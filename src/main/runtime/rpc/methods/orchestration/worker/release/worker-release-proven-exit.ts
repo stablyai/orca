@@ -70,7 +70,8 @@ export function readRetainedWorkerReleaseState(
     return { disposition: 'retained', resource: null, reason: 'no_owned_resource' }
   }
   if (current.owner_dispatch_id !== dispatchId) {
-    return { disposition: 'retained', resource: current, reason: 'ownership_transferred' }
+    // Custody moved during this release's own proof: the winner's row, and its output summary, are not this receipt's.
+    return { disposition: 'retained', resource: null, reason: 'ownership_transferred' }
   }
   const decision = decideWorkerTerminalRelease(current)
   if (decision.action === 'already_released') {

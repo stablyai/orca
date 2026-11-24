@@ -307,6 +307,15 @@ describe('worker release once the exact process is proven exited', () => {
     db.db
       .prepare("UPDATE worker_dispatches SET state = 'stopped' WHERE dispatch_id = ?")
       .run(dispatchId)
+    // Its own output record, so the receipt's summary has something to show.
+    db.storeWorkerTerminalArchiveBeforeStop({
+      dispatchId,
+      resourceId: db.getWorkerTerminalResourceByOwner(dispatchId)!.id,
+      kind: 'terminal_tail',
+      content: '{"version":3,"fallbackReason":"session_not_reported"}',
+      archiveSource: 'terminal',
+      archiveStatus: 'unavailable'
+    })
     goneAfterSettle()
 
     const release = call('orchestration.workerRelease', { dispatch: dispatchId })
@@ -318,10 +327,12 @@ describe('worker release once the exact process is proven exited', () => {
     })
     listing.resolve({ processes: [], inProcessOwner: false })
 
+    // Still its own row: the receipt keeps its output summary.
     await expect(release).resolves.toMatchObject({
       state: 'retained',
       reason: 'user_kept',
-      processAction: 'none'
+      processAction: 'none',
+      archive: { source: 'terminal', status: 'unavailable' }
     })
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
       ownership_state: 'owned',

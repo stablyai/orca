@@ -39,7 +39,13 @@ export async function legacyDaemonMayStillRun(
     // Only a whole record proves which process it names: a torn one's integer prefix (of `12.5`, `12e3`,
     // or a cut-off pid) may name another process, whose ESRCH says nothing about this daemon. Nor does
     // signal 0 to zero or a negative pid, which probes a process group.
-    const pid = parseDaemonPidFile(content)?.pid ?? null
+    const trimmed = content.trim()
+    // A bare record proves a pid only as plain digits; `1e3`, `0x10` or a zero-padded token is not one.
+    const pid = trimmed.startsWith('{')
+      ? (parseDaemonPidFile(trimmed)?.pid ?? null)
+      : /^[1-9]\d*$/.test(trimmed)
+        ? Number(trimmed)
+        : null
     if (pid === null || !Number.isSafeInteger(pid) || pid <= 0) {
       return true
     }

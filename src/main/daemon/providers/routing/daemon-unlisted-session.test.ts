@@ -81,6 +81,24 @@ describe('daemons outside the inventory', () => {
     }
   })
 
+  it('reads a bare record as a pid only when it is plain digits', async () => {
+    const exited = spawnSync(process.execPath, ['-e', '']).pid
+    const kill = vi.spyOn(process, 'kill')
+    try {
+      for (const bare of ['1e3', '0x10', `0${exited}`, `${exited}.0`]) {
+        await expect(
+          mayUnaskedDaemonRunSessions(runtimeDir({ 'daemon-v5.pid': bare }), new Set())
+        ).resolves.toBe(true)
+      }
+      expect(kill).not.toHaveBeenCalled()
+      await expect(
+        mayUnaskedDaemonRunSessions(runtimeDir({ 'daemon-v5.pid': `${exited}\n` }), new Set())
+      ).resolves.toBe(false)
+    } finally {
+      kill.mockRestore()
+    }
+  })
+
   it('ignores a live pid file for the current protocol, which the inventory already asks', async () => {
     await expect(
       mayUnaskedDaemonRunSessions(runtimeDir({ 'daemon-v9999.pid': process.pid }), new Set())

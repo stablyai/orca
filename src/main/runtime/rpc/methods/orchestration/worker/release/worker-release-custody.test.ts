@@ -8,6 +8,7 @@ import '../../../../../orchestration/db/attempt-outcome-projection'
 import type { PtyProcessInfo } from '../../../../../../providers/pty/process-info'
 import { reconcileRequestedWorkerTerminalReleases } from '../../../../../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'
 import { sweepStoppedWorkerTerminals } from '../../../../../orchestration/terminal-authority/release/stopped-worker-terminal-release'
+import { completeWorkerTerminalRelease } from './worker-release-completion'
 import {
   createWorkerReleaseFixture,
   deferred,
@@ -183,9 +184,14 @@ describe('worker release stays within its own custody', () => {
     const before = db.getWorkerTerminalResource(resourceId)
     const archive = db.getWorkerTerminalArchive(successor)
 
+    // Transferred before this call: the lookup keeps its lineage summary, as it always has.
     await expect(
       call('orchestration.workerRelease', { dispatch: dispatchId })
-    ).resolves.toMatchObject({ state: 'retained', reason: 'ownership_transferred' })
+    ).resolves.toMatchObject({
+      state: 'retained',
+      reason: 'ownership_transferred',
+      archive: { source: 'terminal', status: 'unavailable' }
+    })
     expect(db.getWorkerTerminalResource(resourceId)).toEqual(before)
     expect(db.getWorkerTerminalArchive(successor)).toEqual(archive)
     expect(runtime.notifyMessageArrived).not.toHaveBeenCalledWith(
@@ -239,9 +245,9 @@ describe('worker release stays within its own custody', () => {
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
   })
 
-  it.each([true, false])(
-    'reports the Keep open that won during an automatic close (killed: %s), and announces no release',
-    async (ptyKilled) => {
+  it.each(['killed', 'unconfirmed', 'unreachable'] as const)(
+    'reports the Keep open that won during an automatic close (%s), and announces no release',
+    async (outcome) => {
       setup()
       vi.spyOn(runtime, 'isWorkerAgentInTurn').mockReturnValue(false)
       const { dispatchId } = await startSettledWorker()
@@ -259,13 +265,22 @@ describe('worker release stays within its own custody', () => {
       const recovery = reconcileRequestedWorkerTerminalReleases(runtime)
       await vi.waitFor(() => expect(runtime.closeTerminal).toHaveBeenCalledTimes(1))
       await call('orchestration.workerKeepOpen', { paneKey: workerPaneKey, keep: true })
-      closing.resolve({ handle: 'term_worker', tabId: 'tab-worker', ptyKilled })
+      if (outcome === 'unreachable') {
+        closing.reject(new Error('Terminal endpoint not connected'))
+      } else {
+        closing.resolve({
+          handle: 'term_worker',
+          tabId: 'tab-worker',
+          ptyKilled: outcome === 'killed'
+        })
+      }
 
       // Kept, not released and not release_unknown: the close already ran, and the receipt says so.
       await expect(recovery).resolves.toMatchObject({
         attempted: 1,
         released: 0,
         unknown: 0,
+        pending: 0,
         retained: 1
       })
       expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
@@ -283,6 +298,126 @@ describe('worker release stays within its own custody', () => {
       expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
     }
   )
+
+  it("never lets a release's settle reach a successor's row through the installed database", async () => {
+    setup()
+    const { dispatchId } = await startSettledWorker()
+    const { taskId, dispatchId: successor } = await reuseTerminal()
+    db.settleWorkerReport({ taskId, dispatchId: successor, outcome: 'succeeded', result: 'done' })
+    expect(db.requestWorkerTerminalRelease(successor).disposition).toBe('requested')
+    const resourceId = db.getWorkerTerminalResourceByOwner(successor)!.id
+    const before = db.getWorkerTerminalResource(resourceId)
+
+    // The crew notification wrapper sits on these methods; the predecessor's owner fence must survive it.
+    expect(db.settleWorkerTerminalRelease(resourceId, dispatchId)).toEqual(before)
+    expect(db.markWorkerTerminalReleaseUnknown(resourceId, 'stale', dispatchId)).toEqual(before)
+    expect(
+      db.revertWorkerTerminalReleaseToRetained(resourceId, 'identity_unproven', dispatchId)
+    ).toEqual(before)
+    expect(db.settleWorkerTerminalRelease(resourceId, successor).release_state).toBe('released')
+  })
+
+  it.each(['killed', 'unconfirmed', 'failed'] as const)(
+    "reports a close that lost custody (%s) as transferred, never with the successor's state or error",
+    async (outcome) => {
+      setup()
+      vi.spyOn(runtime, 'isWorkerAgentInTurn').mockReturnValue(false)
+      const { dispatchId } = await startSettledWorker()
+      db.db
+        .prepare(
+          `UPDATE worker_terminal_resources SET auto_release_at = datetime('now', '-1 minute'),
+             auto_release_dispatch_id = owner_dispatch_id WHERE owner_dispatch_id = ?`
+        )
+        .run(dispatchId)
+      expect(db.claimDueWorkerTerminalAutoReleases(Date.now())).toBe(1)
+      const closing = deferred<{ handle: string; tabId: string; ptyKilled: boolean }>()
+      vi.mocked(runtime.closeTerminal).mockImplementationOnce(() => closing.promise)
+      const notified = vi.mocked(runtime.notifyMessageArrived).mock.calls.length
+
+      const completion = completeWorkerTerminalRelease({
+        runtime,
+        db,
+        dispatchId,
+        resource: db.getWorkerTerminalResourceByOwner(dispatchId)!,
+        mode: 'recovery'
+      })
+      await vi.waitFor(() => expect(runtime.closeTerminal).toHaveBeenCalledTimes(1))
+      // Keep open wins the row, a new worker reuses the kept terminal, and its own release goes unknown.
+      await call('orchestration.workerKeepOpen', { paneKey: workerPaneKey, keep: true })
+      const { taskId, dispatchId: successor } = await reuseTerminal()
+      db.settleWorkerReport({ taskId, dispatchId: successor, outcome: 'succeeded', result: 'done' })
+      const resourceId = db.getWorkerTerminalResourceByOwner(successor)!.id
+      db.db
+        .prepare(
+          `UPDATE worker_terminal_resources SET release_state = 'unknown', retained_reason = NULL,
+             release_error = 'successor close was not proven' WHERE id = ?`
+        )
+        .run(resourceId)
+      const before = db.getWorkerTerminalResource(resourceId)
+      if (outcome === 'failed') {
+        closing.reject(new Error('close exploded'))
+      } else {
+        closing.resolve({
+          handle: 'term_worker',
+          tabId: 'tab-worker',
+          ptyKilled: outcome === 'killed'
+        })
+      }
+
+      const receipt = await completion
+      expect(receipt).toMatchObject({
+        dispatchId,
+        state: 'retained',
+        reason: 'ownership_transferred',
+        archive: null
+      })
+      expect(receipt.lastError).toBeUndefined()
+      expect(db.getWorkerTerminalResource(resourceId)).toEqual(before)
+      expect(
+        vi
+          .mocked(runtime.notifyMessageArrived)
+          .mock.calls.slice(notified)
+          .filter(([target, kind]) => target === `dispatch:${dispatchId}` && kind === 'status')
+      ).toEqual([])
+    }
+  )
+
+  it("reports a transfer during a stopped worker's own proof without the successor's output summary", async () => {
+    setup()
+    const listing = deferred<{ processes: PtyProcessInfo[]; inProcessOwner: boolean }>()
+    const proving = vi.fn(() => listing.promise)
+    loseWorkerTerminal(proving)
+    const { dispatchId } = await startSettledWorker()
+    db.db
+      .prepare("UPDATE worker_dispatches SET state = 'stopped' WHERE dispatch_id = ?")
+      .run(dispatchId)
+    goneAfterSettle()
+
+    const release = call('orchestration.workerRelease', { dispatch: dispatchId })
+    await vi.waitFor(() => expect(proving).toHaveBeenCalled())
+    const { dispatchId: successor } = await transferWhileProving(dispatchId)
+    const resourceId = db.getWorkerTerminalResourceByOwner(successor)!.id
+    db.storeWorkerTerminalArchiveBeforeStop({
+      dispatchId: successor,
+      resourceId,
+      kind: 'transcript_pin',
+      content: '{"version":3,"agent":"claude","sessionId":"successor-session"}',
+      archiveSource: 'transcript',
+      archiveStatus: 'captured'
+    })
+    const before = db.getWorkerTerminalResource(resourceId)
+    const archive = db.getWorkerTerminalArchive(successor)
+    listing.resolve({ processes: [], inProcessOwner: false })
+
+    await expect(release).resolves.toMatchObject({
+      dispatchId,
+      state: 'retained',
+      reason: 'ownership_transferred',
+      archive: null
+    })
+    expect(db.getWorkerTerminalResource(resourceId)).toEqual(before)
+    expect(db.getWorkerTerminalArchive(successor)).toEqual(archive)
+  })
 
   it.each(['leads', 'joins'] as const)(
     'charges no recovery attempt to the successor when recovery %s a release that lost custody',

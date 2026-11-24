@@ -12,7 +12,11 @@ import type { WorkerTerminalReleaseRuntime } from '../../../../../orchestration/
 import { describeUnconfirmedAgentStop } from '../../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { inspectWorkerTerminal } from '../observation/worker-observation'
 import { orchestrationTimestampToMs } from '../output/worker-output'
-import { archiveSummary, receiptForUnchangedRelease } from './worker-terminal-resource-presentation'
+import {
+  archiveSummary,
+  receiptForUnchangedRelease,
+  unknownWriteApplied
+} from './worker-terminal-resource-presentation'
 import { classifyWorkerTerminalCloseError } from './worker-release-close-error'
 import { workerTerminalLeaseIsCurrent } from './worker-terminal-release-lease'
 import { resolveStructuredWorkerForDispatch } from '../../structured-workers/orchestration-structured-worker-lifecycle'
@@ -139,7 +143,7 @@ async function completeWorkerTerminalReleaseOnce(
       'The recorded terminal no longer resolves; whether its process is gone cannot be proven.',
       dispatchId
     )
-    if (unknown.release_state !== 'unknown') {
+    if (!unknownWriteApplied(unknown, dispatchId)) {
       return receiptForUnchangedRelease(dispatchId, unknown)
     }
     return {
@@ -215,7 +219,7 @@ async function completeWorkerTerminalReleaseOnce(
     if (!close.ptyKilled) {
       const reason = describeUnconfirmedAgentStop(close)
       const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, reason, dispatchId)
-      if (unknown.release_state !== 'unknown') {
+      if (!unknownWriteApplied(unknown, dispatchId)) {
         return receiptForUnchangedRelease(dispatchId, unknown, 'closed_agent_terminal')
       }
       return {
@@ -232,6 +236,11 @@ async function completeWorkerTerminalReleaseOnce(
     const reason = closeError.reason
     // After certified exit, absent close targets mean success; other failures retain recovery intent.
     if (!(closeError.alreadyGone && observation.status === 'exited')) {
+      const current = db.getWorkerTerminalResource(resource.id)
+      if (!current || !isStillReleasing(current, dispatchId)) {
+        // A Keep open won during the close: no intent of this release is left to retry.
+        return receiptForUnchangedRelease(dispatchId, current)
+      }
       if (closeError.transient) {
         // Durable intent exists; the owning endpoint is temporarily unreachable. Recovery retries.
         return {
@@ -245,7 +254,7 @@ async function completeWorkerTerminalReleaseOnce(
         }
       }
       const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, reason, dispatchId)
-      if (unknown.release_state !== 'unknown') {
+      if (!unknownWriteApplied(unknown, dispatchId)) {
         return receiptForUnchangedRelease(dispatchId, unknown)
       }
       return {

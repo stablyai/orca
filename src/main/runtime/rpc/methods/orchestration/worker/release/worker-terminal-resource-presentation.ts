@@ -138,3 +138,11 @@ export function receiptForUnchangedRelease(
         archive: archiveSummary(row)
       }
 }
+
+/**
+ * Whether this dispatch's own release_unknown write landed. An owner-fenced write that was refused still
+ * returns the row, which may be another owner's that is unknown for its own reasons.
+ */
+export function unknownWriteApplied(row: WorkerTerminalResourceRow, dispatchId: string): boolean {
+  return row.owner_dispatch_id === dispatchId && row.release_state === 'unknown'
+}

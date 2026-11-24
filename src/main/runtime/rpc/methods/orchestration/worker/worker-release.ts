@@ -61,7 +61,8 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
       }
       if (requested.disposition === 'retained') {
         const resource = requested.resource
-        if (!resource) {
+        if (!resource || resource.owner_dispatch_id !== params.dispatch) {
+          // Nothing of its own to prove: a former owner's lookup keeps its lineage summary as it always has.
           return {
             dispatchId: params.dispatch,
             state: 'retained',

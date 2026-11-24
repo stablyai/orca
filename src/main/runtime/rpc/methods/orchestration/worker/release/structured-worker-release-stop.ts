@@ -4,7 +4,11 @@ import type { OrchestrationDb } from '../../../../../orchestration/db/orchestrat
 import type { WorkerTerminalResourceRow } from '../../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { stopStructuredWorker } from '../../structured-workers/orchestration-structured-worker-lifecycle'
 import type { StructuredWorkerIdentity } from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
-import { archiveSummary, receiptForUnchangedRelease } from './worker-terminal-resource-presentation'
+import {
+  archiveSummary,
+  receiptForUnchangedRelease,
+  unknownWriteApplied
+} from './worker-terminal-resource-presentation'
 import type { WorkerReleaseReceipt } from './worker-release-completion'
 import { releaseUnknownRecovery } from './worker-release-unknown-recovery'
 
@@ -61,7 +65,7 @@ export async function stopStructuredWorkerForRelease(args: {
       stop.reason ?? 'The structured session close was not proven.',
       dispatchId
     )
-    if (unknown.release_state !== 'unknown') {
+    if (!unknownWriteApplied(unknown, dispatchId)) {
       return receiptForUnchangedRelease(dispatchId, unknown)
     }
     return {
