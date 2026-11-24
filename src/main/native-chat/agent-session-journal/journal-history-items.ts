@@ -1,3 +1,4 @@
+import { serialize } from 'node:v8'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -7,6 +8,7 @@ import { claudePromptUuidForSubmission } from '../../claude/structured/lifecycle
 
 export const JOURNAL_HISTORY_ITEMS_LIMIT = 4_096
 const JOURNAL_HISTORY_ITEMS_BYTES = 16 * 1024 * 1024
+const HISTORY_WORKSPACE_TOO_LARGE = 'history-workspace-too-large'
 
 export type JournalHistoryItem = {
   key: string
@@ -23,24 +25,34 @@ export type JournalHistoryItemSource = {
   turnsOpenedBy?: (key: string) => Iterable<string>
 }
 
-export type JournalHistoryReadOptions = { includeOpeners?: boolean }
+export type JournalHistoryReadOptions = {
+  includeOpeners?: boolean
+  includePlacement?: false
+  maxReplyBytes?: number
+}
 export type JournalHistoryPrompt = { uuid: string; itemId: string }
 
 /** One bounded observation includes the named rows and their saved placement dependencies. */
 export function readJournalHistoryItems(
   source: JournalHistoryItemSource,
-  itemIds: readonly string[]
+  itemIds: readonly string[],
+  options?: JournalHistoryReadOptions
 ): JournalHistoryItem[] {
   const pending = new Set(itemIds)
   const requested = new Set(itemIds)
   const result: JournalHistoryItem[] = []
-  let bytes = 0
+  const includePlacement = options?.includePlacement !== false
+  const maxReplyBytes = options?.maxReplyBytes
+  // Allow for the enclosing reader reply, its credit metadata and array indices.
+  let bytes = maxReplyBytes === undefined ? 0 : 128
   for (const key of pending) {
     if (pending.size > JOURNAL_HISTORY_ITEMS_LIMIT) {
-      throw new Error('history-workspace-too-large')
+      throw new Error(HISTORY_WORKSPACE_TOO_LARGE)
     }
     const canonicalItemId = source.canonicalItemId(key)
-    pending.add(canonicalItemId)
+    if (includePlacement) {
+      pending.add(canonicalItemId)
+    }
     const item = source.item(canonicalItemId)
     let openedTurnIds: string[] | undefined
     if (
@@ -54,7 +66,7 @@ export function readJournalHistoryItems(
         pending.add(turnItemId)
         openedTurnIds.push(turnItemId)
         if (pending.size > JOURNAL_HISTORY_ITEMS_LIMIT) {
-          throw new Error('history-workspace-too-large')
+          throw new Error(HISTORY_WORKSPACE_TOO_LARGE)
         }
       }
     }
@@ -65,15 +77,18 @@ export function readJournalHistoryItems(
       removed: source.presentationRemoved(key),
       ...(openedTurnIds ? { openedTurnIds } : {})
     }
-    bytes += Buffer.byteLength(JSON.stringify(entry))
-    if (bytes > JOURNAL_HISTORY_ITEMS_BYTES) {
-      throw new Error('history-workspace-too-large')
+    bytes +=
+      maxReplyBytes === undefined
+        ? Buffer.byteLength(JSON.stringify(entry))
+        : serialize(entry).byteLength + 8
+    if (bytes > Math.min(maxReplyBytes ?? Infinity, JOURNAL_HISTORY_ITEMS_BYTES)) {
+      throw new Error(HISTORY_WORKSPACE_TOO_LARGE)
     }
     result.push(entry)
-    if (item?.turnScope?.kind === 'turn') {
+    if (includePlacement && item?.turnScope?.kind === 'turn') {
       pending.add(item.turnScope.turnItemId)
     }
-    if (item?.body.kind === 'turn' && item.body.userItemId) {
+    if (includePlacement && item?.body.kind === 'turn' && item.body.userItemId) {
       pending.add(item.body.userItemId)
     }
   }

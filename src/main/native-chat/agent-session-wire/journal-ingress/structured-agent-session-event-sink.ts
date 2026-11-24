@@ -1,3 +1,14 @@
+import { DEFAULT_STRUCTURED_AGENT_SESSION_WATERMARKS } from './structured-agent-session-sink-drain'
+import type {
+  StructuredAgentSessionSinkWatermarks,
+  StructuredAgentSessionReadingControl
+} from './structured-agent-session-sink-drain'
+export type {
+  StructuredAgentSessionSinkWatermarks,
+  StructuredAgentSessionReadingControl
+} from './structured-agent-session-sink-drain'
+import { createStructuredAgentSessionHistoryReplacement } from './structured-agent-session-history-replacement'
+export type { StructuredAgentSessionHistoryReplacement } from './structured-agent-session-history-replacement'
 import type { JournalItemEcho } from '../../agent-session-journal/projection/journal-item-echo'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
@@ -129,6 +140,7 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
     resolution: Extract<JournalTimelineItemResolution, { kind: 'thread-goal' }>,
     options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
+  tryReplaceHistory?: ReturnType<typeof createStructuredAgentSessionHistoryReplacement>
   journalEpoch?(): string | null
   /** Notices of turns settled by any writer while this sink is bound. */
   observeSettledTurns?(listener: (turnItemIds: readonly string[]) => void): () => void
@@ -176,25 +188,6 @@ export type DeferredStructuredAgentSessionEventSink = {
   state(): StructuredAgentSessionSinkState
 }
 
-export type StructuredAgentSessionSinkWatermarks = {
-  pauseQueuedBytes: number
-  lowQueuedBytes: number
-  pauseQueuedOperations: number
-  lowQueuedOperations: number
-}
-
-export type StructuredAgentSessionReadingControl = {
-  pauseReading(): void
-  resumeReading(): void
-}
-
-const DEFAULT_WATERMARKS: StructuredAgentSessionSinkWatermarks = {
-  pauseQueuedBytes: 16 * 1024 * 1024,
-  lowQueuedBytes: 8 * 1024 * 1024,
-  pauseQueuedOperations: 512,
-  lowQueuedOperations: 256
-}
-
 export function createDeferredStructuredAgentSessionEventSink(deps: {
   sessionId: string
   logger: StructuredAgentSessionLogger
@@ -207,7 +200,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
 }): DeferredStructuredAgentSessionEventSink {
   const exit = new exits.StructuredAgentSessionExitObservation()
   const rootExit = new exits.StructuredAgentSessionRootExitReceipt()
-  const watermarks = { ...DEFAULT_WATERMARKS, ...deps.watermarks }
+  const watermarks = { ...DEFAULT_STRUCTURED_AGENT_SESSION_WATERMARKS, ...deps.watermarks }
   const failed = (error: unknown): void => {
     deps.logger.error('writing provider events to the chat journal failed', {
       scope: 'journal-event-sink',
@@ -291,6 +284,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       tryAppendItem: appendItem,
       ...resolvedAppend,
       ...createStructuredAgentSessionTransitionMembers(queue),
+      tryReplaceHistory: createStructuredAgentSessionHistoryReplacement(queue),
       journalEpoch: queue.journalEpoch,
       observeSettledTurns: queue.observeSettledTurns,
       journalSnapshot: queue.journalSnapshot,

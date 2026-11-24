@@ -45,6 +45,8 @@ export function finishJournalSqlCommand(
         applyJournalWriterEffect(db, stateDirectory, effect, publicCoordinates)
       )
     : []
+  const historyReset =
+    command.operation.kind === 'epoch-replace' && command.operation.guard !== undefined
   const publication = {
     ...result,
     ...(command.operation.kind === 'epoch-replace' ? { resetPrompts: true as const } : {}),
@@ -67,23 +69,31 @@ export function finishJournalSqlCommand(
     queueRevision: `${queue.epoch}:${queue.revision}`,
     keys: [],
     inputKeys: [],
-    items: [
-      ...result.items.map((item) => ({
-        itemId: item.itemId,
-        deleted: false as const,
-        revision: item.revision,
-        sequence: item.sequence,
-        sequenceIndex: item.sequenceIndex ?? 0
-      })),
-      ...(result.removedItemIds ?? []).map((itemId) => ({
-        itemId,
-        deleted: true as const,
-        revision: 0
-      }))
-    ],
-    publication,
+    items: historyReset
+      ? []
+      : [
+          ...result.items.map((item) => ({
+            itemId: item.itemId,
+            deleted: false as const,
+            revision: item.revision,
+            sequence: item.sequence,
+            sequenceIndex: item.sequenceIndex ?? 0
+          })),
+          ...(result.removedItemIds ?? []).map((itemId) => ({
+            itemId,
+            deleted: true as const,
+            revision: 0
+          }))
+        ],
+    // Observers refresh the replaced history at its new cursor.
+    ...(historyReset
+      ? {
+          historyReset: true as const,
+          publication: { resetPrompts: true as const, items: [], cards: [], receipts: [] }
+        }
+      : { publication }),
     value: publicJournalSqlValue(command, value, cursor),
-    ...('goals' in claims ? { goals: claims.goals } : {}),
+    ...(!historyReset && 'goals' in claims ? { goals: claims.goals } : {}),
     effects,
     ...(receiptWritten && command.effects ? { receiptWritten: true as const } : {})
   }

@@ -87,7 +87,7 @@ export function createStructuredAgentSessionConversationLifetime(
     return record !== null && deps().hasOpenDispatch?.(record) === true
   }
   const providerHoldsDispatch = (sessionId: string): boolean =>
-    deps().adapter.holdsDispatch?.(sessionId) === true
+    Boolean(deps().adapter.holdsDispatch?.(sessionId))
 
   const holdStopClose = async <T>(
     sessionId: string,

@@ -16,7 +16,10 @@ import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 export type ChatModelWaitJournal = {
   /** Calls `onItems` with the ids each commit changed, or null when the journal was replaced
    *  (nothing seen before still holds); returns the unsubscribe. */
-  observe: (sessionId: string, onItems: (itemIds: readonly string[] | null) => void) => () => void
+  observe: (
+    sessionId: string,
+    onItems: (itemIds: readonly string[] | null, historyReset?: true) => void
+  ) => () => void
   item: (sessionId: string, itemId: string) => Promise<AgentJournalRenderItem | null>
 }
 
@@ -29,7 +32,7 @@ const hostJournal: ChatModelWaitJournal = {
     return host.observeConversationPublications(sessionId, {
       next: (publication) => {
         if (publication.kind === 'reset') {
-          onItems(null)
+          onItems(null, publication.commit?.historyReset)
           return
         }
         const ids = publication.commit?.items.flatMap((item) => (item.deleted ? [] : [item.itemId]))
@@ -111,8 +114,8 @@ export class ChatWorkerModelWait {
       unsubscribe: () => {}
     }
     this.watches.set(sessionId, watch)
-    watch.unsubscribe = this.journal.observe(sessionId, (ids) =>
-      this.changed(sessionId, watch, ids)
+    watch.unsubscribe = this.journal.observe(sessionId, (ids, historyReset) =>
+      this.changed(sessionId, watch, ids, historyReset)
     )
     this.arm(sessionId, watch, WORKER_MODEL_WAIT_MS)
   }
@@ -133,13 +136,24 @@ export class ChatWorkerModelWait {
     }
   }
 
-  private changed(sessionId: string, watch: Watch, itemIds: readonly string[] | null): void {
+  private changed(
+    sessionId: string,
+    watch: Watch,
+    itemIds: readonly string[] | null,
+    historyReset?: true
+  ): void {
     if (!itemIds) {
       watch.generation += 1
       watch.paused.clear()
       watch.plain.clear()
       watch.reading.clear()
       watch.activityAt = this.now()
+      if (historyReset) {
+        watch.turnKey = `${sessionId}:${watch.activityAt}`
+        watch.turnId = undefined
+        watch.lastRetry = undefined
+        watch.retried = false
+      }
       return
     }
     for (const itemId of itemIds) {

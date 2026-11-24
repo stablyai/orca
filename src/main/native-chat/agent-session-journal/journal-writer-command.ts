@@ -148,6 +148,12 @@ export type JournalWriterInputOperation =
   | JournalWriterContextOperation
   | JournalWriterSettlementOperation
 
+export type JournalHistoryReplacementGuard = {
+  expectedCursor: AgentJournalCursor
+  permit: Int32Array
+  deadline: number
+}
+
 export type JournalWriterContextOperation =
   | { kind: 'fork-install' }
   | {
@@ -165,6 +171,7 @@ export type JournalWriterContextOperation =
     }
   | {
       kind: 'epoch-replace'
+      guard?: JournalHistoryReplacementGuard
       historyOrigin?: JournalEpochRow['historyOrigin']
       reason: AgentJournalEpochReason
       fence: number

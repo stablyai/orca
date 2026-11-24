@@ -20,8 +20,24 @@ const nativeCopyOrigin = z.object({
   providerHandle: handle,
   unit: z.enum(['codex-turn', 'claude-entry', 'acp-user-message']),
   agent: text,
-  ids: z.array(text)
+  ids: z.array(text),
+  sourceFrontier: text.optional(),
+  sourceConsumedBytes: z.number().int().nonnegative().optional(),
+  sourceMtimeMs: z.number().finite().optional()
 })
+const nativeCopyHeader = nativeCopyOrigin.omit({ ids: true })
+export type NativeCopyOriginHeader = z.infer<typeof nativeCopyHeader>
+
+export function usableNativeCopyHeader(
+  value: JournalHistoryOrigin | null
+): NativeCopyOriginHeader | null {
+  const parsed = nativeCopyHeader.safeParse(value?.raw)
+  return parsed.success &&
+    sameJournalConversation(value?.providerHandle, parsed.data.providerHandle)
+    ? parsed.data
+    : null
+}
+
 const origin = z.discriminatedUnion('kind', [legacyOrigin, nativeCopyOrigin])
 export type NativeCopyCoverage = Pick<z.infer<typeof nativeCopyOrigin>, 'unit' | 'ids'>
 export type NativeCopyOrigin = z.infer<typeof nativeCopyOrigin>

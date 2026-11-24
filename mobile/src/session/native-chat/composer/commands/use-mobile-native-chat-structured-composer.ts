@@ -11,6 +11,7 @@ const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
 
 export function useMobileNativeChatStructuredComposer(args: {
   structured: boolean
+  catchingUp?: boolean
   sessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
   /** The host keeps files a phone uploads; an older one refuses the upload. */
   acceptsFiles: boolean
@@ -23,7 +24,7 @@ export function useMobileNativeChatStructuredComposer(args: {
   onCommandNotice: (message: string) => void
 }): MobileNativeChatStructuredComposer | null {
   const { structured, acceptsFiles, compactInstructions, files, threadGoal, mcpPanel } = args
-  const { accountUsage, onCommandNotice } = args
+  const { accountUsage, onCommandNotice, catchingUp = false } = args
   const conversationCommands = args.conversationCommands ?? NO_COMMANDS
   const { commands, refresh, setMenuOpen } = args.sessionCommands
   const { files: pendingFiles, attachFiles, attachPastedText, removeFiles } = files
@@ -43,6 +44,7 @@ export function useMobileNativeChatStructuredComposer(args: {
       structured
         ? {
             catalog,
+            catchingUp,
             onSlashMenuOpen: refresh,
             onSlashMenuDemand: setMenuOpen,
             onAttachFiles: acceptsFiles ? () => void attachFiles() : undefined,
@@ -59,6 +61,7 @@ export function useMobileNativeChatStructuredComposer(args: {
           }
         : null,
     [
+      catchingUp,
       threadGoal,
       mcpPanel,
       accountUsage,

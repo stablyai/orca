@@ -1,3 +1,7 @@
+import type {
+  JournalClaudeRecoveryRead,
+  JournalClaudeRecoveryReadResult
+} from './journal-claude-recovery-reads'
 import type { JournalRestartCut } from './journal-sql-restart-cut'
 import type {
   AgentJournalAcceptanceReceipt,
@@ -70,6 +74,15 @@ export type JournalContinuationSpill = Omit<JournalContinuedPayload, 'index' | '
   path: string
 }
 
+type ClaudeRecoveryRequest<K extends JournalClaudeRecoveryRead['kind']> = Omit<
+  Extract<JournalClaudeRecoveryRead, { kind: K }>,
+  'kind'
+>
+type ClaudeRecoveryReply<K extends JournalClaudeRecoveryReadResult['kind']> = Extract<
+  JournalClaudeRecoveryReadResult,
+  { kind: K }
+>
+
 /** Reads a chat answers from its database; scans are filtered so none decodes the whole chat. */
 export type AgentSessionJournalReads = {
   statusIndicators(input: JournalStatusIndicatorRead): Promise<JournalStatusIndicators>
@@ -81,6 +94,22 @@ export type AgentSessionJournalReads = {
   cursor(): Promise<AgentJournalCursor>
   physicalCursor(): Promise<AgentJournalCursor>
   lastActivityAt(): Promise<number>
+  claudeRecoveryFingerprints(
+    input: ClaudeRecoveryRequest<'claude-recovery-fingerprints'>
+  ): Promise<ClaudeRecoveryReply<'claude-recovery-fingerprints'>>
+  claudeRecoverySlices(
+    input: ClaudeRecoveryRequest<'claude-recovery-slices'>
+  ): Promise<ClaudeRecoveryReply<'claude-recovery-slices'>>
+  releaseClaudeRecovery(transferId: string): Promise<void>
+  claudeRecoveryGoal(
+    cursor: AgentJournalCursor
+  ): Promise<ClaudeRecoveryReply<'claude-recovery-goal'>['cost']>
+  claudeRecoveryHeader(
+    input: ClaudeRecoveryRequest<'claude-recovery-header'>
+  ): Promise<ClaudeRecoveryReply<'claude-recovery-header'>['header']>
+  claudeRecoveryOrigin(
+    input: ClaudeRecoveryRequest<'claude-recovery-origin'>
+  ): Promise<ClaudeRecoveryReply<'claude-recovery-origin'>>
   historyOrigin(): Promise<JournalReducerState['historyOrigin']>
   item(itemId: string): Promise<AgentJournalRenderItem | null>
   itemBody(itemId: string): Promise<AgentJournalItemBody | null>

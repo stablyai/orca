@@ -125,7 +125,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     hostOutage === null
   )
   const agentLabel = structuredAgentLabel(props.agent)
-  const hostSendGate = useNativeChatHostSendGate(props.target, props.agent, hostOutage)
+  const hostSendGate = useNativeChatHostSendGate(props, hostOutage, hostExecution.phase)
   const hostHeld = hostSendGate.sendBlockedReason !== null
   const submits = useStructuredNativeChatSubmitReveal(controller, provisionalLaunch.retry, hostHeld)
   const workerApprovalParty = nativeChatWorkerApprovalParty(props)

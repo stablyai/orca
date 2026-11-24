@@ -167,12 +167,13 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
       const savedAt = this.now()
       const context: JournalReceiptStage = { savedAt, row: receiptRow(operation) }
       const preparation = (await prepare?.(context)) ?? {}
+      const stopSettle = this.stopMarks.fact()
       const facts: JournalWriterHostFacts = {
         identity: this.identity,
         openedThrough: this.openedThrough,
         goals: this.goalAttachments.snapshot(),
         ...this.queuedMessages.facts(),
-        ...settled(this.stopMarks.fact()),
+        ...(stopSettle ? { stopSettle } : {}),
         ...preparation.facts
       }
       let staged: JournalStagedReceipt | undefined
@@ -204,6 +205,9 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
       }
       preparation.settle?.(commit)
       staged?.settle(commit.receiptWritten ? commit.effects : undefined)
+      if (commit.dropped) {
+        return commit
+      }
       if (commit.forkInstalled) {
         this.epochReplacements.notify(Promise.resolve(commit))
       }
@@ -234,7 +238,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
       }
       return commit
     })
-    return this.epochReplacements.notifyFor(operation.kind, written)
+    return this.epochReplacements.notifyFor(operation, written)
   }
 
   stageFork(
@@ -328,8 +332,4 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     }
     return this.database.serialize(this.identity.sessionId, run)
   }
-}
-
-function settled(stopSettle: JournalWriterHostFacts['stopSettle']) {
-  return stopSettle ? { stopSettle } : {}
 }

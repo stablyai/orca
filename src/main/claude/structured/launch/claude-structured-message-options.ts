@@ -212,6 +212,9 @@ export async function dispatchClaudeMessage(
   timeoutMs: number | undefined,
   logger: StructuredAgentSessionLogger = defaultLogger
 ): ReturnType<StructuredAgentSessionAdapter['dispatch']> {
+  if (session.initialization.history.recovery) {
+    await waitForPromiseWithSignal(session.initialization.history.recovery, input.signal)
+  }
   let ranOptions: Record<string, string> = {}
   const outcome = await dispatchClaudeTurn(session, input, async () => {
     try {

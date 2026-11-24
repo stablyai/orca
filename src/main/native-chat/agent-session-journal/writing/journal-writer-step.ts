@@ -13,12 +13,14 @@ import type { JournalSqlFailure } from '../journal-sql-failure'
 import type { JournalLifecycleIdentityMutationInput } from './journal-lifecycle-mutation'
 import type { JournalTimelineItemResolution } from './journal-timeline-resolution'
 import type { ProviderTimelineSettlementResolution } from '../../agent-session-timeline/provider-timeline-writer-resolution'
+import type { NativeCopyOrigin } from '../context-epochs/journal-history-origin'
 
 export type JournalHistoryResolution = {
   kind: 'history-catch-up'
   expectedCursor: AgentJournalCursor
   expectedItems: readonly { key: string; canonicalItemId: string; revision: number }[]
   mutations: readonly JournalLifecycleIdentityMutationInput[]
+  historyOrigin?: NativeCopyOrigin
   permit: Int32Array<SharedArrayBuffer>
   deadline: number
 }

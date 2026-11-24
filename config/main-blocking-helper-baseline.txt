@@ -776,7 +776,7 @@
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 1 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
-3 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
+2 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-maintenance.ts # worker-only: the retired prune settles its pending entry on the journal SQL worker
 1 src/main/native-chat/agent-session-journal/journal-domain-schema.ts

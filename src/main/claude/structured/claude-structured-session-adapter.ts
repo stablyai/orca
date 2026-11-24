@@ -51,6 +51,8 @@ import { claudePromptCancelRoute } from './journal/claude-structured-prompt-repl
 import { claudeForkForRewind } from '../transcripts/claude-rewind-fork'
 import { copyClaudeConversation } from '../transcripts/claude-conversation-copy'
 import { ClaudeConversationNaming } from '../conversation-naming/claude-conversation-naming'
+import { claudeOwnsLiveProcess } from './lifecycle/claude-structured-owner-identity'
+import { claudeHistoryStartupSettled } from './startup/claude-structured-session-open'
 import { syncClaudePromptSuggestionPause } from './claude-prompt-suggestion-pause'
 
 export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAdapter {
@@ -213,7 +215,11 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   manageMcp: NonNullable<StructuredAgentSessionAdapter['manageMcp']> = (record, operation) =>
     manageClaudeMcp(this.sessions, record.sessionId, operation)
   readonly atRestCommands: ClaudeStructuredSessionAdapterDeps['atRestCommands']
-  holdsDispatch = (sessionId: string): boolean => claudeHoldsDispatch(this.sessions.get(sessionId))
+  holdsDispatch: NonNullable<StructuredAgentSessionAdapter['holdsDispatch']> = (sessionId) =>
+    claudeHoldsDispatch(this.sessions.get(sessionId))
+  startupSettled = claudeHistoryStartupSettled(this.sessions)
+  pendingDelivery = (sessionId: string): Promise<void> | undefined =>
+    this.sessions.get(sessionId)?.initialization.history.recovery
   requiresModelTransitionRestart = claudeOptions.claudeModelTransitionRestart(this.sessions)
   liveTurnId = (sessionId: string): string | null | undefined =>
     this.sessions.get(sessionId)?.translator?.currentTurnId
@@ -222,14 +228,9 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     const held = session && claudeHeldSends(session)
     return held ?? (this.settledExitErrors.has(sessionId) ? new Set() : undefined)
   }
-  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
-    const session = this.sessions.get(sessionId)
-    return (
-      session?.acquisitionGeneration === acquisitionGeneration &&
-      session.connection.pid !== undefined &&
-      session.connection.exitVerdict.root === 'live'
-    )
-  }
+  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean =>
+    claudeOwnsLiveProcess(this.sessions.get(sessionId), acquisitionGeneration)
+
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
     settleClaudePromptFreeingChild(this.asker(request), answerClaudeStructuredPrompt)
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>

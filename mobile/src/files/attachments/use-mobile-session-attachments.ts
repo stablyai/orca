@@ -1,3 +1,4 @@
+import { useMobileStructuredSessionHostExecutionPhase } from '../../session/native-chat/agent-session/use-mobile-structured-session-host-execution'
 import { useEffect } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
 import { useClipboardReader } from '../../platform/clipboard/clipboard'
@@ -108,7 +109,16 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       onSuccess: triggerSelection,
       onError: triggerError
     })
+  const hostPhase = useMobileStructuredSessionHostExecutionPhase({
+    client,
+    sessionId: nativeChatSessionId,
+    enabled:
+      structuredNativeChat &&
+      connState === 'connected' &&
+      agentSessionHostSupport?.statusFeed === true
+  })
   const nativeChatStructuredComposer = useMobileNativeChatStructuredComposer({
+    catchingUp: hostPhase === 'catching-up',
     structured: structuredNativeChat,
     sessionCommands: nativeChatController.nativeChatSessionCommands,
     acceptsFiles: agentSessionHostSupport?.phoneAttachments === true,

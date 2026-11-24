@@ -295,6 +295,7 @@ export function createCodexHistoryCollector(
         item.type === 'userMessage' ? 'opener' : 'item'
       )
     },
+    retainedBytes: window.retainedBytes,
     items: () => placement.items(window.items())
   }
 }

@@ -1,0 +1,139 @@
+import { serialize } from 'node:v8'
+import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
+import {
+  CLAUDE_IMPORT_PAGE_BYTES,
+  CLAUDE_IMPORT_PAGE_ENTRIES,
+  type ClaudeImportEntry,
+  type ClaudeImportFieldFragment,
+  type ClaudeImportItemPart,
+  type ClaudeImportPage
+} from './journal-claude-import-worker-protocol'
+import type { importClaudeTranscript } from './journal-claude-import'
+
+const PAGE_FRAMING_BYTES = 128
+// Allow a varint array index and V8 alignment padding per entry.
+const ENTRY_FRAMING_BYTES = 8
+const CLAUDE_IMPORT_ENTRIES_BYTES = CLAUDE_IMPORT_PAGE_BYTES - PAGE_FRAMING_BYTES
+
+type Window = Pick<Awaited<ReturnType<typeof importClaudeTranscript>>, 'items' | 'savedKeys'>
+
+export function claudeImportEntryBytes(entry: unknown): number {
+  return serialize(entry).byteLength + ENTRY_FRAMING_BYTES
+}
+
+function* itemEntries({
+  items,
+  savedKeys
+}: Window): Generator<{ entry: ClaudeImportEntry; size: number }> {
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index]!
+    const keys = savedKeys?.[index] ?? []
+    const bytes = Buffer.byteLength(JSON.stringify(item))
+    const entry: ClaudeImportEntry = { kind: 'item', item, keys, bytes }
+    const size = claudeImportEntryBytes(entry)
+    if (size <= CLAUDE_IMPORT_ENTRIES_BYTES) {
+      yield { entry, size }
+      continue
+    }
+    if (item.body.kind !== 'message') {
+      yield* wideEntry(entry)
+      continue
+    }
+    yield* fragment({ kind: 'start', item: { ...item, body: { ...item.body, blocks: [] } }, bytes })
+    for (const key of keys) {
+      yield* fragment({ kind: 'key', key })
+    }
+    for (const block of item.body.blocks) {
+      yield* fragment({ kind: 'block', block })
+    }
+    yield* fragment({ kind: 'end' })
+  }
+}
+
+function* fragment(entry: ClaudeImportItemPart) {
+  const size = claudeImportEntryBytes(entry)
+  if (size <= CLAUDE_IMPORT_ENTRIES_BYTES) {
+    yield { entry, size }
+  } else {
+    yield* wideEntry(entry)
+  }
+}
+
+function measured<Entry extends ClaudeImportEntry>(
+  entry: Entry,
+  budget = CLAUDE_IMPORT_ENTRIES_BYTES
+) {
+  const size = claudeImportEntryBytes(entry)
+  if (size > budget) {
+    throw new ClaudeImportResourceError('A Claude import fragment path exceeds the page limit.')
+  }
+  return { entry, size }
+}
+
+// Some blocks carry uncapped metadata such as edit hunks. Stream their large fields too.
+function* wideEntry(entry: ClaudeImportItemPart) {
+  yield measured({ kind: 'wide-start' })
+  for (const [key, value] of Object.entries(entry)) {
+    yield* wideField([key], value)
+  }
+  yield measured({ kind: 'wide-end' })
+}
+
+type MeasuredField = { entry: ClaudeImportFieldFragment; size: number }
+
+export function* wideField(
+  path: string[],
+  value: unknown,
+  skip = 0,
+  budget = CLAUDE_IMPORT_ENTRIES_BYTES
+): Generator<MeasuredField> {
+  const entry: ClaudeImportFieldFragment = { kind: 'wide-field', path, value }
+  const size =
+    typeof value === 'string' && value.length > budget ? Infinity : claudeImportEntryBytes(entry)
+  if (size <= budget) {
+    if (!skip) {
+      yield { entry, size }
+    }
+  } else if (typeof value === 'string') {
+    if (!skip) {
+      yield measured({ ...entry, value: '' }, budget)
+    }
+    // Four Latin-1 chunks or two UTF-16 chunks fit together with their framing.
+    const chars = CLAUDE_IMPORT_PAGE_BYTES / 4 - 256
+    for (let offset = Math.max(skip - 1, 0) * chars; offset < value.length; offset += chars) {
+      yield measured({ kind: 'wide-text', path, text: value.slice(offset, offset + chars) }, budget)
+    }
+  } else if (value && typeof value === 'object') {
+    if (skip === 0) {
+      yield measured({ ...entry, value: Array.isArray(value) ? [] : {} }, budget)
+    }
+    skip--
+    for (const [key, child] of Object.entries(value)) {
+      for (const fragment of wideField([...path, key], child, 0, budget)) {
+        if (skip-- <= 0) {
+          yield fragment
+        }
+      }
+    }
+  } else {
+    throw new ClaudeImportResourceError('A Claude import fragment path exceeds the page limit.')
+  }
+}
+
+export function* claudeImportPages(window: Window): Generator<ClaudeImportPage> {
+  let entries: ClaudeImportEntry[] = []
+  let bytes = 0
+  for (const { entry, size } of itemEntries(window)) {
+    if (
+      entries.length === CLAUDE_IMPORT_PAGE_ENTRIES ||
+      bytes + size > CLAUDE_IMPORT_ENTRIES_BYTES
+    ) {
+      yield { kind: 'page', entries, done: false }
+      entries = []
+      bytes = 0
+    }
+    entries.push(entry)
+    bytes += size
+  }
+  yield { kind: 'page', entries, done: true }
+}

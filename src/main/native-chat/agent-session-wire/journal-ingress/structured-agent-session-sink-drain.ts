@@ -1,3 +1,15 @@
+export type StructuredAgentSessionSinkWatermarks = {
+  pauseQueuedBytes: number
+  lowQueuedBytes: number
+  pauseQueuedOperations: number
+  lowQueuedOperations: number
+}
+
+export type StructuredAgentSessionReadingControl = {
+  pauseReading(): void
+  resumeReading(): void
+}
+
 import type * as events from './structured-agent-session-event-sink'
 export const MAX_PRE_CONTROL_OPERATIONS = 1_024
 export const MAX_PRE_CONTROL_BYTES = 32 * 1024 * 1024
@@ -38,4 +50,11 @@ export type StructuredAgentSessionSinkQueueDeps = {
     backpressured: boolean,
     state: events.StructuredAgentSessionSinkState
   ) => void
+}
+
+export const DEFAULT_STRUCTURED_AGENT_SESSION_WATERMARKS: StructuredAgentSessionSinkWatermarks = {
+  pauseQueuedBytes: 16 * 1024 * 1024,
+  lowQueuedBytes: 8 * 1024 * 1024,
+  pauseQueuedOperations: 512,
+  lowQueuedOperations: 256
 }

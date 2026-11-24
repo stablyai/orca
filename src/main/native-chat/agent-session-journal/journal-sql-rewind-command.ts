@@ -13,8 +13,9 @@ import { JournalSqlScope } from './journal-sql-scope'
 import { planJournalDomainRewindCut } from './journal-domain-rewind-cut'
 import {
   readJournalDomainContextHead,
+  readJournalDomainHistoryOrigin,
   journalDomainPublicCursor
-} from './journal-domain-context-replacement'
+} from './journal-domain-context-head'
 import { journalDomainEventItem } from './journal-domain-item-removal'
 import { restoreRetainedFailures } from './journal-domain-retained-failures'
 import { removeJournalDomainRewindSuffix } from './journal-domain-rewind-removal'
@@ -119,9 +120,10 @@ export function applyJournalSqlRewindCommand(
           )
         : (handle ?? null)
     })
+    const previousOrigin = readJournalDomainHistoryOrigin(db, target)
     const nativeOrigin =
       rewind.providerFork?.coverage !== undefined &&
-      usableJournalHistoryOrigin(head.historyOrigin)?.kind === 'native_copy'
+      usableJournalHistoryOrigin(previousOrigin)?.kind === 'native_copy'
         ? {
             providerHandle,
             raw: {
@@ -162,9 +164,8 @@ export function applyJournalSqlRewindCommand(
       })
       const origin =
         nativeOrigin ??
-        (head.historyOrigin &&
-        sameJournalConversation(head.historyOrigin.providerHandle, providerHandle)
-          ? { ...head.historyOrigin, providerHandle }
+        (previousOrigin && sameJournalConversation(previousOrigin.providerHandle, providerHandle)
+          ? { ...previousOrigin, providerHandle }
           : null)
       db.prepare(
         `UPDATE journal_chat_state SET context_boundary=?,history_origin_json=? WHERE session_id=? AND epoch=?`

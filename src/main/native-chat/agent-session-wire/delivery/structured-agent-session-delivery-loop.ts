@@ -125,6 +125,7 @@ export class StructuredAgentSessionDeliveryLoop {
           await prepared.readiness.wait()
         }
         await prepared.before
+        await this.deps.adapter.pendingDelivery?.(sessionId)
         const handed = await owned(() =>
           this.handOver(
             sessionId,

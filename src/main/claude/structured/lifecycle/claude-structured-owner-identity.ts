@@ -1,3 +1,4 @@
+import type { ClaudeSession } from '../claude-structured-session-state'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
@@ -55,4 +56,15 @@ export async function claudeProcessIdentity(
     processStartTimeMs,
     spawnToken: input.spawnToken
   }
+}
+
+export function claudeOwnsLiveProcess(
+  session: ClaudeSession | undefined,
+  acquisitionGeneration: string
+): boolean {
+  return (
+    session?.acquisitionGeneration === acquisitionGeneration &&
+    session.connection.pid !== undefined &&
+    session.connection.exitVerdict.root === 'live'
+  )
 }

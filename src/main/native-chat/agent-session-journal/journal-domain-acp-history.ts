@@ -9,7 +9,7 @@ import {
   type AcpNativeTurn
 } from '../../acp/history/acp-history-turn-content'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { journalCanonicalItemId, journalVisibleItem } from './journal-sql-item-reads'
+import { journalCanonicalItemId, journalVisibleItem } from './journal-sql-history-items'
 import { ITEMS_BY_KIND_PAGE_JSON_BUDGET } from './journal-items-by-kind-page'
 import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
 import { measureJournalStoredRow } from './journal-stored-output-rows'

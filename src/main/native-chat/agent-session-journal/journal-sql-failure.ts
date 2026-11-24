@@ -1,3 +1,4 @@
+import { ClaudeImportResourceError } from './history-import/journal-claude-import-resource-error'
 import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
 import { storageCapacityErrorCode } from '../../../shared/errors/storage-capacity-error'
 import { AgentSessionJournalError, JournalOutcomeDecodeError } from './writing/journal-write-guards'
@@ -121,6 +122,8 @@ function restoreFailure(error: JournalSqlFailure): Error {
     return new QueuedMessageNotOwedError(error.queued.messageId, error.queued.owed)
   }
   switch (error.name) {
+    case 'ClaudeImportResourceError':
+      return new ClaudeImportResourceError(error.message)
     case 'JournalDamageError':
       return new JournalDamageError(error.message)
     case 'JournalUnreleasedSchemaError':

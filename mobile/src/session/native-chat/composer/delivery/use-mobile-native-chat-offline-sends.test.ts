@@ -28,11 +28,19 @@ describe('useMobileNativeChatOfflineQueue', () => {
   let releasePending: (() => void) | null = null
   let pendingSend: Promise<boolean> | null = null
 
-  function Harness({ lock, send }: { lock: MobileNativeChatInputLockReason | null; send: Send }) {
+  function Harness({
+    lock,
+    send,
+    held = false
+  }: {
+    lock: MobileNativeChatInputLockReason | null
+    send: Send
+    held?: boolean
+  }) {
     queue = useMobileNativeChatOfflineQueue({
       scope: SCOPE,
       inputLockReason: lock,
-      held: false,
+      held,
       send
     })
     return null
@@ -61,6 +69,25 @@ describe('useMobileNativeChatOfflineQueue', () => {
     releasePending = null
     pendingSend = null
     await loadMobileNativeChatDrafts('host', 'worktree')
+  })
+
+  it('keeps sends in order until the chat releases its hold', async () => {
+    const delivered: string[] = []
+    const send: Send = async (text) => {
+      delivered.push(text)
+      return true
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness, { lock: null, send, held: true }))
+    })
+    await act(async () => {
+      await queue?.send('first')
+      await queue?.send('second')
+    })
+    expect(delivered).toEqual([])
+
+    await reconnect(send)
+    expect(delivered).toEqual(['first', 'second'])
   })
 
   it('pauses a queued message whose send fails and holds later sends behind it until Resume', async () => {

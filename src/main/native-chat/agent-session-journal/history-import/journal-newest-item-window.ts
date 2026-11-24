@@ -30,6 +30,27 @@ export function createNewestItemWindow(maxBytes: number) {
       reserved = value
       trim()
     },
+    retainedBytes: () => bytes + entries.size + 2,
     items: () => [...entries.values()].map(({ item }) => item)
+  }
+}
+
+/** The same suffix as createNewestItemWindow, offered newest first so callers stop once full. */
+export function createNewestFirstItemWindow(maxBytes: number) {
+  const newestFirst: JournalReplacementItem[] = []
+  let bytes = 0
+  return {
+    /** False once the item no longer fits; nothing older can be retained. */
+    offer(item: JournalReplacementItem): boolean {
+      const itemBytes = Buffer.byteLength(JSON.stringify(item))
+      if (newestFirst.length && bytes + itemBytes > maxBytes) {
+        return false
+      }
+      newestFirst.push(item)
+      bytes += itemBytes
+      return true
+    },
+    retainedBytes: () => bytes + newestFirst.length + 2,
+    items: () => newestFirst.toReversed()
   }
 }

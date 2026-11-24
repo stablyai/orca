@@ -26,6 +26,7 @@ import type { ClaudeChildWorkDecoder } from '../child-work/claude-child-work-dec
 import type { ClaudeSlashCommandCatalog } from '../command-catalog/claude-slash-command-catalog'
 import type { ClaudeAtRestCommandCatalog } from '../command-catalog/claude-at-rest-commands'
 import type { ClaudeInitProof } from './startup/claude-structured-init-proof'
+import type { ClaudeSessionHistory } from '../transcripts/claude-transcript-catch-up'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { ClaudeNamingInputs } from '../conversation-naming/claude-naming-invocation'
@@ -228,7 +229,7 @@ export type ClaudeSession = {
     /** The account home the child writes its transcript in, pinned at launch. */
     claudeConfigDir: string
     cwd: string
-    history: { leafUuid: string | null; covered: boolean; contextActivity: number }
+    history: ClaudeSessionHistory
     onLateRefusal: (error: Error) => void
     startup: ClaudeStartupOutcome
   }

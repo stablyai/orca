@@ -1,10 +1,14 @@
-import { isClaudeConversationEntry } from './claude-conversation-fork-boundary'
-import { open } from 'node:fs/promises'
+import { open, type FileHandle } from 'node:fs/promises'
+import { setImmediate } from 'node:timers/promises'
 import { claudeRecord } from '../structured/journal/claude-structured-item-translation'
+import { mainChainAsync } from './claude-transcript-chain'
+import { isClaudeConversationEntry } from './claude-conversation-fork-boundary'
+export { mainChain } from './claude-transcript-chain'
 
 // Read backward to the saved leaf so catch-up costs only the appended stretch, not the whole conversation.
 
 const CHUNK_BYTES = 64 * 1024
+const MAX_RECORD_BYTES = 16 * 1024 * 1024
 /** One read's budget; an outside stretch larger than this is not caught up. */
 export const CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES = 16 * 1024 * 1024
 
@@ -19,63 +23,250 @@ export type ClaudeTranscriptTail = {
 export async function readClaudeTranscriptTail(input: {
   filePath: string
   leafUuid: string
+  chainBoundaries?: readonly string[]
   maxBytes?: number
   check: () => void
   onLeafAbsent?: () => void
 }): Promise<ClaudeTranscriptTail | null> {
+  const newestFirst: Record<string, unknown>[] = []
+  let hasNewConversation = false
+  let covered = false
+  const result = await visitClaudeTranscriptTail(input, (row) => {
+    const boundary = typeof row.uuid === 'string' && input.chainBoundaries?.includes(row.uuid)
+    covered ||= boundary === true
+    if (row.uuid === input.leafUuid && !boundary) {
+      return true
+    }
+    if (!covered && isClaudeConversationEntry(row)) {
+      hasNewConversation = true
+    }
+    if (!boundary) {
+      newestFirst.push(row)
+    }
+    return false
+  })
+  if (result.outcome === 'found' || covered) {
+    if (covered && !hasNewConversation) {
+      return { rows: [], rewound: false }
+    }
+    const tail = await mainChainAsync(
+      newestFirst.toReversed(),
+      input.check,
+      input.leafUuid,
+      covered ? input.chainBoundaries : []
+    )
+    if (result.outcome !== 'capacity' || !tail.rewound) {
+      return tail
+    }
+  }
+  if (result.outcome === 'absent') {
+    input.onLeafAbsent?.()
+  }
+  return null
+}
+
+/** Only complete records in the consumed range can anchor the next catch-up. */
+export async function readClaudeTranscriptFrontier(input: {
+  filePath: string
+  consumedBytes: number
+  maxBytes?: number
+  check: () => void
+}): Promise<string | undefined> {
+  let frontier: string | undefined
+  const range = {
+    ...input,
+    endBytes: input.consumedBytes,
+    // Ordinary catch-up's bound: an unchanged reopen must not cost a recovery-sized read.
+    maxBytes: input.maxBytes ?? CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES
+  }
+  await visitClaudeTranscriptTail(range, (row) => {
+    if (typeof row.uuid !== 'string' || !row.uuid) {
+      return false
+    }
+    frontier = row.uuid
+    return true
+  })
+  return frontier
+}
+
+/** Recovery bounds source work as well as the retained item window. */
+export const CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES = 20 * 1024 * 1024
+export const CLAUDE_TRANSCRIPT_WINDOW_RAW_MAX_BYTES = 64 * 1024 * 1024
+
+type TranscriptSource = { filePath: string } | { handle: FileHandle }
+type TranscriptRowVisitor = (row: Record<string, unknown>, recordEnd: number) => boolean
+
+export async function readClaudeTranscriptWindow(
+  input: TranscriptSource & {
+    check: () => void
+    endBytes?: number
+    maxBytes?: number
+    visit?: TranscriptRowVisitor
+    select?: (recordEnd: number) => boolean
+    /** Also report what readClaudeTranscriptFrontier with this bound would find, in this one pass. */
+    frontierBytes?: number
+  }
+): Promise<{
+  rows: Record<string, unknown>[]
+  frontier?: string
+  bytesRead: number
+  decodedBytes: number
+  consumedBytes: number
+  sourceBytes: number
+  sourceMtimeMs: number
+  /** Complete records over the per-record cap that were passed over, not decoded. */
+  skippedRecords: number
+}> {
+  const newestFirst: Record<string, unknown>[] = []
+  const cap = input.visit
+    ? CLAUDE_TRANSCRIPT_WINDOW_RAW_MAX_BYTES
+    : CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES
+  const result = await visitClaudeTranscriptTail(
+    {
+      ...input,
+      maxBytes: Math.min(input.maxBytes ?? cap, cap)
+    },
+    (row, recordEnd) => {
+      if (input.visit) {
+        return input.visit(row, recordEnd)
+      }
+      newestFirst.push(row)
+      return false
+    },
+    input.select,
+    input.frontierBytes
+  )
+  return { ...result, rows: newestFirst.toReversed() }
+}
+
+async function visitClaudeTranscriptTail(
+  input: TranscriptSource & { endBytes?: number; maxBytes?: number; check: () => void },
+  visit: TranscriptRowVisitor,
+  select?: (recordEnd: number) => boolean,
+  frontierBytes?: number
+): Promise<{
+  outcome: 'found' | 'absent' | 'capacity'
+  frontier?: string
+  bytesRead: number
+  decodedBytes: number
+  consumedBytes: number
+  sourceBytes: number
+  sourceMtimeMs: number
+  /** Complete records over the per-record cap that were passed over, not decoded. */
+  skippedRecords: number
+}> {
   const maxBytes = input.maxBytes ?? CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES
-  const handle = await open(input.filePath, 'r')
+  const handle = 'handle' in input ? input.handle : await open(input.filePath, 'r')
   try {
     input.check()
-    const { size } = await handle.stat()
+    const { size, mtimeMs } = await handle.stat()
+    const endBytes = Math.min(size, input.endBytes ?? size)
     input.check()
-    const newestFirst: Record<string, unknown>[] = []
+    let bytesRead = 0
+    let decodedBytes = 0
+    let consumedBytes = 0
+    let skippedRecords = 0
+    let frontier: string | undefined
+    let frontierSettled = frontierBytes === undefined
+    const result = (outcome: 'found' | 'absent' | 'capacity') => ({
+      outcome,
+      frontier,
+      bytesRead,
+      decodedBytes,
+      consumedBytes,
+      sourceBytes: endBytes,
+      sourceMtimeMs: mtimeMs,
+      skippedRecords
+    })
     // Retain split-line chunks newest first while reading backward.
     let pieces: Buffer[] = []
+    let recordBytes = 0
+    let skipped = false
+    let rowsSinceYield = 0
+    let bytesSinceYield = 0
     // A last line without its newline is a write still landing; it is left for the next read.
     let complete = false
-    const endLine = (): Record<string, unknown> | null => {
-      const row = complete ? parseRow(Buffer.concat(pieces.toReversed())) : null
-      pieces = []
-      complete = true
-      return row
+    let recordEnd = endBytes
+    let selected = false
+    const append = (piece: Buffer) => {
+      recordBytes += piece.length
+      if (recordBytes > MAX_RECORD_BYTES) {
+        pieces = []
+        skipped = true
+      } else if (selected) {
+        pieces.push(piece)
+      }
     }
-    const found = () => mainChain(newestFirst.toReversed(), input.leafUuid)
-    let position = size
+    const endLine = async (nextRecordEnd: number): Promise<boolean> => {
+      const bytes = selected && !skipped ? Buffer.concat(pieces.toReversed()) : null
+      skippedRecords += complete && skipped ? 1 : 0
+      decodedBytes += bytes?.length ?? 0
+      const row = bytes ? parseRow(bytes) : null
+      // A frontier probe from the complete end reaches this record only if it reads the
+      // delimiter before it; the newest record with a UUID settles the answer either way.
+      if (
+        !frontierSettled &&
+        complete &&
+        recordEnd < consumedBytes &&
+        typeof row?.uuid === 'string' &&
+        row.uuid
+      ) {
+        frontierSettled = true
+        frontier = nextRecordEnd >= consumedBytes - (frontierBytes ?? 0) ? row.uuid : undefined
+      }
+      const found = row !== null && visit(row, recordEnd)
+      bytesSinceYield += recordBytes
+      pieces = []
+      recordBytes = 0
+      skipped = false
+      complete = true
+      recordEnd = nextRecordEnd
+      selected = select?.(recordEnd) ?? true
+      if (++rowsSinceYield >= 256 || bytesSinceYield >= 1024 * 1024) {
+        await setImmediate()
+        input.check()
+        rowsSinceYield = 0
+        bytesSinceYield = 0
+      }
+      return found
+    }
+    let position = endBytes
     while (position > 0) {
       input.check()
-      if (size - position >= maxBytes) {
-        return null
+      const remaining = maxBytes - (endBytes - position)
+      if (remaining <= 0) {
+        return result('capacity')
       }
-      const length = Math.min(CHUNK_BYTES, position)
+      const length = Math.min(CHUNK_BYTES, position, remaining)
       position -= length
       const chunk = Buffer.alloc(length)
-      await handle.read(chunk, 0, length, position)
+      const read = await handle.read(chunk, 0, length, position)
+      bytesRead += read.bytesRead
+      if (read.bytesRead !== length) {
+        throw new Error('Claude transcript changed while reading its window')
+      }
       input.check()
       let end = length
       for (let index = length - 1; index >= 0; index -= 1) {
         if (chunk[index] !== 0x0a) {
           continue
         }
-        pieces.push(chunk.subarray(index + 1, end))
-        end = index
-        const row = endLine()
-        if (row?.uuid === input.leafUuid) {
-          return found()
+        if (!complete) {
+          consumedBytes = position + index + 1
         }
-        if (row) {
-          newestFirst.push(row)
+        append(chunk.subarray(index + 1, end))
+        end = index
+        if (await endLine(position + index)) {
+          return result('found')
         }
       }
-      pieces.push(chunk.subarray(0, end))
+      append(chunk.subarray(0, end))
     }
-    if (endLine()?.uuid === input.leafUuid) {
-      return found()
-    }
-    input.onLeafAbsent?.()
-    return null
+    return result((await endLine(0)) ? 'found' : 'absent')
   } finally {
-    await handle.close()
+    if ('filePath' in input) {
+      await handle.close()
+    }
   }
 }
 
@@ -89,41 +280,4 @@ function parseRow(bytes: Buffer): Record<string, unknown> | null {
     // A torn or foreign line is not part of the conversation.
     return null
   }
-}
-
-/** Walk parent links back from the newest row; rows on other branches and sidechains drop out. */
-export function mainChain(rows: Record<string, unknown>[], leafUuid: string): ClaudeTranscriptTail {
-  const byUuid = new Map<string, Record<string, unknown>>()
-  let newest: Record<string, unknown> | null = null
-  for (const row of rows) {
-    if (
-      typeof row.uuid === 'string' &&
-      row.isSidechain !== true &&
-      row.parent_tool_use_id == null
-    ) {
-      byUuid.set(row.uuid, row)
-      if (isClaudeConversationEntry(row)) {
-        newest = row
-      }
-    }
-  }
-  const chain: Record<string, unknown>[] = []
-  let rewound = false
-  for (let row = newest; row;) {
-    chain.push(row)
-    // Each row is visited once, so a parent loop in a damaged file ends the walk.
-    byUuid.delete(String(row.uuid))
-    // A compaction boundary starts a fresh chain and names the one it continues.
-    const parent = typeof row.parentUuid === 'string' ? row.parentUuid : row.logicalParentUuid
-    if (parent === leafUuid) {
-      break
-    }
-    const next = typeof parent === 'string' ? byUuid.get(parent) : undefined
-    if (!next) {
-      rewound = true
-      break
-    }
-    row = next
-  }
-  return { rows: chain.toReversed(), rewound }
 }

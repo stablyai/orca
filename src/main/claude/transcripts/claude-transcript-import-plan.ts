@@ -15,6 +15,7 @@ import {
   continuedOutsideNotice,
   continuedOutsideRecordId,
   createHistoryCatchUpBatch,
+  HistoryCatchUpCapacityError,
   HISTORY_CATCH_UP_MAX_OPERATIONS,
   type HistoryCatchUpPlan
 } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
@@ -98,7 +99,7 @@ export function createClaudeTranscriptImportPlan(input: {
       workAt
     ])
     if (pending.length > HISTORY_CATCH_UP_MAX_OPERATIONS) {
-      throw new Error('too-large')
+      throw new HistoryCatchUpCapacityError()
     }
     return { accepted: true } as const
   }

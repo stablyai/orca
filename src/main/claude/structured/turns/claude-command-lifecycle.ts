@@ -128,8 +128,13 @@ export function claudeHeldSends(session: ClaudeSession): ReadonlySet<string> {
   ])
 }
 
-/** Pending lifecycle-tracked sends must keep the idle sweep from resting the child. */
-export function claudeHoldsDispatch(session: ClaudeSession | undefined): boolean {
+/** Pending sends and history recovery keep the idle sweep from resting the child. */
+export function claudeHoldsDispatch(
+  session: ClaudeSession | undefined
+): boolean | 'history-catch-up' {
+  if (session?.initialization.history.recovery) {
+    return 'history-catch-up'
+  }
   return session?.dispatchWaiters.some((waiter) => waiter.commandLifecycle !== undefined) ?? false
 }
 

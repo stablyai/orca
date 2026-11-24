@@ -1,3 +1,4 @@
+import { releaseJournalClaudeRecovery } from './journal-claude-recovery-reads'
 import { planJournalDomainRewindCut } from './journal-domain-rewind-cut'
 import { readJournalDomainMailObservation } from './journal-domain-mail-observation'
 import { readJournalDomainOutline } from './journal-domain-outline'
@@ -40,12 +41,16 @@ export function readJournalSqlPoint(
   db: Database.Database,
   request: JournalSqlPointRead
 ): JournalSqlPointReadResult {
-  return readJournalSqlProjection(db, request.sessionId, (scope) => read(scope, request.operation))
+  const { operation, sessionId } = request
+  if (operation.kind === 'claude-recovery-release') {
+    return releaseJournalClaudeRecovery(db, operation.transferId)
+  }
+  return readJournalSqlProjection(db, sessionId, (scope) => read(scope, operation))
 }
 
 function read(
   scope: JournalSqlScope,
-  operation: JournalSqlPointRead['operation']
+  operation: Exclude<JournalSqlPointRead['operation'], { kind: 'claude-recovery-release' }>
 ): JournalSqlPointReadResult {
   switch (operation.kind) {
     case 'mail-observation':
@@ -173,6 +178,11 @@ function read(
     case 'continuation-context':
     case 'continuation-spill':
     case 'restart-cut':
+    case 'claude-recovery-fingerprints':
+    case 'claude-recovery-slices':
+    case 'claude-recovery-goal':
+    case 'claude-recovery-header':
+    case 'claude-recovery-origin':
     case 'history-items':
     case 'claude-history-prompts':
     case 'canonical-item-ids':

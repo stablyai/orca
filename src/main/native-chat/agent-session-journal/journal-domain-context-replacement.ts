@@ -1,3 +1,6 @@
+import { readJournalSqlRecoveryGoal } from './projection/journal-thread-goal-source'
+import { droppedJournalHistoryReplacement } from './context-epochs/journal-history-replacement-guard'
+import type { JournalHistoryReplacementGuard } from './journal-writer-command'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type Database from '../../sqlite/sync-database'
 import type {
@@ -6,8 +9,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   journalHistoryOrigin,
-  sameJournalConversation,
-  type JournalHistoryOrigin
+  sameJournalConversation
 } from './context-epochs/journal-history-origin'
 import { journalRowBase } from './writing/journal-row-builders'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -18,6 +20,12 @@ import {
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalEpochRow, AgentJournalEpochReason } from './durable-rows/journal-row-schema'
 import { journalContextEpoch } from './context-epochs/journal-context-epoch'
+import {
+  readJournalDomainContextHead,
+  readJournalDomainHistoryOrigin,
+  journalDomainPublicCursor
+} from './journal-domain-context-head'
+export { journalDomainPublicCursor } from './journal-domain-context-head'
 import type { JournalReplacementItem } from './context-epochs/journal-epoch-replacement'
 import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 import {
@@ -45,6 +53,7 @@ export type JournalDomainContextReplacement =
     }
   | {
       kind: 'epoch-replace'
+      guard?: JournalHistoryReplacementGuard
       historyOrigin?: JournalEpochRow['historyOrigin']
       reason: AgentJournalEpochReason
       providerHandle?: AgentSessionJournalProviderHandle
@@ -58,26 +67,6 @@ import type {
 } from './journal-domain-context-command'
 export type { JournalDomainContextCommit } from './journal-domain-context-command'
 
-export function readJournalDomainContextHead(db: Database.Database, target: Target) {
-  const head = db
-    .prepare(`SELECT last_sequence, highest_fence, context_boundary, queue_clear_operation_id,
-      queue_failure_boundary, history_origin_json FROM journal_chat_state WHERE session_id=? AND epoch=? AND epoch IS NOT NULL`)
-    .get(target.sessionId, target.epoch)
-  if (!head) {
-    throw new Error('journal context command targets a retired chat epoch')
-  }
-  const historyOrigin: JournalHistoryOrigin | null =
-    head.history_origin_json === null ? null : JSON.parse(String(head.history_origin_json))
-  return {
-    lastSequence: Number(head.last_sequence),
-    highestFence: Number(head.highest_fence),
-    contextBoundary: Number(head.context_boundary),
-    cleared: head.queue_clear_operation_id !== null,
-    failureBoundary: Number(head.queue_failure_boundary),
-    historyOrigin
-  }
-}
-
 export function replaceJournalDomainContext(
   db: Database.Database,
   target: Target,
@@ -87,6 +76,15 @@ export function replaceJournalDomainContext(
 ): JournalDomainContextCommit {
   const prefix = [target.sessionId, target.epoch] as const
   const head = readJournalDomainContextHead(db, target)
+  assertJournalFence(operation.fence, head.highestFence)
+  const dropped = droppedJournalHistoryReplacement(
+    operation.kind === 'epoch-replace' ? operation.guard : undefined,
+    { epoch: target.epoch, sequence: head.lastSequence },
+    () => journalDomainPublicCursor(db, target, head.lastSequence)
+  )
+  if (dropped) {
+    return dropped
+  }
   const floor = operation.kind === 'context-rewind' ? operation.floor : null
   if (
     floor &&
@@ -94,11 +92,16 @@ export function replaceJournalDomainContext(
   ) {
     throw new Error('agent_session_rewind:stale-context')
   }
-  assertJournalFence(operation.fence, head.highestFence)
   const { fence } = operation
+  // A recovery transcript carries the goal reply but has no goal accounting.
+  const goal =
+    operation.kind === 'epoch-replace' && operation.guard
+      ? readJournalSqlRecoveryGoal(db, prefix)
+      : undefined
   const itemIds = operation.items.map((item) => agentJournalItemKey(item.identity))
-  const current = db.prepare(`SELECT payload_json, ordinal, hidden, sequence, owner_fence,
-    execution_owner FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
+  const current = db.prepare(
+    `SELECT payload_json, ordinal, hidden, sequence FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`
+  )
   for (const itemId of itemIds) {
     const existing = current.get(...prefix, itemId)
     if (floor && existing && Number(existing.sequence) <= floor.sequence) {
@@ -138,7 +141,7 @@ export function replaceJournalDomainContext(
     .all(...prefix, floor?.sequence ?? 0)
     .map((row) => String(row.item_id))
   for (const itemId of after) {
-    if (queuedJournalDomainSubmission(db, target, itemId)) {
+    if (itemId === goal?.saved.itemId || queuedJournalDomainSubmission(db, target, itemId)) {
       continue
     }
     const removal = removeJournalDomainItem(db, target, itemId, removalSequence, revisions)
@@ -154,21 +157,23 @@ export function replaceJournalDomainContext(
     if (!providerHandle) {
       throw new Error('journal context replacement omitted its provider handle')
     }
-    const previous = head.historyOrigin
-    const historyOrigin = journalHistoryOrigin({
-      kind: 'epoch',
-      ...journalRowBase(target.epoch, removalSequence, fence, savedAt),
-      reason:
-        operation.reason === 'legacy_import' && !operation.items.length
-          ? 'session_created'
-          : operation.reason,
-      providerHandle,
-      ...(operation.historyOrigin !== undefined
-        ? { historyOrigin: operation.historyOrigin }
-        : previous && sameJournalConversation(previous.providerHandle, providerHandle)
-          ? { historyOrigin: previous.raw }
-          : {})
-    })
+    const previous =
+      operation.historyOrigin === undefined ? readJournalDomainHistoryOrigin(db, target) : null
+    const historyOrigin =
+      operation.historyOrigin !== undefined
+        ? { providerHandle, raw: operation.historyOrigin }
+        : journalHistoryOrigin({
+            kind: 'epoch',
+            ...journalRowBase(target.epoch, removalSequence, fence, savedAt),
+            reason:
+              operation.reason === 'legacy_import' && !operation.items.length
+                ? 'session_created'
+                : operation.reason,
+            providerHandle,
+            ...(previous && sameJournalConversation(previous.providerHandle, providerHandle)
+              ? { historyOrigin: previous.raw }
+              : {})
+          })
     // A new context in the same physical epoch: its public identity changes, its rows do not move.
     db.prepare(`UPDATE journal_chat_state SET context_boundary=?, derived_turn_item_id=NULL, history_origin_json=?
       WHERE session_id=? AND epoch=? AND epoch IS NOT NULL`).run(
@@ -196,13 +201,15 @@ export function replaceJournalDomainContext(
   let sequence = removalSequence
   const alias = db.prepare(`SELECT echo_declared FROM journal_item_aliases
     WHERE session_id=? AND epoch=? AND provider_item_id=?`)
-  for (const [index, item] of operation.items.entries()) {
+  for (const [index, imported] of operation.items.entries()) {
     sequence += 1
     const itemId = itemIds[index]!
     const stored = current.get(...prefix, itemId)
-    const previous: AgentJournalRenderItem | undefined = stored
-      ? readJournalStoredItem(db, prefix, stored.payload_json)
-      : undefined
+    const preserved = itemId === goal?.saved.itemId ? goal : undefined
+    const item = preserved?.item ?? imported
+    const previous =
+      preserved?.saved ??
+      (stored ? readJournalStoredItem(db, prefix, stored.payload_json) : undefined)
     const tombstone = db
       .prepare(
         'SELECT revision FROM journal_item_tombstones WHERE session_id=? AND epoch=? AND item_id=?'
@@ -248,6 +255,12 @@ export function replaceJournalDomainContext(
         'DELETE FROM journal_item_tombstones WHERE session_id=? AND epoch=? AND item_id=?'
       ).run(...prefix, itemId)
     }
+    // A provider id now names its own row; an alias to the removed sent row would misdirect removal.
+    db.prepare(`UPDATE journal_item_aliases SET item_id=?3
+      WHERE session_id=?1 AND epoch=?2 AND provider_item_id=?3 AND item_id<>?3`).run(
+      ...prefix,
+      itemId
+    )
     if (Object.hasOwn(item, 'echoOf') && !alias.get(...prefix, itemId)?.echo_declared) {
       db.prepare(`INSERT INTO journal_item_aliases(session_id,epoch,provider_item_id,item_id,echo_declared,echo_json)
         VALUES(?,?,?,?,1,?) ON CONFLICT(session_id,epoch,provider_item_id)
@@ -289,18 +302,4 @@ export function replaceJournalDomainContext(
   commit.physicalCursor = { epoch: target.epoch, sequence }
   commit.cursor = journalDomainPublicCursor(db, target, sequence)
   return commit
-}
-
-export function journalDomainPublicCursor(
-  db: Database.Database,
-  target: Target,
-  sequence: number
-): AgentJournalCursor {
-  return {
-    epoch: journalContextEpoch(
-      target.epoch,
-      readJournalDomainContextHead(db, target).contextBoundary
-    ),
-    sequence
-  }
 }

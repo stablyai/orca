@@ -74,7 +74,7 @@ export type JournalSqlPointRead = {
     | { kind: 'usage-limit-cut' }
     | { kind: 'orca-stop-cut' }
     | { kind: 'input-read'; operation: JournalInputRead }
-    | { kind: 'metadata' }
+    | { kind: 'metadata'; includeHistoryOrigin?: true }
     | { kind: 'item'; itemId: string }
     | { kind: 'item-detail'; itemId: string }
     | { kind: 'submission'; clientMessageId: string }

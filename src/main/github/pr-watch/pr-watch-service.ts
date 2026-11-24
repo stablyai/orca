@@ -145,7 +145,7 @@ export class PRWatchService {
     if (this.deps.database.readOnly) {
       return
     }
-    if (finishesPRActionCall(rows)) {
+    if (rows?.historyReset || finishesPRActionCall(rows)) {
       this.resume.drain()
     }
     this.deliveries.committed(chatId, journal, rows)

@@ -32,7 +32,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
       'getConversation' | 'replacedRuntime' | 'listConversations' | 'isSessionTabRetired'
     >
     logger: StructuredAgentSessionLogger
-    adapter?: Pick<StructuredAgentSessionAdapter, 'runningPermissionMode'>
+    adapter?: Pick<StructuredAgentSessionAdapter, 'runningPermissionMode' | 'holdsDispatch'>
     onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
     statusSink?: StructuredAgentSessionStatusSink
     conversationNaming?: StructuredAgentSessionConversationNaming
@@ -70,6 +70,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
   const feed = new StructuredAgentSessionStatusFeed({
     sessions: args.sessions,
     starting: args.starting,
+    holdsDispatch: (sessionId) => args.deps().adapter?.holdsDispatch?.(sessionId) ?? false,
     readUsageLimitContinue: args.readUsageLimitContinue,
     runningPermissionMode: (sessionId) => args.deps().adapter?.runningPermissionMode?.(sessionId),
     onPublished: args.onPublished,
