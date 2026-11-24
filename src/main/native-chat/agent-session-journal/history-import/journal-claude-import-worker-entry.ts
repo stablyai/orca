@@ -1,15 +1,12 @@
 // The import spool is synchronous SQLite; it runs here so the host's event loop stays free.
 import { parentPort, workerData } from 'node:worker_threads'
-import { serialize } from 'node:v8'
+import { serializedWorkerReplyBytes } from '../../../utility-worker-host/utility-worker-reply-size'
 import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { installWorkerSendLedger } from '../../../worker-threads/worker-send-ledger'
 import { importClaudeTranscript } from './journal-claude-import'
 import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
 import { claudeImportPages } from './journal-claude-import-pages'
-import {
-  CLAUDE_IMPORT_PAGE_BYTES,
-  CLAUDE_IMPORT_REPLY_FRAMING_BYTES
-} from './journal-claude-import-worker-protocol'
+import { CLAUDE_IMPORT_PAGE_BYTES } from './journal-claude-import-worker-protocol'
 import type {
   ClaudeImportPage,
   ClaudeImportWork,
@@ -42,10 +39,7 @@ port.on('message', (request: ClaudeImportWorkerRequest) => {
 })
 
 function send(response: ClaudeImportWorkerResponse): void {
-  if (
-    serialize(response).byteLength >
-    CLAUDE_IMPORT_PAGE_BYTES - CLAUDE_IMPORT_REPLY_FRAMING_BYTES
-  ) {
+  if (serializedWorkerReplyBytes(response).framed > CLAUDE_IMPORT_PAGE_BYTES) {
     port.postMessage({ kind: 'resource', message: 'A Claude import reply exceeds the page limit.' })
   } else {
     port.postMessage(response)

@@ -1,5 +1,3 @@
-import { Worker } from 'node:worker_threads'
-import { serialize } from 'node:v8'
 import { readJournalSqlPoint } from '../../native-chat/agent-session-journal/journal-sql-point-read'
 import { withTestAgentSessionDatabase } from '../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -22,6 +20,7 @@ import {
 import {
   chat,
   closeClaudeCatchUpChats,
+  recoveryReceivedBytes,
   PROVIDER,
   SESSION
 } from './claude-transcript-catch-up.test-support'
@@ -545,29 +544,6 @@ async function saveLargeAnswer(c: Awaited<ReturnType<typeof chat>>, text: string
   return identity
 }
 
-function recoveryReceivedBytes(): number[] {
-  const messages: number[] = []
-  const emit = Worker.prototype.emit
-  vi.spyOn(Worker.prototype, 'emit').mockImplementation(function (this: Worker, event, ...args) {
-    const [reply] = args
-    if (
-      event === 'message' &&
-      reply &&
-      typeof reply === 'object' &&
-      (reply.type === 'point' ||
-        reply.type === 'committed' ||
-        reply.kind === 'page' ||
-        reply.kind === 'imported')
-    ) {
-      messages.push(
-        serialize({ type: 'message', bytes: serialize(reply), seq: 1, more: false }).byteLength
-      )
-    }
-    return emit.call(this, event, ...args)
-  })
-  return messages
-}
-
 // PR #45200: one recovery restores a whole saved answer and certifies the unchanged source.
 it('commits a 2 MiB saved answer in bounded replies and skips recovery on two unchanged reopens', async () => {
   const c = await chat('batch')
@@ -627,7 +603,7 @@ it('commits a 2 MiB saved answer in bounded replies and skips recovery on two un
   expect(Math.max(...receives)).toBeLessThanOrEqual(512 * 1024)
 })
 
-it('rejects staged restoration when the saved revision changes before its first slice', async () => {
+it('rejects staged restoration when the saved revision changes between slices', async () => {
   const c = await chat('batch')
   const text = 'original'.repeat(100_000)
   const identity = await saveLargeAnswer(c, text)
@@ -638,11 +614,13 @@ it('rejects staged restoration when the saved revision changes before its first 
     blocks: [{ type: 'text', text: 'new saved revision' }]
   } as const
   c.journal.reads.claudeRecoverySlices = async (operation) => {
-    await c.journal.appendItem(
-      identity,
-      { ...revised, blocks: [...revised.blocks] },
-      { fence: 1, turnScope: { kind: 'thread' } }
-    )
+    if (operation.after.ordinal !== 0 || operation.after.offset !== 0) {
+      await c.journal.appendItem(
+        identity,
+        { ...revised, blocks: [...revised.blocks] },
+        { fence: 1, turnScope: { kind: 'thread' } }
+      )
+    }
     return read(operation)
   }
   const plan = await prepareCapacityRecovery(c)

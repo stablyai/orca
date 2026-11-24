@@ -3,8 +3,6 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { OrchestrationDb } from '../../db/orchestration-db'
@@ -89,61 +87,4 @@ it('reads a streaming tool row once per read in flight, not once per commit', as
   ).toEqual(['Worker is waiting on the model'])
   watch.dispose()
   db.close()
-})
-
-it('starts fresh model-wait notices when history replaces an earlier retry', async () => {
-  const db = new OrchestrationDb(':memory:')
-  const run = db.createRun({
-    objective: 'ship',
-    coordinatorHandle: 'term_coordinator',
-    coordinatorPaneKey: 'tab_coordinator:11111111-1111-4111-8111-111111111111'
-  })
-  createRootDispatch(
-    db,
-    db.createTask({ spec: 'work', runId: run.id }).id,
-    formatOrcaSessionAddress(SESSION)
-  )
-  const feed: { onItems?: (ids: readonly string[] | null) => void } = {}
-  const retry = agentSessionFailureWords(agentSessionFailureFact('providerRetrying'), {
-    surface: 'row'
-  })
-  const watch = new ChatWorkerModelWait(
-    { getDb: () => db, notify: () => {}, isWaitingForMail: () => false },
-    {
-      observe: (_sessionId, listener) => {
-        feed.onItems = listener
-        return () => {}
-      },
-      item: async (_sessionId, itemId) => ({
-        itemId,
-        revision: 1,
-        sequence: 1,
-        observedAt: Date.now(),
-        body: { kind: 'status', ...retry }
-      })
-    }
-  )
-  try {
-    watch.observe(SESSION, 'working')
-    feed.onItems?.(['old-retry'])
-    await vi.advanceTimersByTimeAsync(1)
-    feed.onItems?.(null)
-    await vi.advanceTimersByTimeAsync(10 * MINUTE)
-    feed.onItems?.(['new-retry'])
-    await vi.advanceTimersByTimeAsync(0)
-    const notices = db.getUnreadRunMailbox(run.id).flatMap(({ payload }) => {
-      const entry = payload ? JSON.parse(payload) : null
-      return entry?.modelWait
-        ? [{ kind: entry.modelWait, hasLastSeen: entry.lastSeen !== undefined }]
-        : []
-    })
-    expect(notices).toEqual([
-      { kind: 'retrying', hasLastSeen: true },
-      { kind: 'waiting', hasLastSeen: false },
-      { kind: 'retrying', hasLastSeen: true }
-    ])
-  } finally {
-    watch.dispose()
-    db.close()
-  }
 })

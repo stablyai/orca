@@ -1,23 +1,30 @@
-import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type Database from '../../sqlite/sync-database'
-import { usableJournalHistoryOrigin } from './context-epochs/journal-history-origin'
 import {
-  CLAUDE_IMPORT_ENTRIES_BYTES,
-  claudeImportEntryBytes,
-  wideField
-} from './history-import/journal-claude-import-pages'
+  claudeRecoveryFragmentBytes,
+  readClaudeRecoveryFragmentPage,
+  type ClaudeRecoveryFragment,
+  type ClaudeRecoveryPosition
+} from './journal-claude-recovery-fragments'
+import { journalRecoveryPageEntriesBytes } from './journal-sql-reader-reply-limit'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import { savedField, type Field } from './journal-claude-recovery-fields'
+import type Database from '../../sqlite/sync-database'
+import {
+  readClaudeRecoveryOriginHeader,
+  readClaudeRecoveryOriginIds,
+  requireClaudeRecoveryCursor
+} from './journal-claude-recovery-origin'
+import type { NativeCopyOriginHeader } from './context-epochs/journal-history-origin'
+import { claudeImportEntryBytes, wideField } from './history-import/journal-claude-import-pages'
 import { ClaudeImportResourceError } from './history-import/journal-claude-import-resource-error'
-import type { ClaudeImportFieldFragment } from './history-import/journal-claude-import-worker-protocol'
+import {
+  CLAUDE_RECOVERY_CONCURRENCY,
+  type ClaudeImportFieldFragment
+} from './history-import/journal-claude-import-worker-protocol'
 import { digestPayload } from './item-lifecycle/journal-payload-bounds'
 import type { JournalHistoryItemSource } from './journal-history-items'
 import { JournalStoredJsonSizeError } from './journal-stored-json-bounds'
 
-type Field = {
-  kind: 'text' | 'tool-result' | 'tool-input' | 'tool-output'
-  blockIndex: number | null
-}
-type Position = { ordinal: number; offset: number }
+type Position = ClaudeRecoveryPosition
 type SavedRevision = { canonicalItemId: string; revision: number }
 type Fingerprint = SavedRevision & {
   keyIndex: number
@@ -33,19 +40,23 @@ export type JournalClaudeRecoveryRead =
       kind: 'claude-recovery-fingerprints'
       cursor: AgentJournalCursor
       keys: readonly string[]
+      outputLengths?: readonly (readonly number[])[]
       after: Position
     }
   | ({
       kind: 'claude-recovery-slices'
       epoch: string
       key: string
-      fields: readonly Field[]
+      transferId: string
+      fields?: readonly Field[]
       after: Position
     } & SavedRevision)
+  | { kind: 'claude-recovery-goal'; cursor: AgentJournalCursor }
+  | { kind: 'claude-recovery-release'; transferId: string }
+  | { kind: 'claude-recovery-header'; cursor?: AgentJournalCursor; providerSessionId?: string }
   | {
       kind: 'claude-recovery-origin'
       cursor: AgentJournalCursor
-      providerSessionId: string
       after: Position
     }
 
@@ -56,60 +67,23 @@ export type JournalClaudeRecoveryReadResult =
       fragments: ClaudeImportFieldFragment[]
       next: Position | null
     }
+  | { kind: 'claude-recovery-goal'; cost: { itemId: string; bytes: number } | null }
+  | { kind: 'claude-recovery-release' }
+  | { kind: 'claude-recovery-header'; header: NativeCopyOriginHeader | null }
   | {
       kind: 'claude-recovery-origin'
       fragments: ClaudeImportFieldFragment[]
       next: Position | null
     }
 
-type SavedField = { field: Field; value: unknown; callId?: string }
 type Prefix = readonly [string, string]
+const FINGERPRINT_BYTES = journalRecoveryPageEntriesBytes({
+  kind: 'claude-recovery-fingerprints',
+  fingerprints: [],
+  next: { ordinal: Number.MAX_SAFE_INTEGER, offset: Number.MAX_SAFE_INTEGER }
+})
+const SLICE_BYTES = claudeRecoveryFragmentBytes('claude-recovery-slices')
 const DIGEST_PLACEHOLDER = '0'.repeat(64)
-
-function toolInput(
-  blockIndex: number | null,
-  call: { callId?: string; input: unknown }
-): SavedField | undefined {
-  return call.callId
-    ? { field: { kind: 'tool-input', blockIndex }, value: call.input ?? null, callId: call.callId }
-    : undefined
-}
-
-// One slot per message block, or input plus output for a standalone call.
-function savedField(body: AgentJournalItemBody, index: number): SavedField | undefined {
-  if (body.kind === 'tool-call') {
-    if (index === 0) {
-      return toolInput(null, body)
-    }
-    if (index === 1 && body.output && !body.output.truncated) {
-      return { field: { kind: 'tool-output', blockIndex: null }, value: body.output.head }
-    }
-  }
-  if (body.kind === 'message') {
-    const block = body.blocks[index]
-    if (block?.type === 'text') {
-      return { field: { kind: 'text', blockIndex: index }, value: block.text }
-    }
-    if (block?.type === 'tool-result') {
-      return { field: { kind: 'tool-result', blockIndex: index }, value: block.output }
-    }
-    if (block?.type === 'tool-call') {
-      return toolInput(index, block)
-    }
-  }
-  return undefined
-}
-
-function requireCursor(db: Database.Database, prefix: Prefix, cursor: AgentJournalCursor): void {
-  if (
-    prefix[1] !== cursor.epoch ||
-    db
-      .prepare('SELECT last_sequence FROM journal_chat_state WHERE session_id=? AND epoch=?')
-      .get(...prefix)?.last_sequence !== cursor.sequence
-  ) {
-    throw new Error('Saved Claude history changed during recovery.')
-  }
-}
 
 function readFingerprints(
   source: JournalHistoryItemSource,
@@ -144,7 +118,8 @@ function readFingerprints(
       continue
     }
     const { body } = item
-    const slots = body.kind === 'message' ? body.blocks.length : 2
+    const outputLengths = operation.outputLengths?.[keyIndex]
+    const slots = body.kind === 'message' ? body.blocks.length : outputLengths?.length ? 2 : 1
     for (
       let index = keyIndex === operation.after.ordinal ? operation.after.offset : 0;
       index < slots;
@@ -152,6 +127,13 @@ function readFingerprints(
     ) {
       const saved = savedField(body, index)
       if (!saved) {
+        continue
+      }
+      if (
+        saved.field.kind === 'tool-output' &&
+        typeof saved.value === 'string' &&
+        !outputLengths?.includes(Buffer.byteLength(saved.value))
+      ) {
         continue
       }
       const json = JSON.stringify(saved.value)
@@ -167,7 +149,7 @@ function readFingerprints(
         jsonBytes: Buffer.byteLength(json)
       }
       const size = claudeImportEntryBytes(field)
-      if (bytes + size > CLAUDE_IMPORT_ENTRIES_BYTES) {
+      if (bytes + size > FINGERPRINT_BYTES) {
         if (!fingerprints.length) {
           throw new ClaudeImportResourceError('A saved Claude fingerprint exceeds the page limit.')
         }
@@ -181,123 +163,150 @@ function readFingerprints(
   return { fingerprints, next: null }
 }
 
-function readFragments(
-  count: number,
-  after: Position,
-  field: (ordinal: number) => { path: string[]; value: unknown }
+type Slice = Extract<JournalClaudeRecoveryRead, { kind: 'claude-recovery-slices' }>
+type Transfer = {
+  prefix: Prefix
+  key: string
+  canonicalItemId: string
+  revision: number
+  available: Generator<ClaudeRecoveryFragment>
+  pending: IteratorResult<ClaudeRecoveryFragment>
+}
+
+// A transfer owns only the matched fields and a paused fragment iterator, never a WAL snapshot.
+const transfersByReader = new WeakMap<Database.Database, Map<string, Transfer>>()
+
+function* sliceFields(values: readonly unknown[]): Generator<ClaudeRecoveryFragment> {
+  for (const [ordinal, value] of values.entries()) {
+    let offset = 0
+    for (const fragment of wideField([String(ordinal)], value, 0, SLICE_BYTES)) {
+      yield { ...fragment, at: { ordinal, offset: offset++ } }
+    }
+  }
+}
+
+function readSlices(
+  db: Database.Database,
+  prefix: Prefix,
+  source: JournalHistoryItemSource,
+  request: Slice
 ) {
+  const { transferId, after, key, canonicalItemId, revision, fields } = request
+  let transfers = transfersByReader.get(db)
+  if (!transfers) {
+    transfers = new Map()
+    transfersByReader.set(db, transfers)
+  }
+  const existing = transfers.get(transferId)
+  transfers.delete(transferId)
+  const visible = db
+    .prepare(`SELECT revision FROM journal_items
+    WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
+    .get(...prefix, canonicalItemId)
   if (
-    !Number.isSafeInteger(after.ordinal) ||
-    after.ordinal < 0 ||
-    after.ordinal >= count ||
-    !Number.isSafeInteger(after.offset) ||
-    after.offset < 0
+    prefix[1] !== request.epoch ||
+    source.canonicalItemId(key) !== canonicalItemId ||
+    source.presentationRemoved(key) ||
+    visible?.revision !== revision
   ) {
-    throw new Error('Invalid saved Claude history slice position.')
+    throw new Error('Saved Claude history changed during recovery.')
   }
-  const fragments: ClaudeImportFieldFragment[] = []
-  let bytes = 0
-  for (let ordinal = after.ordinal; ordinal < count; ordinal++) {
-    const { path, value } = field(ordinal)
-    const start = ordinal === after.ordinal ? after.offset : 0
-    let offset = start
-    for (const { entry, size } of wideField(path, value, offset)) {
-      if (bytes + size > CLAUDE_IMPORT_ENTRIES_BYTES) {
-        return { fragments, next: { ordinal, offset } }
-      }
-      fragments.push(entry)
-      bytes += size
-      offset++
+  let available: Generator<ClaudeRecoveryFragment>
+  let pending: IteratorResult<ClaudeRecoveryFragment> | undefined
+  if (existing) {
+    pending = existing.pending
+    if (
+      pending.done ||
+      pending.value.at.ordinal !== after.ordinal ||
+      pending.value.at.offset !== after.offset ||
+      existing.prefix[0] !== prefix[0] ||
+      existing.prefix[1] !== prefix[1] ||
+      existing.key !== key ||
+      existing.canonicalItemId !== canonicalItemId ||
+      existing.revision !== revision
+    ) {
+      throw new Error('Invalid saved Claude history slice position.')
     }
-    if (offset === start) {
-      throw new Error('Invalid saved Claude history slice offset.')
+    available = existing.available
+  } else {
+    if (!fields || after.ordinal !== 0 || after.offset !== 0) {
+      throw new Error('Saved Claude history transfer is no longer available.')
     }
+    const item = source.item(canonicalItemId)
+    if (!item || item.revision !== revision) {
+      throw new Error('Saved Claude history changed during recovery.')
+    }
+    available = sliceFields(
+      fields.map((address) => {
+        const saved = savedField(
+          item.body,
+          address.blockIndex ?? (address.kind === 'tool-output' ? 1 : 0)
+        )
+        if (
+          !saved ||
+          saved.field.kind !== address.kind ||
+          saved.field.blockIndex !== address.blockIndex
+        ) {
+          throw new Error('Saved Claude history field changed during recovery.')
+        }
+        return saved.value
+      })
+    )
   }
-  return { fragments, next: null }
+  const page = readClaudeRecoveryFragmentPage(available, SLICE_BYTES, pending)
+  if (page.next) {
+    if (transfers.size >= CLAUDE_RECOVERY_CONCURRENCY) {
+      throw new Error('Saved Claude history reader has no transfer slot.')
+    }
+    transfers.set(transferId, {
+      prefix,
+      key,
+      canonicalItemId,
+      revision,
+      available,
+      pending: page.pending
+    })
+  }
+  const { fragments, next } = page
+  return { fragments, next }
+}
+
+export function releaseJournalClaudeRecovery(
+  db: Database.Database,
+  transferId: string
+): JournalClaudeRecoveryReadResult {
+  transfersByReader.get(db)?.delete(transferId)
+  return { kind: 'claude-recovery-release' }
 }
 
 export function readJournalClaudeRecovery(
   db: Database.Database,
   prefix: Prefix,
   history: () => JournalHistoryItemSource,
-  operation: JournalClaudeRecoveryRead
+  operation: Exclude<
+    JournalClaudeRecoveryRead,
+    { kind: 'claude-recovery-release' | 'claude-recovery-goal' }
+  >
 ): JournalClaudeRecoveryReadResult {
   switch (operation.kind) {
     case 'claude-recovery-fingerprints':
-      requireCursor(db, prefix, operation.cursor)
+      requireClaudeRecoveryCursor(db, prefix, operation.cursor)
       return { kind: operation.kind, ...readFingerprints(history(), operation) }
-    case 'claude-recovery-slices': {
-      const source = history()
-      const { key, canonicalItemId, revision, fields, after } = operation
-      const item =
-        prefix[1] === operation.epoch &&
-        source.canonicalItemId(key) === canonicalItemId &&
-        !source.presentationRemoved(key)
-          ? source.item(canonicalItemId)
-          : null
-      if (!item || item.revision !== revision) {
-        throw new Error('Saved Claude history changed during recovery.')
+    case 'claude-recovery-slices':
+      return { kind: operation.kind, ...readSlices(db, prefix, history(), operation) }
+    case 'claude-recovery-header':
+      if (operation.cursor) {
+        requireClaudeRecoveryCursor(db, prefix, operation.cursor)
       }
       return {
         kind: operation.kind,
-        ...readFragments(fields.length, after, (ordinal) => {
-          const address = fields[ordinal]!
-          const index = address.blockIndex ?? (address.kind === 'tool-output' ? 1 : 0)
-          const saved = savedField(item.body, index)
-          if (
-            !saved ||
-            saved.field.kind !== address.kind ||
-            saved.field.blockIndex !== address.blockIndex
-          ) {
-            throw new Error('Saved Claude history field changed during recovery.')
-          }
-          return { path: [String(ordinal)], value: saved.value }
-        })
+        header: readClaudeRecoveryOriginHeader(db, prefix, operation.providerSessionId)
       }
-    }
-    case 'claude-recovery-origin': {
-      requireCursor(db, prefix, operation.cursor)
-      const row = db
-        .prepare(
-          'SELECT history_origin_json FROM journal_chat_state WHERE session_id=? AND epoch=?'
-        )
-        .get(...prefix)
-      const origin =
-        row?.history_origin_json == null
-          ? null
-          : usableJournalHistoryOrigin(JSON.parse(String(row.history_origin_json)))
-      if (
-        origin?.kind !== 'native_copy' ||
-        origin.agent !== 'claude' ||
-        origin.unit !== 'claude-entry' ||
-        origin.providerHandle.kind !== 'claude' ||
-        origin.providerHandle.sessionId !== operation.providerSessionId
-      ) {
-        return { kind: operation.kind, fragments: [], next: null }
-      }
-      const { ids, ...header } = origin
-      if (operation.after.ordinal === 0 && operation.after.offset === 0) {
-        const fragments: ClaudeImportFieldFragment[] = [
-          { kind: 'wide-field', path: ['header'], value: header },
-          { kind: 'wide-field', path: ['ids'], value: ids }
-        ]
-        if (
-          fragments.reduce((bytes, fragment) => bytes + claudeImportEntryBytes(fragment), 0) <=
-          CLAUDE_IMPORT_ENTRIES_BYTES
-        ) {
-          return { kind: operation.kind, fragments, next: null }
-        }
-      }
+    case 'claude-recovery-origin':
+      requireClaudeRecoveryCursor(db, prefix, operation.cursor)
       return {
         kind: operation.kind,
-        ...readFragments(ids.length + 2, operation.after, (ordinal) =>
-          ordinal === 0
-            ? { path: ['header'], value: header }
-            : ordinal === 1
-              ? { path: ['ids'], value: [] }
-              : { path: ['ids', String(ordinal - 2)], value: ids[ordinal - 2]! }
-        )
+        ...readClaudeRecoveryOriginIds(db, prefix, operation.after)
       }
-    }
   }
 }

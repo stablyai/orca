@@ -100,6 +100,13 @@ export type AgentSessionJournalReads = {
   claudeRecoverySlices(
     input: ClaudeRecoveryRequest<'claude-recovery-slices'>
   ): Promise<ClaudeRecoveryReply<'claude-recovery-slices'>>
+  releaseClaudeRecovery(transferId: string): Promise<void>
+  claudeRecoveryGoal(
+    cursor: AgentJournalCursor
+  ): Promise<ClaudeRecoveryReply<'claude-recovery-goal'>['cost']>
+  claudeRecoveryHeader(
+    input: ClaudeRecoveryRequest<'claude-recovery-header'>
+  ): Promise<ClaudeRecoveryReply<'claude-recovery-header'>['header']>
   claudeRecoveryOrigin(
     input: ClaudeRecoveryRequest<'claude-recovery-origin'>
   ): Promise<ClaudeRecoveryReply<'claude-recovery-origin'>>

@@ -248,6 +248,13 @@ export function journalSqlReads(
     claudeRecoveryFingerprints: (request) =>
       read({ kind: 'claude-recovery-fingerprints', ...request }),
     claudeRecoverySlices: (request) => read({ kind: 'claude-recovery-slices', ...request }),
+    releaseClaudeRecovery: async (transferId) => {
+      await read({ kind: 'claude-recovery-release', transferId })
+    },
+    claudeRecoveryGoal: async (cursor) =>
+      (await read({ kind: 'claude-recovery-goal', cursor })).cost,
+    claudeRecoveryHeader: async (request) =>
+      (await read({ kind: 'claude-recovery-header', ...request })).header,
     claudeRecoveryOrigin: (request) => read({ kind: 'claude-recovery-origin', ...request }),
     item,
     itemDetail: async (itemId) => (await read({ kind: 'item-detail', itemId })).item,

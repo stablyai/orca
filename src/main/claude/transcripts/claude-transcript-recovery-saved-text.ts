@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { setImmediate } from 'node:timers/promises'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { NativeChatBlock } from '../../../shared/native-chat/native-chat-types'
@@ -22,7 +23,7 @@ type Fingerprint = Extract<
 type Slice = Extract<JournalClaudeRecoveryRead, { kind: 'claude-recovery-slices' }>
 type RecoveryReads = Pick<
   AgentSessionJournalReads,
-  'claudeRecoveryFingerprints' | 'claudeRecoverySlices'
+  'claudeRecoveryFingerprints' | 'claudeRecoverySlices' | 'releaseClaudeRecovery'
 >
 type Match = { key: string; fingerprint: Fingerprint; targets: Target[] }
 
@@ -150,7 +151,7 @@ function matchSavedField(plan: Restoration, key: string, fingerprint: Fingerprin
 async function restoreMatches(
   kept: Restoration[],
   epoch: string,
-  read: RecoveryReads['claudeRecoverySlices'],
+  reads: RecoveryReads,
   check: () => void
 ): Promise<void> {
   const rows = new Map<
@@ -181,21 +182,29 @@ async function restoreMatches(
     const matches = [...fields.values()]
     const addresses = matches.map(({ field }) => field)
     const values: Record<string, unknown> = {}
+    const transferId = randomUUID()
     let after: Slice['after'] | null = { ordinal: 0, offset: 0 }
-    while (after) {
-      check()
-      const page = await read({
-        epoch,
-        ...row,
-        fields: addresses,
-        after
-      })
-      check()
-      for (const fragment of page.fragments) {
-        applyClaudeImportFieldFragment(values, fragment)
+    try {
+      while (after) {
+        check()
+        const page = await reads.claudeRecoverySlices({
+          epoch,
+          ...row,
+          transferId,
+          ...(after.ordinal === 0 && after.offset === 0 ? { fields: addresses } : {}),
+          after
+        })
+        after = page.next
+        check()
+        for (const fragment of page.fragments) {
+          applyClaudeImportFieldFragment(values, fragment)
+        }
+        await setImmediate()
       }
-      after = page.next
-      await setImmediate()
+    } finally {
+      if (after) {
+        await reads.releaseClaudeRecovery(transferId).catch(() => {})
+      }
     }
     for (const [ordinal, { targets }] of matches.entries()) {
       for (const target of targets) {
@@ -215,6 +224,7 @@ export async function keepSavedRecoveryText(
   reads: RecoveryReads,
   cursor: AgentJournalCursor,
   remainingBytes: number,
+  goal: { itemId: string; bytes: number } | null,
   check: () => void
 ): Promise<void> {
   const byKey = new Map<string, Restoration[]>()
@@ -232,14 +242,18 @@ export async function keepSavedRecoveryText(
     }
   }
   for (const [position, entry] of entries.entries()) {
+    const itemId = agentJournalItemKey(entry.item.identity)
+    if (goal?.itemId === itemId) {
+      entry.bytes = goal.bytes
+      plans.push({ entry, position, minimumBytes: goal.bytes + 1, matches: [] })
+      continue
+    }
     const plan = await indexItem(entry, position, check)
     plans.push(plan)
     if (!plan.text && !plan.inputs) {
       continue
     }
-    for (const key of new Set([agentJournalItemKey(entry.item.identity)]).union(
-      new Set(entry.keys)
-    )) {
+    for (const key of new Set([itemId]).union(new Set(entry.keys))) {
       const candidates = byKey.get(key) ?? []
       byKey.set(key, candidates)
       candidates.push(plan)
@@ -253,10 +267,18 @@ export async function keepSavedRecoveryText(
     if (!requested.length) {
       continue
     }
+    const outputLengths = requested.map((key) => [
+      ...new Set(byKey.get(key)!.flatMap((plan) => (plan.text ? [...plan.text.keys()] : [])))
+    ])
     let after: Slice['after'] | null = { ordinal: 0, offset: 0 }
     while (after && requested.slice(after.ordinal).some(needed)) {
       check()
-      const page = await reads.claudeRecoveryFingerprints({ cursor, keys: requested, after })
+      const page = await reads.claudeRecoveryFingerprints({
+        cursor,
+        keys: requested,
+        after,
+        outputLengths
+      })
       check()
       for (const fingerprint of page.fingerprints) {
         const key = requested[fingerprint.keyIndex]!
@@ -284,5 +306,5 @@ export async function keepSavedRecoveryText(
   if (kept < entries.length) {
     entries[kept]!.bytes = Infinity
   }
-  await restoreMatches(plans.slice(0, kept), cursor.epoch, reads.claudeRecoverySlices, check)
+  await restoreMatches(plans.slice(0, kept), cursor.epoch, reads, check)
 }

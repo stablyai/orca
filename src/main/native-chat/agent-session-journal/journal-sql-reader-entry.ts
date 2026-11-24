@@ -19,6 +19,7 @@ import {
 import { compareJournalLegacyChat } from './database/journal-legacy-compare'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
 import {
+  isClaudeRecoveryRelease,
   journalReaderReplyLimit,
   measureJournalReaderReply
 } from './journal-sql-reader-reply-limit'
@@ -136,7 +137,7 @@ async function handle(id: number, operation: JournalSqlReaderRequest['operation'
     if (!db) {
       throw new Error('journal SQL reader is unavailable')
     }
-    if (fork && !operation.kind.startsWith('fork-')) {
+    if (fork && !operation.kind.startsWith('fork-') && !isClaudeRecoveryRelease(operation)) {
       throw new Error('fork reader is exclusively reserved')
     }
     switch (operation.kind) {

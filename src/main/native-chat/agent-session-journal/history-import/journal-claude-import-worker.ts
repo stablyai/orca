@@ -10,11 +10,12 @@ import {
   type ClaudeImportResult,
   type ClaudeImportRestore
 } from './journal-claude-import-window'
-import type {
-  ClaudeImportPage,
-  ClaudeImportWork,
-  ClaudeImportWorkerRequest,
-  ClaudeImportWorkerResponse
+import {
+  CLAUDE_RECOVERY_CONCURRENCY,
+  type ClaudeImportPage,
+  type ClaudeImportWork,
+  type ClaudeImportWorkerRequest,
+  type ClaudeImportWorkerResponse
 } from './journal-claude-import-worker-protocol'
 
 let entryOverride: string | undefined
@@ -23,7 +24,7 @@ let entryOverride: string | undefined
 type Slots = { limit: number; active: number; waiting: (() => void)[] }
 const slots = {
   first: { limit: 3, active: 0, waiting: [] },
-  recovery: { limit: 3, active: 0, waiting: [] },
+  recovery: { limit: CLAUDE_RECOVERY_CONCURRENCY, active: 0, waiting: [] },
   page: { limit: 2, active: 0, waiting: [] }
 } satisfies Record<string, Slots>
 

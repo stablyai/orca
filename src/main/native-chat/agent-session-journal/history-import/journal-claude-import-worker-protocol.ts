@@ -7,8 +7,8 @@ import type { importClaudeTranscript } from './journal-claude-import'
 type ImportInput = Parameters<typeof importClaudeTranscript>[0]
 type ImportResult = Awaited<ReturnType<typeof importClaudeTranscript>>
 
+export const CLAUDE_RECOVERY_CONCURRENCY = 3
 export const CLAUDE_IMPORT_PAGE_BYTES = 512 * 1024
-export const CLAUDE_IMPORT_REPLY_FRAMING_BYTES = 64
 export const CLAUDE_IMPORT_PAGE_ENTRIES = 256
 
 export type ClaudeImportWork = Omit<ImportInput, 'signal'>

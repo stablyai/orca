@@ -3,6 +3,7 @@ import {
   type JournalClaudeRecoveryRead,
   type JournalClaudeRecoveryReadResult
 } from './journal-claude-recovery-reads'
+import { requireClaudeRecoveryCursor } from './journal-claude-recovery-origin'
 import { readJournalStoredItem } from './journal-stored-output-rows'
 import type Database from '../../sqlite/sync-database'
 import {
@@ -31,6 +32,8 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/re
 import { isAgentSessionContextClear } from '../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import {
   journalThreadGoalSource,
+  readJournalSqlGoalRows,
+  readJournalSqlRecoveryGoal,
   type JournalThreadGoalSource
 } from './projection/journal-thread-goal-source'
 import type { JournalMessageOptions, JournalNamedTurn } from './journal-reads'
@@ -89,7 +92,10 @@ export type JournalSqlItemReadResult =
   | JournalSqlLifecycleReadResult
   | JournalClaudeRecoveryReadResult
 
-export type JournalDomainItemRead = Exclude<JournalSqlItemRead, JournalSqlLifecycleRead>
+export type JournalDomainItemRead = Exclude<
+  JournalSqlItemRead,
+  JournalSqlLifecycleRead | { kind: 'claude-recovery-release' }
+>
 export type JournalDomainItemReadResult = Exclude<
   JournalSqlItemReadResult,
   JournalSqlLifecycleReadResult
@@ -102,7 +108,7 @@ const TURNS_NEWEST_FIRST = `SELECT payload_json FROM journal_items INDEXED BY jo
   WHERE session_id=? AND epoch=? AND hidden=0 AND turn_marker=1
   ORDER BY sequence DESC, ordinal DESC`
 
-/** Runs on the caller's open reader snapshot; it never writes, waits or caches. */
+/** Runs on the caller's open reader snapshot, without writes or waits. */
 export function readJournalDomainItems(
   db: Database.Database,
   target: JournalDomainItemTarget,
@@ -119,6 +125,7 @@ export function readJournalDomainItems(
     }
     case 'claude-recovery-fingerprints':
     case 'claude-recovery-slices':
+    case 'claude-recovery-header':
     case 'claude-recovery-origin':
       return readJournalClaudeRecovery(
         db,
@@ -126,6 +133,17 @@ export function readJournalDomainItems(
         () => journalHistoryItemSource(db, prefix),
         operation
       )
+    case 'claude-recovery-goal': {
+      requireClaudeRecoveryCursor(db, prefix, operation.cursor)
+      const goal = readJournalSqlRecoveryGoal(db, prefix)
+      return {
+        kind: operation.kind,
+        cost: goal && {
+          itemId: goal.saved.itemId,
+          bytes: Buffer.byteLength(JSON.stringify(goal.item))
+        }
+      }
+    }
     case 'history-items':
       return {
         kind: 'history-items',
@@ -283,16 +301,6 @@ function readContextUsage(db: Database.Database, prefix: Prefix): AgentSessionCo
     window ??= facts?.window ? item.sequence : null
   }
   return latestStructuredAgentContextFacts(turns.toReversed())
-}
-
-/** The newest transition wins; on equal sequence the earlier-admitted row, as a fold scan keeps it. */
-export function readJournalSqlGoalRows(db: Database.Database, prefix: Prefix) {
-  const row = db
-    .prepare(`SELECT payload_json FROM journal_items INDEXED BY journal_items_goal_transition
-    WHERE session_id=? AND epoch=? AND hidden=0 AND goal_transition=1
-    ORDER BY sequence DESC, ordinal ASC LIMIT 1`)
-    .get(...prefix)
-  return row ? [readJournalStoredItem(db, prefix, row.payload_json)] : []
 }
 
 function readThreadGoal(db: Database.Database, prefix: Prefix): JournalThreadGoalSource {

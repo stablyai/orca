@@ -1,3 +1,4 @@
+import { JournalClaudeRecoveryReaderSlots } from './journal-claude-recovery-reader-slots'
 import type { LegacyProofCursor } from './journal-legacy-source-proof'
 import type {
   JournalSqlForkReader,
@@ -8,7 +9,6 @@ import { JOURNAL_SQL_READERS } from './journal-sql-reader-requests'
 import type { JournalForkPreparationInput } from './journal-fork-preparation'
 import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 import type { JournalOutlineCache } from './journal-domain-outline'
-import type { JournalLegacyChatComparison } from './journal-sql-reader-protocol'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
@@ -34,6 +34,7 @@ import {
 /** Four WAL readers isolate slow pages; each request executes entirely on its assigned connection. */
 export class JournalSqlReaderPool {
   private readonly slots: ReaderSlot[] = []
+  private readonly claudeTransfers = new JournalClaudeRecoveryReaderSlots()
   private readonly retiring = new Set<Promise<void>>()
   private closed = false
   private closing?: Promise<void>
@@ -171,7 +172,7 @@ export class JournalSqlReaderPool {
   }
 
   /** Null when the original journal is gone. Opens the original, so it waits out a retirement. */
-  async compareLegacyChat(sessionId: string): Promise<JournalLegacyChatComparison | null> {
+  async compareLegacyChat(sessionId: string) {
     await this.releaseSourceLease()
     const response = await this.slot().request({ kind: 'legacy-compare', sessionId })
     if (response.type !== 'legacy-compare') {
@@ -202,6 +203,7 @@ export class JournalSqlReaderPool {
       this.closed ||
       this.sourceLease ||
       this.forkSlot ||
+      this.claudeTransfers.active ||
       this.slots.some((slot) => slot.pendingCount !== 0)
     ) {
       return null
@@ -261,7 +263,7 @@ export class JournalSqlReaderPool {
   }
 
   async point(request: JournalSqlPointRead): Promise<JournalSqlPointReadResult> {
-    const response = await this.slot().request({ kind: 'point', request })
+    const response = await this.claudeTransfers.request(request, () => this.slot())
     if (response.type !== 'point') {
       throw new Error('journal reader returned no point result')
     }
@@ -291,9 +293,10 @@ export class JournalSqlReaderPool {
         this.retiring.add(closed)
       }
     }
-    let slot = this.slots
+    const available = this.slots
       .filter((slot) => slot !== this.forkSlot && (!forFork || slot !== this.conversionSlot))
-      .toSorted((a, b) => a.pendingCount - b.pendingCount)[0]
+      .toSorted((a, b) => a.pendingCount - b.pendingCount)
+    let slot = available.find((candidate) => !forFork || !this.claudeTransfers.uses(candidate))
     if ((!slot || slot.pendingCount > 0) && this.slots.length < JOURNAL_SQL_READERS) {
       slot = new ReaderSlot(
         this.filename,
@@ -304,7 +307,7 @@ export class JournalSqlReaderPool {
       )
       this.slots.push(slot)
     }
-    return slot!
+    return (slot ?? available[0])!
   }
 
   close(): Promise<void> {

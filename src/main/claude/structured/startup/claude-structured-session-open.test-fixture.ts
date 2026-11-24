@@ -26,6 +26,7 @@ export function claudeWithSavedHistory(input: {
   cwd: string
   claudeConfigDir: string
   continuesChain?: true
+  leafless?: true
   replayUuids?: string[]
 }) {
   const { providerSessionId } = input
@@ -110,7 +111,7 @@ export function claudeWithSavedHistory(input: {
       cwd: input.cwd,
       claudeConfigDir: input.claudeConfigDir,
       providerSessionId,
-      resumeLeafUuid: 'old-leaf',
+      resumeLeafUuid: input.leafless ? null : 'old-leaf',
       resumesTranscript: true,
       cliFlag: async () => 'supported',
       continuesChain: input.continuesChain ?? false,

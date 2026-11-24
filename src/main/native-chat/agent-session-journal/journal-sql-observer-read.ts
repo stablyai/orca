@@ -5,7 +5,7 @@ import type { JournalObserverRead, JournalObserverResult } from './journal-obser
 import { readJournalSqlStatusState } from './journal-sql-status-state'
 import { readJournalSqlStatusIndicators } from './journal-sql-status-indicators'
 import { readJournalSqlUsageLimitCut, readJournalSqlOrcaStopCut } from './journal-sql-status-cuts'
-import { readJournalSqlGoalRows } from './journal-sql-item-reads'
+import { readJournalSqlGoalRows } from './projection/journal-thread-goal-source'
 import { agentSessionThreadGoalStartsTurns } from '../../../shared/agent-session/thread-goals/agent-session-thread-goal'
 
 /** Status, cuts and current work share one ready snapshot and one captured live authority. */

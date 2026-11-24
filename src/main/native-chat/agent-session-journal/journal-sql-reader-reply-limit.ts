@@ -1,11 +1,16 @@
-import {
-  CLAUDE_IMPORT_PAGE_BYTES,
-  CLAUDE_IMPORT_REPLY_FRAMING_BYTES
-} from './history-import/journal-claude-import-worker-protocol'
+import { CLAUDE_IMPORT_PAGE_BYTES } from './history-import/journal-claude-import-worker-protocol'
+import { ClaudeImportResourceError } from './history-import/journal-claude-import-resource-error'
+import { serializedWorkerReplyBytes } from '../../utility-worker-host/utility-worker-reply-size'
 import { serialize } from 'node:v8'
 import { describeWorkerMessage } from '../../worker-threads/worker-message-shape'
 import { journalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlReaderReply, JournalSqlReaderRequest } from './journal-sql-reader-protocol'
+
+export function isClaudeRecoveryRelease(operation: JournalSqlReaderRequest['operation']): boolean {
+  return (
+    operation.kind === 'point' && operation.request.operation.kind === 'claude-recovery-release'
+  )
+}
 
 export function journalReaderReplyLimit(operation: JournalSqlReaderRequest['operation']) {
   if (operation.kind !== 'point') {
@@ -16,8 +21,7 @@ export function journalReaderReplyLimit(operation: JournalSqlReaderRequest['oper
     point.kind.startsWith('claude-recovery-') ||
     (point.kind === 'metadata' && !point.includeHistoryOrigin) ||
     (point.kind === 'history-items' && point.options?.maxReplyBytes === CLAUDE_IMPORT_PAGE_BYTES)
-  // Credit metadata and the hosted message envelope are added after measurement.
-  return bounded ? CLAUDE_IMPORT_PAGE_BYTES - CLAUDE_IMPORT_REPLY_FRAMING_BYTES : undefined
+  return bounded ? CLAUDE_IMPORT_PAGE_BYTES : undefined
 }
 
 /**
@@ -76,7 +80,8 @@ export function measureJournalReaderReply<T extends { type: string }>(
   if (reply.type === 'failed' && limit === JOURNAL_READER_REPLY_BYTE_LIMIT) {
     return { reply }
   }
-  const { bytes, exceeds } = replyBytes(reply, limit)
+  const { bytes, exceeds } =
+    limit === CLAUDE_IMPORT_PAGE_BYTES ? framedReaderReplyBytes(reply) : replyBytes(reply, limit)
   if (!exceeds) {
     return bytes === undefined || reply.type === 'failed' ? { reply } : { reply, bytes }
   }
@@ -85,10 +90,47 @@ export function measureJournalReaderReply<T extends { type: string }>(
       type: 'failed',
       id: reply.id,
       error: journalSqlFailure(
-        new Error(`${REPLY_LIMIT_FAILURE} (${reply.type}) exceeds ${limit} bytes`)
+        reply.type === 'point' && 'result' in reply && isClaudeRecoveryReply(reply.result)
+          ? new ClaudeImportResourceError('A saved Claude history reply exceeds the page limit.')
+          : new Error(`${REPLY_LIMIT_FAILURE} (${reply.type}) exceeds ${limit} bytes`)
       )
     }
   }
+}
+
+function isClaudeRecoveryReply(result: unknown): boolean {
+  return (
+    typeof result === 'object' &&
+    result !== null &&
+    'kind' in result &&
+    (result.kind === 'claude-recovery-slices' || result.kind === 'claude-recovery-fingerprints')
+  )
+}
+
+function framedReaderReplyBytes(reply: { type: string }) {
+  // Measure the largest credit-bearing form before taking credit.
+  const { payload, framed } = serializedWorkerReplyBytes(
+    reply.type === 'failed'
+      ? reply
+      : {
+          ...reply,
+          bytes: CLAUDE_IMPORT_PAGE_BYTES,
+          creditWaitExpired: true
+        }
+  )
+  return { bytes: payload, exceeds: framed > CLAUDE_IMPORT_PAGE_BYTES }
+}
+
+export function journalRecoveryPageEntriesBytes(result: unknown): number {
+  const frame = serializedWorkerReplyBytes({
+    type: 'point',
+    id: Number.MAX_SAFE_INTEGER,
+    result,
+    bytes: CLAUDE_IMPORT_PAGE_BYTES,
+    creditWaitExpired: true
+  })
+  // A non-empty array can use a larger length and different string alignment.
+  return CLAUDE_IMPORT_PAGE_BYTES - frame.framed - 16
 }
 
 const REPLY_LIMIT_FAILURE = 'journal read reply'

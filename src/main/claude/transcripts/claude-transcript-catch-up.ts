@@ -1,11 +1,8 @@
 import {
   prepareClaudeTranscriptCapacityRecovery,
-  readClaudeRecoveryOrigin
+  readClaudeRecoveryIds
 } from './claude-transcript-capacity-recovery'
-import {
-  nativeCopyIds,
-  type NativeCopyOrigin
-} from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
+import type { NativeCopyOriginHeader } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { recoverClaudeTranscript } from './claude-transcript-recovery'
 import { join } from 'node:path'
 import { stat } from 'node:fs/promises'
@@ -39,8 +36,7 @@ const DEFAULT_CLAUDE_CATCH_UP_TIMEOUT_MS = 30_000
 export type ClaudeTranscriptCatchUpOutcome = boolean | { kind: 'capacity'; deadline: number }
 type ClaudeHistoryView = {
   physicalCursor: AgentJournalCursor
-  origin: NativeCopyOrigin | null
-  covered?: ReadonlySet<string>
+  origin: NativeCopyOriginHeader | null
   hasRows: boolean
 }
 
@@ -76,13 +72,12 @@ export async function catchUpClaudeTranscript(input: {
           return { hasRows: false, origin: null }
         }
         const hasRows = await history.reads.hasItems()
-        const origin = await readClaudeRecoveryOrigin(
-          history.reads.claudeRecoveryOrigin,
+        signal.throwIfAborted()
+        const origin = await history.reads.claudeRecoveryHeader({
           cursor,
-          input.providerSessionId,
-          () => signal.throwIfAborted()
-        )
-        return { hasRows, origin, covered: origin ? nativeCopyIds(origin) : undefined }
+          providerSessionId: input.providerSessionId
+        })
+        return { hasRows, origin }
       }),
     prepare: async ({ view, history, signal, deadline, check, yieldTurn, warn }) => {
       const claudeProjectsDir = join(input.claudeConfigDir, 'projects')
@@ -111,7 +106,6 @@ export async function catchUpClaudeTranscript(input: {
         return null
       }
       const recovery = planned.origin
-      const copiedLeaf = recovery?.ids.at(-1) ?? input.leafUuid
       const sourceFrontier = recovery?.sourceFrontier
       if (recovery?.sourceConsumedBytes !== undefined) {
         const { size, mtimeMs } = await stat(filePath)
@@ -137,8 +131,17 @@ export async function catchUpClaudeTranscript(input: {
           return deferRecovery()
         }
       }
+      const ids = recovery
+        ? await readClaudeRecoveryIds(
+            history.reads.claudeRecoveryOrigin,
+            planned.physicalCursor,
+            check
+          )
+        : []
+      const covered = recovery ? new Set(ids) : undefined
+      const copiedLeaf = ids.at(-1) ?? input.leafUuid
       const chainBoundaries = sourceFrontier ? [sourceFrontier, copiedLeaf] : []
-      let leafAbsent = input.leafUuid === '' && !!planned.covered && !sourceFrontier
+      let leafAbsent = input.leafUuid === '' && !!covered && !sourceFrontier
       let tail = leafAbsent
         ? null
         : await readClaudeTranscriptTail({
@@ -162,7 +165,7 @@ export async function catchUpClaudeTranscript(input: {
         })
         check()
       }
-      if (!tail && !(leafAbsent && planned.covered)) {
+      if (!tail && !(leafAbsent && covered)) {
         if (!leafAbsent) {
           return deferRecovery()
         }
@@ -196,7 +199,7 @@ export async function catchUpClaudeTranscript(input: {
         try {
           const restore = async (row: Record<string, unknown>) => {
             check()
-            if (!planned.covered?.has(String(row.uuid))) {
+            if (!covered?.has(String(row.uuid))) {
               await items.loadRow(row, input.providerSessionId)
               await staging.restore(row)
             }

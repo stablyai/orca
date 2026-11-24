@@ -1,3 +1,5 @@
+import { Worker } from 'node:worker_threads'
+import { serialize } from 'node:v8'
 import { vi, type Mock } from 'vitest'
 import { mkdir, mkdtemp, open, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -195,4 +197,32 @@ export async function chat(
     },
     items: () => readTestJournalItems(journal)
   }
+}
+
+export function recoveryReceivedBytes(): number[] {
+  const messages: number[] = []
+  const emit = Worker.prototype.emit
+  vi.spyOn(Worker.prototype, 'emit').mockImplementation(function (this: Worker, event, ...args) {
+    const [reply] = args
+    if (
+      event === 'message' &&
+      reply &&
+      typeof reply === 'object' &&
+      (reply.type === 'point' ||
+        reply.type === 'committed' ||
+        reply.kind === 'page' ||
+        reply.kind === 'imported')
+    ) {
+      messages.push(
+        serialize({
+          type: 'message',
+          bytes: serialize(reply),
+          seq: Number.MAX_SAFE_INTEGER,
+          more: false
+        }).byteLength
+      )
+    }
+    return emit.call(this, event, ...args)
+  })
+  return messages
 }

@@ -81,6 +81,8 @@ export async function prepareClaudeTranscriptCapacityRecovery(
     ownerFence: 0,
     turnScope: { kind: 'thread' as const }
   })
+  const goal = await history.reads.claudeRecoveryGoal(input.physicalCursor)
+  check()
   const prepared = await prepareJsonlTranscriptImport({
     agent: 'claude',
     boundedClaude: true,
@@ -94,7 +96,7 @@ export async function prepareClaudeTranscriptCapacityRecovery(
         MAX_LEGACY_IMPORT_RETAINED_BYTES -
         Buffer.byteLength(JSON.stringify(notice(sourceSkippedRecords))),
       page: (items, remaining, checkTransfer) =>
-        keepSavedRecoveryText(items, history.reads, input.physicalCursor, remaining, () => {
+        keepSavedRecoveryText(items, history.reads, input.physicalCursor, remaining, goal, () => {
           checkTransfer()
           check()
         })
@@ -138,14 +140,15 @@ export async function prepareClaudeTranscriptCapacityRecovery(
         ? await probeRefusedSource(input.filePath, check)
         : undefined
     check()
-    const previous = receipt
-      ? await readClaudeRecoveryOrigin(
-          history.reads.claudeRecoveryOrigin,
-          input.physicalCursor,
-          input.providerSessionId,
-          check
-        )
-      : null
+    const previous =
+      receipt &&
+      (await history.reads.claudeRecoveryHeader({
+        cursor: input.physicalCursor,
+        providerSessionId: input.providerSessionId
+      }))
+    const ids = previous
+      ? await readClaudeRecoveryIds(history.reads.claudeRecoveryOrigin, input.physicalCursor, check)
+      : []
     const historyOrigin: NativeCopyOrigin | undefined = receipt
       ? {
           version: 1,
@@ -157,7 +160,7 @@ export async function prepareClaudeTranscriptCapacityRecovery(
             sessionId: input.providerSessionId,
             leafUuid: input.leafUuid || null
           },
-          ids: previous?.ids ?? [],
+          ids,
           sourceFrontier: receipt.sourceFrontier,
           sourceConsumedBytes: receipt.sourceConsumedBytes,
           sourceMtimeMs: receipt.sourceMtimeMs
@@ -204,19 +207,18 @@ export async function prepareClaudeTranscriptCapacityRecovery(
   }
 }
 
-export async function readClaudeRecoveryOrigin(
+export async function readClaudeRecoveryIds(
   read: AgentSessionJournalReads['claudeRecoveryOrigin'],
   cursor: AgentJournalCursor,
-  providerSessionId: string,
   check: () => void
-): Promise<NativeCopyOrigin | null> {
-  const origin: { header?: Omit<NativeCopyOrigin, 'ids'>; ids?: string[] } = {}
+): Promise<string[]> {
+  const origin: { ids: string[] } = { ids: [] }
   let after:
     | Extract<JournalClaudeRecoveryRead, { kind: 'claude-recovery-origin' }>['after']
     | null = { ordinal: 0, offset: 0 }
   while (after) {
     check()
-    const page = await read({ cursor, providerSessionId, after })
+    const page = await read({ cursor, after })
     check()
     for (const fragment of page.fragments) {
       applyClaudeImportFieldFragment(origin, fragment)
@@ -226,5 +228,5 @@ export async function readClaudeRecoveryOrigin(
       await setImmediate()
     }
   }
-  return origin.header && origin.ids ? { ...origin.header, ids: origin.ids } : null
+  return origin.ids
 }
