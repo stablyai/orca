@@ -6,10 +6,12 @@ import process from 'node:process'
 import { resolveOxlintInvocation } from '../../tool-invocation/oxlint-cli-invocation.mjs'
 import { isDirectInvocation } from '../../tool-invocation/script-entry-detection.mjs'
 import { governingPolicies } from './main-push-plan.mjs'
+import { git } from './main-push-range.mjs'
 import {
   escapeAnnotationData,
   escapeAnnotationProperty,
   logLine,
+  incompleteHeading,
   logText,
   truncate,
   MAX_LOG_LINE_CHARS,
@@ -93,22 +95,27 @@ export function reportDiagnostics(diagnostics, errorCount, reporter) {
   for (const diagnostic of diagnostics.slice(0, MAX_ANNOTATIONS)) {
     // A path too long to bound is left out of the location; the log line still names it.
     const location =
-      diagnostic.file && diagnostic.file.length <= MAX_ANNOTATION_PATH_CHARS
+      diagnostic.file &&
+      !diagnostic.ambiguous &&
+      diagnostic.file.length <= MAX_ANNOTATION_PATH_CHARS
         ? `file=${escapeAnnotationProperty(diagnostic.file)},line=${diagnostic.line},col=${diagnostic.col},`
         : ''
-    reporter.error(diagnostic.rule, diagnostic.message, location)
+    const which = diagnostic.ambiguous
+      ? ` (oxlint reported ${diagnostic.file}, which could be any of: ${diagnostic.ambiguous.join(', ')})`
+      : ''
+    reporter.error(diagnostic.rule, `${diagnostic.message}${which}`, location)
   }
   return Math.min(diagnostics.length, MAX_LOG_DIAGNOSTICS)
 }
 
-// Returns how many unfinished runs have their paths in the log, which the summary then cites.
+// Returns how many groups of unlinted paths are in the log, which the summary then cites.
 export function reportIncomplete(incomplete, reporter) {
   let logged = 0
   for (const batch of incomplete.slice(0, MAX_INCOMPLETE_LOGGED)) {
     const output = batch.output.trim().slice(0, 4_000)
     reporter.error(
       'Main-push lint',
-      `oxlint did not finish ${batch.files.length} path(s) (${batch.reason}), so they were not linted:\n${output}`
+      `${incompleteHeading(batch)} (${batch.reason})${output ? `:\n${output}` : '.'}`
     )
     const more =
       batch.files.length > MAX_LOGGED_PATHS
@@ -120,17 +127,61 @@ export function reportIncomplete(incomplete, reporter) {
   }
   if (incomplete.length > MAX_INCOMPLETE_LOGGED) {
     reporter.log(
-      `${incomplete.length - MAX_INCOMPLETE_LOGGED} more unfinished oxlint run(s) are not listed.`
+      `${incomplete.length - MAX_INCOMPLETE_LOGGED} more group(s) of unlinted paths are not listed.`
     )
   }
   return logged
 }
 
+// oxlint 1.94 prints a literal backslash in a reported path as a slash. Map each reported name back to the one
+// tracked file it can stand for; when it could be several, keep it but drop its location and attribution.
+export async function resolveReportedPaths(diagnostics, root) {
+  if (!diagnostics.some((diagnostic) => diagnostic.file)) {
+    return
+  }
+  const tracked = (await git(['ls-files', '-z'], root)).split('\0').filter(Boolean)
+  const withBackslash = new Map()
+  for (const file of tracked.filter((name) => name.includes('\\'))) {
+    const reported = file.replaceAll('\\', '/')
+    withBackslash.set(reported, [...(withBackslash.get(reported) ?? []), file])
+  }
+  if (withBackslash.size === 0) {
+    return
+  }
+  const trackedSet = new Set(tracked)
+  for (const diagnostic of diagnostics) {
+    const variants = withBackslash.get(diagnostic.file)
+    if (variants) {
+      const candidates = [
+        ...(trackedSet.has(diagnostic.file) ? [diagnostic.file] : []),
+        ...variants
+      ]
+      if (candidates.length === 1) {
+        diagnostic.file = candidates[0]
+      } else {
+        diagnostic.ambiguous = candidates
+      }
+    }
+  }
+}
+
 // A failing file the push touched is attributed to the commits that changed it. One it did not touch was
 // linted only because a lint policy changed, so the commits that changed that policy are named instead.
 async function reportAttribution({ diagnostics, plan, env, reporter, api }) {
-  const failing = [...new Set(diagnostics.map((diagnostic) => diagnostic.file).filter(Boolean))]
-  if (failing.length === 0) {
+  const failing = [
+    ...new Set(
+      diagnostics
+        .filter((diagnostic) => !diagnostic.ambiguous)
+        .map((diagnostic) => diagnostic.file)
+        .filter(Boolean)
+    )
+  ]
+  const ambiguous = new Map(
+    diagnostics
+      .filter((diagnostic) => diagnostic.ambiguous)
+      .map((diagnostic) => [diagnostic.file, diagnostic.ambiguous])
+  )
+  if (failing.length === 0 && ambiguous.size === 0) {
     return
   }
   const ref = env.GITHUB_REF_NAME || 'main'
@@ -169,17 +220,25 @@ async function reportAttribution({ diagnostics, plan, env, reporter, api }) {
     const more = policies.length - named.length
     return `${named.join('; ')}${more > 0 ? `; and ${more} more policy change(s)` : ''}`
   }
-  const rows = failing.map((file) => ({
-    file,
-    description: touched.has(file)
-      ? describe(file)
-      : `not changed in ${noun}; linted because ${becauseOf(policiesFor.get(file))}`
-  }))
+  const rows = [
+    ...failing.map((file) => ({
+      file,
+      description: touched.has(file)
+        ? describe(file)
+        : `not changed in ${noun}; linted because ${becauseOf(policiesFor.get(file))}`
+    })),
+    ...[...ambiguous].map(([file, candidates]) => ({
+      file,
+      ambiguous: true,
+      description: `not attributed: oxlint reported this path, which could be any of ${candidates.join(', ')}`
+    }))
+  ]
   let logged = 0
-  for (const { file, description } of rows) {
-    const line = touched.has(file)
-      ? `${file}: changed in ${noun} by ${description}`
-      : `${file}: ${description}`
+  for (const { file, description, ambiguous: unclear } of rows) {
+    const line =
+      touched.has(file) && !unclear
+        ? `${file}: changed in ${noun} by ${description}`
+        : `${file}: ${description}`
     if (reporter.log(line)) {
       logged += 1
     }
@@ -229,6 +288,7 @@ export async function main({
       results = collector.result()
       results.incomplete.push({
         files: targets,
+        ran: false,
         reason: 'could not run oxlint',
         output: `${error.message}\n`
       })
@@ -237,11 +297,13 @@ export async function main({
   if (plan.unrepresentable.length > 0) {
     results.incomplete.push({
       files: plan.unrepresentable,
+      ran: false,
       reason: 'the path is not valid UTF-8, so it cannot be passed to oxlint exactly',
       output: ''
     })
   }
   const { diagnostics, errorCount, incomplete, linted } = results
+  await resolveReportedPaths(diagnostics, root)
   // The verdict, locations and summary are published before any optional PR lookup.
   const loggedDiagnostics = reportDiagnostics(diagnostics, errorCount, reporter)
   const loggedIncomplete = reportIncomplete(incomplete, reporter)

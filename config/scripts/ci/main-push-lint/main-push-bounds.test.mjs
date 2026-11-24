@@ -151,7 +151,7 @@ if (paths.includes('big.ts')) { process.stdout.write('x'.repeat(100_000)) } else
       loggedIncomplete: logged
     })
     expect(summary).toContain(
-      '6 more unfinished oxlint run(s) are not shown here; the step log lists none of the 11.'
+      '6 more group(s) of unlinted paths are not shown here; the step log lists none of the 11.'
     )
   })
 

@@ -49,12 +49,12 @@ export async function planLint({ base, head, cwd }) {
   const touched = changes
     .filter((change) => change.status !== 'D' && isLintable(change.path))
     .map((change) => change.path)
-  const walked = touched.filter((file) => dirs.some((dir) => isUnder(file, dir)))
-  const skippedByWalk = await gitIgnored(walked, cwd)
+  const walked = new Set(touched.filter((file) => dirs.some((dir) => isUnder(file, dir))))
+  const skippedByWalk = await gitIgnored([...walked], cwd)
   return {
     touched,
     // A touched file the walk covers is not passed twice; one the walk skips as Git-ignored still is.
-    files: touched.filter((file) => !walked.includes(file) || skippedByWalk.has(file)),
+    files: touched.filter((file) => !walked.has(file) || skippedByWalk.has(file)),
     dirs,
     policies,
     // A deleted path has nothing to lint, whatever its bytes.

@@ -296,10 +296,16 @@ describe('main-push lint plan', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
     const write = vi
       .spyOn(process.stdout, 'write')
       .mockImplementation((chunk) => out.push(String(chunk)))
+    const summaryPath = scratchFile('summary.md')
     let exit
     try {
       exit = await lint({
-        env: { GITHUB_EVENT_NAME: 'push', BEFORE_SHA: before, HEAD_SHA: after },
+        env: {
+          GITHUB_EVENT_NAME: 'push',
+          BEFORE_SHA: before,
+          HEAD_SHA: after,
+          GITHUB_STEP_SUMMARY: summaryPath
+        },
         root: cwd,
         invocationRoot: REPO_ROOT
       })
@@ -308,6 +314,11 @@ describe('main-push lint plan', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
     }
     expect(exit).toBe(1)
     expect(out.join('')).toContain('the path is not valid UTF-8')
+    // oxlint never received it, so it is "not linted", not an oxlint run that did not finish.
+    const summary = readFileSync(summaryPath, 'utf8')
+    expect(summary).toContain('1 path(s) never reached oxlint, so coverage is incomplete')
+    expect(summary).toContain('#### 1 path(s) were not linted (the path is not valid UTF-8')
+    expect(summary).not.toContain('did not finish')
     expect(out.join('')).toContain('Not linted: bad\\\\xff.ts')
 
     // Deleting that path leaves nothing to lint.
@@ -408,25 +419,29 @@ describe('main-push lint plan', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
       })
     })
 
-    it('follows a symlinked config to its changed target', async () => {
-      const origin = makeOrigin()
-      const before = commit(
-        origin,
-        { '.oxlintrc.json': LENIENT, 'shared.json': LENIENT, 'd/x.ts': DEBUGGER },
-        'setup'
-      )
-      symlinkSync('../shared.json', join(origin, 'd/.oxlintrc.json'))
-      const linked = commit(origin, {}, 'link')
-      const after = commit(origin, { 'shared.json': CONFIG }, 'tighten shared')
-      expect(await planFor({ origin, before: linked, after })).toMatchObject({
-        dirs: ['d'],
-        policies: [
-          { paths: ['shared.json'], why: 'd/.oxlintrc.json extends shared.json, which changed' }
-        ]
-      })
-      expect((await runWorkflow({ origin, before: linked, after })).lintExit).toBe(1)
-      expect(before).not.toBe(linked)
-    })
+    // Windows checkouts may not create symlinks (core.symlinks=false), and oxlint would then see a plain file.
+    it.skipIf(process.platform === 'win32')(
+      'follows a symlinked config to its changed target',
+      async () => {
+        const origin = makeOrigin()
+        const before = commit(
+          origin,
+          { '.oxlintrc.json': LENIENT, 'shared.json': LENIENT, 'd/x.ts': DEBUGGER },
+          'setup'
+        )
+        symlinkSync('../shared.json', join(origin, 'd/.oxlintrc.json'))
+        const linked = commit(origin, {}, 'link')
+        const after = commit(origin, { 'shared.json': CONFIG }, 'tighten shared')
+        expect(await planFor({ origin, before: linked, after })).toMatchObject({
+          dirs: ['d'],
+          policies: [
+            { paths: ['shared.json'], why: 'd/.oxlintrc.json extends shared.json, which changed' }
+          ]
+        })
+        expect((await runWorkflow({ origin, before: linked, after })).lintExit).toBe(1)
+        expect(before).not.toBe(linked)
+      }
+    )
 
     it('lints both scopes when a nested override moves', async () => {
       const pushed = push(
@@ -565,4 +580,31 @@ describe('main-push lint plan', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
     expect(line).toContain('; extra.json changed by')
     expect(line).toContain('; .oxlintrc.json changed (.oxlintrc.json changed by')
   })
+
+  // POSIX allows a backslash in a name; oxlint 1.94 reports it as a slash.
+  describe.skipIf(process.platform === 'win32')(
+    'maps a reported path back to its tracked file',
+    () => {
+      it('restores a backslash oxlint printed as a slash', async () => {
+        const run = await runWorkflow(push({ '.oxlintrc.json': CONFIG }, { 'a\\b.ts': DEBUGGER }))
+        expect(run.lintExit).toBe(1)
+        expect(run.log).toContain('::error file=a\\b.ts,line=1,col=1,')
+        expect(run.log).toMatch(/^a\\\\b\.ts: changed in this push by /m)
+      })
+
+      it('drops the location and attribution when the reported path could be either file', async () => {
+        const run = await runWorkflow(
+          push({ '.oxlintrc.json': CONFIG }, { 'a\\b.ts': DEBUGGER, 'a/b.ts': CLEAN })
+        )
+        expect(run.lintExit).toBe(1)
+        expect(run.log).toContain(
+          '::error title=eslint(no-debugger)::`debugger` statement is not allowed (oxlint reported a/b.ts, which could be any of: a/b.ts, a\\b.ts)'
+        )
+        expect(run.log).not.toContain('::error file=')
+        expect(run.log).toMatch(
+          /^a\/b\.ts: not attributed: oxlint reported this path, which could be any of a\/b\.ts, a\\\\b\.ts$/m
+        )
+      })
+    }
+  )
 })

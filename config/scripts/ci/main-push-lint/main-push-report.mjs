@@ -100,17 +100,30 @@ function listed(items, render) {
   return items.length > MAX_LISTED ? `${shown}; and ${items.length - MAX_LISTED} more` : shown
 }
 
+// A run oxlint started but did not finish, or paths it never received (not run, or not passable as UTF-8).
+export function incompleteHeading(batch) {
+  return batch.ran === false
+    ? `${batch.files.length} path(s) were not linted`
+    : `oxlint did not finish ${batch.files.length} path(s)`
+}
+
 function coverageLine({ candidates, dirs, linted, incomplete }) {
   const walked =
     dirs.length > 0 ? `, plus every lintable file under ${listed(dirs, markdownCode)}` : ''
-  const unfinished = incomplete.reduce((total, batch) => total + batch.files.length, 0)
-  const partial =
-    unfinished > 0
-      ? `; ${unfinished} path(s) were in oxlint runs that did not finish, so coverage is incomplete`
-      : ''
+  const count = (ran) =>
+    incomplete
+      .filter((batch) => (batch.ran !== false) === ran)
+      .reduce((total, batch) => total + batch.files.length, 0)
+  const unfinished = count(true)
+  const unsent = count(false)
+  const gaps = [
+    unfinished > 0 ? `${unfinished} path(s) were in oxlint runs that did not finish` : '',
+    unsent > 0 ? `${unsent} path(s) never reached oxlint` : ''
+  ].filter(Boolean)
+  const partial = gaps.length > 0 ? `; ${gaps.join(' and ')}, so coverage is incomplete` : ''
   // oxlint does not say which explicit paths it excluded or why, so neither does this.
   const excluded =
-    dirs.length === 0 && unfinished === 0 && linted < candidates
+    dirs.length === 0 && unfinished + unsent === 0 && linted < candidates
       ? ` oxlint excluded the other ${candidates - linted} itself.`
       : ''
   return `Planned: ${candidates} changed candidate file(s)${walked}. oxlint reported linting ${linted} file(s)${partial}.${excluded}`
@@ -176,7 +189,7 @@ export function renderLintSummary({
         ? ` and ${batch.files.length - MAX_PATHS_SHOWN} more`
         : ''
     lines.push(
-      `#### oxlint did not finish ${batch.files.length} path(s) (${markdownText(batch.reason)}): ${paths}${more}`,
+      `#### ${incompleteHeading(batch)} (${markdownText(batch.reason)}): ${paths}${more}`,
       '',
       preformatted(batch.output || '(no output)'),
       ''
@@ -184,7 +197,7 @@ export function renderLintSummary({
   }
   if (incomplete.length > MAX_INCOMPLETE_SHOWN) {
     lines.push(
-      `${incomplete.length - MAX_INCOMPLETE_SHOWN} more unfinished oxlint run(s) are not shown here; ${logNote(incomplete.length, loggedIncomplete, 'unfinished run')}.`,
+      `${incomplete.length - MAX_INCOMPLETE_SHOWN} more group(s) of unlinted paths are not shown here; ${logNote(incomplete.length, loggedIncomplete, 'group')}.`,
       ''
     )
   }

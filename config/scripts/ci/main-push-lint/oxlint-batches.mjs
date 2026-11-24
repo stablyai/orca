@@ -84,6 +84,7 @@ export async function runOxlint(
         files: batch,
         failed: true,
         reason: 'not run: the lint time budget ran out',
+        notRun: true,
         output: ''
       })
       continue
@@ -204,6 +205,8 @@ export function createBatchCollector(limits = RETAIN_LIMITS) {
       }
       incomplete.push({
         files: batch.files,
+        // A batch the deadline kept from starting never reached oxlint.
+        ran: !batch.notRun,
         reason: reasons.join('; '),
         output: cut(batch.output, limits.maxExcerptChars)
       })
