@@ -1,16 +1,14 @@
 // Who can ask › Add people: the desktop's BotWhoCanAskPicker as a page. Tick people found in one
-// connector's workspace, then add them together; whoever can already ask stays listed, greyed.
+// connector's workspace, then Add them together; whoever can already ask is left out.
 import { useEffect, useState } from 'react'
 import { BOT_MAX_MEMBERS, type BotMember } from '../../../src/shared/bot-types'
-import { joinSentences } from '../../../src/shared/text/sentence-joining'
 import { MobileSearchField } from '../components/controls/MobileSearchField'
 import { MobileStateView } from '../components/feedback/MobileStateView'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
-import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNote } from '../settings/settings-screen-frame'
-import { memberMark } from './MobileBotWhoCanAsk'
+import { MobileWhoCanAskMemberFace, WHO_FACE_INSET, whoCanAskName } from './MobileWhoCanAskRows'
 import type { WhoCanAskConnector, WhoCanAskFound } from './who-can-ask-connectors'
 
 const SEARCH_DEBOUNCE_MS = 250
@@ -56,9 +54,6 @@ function useMemberSearch(
   return { search, retry: () => setAttempt((count) => count + 1) }
 }
 
-const matches = (name: string, needle: string): boolean =>
-  needle === '' || name.toLowerCase().includes(needle)
-
 // Saved as the desktop saves it: a found person's picture is kept, their handle isn't; an app is
 // marked so, so it draws as one.
 const asMember = (found: Found, connector: WhoCanAskConnector): BotMember => ({
@@ -101,13 +96,8 @@ export function MobileBotWhoCanAskPicker(props: {
     )
 
   const found = search.status === 'ready' && !idle ? search.found.members : []
-  const handles = new Map(found.map((person) => [person.id, person.handle]))
   const isOwner = (id: string): boolean => connector.ownerIds.includes(id)
   const addable = found.filter((person) => !added.has(person.id) && !isOwner(person.id))
-  const withAccess = listed.filter(
-    (member) => matches(member.name || member.id, needle) || found.some((p) => p.id === member.id)
-  )
-  const ownerShown = needle === '' || found.some((person) => isOwner(person.id))
   const handleLine = (name: string, handle: string | undefined) =>
     handle && handle !== name ? handle : undefined
 
@@ -116,8 +106,8 @@ export function MobileBotWhoCanAskPicker(props: {
     return (
       <ListRow
         key={member.id}
-        leading={memberMark(member)}
-        title={member.name || member.id}
+        leading={<MobileWhoCanAskMemberFace member={member} />}
+        title={whoCanAskName(member)}
         subtitle={handleLine(member.name, handle)}
         selected={on}
         accessibilityRole="checkbox"
@@ -128,7 +118,6 @@ export function MobileBotWhoCanAskPicker(props: {
   }
   // Ticked people the current search no longer shows stay on top, so what's added is on screen.
   const offScreen = picked.filter((member) => !addable.some((person) => person.id === member.id))
-  const canAsk = t('bots.whoCanAsk.canAsk', 'Can ask')
 
   const people = idle ? (
     <MobileStateView title={idle.title} message={idle.detail} />
@@ -142,15 +131,25 @@ export function MobileBotWhoCanAskPicker(props: {
   ) : addable.length > 0 ? (
     <>
       <SectionHeader title={connector.peopleHeading} />
-      <ListGroup>
+      <ListGroup separatorInset={WHO_FACE_INSET}>
         {addable.map((person) =>
           pickRow(asMember(person, connector), handleLine(person.name, person.handle))
         )}
       </ListGroup>
     </>
-  ) : withAccess.length === 0 && !ownerShown ? (
+  ) : found.length > 0 ? (
+    <MobileStateView title={t('bots.whoCanAsk.allAdded', 'They can already ask')} />
+  ) : needle === '' ? null : (
     <NoMatch {...connector.noMatch(query.trim())} />
-  ) : null
+  )
+  // One line under the list: why rows stopped taking ticks, or that the list is cut short.
+  const note = full
+    ? t('bots.whoCanAsk.cap', '{{count}} people is the most here.', {
+        count: Math.min(connector.max, BOT_MAX_MEMBERS - props.members.length + added.size)
+      })
+    : search.status === 'ready' && !idle && !search.found.complete
+      ? t('bots.whoCanAsk.incomplete', 'Not everyone is listed. Search by name to find someone.')
+      : null
 
   return (
     <>
@@ -158,6 +157,11 @@ export function MobileBotWhoCanAskPicker(props: {
         title={t('bots.whoCanAsk.addPeople', 'Add people')}
         subtitle={connector.title}
         leading={{ label: t('bots.whoCanAsk.cancel', 'Cancel'), onPress: props.onCancel }}
+        trailing={{
+          label: t('bots.whoCanAsk.add', 'Add'),
+          disabled: picked.length === 0,
+          onPress: () => props.onPicked(picked)
+        }}
       />
       <MobileSearchField
         value={query}
@@ -168,66 +172,13 @@ export function MobileBotWhoCanAskPicker(props: {
       {offScreen.length > 0 ? (
         <>
           <SectionHeader title={t('bots.whoCanAsk.selectedHeading', 'Selected')} />
-          <ListGroup>{offScreen.map((member) => pickRow(member))}</ListGroup>
-        </>
-      ) : null}
-      {people}
-      {withAccess.length > 0 || ownerShown ? (
-        <>
-          <SectionHeader title={canAsk} />
-          <ListGroup>
-            {ownerShown ? (
-              <ListRow
-                title={t('bots.whoCanAsk.you', 'You')}
-                subtitle={t('bots.whoCanAsk.owner', 'Owner')}
-                value={canAsk}
-                disabled
-              />
-            ) : null}
-            {withAccess.map((member) => (
-              <ListRow
-                key={member.id}
-                leading={memberMark(member)}
-                title={member.name || member.id}
-                subtitle={handleLine(member.name, handles.get(member.id))}
-                value={canAsk}
-                disabled
-              />
-            ))}
+          <ListGroup separatorInset={WHO_FACE_INSET}>
+            {offScreen.map((member) => pickRow(member))}
           </ListGroup>
         </>
       ) : null}
-      <SettingsNote>
-        {joinSentences([
-          t('bots.whoCanAsk.addedCount', '{{count}} of {{max}} added', {
-            count: added.size + picked.length,
-            max: connector.max
-          }),
-          ...(search.status === 'ready' && !idle && !search.found.complete
-            ? [
-                t(
-                  'bots.whoCanAsk.incomplete',
-                  'Not everyone is listed. Search by name to find someone.'
-                )
-              ]
-            : [])
-        ])}
-      </SettingsNote>
-      {picked.length > 0 ? (
-        <>
-          <SettingsNote>
-            {t('bots.whoCanAsk.selected', '{{count}} selected', { count: picked.length })}
-          </SettingsNote>
-          <SheetPrimaryButton
-            label={
-              picked.length === 1
-                ? t('bots.whoCanAsk.addOne', 'Add 1 person')
-                : t('bots.whoCanAsk.addMany', 'Add {{count}} people', { count: picked.length })
-            }
-            onPress={() => props.onPicked(picked)}
-          />
-        </>
-      ) : null}
+      {people}
+      {note ? <SettingsNote>{note}</SettingsNote> : null}
     </>
   )
 }

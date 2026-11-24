@@ -2151,14 +2151,18 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "结构化代理会话尚不可用，请稍后重试",
         "gone": "此聊天已不在这台主机上，无法在此重新打开",
         "hostCannotOpen": "更新 Orca 后才能重新打开此聊天",
         "notLocatedNamed": "Orca 找不到 {{agent}} 的运行位置，因此无法打开它",
         "notLocated": "Orca 找不到此智能体的运行位置，因此无法打开它",
         "worktreeDeleted": "工作树已删除。",
         "projectRemoved": "项目已从 Orca 中移除。",
-        "folderWorkspaceRemoved": "文件夹工作区已移除。"
+        "folderWorkspaceRemoved": "文件夹工作区已移除。",
+        "chatStillStarting": "此聊天仍在启动，请稍后重试",
+        "chatOpenFailed": "无法打开此聊天",
+        "chatOpenRetry": "重试",
+        "chatOpenShowDetails": "显示详情",
+        "chatOpenHideDetails": "隐藏详情"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root 配方不支持稀疏检出"
@@ -4232,27 +4236,20 @@
         "cleanup": {
           "WorkspaceCleanupDialog": {
             "3828408538": "删除 {{value0}}",
-            "b6bae1eed1": "取消",
-            "38ca0b1400": "这将永久删除他们的本地文件，您无法撤销此操作",
             "e97e4580c7": "有改动",
             "9623a5107d": "未推送的提交",
             "e8b3741ff7": "被忽略",
             "a9957007eb": "忽略 {{value0}}",
             "bef0adef9b": "分支",
             "bbb1ab6a6f": "选择{{value0}}",
-            "b771c92598": "删除所选内容",
             "7eee951968": "检查工作区安全",
             "191f0bc98e": "关闭",
-            "7ae2ad30f4": "刷新",
             "7f451a3e2c": "无法忽略清理建议",
             "662b8ec3f8": "工作区清理扫描失败",
             "9cc26c019d": "移除",
             "0e2d235c63": "非活动工作区扫描已就绪",
             "4a35c08764": "评审",
             "47123d0108": "正在扫描非活动工作区，你可以关闭此窗口，稍后再回来查看",
-            "1d3503357d": "删除继续期间，你可以关闭此窗口并稍后回来",
-            "4c2990886e": "已删除 {{value0}}/{{value1}}",
-            "86ba852118": "{{value0}}，{{value1}} 个失败",
             "archivedStatus": "已归档",
             "74f6c16279": "返回",
             "mergedStatus": "已合并",
@@ -6474,11 +6471,6 @@
           "changesLost_other": "{{count}} 项未提交的更改将丢失",
           "uncountedChangesLost": "未提交的更改将丢失",
           "moreLoadedPaths": "以及另外 {{value0}} 个已加载的路径"
-        },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "子工作区将被删除",
-          "alsoDeletesChildren_other": "删除此工作区也会删除 {{count}} 个子工作区",
-          "moreChildren_other": "另有 {{count}} 个"
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "显示工作树",
@@ -14206,13 +14198,6 @@
             "c76693e456": "无法加载此工作区的文件："
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "尚无提交",
-            "d0fb0f4bf2": "刷新提交记录",
-            "9f7535d22b": "引用是指向该确切提交的分支或标签名称，它们仅出现在 Git 具有该提交的命名引用的位置",
-            "9289ba0cb9": "什么是参考文献？",
-            "d836037d02": "提交",
-            "8232c8b2f2": "打开提交 {{value0}}：{{value1}}",
-            "e5e81e59a6": "调整提交记录高度",
             "6d1e0a7c3b": "无法加载提交文件"
           },
           "HostedReviewActions": {
@@ -14576,7 +14561,58 @@
             "keepFile": "保留文件",
             "keepDeletion": "保留删除",
             "refreshAll": "全部刷新",
-            "statusReadFailed": "Git 无法读取此工作区，显示的更改可能不是最新的"
+            "statusReadFailed": "Git 无法读取此工作区，显示的更改可能不是最新的",
+            "baseUpToDate": "已是最新",
+            "rebaseOperationInProgress": "请等待当前 Git 操作完成",
+            "rebaseButton": "变基",
+            "rebaseConflictCount_other": "{{count}} 个冲突",
+            "rebasePaused": "变基已暂停",
+            "rebaseResolveConflictsFirst": "请先解决冲突",
+            "rebaseAbort": "中止",
+            "rebaseContinue": "继续",
+            "continueRebasePausedAgain": "变基在下一个冲突处暂停",
+            "continueRebaseFailed": "继续变基失败",
+            "rebaseAutostashConflict": "已变基。你的未提交更改未能干净地重新应用，已保存在 stash 中。",
+            "rebaseStoppedByGit": "Git 暂停了变基",
+            "continueRebaseUnconfirmed": "无法确认结果。源代码管理已刷新以显示当前状态。",
+            "noRebaseInProgress": "没有正在进行的变基",
+            "rebaseStopMovedOn": "变基已经继续进行。请查看面板后重试。",
+            "rebaseEmptyStep": "此步骤没有可提交的内容。请中止变基，或在终端中完成它。",
+            "rebaseStepUnreadableShort": "检查失败",
+            "rebaseCheckAgain": "重新检查",
+            "rebaseRetryInspect": "重试",
+            "rebaseRetryInspectLabel": "重新检查变基步骤",
+            "rebaseStoppedFinishInTerminal": "Git 已在此步骤暂停。请在终端中完成或中止。",
+            "rebaseCheckingStep": "正在检查变基步骤",
+            "rebaseEmptyStepShort": "空步骤",
+            "rebaseAbortLabel": "中止变基",
+            "scopeFileCount_one": "{{count}} 个文件",
+            "scopeFileCount_other": "{{count}} 个文件",
+            "scopeCommitCount_one": "{{count}} 次提交",
+            "scopeCommitCount_other": "{{count}} 次提交",
+            "scopeUncommitted": "未提交",
+            "scopeAllChanges": "所有更改",
+            "scopeNone": "无",
+            "scopeOpenDiff": "打开差异",
+            "scopeShowAll": "显示所有更改",
+            "scopeLoadingBranchChanges": "正在加载分支更改…",
+            "scopeBranchCommits": "此分支上的提交",
+            "scopeRecentCommits": "最近提交",
+            "scopeCompareTo": "与 {{ref}} 比较",
+            "scopeFilterCommits": "筛选提交",
+            "scopeCommitsFailed": "无法加载提交。",
+            "scopeFilesFailed": "无法加载文件。",
+            "scopeLoadingFiles": "正在加载文件…",
+            "scopeNoSharedHistory": "与 {{ref}} 没有共同历史记录",
+            "scopeRetryCommits": "重试",
+            "scopeLoadingCommits": "正在加载提交…",
+            "scopeNoMatchingCommits": "没有匹配的提交",
+            "scopeNoBranchCommitsYet": "此分支上还没有提交",
+            "scopeNoCommitsYet": "还没有提交",
+            "scopeOlderHistory": "在 Git Graph 中查看更早的历史",
+            "scopeNoUncommitted": "没有未提交的更改。",
+            "scopeCommitFiles": "文件",
+            "gitGraphButton": "图谱"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的代理",
@@ -15006,10 +15042,8 @@
                   "titlePublishBranchFirst": "请先发布分支再同步提交",
                   "titleUseForcePush": "使用提交并强制推送 — 远程只有本地提交的旧副本",
                   "titleCommitThenPullPush": "先提交，再拉取并推送",
-                  "rebaseFromNamedBase": "从 {{baseRef}} 变基",
                   "rebaseFromBase": "从基准分支变基",
                   "rebaseChooseRemoteBase": "选择要从中变基的远程基准分支",
-                  "rebaseDirtyHint": "尝试变基；git 可能要求先提交或暂存本地更改",
                   "rebaseWithLatestFrom": "使用 {{baseRef}} 的最新提交变基当前分支",
                   "blockedCommitFirst": "请先提交更改",
                   "blockedCheckOutBranchFirst": "请先检出分支",
@@ -15031,7 +15065,6 @@
                   "titleCommitAndPush": "提交已暂存的更改并推送",
                   "commitForcePush": "提交并强制推送",
                   "commitPush": "提交并推送",
-                  "titleOperationInProgress": "操作正在进行中…",
                   "titleAbortRebaseInProgress": "中止正在进行的变基",
                   "titleAbortMergeInProgress": "中止正在进行的合并",
                   "titleNothingToPushTo": "没有要推送到 {{upstreamName}} 的内容",
@@ -15092,7 +15125,6 @@
                   "statusSetsUpstream": "将设置上游",
                   "statusMayFail": "可能失败",
                   "statusPublished": "已发布",
-                  "statusStashFirst": "请先存入 stash",
                   "statusReplaces": "替换 ↓{{behind}}",
                   "statusCommitFirst": "请先提交",
                   "statusReviewOpen": "{{shortLabel}} 已打开",
@@ -15103,7 +15135,14 @@
                   "statusPushFirst": "请先推送",
                   "statusForcePushFirst": "请先强制推送",
                   "statusSyncFirst": "请先同步",
-                  "statusUnsupported": "不支持"
+                  "statusUnsupported": "不支持",
+                  "rebaseOntoNamedBase": "变基到 {{base}}",
+                  "rebaseCommitOrStashFirst": "请先提交或储藏（stash）更改",
+                  "continueRebase": "继续变基",
+                  "titleContinueRebase": "继续已暂停的变基",
+                  "rebaseFromNamedBase": "从 {{baseRef}} 变基",
+                  "rebaseDirtyHint": "尝试变基；git 可能要求先提交或储藏（stash）本地更改",
+                  "statusStashFirst": "请先存入 stash"
                 }
               },
               "primary": {
@@ -15146,7 +15185,8 @@
                   "e9b5d1f470": "在创建 {{value0}} 之前检出一个分支",
                   "f0c6e2a581": "此分支尚未准备好创建 {{value0}}",
                   "8f9a0b1c2d": "没有可提交的内容，分支已是最新状态",
-                  "h3i4j5k607": "正在检查此分支是否可以创建 {{value0}}…"
+                  "h3i4j5k607": "正在检查此分支是否可以创建 {{value0}}…",
+                  "nothingToCommit": "没有可提交的内容"
                 }
               },
               "branch": {
@@ -15432,12 +15472,7 @@
             "f8a2c4d1e0": "资源管理器搜索模式"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "此提交没有文件更改",
-            "c3d4e5f6a7": "打开未提交的差异"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "显示提交{{value0}}中的文件：{{value1}}",
-            "4a8d9e0c1f": "隐藏提交{{value0}}中的文件：{{value1}}"
+            "b2c3d4e5f6": "此提交没有文件更改"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "在浏览器中打开提交",
@@ -19802,7 +19837,8 @@
         "transitionFieldsNeedsUpdate": "请更新远程 Orca 服务器以提交必填的流转字段，或在 Jira 中完成流转"
       },
       "runtimeGitSyncClient": {
-        "completeMergeNeedsNewerHost": "完成合并需要此主机上安装更新版本的 Orca。请更新该主机上的 Orca。"
+        "completeMergeNeedsNewerHost": "完成合并需要此主机上安装更新版本的 Orca。请更新该主机上的 Orca。",
+        "continueRebaseNeedsNewerHost": "继续变基需要此主机上更新版本的 Orca。请在该主机上更新 Orca。"
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "解决冲突需要此主机上安装更新版本的 Orca。请更新该主机上的 Orca。"
@@ -20150,7 +20186,6 @@
         "pasteNotSaved": "此粘贴内容未保存。请重新粘贴或将其移除",
         "pastedTextTooLarge": "此次粘贴会使消息超过单条消息 256 KB 的上限。请缩短后再粘贴",
         "imageUnavailable": "预览不可用",
-        "botFor": "用途：{{detail}}",
         "agents": "智能体",
         "recent": "最近",
         "bots": "Bots",
@@ -20629,6 +20664,10 @@
       "railLabel": "你的消息",
       "railImageMessage": "图片附件",
       "railEmptyMessage": "消息",
+      "railFilterPlaceholder": "筛选你的消息",
+      "railNoMatches": "没有匹配的消息",
+      "railTickLabel": "第 {{index}} 条消息，共 {{count}} 条：{{text}}",
+      "railMatchCount": "{{count}} / {{total}}",
       "ask": {
         "awaiting": "等待用户输入：",
         "awaitingUnnamed": "等待用户输入",
@@ -21331,6 +21370,11 @@
         "waitOver": "等待结束",
         "scheduled": "按计划",
         "runNow": "立即运行",
+        "github": "GitHub",
+        "slack": "Slack",
+        "linear": "Linear",
+        "webhook": "Webhook",
+        "gmail": "Gmail",
         "calendar": "日历",
         "instructions": "指令",
         "event": "事件",
@@ -21344,6 +21388,8 @@
         "reusedFrom": "复用的事件：{{what}}，发生于 {{time}}",
         "whatOn": "{{what}}（{{where}}）",
         "whatIn": "{{what}}（{{where}}）",
+        "whatAt": "{{what}} · {{where}}",
+        "factsAt": "{{facts}} · {{time}}",
         "someoneWrote": "某人写道",
         "personWrote": "{{name}} 写道",
         "callerSent": "调用方发送了",
@@ -21384,6 +21430,7 @@
             "review_requested": "已请求评审",
             "assigned": "已分配",
             "ci_failed": "CI 失败",
+            "ci_finished": "CI 完成",
             "ci_passed": "CI 通过",
             "pr_conflicted": "出现冲突",
             "pr_closed": "已关闭",
@@ -21669,8 +21716,6 @@
           "noSizes": "尚未测量工作区大小",
           "noSizesDescription": "测量磁盘占用后将显示大小",
           "measureSizesTitle": "扫描工作区大小",
-          "sizeOnDisk": "磁盘占用：{{value0}}",
-          "checkingGitRow": "正在检查 Git 状态",
           "searchPlaceholder": "搜索名称、仓库、分支、路径或主机",
           "searchLabel": "搜索工作区",
           "filters": "筛选器",
@@ -21728,7 +21773,6 @@
           "noMatches": "没有工作区符合这些筛选条件",
           "noMatchesDescription": "所有工作区都在同一列表中——请放宽筛选条件或清除筛选器",
           "sortBy": "排序方式",
-          "sortByField": "按{{value0}}排序",
           "sort": {
             "lastActivity": "最近活动",
             "lastVisited": "最近打开",
@@ -21784,25 +21828,15 @@
             "none": "没有"
           },
           "idleSignalField": "空闲依据",
-          "updatedAgo": "更新于 {{value0}}",
-          "refreshing": "正在刷新…",
-          "refreshingProgress": "正在刷新 {{value0}}/{{value1}}",
-          "notMeasured": "未测量",
           "openWorkspaceNamed": "打开 {{value0}}",
           "openWorkspace": "打开工作区",
-          "workspaceStatus": "工作区状态：{{value0}}",
           "measuringSizesProgress": "正在扫描 {{value0}}/{{value1}}",
           "measuringSizes": "正在扫描大小",
           "measureSizesFailed": "扫描工作区大小失败",
-          "selectedCount": "已选择 {{value0}} 个",
-          "forceDeleteRisk_other": "{{count}} 个工作区目前存在风险，可能需要强制删除",
           "selectionVanishedCount_other": "所选的 {{count}} 个工作区已不存在",
           "selectionWithheldCount_other": "所选的 {{count}} 个工作区被当前筛选条件隐藏，已取消选择",
-          "selectAllSafetyChecked_other": "选择全部 {{count}} 个已通过安全检查的工作区",
-          "clearSelection": "清除选择",
           "lastActive": "最后活跃：{{value0}}",
           "projectNamed": "项目：{{value0}}",
-          "moreFlags": "显示其余 {{value0}} 个标记",
           "pathLabel": "路径",
           "copyPath": "复制路径",
           "gitNotChecked": "未检查",
@@ -21810,7 +21844,9 @@
           "restoreFailed": "无法取消忽略 {{value0}}",
           "ignoreTooltip": "忽略：批量删除时跳过",
           "stopIgnoring": "取消忽略",
-          "stopIgnoringNamed": "取消忽略 {{value0}}"
+          "stopIgnoringNamed": "取消忽略 {{value0}}",
+          "sortAscending": "升序",
+          "sortDescending": "降序"
         },
         "scan": {
           "progress": "正在扫描工作区 ({{value0}}/{{value1}})",
@@ -21854,7 +21890,69 @@
           "ignoredFilesUnchecked": "未完整检查 Git 忽略的文件"
         },
         "confirm": {
-          "deletingTitle_other": "正在删除 {{count}} 个工作区"
+          "title_other": "删除 {{count}} 个工作区？",
+          "localFilesSection": "本地文件将丢失",
+          "back": "返回",
+          "deletePermanently": "永久删除",
+          "retryDescription": "这会永久删除 {{name}} 及其本地文件。",
+          "showMore": "再显示 {{count}} 个"
+        },
+        "review": {
+          "title": "检查工作区",
+          "refresh": "刷新",
+          "checking": "正在检查更改",
+          "updatesAvailable": "有更新。刷新"
+        },
+        "row": {
+          "sizeLabel": "大小",
+          "reviewLabel": "评审",
+          "statusLabel": "状态",
+          "signalsLabel": "信号",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "不是 Git 工作区。请改为从 Orca 中移除该项目。",
+          "unreachable": "无法连接 {{host}}。重新连接后即可删除，或将其从 Orca 中移除。",
+          "mainCheckout": "无法删除项目的主检出。",
+          "uncommittedFiles_other": "{{count}} 个未提交的文件",
+          "couldntCheck": "无法检查更改"
+        },
+        "group": {
+          "empty": "这里没有工作区。",
+          "nothingLocal": "无本地内容",
+          "localFiles": "有本地文件",
+          "cannotDelete": "无法删除",
+          "label": "工作区分组",
+          "selected": "已选 {{count}} 个"
+        },
+        "footer": {
+          "delete_other": "删除 {{count}} 个工作区",
+          "selected": "已选 {{count}} 个",
+          "waitForDelete": "请等待当前删除完成。"
+        },
+        "selectAll": {
+          "partial": "已选 {{selected}}/{{total}} 个",
+          "all": "全选 {{count}} 个"
+        },
+        "runCard": {
+          "title": "正在删除工作区",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "关闭",
+          "show": "显示"
+        },
+        "done": {
+          "failedLine_other": "{{count}} 个无法删除。",
+          "title": "已删除 {{deleted}}/{{total}} 个工作区",
+          "singleTitle": "已删除 {{deleted}}/{{total}} 个工作区",
+          "button": "完成"
+        },
+        "deleting": {
+          "title_other": "正在删除 {{count}} 个工作区",
+          "runInBackground": "在后台运行",
+          "progress": "已删除 {{done}}/{{total}}",
+          "statusDeleted": "已删除",
+          "statusDeleting": "正在删除…",
+          "statusFailed": "无法删除",
+          "statusWaiting": "等待中",
+          "unconfirmed": "无法确认已删除。请刷新以检查。"
         }
       },
       "creation": {
@@ -22763,12 +22861,13 @@
       "downloadSize": "下载大小 {{size}} MB",
       "downloading": "正在下载 {{done}} MB",
       "downloadingOf": "正在下载 {{done}} MB / {{total}} MB",
-      "external": "使用在此主机上找到的 {{agent}} 副本",
-      "extracting": "正在解压 {{agent}}",
+      "external": "使用你自己的 {{agent}}",
+      "externalShort": "使用你自己的副本",
+      "extracting": "正在解压 {{agent}}…",
+      "extractingShort": "正在解压…",
       "failed": "安装失败，请重试",
       "cancelFailed": "无法取消安装，请重试",
       "install": "安装 {{agent}}",
-      "installManaged": "安装 Orca 的副本",
       "installedByOrca": "由 Orca 安装 · {{version}}",
       "notInstalled": "未安装",
       "progress": "{{agent}} 下载",
@@ -22787,7 +22886,8 @@
       "unavailable": "{{agent}} 在此主机上不可用",
       "update": "更新",
       "updateTo": "更新到 {{version}}",
-      "verifying": "正在检查已下载的运行时",
+      "verifying": "正在验证…",
+      "verifyingAgent": "正在验证 {{agent}}…",
       "installTitle": "安装 {{agent}} 以开始聊天",
       "continueTitle": "安装 {{agent}} 以继续",
       "heroBody": "一次性下载 {{size}} MB，由运行此聊天的电脑上的 {{agent}} 聊天共用",
@@ -22805,7 +22905,7 @@
       "checkingTitle": "正在检查下载内容",
       "progressOf": "{{done}} / {{total}} MB",
       "unpackingDetail": "正在解压运行时",
-      "checkingDetail": "正在检查已下载的运行时",
+      "checkingDetail": "正在验证 {{agent}}…",
       "stepDownload": "下载",
       "stepUnpack": "解压",
       "stepCheck": "检查"
@@ -22950,7 +23050,6 @@
       "showDetails": "显示 {{name}} 的任务和最新消息",
       "task": "任务",
       "openFailed": "{{name}}：{{detail}}",
-      "chatUnavailable": "此主机无法打开该聊天，请重试",
       "terminalExited": "此终端已退出",
       "openOnHost": "请在 {{host}} 上打开此智能体",
       "cannotLocate": "此主机找不到此智能体，请重试",
@@ -24886,8 +24985,6 @@
     "setupTerminalTitle": "初始设置",
     "delete": {
       "detachingChildren": "正在分离子工作区…",
-      "childrenPreservedTitle": "子工作区将被保留",
-      "childrenCannotBeKeptTitle": "无法保留子工作区",
       "childrenPreservedDescription": "直接子工作区将成为顶级工作区，其文件、终端和嵌套的子工作区都将保留",
       "detachChildren": "分离并保留子工作区",
       "nestedChildrenCannotBeKept": "此工作区内的子工作区文件夹需先移到此工作区之外，才能保留",
@@ -26792,7 +26889,8 @@
     "branchCreated": "已在 {{commit}} 创建 {{branch}}",
     "branchName": "分支名称",
     "invalidBranchName": "此分支名称无效。请选择其他名称。",
-    "createBranchFailed": "Orca 无法创建分支。请在终端中检查此仓库，然后重试。"
+    "createBranchFailed": "Orca 无法创建分支。请在终端中检查此仓库，然后重试。",
+    "openDiff": "打开差异"
   },
   "bots": {
     "deepLink": {
@@ -27517,12 +27615,10 @@
         "title": "要在另一台电脑上登录？",
         "line": "在那台电脑上登录 {{app}}，然后复制未能加载的页面的地址"
       },
-      "title": "添加到 {{bot}}",
       "close": "关闭",
       "signingIn": "正在登录",
       "add": "添加",
       "composio": {
-        "note": "这些应用通过你的 Composio 账户连接",
         "browseAll": "浏览 Composio 应用",
         "searchCaption": "Composio 应用",
         "allCaption": "全部 Composio 应用",
@@ -27534,7 +27630,6 @@
         "addKey": "添加密钥并继续",
         "keyStoredOnHost": "存储在 {{host}} 上，bots 永远看不到它。你的应用登录信息由 Composio 保管"
       },
-      "allApps": "全部应用",
       "closeKeepsSigningIn": "登录会在浏览器中继续进行",
       "openPageAgain": "再次打开页面",
       "webhooks": {
@@ -27554,10 +27649,8 @@
       "back": "返回",
       "signInAllow": "登录 {{app}} 并允许访问",
       "viaComposio": "通过 Composio",
-      "onBot": "{{bot}} 的应用",
       "appsCaption": "应用",
       "searchComposio": "搜索 Composio 应用",
-      "searchMine": "搜索 {{bot}} 的应用",
       "search": "搜索应用",
       "categories": "分类",
       "addByUrl": "通过 URL 添加",
@@ -27775,14 +27868,15 @@
         "activity": "活动",
         "canceledNote": "已取消：",
         "doneNote": "已完成：",
-        "links": "链接",
         "showLess": "收起",
         "showMore": "展开",
-        "subWhere": "事项 {{number}} · {{chat}}",
+        "linkCount": "{{count}} 个链接",
+        "reply": "回复",
+        "replyAbove": "回复上方的问题",
+        "replyBelow": "回复下方的问题",
         "showEarlier": "显示更早的",
         "place": "{{index}} / {{total}}",
         "deleted": "此事项已被删除",
-        "moreLinks": "还有 {{count}} 个链接",
         "loading": "正在加载事项…"
       },
       "activity": {
@@ -27959,16 +28053,17 @@
         "pickCustom": "自定义时间"
       },
       "ask": {
-        "heldCount_other": "{{count}} 条回答尚未发送，<send>仍然发送</send>",
-        "next": "下一个问题",
         "notSentYet": "尚未发送",
-        "previous": "上一个问题",
         "recommended": "推荐",
-        "step": "第 {{n}} 个，共 {{total}} 个",
         "typeAnswer": "输入你的回答",
         "replaced": "智能体提出了新问题。请先阅读，再回复",
         "replacedByNewer": "已由较新的问题取代",
-        "skipped": "已跳过"
+        "skipped": "已跳过",
+        "send": "发送",
+        "sending": "正在发送…",
+        "sendSome": "发送 {{count}}/{{total}}",
+        "sendSomeLabel": "发送 {{total}} 个回答中的 {{count}} 个",
+        "changeAnswer": "{{question}}：{{answer}}。更改回答"
       },
       "readMoreClosedFailed": "无法读取更多已关闭的条目"
     },
@@ -28544,7 +28639,10 @@
       "runNow": "立即运行",
       "openOnPage": "在自动化页面中打开",
       "pauseShort": "暂停",
-      "resumeShort": "恢复"
+      "resumeShort": "恢复",
+      "deleting": "正在删除…",
+      "deleteFailed": "无法删除 {{name}}",
+      "deleteDescription": "删除 <name/> 及其运行历史。"
     },
     "host": {
       "errors": {
@@ -29037,13 +29135,11 @@
         "refresh": "刷新"
       },
       "setup": {
-        "install": "安装 Orca 应用",
         "close": "关闭",
         "checking": "正在检查 GitHub…",
         "retry": "重试",
         "installing": "正在等待安装完成或组织所有者批准…",
         "finish": "完成",
-        "title": "将 {{name}} 添加到 GitHub",
         "pushesAsYou": "{{name}} 会使用你自己的 git 凭据从此电脑推送代码",
         "addMore": "添加仓库或组织",
         "checkingInstalls": "正在检查 GitHub 上的更改…",
@@ -29052,7 +29148,6 @@
         "repositories": "仓库",
         "isOn": "{{name}} 已接入 GitHub",
         "new": "新增",
-        "finishInBrowser": "请在浏览器中的 GitHub 页面上完成…",
         "openAgain": "再次打开",
         "added": "已从 GitHub 添加：{{names}}",
         "pushesOnHost": "{{name}} 会在 {{host}} 上使用该电脑的 git 凭据推送代码",
@@ -29100,7 +29195,6 @@
         "waiting": "请在浏览器中完成 GitHub 登录…",
         "requested": "已请求组织所有者批准 Orca 应用",
         "notInstalled": "Orca 应用尚未安装在你的任何仓库上",
-        "turnOn": "启用 {{name}}",
         "connected": "已连接 GitHub",
         "pickRepositories": "登录并选择 {{name}} 可以在哪些仓库中工作",
         "readsOnly": "Orca 只会读取你的 GitHub 用户名和 ID"
@@ -29166,7 +29260,7 @@
       "codexNoSandbox": "不使用 Codex 沙盒",
       "whoeverAskedApproves": "如果它请求批准，提问的人可以批准",
       "reachLinear": "以你的身份评论、更新和创建 Linear 议题",
-      "reachSlack": "以 @{{name}} 的身份在 Slack 中发消息",
+      "reachSlack": "以 {{name}} 的身份在 Slack 中发消息",
       "reachGitHub": "以你的身份在 GitHub 上评论、评审和推送",
       "trust": "只添加你放心把键盘交给对方的人",
       "adviceHeading": "分享之前",
@@ -29306,7 +29400,6 @@
     "composio": {
       "connectedAs": "已以 {{label}} 身份连接",
       "connected": "已连接",
-      "group": "通过 Composio 使用更多应用",
       "key": {
         "label": "Composio API 密钥",
         "placeholder": "粘贴你的密钥",

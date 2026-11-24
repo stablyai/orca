@@ -102,9 +102,9 @@
       "noWorkspace": "Ничего не открыто",
       "fullPageView": "У этой страницы нет строки на боковой панели",
       "archived": "Архивные рабочие пространства не показываются на боковой панели",
-      "botsOff": "Bots выключены, поэтому этот bot не показан",
-      "botHidden": "Этот bot приостановлен и скрыт параметрами Bot",
-      "renameBotPage": "Страница bot или группы — не рабочее дерево. Чтобы переименовать, используйте «Переименовать» в меню его строки.",
+      "botsOff": "Боты выключены, поэтому этот бот не показан",
+      "botHidden": "Этот бот приостановлен и скрыт параметрами ботов",
+      "renameBotPage": "Страница бота или группы — не рабочее дерево. Чтобы переименовать, используйте «Переименовать» в меню соответствующей строки.",
       "renameUnlisted": "Это рабочее пространство сейчас не показано на боковой панели, поэтому переименовать его там нельзя."
     },
     "startupWorktreeRefresh": {
@@ -2027,12 +2027,16 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "Структурированная сессия агента пока недоступна. Повторите попытку чуть позже.",
         "gone": "Этого чата больше нет на этом компьютере, поэтому открыть его здесь нельзя.",
         "hostCannotOpen": "Этот чат нельзя открыть повторно до обновления Orca.",
         "worktreeDeleted": "Рабочее дерево удалено.",
         "projectRemoved": "Проект удалён из Orca.",
-        "folderWorkspaceRemoved": "Рабочее пространство папки удалено."
+        "folderWorkspaceRemoved": "Рабочее пространство папки удалено.",
+        "chatStillStarting": "Чат ещё запускается. Повторите чуть позже.",
+        "chatOpenFailed": "Не удалось открыть чат.",
+        "chatOpenRetry": "Повторить",
+        "chatOpenShowDetails": "Показать подробности",
+        "chatOpenHideDetails": "Скрыть подробности"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Рецепты с подготовкой корня проекта не поддерживают выборочную выгрузку."
@@ -4016,27 +4020,20 @@
         "cleanup": {
           "WorkspaceCleanupDialog": {
             "3828408538": "Удалить {{value0}}",
-            "b6bae1eed1": "Отмена",
-            "38ca0b1400": "Локальные файлы будут удалены навсегда. Это действие нельзя отменить.",
             "e97e4580c7": "Есть изменения",
             "9623a5107d": "Неотправленные коммиты",
             "e8b3741ff7": "Игнорируется",
             "a9957007eb": "Игнорировать {{value0}}",
             "bef0adef9b": "Ветка",
             "bbb1ab6a6f": "Выбрать {{value0}}",
-            "b771c92598": "Удалить выбранные",
             "7eee951968": "Сканирование рабочих пространств",
             "191f0bc98e": "Закрыть",
-            "7ae2ad30f4": "Обновить",
             "7f451a3e2c": "Не удалось проигнорировать рекомендацию по очистке",
             "662b8ec3f8": "Не удалось проверить рабочие пространства для очистки",
             "9cc26c019d": "Удалить",
             "0e2d235c63": "Проверка рабочих пространств завершена",
             "4a35c08764": "Проверка",
             "47123d0108": "Собираем сведения о рабочих пространствах. Можно закрыть окно и вернуться позже.",
-            "1d3503357d": "Можно закрыть окно и вернуться позже: удаление продолжится.",
-            "4c2990886e": "Удалено: {{value0}}/{{value1}}",
-            "86ba852118": "{{value0}}, с ошибкой: {{value1}}",
             "archivedStatus": "Архивные",
             "mergedStatus": "Слито",
             "unchangedStatus": "Нет новых коммитов",
@@ -6467,17 +6464,6 @@
           "changesLost_many": "{{count}} незакоммиченных изменений будет потеряно",
           "changesLost_other": "{{count}} незакоммиченного изменения будет потеряно",
           "uncountedChangesLost": "Незакоммиченные изменения будут потеряны"
-        },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Дочерние рабочие пространства будут удалены",
-          "alsoDeletesChildren_one": "При удалении этого рабочего пространства также будет удалено {{count}} дочернее рабочее пространство.",
-          "alsoDeletesChildren_few": "При удалении этого рабочего пространства также будут удалены {{count}} дочерних рабочих пространства.",
-          "alsoDeletesChildren_many": "При удалении этого рабочего пространства также будет удалено {{count}} дочерних рабочих пространств.",
-          "alsoDeletesChildren_other": "При удалении этого рабочего пространства также будет удалено {{count}} дочернего рабочего пространства.",
-          "moreChildren_one": "+{{count}} ещё",
-          "moreChildren_few": "+{{count}} ещё",
-          "moreChildren_many": "+{{count}} ещё",
-          "moreChildren_other": "+{{count}} ещё"
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Показать рабочее дерево",
@@ -14066,13 +14052,6 @@
             "c76693e456": "Не удалось загрузить файлы этого рабочего пространства:"
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "Коммитов пока нет",
-            "d0fb0f4bf2": "Обновить коммиты",
-            "9f7535d22b": "Ссылки — это имена веток или тегов, указывающих на конкретный коммит. Они отображаются только там, где у коммита есть именованная ссылка Git.",
-            "9289ba0cb9": "Что такое ссылки?",
-            "d836037d02": "Коммиты",
-            "8232c8b2f2": "Открыть коммит {{value0}}: {{value1}}",
-            "e5e81e59a6": "Изменить размер списка коммитов",
             "6d1e0a7c3b": "Не удалось загрузить файлы коммита"
           },
           "HostedReviewActions": {
@@ -14468,7 +14447,65 @@
             "markResolved": "Отметить как решённый",
             "keepFile": "Сохранить файл",
             "keepDeletion": "Сохранить удаление",
-            "refreshAll": "Обновить всё"
+            "refreshAll": "Обновить всё",
+            "baseUpToDate": "Актуально",
+            "rebaseOperationInProgress": "Дождитесь завершения текущей операции Git",
+            "rebaseButton": "Rebase",
+            "rebaseConflictCount_one": "{{count}} конфликт",
+            "rebaseConflictCount_few": "{{count}} конфликта",
+            "rebaseConflictCount_many": "{{count}} конфликтов",
+            "rebaseConflictCount_other": "{{count}} конфликта",
+            "rebasePaused": "Rebase приостановлен",
+            "rebaseResolveConflictsFirst": "Сначала разрешите конфликты",
+            "rebaseAbort": "Прервать",
+            "rebaseContinue": "Продолжить",
+            "continueRebasePausedAgain": "Rebase приостановлен на следующем конфликте",
+            "continueRebaseFailed": "Не удалось продолжить rebase",
+            "rebaseAutostashConflict": "Rebase выполнен. Незакоммиченные изменения не удалось чисто применить снова; они сохранены в stash.",
+            "rebaseStoppedByGit": "Git приостановил rebase",
+            "continueRebaseUnconfirmed": "Не удалось подтвердить результат. Система контроля версий обновлена и показывает текущее состояние.",
+            "noRebaseInProgress": "Rebase не выполняется",
+            "rebaseStopMovedOn": "Rebase уже продвинулся дальше. Проверьте панель и повторите попытку.",
+            "rebaseEmptyStep": "На этом шаге нечего коммитить. Прервите rebase или завершите его в терминале.",
+            "rebaseStepUnreadableShort": "Проверка не удалась",
+            "rebaseCheckAgain": "Проверить снова",
+            "rebaseRetryInspect": "Повторить",
+            "rebaseRetryInspectLabel": "Повторно проверить шаг rebase",
+            "rebaseStoppedFinishInTerminal": "Git приостановил этот шаг. Завершите его в терминале или прервите.",
+            "rebaseCheckingStep": "Проверка шага rebase",
+            "rebaseEmptyStepShort": "Пустой шаг",
+            "rebaseAbortLabel": "Прервать rebase",
+            "scopeFileCount_one": "{{count}} файл",
+            "scopeFileCount_other": "{{count}} файлов",
+            "scopeCommitCount_one": "{{count}} коммит",
+            "scopeCommitCount_other": "{{count}} коммитов",
+            "scopeUncommitted": "Незакоммиченные",
+            "scopeAllChanges": "Все изменения",
+            "scopeNone": "Нет",
+            "scopeOpenDiff": "Открыть diff",
+            "scopeShowAll": "Показать все изменения",
+            "scopeLoadingBranchChanges": "Загрузка изменений ветки…",
+            "scopeBranchCommits": "Коммиты в этой ветке",
+            "scopeRecentCommits": "Последние коммиты",
+            "scopeCompareTo": "Сравнить с {{ref}}",
+            "scopeFilterCommits": "Фильтр коммитов",
+            "scopeCommitsFailed": "Не удалось загрузить коммиты.",
+            "scopeFilesFailed": "Не удалось загрузить файлы.",
+            "scopeLoadingFiles": "Загрузка файлов…",
+            "scopeNoSharedHistory": "Нет общей истории с {{ref}}",
+            "scopeRetryCommits": "Повторить",
+            "scopeLoadingCommits": "Загрузка коммитов…",
+            "scopeNoMatchingCommits": "Нет подходящих коммитов",
+            "scopeNoBranchCommitsYet": "В этой ветке пока нет коммитов",
+            "scopeNoCommitsYet": "Пока нет коммитов",
+            "scopeOlderHistory": "Более ранняя история в Git Graph",
+            "scopeNoUncommitted": "Нет незакоммиченных изменений.",
+            "scopeCommitFiles": "Файлы",
+            "gitGraphButton": "Граф",
+            "scopeFileCount_few": "{{count}} файла",
+            "scopeFileCount_many": "{{count}} файлов",
+            "scopeCommitCount_few": "{{count}} коммита",
+            "scopeCommitCount_many": "{{count}} коммитов"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Не удалось запустить выбранного агента.",
@@ -14922,10 +14959,8 @@
                   "titlePublishBranchFirst": "Сначала опубликуйте ветку для синхронизации коммитов",
                   "titleUseForcePush": "Используйте «Коммит и принудительная отправка»: в удалённой ветке только старые версии локальных коммитов",
                   "titleCommitThenPullPush": "Создать коммит, затем получить и отправить изменения",
-                  "rebaseFromNamedBase": "Перебазировать на {{baseRef}}",
                   "rebaseFromBase": "Перебазировать на базовую ветку",
                   "rebaseChooseRemoteBase": "Выберите удалённую базовую ветку для перебазирования",
-                  "rebaseDirtyHint": "Попробуйте перебазирование. Git может сначала потребовать коммит или сохранение локальных изменений в stash.",
                   "rebaseWithLatestFrom": "Перебазировать текущую ветку на последние коммиты из {{baseRef}}",
                   "blockedCommitFirst": "Сначала создайте коммит",
                   "blockedCheckOutBranchFirst": "Сначала переключитесь на ветку",
@@ -14998,7 +15033,6 @@
                   "titleNothingToPull": "Нечего получать и сливать",
                   "titleNothingToPush": "Нечего отправлять",
                   "titleNothingToPushTo": "Нечего отправлять в {{upstreamName}}",
-                  "titleOperationInProgress": "Выполняется операция…",
                   "titlePublishBranchFirstToFastForward": "Сначала опубликуйте ветку для перемотки вперёд",
                   "titlePublishBranchFirstToPull": "Сначала опубликуйте ветку для получения и слияния коммитов",
                   "titlePublishBranchFirstToPush": "Сначала опубликуйте ветку для отправки коммитов",
@@ -15012,7 +15046,13 @@
                   "titleUnpublishedForcePushCount_many": "Принудительно отправьте {{count}} коммитов этой ветки с проверкой состояния удалённой ветки и при необходимости настройте отслеживаемую удалённую ветку.",
                   "titleUnpublishedForcePushCount_one": "Принудительно отправьте {{count}} коммит этой ветки с проверкой состояния удалённой ветки и при необходимости настройте отслеживаемую удалённую ветку.",
                   "titleUnpublishedForcePushCount_other": "Принудительно отправьте {{count}} коммита этой ветки с проверкой состояния удалённой ветки и при необходимости настройте отслеживаемую удалённую ветку.",
-                  "titleUseForcePushToSync": "Используйте принудительную отправку: в удалённом репозитории есть только старые версии локальных коммитов"
+                  "titleUseForcePushToSync": "Используйте принудительную отправку: в удалённом репозитории есть только старые версии локальных коммитов",
+                  "rebaseOntoNamedBase": "Rebase на {{base}}",
+                  "rebaseCommitOrStashFirst": "Сначала закоммитьте или спрячьте изменения",
+                  "continueRebase": "Продолжить rebase",
+                  "titleContinueRebase": "Продолжить приостановленный rebase",
+                  "rebaseFromNamedBase": "Перебазировать на {{baseRef}}",
+                  "rebaseDirtyHint": "Попробуйте перебазирование. Git может сначала потребовать коммит или сохранение локальных изменений в stash."
                 }
               },
               "primary": {
@@ -15055,7 +15095,8 @@
                   "e9b5d1f470": "Переключитесь на ветку перед созданием {{value0}}.",
                   "f0c6e2a581": "Эта ветка ещё не готова для {{value0}}.",
                   "8f9a0b1c2d": "Нет изменений для коммита. Ветка актуальна.",
-                  "h3i4j5k607": "Проверка готовности этой ветки к созданию {{value0}}…"
+                  "h3i4j5k607": "Проверка готовности этой ветки к созданию {{value0}}…",
+                  "nothingToCommit": "Нечего коммитить"
                 }
               },
               "branch": {
@@ -15368,12 +15409,7 @@
             "f8a2c4d1e0": "Режим поиска в проводнике"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "В этом коммите нет изменений файлов",
-            "c3d4e5f6a7": "Открыть все изменения"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "Показать файлы коммита {{value0}}: {{value1}}",
-            "4a8d9e0c1f": "Скрыть файлы коммита {{value0}}: {{value1}}"
+            "b2c3d4e5f6": "В этом коммите нет изменений файлов"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "Открыть коммит в браузере",
@@ -19728,7 +19764,8 @@
         "thisComputer": "этот компьютер"
       },
       "runtimeGitSyncClient": {
-        "completeMergeNeedsNewerHost": "Для завершения слияния нужна более новая версия Orca на этом сервере. Обновите Orca на этом сервере."
+        "completeMergeNeedsNewerHost": "Для завершения слияния нужна более новая версия Orca на этом сервере. Обновите Orca на этом сервере.",
+        "continueRebaseNeedsNewerHost": "Чтобы продолжить rebase, на этом хосте нужна более новая версия Orca. Обновите Orca на этом хосте."
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "Для разрешения конфликтов нужна более новая версия Orca на этом сервере. Обновите Orca на этом сервере."
@@ -20278,7 +20315,6 @@
         "exitPlanMode": "Выйти из режима планирования",
         "moreControls": "Другие элементы управления чатом",
         "permissionAppliesNextMessage": "{{saved}} применяется со следующего сообщения; сейчас используется: {{active}}",
-        "botFor": "Для: {{detail}}",
         "bots": "Боты"
       },
       "tool": {
@@ -20573,6 +20609,10 @@
       "railLabel": "Ваши сообщения",
       "railImageMessage": "Вложенное изображение",
       "railEmptyMessage": "Сообщение",
+      "railFilterPlaceholder": "Фильтр сообщений",
+      "railNoMatches": "Нет подходящих сообщений",
+      "railTickLabel": "Сообщение {{index}} из {{count}}: {{text}}",
+      "railMatchCount": "{{count}} из {{total}}",
       "prompt": {
         "collapse": "Свернуть",
         "expand": "Развернуть"
@@ -20720,7 +20760,12 @@
         "paused": "Цель приостановлена",
         "blocked": "Цель заблокирована",
         "limited": "Достигнут лимит цели",
-        "attachmentsUnsupported": "Уберите вложения перед постановкой цели."
+        "attachmentsUnsupported": "Уберите вложения перед постановкой цели.",
+        "checks_one": "{{count}} проверка",
+        "checks_few": "{{count}} проверки",
+        "checks_many": "{{count}} проверок",
+        "checks_other": "{{count}} проверки",
+        "last-check": "Последняя проверка цели"
       },
       "fileLinks": {
         "notFound": "Файл не найден: {{value0}}",
@@ -20843,7 +20888,16 @@
         "settingsRejected": "Codex не смог применить выбранные модель и усилие. Изменение цели не отправлено. Проверьте выбор и повторите попытку.",
         "settingsUnconfirmed": "Codex не подтвердил выбранные модель и усилие. Изменение цели не отправлено. Проверьте чат и повторите попытку.",
         "pauseUnconfirmed": "Codex остановился, но приостановка его цели не подтверждена. Проверьте цель, прежде чем продолжать.",
-        "stopUnconfirmed": "Codex не подтвердил остановку. Проверьте чат, прежде чем продолжать."
+        "stopUnconfirmed": "Codex не подтвердил остановку. Проверьте чат, прежде чем продолжать.",
+        "noGoal": "У Codex нет цели, которую можно изменить в этом чате. Задайте её командой /goal и описанием цели."
+      },
+      "automationResult": {
+        "openRun": "Открыть запуск",
+        "notRead": "{{name}} ещё не видит этот результат. Он будет передан с вашим следующим сообщением.",
+        "read": "{{name}}: прочитано с вашим следующим сообщением.",
+        "sentWithOne": "Отправлено с 1 результатом автоматизации",
+        "sentWithMany": "Отправлено с результатами автоматизации: {{count}}",
+        "cleared": "Поступило до очистки чата. {{name}} не получит этот результат."
       },
       "slashCommandDescriptions": {
         "agent": "Переключить активное обсуждение агента",
@@ -21011,10 +21065,31 @@
         "sourceTooltip": "Ответвление от {{name}}",
         "unknownSourceTooltip": "Ответвление от другого чата"
       },
+      "importPlan": {
+        "comes": "Будет перенесено",
+        "changed": "Будет перенесено с изменениями",
+        "already": "Уже есть",
+        "stays": "Останется в {{app}}",
+        "fromAgain": "Из {{app}}, повторно",
+        "from": "Из {{app}}",
+        "selected": "Выбрано {{chosen}} из {{total}} · ключи и данные для входа никогда не копируются",
+        "importOne": "Импортировать (1)",
+        "importMany": "Импортировать ({{count}})",
+        "askedOne": "Запрошен импорт 1 элемента",
+        "askedMany": "Запрошен импорт элементов: {{count}}"
+      },
+      "importDone": {
+        "heading": "Импорт завершён",
+        "title": "Перенесено из {{app}}: {{name}}",
+        "open": "Открыть",
+        "stayed": "Осталось в {{app}}: {{things}}. В {{app}} ничего не изменено.",
+        "unchanged": "В {{app}} ничего не изменено.",
+        "paused": "Автоматизации приостановлены, чтобы ничего не запускалось дважды. Включите их, когда старый бот будет отключён в {{app}}."
+      },
       "cardKindHidden": {
         "description": "Вы можете изменить это в любое время в разделе",
-        "settingsLink": "Настройки > Chat UI > Активность за ход",
-        "failed": "Не удалось сохранить. Это можно отключить в разделе Настройки > Chat UI > Активность за ход."
+        "settingsLink": "Настройки > Интерфейс чата > Активность за ход",
+        "failed": "Не удалось сохранить. Это можно отключить в разделе Настройки > Интерфейс чата > Активность за ход."
       },
       "openedPullRequests": {
         "one": "Создан запрос на слияние {{name}}",
@@ -21027,11 +21102,149 @@
       },
       "splitRight": "Разделить вправо",
       "splitDown": "Разделить вниз",
+      "automationRun": {
+        "waitOver": "Ожидание закончилось",
+        "scheduled": "По расписанию",
+        "runNow": "Запустить сейчас",
+        "github": "GitHub",
+        "slack": "Slack",
+        "linear": "Linear",
+        "webhook": "Вебхук",
+        "gmail": "Gmail",
+        "calendar": "Календарь",
+        "instructions": "Инструкции",
+        "event": "Событие",
+        "startError": "Ошибка",
+        "couldNotStart": "Не удалось запустить",
+        "queued": "В очереди",
+        "deadlineReached": "Срок истёк",
+        "due": "По плану: {{time}}",
+        "dueRan": "по плану {{due}}, запуск {{ran}}",
+        "reused": "Повторно использовано: {{what}}",
+        "reusedFrom": "Повторно использовано событие: {{what}} · от {{time}}",
+        "whatOn": "{{what}} в {{where}}",
+        "whatIn": "{{what}} в {{where}}",
+        "whatAt": "{{what}} · {{where}}",
+        "factsAt": "{{facts}} · {{time}}",
+        "someoneWrote": "Кто-то написал",
+        "personWrote": "Сообщение от {{name}}",
+        "callerSent": "Отправлено вызывающей стороной",
+        "external": "Внешнее содержимое · передано боту как информация, а не как инструкции",
+        "shortened": "Сокращено до 4 096 символов, как передано боту.",
+        "memberAccess": "{{name}}: в списке «Кто может обращаться» на момент запуска.",
+        "someMemberAccess": "Отправитель из списка «Кто может обращаться» на момент запуска.",
+        "otherAccess": "Не в списке «Кто может обращаться» или доступ неизвестен.",
+        "ownerAccess": "От владельца бота.",
+        "sampleCall": "Пример вызова",
+        "firstCall": "Первый вызов",
+        "webhookCall": "Вызов вебхука",
+        "openOnGitHub": "Открыть на GitHub",
+        "openInSlack": "Открыть в Slack",
+        "openInLinear": "Открыть в Linear",
+        "openLink": "Открыть ссылку",
+        "accessibleName": "Запуск автоматизации. {{label}}: {{name}}. {{reason}}.",
+        "accessibleNameAt": "Запуск автоматизации. {{label}}: {{name}}. {{reason}}. {{time}}.",
+        "accessibleNameNoReason": "Запуск автоматизации. {{label}}: {{name}}.",
+        "accessibleNameNoReasonAt": "Запуск автоматизации. {{label}}: {{name}}. {{time}}.",
+        "copyInstructions": "Копировать инструкции",
+        "copyEvent": "Копировать событие",
+        "openAutomation": "Открыть автоматизацию",
+        "sendAgain": "Отправить снова",
+        "sentAgain": "Отправлено снова",
+        "showAll": "Показать все",
+        "showLess": "Свернуть",
+        "what": {
+          "github": {
+            "issue_opened": "Задача создана",
+            "pr_opened": "Пул-реквест открыт",
+            "pr_pushed": "Отправка коммитов",
+            "pr_merged": "Слит",
+            "comment": "Комментарий",
+            "review_comment": "Комментарий к проверке",
+            "review": "Проверка",
+            "mentioned": "Упоминание",
+            "review_requested": "Запрошена проверка",
+            "assigned": "Назначено",
+            "ci_failed": "Сбой CI",
+            "ci_finished": "CI завершён",
+            "ci_passed": "CI пройден",
+            "pr_conflicted": "Конфликты",
+            "pr_closed": "Закрыт",
+            "pr_ready": "Готов к проверке",
+            "labeled": "Добавлена метка",
+            "issue_closed": "Задача закрыта",
+            "deploy_finished": "Развёртывание завершено",
+            "security_alert": "Оповещение о безопасности",
+            "workflow_finished": "Запуск рабочего процесса завершён"
+          },
+          "slack": {
+            "mentioned": "Упоминание",
+            "message": "Сообщение",
+            "reaction": "Реакция"
+          },
+          "linear": {
+            "assigned": "Назначено",
+            "mentioned": "Упоминание",
+            "issue_created": "Задача создана",
+            "issue_moved": "Задача перемещена"
+          },
+          "gmail": {
+            "new_email": "Новое письмо"
+          },
+          "calendar": {
+            "starting_soon": "Скоро начнётся встреча"
+          },
+          "other": "Событие"
+        },
+        "afterThirtyDays": "Через 30 дней",
+        "cancel": "Отмена",
+        "cancelled": "Отменено",
+        "couldNotFinish": "Не удалось завершить",
+        "createdAutomation": "Автоматизация создана",
+        "finished": "Завершено",
+        "happened": "Произошло",
+        "noDeadline": "Без срока",
+        "noReplyBy": "Нет ответа до {{time}}",
+        "nothingBy": "Ничего до {{time}}",
+        "paused": "Приостановлена",
+        "replied": "Ответ: {{actor}}",
+        "rowAccessibleName": "{{label}}: {{name}}. {{details}}",
+        "thenLine": "Затем",
+        "thenOnce": "Выполняется один раз, когда это произойдёт",
+        "thenOnceBy": "Выполняется один раз; в {{time}}, если ничего не пришло",
+        "until": "До {{time}}",
+        "updatedAutomation": "Автоматизация обновлена",
+        "waiting": "Ожидание",
+        "waitsFor": "Ожидает"
+      },
+      "eventRow": {
+        "showLess": "Свернуть",
+        "showMore": "Развернуть",
+        "running": "Выполняется",
+        "failed": "Сбой"
+      },
       "dock": {
         "label": "Поле сообщения и запросы"
       },
       "automationSaved": {
-        "openFullPage": "Открыть страницу"
+        "resultsInRuns": "результаты в каждом запуске",
+        "paused": "приостановлена",
+        "webhookHint": "Укажите этот URL в вашем сервисе",
+        "gettingUrl": "Получение URL…",
+        "editDraft": "Измените «{{name}}» так, чтобы ",
+        "resultsInEachRun": "В каждом запуске",
+        "resultsChat": "Чат",
+        "noRuns": "Запусков пока нет",
+        "recentRuns": "Последние запуски",
+        "when": "Когда",
+        "results": "Результаты",
+        "agent": "Агент",
+        "runNow": "Запустить сейчас",
+        "loading": "Загрузка",
+        "deleted": "Эта автоматизация удалена",
+        "loadFailed": "Не удалось прочитать эту автоматизацию",
+        "openFullPage": "Открыть страницу",
+        "onAgent": "на {{name}}"
       },
       "usageLimitActions": {
         "handOff": "Передать агенту"
@@ -21137,8 +21350,6 @@
           "noSizes": "Размеры рабочих пространств ещё не измерены.",
           "noSizesDescription": "Размеры появятся после измерения использования диска.",
           "measureSizesTitle": "Проверить размеры рабочих пространств",
-          "sizeOnDisk": "Размер на диске: {{value0}}",
-          "checkingGitRow": "Проверка статуса Git",
           "searchPlaceholder": "Поиск по имени, репозиторию, ветке, пути, компьютеру",
           "searchLabel": "Поиск рабочих пространств",
           "filters": "Фильтры",
@@ -21196,7 +21407,6 @@
           "noMatches": "Нет рабочих пространств, соответствующих этим фильтрам.",
           "noMatchesDescription": "Все рабочие пространства собраны в одном списке — расширьте условия или сбросьте фильтры.",
           "sortBy": "Сортировать по",
-          "sortByField": "Сортировать по {{value0}}",
           "sort": {
             "lastActivity": "Последняя активность",
             "lastVisited": "Последнее открытие",
@@ -21252,17 +21462,11 @@
             "none": "Нет"
           },
           "idleSignalField": "Признак неактивности",
-          "updatedAgo": "Обновлено {{value0}}",
-          "refreshing": "Обновление…",
-          "refreshingProgress": "Обновление {{value0}}/{{value1}}",
-          "notMeasured": "Не измерено",
           "openWorkspaceNamed": "Открыть {{value0}}",
           "openWorkspace": "Открыть рабочее пространство",
-          "workspaceStatus": "Статус рабочего пространства: {{value0}}",
           "measuringSizesProgress": "Сканирование {{value0}}/{{value1}}",
           "measuringSizes": "Проверка размеров",
           "measureSizesFailed": "Не удалось проверить размеры рабочих пространств",
-          "selectedCount": "Выбрано: {{value0}}",
           "gitStatusCheckFailed": "Ошибка проверки статуса Git",
           "gitStatusUnverified": "Не удалось проверить статус Git",
           "deleteAnyway": "Всё равно удалить",
@@ -21310,10 +21514,6 @@
               "finishedAgents": "Завершённые агенты"
             }
           },
-          "forceDeleteRisk_one": "Для {{count}} рабочего пространства сейчас выявлены риски; может потребоваться принудительное удаление",
-          "forceDeleteRisk_few": "Для {{count}} рабочих пространств сейчас выявлены риски; может потребоваться принудительное удаление",
-          "forceDeleteRisk_many": "Для {{count}} рабочих пространств сейчас выявлены риски; может потребоваться принудительное удаление",
-          "forceDeleteRisk_other": "Для {{count}} рабочего пространства сейчас выявлены риски; может потребоваться принудительное удаление",
           "selectionVanishedCount_one": "{{count}} выбранное рабочее пространство больше не существует.",
           "selectionVanishedCount_few": "{{count}} выбранных рабочих пространства больше не существуют.",
           "selectionVanishedCount_many": "{{count}} выбранных рабочих пространств больше не существуют.",
@@ -21322,12 +21522,9 @@
           "selectionWithheldCount_few": "{{count}} выбранных рабочих пространства скрыты текущими фильтрами, поэтому выбор снят.",
           "selectionWithheldCount_many": "{{count}} выбранных рабочих пространств скрыты текущими фильтрами, поэтому выбор снят.",
           "selectionWithheldCount_other": "{{count}} выбранного рабочего пространства скрыто текущими фильтрами, поэтому выбор снят.",
-          "selectAllSafetyChecked_one": "Выбрать {{count}} рабочее пространство, прошедшее проверку безопасности",
-          "selectAllSafetyChecked_few": "Выбрать все {{count}} рабочих пространства, прошедших проверку безопасности",
-          "selectAllSafetyChecked_many": "Выбрать все {{count}} рабочих пространств, прошедших проверку безопасности",
-          "selectAllSafetyChecked_other": "Выбрать все рабочие пространства, прошедшие проверку безопасности ({{count}})",
-          "clearSelection": "Сбросить выбор",
-          "lastActive": "Последняя активность: {{value0}}"
+          "lastActive": "Последняя активность: {{value0}}",
+          "sortAscending": "по возрастанию",
+          "sortDescending": "по убыванию"
         },
         "scan": {
           "progress": "Сканирование рабочих пространств ({{value0}}/{{value1}})",
@@ -21374,6 +21571,86 @@
           "ignoredFilesBlocker": "Игнорируемые локальные файлы",
           "ignoredFilesNamed": "Игнорируемые файлы: {{value0}}",
           "ignoredFilesUnchecked": "Игнорируемые файлы проверены не полностью"
+        },
+        "confirm": {
+          "title_one": "Удалить {{count}} рабочее пространство?",
+          "title_few": "Удалить {{count}} рабочих пространства?",
+          "title_many": "Удалить {{count}} рабочих пространств?",
+          "title_other": "Удалить {{count}} рабочих пространства?",
+          "localFilesSection": "Локальные файлы будут потеряны",
+          "back": "Назад",
+          "deletePermanently": "Удалить навсегда",
+          "retryDescription": "Это действие навсегда удалит {{name}} и его локальные файлы.",
+          "showMore": "Показать ещё {{count}}"
+        },
+        "review": {
+          "title": "Просмотр рабочих пространств",
+          "refresh": "Обновить",
+          "checking": "Проверка изменений",
+          "updatesAvailable": "Есть обновления. Обновить"
+        },
+        "row": {
+          "sizeLabel": "Размер",
+          "reviewLabel": "Ревью",
+          "statusLabel": "Статус",
+          "signalsLabel": "Сигналы",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "Это не рабочее пространство Git. Вместо этого удалите проект из Orca.",
+          "unreachable": "Нет связи с {{host}}. Переподключитесь, чтобы удалить, или удалите из Orca.",
+          "mainCheckout": "Нельзя удалить основной checkout проекта.",
+          "uncommittedFiles_one": "{{count}} незакоммиченный файл",
+          "uncommittedFiles_few": "{{count}} незакоммиченных файла",
+          "uncommittedFiles_many": "{{count}} незакоммиченных файлов",
+          "uncommittedFiles_other": "{{count}} незакоммиченных файла",
+          "couldntCheck": "Не удалось проверить изменения"
+        },
+        "group": {
+          "empty": "Здесь нет рабочих пространств.",
+          "nothingLocal": "Ничего локального",
+          "localFiles": "Есть локальные файлы",
+          "cannotDelete": "Нельзя удалить",
+          "label": "Группы рабочих пространств",
+          "selected": "Выбрано: {{count}}"
+        },
+        "footer": {
+          "delete_one": "Удалить {{count}} рабочее пространство",
+          "delete_few": "Удалить {{count}} рабочих пространства",
+          "delete_many": "Удалить {{count}} рабочих пространств",
+          "delete_other": "Удалить {{count}} рабочих пространства",
+          "selected": "Выбрано: {{count}}",
+          "waitForDelete": "Дождитесь окончания текущего удаления."
+        },
+        "selectAll": {
+          "partial": "Выбрано: {{selected}} из {{total}}",
+          "all": "Выбрать все ({{count}})"
+        },
+        "runCard": {
+          "title": "Удаление рабочих пространств",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "Закрыть",
+          "show": "Показать"
+        },
+        "done": {
+          "failedLine_one": "Не удалось удалить: {{count}}.",
+          "failedLine_few": "Не удалось удалить: {{count}}.",
+          "failedLine_many": "Не удалось удалить: {{count}}.",
+          "failedLine_other": "Не удалось удалить: {{count}}.",
+          "title": "Удалено рабочих пространств: {{deleted}} из {{total}}",
+          "singleTitle": "{{deleted}} из {{total}} рабочего пространства удалено",
+          "button": "Готово"
+        },
+        "deleting": {
+          "title_one": "Удаление {{count}} рабочего пространства",
+          "title_few": "Удаление {{count}} рабочих пространств",
+          "title_many": "Удаление {{count}} рабочих пространств",
+          "title_other": "Удаление {{count}} рабочих пространств",
+          "runInBackground": "Выполнять в фоне",
+          "progress": "Удалено {{done}} из {{total}}",
+          "statusDeleted": "Удалено",
+          "statusDeleting": "Удаление…",
+          "statusFailed": "Не удалось удалить",
+          "statusWaiting": "Ожидание",
+          "unconfirmed": "Не удалось подтвердить удаление. Обновите, чтобы проверить."
         }
       },
       "creation": {
@@ -21730,7 +22007,7 @@
             "createToken": "Создать",
             "environmentManagedLine": "Задано переменными окружения ORCA_BITBUCKET_*. Удалите их, чтобы сохранить здесь.",
             "savedLocallyOnly": "Сохраняется только на этом компьютере.",
-            "accessTokenNeeds": "Нужен доступ на чтение pull request.",
+            "accessTokenNeeds": "Нужен доступ на чтение пул-реквестов.",
             "atlassianEmail": "Электронная почта Atlassian",
             "requiredScopes": "Необходимые области доступа",
             "apiBaseUrl": "Базовый URL API",
@@ -21825,12 +22102,13 @@
       "downloadSize": "Загрузка {{size}} МБ.",
       "downloading": "Загружено {{done}} МБ.",
       "downloadingOf": "Загружено {{done}} МБ из {{total}} МБ.",
-      "external": "Использует копию {{agent}}, найденную на этом компьютере.",
-      "extracting": "Распаковка {{agent}}.",
+      "external": "Используется ваш собственный {{agent}}",
+      "externalShort": "Используется ваша копия",
+      "extracting": "Распаковка {{agent}}…",
+      "extractingShort": "Распаковка…",
       "failed": "Не удалось установить. Повторите попытку.",
       "cancelFailed": "Не удалось отменить установку. Повторите попытку.",
       "install": "Установить {{agent}}",
-      "installManaged": "Установить копию, предоставляемую Orca",
       "notInstalled": "Не установлено.",
       "progress": "Загрузка {{agent}}",
       "readFailed": "Не удалось проверить {{agent}} на этом компьютере. Повторяем попытку.",
@@ -21847,7 +22125,8 @@
       "thisComputer": "этот компьютер",
       "unavailable": "{{agent}} недоступен на этом компьютере.",
       "update": "Обновить",
-      "verifying": "Проверка загруженной среды выполнения.",
+      "verifying": "Проверка…",
+      "verifyingAgent": "Проверка {{agent}}…",
       "installTitle": "Установите {{agent}}, чтобы начать чат",
       "continueTitle": "Установите {{agent}}, чтобы продолжить",
       "heroBody": "Однократная загрузка {{size}} МБ. Эта копия общая для чатов {{agent}} на компьютере, где работает этот чат.",
@@ -21865,7 +22144,7 @@
       "checkingTitle": "Проверка загрузки",
       "progressOf": "{{done}} из {{total}} МБ",
       "unpackingDetail": "Распаковка среды выполнения",
-      "checkingDetail": "Проверка загруженной среды выполнения",
+      "checkingDetail": "Проверка {{agent}}…",
       "stepDownload": "Скачать",
       "stepUnpack": "Распаковать",
       "stepCheck": "Проверить"
@@ -22167,8 +22446,8 @@
       "demoPassword": "пароль",
       "demoCookie": "cookie",
       "openSettings": "Открыть настройки",
-      "switchedNoteTitle": "Новые агенты будут открываться в Chat UI",
-      "switchedNoteBody": "Предпочитаете терминал? Вернуться можно в любой момент: найдите <term>Chat UI</term> в настройках."
+      "switchedNoteTitle": "Новые агенты будут открываться в интерфейсе чата",
+      "switchedNoteBody": "Предпочитаете терминал? Вернуться можно в любой момент: найдите <term>Интерфейс чата</term> в настройках."
     },
     "botsTeammate": {
       "activity": "События",
@@ -24838,26 +25117,26 @@
       "weekdays": "по будням, {{schedule}}"
     },
     "palette": {
-      "placeholder": "Поиск bots, чатов, терминалов, рабочих пространств, задач, настроек и действий…",
-      "description": "Поиск bots, чатов, терминалов, рабочих пространств, задач, настроек и действий",
-      "scopedPlaceholder": "Поиск bots…",
-      "scopedLabel": "Поиск bots",
-      "scopeHint": "Введите @, чтобы показать только bots",
-      "chip": "Bots",
-      "chipLabel": "Bots, показать всё",
+      "placeholder": "Поиск ботов, чатов, терминалов, рабочих пространств, задач, настроек и действий…",
+      "description": "Поиск ботов, чатов, терминалов, рабочих пространств, задач, настроек и действий",
+      "scopedPlaceholder": "Поиск ботов…",
+      "scopedLabel": "Поиск ботов",
+      "scopeHint": "Введите @, чтобы показать только ботов",
+      "chip": "Боты",
+      "chipLabel": "Боты, показать всё",
       "searchEverything": "Искать «{{text}}» везде",
-      "noMatch": "Нет bots, подходящих под «{{text}}»",
-      "noBotsYet": "bots пока нет",
-      "filtersPaused": "Фильтры применяются к рабочим пространствам, а не к bots",
+      "noMatch": "Нет ботов, подходящих под «{{text}}»",
+      "noBotsYet": "Ботов пока нет",
+      "filtersPaused": "Фильтры применяются к рабочим пространствам, а не к ботам",
       "showEverything": "Показать всё",
-      "footerBots": "Bots",
+      "footerBots": "Боты",
       "matchesPurpose": "Совпадает с назначением.",
-      "scopedStatus_one": "Показаны только bots. Найден {{count}} результат.",
-      "scopedStatus_other": "Показаны только bots. Найдено {{count}} результата.",
-      "sidebarSearchLabel": "Поиск bots, рабочих пространств и вкладок браузера",
-      "scopedStatus_few": "Показаны только bots. Найдено {{count}} результата.",
-      "scopedStatus_many": "Показаны только bots. Найдено {{count}} результатов.",
-      "section": "Bots"
+      "scopedStatus_one": "Показаны только боты. Найден {{count}} результат.",
+      "scopedStatus_other": "Показаны только боты. Найдено {{count}} результата.",
+      "sidebarSearchLabel": "Поиск ботов, рабочих пространств и вкладок браузера",
+      "scopedStatus_few": "Показаны только боты. Найдено {{count}} результата.",
+      "scopedStatus_many": "Показаны только боты. Найдено {{count}} результатов.",
+      "section": "Боты"
     },
     "templates": {
       "browse": "Просмотреть шаблоны",
@@ -24910,7 +25189,6 @@
       "paste": {
         "remoteSignIn": "Удалённый вход"
       },
-      "allApps": "Все приложения",
       "composio": {
         "withComposio": "С Composio"
       },
@@ -24938,7 +25216,6 @@
           "usWest": "Запад США"
         }
       },
-      "onBot": "В {{bot}}",
       "line": {
         "vercel": "Проверка развёртываний и чтение их журналов",
         "sentry": "Разбор ошибок и событий за ними",
@@ -25011,7 +25288,10 @@
         "lastItem": "Последний элемент",
         "previous": "Предыдущий элемент",
         "next": "Следующий элемент",
-        "subWhere": "Элемент {{number}} · {{chat}}"
+        "linkCount": "Ссылки: {{count}}",
+        "reply": "Ответить",
+        "replyAbove": "Ответить на вопрос выше",
+        "replyBelow": "Ответить на вопрос ниже"
       },
       "activity": {
         "linked": "связал {{links}}",
@@ -25124,7 +25404,7 @@
       "controlOne": "{{person}} может использовать {{name}} для работы на {{computer}} от вашего имени: выполнять команды, открывать и изменять файлы и использовать ваши подключённые аккаунты.",
       "executionComputer": "компьютер, на котором работает этот агент",
       "here": "здесь",
-      "reachSlack": "Публиковать сообщения в Slack от имени @{{name}}",
+      "reachSlack": "Публиковать сообщения в Slack от имени {{name}}",
       "reject": "Отклонить",
       "there": "там",
       "thisComputer": "этот компьютер",
@@ -25139,7 +25419,10 @@
       "paused": "Приостановлено",
       "resumeShort": "Продолжить",
       "runNow": "Запустить сейчас",
-      "running": "Работает"
+      "running": "Работает",
+      "deleting": "Удаление…",
+      "deleteFailed": "Не удалось удалить {{name}}",
+      "deleteDescription": "Удалить <name/> и историю запусков."
     },
     "cloudSignIn": {
       "eventsHostChat": "Для событий {{source}} нужен вход в Orca Cloud на {{host}}. Я сохраню это правило, как только вход будет выполнен.",
@@ -25518,7 +25801,8 @@
     "branchCreated": "Ветка {{branch}} создана на {{commit}}",
     "branchName": "Название ветки",
     "invalidBranchName": "Это имя ветки недопустимо. Выберите другое имя.",
-    "createBranchFailed": "Orca не удалось создать ветку. Проверьте этот репозиторий в терминале и повторите попытку."
+    "createBranchFailed": "Orca не удалось создать ветку. Проверьте этот репозиторий в терминале и повторите попытку.",
+    "openDiff": "Открыть diff"
   },
   "speechModelUpdate": {
     "update": "Обновить",

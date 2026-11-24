@@ -138,6 +138,7 @@ import {
   AutomationRuns,
   AutomationUpdate
 } from './automations/automation-params'
+import { BotAvatarRead, BotAvatarUpload } from './bot-avatar-params'
 import {
   ComposioApp,
   ComposioApps,
@@ -205,8 +206,6 @@ import {
   BotAccessDecide,
   BotAccessRedeem,
   BotActivityRead,
-  BotAvatarRead,
-  BotAvatarUpload,
   BotChat,
   BotChatReset,
   BotChatSearch,
@@ -375,6 +374,7 @@ import {
 } from './computer/computer-schemas-params'
 import {
   ConnectorAct,
+  ConnectorLeaveThread,
   ConnectorReact,
   ConnectorReply,
   ConnectorSlackMirrorPost,
@@ -836,6 +836,7 @@ import {
   GitCommitAction,
   GitCommitCompare,
   GitCommitDiff,
+  GitContinueRebase,
   GitCreateBranch,
   GitDiff,
   GitDiscoverCommitMessageModels,
@@ -1524,6 +1525,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.setValue': SetValue,
   'computer.typeText': TypeText,
   'connector.act': ConnectorAct,
+  'connector.leaveThread': ConnectorLeaveThread,
   'connector.react': ConnectorReact,
   'connector.reply': ConnectorReply,
   'connector.slackMirror.post': ConnectorSlackMirrorPost,
@@ -1624,6 +1626,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.commitDiff': GitCommitDiff,
   'git.completeMerge': WorktreeSelectorOfGitParams,
   'git.conflictOperation': WorktreeSelectorOfGitParams,
+  'git.continueRebase': GitContinueRebase,
   'git.createBranch': GitCreateBranch,
   'git.diff': GitDiff,
   'git.discard': GitFilePath,
@@ -1638,6 +1641,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.mutationInFlight': WorktreeSelectorOfGitParams,
   'git.pull': GitTargetedRemote,
   'git.push': GitPush,
+  'git.rebaseAutoStash': WorktreeSelectorOfGitParams,
   'git.rebaseFromBase': GitRebaseFromBase,
   'git.refs': GitRefs,
   'git.remoteCommitUrl': GitRemoteCommitUrl,

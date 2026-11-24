@@ -59,6 +59,15 @@ export function botErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message === 'bot_name_taken') {
     return translate('bots.errors.nameTaken', 'Another bot already has that name.')
   }
+  if (error instanceof Error && error.message === 'bot_avatar_home_unreadable') {
+    return translate(
+      'bots.errors.avatarHomeUnreadable',
+      "Couldn't read the saved picture. Choose it again."
+    )
+  }
+  if (error instanceof Error && error.message === 'bot_folder_not_owned') {
+    return translate('bots.errors.folderNotOwned', "Couldn't verify this bot's folder.")
+  }
   if (error instanceof Error && error.message === 'bot_avatar_invalid') {
     return translate(
       'bots.errors.avatarInvalid',
