@@ -806,6 +806,10 @@ static int sweep_once(struct watcher *w, int signal_number) {
     }
     long long scan_tick = (long long)boot.tv_sec * ticks_per_second +
                           (long long)boot.tv_nsec * ticks_per_second / 1000000000LL;
+    // /proc can be remounted while the chat runs, so its namespace is proven around every read.
+    if (!procfs_in_own_namespace()) {
+        return -1;
+    }
     int hidden_before = procfs_hides_processes();
     struct pollfd anchor = {.fd = w->reaper_fd, .events = POLLIN};
     if (w->reaper_fd < 0 || poll(&anchor, 1, 0) != 0) {
@@ -838,6 +842,10 @@ static int sweep_once(struct watcher *w, int signal_number) {
 #if defined(__linux__)
     // A hidden row this watcher can signal might be a member, so the scan can't prove absence.
     // Checked around each table read: the mount's options can change while the chat runs.
+    if (!procfs_in_own_namespace()) {
+        live = -1;
+        goto done;
+    }
     int dropped = table_has_hidden_row || hidden_before || procfs_hides_processes();
 #else
     int dropped = 0;
