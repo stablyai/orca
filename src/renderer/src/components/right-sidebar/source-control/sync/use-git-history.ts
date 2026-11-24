@@ -163,7 +163,7 @@ export function useSourceControlGitHistory({
           {
             limit: GIT_HISTORY_DEFAULT_LIMIT,
             baseRef: compareBaseRef,
-            // Commits the base lacks, without per-row pushed/stat work the menu never shows.
+            // Commits the base lacks, without the pushed state, statistics or counts the menu never shows.
             branchOnly: true,
             branchListOnly: true,
             ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
