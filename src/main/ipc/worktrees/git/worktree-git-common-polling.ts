@@ -111,6 +111,11 @@ async function snapshotGitCommon(
   }
 }
 
+export type GitCommonPollingSubscription = WorktreeBaseSubscription & {
+  /** Run a gated check now (no forced sweep, not counted toward the full-sweep cadence); then wait a full interval. */
+  poke: () => void
+}
+
 export type GitCommonPollingOptions = {
   /** Reconciliation directly probes in-place leaves each tick and forces a full sweep every N ticks. */
   reconciliationFullScanEveryTicks?: number
@@ -130,7 +135,7 @@ export async function startGitCommonPolling(
   includePrimary = true,
   getStatusRefPaths: () => readonly string[] = () => [],
   options: GitCommonPollingOptions = {}
-): Promise<WorktreeBaseSubscription> {
+): Promise<GitCommonPollingSubscription> {
   let disposed = false
   let ticking = false
   let tickCount = 0
@@ -152,7 +157,10 @@ export async function startGitCommonPolling(
   let timer: ReturnType<typeof setTimeout> | null = null
   let parkedWhileHidden = false
 
-  const tick = async (forceFullScan = false): Promise<void> => {
+  const tick = async (forceFullScan = false, poked = false): Promise<void> => {
+    if (timer) {
+      clearTimeout(timer)
+    }
     timer = null
     if (disposed) {
       return
@@ -167,11 +175,13 @@ export async function startGitCommonPolling(
     ticking = true
     // Measure start-to-start cadence so scan duration does not add a full interval of lag.
     const startedAt = Date.now()
-    tickCount++
+    if (!poked) {
+      tickCount++
+    }
     const shouldForceFullScan =
       (isReconciliation && !entryDirGateTrusted) ||
       forceFullScan ||
-      tickCount % (reconciliationFullScanEveryTicks ?? INDEX_BACKSTOP_TICKS) === 0
+      (!poked && tickCount % (reconciliationFullScanEveryTicks ?? INDEX_BACKSTOP_TICKS) === 0)
     let dirGateMissed = false
     try {
       const next = await snapshotGitCommon(
@@ -234,6 +244,11 @@ export async function startGitCommonPolling(
   timer.unref?.()
 
   return {
+    poke: () => {
+      if (!disposed && !ticking) {
+        void tick(false, true)
+      }
+    },
     unsubscribe: async () => {
       disposed = true
       if (timer) {

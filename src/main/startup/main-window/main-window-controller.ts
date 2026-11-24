@@ -15,7 +15,10 @@ import {
   startWindowsInstallDirAclRepairIfPoisoned
 } from '../windows-install-permissions/windows-install-dir-acl-recovery'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
-import { notifyMainWindowBecameVisible } from '../../window/visibility/main-window-visibility'
+import {
+  notifyMainWindowBecameVisible,
+  notifyMainWindowFocused
+} from '../../window/visibility/main-window-visibility'
 import { setTrayAttention } from '../../tray/system-tray'
 import { createSystemTrayDeferred, showRendererRecoveryPrompt } from './main-window-actions'
 import { attachMainWindowCoreServices } from './main-window-core-services'
@@ -241,6 +244,7 @@ export async function openMainWindow(options: MainWindowOpenOptions = {}): Promi
   window.on('minimize', stopSyntheticTitleSpinnerTimer)
   window.on('show', notifyMainWindowBecameVisible)
   window.on('restore', notifyMainWindowBecameVisible)
+  window.on('focus', notifyMainWindowFocused)
   window.on('show', () => setTrayAttention(false))
   window.on('restore', () => setTrayAttention(false))
   installMainWindowAgentStatusListeners({

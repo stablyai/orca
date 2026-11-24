@@ -1,16 +1,20 @@
 import { dirname, join } from 'node:path'
 import type {
   WorktreeBasePollEvent,
-  WorktreeBaseSubscription,
   WorktreePollerWindowVisibility
 } from '../creation/worktree-base-directory-poller'
-import { startGitCommonPolling } from './worktree-git-common-polling'
+import {
+  startGitCommonPolling,
+  type GitCommonPollingSubscription
+} from './worktree-git-common-polling'
 import { createSingleFlight } from './single-flight-promise'
 
-// Reconcile silent native losses on the shared 15-tick backstop without per-repo two-second timers.
-const NARROW_WATCH_RECONCILIATION_TICKS = 15
-// Gate each reconciliation by directory/in-place signatures; sweep every leaf about every five minutes.
-const RECONCILIATION_FULL_SCAN_EVERY_TICKS = 10
+// The native watcher is primary: reconcile its silent losses every five minutes and on window focus, not every 30 s.
+const NARROW_WATCH_RECONCILIATION_TICKS = 150
+// Each timed reconciliation sweeps every leaf, keeping the five-minute bound for coarse-timestamp filesystems.
+const RECONCILIATION_FULL_SCAN_EVERY_TICKS = 1
+// Focus runs the gated per-entry check at most as often as the old 30 s cadence.
+const FOCUS_RECONCILIATION_MIN_TICKS = 15
 
 type GitCommonWatchReconciliationOptions = {
   commonDirPath: string
@@ -38,7 +42,19 @@ export function createGitCommonWatchReconciliation({
   onEvents
 }: GitCommonWatchReconciliationOptions): GitCommonWatchReconciliation {
   const worktreesDir = join(commonDirPath, 'worktrees')
-  let subscription: WorktreeBaseSubscription | null = null
+  let subscription: GitCommonPollingSubscription | null = null
+  let lastFocusReconcileAt = 0
+  const unsubscribeFocus = visibility.onWindowFocused?.(() => {
+    const now = Date.now()
+    if (
+      !subscription ||
+      now - lastFocusReconcileAt < pollIntervalMs * FOCUS_RECONCILIATION_MIN_TICKS
+    ) {
+      return
+    }
+    lastFocusReconcileAt = now
+    subscription.poke()
+  })
   const starting = createSingleFlight()
   let generation = 0
   const visibilityListeners = new Set<() => void>()
@@ -124,6 +140,7 @@ export function createGitCommonWatchReconciliation({
       }
     },
     unsubscribe: async () => {
+      unsubscribeFocus?.()
       generation++
       await starting.pending()?.catch(() => {})
       const current = subscription
