@@ -90,17 +90,13 @@ export function getTerminalUrlOpenHint(options: TerminalUrlOpenHintOptions = {})
 /** A terminal URL's hover hint; a localhost link opens in Orca on a plain click, so it names Orca and offers no chooser. */
 export function getTerminalUrlLinkHint(
   settings: GlobalSettings | null | undefined,
-  source: {
-    sourceOwner?: HttpLinkSourceOwner
-    canOpenOwnedBrowser: boolean
-    url?: string
-    destinations?: HttpLinkActionDestinations
-  }
+  hintOptions: TerminalUrlOpenHintOptions,
+  link: { url?: string; destinations?: HttpLinkActionDestinations }
 ): string {
-  const localhost = source.destinations?.primary === 'orca' && isDesktopLocalhostLink(source.url)
+  const localhost = link.destinations?.primary === 'orca' && isDesktopLocalhostLink(link.url)
   const plainClick = terminalLinkClickBehaviorFor(settings)
   return getTerminalUrlOpenHint({
-    ...terminalUrlOpenHintOptionsFor(settings, source.sourceOwner, source.canOpenOwnedBrowser),
+    ...hintOptions,
     ...(localhost ? { openLinksInApp: true } : {}),
     showActions: usesHttpLinkMode()
       ? !localhost && plainClick !== 'none' && httpLinkModeFor(settings) === 'ask'

@@ -310,24 +310,30 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
             />
           ))}
           {request.rememberEligible ? (
-            <Button
-              role="menuitemcheckbox"
-              aria-checked={remember}
-              data-link-popover-item
-              className="mt-0.5 h-8 w-full justify-start gap-2 rounded-t-none border-t border-border px-1.5 text-xs font-normal text-muted-foreground"
-              variant="ghost"
-              // Toggling keeps the chooser open; the browser row chosen next reads it.
-              onClick={() => setRememberFor(remember ? null : request)}
-            >
-              <span
-                aria-hidden
-                className="grid size-3.5 place-items-center rounded-[3px] border border-muted-foreground/60 aria-checked:border-primary aria-checked:bg-primary aria-checked:text-primary-foreground"
+            // The divider lives on a wrapper: Button owns its own border and shape.
+            <div className="mt-0.5 border-t border-border">
+              <Button
+                role="menuitemcheckbox"
                 aria-checked={remember}
+                data-link-popover-item
+                className="w-full justify-start"
+                variant="ghost"
+                size="menu"
+                // Toggling keeps the chooser open; the browser row chosen next reads it.
+                onClick={() => setRememberFor(remember ? null : request)}
               >
-                {remember ? <Check className="size-3" /> : null}
-              </span>
-              {t('components.link.actions.rememberChoice', 'Always open links this way')}
-            </Button>
+                <span
+                  aria-hidden
+                  className="grid size-3.5 place-items-center rounded-[3px] border border-muted-foreground/60 aria-checked:border-primary aria-checked:bg-primary aria-checked:text-primary-foreground"
+                  aria-checked={remember}
+                >
+                  {remember ? <Check className="size-3" /> : null}
+                </span>
+                <span className="font-normal text-muted-foreground">
+                  {t('components.link.actions.rememberChoice', 'Always open links this way')}
+                </span>
+              </Button>
+            </div>
           ) : null}
         </PopoverContent>
       ) : null}

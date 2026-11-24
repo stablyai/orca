@@ -85,6 +85,7 @@ beforeEach(() => {
   h.admit = true
 })
 
+// Why: the first case imports the remote browser-creation graph cold, which can pass 5s on a busy host.
 describe('remote browser creation for a link', { timeout: 60_000 }, () => {
   it('sends no tab create when admission is lost while preparation is pending', async () => {
     const placement = holdPlacement()
