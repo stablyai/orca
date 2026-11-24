@@ -377,17 +377,24 @@ describe('orca environment update --force', () => {
   })
 
   it('gives an accepted update the full action budget, not what was left of the status one', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    // Date too, so a budget measured from connect by the clock is caught as well.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    let holdStatus!: (reply: () => void) => void
+    const statusHeld = new Promise<() => void>((done) => (holdStatus = done))
     let holdUpdate!: (reply: () => void) => void
     const updateHeld = new Promise<() => void>((done) => (holdUpdate = done))
-    select(await startRuntime('slow', CURRENT, { holdUpdate }))
+    select(await startRuntime('slow', CURRENT, { status: { hold: holdStatus }, holdUpdate }))
 
     const slow = expect(update({ force: true })).rejects.toMatchObject({
       code: 'managed_server_deferred'
     })
+    // Status accepted just inside its own budget.
+    const answerStatus = await statusHeld
+    await vi.advanceTimersByTimeAsync(59_000)
+    answerStatus()
     const replyToUpdate = await updateHeld
-    // A quiet gap past the status budget, still inside the action budget.
-    await vi.advanceTimersByTimeAsync(120_000)
+    // Quiet past the status budget, and past 20 minutes from connect, but inside 20 from acceptance.
+    await vi.advanceTimersByTimeAsync(19 * 60_000 + 30_000)
     replyToUpdate()
     await slow
 
