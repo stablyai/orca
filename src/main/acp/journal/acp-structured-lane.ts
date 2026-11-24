@@ -74,7 +74,8 @@ export class AcpStructuredLane {
       sessionId: deps.providerSessionId,
       dialect: deps.dialect,
       agentName: deps.agentName,
-      onTextDropped: (drop) => this.reportTextDrop(drop)
+      onTextDropped: (drop) => this.reportTextDrop(drop),
+      numbersMessages: deps.requestGeneration !== undefined
     })
     this.assembler = createProviderTimelineAssembler({
       sink: deps.sink,
@@ -161,11 +162,8 @@ export class AcpStructuredLane {
     if (identity?.provider !== 'legacy' || identity.sessionId !== this.deps.sessionId) {
       return false
     }
-    const first = this.requestIdentity.request({
-      generation: this.deps.requestGeneration ?? this.deps.generation,
-      key: requestKey,
-      incarnation: 1
-    })
+    const generation = this.deps.requestGeneration ?? this.deps.generation
+    const first = this.requestIdentity.request({ generation, key: requestKey, incarnation: 1 })
     const prefix = first.provider === 'legacy' ? first.recordId : null
     return identity.recordId === prefix || identity.recordId.startsWith(`${prefix}#`)
   }

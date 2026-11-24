@@ -116,6 +116,7 @@ export async function acquireAcpStructuredSession(input: {
     onRequest: (method, params, context) => prompts.handle(method, params, context),
     onExtensionNotification: (method, params) =>
       whenLane(() => {
+        relayed?.turns.observeSessionUpdate(params)
         if (slot.reattaching) {
           slot.history?.keep(method, params)
         }
@@ -154,6 +155,7 @@ export async function acquireAcpStructuredSession(input: {
   input.track(connection)
   connection.subscribe((event: AcpSessionEvent) =>
     whenLane(() => {
+      relayed?.turns.observeSessionUpdate(event.kind === 'known' ? event.notification : event.raw)
       if (slot.lane) {
         if (slot.reattaching) {
           slot.history?.keep(

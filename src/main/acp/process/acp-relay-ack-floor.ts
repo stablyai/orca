@@ -11,7 +11,7 @@ export const ACP_SESSION_UPDATE_METHODS = new Set([
 ])
 
 const ENVELOPE_SCAN_CHARS = 4096
-/** A long line's fields are read from its start and end; its payload in between is never parsed. */
+/** A long line's fields are read from its start and end; no line is parsed here. */
 const FIELD_WINDOW_CHARS = 4096
 /** More open items than this can't be real; the oldest stay held, so nothing is acked past them. */
 const MAX_OPEN_ITEMS = 256
@@ -24,7 +24,6 @@ type UpdateFields = {
   sessionUpdate?: string
   messageId?: string
   toolCallId?: string
-  status?: string
 }
 
 /** A key outside any string: an unescaped quote can't sit inside a JSON string. */
@@ -33,40 +32,13 @@ const SESSION_ID = field('sessionId')
 const SESSION_UPDATE = field('sessionUpdate')
 const MESSAGE_ID = field('messageId')
 const TOOL_CALL_ID = field('toolCallId')
-/** A call's end status may be here; only then is the line parsed, so a nested `status` never ends it. */
-const MAY_END = /"status"\s*:\s*"(?:completed|failed)"/
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-const child = (value: unknown, key: string): Record<string, unknown> | undefined => {
-  const found = isRecord(value) ? value[key] : undefined
-  return isRecord(found) ? found : undefined
-}
-
-function parsedUpdate(line: string): UpdateFields {
-  let message: unknown
-  try {
-    message = JSON.parse(line)
-  } catch {
-    return {}
-  }
-  const params = child(message, 'params')
-  const update = child(params, 'update')
-  const text = (record: Record<string, unknown> | undefined, key: string): string | undefined => {
-    const value = record?.[key]
-    return typeof value === 'string' ? value : undefined
-  }
-  return {
-    sessionId: text(params, 'sessionId'),
-    sessionUpdate: text(update, 'sessionUpdate'),
-    toolCallId: text(update, 'toolCallId'),
-    status: text(update, 'status')
-  }
-}
-
-/** The fields the floor needs, scanned; a line is parsed only when it may end a call. */
+/** The fields the floor needs, scanned from the line's ends. A call's end is read by the
+ *  connection, which parses every line anyway (`AcpRelayTurns.observeUpdate`). */
 function updateFields(line: string): UpdateFields {
   const windows =
     line.length <= 2 * FIELD_WINDOW_CHARS
@@ -75,10 +47,7 @@ function updateFields(line: string): UpdateFields {
   const find = (pattern: RegExp): string | undefined =>
     windows.map((text) => pattern.exec(text)?.[1]).find((value) => value !== undefined)
   const sessionUpdate = find(SESSION_UPDATE)
-  if (sessionUpdate === 'tool_call' || sessionUpdate === 'tool_call_update') {
-    if (windows.some((text) => MAY_END.test(text))) {
-      return parsedUpdate(line)
-    }
+  if (sessionUpdate === 'tool_call') {
     return { sessionId: find(SESSION_ID), sessionUpdate, toolCallId: find(TOOL_CALL_ID) }
   }
   return {
@@ -147,12 +116,8 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
         this.open(this.messages, update.messageId, { seq, session: update.sessionId })
       }
     }
-    if ((kind === 'tool_call' || kind === 'tool_call_update') && update.toolCallId) {
-      if (update.status === 'completed' || update.status === 'failed') {
-        this.calls.delete(update.toolCallId)
-      } else if (kind === 'tool_call') {
-        this.open(this.calls, update.toolCallId, { seq })
-      }
+    if (kind === 'tool_call' && update.toolCallId) {
+      this.open(this.calls, update.toolCallId, { seq })
     }
   }
 
@@ -164,11 +129,19 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
     return held.length > 0 ? Math.min(...held) : null
   }
 
-  /** `adopted`: an earlier app's prompt, whose turn began at this attach's first replayed line. */
+  /** `adopted`: an earlier app's prompt, whose turn began at this attach's first replayed line;
+   *  the calls and messages already read from that replay stay open. */
   startTurn(adopted: boolean): void {
-    this.endTurn()
+    if (!adopted) {
+      this.endTurn()
+    }
     this.turnStart = adopted ? this.firstSeq : null
     this.turnPending = this.turnStart === null
+  }
+
+  /** The call reported its final status. */
+  endCall(toolCallId: string): void {
+    this.calls.delete(toolCallId)
   }
 
   /** Answered or failed: its calls Orca backgrounds are restated from their saved rows instead. */
@@ -216,5 +189,19 @@ export class AcpRelayTurns {
     const answered = send()
     void answered.then(end, end)
     return answered
+  }
+
+  /** Every session update's params the connection parsed: a call's final status lets the floor
+   *  past it. Acks follow the save barrier, so the parse is in before the floor is next read. */
+  observeSessionUpdate(params: unknown): void {
+    const update = isRecord(params) ? params.update : undefined
+    if (
+      isRecord(update) &&
+      (update.sessionUpdate === 'tool_call' || update.sessionUpdate === 'tool_call_update') &&
+      (update.status === 'completed' || update.status === 'failed') &&
+      typeof update.toolCallId === 'string'
+    ) {
+      this.current?.endCall(update.toolCallId)
+    }
   }
 }

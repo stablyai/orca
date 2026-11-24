@@ -45,17 +45,19 @@ function rig() {
     answered.catch(() => {})
     return settle
   }
-  return { output, acks, send, prompt }
+  /** The connection's parse of a line it was handed. */
+  const parsed = (line: string) => turns.observeSessionUpdate(JSON.parse(line).params)
+  return { output, acks, send, prompt, parsed }
 }
 
 describe('ACP relay ack floor', () => {
   it('acks only below the start of an open call or message, so a replay rewrites each whole', async () => {
-    const { send, prompt } = rig()
+    const { send, prompt, parsed } = rig()
     const answer = prompt()
     // A chunk with an id shows the agent numbers no messages, so only open items hold.
     await send(chunk('a', 'm1'))
     expect(await send(chunk('b', 'm1'))).toEqual([])
-    // A call ends the message; the call holds until its final status, never a nested one.
+    // A call ends the message; the call holds until the connection reads its final status.
     await send(
       update('tool_call', {
         toolCallId: 'c1',
@@ -65,7 +67,9 @@ describe('ACP relay ack floor', () => {
     )
     expect(await send(update('tool_call_update', { toolCallId: 'c1', content: [] }))).toEqual([2])
     const done = update('tool_call_update', { toolCallId: 'c1', status: 'completed' })
-    expect(await send(done)).toEqual([2, 5])
+    await send(done)
+    parsed(done)
+    expect(await send()).toEqual([2, 5])
     // An open message holds until its prompt's answer.
     expect(await send(chunk('c', 'm2'))).toEqual([2, 5])
     answer.resolve()
@@ -75,12 +79,14 @@ describe('ACP relay ack floor', () => {
   })
 
   it("holds an unnumbered agent's prompt from its first line until it ends, even by failing", async () => {
-    const { output, acks, send, prompt } = rig()
+    const { output, acks, send, prompt, parsed } = rig()
     // A turn the agent began itself holds nothing: it replays as a turn of its own.
     expect(await send(chunk('idle'))).toEqual([1])
     const answer = prompt()
     await send(update('tool_call', { toolCallId: 'c1' }))
-    await send(update('tool_call_update', { toolCallId: 'c1', status: 'failed' }))
+    const failed = update('tool_call_update', { toolCallId: 'c1', status: 'failed' })
+    await send(failed)
+    parsed(failed)
     // Without ids its messages are numbered from the turn's start, so nothing in the turn is acked.
     expect(await send(chunk('a'), chunk('b'))).toEqual([1])
     // The daemon's ask passes the floor; the turn still holds what follows.
@@ -101,7 +107,9 @@ describe('ACP relay ack floor', () => {
       update('tool_call_update', { toolCallId: 'c1', content: [{ type: 'text', text: big }] })
     )
     await send(chunk(big, 'm1'))
-    // Envelope fields are read with small parses; no whole line is parsed.
+    const end = { toolCallId: 'c1', status: 'completed', content: [{ type: 'text', text: big }] }
+    await send(update('tool_call_update', end))
+    // Envelope fields are read with small parses; no whole line is parsed, even a call's end.
     expect(parse.mock.calls.filter(([text]) => text.length > 1024)).toEqual([])
     parse.mockRestore()
   })
