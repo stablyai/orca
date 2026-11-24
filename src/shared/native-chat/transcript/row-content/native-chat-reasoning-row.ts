@@ -14,17 +14,11 @@ export function selectNativeChatLiveReasoning(
   messages: readonly NativeChatMessage[],
   inLiveWorkingTurn: (index: number) => boolean
 ): NativeChatLiveReasoning | null {
-  // Rows are in draw order, where a turn's rows sit together: leaving the live turn ends the search.
-  let seenLiveTurn = false
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]
     if (!message || !inLiveWorkingTurn(index)) {
-      if (seenLiveTurn) {
-        return null
-      }
       continue
     }
-    seenLiveTurn = true
     if (message.role === 'user') {
       return null
     }

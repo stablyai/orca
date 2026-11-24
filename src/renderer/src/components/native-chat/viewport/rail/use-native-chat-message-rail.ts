@@ -1,9 +1,6 @@
 // Compute the active tick after scrolling settles to avoid expensive, flickering position reports mid-scroll.
 
-import {
-  projectionBesideStreamedText,
-  stageBesideStreamedText
-} from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { findActiveNativeChatRailItem } from './native-chat-active-rail-item'
@@ -186,15 +183,10 @@ export function useNativeChatMessageRail({
     },
     [scheduleRead]
   )
-  // A preview of the saved reply, so hovering a tick reads no history on each streamed frame.
-  const previewRows = projectionBesideStreamedText(turnRows.messages)
-  const { turnKeys } = turnRows
+  // The preview reads reply text, so it follows the newest; it is built only while a tick is hovered.
   const previewReply = useMemo(
-    () =>
-      previewId === null
-        ? ''
-        : nativeChatRailReplyPreview({ messages: previewRows, turnKeys }, items, previewId),
-    [previewId, previewRows, turnKeys, items]
+    () => (previewId === null ? '' : nativeChatRailReplyPreview(turnRows, items, previewId)),
+    [previewId, turnRows, items]
   )
 
   return useMemo(
