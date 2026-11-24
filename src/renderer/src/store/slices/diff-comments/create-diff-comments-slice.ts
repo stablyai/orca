@@ -16,6 +16,7 @@ import {
 } from './diff-comment-persistence'
 import { enqueueDeliveredDiffCommentCleanup } from './diff-comment-delivery-cleanup'
 import { selectWorktreeDiffCommentsOrEmpty } from './worktree-diff-comments-selector'
+import { showClearNotesFailedToast } from './clear-notes-failed-toast'
 import { readOwnedDiffComments, type DiffCommentOwner } from './diff-comment-owner'
 
 export type DiffCommentsSlice = {
@@ -56,14 +57,11 @@ function recordReviewNoteInteraction(get: () => AppState): void {
 // Why: a copy gone since the user acted fails once, never on another copy. Add and clear callers already report their failures.
 function reportLostDiffCommentOwner(action: 'save' | 'clear'): void {
   console.error('Review notes were not changed: the workspace copy they belong to is gone.')
-  toast.error(
-    action === 'save'
-      ? translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
-      : translate(
-          'auto.components.right.sidebar.SourceControl.eae7a1da5f',
-          'Failed to clear notes.'
-        )
-  )
+  if (action === 'clear') {
+    showClearNotesFailedToast()
+    return
+  }
+  toast.error(translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment'))
 }
 
 export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffCommentsSlice> = (

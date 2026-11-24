@@ -17,6 +17,10 @@ import { describeClipboardWriteFailure } from '@/lib/clipboard/clipboard-write-f
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
+import {
+  dismissClearNotesFailedToast,
+  showClearNotesFailedToast
+} from '@/store/slices/diff-comments/clear-notes-failed-toast'
 
 /** Copy and Clear at the bottom of a send menu. */
 export function NotesMenuCopyClearItems({
@@ -155,14 +159,10 @@ export function useClearNotesConfirm(): {
     }
     setIsClearing(false)
     if (ok) {
+      dismissClearNotesFailedToast()
       setPending(null)
     } else {
-      toast.error(
-        translate(
-          'auto.components.right.sidebar.SourceControl.eae7a1da5f',
-          'Failed to clear notes.'
-        )
-      )
+      showClearNotesFailedToast()
     }
   }, [isClearing, pending])
 
