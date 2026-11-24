@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
-import { patchCopilotStatus, useCopilotStatus } from '@/lib/monaco-copilot/copilot-status'
+import { useCopilotStatus } from '@/lib/monaco-copilot/copilot-status'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './composition/status-bar-context-menu-policy'
 
 function showSignInFailed(): void {
@@ -54,9 +54,7 @@ export function CopilotStatusSegment(): React.JSX.Element | null {
           ),
           { duration: 60_000 }
         )
-      } else if (result.state === 'alreadySignedIn') {
-        patchCopilotStatus({ user: result.user, kind: 'Normal' })
-      } else {
+      } else if (result.state === 'unavailable') {
         showSignInFailed()
       }
     } catch {

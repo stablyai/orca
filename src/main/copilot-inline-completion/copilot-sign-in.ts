@@ -9,7 +9,7 @@ export type CopilotSignInDeps = {
   openExternal: (url: string) => void
   copyToClipboard: (text: string) => void
   ensureConnection: () => Promise<CopilotServerConnection | null>
-  refreshAuth: (connection: CopilotServerConnection) => Promise<void>
+  refreshAuth: (connection: CopilotServerConnection) => Promise<string | null>
   currentUser: () => string | null
   /** Runs when the browser step failed, timed out, or ended without a signed-in user. */
   onFinishFailed: () => void
@@ -51,8 +51,8 @@ export function createCopilotSignIn(deps: CopilotSignInDeps) {
       }
       const response = parseSignInResponse(await connection.request('signIn', {}))
       if (!response?.userCode) {
-        await deps.refreshAuth(connection)
-        return { state: 'alreadySignedIn', user: response?.user ?? deps.currentUser() }
+        const user = await deps.refreshAuth(connection)
+        return user ? { state: 'alreadySignedIn', user } : { state: 'unavailable' }
       }
       deps.copyToClipboard(response.userCode)
       const finish = response.command

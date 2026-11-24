@@ -198,6 +198,29 @@ describe('createCopilotLanguageServer', () => {
     })
   })
 
+  it.each([true, false])(
+    'uses the verified account after a code-less sign-in (signed in: %s)',
+    async (signedIn) => {
+      const { fake, copilot } = createCopilotWithFakeServer(SIGNED_OUT)
+      const pending = copilot.signIn()
+      const signIn = await fake.waitFor((message) => message.method === 'signIn')
+      if (signedIn) {
+        fake.setAutoReply('checkStatus', SIGNED_IN.checkStatus)
+      }
+      fake.reply(signIn.id, { user: 'stale-name' })
+      if (signedIn) {
+        await expect(pending).resolves.toEqual({ state: 'alreadySignedIn', user: 'octocat' })
+        await expect(copilot.getStatus()).resolves.toMatchObject({
+          user: 'octocat',
+          kind: 'Normal'
+        })
+      } else {
+        await expect(pending).resolves.toEqual({ state: 'unavailable' })
+        await expect(copilot.getStatus()).resolves.toMatchObject({ user: null, kind: 'Error' })
+      }
+    }
+  )
+
   it('copies the device code and runs the finish command on sign-in', async () => {
     const { fake, copilot, copyToClipboard } = createCopilotWithFakeServer(SIGNED_OUT)
     const pending = copilot.signIn()

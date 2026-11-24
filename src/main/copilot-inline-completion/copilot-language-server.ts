@@ -46,7 +46,7 @@ export function createCopilotLanguageServer(deps: CopilotLanguageServerDeps) {
   let authenticated: boolean | null = null
   let connectionPromise: Promise<CopilotServerConnection | null> | null = null
   let activeConnection: CopilotServerConnection | null = null
-  let authCheck: Promise<void> | null = null
+  let authCheck: Promise<string | null> | null = null
   // Set once an open found checkStatus unanswered; the next open retries it instead of respawning.
   let authUnverified = false
   const openDocuments = createCopilotOpenDocuments()
@@ -76,22 +76,24 @@ export function createCopilotLanguageServer(deps: CopilotLanguageServerDeps) {
     idleTimer.unref?.()
   }
 
-  async function refreshAuth(connection: CopilotServerConnection): Promise<void> {
+  async function refreshAuth(connection: CopilotServerConnection): Promise<string | null> {
     try {
       const { signedIn, user } = parseCheckStatusResult(await connection.request('checkStatus', {}))
+      const verifiedKind = status.kind === 'Error' ? 'Normal' : (status.kind ?? 'Normal')
       authenticated = signedIn
       updateStatus({
         installed: true,
         user: signedIn ? user : null,
-        ...(signedIn ? {} : { kind: 'Error' as const })
+        kind: signedIn ? verifiedKind : 'Error'
       })
+      return status.user
     } catch {
-      // Status stays whatever didChangeStatus last reported.
+      return null
     }
   }
 
   // Why: concurrent opens share one checkStatus instead of each racing its own.
-  function recheckAuth(connection: CopilotServerConnection): Promise<void> {
+  function recheckAuth(connection: CopilotServerConnection): Promise<string | null> {
     authCheck ??= refreshAuth(connection).finally(() => {
       authCheck = null
     })
