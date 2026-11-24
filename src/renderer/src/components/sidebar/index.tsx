@@ -30,6 +30,7 @@ import { useWorkspaceRevealBodyRedirect } from './worktree-list/navigation/use-w
 import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { usePerforceCopySync } from '../perforce-copies/use-perforce-copy-sync'
+import { PerforceSidebarModals } from '../perforce-copies/PerforceSidebarModals'
 import { LocalGitToolchainScanBanner } from '../repo/toolchain/LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from '../maintenance/terminal-daemon/SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from '../maintenance/terminal-daemon/StalledTerminalDaemonBanner'
@@ -70,14 +71,6 @@ const OrcaYamlTrustDialog = lazyWithRetry(
 )
 const ForgetSshWorkspaceDialog = lazyWithRetry(
   () => import('./workspace-actions/deletion/ForgetSshWorkspaceDialog')
-)
-const PerforceCopyDeleteModal = lazyWithRetry(
-  () => import('../perforce-copies/PerforceCopyDeleteModal')
-)
-const PerforceCopyUpModal = lazyWithRetry(() => import('../perforce-copies/PerforceCopyUpModal'))
-const PerforceCopiesModal = lazyWithRetry(() => import('../perforce-copies/PerforceCopiesModal'))
-const PerforceOpenForEditDialog = lazyWithRetry(
-  () => import('../right-sidebar/perforce/PerforceOpenForEditDialog')
 )
 const AgentDashboardSidebarHost = lazyWithRetry(
   () => import('../dashboard/sidebar/AgentDashboardSidebarHost')
@@ -404,10 +397,7 @@ function Sidebar({
         {activeModal === 'worktree-visibility' ? <WorktreeVisibilityDialog /> : null}
         {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
         {activeModal === 'forget-ssh-workspace' ? <ForgetSshWorkspaceDialog /> : null}
-        {activeModal === 'delete-perforce-copy' ? <PerforceCopyDeleteModal /> : null}
-        {activeModal === 'copy-up-perforce-copy' ? <PerforceCopyUpModal /> : null}
-        {activeModal === 'perforce-copies' ? <PerforceCopiesModal /> : null}
-        {activeModal === 'perforce-open-for-edit' ? <PerforceOpenForEditDialog /> : null}
+        <PerforceSidebarModals />
       </React.Suspense>
       {sidebarOpen ? (
         <WorkspaceKanbanDrawer
