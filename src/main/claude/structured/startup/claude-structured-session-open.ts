@@ -13,6 +13,7 @@ import {
   keptClaudeAgentRelay,
   takeKeptClaudeAgentReadToEnd
 } from '../../relay/claude-kept-agent-connection'
+import { applyKeptClaudeLaunchMode } from '../../relay/claude-kept-permission'
 import { restateKeptClaudeBackgroundTasks } from '../../relay/claude-kept-background-tasks'
 import { keptClaudeToolCalls, keptClaudeTurn } from '../../relay/claude-kept-turn'
 import type {
@@ -122,6 +123,13 @@ async function openStartingClaudeSession(
       events?.appendItem(keptTurn.identity, keptTurn.body, { turnScope: { kind: 'thread' } })
     }
     restateKeptClaudeBackgroundTasks(session, kept.taskIds, keptTurn !== null)
+    void applyKeptClaudeLaunchMode(session, deps.requestTimeoutMs).catch((error: unknown) =>
+      deps.logger?.warn('applying the chat\u2019s mode to a kept Claude agent failed', {
+        scope: 'kept-permission',
+        sessionId: request.sessionId,
+        error
+      })
+    )
     input.publishChildWork?.(request.sessionId, session)
   }
   // After a kept agent ended here its whole output is already saved; catching up would race the

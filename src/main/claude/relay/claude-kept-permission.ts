@@ -1,3 +1,4 @@
+import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { ClaudeSession } from '../structured/claude-structured-session-state'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -18,8 +19,37 @@ function keptSession(sessions: Sessions, sessionId: string): ClaudeSession | nul
 // for one. Two picks it can't take still start a fresh agent: "your Claude settings" (no mode to
 // send), and Full access once Claude refused bypass (only a flagged launch allows it).
 
-function takesLive(session: ClaudeSession, mode: AgentChatPermissionChoice): boolean {
-  return mode !== 'own' && !(mode === 'full-access' && session.bypassDisabled === true)
+const bypassRefused = (session: ClaudeSession, mode: AgentChatPermissionChoice): boolean =>
+  mode === 'full-access' && session.bypassDisabled === true
+
+/** Writes a Build mode and records the one Claude accepted; a failed switch records none. */
+async function applyBuildMode(
+  session: ClaudeSession,
+  mode: PermissionMode,
+  timeoutMs: number | undefined
+): Promise<void> {
+  if (claudeInPlan(session)) {
+    // Plan stays until the user leaves it; leaving it returns to this mode.
+    session.appliedInputOptions.set('buildPermissionMode', mode)
+    return
+  }
+  try {
+    const applied = await setClaudeAllowedPermissionMode(session, mode, { timeoutMs })
+    session.appliedInputOptions.set('buildPermissionMode', applied)
+  } catch (error) {
+    session.appliedInputOptions.delete('buildPermissionMode')
+    throw error
+  }
+}
+
+/** At reattach: the agent runs the mode it had when the last app let go, which a pick made since
+ *  may have changed, so the chat's own mode is written before anything is sent. */
+export function applyKeptClaudeLaunchMode(
+  session: ClaudeSession,
+  timeoutMs: number | undefined
+): Promise<void> {
+  const wanted = session.launchIntent?.permissionMode
+  return wanted ? applyBuildMode(session, wanted as PermissionMode, timeoutMs) : Promise.resolve()
 }
 
 export function requiresAcquisition(
@@ -27,7 +57,10 @@ export function requiresAcquisition(
 ): NonNullable<Adapter['permissionModeRequiresAcquisition']> {
   return (sessionId, mode) => {
     const session = keptSession(sessions, sessionId)
-    return session && takesLive(session, mode) ? false : undefined
+    if (!session || mode === 'own') {
+      return undefined
+    }
+    return bypassRefused(session, mode)
   }
 }
 
@@ -37,14 +70,9 @@ export function applyLive(
 ): NonNullable<Adapter['applyPermissionMode']> {
   return async ({ sessionId, fence, mode }) => {
     const session = keptSession(sessions, sessionId)
-    if (!session || session.fence !== fence || mode === 'own' || !takesLive(session, mode)) {
+    if (!session || session.fence !== fence || mode === 'own' || bypassRefused(session, mode)) {
       return
     }
-    const claudeMode = claudePermissionModeFor(mode)
-    // Plan stays until the user leaves it; leaving it returns to this mode.
-    const applied = claudeInPlan(session)
-      ? claudeMode
-      : await setClaudeAllowedPermissionMode(session, claudeMode, { timeoutMs: timeoutMs() })
-    session.appliedInputOptions.set('buildPermissionMode', applied)
+    await applyBuildMode(session, claudePermissionModeFor(mode), timeoutMs())
   }
 }
