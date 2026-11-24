@@ -36,8 +36,38 @@ export type RelayRpcStreamsOptions<TEnvelope> = {
   /** A stream whose release names its own request and never waits for the host's id (the phone's terminals). */
   requestBoundUnsubscribe?: (method: string, params: unknown) => StreamUnsubscribe | null
   /** Sees each opener result of a live stream before its listener, for frames routed by other ids. */
-  onOpenerResult?: (id: string, stream: RelayStream<TEnvelope>, result: object) => void
+  onOpenerResult?: (
+    id: string,
+    stream: RelayStream<TEnvelope>,
+    facts: RelayStreamFrameFacts
+  ) => void
   onRemoved?: (id: string, stream: RelayStream<TEnvelope>) => void
+}
+
+/** What a stream frame says about the stream itself, as opposed to its content. */
+export type RelayStreamFrameFacts = { type?: unknown; subscriptionId?: unknown; streamId?: unknown }
+
+function frameFacts(result: unknown): RelayStreamFrameFacts | null {
+  if (typeof result !== 'object' || result === null) {
+    return null
+  }
+  return {
+    type: 'type' in result ? result.type : undefined,
+    subscriptionId: 'subscriptionId' in result ? result.subscriptionId : undefined,
+    streamId: 'streamId' in result ? result.streamId : undefined
+  }
+}
+
+/** The message of the error frame a failed or closed stream ends with, or null for any other frame. */
+export function relayStreamError(result: unknown): string | null {
+  return typeof result === 'object' &&
+    result !== null &&
+    'type' in result &&
+    result.type === 'error' &&
+    'message' in result &&
+    typeof result.message === 'string'
+    ? result.message
+    : null
 }
 
 const isStreamingOpener = (response: RpcResponse): boolean =>
@@ -124,15 +154,15 @@ export class RelayRpcStreams<TEnvelope = Record<string, unknown>> {
       return true
     }
     const { result } = response
-    if (result && typeof result === 'object') {
-      const metadata = result as { subscriptionId?: unknown; type?: unknown }
+    const metadata = frameFacts(result)
+    if (metadata) {
       if (metadata.type === 'snapshot') {
         stream.receivedSnapshot = true
       }
       if (typeof metadata.subscriptionId === 'string') {
         stream.subscriptionId = metadata.subscriptionId
       }
-      this.options.onOpenerResult?.(response.id, stream, result)
+      this.options.onOpenerResult?.(response.id, stream, metadata)
       if (metadata.type === 'end') {
         this.finish(response.id, stream, result)
         return true
@@ -168,8 +198,8 @@ export class RelayRpcStreams<TEnvelope = Record<string, unknown>> {
       this.cancelledSubscriptions.delete(response.id)
       return
     }
-    const result = response.result as { subscriptionId?: unknown; type?: unknown } | null
-    if (result && typeof result === 'object') {
+    const result = frameFacts(response.result)
+    if (result) {
       if (result.type === 'end') {
         this.cancelledSubscriptions.delete(response.id)
       } else if (result.type === 'snapshot' && cancelled.unsubscribe) {

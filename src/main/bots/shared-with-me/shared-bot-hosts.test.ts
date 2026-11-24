@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { SharedBotHosts } from './shared-bot-hosts'
 import type { SharedBotHostEntry } from './shared-bot-host-store'
@@ -14,6 +14,7 @@ import {
   type MineShare
 } from './shared-bot-pairing'
 import type { SharedBotsCloud } from './shared-bots-cloud'
+import type { ConnectorShareAcceptRequest } from '../../../../cloud/packages/connector-contract/src/share-messages'
 
 const HOST_KEY = Buffer.from(nacl.box.keyPair().publicKey).toString('base64')
 const dirs: string[] = []
@@ -71,12 +72,15 @@ const offer = (inviteExpiresAt: number): NonNullable<SharedBotHostEntry['offer']
 function hosts(mine: () => MineShare[], now: () => number) {
   const dir = mkdtempSync(join(tmpdir(), 'shared-bot-hosts-'))
   dirs.push(dir)
-  const accept = vi.fn(async () => ({ ok: true as const, value: { status: 'queued' as const } }))
-  const cloud = {
-    mine: async () => ({ ok: true as const, value: { v: 1 as const, shares: mine() } }),
-    accept,
-    hold: vi.fn()
-  } as unknown as SharedBotsCloud
+  const accepts: [string, ConnectorShareAcceptRequest][] = []
+  const cloud: SharedBotsCloud = {
+    mine: async () => ({ ok: true, value: { v: 1, shares: mine() } }),
+    accept: async (shareId, request) => {
+      accepts.push([shareId, request])
+      return { ok: true, value: { status: 'queued' } }
+    },
+    hold: async () => ({ ok: true, value: { status: 'held' } })
+  }
   const published: string[][] = []
   const service = new SharedBotHosts({
     userDataPath: dir,
@@ -85,7 +89,7 @@ function hosts(mine: () => MineShare[], now: () => number) {
     publish: (views) => published.push(views.map((view) => view.shareId)),
     now
   })
-  return { service, accept, published }
+  return { service, accepts, published }
 }
 
 describe('shared agent pairing', () => {
@@ -106,7 +110,7 @@ describe('shared agent pairing', () => {
   it('accepts again with the same device keys once the invite expired and the host is back', async () => {
     let now = 1_000
     let online = true
-    const { service, accept } = hosts(
+    const { service, accepts } = hosts(
       () => [share({ hostOnline: online })],
       () => now
     )
@@ -114,12 +118,12 @@ describe('shared agent pairing', () => {
     online = false
     now += ACCEPT_RETRY_MS + 1
     await service.refresh()
-    expect(accept).toHaveBeenCalledTimes(1)
+    expect(accepts).toHaveLength(1)
     online = true
     await service.refresh()
     service.stop()
-    expect(accept).toHaveBeenCalledTimes(2)
-    const [first, second] = accept.mock.calls as unknown as [string, object][]
+    expect(accepts).toHaveLength(2)
+    const [first, second] = accepts
     expect(second).toEqual(first)
   })
 

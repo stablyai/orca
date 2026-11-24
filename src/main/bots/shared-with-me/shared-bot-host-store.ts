@@ -2,12 +2,12 @@
 // the host's offer and the relay resume credential. Kept apart from the paired-server registry, which
 // older builds read and would dial as a paired server.
 import { randomUUID } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { BotTeamShareOffer } from '../../../shared/bots/bot-team-share-seal'
 import { BotShareIdSchema } from '../../../shared/bots/bot-team-shares'
-import { writeSecureJsonFile } from '../../../shared/secure-storage/secure-file'
+import { writeSecureFileAsync } from '../../../shared/secure-storage/secure-file-async-write'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
 import nacl from 'tweetnacl'
 
@@ -88,41 +88,55 @@ function parseFile(text: string): SharedBotHostEntry[] {
     : []
 }
 
+/** Read once at start; every change is kept in memory at once and written behind, in order. */
 export class SharedBotHostStore {
   private readonly path: string
-  private entries: SharedBotHostEntry[] | null = null
+  private entries: SharedBotHostEntry[] = []
+  private writes: Promise<void> = Promise.resolve()
 
   constructor(userDataPath: string) {
     this.path = join(userDataPath, SHARED_BOT_HOSTS_FILENAME)
   }
 
-  list(): readonly SharedBotHostEntry[] {
-    if (!this.entries) {
-      try {
-        this.entries = parseFile(readFileSync(this.path, 'utf8'))
-      } catch {
-        this.entries = []
-      }
+  async load(): Promise<void> {
+    try {
+      this.entries = parseFile(await readFile(this.path, 'utf8'))
+    } catch {
+      this.entries = []
     }
+  }
+
+  list(): readonly SharedBotHostEntry[] {
     return this.entries
   }
 
   get(shareId: string): SharedBotHostEntry | undefined {
-    return this.list().find((entry) => entry.shareId === shareId)
+    return this.entries.find((entry) => entry.shareId === shareId)
   }
 
   put(entry: SharedBotHostEntry): void {
-    this.write([...this.list().filter((other) => other.shareId !== entry.shareId), entry])
+    this.write([...this.entries.filter((other) => other.shareId !== entry.shareId), entry])
   }
 
   remove(shareIds: ReadonlySet<string>): void {
-    if (this.list().some((entry) => shareIds.has(entry.shareId))) {
-      this.write(this.list().filter((entry) => !shareIds.has(entry.shareId)))
+    if (this.entries.some((entry) => shareIds.has(entry.shareId))) {
+      this.write(this.entries.filter((entry) => !shareIds.has(entry.shareId)))
     }
+  }
+
+  /** Every write so far is on disk. */
+  flushed(): Promise<void> {
+    return this.writes
   }
 
   private write(entries: SharedBotHostEntry[]): void {
     this.entries = entries
-    writeSecureJsonFile(this.path, { v: 1, shares: entries })
+    const contents = JSON.stringify({ v: 1, shares: entries }, null, 2)
+    this.writes = this.writes
+      .then(() => writeSecureFileAsync(this.path, contents))
+      .then(
+        () => undefined,
+        (error: unknown) => console.warn('[shared-agents] could not save shared agents', error)
+      )
   }
 }

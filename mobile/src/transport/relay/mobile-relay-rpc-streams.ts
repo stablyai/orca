@@ -46,8 +46,7 @@ export class MobileRelayRpcStreams {
           ? { method: 'terminal.unsubscribe', params: unsubscribeParams }
           : null
       },
-      onOpenerResult: (id, stream, result) => {
-        const { streamId } = result as { streamId?: unknown }
+      onOpenerResult: (id, stream, { streamId }) => {
         if (typeof streamId === 'number' && stream.listener) {
           const ids = this.terminalStreamIds.get(id) ?? new Set<number>()
           ids.add(streamId)

@@ -51,15 +51,14 @@ export async function callRuntimeRpcResponse<TResult>(
   const sharedHost = sharedBotHostFor(target)
   if (sharedHost) {
     // Reached over its relay link: no paired-server pairing revision or compatibility probe.
-    const response = (await window.api.sharedBotHosts.call({
-      environmentId: sharedHost.environmentId,
-      method,
-      params
-    })) as RuntimeRpcResponse<TResult>
-    if (!response.ok) {
-      throw new RuntimeRpcCallError(response, target)
-    }
-    return response
+    return successOf<TResult>(
+      await window.api.sharedBotHosts.call({
+        environmentId: sharedHost.environmentId,
+        method,
+        params
+      }),
+      target
+    )
   }
   const background = isBackgroundRuntimeCall(options.background, params)
   // Captured before any await: only a call made while the user acts may boot a stopped host.
@@ -112,6 +111,13 @@ export async function callRuntimeRpcResponse<TResult>(
           background,
           wake
         })
+  return successOf<TResult>(response, target)
+}
+
+function successOf<TResult>(
+  response: unknown,
+  target: RuntimeClientTarget
+): RuntimeRpcSuccess<TResult> {
   const envelope = response as RuntimeRpcResponse<TResult>
   if (!envelope.ok) {
     throw new RuntimeRpcCallError(envelope, target)

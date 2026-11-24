@@ -9,6 +9,8 @@ import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee
 import type { RelayClientPlatform } from '../../../shared/remote-runtime/relay/client/relay-client-platform'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
+import { relayStreamError } from '../../../shared/remote-runtime/relay/client/relay-rpc-streams'
+import { SendParams } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import { SharedBotHostLink } from './shared-bot-host-link'
 import {
   newSharedBotHostEntry,
@@ -46,6 +48,7 @@ export class SharedBotHosts {
   private heldStates = new Map<string, HeldState>()
   private timer: ReturnType<typeof setTimeout> | null = null
   private readonly now: () => number
+  private loaded: Promise<void> | null = null
 
   constructor(private readonly deps: SharedBotHostsDeps) {
     this.store = new SharedBotHostStore(deps.userDataPath)
@@ -85,6 +88,8 @@ export class SharedBotHosts {
 
   /** Reads the account's shares, follows each one's pairing, and schedules the next read. */
   async refresh(): Promise<void> {
+    this.loaded ??= this.store.load()
+    await this.loaded
     if (this.timer) {
       clearTimeout(this.timer)
       this.timer = null
@@ -112,6 +117,7 @@ export class SharedBotHosts {
   }
 
   async call(environmentId: string, method: string, params: unknown) {
+    await this.loaded
     const entry = this.entryFor(environmentId)
     if (!entry) {
       return failure(method, SHARED_BOT_HOST_ERRORS.offline, 'This agent is no longer shared.')
@@ -135,6 +141,7 @@ export class SharedBotHosts {
     params: unknown,
     onResponse: (response: RuntimeRpcResponse<unknown>) => void
   ): Promise<() => void> {
+    await this.loaded
     const entry = this.entryFor(environmentId)
     if (!entry || (await this.reach(entry)) !== 'live') {
       onResponse(
@@ -145,11 +152,11 @@ export class SharedBotHosts {
       return () => {}
     }
     return this.linkFor(entry).subscribe(method, params, (result) => {
-      const frame = result as { type?: unknown; message?: unknown } | null
+      const error = relayStreamError(result)
       onResponse(
-        frame?.type === 'error'
-          ? failure(method, SHARED_BOT_HOST_ERRORS.offline, String(frame.message ?? 'closed'))
-          : { id: method, ok: true, result, _meta: { runtimeId: entry.environmentId } }
+        error === null
+          ? { id: method, ok: true, result, _meta: { runtimeId: entry.environmentId } }
+          : failure(method, SHARED_BOT_HOST_ERRORS.offline, error)
       )
     })
   }
@@ -232,14 +239,12 @@ export class SharedBotHosts {
     link: Awaited<ReturnType<SharedBotHosts['reach']>>,
     params: unknown
   ): Promise<RuntimeRpcResponse<unknown> | null> {
-    const send = params as {
-      envelope?: { sessionId?: string; clientOperationId?: string }
-      body?: { blocks?: { type: string }[] }
-    }
-    const sessionId = send.envelope?.sessionId
-    const clientMessageId = send.envelope?.clientOperationId
+    const send = SendParams.safeParse(params).data
+    const sessionId = send?.envelope.sessionId
+    const clientMessageId = send?.envelope.clientOperationId
     const { hostKey } = entry
     if (
+      !send ||
       !sessionId ||
       !clientMessageId ||
       !hostKey ||
@@ -255,12 +260,12 @@ export class SharedBotHosts {
           {
             chat: { sessionId },
             clientMessageId,
-            blocks: send.body?.blocks ?? [],
+            blocks: send.body.blocks,
             sentAt: this.now()
           }
         )
-      : ({ kind: 'failed', error: null } as const)
-    if (result.kind === 'held') {
+      : null
+    if (result?.kind === 'held') {
       const current = this.store.get(entry.shareId) ?? entry
       this.store.put({ ...current, held: [...current.held, result.held] })
       this.heldStates.set(clientMessageId, 'waiting')
@@ -271,7 +276,7 @@ export class SharedBotHosts {
         `Waiting for ${entry.ownerName}’s computer`
       )
     }
-    if (result.kind === 'too-large') {
+    if (result?.kind === 'too-large') {
       return failure(
         'agentSession.send',
         SHARED_BOT_HOST_ERRORS.tooLarge,
