@@ -54,6 +54,8 @@ export type Automation = {
   launchSetup?: AutomationLaunchSetup
   launchPreferences?: AutomationLaunchPreferences
   agentArgs?: string | null
+  /** Account its runs launch under (id, email, name or `system`); absent follows the bot's, then the host's. */
+  account?: string
   /** Saved text appended to the host's default agent Arguments on each fresh run; absent means none. */
   extraAgentArgs?: string
   /** Why: runContext carries the logical project + host setup identity for
@@ -114,6 +116,7 @@ export type AutomationCreateInput = {
   launchSetupPatch?: AutomationLaunchSetupPatch
   /** Empty or whitespace means no extras. */
   extraAgentArgs?: string
+  account?: string
   runContext?: WorkspaceRunContext | null
   sourceContext?: TaskSourceContext | null
   bot?: AutomationBotTarget
@@ -145,6 +148,7 @@ export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPa
     | 'precheck'
     | 'agentId'
     | 'extraAgentArgs'
+    | 'account'
     | 'runContext'
     | 'sourceContext'
     | 'bot'

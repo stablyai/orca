@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { TERMINAL_INPUT_MAX_BYTES } from '../../terminal/input/terminal-input'
 import type { PluginHookName } from '../contributions/plugin-hook-contribution'
+import { AgentAccountRefSchema } from '../../agent-accounts/launch-account-ref'
 import { PLUGIN_TERMINAL_ID_MAX_LENGTH } from '../workers/plugin-host-api'
 
 /** How long Orca waits on one plugin's hook before it carries on as if the plugin passed. */
@@ -82,6 +83,20 @@ export const agentLaunchBeforeHookPayloadSchema = z.object({
   env: pluginHookEnvSchema
 })
 
+export const agentAccountResolveHookPayloadSchema = z.object({
+  /** The agent CLI the launch starts, e.g. `claude`. */
+  agent: z.string().min(1).max(64),
+  /** The bot the launch is for, when it is a bot's chat. */
+  botId: z.string().min(1).max(2048).optional(),
+  /** The automation the launch is a run of, when it is one. */
+  automationId: z.string().min(1).max(2048).optional(),
+  /** The workspace the agent starts in; null outside any workspace. */
+  workspaceId: z.string().min(1).max(2048).nullable(),
+  /** The account Orca would use now: an explicit request, else the bot's or automation's own. Absent
+   *  when none is set, in which case the host's selection applies. Change it with `next`. */
+  account: AgentAccountRefSchema.optional()
+})
+
 export const agentPromptBeforeHookPayloadSchema = z.object({
   /** The agent running in the terminal, when Orca knows it. */
   agent: z.string().min(1).max(64).nullable(),
@@ -157,6 +172,14 @@ export const PLUGIN_HOOK_SPECS = {
     deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
     summary:
       'Orca is about to start an agent CLI in a terminal, from any launcher (new tab, workspace create, CLI, automation, orchestration). Change `command` or add `env` with `next`, or return `{ deny }` to refuse the launch. Restores of saved sessions are not hooked.'
+  },
+  'agent.account.resolve': {
+    payload: agentAccountResolveHookPayloadSchema,
+    result: denyResultSchema,
+    mutable: ['account'],
+    deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
+    summary:
+      "Orca is about to pick the account a bot chat or an automation chat launches under. `account` is the bot's or automation's own, when it has one. Set `account` with `next` to a saved account's id, email or name, or `system`; an unknown account falls back to the host's selection. A launch that names its own account is not hooked. Past 2 s the launch carries on as if the plugin passed; a plugin that must fail closed lists `onError: deny`, or returns `{ deny }` to refuse the launch."
   },
   'agent.prompt.before': {
     payload: agentPromptBeforeHookPayloadSchema,

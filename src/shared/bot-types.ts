@@ -7,6 +7,7 @@ import type { NativeChatAgent } from './agent-launch/permissions/agent-chat-perm
 import { LOCAL_EXECUTION_HOST_ID } from './execution-host/execution-host'
 import { BotLookAroundSchema } from './bots/bot-look-around'
 import { BotLaunchSchema } from './bots/bot-launch'
+import { AgentAccountRefSchema } from './agent-accounts/launch-account-ref'
 import { BotTidyUpSchema } from './bots/bot-tidy-up'
 import { BotOfferAnswerSchema } from './bots/bot-offer-answers'
 import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
@@ -190,6 +191,10 @@ export const BotSchema = z.object({
   /** The owner's model and options for `agent`; absent on older bots and dropped by older hosts. */
   // A malformed value reads as unset rather than losing the whole bot.
   launch: BotLaunchSchema.optional().catch(undefined),
+  /** The account its chats launch under: a saved account's id, email or name, or `system`. Absent follows
+   *  the host's selection. A plugin's `agent.account.resolve` may still answer first. Older hosts drop it. */
+  // A malformed value reads as unset rather than losing the whole bot.
+  account: AgentAccountRefSchema.optional().catch(undefined),
   notifications: BotNotificationsSchema,
   members: z.array(BotMemberSchema).max(BOT_MAX_MEMBERS),
   /** The first of slackApps, kept for readers that know one workspace (older Orcas, the phone). */

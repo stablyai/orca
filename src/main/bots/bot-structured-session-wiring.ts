@@ -29,6 +29,10 @@ import {
   NO_LINKED_SKILLS,
   type LinkedSkills
 } from '../native-chat/native-chat-skill-roots'
+import {
+  resolveLaunchAccount,
+  type LaunchAccountSettings
+} from '../claude-accounts/selection/launch-account-resolution'
 import type { Repo } from '../../shared/repository/repo-types'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 
@@ -40,7 +44,17 @@ export type WiredBot = Bot
 
 export function botStructuredSessionWiring(deps: {
   /** The host's bots, and its projects, which bots link for skills. */
-  store: () => { getBots?: () => readonly Bot[]; getRepos: () => readonly Repo[] }
+  store: () => {
+    getBots?: () => readonly Bot[]
+    getRepos: () => readonly Repo[]
+    /** The saved Claude accounts a bot's `account` names. */
+    getSettings?: () => LaunchAccountSettings
+    /** A workspace an automation created names that automation, for chats that have no bot. */
+    getWorktreeMeta?: (
+      id: string
+    ) => { automationProvenance?: { automationId: string } } | undefined
+    listAutomations?: () => readonly { id: string; account?: string }[]
+  }
   /** First-run setup's end, and each bot's MEMORY.md as Orca last recorded it. */
   bots: Pick<BotController, 'endFirstRun' | 'memory'>
   /** The bot's chats as a turn end reads them. */
@@ -69,6 +83,7 @@ export function botStructuredSessionWiring(deps: {
     StructuredAgentSessionRuntimeDeps,
     | 'resolveSessionInstructions'
     | 'resolveSessionToolServers'
+    | 'resolveClaudeRequestedAccount'
     | 'launchTools'
     | 'resolveSessionLinkedSkills'
     | 'prepareSessionLinkedSkills'
@@ -181,6 +196,37 @@ export function botStructuredSessionWiring(deps: {
           console.warn("[bots] the bot's own skills could not be linked", bot.id, error)
         })
       }
+    },
+    // The bot's or automation's own account, which a plugin's `agent.account.resolve` may change; null follows the host.
+    resolveClaudeRequestedAccount: async (record) => {
+      const bot = botOfRecord(record)
+      const store = deps.store()
+      const settings = store.getSettings?.()
+      if (!settings) {
+        return null
+      }
+      const workspaceId = record.location.workspaceId
+      // A chat with no bot may still be an automation's: its workspace says which.
+      const automationId = bot
+        ? undefined
+        : store.getWorktreeMeta?.(workspaceId)?.automationProvenance?.automationId
+      if (!bot && !automationId) {
+        return null
+      }
+      const automation = automationId
+        ? store.listAutomations?.().find((candidate) => candidate.id === automationId)
+        : undefined
+      return resolveLaunchAccount(
+        {
+          agent: record.provider,
+          workspaceId,
+          ...(bot ? { botId: bot.id } : {}),
+          ...(bot?.account ? { bot: bot.account } : {}),
+          ...(automationId ? { automationId } : {}),
+          ...(automation?.account ? { automation: automation.account } : {})
+        },
+        settings
+      )
     },
     resolveSessionToolServers: async (record, launchDirectory) => {
       const bot = botOfRecord(record)

@@ -9,6 +9,7 @@ export const PLUGIN_HOOK_NAMES = [
   'workspace.create.before',
   'workspace.create.after',
   'agent.launch.before',
+  'agent.account.resolve',
   'agent.prompt.before',
   'agent.tool.before',
   'agent.tool.after',
@@ -18,12 +19,16 @@ export const PLUGIN_HOOK_LIMIT = PLUGIN_HOOK_NAMES.length
 
 export type PluginHookName = (typeof PLUGIN_HOOK_NAMES)[number]
 
+/** First release with `agent.account.resolve`. */
+export const PLUGIN_ACCOUNT_RESOLVE_HOOK_SINCE = '1.4.274'
+
 /** The release each hook arrived in; engines.orca must cover every one a plugin lists. */
 export const PLUGIN_HOOK_SINCE: Record<PluginHookName, string> = {
   'terminal.send': PLUGIN_HOOKS_SINCE,
   'workspace.create.before': PLUGIN_HOOKS_SINCE,
   'workspace.create.after': PLUGIN_HOOKS_SINCE,
   'agent.launch.before': PLUGIN_HOOKS_SINCE,
+  'agent.account.resolve': PLUGIN_ACCOUNT_RESOLVE_HOOK_SINCE,
   'agent.prompt.before': PLUGIN_HOOKS_SINCE,
   'agent.tool.before': PLUGIN_HOOKS_SINCE,
   'agent.tool.after': PLUGIN_HOOKS_SINCE,

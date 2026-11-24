@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { AgentAccountRefSchema } from '../../agent-accounts/launch-account-ref'
 import { ChoicePatch, OptionKey } from '../agent-launch/agent-launch-settings-params'
 import { AGENT_PERMISSION_CHOICES } from '../../agent-launch/permissions/tui-agent-permission-choice'
 import {
@@ -266,6 +267,7 @@ export const AutomationCreate = z
     precheck: AutomationPrecheck,
     agentId: TuiAgent,
     extraAgentArgs: ExtraAgentArgs,
+    account: AgentAccountRefSchema.optional(),
     launchSetupPatch: AutomationLaunchSetupPatch.optional(),
     runContext: WorkspaceRunContext,
     sourceContext: TaskSourceContext,
@@ -302,6 +304,7 @@ export const AutomationUpdateFields = z
     precheck: AutomationPrecheck,
     agentId: TuiAgent.optional(),
     extraAgentArgs: ExtraAgentArgs,
+    account: AgentAccountRefSchema.optional(),
     launchSetupPatch: AutomationLaunchSetupPatch.optional(),
     runContext: WorkspaceRunContext,
     sourceContext: TaskSourceContext,
