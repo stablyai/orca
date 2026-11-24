@@ -87,6 +87,14 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
       botOfTidyUp: (sessionId) => runtime.lookAround.botOfTidyUp(sessionId)
     }
   })
+  // A failed read means no Needs you note this turn, never a lost turn note.
+  const ownerChat = (sessionId: string): boolean => {
+    try {
+      return isOwnerChat(sessionId)
+    } catch {
+      return false
+    }
+  }
   const unansweredQuestionNote = createBotUnansweredQuestionNote(isOwnerChat, async (sessionId) =>
     (await (await requireStructuredHost(runtime)).journalReads(sessionId)).endedTurnCount()
   )
@@ -129,7 +137,7 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
       ])
       const idle = work?.idle ? botIdleItemsNote(idleSaid, sessionId, work.idle) : null
       const needsYou =
-        work?.needsYou && isOwnerChat(sessionId)
+        work?.needsYou && ownerChat(sessionId)
           ? botNeedsYouInChatNote(needsYouSaid, sessionId, work.needsYou)
           : null
       const text = [unanswered, needsYou?.text, idle?.text].filter(Boolean).join('\n\n')
