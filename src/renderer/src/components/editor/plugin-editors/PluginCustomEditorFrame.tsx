@@ -21,7 +21,10 @@ import {
   countCustomEditorMergingView,
   useCustomEditorOutsideMerge
 } from './use-custom-editor-outside-merge'
-import { registerEditorFrameFlush } from '../save/flush/editor-pending-flush'
+import {
+  registerEditorFrameDiscard,
+  registerEditorFrameFlush
+} from '../save/flush/editor-pending-flush'
 import { useCustomEditorReloadFlush } from './use-custom-editor-reload-flush'
 import { PluginEditorNeedsDesktopNotice } from './PluginEditorNeedsDesktopNotice'
 import {
@@ -217,11 +220,16 @@ export default function PluginCustomEditorFrame({
     if (fileId === undefined) {
       return
     }
-    return registerEditorFrameFlush(fileId, async () => {
+    const unregisterFlush = registerEditorFrameFlush(fileId, async () => {
       const flushed = await host.flush()
       setSaveBlocked(!flushed)
       return flushed
     })
+    const unregisterDiscard = registerEditorFrameDiscard(fileId, () => host.discardPending())
+    return () => {
+      unregisterFlush()
+      unregisterDiscard()
+    }
   }, [fileId, host])
 
   if (entry.status === 'loading') {

@@ -5468,6 +5468,14 @@
           "legacyRelayBridge": {
             "unreachable": "This terminal is still running on the host under an older version of Orca. Reconnecting to it…"
           }
+        },
+        "workbench": {
+          "TerminalWorkspaceDialogs": {
+            "5e7baeb39c": "Unsaved draft",
+            "b614af1319": "\"{{value0}}\" has changes its editor could not apply. Closing discards them.",
+            "e1a5954ac0": "Return to editor",
+            "4d2cd17ad4": "Discard and close"
+          }
         }
       },
       "tab": {

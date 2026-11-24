@@ -114,14 +114,25 @@ export function useTerminalBulkCloseActions(
       const entityByTab = new Map(tabs.map((tab) => [tab.id, tab.entityId]))
       const fileIdOf = (id: string): string => entityByTab.get(id) ?? id
       // Why: a custom editor frame may still hold edits the dirty checks must see; only its tabs wait.
-      const framed = tabIds.filter((id) => hasEditorFrameFlush(state, fileIdOf(id)))
+      const framed = tabIds.filter((id) => hasEditorFrameFlush(fileIdOf(id)))
       const framedIds = new Set(framed)
       closeTabBarTabsNow(tabIds.filter((id) => !framedIds.has(id)))
       if (framed.length > 0) {
-        runAfterEditorFramesFlush(state, framed.map(fileIdOf), () => closeTabBarTabsNow(framed))
+        runAfterEditorFramesFlush(framed.map(fileIdOf), ({ blocked }) => {
+          // A tab whose frame kept edits goes through the close queue's prompt instead.
+          const blockedTabs = framed.filter((id) => blocked.has(fileIdOf(id)))
+          const closableTabs = framed.filter((id) => !blocked.has(fileIdOf(id)))
+          if (closableTabs.length > 0) {
+            closeTabBarTabsNow(closableTabs)
+          }
+          if (blockedTabs.length > 0) {
+            const blockedFileIds = blockedTabs.map(fileIdOf)
+            queueEditorCloseRequests(blockedFileIds, undefined, blockedFileIds)
+          }
+        })
       }
     },
-    [activeWorktreeId, closeTabBarTabsNow]
+    [activeWorktreeId, closeTabBarTabsNow, queueEditorCloseRequests]
   )
 
   const selectScopeTabIds = useCallback(

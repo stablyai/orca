@@ -85,6 +85,8 @@ export type EditorFileSavedDetail = {
 export type EditorRequestFileCloseDetail = {
   fileId: string
   tabId?: string
+  /** The file's editor frame kept edits it could not hand over, so the close prompt must not offer Save. */
+  draftBlocked?: boolean
   /** Runs once the file actually closes — after save or discard, never on cancel. */
   onClosed?: () => void
 }
@@ -229,7 +231,7 @@ export async function requestEditorFileSave(target: EditorSaveFileTarget): Promi
 
 export function requestEditorFileClose(
   fileId: string,
-  options?: Pick<EditorRequestFileCloseDetail, 'onClosed' | 'tabId'>
+  options?: Pick<EditorRequestFileCloseDetail, 'onClosed' | 'tabId' | 'draftBlocked'>
 ): void {
   window.dispatchEvent(
     new CustomEvent<EditorRequestFileCloseDetail>(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, {

@@ -87,6 +87,18 @@ export function flushClosingEditorBuffers(
 type FrameFlush = () => Promise<boolean>
 const frameFlushes = new Map<string, Set<FrameFlush>>()
 
+type FrameDiscard = () => void
+const frameDiscards = new Map<string, Set<FrameDiscard>>()
+
+/** What a frame-flush wait concluded: `blocked` names files whose frame still held edits it could
+ *  not hand over, so a close must prompt instead of dropping them. */
+export type EditorFrameFlushResult = {
+  deferred: boolean
+  blocked: ReadonlySet<string>
+}
+
+const NO_BLOCKED_FILES: ReadonlySet<string> = new Set()
+
 /** For editors whose pending edits live in another frame, so flushing them is a round trip. */
 export function registerEditorFrameFlush(fileId: string, flush: FrameFlush): () => void {
   const entries = frameFlushes.get(fileId) ?? new Set<FrameFlush>()
@@ -99,6 +111,32 @@ export function registerEditorFrameFlush(fileId: string, flush: FrameFlush): () 
     }
   }
 }
+
+/** An explicit discard drops what this view's frame still holds, so it cannot be re-applied on unmount. */
+export function registerEditorFrameDiscard(fileId: string, discard: FrameDiscard): () => void {
+  const entries = frameDiscards.get(fileId) ?? new Set<FrameDiscard>()
+  entries.add(discard)
+  frameDiscards.set(fileId, entries)
+  return () => {
+    entries.delete(discard)
+    if (!entries.size && frameDiscards.get(fileId) === entries) {
+      frameDiscards.delete(fileId)
+    }
+  }
+}
+
+/** Every frame view of these files drops what it still holds; a discard must leave nothing to re-apply. */
+export function discardEditorFrames(fileIds: Iterable<string>): void {
+  for (const fileId of fileIds) {
+    for (const discard of frameDiscards.get(fileId) ?? []) {
+      discard()
+    }
+  }
+}
+
+const ownFrameFlushes = (fileId: string): FrameFlush[] => [
+  ...(frameFlushes.get(fileId) ?? new Set<FrameFlush>())
+]
 
 /** Flushes every frame view of `fileId`'s record; false if any kept edits back, so a save must
  *  not write the buffer as if it were the latest. */
@@ -132,28 +170,36 @@ function frameFlushesOf(state: EditorBufferViewIndex, fileId: string): FrameFlus
   ])
 }
 
-/** Whether closing `fileId` must first wait on a mounted frame view's flush. */
-export function hasEditorFrameFlush(state: EditorBufferViewIndex, fileId: string): boolean {
-  return frameFlushesOf(state, fileId).length > 0
+/** Whether closing `fileId` must first wait on its own mounted frame view's flush. */
+export function hasEditorFrameFlush(fileId: string): boolean {
+  return ownFrameFlushes(fileId).length > 0
 }
 
 /** Runs `run` (a close or view switch that unmounts frames) once every frame view of these files
  *  handed over its pending edits, so a dirty check sees them; synchronous when none is mounted, else
- *  `deferred` (re-check what is still open). Each flush has its own deadline, bounding the delay. */
+ *  `deferred` (re-check what is still open). `result.blocked` reports files whose own frame kept
+ *  edits back, so a close can prompt instead of silently dropping them. Each flush has its own
+ *  deadline; a sibling view's frame answers for its own tab, not for this one. */
 export function runAfterEditorFramesFlush(
-  state: EditorBufferViewIndex,
   fileIds: Iterable<string>,
-  run: (deferred: boolean) => void
+  run: (result: EditorFrameFlushResult) => void
 ): void {
-  const flushes = new Set<FrameFlush>()
-  for (const fileId of fileIds) {
-    for (const flush of frameFlushesOf(state, fileId)) {
-      flushes.add(flush)
-    }
-  }
-  if (flushes.size === 0) {
-    run(false)
+  const framed = [...new Set(fileIds)].filter((fileId) => ownFrameFlushes(fileId).length > 0)
+  if (framed.length === 0) {
+    run({ deferred: false, blocked: NO_BLOCKED_FILES })
     return
   }
-  void Promise.all([...flushes].map((flush) => flush().catch(() => false))).then(() => run(true))
+  void Promise.all(
+    framed.map(async (fileId) => {
+      const results = await Promise.all(
+        ownFrameFlushes(fileId).map((flush) => flush().catch(() => false))
+      )
+      return results.every(Boolean) ? null : fileId
+    })
+  ).then((settled) =>
+    run({
+      deferred: true,
+      blocked: new Set(settled.filter((fileId): fileId is string => fileId !== null))
+    })
+  )
 }

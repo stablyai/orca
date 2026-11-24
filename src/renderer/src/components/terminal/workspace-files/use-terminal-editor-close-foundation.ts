@@ -16,6 +16,8 @@ export function useTerminalEditorCloseFoundation(
   const saveDialogFile = saveDialogFileId
     ? openFiles.find((file) => file.id === saveDialogFileId)
     : null
+  // 'plugin-draft': the file's editor frame kept edits a flush could not hand over, so the prompt hides Save.
+  const [saveDialogKind, setSaveDialogKind] = useState<'dirty' | 'plugin-draft'>('dirty')
   const pendingEditorCloseQueueRef = useRef<string[]>([])
   // Why: a close request can carry what to do once its file actually closes; cancel drops it.
   const closedReactionsRef = useRef(new Map<string, () => void>())
@@ -73,6 +75,8 @@ export function useTerminalEditorCloseFoundation(
     saveDialogFileId,
     setSaveDialogFileId,
     saveDialogFile,
+    saveDialogKind,
+    setSaveDialogKind,
     pendingEditorCloseQueueRef,
     closedReactionsRef,
     inFlightSaveFileIdRef,
