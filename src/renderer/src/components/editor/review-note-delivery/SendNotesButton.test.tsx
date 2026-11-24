@@ -132,6 +132,17 @@ describe('SendNotesButton', () => {
     expect(button).toHaveTextContent(/^3$/)
   })
 
+  it('measures each label with the same classes the live button paints', () => {
+    layout.slotWidth = 200
+    renderInSlot(3)
+    const button = screen.getByRole('button', { name: 'Send 3 notes to an agent' })
+    const sizers = Array.from(document.querySelector('[inert] > span')!.children)
+    expect(sizers).toHaveLength(3)
+    for (const sizer of sizers) {
+      expect(sizer.className).toBe(button.className)
+    }
+  })
+
   it('stops observing the row when the button goes away', () => {
     layout.slotWidth = 200
     const view = renderInSlot(3)

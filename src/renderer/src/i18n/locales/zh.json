@@ -23517,7 +23517,8 @@
         "sendComments_other": "发送 {{count}} 条评论",
         "clearPageNotes_other": "清除此页面中的 {{count}} 条备注？",
         "copyNotes": "复制备注",
-        "sendNotesToAgent_other": "将 {{count}} 条备注发送给智能体"
+        "sendNotesToAgent_other": "将 {{count}} 条备注发送给智能体",
+        "retryClear": "重试"
       }
     }
   },

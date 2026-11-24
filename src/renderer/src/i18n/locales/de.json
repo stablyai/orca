@@ -24145,7 +24145,8 @@
         "sendComments_one": "{{count}} Kommentar senden",
         "copyNotes": "Notizen kopieren",
         "clearPageNotes_other": "{{count}} Notizen von dieser Seite löschen?",
-        "sendNotesToAgent_other": "{{count}} Notizen an einen Agenten senden"
+        "sendNotesToAgent_other": "{{count}} Notizen an einen Agenten senden",
+        "retryClear": "Wiederholen"
       }
     }
   },

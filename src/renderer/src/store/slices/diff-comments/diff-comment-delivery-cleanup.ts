@@ -12,6 +12,13 @@ import {
   reconcileDiffCommentQueueFloor
 } from './diff-comment-persistence'
 
+/** The host answered without removing a delivered note it still holds unchanged. */
+export class DeliveredCleanupNotAppliedError extends Error {
+  constructor() {
+    super('The workspace host kept the delivered review notes; it may not support removing them.')
+  }
+}
+
 export function enqueueDeliveredDiffCommentCleanup(
   set: Parameters<StateCreator<AppState>>[0],
   get: () => AppState,
@@ -26,6 +33,11 @@ export function enqueueDeliveredDiffCommentCleanup(
     const saved = await writeDiffCommentsToHost(owner, { deliveredDiffCommentSnapshots: snapshots })
     if (!saved) {
       throw new Error('The workspace host did not return its review notes.')
+    }
+    // Why: a host that processed the command never answers with an unchanged delivered note; one that
+    // dropped the unknown field (older host, stripped transport) answers with it, which is not success.
+    if (saved.some((note) => snapshots.some((s) => matchesDeliveredDiffComment(note, s)))) {
+      throw new DeliveredCleanupNotAppliedError()
     }
     const expected = new Map(snapshots.map((note) => [note.id, note]))
     const authoritative = new Map(saved.map((note) => [note.id, note]))

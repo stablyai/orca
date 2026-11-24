@@ -24556,7 +24556,8 @@
         "sendComments_one": "{{count}} yorumu gönder",
         "copyNotes": "Notları kopyala",
         "clearPageNotes_other": "Bu sayfadaki {{count}} not silinsin mi?",
-        "sendNotesToAgent_other": "{{count}} notu bir ajana gönder"
+        "sendNotesToAgent_other": "{{count}} notu bir ajana gönder",
+        "retryClear": "Yeniden dene"
       }
     }
   },

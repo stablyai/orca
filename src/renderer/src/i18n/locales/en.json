@@ -24556,7 +24556,8 @@
         "sendComments_one": "Send {{count}} comment",
         "copyNotes": "Copy notes",
         "clearPageNotes_other": "Clear {{count}} notes from this page?",
-        "sendNotesToAgent_other": "Send {{count}} notes to an agent"
+        "sendNotesToAgent_other": "Send {{count}} notes to an agent",
+        "retryClear": "Retry"
       }
     }
   },

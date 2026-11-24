@@ -8,6 +8,7 @@ import { diffCommentOwnerKey, findOwnedFolder, type DiffCommentOwner } from './d
 import type { getExecutionHostIdForFolderWorkspace } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import { readDiffCommentsFromHost, writeDiffCommentsToHost } from './diff-comment-host-write'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import { latestReconciled, recordReconciledSwap } from './diff-comment-reconciled-arrays'
 
 export function normalizeDiffComment(comment: DiffComment): DiffComment {
   const rawSource = (comment as { source?: unknown }).source
@@ -125,6 +126,9 @@ export function reconcileDiffCommentQueueFloor(
     lastPersistedByQueue.set(floorKey, reconcile(floor) ?? floor)
   }
   const mutation = mutateDiffComments(set, owner, reconcile)
+  if (mutation?.previous) {
+    recordReconciledSwap(mutation.previous, mutation.next)
+  }
   if (mutation && lastMutationNextByQueue.get(floorKey) === mutation.previous) {
     lastMutationNextByQueue.set(floorKey, mutation.next)
   }
@@ -302,8 +306,9 @@ function rollback(
   set: Parameters<StateCreator<AppState>>[0],
   worktreeId: string,
   previous: DiffComment[] | undefined,
-  { next: expectedCurrent, owner }: DiffCommentMutation
+  { next, owner }: DiffCommentMutation
 ): void {
+  const expectedCurrent = latestReconciled(next)
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   set((s) => {
     const scope = parseWorkspaceKey(worktreeId)

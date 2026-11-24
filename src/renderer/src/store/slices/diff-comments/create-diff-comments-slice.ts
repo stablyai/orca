@@ -3,7 +3,10 @@ import { translate } from '@/i18n/i18n'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
-import type { DiffCommentDeliverySnapshot } from '../../../../../shared/file-review/diff-comment-mutation'
+import {
+  matchesDeliveredDiffComment,
+  type DiffCommentDeliverySnapshot
+} from '../../../../../shared/file-review/diff-comment-mutation'
 import {
   diffCommentSendKey,
   holdNotesForSend
@@ -16,7 +19,7 @@ import {
 } from './diff-comment-persistence'
 import { enqueueDeliveredDiffCommentCleanup } from './diff-comment-delivery-cleanup'
 import { selectWorktreeDiffCommentsOrEmpty } from './worktree-diff-comments-selector'
-import { showClearNotesFailedToast } from './clear-notes-failed-toast'
+import { dismissClearNotesFailedToast, showClearNotesFailedToast } from './clear-notes-failed-toast'
 import { readOwnedDiffComments, type DiffCommentOwner } from './diff-comment-owner'
 
 export type DiffCommentsSlice = {
@@ -44,6 +47,38 @@ export type DiffCommentsSlice = {
 }
 
 export type { DiffCommentDeliverySnapshot } from '../../../../../shared/file-review/diff-comment-mutation'
+
+// Exact snapshots whose host removal is queued or running, so a repeated success report adds no second command.
+const cleanupsInFlight = new Set<string>()
+
+function markDeliveredDiffCommentsSent(
+  set: Parameters<StateCreator<AppState>>[0],
+  get: () => AppState,
+  owner: DiffCommentOwner,
+  snapshots: readonly DiffCommentDeliverySnapshot[]
+): void {
+  const sentAt = Date.now()
+  const mutation = mutateDiffComments(set, owner, (existing) => {
+    let changed = false
+    const next = existing.map((note) => {
+      // Only the delivered revision: a note edited since keeps its new text sendable.
+      if (
+        note.sentAt ||
+        !snapshots.some((snapshot) => matchesDeliveredDiffComment(note, snapshot))
+      ) {
+        return note
+      }
+      changed = true
+      return { ...note, sentAt }
+    })
+    return changed ? next : null
+  })
+  if (mutation) {
+    enqueueDiffCommentPersist(set, owner.worktreeId, get, mutation).catch((err: unknown) => {
+      console.error('Failed to persist diff comments:', err)
+    })
+  }
+}
 
 // Why: best-effort telemetry runs only after the note is on disk, so a throw here must not report a failed save.
 function recordReviewNoteInteraction(get: () => AppState): void {
@@ -144,26 +179,47 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
   },
 
   clearDeliveredDiffComments: async (owner, comments) => {
-    if (!readOwnedDiffComments(get(), owner)) {
+    const shown = readOwnedDiffComments(get(), owner)
+    if (!shown) {
       reportLostDiffCommentOwner('clear')
       return false
     }
-    if (comments.length === 0) {
+    // Why: some launch paths report one success twice; only unchanged notes not already being removed need the host.
+    const pending = comments.filter(
+      (snapshot) =>
+        !cleanupsInFlight.has(diffCommentSendKey(owner, snapshot)) &&
+        shown.some((note) => matchesDeliveredDiffComment(note, snapshot))
+    )
+    if (pending.length === 0) {
       return true
     }
-    const cleanup = enqueueDeliveredDiffCommentCleanup(set, get, owner, comments)
-    holdNotesForSend(
-      comments.map((note) => diffCommentSendKey(owner, note)),
-      cleanup
-    )
-    try {
-      await cleanup
-    } catch (err) {
-      console.error('Failed to persist diff comments:', err)
-      return false
+    const keys = pending.map((note) => diffCommentSendKey(owner, note))
+    for (const key of keys) {
+      cleanupsInFlight.add(key)
     }
-    recordReviewNoteInteraction(get)
-    return true
+    const outcome = enqueueDeliveredDiffCommentCleanup(set, get, owner, pending).then(
+      () => {
+        dismissClearNotesFailedToast()
+        return true
+      },
+      (err: unknown) => {
+        console.error('Failed to remove delivered review notes:', err)
+        // Why: the recipient already has these notes. Mark them sent before the hold releases so they never
+        // return to Send; an edit clears the mark, and Retry asks the host again.
+        markDeliveredDiffCommentsSent(set, get, owner, pending)
+        showClearNotesFailedToast(() => void get().clearDeliveredDiffComments(owner, pending))
+        return false
+      }
+    )
+    holdNotesForSend(keys, outcome)
+    const ok = await outcome
+    for (const key of keys) {
+      cleanupsInFlight.delete(key)
+    }
+    if (ok) {
+      recordReviewNoteInteraction(get)
+    }
+    return ok
   },
 
   markDiffCommentsSent: async (owner, commentIds, sentAt = Date.now()) => {

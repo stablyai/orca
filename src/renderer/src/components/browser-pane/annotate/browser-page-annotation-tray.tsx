@@ -46,6 +46,7 @@ export function BrowserPageAnnotationTray({
   handleIncludePageDetailsChange,
   handleBrowserAnnotationsSentToAgent,
   handleBrowserAnnotationsHandedOff,
+  canSendBrowserAnnotations,
   handleCopyBrowserAnnotations,
   browserAnnotationsCopied,
   createBrowserAnnotationsClearRequest,
@@ -154,6 +155,7 @@ export function BrowserPageAnnotationTray({
                 onIncludePageDetailsChange={handleIncludePageDetailsChange}
                 onPromptDelivered={handleBrowserAnnotationsSentToAgent}
                 onPromptHandedOff={handleBrowserAnnotationsHandedOff}
+                canSendPrompt={canSendBrowserAnnotations}
                 onCopy={handleCopyBrowserAnnotations}
                 createClearRequest={createBrowserAnnotationsClearRequest}
               />

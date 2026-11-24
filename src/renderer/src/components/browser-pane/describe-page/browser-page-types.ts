@@ -145,6 +145,7 @@ export type BrowserPageAnnotationTrayProps = {
   handleIncludePageDetailsChange: (include: boolean) => void
   handleBrowserAnnotationsSentToAgent: () => void
   handleBrowserAnnotationsHandedOff: (delivered: Promise<unknown>) => void
+  canSendBrowserAnnotations: () => boolean
   handleCopyBrowserAnnotations: () => void
   browserAnnotationsCopied: boolean
   createBrowserAnnotationsClearRequest: () => BrowserAnnotationsClearRequest

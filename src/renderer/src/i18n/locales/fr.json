@@ -24170,7 +24170,8 @@
         "sending": "Envoi…",
         "sendNotesToAgent_one": "Envoyer {{count}} note à un agent",
         "clearPageNotes_other": "Effacer {{count}} notes de cette page ?",
-        "sendNotesToAgent_other": "Envoyer {{count}} notes à un agent"
+        "sendNotesToAgent_other": "Envoyer {{count}} notes à un agent",
+        "retryClear": "Réessayer"
       }
     }
   },

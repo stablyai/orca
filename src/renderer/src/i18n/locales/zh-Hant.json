@@ -23810,7 +23810,8 @@
         "sendComments_other": "傳送 {{count}} 則留言",
         "clearPageNotes_other": "清除此頁面中的 {{count}} 則備註？",
         "copyNotes": "複製備註",
-        "sendNotesToAgent_other": "將 {{count}} 則備註傳送給代理程式"
+        "sendNotesToAgent_other": "將 {{count}} 則備註傳送給代理程式",
+        "retryClear": "重試"
       }
     }
   },

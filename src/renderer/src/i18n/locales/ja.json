@@ -23166,7 +23166,8 @@
         "sendComments_other": "{{count}} 件のコメントを送信",
         "clearPageNotes_other": "このページから {{count}} 件のメモを削除しますか？",
         "copyNotes": "メモをコピー",
-        "sendNotesToAgent_other": "{{count}} 件のメモを Agent に送信"
+        "sendNotesToAgent_other": "{{count}} 件のメモを Agent に送信",
+        "retryClear": "再試行"
       }
     }
   },

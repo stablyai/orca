@@ -29,6 +29,7 @@ export function BrowserAnnotationSendMenu({
   onIncludePageDetailsChange,
   onPromptDelivered,
   onPromptHandedOff,
+  canSendPrompt,
   onCopy,
   createClearRequest,
   size
@@ -44,6 +45,7 @@ export function BrowserAnnotationSendMenu({
   onIncludePageDetailsChange: (include: boolean) => void
   onPromptDelivered: () => void
   onPromptHandedOff: (delivered: Promise<unknown>) => void
+  canSendPrompt: () => boolean
   onCopy: () => void
   createClearRequest: () => BrowserAnnotationsClearRequest
   size?: SendNotesButtonSize
@@ -75,6 +77,7 @@ export function BrowserAnnotationSendMenu({
               onIncludePageDetailsChange={onIncludePageDetailsChange}
               onPromptDelivered={onPromptDelivered}
               onPromptHandedOff={onPromptHandedOff}
+              canSendPrompt={canSendPrompt}
             />
             <NotesMenuCopyClearItems
               onCopy={onCopy}

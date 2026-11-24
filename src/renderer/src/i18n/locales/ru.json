@@ -25355,7 +25355,8 @@
         "sending": "Отправка…",
         "sendNotesToAgent_one": "Отправить агенту {{count}} заметку",
         "clearPageNotes_other": "Удалить {{count}} заметки с этой страницы?",
-        "sendNotesToAgent_other": "Отправить агенту {{count}} заметки"
+        "sendNotesToAgent_other": "Отправить агенту {{count}} заметки",
+        "retryClear": "Повторить"
       }
     }
   },

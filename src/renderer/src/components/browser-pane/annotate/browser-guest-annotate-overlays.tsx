@@ -108,6 +108,7 @@ export function BrowserGuestAnnotateOverlays({
     handleIncludePageDetailsChange,
     handleBrowserAnnotationsSentToAgent,
     handleBrowserAnnotationsHandedOff,
+    canSendBrowserAnnotations,
     handleCopyBrowserAnnotations,
     browserAnnotationsCopied,
     createBrowserAnnotationsClearRequest,
@@ -248,6 +249,7 @@ export function BrowserGuestAnnotateOverlays({
                         onIncludePageDetailsChange={handleIncludePageDetailsChange}
                         onPromptDelivered={handleBrowserAnnotationsSentToAgent}
                         onPromptHandedOff={handleBrowserAnnotationsHandedOff}
+                        canSendPrompt={canSendBrowserAnnotations}
                       />
                     }
                   />
@@ -352,6 +354,7 @@ export function BrowserGuestAnnotateOverlays({
           handleIncludePageDetailsChange={handleIncludePageDetailsChange}
           handleBrowserAnnotationsSentToAgent={handleBrowserAnnotationsSentToAgent}
           handleBrowserAnnotationsHandedOff={handleBrowserAnnotationsHandedOff}
+          canSendBrowserAnnotations={canSendBrowserAnnotations}
           handleCopyBrowserAnnotations={handleCopyBrowserAnnotations}
           browserAnnotationsCopied={browserAnnotationsCopied}
           createBrowserAnnotationsClearRequest={createBrowserAnnotationsClearRequest}

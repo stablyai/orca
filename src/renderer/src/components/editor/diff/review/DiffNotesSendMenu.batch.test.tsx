@@ -170,7 +170,11 @@ describe('DiffNotesSendMenu batch button', () => {
     expect(clearNotesDescription(2, '/private/tmp/sample/docs/guide.md')).toBe(
       'Clear 2 notes from guide.md?'
     )
-    expect(clearNotesDescription(1, 'docs\\guide.md')).toBe('Clear 1 note from guide.md?')
+    expect(clearNotesDescription(1, 'C:\\repo\\docs\\guide.md')).toBe('Clear 1 note from guide.md?')
+    // A backslash is part of a POSIX file name, not a folder separator.
+    expect(clearNotesDescription(1, '/repo/docs/plan\\review.md')).toBe(
+      'Clear 1 note from plan\\review.md?'
+    )
   })
 
   it('clears only the notes the confirmation counted', async () => {

@@ -162,7 +162,8 @@ export function SendNotesSlot({
             {TIERS.map((tier) => (
               <span
                 key={tier}
-                className={buttonVariants({ variant: 'default', size: buttonSize(face.size) })}
+                // Why cn: the live Button merges its variant classes the same way, so widths match.
+                className={cn(buttonVariants({ variant: 'default', size: buttonSize(face.size) }))}
               >
                 <SendNotesFaceContent face={face} tier={tier} />
               </span>

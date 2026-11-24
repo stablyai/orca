@@ -23856,7 +23856,8 @@
         "sending": "Enviando…",
         "sendNotesToAgent_one": "Enviar {{count}} nota a un agente",
         "clearPageNotes_other": "¿Borrar {{count}} notas de esta página?",
-        "sendNotesToAgent_other": "Enviar {{count}} notas a un agente"
+        "sendNotesToAgent_other": "Enviar {{count}} notas a un agente",
+        "retryClear": "Reintentar"
       }
     }
   },

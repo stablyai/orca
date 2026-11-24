@@ -12,6 +12,27 @@ import { holdNotesForSend, isNoteInFlight } from '@/components/notes/delivery/no
 import { useNotesInFlightVersion } from '@/components/notes/delivery/use-notes-in-flight-version'
 import { recomputeOn } from '@/lib/recompute-on'
 
+/** The annotations a prompt was built from can still go: unchanged, not already on their way, and their page still showing in this workspace. */
+export function browserAnnotationsStillSendable(
+  state: {
+    browserTabsByWorktree: Readonly<Record<string, readonly { activePageId?: string | null }[]>>
+    browserAnnotationsByPageId: Readonly<Record<string, readonly BrowserPageAnnotation[]>>
+  },
+  worktreeId: string,
+  pageId: string,
+  sendable: readonly BrowserPageAnnotation[]
+): boolean {
+  const pageActive = (state.browserTabsByWorktree[worktreeId] ?? []).some(
+    (workspace) => workspace.activePageId === pageId
+  )
+  const current = new Set(state.browserAnnotationsByPageId[pageId])
+  return (
+    pageActive &&
+    sendable.length > 0 &&
+    sendable.every((annotation) => current.has(annotation) && !isNoteInFlight(annotation))
+  )
+}
+
 export type BrowserAnnotationsClearRequest = {
   description: string
   clear: () => Promise<boolean>
@@ -47,6 +68,7 @@ export function useBrowserPageAnnotationSend({
   ) => void
   handleBrowserAnnotationsSentToAgent: () => void
   handleBrowserAnnotationsHandedOff: (delivered: Promise<unknown>) => void
+  canSendBrowserAnnotations: () => boolean
   activeGroupId: string | undefined
 } {
   const browserAnnotations = useAppStore(
@@ -162,6 +184,19 @@ export function useBrowserPageAnnotationSend({
     }
   }, [browserTabId, recordFeatureInteraction, removeDeliveredBrowserPageAnnotations])
 
+  // Why one check for every route: the inline menu and the sidebar picker both dispatch a prompt built
+  // earlier; refuse it once an annotation changed, is already on its way, or the page left this workspace.
+  const canSendBrowserAnnotations = useCallback(
+    (): boolean =>
+      browserAnnotationsStillSendable(
+        useAppStore.getState(),
+        worktreeId,
+        browserTabId,
+        sendableAnnotations
+      ),
+    [browserTabId, sendableAnnotations, worktreeId]
+  )
+
   const openAnnotationSendTargetMode = useCallback(
     (modeId: string, prompt: string): void => {
       openAgentSendPopoverTargetMode({
@@ -174,22 +209,16 @@ export function useBrowserPageAnnotationSend({
           'Browser annotations'
         ),
         launchSource: 'notes_send',
-        canSendPrompt: () => {
-          const current = new Set(useAppStore.getState().browserAnnotationsByPageId[browserTabId])
-          return sendableAnnotations.every(
-            (annotation) => current.has(annotation) && !isNoteInFlight(annotation)
-          )
-        },
+        canSendPrompt: canSendBrowserAnnotations,
         onPromptDelivered: handleBrowserAnnotationsSentToAgent,
         onPromptHandedOff: handleBrowserAnnotationsHandedOff
       })
     },
     [
-      browserTabId,
+      canSendBrowserAnnotations,
       handleBrowserAnnotationsSentToAgent,
       handleBrowserAnnotationsHandedOff,
       openAgentSendPopoverTargetMode,
-      sendableAnnotations,
       worktreeId
     ]
   )
@@ -292,6 +321,7 @@ export function useBrowserPageAnnotationSend({
     handleUpdateBrowserAnnotation,
     handleBrowserAnnotationsSentToAgent,
     handleBrowserAnnotationsHandedOff,
+    canSendBrowserAnnotations,
     activeGroupId
   }
 }

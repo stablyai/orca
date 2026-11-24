@@ -32,6 +32,7 @@ export function BrowserGuestGrabBanner({
     handleIncludePageDetailsChange,
     handleBrowserAnnotationsSentToAgent,
     handleBrowserAnnotationsHandedOff,
+    canSendBrowserAnnotations,
     handleCopyBrowserAnnotations,
     sendableAnnotationCount,
     createBrowserAnnotationsClearRequest
@@ -111,6 +112,7 @@ export function BrowserGuestGrabBanner({
             onIncludePageDetailsChange={handleIncludePageDetailsChange}
             onPromptDelivered={handleBrowserAnnotationsSentToAgent}
             onPromptHandedOff={handleBrowserAnnotationsHandedOff}
+            canSendPrompt={canSendBrowserAnnotations}
             onCopy={handleCopyBrowserAnnotations}
             createClearRequest={createBrowserAnnotationsClearRequest}
             size="sm"
