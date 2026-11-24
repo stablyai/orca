@@ -1,7 +1,8 @@
 import { removeChromiumDisabledSessionBus } from '../../../pty/shell-startup/chromium-session-bus-env'
 import {
   buildConfiguredProxyEnv,
-  PROXY_ENVIRONMENT_KEYS
+  PROXY_ENVIRONMENT_KEYS,
+  PROXY_ENV_KEYS
 } from '../../../../shared/network/network-proxy'
 import { readNetworkProxySettings } from '../../../browser/network/execution-routes/browser-network-proxy-settings-source'
 
@@ -41,6 +42,11 @@ function isProxyKey(key: string): boolean {
   return PROXY_ENVIRONMENT_KEYS.some((proxyKey) => proxyKey.toLowerCase() === lowered)
 }
 
+function isProxyUrlKey(key: string): boolean {
+  const lowered = key.toLowerCase()
+  return PROXY_ENV_KEYS.some((proxyKey) => proxyKey.toLowerCase() === lowered)
+}
+
 export function buildPluginWorkerEnv(
   baseEnv: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
@@ -74,11 +80,19 @@ export function buildPluginWorkerEnv(
       env[key] = value
     }
   }
-  // A proxy configured in Settings never reaches this process's environment; add it where the
-  // inherited variables left nothing, the same way terminals receive it.
-  for (const [key, value] of Object.entries(buildConfiguredProxyEnv(readNetworkProxySettings()))) {
-    if (env[key] === undefined) {
-      env[key] = value
+  // A proxy configured in Settings never reaches this process's environment. Add it only when the
+  // worker inherited no proxy route at all: a Settings value landing beside an inherited one under
+  // a different spelling would leave the worker on two routes, and the bypass rules would not match.
+  const inheritedProxyUrl = Object.entries(env).some(
+    ([key, value]) => isProxyUrlKey(key) && value.trim() !== ''
+  )
+  if (!inheritedProxyUrl) {
+    for (const [key, value] of Object.entries(
+      buildConfiguredProxyEnv(readNetworkProxySettings())
+    )) {
+      if (env[key] === undefined) {
+        env[key] = value
+      }
     }
   }
   removeChromiumDisabledSessionBus(env)

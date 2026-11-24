@@ -122,4 +122,18 @@ describe('buildPluginWorkerEnv', () => {
     expect(env.HTTPS_PROXY).toBe('http://inherited.example:3128')
     expect(env.NO_PROXY).toBe('*')
   })
+
+  it('does not add a Settings proxy beside an inherited one spelled differently', () => {
+    setNetworkProxySettingsSource(() => ({
+      httpProxyUrl: 'http://settings-proxy.example:8080',
+      httpProxyBypassRules: 'corp.example'
+    }))
+    const env = buildPluginWorkerEnv(
+      { ...sessionEnv, https_proxy: 'http://inherited.example:3128' },
+      'linux'
+    )
+    expect(env.https_proxy).toBe('http://inherited.example:3128')
+    expect(env).not.toHaveProperty('HTTPS_PROXY')
+    expect(env).not.toHaveProperty('NO_PROXY')
+  })
 })
