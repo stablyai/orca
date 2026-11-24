@@ -22,6 +22,7 @@ import {
 import { pairedHostClientCapabilities } from '@/runtime/rpc/targets/paired-host-client-capabilities'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import { NativeChatCrewBackgroundTasksStatus } from './NativeChatCrewBackgroundTasksStatus'
+import { structuredReadOwnerKey } from '../../session/structured/read/structured-agent-session-read-owner-registry'
 import type { StructuredSessionBackgroundTasksView } from '../../../../../../shared/agent-session/view/structured-session-background-tasks-view'
 import { useStructuredSessionChildRowContext } from './use-structured-session-child-row-context'
 import type { StructuredSessionTaskStop } from './use-structured-session-task-stop'
@@ -163,9 +164,17 @@ export function NativeChatStructuredSessionStatus(props: {
   const [providerDetails, setProviderDetails] = useState<{
     row: WorkerDockRowView
     opener: HTMLElement
+    /** The session and host it was opened for; another one closes it. */
+    owner: string
     /** A crew's strip replaced the dialog's branch while it was open; it shows again on its own. */
     hiddenByCrew?: boolean
   } | null>(null)
+  const detailsOwner = structuredReadOwnerKey(props.sessionId, target)
+  // Another session or host closes the dialog during render, so it never shows the old one's text.
+  if (providerDetails && providerDetails.owner !== detailsOwner) {
+    setProviderDetails(null)
+  }
+  const shownDetails = providerDetails?.owner === detailsOwner ? providerDetails : null
   useEffect(() => {
     if (crew && providerDetails && !providerDetails.hiddenByCrew) {
       setProviderDetails({ ...providerDetails, hiddenByCrew: true })
@@ -269,17 +278,19 @@ export function NativeChatStructuredSessionStatus(props: {
         onStop={stop.onStop}
         currentAgentId={props.currentAgentId ?? null}
         onShowAgent={(providerId) => openNativeChatSubagent(props.paneKey, providerId)}
-        onShowProviderDetails={(row, opener) => setProviderDetails({ row, opener })}
+        onShowProviderDetails={(row, opener) =>
+          setProviderDetails({ row, opener, owner: detailsOwner })
+        }
       />
-      {providerDetails ? (
+      {shownDetails ? (
         <Suspense fallback={null}>
           <WorkerDockProviderDetailsDialog
-            row={providerDetails.row}
-            opener={providerDetails.opener}
+            row={shownDetails.row}
+            opener={shownDetails.opener}
             sessionId={props.sessionId}
             target={target}
             onClose={() => setProviderDetails(null)}
-            reappeared={providerDetails.hiddenByCrew === true}
+            reappeared={shownDetails.hiddenByCrew === true}
           />
         </Suspense>
       ) : null}

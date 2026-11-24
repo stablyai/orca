@@ -122,10 +122,14 @@ export class StructuredAgentSessionStatusOwnership {
     }
     this.subjects.set(summary.sessionId, subject)
     this.landed.delete(summary.sessionId)
-    sink.publish(summary, subject)
-    this.landed.add(summary.sessionId)
-    if (relocated) {
-      this.deps().onSubjectForgotten?.(summary.sessionId)
+    // Once forget succeeded the old children are gone: readers re-derive availability even when
+    // publishing the new subject throws (it then stays not landed).
+    const forgotten = relocated ? this.deps().onSubjectForgotten : undefined
+    try {
+      sink.publish(summary, subject)
+      this.landed.add(summary.sessionId)
+    } finally {
+      forgotten?.(summary.sessionId)
     }
   }
 

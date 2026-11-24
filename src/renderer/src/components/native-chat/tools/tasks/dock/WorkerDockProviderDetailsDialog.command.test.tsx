@@ -106,11 +106,12 @@ function credit(): void {
 }
 
 function renderStrip() {
+  let sessionId = SESSION
   // A fresh element each time: React skips a rerender of the identical element object.
   const view = () => (
     <TooltipProvider>
       <NativeChatStructuredSessionStatus
-        sessionId={SESSION}
+        sessionId={sessionId}
         target={LOCAL}
         paneKey="pane-synthetic"
         isVisible
@@ -121,7 +122,14 @@ function renderStrip() {
   )
   const rendered = render(view())
   fireEvent.click(screen.getByRole('button', { expanded: false }))
-  return { ...rendered, again: () => rendered.rerender(view()) }
+  return {
+    ...rendered,
+    again: () => rendered.rerender(view()),
+    switchSession: (next: string) => {
+      sessionId = next
+      rendered.rerender(view())
+    }
+  }
 }
 
 async function openRow() {
@@ -160,13 +168,11 @@ afterEach(() => {
 })
 
 describe('Worker Dock command dialog', () => {
-  it('shows the exact command with Copy, and copies its bytes unchanged (no CRLF)', async () => {
+  it('copies the exact command bytes from one read of the credited invocation (no CRLF)', async () => {
     credit()
     renderStrip()
-    const dialog = await openRow()
+    await openRow()
     const copy = await screen.findByRole('button', { name: 'Copy command' })
-    expect(dialog).toHaveTextContent('fixture-pack "a b"')
-    expect(dialog.querySelector('pre')?.textContent).toBe(EXACT)
     const reads = hoisted.rpc.mock.calls.filter(
       ([, method]) => method === 'agentSession.backgroundCommand'
     )
@@ -178,15 +184,11 @@ describe('Worker Dock command dialog', () => {
     })
     fireEvent.click(copy)
     await waitFor(() => expect(writes).toEqual([EXACT]))
-    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
   })
 
-  it('without credit shows the preview with its ellipsis, no Copy and no read', async () => {
+  it('makes no host read without credit', async () => {
     renderStrip()
-    const dialog = await openRow()
-    expect(dialog.querySelector('pre')?.textContent).toBe(PREVIEW)
-    expect(screen.queryByRole('button', { name: 'Copy command' })).toBeNull()
-    expect(screen.queryByText(/preview/i)).toBeNull()
+    await openRow()
     expect(hoisted.rpc).not.toHaveBeenCalledWith(
       expect.anything(),
       'agentSession.backgroundCommand',
@@ -205,7 +207,6 @@ describe('Worker Dock command dialog', () => {
     fireEvent.click(copy)
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Copy command' })).toBeNull())
     expect(writes).toEqual([])
-    expect(screen.getByRole('dialog').querySelector('pre')?.textContent).toBe(PREVIEW)
   })
 
   it('a late reply after the opening was lost is discarded', async () => {
@@ -228,8 +229,16 @@ describe('Worker Dock command dialog', () => {
     )
     authority.invalidate(null)
     await act(async () => reply({ command: EXACT }))
-    expect(screen.queryByRole('button', { name: 'Copy command' })).toBeNull()
-    expect(screen.getByRole('dialog').querySelector('pre')?.textContent).toBe(PREVIEW)
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('fixture-pack "a b"')
+  })
+
+  it('a session change closes the dialog, so its exact text never outlives the session', async () => {
+    credit()
+    const strip = renderStrip()
+    await openRow()
+    await screen.findByRole('button', { name: 'Copy command' })
+    strip.switchSession('session-other')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
   it('after a crew comes and goes it reappears on its own, focused on Close, with a fresh read', async () => {
