@@ -13,6 +13,7 @@ import {
   resolveWorktreeRemovalMetadata,
   resolveWorktreeRemovalRepoOwner
 } from '../../../workspaces/removal/worktree-removal-repo-owner'
+import { assertWorktreeNotProviderManaged } from '../../../workspaces/removal/provider-worktree-removal-guard'
 import type { RuntimePreservedBranchCleanup } from '../../repositories/runtime-preserved-branch-cleanup'
 import { listWorktreesSharedStrict as listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-scan-cache'
 import {
@@ -77,6 +78,15 @@ export function interruptedLocalWorktreeRemovalJob(
     )?.pushTarget
   return {
     run: async (stopSignal) => {
+      assertWorktreeNotProviderManaged(
+        record.worktreeId,
+        resolveWorktreeRemovalMetadata(
+          host.store,
+          record.repoId,
+          record.worktreeId,
+          LOCAL_EXECUTION_HOST_ID
+        )
+      )
       const removedPushTarget = resolveRemovedPushTarget()
       const result = await finishInterruptedLocalWorktreeRemoval({
         record,

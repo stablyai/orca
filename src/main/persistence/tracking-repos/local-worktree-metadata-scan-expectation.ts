@@ -223,6 +223,10 @@ export function isLocallyRemovableWorktreeMetadataRow(
   if (legacy?.archivedCheckout || canonical?.archivedCheckout) {
     return false
   }
+  // A provider lease outlives its path; only release may drop it.
+  if (legacy?.worktreeProvider || canonical?.worktreeProvider) {
+    return false
+  }
   return !(
     (legacy?.hostId && legacy.hostId !== LOCAL_EXECUTION_HOST_ID) ||
     (canonical?.hostId && canonical.hostId !== LOCAL_EXECUTION_HOST_ID) ||

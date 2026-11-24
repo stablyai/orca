@@ -59,6 +59,7 @@ export type WorkspaceCleanupBlocker =
   | 'ignored-files'
   | 'unpushed-commits'
   | 'unknown-base'
+  | 'provider-managed'
   | 'dismissed'
 
 export type WorkspaceCleanupDismissal = {
@@ -177,7 +178,8 @@ export type WorkspaceCleanupDismissArgs = {
 const WORKSPACE_CLEANUP_QUEUE_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
   'main-worktree',
   'folder-repo',
-  'ssh-disconnected'
+  'ssh-disconnected',
+  'provider-managed'
 ])
 
 export const WORKSPACE_CLEANUP_FORCE_REMOVE_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> =

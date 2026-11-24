@@ -39,6 +39,7 @@ type UnregisteredOrcaCleanupMeta = Pick<
   | 'sparseBaseRef'
   | 'sparsePresetId'
   | 'preserveBranchOnDelete'
+  | 'worktreeProvider'
 >
 
 export const ORPHANED_WORKTREE_DIRECTORY_MESSAGE =
@@ -159,6 +160,10 @@ export async function canSafelyRemoveOrphanedWorktreeDirectory(
 export function canCleanupUnregisteredOrcaWorktreeDirectory(args: {
   meta: UnregisteredOrcaCleanupMeta | null | undefined
 }): boolean {
+  // A pooled checkout is never Orca's to delete, even when Git lost its registration.
+  if (args.meta?.worktreeProvider) {
+    return false
+  }
   if (hasCurrentOrcaCreationProvenance(args.meta)) {
     return true
   }

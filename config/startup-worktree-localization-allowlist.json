@@ -22,5 +22,9 @@
     "dynamic": false,
     "count": 1,
     "reason": "Existing recovery detail is user-visible and remains untranslated; tracked in issue 32207."
+  },
+  {
+    "filePath": "src/shared/worktree/provider/worktree-provider-config.ts",
+    "reason": "Worktree provider config diagnostics are CLI/agent-facing validation text, not renderer UI copy."
   }
 ]

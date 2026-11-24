@@ -15,6 +15,7 @@ import type { OrcaWorkspaceLayout } from './paths/orca-workspace-layout'
 import type { DiffComment, MobileDiffReviewState } from '../file-review/diff-comment-types'
 import type { SmartTier } from '../sidebar-list/sorting/sort-stamps'
 import type { ExternalConversationLink } from '../connectors/external-conversation-link'
+import type { WorktreeProviderWorkspace } from './provider/worktree-provider-types'
 
 export type ArchivedCheckout = {
   branch: string
@@ -109,6 +110,8 @@ export type WorktreeMeta = {
   automationProvenance?: AutomationWorkspaceProvenance
   /** System-owned provenance for workspaces created via `orca worktree create`. */
   cliProvenance?: CliWorkspaceProvenance
+  /** Lease for a checkout acquired from an external pool; Orca must release, never Git-remove it. */
+  worktreeProvider?: WorktreeProviderWorkspace
   /** System-owned connector threads whose agents run here; never published on `Worktree`. */
   externalConversations?: ExternalConversationLink[]
 }

@@ -85,6 +85,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       'worktree.list',
       {
         repo: getOptionalStringFlag(flags, 'repo'),
+        provider: getOptionalStringFlag(flags, 'provider'),
         limit: getOptionalPositiveIntegerFlag(flags, 'limit')
       }
     )

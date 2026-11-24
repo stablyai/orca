@@ -107,6 +107,9 @@ export function mergeWorktree(
     ...(meta?.baseRef !== undefined ? { baseRef: meta.baseRef } : {}),
     ...(meta?.pushTarget !== undefined ? { pushTarget: meta.pushTarget } : {}),
     ...(meta?.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
+    ...(meta?.worktreeProvider
+      ? { worktreeProvider: meta.worktreeProvider, providerManaged: true as const }
+      : {}),
     workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     diffComments: meta?.diffComments,
     mobileDiffReview: meta?.mobileDiffReview

@@ -25,6 +25,7 @@ import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../../shared/orc
 import { ORCHESTRATION_FEDERATION_ERROR_CODES } from '../../../../shared/orchestration/orchestration-federation-error-codes'
 import { computerUseErrorRecoveryData } from '../../../../shared/computer/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../../shared/computer/computer-use-runtime-types'
+import { WORKTREE_PROVIDER_ERROR_CODES } from '../../../../shared/worktree/provider/worktree-provider-types'
 import { TerminalSplitOutcomeError } from '../../../../shared/workspace-layout/terminal-topology/terminal-split-outcome'
 import { WslHostWindowsDriveRefusalError } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import { wslDistroHoldRpcFailure } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
@@ -84,6 +85,7 @@ const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   ...CONNECTOR_ACT_ERROR_CODES,
   ...RECIPE_VM_REFUSAL_CODES,
+  ...WORKTREE_PROVIDER_ERROR_CODES,
   WORKTREE_CREATE_COLLISION_CODE,
   WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE,
   AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,

@@ -114,6 +114,9 @@ function inputWithoutGit(summary: RuntimeWorktreePsSummary): WorkspaceCleanupEva
   if (summary.isPinned) {
     blockers.push('pinned')
   }
+  if (summary.providerManaged) {
+    blockers.push('provider-managed')
+  }
   return {
     reasons: [],
     blockers,
@@ -180,6 +183,9 @@ function withHostBlockers(
   }
   if (dirtyEditor) {
     blockers.push('dirty-editor-buffer')
+  }
+  if (summary.providerManaged) {
+    blockers.push('provider-managed')
   }
   return { ...input, blockers }
 }

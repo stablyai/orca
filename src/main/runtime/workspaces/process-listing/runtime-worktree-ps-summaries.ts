@@ -135,6 +135,9 @@ export function buildRuntimeWorktreePsSummaries(args: {
       ...sortStampSummaryFields(worktree),
       ...(worktree.createdAt !== undefined ? { createdAt: worktree.createdAt } : {}),
       ...(worktree.creatorProvenance ? { creatorProvenance: worktree.creatorProvenance } : {}),
+      ...(meta?.worktreeProvider
+        ? { worktreeProvider: meta.worktreeProvider, providerManaged: true as const }
+        : {}),
       linkedIssue: worktree.linkedIssue,
       linkedPR,
       linkedLinearIssue: meta?.linkedLinearIssue ?? null,

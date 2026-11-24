@@ -59,7 +59,8 @@ export type WorkspaceCleanupEvaluationInput = Pick<
 
 const NOT_REMOVABLE_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
   'main-worktree',
-  'folder-repo'
+  'folder-repo',
+  'provider-managed'
 ])
 
 // Priority order: the first present blocker names the keep cause.

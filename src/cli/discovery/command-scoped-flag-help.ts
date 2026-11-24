@@ -77,6 +77,15 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     'gitlab-issue': '--gitlab-issue <number|url> Linked GitLab issue in the source project',
     'gitlab-mr': '--gitlab-mr <number|url> Linked GitLab merge request in the source project'
   },
+  'worktree acquire': {
+    provider: '--provider <name>      Configured worktree provider to claim from',
+    profile: '--profile <name>       Provider profile passed to claim and setup'
+  },
+  'worktree release': {
+    force: '--force                Ask the provider to discard uncommitted changes',
+    forget:
+      '--forget               Unregister without calling the provider (the lease may remain held)'
+  },
   'skills get': {
     full: '--full                 Print the full guide with bundled references',
     reference: '--reference <name>     Print one bundled reference by name',

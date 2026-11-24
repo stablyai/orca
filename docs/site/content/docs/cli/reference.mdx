@@ -119,7 +119,26 @@ orca worktree create --name child-task --agent codex --prompt "Investigate the f
 orca worktree set --worktree active --comment "reproduced failure; testing token refresh fix" --json
 orca worktree set --worktree active --workspace-status in-review --unread --json
 orca worktree rm --worktree id:<worktreeId> --force --json
+orca worktree acquire --provider wtp --repo path:/path/to/repo --profile cone --agent claude --json
+orca worktree release id:<worktreeId> --json
+orca worktree providers list --repo path:/path/to/repo --json
+orca worktree providers trust --repo path:/path/to/repo
 ```
+
+### Worktree providers
+
+`worktree acquire` claims a checkout from a configured pool, registers it as a provider-managed workspace, and optionally launches an agent with `--agent` (plus `--prompt`, `--model`, `--effort`, `--surface`, as in `agent launch`). `worktree release` returns it through the provider. Orca never runs `git worktree remove` on a provider-managed path: `worktree rm` refuses it, archive refuses it, and workspace cleanup skips it.
+
+```bash
+orca worktree acquire --provider wtp --profile cone --agent claude --json
+orca worktree release path:/path/to/slot --force
+orca worktree release name:wtp-slot-3 --forget --json
+orca worktree list --provider wtp --json
+```
+
+Define providers in `~/.orca/worktree-providers.yaml` (trusted, user-authored) or in a repository's `orca.yaml` (untrusted until `orca worktree providers trust` records the current command block). Commands are argv arrays, never shell strings. The claim command receives `--repo <path> [--profile <p>]` and prints one JSON object with an absolute `path`, plus optional `lease_id`, `profile`, and `handle`; release receives the path, `--repo`, and any recorded lease/handle. A nonzero release keeps the workspace and prints the provider's message; a dirty slot refusing to return is normal, not a crash.
+
+`release` accepts an exact `id:<repoId>::<path>` selector when the checkout is already gone. `--forget` unregisters without calling the provider when its config is lost or the lease was returned out of band; it never deletes the checkout. Provider workspaces report `worktreeProvider` (name, profile, lease, handle, timeout) and `providerManaged: true` in `worktree list/show/ps --json`. See [Worktree providers](https://github.com/stablyai/orca/blob/main/docs/worktree-providers.md) for the full command contract and trust model.
 
 When `worktree create` runs from inside an Orca-managed worktree, Orca records the new worktree as a child when it can infer the relationship. Pass `--parent-worktree active` to be explicit, or `--no-parent` when the new work is independent.
 

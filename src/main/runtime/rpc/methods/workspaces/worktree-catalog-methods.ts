@@ -15,6 +15,7 @@ import {
   WorktreeListParams,
   WorktreePsParams
 } from '../../../../../shared/rpc-contract/workspaces/worktree-params'
+import { WORKTREE_PROVIDER_METHODS } from './worktree-provider-methods'
 
 export const WORKTREE_CATALOG_METHODS = [
   defineMethod({
@@ -66,7 +67,8 @@ export const WORKTREE_CATALOG_METHODS = [
         await context.runtime.listManagedWorktrees(
           params.repo,
           params.limit,
-          supportsWorktreeVisibilitySourceDefaults(context)
+          supportsWorktreeVisibilitySourceDefaults(context),
+          params.provider
         ),
         context,
         pendingAtScan
@@ -95,5 +97,7 @@ export const WORKTREE_CATALOG_METHODS = [
         pendingAtScan
       )
     }
-  })
+  }),
+  // Kept with the worktree method catalog so the registry file stays under the size cap.
+  ...WORKTREE_PROVIDER_METHODS
 ]

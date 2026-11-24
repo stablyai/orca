@@ -12,7 +12,7 @@ import type { Repo } from '../../repository/repo-types'
 import type { Worktree, WorktreeOwnership } from '../types'
 
 export function shouldShowWorktree(args: {
-  worktree: Pick<Worktree, 'path'>
+  worktree: Pick<Worktree, 'path' | 'providerManaged'>
   ownership: WorktreeOwnership
   repo: Repo
   isLegacyRepoForVisibility: boolean
@@ -21,7 +21,11 @@ export function shouldShowWorktree(args: {
   importedExternalWorktreePaths?: readonly string[] | undefined
   visibilitySource?: ReturnType<WorktreeVisibilitySourceMatcher>
 }): boolean {
-  if (args.isSelectedCheckout || args.ownership === 'orca-managed') {
+  if (
+    args.isSelectedCheckout ||
+    args.ownership === 'orca-managed' ||
+    args.worktree.providerManaged
+  ) {
     return true
   }
   if (

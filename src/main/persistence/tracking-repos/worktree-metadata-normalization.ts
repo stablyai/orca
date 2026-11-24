@@ -64,6 +64,10 @@ export function gcStaleWorktreeMeta(state: PersistedState): number {
     if ((meta?.hostId && meta.hostId !== LOCAL_EXECUTION_HOST_ID) || meta?.archivedCheckout) {
       continue
     }
+    // A provider lease outlives its path; only release may drop it.
+    if (meta?.worktreeProvider) {
+      continue
+    }
     if (!isAbsolute(worktreePath) || isWslUncPath(worktreePath)) {
       continue
     }
