@@ -60,7 +60,9 @@ describe('giving an agent an account signed in for it', () => {
 
   it('says so and reports false when adding it to the list fails', async () => {
     setBotGoogle.mockRejectedValueOnce(new Error('Host unreachable'))
-    await expect(giveBotGoogleAccount(bot, 'me@gmail.com', vi.fn())).resolves.toBe(false)
+    await expect(giveBotGoogleAccount(bot, 'me@gmail.com', vi.fn(), async (b) => b)).resolves.toBe(
+      false
+    )
     expect(setBotGoogle).toHaveBeenCalledWith(bot, true, {
       accounts: ['me@work.com', 'me@gmail.com']
     })
@@ -70,9 +72,42 @@ describe('giving an agent an account signed in for it', () => {
   it('turns Google on with only that account for an agent without it', async () => {
     const turnOn = vi.fn(async () => true)
     const off = { ...bot, google: false, googleAccounts: undefined }
-    await expect(giveBotGoogleAccount(off, 'me@gmail.com', turnOn)).resolves.toBe(true)
+    await expect(giveBotGoogleAccount(off, 'me@gmail.com', turnOn, async (b) => b)).resolves.toBe(
+      true
+    )
     expect(turnOn).toHaveBeenCalledWith(off, ['me@gmail.com'])
     expect(setBotGoogle).not.toHaveBeenCalled()
+  })
+})
+
+describe('granting after a sign-in', () => {
+  const stale: { id: string; hostId: 'local'; google: boolean; googleAccounts?: string[] } = {
+    id: 'scout',
+    hostId: 'local',
+    google: true,
+    googleAccounts: ['a@x.com']
+  }
+
+  it('adds the account to the list the host has now, not the one from before', async () => {
+    setBotGoogle.mockResolvedValueOnce(undefined)
+    const fresh = { ...stale, googleAccounts: ['c@x.com'] }
+    await expect(giveBotGoogleAccount(stale, 'b@x.com', vi.fn(), async () => fresh)).resolves.toBe(
+      true
+    )
+    expect(setBotGoogle).toHaveBeenCalledWith(fresh, true, { accounts: ['c@x.com', 'b@x.com'] })
+  })
+
+  it('grants nothing when the host’s current list cannot be confirmed', async () => {
+    const turnOn = vi.fn(async () => true)
+    const unconfirmed = async (): Promise<typeof stale> => {
+      throw new Error('host offline')
+    }
+    await expect(giveBotGoogleAccount(stale, 'b@x.com', turnOn, unconfirmed)).resolves.toBe(false)
+    const off = { ...stale, google: false, googleAccounts: undefined }
+    await expect(giveBotGoogleAccount(off, 'b@x.com', turnOn, unconfirmed)).resolves.toBe(false)
+    expect(setBotGoogle).not.toHaveBeenCalled()
+    expect(turnOn).not.toHaveBeenCalled()
+    expect(toastError).toHaveBeenCalledTimes(2)
   })
 })
 
