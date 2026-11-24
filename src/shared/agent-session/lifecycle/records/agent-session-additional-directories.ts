@@ -1,5 +1,8 @@
 import { findOptionOccurrence } from '../../../cli/command-option-occurrence'
-import { tokenizeStartupCommand } from '../../../agent-launch/startup/tui-agent-startup-shell'
+import {
+  tokenizeStartupCommand,
+  type AgentStartupShell
+} from '../../../agent-launch/startup/tui-agent-startup-shell'
 import { MAX_PATH_LENGTH } from '../accounts/agent-session-account-home'
 
 const MAX_ADDITIONAL_DIRECTORIES = 64
@@ -24,13 +27,18 @@ export function normalizeAdditionalDirectories(
   return result.length > 0 ? result : undefined
 }
 
-/** Extracts deduplicated `--add-dir` values from configured agent args, preserving order. */
-export function extractAdditionalDirectoriesFromArgs(rawArgs: string | undefined): string[] {
+/** Extracts deduplicated `--add-dir` / `-add-dir` values from configured agent args, preserving order. */
+export function extractAdditionalDirectoriesFromArgs(
+  rawArgs: string | undefined,
+  shell: AgentStartupShell = typeof process !== 'undefined' && process.platform === 'win32'
+    ? 'powershell'
+    : 'posix'
+): string[] {
   const text = rawArgs?.trim()
   if (!text) {
     return []
   }
-  const tokenized = tokenizeStartupCommand(text, 'posix')
+  const tokenized = tokenizeStartupCommand(text, shell)
   if (!tokenized.ok) {
     return []
   }
@@ -41,7 +49,11 @@ export function extractAdditionalDirectoriesFromArgs(rawArgs: string | undefined
     if (token === '--') {
       break
     }
-    const occurrence = findOptionOccurrence(tokens.slice(index, index + 2), ['--add-dir'], false)
+    const occurrence = findOptionOccurrence(
+      tokens.slice(index, index + 2),
+      ['--add-dir', '-add-dir'],
+      false
+    )
     if (occurrence?.index === 0) {
       if (occurrence.value) {
         directories.push(occurrence.value)
@@ -55,11 +67,12 @@ export function extractAdditionalDirectoriesFromArgs(rawArgs: string | undefined
 /** Merges persisted session directories with `--add-dir` entries from default agent args. */
 export function resolveAdditionalDirectoriesFromLaunch(
   recordDirectories: readonly string[] | undefined,
-  defaultArgs: string | undefined
+  defaultArgs: string | undefined,
+  shell?: AgentStartupShell
 ): string[] | undefined {
   return normalizeAdditionalDirectories([
     ...(recordDirectories ?? []),
-    ...extractAdditionalDirectoriesFromArgs(defaultArgs)
+    ...extractAdditionalDirectoriesFromArgs(defaultArgs, shell)
   ])
 }
 

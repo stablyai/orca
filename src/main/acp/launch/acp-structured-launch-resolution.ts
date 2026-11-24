@@ -274,7 +274,8 @@ export function acpStructuredLaunchPart(
       record.additionalDirectories,
       spec.agent === 'antigravity'
         ? basis.commandSettings().agentDefaultArgs?.antigravity
-        : undefined
+        : undefined,
+      record.location.wslDistro ? 'posix' : undefined
     )
     const args = [
       ...spec.args({ fullAccess, pluginDirs: skill?.pluginDirs ?? [], model }),
