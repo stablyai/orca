@@ -30321,17 +30321,17 @@
         "pickCustom": "Custom time"
       },
       "ask": {
-        "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
-        "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>",
-        "next": "Next question",
         "notSentYet": "not sent yet",
-        "previous": "Previous question",
         "recommended": "Recommended",
-        "step": "{{n}} of {{total}}",
         "typeAnswer": "Type your answer",
         "replaced": "The agent asked a new question. Read it, then reply.",
         "replacedByNewer": "Replaced by a newer question",
-        "skipped": "Skipped"
+        "skipped": "Skipped",
+        "send": "Send",
+        "sending": "Sending…",
+        "sendSome": "Send {{count}}/{{total}}",
+        "sendSomeLabel": "Send {{count}} of {{total}} answers",
+        "changeAnswer": "{{question}}: {{answer}}. Change answer"
       },
       "readMoreClosedFailed": "Reading more Closed items failed",
       "wait": {

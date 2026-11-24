@@ -246,7 +246,7 @@ export function BotItemBody({
     [fileContext?.fileLinkContext, runtimeContext]
   )
   // `waitingLine`: the question the comment box names, until a reply is on its way.
-  const { steps, sent, quick, fromBox, waitingLine } = useBotItemQuestionSteps(
+  const { steps, sent, quick, fromBox, answerNone, waitingLine } = useBotItemQuestionSteps(
     bot,
     item,
     view.events,
@@ -260,17 +260,20 @@ export function BotItemBody({
         : {
             send: quick,
             edit: (text: string) => comment.current?.fill(text),
-            recover: (text: string) => comment.current?.fill(text, true),
+            recover: (text: string) => {
+              // A comment of its own: it answers no line, whatever the box names next.
+              answerNone()
+              comment.current?.fill(text, true)
+            },
             type: () => comment.current?.answer(),
             steps,
             sent
           },
-    [deleted, comment, quick, steps, sent]
+    [deleted, comment, quick, answerNone, steps, sent]
   )
   const loadingTarget = useWaitingQuestionPage(item.waitingAsk ?? item.question?.eventId, view)
-  const answering = pending.shown.some(({ failed }) => !failed)
-  const waitingOn =
-    waitingLine && !answering ? { ...waitingLine, asker: item.owner.name ?? bot.name } : null
+  const answering = steps?.sending ?? pending.shown.some(({ failed }) => !failed)
+  const waitingOn = waitingLine ? { ...waitingLine, asker: item.owner.name ?? bot.name } : null
   const needsYou = useBotItemNeedsYouJump({
     eligible: item.status === 'needs_you' && !deleted && !answering,
     activityShown,
