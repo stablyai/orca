@@ -12,14 +12,9 @@ import type { ManagedRuntimeInstallState } from '../../../../../shared/agent-lau
 import { NativeChatInstallStrip } from './NativeChatInstallStrip'
 import {
   NativeChatSignInStrip,
-  nativeChatSignInTitle,
+  useAntigravityChatSignInStrip,
   type NativeChatSignInStripState
 } from './NativeChatSignInStrip'
-import { useAntigravityChatSignIn } from '@/components/provider-accounts/use-antigravity-chat-sign-in'
-import {
-  antigravityChatSignInPrompt,
-  antigravityOrcaRuntimeSignsIn
-} from '@/components/provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import { useStructuredAgentSessionHostProgram } from '../session/status/structured-agent-session-status-hooks'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { NativeChatAntigravityAuthTarget } from '../antigravity-auth/native-chat-antigravity-auth'
@@ -55,65 +50,42 @@ export function useNativeChatInstallSlot(
 } {
   const t = useTranslate()
   const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
-  // Chats on the host program follow it too: Orca's copy of agy may be what they need installed.
+  // Chats on the host program follow it too: Orca's agy may be what they need installed.
   const observation = useManagedRuntimeInstall(props.target, props.agent, props.isVisible)
   const slot = nativeChatInstallSlotState(observation, layout, hostProgram)
-  // Once Orca's own runtime is ready, chats still need its sign-in; the host's agy signs itself in.
-  const signsIn =
-    props.agent === 'antigravity' &&
-    props.isVisible &&
-    !hostProgram &&
-    slot.kind === 'none' &&
-    observation.kind === 'active' &&
-    antigravityOrcaRuntimeSignsIn(observation)
-  const signInView = useAntigravityChatSignIn(signsIn ? props.target : null)
-  const prompt = signsIn ? antigravityChatSignInPrompt(signInView) : null
-  const signIn =
-    prompt === null ? null : { prompt, view: signInView, agent: props.agent, host: props.target }
+  const antigravity = props.agent === 'antigravity' && props.isVisible
+  // Advisory, as the host's other verdicts: a login agy gets elsewhere isn't seen at once.
+  const signIn = useAntigravityChatSignInStrip(
+    antigravity && slot.kind === 'none' ? props.target : null,
+    props.agent
+  )
   const unavailableHint =
     slot.kind === 'install'
       ? managedRuntimeInstallCard(slot.state, agentLabel, slot.layout, undefined, t).title
-      : signIn
-        ? nativeChatSignInTitle(agentLabel, t)
-        : undefined
+      : undefined
   return {
     slot,
     signIn,
     sendBlockedReason: unavailableHint ?? installSlotSendBlockedReason(slot, agentLabel, t),
     unavailableHint,
-    antigravityAuth: signsIn
-      ? {
-          host: props.target,
-          backend: 'managed',
-          managedVersion:
-            observation.snapshot.kind === 'known'
-              ? observation.snapshot.state.installedVersion
-              : null
-        }
-      : props.agent === 'antigravity' && props.isVisible && hostProgram
-        ? {
-            host: props.target,
-            backend: 'agy',
-            ...orcasAgy(observation),
-            // Until the host says which agy is there, or while none is, the chip names none.
-            programPending:
-              slot.kind === 'install' ||
-              observation.kind === 'pending' ||
-              (observation.kind === 'active' && observation.snapshot.kind === 'unknown')
-          }
-        : null
+    antigravityAuth: antigravity ? { host: props.target, ...antigravityAgy(observation) } : null
   }
 }
 
-/** Orca's installed agy is the one a chat on the host program runs; the person's own wins. */
-function orcasAgy(observation: ManagedRuntimeInstallObservation) {
+/** Which agy runs Antigravity chats on the host, once its install status says. */
+function antigravityAgy(
+  observation: ManagedRuntimeInstallObservation
+): Omit<NativeChatAntigravityAuthTarget, 'host'> {
   const state =
     observation.kind === 'active' && observation.snapshot.kind === 'known'
       ? observation.snapshot.state
       : null
-  return state?.program === 'cli' && state.source === 'managed'
-    ? { orcasAgy: true, managedVersion: state.installedVersion }
-    : {}
+  if (state?.program !== 'cli' || state.source === null) {
+    return { agy: null, managedVersion: null }
+  }
+  return state.source === 'managed'
+    ? { agy: 'orcas', managedVersion: state.installedVersion }
+    : { agy: 'yours', managedVersion: null }
 }
 
 /** A chat on the host's own program needs an install only when that program is Orca's missing

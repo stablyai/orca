@@ -667,8 +667,7 @@
         "title": "Anbieter",
         "searchAgents": "Agenten",
         "searchCli": "CLI",
-        "searchTerminal": "Terminal",
-        "antigravityAccount": "Konto"
+        "searchTerminal": "Terminal"
       },
       "permissionsDescriptionOwnAgents": "Neue Chats verwenden die jeweilige Agentenberechtigung unter Einstellungen → Agenten.",
       "launch": {
@@ -22776,10 +22775,8 @@
       "chatCopyLink": "Anmeldelink kopieren",
       "chatCopyFailed": "Der Link konnte nicht kopiert werden.",
       "chatStarting": "Anmeldung wird gestartet…",
-      "chatWaiting": "Anmeldung im Browser abschließen.",
       "chatOpenFailed": "Den Link kopieren und im Browser öffnen.",
       "chatVerifying": "Anmeldung wird abgeschlossen…",
-      "chatPasteHelp": "Falls die letzte Seite nach der Anmeldung nicht geladen wird, ihre vollständige Adresse aus dem Browser kopieren und hier einfügen.",
       "chatContinue": "Fortfahren",
       "chatCancelled": "Anmeldung abgebrochen.",
       "chatExpired": "Zeitüberschreitung bei der Anmeldung. Erneut versuchen.",
@@ -22816,7 +22813,6 @@
       "apiKeyGet": "API-Schlüssel abrufen",
       "location": "Standort",
       "enterpriseFieldsShort": "Projekt und Standort eingeben.",
-      "chatUseMethod": "Erneut anmelden, um {{method}} zu verwenden",
       "loadFailed": "Die agy-Konten konnten nicht geladen werden",
       "loading": "Konten werden geladen…",
       "notSignedIn": "Nicht angemeldet",

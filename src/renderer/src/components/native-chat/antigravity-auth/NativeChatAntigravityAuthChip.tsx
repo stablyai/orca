@@ -1,4 +1,4 @@
-import { ChevronDown, Cloud, KeyRound, LogIn, Settings2, SquareTerminal } from 'lucide-react'
+import { ChevronDown, Cloud, KeyRound, LogIn, Settings2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -27,8 +27,6 @@ const ICONS: Record<Method, typeof KeyRound> = {
   'agent-platform': Cloud
 }
 
-const AGY = 'agy'
-
 /** How this Antigravity chat signs in, always in view, with the other methods one click away. */
 export function NativeChatAntigravityAuthChip({
   textClassName
@@ -38,30 +36,22 @@ export function NativeChatAntigravityAuthChip({
   const t = useTranslate()
   const auth = useNativeChatAntigravityAuth()
   const method = auth?.detection?.method
-  const onAgy = auth?.backend === 'agy'
-  if (!auth || (!method && !onAgy) || (onAgy && auth.programPending)) {
+  if (!auth || !method) {
     return null
   }
-  // On the host's agy, agy's own login serves this chat whatever Google method is saved; another
-  // method moves new chats to Orca's server.
-  const items = antigravityChatAuthMenuItems(auth.detection, auth.keyAndAdc).filter(
-    (item) => !onAgy || item.method !== 'oauth-personal'
-  )
-  // The host's current version; a chat started before an upgrade runs the older one until it restarts.
-  const program = antigravityProgramLabel(
-    onAgy && auth.orcasAgy ? 'orcasAgy' : auth.backend,
-    onAgy
-      ? (auth.detection?.agyVersion ?? (auth.orcasAgy ? auth.managedVersion : null))
-      : auth.managedVersion,
-    t
-  )
-  const label = onAgy ? program : (antigravityChatAuthMethodLabel(method ?? '', t) ?? '')
+  const items = antigravityChatAuthMenuItems(auth.detection, auth.keyAndAdc)
+  const label = antigravityChatAuthMethodLabel(method, t) ?? ''
   const project = method === 'agent-platform' ? auth.detection?.adc.project : null
   const shown = project ? `${label} · ${project}` : label
-  const signsInWith = onAgy
-    ? t('components.native-chat.antigravityAuth.agyItem', "agy's own login")
-    : shown
-  const Icon = onAgy || !method ? SquareTerminal : ICONS[method]
+  // The host's current version; a chat started before an upgrade runs the older one until it restarts.
+  const program = auth.agy
+    ? antigravityProgramLabel(
+        auth.agy === 'orcas',
+        auth.detection?.agyVersion ?? (auth.agy === 'orcas' ? auth.managedVersion : null),
+        t
+      )
+    : null
+  const Icon = ICONS[method]
   return (
     <DropdownMenu onOpenChange={(open) => open && auth.refresh()}>
       <DropdownMenuTrigger asChild>
@@ -74,12 +64,12 @@ export function NativeChatAntigravityAuthChip({
           aria-label={t(
             'components.native-chat.antigravityAuth.chipLabel',
             'Antigravity signs in with {{method}}. Change',
-            { method: signsInWith }
+            { method: shown }
           )}
           title={t(
             'components.native-chat.antigravityAuth.chipTitle',
             'Antigravity signs in with {{method}}',
-            { method: signsInWith }
+            { method: shown }
           )}
         >
           {auth.switching ? (
@@ -95,27 +85,14 @@ export function NativeChatAntigravityAuthChip({
         <DropdownMenuLabel>
           {t('components.native-chat.antigravityAuth.menuTitle', 'Antigravity signs in with')}
         </DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={onAgy ? AGY : (method ?? '')}>
-          {onAgy ? (
-            <DropdownMenuRadioItem value={AGY} onSelect={(event) => event.preventDefault()}>
-              <span className="min-w-0 flex-1">
-                {t('components.native-chat.antigravityAuth.agyItem', "agy's own login")}
-                <span className="block text-2xs text-muted-foreground">
-                  {t(
-                    'components.native-chat.antigravityAuth.agyHint',
-                    'This chat runs the Antigravity CLI on this host. Another method applies to new chats.'
-                  )}
-                </span>
-              </span>
-            </DropdownMenuRadioItem>
-          ) : null}
+        <DropdownMenuRadioGroup value={method}>
           {items.map((item) => (
             <DropdownMenuRadioItem
               key={item.method}
               value={item.method}
               disabled={auth.switching !== null}
               onSelect={() => {
-                if (item.active && !onAgy) {
+                if (item.active) {
                   return
                 }
                 if (item.opensSettings || item.method === 'oauth-business') {
@@ -138,9 +115,13 @@ export function NativeChatAntigravityAuthChip({
           ))}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
-        <p data-antigravity-program="" className="px-2 py-1.5 text-2xs text-muted-foreground">
-          {t('components.native-chat.antigravityAuth.runsOn', 'Runs on: {{program}}', { program })}
-        </p>
+        {program ? (
+          <p data-antigravity-program="" className="px-2 py-1.5 text-2xs text-muted-foreground">
+            {t('components.native-chat.antigravityAuth.runsOn', 'Runs on: {{program}}', {
+              program
+            })}
+          </p>
+        ) : null}
         <DropdownMenuItem onSelect={auth.openSettings}>
           <Settings2 className="size-3.5" aria-hidden />
           {t('components.native-chat.antigravityAuth.settings', 'Sign-in settings…')}

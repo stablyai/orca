@@ -56,7 +56,6 @@
       },
       "providers": {
         "title": "Proveedores",
-        "antigravityAccount": "Cuenta",
         "searchAgents": "agentes",
         "searchTerminal": "Terminal",
         "searchCli": "CLI"
@@ -22332,10 +22331,8 @@
       "chatCopyLink": "Copiar enlace de inicio de sesión",
       "chatCopyFailed": "No se pudo copiar el enlace.",
       "chatStarting": "Iniciando sesión…",
-      "chatWaiting": "Termina de iniciar sesión en tu navegador.",
       "chatOpenFailed": "Copia el enlace y ábrelo en tu navegador.",
       "chatVerifying": "Finalizando el inicio de sesión…",
-      "chatPasteHelp": "Si la última página después de iniciar sesión no carga, copia su dirección completa desde el navegador y pégala aquí.",
       "chatContinue": "Continuar",
       "chatCancelled": "Inicio de sesión cancelado.",
       "chatExpired": "El inicio de sesión caducó. Inténtalo de nuevo.",
@@ -22372,7 +22369,6 @@
       "apiKeyGet": "Obtener clave API",
       "location": "Ubicación",
       "enterpriseFieldsShort": "Introduce un proyecto y una ubicación.",
-      "chatUseMethod": "Vuelve a iniciar sesión para usar {{method}}",
       "loadFailed": "No se pudieron cargar las cuentas de agy",
       "loading": "Cargando cuentas…",
       "notSignedIn": "Sin sesión iniciada",

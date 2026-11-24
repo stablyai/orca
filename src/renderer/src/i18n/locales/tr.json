@@ -731,8 +731,7 @@
         "title": "Sağlayıcılar",
         "searchAgents": "ajanlar",
         "searchCli": "CLI",
-        "searchTerminal": "terminal",
-        "antigravityAccount": "Hesap"
+        "searchTerminal": "terminal"
       },
       "permissionsDescriptionOwnAgents": "Yeni sohbetlerde her ajanın Ayarlar → Ajanlar bölümündeki izni geçerlidir.",
       "launch": {
@@ -25351,10 +25350,8 @@
       "chatCopyLink": "Oturum açma bağlantısını kopyala",
       "chatCopyFailed": "Bağlantı kopyalanamadı.",
       "chatStarting": "Oturum açma başlatılıyor…",
-      "chatWaiting": "Tarayıcınızda oturum açmayı tamamlayın.",
       "chatOpenFailed": "Bağlantıyı kopyalayıp tarayıcınızda açın.",
       "chatVerifying": "Oturum açma tamamlanıyor…",
-      "chatPasteHelp": "Oturum açtıktan sonra son sayfa yüklenmezse tarayıcınızdan tam adresini kopyalayıp buraya yapıştırın.",
       "chatContinue": "Devam et",
       "chatCancelled": "Oturum açma iptal edildi.",
       "chatExpired": "Oturum açma zaman aşımına uğradı. Yeniden deneyin.",
@@ -25418,7 +25415,6 @@
       "apiKeyGet": "API anahtarı al",
       "location": "Konum",
       "enterpriseFieldsShort": "Bir proje ve konum girin.",
-      "chatUseMethod": "{{method}} kullanmak için yeniden oturum açın",
       "signInEllipsis": "Oturum aç…",
       "loadFailed": "agy hesapları yüklenemedi",
       "loading": "Hesaplar yükleniyor…",

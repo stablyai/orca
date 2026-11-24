@@ -49,7 +49,9 @@ export async function detectAntigravityChatAuth(
   // Enterprise also needs its license's project, which only Settings knows, so only a Google
   // account reads as ready from the login alone.
   const personal = await agyLogin(env.HOME ?? env.USERPROFILE ?? homedir())
-  const agySignedOut = sources.agySignedOut?.() ?? null
+  // Only a Google method runs on agy's own login; a key or gcloud chat doesn't need it signed in.
+  const google = method === null || method === 'oauth-personal' || method === 'oauth-business'
+  const agySignedOut = google ? (sources.agySignedOut?.() ?? null) : null
   const adcAvailable = await isFile(agentPlatformCredentialsFile(env))
   // A switch to gcloud keeps a saved project, as the apply does; Enterprise's is its own.
   const saved = config && config.method !== 'oauth-business' ? config : {}

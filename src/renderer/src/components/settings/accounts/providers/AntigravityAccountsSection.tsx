@@ -20,21 +20,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'
 import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import { AntigravityChatSignInRow } from '../../../provider-accounts/AntigravityChatSignInRow'
-import {
-  antigravityChatDescription,
-  antigravityChatSignInBlocked,
-  antigravityProviderSignInShown,
-  type AntigravityChatDescription
-} from '../../../provider-accounts/antigravity-chat-runtime-sign-in-policy'
+import { antigravityChatSignInBlocked } from '../../../provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import { useAntigravityChatSignIn } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
-import { useRecheckOnce } from './use-recheck-once'
 import { useOnLaterChange } from './use-on-later-change'
 import { useAntigravityAccountRun } from './use-antigravity-account-run'
-import { AntigravityGoogleSignInChoice } from '../../../provider-accounts/AntigravityGoogleSignInChoice'
-import { AntigravityAgySignInButton } from '../../../provider-accounts/AntigravityAgySignInButton'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 import {
   AntigravityTerminalAccountRows,
@@ -55,7 +47,6 @@ function usageMatchesTarget(provenance: string, target: AntigravityAccountTarget
   return provenance.startsWith('wsl:')
 }
 
-const AGY_CHECK_SETTLE_MS = 8_000
 // Why a helper: React Compiler cannot compile a throw statement inside try/catch.
 function staleUsageRead(message: string): never {
   throw new Error(message)
@@ -77,7 +68,7 @@ export function AntigravityAccountsSection({
   const [usage, setUsage] = useState<ProviderRateLimits | null>(null)
   const [error, setError] = useState<string | null>(null)
   const mounted = useRef(true)
-  const { busy, pending, run } = useAntigravityAccountRun(perform, mounted)
+  const { busy, run } = useAntigravityAccountRun(perform, mounted)
   const ownerKind = owner.kind
   const environmentId = owner.kind === 'environment' ? owner.environmentId : null
   const windowsHost = ownerPlatform === 'win32' && target.runtime === 'host'
@@ -86,13 +77,7 @@ export function AntigravityAccountsSection({
   // Chats run on the host itself, never in a WSL distro.
   const chats = runtime !== 'wsl'
   const chatRuntime = useManagedRuntimeInstall(owner, 'antigravity', chats)
-  const managedVersion =
-    chatRuntime.kind === 'active' &&
-    chatRuntime.snapshot.kind === 'known' &&
-    chatRuntime.snapshot.state.source === 'managed'
-      ? chatRuntime.snapshot.state.installedVersion
-      : null
-  // A remote host's sign-in finishes from the address pasted back into its row.
+  // Install and Remove wait for a sign-in, which runs agy.
   const chatSignIn = chats && chatRuntime.kind === 'active'
   const signIn = useAntigravityChatSignIn(chatSignIn ? owner : null)
 
@@ -122,21 +107,6 @@ export function AntigravityAccountsSection({
       mounted.current = false
     }
   }, [ownerKind, environmentId, runtime, wslDistro])
-
-  // The rows don't wait for a cold agy check (1.5 s); once it has had time to answer, they read
-  // it again, so "isn't signed in" and its Sign in show without Refresh.
-  const agyUnanswered =
-    chats &&
-    state !== null &&
-    state.chatUsesAgy === undefined &&
-    state.chatAgySignedOut === undefined
-  useRecheckOnce(agyUnanswered, AGY_CHECK_SETTLE_MS, () => {
-    if (pending.current) {
-      return false
-    }
-    void run('List', undefined, true)
-    return true
-  })
 
   /** `keepShown`: a background re-read, which leaves a Usage reading or error on screen. */
   async function perform(
@@ -232,96 +202,38 @@ export function AntigravityAccountsSection({
       </ManagedRuntimeInstallRow>
     ) : null
 
-  const agyVersion = state?.chatAgyVersion
-  const chatDescriptions: Record<AntigravityChatDescription, string> = {
-    agySignedOut: t(
-      'accounts.antigravity.chatDescriptionAgySignedOut',
-      "New chats use agy, which isn't signed in yet. Run agy on this host to sign in."
-    ),
-    orcasAgy: managedVersion
-      ? t(
-          'accounts.antigravity.chatDescriptionOrcaAgyVersion',
-          "Chats run on Orca's agy (v{{version}}) and use agy's own sign-in.",
-          { version: managedVersion }
-        )
-      : t(
-          'accounts.antigravity.chatDescriptionOrcaAgy',
-          "Chats run on Orca's copy of agy and use agy's own sign-in."
-        ),
-    agy: agyVersion
-      ? t(
-          'accounts.antigravity.chatDescriptionAgyOwnSignInVersion',
-          "Chats run on your agy (v{{version}}) and use agy's own sign-in.",
-          { version: agyVersion }
-        )
-      : t(
-          'accounts.antigravity.chatDescriptionAgyOwnSignIn',
-          "Chats run on agy and use agy's own sign-in."
-        ),
-    installAgy: t(
-      'accounts.antigravity.chatDescriptionInstallAgy',
-      'Install agy below to use Chat. It signs in with its own account.'
-    ),
-    agySignedIn: agyVersion
-      ? t(
-          'accounts.antigravity.chatDescriptionAgyVersion',
-          "New chats run on your agy (v{{version}}) and its account below. This sign-in is used when agy isn't.",
-          { version: agyVersion }
-        )
-      : t(
-          'accounts.antigravity.chatDescriptionAgy',
-          "agy is signed in here, so new chats use agy's account below. This sign-in is used when agy isn't."
-        ),
-    orcaSignIn:
-      managedVersion && state?.chatUsesAgy === false
-        ? t(
-            'accounts.antigravity.chatDescriptionManagedVersion',
-            "New chats run on Orca's copy (v{{version}}), so Chat works without agy installed.",
-            { version: managedVersion }
-          )
-        : t(
-            'accounts.antigravity.chatDescription',
-            'Signs in through your browser, so Chat works without agy installed.'
-          )
-  }
-
-  const chatDescription = antigravityChatDescription(state, chatRuntime)
-  // A pick moves new chats between agy and Orca's server, which the rows' answer follows.
+  // A pick moves new chats between agy's own home and Orca's, which the description follows.
   const reread = () => void run('List', undefined, true)
-  // Removing, installing or switching the runtime moves the route; the rows read it again then.
+  // Installing or removing agy changes what its account rows can read.
   const installKey =
     chatRuntime.kind === 'active' && chatRuntime.snapshot.kind === 'known'
       ? `${chatRuntime.snapshot.state.program}:${chatRuntime.snapshot.state.source}`
       : null
   useOnLaterChange(installKey, reread)
-  // Present only for the Google account method once the route has answered (see the host's
-  // chatGoogleSignInInUse); the choice stays hidden otherwise.
-  const inUse = state?.chatGoogleSignInInUse
-  const googleSignIn = inUse ? { inUse, changed: reread } : undefined
-  // Gemini API key chats run on agy here: the method and key stay editable.
-  const keyOnAgy = state?.chatKeyOnAgy === true
+  const agyMissing =
+    chatRuntime.kind === 'active' &&
+    chatRuntime.snapshot.kind === 'known' &&
+    chatRuntime.snapshot.state.source === null
+  const chatDescription = agyMissing
+    ? t('accounts.antigravity.chatDescriptionInstallAgyBelow', 'Chats run agy. Install it below.')
+    : state?.chatKeyOnAgy
+      ? t(
+          'accounts.antigravity.chatDescriptionKeyOnAgy',
+          'Chats run agy with the sign-in below, kept apart from agy in the terminal.'
+        )
+      : t(
+          'accounts.antigravity.chatDescriptionGoogle',
+          "Chats run agy and use agy's own Google sign-in, the same one agy uses in the terminal."
+        )
   const chatRows =
     chats && chatRuntime.kind === 'active' ? (
-      keyOnAgy || antigravityProviderSignInShown(chatRuntime) ? (
-        <AntigravityChatSignInRow
-          owner={owner}
-          label={label}
-          disabled={!keyOnAgy && antigravityChatSignInBlocked(chatRuntime)}
-          runtime={runtimeRow}
-          googleSignIn={googleSignIn}
-          onSaved={reread}
-          noServerAccount={keyOnAgy}
-        />
-      ) : (
-        // No sign-in form: new chats run on agy, or Orca's server isn't installed or is changing.
-        // The choice shows wherever the host says Google-account chats run.
-        <>
-          {googleSignIn && (
-            <AntigravityGoogleSignInChoice owner={owner} {...googleSignIn} standalone />
-          )}
-          {runtimeRow}
-        </>
-      )
+      <AntigravityChatSignInRow
+        owner={owner}
+        label={label}
+        signInDisabled={antigravityChatSignInBlocked(chatRuntime)}
+        runtime={runtimeRow}
+        onSaved={reread}
+      />
     ) : null
 
   return (
@@ -329,19 +241,7 @@ export function AntigravityAccountsSection({
       {chatRows ? (
         <SettingsGroup
           title={logoTitle(t('accounts.antigravity.chatTitle', 'Antigravity Chat'))}
-          description={
-            keyOnAgy
-              ? t(
-                  'accounts.antigravity.chatDescriptionKeyOnAgy',
-                  'New chats run on agy with the sign-in below, kept apart from agy in the terminal.'
-                )
-              : chatDescriptions[chatDescription]
-          }
-          action={
-            chatDescription === 'agySignedOut' ? (
-              <AntigravityAgySignInButton owner={owner} />
-            ) : undefined
-          }
+          description={chatDescription}
         >
           {chatRows}
         </SettingsGroup>
@@ -354,20 +254,15 @@ export function AntigravityAccountsSection({
                 'accounts.antigravity.terminalDescriptionWindows',
                 "Uses agy's own saved accounts. Switching applies to the host default agy credential."
               )
-            : state?.chatUsesAgy === undefined && state?.chatAgySignedOut === undefined
+            : chats
               ? t(
+                  'accounts.antigravity.terminalDescriptionGoogleChats',
+                  "Uses agy's own saved accounts. Switching applies to new agy sessions and to Antigravity chats on a Google account."
+                )
+              : t(
                   'accounts.antigravity.terminalDescription',
                   "Uses agy's own saved accounts. Switching applies to new agy sessions."
                 )
-              : state?.chatUsesAgy || state?.chatAgySignedOut
-                ? t(
-                    'accounts.antigravity.terminalDescriptionChats',
-                    "Uses agy's own saved accounts. Switching applies to new agy sessions and to Antigravity chats."
-                  )
-                : t(
-                    'accounts.antigravity.terminalDescriptionNoChats',
-                    "Uses agy's own saved accounts. Switching applies to new agy sessions, not to Antigravity chats."
-                  )
         }
         action={
           <Tooltip>

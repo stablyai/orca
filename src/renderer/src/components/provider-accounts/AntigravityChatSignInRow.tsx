@@ -1,42 +1,36 @@
 import { AntigravityChatAuthForm } from './AntigravityChatAuthForm'
-import type { AntigravityGoogleSignInState } from './AntigravityGoogleSignInChoice'
 import type { ReactNode } from 'react'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { AntigravityChatAccountRow } from './AntigravityChatSignInAction'
 import { useAntigravityChatSignInControls } from './use-antigravity-chat-sign-in'
-import { antigravityServerAccountRowShown } from './antigravity-server-account-row'
+import { isAntigravityGoogleMethod } from './antigravity-chat-runtime-sign-in-policy'
 
-/** Settings rows for an execution host's chat sign-in; every client of the host shares its server's sign-in, including running flows. */
+/** Settings rows for a host's chat sign-in method and, on a Google method, agy's own login, which
+ *  every client of the host shares, running flows included. */
 export function AntigravityChatSignInRow(props: {
   owner: RuntimeClientTarget
   label: string
-  disabled: boolean
-  /** The chat server's install row, last because it is set up once. */
+  /** Sign-in runs agy, which isn't installed or is changing. */
+  signInDisabled: boolean
+  /** agy's install row, last because it is set up once. */
   runtime?: ReactNode
-  /** The Google sign-in choice's state from the host's answer. */
-  googleSignIn?: AntigravityGoogleSignInState
-  /** After the sign-in method saves; the host's answer about the route is read again. */
+  /** After the sign-in method saves, which moves new chats between agy's home and Orca's. */
   onSaved?: () => void
-  /** Hide the server's account row unless it carries an error, or a sign-in for a picked method
-   *  that signs in: Gemini API key chats run on agy, which Orca doesn't sign in. */
-  noServerAccount?: boolean
 }): React.JSX.Element {
   const signIn = useAntigravityChatSignInControls({
     owner: props.owner,
     label: props.label,
-    disabled: props.disabled
+    disabled: props.signInDisabled
   })
   return (
     <>
       <AntigravityChatAuthForm
         owner={props.owner}
-        disabled={props.disabled || signIn.ownFlow}
+        disabled={signIn.ownFlow}
         onSignIn={signIn.start}
         signInError={signIn.alert}
         heading={null}
-        googleSignIn={props.googleSignIn}
         onSaved={props.onSaved}
-        noServerAccount={props.noServerAccount}
         fieldsRow={(fields) => (
           <div data-settings-row="" className="py-3">
             {fields}
@@ -44,12 +38,8 @@ export function AntigravityChatSignInRow(props: {
         )}
       >
         {(auth) =>
-          antigravityServerAccountRowShown({
-            noServerAccount: props.noServerAccount === true,
-            alert: auth.alert,
-            reauth: auth.reauth,
-            pickedMethod: auth.pickedMethod
-          }) ? (
+          // A key or gcloud never uses agy's Google login, so only a failure shows for them.
+          isAntigravityGoogleMethod(auth.pickedMethod) || auth.alert ? (
             <AntigravityChatAccountRow signIn={signIn} auth={auth} />
           ) : null
         }

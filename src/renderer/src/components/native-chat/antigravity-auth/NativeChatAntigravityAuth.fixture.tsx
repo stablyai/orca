@@ -27,13 +27,11 @@ const NOTHING: AntigravityChatAuthDetection = {
 
 const auth = (
   detection: AntigravityChatAuthDetection,
-  backend: NativeChatAntigravityAuth['backend'] = 'managed'
+  agy: NativeChatAntigravityAuth['agy'] = 'yours'
 ): NativeChatAntigravityAuth => ({
   host: { kind: 'local' },
-  backend,
-  managedVersion: '1.5.0',
-  orcasAgy: false,
-  programPending: false,
+  agy,
+  managedVersion: agy === 'orcas' ? '1.5.16' : null,
   detection,
   keyAndAdc: true,
   switching: null,
@@ -115,10 +113,10 @@ export const chipMenu = defineFixture({
   )
 })
 
-export const chipMenuOnAgy = defineFixture({
+export const chipMenuOrcasAgy = defineFixture({
   width: 720,
   interact: openChip,
-  render: () => <ChipMenu auth={auth(FOUND, 'agy')} />
+  render: () => <ChipMenu auth={auth({ ...FOUND, agyVersion: null }, 'orcas')} />
 })
 
 export const failureNotice = defineFixture({

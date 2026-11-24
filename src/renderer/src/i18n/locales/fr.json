@@ -366,7 +366,6 @@
       },
       "providers": {
         "title": "Fournisseurs",
-        "antigravityAccount": "Compte",
         "searchTerminal": "Terminal",
         "searchAgents": "agents",
         "searchCli": "CLI"
@@ -23068,10 +23067,8 @@
       "chatCopyLink": "Copier le lien de connexion",
       "chatCopyFailed": "Impossible de copier le lien.",
       "chatStarting": "Démarrage de la connexion…",
-      "chatWaiting": "Terminez la connexion dans votre navigateur.",
       "chatOpenFailed": "Copiez le lien et ouvrez-le dans votre navigateur.",
       "chatVerifying": "Finalisation de la connexion…",
-      "chatPasteHelp": "Si la dernière page après la connexion ne se charge pas, copiez son adresse complète depuis votre navigateur et collez-la ici.",
       "chatContinue": "Continuer",
       "chatCancelled": "Connexion annulée.",
       "chatExpired": "La connexion a expiré. Réessayez.",
@@ -23108,7 +23105,6 @@
       "apiKeyGet": "Obtenir la clé API",
       "location": "Emplacement",
       "enterpriseFieldsShort": "Saisissez un projet et un emplacement.",
-      "chatUseMethod": "Reconnectez-vous pour utiliser {{method}}",
       "loadFailed": "Impossible de charger les comptes agy",
       "loading": "Chargement des comptes…",
       "notSignedIn": "Non connecté",
