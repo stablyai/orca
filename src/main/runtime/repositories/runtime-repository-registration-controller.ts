@@ -38,6 +38,7 @@ import {
   type RepoCreateFailure
 } from '../../../shared/repository/creation/repo-create-failure-copy'
 import { getDefaultCreateProjectParent } from './default-create-project-parent'
+import { restoreOrphanedChats } from './orphaned-chat-restore'
 
 type RuntimeRepositoryRegistrationDependencies = {
   getStore: () => RuntimeStore | null
@@ -132,6 +133,8 @@ export class RuntimeRepositoryRegistrationController {
     store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(store, repo)
     this.invalidate(repo.id)
+    // The new id is never an old one; saved chats of a removed copy of this project move to it (#40409).
+    void restoreOrphanedChats(repo, { isLive: (repoId) => store.getRepo(repoId) != null })
     return store.getRepo(repo.id) ?? repo
   }
 

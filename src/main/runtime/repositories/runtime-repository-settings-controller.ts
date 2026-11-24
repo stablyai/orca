@@ -14,6 +14,7 @@ import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects
 import { teardownStops } from '../workspaces/removal/owned-session-teardown-policy'
 import { assertNoProjectWorktreeCreate } from '../../workspaces/creation/worktree-create-in-flight'
 import { releaseWorktreeCreatePreparationsForRepo } from '../../workspaces/creation/preparation/worktree-create-preparation-project-removal'
+import { beginProjectRemoval } from './removed-project-ledger'
 
 const PROJECT_TERMINAL_STOP_BUDGET_MS = 10_000
 
@@ -205,9 +206,15 @@ export class RuntimeRepositorySettingsController {
     assertWslMoveRepoWritable(store, repo)
     assertNoProjectWorktreeCreate(repo)
     releaseWorktreeCreatePreparationsForRepo(store, repo)
-    store.removeProjectForHost(repo)
-    // Sweep again for terminals spawned during stop. Retire chats only after the final WSL fence because that step is irreversible.
-    await stopProjectTerminals(teardownStops('project-removal', 'structured-chat'))
+    // A re-add of this project during the teardown below waits for it before taking its chats.
+    const removalSettled = beginProjectRemoval(repo)
+    try {
+      store.removeProjectForHost(repo)
+      // Sweep again for terminals spawned during stop. Retire chats only after the final WSL fence because that step is irreversible.
+      await stopProjectTerminals(teardownStops('project-removal', 'structured-chat'))
+    } finally {
+      removalSettled()
+    }
     this.deps.forgetTerminalTopology(repo.id)
     this.deps.invalidateResolvedWorktrees()
     this.deps.invalidateWorktreeScan(repo.id)

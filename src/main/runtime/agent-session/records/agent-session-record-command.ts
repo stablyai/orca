@@ -88,6 +88,8 @@ export type AgentSessionRecordCommand =
       deathEvidenceKind?: 'kill-delivered'
     }
   | { kind: 'exit-observed'; fence: number; observedAt: number }
+  /** Moves a saved chat from a removed project's workspace id to the re-added project's (#40409). */
+  | { kind: 'workspace'; from: string; to: string }
 
 export type AgentSessionRecordCommandResult<C extends AgentSessionRecordCommand> = C extends {
   kind: 'user-name'
@@ -185,6 +187,13 @@ export function applyAgentSessionRecordCommand(
       break
     case 'skip-async-questions':
       next = { ...record, asyncQuestionsSkippedThrough: command.itemId }
+      break
+    case 'workspace':
+      // Only from the exact id planned against: a chat moved or reopened since keeps its place.
+      next =
+        record.location.workspaceId === command.from
+          ? { ...record, location: { ...record.location, workspaceId: command.to } }
+          : record
       break
     case 'last-turn': {
       const { lastTurn: previous, ...rest } = record
