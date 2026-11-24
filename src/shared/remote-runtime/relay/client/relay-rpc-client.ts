@@ -44,14 +44,13 @@ export function connectRelayRpcClient(
   let requestCounter = 0
   let closed = false
   let intentionallyClosed = false
-  let authenticated = false
   let resolveAuthenticated!: () => void
   let rejectAuthenticated!: (error: Error) => void
   const authenticatedPromise = new Promise<void>((resolve, reject) => {
     resolveAuthenticated = resolve
     rejectAuthenticated = reject
   })
-  // Why: a request is the only consumer; an unawaited failure must not surface as unhandled.
+  // Why: requests settle through their own pending entries; an unwatched failure is not unhandled.
   authenticatedPromise.catch(() => {})
 
   const link = new RelayE2eeLink({
@@ -74,7 +73,6 @@ export function connectRelayRpcClient(
       events.onHello?.(hello)
     },
     onAuthenticated: () => {
-      authenticated = true
       events.onAuthenticated?.()
       resolveAuthenticated()
     },
@@ -104,7 +102,6 @@ export function connectRelayRpcClient(
       return
     }
     closed = true
-    events.onClosed?.(error, intentionallyClosed)
     link.close()
     rejectAuthenticated(error)
     for (const request of pending.values()) {
@@ -112,26 +109,43 @@ export function connectRelayRpcClient(
       request.reject(error)
     }
     pending.clear()
+    try {
+      events.onClosed?.(error, intentionallyClosed)
+    } catch {
+      // Why: an observer is told after cleanup and must not turn close() into a throw.
+    }
   }
 
   return {
-    async sendRequest(method, params) {
-      await authenticatedPromise
-      if (closed || !authenticated) {
-        throw new Error('relay RPC client closed')
+    sendRequest(method, params) {
+      if (closed) {
+        return Promise.reject(new Error('relay RPC client closed'))
       }
       const id = `relay-rpc-${++requestCounter}`
+      let frame: string
+      try {
+        frame = JSON.stringify({ id, ...credentialFields, method, params })
+      } catch (error) {
+        return Promise.reject(error instanceof Error ? error : new Error(String(error)))
+      }
       return new Promise<RpcResponse>((resolve, reject) => {
+        // Why before the auth wait: one budget covers reaching an authenticated host and its reply.
         const timer = setTimeout(() => {
           pending.delete(id)
           reject(new Error(`relay RPC timed out: ${method}`))
         }, requestTimeoutMs)
         pending.set(id, { resolve, reject, timer })
-        if (!link.sendText(JSON.stringify({ id, ...credentialFields, method, params }))) {
-          clearTimeout(timer)
-          pending.delete(id)
-          reject(new Error('relay E2EE channel not ready'))
-        }
+        // A failed link rejects every pending request itself.
+        void authenticatedPromise.then(
+          () => {
+            if (pending.has(id) && !link.sendText(frame)) {
+              clearTimeout(timer)
+              pending.delete(id)
+              reject(new Error('relay E2EE channel not ready'))
+            }
+          },
+          () => {}
+        )
       })
     },
     close: () => {

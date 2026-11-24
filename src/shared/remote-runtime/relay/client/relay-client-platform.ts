@@ -20,6 +20,7 @@ export type RelayClientSocketEvents = {
 /** What differs between the phone (Hermes) and desktop (Node) relay clients. */
 export type RelayClientPlatform = {
   primitives: PairedE2EEPrimitives
+  // Events must start only after createSocket returns, as WebSocket's do.
   createSocket: (url: string, events: RelayClientSocketEvents) => RelayClientSocket
   decodeBinary: (raw: unknown) => Promise<Uint8Array | null>
   // Null for a binary frame that is not compressed; throws on a corrupt one.

@@ -50,6 +50,7 @@ export class RelayE2eeLink {
   private readonly socket: RelayClientSocket
   private readonly channel: PairedE2EEV2PhysicalChannel
   private outerReady = false
+  private constructed = false
   private closed = false
   private rejectedHelloCode: number | null = null
   private closeGraceTimer: ReturnType<typeof setTimeout> | null = null
@@ -58,40 +59,13 @@ export class RelayE2eeLink {
   constructor(options: RelayE2eeLinkOptions) {
     this.options = options
     const { platform } = options
-    this.socket = platform.createSocket(
-      relayConnectWebSocketUrl(options.endpoint.cellUrl, options.endpoint.relayHostId),
-      {
-        onOpen: () => this.sendRelayAuth(),
-        onMessage: (data) => void this.inbound.enqueue(data),
-        // `error` is often delivered just before `close`; wait for close so a
-        // typed relay code is not replaced by a generic transport error.
-        onError: () => {
-          if (!this.closed) {
-            this.awaitClose()
-          }
-        },
-        onClose: (code, reason) => this.handleClose(code, reason)
-      }
-    )
-    this.channel = new PairedE2EEV2PhysicalChannel({
-      handshake: createPairedE2EEClientHandshake({
-        primitives: platform.primitives,
-        hostPublicKeyB64: options.desktopPublicKeyB64,
-        framing: 'v2',
-        transport: 'relay',
-        relayHostId: options.endpoint.relayHostId
-      }),
-      socket: this.socket,
-      credential: options.authCredential,
-      decodeBinary: platform.decodeBinary,
-      inflateFrame: platform.inflateFrame,
-      onAuthenticated: () => {
-        platform.latchHostToE2EEV2?.(options.desktopPublicKeyB64)
-        options.onAuthenticated()
-      },
-      onText: options.onText,
-      onBinary: options.onBinary,
-      onError: (error) => this.fail(error)
+    // Why first: a malformed stored host key throws here, before any socket exists.
+    const handshake = createPairedE2EEClientHandshake({
+      primitives: platform.primitives,
+      hostPublicKeyB64: options.desktopPublicKeyB64,
+      framing: 'v2',
+      transport: 'relay',
+      relayHostId: options.endpoint.relayHostId
     })
     this.inbound = new WsInboundMessageQueue(
       async (raw) => {
@@ -106,6 +80,45 @@ export class RelayE2eeLink {
       },
       (error) => this.fail(asError(error))
     )
+    // A platform that breaks the contract and fires during createSocket is replayed once it returns.
+    const wired = (handle: () => void): void => {
+      if (this.constructed) {
+        handle()
+      } else {
+        queueMicrotask(handle)
+      }
+    }
+    this.socket = platform.createSocket(
+      relayConnectWebSocketUrl(options.endpoint.cellUrl, options.endpoint.relayHostId),
+      {
+        onOpen: () => wired(() => this.sendRelayAuth()),
+        onMessage: (data) => wired(() => void this.inbound.enqueue(data)),
+        // `error` is often delivered just before `close`; wait for close so a
+        // typed relay code is not replaced by a generic transport error.
+        onError: () =>
+          wired(() => {
+            if (!this.closed) {
+              this.awaitClose()
+            }
+          }),
+        onClose: (code, reason) => wired(() => this.handleClose(code, reason))
+      }
+    )
+    this.channel = new PairedE2EEV2PhysicalChannel({
+      handshake,
+      socket: this.socket,
+      credential: options.authCredential,
+      decodeBinary: platform.decodeBinary,
+      inflateFrame: platform.inflateFrame,
+      onAuthenticated: () => {
+        platform.latchHostToE2EEV2?.(options.desktopPublicKeyB64)
+        options.onAuthenticated()
+      },
+      onText: options.onText,
+      onBinary: options.onBinary,
+      onError: (error) => this.fail(error)
+    })
+    this.constructed = true
   }
 
   sendText(plaintext: string): boolean {
