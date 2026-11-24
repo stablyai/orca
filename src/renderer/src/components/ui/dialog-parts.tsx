@@ -98,6 +98,7 @@ function DialogDisclosure({
 }): React.JSX.Element {
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen)
   const open = controlledOpen ?? uncontrolledOpen
+  const contentId = React.useId()
   const chevronIcon = (
     <ChevronRight
       aria-hidden="true"
@@ -118,6 +119,7 @@ function DialogDisclosure({
       }}
     >
       <CollapsibleTrigger
+        aria-controls={contentId}
         className={cn(
           'flex w-fit items-center gap-1 rounded-sm text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
           status && 'h-5 max-w-full min-w-0 gap-1.5 leading-5',
@@ -129,6 +131,7 @@ function DialogDisclosure({
         {status ? chevronIcon : null}
       </CollapsibleTrigger>
       <CollapsibleContent
+        id={contentId}
         animation={status ? 'height' : 'none'}
         {...(status ? {} : { forceMount: true, hidden: !open })}
       >
