@@ -30,6 +30,7 @@ beforeEach(() => {
 
 describe('agentSession.backgroundCommand', () => {
   it('reads the exact tuple through the default membership gate', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
     await expect(method!.handler(params, { clientKind: undefined } as never)).resolves.toEqual({
       command: 'make all'
     })
@@ -45,14 +46,17 @@ describe('agentSession.backgroundCommand', () => {
   })
 
   it('denies every phone before touching the host', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
     await expect(method!.handler(params, { clientKind: 'mobile' } as never)).rejects.toThrow()
     expect(hoisted.requireInstalledStructuredHost).not.toHaveBeenCalled()
   })
 
   it('answers null for a non-Codex session and passes on a gate refusal', async () => {
     hoisted.host.sessionAgent.mockReturnValue('claude')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
     await expect(method!.handler(params, {} as never)).resolves.toEqual({ command: null })
     hoisted.requireInstalledStructuredHost.mockRejectedValue(new Error('no longer a member'))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
     await expect(method!.handler(params, {} as never)).rejects.toThrow('no longer a member')
   })
 

@@ -26,10 +26,11 @@ function exactTuple(value: unknown): AgentSessionCommandDetailTuple | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return null
   }
-  const entry = value as Record<string, unknown>
-  const { childWorkId, invocationId, generation } = entry
+  const childWorkId: unknown = Reflect.get(value, 'childWorkId')
+  const invocationId: unknown = Reflect.get(value, 'invocationId')
+  const generation: unknown = Reflect.get(value, 'generation')
   if (
-    Object.keys(entry).length !== 3 ||
+    Object.keys(value).length !== 3 ||
     typeof childWorkId !== 'string' ||
     childWorkId.length === 0 ||
     typeof invocationId !== 'string' ||

@@ -17,13 +17,21 @@ export function useWorkerDockCommandDetail(
 ): { exact: string | null; copy: () => Promise<boolean> } {
   const holder = useRef<Holder | null>(null)
   const [exact, setExact] = useState<string | null>(null)
+  // The held row, session and target as this instance opened; they never retarget while it is up.
+  const [opened] = useState(() => ({ tuple: held.commandDetail, sessionId, target }))
   useEffect(() => {
-    holder.current ??= {
-      detail: held.commandDetail
-        ? openWorkerDockCommandDetail({ sessionId, target, tuple: held.commandDetail })
-        : null,
-      mounted: 0,
-      read: false
+    if (holder.current === null) {
+      holder.current = {
+        detail: opened.tuple
+          ? openWorkerDockCommandDetail({
+              sessionId: opened.sessionId,
+              target: opened.target,
+              tuple: opened.tuple
+            })
+          : null,
+        mounted: 0,
+        read: false
+      }
     }
     const current = holder.current
     current.mounted += 1
@@ -51,9 +59,7 @@ export function useWorkerDockCommandDetail(
         }
       })
     }
-    // The held row, session and target are this instance's; they never change while it is open.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [opened])
   const copy = useCallback(async (): Promise<boolean> => {
     const detail = holder.current?.detail
     if (!detail) {

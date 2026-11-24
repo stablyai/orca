@@ -162,34 +162,30 @@ export function createCommandDetailAuthority(): CommandDetailAuthority {
       const openedScope = scope
       const listeners = new Set<() => void>()
       let lost = false
-      const entry: OpeningState = {
-        scope: openedScope,
-        key,
-        fence,
-        lose: () => {
-          if (lost) {
-            return
-          }
-          lost = true
-          openings.delete(entry)
-          for (const listener of listeners) {
-            listener()
-          }
-          listeners.clear()
-        },
-        opening: undefined as unknown as CommandDetailOpening
+      const openedFence = fence
+      // Called only after `entry` below is initialized.
+      const lose = (): void => {
+        if (lost) {
+          return
+        }
+        lost = true
+        openings.delete(entry)
+        for (const listener of listeners) {
+          listener()
+        }
+        listeners.clear()
       }
       const valid = (): boolean =>
         !lost && connected && sameScope(scope, openedScope) && pinnedCurrent()
-      entry.opening = {
+      const opening: CommandDetailOpening = {
         tuple,
-        fence: entry.fence,
+        fence: openedFence,
         valid,
         check: () => {
           if (valid()) {
             return true
           }
-          entry.lose()
+          lose()
           return false
         },
         get lost() {
@@ -209,6 +205,7 @@ export function createCommandDetailAuthority(): CommandDetailAuthority {
           lost = true
         }
       }
+      const entry: OpeningState = { scope: openedScope, key, fence: openedFence, lose, opening }
       openings.add(entry)
       return entry.opening
     },

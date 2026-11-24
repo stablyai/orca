@@ -163,6 +163,7 @@ describe('structured command detail slots', () => {
     const h = harness()
     const occurrence = createStructuredCommandOccurrence('echo ok')
     // Refused as invalid after a resolution that saw no retirement: nothing is admitted.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
     const refused = h.deliver([live(occurrence, { kind: 'bogus' as never })], { fence: 1 })
     expect(refused.rejected).toHaveLength(1)
     expect(h.record()).toBeNull()

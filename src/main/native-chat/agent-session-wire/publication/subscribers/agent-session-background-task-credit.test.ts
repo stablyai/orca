@@ -43,6 +43,7 @@ function subscriber(
   extra: Partial<Subscriber> = {}
 ): Subscriber & { sent: AgentSessionSubscribeEvent[] } {
   const sent: AgentSessionSubscribeEvent[] = []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
   return {
     id: 'sub',
     sessionId: 's',
@@ -60,6 +61,7 @@ function port(
   hooks: SubscriberFieldHooks = {}
 ): SubscriberDeliveryPort {
   const all: SubscriberFieldHooks = { ...hooks, readBackgroundTaskLane: () => read() }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
   return {
     hooks: all,
     emit: (target: Subscriber, event: AgentSessionSubscribeEvent) =>
@@ -71,10 +73,12 @@ const opening = (
   state: AgentSessionBackgroundTaskState | null,
   fence = 1
 ): AgentSessionSubscribeEvent =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
   ({
     type: 'snapshot',
     sessionId: 's',
     fence,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
     page: {} as never,
     backgroundTasks: state
   }) as AgentSessionSubscribeEvent
@@ -106,6 +110,7 @@ describe('credit placement (§H)', () => {
       },
       { clientKind: 'mobile' as const, clientCapabilities: [] }
     ]) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
       const project = backgroundTaskSubscriberProjection(ctx as never)
       expect(project).toBeDefined()
       const reader = subscriber({ projectBackgroundTasks: project })
@@ -123,6 +128,7 @@ describe('credit placement (§H)', () => {
       expect(reader.backgroundTasks).toBe(fingerprint)
       expect(JSON.stringify(reader.sent)).not.toContain('commandDetailsAvailable')
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
     expect(backgroundTaskSubscriberProjection({ clientKind: undefined } as never)).toBeUndefined()
   })
 })
@@ -174,6 +180,7 @@ describe('lane emission rule (§H)', () => {
       's',
       1
     )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
     const replay = reader.sent.at(-1) as Extract<AgentSessionSubscribeEvent, { type: 'batch' }>
     expect(replay.backgroundTasks?.children?.[0]?.description).toBe('latest rows')
     expect(replay.backgroundTasks).not.toHaveProperty('commandDetailsAvailable')

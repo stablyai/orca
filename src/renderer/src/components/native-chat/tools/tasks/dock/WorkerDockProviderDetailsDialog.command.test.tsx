@@ -22,6 +22,7 @@ const hoisted = vi.hoisted(() => ({
   rpc: vi.fn<
     (target: unknown, method: string, params: unknown, options?: unknown) => Promise<unknown>
   >(),
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
   crew: null as unknown
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: hoisted.rpc }))
@@ -83,6 +84,7 @@ let scope: { transport: object; generation: number }
 const writes: string[] = []
 
 function frame(fence: number, available = true): AgentSessionSubscribeEvent {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
   return {
     type: 'batch',
     sessionId: SESSION,
@@ -104,7 +106,8 @@ function credit(): void {
 }
 
 function renderStrip() {
-  const view = (
+  // A fresh element each time: React skips a rerender of the identical element object.
+  const view = () => (
     <TooltipProvider>
       <NativeChatStructuredSessionStatus
         sessionId={SESSION}
@@ -116,9 +119,9 @@ function renderStrip() {
       />
     </TooltipProvider>
   )
-  const rendered = render(view)
+  const rendered = render(view())
   fireEvent.click(screen.getByRole('button', { expanded: false }))
-  return { ...rendered, again: () => rendered.rerender(view) }
+  return { ...rendered, again: () => rendered.rerender(view()) }
 }
 
 async function openRow() {
@@ -126,7 +129,8 @@ async function openRow() {
     .getAllByRole('button', { name: /fixture-build/ })
     .find((button) => !button.hasAttribute('data-worker-dock-pill'))!
   fireEvent.click(row)
-  return screen.findByRole('dialog')
+  // The dialog is lazy-loaded; its first import can take longer than the default second.
+  return screen.findByRole('dialog', {}, { timeout: 10_000 })
 }
 
 beforeEach(() => {
@@ -134,6 +138,7 @@ beforeEach(() => {
   getOrCreateStructuredReadOwner(
     structuredReadOwnerKey(SESSION, LOCAL),
     () =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
       ({
         commandDetails: authority
       }) as never
@@ -144,6 +149,7 @@ beforeEach(() => {
     method === 'agentSession.backgroundCommand' ? { command: EXACT } : { ok: false }
   )
   writes.length = 0
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
   ;(window as unknown as { api: unknown }).api = {
     ui: { writeClipboardText: vi.fn(async (text: string) => void writes.push(text)) }
   }

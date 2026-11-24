@@ -84,6 +84,7 @@ function tasks(scene: Scene): StructuredSessionBackgroundTasksView {
 }
 
 function roster(scene: Scene, fence: number, available: boolean): AgentSessionSubscribeEvent {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
   return {
     type: 'batch',
     sessionId: SESSION,
@@ -109,6 +110,7 @@ function seedReader(scene: Scene, credited: boolean) {
   getOrCreateStructuredReadOwner(
     structuredReadOwnerKey(SESSION, LOCAL),
     () =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
       ({
         commandDetails: authority
       }) as never
@@ -130,7 +132,10 @@ function seedReader(scene: Scene, credited: boolean) {
   }
 }
 
-const copies = { last: null as string | null, listeners: new Set<() => void>() }
+const copies: { last: string | null; listeners: Set<() => void> } = {
+  last: null,
+  listeners: new Set()
+}
 
 function stubHost(scene: Scene): void {
   const runtime: unknown = window.api.runtime
@@ -152,7 +157,7 @@ function stubHost(scene: Scene): void {
   })
 }
 
-function crewSource(): NativeChatCrewSource & { set: (on: boolean) => void } {
+function crewSource(): NativeChatCrewSource & { set: (on: boolean) => void; on: () => boolean } {
   let on = false
   const listeners = new Set<() => void>()
   const states = {
@@ -166,10 +171,12 @@ function crewSource(): NativeChatCrewSource & { set: (on: boolean) => void } {
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
     read: () => (on ? states.on : states.off) as never,
     wantRows: () => () => {},
     mention: () => {},
     insertName: () => {},
+    on: () => on,
     set: (next) => {
       on = next
       listeners.forEach((listener) => listener())
@@ -194,10 +201,8 @@ function CommandStrip({ scene, credited }: { scene: Scene; credited: boolean }) 
         return
       }
       if (event.code === 'KeyC') {
-        setCrewOn((on) => {
-          crew.set(!on)
-          return !on
-        })
+        crew.set(!crew.on())
+        setCrewOn(crew.on())
       } else if (event.code === 'KeyR') {
         reader.revoke()
       }

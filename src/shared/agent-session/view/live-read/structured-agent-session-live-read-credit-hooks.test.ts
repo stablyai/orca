@@ -3,6 +3,7 @@ import type { AgentSessionSubscribeEvent } from '../../agent-session-wire'
 import { startStructuredAgentSessionLiveRead } from './structured-agent-session-live-read'
 
 function batch(sequence: number, items: unknown[] = []): AgentSessionSubscribeEvent {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
   return {
     type: 'batch',
     sessionId: 's',

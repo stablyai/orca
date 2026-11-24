@@ -16,14 +16,17 @@ const state: AgentSessionBackgroundTaskState = {
   commandDetailsAvailable: [{ childWorkId: 'cmd', invocationId: 'run', generation: 1 }]
 }
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
 const event = {
   type: 'batch',
   sessionId: 's',
   backgroundTasks: state
 } as AgentSessionSubscribeEvent
 
-function projected(ctx: object) {
-  const result = projectBackgroundTaskEvent(event, ctx as never)
+type Reader = Parameters<typeof projectBackgroundTaskEvent>[1]
+
+function projected(ctx: Reader) {
+  const result = projectBackgroundTaskEvent(event, ctx)
   return result.type === 'end' ? undefined : result.backgroundTasks
 }
 
@@ -44,14 +47,15 @@ describe('final-emit audience projection of exact-command availability', () => {
   })
 
   it('strips it for every phone, including one that reads child views, and for legacy readers', () => {
-    for (const ctx of [
+    const readers: Reader[] = [
       {
         clientKind: 'mobile',
         clientCapabilities: [...rowStops, AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY]
       },
       { clientKind: 'mobile', clientCapabilities: rowStops },
       { clientKind: 'runtime', clientCapabilities: rowStops }
-    ]) {
+    ]
+    for (const ctx of readers) {
       const result = projected(ctx)
       expect(result).toBeTruthy()
       expect(result).not.toHaveProperty('commandDetailsAvailable')

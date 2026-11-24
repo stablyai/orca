@@ -43,7 +43,8 @@ export function decodeStrictShellWrapper(command: string): string | null {
 
 /** A fresh flat copy, so a retained value never pins a larger stream chunk it was sliced from. */
 function owned(text: string): string {
-  return JSON.parse(JSON.stringify(text)) as string
+  const copy: unknown = JSON.parse(JSON.stringify(text))
+  return typeof copy === 'string' ? copy : text
 }
 
 /** The one value display and Copy share, or null when the command is not proven exact. A decoded

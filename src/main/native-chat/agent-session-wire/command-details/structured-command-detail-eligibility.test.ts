@@ -6,6 +6,7 @@ import { createStructuredCommandOccurrence } from './structured-command-occurren
 const TUPLE = { childWorkId: 'cmd', invocationId: 'run', generation: 2 }
 
 function record(extra: Partial<AgentChildWorkRecord> = {}): AgentChildWorkRecord {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
   return {
     childWorkId: 'cmd',
     kind: 'command',
@@ -23,6 +24,7 @@ const slot = (fence = 5) => ({
 })
 
 function conversation(currentFence = 5, owner: Record<string, unknown> = {}) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
   return {
     provider: 'codex',
     currentFence,
@@ -71,6 +73,7 @@ describe('eligibleStructuredCommandDetail', () => {
       })
     ).toBeNull()
     expect(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
       read({ conversation: { ...(conversation() as object), provider: 'claude' } as never })
     ).toBeNull()
   })
