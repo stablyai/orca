@@ -7,7 +7,7 @@ import {
   admitRestoredTerminalReport,
   hasCommandBoundarySinceReattach,
   hasTerminalCommandPainted
-} from '../input/terminal-command-paint'
+} from '../input/terminal-command-paint-record'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-screen'
 import type { RuledScreen } from '../wait/screen-input-veto'
