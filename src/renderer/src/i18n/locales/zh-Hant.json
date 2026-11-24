@@ -519,7 +519,8 @@
         "menuItem": "匯入 Cookie…",
         "search": "搜尋設定檔",
         "lastUsed": "上次使用",
-        "noMatches": "沒有相符項目"
+        "noMatches": "沒有相符項目",
+        "googleNote": "Google 登入資訊未匯入"
       }
     },
     "passwords": {

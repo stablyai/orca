@@ -585,7 +585,8 @@
         "menuItem": "Import Cookies…",
         "search": "Search profiles",
         "lastUsed": "Last used",
-        "noMatches": "No matches"
+        "noMatches": "No matches",
+        "googleNote": "Google logins aren’t imported"
       }
     },
     "passwords": {

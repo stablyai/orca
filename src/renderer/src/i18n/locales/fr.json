@@ -275,7 +275,8 @@
         "menuItem": "Importer des cookies…",
         "search": "Rechercher des profils",
         "lastUsed": "Dernière utilisation",
-        "noMatches": "Aucun résultat"
+        "noMatches": "Aucun résultat",
+        "googleNote": "Connexions Google non importées"
       }
     },
     "passwords": {

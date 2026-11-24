@@ -548,7 +548,8 @@
         "menuItem": "Çerezleri İçe Aktar…",
         "search": "Profillerde ara",
         "lastUsed": "Son kullanılan",
-        "noMatches": "Eşleşme yok"
+        "noMatches": "Eşleşme yok",
+        "googleNote": "Google oturum açma bilgileri içe aktarılmaz"
       }
     },
     "passwords": {

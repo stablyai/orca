@@ -1,14 +1,16 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import BrowserAddressBar from '../address-bar/BrowserAddressBar'
 import { BrowserChromeToolbar } from './browser-chrome-toolbar'
 import { BrowserToolbarMenuDropdown } from './browser-toolbar-menu-dropdown'
 import type { BrowserSessionProfile } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import type { BrowserPageCookieImportRoute } from '@/store/slices/browser/browser-slice-contract'
 import type { DetectedBrowserEntry } from '../profile-routing/browser-toolbar-import-cookies-item'
 import type { BrowserCookieImportSource } from '../profile-routing/browser-cookie-import-picker-rows'
 import { rememberBrowserCookieImportLastUsed } from '../profile-routing/browser-cookie-import-last-used'
 
 const noop = (): void => {}
+const LOCAL_PAGE_ROUTE = { kind: 'local' } satisfies BrowserPageCookieImportRoute
 
 const PROFILES: BrowserSessionProfile[] = [
   {
@@ -106,9 +108,13 @@ function FixtureImportLog({ entries }: { entries: string[] }): React.JSX.Element
 }
 
 function Toolbar({
-  detectedBrowsers = MANY_BROWSERS
+  detectedBrowsers = MANY_BROWSERS,
+  onFetchDetectedBrowsers = noop,
+  pageRoute = LOCAL_PAGE_ROUTE
 }: {
   detectedBrowsers?: DetectedBrowserEntry[]
+  onFetchDetectedBrowsers?: () => void
+  pageRoute?: BrowserPageCookieImportRoute
 }): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
@@ -164,9 +170,9 @@ function Toolbar({
               browserPageId: 'fixture-page',
               effectiveProfileId: 'default',
               detectedBrowsers,
-              onFetchDetectedBrowsers: noop,
+              onFetchDetectedBrowsers,
               browserSessionImportState: null,
-              pageRoute: { kind: 'local' },
+              pageRoute,
               pickerOpen,
               onPickerOpenChange: setPickerOpen,
               onImportFromBrowser: (family, profile) =>
@@ -191,6 +197,33 @@ function Toolbar({
       />
       <FixtureImportLog entries={imports} />
     </div>
+  )
+}
+
+function RemoteToolbarWithDelayedProbe(): React.JSX.Element {
+  const [requested, setRequested] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  useEffect(() => {
+    if (!requested) {
+      return
+    }
+    const event = 'fixture-browser-probe-complete'
+    const load = (): void => setLoaded(true)
+    window.addEventListener(event, load, { once: true })
+    return () => window.removeEventListener(event, load)
+  }, [requested])
+
+  return (
+    <Toolbar
+      detectedBrowsers={loaded ? MANY_BROWSERS : []}
+      onFetchDetectedBrowsers={() => setRequested(true)}
+      pageRoute={{
+        kind: 'client-host',
+        browserPageId: 'fixture-page',
+        environmentId: 'fixture-host',
+        hostLabel: 'Example Server'
+      }}
+    />
   )
 }
 
@@ -240,6 +273,12 @@ function typeInPicker(frame: HTMLElement, text: string): void {
 }
 
 const LAST_USED: BrowserCookieImportSource = { family: 'chrome', profile: 'Profile 1' }
+
+export const remoteImportPickerDelayedProbe = defineFixture({
+  width: 640,
+  setup: () => seedLastUsed(null),
+  render: () => <RemoteToolbarWithDelayedProbe />
+})
 
 export const menuOpen = defineFixture({
   width: 640,

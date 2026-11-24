@@ -23360,7 +23360,8 @@
         "menuItem": "导入 Cookie…",
         "search": "搜索配置文件",
         "lastUsed": "上次使用",
-        "noMatches": "无匹配项"
+        "noMatches": "无匹配项",
+        "googleNote": "Google 登录信息未导入"
       }
     },
     "googleCookieClear": {

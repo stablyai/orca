@@ -1,8 +1,8 @@
 import type { DetectedBrowserEntry } from './browser-toolbar-import-cookies-item'
 
-/** One importable source: a browser, plus the profile directory when it has several. */
 export type BrowserCookieImportSource = {
   family: string
+  /** Null for a browser that reported no profiles. */
   profile: string | null
 }
 
@@ -11,10 +11,14 @@ export type BrowserCookieImportPickerRow = {
   value: string
   label: string
   source: BrowserCookieImportSource
+  /** Lowercased "browser profile", the text a search matches. */
+  searchText: string
 }
 
 export type BrowserCookieImportPickerSection = {
-  /** Null for "Last used", whose label the picker translates. */
+  /** "Last used" is labelled by the picker, which translates it. */
+  kind: 'last-used' | 'browser'
+  /** Null where the section has no label: "Last used", and a browser whose one row already names it. */
   browserLabel: string | null
   key: string
   rows: BrowserCookieImportPickerRow[]
@@ -24,40 +28,36 @@ function sourceValue(source: BrowserCookieImportSource): string {
   return `${source.family}\u001f${source.profile ?? ''}`
 }
 
-/** A browser with one profile imports without naming it, as its single row is named after the browser. */
+/** One pass over the profiles; a one-profile browser is a single row named after the browser. */
 function browserRows(browser: DetectedBrowserEntry): BrowserCookieImportPickerRow[] {
-  if (browser.profiles.length <= 1) {
-    const source = { family: browser.family, profile: null }
-    return [{ value: sourceValue(source), label: browser.label, source }]
-  }
-  return browser.profiles.map((profile) => {
-    const source = { family: browser.family, profile: profile.directory }
-    return { value: sourceValue(source), label: profile.name, source }
+  const single = browser.profiles.length <= 1
+  const profiles = browser.profiles.length > 0 ? browser.profiles : [null]
+  return profiles.map((profile) => {
+    const name = profile?.name ?? ''
+    const source = { family: browser.family, profile: profile?.directory ?? null }
+    return {
+      value: sourceValue(source),
+      label: single ? browser.label : name,
+      source,
+      searchText: `${browser.label} ${name}`.toLowerCase()
+    }
   })
-}
-
-function matchText(browser: DetectedBrowserEntry, profileDirectory: string | null): string {
-  const profile = browser.profiles.find((p) => p.directory === profileDirectory)
-  return `${browser.label} ${profile?.name ?? browser.profiles[0]?.name ?? ''}`.toLowerCase()
 }
 
 /** "<Browser> · <Profile>" for the last source, or null when that browser or profile is gone. */
 function lastUsedRow(
-  browsers: readonly DetectedBrowserEntry[],
+  browser: DetectedBrowserEntry,
+  rows: readonly BrowserCookieImportPickerRow[],
   lastUsed: BrowserCookieImportSource
 ): BrowserCookieImportPickerRow | null {
-  const browser = browsers.find((b) => b.family === lastUsed.family)
-  if (!browser) {
-    return null
-  }
-  const row = browserRows(browser).find((r) => r.source.profile === lastUsed.profile)
+  const row = rows.find((r) => r.source.profile === lastUsed.profile)
   if (!row) {
     return null
   }
   return {
+    ...row,
     value: `last\u001f${row.value}`,
-    label: lastUsed.profile === null ? browser.label : `${browser.label} · ${row.label}`,
-    source: row.source
+    label: browser.profiles.length > 1 ? `${browser.label} · ${row.label}` : browser.label
   }
 }
 
@@ -71,18 +71,24 @@ export function buildBrowserCookieImportPickerSections(
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const searching = words.length > 0
   const sections: BrowserCookieImportPickerSection[] = []
-  const last = !searching && lastUsed ? lastUsedRow(browsers, lastUsed) : null
-  if (last) {
-    sections.push({ browserLabel: null, key: 'last-used', rows: [last] })
-  }
+  let last: BrowserCookieImportPickerRow | null = null
   for (const browser of browsers) {
-    const rows = browserRows(browser).filter((row) => {
-      const text = matchText(browser, row.source.profile)
-      return words.every((word) => text.includes(word))
-    })
-    if (rows.length > 0) {
-      sections.push({ browserLabel: browser.label, key: browser.family, rows })
+    const rows = browserRows(browser)
+    if (!searching && lastUsed?.family === browser.family) {
+      last ??= lastUsedRow(browser, rows, lastUsed)
     }
+    const matching = rows.filter((row) => words.every((word) => row.searchText.includes(word)))
+    if (matching.length > 0) {
+      sections.push({
+        kind: 'browser',
+        browserLabel: browser.profiles.length > 1 ? browser.label : null,
+        key: browser.family,
+        rows: matching
+      })
+    }
+  }
+  if (last) {
+    sections.unshift({ kind: 'last-used', browserLabel: null, key: 'last-used', rows: [last] })
   }
   return sections
 }

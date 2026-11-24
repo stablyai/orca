@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Info } from 'lucide-react'
 import {
   Command,
   CommandGroup,
@@ -8,11 +9,11 @@ import {
   CommandSeparator
 } from '@/components/ui/command'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
-import { MENU_LABEL_CLASS, menuSeparatorVariants } from '@/components/ui/menu-item'
+import { menuSeparatorVariants } from '@/components/ui/menu-item'
 import { MENU_SURFACE_CLASS } from '@/components/ui/menu-surface'
-import { BrowserCookieImportDisclosure } from '@/components/settings/browser/profiles/BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from '@/components/settings/browser/profiles/BrowserCookieImportMachineNotice'
 import { cn } from '@/lib/class-names'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserToolbarImportCookiesProps } from './browser-toolbar-import-cookies-item'
 import {
@@ -25,13 +26,23 @@ import {
 } from './browser-cookie-import-last-used'
 
 const FROM_FILE_VALUE = 'from-file'
+// A cmdk value no row has, so nothing is highlighted.
+const NO_HIGHLIGHT = '\u001fnone\u001f'
 
 // Menu row tokens (26px rows, 10px inset, menu hover), on cmdk's highlight instead of focus.
 const PICKER_ROW_CLASS =
   'gap-2 rounded-md px-2.5 py-[5px] text-[13px] leading-4 data-[selected=true]:bg-black/8 data-[selected=true]:text-popover-foreground dark:data-[selected=true]:bg-white/14'
 
-// Eight rows plus two section labels, then the list scrolls.
-const LIST_SCROLL_CLASS = 'max-h-[252px] overflow-y-auto scrollbar-sleek'
+// About seven and a half rows, so a long list shows half of the next row as its scroll cue.
+const LIST_SCROLL_CLASS = 'max-h-[249px] overflow-y-auto scrollbar-sleek'
+
+/** Keys cmdk moves the highlight with (its vim bindings included). */
+function isHighlightKey(event: React.KeyboardEvent): boolean {
+  return (
+    ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) ||
+    (event.ctrlKey && ['n', 'j', 'p', 'k'].includes(event.key))
+  )
+}
 
 /** As cmdk does, but for the row now highlighted: a section's first row brings its label along. */
 function scrollRowIntoView(list: HTMLElement | null, value: string): void {
@@ -69,6 +80,7 @@ export function BrowserCookieImportPicker({
   browserPageId,
   ...body
 }: BrowserCookieImportPickerProps): React.JSX.Element {
+  const closedOutsideRef = useRef(false)
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor
@@ -81,10 +93,17 @@ export function BrowserCookieImportPicker({
         className={cn(MENU_SURFACE_CLASS, 'w-[260px] max-w-[calc(100vw-16px)]')}
         data-browser-page-menu-id={browserPageId}
         data-testid="browser-cookie-import-picker"
+        onInteractOutside={() => {
+          closedOutsideRef.current = true
+        }}
         onCloseAutoFocus={(event) => {
-          // An anchor is not a trigger, so Radix has nothing to return focus to.
+          // An anchor is not a trigger, so Radix has nothing to return focus to. A click elsewhere
+          // keeps focus where it landed, as Radix does for a trigger.
           event.preventDefault()
-          anchorRef.current?.focus()
+          if (!closedOutsideRef.current) {
+            anchorRef.current?.focus()
+          }
+          closedOutsideRef.current = false
         }}
       >
         <BrowserCookieImportPickerBody {...body} onClose={() => onOpenChange(false)} />
@@ -111,16 +130,23 @@ function BrowserCookieImportPickerBody({
     [detectedBrowsers, lastUsed, query]
   )
   const rowValues = [...sections.flatMap((s) => s.rows.map((r) => r.value)), FROM_FILE_VALUE]
+  const hasSearch = query.trim() !== ''
+  const noMatches = sections.length === 0 && hasSearch
+  // No profile rows (still probing, none found, or no matches): From File… is all that's left, and
+  // Enter alone must not open a file dialog.
+  const onlyFromFile = sections.length === 0
   // Typing or browsers arriving from the lazy probe puts the highlight back on the first row.
-  const rowsKey = rowValues.join('\n')
-  const [highlight, setHighlight] = useState<{
-    rowsKey: string
-    value: string
-  } | null>(null)
-  const highlighted =
-    highlight && highlight.rowsKey === rowsKey && rowValues.includes(highlight.value)
-      ? highlight.value
-      : rowValues[0]
+  const rowsKey = JSON.stringify([query, ...rowValues])
+  const [highlight, setHighlight] = useState<{ rowsKey: string; value: string } | null>(null)
+  const [selectionReset, setSelectionReset] = useState(0)
+  const explicitSelection = useRef(false)
+  const selected = highlight?.rowsKey === rowsKey ? highlight.value : null
+  const highlighted = onlyFromFile
+    ? (selected ?? `${NO_HIGHLIGHT}${selectionReset}`)
+    : (selected ?? rowValues[0])
+  const markExplicitSelection = (): void => {
+    explicitSelection.current = true
+  }
   const listRef = useRef<HTMLDivElement>(null)
   // cmdk scrolls before a controlled highlight re-renders, so it would scroll the previous row.
   useLayoutEffect(() => scrollRowIntoView(listRef.current, highlighted), [highlighted])
@@ -131,21 +157,42 @@ function BrowserCookieImportPickerBody({
     onImportFromBrowser(row.source.family, row.source.profile ?? undefined)
   }
   const searchLabel = t('browser.cookieImport.picker.search', 'Search profiles')
-  const hasSearch = query.trim() !== ''
 
   return (
     <Command
       shouldFilter={false}
-      loop={false}
+      loop={onlyFromFile}
       value={highlighted}
-      onValueChange={(value) => setHighlight({ rowsKey, value })}
+      onValueChange={(value) => {
+        const byUser = explicitSelection.current
+        explicitSelection.current = false
+        if (!onlyFromFile || byUser) {
+          setHighlight({ rowsKey, value: rowValues.includes(value) ? value : rowValues[0] })
+        } else if (!selected) {
+          // cmdk selects its first row on search changes. A new value clears that selection.
+          setSelectionReset((count) => count + 1)
+        }
+      }}
+      onKeyDown={(event) => {
+        if (!onlyFromFile || selected || isImeCompositionKeyDown(event)) {
+          return
+        }
+        if (event.key === 'Enter') {
+          event.preventDefault()
+        } else if (isHighlightKey(event)) {
+          markExplicitSelection()
+        }
+      }}
       label={t('browser.cookieImport.picker.menuItem', 'Import Cookies…')}
       surface="inline"
       className="rounded-none"
     >
       <CommandInput
         value={query}
-        onValueChange={setQuery}
+        onValueChange={(value) => {
+          explicitSelection.current = false
+          setQuery(value)
+        }}
         placeholder={searchLabel}
         aria-label={searchLabel}
         // Text starts where row text does: the field's inset is the rows' 10px.
@@ -156,14 +203,18 @@ function BrowserCookieImportPickerBody({
       <CommandList ref={listRef} className="max-h-none overflow-visible">
         <BrowserCookieImportMachineNotice pageRoute={pageRoute} />
         <div className={LIST_SCROLL_CLASS}>
-          {sections.map((section) => (
+          {sections.map((section, index) => (
             <CommandGroup
               key={section.key}
               heading={
-                section.browserLabel ?? t('browser.cookieImport.picker.lastUsed', 'Last used')
+                section.kind === 'last-used'
+                  ? t('browser.cookieImport.picker.lastUsed', 'Last used')
+                  : (section.browserLabel ?? undefined)
               }
               className={cn(
                 'p-0',
+                // The same gap above every section, labelled or not.
+                index > 0 && 'mt-[6px]',
                 '[&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:pt-[5px] [&_[cmdk-group-heading]]:pb-[3px] [&_[cmdk-group-heading]]:text-2xs [&_[cmdk-group-heading]]:font-semibold'
               )}
             >
@@ -179,8 +230,8 @@ function BrowserCookieImportPickerBody({
               ))}
             </CommandGroup>
           ))}
-          {sections.length === 0 && hasSearch ? (
-            <div role="presentation" className={MENU_LABEL_CLASS}>
+          {noMatches ? (
+            <div className="px-2.5 py-[5px] text-[13px] leading-4 text-muted-foreground">
               {t('browser.cookieImport.picker.noMatches', 'No matches')}
             </div>
           ) : null}
@@ -191,6 +242,7 @@ function BrowserCookieImportPickerBody({
         <CommandItem
           value={FROM_FILE_VALUE}
           className={PICKER_ROW_CLASS}
+          onPointerMoveCapture={onlyFromFile && !selected ? markExplicitSelection : undefined}
           onSelect={() => {
             onClose()
             onImportFromFile()
@@ -198,7 +250,13 @@ function BrowserCookieImportPickerBody({
         >
           {t('auto.components.browser.pane.BrowserToolbarMenu.56f94f4ffa', 'From File…')}
         </CommandItem>
-        <BrowserCookieImportDisclosure />
+        <div role="separator" className={menuSeparatorVariants()} />
+        <p className="flex items-center gap-2 px-2.5 py-[5px] text-[12px] leading-4 text-muted-foreground">
+          <Info aria-hidden className="size-3.5 shrink-0" />
+          <span className="min-w-0 truncate">
+            {t('browser.cookieImport.picker.googleNote', 'Google logins aren’t imported')}
+          </span>
+        </p>
       </CommandList>
     </Command>
   )

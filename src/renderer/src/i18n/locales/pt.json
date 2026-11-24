@@ -1451,7 +1451,8 @@
         "menuItem": "Importar Cookies…",
         "search": "Pesquisar perfis",
         "lastUsed": "Usado por último",
-        "noMatches": "Nenhum resultado"
+        "noMatches": "Nenhum resultado",
+        "googleNote": "Logins do Google não são importados"
       }
     },
     "googleCookieClear": {

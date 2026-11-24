@@ -23413,7 +23413,8 @@
         "menuItem": "쿠키 가져오기…",
         "search": "프로필 검색",
         "lastUsed": "최근 사용",
-        "noMatches": "일치하는 항목 없음"
+        "noMatches": "일치하는 항목 없음",
+        "googleNote": "Google 로그인을 가져올 수 없습니다"
       }
     },
     "passwords": {
