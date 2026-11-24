@@ -244,6 +244,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** The structured host's bot side: their sessions' tools and memory, Look around, and the queued-message gate. */
   protected botStructuredSessionHostDeps(store: () => RuntimeStore) {
     return {
+      owedItemAttachmentUploads: (stateDirectory: string, root: string) =>
+        this.botItems.owedCommentAttachmentUploads(stateDirectory, root),
       ...botStructuredSessionWiring({
         store,
         botsAtInstall: this.store?.getBots?.() ?? [],

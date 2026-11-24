@@ -6,6 +6,9 @@ import { BotItemError } from './bot-item-error'
 import { ensureKeptWaitingAsks } from './bot-item-waiting-ask-keep'
 import { migrateBotItems } from './bot-items-schema'
 import { BotItemsOwner } from './bot-items-owner'
+import { ownerCommentAttachmentBody } from './bot-item-comment-attachment-body'
+import { agentSessionAttachmentReferences } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
+import { eventRecordOf } from './bot-items-rows'
 
 export { BotItemError }
 
@@ -26,5 +29,24 @@ export class BotItemsStore extends BotItemsOwner {
       hardenSqliteDatabaseFiles(path)
     }
     return new BotItemsStore(db, !writable)
+  }
+
+  /** Accepted uploads stay with the outbox until mail has custody, even when the first chat is deleted. */
+  owedCommentAttachmentUploads(root: string): string[] {
+    const uploads = new Set<string>()
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM item_events WHERE mail = 'owed' AND kind = 'commented' ORDER BY action`
+      )
+      .iterate()
+    for (const row of rows) {
+      const body = ownerCommentAttachmentBody(eventRecordOf(row))
+      if (body) {
+        for (const id of agentSessionAttachmentReferences(root, body)) {
+          uploads.add(id)
+        }
+      }
+    }
+    return [...uploads]
   }
 }

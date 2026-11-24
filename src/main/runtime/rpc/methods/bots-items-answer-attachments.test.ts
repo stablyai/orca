@@ -14,12 +14,12 @@ import { agentSessionAttachmentStoreRoot } from '../../../native-chat/agent-sess
 import {
   claimAgentSessionAttachmentsInTransaction,
   finishUploadSweep,
-  isAgentSessionUploadUnclaimed,
   listUploadsBeingSwept,
   markUnclaimedUploadForSweep,
   pruneAgentSessionAttachmentClaims
 } from '../../../native-chat/agent-session-attachments/agent-session-attachment-claims'
 import { sweepAgentSessionAttachments } from '../../../native-chat/agent-session-attachments/agent-session-attachment-sweep'
+import { applyJournalWriterEffect } from '../../../native-chat/agent-session-journal/journal-writer-effects'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
@@ -207,7 +207,11 @@ it('claims an item answer for the chat it actually mails and replays the same an
             )
           },
           retention: {
-            isUnclaimed: (id) => isAgentSessionUploadUnclaimed(journal.db, id),
+            isUnclaimed: (uploadId) =>
+              applyJournalWriterEffect(journal.db, dir, {
+                kind: 'sweep',
+                operation: { kind: 'unclaimed', uploadId }
+              }) === true,
             uploads: async () => {
               retentionReads++
               return new Set(items.owedCommentAttachmentUploads(attachments.rootDir))
@@ -300,15 +304,20 @@ it('claims an item answer for the chat it actually mails and replays the same an
 
     items.markMailSent(nextMail!.changes.map(({ event }) => event.id))
     const surviving = await attachments.storeFile('surviving.png', Buffer.from('kept'))
-    items.ownerComment(uid, 'The older answer still has a screenshot', { kind: 'owner' }, [
-      { path, name: 'proof.png', bytes: 4 },
-      { path: surviving, name: 'surviving.png', bytes: 4 }
-    ])
+    items.ownerComment(
+      uid,
+      'Use [Image #1]. [Image #2] is the rejected design.',
+      { kind: 'owner' },
+      [
+        { path, name: 'proof.png', bytes: 4 },
+        { path: surviving, name: 'surviving.png', bytes: 4 }
+      ]
+    )
     const [legacy] = items.owedMail(0).mails
     expect(await sendBotItemMail(context.runtime, legacy!)).toBe(true)
     const delivered = mail.getMessageById(botItemMailId(legacy!.id))!
     expect(JSON.parse(delivered.payload!)).toMatchObject({ images: [surviving] })
-    expect(delivered.body).toContain('The older answer still has a screenshot')
+    expect(delivered.body).toContain('Use [Expired image #1]. [Image #1] is the rejected design.')
     expect(
       journal.db
         .prepare('SELECT session_id FROM agent_session_attachment_claims WHERE upload_id = ?')

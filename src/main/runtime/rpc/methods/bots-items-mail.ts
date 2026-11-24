@@ -9,7 +9,6 @@ import {
 } from '../../../../shared/bots/bot-item-note-runs'
 import { botMailSession, botMailSessionStillCurrent } from '../../../bots/bot-mail-chat'
 import { ownerCommentAttachmentBody } from '../../../bots/bot-item-comment-attachment-body'
-import { agentSessionAttachmentUploadIdOfPath } from '../../../../shared/agent-session/agent-session-attachments'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { isAgentSessionAttachmentExpiredError } from '../../../native-chat/agent-session-attachments/agent-session-attachment-claims'
 import {
@@ -23,7 +22,11 @@ import {
 } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
 import type { BotItemNoteBy } from '../../../../shared/bots/bot-item-note'
 import { appendBotItemNote, botItemNote } from '../../../bots/bot-item-chat-notes'
-import { botItemChangeMail, botItemMailImages } from '../../../bots/bot-items-mail-text'
+import {
+  botItemChangeMail,
+  botItemMailImages,
+  botItemMailWithoutExpiredImages
+} from '../../../bots/bot-items-mail-text'
 import type { BotItemMail } from '../../../bots/bot-items-schema'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
@@ -144,9 +147,11 @@ export async function sendBotItemMail(
       }
     }
   }
-  const images = botItemMailImages(owed.changes).filter(
-    (path) => !expired.has(agentSessionAttachmentUploadIdOfPath(path) ?? '')
-  )
+  const deliveredChanges = expired.size
+    ? botItemMailWithoutExpiredImages(owed.changes, expired)
+    : owed.changes
+  const images = botItemMailImages(deliveredChanges)
+  const delivered = expired.size ? (botItemChangeMail(deliveredChanges) ?? mail) : mail
   const asker = answerAskedIn(owed)
   const payload = JSON.stringify({
     botItems: owed.changes.map(({ event, item }) => ({
@@ -169,8 +174,8 @@ export async function sendBotItemMail(
     type: 'status',
     subject: mail.subject,
     body: expired.size
-      ? `${mail.body}\n\n[Orca: Some of the owner's attachments expired before delivery.]`
-      : mail.body,
+      ? `${delivered.body}\n\n[Orca: Some of the owner's attachments expired before delivery.]`
+      : delivered.body,
     payload,
     orcaAuthored: 'item-mail'
   })

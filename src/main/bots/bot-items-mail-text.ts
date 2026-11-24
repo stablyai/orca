@@ -1,6 +1,7 @@
 // What item mail tells the bot (Orca's voice, workflow only). The owner's and other chats' words are
 // fenced, so a comment can't pose as Orca's instructions; each mail names its event for `show --after`.
 import { fenceQuotedText, inlineUntrusted } from '../../shared/quoted-text-fence'
+import { agentSessionAttachmentUploadIdOfPath } from '../../shared/agent-session/agent-session-attachments'
 import {
   botItemCommentImages,
   botItemCommentSkills,
@@ -9,7 +10,10 @@ import {
   type BotItemCommentSkill,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
-import { offsetSentImagePromptMarkers } from '../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
+import {
+  offsetSentImagePromptMarkers,
+  remapSentImagePromptMarkers
+} from '../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { statusOf } from './bot-items-rows'
 import type { BotItemEventRecord, BotItemRecord } from './bot-items-schema'
 
@@ -184,6 +188,31 @@ export function botItemMailImages(changes: readonly { event: BotItemEventRecord 
   return changes.flatMap(({ event }) =>
     event.kind === 'commented' ? botItemCommentImages(event.data).map(({ path }) => path) : []
   )
+}
+
+export function botItemMailWithoutExpiredImages(
+  changes: readonly Change[],
+  expired: ReadonlySet<string>
+): Change[] {
+  return changes.map(({ event, item }) => {
+    if (event.kind !== 'commented') {
+      return { event, item }
+    }
+    const kept: BotItemCommentImage[] = []
+    const positions = botItemCommentImages(event.data).map((image) => {
+      const uploadId = agentSessionAttachmentUploadIdOfPath(image.path)
+      if (uploadId && expired.has(uploadId)) {
+        return null
+      }
+      kept.push(image)
+      return kept.length
+    })
+    if (kept.length === positions.length) {
+      return { event, item }
+    }
+    const text = remapSentImagePromptMarkers(str(event.data.text) ?? '', positions)
+    return { event: { ...event, data: { ...event.data, text, images: kept } }, item }
+  })
 }
 
 function changeWords(event: BotItemEventRecord): string | null {

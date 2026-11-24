@@ -160,15 +160,6 @@ export function markUnclaimedUploadForSweep(
   return Number(result.changes) > 0
 }
 
-/** A read before asking another store about the file. The eventual mark still arbitrates against claims. */
-export function isAgentSessionUploadUnclaimed(db: Database.Database, uploadId: string): boolean {
-  return (
-    db
-      .prepare('SELECT 1 FROM agent_session_attachment_claims WHERE upload_id = ?')
-      .get(uploadId) === undefined
-  )
-}
-
 export function listUploadsBeingSwept(db: Database.Database): string[] {
   return db
     .prepare('SELECT upload_id FROM agent_session_attachment_sweeps')
