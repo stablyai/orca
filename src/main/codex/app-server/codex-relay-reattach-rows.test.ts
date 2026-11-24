@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { RelayedProviderOutput } from '../../provider-relay/relayed-provider-output'
 import { createCodexRelayAckFloor } from './codex-relay-ack-floor'
 import { CODEX_RELAY_ITEM_CONTINUATION } from './codex-relay-item-continuation'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { createCodexJournalTranslator } from '../structured/journal/codex-structured-journal-translation'
 import {
   restateKeptCodexBackgroundWork,
   seedKeptCodexTurnOrdinals
@@ -110,6 +112,90 @@ describe('codex rows across a reattach', () => {
     expect(first.acks).toEqual(['13 keep 11'])
     const second = await attach()
     expect(second.ids).toEqual(first.ids)
+  })
+
+  it('a cap-cut replay never overwrites the saved row, and the item ends whole on it', async () => {
+    const rows = new Map<string, string>()
+    const translatorFor = () =>
+      createCodexJournalTranslator({
+        sink: {
+          appendItem: (identity, body) =>
+            rows.set(agentJournalItemKey(identity), JSON.stringify(body)),
+          appendTombstone: (identity) => rows.delete(agentJournalItemKey(identity)),
+          publish: () => {}
+        }
+      })
+    const msg = { type: 'agentMessage', id: 'msg_0', text: '' }
+    const at = { threadId: 't', turnId: 'turn-a' }
+    const delta = (text: string) =>
+      JSON.stringify({
+        method: 'item/agentMessage/delta',
+        params: { ...at, itemId: 'msg_0', delta: text }
+      })
+    // The last run saved "Hello " before Orca quit.
+    const first = translatorFor()
+    const send = (translator: typeof first, line: string) => {
+      const { method, params } = JSON.parse(line) as {
+        method: string
+        params: Record<string, unknown>
+      }
+      translator.handle({ type: 'notification', sessionId: 's', threadId: 't', method, params })
+    }
+    send(
+      first,
+      JSON.stringify({ method: 'turn/started', params: { threadId: 't', turn: { id: 'turn-a' } } })
+    )
+    send(
+      first,
+      JSON.stringify({
+        method: 'item/completed',
+        params: { ...at, item: { type: 'userMessage', id: 'u', content: [] } }
+      })
+    )
+    send(first, JSON.stringify({ method: 'item/started', params: { ...at, item: msg } }))
+    send(first, delta('Hello '))
+    first.flush()
+    const saved = [...rows.entries()]
+    expect(saved).toHaveLength(1)
+
+    // Each launch reattaches; the daemon dropped the item's start at its file cap (through 10).
+    const reattach = async (lines: string[]) => {
+      const translator = translatorFor()
+      translator.seedTurnOrdinals('t', 'turn-a', ['u', 'msg_0'])
+      const stdout = new Readable({ read() {} })
+      stdout.setEncoding('utf8').on('data', (chunk: string) =>
+        chunk
+          .trim()
+          .split('\n')
+          .forEach((line) => send(translator, line))
+      )
+      const output = new RelayedProviderOutput({
+        stdout,
+        ackFloor: createCodexRelayAckFloor(),
+        passWhileHeld: () => false,
+        ack: async () => {}
+      })
+      output.restartAt(10)
+      lines.forEach((line, i) => output.line('relayData', 11 + i, line))
+      output.continueAfterTruncation(CODEX_RELAY_ITEM_CONTINUATION, 'r1', 10)
+      await output.release()
+      await settle()
+      translator.flush()
+    }
+    await reattach([delta('world')])
+    await reattach([delta('world')])
+    // The saved row keeps its text; the cut part is one more row, the same on both attaches.
+    expect(rows.get(saved[0]![0])).toBe(saved[0]![1])
+    expect(rows.size).toBe(2)
+
+    const completed = JSON.stringify({
+      method: 'item/completed',
+      params: { ...at, item: { ...msg, text: 'Hello world' } }
+    })
+    await reattach([delta('world'), completed])
+    // The end carries the whole message: it lands on the saved row, and the continuation goes.
+    expect([...rows.keys()]).toEqual([saved[0]![0]])
+    expect(rows.get(saved[0]![0])).toContain('Hello world')
   })
 
   it("numbers a kept chat's and its subagents' running turns as the live run did", async () => {

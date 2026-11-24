@@ -45,7 +45,8 @@ export class CodexJournalItems {
   readonly ordinals = new CodexTurnOrdinals()
   readonly activeItems = new Map<string, CodexActiveJournalItem>()
   readonly streams
-  private readonly identities = new Map<string, AgentJournalItemIdentity>()
+  /** Each item's row, by `codexStructuredItemKey`. */
+  readonly identities = new Map<string, AgentJournalItemIdentity>()
   private readonly details = new Map<string, string>()
 
   constructor(

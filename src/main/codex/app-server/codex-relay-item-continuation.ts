@@ -44,6 +44,9 @@ function textItemLine(line: string): Message | null {
 }
 
 const itemId = ({ params }: Message): string => String(params.itemId ?? params.item?.id)
+
+/** Orca's own line (never Codex's): the continuation row of an item that ended goes. */
+export const CODEX_RELAY_CONTINUATION_RETIRED = 'orca/relayContinuationRetired'
 const continuationId = (tag: string, id: string): string => `${tag}:${id}`
 
 /** Codex keys rows by item id, so a cut item continues under `<tag>:<item id>` in the same thread. */
@@ -68,6 +71,18 @@ export const CODEX_RELAY_ITEM_CONTINUATION: ProviderRelayItemContinuation = {
       ? { ...message.params, item: { ...message.params.item, id } }
       : { ...message.params, itemId: id }
     return JSON.stringify({ ...message, params })
+  },
+  // Codex's end carries the whole item: it goes to the saved row, and the continuation is retired.
+  finish: (line, tag) => {
+    const message = textItemLine(line)
+    if (!message) {
+      return [line]
+    }
+    const retired = {
+      method: CODEX_RELAY_CONTINUATION_RETIRED,
+      params: { threadId: message.params.threadId, itemId: continuationId(tag, itemId(message)) }
+    }
+    return [CODEX_RELAY_ITEM_CONTINUATION.rekey(line, tag), JSON.stringify(retired), line]
   },
   start: (line, tag) => {
     const message = textItemLine(line)

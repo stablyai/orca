@@ -1,3 +1,5 @@
+import { CODEX_RELAY_CONTINUATION_RETIRED } from '../../app-server/codex-relay-item-continuation'
+import { retireCodexRelayContinuation } from './codex-relay-continuation-retire'
 import { createCodexProviderActivityReader } from '../../../native-chat/agent-session-wire/providers/provider-frame-activity'
 import { recordCodexContextUsage } from './codex-context-usage'
 import { CODEX_TOKEN_USAGE_METHOD } from '../background-work/codex-subagent-activity'
@@ -210,6 +212,9 @@ function createCodexTranslation(
       }
       if (event.type !== 'notification') {
         return CODEX_JOURNAL_ADMITTED
+      }
+      if (event.method === CODEX_RELAY_CONTINUATION_RETIRED) {
+        return retireCodexRelayContinuation(items, deps.sink, event.threadId, event.params)
       }
       if (event.method === 'turn/started' || event.method === 'turn/completed') {
         if (event.method === 'turn/started') {
