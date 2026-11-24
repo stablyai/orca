@@ -247,7 +247,7 @@ function CommentLine({
       <View>
         {/* The box: the floor's width, never past the bubble's cap, and the line's height at the
             current text size, both in the first layout pass. Its blank text, the line's tallest (the
-            "On"; the chip's is shorter), is only measured. */}
+            "On", kept to one line as on desktop; the chip's is shorter), is only measured. */}
         <View
           style={[styles.commentFloor, { minHeight: CHIP_HEIGHT * fontScale }]}
           pointerEvents="none"
@@ -263,7 +263,10 @@ function CommentLine({
         </View>
         <View style={styles.commentOn}>
           <ListTodo size={12 * fontScale} strokeWidth={2} color={colors.textMuted} />
-          <Text style={[styles.text, scaledType(typography.metaSize, fontScale)]}>
+          <Text
+            numberOfLines={1}
+            style={[styles.commentLabel, scaledType(typography.metaSize, fontScale)]}
+          >
             {t('bots.items.chat.commentOn', 'On')}
           </Text>
           <ItemChip item={line.item} fontScale={fontScale} open={open} />
@@ -414,6 +417,9 @@ const styles = themedStyleSheet(() => ({
   commentProbe: {
     width: 100
   },
+  // Its full width on one line, as on desktop: the chip's title cuts short instead, so the line
+  // never wraps past the one line the box reserves.
+  commentLabel: { color: colors.textMuted, flexShrink: 0 },
   commentOn: {
     position: 'absolute',
     top: 0,
