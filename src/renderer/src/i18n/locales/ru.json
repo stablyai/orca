@@ -21499,8 +21499,6 @@
         "chipLabel": "{{label}}, последний: {{title}}"
       },
       "automationSaved": {
-        "resultsInRuns": "результаты в каждом запуске",
-        "paused": "приостановлена",
         "webhookHint": "Укажите этот URL в вашем сервисе",
         "gettingUrl": "Получение URL…",
         "editDraft": "Измените «{{name}}» так, чтобы ",
@@ -21513,10 +21511,8 @@
         "agent": "Агент",
         "runNow": "Запустить сейчас",
         "loading": "Загрузка",
-        "deleted": "Эта автоматизация удалена",
         "loadFailed": "Не удалось прочитать эту автоматизацию",
-        "openFullPage": "Открыть страницу",
-        "onAgent": "на {{name}}"
+        "openFullPage": "Открыть страницу"
       },
       "usageLimitActions": {
         "handOff": "Передать агенту"

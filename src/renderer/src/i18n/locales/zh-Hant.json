@@ -20491,8 +20491,6 @@
         "chipLabel": "{{label}}，最新：{{title}}"
       },
       "automationSaved": {
-        "resultsInRuns": "結果顯示於每次執行中",
-        "paused": "已暫停",
         "webhookHint": "請將你的服務指向此 URL",
         "gettingUrl": "正在取得 URL…",
         "editDraft": "請修改「{{name}}」，讓它",
@@ -20505,10 +20503,8 @@
         "agent": "代理程式",
         "runNow": "立即執行",
         "loading": "載入中",
-        "deleted": "此自動化已刪除",
         "loadFailed": "無法讀取此自動化",
-        "openFullPage": "開啟頁面",
-        "onAgent": "由 {{name}} 執行"
+        "openFullPage": "開啟頁面"
       },
       "usageLimitActions": {
         "handOff": "交接給代理程式"

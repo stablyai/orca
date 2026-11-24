@@ -20999,8 +20999,6 @@
         "failed": "失敗"
       },
       "automationSaved": {
-        "resultsInRuns": "結果は各実行内",
-        "paused": "一時停止中",
         "webhookHint": "サービスの送信先をこの URL に設定してください",
         "gettingUrl": "URL を取得中…",
         "editDraft": "「{{name}}」を次のように変更してください: ",
@@ -21013,10 +21011,8 @@
         "agent": "Agent",
         "runNow": "今すぐ実行",
         "loading": "読み込み中",
-        "deleted": "このオートメーションは削除されました",
         "loadFailed": "このオートメーションを読み込めませんでした",
-        "openFullPage": "ページを開く",
-        "onAgent": "{{name}} で実行"
+        "openFullPage": "ページを開く"
       },
       "mcp": {
         "status": {

@@ -22815,8 +22815,6 @@
         "label": "Mesaj kutusu ve istemler"
       },
       "automationSaved": {
-        "resultsInRuns": "her çalıştırmada sonuçlar",
-        "paused": "duraklatıldı",
         "webhookHint": "Hizmetinizi bu URL'ye yönlendirin",
         "gettingUrl": "URL alınıyor…",
         "editDraft": "“{{name}}” otomasyonunu şu şekilde değiştir: ",
@@ -22829,10 +22827,8 @@
         "agent": "Ajan",
         "runNow": "Şimdi çalıştır",
         "loading": "Yükleniyor",
-        "deleted": "Bu otomasyon silindi",
         "loadFailed": "Bu otomasyon okunamadı",
-        "openFullPage": "Sayfayı aç",
-        "onAgent": "{{name}} üzerinde"
+        "openFullPage": "Sayfayı aç"
       },
       "usageLimitActions": {
         "handOff": "Ajana devret",

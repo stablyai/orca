@@ -21723,8 +21723,6 @@
         "runsOn": "运行于：{{program}}"
       },
       "automationSaved": {
-        "resultsInRuns": "结果留在每次运行中",
-        "paused": "已暂停",
         "webhookHint": "将你的服务指向此 URL",
         "gettingUrl": "正在获取 URL…",
         "editDraft": "修改“{{name}}”，让它 ",
@@ -21737,10 +21735,8 @@
         "agent": "智能体",
         "runNow": "立即运行",
         "loading": "加载中",
-        "deleted": "此自动化已被删除",
         "loadFailed": "无法读取此自动化",
-        "openFullPage": "打开页面",
-        "onAgent": "由 {{name}} 运行"
+        "openFullPage": "打开页面"
       },
       "botContext": {
         "soul": "已应用更新后的灵魂",

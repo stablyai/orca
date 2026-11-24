@@ -20803,8 +20803,6 @@
         "chipLabel": "{{label}}, zuletzt: {{title}}"
       },
       "automationSaved": {
-        "resultsInRuns": "Ergebnisse in jeder Ausführung",
-        "paused": "pausiert",
         "webhookHint": "Diese URL in deinem Dienst als Ziel eintragen",
         "gettingUrl": "URL wird abgerufen…",
         "editDraft": "Ändere „{{name}}“ so, dass ",
@@ -20817,10 +20815,8 @@
         "agent": "Agent",
         "runNow": "Jetzt ausführen",
         "loading": "Wird geladen",
-        "deleted": "Diese Automatisierung wurde gelöscht",
         "loadFailed": "Diese Automatisierung konnte nicht geladen werden",
-        "openFullPage": "Seite öffnen",
-        "onAgent": "mit {{name}}"
+        "openFullPage": "Seite öffnen"
       },
       "usageLimitActions": {
         "handOff": "An Agenten übergeben"
