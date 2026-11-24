@@ -21,7 +21,10 @@ const LISTING_RETRY_SCANS = 9
 let scansUntilListingRetry = 0
 
 /** Map listening socket inodes to the pid a full /proc walk keeps: the last holder in /proc's listing order. */
-export async function resolveLinuxSocketOwners(inodes: Set<number>): Promise<Map<number, number>> {
+export async function resolveLinuxSocketOwners(
+  inodes: Set<number>,
+  options: { requireExact?: boolean } = {}
+): Promise<Map<number, number>> {
   if (inodes.size === 0) {
     return new Map()
   }
@@ -30,6 +33,10 @@ export async function resolveLinuxSocketOwners(inodes: Set<number>): Promise<Map
     pids = (await readdir('/proc')).filter((entry) => /^\d+$/.test(entry))
   } catch {
     return new Map()
+  }
+  // Kill and allow-list checks read each link exactly; ls prints raw paths, so a crafted name could fake a line.
+  if (options.requireExact) {
+    return walkProcSocketOwners(pids, inodes)
   }
   // After a failed listing, don't pay for it and the walk on every scan; retry it every 10th scan.
   if (scansUntilListingRetry > 0) {
