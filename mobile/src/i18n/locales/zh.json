@@ -6786,13 +6786,7 @@
       },
       "cancel": {
         "keep": "保留",
-        "confirmMany": "取消 {{count}} 项",
-        "titleMany": "要取消 {{count}} 个事项吗？",
-        "titleOne": "要取消“{{title}}”吗？",
-        "why": "bot 会看到原因。不会删除任何内容",
-        "placeholder": "原因",
-        "confirmOne": "取消事项",
-        "offline": "{{host}} 已离线。你填写的原因已保留，{{action}} 会在它恢复连接后重新可用"
+        "confirmMany": "取消 {{count}} 项"
       },
       "strip": {
         "view": "查看"

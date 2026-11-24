@@ -73,6 +73,10 @@ export const BOTS_HOME_PIN_RUNTIME_CAPABILITY = 'bots.home-pin.v1' as const
 // too: a host shows Waiting only to a client that reads it, and as In progress to one that doesn't.
 export const BOTS_ITEM_WAITING_CAPABILITY = 'bots.item-waiting.v1' as const
 
+// Host cancels an item for the owner with no reason (bots.items.owner.status `canceled`); an older host
+// refuses one, so a client sends it a plain reason (botItemStatusFields).
+export const BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY = 'bots.item-cancel-no-reason.v1' as const
+
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
   BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
@@ -93,5 +97,6 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
   BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY,
   BOTS_HOME_PIN_RUNTIME_CAPABILITY,
-  BOTS_ITEM_WAITING_CAPABILITY
+  BOTS_ITEM_WAITING_CAPABILITY,
+  BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY
 ] as const
