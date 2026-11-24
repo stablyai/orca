@@ -23,12 +23,19 @@ function changedSelection(state: AppState, previous: AppState): boolean {
   }
   const previousGroup = previous.activeGroupIdByWorktree[workspace]
   const currentGroup = state.activeGroupIdByWorktree[workspace]
-  const currentId = state.groupsByWorktree[workspace]?.find(
-    (group) => group.id === currentGroup
-  )?.activeTabId
-  const previousId = previous.groupsByWorktree[workspace]?.find(
-    (group) => group.id === previousGroup
-  )?.activeTabId
+  const groups = state.groupsByWorktree[workspace]
+  const previousGroups = previous.groupsByWorktree[workspace]
+  // Focusing an existing split changes its group selection without rebuilding its tabs.
+  if (
+    previousGroup &&
+    currentGroup &&
+    previousGroup !== currentGroup &&
+    groups === previousGroups
+  ) {
+    return true
+  }
+  const currentId = groups?.find((group) => group.id === currentGroup)?.activeTabId
+  const previousId = previousGroups?.find((group) => group.id === previousGroup)?.activeTabId
   if (!currentId || (currentId === previousId && currentGroup === previousGroup)) {
     return false
   }

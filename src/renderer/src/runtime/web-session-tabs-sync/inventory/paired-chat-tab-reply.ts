@@ -2,6 +2,10 @@ import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { hostSnapshotAffirmsWorktreeContents } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../../../../shared/concurrency/abort-signal-reason'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { structuredAgentSessionOwnerForTab } from '../../native-chat/session-ownership/structured-agent-session-owner'
 import { callRuntimeRpcResponse } from '../../rpc/calls/runtime-rpc-call'
@@ -39,15 +43,19 @@ export async function readPairedChatTab(args: {
   const registration = getRuntimeEnvironmentRegistration(environmentId)
   const connectionGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
   const receivedFrame = nextReceivedSessionTabsFrame()
-  const response = await callRuntimeRpcResponse<RuntimeMobileSessionTabsResult>(
-    { kind: 'environment', environmentId },
-    'session.tabs.list',
-    { worktree: toRuntimeWorktreeSelector(worktreeId) },
-    {
-      timeoutMs: args.timeoutMs,
-      signal,
-      expectedEnvironmentPairingRevision: registration?.revision
-    }
+  // Share the ordinary runtime connection; this link owns only its wait for the reply.
+  const response = await waitForPromiseWithSignal(
+    callRuntimeRpcResponse<RuntimeMobileSessionTabsResult>(
+      { kind: 'environment', environmentId },
+      'session.tabs.list',
+      { worktree: toRuntimeWorktreeSelector(worktreeId) },
+      {
+        timeoutMs: args.timeoutMs,
+        beforeSend: () => throwIfSignalAborted(signal),
+        expectedEnvironmentPairingRevision: registration?.revision
+      }
+    ),
+    signal
   )
   const snapshot = response.result
   const runtimeId = getSessionTabsRuntimeIdFromResponse(response)

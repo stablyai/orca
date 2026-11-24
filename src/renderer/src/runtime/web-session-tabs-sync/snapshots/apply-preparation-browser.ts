@@ -75,17 +75,6 @@ export function prepareWebSessionTabsSnapshotBrowser(
         receivedChats.get(tab.entityId)?.tabId === tab.id
     )
   )
-  const directlyOpenedTabIds =
-    receivedChats &&
-    new Map(
-      currentUnifiedTabs.flatMap((tab) =>
-        tab.executionHostId === snapshotExecutionHostId &&
-        tab.contentType === 'agent-session' &&
-        receivedChats.get(tab.entityId)?.tabId === tab.id
-          ? [[tab.entityId, tab.id] as const]
-          : []
-      )
-    )
   const directlyOpened = retainDirectlyOpenedChats(
     environmentId,
     snapshot,
@@ -202,8 +191,13 @@ export function prepareWebSessionTabsSnapshotBrowser(
     mirroredTerminalTabEntries.length + mirroredBrowserTabs.length + mirroredEditorTabs.length,
     currentUnifiedTabs,
     now,
-    directlyOpenedTabIds
-      ? (tab) => (directlyOpenedTabIds.get(tab.entityId) ?? tab.id) === tab.id
+    receivedChats
+      ? (tab) => {
+          const proof = receivedChats.get(tab.entityId)
+          return (
+            !proof || (tab.id === proof.tabId && tab.executionHostId === snapshotExecutionHostId)
+          )
+        }
       : undefined
   )
   if (directlyOpened) {

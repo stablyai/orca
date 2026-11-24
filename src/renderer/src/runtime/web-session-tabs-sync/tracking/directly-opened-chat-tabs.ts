@@ -3,11 +3,7 @@ import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { getRuntimeEnvironmentRegistration } from '../../rpc/environment-revisions/runtime-environment-revision'
-import {
-  MAX_TRACKED_SESSION_TABS_RECEIPTS,
-  sessionTabsFreshnessKey,
-  type MirroredAgentTab
-} from '../state'
+import { sessionTabsFreshnessKey, type MirroredAgentTab } from '../state'
 import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
 import {
   isCurrentSessionTabsRuntimeFrame,
@@ -27,6 +23,7 @@ type ChatPublication = {
   initialGroupId?: string
 }
 
+// A proof lives with its tab until a current frame, close or workspace teardown retires it.
 const directlyOpenedChats = new Map<string, Map<string, ChatPublication>>()
 
 export function directlyOpenedChatPublications(
@@ -39,11 +36,15 @@ export function directlyOpenedChatPublications(
 export function forgetDirectlyOpenedChat(
   environmentId: string,
   worktreeId: string,
-  sessionId: string
+  sessionId: string,
+  tabId?: string
 ): void {
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   const entries = directlyOpenedChats.get(key)
-  if (entries?.delete(sessionId) && entries.size === 0) {
+  if (!entries || (tabId !== undefined && entries.get(sessionId)?.tabId !== tabId)) {
+    return
+  }
+  if (entries.delete(sessionId) && entries.size === 0) {
     directlyOpenedChats.delete(key)
   }
 }
@@ -72,14 +73,7 @@ export function recordDirectlyOpenedChat(
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   const entries = directlyOpenedChats.get(key) ?? new Map<string, ChatPublication>()
   entries.set(sessionId, publication)
-  directlyOpenedChats.delete(key)
   directlyOpenedChats.set(key, entries)
-  if (directlyOpenedChats.size > MAX_TRACKED_SESSION_TABS_RECEIPTS) {
-    const oldest = directlyOpenedChats.keys().next()
-    if (!oldest.done) {
-      directlyOpenedChats.delete(oldest.value)
-    }
-  }
 }
 
 /** An older full frame can update other surfaces while the directly opened chat awaits its own frame. */
@@ -102,6 +96,7 @@ export function retainDirectlyOpenedChats(
   const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
   const host = toRuntimeExecutionHostId(environmentId)
   const retained = new Map<string, MirroredAgentTab>()
+  const retainedProofs = new Map<string, ChatPublication>()
   for (const tab of currentTabs) {
     const proof = entries.get(tab.entityId)
     if (
@@ -126,18 +121,16 @@ export function retainDirectlyOpenedChats(
       isCurrentSessionTabsRuntimeFrame(environmentId, proof.runtimeId)
     ) {
       retained.set(tab.entityId, { hostTabId: proof.hostTabId, unifiedTab: tab })
+      retainedProofs.set(tab.entityId, proof)
       if (proof.hostGroupId) {
         hostGroupIdByTabId.set(proof.hostTabId, proof.hostGroupId)
       }
     }
   }
-  for (const sessionId of entries.keys()) {
-    if (!retained.has(sessionId)) {
-      entries.delete(sessionId)
-    }
-  }
-  if (entries.size === 0) {
+  if (retainedProofs.size === 0) {
     directlyOpenedChats.delete(key)
+  } else if (retainedProofs.size !== entries.size) {
+    directlyOpenedChats.set(key, retainedProofs)
   }
   return retained.size > 0 ? retained : undefined
 }

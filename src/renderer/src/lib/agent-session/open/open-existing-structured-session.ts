@@ -27,6 +27,10 @@ import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-p
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { OrchestrationPartyLocationResult } from '../../../../../shared/orchestration/orchestration-caller-status'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../../../../shared/concurrency/abort-signal-reason'
 
 const STRUCTURED_SESSION_RESTORE_TIMEOUT_MS = 5_000
 
@@ -101,7 +105,7 @@ export function pairedBotThreadOpenDeps(
                 current
               })
           ),
-          () => timeout.abort()
+          { onTimeout: () => timeout.abort() }
         )
       } else {
         await defaultDeps.refresh({ worktreeId, sessionId }, owner)
@@ -231,8 +235,12 @@ async function executeDesktopStructuredSession(
             owner,
             method,
             { address, ...(messageIds.length ? { messageIds } : {}) },
-            { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS, signal: deps.signal }
-          )
+            {
+              timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS,
+              ...(deps.signal ? { beforeSend: () => throwIfSignalAborted(deps.signal) } : {})
+            }
+          ),
+          { signal: deps.signal }
         )
       } catch (error) {
         return structuredSessionOpenFailure(error)
@@ -283,7 +291,8 @@ export async function revealStructuredSession(target: {
           host.environmentId,
           STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
           STRUCTURED_SESSION_RESTORE_TIMEOUT_MS
-        )
+        ),
+        { signal: target.signal }
       )
     } catch (error) {
       // Only a version block proves age; other probe failures say nothing about the chat (as in remote-agent-session-launch).
@@ -302,9 +311,10 @@ export async function revealStructuredSession(target: {
         { sessionId: target.sessionId },
         {
           timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS,
-          signal: target.signal
+          ...(target.signal ? { beforeSend: () => throwIfSignalAborted(target.signal) } : {})
         }
-      )
+      ),
+      { signal: target.signal }
     )
   } catch (error) {
     return unreachableOpenFailure(error)
@@ -348,15 +358,15 @@ async function refreshStructuredSessionTabs(
 
 async function withStructuredSessionRestoreTimeout<T>(
   promise: Promise<T>,
-  onTimeout?: () => void
+  options?: { signal?: AbortSignal; onTimeout?: () => void }
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
-      promise,
+      waitForPromiseWithSignal(promise, options?.signal),
       new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => {
-          onTimeout?.()
+          options?.onTimeout?.()
           reject(new Error('structured_session_restore_timeout'))
         }, STRUCTURED_SESSION_RESTORE_TIMEOUT_MS)
       })
