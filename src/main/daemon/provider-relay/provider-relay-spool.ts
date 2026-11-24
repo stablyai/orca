@@ -172,7 +172,11 @@ export class ProviderRelaySpool {
     this.updatePressure()
     const current = (): boolean =>
       generation === this.attachGeneration && this.mode === 'replaying' && !this.disposed
-    await this.file.io
+    // Only file work for records this file still holds is waited for, so obsolete work (a compaction
+    // of a retired file) can't hold a reattach that has nothing to read from it.
+    if (this.file.index.lastSeq > 0) {
+      await this.file.io
+    }
     let after = Math.max(fromSeq, this.acked)
     // The highest seq the file should hold whole; a write that failed partway was taken out of it.
     const fileLast = this.file.index.lastSeq
