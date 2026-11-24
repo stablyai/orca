@@ -9,10 +9,7 @@ import {
   CommandSeparator
 } from '@/components/ui/command'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
-import { menuSeparatorVariants } from '@/components/ui/menu-item'
-import { MENU_SURFACE_CLASS } from '@/components/ui/menu-surface'
 import { BrowserCookieImportMachineNotice } from '@/components/settings/browser/profiles/BrowserCookieImportMachineNotice'
-import { cn } from '@/lib/class-names'
 import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserToolbarImportCookiesProps } from './browser-toolbar-import-cookies-item'
@@ -34,12 +31,8 @@ import {
 // A cmdk value no row has, so nothing is highlighted.
 const NO_HIGHLIGHT = '\u001fnone\u001f'
 
-// Menu row tokens (26px rows, 10px inset, menu hover), on cmdk's highlight instead of focus.
-const PICKER_ROW_CLASS =
-  'gap-2 rounded-md px-2.5 py-[5px] text-[13px] leading-4 data-[selected=true]:bg-black/8 data-[selected=true]:text-popover-foreground dark:data-[selected=true]:bg-white/14'
-
 // About seven and a half rows, so a long list shows half of the next row as its scroll cue.
-const LIST_SCROLL_CLASS = 'max-h-[249px] overflow-y-auto scrollbar-sleek'
+const LIST_SCROLL_CLASS = 'max-h-[249px] space-y-[6px] overflow-y-auto scrollbar-sleek'
 
 /** Keys cmdk moves the highlight with (its vim bindings included). */
 function isHighlightKey(event: React.KeyboardEvent): boolean {
@@ -100,7 +93,8 @@ export function BrowserCookieImportPicker({
       <PopoverContent
         align="end"
         collisionPadding={8}
-        className={cn(MENU_SURFACE_CLASS, 'w-[260px] max-w-[calc(100vw-16px)]')}
+        tone="menu"
+        className="w-[260px] max-w-[calc(100vw-16px)]"
         data-browser-page-menu-id={browserPageId}
         data-testid="browser-cookie-import-picker"
         onInteractOutside={() => {
@@ -195,8 +189,7 @@ function BrowserCookieImportPickerBody({
         }
       }}
       label={t('browser.cookieImport.picker.menuItem', 'Import Cookies…')}
-      surface="inline"
-      className="rounded-none"
+      surface="menu"
     >
       <CommandInput
         value={query}
@@ -206,34 +199,28 @@ function BrowserCookieImportPickerBody({
         }}
         placeholder={searchLabel}
         aria-label={searchLabel}
-        // Text starts where row text does: the field's inset is the rows' 10px.
-        wrapperClassName="mb-[6px] h-8 border-black/7 bg-transparent px-2.5 py-0 dark:border-white/10"
-        iconClassName="hidden"
-        className="h-8 py-0 text-[13px]"
+        variant="menu"
+        wrapperClassName="mb-[6px]"
       />
       <CommandList ref={listRef} className="max-h-none overflow-visible">
         <BrowserCookieImportMachineNotice pageRoute={pageRoute} />
         <div className={LIST_SCROLL_CLASS} aria-busy={!detectedBrowsersLoaded}>
-          {sections.map((section, index) => (
+          {sections.map((section) => (
             <CommandGroup
               key={section.key}
+              variant="menu"
               heading={
                 section.kind === 'last-used'
                   ? t('browser.cookieImport.picker.lastUsed', 'Last used')
                   : (section.browserLabel ?? undefined)
               }
-              className={cn(
-                'p-0',
-                // The same gap above every section, labelled or not.
-                index > 0 && 'mt-[6px]',
-                '[&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:pt-[5px] [&_[cmdk-group-heading]]:pb-[3px] [&_[cmdk-group-heading]]:text-2xs [&_[cmdk-group-heading]]:font-semibold'
-              )}
             >
               {section.rows.map((row) => (
                 <CommandItem
                   key={row.value}
                   value={row.value}
-                  className={PICKER_ROW_CLASS}
+                  density="menu"
+                  selection="menu"
                   onSelect={() => importRow(row)}
                 >
                   <span className="min-w-0 truncate">{row.label}</span>
@@ -247,12 +234,11 @@ function BrowserCookieImportPickerBody({
             </div>
           ) : null}
         </div>
-        {!onlyFromFile || noMatches ? (
-          <CommandSeparator alwaysRender className={menuSeparatorVariants()} />
-        ) : null}
+        {!onlyFromFile || noMatches ? <CommandSeparator alwaysRender variant="menu" /> : null}
         <CommandItem
           value={FROM_FILE_VALUE}
-          className={PICKER_ROW_CLASS}
+          density="menu"
+          selection="menu"
           onPointerMoveCapture={onlyFromFile && !selected ? markExplicitSelection : undefined}
           onSelect={() => {
             onClose()
@@ -261,7 +247,7 @@ function BrowserCookieImportPickerBody({
         >
           {t('auto.components.browser.pane.BrowserToolbarMenu.56f94f4ffa', 'From File…')}
         </CommandItem>
-        <div role="separator" className={menuSeparatorVariants()} />
+        <CommandSeparator alwaysRender variant="menu" />
         <p className="flex items-center gap-2 px-2.5 py-[5px] text-[12px] leading-4 text-muted-foreground">
           <Info aria-hidden className="size-3.5 shrink-0" />
           <span className="min-w-0">
