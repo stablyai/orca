@@ -16,7 +16,7 @@ export function startScreencastViewerEvents(
   page: { guestWebContentsId: number; browserPageId: string },
   params: Pick<
     BrowserScreencastParams,
-    'pagePrompts' | 'fileChoosers' | 'agentCursor' | 'downloads' | 'downloadCopies' | 'prints'
+    'pagePrompts' | 'fileChoosers' | 'agentCursor' | 'downloads' | 'downloadCopyStreams' | 'prints'
   >,
   { emit, pairedDeviceId }: ScreencastViewer
 ): (() => void) | null {
@@ -52,7 +52,7 @@ export function startScreencastViewerEvents(
   }
   if (params.downloads === 1) {
     stops.push(
-      params.downloadCopies === 1 && pairedDeviceId
+      params.downloadCopyStreams === 1 && pairedDeviceId
         ? watchDownloadsWithCopies(page.browserPageId, pairedDeviceId, emit)
         : browserManager.watchDownloads(page.browserPageId, emit)
     )
