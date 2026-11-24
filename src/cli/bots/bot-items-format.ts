@@ -42,6 +42,11 @@ function statusWord(value: unknown): string {
   return status ? STATUS_WORDS[status] : String(value ?? '')
 }
 
+/** A title on the header's one line, however it was written. */
+function titleLine(item: BotItem): string {
+  return item.title.replace(/\s+/g, ' ').trim()
+}
+
 function chatWords(item: BotItem): string {
   return item.chat.title ?? (item.chat.kind === 'home' ? 'Home Chat' : `chat:${item.chat.id}`)
 }
@@ -55,6 +60,7 @@ export function formatBotItemWrite(view: BotItemWriteView): string {
       ...(item.madeBy && item.owner.botId !== item.madeBy.botId
         ? [`for ${item.owner.name ?? item.owner.botId}`]
         : []),
+      titleLine(item),
       chatWords(item),
       ...(view.unchanged ? ['nothing changed'] : [])
     ].join(' · ')
@@ -195,7 +201,7 @@ export function formatBotItemShow(view: BotItemShowView, now = Date.now()): stri
   const { item } = view
   const until = snoozedUntil(item, now)
   const lines = [
-    `item ${item.number} · ${STATUS_WORDS[item.status]} · ${item.title} · ${chatWords(item)} · owner ${item.owner.name ?? item.owner.botId}`,
+    `item ${item.number} · ${STATUS_WORDS[item.status]} · ${titleLine(item)} · ${chatWords(item)} · owner ${item.owner.name ?? item.owner.botId}`,
     ...(until ? [`Snoozed ${snoozedWords(until)}.`] : []),
     ...(item.description ? [item.description] : []),
     ...(item.doneMeans ? [`Done means: ${item.doneMeans}`] : []),
