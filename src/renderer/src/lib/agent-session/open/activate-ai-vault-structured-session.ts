@@ -65,7 +65,7 @@ export const structuredSessionOpenFeedbackText = {
 }
 
 export const structuredSessionOpenFeedback: StructuredSessionOpenFeedback = {
-  unavailable: (_agent, context) => showChatOpenUnavailable(context),
+  unavailable: (agent, context) => showChatOpenUnavailable(context, agent),
   gone: () => toast.error(structuredSessionOpenFeedbackText.gone()),
   hostCannotOpen: () => toast.error(structuredSessionOpenFeedbackText.hostCannotOpen())
 }

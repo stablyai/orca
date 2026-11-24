@@ -27,7 +27,8 @@ export const chatOpenUnavailableText = {
     )
 }
 
-export function showChatOpenUnavailable(context: ChatOpenUnavailable = {}): void {
+/** `agent` leads the details, so a toast without the name still says whose chat failed. */
+export function showChatOpenUnavailable(context: ChatOpenUnavailable = {}, agent?: string): void {
   // One id keeps repeated clicks to one toast; sonner merges updates, so clear what this one lacks.
   if (context.starting) {
     toast.info(chatOpenUnavailableText.stillStarting(), {
@@ -37,7 +38,8 @@ export function showChatOpenUnavailable(context: ChatOpenUnavailable = {}): void
     })
     return
   }
-  const { retry, detail } = context
+  const { retry } = context
+  const detail = [agent, context.detail].filter(Boolean).join('\n')
   toast.error(chatOpenUnavailableText.openFailed(), {
     id: CHAT_OPEN_TOAST_ID,
     description: detail ? <ChatOpenFailureDetails detail={detail} /> : undefined,
@@ -75,7 +77,7 @@ export function ChatOpenFailureDetails({ detail }: { detail: string }): React.JS
       {open ? (
         <p
           id={detailId}
-          className="scrollbar-sleek max-h-20 select-text overflow-auto break-words rounded-md bg-muted/40 px-2 py-1.5 font-mono text-xs leading-relaxed text-muted-foreground"
+          className="scrollbar-sleek max-h-20 select-text overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 px-2 py-1.5 font-mono text-xs leading-relaxed text-muted-foreground"
         >
           {detail}
         </p>

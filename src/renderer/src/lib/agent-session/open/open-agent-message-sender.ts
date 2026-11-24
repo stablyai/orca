@@ -225,13 +225,13 @@ export async function openOrchestrationCrewAgent(
   const feedback: StructuredSessionOpenFeedback =
     target?.kind === 'chat'
       ? {
-          unavailable: (_agent, context) => showChatOpenUnavailable(context),
+          unavailable: (_agent, context) => showChatOpenUnavailable(context, row.label),
           gone: () => unavailable(structuredSessionOpenFeedbackText.gone()),
           hostCannotOpen: () => unavailable(structuredSessionOpenFeedbackText.hostCannotOpen()),
           notLocated: () => unavailable(structuredSessionOpenFeedbackText.notLocated())
         }
       : {
-          unavailable: (_agent, context) => showChatOpenUnavailable(context),
+          unavailable: (_agent, context) => showChatOpenUnavailable(context, row.label),
           hostCannotOpen: () => unavailable(structuredSessionOpenFeedbackText.hostCannotOpen()),
           gone: () => unavailable(structuredSessionOpenFeedbackText.gone()),
           notLocated: () => unavailable(structuredSessionOpenFeedbackText.notLocated()),

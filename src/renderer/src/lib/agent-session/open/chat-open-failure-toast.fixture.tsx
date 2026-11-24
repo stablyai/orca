@@ -8,12 +8,14 @@ import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { showChatOpenUnavailable } from './chat-open-failure-toast'
 
 const LIVE_TOAST = '[data-sonner-toast]:not([data-removed="true"])'
+const AGENT = 'Test agent'
 const DETAIL = 'unreachable · structured_session_restore_timeout'
 
 function ToastStage({ starting }: { starting: boolean }): React.JSX.Element {
   useEffect(() => {
     showChatOpenUnavailable(
-      starting ? { starting: true } : { detail: DETAIL, retry: () => undefined }
+      starting ? { starting: true } : { detail: DETAIL, retry: () => undefined },
+      AGENT
     )
     return () => toast.dismiss()
   }, [starting])
@@ -56,7 +58,8 @@ async function raise(language: UiLanguage, starting: boolean): Promise<void> {
   await i18n.changeLanguage(await loadRendererUiLanguage(language))
   // The toast reads its words when shown, so raise it in the loaded language.
   showChatOpenUnavailable(
-    starting ? { starting: true } : { detail: DETAIL, retry: () => undefined }
+    starting ? { starting: true } : { detail: DETAIL, retry: () => undefined },
+    AGENT
   )
   await waitFor(
     () => document.querySelector(LIVE_TOAST)?.getAttribute('data-mounted') === 'true',
