@@ -78,7 +78,7 @@ export const LOCALE_VALUE_OVERRIDES = {
     Discard: '버리기',
     Retry: '다시 시도',
     'Search settings': '설정 검색',
-    'Find shortcuts': '바로가기 검색',
+    'Find shortcuts': '단축키 검색',
     'Opt out': '거부',
     'Got it': '확인',
     'Force Delete': '강제 삭제',

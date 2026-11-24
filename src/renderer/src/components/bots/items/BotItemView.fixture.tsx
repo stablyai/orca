@@ -84,7 +84,7 @@ const numbered = makeTestBotItem(35, {
   description: 'Bots say "item 35"; show that number on every row and in the item view.'
 })
 
-// The item's number before its title and in the line under it.
+// The item's number before its title; status and links on the row under it.
 export const header = defineFixture({
   width: 360,
   render: () => (

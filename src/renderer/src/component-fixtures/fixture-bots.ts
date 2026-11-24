@@ -13,24 +13,37 @@ function rosterResult(bots: Bot[], purposes?: Record<string, string>): Record<st
     : {}
 }
 
+/** A fixture's view of the bot RPCs it stubs: more methods to answer, and each call as it arrives. */
+export type StubBotCalls = {
+  results?: Record<string, unknown>
+  record?: (call: { method: string; params?: unknown }) => void
+}
+
 // The bot reads a mounted bot list makes, answered without a runtime: these bots, no groups, nothing new.
 // `purposes`, by bot id, is what each bot is for, as its SOUL.md says.
-export function stubBots(bots: Bot[], purposes?: Record<string, string>): void {
+export function stubBots(
+  bots: Bot[],
+  purposes?: Record<string, string>,
+  calls: StubBotCalls = {}
+): void {
   publishBots(bots)
   const results: Record<string, unknown> = {
     ...rosterResult(bots, purposes),
     'bots.list': { bots },
     'bots.groups.list': { groups: [] },
     'bots.upNext.unseen': { unseen: {} },
-    'bots.chatTree': { chats: [], workspaceChats: {} }
+    'bots.chatTree': { chats: [], workspaceChats: {} },
+    ...calls.results
   }
   const runtime: unknown = window.api.runtime
   Reflect.set(window.api, 'runtime', {
     ...(typeof runtime === 'object' ? runtime : {}),
-    call: async ({ method }: { method: string }) =>
-      method in results
+    call: async ({ method, params }: { method: string; params?: unknown }) => {
+      calls.record?.({ method, params })
+      return method in results
         ? { ok: true, result: results[method] }
         : { ok: false, error: { code: 'runtime_error', message: method } }
+    }
   })
 }
 

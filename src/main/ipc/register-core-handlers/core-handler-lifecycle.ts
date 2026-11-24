@@ -25,6 +25,7 @@ export type CoreHandlerLifecycleOptions = {
   deferHostInitialization?: boolean
   hostInitialization?: Promise<void>
   onBeforeRelaunch?: () => void | Promise<void>
+  onQuit?: () => void
   orcaAccount?: OrcaAccountService
   profileDirectory?: string
   rendererCheckpoint?: RendererShutdownCheckpointService

@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { ComposerAutocomplete } from '../../../../../../src/shared/native-chat/input/composer/native-chat-composer-autocomplete'
 import {
+  nativeChatMentionSnippet,
   nativeChatRoomNameMatches,
   rankNativeChatRoomMembers
 } from '../../../../../../src/shared/native-chat/input/native-chat-room-mentions'
@@ -29,6 +30,7 @@ export function useMobileNativeChatMentionBotMenu(bots: MentionBots | undefined)
       bots?.bots.map((bot) => ({
         name: bot.name,
         key: bot.id,
+        ...(bot.purpose ? { detail: bot.purpose } : {}),
         ...(bot.paused ? { unavailable: 'paused' } : {})
       })) ?? [],
     [bots]
@@ -65,9 +67,24 @@ export function useMobileNativeChatMentionBotMenu(bots: MentionBots | undefined)
         .matches.slice(0, MENU_ROWS_PER_GROUP)
         .flatMap((match): MentionBotRow[] => {
           const bot = byId.get(match.value)
-          return bot
-            ? [{ kind: 'bot', id: `bot:${bot.id}`, bot, chats: bots.chatPicks && !bot.paused }]
-            : []
+          if (!bot) {
+            return []
+          }
+          // Found by what it is for: the line starts near the match, so the match shows.
+          const snippet =
+            bot.purpose && match.detailHits.length > 0
+              ? nativeChatMentionSnippet(bot.purpose, match.detailHits)
+              : null
+          const detail = snippet ? `${snippet.clipped ? '…' : ''}${snippet.text}` : bot.purpose
+          return [
+            {
+              kind: 'bot',
+              id: `bot:${bot.id}`,
+              bot,
+              chats: bots.chatPicks && !bot.paused,
+              ...(detail ? { detail } : {})
+            }
+          ]
         })
       return [...botRows, ...files]
     },

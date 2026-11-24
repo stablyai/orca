@@ -65,7 +65,7 @@ export async function noteBotGroupMemberReply(
       { after, reply }
     )
     if (kept) {
-      groups.changed()
+      groups.changed(owner.group.id)
     }
   }
   if (!finished) {

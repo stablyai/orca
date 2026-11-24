@@ -29,7 +29,12 @@ export function structuredAgentSessionToolCallBlock(
   itemId: string
 ): NativeChatToolCallBlock {
   if (action.kind === 'diff') {
-    return { type: 'tool-call', name: 'Diff', input: { path: action.path }, callId: itemId }
+    return {
+      type: 'tool-call',
+      name: 'Diff',
+      input: { path: action.path, ...(action.paths ? { paths: action.paths } : {}) },
+      callId: itemId
+    }
   }
   return {
     type: 'tool-call',

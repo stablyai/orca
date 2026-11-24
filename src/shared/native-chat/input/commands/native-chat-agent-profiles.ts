@@ -17,6 +17,8 @@ export type NativeChatAgentProfile = {
   readsSkillFoldersOf?: readonly AgentType[]
   /** Other agents whose project skill folders, but not home ones, this agent also reads. */
   readsProjectSkillFoldersOf?: readonly AgentType[]
+  /** The agent never reads the shared `.agents/skills` roots (owner null). */
+  skipsSharedSkillFolders?: true
   /** OpenCode 1.x reports some skills as commands; 2.x reports none. Keep folder scans for running chats. */
   keepsScannedSkills?: true
   /** The agent's own harness expands a slash command out of the message text, so
@@ -48,9 +50,11 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
     // App-server has no slash parser; the model owns goal tools and receives /goal objectives as prose.
     textDrivenCommands: ['goal']
   },
+  // Claude Code loads `.claude` skill folders and plugins only; OpenClaude also reads ~/.agents/skills.
   claude: {
     skillPrefix: '/',
     skillSourceOwner: 'claude',
+    skipsSharedSkillFolders: true,
     expandsSlashCommandsFromText: true
   },
   openclaude: {
@@ -131,18 +135,22 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   }
 }
 
-/** Whether `skill` under `source` reaches `profile`'s agent: shared roots, its own, and the skill
- *  folders of agents it also reads, without their plugins or the skills they bundle. */
+/** Whether `skill` under `source` reaches `profile`'s agent: shared roots unless the profile sets
+ *  `skipsSharedSkillFolders`, its own, and the skill folders of agents it also reads, without their
+ *  plugins or the skills they bundle. */
 export function readsSkillSource(
   profile: Pick<
     NativeChatAgentProfile,
-    'skillSourceOwner' | 'readsSkillFoldersOf' | 'readsProjectSkillFoldersOf'
+    | 'skillSourceOwner'
+    | 'readsSkillFoldersOf'
+    | 'readsProjectSkillFoldersOf'
+    | 'skipsSharedSkillFolders'
   >,
   source: Pick<SkillDiscoverySource, 'owner' | 'sourceKind' | 'readers'>,
   skill: Pick<DiscoveredSkill, 'sourceKind'>
 ): boolean {
   if (source.owner === null) {
-    return true
+    return profile.skipsSharedSkillFolders !== true
   }
   if (source.owner === profile.skillSourceOwner) {
     return source.readers !== 'borrowers'

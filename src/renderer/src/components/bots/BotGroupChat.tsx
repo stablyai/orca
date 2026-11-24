@@ -281,6 +281,7 @@ export function BotGroupChat({
           <NativeChatTranscriptViewport
             scrollRef={follow.scrollRef}
             scrollerProps={follow.scrollerProps}
+            toolRunScroll={follow.toolRunScroll}
             forwardedGesture={follow.forwardedGesture}
             showJump={follow.showJump}
             onJump={follow.jumpToLatest}

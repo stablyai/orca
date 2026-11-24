@@ -215,6 +215,9 @@ export function BotGitHubCard({
   // GitHub's install page, through the same setup as Add connector.
   const addAccess = useConnectorSetup(bot)
   const notReady = view.status === 'ready' && !face.ready
+  // A cloud that links several logins lists them; a paired web client can't start a sign-in.
+  const signsIn =
+    face.ready && view.status === 'ready' && !!view.github.accounts && !isPairedWebClientWindow()
   return (
     <BotConnectorRow
       connector={{ id: 'github', Icon: GitHubIcon }}
@@ -240,10 +243,17 @@ export function BotGitHubCard({
           : null
       }
       addAccount={
-        // A cloud that links several logins lists them; a paired web client can't start a sign-in.
-        face.ready && view.status === 'ready' && view.github.accounts && !isPairedWebClientWindow()
+        signsIn
           ? {
               label: t('bots.github.connection.addAccount', 'Add another GitHub account'),
+              onClick: () => addGitHubAccount(bot)
+            }
+          : null
+      }
+      update={
+        signsIn
+          ? {
+              label: t('bots.github.connection.refresh', 'Refresh'),
               onClick: () => addGitHubAccount(bot)
             }
           : null

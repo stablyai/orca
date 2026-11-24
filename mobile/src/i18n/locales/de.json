@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "Erneut anmelden",
-      "usageSignInMessage": "Für das ausgewählte Claude-Konto ist eine erneute Anmeldung erforderlich. Einstellungen > Konten für KI-Anbieter öffnen oder „Systemstandard“ auswählen."
+      "usageSignInMessage": "Für dieses Konto ist eine erneute Anmeldung erforderlich."
     }
   },
   "agentHistory": {
@@ -207,8 +207,7 @@
       "next": "Weiter",
       "other": "Sonstiges…",
       "skip": "Überspringen",
-      "step": "Schritt {{step}}",
-      "submit": "Absenden"
+      "step": "Schritt {{step}}"
     },
     "askRow": {
       "asked": "Gefragt:",
@@ -381,17 +380,16 @@
     "promptStrip": {
       "expand": "Ausklappen"
     },
-    "question": {
-      "otherReplyPlaceholder": "Oder eine Antwort eingeben…",
-      "replyPlaceholder": "Antwort eingeben…",
-      "sendReply": "Antwort senden",
-      "submit": "Absenden",
-      "submitCount": "Absenden ({{count}})",
-      "submitSelectedOptions": "Ausgewählte Optionen absenden"
-    },
     "queuedMessages": {
       "deleteAll": "Alle löschen",
       "editMessage": "Nachricht bearbeiten",
+      "showLess": "Weniger anzeigen",
+      "moreCount_one": "{{count}} weitere",
+      "moreCount_other": "{{count}} weitere",
+      "deleteMessage": "Nachricht löschen",
+      "queuedCount_one": "{{count}} Nachricht in der Warteschlange",
+      "queuedCount_other": "{{count}} Nachrichten in der Warteschlange",
+      "foldNeedsAttention": "{{more}}, eine Nachricht erfordert Aufmerksamkeit",
       "pausedState": "Pausiert",
       "queuedState": "In der Warteschlange",
       "resume": "Fortsetzen",
@@ -2429,6 +2427,7 @@
       "images_one": "{{count}} Bild",
       "images_other": "{{count}} Bilder",
       "moreActions": "Weitere Aktionen",
+      "you": "Du",
       "send": "Senden",
       "sendAgainHint": "Diese Nachricht erneut senden",
       "sendHint": "Diese Nachricht senden",
@@ -2538,6 +2537,7 @@
       "unsavedMarkdown": "Ungespeicherte Markdown-Änderungen",
       "urlPrompt": "URL eingeben oder für einen neuen Tab leer lassen.",
       "allowAutoClose": "Automatisches Schließen erlauben",
+      "agents": "Agenten",
       "renameTerminalFailed": "Das Terminal konnte nicht umbenannt werden. {{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -2751,6 +2751,8 @@
       "conversationCleared": "Diese Unterhaltung wurde geleert.",
       "goalsUnsupported": "Dieser Agent unterstützt keine Ziele.",
       "historyUnavailable": "Orca konnte den Verlauf dieses Chats gerade nicht öffnen.",
+      "diskFull": "Der Datenträger auf dem Computer, auf dem dieser Chat läuft, ist voll.",
+      "freeDiskSpace": "Gib auf diesem Datenträger Speicherplatz frei und versuche es dann erneut.",
       "savedInOtherFolder": "Diese Unterhaltung wurde in einem anderen Ordner gespeichert.",
       "historyUnreadable": "Orca konnte den gespeicherten Verlauf dieses Chats nicht lesen.",
       "historyUnusable": "Dieser Chat konnte nicht geladen werden.",
@@ -2850,16 +2852,35 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "Der Worktree wurde gelöscht.",
+      "projectRemoved": "Das Projekt wurde aus Orca entfernt.",
       "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
     },
     "nativeChatView": {
       "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden."
     },
+    "tabsSheet": {
+      "needsYou": "Benötigt dich",
+      "working": "In Arbeit",
+      "everythingElse": "Alles andere",
+      "closeTab": "{{title}} schließen"
+    },
+    "tabRows": {
+      "browser": "Browser",
+      "markdown": "Markdown-Notiz",
+      "file": "Datei",
+      "chat": "Chat",
+      "terminal": "Terminal"
+    },
     "browserProfile": {
       "default": "Standard"
     },
     "tabBar": {
+      "oneTab": "1 Tab",
       "tabCount": "{{count}} Tabs",
+      "anotherNeedsYou": "ein anderer Tab benötigt dich",
+      "actionsHint": "Zeigt Aktionen für diesen Tab",
+      "next": "Nächster Tab",
+      "previous": "Vorheriger Tab",
       "hint": "Zeigt alle Tabs"
     }
   },
@@ -3439,6 +3460,9 @@
       "planModelUnavailable": "Modell „{{model}}“ ist für {{label}} nicht verfügbar.",
       "planModelWithoutThinking": "Modell „{{model}}“ unterstützt keine Einstellung des Denkaufwands.",
       "planThinkingLevelInvalid": "Die Denkstufe „{{level}}“ ist für {{model}} nicht gültig.",
+      "commandTemplateEmptyDictationCleanup": "Die Befehlsvorlage für die Diktatnachbearbeitung ist leer.",
+      "dictationCleanupAgentUnsupported": "Unter Einstellungen -> Spracheingabe -> Nachbearbeitung einen unterstützten Agenten für die KI-Nachbearbeitung auswählen. Unterstützte Agenten: {{agents}} oder Benutzerdefinierter Befehl.",
+      "agentCannotGenerateDictationCleanup": "Agent „{{agent}}“ unterstützt keine Diktatnachbearbeitung. Unterstützte Agenten: {{agents}} oder Benutzerdefinierter Befehl.",
       "promptTooLargeForArgument": "Der Prompt für {{label}} ist zu groß, um ihn als einzelnes Befehlszeilenargument zu übergeben. Weniger Änderungen vormerken und erneut versuchen.",
       "promptTooLargeForWindows": "Der Prompt für {{label}} ist für die Windows-Befehlszeile zu groß. Weniger Änderungen vormerken und erneut versuchen.",
       "pullRequestDetailsUnparseable": "Die generierten Pull-Request-Details konnten nicht geparst werden.",
@@ -4092,7 +4116,6 @@
       "empty": "Keine Arbeitsbereiche",
       "loadFailed": "Arbeitsbereiche von diesem Host konnten nicht geladen werden.",
       "noFilterMatches": "Keine Arbeitsbereiche entsprechen den Filtern",
-      "noMatches": "Keine passenden Arbeitsbereiche",
       "reopen": "Zum Aktualisieren erneut öffnen",
       "reopenDetail": "Dieser Host listet Arbeitsbereiche in einem Format auf, das diese Seite noch nicht unterstützt."
     },
@@ -4119,7 +4142,6 @@
       "extraAgentArguments": "Zusätzliche Agentenargumente",
       "allAutomations": "Alle Automatisierungen",
       "schedule": "Zeitplan",
-      "nextRun": "Nächste Ausführung",
       "project": "Projekt",
       "unavailable": "Nicht verfügbar",
       "workspace": "Arbeitsbereich",
@@ -4168,7 +4190,6 @@
       "newWorkspacePerRun": "Neuer Arbeitsbereich pro Ausführung",
       "instructions": "Anweisungen",
       "runNow": "Jetzt ausführen",
-      "viewAllRuns": "Alle Ausführungen anzeigen",
       "savedAgent": "{{agent}} (gespeichert)",
       "chooseAProjectSetUpOnThisHost": "Wähle ein auf diesem Host eingerichtetes Projekt.",
       "newAutomation": "Neue Automatisierung",
@@ -4193,9 +4214,6 @@
       "letYourAgentsWorkOnASchedule": "Lass deine Agenten nach Zeitplan arbeiten",
       "createAnAutomationToRunATaskOnThisHost": "Erstelle eine Automatisierung, um eine Aufgabe auf diesem Host auszuführen.",
       "nextDate": "Nächste: {{date}}",
-      "lastResult": "Zuletzt: {{status}} · {{date}}",
-      "latestResultNotReported": "Letztes Ergebnis nicht gemeldet",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Verbinde dich erneut mit diesem Host, um zu aktualisieren oder Änderungen vorzunehmen. Gespeicherte Informationen bleiben unten verfügbar.",
       "recentRuns": "Letzte Ausführungen",
       "outcome": "Ergebnis",
@@ -4218,7 +4236,6 @@
       "fullOutputUnavailable": "Die vollständige Ausgabe konnte nicht geladen werden.",
       "retryFullOutput": "Erneut versuchen",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "Keine passenden Ausführungen im geladenen Verlauf. Lade weitere, um fortzufahren.",
-      "noMatchingRunsYet": "Noch keine passenden Ausführungen.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
       "scheduled": "Geplant",
       "loadMoreRuns": "Weitere Ausführungen laden",
@@ -4443,6 +4460,7 @@
     }
   },
   "bots": {
+    "section": {},
     "link": {
       "pairTitle": "Computer koppeln",
       "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",
@@ -4481,7 +4499,6 @@
       "access": "Zugriff",
       "whoCanAsk": "Wer fragen darf",
       "deleteBot": "Bot löschen…",
-      "agentDetail": "Wird für Bot-Unterhaltungen und Automatisierungen verwendet. Ein neues Modell gilt für neue Unterhaltungen; der Home-Chat behält sein aktuelles.",
       "accountChecking": "Wird geprüft…",
       "signedOut": "Von Orca abgemeldet",
       "orcaAccount": "Orca-Konto",
@@ -4496,7 +4513,6 @@
       "onlyYou": "Nur du",
       "model": "Modell",
       "effort": "Denkaufwand",
-      "chatDefaultNote": "Nutzt deinen Chat-Standard. Hintergrundläufe nutzen deine Agents-Einstellung.",
       "modelDefault": "Standard",
       "signInChanged": "Orca-Anmeldung geändert",
       "sameAsChatsDetail": "Verwendet deine Chat-Berechtigungseinstellung.",
@@ -4522,7 +4538,6 @@
     "lookAround": {
       "looking": "Sucht…",
       "save": "Speichern",
-      "detail": "Liest verbundene Apps und Projekte, um nächste Schritte vorzuschlagen. Nur Lesen. Jedes Umsehen nutzt deinen Agenten-Plan, und Orca muss auf dem Host laufen.",
       "lookNow": "Jetzt umsehen",
       "notYet": "Noch nicht",
       "backToLookAround": "Zurück zum Umsehen"
@@ -4537,28 +4552,13 @@
     "groups": {
       "group": "Gruppe",
       "peerTold": "{{from}} hat {{to}} Bescheid gegeben",
-      "startAConversationWithThisGroupMentionBots": "Starte eine Unterhaltung mit dieser Gruppe. Erwähne Bots mit @Name oder @everyone.",
       "items": {
-        "thisGroup": "Diese Gruppe",
-        "thread": "Thread",
-        "all": "Ihre gesamte Arbeit",
-        "orNames": "{{names}} oder {{last}}",
-        "outsideRoom_one": "{{count}} weiteres außerhalb dieses Raums",
-        "outsideRoom_other": "{{count}} weitere außerhalb dieses Raums",
-        "outsideThread_one": "{{count}} weiteres außerhalb dieses Threads",
-        "outsideThread_other": "{{count}} weitere außerhalb dieses Threads",
-        "outside_one": "{{count}} weiteres außerhalb dieser Gruppe",
-        "outside_other": "{{count}} weitere außerhalb dieser Gruppe",
         "emptyTitle": "Noch keine Elemente aus dieser Gruppe",
-        "emptyBody": "Wenn {{names}} in dieser Gruppe etwas übernehmen, erscheint es hier.",
         "needsYouCount_one": "{{count}} braucht dich",
         "needsYouCount_other": "{{count}} brauchen dich",
         "workingCount_one": "{{count}} arbeitet",
         "workingCount_other": "{{count}} arbeiten",
         "filterBot": "Bot",
-        "outsideRoom": "{{count}} weiteres außerhalb dieses Raums",
-        "outsideThread": "{{count}} weiteres außerhalb dieses Threads",
-        "outside": "{{count}} weiteres außerhalb dieser Gruppe",
         "needsYouCount": "{{count}} braucht dich",
         "workingCount": "{{count}} arbeitet"
       },
@@ -4590,14 +4590,11 @@
     "tidyUp": {
       "title": "Gedächtnispflege",
       "never": "Noch nicht",
-      "footer": "Ändert nur Gedächtnisdateien. Nutzt deinen Agenten-Tarif wie ein kurzer Chat. Orca muss auf deinem Computer laufen.",
-      "undoNote": "Beim Rückgängigmachen wird MEMORY.md in einem Schritt auf den Stand vor diesem Aufräumen zurückgesetzt. Den vollständigen Verlauf und die Gedächtnisbearbeitung findest du auf deinem Computer unter Einstellungen → Gedächtnis.",
       "backToTidyUp": "Zurück zur Gedächtnispflege"
     },
     "items": {
       "filter": {
-        "clearAll": "Filter zurücksetzen",
-        "chat": "Chat"
+        "clearAll": "Filter zurücksetzen"
       },
       "tab": "Einträge",
       "activity": {
@@ -4613,8 +4610,7 @@
         "title": "Element",
         "placeOf": "{{index}} von {{total}}",
         "previous": "Vorheriges Element",
-        "next": "Nächstes Element",
-        "subWhere": "Element {{number}} · {{chat}}"
+        "next": "Nächstes Element"
       },
       "write": {
         "offline": "{{host}} ist offline."
@@ -4623,8 +4619,9 @@
       "readFailedClosedPage": "Weitere geschlossene Elemente konnten nicht gelesen werden.",
       "skillLimit": "Nachricht nicht gesendet. Wähle höchstens {{limit}} Skill-Dateien aus und versuche es erneut.",
       "ask": {
-        "notSentYet": "noch nicht gesendet",
-        "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann."
+        "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann.",
+        "replacedByNewer": "Durch eine neuere Frage ersetzt",
+        "skipped": "Übersprungen"
       }
     },
     "needs": {
@@ -4660,7 +4657,6 @@
       },
       "rotate": {
         "open": "Schlüssel rotieren…",
-        "title": "Schlüssel für „{{automation}}“ rotieren?",
         "confirm": "Schlüssel rotieren",
         "note": "Die URL bekommt einen neuen Schlüssel. Aktualisiere damit jeden Absender.",
         "overlap": "Alten Schlüssel 24 Stunden weiter gültig lassen",
@@ -4675,19 +4671,15 @@
         "add": "Signatur-Secret hinzufügen…",
         "generatedTitle": "Signatur-Secret bereit",
         "done": "Erledigt",
-        "generatedNote": "Kopiere es in die Webhook-Einstellungen von {{sender}}. Ab jetzt müssen Aufrufe seine Signatur tragen.",
         "copy": "Secret kopieren",
         "copied": "Secret kopiert",
         "changeTitle": "Signatur-Secret ändern",
         "addTitle": "Signatur-Secret hinzufügen",
-        "note": "Orca akzeptiert dann nur Aufrufe, die mit diesem Secret signiert sind, sodass eine geleakte URL allein „{{automation}}“ nicht starten kann.",
         "sender": "Absender",
         "modeGenerate": "Orca erzeugt eins",
         "modePaste": "Das des Absenders einfügen",
         "generateNote": "Orca erzeugt dieses Secret. Als Nächstes kopierst du es in {{sender}}.",
         "paste": "{{sender}}-Secret",
-        "pasteNote": "Verwende dies, wenn der Absender dir sein eigenes Secret gibt.",
-        "generate": "Secret erzeugen",
         "save": "Speichern",
         "saved": "Signatur-Secret gespeichert",
         "changeOpen": "Signatur-Secret ändern…",
@@ -4721,7 +4713,6 @@
       "hookCount_one": "{{count}} Hook",
       "hookCount_other": "{{count}} Hooks",
       "name": "Webhooks",
-      "hooks": "Hooks",
       "addInChat": "Im Chat hinzufügen",
       "setUpDraft": "Richte einen Webhook ein, der ",
       "resumed": "Webhook fortgesetzt",
@@ -4787,8 +4778,7 @@
         "unverifiable": "Nicht überprüfbar",
         "unverifiableDetail": "Der Computer von {{bot}} ist nicht erreichbar"
       },
-      "back": "Zurück zu den Webhooks",
-      "howToCallShort": "Jedes Tool oder Skript kann per POST an die URL eines Hooks senden. Jeder Hook startet eine Automatisierung."
+      "back": "Zurück zu den Webhooks"
     },
     "errors": {
       "generic": "Etwas ist schiefgelaufen. Versuche es erneut."
@@ -4854,7 +4844,6 @@
       "colorInk": "Tinte",
       "title": "Name und Bild",
       "mascot": "Maskottchen",
-      "background": "Hintergrundfarbe",
       "choosePhoto": "Aus Fotos auswählen",
       "slackToo": "Ändert auch das Bild deines Bots in Slack."
     },
@@ -4871,9 +4860,7 @@
       "addButton": "Hinzufügen",
       "sourceLabel": "Server-URL oder Startbefehl",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "Nur {{name}} bekommt es, zusätzlich zu deinen eigenen Werkzeugen.",
       "details": "Details",
-      "commandWarning": "Der Befehl läuft im Home-Ordner dieses Bots auf {{host}}. Hinzufügen oder Speichern kann ihn während der nativen Prüfung starten. Füge nur Software hinzu, der du vertraust.",
       "serverType": "Servertyp",
       "urlMode": "Mit einer URL verbinden",
       "commandMode": "Befehl ausführen",
@@ -4881,7 +4868,6 @@
       "removeTitle": "{{app}} entfernen?",
       "removeNote": "{{bot}} kann {{app}} nicht mehr verwenden. Du kannst es jederzeit wieder hinzufügen.",
       "remove": "Entfernen",
-      "signInOrca": "Funktioniert mit Claude und Codex",
       "signInMissing": "{{agent}} ist nicht angemeldet",
       "signInHeld": "Von {{agent}} verwaltet",
       "wontStart": "Startet nicht",
@@ -4943,7 +4929,17 @@
         "denied": "Der Zugriff wurde nicht erlaubt.",
         "expired": "Die Anmeldung ist abgelaufen. Versuche es erneut.",
         "couldNotSignIn": "Anmeldung nicht möglich. Versuche es erneut."
-      }
+      },
+      "trust": "Füge nur Software hinzu, der du vertraust.",
+      "argument": "Argument",
+      "removeArgument": "Argument entfernen",
+      "header": "Header",
+      "variable": "Variable",
+      "removeHeaderRow": "Header entfernen",
+      "removeVariableRow": "Variable entfernen",
+      "emptyArgument": "Leer",
+      "valueNew": "Neuer Wert",
+      "valueSaved": "Gespeichert"
     },
     "handToBot": {
       "menu": "An Bot übergeben…",
@@ -4976,7 +4972,6 @@
       "rowDetail": "{{app}} {{kind}}",
       "bringOver": "Übernehmen",
       "otherApp": "Andere App…",
-      "otherAppNote": "Dein alter Bot kopiert seine Dateien für dich",
       "noneFoundNote": "Keine Bots in OpenClaw (~/.openclaw), Hermes (~/.hermes) oder OpenBot gefunden.",
       "sendStep": "Sende deinem alten Bot diese Nachricht",
       "copyMessage": "Nachricht kopieren",
@@ -4987,18 +4982,13 @@
       "replyLabel": "Seine Antwort",
       "title": "Aus einer anderen App importieren",
       "newBot": "Neuer Bot",
-      "exportDescription": "Bitte deinen alten Bot um eine Kopie von sich selbst und gib die Kopie dann deinem neuen Bot.",
-      "description": "Dein neuer Bot liest den alten und richtet sich selbst ein.",
       "nameAnother": "Neuen Bot benennen",
-      "importedBefore": "{{bot}} stammt von diesem Bot",
       "keysStay": "Schlüssel und Logins bleiben zurück",
       "chooseFolderTitle": "Ordner auswählen",
       "loadingFolders": "Ordner werden geladen…",
       "lookingOn": "Suche auf {{host}}…",
       "foundOn": "{{count}} auf {{host}} gefunden",
-      "copiedNote": "Kopiert. Füge die Nachricht dort ein, wo du mit deinem alten Bot chattest.",
       "copyAgain": "Erneut kopieren",
-      "addStepNote": "Er speichert auf {{host}} unter Downloads einen Ordner, dessen Name auf -export endet.",
       "folderItems_one": "{{count}} Element",
       "folderItems_other": "{{count}} Elemente",
       "chooseAnother": "Anderen Ordner auswählen…",
@@ -5160,6 +5150,9 @@
       },
       "webhooks": {
         "line": "Ereignisse aus jedem Tool oder Skript"
+      },
+      "composio": {
+        "keyOnHost": "Gespeichert auf {{host}}; Bots sehen ihn nie."
       }
     },
     "share": {
@@ -5171,6 +5164,11 @@
       "today": "heute",
       "yesterday": "gestern",
       "lastTidied": "zuletzt aufgeräumt {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Fortsetzung um {{time}}",
+      "continues": "Fortsetzung um {{time}}",
+      "hitLimit": "Limit erreicht · Reset {{time}}"
     }
   },
   "sidebar": {

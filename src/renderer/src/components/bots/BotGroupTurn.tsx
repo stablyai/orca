@@ -91,7 +91,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
   const submission = submissions.find(
     (item) => item.clientMessageId === turn.operationId || item.queuedMessageId === turn.operationId
   )
-  const queued = session?.queuedMessages.cards.some((card) => card.messageId === turn.operationId)
+  const queued = session?.queuedMessages.holds(turn.operationId)
   const working = !turn.revoked && lifecycle?.state === 'running'
   const rejection =
     (turn.error === undefined ? null : botCodedText(turn.error, turn.failure, t)) ??
