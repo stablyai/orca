@@ -43,11 +43,12 @@ export function botSidebarWorkerLines(
   return (line) => lines.get(botLineWorkspaceKey(line))
 }
 
-/** A "Show more" step reads the chat's next page of finished workers while the host holds more than
- *  it sent, so the older lines it reveals have their workers too. */
-export function botSidebarStepReadsMore(
+/** A chat reads its next page of finished workers while a line it shows has none yet and the host
+ *  holds more than it sent; pages are counted in workers, and one workspace can hold several. */
+export function botSidebarChatReadsMore<L extends Pick<Worktree, 'id' | 'hostId'>>(
   chat: Pick<BotChatTreeChat, 'finished' | 'finishedTotal'>,
-  nextSteps: number
+  lines: readonly L[],
+  lineWorkerOf: (line: L) => WorktreeCardLineWorker | undefined
 ): boolean {
-  return nextSteps > 0 && chat.finished.length < chat.finishedTotal
+  return chat.finished.length < chat.finishedTotal && lines.some((line) => !lineWorkerOf(line))
 }

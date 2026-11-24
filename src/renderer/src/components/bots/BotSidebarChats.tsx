@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -26,7 +26,7 @@ import type { BotChatTree } from './use-bot-chat-tree'
 import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChatRowMenu'
 import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
-import { botSidebarStepReadsMore, botSidebarWorkerLines } from './bot-sidebar-worker-lines'
+import { botSidebarChatReadsMore, botSidebarWorkerLines } from './bot-sidebar-worker-lines'
 import type { WorktreeCardLineWorker } from '@/components/sidebar/workspace-card/controller/worktree-card-model'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
 
@@ -121,12 +121,8 @@ export function BotSidebarChats({
           notes={notes}
           lineWorkerOf={lineWorkerOf}
           lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
-          onStep={(next) => {
-            if (botSidebarStepReadsMore(chatView.chat, next)) {
-              loadMore(chatView.chat.chatId)
-            }
-            onStep(chatView.chat.chatId, next)
-          }}
+          onReadMore={loadMore}
+          onStep={(next) => onStep(chatView.chat.chatId, next)}
           onOpen={onOpen}
         />
       ))}
@@ -164,6 +160,7 @@ function BotSidebarChat({
   notes,
   lineWorkerOf,
   lineageChildrenByParentIdentity,
+  onReadMore,
   onStep,
   onOpen
 }: {
@@ -171,12 +168,26 @@ function BotSidebarChat({
   view: BotSidebarChatView<Worktree>
   notes: ReadonlyMap<string, string>
   lineWorkerOf: (worktree: Worktree) => WorktreeCardLineWorker | undefined
+  onReadMore: (chatId: string) => void
   lineageChildrenByParentIdentity: ReadonlyMap<string, Worktree[]>
   onStep: (steps: number) => void
   onOpen: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const { chat, foldable, open, lines, paging, steps } = view
+  // Reads page after page until each shown line has its worker; a page that adds none stops it.
+  const readsMore = open && botSidebarChatReadsMore(chat, lines, lineWorkerOf)
+  const loaded = chat.finished.length
+  // The reader changes with every page; only a page that grew the list asks for the next.
+  const readMore = useRef(onReadMore)
+  useLayoutEffect(() => {
+    readMore.current = onReadMore
+  })
+  useEffect(() => {
+    if (readsMore) {
+      readMore.current(chat.chatId)
+    }
+  }, [readsMore, loaded, chat.chatId])
   const { active, toggle, highlight } = useBotChatPress(bot, chat.chatId)
   const title = chatTitle(t, chat)
   const label = useBotChatLabel(chat, title)

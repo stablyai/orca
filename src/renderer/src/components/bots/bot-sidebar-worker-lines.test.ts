@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BotOnHost } from '@/lib/bot-hosts'
 import type { BotChatTreeChat, BotChatTreeWorker } from '../../../../shared/bots/bot-chat-tree'
-import { botSidebarStepReadsMore, botSidebarWorkerLines } from './bot-sidebar-worker-lines'
+import { botSidebarChatReadsMore, botSidebarWorkerLines } from './bot-sidebar-worker-lines'
 
 type Opened = { dispatchId: string; worktreeId: string | null }
 const opened = vi.hoisted((): Opened[] => [])
@@ -114,14 +114,25 @@ describe('botSidebarWorkerLines', () => {
   })
 })
 
-describe('botSidebarStepReadsMore', () => {
-  it('reads the next page while the host holds finished workers it has not sent', () => {
-    expect(botSidebarStepReadsMore({ finished: [worker('a', 'done')], finishedTotal: 5 }, 1)).toBe(
-      true
-    )
-    expect(botSidebarStepReadsMore({ finished: [worker('a', 'done')], finishedTotal: 1 }, 1)).toBe(
-      false
-    )
-    expect(botSidebarStepReadsMore({ finished: [], finishedTotal: 5 }, 0)).toBe(false)
+describe('botSidebarChatReadsMore', () => {
+  // A page holds 8 workers; here one busy workspace fills it, so the next shown line's worker is past it.
+  const busy = Array.from({ length: 8 }, (_, n) =>
+    worker(`busy${n}`, 'done', { worktreeId: 'wt-busy', startedAt: 20 - n })
+  )
+  const late = worker('late', 'done', { startedAt: 1 })
+  const shown = [{ id: 'wt-busy' }, { id: 'wt-late' }]
+
+  function readsMore(finished: BotChatTreeWorker[], finishedTotal: number): boolean {
+    const home = { ...chat([], finished), finishedTotal }
+    return botSidebarChatReadsMore(home, shown, botSidebarWorkerLines(here, [home]))
+  }
+
+  it('keeps reading pages until every shown line has its worker', () => {
+    expect(readsMore(busy, 9)).toBe(true)
+    expect(readsMore([...busy, late], 9)).toBe(false)
+  })
+
+  it('stops once the host has sent every finished worker', () => {
+    expect(readsMore(busy, 8)).toBe(false)
   })
 })
