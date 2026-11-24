@@ -16,6 +16,7 @@ import {
 import { hookIdOfActor, hookIdOfRule } from './webhook-names.js'
 import { WEBHOOK_NOTICE_CONDITIONS, WebhookHookIdSchema } from './webhook-messages.js'
 import { PrEventSchema } from './pr-event-messages.js'
+import { ShareAcceptFields, ShareResolvedFields, ShareSendFields } from './share-messages.js'
 
 // Polls, acks and events name the hello they belong to. Under any other than the current one the cloud
 // answers 409 hello_required and applies nothing; the first poll after a hello lists what is unsettled.
@@ -32,6 +33,12 @@ const DeliveryBase = {
   seq: SequenceSchema,
   expiresAt: EpochMsSchema,
   conversation: ConnectorConversationSchema
+}
+
+// A share's deliveries: one ordered queue per share, its conversation named by the share's id.
+const ShareDelivery = {
+  ...DeliveryBase,
+  conversation: z.object({ source: z.literal('orca'), externalId: OpaqueIdSchema })
 }
 
 // Where a bot was asked: a Slack conversation by channel id; a GitHub issue or pull request as
@@ -233,7 +240,11 @@ export const ConnectorDeliverySchema = z.discriminatedUnion('kind', [
     ...DeliveryBase,
     kind: z.literal('pr_event'),
     event: PrEventSchema
-  })
+  }),
+  // Sent only to a machine that lists bots.shares, on the share's conversation (share-messages.ts).
+  z.object({ ...ShareDelivery, kind: z.literal('share_resolved'), ...ShareResolvedFields }),
+  z.object({ ...ShareDelivery, kind: z.literal('share_accept'), ...ShareAcceptFields }),
+  z.object({ ...ShareDelivery, kind: z.literal('share_send'), ...ShareSendFields })
 ])
 
 const absent = z.never().optional()

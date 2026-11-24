@@ -68,6 +68,11 @@ export const CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE = 'reply.choices'
  *  as the cloud's contract keeps it. */
 export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
 
+/** The cloud keeps a bot's sharedWith, serves the shares routes and sends the share deliveries
+ *  (cloud/packages/connector-contract/src/share-messages.ts); this Orca lists it once it takes them.
+ *  Its own constant, as the cloud's contract keeps it. */
+export const CONNECTOR_CLOUD_BOT_SHARES_FEATURE = 'bots.shares'
+
 /** Listed by this Orca, which keeps a reply outbox, and by a cloud that takes its `reply` events
  *  (design item 125). Its own constant, as the cloud's contract keeps it. */
 export const CONNECTOR_REPLIES_OUTBOX_FEATURE = 'replies.outbox'
