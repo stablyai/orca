@@ -51,6 +51,8 @@ const NativeChatWaitingAgentMailRow = memo(function NativeChatWaitingAgentMailRo
     <div
       ref={setElement}
       data-native-chat-message-id={message.id}
+      // A held row is empty, so in a flex column (setup mail block) it would shrink to nothing.
+      className="shrink-0"
       style={held ? { height } : undefined}
     >
       {held ? null : <NativeChatWaitingAgentMailCard message={message} />}
