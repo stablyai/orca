@@ -1,6 +1,9 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { z } from 'zod'
-import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
+import {
+  listEnvironments,
+  resolveEnvironment
+} from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   RUNTIME_ENVIRONMENT_PORT_FORWARDS_CHANGED_CHANNEL,
@@ -71,6 +74,24 @@ export function registerRuntimeEnvironmentPortForwardHandlers(options: {
       z.object({ environmentId: EnvironmentId, remotePort: Port, label: Label }).parse(input)
     )
   )
+}
+
+/** The CLI can remove a pairing from the registry directly; its forwards stop listening here too. */
+export async function closePortForwardsOfRemovedEnvironments(userDataPath: string): Promise<void> {
+  const forwardedIds = new Set(listPairedPortForwards().map((entry) => entry.connectionId))
+  if (forwardedIds.size === 0) {
+    return
+  }
+  try {
+    const known = new Set(
+      (await listEnvironments(userDataPath)).map((environment) => environment.id)
+    )
+    await Promise.all(
+      [...forwardedIds].filter((id) => !known.has(id)).map((id) => closePairedPortForwards(id))
+    )
+  } catch (error) {
+    console.warn("[runtime-environments] Closing removed servers' forwards failed:", error)
+  }
 }
 
 function publishPortForwardsChanged(environmentId: string): void {
