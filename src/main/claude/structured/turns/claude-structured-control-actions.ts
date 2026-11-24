@@ -1,4 +1,5 @@
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
+import { claudeRelayOpenWork } from '../../relay/claude-relay-markers'
 import type { AgentChildWorkStopAcknowledgement } from '../../../../shared/agent-status/child-work/agent-child-work-stop-targets'
 import type { ClaudePromptClaim } from '../permissions/claude-prompt-registry'
 import {
@@ -139,4 +140,18 @@ export async function answerClaudePrompt(
   session.prompts.forget(claim.found.prompt)
   claim.found.prompt.settle(reply)
   session.translator?.journalPrompts.resolve(claim.found.prompt.promptKey)
+}
+
+/** Which background-task stops a live chat supports. */
+export function claudeBackgroundTaskStops(sessions: ReadonlyMap<string, ClaudeSession>) {
+  return (sessionId: string) =>
+    sessions.has(sessionId) ? { supportsTaskStop: true, supportsStopAll: true } : undefined
+}
+
+/** The adapter's `relayOpenWork`: a chat's open work for the daemon's detached idle stop. */
+export function claudeRelayOpenWorkOf(sessions: ReadonlyMap<string, ClaudeSession>) {
+  return (sessionId: string, rootTurnRunning: boolean): Record<string, string[][]> | null => {
+    const session = sessions.get(sessionId)
+    return session ? claudeRelayOpenWork(session, rootTurnRunning) : null
+  }
 }

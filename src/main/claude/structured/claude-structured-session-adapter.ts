@@ -8,7 +8,7 @@ import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionAdapter
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { stopCurrentClaudeBackgroundTasks } from './turns/claude-structured-control-actions'
+import * as controlActions from './turns/claude-structured-control-actions'
 import { claudeHeldSends, claudeHoldsDispatch } from './turns/claude-command-lifecycle'
 import {
   releaseClaudeAcquisition,
@@ -200,14 +200,14 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = async (
     input
   ) =>
-    stopCurrentClaudeBackgroundTasks({
+    controlActions.stopCurrentClaudeBackgroundTasks({
       ...input,
       sessions: this.sessions,
       session: this.session(input.sessionId),
       timeoutMs: this.deps.requestTimeoutMs
     })
-  backgroundTaskStops = (sessionId: string) =>
-    this.sessions.has(sessionId) ? { supportsTaskStop: true, supportsStopAll: true } : undefined
+  backgroundTaskStops = controlActions.claudeBackgroundTaskStops(this.sessions)
+  relayOpenWork = controlActions.claudeRelayOpenWorkOf(this.sessions)
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
     this.sessions.get(sessionId)?.commands.commands
   manageMcp: NonNullable<StructuredAgentSessionAdapter['manageMcp']> = (record, operation) =>
