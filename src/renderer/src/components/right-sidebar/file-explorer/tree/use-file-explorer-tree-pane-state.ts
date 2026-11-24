@@ -6,10 +6,9 @@ import { useWorkspaceFileBrowserActionPredicate } from '@/lib/browser/documents/
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { TreeNode } from './file-explorer-types'
-import {
+import type {
   buildFolderStatusMap,
   buildStatusMap
 } from '../../../../../../shared/git/status/git-path-decoration'
@@ -21,6 +20,7 @@ import { useFileExplorerInlineInput } from '../mutations/useFileExplorerInlineIn
 import { useFileExplorerNodeCommands } from '../mutations/use-file-explorer-node-commands'
 import { useFileExplorerRowScrolling } from '../selection/use-file-explorer-row-scrolling'
 import { useFileExplorerLoadMore } from './use-file-explorer-load-more'
+import { useFileExplorerGitDecorations } from './use-file-explorer-submodule-status'
 import { useFileExplorerTreeLoadEffects } from './use-file-explorer-tree-load-effects'
 import { useFileExplorerWatch } from '../watching/useFileExplorerWatch'
 import { useClearNameFilterForReveal } from '../navigation/use-clear-name-filter-for-reveal'
@@ -28,9 +28,6 @@ import type { useFileExplorerSelection } from '../selection/useFileExplorerSelec
 import type { useFileExplorerTree } from './useFileExplorerTree'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { LocalPathOpenOwner } from '@/lib/files/os-open/local-path-open-guard'
-
-// Why: a stable reference keeps the selector from re-rendering the pane when the active worktree has no status.
-const NO_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 
 type UseFileExplorerTreePaneStateParams = {
   onRevealOutsideRoot?: () => void
@@ -135,11 +132,6 @@ export function useFileExplorerTreePaneState({
   const toggleDir = useAppStore((s) => s.toggleDir)
   const openFile = useAppStore((s) => s.openFile)
   const makePreviewFilePermanent = useAppStore((s) => s.makePreviewFilePermanent)
-  const entries = useAppStore((s) =>
-    activeWorktreeId
-      ? (s.gitStatusByWorktree[activeWorktreeId] ?? NO_GIT_STATUS_ENTRIES)
-      : NO_GIT_STATUS_ENTRIES
-  )
   const closeFile = useAppStore((s) => s.closeFile)
 
   const runtimeDownloadContext = useMemo(
@@ -156,8 +148,12 @@ export function useFileExplorerTreePaneState({
   )
   const isWindows = useMemo(() => navigator.userAgent.includes('Windows'), [])
 
-  const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
-  const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
+  const { statusByRelativePath, folderStatusByRelativePath } = useFileExplorerGitDecorations({
+    activeWorktreeId,
+    worktreePath,
+    readsEnabled: visibleFilesWorktreePath !== null,
+    expanded: effectiveExpanded
+  })
 
   const deletion = useFileDeletion({
     activeWorktreeId,

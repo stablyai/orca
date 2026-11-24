@@ -27,7 +27,7 @@ import type {
 } from '../../../shared/git/history/git-history-types'
 import type { CommitMessageDraftContext } from '../../../shared/source-control/ai/generation/commit-message-generation'
 import type { ConflictResolution } from '../../../shared/source-control/listing/source-control-entry-actions'
-import type { GitProviderStatusOptions } from './status-options'
+import type { GitProviderStatusOptions, GitSubmoduleStatusOptions } from './status-options'
 import type { BranchSwitchCreation } from '../../../shared/git/branch-switch-target'
 import type { RuntimeGitLocalBranches } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
@@ -38,7 +38,8 @@ export type IGitProvider = {
   getSubmoduleStatus(
     worktreePath: string,
     submodulePath: string,
-    area?: GitStagingArea
+    area?: GitStagingArea,
+    options?: GitSubmoduleStatusOptions
   ): Promise<GitStatusResult>
   checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]>
   getHistoryRefs(worktreePath: string, query?: string): Promise<GitHistoryItemRef[]>

@@ -5,6 +5,7 @@ import { callAbortableRuntimeEnvironment } from '../../../runtime/rpc/calls/abor
 import { toRuntimeWorktreeSelector } from '../../../runtime/rpc/targets/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from '../../runtime/client/web-runtime-calls'
+import { webGitSubmoduleStatus } from './web-git-submodule-status'
 import { createWebGitAtRiskLocalFilesApi } from './web-git-at-risk-local-files-api'
 import { mutateGitPath, mutateGitPaths, resolveGitConflict } from './web-git-mutations'
 import { requireGitStageWorktreeScopeReceipt } from '../../../../../shared/git/paths/git-stage-worktree-scope'
@@ -77,14 +78,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       webGitStatusAbortControllers.get(requestToken)?.abort()
     },
     setStatusUpstreamRefWatch: async () => {},
-    submoduleStatus: async ({ worktreePath, submodulePath, area }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.submoduleStatus', {
-        worktree: toRuntimeWorktreeSelector(worktree.id),
-        submodulePath,
-        area
-      })
-    },
+    submoduleStatus: webGitSubmoduleStatus,
     checkIgnored: async ({ worktreePath, paths }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.checkIgnored', {

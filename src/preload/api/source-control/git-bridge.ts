@@ -46,6 +46,7 @@ export const gitApi = {
     submodulePath: string
     connectionId?: string
     area?: GitStagingArea
+    workingTreeOnly?: boolean
   }) => ipcRenderer.invoke('git:submoduleStatus', args),
   checkIgnored: (args: {
     worktreePath: string
