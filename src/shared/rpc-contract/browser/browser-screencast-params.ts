@@ -33,6 +33,8 @@ export const Screencast = BrowserTarget.extend({
   driverEvents: z.literal(1).optional(),
   // Hear the page's downloads start and end as `download*` events. Old hosts strip it.
   downloads: z.literal(1).optional(),
+  // With `downloads`: each finished download carries a `copyId` this device can copy here. Old hosts strip it.
+  downloadCopies: z.literal(1).optional(),
   // Hear the print() calls this viewer's own input makes as `print` events. Old hosts strip it.
   prints: z.literal(1).optional()
 })
@@ -59,7 +61,6 @@ export const PagePromptAnswer = z.object({
   answer: z.unknown()
 })
 
-// A `fileChooser` event's requestId and the host paths the viewer staged; null when the person closed their picker.
 // A `print` event's PDF, read in slices by the device it was handed to.
 export const ReleasePrintPdf = z.object({
   printId: z.string().min(1)
@@ -69,6 +70,16 @@ export const ReadPrintPdf = ReleasePrintPdf.extend({
   offset: z.number().int().nonnegative().optional()
 })
 
+// A `downloadFinished` event's copy, read in order by the device it was offered to.
+export const ReleaseDownloadCopy = z.object({
+  copyId: z.string().min(1)
+})
+
+export const ReadDownloadCopy = ReleaseDownloadCopy.extend({
+  offset: z.number().int().nonnegative()
+})
+
+// A `fileChooser` event's requestId and the host paths the viewer staged; null when the person closed their picker.
 export const FileChooserAnswer = z.object({
   requestId: z.string().min(1),
   files: z.array(z.string().min(1)).nullable()
