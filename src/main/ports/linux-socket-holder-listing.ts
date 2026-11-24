@@ -18,6 +18,7 @@ export class LinuxSocketHolderFilter {
   private pid: string | null = null
   private seen = 0
   private holders = ''
+  private discarding = false
 
   constructor(private readonly wanted: ReadonlySet<number>) {}
 
@@ -25,19 +26,24 @@ export class LinuxSocketHolderFilter {
     this.pending += chunk
     let newline: number
     while ((newline = this.pending.indexOf('\n')) !== -1) {
-      this.line(this.pending.slice(0, newline))
+      if (!this.discarding) {
+        this.line(this.pending.slice(0, newline))
+      }
+      this.discarding = false
       this.pending = this.pending.slice(newline + 1)
     }
-    // A longer line is a hostile or unexpected path, never an fd row; skip it without buffering it.
+    // An over-long line is a path, never a header; drop just that line without buffering it.
     if (this.pending.length > MAX_LINE_CHARS) {
       this.pending = ''
-      this.pid = null
+      this.discarding = true
     }
   }
 
   /** `<pid> socket:[<inode>]` lines, then `seen <n>`. */
   finish(): string {
-    this.line(this.pending)
+    if (!this.discarding) {
+      this.line(this.pending)
+    }
     this.pending = ''
     return `${this.holders}seen ${this.seen}\n`
   }
@@ -78,7 +84,8 @@ export function runLinuxSocketHolderListing(
   const child = spawnProcess({
     program: '/bin/sh',
     args: ['-c', LISTING_SCRIPT],
-    env: { ...process.env, LC_ALL: 'C' },
+    // Only PATH: TIME_STYLE, QUOTING_STYLE and friends change GNU ls's layout and LC_ALL doesn't override them.
+    env: { PATH: process.env.PATH ?? '/usr/bin:/bin', LC_ALL: 'C' },
     stdio: ['ignore', 'pipe', 'ignore']
   })
   const spawnMs = Date.now() - startedAt

@@ -48,6 +48,22 @@ describe('Linux socket holder listing', () => {
     expect(pickLastHolders(parsed!.holders, ['1000', '900'], inodes).get(4242)).toBe(900)
   })
 
+  it('drops only an over-long line, whatever the chunk boundaries', () => {
+    const long = `lr-x------ 1 1000 1000 64 Nov 23 17:00 6 -> /${'p'.repeat(4091)}`
+    const text = [
+      '/proc/100/fd:',
+      long,
+      'lrwx------ 1 1000 1000 64 Nov 23 17:00 7 -> socket:[4242]',
+      ''
+    ].join('\n')
+    for (const chunk of [7, 4130, 65536]) {
+      expect(parseSocketHolderListing(listing([4242], text, chunk))).toEqual({
+        holders: [{ pid: 100, inode: 4242 }],
+        seen: 1
+      })
+    }
+  })
+
   it('tells an unreadable layout apart from no wanted holders', () => {
     expect(parseSocketHolderListing(listing([1], LS))).toEqual({ holders: [], seen: 4 })
     expect(
