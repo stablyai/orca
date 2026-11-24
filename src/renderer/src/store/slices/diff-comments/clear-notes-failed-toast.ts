@@ -1,3 +1,4 @@
+// @protected-copy: the Clear notes failure belongs to a destructive confirmation; keep its wording.
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
