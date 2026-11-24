@@ -15,7 +15,10 @@ import {
   BOT_SLACK_DESKTOP_ERRORS,
   type BotSlackResult
 } from '../../../shared/connector-bot-slack-contract'
-import type { ConnectorConnectSource } from '../../../shared/connectors/connector-cloud-contract'
+import {
+  CONNECTOR_CONNECT_SOURCES,
+  type ConnectorConnectSource
+} from '../../../shared/connectors/connector-cloud-contract'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
@@ -82,10 +85,6 @@ const REFRESH: Record<ConnectorConnectSource, (hostId: ExecutionHostId) => Promi
   slack: () => Promise.resolve()
 }
 
-function refresh(hostId: ExecutionHostId, source: ConnectorConnectSource): Promise<unknown> {
-  return REFRESH[source](hostId)
-}
-
 async function settle(
   hostId: ExecutionHostId,
   source: ConnectorConnectSource,
@@ -99,7 +98,7 @@ async function settle(
     }
     return
   }
-  await refresh(hostId, source)
+  await REFRESH[source](hostId)
   if (request === trip.latest) {
     set(trip, { status: 'linked', link: result.value })
   }
@@ -211,7 +210,7 @@ export async function connectAnotherAccount(
   trip.owner = options.owner ?? null
   set(trip, { status: 'waiting' })
   const unlinked = await unlink().catch(() => FAILED)
-  await refresh(hostId, source)
+  await REFRESH[source](hostId)
   if (request !== trip.latest) {
     return
   }
@@ -345,7 +344,7 @@ function watchSignedInAccount(): void {
       return
     }
     shownAccount = account
-    for (const source of ['linear', 'github'] as const) {
+    for (const source of CONNECTOR_CONNECT_SOURCES) {
       const trip = trips.get(tripKey(LOCAL_EXECUTION_HOST_ID, source))
       if (trip) {
         trip.latest++

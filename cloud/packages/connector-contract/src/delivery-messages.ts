@@ -18,7 +18,12 @@ import {
 import { hookIdOfActor, hookIdOfRule } from './webhook-names.js'
 import { WEBHOOK_NOTICE_CONDITIONS, WebhookHookIdSchema } from './webhook-messages.js'
 import { PrEventSchema } from './pr-event-messages.js'
-import { ShareAcceptFields, ShareResolvedFields, ShareSendFields } from './share-messages.js'
+import {
+  ShareAcceptFields,
+  ShareResolvedFields,
+  ShareSendFields,
+  ViaAccountSchema
+} from './share-messages.js'
 
 // Polls, acks and events name the hello they belong to. Under any other than the current one the cloud
 // answers 409 hello_required and applies nothing; the first poll after a hello lists what is unsettled.
@@ -114,7 +119,8 @@ export const ConnectorAskerSchema = z.object({
   app: z.literal(true).optional(),
   // Orca's own lines for the agent on where it was asked (GitHub: the branch, how to post there),
   // which the chat doesn't show. Only to a machine that lists askerNote; any other reads it in text.
-  note: z.string().min(1).max(CONNECTOR_LIMITS.maxAskerNoteLength).optional()
+  note: z.string().min(1).max(CONNECTOR_LIMITS.maxAskerNoteLength).optional(),
+  viaAccount: ViaAccountSchema
 })
 
 // A hook's call comes only in a webhook conversation, from the hook its rule names; no other event

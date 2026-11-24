@@ -6,6 +6,7 @@ import { CONNECTOR_PLACE_SOURCES } from './connector-wire-scalars.js'
 import { isWorkspaceRef, parseConnectorRef } from './action-messages.js'
 import { ConnectorWebhookTriggerSchema, WebhookTriggerEventSchema } from './webhook-messages.js'
 import { hookIdOfActor, hookIdOfRule } from './webhook-names.js'
+import { ViaAccountSchema } from './share-messages.js'
 
 const Id = z.string().min(1).max(CONNECTOR_LIMITS.maxBotIdLength)
 const FilterText = z.string().min(1).max(CONNECTOR_LIMITS.maxDisplayTextLength)
@@ -109,6 +110,8 @@ export const SourceTriggerEventSchema = z.object({
     .min(1)
     .max(CONNECTOR_LIMITS.maxBotIdLength)
     .refine((id) => hookIdOfActor(id) === null),
+  // Asked through a share (share-messages.ts ViaAccountSchema).
+  viaAccount: ViaAccountSchema,
   // The bot's owner did it; the machine doesn't know the owner's id in each source.
   fromOwner: z.literal(true).optional(),
   // A reaction on a message the owner wrote, for a rule that asks for only those.

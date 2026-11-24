@@ -14,6 +14,11 @@ const OpaqueIdSchema = z.string().min(1).max(128)
  *  random (a UUID or 16+ random bytes, base64url), so it is unique across hosts; it goes in paths as is. */
 export const ShareIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/)
 
+// On a person's request or trigger actor: the Orca account, linked to them, whose share of the bot let
+// them ask (canAskBot's linkedAccountIds). The machine trusts it only while that account is on its
+// Bot.shares, never as a grant of its own. Absent from an older cloud; an older machine ignores it.
+export const ViaAccountSchema = OpaqueIdSchema.optional()
+
 /** An email as a share stores and compares it: trimmed and lower case, wherever it came from. */
 export function normalizeShareEmail(email: string): string {
   return email.trim().toLowerCase()

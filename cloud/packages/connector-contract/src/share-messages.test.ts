@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { canAskBot } from './bot-askers.js'
 import { CONNECTOR_LIMITS } from './connector-limits.js'
-import { ConnectorDeliverySchema } from './delivery-messages.js'
+import { ConnectorAskerSchema, ConnectorDeliverySchema } from './delivery-messages.js'
+import { SourceTriggerEventSchema } from './trigger-messages.js'
 import { ConnectorHelloRequestSchema } from './hello-messages.js'
 import { ConnectorSharesMineSchema, SharePublicKeySchema, ShareIdSchema } from './share-messages.js'
 
@@ -103,6 +104,22 @@ describe('bot shares contract', () => {
         prompt: 'hi'
       }).success
     ).toBe(false)
+  })
+
+  it('names the shared account a person asked through, on a request and a trigger actor', () => {
+    const asker = {
+      userId: 'U0ALICE',
+      role: 'member',
+      place: { kind: 'channel', id: 'C1' },
+      text: 'hi',
+      context: []
+    }
+    expect(ConnectorAskerSchema.parse({ ...asker, viaAccount: 'acct-2' }).viaAccount).toBe('acct-2')
+    expect(ConnectorAskerSchema.parse(asker).viaAccount).toBeUndefined()
+    expect(ConnectorAskerSchema.safeParse({ ...asker, viaAccount: '' }).success).toBe(false)
+    const event = { key: 'k1', actorId: 'U0ALICE', occurredAt: 1 }
+    expect(SourceTriggerEventSchema.parse({ ...event, viaAccount: 'acct-2' }).viaAccount).toBe('acct-2')
+    expect(SourceTriggerEventSchema.parse(event).viaAccount).toBeUndefined()
   })
 
   it('lets a person ask through any linked account the bot is shared with', () => {
