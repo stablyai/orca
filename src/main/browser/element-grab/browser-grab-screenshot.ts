@@ -67,6 +67,10 @@ export async function captureSelectionScreenshot(
   }
   capturing.add(guest)
   const scope = grabDocumentScope(guest)
+  // The picker main knows is live now. Cancel or a new arm retires it in main synchronously, before
+  // any page report it races, so the native submission checks it, not only the page's answer.
+  const pickerAtStart = scope.overlayId
+  const pickerStillOwned = (): boolean => scope.current && scope.overlayId === pickerAtStart
   const captureId = randomUUID()
   // Once the readback is submitted the lane helper owns the lease: held until Electron settles it.
   let paintHandedOff = false
@@ -99,9 +103,9 @@ export async function captureSelectionScreenshot(
       new AbortController().signal,
       releasePaint,
       SELECTION_CAPTURE_DEADLINE_MS,
-      { canSubmit: () => scope.current, confirmAfterWait: pickUnchanged }
+      { canSubmit: pickerStillOwned, confirmAfterWait: pickUnchanged }
     )
-    if (!image || image.isEmpty() || !scope.current || guest.isDestroyed()) {
+    if (!image || image.isEmpty() || !pickerStillOwned() || guest.isDestroyed()) {
       return null
     }
     if (!(await pickUnchanged())) {
