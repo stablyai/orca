@@ -20565,7 +20565,7 @@
       "railFilterPlaceholder": "Фильтр сообщений",
       "railNoMatches": "Нет подходящих сообщений",
       "railTickLabel": "Сообщение {{index}} из {{count}}: {{text}}",
-      "railListPosition": "{{index}} / {{count}}",
+      "railMatchCount": "{{count}} из {{total}}",
       "prompt": {
         "collapse": "Свернуть",
         "expand": "Развернуть"

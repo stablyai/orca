@@ -19908,7 +19908,7 @@
       "railFilterPlaceholder": "Nachrichten filtern",
       "railNoMatches": "Keine passenden Nachrichten",
       "railTickLabel": "Nachricht {{index}} von {{count}}: {{text}}",
-      "railListPosition": "{{index}} / {{count}}",
+      "railMatchCount": "{{count}} von {{total}}",
       "prompt": {
         "collapse": "Einklappen",
         "expand": "Ausklappen"

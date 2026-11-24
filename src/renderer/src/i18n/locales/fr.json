@@ -19954,7 +19954,7 @@
       "railFilterPlaceholder": "Filtrer vos messages",
       "railNoMatches": "Aucun message ne correspond",
       "railTickLabel": "Message {{index}} sur {{count}} : {{text}}",
-      "railListPosition": "{{index}} / {{count}}",
+      "railMatchCount": "{{count}} sur {{total}}",
       "ask": {
         "awaiting": "En attente de la saisie de l'utilisateur :",
         "awaitingUnnamed": "En attente de la saisie de l'utilisateur",

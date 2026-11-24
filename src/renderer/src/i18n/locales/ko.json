@@ -20830,7 +20830,7 @@
       "railFilterPlaceholder": "메시지 필터",
       "railNoMatches": "일치하는 메시지 없음",
       "railTickLabel": "메시지 {{index}}/{{count}}: {{text}}",
-      "railListPosition": "{{index}} / {{count}}",
+      "railMatchCount": "{{count}} / {{total}}",
       "ask": {
         "awaiting": "사용자 입력을 기다리는 중:",
         "awaitingUnnamed": "사용자 입력을 기다리는 중",

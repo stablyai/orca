@@ -19756,7 +19756,7 @@
       "railFilterPlaceholder": "Filtrar tus mensajes",
       "railNoMatches": "Ningún mensaje coincide",
       "railTickLabel": "Mensaje {{index}} de {{count}}: {{text}}",
-      "railListPosition": "{{index}} / {{count}}",
+      "railMatchCount": "{{count}} de {{total}}",
       "ask": {
         "awaiting": "Esperando entrada del usuario:",
         "awaitingUnnamed": "Esperando entrada del usuario",

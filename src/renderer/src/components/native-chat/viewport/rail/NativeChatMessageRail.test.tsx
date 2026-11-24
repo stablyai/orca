@@ -166,7 +166,7 @@ describe('NativeChatMessageRail in a tall pane', () => {
     wait(199)
     expect(panel()).toBeNull()
     wait(1)
-    expect(panel()?.textContent).toContain('21 / 21')
+    expect(panel()).not.toBeNull()
     expect(tabStop().getAttribute('aria-keyshortcuts')).toBe('Alt+ArrowDown')
   })
 
@@ -216,9 +216,11 @@ describe('rail keys', () => {
     await keys.keyboard('{Alt>}{ArrowDown}{/Alt}')
     expect(document.activeElement).toBe(filter())
     expect(panel()?.getAttribute('role')).toBe('dialog')
-    expect(panel()?.textContent).toContain('/ 30')
-    // Esc returns to the outline tick that opened the list.
-    await keys.keyboard('{Escape}')
+    // Only the 30 loaded prompts are listed; the 150 outline ones are not.
+    await keys.keyboard('p')
+    expect(panel()?.textContent).toContain('30 of 30')
+    // Esc clears the query, then returns to the outline tick that opened the list.
+    await keys.keyboard('{Escape}{Escape}')
     expect(panel()).toBeNull()
     expect(document.activeElement?.getAttribute('aria-label')).toBe('Message 4 of 180: older 4')
   })
@@ -240,6 +242,17 @@ describe('rail keys', () => {
     await keys.keyboard('{Tab}')
     expect(panel()).toBeNull()
     expect(document.activeElement?.textContent).toBe('Jump to latest')
+  })
+
+  it('shows no count until the reader types, then "n of N" over the listed rows', async () => {
+    const keys = user()
+    render({ loaded: 180 })
+    act(() => tabStop().focus())
+    await keys.keyboard('{Alt>}{ArrowDown}{/Alt}')
+    expect(panel()?.textContent).not.toMatch(/\d+ of \d+/)
+    await keys.keyboard('prompt 1')
+    // prompt 1, 10–19, 100–180
+    expect(panel()?.textContent).toContain('92 of 180')
   })
 
   it('Enter picks the highlighted loaded row and returns focus to the opener', async () => {
@@ -274,7 +287,9 @@ describe('hover mode beside a focused composer', () => {
     })
     expect(escape.defaultPrevented).toBe(false)
     expect(panel()).not.toBeNull()
-    const row = panel()!.querySelector<HTMLElement>('[data-selected="true"]')!
+    const row = Array.from(panel()!.querySelectorAll<HTMLElement>('[id*="-opt-"]')).find((option) =>
+      option.textContent?.includes('prompt 30')
+    )!
     await keys.click(row)
     expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'm29' }))
     expect(document.activeElement).toBe(composer())

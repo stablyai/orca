@@ -21195,7 +21195,7 @@
       "railFilterPlaceholder": "Filtrar suas mensagens",
       "railNoMatches": "Nenhuma mensagem corresponde",
       "railTickLabel": "Mensagem {{index}} de {{count}}: {{text}}",
-      "railListPosition": "{{index}} / {{count}}",
+      "railMatchCount": "{{count}} de {{total}}",
       "question": {
         "step": "Etapa {{value0}}",
         "otherPlaceholder": "Digite sua resposta",

@@ -21690,7 +21690,7 @@
       "railFilterPlaceholder": "Filter your messages",
       "railNoMatches": "No messages match",
       "railTickLabel": "Message {{index}} of {{count}}: {{text}}",
-      "railListPosition": "{{index}} / {{count}}",
+      "railMatchCount": "{{count}} of {{total}}",
       "prompt": {
         "collapse": "Collapse",
         "expand": "Expand"

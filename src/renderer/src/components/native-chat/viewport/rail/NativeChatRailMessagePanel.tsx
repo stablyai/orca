@@ -2,6 +2,7 @@
 
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual'
+import { Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { MENU_SURFACE_CLASS } from '@/components/ui/menu-surface'
 import { cn } from '@/lib/class-names'
@@ -17,13 +18,17 @@ import { nativeChatRailItemLabel } from './native-chat-rail-item-label'
 import type { NativeChatRailListMode } from './use-native-chat-rail-list-open'
 
 const ROW_PX = 28
+const LIST_PAD_TOP_PX = 4
+const LIST_PAD_BOTTOM_PX = 8
 const TIME_CLASS = 'text-xs whitespace-nowrap tabular-nums'
-const MARK_CLASS = 'rounded-[2px] bg-search-match/45 text-foreground dark:bg-search-match/25'
+// Bold accent text, not a fill: a translucent fill over the muted row text reads muddy in dark.
+const MARK_CLASS = 'bg-transparent p-0 font-semibold text-theme-accent'
 
 export function NativeChatRailMessagePanel({
   panelRef,
   panelId,
   items,
+  positions,
   activeId,
   mode,
   focusRequest,
@@ -38,6 +43,8 @@ export function NativeChatRailMessagePanel({
   panelId: string
   /** Loaded prompts, oldest first. */
   items: readonly NativeChatRailItem[]
+  /** Each message's place in the whole conversation, as its tick numbers it. */
+  positions: ReadonlyMap<string, number>
   activeId: string | null
   mode: NativeChatRailListMode
   focusRequest: number
@@ -67,16 +74,11 @@ export function NativeChatRailMessagePanel({
     for (const item of items) {
       const date = item.timestamp === null ? null : new Date(item.timestamp)
       if (date && !Number.isNaN(date.getTime())) {
-        byId.set(
-          item.id,
-          formatter.format(date, today.date, (time) =>
-            t('nativeChat.messageTime.yesterday', 'Yesterday {{time}}', { time })
-          )
-        )
+        byId.set(item.id, formatter.formatCompact(date, today.date))
       }
     }
     return byId
-  }, [intlLocale, items, t, today])
+  }, [intlLocale, items, today])
   const distinctTimes = useMemo(() => Array.from(new Set(times.values())), [times])
 
   // One width for every row's time, measured from the real type, so text columns line up.
@@ -127,6 +129,10 @@ export function NativeChatRailMessagePanel({
     estimateSize: () => ROW_PX,
     getItemKey: (index) => results[index]?.item.id ?? index,
     overscan: 10,
+    paddingStart: LIST_PAD_TOP_PX,
+    paddingEnd: LIST_PAD_BOTTOM_PX,
+    scrollPaddingStart: LIST_PAD_TOP_PX,
+    scrollPaddingEnd: LIST_PAD_BOTTOM_PX,
     rangeExtractor
   })
   const virtualItems = virtualizer.getVirtualItems()
@@ -176,12 +182,14 @@ export function NativeChatRailMessagePanel({
     virtualizer.scrollToIndex(highlightIndex, { align: 'auto' })
   }
 
-  const position = query.trim()
-    ? String(results.length)
-    : t('components.native-chat.railListPosition', '{{index}} / {{count}}', {
-        index: highlightIndex + 1,
-        count: items.length
+  const matchCount = query.trim()
+    ? t('components.native-chat.railMatchCount', '{{count}} of {{total}}', {
+        count: results.length,
+        total: items.length
       })
+    : null
+  // The list keeps the full list's height while filtering, so the field never moves.
+  const listHeight = items.length * ROW_PX + LIST_PAD_TOP_PX + LIST_PAD_BOTTOM_PX
   const filterLabel = t('components.native-chat.railFilterPlaceholder', 'Filter your messages')
   const listId = `${panelId}-list`
 
@@ -232,14 +240,17 @@ export function NativeChatRailMessagePanel({
       }}
       className={cn(
         MENU_SURFACE_CLASS,
-        'absolute top-1/2 right-[44px] z-20 flex max-h-[60%] w-[300px] -translate-y-1/2 flex-col rounded-[10px] p-2'
+        'absolute top-1/2 right-[44px] z-20 flex max-h-[60%] w-[300px] -translate-y-1/2 flex-col rounded-[10px] p-0'
       )}
     >
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="relative m-2 mb-0 flex shrink-0 items-center gap-2">
+        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3 -translate-y-1/2 text-muted-foreground" />
         <Input
           ref={filterRef}
           density="compact"
-          className="h-8 flex-1"
+          inset="leadingIcon"
+          className="flex-1"
+          autoComplete="off"
           value={query}
           placeholder={filterLabel}
           aria-label={filterLabel}
@@ -266,23 +277,23 @@ export function NativeChatRailMessagePanel({
             }
           }}
         />
-        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{position}</span>
+        {matchCount === null ? null : (
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{matchCount}</span>
+        )}
       </div>
-      {results.length === 0 ? (
-        <p className="px-2 pt-2 pb-1 text-xs text-muted-foreground" role="status">
-          {t('components.native-chat.railNoMatches', 'No messages match')}
-        </p>
-      ) : null}
       <div
         ref={listRef}
         id={listId}
         role={focused ? 'listbox' : undefined}
         aria-label={focused ? t('components.native-chat.railLabel', 'Your messages') : undefined}
-        className={cn(
-          'scrollbar-sleek relative mt-1 min-h-0 overflow-y-auto overscroll-contain',
-          results.length === 0 && 'hidden'
-        )}
+        className="scrollbar-sleek relative min-h-0 shrink overflow-y-auto overscroll-contain px-2"
+        style={{ height: listHeight }}
       >
+        {results.length === 0 ? (
+          <p className="px-2 pt-2 text-xs text-muted-foreground" role="status">
+            {t('components.native-chat.railNoMatches', 'No messages match')}
+          </p>
+        ) : null}
         <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
           {virtualItems.map((virtualItem) => {
             const result = results[virtualItem.index]
@@ -291,6 +302,7 @@ export function NativeChatRailMessagePanel({
             }
             const { item } = result
             const selected = virtualItem.index === highlightIndex
+            const current = item.id === activeId
             const display = nativeChatRailRowDisplay(nativeChatRailItemLabel(item, t), result.match)
             const { mark } = display
             return (
@@ -302,17 +314,26 @@ export function NativeChatRailMessagePanel({
                 aria-setsize={focused ? results.length : undefined}
                 aria-posinset={focused ? virtualItem.index + 1 : undefined}
                 tabIndex={-1}
-                data-selected={selected}
+                // Only a keyboard cursor fills the row; the pointer's row shows by hover.
+                data-selected={focused && selected}
+                data-current={current || undefined}
                 onPointerMove={() => {
                   if (highlightId !== item.id) {
                     setHighlightId(item.id)
                   }
                 }}
                 onClick={() => onPick(item.id)}
-                className="absolute top-0 left-0 flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-xs text-popover-foreground data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
+                className={cn(
+                  'jump-palette-item absolute top-0 left-0 flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  // The reader's place: an accent bar and bold title, kept apart from the hover and keyboard fill.
+                  'data-current:text-foreground data-current:before:absolute data-current:before:top-1/2 data-current:before:left-0.5 data-current:before:h-3.5 data-current:before:w-[3px] data-current:before:-translate-y-1/2 data-current:before:rounded-full data-current:before:bg-theme-accent'
+                )}
                 style={{ transform: `translateY(${virtualItem.start}px)` }}
               >
-                <span className="min-w-0 flex-1 truncate">
+                <span className="min-w-6 shrink-0 text-right tabular-nums opacity-70">
+                  {(positions.get(item.id) ?? 0) + 1}
+                </span>
+                <span className={cn('min-w-0 flex-1 truncate', current && 'font-semibold')}>
                   {mark === null ? (
                     display.text
                   ) : (

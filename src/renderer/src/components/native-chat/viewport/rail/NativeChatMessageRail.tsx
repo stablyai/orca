@@ -310,6 +310,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
           panelRef={panelRef}
           panelId={panelId}
           items={rail.loadedItems}
+          positions={positions}
           activeId={rail.activeId}
           mode={list.mode}
           focusRequest={list.focusRequest}
