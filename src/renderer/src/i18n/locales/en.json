@@ -30343,10 +30343,9 @@
         "lastItem": "Last item",
         "deleted": "This item was deleted.",
         "linkCount": "{{count}} links",
-        "reply": "Reply",
-        "replyAbove": "Reply, above",
-        "replyBelow": "Reply, below",
-        "loading": "Loading item…"
+        "loading": "Loading item…",
+        "questionAbove": "Go to the question above",
+        "questionBelow": "Go to the question below"
       },
       "loading": "Loading items…",
       "readFailed": "Couldn't read items.",

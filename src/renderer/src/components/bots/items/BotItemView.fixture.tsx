@@ -68,10 +68,12 @@ export const scrolledUp = defineFixture({
     </div>
   ),
   interact: async (frame) => {
-    const scroller = frame.querySelector<HTMLElement>('.overflow-y-auto')
+    const scroller = frame.querySelector<HTMLElement>('section .overflow-y-auto')
     if (!scroller) {
       return
     }
+    // The Activity draws a frame after the top.
+    await new Promise((resolve) => setTimeout(resolve, 150))
     scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: -400, bubbles: true }))
     scroller.scrollTop = scroller.scrollHeight / 3
     scroller.dispatchEvent(new Event('scroll'))

@@ -1,4 +1,4 @@
-// One item, in the list's place: a fixed top (title, status, links, Reply, description, chat, done means;
+// One item, in the list's place: a fixed top (title, status, links, description, chat, done means;
 // it scrolls itself only to leave the Activity 140px), the Activity scrolling under it, and a comment box.
 // BotItemPane holds it under the back row and sends typing from anywhere in it to the comment box.
 // The comment box always stays at the bottom: a reply to the agent's question is a comment, typed there
@@ -16,7 +16,6 @@ import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem, BotItemStatus } from '../../../../../shared/bots/bot-items'
 import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
-import { NativeChatJumpToLatest } from '../../native-chat/viewport/scroll/NativeChatJumpToLatest'
 import { NativeChatPaneFileDropSurface } from '../../native-chat/attachments/intake/NativeChatPaneFileDropSurface'
 import {
   NativeChatMarkdownImageOwnerContext,
@@ -38,7 +37,7 @@ import { BotItemCommentBox, type BotItemCommentBoxHandle } from './BotItemCommen
 import { NativeChatSelectionQuote } from '../../native-chat/selection-quotes/NativeChatSelectionQuote'
 import { revealBotItemComment } from './bot-item-comment-reveal'
 import { BotItemHeader } from './BotItemHeader'
-import { useBotItemNeedsYouJump } from './BotItemReplyJump'
+import { useBotItemNeedsYouJump } from './BotItemNeedsYouJump'
 import { setBotItemsStatus } from './use-bot-items'
 import { useBotItemSnoozing } from './BotItemSnooze'
 import { useBotItemView, useWaitingQuestionPage, type BotItemViewRead } from './use-bot-item-view'
@@ -282,7 +281,9 @@ export function BotItemBody({
     loadingTarget,
     scrollRef,
     revealRow,
-    comment
+    comment,
+    showLatest: showJump,
+    jumpToLatest
   })
   const links = useNativeChatLinkActions(fileContext?.fileLinkContext ?? null, pane, {
     sessionId: null,
@@ -314,7 +315,6 @@ export function BotItemBody({
                       deleted={deleted}
                       onStatus={(to) => notes.move([item], to)}
                       snoozing={snoozing}
-                      reply={needsYou.reply}
                     />
                     <div className="flex flex-col gap-4 px-3.5 pt-2">
                       {item.description ? (
@@ -383,10 +383,7 @@ export function BotItemBody({
                     aria-hidden
                     className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-linear-to-b from-transparent to-sidebar"
                   />
-                  <NativeChatJumpToLatest
-                    visible={showJump && !needsYou.pointsDown}
-                    onJump={jumpToLatest}
-                  />
+                  {needsYou.pill}
                 </div>
               </NativeChatLinkClickContext>
             </NativeChatFileLinkExistenceContext>

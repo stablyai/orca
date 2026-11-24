@@ -25068,9 +25068,8 @@
         "previous": "Предыдущий элемент",
         "next": "Следующий элемент",
         "linkCount": "Ссылки: {{count}}",
-        "reply": "Ответить",
-        "replyAbove": "Ответить на вопрос выше",
-        "replyBelow": "Ответить на вопрос ниже"
+        "questionAbove": "К вопросу выше",
+        "questionBelow": "К вопросу ниже"
       },
       "activity": {
         "linked": "связал {{links}}",

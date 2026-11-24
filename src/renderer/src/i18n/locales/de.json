@@ -24461,9 +24461,8 @@
         "previous": "Vorheriges Element",
         "next": "Nächstes Element",
         "linkCount": "{{count}} Links",
-        "reply": "Antworten",
-        "replyAbove": "Antworten, weiter oben",
-        "replyBelow": "Antworten, weiter unten"
+        "questionAbove": "Zur Frage weiter oben",
+        "questionBelow": "Zur Frage weiter unten"
       },
       "activity": {
         "linked": "hat {{links}} verknüpft",

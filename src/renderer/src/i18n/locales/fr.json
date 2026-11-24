@@ -25062,9 +25062,8 @@
         "previous": "Élément précédent",
         "next": "Élément suivant",
         "linkCount": "{{count}} liens",
-        "reply": "Répondre",
-        "replyAbove": "Répondre, plus haut",
-        "replyBelow": "Répondre, plus bas"
+        "questionAbove": "Aller à la question plus haut",
+        "questionBelow": "Aller à la question plus bas"
       },
       "activity": {
         "linked": "a lié {{links}}",

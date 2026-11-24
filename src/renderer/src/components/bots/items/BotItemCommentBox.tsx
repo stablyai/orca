@@ -118,7 +118,7 @@ function BotItemCommentField({
   onShowQuestion?: (eventId: string) => void
   /** The item pane's previous / next arrows, between the attach and mic buttons. */
   nav?: React.ReactNode
-  /** The Activity entry this comment would answer, read with the box once Reply led there. */
+  /** The Activity entry this comment would answer, read with the box once the pill led there. */
   describedBy?: string
   ref?: Ref<BotItemCommentBoxHandle>
 }): React.JSX.Element {

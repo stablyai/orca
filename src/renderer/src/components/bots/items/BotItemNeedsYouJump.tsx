@@ -1,27 +1,21 @@
-// The header's Reply while the item needs the owner: shown only when the entry that asked is off screen,
-// its arrow pointing there. A click reads the pages before it if needed, scrolls it in under the header
-// with a brief ring and puts the cursor in the comment box.
+// The item view's one jump pill, the chat's own: while the item needs the owner and the entry that asked
+// is off screen it reads Needs you and points there; a click reads the pages before it if needed, scrolls
+// it in under the header with a brief ring and puts the cursor in the comment box. Otherwise it is the
+// chat's Jump to latest; with the question on screen, no pill.
 import { useEffect, useId, useState, useSyncExternalStore } from 'react'
-import { ArrowDown, ArrowUp, LoaderCircle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
+import { NativeChatJumpToLatest } from '../../native-chat/viewport/scroll/NativeChatJumpToLatest'
 import type { BotItemNeedsYouMark } from './BotItemNeedsYouMark'
 import type { BotItemCommentBoxHandle } from './BotItemCommentBox'
-import {
-  createBotItemNeedsYouWatch,
-  type BotItemNeedsYouPlace,
-  type BotItemNeedsYouWatch
-} from './bot-item-needs-you-watch'
+import { createBotItemNeedsYouWatch, type BotItemNeedsYouWatch } from './bot-item-needs-you-watch'
 
 export type BotItemNeedsYouJump = {
-  /** For the Activity: the entry to mark, while Reply can lead there. */
+  /** For the Activity: the entry to mark, while the pill can lead there. */
   mark: BotItemNeedsYouMark | undefined
-  /** For the header's status row. */
-  reply: React.ReactNode
+  /** Over the Activity, above the comment box. */
+  pill: React.ReactNode
   /** For the comment box after a jump: the entry it answers, read with it. */
   describedBy: string | undefined
-  /** Reply points down (or waits on a page): Jump to latest would be a second way down. */
-  pointsDown: boolean
 }
 
 export function useBotItemNeedsYouJump({
@@ -30,7 +24,9 @@ export function useBotItemNeedsYouJump({
   loadingTarget,
   scrollRef,
   revealRow,
-  comment
+  comment,
+  showLatest,
+  jumpToLatest
 }: {
   /** Needs you and no answer is on its way. */
   eligible: boolean
@@ -40,11 +36,13 @@ export function useBotItemNeedsYouJump({
   scrollRef: React.RefObject<HTMLDivElement | null>
   revealRow: (row: HTMLElement, behavior: ScrollBehavior) => void
   comment: React.RefObject<BotItemCommentBoxHandle | null>
+  /** The chat's own rule for Jump to latest: not following and away from the end. */
+  showLatest: boolean
+  jumpToLatest: () => void
 }): BotItemNeedsYouJump {
   const [watch] = useState(createBotItemNeedsYouWatch)
   const id = useId()
   const { opened, jumped, pending } = useSyncExternalStore(watch.subscribe, watch.jump)
-  const below = useSyncExternalStore(watch.subscribe, () => watch.place() === 'below')
   const reveal = (node: HTMLElement): void => {
     watch.revealed()
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -126,58 +124,73 @@ export function useBotItemNeedsYouJump({
 
   return {
     mark: eligible ? { setNode: watch.setNode, opened, id } : undefined,
-    reply:
-      eligible && activityShown ? (
-        <BotItemReplyButton
-          watch={watch}
-          fallback={loadingTarget ? 'above' : null}
-          busy={pending}
-          onJump={jump}
-        />
-      ) : null,
-    describedBy: eligible && jumped ? id : undefined,
-    pointsDown: eligible && activityShown && (below || pending)
+    pill: (
+      <BotItemJumpPill
+        watch={watch}
+        waiting={eligible && activityShown}
+        loadingTarget={loadingTarget}
+        showLatest={showLatest}
+        busy={pending}
+        onNeedsYou={jump}
+        onLatest={jumpToLatest}
+      />
+    ),
+    describedBy: eligible && jumped ? id : undefined
   }
 }
 
-function BotItemReplyButton({
+type BotItemJumpPillState = { shown: boolean; needsYou: boolean; direction: 'up' | 'down' }
+
+/** Its own component, so the entry crossing the view's edge re-renders only the pill. */
+function BotItemJumpPill({
   watch,
-  fallback,
+  waiting,
+  loadingTarget,
+  showLatest,
   busy,
-  onJump
+  onNeedsYou,
+  onLatest
 }: {
   watch: BotItemNeedsYouWatch
-  /** Where the entry is while it isn't drawn (its page not read yet). */
-  fallback: BotItemNeedsYouPlace
+  waiting: boolean
+  loadingTarget: boolean
+  showLatest: boolean
+  /** A jump waits on earlier pages to draw the question. */
   busy: boolean
-  onJump: () => void
-}): React.JSX.Element | null {
+  onNeedsYou: () => void
+  onLatest: () => void
+}): React.JSX.Element {
   const t = useTranslate()
   const watched = useSyncExternalStore(watch.subscribe, watch.place)
-  const place = watched === 'undrawn' ? fallback : watched
-  if (place === null || place === 'visible' || place === 'undrawn') {
-    return null
+  // Not drawn yet: its page is still being read, before the ones shown.
+  const place = watched === 'undrawn' && loadingTarget ? 'above' : watched
+  const next: BotItemJumpPillState =
+    waiting && (place === 'above' || place === 'below')
+      ? { shown: true, needsYou: true, direction: place === 'above' ? 'up' : 'down' }
+      : waiting && place !== 'undrawn'
+        ? { shown: false, needsYou: true, direction: 'down' }
+        : { shown: showLatest, needsYou: false, direction: 'down' }
+  // A hidden pill keeps its last label and arrow while it fades out.
+  const [last, setLast] = useState(next)
+  if (next.shown && (next.needsYou !== last.needsYou || next.direction !== last.direction)) {
+    setLast(next)
   }
-  const Arrow = place === 'above' ? ArrowUp : ArrowDown
+  const look = next.shown ? next : last
   return (
-    <Button
-      variant="needs-you"
-      size="xs"
-      aria-busy={busy || undefined}
-      aria-label={
-        place === 'above'
-          ? t('bots.items.view.replyAbove', 'Reply, above')
-          : t('bots.items.view.replyBelow', 'Reply, below')
+    <NativeChatJumpToLatest
+      visible={next.shown}
+      onJump={look.needsYou ? onNeedsYou : onLatest}
+      label={look.needsYou ? t('bots.items.status.needsYou', 'Needs you') : undefined}
+      ariaLabel={
+        !look.needsYou
+          ? undefined
+          : look.direction === 'up'
+            ? t('bots.items.view.questionAbove', 'Go to the question above')
+            : t('bots.items.view.questionBelow', 'Go to the question below')
       }
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={onJump}
-    >
-      {t('bots.items.view.reply', 'Reply')}
-      {busy ? (
-        <LoaderCircle aria-hidden className="size-3 animate-spin motion-reduce:animate-none" />
-      ) : (
-        <Arrow aria-hidden className="size-3" />
-      )}
-    </Button>
+      busy={look.needsYou && busy}
+      direction={look.direction}
+      needsYou={look.needsYou}
+    />
   )
 }

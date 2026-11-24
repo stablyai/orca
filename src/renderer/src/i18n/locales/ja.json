@@ -25765,9 +25765,8 @@
         "previous": "前の項目",
         "next": "次の項目",
         "linkCount": "リンク{{count}}件",
-        "reply": "返信",
-        "replyAbove": "上の質問に返信",
-        "replyBelow": "下の質問に返信"
+        "questionAbove": "上の質問へ移動",
+        "questionBelow": "下の質問へ移動"
       },
       "activity": {
         "linked": "が {{links}} をリンクしました",
