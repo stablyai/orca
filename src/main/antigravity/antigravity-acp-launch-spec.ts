@@ -94,8 +94,6 @@ const AGY_SESSION_MODEL_DISCOVERY: AcpSessionModelDiscovery = {
   kind: 'session',
   listingNamesConfiguredModel: false,
   inPrivateFolder: true,
-  // Only a picker asking starts agy to list.
-  listsOnDemand: true,
   discardSession: discardAgyListingSession
 }
 

@@ -21509,7 +21509,9 @@
         "retryChats": "Retry",
         "permissionAppliesNextMessage": "{{saved}} applies to your next message; currently using {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
-        "modelAndEffort": "Model and effort"
+        "modelAndEffort": "Model and effort",
+        "modelsLoading": "Loading models…",
+        "signInForModels": "Sign in to see the models you can use."
       },
       "tool": {
         "exitCode": "exit {{value0}}",
