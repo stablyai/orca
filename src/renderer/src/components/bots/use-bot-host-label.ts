@@ -3,21 +3,28 @@ import { useShallow } from 'zustand/react/shallow'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { useAppStore } from '@/store'
+import { useTranslate } from '@/i18n/use-translate'
+import { useSharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 
 /**
- * The paired server a bot runs on, by its name in Settings; null for this computer's own bots, and
- * in a paired web window, whose bots are all on its one server.
+ * The paired server a bot runs on, by its name in Settings, or the computer of whoever shared it;
+ * null for this computer's own bots, and in a paired web window, whose bots are all on its one server.
  */
 export function useBotHostLabel(hostId: ExecutionHostId): string | null {
-  return useAppStore((state) =>
+  const t = useTranslate()
+  const shared = useSharedBotHostOf(hostId)
+  const label = useAppStore((state) =>
     hostId === LOCAL_EXECUTION_HOST_ID || isPairedWebClientWindow()
       ? null
       : selectExecutionHostDisplayLabel(state, hostId)
   )
+  return shared
+    ? t('bots.share.ownersComputer', '{{name}}’s computer', { name: shared.ownerName })
+    : label
 }
 
 const NO_LABELS: ReadonlyMap<ExecutionHostId, string> = new Map()

@@ -1,4 +1,4 @@
-import { buildNativeChatUnsubscribe } from '../../../../src/shared/native-chat/transcript/streaming/native-chat-stream-unsubscribe'
+import { buildStreamUnsubscribe } from '../../../../src/shared/remote-runtime/relay/client/relay-stream-unsubscribe'
 
 type TerminalStreamParams = {
   terminal?: unknown
@@ -31,56 +31,6 @@ export function updateTerminalSubscriptionViewport(
       viewport
     }
   }
-}
-
-// Centralize method-specific unsubscribe echoes for explicit host teardown; return null when none is needed.
-export function buildStreamUnsubscribe(
-  method: string | undefined,
-  params: unknown,
-  requestId?: string
-): { method: string; params: Record<string, unknown> } | null {
-  if (!params || typeof params !== 'object') {
-    return null
-  }
-  if (method === 'session.tabs.subscribe') {
-    const worktree = (params as { worktree?: unknown }).worktree
-    return typeof worktree === 'string'
-      ? {
-          method: 'session.tabs.unsubscribe',
-          params: { worktree, ...(requestId ? { subscriptionId: requestId } : {}) }
-        }
-      : null
-  }
-  if (method === 'agentSession.subscribe') {
-    const sessionId = (params as { sessionId?: unknown }).sessionId
-    // The host keys each transcript stream by its frame id; without it every stream of the
-    // session on this socket would end.
-    return typeof sessionId === 'string' && requestId
-      ? { method: 'agentSession.unsubscribe', params: { sessionId, subscriptionId: requestId } }
-      : null
-  }
-  if (method === 'orchestration.workerApprovalsSubscribe') {
-    // The host names each approvals stream by the request that opened it.
-    return requestId
-      ? {
-          method: 'orchestration.workerApprovalsUnsubscribe',
-          params: { subscriptionId: requestId }
-        }
-      : null
-  }
-  if (method === 'nativeChat.subscribe') {
-    const subscriptionId = (params as { subscriptionId?: unknown }).subscriptionId
-    if (typeof subscriptionId === 'string') {
-      return { method: 'nativeChat.unsubscribe', params: { subscriptionId } }
-    }
-    // Backward compatibility for callers that predate explicit cleanup tokens.
-    const agent = (params as { agent?: unknown }).agent
-    const sessionId = (params as { sessionId?: unknown }).sessionId
-    return typeof agent === 'string' && typeof sessionId === 'string'
-      ? buildNativeChatUnsubscribe(agent, sessionId)
-      : null
-  }
-  return null
 }
 
 /** Direct-connection unsubscribe for the stream opened by `requestId`, or null when none is required. */

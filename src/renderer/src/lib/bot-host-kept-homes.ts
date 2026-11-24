@@ -33,6 +33,25 @@ export function keptBotHomes(
   ]
 }
 
+/**
+ * A shared agent's host lists none of its workspaces to this account, so each of its bots' homes is
+ * the bot's own name, restored like an away server's kept home.
+ */
+export function sharedBotHomes(
+  hostId: ExecutionHostId,
+  list: KeptBotHostList
+): readonly KeptBotHome[] {
+  return list.bots.map((bot) => ({
+    id: bot.folderWorkspaceId,
+    name: bot.name,
+    folderPath: '',
+    executionHostId: hostId,
+    // The owner's project groups aren't the teammate's: it stands in none.
+    projectGroupId: '',
+    sortOrder: 0
+  }))
+}
+
 /** A kept home as a row reads it: nothing unread, archived or active, since its server is away. */
 function restoredHome(home: KeptBotHome): FolderWorkspace {
   return {

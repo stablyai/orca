@@ -12,6 +12,7 @@ import { hasRecentUserGestureFor, isBackgroundRuntimeCall } from './runtime-rpc-
 import { captureRuntimeEnvironmentRequestRevision } from '../environment-revisions/runtime-environment-revision'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { ensureRuntimeEnvironmentCompatible } from '../compatibility/runtime-compatibility-probe'
+import { sharedBotHostFor } from '../../hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 type RuntimeRpcCallOptions = {
   timeoutMs?: number
@@ -46,6 +47,19 @@ export async function callRuntimeRpcResponse<TResult>(
 ): Promise<RuntimeRpcSuccess<TResult>> {
   if (options.signal?.aborted) {
     throw createRuntimeRpcAbortError()
+  }
+  const sharedHost = sharedBotHostFor(target)
+  if (sharedHost) {
+    // Reached over its relay link: no paired-server pairing revision or compatibility probe.
+    const response = (await window.api.sharedBotHosts.call({
+      environmentId: sharedHost.environmentId,
+      method,
+      params
+    })) as RuntimeRpcResponse<TResult>
+    if (!response.ok) {
+      throw new RuntimeRpcCallError(response, target)
+    }
+    return response
   }
   const background = isBackgroundRuntimeCall(options.background, params)
   // Captured before any await: only a call made while the user acts may boot a stopped host.

@@ -28,6 +28,8 @@ export type BotSidebarRowProps = {
   /** The row's picture: a bot's avatar, or a group's member faces. */
   avatar: React.ReactNode
   name: string
+  /** A mark right after the name, such as a shared agent's people icon. */
+  nameMark?: React.ReactNode
   /** Its home's key: the status and unread mark are the home's. */
   workspaceId: string
   hostId: ExecutionHostId
@@ -63,6 +65,7 @@ export type BotSidebarRowProps = {
 export function BotSidebarRow({
   avatar,
   name,
+  nameMark = null,
   workspaceId,
   hostId,
   status,
@@ -159,6 +162,7 @@ export function BotSidebarRow({
                       beginEditing={renameRequested}
                       onBeginEditingConsumed={() => setRenameRequested(false)}
                     />
+                    {nameMark}
                     {age ? (
                       <span className="ml-auto shrink-0 text-3xs leading-none text-muted-foreground tabular-nums">
                         {age}

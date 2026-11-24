@@ -3,6 +3,7 @@ import type { RelayPhoneHello } from '../mobile-relay-phone-protocol'
 import type { PairedE2EEClientCredential } from './paired-e2ee-v2-physical-channel'
 import type { RelayClientPlatform } from './relay-client-platform'
 import { RelayE2eeLink, relayRequestCredentialFields } from './relay-e2ee-link'
+import { RelayRpcStreams } from './relay-rpc-streams'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -14,6 +15,9 @@ type PendingRequest = {
 
 export type RelayRpcClient = {
   sendRequest(method: string, params?: unknown): Promise<RpcResponse>
+  /** A host stream on this link; frames reach `listener` until the host ends it or `release`. A
+   *  closed link ends it with a `{ type: 'error' }` frame. */
+  subscribe(method: string, params: unknown, listener: (result: unknown) => void): () => void
   close(): void
 }
 
@@ -47,6 +51,18 @@ export function connectRelayRpcClient(
   let closed = false
   let intentionallyClosed = false
   let authenticated = false
+  const authenticatedWaiters = new Set<{ resolve: () => void; reject: (error: Error) => void }>()
+  const streams = new RelayRpcStreams({
+    nextId: () => `relay-rpc-${++requestCounter}`,
+    sendFrame: ({ id, method, params }) =>
+      link.sendText(JSON.stringify({ id, ...credentialFields, method, params })),
+    waitForConnected: () =>
+      authenticated
+        ? Promise.resolve()
+        : closed
+          ? Promise.reject(new Error('relay RPC client closed'))
+          : new Promise<void>((resolve, reject) => authenticatedWaiters.add({ resolve, reject }))
+  })
 
   const link = new RelayE2eeLink({
     platform: args.platform,
@@ -69,6 +85,10 @@ export function connectRelayRpcClient(
     },
     onAuthenticated: () => {
       authenticated = true
+      for (const waiter of authenticatedWaiters) {
+        waiter.resolve()
+      }
+      authenticatedWaiters.clear()
       events.onAuthenticated?.()
       for (const [id, request] of pending) {
         if (request.unsentFrame !== null) {
@@ -83,7 +103,7 @@ export function connectRelayRpcClient(
       } catch {
         return
       }
-      if (!isRpcResponse(value)) {
+      if (!isRpcResponse(value) || streams.handleResponse(value)) {
         return
       }
       const request = pending.get(value.id)
@@ -117,6 +137,11 @@ export function connectRelayRpcClient(
       request.reject(error)
     }
     pending.clear()
+    for (const waiter of authenticatedWaiters) {
+      waiter.reject(error)
+    }
+    authenticatedWaiters.clear()
+    streams.failAll(error.message, error)
     try {
       events.onClosed?.(error, intentionallyClosed)
     } catch {
@@ -148,6 +173,9 @@ export function connectRelayRpcClient(
           send(id, request, frame)
         }
       })
+    },
+    subscribe(method, params, listener) {
+      return streams.subscribe(method, params, listener).release
     },
     close: () => {
       intentionallyClosed = true

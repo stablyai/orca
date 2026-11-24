@@ -2,6 +2,7 @@ import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rp
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { subscribeRuntimeEnvironment } from '../environment-revisions/runtime-environment-pairing-refresh'
 import { getRuntimeEnvironmentRevision } from '../environment-revisions/runtime-environment-revision'
+import { sharedBotHostFor } from '../../hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 export type RuntimeRpcSubscriptionHandlers = {
   /** Each successful frame's result. */
@@ -27,6 +28,13 @@ export async function subscribeRuntimeRpc(
   }
   if (target.kind === 'local') {
     return window.api.runtime.subscribe({ method, params }, onResponse)
+  }
+  const sharedHost = sharedBotHostFor(target)
+  if (sharedHost) {
+    return window.api.sharedBotHosts.subscribe(
+      { environmentId: sharedHost.environmentId, method, params },
+      onResponse
+    )
   }
   return subscribeRuntimeEnvironment(
     {

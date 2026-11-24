@@ -29,10 +29,15 @@ import {
   retainKeptBotHostLists,
   setKeptBotHomesReader
 } from './bot-host-kept-lists'
-import { keptBotHomes } from './bot-host-kept-homes'
+import { keptBotHomes, sharedBotHomes } from './bot-host-kept-homes'
 import { retainListedBotGroupHosts } from './bot-group-catalog-snapshot'
 import { emitBotsChangedWindowEvent } from './bots-changed-window-event'
 import { noteBotHostCameBack } from './bot-host-link-read'
+import type { SharedBotHostView } from '../../../shared/bots/shared-bot-hosts'
+import {
+  readSharedBotHosts,
+  subscribeSharedBotHosts
+} from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 type BotHostListingStoreState = Pick<
   AppState,
@@ -41,6 +46,8 @@ type BotHostListingStoreState = Pick<
 
 export type BotHostListingInput = BotHostListingStoreState & {
   runtimeStatusByEnvironmentId: RuntimeStatuses
+  /** Agents other people shared with this account: listed live while their relay link is. */
+  sharedBotHosts: readonly SharedBotHostView[]
 }
 
 type HostRead = {
@@ -80,6 +87,12 @@ export function computeBotHostListing(
       updateNeeded.push(hostId)
     }
   }
+  for (const shared of input.sharedBotHosts) {
+    hosts.push({
+      hostId: toRuntimeExecutionHostId(shared.environmentId),
+      state: shared.link === 'live' ? 'live' : 'offline'
+    })
+  }
   return { hosts, updateNeeded }
 }
 
@@ -90,13 +103,17 @@ export function computeBotHostListing(
 export function syncBotHostListing(input: BotHostListingInput, webClient: boolean): void {
   if (input.runtimeEnvironmentCatalogHydrated) {
     retainKeptBotHostLists(
-      new Map(
-        (input.runtimeEnvironments ?? []).map((env) => [
+      new Map([
+        ...(input.runtimeEnvironments ?? []).map((env): [ExecutionHostId, string] => [
           toRuntimeExecutionHostId(env.id),
           // The server's key and its pairing: a re-pair to another server under the same id changes it.
           `${env.hostKeyFingerprint ?? ''}|${env.pairingRevision ?? ''}`
+        ]),
+        ...input.sharedBotHosts.map((shared): [ExecutionHostId, string] => [
+          toRuntimeExecutionHostId(shared.environmentId),
+          `share|${shared.shareId}`
         ])
-      )
+      ])
     )
   }
   const listing = computeBotHostListing(
@@ -140,38 +157,57 @@ export function emitPairedBotsStreamCameBack(environmentId: string): void {
 }
 
 /** Starts following the store; local-only windows never pass the reference gate, so they do no work. */
+type BotHostListingStore = Omit<BotHostListingInput, 'sharedBotHosts'>
+
 export function installBotHostListing(
   store: {
-    getState: () => BotHostListingInput
+    getState: () => BotHostListingStore
     subscribe: (
-      listener: (state: BotHostListingInput, previous: BotHostListingInput) => void
+      listener: (state: BotHostListingStore, previous: BotHostListingStore) => void
     ) => () => void
   },
   webClient: boolean
 ): () => void {
   const sync = (state: BotHostListingStoreState, statuses: RuntimeStatuses): void =>
     syncBotHostListing(
-      { ...pickListingState(state), runtimeStatusByEnvironmentId: statuses },
+      {
+        ...pickListingState(state),
+        runtimeStatusByEnvironmentId: statuses,
+        sharedBotHosts: readSharedBotHosts()
+      },
       webClient
     )
-  sync(store.getState(), runtimeStatusSubscriptionsFor(store).readStatuses())
+  const statusReads = runtimeStatusSubscriptionsFor(store)
+  sync(store.getState(), statusReads.readStatuses())
   // Homes are read once per flush; a catalog change only marks the connected servers dirty.
   setKeptBotHomesReader((hostId, list) =>
-    keptBotHomes(hostId, list, selectFolderWorkspaces(store.getState()) ?? [])
+    readSharedBotHosts().some((shared) => toRuntimeExecutionHostId(shared.environmentId) === hostId)
+      ? sharedBotHomes(hostId, list)
+      : keptBotHomes(hostId, list, selectFolderWorkspaces(store.getState()) ?? [])
   )
-  return subscribeStoreWithStatuses(store, (state, previous, statuses, previousStatuses) => {
-    if (selectFolderWorkspaces(state) !== selectFolderWorkspaces(previous)) {
-      readLiveBotHostIds().forEach(markKeptBotHostDirty)
+  const stopShared = subscribeSharedBotHosts(() =>
+    sync(store.getState(), statusReads.readStatuses())
+  )
+  const stopStore = subscribeStoreWithStatuses(
+    store,
+    (state, previous, statuses, previousStatuses) => {
+      if (selectFolderWorkspaces(state) !== selectFolderWorkspaces(previous)) {
+        readLiveBotHostIds().forEach(markKeptBotHostDirty)
+      }
+      if (
+        state.runtimeEnvironments === previous.runtimeEnvironments &&
+        statuses === previousStatuses &&
+        state.runtimeEnvironmentCatalogHydrated === previous.runtimeEnvironmentCatalogHydrated
+      ) {
+        return
+      }
+      sync(state, statuses)
     }
-    if (
-      state.runtimeEnvironments === previous.runtimeEnvironments &&
-      statuses === previousStatuses &&
-      state.runtimeEnvironmentCatalogHydrated === previous.runtimeEnvironmentCatalogHydrated
-    ) {
-      return
-    }
-    sync(state, statuses)
-  })
+  )
+  return () => {
+    stopShared()
+    stopStore()
+  }
 }
 
 function pickListingState(state: BotHostListingStoreState): BotHostListingStoreState {

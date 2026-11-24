@@ -29727,7 +29727,10 @@
         "avatarRefused": "Orca Cloud refused the bot's picture. Pick another picture, then try again.",
         "tooLarge": "This bot is too large to share. Leave out some memory or skills, then try again."
       },
-      "duplicateSkill": "Same name, in {{folder}} · not shared"
+      "duplicateSkill": "Same name, in {{folder}} · not shared",
+      "sharedBy": "Shared by {{name}}",
+      "sharedWith": "Shared with {{names}}",
+      "ownersComputer": "{{name}}’s computer"
     },
     "apps": {
       "title": "Add to {{bot}}",
