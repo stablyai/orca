@@ -8,12 +8,14 @@ const emptyImage = { isEmpty: () => true }
 
 function stallingWebview(): { webview: Electron.WebviewTag; settle: (() => void)[] } {
   const settle: (() => void)[] = []
-  const webview = {
+  const members = {
     capturePage: () =>
       new Promise((resolve) => {
         settle.push(() => resolve(emptyImage))
       })
-  } as unknown as Electron.WebviewTag
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a webview capture source only calls capturePage.
+  const webview = members as unknown as Electron.WebviewTag
   return { webview, settle }
 }
 

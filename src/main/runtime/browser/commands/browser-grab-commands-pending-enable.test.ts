@@ -28,11 +28,13 @@ import { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import { RuntimeBrowserGrab } from './browser-grab-commands'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 
-const host = {
+const hostMembers = {
   getAgentBrowserBridge: () => null,
   getRuntimeBrowserPageRegistry: () => ({ getPage: () => undefined })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission and grab are stubbed below; only these members are read.
-} as unknown as RuntimeBrowserCommandHost
+}
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission and grab are stubbed below; only these members are read.
+const host = hostMembers as unknown as RuntimeBrowserCommandHost
+type GrabGuestLookup = { resolveGrabGuest: () => Promise<unknown> }
 
 /** Holds every page admission until `admit` runs, like a page that is still loading. */
 function holdPageAdmission(): { admit: () => void } {
@@ -52,12 +54,12 @@ function holdPageAdmission(): { admit: () => void } {
 beforeEach(() => {
   vi.restoreAllMocks()
   sequencer.setBrowserGrabMode.mockClear()
-  vi.spyOn(
-    RuntimeBrowserGrab.prototype as unknown as {
-      resolveGrabGuest: () => Promise<unknown>
-    },
-    'resolveGrabGuest'
-  ).mockResolvedValue({ browserPageId: 'page', resolveGuest: () => null })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the private guest lookup is replaced; the commands call it with these params.
+  const grabLookup = RuntimeBrowserGrab.prototype as unknown as GrabGuestLookup
+  vi.spyOn(grabLookup, 'resolveGrabGuest').mockResolvedValue({
+    browserPageId: 'page',
+    resolveGuest: () => null
+  })
 })
 
 it('an enable waiting for its page arms once the page is ready', async () => {
