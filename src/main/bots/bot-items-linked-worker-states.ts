@@ -21,9 +21,11 @@ export type LinkedWorkerState = {
   reason?: string | null
 }
 
-/** Every linked Dispatch of a big profile (thousands) stays kept, within a few MB in all. */
-const KEPT_MAX = 16_384
-const KEPT_MAX_CHARS = 1_500_000
+/** A big profile's linked Dispatches (thousands) stay kept, within a few MB in all: a worker whose own
+ *  read is longer isn't kept, and reports past their budget are read from the Task on use. */
+const KEPT_MAX = 8_192
+const KEPT_WORKER_MAX_CHARS = 512
+const KEPT_REPORT_MAX_CHARS = 1_000_000
 const FINISHED_STATES = new Set<BotWorkWorker['state']>(['completed', 'failed', 'stopped'])
 
 type Kept = {
@@ -34,6 +36,7 @@ type Kept = {
   dispatchId: string
   resourceId: string | null
   print: number
+  /** The kept report's length, counted against its budget. */
   chars: number
 }
 
@@ -124,19 +127,19 @@ export class LinkedWorkerStates {
         // A worker still on a pane reads as the fleet sees every Dispatch on it, so it stays live.
         (!resource || resource.ownership_state === 'released')
       ) {
-        const report = reportLength(read) <= 2_000 ? read : undefined
-        // A copy: a kept substring would otherwise pin the whole Task spec or result it was cut from.
-        const value = structuredClone({ worker, report })
-        finished.push([
-          ref,
-          {
-            ...value,
-            dispatchId: lineage.latest.id,
-            resourceId: resource?.id ?? null,
-            print: 0,
-            chars: JSON.stringify(value).length
-          }
-        ])
+        if (JSON.stringify(worker).length <= KEPT_WORKER_MAX_CHARS) {
+          // A copy: a kept substring would otherwise pin the whole Task spec or result it was cut from.
+          finished.push([
+            ref,
+            {
+              ...structuredClone({ worker, report: read }),
+              dispatchId: lineage.latest.id,
+              resourceId: resource?.id ?? null,
+              print: 0,
+              chars: reportLength(read)
+            }
+          ])
+        }
       }
     }
     const finishedPrints = readPrints(
@@ -154,17 +157,18 @@ export class LinkedWorkerStates {
 
   private keep(ref: string, kept: Kept): void {
     this.forget(ref)
-    if (kept.chars > KEPT_MAX_CHARS) {
-      return
-    }
     for (const oldest of this.kept.keys()) {
-      if (this.kept.size < KEPT_MAX && this.keptChars + kept.chars <= KEPT_MAX_CHARS) {
+      if (this.kept.size < KEPT_MAX) {
         break
       }
       this.forget(oldest)
     }
-    this.kept.set(ref, kept)
-    this.keptChars += kept.chars
+    const value =
+      this.keptChars + kept.chars <= KEPT_REPORT_MAX_CHARS
+        ? kept
+        : { ...kept, report: undefined, chars: 0 }
+    this.kept.set(ref, value)
+    this.keptChars += value.chars
   }
 
   private forget(ref: string): void {
