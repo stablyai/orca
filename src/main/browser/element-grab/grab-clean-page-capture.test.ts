@@ -57,10 +57,11 @@ it('never overlaps Draw readbacks with the paint lease restore capture, in eithe
     readback: [],
     restore: []
   }
+  const throttling: boolean[] = []
   const guest = {
     isDestroyed: () => false,
     isFocused: () => false,
-    setBackgroundThrottling: () => {},
+    setBackgroundThrottling: (allowed: boolean) => throttling.push(allowed),
     capturePage: (rect?: unknown) => {
       const kind = rect ? 'restore' : 'readback'
       calls.push(kind)
@@ -86,14 +87,24 @@ it('never overlaps Draw readbacks with the paint lease restore capture, in eithe
   await expect(abandoned).resolves.toBeNull()
   await vi.advanceTimersByTimeAsync(5_000)
   expect(leases).toEqual([true, false])
-  // The released lease's restore waits for the readback still in flight.
+  // The guest is throttled again at once, while only its rehide capture waits for the readback.
+  await vi.advanceTimersByTimeAsync(100)
+  expect(throttling).toEqual([false, true])
+  expect(calls).toEqual(['readback'])
+
+  // Draws that time out behind the stalled readback submit nothing of their own.
+  for (let i = 0; i < 3; i++) {
+    const waiting = draw()
+    await vi.advanceTimersByTimeAsync(1_000)
+    await expect(waiting).resolves.toBeNull()
+  }
   await vi.advanceTimersByTimeAsync(100)
   expect(calls).toEqual(['readback'])
+  expect(throttling.at(-1)).toBe(true)
 
   pending.readback[0]()
   await vi.advanceTimersByTimeAsync(0)
   expect(calls).toEqual(['readback', 'restore'])
-  expect(leases).toEqual([true, false])
 
   // The restore is still pending when the next Draw starts: Draw waits for it, then captures.
   const next = draw()
@@ -104,6 +115,59 @@ it('never overlaps Draw readbacks with the paint lease restore capture, in eithe
   expect(calls).toEqual(['readback', 'restore', 'readback'])
   pending.readback[1]()
   await expect(next).resolves.toEqual(captured)
+})
+
+it('owes one rehide per final release, and a lease held when the readback settles postpones it', async () => {
+  vi.useFakeTimers()
+  const throttle = new RendererPublicationThrottle()
+  const calls: string[] = []
+  const readbacks: (() => void)[] = []
+  const guest = {
+    isDestroyed: () => false,
+    isFocused: () => false,
+    setBackgroundThrottling: () => {},
+    capturePage: (rect?: unknown) => {
+      calls.push(rect ? 'restore' : 'readback')
+      return rect
+        ? Promise.resolve(image)
+        : new Promise<typeof image>((resolve) => {
+            readbacks.push(() => resolve(image))
+          })
+    }
+  }
+  const draw = (): ReturnType<typeof captureCleanGuestPage> =>
+    captureCleanGuestPage(
+      guest,
+      new AbortController().signal,
+      () => throttle.acquire(guest),
+      1_000,
+      5_000
+    )
+
+  // Past the deadline and the paint cap: the rehide is owed behind the pending readback.
+  void draw()
+  await vi.advanceTimersByTimeAsync(6_100)
+  // Another lease starts and ends; the readback settles before that release's restore timer runs.
+  throttle.acquire(guest)()
+  readbacks[0]()
+  // Let the settlement run to completion before that timer fires.
+  for (let i = 0; i < 30; i++) {
+    await Promise.resolve()
+  }
+  await vi.advanceTimersByTimeAsync(0)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(calls).toEqual(['readback', 'restore'])
+
+  // A lease still held when the next abandoned readback settles postpones the rehide to its own release.
+  void draw()
+  await vi.advanceTimersByTimeAsync(6_100)
+  const release = throttle.acquire(guest)
+  readbacks[1]()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(calls).toEqual(['readback', 'restore', 'readback'])
+  release()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(calls).toEqual(['readback', 'restore', 'readback', 'restore'])
 })
 
 it('leaves the guest usable for the next Draw when taking the paint lease fails', async () => {

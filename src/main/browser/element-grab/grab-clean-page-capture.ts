@@ -1,7 +1,8 @@
 import type { BrowserCleanPageCapture } from '../../../shared/browser/element-grab/browser-grab-clean-capture'
 import {
+  isNativeCaptureBusy,
   occupyNativeCaptureLane,
-  pendingNativeCapture
+  whenNativeCaptureLaneFree
 } from '../../window/visibility/native-capture-lane'
 
 type ReadbackImage = {
@@ -50,12 +51,25 @@ export async function captureCleanGuestPage(
   } catch {
     return null
   }
+  // The deadline also withdraws a pending lane wait, so repeated timed-out Draws leave no registrations.
+  let stopWaiting: () => void = () => {}
   let deadlineTimer: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<null>((resolve) => {
-    deadlineTimer = setTimeout(() => resolve(null), deadlineMs)
+    deadlineTimer = setTimeout(() => {
+      stopWaiting()
+      resolve(null)
+    }, deadlineMs)
   })
-  for (let busy = pendingNativeCapture(guest); busy; busy = pendingNativeCapture(guest)) {
-    if ((await Promise.race([busy.then(() => true), deadline])) !== true) {
+  while (isNativeCaptureBusy(guest)) {
+    const free = await new Promise<boolean>((resolve) => {
+      const cancel = whenNativeCaptureLaneFree(guest, () => resolve(true))
+      stopWaiting = () => {
+        cancel()
+        resolve(false)
+      }
+    })
+    stopWaiting = () => {}
+    if (!free) {
       releasePaint()
       return null
     }

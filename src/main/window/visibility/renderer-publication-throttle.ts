@@ -1,4 +1,8 @@
-import { occupyNativeCaptureLane, pendingNativeCapture } from './native-capture-lane'
+import {
+  isNativeCaptureBusy,
+  occupyNativeCaptureLane,
+  whenNativeCaptureLaneFree
+} from './native-capture-lane'
 
 export type RendererPublicationThrottleTarget = {
   isDestroyed?: () => boolean
@@ -19,7 +23,11 @@ export class RendererPublicationThrottle {
     RendererPublicationThrottleTarget,
     ReturnType<typeof setTimeout>
   >()
-  private readonly deferredRestores = new Set<RendererPublicationThrottleTarget>()
+  // Weak, so an owed rehide never keeps a destroyed target alive.
+  private readonly owedRehides = new WeakMap<
+    RendererPublicationThrottleTarget,
+    { cancel: () => void }
+  >()
   private readonly observers = new Map<
     RendererPublicationThrottleTarget,
     Set<(leased: boolean) => void>
@@ -47,6 +55,8 @@ export class RendererPublicationThrottle {
       clearTimeout(pendingRestore)
       this.pendingRestores.delete(target)
     }
+    // A held lease postpones any owed rehide until its own release.
+    this.dropRehide(target)
     const leaseCount = this.leasesByTarget.get(target) ?? 0
     if (leaseCount === 0) {
       target.setBackgroundThrottling(false)
@@ -69,41 +79,66 @@ export class RendererPublicationThrottle {
       // Debugger detach drains promise callbacks inside native destruction, before isDestroyed flips.
       const restore = setTimeout(() => {
         this.pendingRestores.delete(target)
-        this.restoreWhenCaptureLaneFree(target)
+        this.restore(target)
       }, 0)
       this.pendingRestores.set(target, restore)
     }
   }
 
-  // A native capture still in flight (e.g. an abandoned Draw readback) must settle before the restore submits its own.
-  private restoreWhenCaptureLaneFree(target: RendererPublicationThrottleTarget): void {
-    if (this.leasesByTarget.has(target) || this.deferredRestores.has(target)) {
-      return
-    }
-    const busy = pendingNativeCapture(target)
-    if (busy) {
-      this.deferredRestores.add(target)
-      void busy.then(() => {
-        this.deferredRestores.delete(target)
-        this.restoreWhenCaptureLaneFree(target)
-      })
+  private restore(target: RendererPublicationThrottleTarget): void {
+    if (this.leasesByTarget.has(target)) {
       return
     }
     try {
       if (target.isDestroyed?.() === true) {
         return
       }
+      // Re-throttle at once, even while a native capture (e.g. an abandoned Draw readback) is pending.
       target.setBackgroundThrottling(true)
       // Focused targets have no swallowed hide: embedder key status is lost under a cover.
       if (target.isFocused?.() !== true) {
+        this.oweRehide(target)
+      }
+    } catch {
+      // Native calls can also throw synchronously when the renderer is unavailable.
+    }
+  }
+
+  // One rehide obligation per target: it waits for an in-flight capture, and a new lease cancels it.
+  private oweRehide(target: RendererPublicationThrottleTarget): void {
+    this.dropRehide(target)
+    const owed = { cancel: () => {} }
+    this.owedRehides.set(target, owed)
+    const submit = (): void => {
+      if (this.owedRehides.get(target) !== owed) {
+        return
+      }
+      if (isNativeCaptureBusy(target)) {
+        owed.cancel = whenNativeCaptureLaneFree(target, submit)
+        return
+      }
+      this.owedRehides.delete(target)
+      try {
+        if (target.isDestroyed?.() === true || this.leasesByTarget.has(target)) {
+          return
+        }
         // Re-throttling cannot replay a swallowed hide; stayHidden capture completion can.
         occupyNativeCaptureLane(
           target,
           target.capturePage(REHIDE_CAPTURE_RECT, { stayHidden: true }).catch(() => {})
         )
+      } catch {
+        // Native calls can also throw synchronously when the renderer is unavailable.
       }
-    } catch {
-      // Native calls can also throw synchronously when the renderer is unavailable.
+    }
+    submit()
+  }
+
+  private dropRehide(target: RendererPublicationThrottleTarget): void {
+    const owed = this.owedRehides.get(target)
+    if (owed) {
+      owed.cancel()
+      this.owedRehides.delete(target)
     }
   }
 
