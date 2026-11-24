@@ -20,9 +20,6 @@ export type {
 
 // A stalled host never holds a message back: past this, the turn goes without a note.
 export const BOT_WORK_NOTE_TIMEOUT_MS = 1_500
-// A list someone asked for waits this long for its stale PRs' reads (about two seconds each); a
-// turn's note never waits, and the reads land in time for its next turn.
-export const BOT_WORK_ASKED_PR_WAIT_MS = 10_000
 
 export class BotWorkRecord {
   // Each session's current turn, as its handover named it; cleared when the turn ends.
@@ -83,8 +80,8 @@ export class BotWorkRecord {
   }
 
   /** Validates live rows with one worker read per host, closing each on proof; yields those still live. */
-  async *checkAll(rows: readonly BotWorkRow[], prWaitMs = 0): AsyncGenerator<BotWorkCheck> {
-    for await (const read of readBotWorkRows(this.deps, rows, Date.now() + prWaitMs)) {
+  async *checkAll(rows: readonly BotWorkRow[]): AsyncGenerator<BotWorkCheck> {
+    for await (const read of readBotWorkRows(this.deps, rows)) {
       if ('closeReason' in read) {
         // A failed close leaves the row live for the next read; the other rows still count.
         await this.deps
@@ -114,13 +111,11 @@ export class BotWorkRecord {
     return checked ? botWorkTurnNote(checked) : null
   }
 
-  /** The work a bot started that is still its conversations', newest first. `prWaitMs`: how long
-   *  its stale PRs' reads again may hold the list. */
-  async list(botId: string, prWaitMs = 0): Promise<BotWorkerSummary[]> {
+  /** The work a bot started that is still its conversations', newest first. */
+  async list(botId: string): Promise<BotWorkerSummary[]> {
     const items: BotWorkerSummary[] = []
     for await (const { row, worker, workspace } of this.checkAll(
-      await this.deps.store().liveRows(botId),
-      prWaitMs
+      await this.deps.store().liveRows(botId)
     )) {
       // A chat's own name; a connector conversation's only when its connector asked.
       const linked =

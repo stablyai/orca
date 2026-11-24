@@ -51,11 +51,8 @@ export type BotWorkRecordDeps = {
    *  Dispatch, left out when that one can't be read. Throws when orchestration can't be read. */
   workers: (dispatchIds: readonly string[]) => Promise<ReadonlyMap<string, BotWorkWorker | null>>
   /** A workspace reader for one batch of rows, sharing its repo reads. Each read is 'gone' only with
-   *  proof; null when it can't be told (an offline host, a remote server). `prReadBy`: until when
-   *  the batch may wait for stale PRs' reads again. */
-  workspaces: (
-    prReadBy: number
-  ) => (worker: BotWorkWorker) => Promise<BotWorkWorkspace | 'gone' | null>
+   *  proof; null when it can't be told (an offline host, a remote server). */
+  workspaces: () => (worker: BotWorkWorker) => Promise<BotWorkWorkspace | 'gone' | null>
   /** What the conversation is called, from the message that started it; a chat, by its name. */
   conversationTitle: (address: BotWorkAddress) => string | null
   /** The conversation the message a bot session's turn was handed names; null for the owner's

@@ -58,6 +58,7 @@ export type RuntimeStore = {
   setCrossStoreWorkspaceLineage?: Store['setCrossStoreWorkspaceLineage']
   removeCrossStoreWorkspaceLineage?: Store['removeCrossStoreWorkspaceLineage']
   getGitHubCache: Store['getGitHubCache']
+  setGitHubCache?: Store['setGitHubCache']
   onGitHubCacheWritten?: Store['onGitHubCacheWritten']
   getWorkspaceSession?: Store['getWorkspaceSession']
   getWorkspaceSessionHostIds?: Store['getWorkspaceSessionHostIds']

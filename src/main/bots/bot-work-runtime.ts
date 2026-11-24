@@ -65,21 +65,17 @@ export function botWorkHostOf(db: OrchestrationDb, dispatchId: string): BotWorkH
 }
 
 /** One batch's workspace reader; `reads`: its repo reads, shared by every workspace it reads.
- *  `exists`: path checks shared too, only where a 'gone' never closes anything (item views).
- *  `prReadBy`: until when it waits for stale PRs' reads again; by default it only starts them. */
+ *  `exists`: path checks shared too, only where a 'gone' never closes anything (item views). */
 export function workspaceReader(
   runtime: BotWorkRuntime,
   reads: ScopedWorktreeReads = new Map(),
-  exists?: Map<string, boolean>,
-  prReadBy = 0
+  exists?: Map<string, boolean>
 ): (worker: BotWorkWorker) => Promise<BotWorkWorkspace | 'gone' | null> {
   return async (worker) => {
     if (worker.host !== 'local') {
       return readRemoteWorkspace(runtime, worker)
     }
-    return worker.worktreeId
-      ? readLocalWorkspace(runtime, worker.worktreeId, prReadBy, reads, exists)
-      : null
+    return worker.worktreeId ? readLocalWorkspace(runtime, worker.worktreeId, reads, exists) : null
   }
 }
 
@@ -94,7 +90,6 @@ function existsOnce(key: string, check: () => boolean, known?: Map<string, boole
 async function readLocalWorkspace(
   runtime: BotWorkRuntime,
   worktreeId: string,
-  prReadBy: number,
   reads?: ScopedWorktreeReads,
   exists?: Map<string, boolean>
 ): Promise<BotWorkWorkspace | 'gone' | null> {
@@ -118,9 +113,8 @@ async function readLocalWorkspace(
     return 'gone'
   }
   const worktree = await runtime.showManagedTerminalWorkspace(`id:${worktreeId}`, undefined, reads)
-  // The PR the workspace's row shows, read again through the row's own refresh when it is stale.
-  const wait = Math.max(0, prReadBy - Date.now())
-  const pr = await readWorkspacePR(store, { ...worktree, id: worktreeId }, repo, wait)
+  // The PR the workspace's row shows, from the shared cache; a stale one is read again in the background.
+  const pr = readWorkspacePR(store, { ...worktree, id: worktreeId }, repo)
   return {
     name: worktree.displayName || worktree.branch,
     branch: worktree.branch || null,
@@ -179,7 +173,7 @@ export function runtimeBotWork(
       return store
     },
     workers: (dispatchIds) => readWorkers(runtime, dispatchIds),
-    workspaces: (prReadBy) => workspaceReader(runtime, undefined, undefined, prReadBy),
+    workspaces: () => workspaceReader(runtime),
     turnAddress: (sessionId, message) => readTurnAddress(runtime, sessionId, message),
     conversationTitle: (address) => {
       if (address.source === 'chat') {

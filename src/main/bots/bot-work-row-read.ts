@@ -32,10 +32,9 @@ function judge(
  *  fresh: a workspace wait could outlive it (a follow-up revives a stopped worker). */
 export async function* readBotWorkRows(
   deps: Pick<BotWorkRecordDeps, 'workers' | 'workspaces'>,
-  rows: readonly BotWorkRow[],
-  prReadBy: number
+  rows: readonly BotWorkRow[]
 ): AsyncGenerator<BotWorkRowRead> {
-  const workspace = deps.workspaces(prReadBy)
+  const workspace = deps.workspaces()
   const hosts = new Map<BotWorkHost, Map<BotWorkRow, WorkerRead>>()
   for (const row of rows) {
     let reads = hosts.get(row.host)

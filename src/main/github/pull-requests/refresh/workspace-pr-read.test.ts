@@ -1,11 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRInfo } from '../../../../shared/github/pull-requests/pull-request-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { readPRRefreshOutcome } from './pr-refresh-coordinator'
+import { setPRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
+import type { PRRefreshOutcomeObserver } from './pr-refresh-event-publisher'
+import { addPRRefreshOutcomeObserver, enqueuePRRefresh } from './pr-refresh-coordinator'
 import { readWorkspacePR, type WorkspacePRReadWorktree } from './workspace-pr-read'
 
-vi.mock('./pr-refresh-coordinator', () => ({ readPRRefreshOutcome: vi.fn() }))
-const read = vi.mocked(readPRRefreshOutcome)
+vi.mock('./pr-refresh-coordinator', () => ({
+  addPRRefreshOutcomeObserver: vi.fn(),
+  enqueuePRRefresh: vi.fn()
+}))
+const enqueue = vi.mocked(enqueuePRRefresh)
+let observer: PRRefreshOutcomeObserver | undefined
+vi.mocked(addPRRefreshOutcomeObserver).mockImplementation((next) => {
+  observer = next
+  return () => {}
+})
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read uses only these fields.
 const repo = { id: 'repo-1', path: '/repos/orca', kind: 'git' } as Repo
@@ -17,6 +28,7 @@ const worktree: WorkspacePRReadWorktree = {
 }
 const cacheKey = 'repo-1::fix-list'
 const NOW = Date.parse('2026-11-23T12:00:00Z')
+const HOUR = 60 * 60_000
 
 function pr(state: PRInfo['state']): PRInfo {
   return {
@@ -24,52 +36,62 @@ function pr(state: PRInfo['state']): PRInfo {
     title: 'Fix the list',
     state,
     url: 'https://github.com/o/r/pull/42',
-    checksStatus: 'success',
-    checksReadComplete: true,
+    checksStatus: 'pending',
     updatedAt: '2026-11-23T00:00:00Z',
     mergeable: 'MERGEABLE',
     headSha: 'abc123'
   }
 }
 
+/** A main-process store with no window: only this module writes its cache. */
 function storeWith(data: PRInfo, ageMs: number) {
+  let cache: PersistedState['githubCache'] = {
+    pr: { [cacheKey]: { data, fetchedAt: NOW - ageMs } },
+    issue: {}
+  }
   return {
-    getGitHubCache: () => ({
-      pr: { [cacheKey]: { data, fetchedAt: NOW - ageMs } },
-      issue: {}
-    })
+    getGitHubCache: () => cache,
+    setGitHubCache: (next: PersistedState['githubCache']) => {
+      cache = next
+    }
   }
 }
 
 beforeEach(() => {
-  read.mockReset()
+  enqueue.mockReset()
   vi.useFakeTimers({ now: NOW })
 })
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  setPRAutoRefreshCadence('default')
+})
 
 describe('a workspace PR read outside its row', () => {
-  it('reads a stale open PR again and shows the merge, by number once the branch is gone', async () => {
-    read.mockResolvedValue({ kind: 'found', pr: pr('merged'), fetchedAt: NOW })
-    const shown = await readWorkspacePR(storeWith(pr('open'), 60 * 60_000), worktree, repo, 1_000)
-    expect(shown?.state).toBe('merged')
-    expect(read).toHaveBeenCalledTimes(1)
-    expect(read.mock.calls[0][0]).toMatchObject({
-      cacheKey,
-      branch: 'fix-list',
-      worktreeId: worktree.id,
-      fallbackPRNumber: 42
-    })
+  it('queues a stale open PR as background work and keeps its merge with no window open', () => {
+    const store = storeWith(pr('open'), HOUR)
+    expect(readWorkspacePR(store, worktree, repo)?.state).toBe('open')
+    expect(enqueue).toHaveBeenCalledTimes(1)
+    const [candidate, reason, priority] = enqueue.mock.calls[0]
+    expect(reason).toBe('swr')
+    expect(priority).toBeLessThan(40)
+    // The branch is deleted on merge: the read finds the PR by its cached number.
+    expect(candidate).toMatchObject({ cacheKey, branch: 'fix-list', fallbackPRNumber: 42 })
+
+    observer!(candidate, { kind: 'found', pr: pr('merged'), fetchedAt: NOW + 1_000 }, [])
+    expect(readWorkspacePR(store, worktree, repo)?.state).toBe('merged')
+    expect(enqueue).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the cached PR when the read does not land in time', async () => {
-    read.mockResolvedValue(null)
-    const shown = await readWorkspacePR(storeWith(pr('open'), 60 * 60_000), worktree, repo, 1_000)
-    expect(shown?.state).toBe('open')
+  it('never reads a final PR again, however old, even with pending checks', () => {
+    readWorkspacePR(storeWith(pr('merged'), 24 * HOUR), worktree, repo)
+    readWorkspacePR(storeWith(pr('closed'), 24 * HOUR), worktree, repo)
+    expect(enqueue).not.toHaveBeenCalled()
   })
 
-  it('never reads a fresh open PR or a merged one with final checks again', async () => {
-    await readWorkspacePR(storeWith(pr('open'), 5_000), worktree, repo, 1_000)
-    await readWorkspacePR(storeWith(pr('merged'), 24 * 60 * 60_000), worktree, repo, 1_000)
-    expect(read).not.toHaveBeenCalled()
+  it('reads nothing while fresh or with automatic refresh off', () => {
+    readWorkspacePR(storeWith(pr('open'), 5_000), worktree, repo)
+    setPRAutoRefreshCadence('off')
+    readWorkspacePR(storeWith(pr('open'), HOUR), worktree, repo)
+    expect(enqueue).not.toHaveBeenCalled()
   })
 })
