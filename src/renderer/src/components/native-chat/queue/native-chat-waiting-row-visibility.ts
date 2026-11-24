@@ -3,12 +3,12 @@ import { useEffect, useState } from 'react'
 // Rows this far past the view are drawn before they scroll in.
 const MARGIN = '200px'
 
-// One observer per transcript scroller: the margin applies to the scroller rows are clipped by.
+// One observer per scroller (transcript or setup mail block): the margin applies to the one clipping the rows.
 const observers = new Map<Element | null, { observer: IntersectionObserver; rows: number }>()
 const listeners = new Map<Element, (shown: boolean) => void>()
 
 function observe(element: Element, listener: (shown: boolean) => void): () => void {
-  const root = element.closest('[data-native-chat-scroll]')
+  const root = element.closest('[data-native-chat-scroll],[data-native-chat-waiting-mail-scroll]')
   let shared = observers.get(root)
   if (!shared) {
     shared = {

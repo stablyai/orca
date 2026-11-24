@@ -101,6 +101,7 @@ function NativeChatSetupWaitingMail({ shown }: { shown: boolean }): React.JSX.El
   const disclosures = useNativeChatDisclosures()
   return (
     <div
+      data-native-chat-waiting-mail-scroll
       className={cn(
         'mx-auto flex w-full max-w-(--chat-content-max-width) shrink-0 flex-col gap-2',
         shown && 'max-h-1/2 scrollbar-sleek overflow-y-auto px-4 pt-2 pb-2'
