@@ -1,25 +1,25 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Components } from 'react-markdown'
 import type { editor } from 'monaco-editor'
-import { monaco } from '@/lib/monaco-setup'
+import { monaco } from '@/lib/editor/monaco/monaco-setup'
 import {
   EDITOR_TYPOGRAPHY_SURFACE_CLASS,
   editorTypographyTextStyle,
   monacoTypographyOptions
-} from '@/lib/editor-typography'
-import { useEditorTypography } from '@/hooks/use-editor-typography'
-import { cn } from '@/lib/utils'
-import { installMonacoEditorFindShortcut } from '../../editor-shortcuts'
-import { syncContentUpdate } from '../../monaco-content-sync'
+} from '@/lib/editor/appearance/editor-typography'
+import { useEditorTypography } from '@/lib/editor/appearance/use-editor-typography'
+import { cn } from '@/lib/class-names'
+import { installMonacoEditorFindShortcut } from '../../commands/editor-shortcuts'
+import { syncContentUpdate } from '../../model-lifetime/buffer-text/monaco-content-sync'
 import {
   IPYNB_CODE_CELL_PREVIEW_MAX_LINES,
   getIpynbCodeCellPreviewLines
 } from './ipynb-code-cell-lines'
 import type { IpynbCell } from '../document/ipynb-parse'
 import { MarkdownPreviewBody } from '../../markdown-preview/render-tree/MarkdownPreviewBody'
-import { useMonacoColorizedLines } from '../../MonacoCodeExcerpt'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
-import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { useMonacoColorizedLines } from '../../monaco/MonacoCodeExcerpt'
+import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
+import { useMonacoTheme } from '@/lib/editor/appearance/use-monaco-theme'
 
 const NO_MARKDOWN_COMPONENTS: Components = {}
 // Share preview/editor box metrics to avoid shifts on activation.
@@ -52,13 +52,14 @@ type IpynbCellSourceProps = {
   onChange: (source: string) => void
 }
 
-type ClientPoint = { x: number; y: number }
+type CellPress = { x: number; y: number; previewScrollsX: boolean; replayMousePress: boolean }
 
 export function IpynbCellSource(props: IpynbCellSourceProps): React.JSX.Element {
   const { cell, source, active, onActivate } = props
-  const [pressedAt, setPressedAt] = useState<ClientPoint | null>(null)
-  const activate = (point: ClientPoint | null): void => {
-    setPressedAt(point)
+  const [press, setPress] = useState<CellPress | null>(null)
+  const pressedByTouchRef = useRef(false)
+  const activate = (nextPress: CellPress | null): void => {
+    setPress(nextPress)
     onActivate()
   }
   const activateOnEnter = (event: React.KeyboardEvent): void => {
@@ -85,7 +86,7 @@ export function IpynbCellSource(props: IpynbCellSourceProps): React.JSX.Element 
   return (
     <div className="ipynb-code-surface code-editor-colors overflow-hidden rounded-md border border-border bg-muted/60 focus-within:border-ring">
       {active ? (
-        <IpynbSourceEditor {...props} pressedAt={pressedAt} />
+        <IpynbSourceEditor {...props} press={press} />
       ) : (
         <div
           role="button"
@@ -95,8 +96,19 @@ export function IpynbCellSource(props: IpynbCellSourceProps): React.JSX.Element 
           onMouseDown={(event) => {
             if (event.button === 0) {
               event.preventDefault()
-              activate({ x: event.clientX, y: event.clientY })
+              const preview = event.currentTarget.firstElementChild
+              activate({
+                x: event.clientX,
+                y: event.clientY,
+                // Raw cells wrap in Monaco, so only code cells gain a horizontal scrollbar.
+                previewScrollsX:
+                  cell.kind === 'code' && !!preview && preview.scrollWidth > preview.clientWidth,
+                replayMousePress: shouldReplayMousePress(event, pressedByTouchRef.current)
+              })
             }
+          }}
+          onPointerDown={(event) => {
+            pressedByTouchRef.current = event.pointerType === 'touch'
           }}
           onKeyDown={activateOnEnter}
         >
@@ -104,6 +116,20 @@ export function IpynbCellSource(props: IpynbCellSourceProps): React.JSX.Element 
         </div>
       )}
     </div>
+  )
+}
+
+// Presses on the preview's scrollbar or padding, modified presses and touch only place the caret.
+function shouldReplayMousePress(event: React.MouseEvent, pressedByTouch: boolean): boolean {
+  return (
+    event.target instanceof Element &&
+    event.target.closest('code') !== null &&
+    event.buttons === 1 &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    !pressedByTouch
   )
 }
 
@@ -149,10 +175,10 @@ function IpynbSourceEditor({
   modelKey,
   cell,
   source,
-  pressedAt,
+  press,
   onDeactivate,
   onChange
-}: IpynbCellSourceProps & { pressedAt: ClientPoint | null }): React.JSX.Element {
+}: IpynbCellSourceProps & { press: CellPress | null }): React.JSX.Element {
   const monacoTheme = useMonacoTheme()
   const typography = useEditorTypography()
   // Monaco gets the CSS stack so cells match their DOM previews.
@@ -221,21 +247,55 @@ function IpynbSourceEditor({
       wordWrap: cell.kind === 'code' ? 'off' : 'on'
     })
     editorRef.current = editorInstance
+    // Monaco can add the horizontal scrollbar after measuring lines late; reserve it so that height change cannot end a drag.
+    let minHeight = press?.previewScrollsX
+      ? editorInstance.getContentHeight() + editorInstance.getLayoutInfo().horizontalScrollbarHeight
+      : 0
     const fitHeight = (): void => {
       const maxHeight = IPYNB_CODE_CELL_PREVIEW_MAX_LINES * lineHeightRef.current
-      container.style.height = `${Math.min(editorInstance.getContentHeight(), maxHeight)}px`
+      const height = Math.max(editorInstance.getContentHeight(), minHeight)
+      container.style.height = `${Math.min(height, maxHeight)}px`
       editorInstance.layout()
     }
     fitHeightRef.current = fitHeight
     fitHeight()
-    editorInstance.onDidContentSizeChange(fitHeight)
+    editorInstance.onDidContentSizeChange((event) => {
+      if (event.contentHeightChanged) {
+        minHeight = 0
+      }
+      fitHeight()
+    })
     // Restoring view state marks visible lines stable and forces tokenization before the first paint.
     editorInstance.restoreViewState(editorInstance.saveViewState())
-    const target = pressedAt && editorInstance.getTargetAtClientPoint(pressedAt.x, pressedAt.y)
+    const target = press && editorInstance.getTargetAtClientPoint(press.x, press.y)
     if (target?.position) {
       editorInstance.setPosition(target.position)
+      // Focus scrolls the notebook to Monaco's hidden input, which stays on line 1 until the caret is rendered.
+      editorInstance.render()
     }
     editorInstance.focus()
+    if (press?.replayMousePress) {
+      // Monaco counts clicks and starts drags from mousedown, so replay the press once the editor has its final size.
+      queueMicrotask(() => {
+        if (editorRef.current !== editorInstance) {
+          return
+        }
+        const pressTarget = document.elementFromPoint(press.x, press.y)
+        if (pressTarget && container.contains(pressTarget)) {
+          pressTarget.dispatchEvent(
+            new MouseEvent('mousedown', {
+              bubbles: true,
+              cancelable: true,
+              view: window,
+              detail: 1,
+              buttons: 1,
+              clientX: press.x,
+              clientY: press.y
+            })
+          )
+        }
+      })
+    }
     model.onDidChangeContent(() => {
       if (!syncingSourceRef.current) {
         callbacksRef.current.onChange(model.getValue())

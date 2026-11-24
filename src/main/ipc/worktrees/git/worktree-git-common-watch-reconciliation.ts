@@ -5,7 +5,7 @@ import type {
   WorktreePollerWindowVisibility
 } from '../creation/worktree-base-directory-poller'
 import { startGitCommonPolling } from './worktree-git-common-polling'
-import { createSingleFlight } from '../../single-flight-promise'
+import { createSingleFlight } from './single-flight-promise'
 
 // Reconcile silent native losses on the shared 15-tick backstop without per-repo two-second timers.
 const NARROW_WATCH_RECONCILIATION_TICKS = 15

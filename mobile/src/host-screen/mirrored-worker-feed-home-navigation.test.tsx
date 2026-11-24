@@ -1,18 +1,37 @@
 import { createElement } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, create as createRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
-import type { Worktree } from '../worktree/workspace-list-types'
+import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/remote-runtime/relay/mobile-desktop-relay-contract'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { useHostScreenState } from './use-host-screen-state'
-import { useHostWorktreeActions } from './use-host-worktree-actions'
-import { stubRpcClient } from '../transport/rpc-client-test-stub'
+import { useHostWorktreeActions } from './workspace-actions/use-host-worktree-actions'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+
+/** A connected RpcClient whose behaviour is only the members a test supplies; an unscripted request rejects. */
+function stubRpcClient(members: Partial<RpcClient> = {}): RpcClient {
+  return {
+    sendRequest: (method: string) => Promise.reject(new Error(`unscripted request: ${method}`)),
+    subscribe: () => () => {},
+    updateTerminalSubscriptionViewport: () => {},
+    getState: () => 'connected',
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
+    notifyForeground: () => {},
+    close: () => {},
+    ...members
+  }
+}
 
 const renderers = new Set<ReturnType<typeof createRenderer>>()
 
 vi.mock('expo-router', () => ({}))
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('../storage/preferences', () => ({ savePinnedIds: async () => {} }))
-vi.mock('../transport/host-removal-lifecycle', () => ({ removeHostAndCloseClient: async () => {} }))
+vi.mock('../host-catalog/host-removal-lifecycle', () => ({
+  removeHostAndCloseClient: async () => {}
+}))
 vi.mock('../host-route-exit', () => ({ leaveHostRoute: vi.fn() }))
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial test fixture
@@ -93,7 +112,11 @@ it('opens a mirrored worker in its feed home, not the coordinator card', async (
     return null
   }
   await act(async () => {
-    renderers.add(createRenderer(createElement(Probe)))
+    renderers.add(
+      createRenderer(
+        createElement(QueryClientProvider, { client: new QueryClient() }, createElement(Probe))
+      )
+    )
   })
   await act(async () => {
     held.setLists?.([orca], [babysitter])

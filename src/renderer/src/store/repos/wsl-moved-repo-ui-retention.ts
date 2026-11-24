@@ -7,7 +7,7 @@ import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-proj
 import {
   getSetupScriptPromptDismissalRepoId,
   sanitizeSetupScriptPromptDismissals
-} from '@/lib/setup-script-prompt'
+} from '@/runtime/repo-hooks/setup-script-prompt'
 
 // Undefined in partial test stores and older state shapes; treated as no moved project.
 type MovedProjects = readonly WslMovedProject[] | undefined

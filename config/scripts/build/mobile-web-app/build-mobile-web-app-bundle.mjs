@@ -1,13 +1,14 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { readRouteSnapshot } from '../../mobile-web-app/mobile-web-app-route-snapshot.mjs'
 import { MOBILE_WEB_APP_DEPENDENCY_PATH } from '../../mobile-web-app/mobile-web-app-bundle-dependencies.mjs'
 import { existsSync, realpathSync } from 'node:fs'
-import { basename, extname, join, resolve } from 'node:path'
+import { basename, dirname, extname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
 import {
   MOBILE_WEB_BUNDLE_ENTRYPOINT,
+  contentAssetName,
   hashedAsset,
   readDesktopVersion,
   readProtocolWindow,
@@ -24,6 +25,21 @@ import {
   routePathnameFromKey
 } from '../../mobile-web-app/mobile-web-app-route-manifest.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
+import { reactNativeSvgWebPlugin } from './react-native-svg-web-plugin.mjs'
+import { packageBuildPlugin } from './one-package-build-plugin.mjs'
+import { PAGE_GLOBALS_BANNER, bannerOnlyWhereScriptsRunFirst } from './page-globals-banner.mjs'
+import {
+  ROUTE_ENTRY_NAMESPACE,
+  entryStaticClosure,
+  isScriptOutput,
+  lazyModulesToAnchor,
+  sharedModulesToMerge
+} from './mobile-web-app-chunk-grouping.mjs'
+import {
+  deferredOutputs,
+  localeCatalogOutputs,
+  pageScriptCount
+} from './mobile-web-app-asset-kinds.mjs'
 
 const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
 const mobileDir = join(projectDir, 'mobile')
@@ -89,6 +105,11 @@ export const MOBILE_WEB_APP_SHIMS = [
       options.plugins?.some((plugin) => plugin.name === HAIRLINE_PLUGIN_NAME) === true
   },
   {
+    // Point imports that would ship a second build (or an unused part) of a package at what the page already loads.
+    name: 'one-package-build',
+    appliesTo: (options) => options.plugins?.includes(packageBuildPlugin) === true
+  },
+  {
     // esbuild has no require.context, so the route tree is generated and injected.
     name: 'route-manifest',
     appliesTo: (options) =>
@@ -117,15 +138,12 @@ const PAGE_ASYNC_STORAGE_MODULE = join(
   'src',
   'mobile-web-shell',
   'bridge',
+  'page-storage',
   'page-async-storage.ts'
 )
 
 // nodePaths cannot override shared modules’ root Zod resolution. Alias mobile’s package to match tsconfig and salvage/container instances; esbuild picks its ESM module entry.
 const MOBILE_ZOD_PACKAGE = join(mobileDir, 'node_modules', 'zod')
-
-// Set __zod_globalConfig.jitless in banner: module-scope schema construction probes eval before our imports can configure it, generating caught-but-reported CSP violations.
-const ZOD_JITLESS_BANNER =
-  'globalThis.__zod_globalConfig ??= {}; globalThis.__zod_globalConfig.jitless = true;'
 
 const ROUTE_MANIFEST_PLUGIN_NAME = 'orca-route-manifest'
 const LUCIDE_PLUGIN_NAME = 'orca-lucide-barrel-provider'
@@ -133,15 +151,85 @@ const HAIRLINE_PLUGIN_NAME = 'orca-hairline-device-pixel'
 
 const ENTRY_CHUNK_NAME = 'entry'
 
+const ROUTE_MANIFEST_MODULE = /web-entry[\\/]route-manifest(\.ts)?$/
+const LAZY_ENTRY_NAMESPACE = 'orca-lazy-entry'
+
+// The entry's static imports as written, minus the manifest: a route importing it would be an output cycle.
+async function entryImportAnchors() {
+  const scan = await esbuild.build({
+    entryPoints: [entryPoint],
+    write: false,
+    metafile: true,
+    outdir: 'scan',
+    logLevel: 'silent'
+  })
+  const [{ imports }] = Object.values(scan.metafile.outputs)
+  return imports
+    .filter(
+      ({ kind, path }) =>
+        kind === 'import-statement' && !ROUTE_MANIFEST_MODULE.test(join(dirname(entryPoint), path))
+    )
+    .map(({ path }) => `import ${JSON.stringify(path)}\n`)
+    .join('')
+}
+
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 // Keep typed route-manifest file for TS/Metro resolution; replace only its body for web.
-function routeManifestPlugin(manifestSource) {
+// Routes import the entry's imports first, so esbuild keeps those modules in one chunk instead of one per route subset.
+// Routes also import every module in sharedModules, which esbuild then puts in one chunk all routes load.
+// Lazy modules in anchoredLazyModules (path to export names) get the same imports, so they don't split those chunks either.
+function routeManifestPlugin(manifestSource, routes, sharedModules, anchoredLazyModules) {
+  let anchors
+  const anchoredImports = async () => {
+    anchors ??= entryImportAnchors()
+    const shared = sharedModules.map((module) => `import ${JSON.stringify(module)}\n`).join('')
+    return `${await anchors}${shared}`
+  }
   return {
     name: ROUTE_MANIFEST_PLUGIN_NAME,
     setup(build) {
-      build.onLoad({ filter: /web-entry[\\/]route-manifest\.ts$/ }, () => ({
+      build.onLoad({ filter: ROUTE_MANIFEST_MODULE }, () => ({
         contents: manifestSource,
         loader: 'js',
         resolveDir: mobileDir
+      }))
+      if (routes.length > 0) {
+        const routeImport = new RegExp(
+          `^(?:${routes.map(({ module }) => escapeRegExp(module)).join('|')})$`
+        )
+        build.onResolve({ filter: routeImport }, (args) =>
+          args.kind === 'dynamic-import'
+            ? { path: args.path, namespace: ROUTE_ENTRY_NAMESPACE }
+            : undefined
+        )
+        build.onLoad({ filter: /.*/, namespace: ROUTE_ENTRY_NAMESPACE }, async (args) => ({
+          contents: `${await anchoredImports()}export { default } from ${JSON.stringify(args.path)}\n`,
+          loader: 'js',
+          resolveDir: dirname(entryPoint)
+        }))
+      }
+      if (anchoredLazyModules.size === 0) {
+        return
+      }
+      build.onResolve({ filter: /.*/ }, async (args) => {
+        if (args.kind !== 'dynamic-import' || args.pluginData === LAZY_ENTRY_NAMESPACE) {
+          return undefined
+        }
+        const { path, errors } = await build.resolve(args.path, {
+          kind: args.kind,
+          importer: args.importer,
+          resolveDir: args.resolveDir,
+          pluginData: LAZY_ENTRY_NAMESPACE
+        })
+        return errors.length === 0 && anchoredLazyModules.has(path)
+          ? { path, namespace: LAZY_ENTRY_NAMESPACE }
+          : undefined
+      })
+      build.onLoad({ filter: /.*/, namespace: LAZY_ENTRY_NAMESPACE }, async (args) => ({
+        contents: `${await anchoredImports()}export { ${anchoredLazyModules.get(args.path).join(', ')} } from ${JSON.stringify(args.path)}\n`,
+        loader: 'js',
+        resolveDir: dirname(entryPoint)
       }))
     }
   }
@@ -157,6 +245,9 @@ export const lucideBarrelPlugin = {
     }))
   }
 }
+
+// Render checks bundle components on their own; share the page's module shims so they resolve alike.
+export const mobileWebRenderCheckPlugins = [lucideBarrelPlugin, reactNativeSvgWebPlugin]
 
 // react-native-web's own assignment, matched whole so an upgrade that moves it fails the build.
 const RNW_HAIRLINE_ASSIGNMENT = 'StyleSheet.hairlineWidth = 1;'
@@ -187,7 +278,11 @@ const hairlineDevicePixelPlugin = {
 }
 
 /** Split out so a test can read the options MOBILE_WEB_APP_SHIMS claims, without a build. */
-export function mobileWebAppBuildOptions(routes) {
+export function mobileWebAppBuildOptions(
+  routes,
+  sharedModules = [],
+  anchoredLazyModules = new Map()
+) {
   return {
     // Fixed so no absolute path of this checkout can reach the output.
     absWorkingDir: mobileDir,
@@ -205,6 +300,8 @@ export function mobileWebAppBuildOptions(routes) {
     // Pinned rather than defaulted, so the entry is found by name and not by elimination.
     entryNames: ENTRY_CHUNK_NAME,
     target: ['es2022'],
+    // Keep ESM tree shaking when a dependency also requires the same package.
+    mainFields: ['browser', 'module', 'main'],
     charset: 'utf8',
     legalComments: 'none',
     // Omit maps carrying absolute checkout paths; keep unhashed/unwritten metafile for output/import classification.
@@ -220,9 +317,16 @@ export function mobileWebAppBuildOptions(routes) {
       zod: MOBILE_ZOD_PACKAGE
     },
     plugins: [
-      routeManifestPlugin(renderMobileWebAppRouteManifest(routes)),
+      routeManifestPlugin(
+        renderMobileWebAppRouteManifest(routes),
+        routes,
+        sharedModules,
+        anchoredLazyModules
+      ),
       lucideBarrelPlugin,
-      hairlineDevicePixelPlugin
+      reactNativeSvgWebPlugin,
+      hairlineDevicePixelPlugin,
+      packageBuildPlugin
     ],
     resolveExtensions: [
       '.web.tsx',
@@ -249,9 +353,7 @@ export function mobileWebAppBuildOptions(routes) {
     assetNames: '[hash]',
     // Root-absolute asset URLs remain correct at nested page routes.
     publicPath: '/assets',
-    banner: {
-      js: `globalThis.process ??= { env: { NODE_ENV: 'production', EXPO_OS: 'web' }, platform: 'web', version: '', nextTick: (fn) => setTimeout(fn, 0) };${ZOD_JITLESS_BANNER}`
-    },
+    banner: { js: PAGE_GLOBALS_BANNER },
     define: {
       global: 'globalThis',
       __DEV__: 'false',
@@ -262,20 +364,6 @@ export function mobileWebAppBuildOptions(routes) {
       ...turnedOnDarkBuildDefines()
     }
   }
-}
-
-// Budget entry plus transitive static imports, stopping at dynamic imports; entry-only limits let shared initial chunks grow unseen.
-export function entryStaticClosure(metafile, entryOutputPath) {
-  const reached = new Set([entryOutputPath])
-  for (const current of reached) {
-    for (const imported of metafile.outputs[current]?.imports ?? []) {
-      if (imported.kind !== 'import-statement' || reached.has(imported.path)) {
-        continue
-      }
-      reached.add(imported.path)
-    }
-  }
-  return reached
 }
 
 // Hash final output bytes leaf-first, rewriting dependency names before hashing importers.
@@ -315,7 +403,7 @@ export function renameOutputsByContent(metafile, outputFiles) {
       )
     }
     open.delete(name)
-    const result = { name: `${sha256Hex(bytes)}${extname(name)}`, bytes }
+    const result = { name: contentAssetName(sha256Hex(bytes), extname(name).slice(1)), bytes }
     renamed.set(name, result)
     return result
   }
@@ -344,8 +432,6 @@ export function routeChunkNames(metafile, routes, renamed) {
     })
   )
 }
-
-const isScriptOutput = (path) => path.endsWith('.js')
 
 // appDir is a seam for the tests, which bundle a scratch route tree; production always uses mobile/app.
 // Page closure includes ancestor layouts as entry modules, not just route imports.
@@ -385,31 +471,81 @@ export async function mobileWebAppModuleClosure(entryModules, { absWorkingDir } 
   }
 }
 
-// One lazily imported chunk per UI language; the page fetches only the active one after init.
-const LOCALE_CATALOG_INPUT = /(^|\/)src\/i18n\/locales\/[^/]+\.json$/
+const localeCatalogDir = join(mobileDir, 'src', 'i18n', 'locales')
 
-function localeCatalogOutputs(metafile) {
-  return new Set(
-    Object.entries(metafile.outputs)
-      .filter(([, output]) => {
-        const inputs = Object.keys(output.inputs ?? {})
-        return inputs.length > 0 && inputs.every((input) => LOCALE_CATALOG_INPUT.test(input))
-      })
-      .map(([output]) => basename(output))
+// The same catalogs as JSON for the host to serve one at a time, to shells that skip the chunks;
+// English is the page's inline fallback, so it has none.
+export async function readLocaleCatalogs(directory = localeCatalogDir) {
+  const names = (await readdir(directory))
+    .filter((name) => name.endsWith('.json') && name !== 'en.json')
+    .sort()
+  return Promise.all(
+    names.map(async (name) => {
+      // Minify: the host sends and the phone keeps the parsed object, not the source layout.
+      const bytes = Buffer.from(
+        JSON.stringify(JSON.parse(await readFile(join(directory, name), 'utf8'))),
+        'utf8'
+      )
+      const sha256 = sha256Hex(bytes)
+      return {
+        locale: name.slice(0, -'.json'.length),
+        bytes,
+        path: `catalogs/${sha256}.json`,
+        sha256,
+        byteLength: bytes.byteLength
+      }
+    })
   )
+}
+
+// esbuild keeps a whole namespace used as a value: `import { z }` or `z.core` ships ~200 KB of zod locale tables.
+const ZOD_LOCALE_TABLE_INPUT = /\/zod\/v4\/locales\/(?!en\.js$)[^/]+$/
+
+function assertNoZodLocaleTables(metafile) {
+  const leaked = Object.values(metafile.outputs).flatMap(({ inputs }) =>
+    Object.entries(inputs)
+      .filter(
+        ([input, { bytesInOutput }]) => bytesInOutput > 0 && ZOD_LOCALE_TABLE_INPUT.test(input)
+      )
+      .map(([input]) => input)
+  )
+  if (leaked.length > 0) {
+    throw new Error(
+      `[build-mobile-web-app-bundle] ${String(leaked.length)} zod locale tables reached the page (${leaked[0]}, …); ` +
+        "use `import * as z from 'zod'`, and import nested namespaces like `z.core` directly"
+    )
+  }
+}
+
+function entryOutput(metafile) {
+  const path = Object.keys(metafile.outputs).find(
+    (output) => basename(output) === `${ENTRY_CHUNK_NAME}.js`
+  )
+  if (!path) {
+    throw new Error('[build-mobile-web-app-bundle] esbuild emitted no entry script')
+  }
+  return path
+}
+
+// The page's scripts as shipped: a first build finds the small shared chunks, a second merges them.
+export async function buildMobileWebAppScripts(routes) {
+  const split = await esbuild.build(mobileWebAppBuildOptions(routes))
+  const entryOutputPath = entryOutput(split.metafile)
+  const sharedModules = sharedModulesToMerge(split.metafile, entryOutputPath)
+  const anchoredLazyModules = lazyModulesToAnchor(split.metafile, entryOutputPath)
+  return sharedModules.length === 0 && anchoredLazyModules.size === 0
+    ? split
+    : esbuild.build(mobileWebAppBuildOptions(routes, sharedModules, anchoredLazyModules))
 }
 
 export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const routes = await collectMobileWebAppRoutes(appDir)
   await assertRoutesCarryNoSynchronousExports(routes)
-  const result = await esbuild.build(mobileWebAppBuildOptions(routes))
-  const entryOutputPath = Object.keys(result.metafile.outputs).find(
-    (path) => basename(path) === `${ENTRY_CHUNK_NAME}.js`
-  )
-  if (!entryOutputPath) {
-    throw new Error('[build-mobile-web-app-bundle] esbuild emitted no entry script')
-  }
-  const renamed = renameOutputsByContent(result.metafile, result.outputFiles)
+  const result = await buildMobileWebAppScripts(routes)
+  assertNoZodLocaleTables(result.metafile)
+  const entryOutputPath = entryOutput(result.metafile)
+  const outputFiles = bannerOnlyWhereScriptsRunFirst(result.metafile, result.outputFiles)
+  const renamed = renameOutputsByContent(result.metafile, outputFiles)
   const entry = renamed.get(basename(entryOutputPath))
   const byName = (left, right) => (left.name < right.name ? -1 : 1)
   const others = [...renamed.entries()]
@@ -421,16 +557,19 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const images = others.filter(({ emittedName }) => !isScriptOutput(emittedName)).sort(byName)
   const closure = entryStaticClosure(result.metafile, entryOutputPath)
   const catalogOutputs = localeCatalogOutputs(result.metafile)
+  const deferred = deferredOutputs(result.metafile)
   return {
     script: entry.bytes,
     chunks,
     images,
     catalogChunks: chunks.filter(({ emittedName }) => catalogOutputs.has(emittedName)),
+    deferredChunks: chunks.filter(({ emittedName }) => deferred.has(emittedName)),
     // Count final renamed bytes; metafile sizes predate longer hashes but still identify static imports.
     entryStaticBytes: [...closure].reduce(
       (total, path) => total + (renamed.get(basename(path))?.bytes.byteLength ?? 0),
       0
     ),
+    chunkCount: pageScriptCount(result.metafile),
     routeKeys: routes.map((route) => route.key),
     routeChunks: routeChunkNames(result.metafile, routes, renamed)
   }
@@ -463,17 +602,31 @@ export function resolveMobileWebPageRoutes(routeKeys, declared = MOBILE_WEB_PAGE
 export async function buildMobileWebAppBundle({
   appDir,
   outDir = defaultOutDir,
-  pageRoutes = MOBILE_WEB_PAGE_ROUTES
+  pageRoutes = MOBILE_WEB_PAGE_ROUTES,
+  // Only the shipped tree pays for brotli-11; tests and verify's scratch builds read raw assets.
+  brotli = false
 } = {}) {
   const [
     desktopVersion,
     protocolWindow,
-    { script, chunks, images, catalogChunks, entryStaticBytes, routeChunks, routeKeys },
+    {
+      script,
+      chunks,
+      images,
+      catalogChunks,
+      deferredChunks,
+      entryStaticBytes,
+      chunkCount,
+      routeChunks,
+      routeKeys
+    },
+    catalogs,
     scrollbarStyle
   ] = await Promise.all([
     readDesktopVersion(),
     readProtocolWindow(),
     bundleMobileWebApp({ appDir }),
+    readLocaleCatalogs(),
     readFile(join(projectDir, 'src/shared/styles/scrollbar-sleek.css'), 'utf8').then((style) =>
       // The shared desktop stylesheet can be checked out as CRLF on Windows.
       style.replace(/\r\n/g, '\n')
@@ -481,9 +634,16 @@ export async function buildMobileWebAppBundle({
   ])
   // Names already hash final bytes, so hashedAsset must reproduce them.
   const scriptAsset = hashedAsset(script, 'js')
+  const catalogChunkSet = new Set(catalogChunks)
+  const deferredChunkSet = new Set(deferredChunks)
   const written = [
     scriptAsset,
-    ...[...chunks, ...images].map(({ name, bytes }) => hashedAsset(bytes, extname(name).slice(1)))
+    ...[...chunks, ...images].map((output) => ({
+      ...hashedAsset(output.bytes, extname(output.name).slice(1)),
+      // Newer shells skip these in the download; older shells download them as before.
+      ...(catalogChunkSet.has(output) ? { kind: 'catalog' } : {}),
+      ...(deferredChunkSet.has(output) ? { deferred: true } : {})
+    }))
   ]
 
   // Root-absolute URLs survive nested routes; CSP allows only about: base. ESM entry/chunks load under existing self policy.
@@ -507,9 +667,11 @@ export async function buildMobileWebAppBundle({
   const { manifest } = await writeMobileWebBundleTree({
     outDir,
     written: [indexAsset, ...written],
+    catalogs,
     desktopVersion,
     protocolWindow,
-    routes: resolveMobileWebPageRoutes(routeKeys, pageRoutes)
+    routes: resolveMobileWebPageRoutes(routeKeys, pageRoutes),
+    brotli
   })
   return {
     manifest,
@@ -517,13 +679,12 @@ export async function buildMobileWebAppBundle({
     routeChunks,
     routeKeys,
     entryStaticBytes,
-    // The entry counts: it is a chunk the browser fetches, and the budget is about how many.
-    // Locale catalogs are counted separately against their own allowance.
-    chunkCount: chunks.length - catalogChunks.length + 1,
+    chunkCount,
     // Everything the routes import that is not a script, which is the rest of the asset budget.
     imageCount: images.length,
     catalogChunkCount: catalogChunks.length,
-    catalogBytes: catalogChunks.reduce((total, { bytes }) => total + bytes.byteLength, 0)
+    catalogBytes: catalogChunks.reduce((total, { bytes }) => total + bytes.byteLength, 0),
+    deferredBytes: deferredChunks.reduce((total, { bytes }) => total + bytes.byteLength, 0)
   }
 }
 
@@ -536,7 +697,7 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
   }
   try {
     const { manifest, outDir, routeKeys, entryStaticBytes, chunkCount } =
-      await buildMobileWebAppBundle()
+      await buildMobileWebAppBundle({ brotli: true })
     console.log(
       `[build-mobile-web-app-bundle] OK — ${String(routeKeys.length)} route(s), ` +
         `${String(chunkCount)} chunk(s), ${String(entryStaticBytes)} bytes before the first route, ` +

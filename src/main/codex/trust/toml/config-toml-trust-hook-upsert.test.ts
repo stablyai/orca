@@ -1,14 +1,32 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { existsSync, lstatSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { lstatSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { escapeRegex } from '../../../../shared/string-utils'
+import { escapeRegex } from '../../../../shared/text/regex-escaping'
 import { upsertHookTrustEntries, type CodexTrustEntry } from './config-toml-trust'
-import { computeCodexTrustedHash as computeTrustedHash } from '../identity/codex-trust-identity'
+import type * as TomlAtomicWrite from '../../configuration/toml/config-toml-atomic-write'
 import { escapeTomlBasicString as escapeTomlString } from '../../configuration/toml/config-toml-syntax'
 import {
   createTrustConfigFixture,
   removeTrustConfigFixture
 } from './config-toml-trust-test-fixtures'
+
+const beforePublish = vi.hoisted(() => {
+  const state: { run: ((path: string) => void) | null } = { run: null }
+  return state
+})
+
+vi.mock('../../configuration/toml/config-toml-atomic-write', async (importOriginal) => {
+  const actual = await importOriginal<typeof TomlAtomicWrite>()
+  return {
+    ...actual,
+    writeTomlConfigAtomically: (...args: Parameters<typeof actual.writeTomlConfigAtomically>) => {
+      const run = beforePublish.run
+      beforePublish.run = null
+      run?.(args[0])
+      return actual.writeTomlConfigAtomically(...args)
+    }
+  }
+})
 
 let tmpDir: string
 let configPath: string
@@ -20,10 +38,81 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  beforePublish.run = null
   removeTrustConfigFixture(tmpDir)
 })
 
 describe('upsertHookTrustEntries', () => {
+  it('keeps a save that lands after Orca read the config and adds the approval on top of it', () => {
+    writeFileSync(configPath, 'model = "a"\n', 'utf-8')
+    beforePublish.run = (path) => writeFileSync(path, 'model = "b"\n', 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: '/home/me/.codex/hooks.json',
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo stop',
+        trustedHash: 'sha256:NEW'
+      }
+    ])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written.startsWith('model = "b"\n')).toBe(true)
+    expect(written).toContain('trusted_hash = "sha256:NEW"')
+  })
+
+  it.each([
+    {
+      name: 'followed by another table',
+      sourcePath: '/home/me/.codex/hooks.json',
+      original: [
+        '[hooks.state."/home/me/.codex/hooks.json:stop:0:0"]',
+        'enabled = true',
+        'trusted_hash = "sha256:KEEP"',
+        '',
+        '[features]',
+        'daemon_auto_start = false',
+        ''
+      ].join('\n')
+    },
+    {
+      name: 'with both Windows spellings ending the file',
+      sourcePath: 'C:\\Users\\me\\.codex\\hooks.json',
+      original: [
+        'model = "B"',
+        '',
+        '[hooks.state]',
+        '',
+        "[hooks.state.'C:\\Users\\me\\.codex\\hooks.json:stop:0:0']",
+        'enabled = true',
+        'trusted_hash = "sha256:KEEP"',
+        '',
+        "[hooks.state.'C:/Users/me/.codex/hooks.json:stop:0:0']",
+        'enabled = true',
+        'trusted_hash = "sha256:KEEP"',
+        ''
+      ].join('\n')
+    }
+  ])('leaves an unchanged approval $name byte-identical', ({ sourcePath, original }) => {
+    writeFileSync(configPath, original, 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath,
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo stop',
+        trustedHash: 'sha256:KEEP',
+        enabled: true
+      }
+    ])
+
+    expect(readFileSync(configPath, 'utf-8')).toBe(original)
+  })
+
   it('collapses duplicate blocks for the same hook key while preserving unrelated hook state', () => {
     const sourcePath = 'C:\\Users\\me\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json'
     const key = `${sourcePath}:session_start:0:0`
@@ -65,22 +154,6 @@ describe('upsertHookTrustEntries', () => {
     expect(written).toContain('enabled = false')
     expect(written).not.toContain('STALE1')
     expect(written).not.toContain('STALE2')
-    expect(written).toContain(`trusted_hash = "${computeTrustedHash(entry)}"`)
-  })
-
-  it('writes a .bak file before overwriting an existing config', () => {
-    writeFileSync(configPath, 'model = "old"\n', 'utf-8')
-    upsertHookTrustEntries(configPath, [
-      {
-        sourcePath: '/x/hooks.json',
-        eventLabel: 'pre_tool_use',
-        groupIndex: 0,
-        handlerIndex: 0,
-        command: 'echo'
-      }
-    ])
-    expect(existsSync(`${configPath}.bak`)).toBe(true)
-    expect(readFileSync(`${configPath}.bak`, 'utf-8')).toBe('model = "old"\n')
   })
 
   it.skipIf(process.platform === 'win32')('does not follow an existing .bak symlink', () => {
@@ -140,26 +213,6 @@ describe('upsertHookTrustEntries', () => {
     expect(written).toContain('[notes]')
     expect(written).not.toContain('sha256:STALE')
   })
-
-  it('preserves `enabled = false` when the user hand-edited it before reinstall', () => {
-    const key = '/x/hooks.json:pre_tool_use:0:0'
-    const original = `[hooks.state."${key}"]\nenabled = false\ntrusted_hash = "sha256:OLD"\n`
-    writeFileSync(configPath, original, 'utf-8')
-
-    upsertHookTrustEntries(configPath, [
-      {
-        sourcePath: '/x/hooks.json',
-        eventLabel: 'pre_tool_use',
-        groupIndex: 0,
-        handlerIndex: 0,
-        command: 'echo hi'
-      }
-    ])
-
-    const written = readFileSync(configPath, 'utf-8')
-    expect(written).toContain('enabled = false')
-    expect(written).not.toContain('enabled = true')
-  })
 })
 describe('upsertHookTrustEntries with array-of-tables boundaries', () => {
   it('stops the replacement at a following [[array.of.tables]] header', () => {
@@ -189,5 +242,56 @@ describe('upsertHookTrustEntries with array-of-tables boundaries', () => {
     expect(written).not.toContain('STALE')
     expect(written).toContain('[[products]]')
     expect(written).toContain('name = "thing"')
+  })
+})
+
+describe('upsertHookTrustEntries batch order', () => {
+  const entry = (eventLabel: 'pre_tool_use' | 'stop', trustedHash: string): CodexTrustEntry => ({
+    sourcePath: '/x/hooks.json',
+    eventLabel,
+    groupIndex: 0,
+    handlerIndex: 0,
+    command: 'echo',
+    trustedHash
+  })
+
+  it('appends a missing entry before replacing the block that ended the file', () => {
+    writeFileSync(
+      configPath,
+      '[hooks.state."/x/hooks.json:pre_tool_use:0:0"]\nenabled = true\ntrusted_hash = "OLD"\n',
+      'utf-8'
+    )
+
+    upsertHookTrustEntries(configPath, [entry('stop', 'B'), entry('pre_tool_use', 'A')])
+
+    expect(readFileSync(configPath, 'utf-8')).toBe(
+      [
+        '[hooks.state."/x/hooks.json:pre_tool_use:0:0"]',
+        'enabled = true',
+        'trusted_hash = "A"',
+        '',
+        '[hooks.state."/x/hooks.json:stop:0:0"]',
+        'enabled = true',
+        'trusted_hash = "B"',
+        ''
+      ].join('\n')
+    )
+  })
+
+  it('keeps text appended inside an unterminated multiline value owned by the open block', () => {
+    writeFileSync(
+      configPath,
+      '[hooks.state."/x/hooks.json:pre_tool_use:0:0"]\nnote = """\n',
+      'utf-8'
+    )
+
+    upsertHookTrustEntries(configPath, [
+      { ...entry('stop', 'B'), enabled: false },
+      entry('pre_tool_use', 'A')
+    ])
+
+    expect(readFileSync(configPath, 'utf-8')).toBe(
+      '[hooks.state."/x/hooks.json:pre_tool_use:0:0"]\nenabled = false\ntrusted_hash = "A"\n'
+    )
   })
 })

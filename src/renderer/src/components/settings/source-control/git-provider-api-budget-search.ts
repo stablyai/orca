@@ -1,10 +1,20 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import {
+  getPRAutoRefreshDescription,
+  getPRAutoRefreshTitle,
+  PR_AUTO_REFRESH_KEYWORDS
+} from './pr-auto-refresh-search'
 
 export const getGitProviderApiBudgetSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.git.search.ff86e354c4', 'GitHub API Budget'),
+    title: getPRAutoRefreshTitle(),
+    description: getPRAutoRefreshDescription(),
+    keywords: PR_AUTO_REFRESH_KEYWORDS
+  },
+  {
+    title: translate('auto.components.settings.git.search.52d52b099d', 'GitHub API budget'),
     description: translate(
       'auto.components.settings.git.search.1139f61512',
       'Current GitHub CLI REST, Search, and GraphQL rate limits.'
@@ -18,7 +28,7 @@ export const getGitProviderApiBudgetSearchEntries = createLocalizedCatalog(() =>
     ]
   },
   {
-    title: translate('auto.components.settings.git.search.83ecb3f470', 'GitLab API Budget'),
+    title: translate('auto.components.settings.git.search.b7562365cd', 'GitLab API budget'),
     description: translate(
       'auto.components.settings.git.search.2b4a72885d',
       'Current GitLab CLI REST rate-limit headers when available.'

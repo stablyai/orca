@@ -7,14 +7,14 @@ import {
   NODE_RUNTIME_PIN,
   nodeRuntimeExecutablePath,
   type NodeRuntimeTarget
-} from '../../../shared/node-runtime-pin'
+} from '../../../shared/node-runtime/node-runtime-pin'
 import {
   ORCAD_NODE_RUNTIME_DIR_PREFIX,
   ORCAD_NODE_RUNTIME_POSIX_EXECUTABLE,
   ORCAD_RUNTIMES_DIRNAME,
   orcadNodeRuntimeExecutable
-} from '../../../shared/orcad-artifacts'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
+import type { OrcadHostTransport } from './orcad-host-transport'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   execCommand,
@@ -28,7 +28,7 @@ import {
   joinRemotePath,
   remoteDirname,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 import { assertPosixOrcadHost } from './orcad-remote-host-support'
 import { withRuntimeStoreLock, type HeldRuntimeStoreLock } from './remote-node-runtime-store-lock'
 import {
@@ -41,7 +41,7 @@ import {
   REMOTE_NODE_RUNTIME_READY,
   REMOTE_NODE_RUNTIME_SELFTEST_FAILED,
   REMOTE_NODE_RUNTIME_VERIFIED_MARKER
-} from '../../ssh/orcad-remote-node-runtime-report'
+} from './orcad-remote-node-runtime-report'
 import {
   windowsNodeRuntimePresentCommand,
   windowsNodeRuntimeProbeCommand,

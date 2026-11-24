@@ -1,5 +1,5 @@
 import type { WorkspaceLayout } from '../workspace-layout-model'
-import type { TabGroupLayoutNode } from '../../tab-types'
+import type { TabGroupLayoutNode } from '../tab-groups/tab-types'
 
 /** A workspace's groups in its group layout's order; groups the layout misses go last. */
 export function groupsInLayoutOrder(workspace: WorkspaceLayout): WorkspaceLayout['groups'] {

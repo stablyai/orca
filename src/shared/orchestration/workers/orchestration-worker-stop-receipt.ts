@@ -1,0 +1,28 @@
+import { z } from 'zod'
+
+/** One helper under a stopped worker, and what its stop did. */
+export const HelperStopOutcome = z.object({
+  dispatchId: z.string(),
+  creatorDispatchId: z.string(),
+  outcome: z.enum(['stopped', 'already_finished', 'kept_open', 'starting', 'unconfirmed']),
+  /** Set on a helper left running because the user kept this ancestor open. */
+  keptOpenBy: z.string().optional(),
+  state: z.string().optional(),
+  lastError: z.string().nullable().optional()
+})
+export type HelperStopOutcome = z.infer<typeof HelperStopOutcome>
+
+export type WorkerStopReceipt = {
+  dispatchId: string
+  state: string
+  alreadySettled: boolean
+  processAction: string
+  close?: unknown
+  /** How a stop settled without a proven exit, such as a start it cancelled. */
+  reason?: string
+  lastError?: string | null
+  warning?: string
+  helpers?: HelperStopOutcome[]
+  /** Why helpers on the worker's host could not be stopped or listed. */
+  helperStopError?: string
+}

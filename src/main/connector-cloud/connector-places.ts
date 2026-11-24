@@ -1,48 +1,29 @@
-// A place is where a connector start may run; its id rebuilds the launch target with no lookup, so twins on other hosts stay apart.
-import { createHash } from 'node:crypto'
+// A place is the bot home a connector start runs in; its id names the bot with no lookup.
 import { z } from 'zod'
 import {
   CONNECTOR_CLIENT_LIMITS,
-  type ConnectorConversation,
-  type ConnectorProject
-} from '../../shared/connector-cloud-contract'
+  type ConnectorBot,
+  type ConnectorCloudFeature,
+  type ConnectorBotWorkspace
+} from '../../shared/connectors/connector-cloud-contract'
 import {
-  getRepoExecutionHostId,
-  parseExecutionHostId,
-  type ExecutionHostId
-} from '../../shared/execution-host'
-import { splitGitRemoteKey } from '../../shared/git/remotes/git-remote-identity'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import { isFolderRepo } from '../../shared/repo-kind'
-import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'
-import { parseWslUncPath } from '../../shared/wsl-paths'
-import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
-import type { RuntimeStore } from '../runtime/runtime-store-contract'
-import {
-  runtimeVisibleProjectGroups,
-  runtimeVisibleRepos
-} from '../runtime/workspaces/catalog/runtime-visible-catalog'
+  botLinearWorkspaces,
+  botMembersFrom,
+  botSlackApps,
+  gitHubMembersOf,
+  linearMembersOf,
+  slackMembersOf,
+  type Bot,
+  type BotMember
+} from '../../shared/bot-types'
+import { GITHUB_ID_PATTERN } from '../../shared/connector-bot-github-contract'
+import type { ExternalConversationBot } from '../../shared/connectors/external-conversation-link'
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 
-const Place = z.union([
-  z.tuple([z.literal('git'), z.string().min(1), z.string().min(1)]),
-  z.tuple([z.literal('folder'), z.string().min(1)])
-])
+const Place = z.tuple([z.enum(['bot', 'bot-chat']), z.string().min(1)])
 type Place = z.infer<typeof Place>
 
-export type ConnectorPlacesStore = Pick<
-  RuntimeStore,
-  | 'getRepos'
-  | 'getProjectGroups'
-  | 'getFolderWorkspaces'
-  | 'getSshTargets'
-  | 'getProjectHostSetups'
-  | 'getAllWorktreeMeta'
-  | 'getAllWorktreeMetaForHost'
->
-
-function encodePlace(place: Place): string {
-  return Buffer.from(JSON.stringify(place)).toString('base64url')
-}
+export type ConnectorPlacesStore = Pick<RuntimeStore, 'getBots'>
 
 function decodePlace(placeId: string): Place | null {
   try {
@@ -53,59 +34,160 @@ function decodePlace(placeId: string): Place | null {
   }
 }
 
-/** A pure function of the delivery, so a resent start hashes to the same receipt. */
-export function placeLaunchTarget(
-  placeId: string,
-  deliveryId: string,
-  source: ConnectorConversation['source']
-): AgentLaunchParams['target'] | null {
+/** The bot home a start's place names; null for any other place. */
+export function placeLaunchTarget(placeId: string): ExternalConversationBot | null {
   const place = decodePlace(placeId)
-  if (!place) {
-    return null
-  }
-  const name = `${source}-${createHash('sha256').update(deliveryId).digest('hex').slice(0, 8)}`
-  if (place[0] === 'folder') {
-    return { kind: 'create-folder-workspace', create: { projectGroupId: place[1], name } }
-  }
-  const [, repoHostId, repoId] = place
-  const hostId = parseExecutionHostId(repoHostId)?.id
-  return hostId
-    ? {
-        kind: 'create-worktree',
-        create: { repo: `id:${repoId}`, repoHostId: hostId, name, nameWasGenerated: true }
-      }
-    : null
+  return place ? { kind: place[0], botId: place[1] } : null
 }
 
-/** Never paths: where a place runs, by host kind and label only. Null for a paired server's place, which it lists itself. */
-function placeWhere(
-  hostId: ExecutionHostId,
-  path: string | null,
-  store: ConnectorPlacesStore
-): ConnectorProject['where'] | null {
-  const host = parseExecutionHostId(hostId)
-  if (host?.kind === 'ssh') {
-    const label = store.getSshTargets?.().find((target) => target.id === host.targetId)?.label
-    return { kind: 'ssh', ...(label ? { label: displayText(label) } : {}) }
+// Ids JSON writes byte for byte, so the bots' share of a hello stays within its cap.
+const PLAIN_ID = /^[\w.:-]+$/
+
+// Room a hello keeps for everything but its bots and triggers (capabilities, host name…).
+const HELLO_ENVELOPE_RESERVE_BYTES = 8 * 1024
+// Room kept for triggers: maxHelloTriggers rules with every field at its cap, in plain text, fit in it.
+const HELLO_TRIGGERS_RESERVE_BYTES = 256 * 1024
+/** Each bot's share of a hello or bot page, so maxHelloBots of them fit beside the rest. */
+export const BOT_HELLO_BUDGET_BYTES = Math.floor(
+  (CONNECTOR_CLIENT_LIMITS.maxRequestBytes -
+    HELLO_ENVELOPE_RESERVE_BYTES -
+    HELLO_TRIGGERS_RESERVE_BYTES) /
+    CONNECTOR_CLIENT_LIMITS.maxHelloBots
+)
+
+/** A bot's GitHub people go on each installation, so a bot over its share drops installations from the end. */
+function withinBotBudget(bot: ConnectorBot): ConnectorBot {
+  const workspaces = [...(bot.sharedAppWorkspaces ?? [])]
+  while (
+    workspaces.at(-1)?.source === 'github' &&
+    Buffer.byteLength(JSON.stringify({ ...bot, sharedAppWorkspaces: workspaces })) >
+      BOT_HELLO_BUDGET_BYTES
+  ) {
+    workspaces.pop()
   }
-  if (host?.kind !== 'local') {
-    return null
-  }
-  const wsl = path ? parseWslUncPath(path) : null
-  return wsl ? { kind: 'wsl', label: displayText(wsl.distro) } : { kind: 'local' }
+  return { ...bot, sharedAppWorkspaces: workspaces }
 }
 
-/** The latest time per key, in one pass. */
-function latestBy<T>(
-  items: Iterable<T>,
-  key: (item: T) => string,
-  at: (item: T) => number
-): Map<string, number> {
-  const latest = new Map<string, number>()
-  for (const item of items) {
-    latest.set(key(item), Math.max(latest.get(key(item)) ?? 0, at(item)))
+/**
+ * The bots on this machine as a hello lists them, cut to the contract's caps so one never voids the hello.
+ * A bot on GitHub is there in each of the account's installations but those its owner removed.
+ * Slack rows carry Who can ask per workspace; an older cloud keeps them unread and uses `members`.
+ */
+export function connectorBots(
+  store: ConnectorPlacesStore,
+  botsEnabled = true,
+  gitHubInstallationIds: readonly string[] = [],
+  /** What the cloud's last hello answer listed; null before one. */
+  cloudFeatures: ReadonlySet<string> | null = null
+): ConnectorBot[] {
+  const {
+    maxHelloBots,
+    maxBotPages,
+    maxBotIdLength,
+    maxBotMembers,
+    maxBotMemberIdLength,
+    maxBotWorkspaceMemberIdLength,
+    maxBotWorkspaceMembers,
+    maxBotHandleLength,
+    maxBotWorkspaces,
+    maxBotSlackWorkspaces
+  } = CONNECTOR_CLIENT_LIMITS
+  // A cloud with `slack.teams` reads Slack rows beside the others, each as large as the Slack list.
+  // Before the first answer they keep an older cloud's caps, so the hello always lands. A cloud
+  // that answered without it never reads them, so it gets none.
+  const slackTeams = cloudFeatures?.has('slack.teams' satisfies ConnectorCloudFeature) === true
+  const sendSlack = cloudFeatures === null || slackTeams
+  const plain = (id: string, max: number): boolean => id.length <= max && PLAIN_ID.test(id)
+  const memberIds = (members: BotMember[], maxLength: number, maxCount: number): string[] =>
+    members
+      .map((member) => member.id)
+      .filter((id) => plain(id, maxLength))
+      .slice(0, maxCount)
+  // GitHub ids are numbers, so they never grow a hello past the digits counted here.
+  const gitHubWorkspaces = (
+    members: readonly BotMember[],
+    installationIds: readonly string[]
+  ): ConnectorBotWorkspace[] => {
+    const people = (installationId: string): string[] =>
+      gitHubMembersOf(members, installationId)
+        .map((member) => member.id)
+        .filter((id) => GITHUB_ID_PATTERN.test(id))
+        .slice(0, maxBotWorkspaceMembers)
+    return installationIds
+      .filter((id) => GITHUB_ID_PATTERN.test(id))
+      .map((workspaceId) => ({
+        source: 'github' as const,
+        workspaceId,
+        members: people(workspaceId)
+      }))
   }
-  return latest
+  // First and never dropped: a cloud with rows reads a workspace without one as the owner's alone.
+  const slackWorkspaces = (bot: Bot): ConnectorBotWorkspace[] => {
+    if (!sendSlack) {
+      return []
+    }
+    const cap = slackTeams ? maxBotMembers : maxBotWorkspaceMembers
+    return botSlackApps(bot)
+      .filter((app) => plain(app.teamId, maxBotIdLength))
+      .slice(0, slackTeams ? maxBotSlackWorkspaces : maxBotWorkspaces)
+      .map((app) => {
+        const people = memberIds(
+          slackMembersOf(bot, app.teamId),
+          maxBotWorkspaceMemberIdLength,
+          Number.POSITIVE_INFINITY
+        )
+        if (people.length > cap) {
+          console.warn(
+            `[connector] Slack Who can ask for one workspace was cut to ${cap} until the cloud answers`
+          )
+        }
+        return { source: 'slack' as const, workspaceId: app.teamId, members: people.slice(0, cap) }
+      })
+  }
+  // An older cloud counts every row against one cap; a cloud with `slack.teams` counts Slack apart.
+  const withSlackFirst = (
+    slack: ConnectorBotWorkspace[],
+    others: ConnectorBotWorkspace[]
+  ): ConnectorBotWorkspace[] =>
+    slackTeams
+      ? [...slack, ...others.slice(0, maxBotWorkspaces)]
+      : [...slack, ...others].slice(0, maxBotWorkspaces)
+  // Every bot a cloud's pages take; the hello picks an older cloud's first maxHelloBots.
+  return (store.getBots?.() ?? [])
+    .filter((bot) => plain(bot.id, maxBotIdLength))
+    .slice(0, maxHelloBots * maxBotPages)
+    .map((bot) => ({
+      id: bot.id,
+      name: displayText(bot.name),
+      agent: bot.agent,
+      // The cloud reads these as Slack user ids; another source's people go in their workspace below.
+      members: memberIds(botMembersFrom(bot.members, 'slack'), maxBotMemberIdLength, maxBotMembers),
+      // Bots off reads as every bot paused: the cloud keeps the bot, so a running turn's Stop still arrives.
+      paused: bot.paused || !botsEnabled,
+      ...(plain(bot.folder, maxBotHandleLength) ? { handle: bot.folder } : {}),
+      sharedAppWorkspaces: withSlackFirst(slackWorkspaces(bot), [
+        ...botLinearWorkspaces(bot)
+          .filter((linear) => plain(linear.workspaceId, maxBotIdLength))
+          .map((linear) => ({
+            source: 'linear' as const,
+            workspaceId: linear.workspaceId,
+            members: memberIds(
+              linearMembersOf(bot.members, linear.workspaceId),
+              maxBotWorkspaceMemberIdLength,
+              maxBotWorkspaceMembers
+            )
+          })),
+        ...(bot.github
+          ? gitHubWorkspaces(
+              bot.members,
+              gitHubInstallationIds.filter(
+                (id) => !bot.github?.removedInstallationIds?.includes(id)
+              )
+            )
+          : [])
+      ])
+    }))
+    .map(withinBotBudget)
 }
 
 /** At most the contract's display length, never splitting a surrogate pair. */
@@ -116,71 +198,4 @@ function displayText(text: string): string {
   }
   const cut = text.slice(0, max)
   return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut
-}
-
-/**
- * Git repos (each a fresh worktree) and folder projects (each a fresh folder workspace), most recently used
- * first by their workspaces' activity, at most maxHelloProjects.
- */
-export function connectorProjects(store: ConnectorPlacesStore): ConnectorProject[] {
-  const projects: { project: ConnectorProject; usedAt: number }[] = []
-  // Each host's worktree activity, read once and keyed by repo id; same-id repos on other hosts stay apart.
-  const activityByHost = new Map<ExecutionHostId, Map<string, number>>()
-  const repoActivity = (hostId: ExecutionHostId): Map<string, number> => {
-    let activity = activityByHost.get(hostId)
-    if (!activity) {
-      activity = latestBy(
-        Object.entries(readAllWorktreeMetaForHost(store, hostId)),
-        ([worktreeId]) => getRepoIdFromWorktreeId(worktreeId),
-        ([, meta]) => meta.lastActivityAt
-      )
-      activityByHost.set(hostId, activity)
-    }
-    return activity
-  }
-  for (const repo of runtimeVisibleRepos(store)) {
-    const hostId = getRepoExecutionHostId(repo)
-    const where = isFolderRepo(repo) ? null : placeWhere(hostId, repo.path, store)
-    if (!where) {
-      continue
-    }
-    const remote = splitGitRemoteKey(repo.gitRemoteIdentity?.canonicalKey, (host) => host)?.tail
-    const usedAt = Math.max(repo.addedAt, repoActivity(hostId).get(repo.id) ?? 0)
-    projects.push({
-      project: {
-        placeId: encodePlace(['git', hostId, repo.id]),
-        name: displayText(repo.displayName),
-        ...(remote ? { remote: displayText(remote) } : {}),
-        kind: 'git',
-        where
-      },
-      usedAt
-    })
-  }
-  const folderActivity = latestBy(
-    store.getFolderWorkspaces?.() ?? [],
-    (folder) => folder.projectGroupId,
-    (folder) => folder.lastActivityAt
-  )
-  for (const group of runtimeVisibleProjectGroups(store)) {
-    const where = group.parentPath
-      ? placeWhere(getRepoExecutionHostId(group), group.parentPath, store)
-      : null
-    if (where) {
-      const usedAt = Math.max(group.updatedAt, folderActivity.get(group.id) ?? 0)
-      projects.push({
-        project: {
-          placeId: encodePlace(['folder', group.id]),
-          name: displayText(group.name),
-          kind: 'folder',
-          where
-        },
-        usedAt
-      })
-    }
-  }
-  return projects
-    .sort((a, b) => b.usedAt - a.usedAt)
-    .slice(0, CONNECTOR_CLIENT_LIMITS.maxHelloProjects)
-    .map(({ project }) => project)
 }

@@ -1,7 +1,7 @@
 // Main stores isPreview only when true; frame-owned saves must omit false or mutate main’s model.
 
-import type { Tab } from '../../../../../shared/tab-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 
 export function createdTabPreviewFlag(isPreview: boolean | undefined): Pick<Tab, 'isPreview'> {
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {

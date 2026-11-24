@@ -1,14 +1,20 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { clearDisclosuresForTests } from '../worktree/agent-child-disclosure'
-import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
-import { WorktreeAgentList } from './WorktreeAgentList'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
+import { WorktreeAgentList } from '../worktree/agent-lineage/presentation/WorktreeAgentList'
 
-beforeEach(clearDisclosuresForTests)
+type HostNode = ReturnType<ReactTestRenderer['root']['findAll']>[number]
+
+function findAllByHostType(row: HostNode, type: string): HostNode[] {
+  return row.findAll((node) => node.type === type)
+}
 
 vi.mock('react-native', () => ({
+  AppState: {
+    currentState: 'active',
+    addEventListener: () => ({ remove: () => {} })
+  },
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',
@@ -18,8 +24,8 @@ vi.mock('lucide-react-native', () => ({
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight'
 }))
-vi.mock('./AgentStateDot', () => ({ AgentStateDot: () => null }))
-vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
+vi.mock('../agents/presentation/AgentStateDot', () => ({ AgentStateDot: () => null }))
+vi.mock('./icons/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 
 function agent(
   paneKey: string,
@@ -77,7 +83,6 @@ describe('cross-workspace session nesting', () => {
             agent(coordinator, null, 'Main Coordinator'),
             agent(worker, coordinator, 'Crew session-list nesting fix')
           ],
-          now: 2_000,
           unvisited: false,
           fullList: true,
           onAgentPress,
@@ -137,7 +142,6 @@ describe('cross-workspace session nesting', () => {
               subagents: [{ id: 'child', state: 'working', startedAt: 1_000 }]
             }
           ],
-          now: 2_000,
           unvisited: false,
           fullList: true,
           statusLive: true,

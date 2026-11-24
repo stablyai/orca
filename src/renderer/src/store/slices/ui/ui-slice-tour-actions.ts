@@ -2,19 +2,19 @@ import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
   hasContextualTourActionStep,
   isContextualTourStepDone
-} from '../../../../../shared/contextual-tour-action-steps'
+} from '../../../../../shared/feature-education/contextual-tours/contextual-tour-action-steps'
 import {
   getContextualTour,
   type ContextualTourId,
   getContextualTourStepIndex
-} from '../../../../../shared/contextual-tours'
+} from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import {
   getContextualTourRequestDecision,
   hasContextualTourTarget,
   getNextVisibleContextualTourStepIndex,
   getPreviousVisibleContextualTourStepIndex
 } from '../../../components/contextual-tours/contextual-tour-gate'
-import { hasFeatureInteraction } from '../../../../../shared/feature-interactions'
+import { hasFeatureInteraction } from '../../../../../shared/feature-education/interactions/feature-interactions'
 
 // An unfinished action tour waits for the user to act, so it sits outside the one-tour-per-session
 // limit: it neither blocks other tours nor is blocked by them until it is seen (final tip shown or closed).
@@ -190,7 +190,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         if (nextStepIndex !== null) {
           return { activeContextualTourStepIndex: nextStepIndex }
         }
-        // Why: browser step 3's target lives in a closed menu until that step is active.
+        // Why: the browser tour's last target lives in a closed menu until that step is active.
         if (
           s.activeContextualTourId === 'browser' &&
           s.activeContextualTourStepIndex + 1 < tour.steps.length

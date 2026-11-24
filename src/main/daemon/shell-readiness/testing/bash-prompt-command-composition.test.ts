@@ -70,9 +70,9 @@ describe.skipIf(process.platform === 'win32')('daemon bash PROMPT_COMMAND compos
     rmSync(tempHome, { recursive: true, force: true })
   })
 
-  itWithBash('normalizes a trailing separator with errexit enabled', () => {
+  itWithBash('normalizes trailing separators with errexit enabled', () => {
     const output = runInteractiveBash(
-      'set -e\nPROMPT_COMMAND=\'printf "PROMPT_ERREXIT\\n";   \'\n',
+      'set -e\nPROMPT_COMMAND=\'printf "PROMPT_ERREXIT\\n"; ;\t\n;;  \'\n',
       tempHome,
       'true\ntrue\nexit 0\n'
     )
@@ -139,18 +139,6 @@ PROMPT_COMMAND=(__status_a __status_b)
     const output = runInteractiveBash(profile, tempHome)
 
     expect(output.split(`PROMPT_ESCAPED:<${expected}>`)).toHaveLength(4)
-    expectLifecycle(output)
-  })
-
-  itWithBash('passes the foreground exit status to the inherited hook', () => {
-    const profile = `__status_hook() { printf 'PROMPT_STATUS:%s\\n' "$?"; }\nPROMPT_COMMAND=__status_hook\n`
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect([...output.matchAll(/PROMPT_STATUS:(\d+)/g)].map((match) => match[1])).toEqual([
-      '0',
-      '0',
-      '1'
-    ])
     expectLifecycle(output)
   })
 

@@ -1,18 +1,21 @@
-import { useAppStore } from '@/store'
+import {
+  readRuntimeStatuses,
+  subscribeAppStoreWithStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   getRuntimeEnvironmentRevision,
   onRuntimeEnvironmentRevisionsChanged,
   onRuntimeEnvironmentsRetired
-} from '@/runtime/runtime-environment-revision'
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { SharedControlReconnectScheduler } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-reconnect'
 import {
   runtimeHostContactForEntry,
   lastRuntimeHostAnswer
 } from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/protocol-version'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { CrewSubscriptionAttemptArgs } from '../../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
-import { CrewSubscription, UNKNOWN_CREW } from './orchestration-crew-subscription'
+import { CrewSubscription, UNKNOWN_CREW_STATE } from './orchestration-crew-subscription'
 
 type SourceSelection = {
   identity: string
@@ -25,7 +28,7 @@ function selectSource(target: RuntimeClientTarget): SourceSelection {
   if (target.kind === 'local') {
     return { identity: 'local', wake: 'local', initial: true }
   }
-  const entry = useAppStore.getState().runtimeStatusByEnvironmentId.get(target.environmentId)
+  const entry = readRuntimeStatuses().get(target.environmentId)
   const revision = getRuntimeEnvironmentRevision(target.environmentId)
   const contact = runtimeHostContactForEntry(entry)
   const status = lastRuntimeHostAnswer(contact)
@@ -105,7 +108,20 @@ export class CrewFollowSource {
         }
       })
       const revisions = onRuntimeEnvironmentRevisionsChanged(changed)
-      const store = useAppStore.subscribe(() => this.update())
+      // A local source never changes; a remote one only with its own status entry.
+      const target = this.target
+      let entry =
+        target.kind === 'environment' ? readRuntimeStatuses().get(target.environmentId) : undefined
+      const store =
+        target.kind === 'environment'
+          ? subscribeAppStoreWithStatuses((_state, _previous, statuses) => {
+              const next = statuses.get(target.environmentId)
+              if (next !== entry) {
+                entry = next
+                this.update()
+              }
+            })
+          : () => {}
       const gone = (): void => {
         this.retiredIdentity = this.current.identity
         this.block(false)
@@ -227,6 +243,10 @@ export function observeCrew(target: RuntimeClientTarget, party: string) {
       entry = crewInterest(target, party)
       return entry.subscribe(listener)
     },
-    read: () => entry?.read() ?? UNKNOWN_CREW
+    read: () => entry?.read() ?? UNKNOWN_CREW_STATE,
+    /** Rows for an open list or `@` menu, on the same subscription; call once subscribed. */
+    wantRows: (): (() => void) => entry?.wantRows() ?? (() => {})
   }
 }
+
+export type CrewObservation = ReturnType<typeof observeCrew>

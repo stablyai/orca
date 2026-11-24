@@ -23,6 +23,7 @@ export type WorktreeSidebarDragRect = {
   groupIndex: number
   top: number
   bottom: number
+  layoutBottom?: number
 }
 
 export type WorktreeSidebarDragSession = {

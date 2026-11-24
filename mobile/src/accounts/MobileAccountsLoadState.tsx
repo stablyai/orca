@@ -3,9 +3,9 @@ import {
   MobileLoadErrorState,
   MobileOfflineState,
   MobileStateView
-} from '../components/MobileStateView'
+} from '../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { ConnectionState } from '../transport/types'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 /** Accounts before its first snapshot: connecting, offline, re-pair, failed load or loading. */
 export function MobileAccountsLoadState({

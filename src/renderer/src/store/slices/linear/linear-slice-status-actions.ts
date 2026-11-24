@@ -4,7 +4,7 @@ import type {
   LinearViewer
 } from '../../../../../shared/linear/workspace-types'
 import type { LinearSlice, LinearSliceGet, LinearSliceSet } from './linear-slice-contract'
-import { linearStatus } from '@/runtime/runtime-linear-client'
+import { linearStatus } from '@/runtime/linear/runtime-linear-client'
 import {
   getInflightStatusRequest,
   getLinearMutationGeneration,

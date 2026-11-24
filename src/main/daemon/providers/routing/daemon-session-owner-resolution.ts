@@ -6,12 +6,9 @@ import {
   type OwnerInventory,
   type ProviderInventory
 } from './daemon-session-owner-inventory'
-import type {
-  IPtyProvider,
-  PtyProcessInfo,
-  PtySpawnOptions,
-  PtySpawnResult
-} from '../../../providers/pty-provider-contract'
+import type { IPtyProvider, PtySpawnOptions } from '../../../providers/pty/provider-contract'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { TerminalSessionOwnerUnverifiedError } from '../../protocol/daemon-errors'
 import { spawnDaemonAttachOnly } from './daemon-session-owner-attach'
 import { probeDaemonSessionOwner } from './daemon-session-owner-liveness'
@@ -158,11 +155,12 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
       throw new TerminalSessionOwnerUnverifiedError('inventory deadline')
     }
     const inventory = await pending
-    if (inventory.epoch !== this.epoch) {
-      throw new TerminalSessionOwnerUnverifiedError('stale inventory')
-    }
+    // A provider failure outranks staleness, so callers that re-read stale listings don't repeat it.
     if (inventory.failure) {
       throw inventory.failure.error
+    }
+    if (inventory.epoch !== this.epoch) {
+      throw new TerminalSessionOwnerUnverifiedError('stale inventory')
     }
     return selectListedDaemonProcesses(inventory, this.routes, this.routeIncarnations, opts)
   }
@@ -273,6 +271,15 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     epoch: number,
     replaceEstablishedRoutes = false
   ): OwnerInventory<T> {
+    // Every reader discards an outdated inventory, so indexing its rows would be wasted work.
+    if (epoch !== this.epoch) {
+      return {
+        candidatesBySessionId: new Map(),
+        complete: false,
+        epoch,
+        failure: entries.find((entry) => entry.failure)?.failure
+      }
+    }
     return indexDaemonOwnerInventory(
       entries,
       epoch,

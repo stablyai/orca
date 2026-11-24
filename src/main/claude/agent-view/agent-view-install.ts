@@ -11,13 +11,14 @@ import { existsSync, rmSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { readFile, rm } from 'node:fs/promises'
 import type { SFTPWrapper } from 'ssh2'
-import { writeHooksJson, type HooksConfig } from '../../agent-hooks/installer-utils'
+import { writeHooksJson } from '../../agent-hooks/installation/configuration/hooks-json-write'
+import type { HooksConfig } from '../../agent-hooks/installation/configuration/hook-config-schema'
 import {
   readHooksJson,
   parseHooksJsonText,
   readHooksJsonWithRaw
-} from '../../agent-hooks/hooks-json-read'
-import { writeHooksJsonAsync } from '../../agent-hooks/hooks-json-write-async'
+} from '../../agent-hooks/installation/configuration/hooks-json-read'
+import { writeHooksJsonAsync } from '../../agent-hooks/installation/configuration/hooks-json-write-async'
 import {
   claudeAgentViewChord,
   parseClaudeAgentViewBindings,
@@ -25,11 +26,11 @@ import {
 } from './agent-view-keybindings'
 import {
   readHooksJsonRemote,
-  readTextFileRemote,
-  writeHooksJsonRemote,
-  renamePlain
-} from '../../agent-hooks/installer-utils-remote'
-import { CLAUDE_AGENT_VIEW_PLUGIN } from '../../../shared/claude-agent-view'
+  writeHooksJsonRemote
+} from '../../agent-hooks/installation/configuration/hooks-json-remote'
+import { readTextFileRemote } from '../../agent-hooks/installation/remote/hook-text-files-remote'
+import { renamePlain } from '../../agent-hooks/installation/remote/hook-sftp-operations'
+import { CLAUDE_AGENT_VIEW_PLUGIN } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
 // Called only after the user opts in; a surviving marker remembers deletions and edited chords.
 export function installClaudeAgentView(configPath: string): boolean {

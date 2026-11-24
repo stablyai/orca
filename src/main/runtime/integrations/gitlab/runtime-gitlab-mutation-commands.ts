@@ -3,20 +3,24 @@ import type {
   GitLabMRInlineCommentInput,
   GitLabMRUpdate,
   GitLabProjectRef
-} from '../../../../shared/gitlab-types'
-import type { Repo } from '../../../../shared/repo-types'
-import { addIssueComment, createIssue } from '../../../gitlab/issues'
+} from '../../../../shared/gitlab/gitlab-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { addIssueComment, createIssue } from '../../../gitlab/issues/gitlab-issue-queries'
 import {
   addMRComment,
   addMRInlineComment,
   resolveMRDiscussion,
   updateMRReviewers
-} from '../../../gitlab/merge-request-review-mutations'
-import { closeMR, mergeMR, reopenMR } from '../../../gitlab/merge-request-state-mutations'
-import { getJobTrace, retryJob } from '../../../gitlab/pipeline-job-mutations'
-import { updateIssue } from '../../../gitlab/issue-update'
-import { updateMR } from '../../../gitlab/merge-request-update'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+} from '../../../gitlab/merge-requests/merge-request-review-mutations'
+import {
+  closeMR,
+  mergeMR,
+  reopenMR
+} from '../../../gitlab/merge-requests/merge-request-state-mutations'
+import { getJobTrace, retryJob } from '../../../gitlab/pipelines/pipeline-job-mutations'
+import { updateIssue } from '../../../gitlab/issues/issue-update'
+import { updateMR } from '../../../gitlab/merge-requests/merge-request-update'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 
 type LocalGitArgs = [] | [{ wslDistro?: string }]
 

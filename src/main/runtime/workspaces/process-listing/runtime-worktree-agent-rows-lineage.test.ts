@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-types'
+import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 
@@ -64,7 +64,7 @@ describe('worktree agent rows nest orchestration workers across folder workspace
     attachRuntimeWorktreeAgentRows({
       summaries,
       rowSources,
-      terminalTitleEvidenceByWorktreeId: new Map(),
+      terminalTitleEvidenceByRow: new Map(),
       orchestrationByPaneKey: {
         [worker]: {
           parentPaneKey: 'tab-stale:leaf-stale',
@@ -90,7 +90,7 @@ describe('worktree agent rows nest orchestration workers across folder workspace
     attachRuntimeWorktreeAgentRows({
       summaries,
       rowSources: new Map([[worker, source(worker, 'folder:babysitter', 'term_worker')]]),
-      terminalTitleEvidenceByWorktreeId: new Map(),
+      terminalTitleEvidenceByRow: new Map(),
       orchestrationByPaneKey: {},
       getSummary: (id) => summaries.get(id) ?? null
     })
@@ -105,7 +105,7 @@ describe('worktree agent rows nest orchestration workers across folder workspace
     attachRuntimeWorktreeAgentRows({
       summaries,
       rowSources: new Map([[pane, workingSource(pane, alias)]]),
-      terminalTitleEvidenceByWorktreeId: new Map(),
+      terminalTitleEvidenceByRow: new Map(),
       orchestrationByPaneKey: {},
       getSummary: (id) =>
         id === alias || id === canonical ? (summaries.get(canonical) ?? null) : null
@@ -133,7 +133,7 @@ describe('worktree agent rows nest orchestration workers across folder workspace
         [coordinator, source(coordinator, parentId, 'term_coord')],
         [worker, workingSource(worker, childAlias)]
       ]),
-      terminalTitleEvidenceByWorktreeId: new Map(),
+      terminalTitleEvidenceByRow: new Map(),
       orchestrationByPaneKey: { [worker]: { parentPaneKey: coordinator } },
       getSummary: (id) => {
         if (id === parentId) {
@@ -164,7 +164,7 @@ describe('worktree agent rows nest orchestration workers across folder workspace
         [coordinator, source(coordinator, 'folder:orca', 'term_coord')],
         [worker, { ...workingSource(worker, 'folder:babysitter'), state: 'waiting' }]
       ]),
-      terminalTitleEvidenceByWorktreeId: new Map(),
+      terminalTitleEvidenceByRow: new Map(),
       orchestrationByPaneKey: { [worker]: { parentPaneKey: coordinator } },
       getSummary: (id) => summaries.get(id) ?? null
     })
@@ -189,7 +189,7 @@ describe('worktree agent rows nest orchestration workers across folder workspace
         [worker, source(worker, 'folder:worker', 'term_worker')],
         [helper, source(helper, 'folder:helper', 'term_helper')]
       ]),
-      terminalTitleEvidenceByWorktreeId: new Map(),
+      terminalTitleEvidenceByRow: new Map(),
       orchestrationByPaneKey: {
         [worker]: { parentPaneKey: coordinator },
         [helper]: { parentPaneKey: worker }
@@ -223,7 +223,7 @@ describe('worktree agent rows nest orchestration workers across folder workspace
         [coordinator, source(coordinator, parentAlias, 'term_coord')],
         [worker, source(worker, 'folder:babysitter', 'term_worker')]
       ]),
-      terminalTitleEvidenceByWorktreeId: new Map(),
+      terminalTitleEvidenceByRow: new Map(),
       orchestrationByPaneKey: { [worker]: { parentPaneKey: coordinator } },
       getSummary: (id) =>
         id === parentId || id === parentAlias
@@ -250,7 +250,7 @@ describe('worktree agent rows nest orchestration workers across folder workspace
         [worker, source(worker, 'folder:babysitter', 'term_worker')],
         [helper, source(helper, 'folder:babysitter', 'term_helper')]
       ]),
-      terminalTitleEvidenceByWorktreeId: new Map(),
+      terminalTitleEvidenceByRow: new Map(),
       orchestrationByPaneKey: {
         [worker]: { parentPaneKey: coordinator },
         [helper]: { parentPaneKey: worker }

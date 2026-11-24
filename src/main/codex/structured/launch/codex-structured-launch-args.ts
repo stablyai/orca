@@ -1,6 +1,6 @@
 import { CODEX_PERMISSION_CONFIG_ROOTS } from '../../../../shared/agent-launch/permissions/agent-permission-args'
 import { parseTomlKeyPath } from '../../configuration/toml/config-toml-key-path'
-import { StructuredAgentArgumentsError } from '../../../native-chat/structured-agent-arguments-error'
+import { StructuredAgentArgumentsError } from '../../../native-chat/agent-launch/structured-agent-arguments-error'
 
 const VALUE_OPTIONS = new Set([
   '-c',

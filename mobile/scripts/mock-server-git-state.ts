@@ -1,4 +1,4 @@
-import type { MobileGitStatusEntry } from '../src/source-control/mobile-git-status'
+import type { MobileGitStatusEntry } from '../src/source-control/git/git-status-reply-schema'
 
 type FakeGitEntry = MobileGitStatusEntry & {
   stagedFromUntracked?: boolean

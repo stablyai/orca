@@ -153,6 +153,10 @@ export function sanitizeHydratedEntry(
   const hostTurn = readHostTurnRecord(record.hostTurn)
   return {
     paneKey,
+    // A sleep also settles a conversation that had no turn yet (a session boundary).
+    ...(payload.state === 'done' && !providerSessionOnly
+      ? { paneSleep: readPaneSleep(record.paneSleep) }
+      : {}),
     agentPresence: readAgentProcessPresence(record.agentPresence),
     source,
     tabId: typeof tabId === 'string' ? tabId : undefined,
@@ -263,3 +267,4 @@ export function authorityCommitmentsMatch(
     left.worktreeId === right.worktreeId
   )
 }
+import { readPaneSleep } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
