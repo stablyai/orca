@@ -21,6 +21,7 @@ import {
 } from '../../../../../shared/bots/bot-items'
 import {
   botItemActivity,
+  botItemLiveAskKey,
   botItemNeedsYouEntryKey,
   botItemWaitEntryKey,
   botItemWorkerStopReason,
@@ -276,6 +277,7 @@ export function BotItemActivityList({
   const t = useTranslate()
   const entries = botItemActivity(item, events)
   const waitKey = botItemWaitEntryKey(item, entries)
+  const liveAskId = botItemLiveAskKey(entries)
   // Keep the ask mounted when its marker clears during Send.
   const needsYouKey =
     quickReplies?.steps?.askId ?? (needsYou ? botItemNeedsYouEntryKey(item, entries) : null)
@@ -302,6 +304,7 @@ export function BotItemActivityList({
               : entry
           }
           onJump={jump}
+          liveAskId={liveAskId}
           quickReplies={quickReplies}
         />
       )
