@@ -149,7 +149,7 @@ function LoudRestartOverlay({
             ? // Retry fails the same way until the terminal service restarts; an Orca restart can reconnect to the same one.
               t(
                 'auto.components.CodexRestartChip.e41c7a9d05',
-                "Orca's terminal service is out of date. Restart it from Settings > Terminal, then retry."
+                "Orca's terminal service is out of date. Restart the terminal service from Settings > Terminal, then retry."
               )
             : t(
                 'auto.components.CodexRestartChip.9375620cc3',
