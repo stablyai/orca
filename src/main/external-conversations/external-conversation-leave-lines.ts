@@ -7,6 +7,7 @@ import { cloudConversation } from '../../shared/connectors/connector-cloud-contr
 import type { ConnectorReplyBody } from '../connector-cloud/connector-replies'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import { readThreadMute, writeLinkFact } from './external-conversation-link-writes'
+import { threadMuteSaving } from '../connector-cloud/connector-thread-mute-saves'
 import {
   allLinks,
   findLink,
@@ -34,8 +35,7 @@ export type LeaveLinesCloud = {
   cloudFeatures: () => ReadonlySet<string> | null
   /** Whether `turnId`'s end in the thread still waits for the cloud to take it. */
   turnEndPending?: (conversation: Thread, turnId: number) => boolean
-  /** Null while no client runs. */
-  /** `proceed`: asked before each of the client's own retries. */
+  /** Null while no client runs. `proceed`: asked before each of the client's own retries. */
   reply: (
     body: ConnectorReplyBody,
     proceed?: () => boolean
@@ -169,6 +169,8 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
         timer(next, wait)
       }
       const cloud = deps.cloud()
+      // The leave's save is on disk first: one that fails puts the thread back, owing nothing.
+      await threadMuteSaving(link)?.catch(() => undefined)
       // Its answer goes first: the end or reply that carries it (or the end an owner's failed post
       // holds). Its acceptance wakes this; the waits cover a route that doesn't (Orca's /replies).
       const pending =

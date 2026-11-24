@@ -378,6 +378,12 @@ describe('a bot that leaves its thread', () => {
     await expect.poll(() => readThreadMute(store, FIRST)).toMatchObject({ muted: true })
     // Asked again while it saves: answered as what was saved, never "already" first.
     const again = leave()
+    // A turn end posting its line while the save is on its way waits for it.
+    lines().post(link(), TURN_ID)
+    for (let tick = 0; tick < 10; tick++) {
+      await Promise.resolve()
+    }
+    expect(posted).toEqual([])
     // A reply while the save is on its way waits for it, so the failed save swallows nothing.
     const replied = deliver(send(FIRST, 'still there?'))
     fail()
