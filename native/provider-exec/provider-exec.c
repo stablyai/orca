@@ -826,9 +826,10 @@ static int sweep_once(struct watcher *w, int signal_number) {
         return TREE_UNPROVABLE;
     }
     if (w->reaper_start == REAPER_START_UNREAD) {
-        // Its pidfd shows it is still that process, so its row read now is its own.
+        // The row is its own only if the pidfd still shows it alive after the read.
         struct proc_row reaper_row;
-        if (read_row(w->reaper, &reaper_row) != 1) {
+        if (read_row(w->reaper, &reaper_row) != 1 || poll(&anchor, 1, 0) != 0 ||
+                procfs_in_own_namespace() != 1) {
             return -1;
         }
         w->reaper_start = reaper_row.start;
