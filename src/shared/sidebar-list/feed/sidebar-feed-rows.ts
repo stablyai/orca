@@ -195,11 +195,10 @@ export function planSidebarFeedRows(
     pairedDeviceIdsByEnvironment,
     hideDoneWorkspaces: view.filters.hideDoneWorkspaces
   })
-  const visibleFolderWorkspaces = folderScope.folders
   const visibleProjectGroups = filterProjectGroupsWithVisibleContent({
     groups: filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
     visibleRepos,
-    visibleFolders: visibleFolderWorkspaces,
+    visibleFolders: folderScope.folders,
     emptiedGroupIds: folderScope.emptiedGroupIds
   })
   const listed = new Set(workspaces.map((entry) => entry.worktree.id))
@@ -215,7 +214,8 @@ export function planSidebarFeedRows(
     worktreesByRepo,
     visibleWorktrees,
     filterRepoIds: view.filters.filterRepoIds,
-    hiddenProjects
+    hiddenProjects,
+    hideDoneWorkspaces: view.filters.hideDoneWorkspaces
   })
   const plan = planSidebarRows({
     groupBy,
@@ -239,7 +239,7 @@ export function planSidebarFeedRows(
     newExternalWorktreesInboxByRepo: extras.newExternalWorktreesInboxByRepo ?? new Map(),
     pendingCreations,
     projectGrouping: catalog.projectGrouping,
-    folderWorkspaces: visibleFolderWorkspaces,
+    folderWorkspaces: folderScope.folders,
     hostLabelById: new Map(hostOptions.map((host) => [host.id, host.label])),
     defaultHostId,
     pinnedDisplayPolicy: view.pinnedDisplayPolicy,
@@ -253,7 +253,7 @@ export function planSidebarFeedRows(
     lineageById: NO_LINEAGE_MAP,
     placeholderRepoIds,
     visibleProjectGroups,
-    visibleFolderWorkspaces,
+    visibleFolderWorkspaces: folderScope.folders,
     orderedHostOptions: orderHostSectionOptions(
       hostOptions,
       normalizeExecutionHostOrder(view.workspaceHostOrder ?? domains.desktop?.workspaceHostOrder)

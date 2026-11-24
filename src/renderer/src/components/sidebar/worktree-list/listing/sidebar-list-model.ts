@@ -72,6 +72,7 @@ export type SectionRowsArgs = {
   importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>
   newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
   filterRepoIds: readonly string[]
+  hideDoneWorkspaces: boolean
   visibleWorkspaceHostIds: readonly ExecutionHostId[] | null
   workspaceHostScope: AppState['workspaceHostScope']
 }

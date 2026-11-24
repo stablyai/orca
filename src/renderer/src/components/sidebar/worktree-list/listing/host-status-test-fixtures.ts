@@ -134,6 +134,7 @@ export function sectionArgs(): Parameters<typeof useSidebarSectionRows>[0] {
     importedWorktreesByRepo: new Map(),
     newExternalWorktreesInboxByRepo: new Map(),
     filterRepoIds: [],
+    hideDoneWorkspaces: false,
     visibleWorkspaceHostIds: null,
     workspaceHostScope: 'all'
   }

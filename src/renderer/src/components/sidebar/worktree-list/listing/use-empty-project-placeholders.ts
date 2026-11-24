@@ -21,8 +21,17 @@ export function useEmptyProjectPlaceholderRepoIds(args: {
   visibleWorktrees: readonly Worktree[]
   filterRepoIds: readonly string[]
   defaultHostId: ExecutionHostId
+  hideDoneWorkspaces: boolean
 }): Set<string> {
-  const { groupBy, repos, visibleRepos, visibleWorktrees, filterRepoIds, defaultHostId } = args
+  const {
+    groupBy,
+    repos,
+    visibleRepos,
+    visibleWorktrees,
+    filterRepoIds,
+    defaultHostId,
+    hideDoneWorkspaces
+  } = args
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const hiddenVmCheckouts = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
   return useMemo(
@@ -34,7 +43,8 @@ export function useEmptyProjectPlaceholderRepoIds(args: {
         visibleWorktrees,
         filterRepoIds,
         hiddenProjects: indexHiddenProjects(repos, defaultHostId),
-        pendingVmRepoIds: hiddenVmCheckouts.repoIds
+        pendingVmRepoIds: hiddenVmCheckouts.repoIds,
+        hideDoneWorkspaces
       }),
     [
       groupBy,
@@ -44,7 +54,8 @@ export function useEmptyProjectPlaceholderRepoIds(args: {
       visibleWorktrees,
       filterRepoIds,
       defaultHostId,
-      hiddenVmCheckouts
+      hiddenVmCheckouts,
+      hideDoneWorkspaces
     ]
   )
 }
