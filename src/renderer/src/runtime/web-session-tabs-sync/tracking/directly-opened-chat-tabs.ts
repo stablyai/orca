@@ -6,7 +6,11 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { getRuntimeEnvironmentRegistration } from '../../rpc/environment-revisions/runtime-environment-revision'
-import { sessionTabsFreshnessKey, type MirroredAgentTab, type WebSessionTabsSyncState } from '../state'
+import {
+  sessionTabsFreshnessKey,
+  type MirroredAgentTab,
+  type WebSessionTabsSyncState
+} from '../state'
 import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
 import {
   isCurrentSessionTabsRuntimeFrame,
