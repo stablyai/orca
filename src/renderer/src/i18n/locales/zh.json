@@ -586,7 +586,7 @@
     "followSymlinkedDirectories": "跟随符号链接目录",
     "followSymlinkedDirectoriesDescription": "在快速打开中搜索链接文件夹，并在文件资源管理器中展开本地链接文件夹",
     "accounts": {
-      "codexRemoveHome": "Orca 会删除此账户在 {{host}} 上的 Codex 文件夹，包括其中的登录信息、MCP 登录以及仅保存在该文件夹中的 Codex 历史记录，此操作无法撤销。如果此账户被选中，你下次启动的 Codex 将使用系统默认",
+      "codexRemoveHome": "Orca 会删除此账户在 {{host}} 上的 Codex 文件夹，包括其中的登录信息和 MCP 登录。此操作无法撤销。如果此账户被选中，你下次启动的 Codex 将使用系统默认",
       "claudeRemoveProfile": "Orca 会删除此账户在 {{host}} 上自己的 Claude 文件夹及其中保存的登录信息，你的系统默认登录以及与其共享的聊天记录会保留。如果此账户被选中，你下次启动的 Claude 将使用系统默认"
     },
     "sourceControl": {
@@ -2157,6 +2157,7 @@
         "notLocatedNamed": "Orca 找不到 {{agent}} 的运行位置，因此无法打开它",
         "notLocated": "Orca 找不到此智能体的运行位置，因此无法打开它",
         "worktreeDeleted": "工作树已删除。",
+        "projectRemoved": "项目已从 Orca 中移除。",
         "folderWorkspaceRemoved": "文件夹工作区已移除。"
       },
       "ephemeralVmWorktreeCreation": {
@@ -6255,7 +6256,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "另一个安装仍在运行",
-          "edited": "技能已在 Orca 外部编辑",
           "install": "安装",
           "installFor": "为 {{value0}} 安装",
           "installed": "已安装",
@@ -6416,7 +6416,6 @@
           "74fc00776f": "错误详情",
           "ca3b225195": "分支自动命名失败",
           "couldNotGenerateBranchName": "Orca 无法根据智能体的第一条消息为 <name>{{name}}</name> 生成分支名称",
-          "dismiss": "清除",
           "tryAgain": "重试",
           "namingBranch": "正在命名分支…",
           "errorDetailsAt": "错误详情 · {{time}}",
@@ -6433,8 +6432,7 @@
           "reasonFirstMessageUnavailable": "Orca 找不到此工作区的第一条消息",
           "reasonAlreadyNamed": "此工作区已被重命名",
           "reasonUnavailable": "Orca 无法再为此分支命名",
-          "branchNameKept": "已保留分支名称",
-          "dismissing": "正在清除…"
+          "branchNameKept": "已保留分支名称"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "选择父文件夹...",
@@ -8181,7 +8179,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "已删除配置文件\"{{value0}}\"",
-          "2d4bea7f35": "默认 cookie 已清除",
           "796d846483": "没有导入cookie",
           "c29648fe5b": "当前",
           "b4c167764d": "已从文件将 {{value0}} 个 Cookie 导入到 {{value1}}",
@@ -8189,10 +8186,7 @@
           "b4e9d3f2a1c5": "已从 {{value1}} 导入 {{value0}} 个 Cookie 到 {{value2}}",
           "c5a273a809": "从 {{value0}}",
           "80bffd32bf": "导入 Cookie",
-          "bd7d68f138": "从文件...",
-          "4054c458e1": "清除默认 cookie",
-          "3b662becd5": "要清除默认配置文件中的 cookie 吗？",
-          "f159cf5a3e": "这可能会让你退出此配置文件中的网站。"
+          "bd7d68f138": "从文件..."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "如果 cookie 导入不合适，“计算机使用”可以控制本地应用程序，并可以在适用的情况下使用现有的登录浏览器会话。安装 Orca Computer Use 技能； macOS 还需要隐私权限。",
@@ -13620,7 +13614,6 @@
           "attentionUnwritable": "需要处理 · Orca 无法写入 {{folder}}",
           "attentionBusy": "需要处理 · 此处的另一个技能安装仍未完成",
           "attentionUnreadable": "需要处理 · Orca 无法读取此副本中的所有文件",
-          "attentionEdited": "需要处理 · 你编辑过此副本",
           "attentionOther": "需要处理 · 另一个技能已使用此名称",
           "attentionSharedNotCurrent": "需要处理 · 此文件夹使用的共享副本不是 Orca 的副本",
           "resultUpdateSkippedPlaces": "{{result}} · 已跳过 {{places}} 个位置的更新：{{reason}}",
@@ -18082,8 +18075,6 @@
             "ed8f54509d": "默认",
             "e5d31de1a9": "视口尺寸",
             "56f94f4ffa": "从文件...",
-            "eb280bfb11": "从 {{value0}}",
-            "2293adf620": "导入 Cookie",
             "cf7cdc67ef": "新档案...",
             "7b838540c7": "浏览器菜单",
             "a7a86702b3": "创建并切换到 {{value0}} 配置文件",
@@ -19414,9 +19405,7 @@
         "streamBrowserUnavailable": "远程浏览器不可用，请检查其在服务器上的设置"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "此设备上的浏览器",
         "remoteLabel": "{{value0}} 上的浏览器",
-        "clientNoteLocalStorage": "导入操作会读取此设备上的浏览器，Cookie 存储在本机",
         "remoteNoteRemoteStorage": "导入操作会读取 {{value0}} 上的浏览器，Cookie 存储在该设备上，其屏幕上可能会出现权限提示"
       },
       "native": {
@@ -20065,6 +20054,8 @@
         "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录",
         "historyUnusable": "无法加载此聊天",
         "historyUnavailable": "Orca 目前无法打开此聊天的历史记录",
+        "diskFull": "运行此聊天的电脑磁盘已满。",
+        "freeDiskSpace": "请释放该磁盘空间后重试。",
         "savedInOtherFolder": "此对话保存在另一个文件夹中",
         "savedByNewerOrca": "这些聊天由更新版本的 Orca 保存",
         "updateOrcaToKeepUsing": "请更新 Orca 以继续使用这些聊天",
@@ -20429,7 +20420,6 @@
         "terminalRequired": "在终端中回答这个 OMP 问题",
         "openTerminal": "在终端中回答",
         "recommended": "推荐",
-        "stepAnswered": "{{value0}}，已回答",
         "stepOf": "第 {{value0}} 个，共 {{value1}} 个",
         "answered": "已回答",
         "title": "问题",
@@ -20498,6 +20488,9 @@
       "imagePreview": {
         "fileActions": "文件操作",
         "linkActions": "链接操作"
+      },
+      "imageGallery": {
+        "loadFailed": "无法加载 {{name}}"
       },
       "launchPromptNotDelivered": "未送达 — 请检查终端",
       "taskList": {
@@ -22822,11 +22815,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "临时编排工作代理 · 完成后 2 分钟关闭",
-        "finished": "临时编排工作代理已完成 · {{countdown}}后关闭",
         "keepOpen": "保持打开",
         "bannerRunning": "编排工作代理 · 完成后 2 分钟关闭",
-        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭"
+        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭",
+        "bannerFinishedStatus": "编排工作代理已完成 · 即将关闭"
       }
     },
     "wslHostMark": {
@@ -23348,12 +23340,21 @@
         "imported_other": "已为 {{domains}} 导入 {{count}} 个 Cookie。请重新加载页面以使用它们",
         "failed": "Cookie 导入失败：{{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "此设备上的浏览器",
         "destination": "导入到 {{host}} 的浏览器。",
-        "hostAgents": "{{host}} 上的智能体可以使用这些登录状态，但无法读取 Cookie。",
+        "hostAgents": "{{host}} 上的智能体可以使用这些登录状态，但无法读取 Cookie。"
+      },
+      "sshPage": {
         "stored": "已存储到 {{host}} 的浏览器。",
         "googleCookiesSkipped": "未导入 Google Cookie。请打开一个通过 {{host}} 浏览的页面，然后登录 Google。"
+      },
+      "picker": {
+        "menuItem": "导入 Cookie…",
+        "search": "搜索配置文件",
+        "lastUsed": "上次使用",
+        "noMatches": "无匹配项",
+        "googleNote": "Google 登录信息未导入"
       }
     },
     "googleCookieClear": {
@@ -24557,7 +24558,7 @@
       "signInRequired": "请重新登录以使用此账户",
       "signInAgain": "重新登录",
       "usageSignInLabel": "重新登录",
-      "usageSignInMessage": "所选 Claude 账户需要您重新登录，请打开设置 > AI 提供商账户，或选择系统默认",
+      "usageSignInMessage": "此账户需要您重新登录。",
       "signIn": "登录",
       "moreSignInOptions": "更多登录选项",
       "copySignInLink": "改为复制登录链接",
@@ -24714,6 +24715,11 @@
       "dialogTitle": "为何这里的 claude 不使用所选账户",
       "dialogDescription": "Orca 现在将每个 Claude 账户保存在各自的文件夹中，新终端中的 claude 会遵循您选择的账户",
       "dialogCause": "在此更新之前打开的终端不会如此，因此这里的 claude 使用系统默认的登录信息登录，请打开新终端以使用所选账户"
+    },
+    "fileDrop": {
+      "copyUploadedPaths": "复制路径",
+      "copyUploadedPathsFailed": "无法复制已上传文件的路径。",
+      "uploadedWithoutPaste": "上传完成，但无法将路径粘贴到终端。"
     },
     "newerDaemonBanner": {
       "failedTitle": "无法重新打开此终端",
@@ -27642,7 +27648,6 @@
       "waitingFor": "正在等待 {{label}}",
       "waitingForUntil": "正在等待 {{label}} · 直到 {{time}}",
       "waitingCount": "正在等待 {{count}} 个事件",
-      "hostDisconnected": "{{host}} 已断开连接",
       "disconnected": "已断开连接",
       "runsOn": "在 {{host}} 上运行",
       "deleteTitle": "要删除 {{name}} 吗？",
@@ -27795,12 +27800,7 @@
       },
       "cancel": {
         "confirmMany": "取消 {{count}} 项",
-        "confirmOne": "取消事项",
-        "keep": "保留",
-        "placeholder": "原因",
-        "titleMany": "要取消 {{count}} 个事项吗？",
-        "titleOne": "要取消“{{title}}”吗？",
-        "why": "bot 会看到原因。不会删除任何内容"
+        "keep": "保留"
       },
       "chat": {
         "added": "添加了 {{items}}",
@@ -27896,8 +27896,7 @@
         "serverPr": "服务器上的工作暂不显示 PR"
       },
       "menu": {
-        "cancel": "取消事项…",
-        "canceled": "已取消…",
+        "cancel": "取消事项",
         "done": "完成"
       },
       "pill": {
@@ -27957,7 +27956,9 @@
         "recommended": "推荐",
         "step": "第 {{n}} 个，共 {{total}} 个",
         "typeAnswer": "输入你的回答",
-        "replaced": "智能体提出了新问题。请先阅读，再回复"
+        "replaced": "智能体提出了新问题。请先阅读，再回复",
+        "replacedByNewer": "已由较新的问题取代",
+        "skipped": "已跳过"
       },
       "readMoreClosedFailed": "无法读取更多已关闭的条目"
     },
@@ -28213,13 +28214,10 @@
       "hostChoice": {
         "description": "选择 {{bot}} 登录你的 Gmail、日历和云端硬盘的方式",
         "orca": "Orca 托管",
-        "comingSoon": "即将推出",
-        "orcaNote": "使用 Google 登录。无需任何设置",
+        "soon": "即将推出",
+        "orcaNote": "使用 Google 登录",
         "self": "自行托管",
-        "selfNote": "你将自行创建 Google Cloud 应用，因此你的登录信息会保留在你的电脑上。所有内容都不会经过 Orca 的服务器",
-        "stepApp": "{{bot}} 打开 Google Cloud 并设置应用",
-        "stepSignIn": "你勾选 Google 的条款复选框，然后登录",
-        "stepCheck": "{{bot}} 检查 Gmail、日历和云端硬盘能否正常使用",
+        "selfNote": "使用你自己的 Google 应用",
         "continue": "继续"
       },
       "connectDescription": "让你的 bots 能够访问 Gmail、日历和云端硬盘。你的登录信息会保留在 {{host}} 上",
@@ -29036,7 +29034,8 @@
         "removeConfirm": "移除",
         "finishSetup": "完成设置",
         "orgDescription": "{{repos}} · 已以 @{{login}} 身份登录",
-        "addAccount": "添加另一个 GitHub 账户"
+        "addAccount": "添加另一个 GitHub 账户",
+        "refresh": "刷新"
       },
       "setup": {
         "install": "安装 Orca 应用",
@@ -29279,6 +29278,8 @@
       }
     },
     "section": {
+      "scrollLeft": "向左滚动 · 隐藏 {{amount}} 个",
+      "scrollRight": "向右滚动 · 隐藏 {{amount}} 个",
       "title": "Bots",
       "newBot": "新建 bot",
       "startFromScratch": "从空白开始",
@@ -29287,8 +29288,6 @@
       "expand": "展开 Bots",
       "collapse": "折叠 Bots",
       "summary": "{{action}}，{{total}} 个 bot，{{attention}} 项需要你处理，{{unread}} 个未读，{{working}} 个工作中",
-      "showMore_one": "再显示 {{count}} 个 bot",
-      "showMore_other": "再显示 {{count}} 个 bot",
       "new": "新建 bot 或群组",
       "expandAll": "展开所有 bots",
       "collapseAll": "折叠所有 bots"

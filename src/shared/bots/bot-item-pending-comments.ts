@@ -27,6 +27,8 @@ export type BotItemPendingComment = {
   plain: boolean
   /** Skills picked in it, each by its file on the bot's host; empty where the host takes none. */
   skills?: readonly BotItemCommentSkill[]
+  /** With `questionId`, the ask's lines this answer skips; empty where the host takes none. */
+  skipped?: readonly number[]
   failed: boolean
   /** Failed after it went out, with no request id to dedupe a Retry by: it may be on the host, so it
    *  offers only Discard until the read shows it. */
@@ -98,6 +100,8 @@ export type BotItemPendingCommentDelivery = {
   /** Says why a comment wasn't sent; it stays with Retry, unless it answered a question the agent
    *  has since replaced (`replaced`): that one goes, as a Retry would fail the same way. */
   failed: (error: unknown, replaced: boolean) => void
+  /** A replaced question's reply, dropped: its words go back to the comment box if it is empty. */
+  returnText: (text: string) => void
   /** The host dedupes comments by request id, so a Retry never posts twice. */
   requestIds: boolean
   /** The host binds a quick reply to its question. */
@@ -106,20 +110,24 @@ export type BotItemPendingCommentDelivery = {
   plain: boolean
   /** The host takes a comment's picked skills. */
   skills?: boolean
+  /** The host takes an answer's skipped lines. */
+  skipped?: boolean
 }
 
 export type BotItemPendingComments = {
   /** Sent comments the item's read doesn't show yet, oldest first. */
   shown: readonly BotItemPendingComment[]
   /** `after`: the id of the item's newest event as the view shows it; `questionId`: the ask a quick
-   *  reply answers; `plain`: it answers no question; `skills`: the skills picked in it. */
+   *  reply answers; `plain`: it answers no question; `skills`: the skills picked in it; `skipped`: the
+   *  ask's lines it skips. */
   send: (
     text: string,
     paths: readonly string[],
     after: string | null,
     questionId?: string,
     plain?: boolean,
-    skills?: readonly BotItemCommentSkill[]
+    skills?: readonly BotItemCommentSkill[],
+    skipped?: readonly number[]
   ) => void
   retry: (id: string) => void
   discard: (id: string) => void
@@ -189,6 +197,7 @@ function deliver(
         delivery.failed(error, replaced)
         if (replaced) {
           update(key, id, null)
+          delivery.returnText(botItemPendingCommentText(entry))
           return
         }
         update(key, id, {
@@ -246,7 +255,7 @@ export function createBotItemPendingCommentsHook({
 
     return {
       shown: done.size > 0 ? entries.filter((entry) => !done.has(entry.event.id)) : entries,
-      send: (text, paths, after, questionId, plain = false, skills = []) => {
+      send: (text, paths, after, questionId, plain = false, skills = [], skipped = []) => {
         const entry: BotItemPendingComment = {
           event: {
             id: nextPendingId(),
@@ -269,6 +278,10 @@ export function createBotItemPendingCommentsHook({
           questionId: questionId && delivery.questionIds ? questionId : null,
           plain: plain && delivery.plain,
           ...(delivery.skills && skills.length > 0 ? { skills } : {}),
+          // Only with the ask it answers named: skipped lines are that ask's.
+          ...(delivery.skipped && delivery.questionIds && questionId && skipped.length > 0
+            ? { skipped }
+            : {}),
           failed: false
         }
         write(key, (prev) => [...prev, entry])

@@ -38,6 +38,9 @@ import type {
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { watchBotTurnEnds } from './bot-run-turn-watch'
+import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
+import { structuredAgentSessionRefusalLine } from '../../shared/agent-session/requests/structured-agent-session-turn-failure'
 import { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
 import { PiRpcTurns } from '../pi/rpc/rpc-turns'
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
@@ -351,4 +354,41 @@ it('a Pi run steered into a turn waits for it, and fails when that turn fails', 
     person: accepted.get('person')!,
     run: () => accepted.get('run')!
   })
+})
+
+it("a run whose Codex never started says why, not only that the turn didn't finish", async () => {
+  const journal = chatJournal('codex', codexTurnLifecycleIdentity('chat', 'turn-1'))
+  const fingerprint = journal.admit('run')
+  // As the host records a thread Codex refused to start.
+  const failure = agentSessionFailureFact('startFailed', {
+    detail: {
+      text: 'failed to load configuration: url is not supported for stdio\nin `mcp_servers.notion`',
+      audience: 'person'
+    }
+  })
+  journal.dispatch({
+    clientMessageId: 'run',
+    state: 'rejected',
+    fence: 1,
+    ...agentSessionFailureWords(failure, { surface: 'rejection', agentName: 'Codex' })
+  })
+  const host = {
+    subscribeTurnCompletions: () => () => {},
+    subscribe: async () => () => {},
+    history: async () => ({ ok: false }),
+    currentWork: async () => null,
+    journalReads: async () => ({ operationWindow: async () => journal.window() })
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every host read the watch makes; its journal reads are the real ones
+  const ended = await watchBotTurnEnds(host as never).next({
+    sessionId: 'chat',
+    clientMessageId: 'run',
+    fingerprint
+  })
+  expect(ended).toMatchObject({ outcome: 'failure', message: '' })
+  expect(
+    structuredAgentSessionRefusalLine('refusal' in ended ? ended.refusal : null, 'Codex')
+  ).toBe(
+    "Codex couldn't start: failed to load configuration: url is not supported for stdio in `mcp_servers.notion`"
+  )
 })

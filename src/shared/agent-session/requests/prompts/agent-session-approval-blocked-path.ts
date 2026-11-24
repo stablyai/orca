@@ -1,9 +1,11 @@
 import { approvalDetailPreview } from './agent-session-approval-detail-preview'
 import { isPlanApprovalSubject } from './agent-session-approval-subject'
+import { readShellApprovalDetail } from './agent-session-approval-shell-detail'
 import type { AgentJournalApprovalSubject } from '../../journal/agent-session-journal-approval-subject'
 
 export type ApprovalCardText = {
   blockedPath?: string
+  toolName?: string
   description?: string
   decisionReason?: string
   subject?: AgentJournalApprovalSubject
@@ -20,11 +22,22 @@ export function approvalBlockedPathToShow(approval: ApprovalCardText): string | 
   const forms = [path, JSON.stringify(path).slice(1, -1)]
   const drawn = isPlanApprovalSubject(approval.subject)
     ? [approval.subject.text, approval.subject.filePath]
-    : [approval.detail === undefined ? undefined : approvalDetailPreview(approval.detail)]
+    : drawnDetail(approval)
   const shown = [approval.description, approval.decisionReason, ...drawn].some(
     (text) => text !== undefined && forms.some((form) => containsWholePath(text, form))
   )
   return shown ? null : path
+}
+
+// A shell call's card draws its command and other arguments, not the stored JSON.
+function drawnDetail(approval: ApprovalCardText): (string | undefined)[] {
+  if (approval.detail === undefined) {
+    return []
+  }
+  const shell = readShellApprovalDetail(approval.detail, approval.toolName, approval.description)
+  return shell
+    ? [approvalDetailPreview(shell.command), shell.otherArguments ?? undefined]
+    : [approvalDetailPreview(approval.detail)]
 }
 
 // A backslash also starts a JSON escape (`\\`, `\"`) after the escaped form.

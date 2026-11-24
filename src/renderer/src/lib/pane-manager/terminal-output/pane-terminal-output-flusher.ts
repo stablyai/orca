@@ -87,7 +87,8 @@ export function flushTerminalOutputImpl(
                 terminal,
                 queuedWrite.onParsed,
                 ackCreditsParsed,
-                undefined
+                undefined,
+                queuedWrite.data
               ),
               onWriteFailure: composeWriteFailureCallback(terminal, ackCreditsParsed)
             }
@@ -95,7 +96,13 @@ export function flushTerminalOutputImpl(
         : writeBackgroundTerminalChunk(
             terminal,
             queuedWrite.data,
-            composeParsedCallback(terminal, queuedWrite.onParsed, ackCreditsParsed, undefined),
+            composeParsedCallback(
+              terminal,
+              queuedWrite.onParsed,
+              ackCreditsParsed,
+              undefined,
+              queuedWrite.data
+            ),
             composeWriteFailureCallback(terminal, ackCreditsParsed)
           )
       if (!writeAccepted) {

@@ -1,15 +1,15 @@
-import { useEffect, useRef, type RefObject, type UIEvent, type KeyboardEvent } from 'react'
+import type { RefObject, UIEvent, KeyboardEvent } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 
+/** The open roster's own scrolling: native wheel, trackpad and touch move it freely (no snapping
+ *  back to a row edge), and arrow/Page/Home/End step through rows while the list has focus. */
 export function useWorkerDockScroll({
   small,
   viewport,
   virtual,
   items,
   onAnchorChange,
-  measure,
-  hold,
-  setBrowsing,
+  onScrolled,
   scrollTo
 }: {
   small: boolean
@@ -17,68 +17,37 @@ export function useWorkerDockScroll({
   virtual: Virtualizer<HTMLDivElement, HTMLDivElement>
   items: readonly { id: string }[]
   onAnchorChange: (anchor: { id: string; offset: number; index: number }) => void
-  measure: () => void
-  hold: () => void
-  setBrowsing: (value: boolean) => void
+  onScrolled: () => void
   scrollTo: (index: number) => void
 }) {
-  const settle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  useEffect(() => () => clearTimeout(settle.current), [])
+  const firstVisible = (element: HTMLElement) =>
+    small
+      ? [...element.querySelectorAll<HTMLElement>('[data-index]')]
+          .map((node) => ({
+            index: Number(node.dataset.index),
+            start: node.offsetTop,
+            end: node.offsetTop + node.offsetHeight
+          }))
+          .find((item) => item.end > element.scrollTop)
+      : virtual.getVirtualItems().find((item) => item.end > element.scrollTop)
   return {
     onScroll: (event: UIEvent<HTMLDivElement>) => {
-      const first = small
-        ? [...event.currentTarget.querySelectorAll<HTMLElement>('[data-index]')]
-            .map((node) => ({
-              index: Number(node.dataset.index),
-              start: node.offsetTop,
-              end: node.offsetTop + node.offsetHeight
-            }))
-            .find((item) => item.end > event.currentTarget.scrollTop)
-        : virtual.getVirtualItems().find((item) => item.end > (viewport.current?.scrollTop ?? 0))
-      if (first) {
+      const element = event.currentTarget
+      const first = firstVisible(element)
+      if (first && items[first.index]) {
         onAnchorChange({
           id: items[first.index].id,
-          offset: (viewport.current?.scrollTop ?? 0) - first.start,
+          offset: element.scrollTop - first.start,
           index: first.index
         })
       }
-      if ((viewport.current?.scrollTop ?? 0) > 0) {
-        setBrowsing(true)
-        hold()
-      }
-      measure()
-      clearTimeout(settle.current)
-      settle.current = setTimeout(() => {
-        const element = viewport.current
-        if (!element) {
-          return
-        }
-        const top = element.scrollTop
-        const candidates = small
-          ? [...element.querySelectorAll<HTMLElement>('[data-index]')].map((node) => node.offsetTop)
-          : virtual.getVirtualItems().map((item) => item.start)
-        const nearest = candidates.reduce(
-          (best, next) => (Math.abs(next - top) < Math.abs(best - top) ? next : best),
-          top === 0 ? 0 : (candidates[0] ?? 0)
-        )
-        if (Math.abs(top - nearest) > 1) {
-          element.scrollTop = nearest
-        }
-        measure()
-      }, 100)
+      onScrolled()
     },
     onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.target !== event.currentTarget) {
+      if (event.target !== event.currentTarget || !viewport.current) {
         return
       }
-      const first = small
-        ? Number(
-            [...event.currentTarget.querySelectorAll<HTMLElement>('[data-index]')].find(
-              (node) => node.offsetTop + node.offsetHeight > event.currentTarget.scrollTop
-            )?.dataset.index ?? 0
-          )
-        : (virtual.getVirtualItems().find((item) => item.end > event.currentTarget.scrollTop)
-            ?.index ?? 0)
+      const first = firstVisible(event.currentTarget)?.index ?? 0
       const step =
         event.key === 'ArrowDown'
           ? first + 1

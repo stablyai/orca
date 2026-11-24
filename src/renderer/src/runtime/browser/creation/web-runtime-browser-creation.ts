@@ -19,6 +19,7 @@ import {
   stageWebRuntimeBrowserCreation
 } from './web-runtime-browser-creation-context'
 import type { CreateWebRuntimeSessionBrowserTabArgs } from './web-runtime-browser-creation-context'
+import { browserCreateErrorForLog } from './web-runtime-browser-create-failure-code'
 import {
   finishWebRuntimeBrowserCreationFailure,
   prepareWebRuntimeBrowserCreationFailure
@@ -74,7 +75,10 @@ export async function createWebRuntimeSessionBrowserTabOnHost(
           preference: placementPreference
         })
       } catch (error) {
-        console.warn('[web-runtime-session] failed to prepare client browser host:', error)
+        console.warn(
+          '[web-runtime-session] failed to prepare client browser host:',
+          browserCreateErrorForLog(args.failureLogMode, error)
+        )
         throw new Error(
           translate(
             'browser.clientHosted.preparationFailed',
@@ -126,7 +130,7 @@ export async function createWebRuntimeSessionBrowserTabOnHost(
         .catch((error) => {
           console.warn(
             '[web-runtime-session] created browser tab navigation failed:',
-            error instanceof Error ? error.message : String(error)
+            browserCreateErrorForLog(args.failureLogMode, error)
           )
         })
     }
@@ -260,7 +264,7 @@ export async function createWebRuntimeSessionBrowserTabOnHost(
           failure.recoveryError = cleanupError
           console.warn(
             '[web-runtime-session] failed to clean up unreconciled browser tab:',
-            cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+            browserCreateErrorForLog(args.failureLogMode, cleanupError)
           )
         }
       }

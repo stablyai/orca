@@ -29,28 +29,31 @@ export function WorkerDockRowAction({
   } | null>(null)
   const [focusedAction, setFocusedAction] = useState<'stop' | 'clear' | null>(null)
   const failed = row.state === 'failed' || row.state === 'unexpected'
-  const action = focusedAction ?? (failed && row.settlement ? 'clear' : 'stop')
-  const unavailable =
-    row.ownerActionsAvailable === false ||
-    row.retired ||
-    row.state === 'saving' ||
-    !row.stoppable ||
-    pending
+  const owner = row.ownerActionsAvailable !== false && !row.retired
+  // Only an action that can run gets a button: a remote worker, a cleared row or a failure with
+  // nothing to acknowledge shows none rather than a live-looking control that does nothing.
+  const canClear = owner && failed && Boolean(row.settlement)
+  // An exited worker with an open dispatch has nothing to clear; Stop settles it.
+  const exitedOpen = row.state === 'unexpected' && !row.settlement
+  const canStop = owner && (!failed || exitedOpen) && row.stoppable && row.state !== 'saving'
+  const action = focusedAction ?? (canClear ? 'clear' : 'stop')
+  const unavailable = !canStop || pending
   return (
     <div
       className={cn(
         'flex shrink-0 justify-center pt-1.5',
         narrow ? 'w-11' : 'w-10',
         action === 'stop' &&
+          !pending &&
           'opacity-0 group-hover/worker:opacity-100 group-focus-within/worker:opacity-100 [@media(pointer:coarse)]:opacity-100'
       )}
     >
-      {row.stoppable || failed || row.retired || row.state === 'saving' ? (
+      {canClear || canStop ? (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               type="button"
-              variant="ghost-inset"
+              variant="ghost-on-accent"
               size="icon-xs"
               data-worker-dock-action={row.id}
               className={cn(narrow ? (action === 'clear' ? 'h-6 w-11' : 'size-11') : 'size-6.5')}
@@ -59,23 +62,14 @@ export function WorkerDockRowAction({
                   ? t('components.native-chat.workerDock.clearName', 'Clear {{name}}', {
                       name: row.name
                     })
-                  : unavailable
+                  : pending
                     ? t(
                         'components.native-chat.workerDock.stopUnavailable',
                         'Stop {{name}} · {{title}} unavailable · {{reason}}',
                         {
                           name: row.name,
                           title: row.title,
-                          reason:
-                            row.state === 'saving'
-                              ? workerDockStateLabel(t, 'saving')
-                              : row.retired
-                                ? t('components.native-chat.workerDock.resultReady', 'result ready')
-                                : failed
-                                  ? workerDockStateLabel(t, row.state)
-                                  : pending
-                                    ? workerDockStateLabel(t, 'stopping')
-                                    : workerDockStateLabel(t, 'unavailable')
+                          reason: workerDockStateLabel(t, 'stopping')
                         }
                       )
                     : t('components.native-chat.workerDock.stopName', 'Stop {{name}} · {{title}}', {
@@ -83,9 +77,7 @@ export function WorkerDockRowAction({
                         title: row.title
                       })
               }
-              aria-disabled={
-                row.ownerActionsAvailable === false || (action === 'stop' ? unavailable : pending)
-              }
+              aria-disabled={action === 'stop' ? unavailable : pending}
               onPointerDown={(event) => {
                 if (event.button === 0) {
                   window.addEventListener(
@@ -160,10 +152,7 @@ export function WorkerDockRowAction({
                 }
                 const intendedRow = captured?.row ?? row
                 const intendedAction = captured?.action ?? action
-                if (
-                  intendedRow.ownerActionsAvailable !== false &&
-                  (intendedAction === 'clear' ? !pending : !unavailable)
-                ) {
+                if (intendedAction === 'clear' ? canClear && !pending : !unavailable) {
                   if (captured) {
                     captured.activated = true
                   }
@@ -179,16 +168,11 @@ export function WorkerDockRowAction({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {row.ownerActionsAvailable === false
-              ? t(
-                  'components.native-chat.workerDock.remoteOwner',
-                  'Stop or clear this from the computer it runs on'
-                )
-              : pending
-                ? t('components.native-chat.workerDock.stopping', 'Stopping…')
-                : action === 'clear'
-                  ? t('components.native-chat.workerDock.clear', 'Clear')
-                  : t('components.native-chat.workerDock.stop', 'Stop')}
+            {pending
+              ? t('components.native-chat.workerDock.stopping', 'Stopping…')
+              : action === 'clear'
+                ? t('components.native-chat.workerDock.clear', 'Clear')
+                : t('components.native-chat.workerDock.stop', 'Stop')}
           </TooltipContent>
         </Tooltip>
       ) : null}

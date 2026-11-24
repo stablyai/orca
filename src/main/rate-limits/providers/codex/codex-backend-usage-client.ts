@@ -19,6 +19,8 @@ import {
 } from './codex-rate-limit-window-mapper'
 import { mapBackendRateLimitResetCredits } from './codex-reset-credit-client'
 
+const CODEX_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage'
+
 type BackendRateLimitWindow = {
   used_percent?: number
   limit_window_seconds?: number
@@ -72,9 +74,20 @@ export async function fetchCodexRateLimitsViaBackend(
   if (!headers || signal.aborted) {
     return null
   }
-  const response = await request('https://chatgpt.com/backend-api/wham/usage', { headers, signal })
+  const response = await request(CODEX_USAGE_URL, { headers, signal })
   if (!response.ok) {
     await cancelUnreadResponseBody(response)
+    if (response.status === 401) {
+      return {
+        provider: 'codex',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: `GET ${CODEX_USAGE_URL} failed: 401 Unauthorized`,
+        status: 'error',
+        usageMetadata: { source: 'web', failureKind: 'stale-token' }
+      }
+    }
     return null
   }
   const payload = (await response.json()) as BackendUsageResponse
@@ -131,7 +144,7 @@ export async function supplementCodexUsageWindows(
   }
   try {
     const backend = await fetchCodexRateLimitsViaBackend(request, options)
-    if (!backend) {
+    if (backend?.status !== 'ok') {
       return limits
     }
     const rateLimitResetCredits = backend.rateLimitResetCredits ?? limits.rateLimitResetCredits

@@ -22,6 +22,7 @@ import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAt
 import { NativeChatForkAction } from '../actions/NativeChatForkAction'
 import type { useNativeChatWorkRun } from '../../tools/runs/use-native-chat-work-run'
 import { useTranslate } from '@/i18n/use-translate'
+import { NativeChatGalleryMessageContext } from '../../media/images/gallery/native-chat-image-gallery-context'
 
 function messageIsStreaming(
   message: NativeChatMessage,
@@ -125,7 +126,12 @@ export function NativeChatAssistantMessageRow({
           {t('bots.chat.nothingToReport', 'Nothing to report')}
         </p>
       ) : null}
-      {toolRun ? <NativeChatToolRun {...toolRun} /> : null}
+      {/* Tool runs rebuild and reorder their images as reads finish. */}
+      {toolRun ? (
+        <NativeChatGalleryMessageContext value={null}>
+          <NativeChatToolRun {...toolRun} />
+        </NativeChatGalleryMessageContext>
+      ) : null}
       {showControls ? (
         <NativeChatAgentControls
           markdown={words}

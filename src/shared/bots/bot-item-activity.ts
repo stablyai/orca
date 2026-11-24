@@ -13,7 +13,11 @@ import {
   type BotItemEvent,
   type BotItemLinkView
 } from './bot-items'
-import { botItemQuestionPairing, type BotItemQuestionPairing } from './bot-item-question-answers'
+import {
+  botItemQuestionPairing,
+  type BotItemAskEnd,
+  type BotItemQuestionPairing
+} from './bot-item-question-answers'
 
 type DispatchLink = Extract<BotItemLinkView, { kind: 'dispatch' }>
 
@@ -30,12 +34,20 @@ export type BotItemActivityEntry =
       answers?: (BotItemEvent | null)[]
       /** On an ask: per line, answered only by order (a comment naming no line). */
       byOrder?: boolean[]
+      /** On an ask a later one replaced, or answered with the rest skipped: its open lines take no answer. */
+      ended?: BotItemAskEnd
       /** On the owner's reply to a question: the question it answers, by its first line. */
       replyTo?: { eventId: string; text: string }
       /** The owner's answer reads in full on its ask's lines ("Question → answer"): no card of its own. */
       onAsk?: true
     }
   | { kind: 'worker'; key: string; at: number; phase: 'started' | 'finished'; link: DispatchLink }
+
+/** Why a worker stopped without a report, worded as the chat's worker strip words it. */
+export function botItemWorkerStopReason(link: DispatchLink): string | null {
+  const stopped = link.state === 'failed' || link.state === 'stopped'
+  return stopped && !link.report && link.reason?.trim() ? link.reason.trim() : null
+}
 
 /** The question an owner's comment answers (`answers`), or null for any other event. */
 function answeredQuestion(event: BotItemEvent): string | null {
@@ -178,6 +190,7 @@ function eventEntries(
         ? asked.waiting
         : event.id === item.question?.eventId && event.actor.kind !== 'owner' && !askWaiting,
       ...(asked ? { answers: asked.answers, byOrder: asked.byOrder } : {}),
+      ...(asked?.ended ? { ended: asked.ended } : {}),
       ...(replyTo ? { replyTo } : {}),
       ...(readsOnAsk(event, pairing) ? { onAsk: true as const } : {})
     })

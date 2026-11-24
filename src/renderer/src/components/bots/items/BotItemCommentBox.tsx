@@ -47,7 +47,7 @@ import {
 import { imageReferencesToPromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import type { Bot } from '../../../../../shared/bot-types'
 import { BOT_ITEM_LIMITS, type BotItem } from '../../../../../shared/bots/bot-items'
-import { botRefKey } from '@/lib/bot-hosts'
+import { botItemCommentDraftScope } from './bot-item-comment-draft'
 import { useKeepFloatingTerminalTriggerClear } from '../../floating-terminal/trigger/floating-terminal-trigger-keep-clear'
 import { BOT_ITEM_TOOL_ROW_TOUCH_FIT } from './BotItemStepper'
 import {
@@ -118,7 +118,7 @@ function BotItemCommentField({
   ref?: Ref<BotItemCommentBoxHandle>
 }): React.JSX.Element {
   const t = useTranslate()
-  const scopeKey = `bot-item-comment:${botRefKey(bot)}:${item.uid}`
+  const scopeKey = botItemCommentDraftScope(bot, item.uid)
   const ime = useImeEnterGestureOwnership()
   const { draft, setDraft, flushDraftAppends } = useNativeChatDraft(scopeKey, ime.isComposing)
   const [caret, setCaret] = useState(draft.length)

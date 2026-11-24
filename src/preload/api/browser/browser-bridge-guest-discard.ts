@@ -15,6 +15,7 @@ export const browserGuestDiscardApi = {
   preparePageAttach: (args) => ipcRenderer.invoke('browser:preparePageAttach', args),
   reserveGuestDiscard: (args) => ipcRenderer.sendSync('browser:reserveGuestDiscard', args) === true,
   acknowledgeGuestRemoval: (args) => ipcRenderer.invoke('browser:acknowledgeGuestRemoval', args),
+  wakeClientPage: (args) => ipcRenderer.invoke('browser:wakeClientPage', args),
   getGuestDiscardProtection: (args) =>
     ipcRenderer.invoke('browser:getGuestDiscardProtection', args),
   onGuestDiscardProtectionChanged: (callback): (() => void) => {

@@ -1737,6 +1737,7 @@
         "gone": "このチャットはこのホスト上に存在しないため、ここで再度開くことはできません。",
         "hostCannotOpen": "Orca が更新されるまで、このチャットを再度開くことはできません。",
         "worktreeDeleted": "ワークツリーは削除されました。",
+        "projectRemoved": "プロジェクトは Orca から削除されました。",
         "folderWorkspaceRemoved": "フォルダーワークスペースは削除されました。"
       },
       "ephemeralVmWorktreeCreation": {
@@ -4862,7 +4863,7 @@
             "cursor": {
               "expired": {
                 "label": "サインインの有効期限切れ",
-                "message": "Orca を実行しているコンピュータのターミナルで cursor-agent login を実行し、使用状況を再試行してください。"
+                "message": "Orca を実行しているコンピュータのターミナルで cursor-agent login を実行し、使用状況の取得を再試行してください。"
               },
               "plan": "プラン"
             },
@@ -5826,7 +5827,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "別のインストールがまだ実行中です",
-          "edited": "スキルが Orca の外部で編集されています",
           "install": "インストール",
           "installFor": "{{value0}} にインストール",
           "installed": "インストール済み",
@@ -5981,7 +5981,6 @@
           "cloneFolderNotEmpty": "このフォルダーには「{{value0}}」がすでに存在するため、このクローンには専用のフォルダーが必要です。"
         },
         "AutoRenameFailedDialog": {
-          "dismissing": "閉じています…",
           "aed1623b1e": "閉じる",
           "eab8b45238": "コピーエラー",
           "a23b22d16f": "コピーしました",
@@ -7731,7 +7730,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "プロファイル「{{value0}}」が削除されました。",
-          "2d4bea7f35": "デフォルトの Cookie がクリアされました。",
           "796d846483": "Cookie はインポートされません",
           "c29648fe5b": "アクティブ",
           "b4c167764d": "ファイルから {{value0}} 個の Cookie を {{value1}} にインポートしました。",
@@ -7739,10 +7737,7 @@
           "b4e9d3f2a1c5": "{{value1}} から {{value0}} 件の Cookie を {{value2}} にインポートしました。",
           "c5a273a809": "{{value0}} から",
           "80bffd32bf": "Cookie のインポート",
-          "bd7d68f138": "ファイルから…",
-          "4054c458e1": "デフォルトの Cookie をクリア",
-          "3b662becd5": "デフォルトプロファイルの Cookie をクリアしますか？",
-          "f159cf5a3e": "このプロファイルのサイトからサインアウトされる場合があります。"
+          "bd7d68f138": "ファイルから…"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Cookie のインポートが適切でない場合、コンピュータ操作はローカルアプリを制御し、該当する場合は既存のログインブラウザセッションを使用することがあります。Orca Computer Use スキルをインストールします。 macOS ではプライバシー許可も必要です。",
@@ -13126,7 +13121,6 @@
           "attentionUnwritable": "対応が必要です · Orca は {{folder}} に書き込めません",
           "attentionBusy": "対応が必要です · この場所では別のスキルのインストールがまだ完了していません",
           "attentionUnreadable": "対応が必要です · Orca はこのコピーのすべてのファイルを読み取れません",
-          "attentionEdited": "対応が必要です · このコピーは編集されています",
           "attentionOther": "対応が必要です · 別のスキルがすでにこの名前を使用しています",
           "attentionSharedNotCurrent": "対応が必要です · このフォルダーが使用する共有コピーは Orca のものではありません",
           "resultUpdateSkippedPlaces": "{{result}} · {{places}} か所で更新をスキップ: {{reason}}",
@@ -17586,8 +17580,6 @@
             "ed8f54509d": "デフォルト",
             "e5d31de1a9": "ビューポートのサイズ",
             "56f94f4ffa": "ファイルから…",
-            "eb280bfb11": "{{value0}} から",
-            "2293adf620": "Cookie のインポート",
             "cf7cdc67ef": "新規プロファイル…",
             "7b838540c7": "ブラウザメニュー",
             "a7a86702b3": "{{value0}} プロファイルを作成して切り替えました",
@@ -18871,9 +18863,7 @@
         "streamBrowserUnavailable": "リモートブラウザを利用できません。サーバーでのセットアップを確認してください。"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "このデバイス上のブラウザ",
         "remoteLabel": "{{value0}} のブラウザ",
-        "clientNoteLocalStorage": "インポートはこのデバイスのブラウザを読み取ります。 Cookie はローカルに保存されます。",
         "remoteNoteRemoteStorage": "{{value0}} に読み取りブラウザをインポートします。 Cookie はそのマシンに保存され、画面に許可のプロンプトが表示される場合があります。"
       },
       "native": {
@@ -19635,6 +19625,8 @@
         "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
         "historyUnusable": "このチャットを読み込めません。",
         "historyUnavailable": "Orca は現在このチャットの履歴を開けませんでした。",
+        "diskFull": "このチャットを実行しているコンピューターのディスクがいっぱいです。",
+        "freeDiskSpace": "そのディスクの空き容量を増やしてから、もう一度お試しください。",
         "savedInOtherFolder": "この会話は別のフォルダーに保存されています。",
         "savedByNewerOrca": "チャットは新しいバージョンの Orca で保存されました。",
         "updateOrcaToKeepUsing": "引き続き使用するには、Orca を更新してください。",
@@ -19980,7 +19972,6 @@
         "terminalRequired": "ターミナルでこの OMP の質問に答えてください。",
         "openTerminal": "ターミナルで回答する",
         "recommended": "おすすめ",
-        "stepAnswered": "{{value0}}、回答済み",
         "stepOf": "{{value0}} / {{value1}}",
         "answered": "回答済み",
         "title": "質問",
@@ -20358,6 +20349,9 @@
       "imagePreview": {
         "fileActions": "ファイル操作",
         "linkActions": "リンク操作"
+      },
+      "imageGallery": {
+        "loadFailed": "{{name}} を読み込めませんでした"
       },
       "hostPermission": {
         "checkAgain": "再確認",
@@ -21568,11 +21562,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "一時的なオーケストレーションワーカー · 完了の2分後に閉じます",
-        "finished": "一時的なオーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
         "keepOpen": "開いたままにする",
         "bannerRunning": "オーケストレーションワーカー · 完了の2分後に閉じます",
-        "bannerFinished": "オーケストレーションワーカーが完了 · {{countdown}}後に閉じます"
+        "bannerFinished": "オーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
+        "bannerFinishedStatus": "オーケストレーションワーカーが完了 · まもなく閉じます"
       }
     },
     "wslHostMark": {
@@ -22045,12 +22038,21 @@
         "imported_other": "{{domains}} 用に Cookie を {{count}} 個インポートしました。使用するにはページを再読み込みしてください。",
         "failed": "Cookie をインポートできませんでした: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "このデバイスのブラウザ",
         "destination": "{{host}} 用のブラウザにインポートします。",
-        "hostAgents": "{{host}} の Agent はこれらのサインインを使用できますが、Cookie を読み取ることはできません。",
+        "hostAgents": "{{host}} の Agent はこれらのサインインを使用できますが、Cookie を読み取ることはできません。"
+      },
+      "sshPage": {
         "stored": "{{host}} 用のブラウザに保存しました。",
         "googleCookiesSkipped": "Google の Cookie はインポートされませんでした。{{host}} 経由で閲覧するページを開き、Google にサインインしてください。"
+      },
+      "picker": {
+        "menuItem": "Cookie のインポート…",
+        "search": "プロファイルを検索",
+        "lastUsed": "前回使用",
+        "noMatches": "一致する項目がありません",
+        "googleNote": "Google ログインは対象外です"
       }
     },
     "passwords": {
@@ -23177,7 +23179,7 @@
       "signInRequired": "このアカウントを使用するにはもう一度サインインしてください",
       "signInAgain": "もう一度サインイン",
       "usageSignInLabel": "もう一度サインイン",
-      "usageSignInMessage": "選択した Claude アカウントは再度サインインが必要です。設定 > AI プロバイダーアカウントを開くか、システムのデフォルトを選択してください。",
+      "usageSignInMessage": "このアカウントは再度サインインが必要です。",
       "signIn": "サインイン",
       "moreSignInOptions": "その他のサインインオプション",
       "copySignInLink": "代わりにサインインリンクをコピー",
@@ -23316,6 +23318,11 @@
       "dialogTitle": "ここでの claude が選択したアカウントを使用しない理由",
       "dialogDescription": "Orca は現在、各 Claude アカウントをそれぞれのフォルダーに保持しており、新規ターミナルの claude は選択したアカウントに従います。",
       "dialogCause": "この更新より前に開かれたターミナルは従わないため、ここでの claude はシステムのデフォルトのログインでサインインします。選択したアカウントを使用するには、新規ターミナルを開いてください。"
+    },
+    "fileDrop": {
+      "copyUploadedPaths": "パスをコピー",
+      "copyUploadedPathsFailed": "アップロードしたファイルのパスをコピーできませんでした。",
+      "uploadedWithoutPaste": "アップロードは完了しましたが、パスをターミナルに貼り付けられませんでした。"
     },
     "newerDaemonBanner": {
       "failedTitle": "このターミナルを再度開けませんでした",
@@ -25511,7 +25518,6 @@
     "row": {
       "runsOn": "{{host}} で実行中",
       "disconnected": "切断済み",
-      "hostDisconnected": "{{host}} は切断されています",
       "idle": "アイドル",
       "paused": "一時停止中",
       "reading": "メッセージを読んでいます",
@@ -25568,7 +25574,9 @@
       },
       "ask": {
         "notSentYet": "まだ送信されていません",
-        "replaced": "Agent が新たな質問をしました。確認してから返信してください。"
+        "replaced": "Agent が新たな質問をしました。確認してから返信してください。",
+        "replacedByNewer": "新しい質問に置き換えられました",
+        "skipped": "スキップ済み"
       },
       "readMoreClosedFailed": "クローズ済みの項目をさらに読み込めませんでした"
     },
@@ -25615,6 +25623,8 @@
       "hitTip": "{{agent}} の利用上限に到達 · {{time}} にリセット"
     },
     "section": {
+      "scrollLeft": "左にスクロール · 非表示 {{amount}} 件",
+      "scrollRight": "右にスクロール · 非表示 {{amount}} 件",
       "title": "Bots",
       "startFromScratch": "最初から作成"
     },

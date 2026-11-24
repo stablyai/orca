@@ -150,7 +150,7 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
     } else if (action.kind === 'done') {
       void move([item], 'done')
     } else {
-      notes.move([item], 'canceled')
+      void move([item], 'canceled')
     }
   })
 

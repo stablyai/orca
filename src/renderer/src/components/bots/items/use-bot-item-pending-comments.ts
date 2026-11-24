@@ -6,7 +6,8 @@ import {
   BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY,
-  BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY
+  BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY
 } from '../../../../../shared/bot-runtime-capabilities'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import {
@@ -18,6 +19,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { botErrorMessage } from '../bot-presentation'
 import { botHostTakes } from '../bot-host-capability'
 import { commentOnBotItem } from './use-bot-items'
+import { returnBotItemCommentDraft } from './bot-item-comment-draft'
 
 const usePendingComments = createBotItemPendingCommentsHook({ useEffect, useSyncExternalStore })
 
@@ -37,7 +39,8 @@ export function useBotItemPendingComments(
         entry.requestId ?? undefined,
         entry.questionId ?? undefined,
         entry.plain,
-        entry.skills
+        entry.skills,
+        entry.skipped
       ),
     failed: (error, replaced) =>
       toast.error(
@@ -45,9 +48,11 @@ export function useBotItemPendingComments(
           ? t('bots.items.ask.replaced', 'The agent asked a new question. Read it, then reply.')
           : botErrorMessage(error)
       ),
+    returnText: (text) => returnBotItemCommentDraft(bot, uid, text),
     requestIds: botHostTakes(bot, BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY),
     questionIds: botHostTakes(bot, BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY),
     plain: botHostTakes(bot, BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY),
-    skills: botHostTakes(bot, BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY)
+    skills: botHostTakes(bot, BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY),
+    skipped: botHostTakes(bot, BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY)
   })
 }

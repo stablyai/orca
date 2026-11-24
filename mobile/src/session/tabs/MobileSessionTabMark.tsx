@@ -4,7 +4,31 @@ import { File, FileText, Globe, SquareTerminal } from 'lucide-react-native'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import type { MobileSessionTabRow } from './mobile-session-tab-rows'
+import {
+  mobileSessionTabAgentId,
+  mobileSessionTabKindLabel,
+  type MobileSessionTabRow
+} from './mobile-session-tab-rows'
+import type { MobileSessionTab } from './mobile-session-tabs'
+
+/** A tab menu's header: the tab's mark in a tile, and what kind of tab it is under the title. */
+export function mobileSessionTabMenuHeader(
+  tab: MobileSessionTab | null | undefined,
+  terminals: readonly { handle: string; agentIdentity?: string }[]
+): { headerIcon?: React.JSX.Element; message?: string } {
+  if (!tab) {
+    return {}
+  }
+  return {
+    headerIcon: (
+      <MobileSessionTabMark
+        row={{ tab, agentId: mobileSessionTabAgentId(tab, terminals) }}
+        size={17}
+      />
+    ),
+    message: mobileSessionTabKindLabel(tab)
+  }
+}
 
 /** The tab's agent icon, else the page's favicon, else an icon for what kind of tab it is. */
 export function MobileSessionTabMark({

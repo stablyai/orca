@@ -4,6 +4,7 @@ import type {
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
   BrowserScreencastFrameBudget,
+  BrowserScreencastLane,
   BrowserScreencastSession,
   BrowserScreencastViewport
 } from '../../../browser/cdp/screencast/browser-screencast-stream-types'
@@ -37,13 +38,17 @@ export type BrowserScreencastParams = {
   agentCursor?: 1
   // The viewer locks its input while a phone drives the page: `driver` events.
   driverEvents?: 1
+  // The viewer hears the page's downloads start and end: `downloadRequested`, `downloadFinished`.
+  downloads?: 1
+  // The viewer saves the page as a PDF when its own input makes the page print: `print` events.
+  prints?: 1
 } & BrowserCommandTargetParams
 
 export type BrowserScreencastStartResult = {
   subscriptionId: string
   ready: Extract<BrowserScreencastResult, { type: 'ready' }>
-  // Shared-page budget ownership must not leak through subscriber handles.
-  session: Omit<BrowserScreencastSession, 'updateFrameBudget'>
+  // Shared-page lanes must not leak through subscriber handles.
+  session: Pick<BrowserScreencastSession, 'done' | 'stop' | 'updateViewport'>
   // Replay the joining snapshot once the caller's pre-ready gate opens.
   flushPendingFrame: () => void
   // After `ready`, so a prompt already open reaches a viewer that knows the stream.
@@ -57,6 +62,7 @@ export type ActiveBrowserScreencastSubscriber = {
   resolveDone: () => void
   viewport: BrowserScreencastViewport
   budget: BrowserScreencastFrameBudget
+  lane: ActiveBrowserScreencastLane
   pendingFrame: Uint8Array<ArrayBufferLike> | null
   pendingFrameRetry: ReturnType<typeof setTimeout> | null
   // Device identity survives reconnects; connection ids cannot replace stale subscriptions.
@@ -66,8 +72,15 @@ export type ActiveBrowserScreencastSubscriber = {
   frameCredit: { credit: BrowserScreencastFrameCredit; release: () => void } | null
   pointerEvents: boolean
   contextMenus: boolean
-  // Present while the viewer hears the page's prompts, its own file pickers or the agent cursor.
+  // Present while the viewer hears the page's prompts, its own file pickers and prints, the agent cursor or downloads.
   stopViewerEvents: (() => void) | null
+}
+
+/** Viewers that share one encoding of the page; each lane has the merged budget of its viewers. */
+export type ActiveBrowserScreencastLane = {
+  opened: Promise<BrowserScreencastLane>
+  subscriptionIds: Set<string>
+  appliedBudget: BrowserScreencastFrameBudget
 }
 
 export type ActiveBrowserScreencastPage = {
@@ -77,6 +90,6 @@ export type ActiveBrowserScreencastPage = {
   stopping: boolean
   subscribers: Map<string, ActiveBrowserScreencastSubscriber>
   viewportOwnerSubscriptionId: string | null
-  appliedBudget: BrowserScreencastFrameBudget
+  lanes: ActiveBrowserScreencastLane[]
   pointer: () => BrowserScreencastPointer
 }

@@ -36,6 +36,7 @@ import { botOwnSkillsView, linkBotOwnSkills } from '../../../bots/bot-own-skills
 import { botHomeFolder } from '../../../bots/bot-home'
 import { listedBotsFacts } from './bots-list-facts'
 import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-view'
+import { OWNER_ACTS_FOR } from '../../../../shared/bots/bot-acts-for'
 import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
 import { refuseUnsavedFolderDrafts } from '../../repositories/folder-workspace-deletion'
 
@@ -269,7 +270,9 @@ export const BOT_METHODS = [
           return null
         }
       )
-      return { sessionId: empty ?? (await startBotSession(runtime, onAgent)) }
+      // The owner's own chat, as Home Chat is: recorded so a /clear never leaves it unattributed.
+      const actsFor = { actsFor: [...OWNER_ACTS_FOR] }
+      return { sessionId: empty ?? (await startBotSession(runtime, onAgent, { actsFor })) }
     }
   })
 ]

@@ -1,5 +1,4 @@
 import { defineMethod, defineStreamingMethod } from '../../core'
-import { Screencast } from '../../../../../shared/rpc-contract/browser/browser-params'
 import { BrowserError } from '../../../../browser/browser-error'
 
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
@@ -7,6 +6,9 @@ import { runtimeBrowserCommandsFactoryIsAvailable } from '../../../browser/insta
 import {
   FileChooserAnswer,
   PagePromptAnswer,
+  ReadPrintPdf,
+  ReleasePrintPdf,
+  Screencast,
   ScreencastAck,
   ScreencastReclaimForDesktop,
   ScreencastUnsubscribe
@@ -14,6 +16,10 @@ import {
 import { acknowledgeBrowserScreencastFrame } from '../../../browser/screencast/browser-screencast-frame-credit'
 import { respondToStreamedBrowserPagePrompt } from '../../../../browser/guest-lifecycle/prompts/browser-page-prompts'
 import { answerBrowserFileChooser } from '../../../../browser/guest-lifecycle/prompts/browser-file-chooser-viewers'
+import {
+  readBrowserPrintPdf,
+  releaseBrowserPrintPdf
+} from '../../../../browser/guest-lifecycle/prompts/browser-print-viewers'
 import { ownerOnly } from '../bots-caller-gates'
 
 export const BROWSER_SCREENCAST_METHODS = [
@@ -53,6 +59,19 @@ export const BROWSER_SCREENCAST_METHODS = [
     handler: async (params, { pairedDeviceId }) => ({
       result: await answerBrowserFileChooser(pairedDeviceId, params)
     })
+  }),
+  defineMethod({
+    name: 'browser.readPrintPdf',
+    permission: 'workspace',
+    params: ReadPrintPdf,
+    // Only the device the print was handed to can read it.
+    handler: async (params, { pairedDeviceId }) => readBrowserPrintPdf(pairedDeviceId, params)
+  }),
+  defineMethod({
+    name: 'browser.releasePrintPdf',
+    permission: 'workspace',
+    params: ReleasePrintPdf,
+    handler: async (params, { pairedDeviceId }) => releaseBrowserPrintPdf(pairedDeviceId, params)
   }),
   defineMethod({
     name: 'browser.screencast.reclaimForDesktop',

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
+import { notePageVersion } from '../../transport/connection/mobile-page-client-capabilities'
 import {
   createDownloadProgressFeed,
   downloadFraction,
@@ -147,6 +148,10 @@ export function useMobileWebShellSession(args: {
           }) ?? null
       } else {
         releaseHold()
+      }
+      if (next.kind === 'ready') {
+        // Before the document loads, so the host never sends this page what it can't draw.
+        notePageVersion(hostIdRef.current, next.compat.pageVersion ?? 0)
       }
       if (next.kind === 'fetching') {
         downloadProgress.publish(downloadFraction(next.receivedBytes, next.totalBytes))
