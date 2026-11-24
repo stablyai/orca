@@ -24,9 +24,13 @@ type Scope = {
 }
 type LocateResult = Awaited<ReturnType<StructuredSessionOpenDeps['locate']>>
 type Pending<T> = Scope & { targetKey: string; request: Promise<T> }
+type RevealResult = {
+  target: { worktreeId: string; sessionId: string }
+  outcome: StructuredSessionRevealOutcome
+}
 
 const pendingLocations = new Map<string, Pending<LocateResult>>()
-const pendingReveals = new Map<string, Pending<StructuredSessionRevealOutcome>>()
+const pendingReveals = new Map<string, Pending<RevealResult>>()
 
 export function pairedBotThreadRecovery(
   owner: Owner,
@@ -39,14 +43,12 @@ export function pairedBotThreadRecovery(
   const registration = getRuntimeEnvironmentRegistration(environmentId)
   const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
   let minimumReceivedFrame: number | undefined
-  let confirmedReveal: StructuredSessionOpenTarget | undefined
-  const recordReveal = (result: StructuredSessionRevealOutcome): boolean => {
-    if (typeof result === 'object' && 'sessionId' in result) {
-      confirmedReveal = result
+  let completedReveal: RevealResult | undefined
+  const recordReveal = (result: RevealResult): void => {
+    completedReveal = result
+    if (revealedChat(result.outcome)) {
       minimumReceivedFrame = nextReceivedSessionTabsFrame()
-      return true
     }
-    return false
   }
   const find = <T>(
     pending: Map<string, Pending<T>>,
@@ -104,12 +106,17 @@ export function pairedBotThreadRecovery(
         return true
       }
       const pending = find(pendingReveals)
-      return pending ? recordReveal(await observe(pending)) : false
+      if (!pending) {
+        return false
+      }
+      recordReveal(await observe(pending))
+      return true
     },
     minimumInventoryFrame: (): number | undefined => minimumReceivedFrame,
     locate: async (address: string, messageIds: readonly string[]): Promise<LocateResult> => {
-      if (confirmedReveal) {
-        return { location: { kind: 'chat', ...confirmedReveal } }
+      if (completedReveal) {
+        const chat = revealedChat(completedReveal.outcome) ?? completedReveal.target
+        return { location: { kind: 'chat', ...chat } }
       }
       try {
         return await wait(pendingLocations, JSON.stringify([address, messageIds]), (beforeSend) =>
@@ -121,27 +128,38 @@ export function pairedBotThreadRecovery(
         return structuredSessionOpenFailure(error)
       }
     },
-    reveal: async (target: {
+    reveal: async ({
+      worktreeId,
+      sessionId
+    }: {
       worktreeId: string
       sessionId: string
     }): Promise<StructuredSessionRevealOutcome> => {
-      if (
-        confirmedReveal?.sessionId === target.sessionId &&
-        confirmedReveal.worktreeId === target.worktreeId
-      ) {
-        return confirmedReveal
+      const target = { worktreeId, sessionId }
+      if (completedReveal) {
+        const chat = revealedChat(completedReveal.outcome) ?? completedReveal.target
+        if (chat.sessionId === target.sessionId && chat.worktreeId === target.worktreeId) {
+          return completedReveal.outcome
+        }
       }
       try {
-        const outcome = await wait(
+        const result = await wait(
           pendingReveals,
           `${target.worktreeId}\0${target.sessionId}`,
-          (beforeSend) => revealStructuredSession({ ...target, target: owner, beforeSend })
+          async (beforeSend) => ({
+            target,
+            outcome: await revealStructuredSession({ ...target, target: owner, beforeSend })
+          })
         )
-        recordReveal(outcome)
-        return outcome
+        recordReveal(result)
+        return result.outcome
       } catch (error) {
         return structuredSessionOpenFailure(error)
       }
     }
   }
+}
+
+function revealedChat(outcome: StructuredSessionRevealOutcome): StructuredSessionOpenTarget | null {
+  return typeof outcome === 'object' && 'sessionId' in outcome ? outcome : null
 }

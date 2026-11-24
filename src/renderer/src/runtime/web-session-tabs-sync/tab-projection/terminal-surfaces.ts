@@ -76,7 +76,7 @@ export function buildMirroredAgentTabs(
   options: {
     mayAdopt?: (tab: Tab) => boolean
     mayProject?: (tab: RuntimeMobileSessionAgentTab) => boolean
-    occupiedIds?: Set<string>
+    currentTabsById?: ReadonlyMap<string, Tab>
   } = {}
 ): MirroredAgentTab[] {
   const { mayAdopt = () => true, mayProject } = options
@@ -87,7 +87,7 @@ export function buildMirroredAgentTabs(
         (!mayProject || mayProject(tab)) &&
         !hasStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)
     )
-  const occupiedIds = options.occupiedIds ?? new Set(currentUnifiedTabs.map((tab) => tab.id))
+  const occupiedIds = options.currentTabsById ?? new Set(currentUnifiedTabs.map((tab) => tab.id))
   const assignedIds = new Set<string>()
   const replacementTabs = new Map<string, Tab>()
   const replacementIds = new Set<string>()
@@ -135,11 +135,10 @@ export function buildMirroredAgentTabs(
     let localId = existing?.id ?? baseId
     if (!existing || assignedIds.has(localId)) {
       let suffix = 0
-      while (occupiedIds.has(localId)) {
+      while (occupiedIds.has(localId) || assignedIds.has(localId)) {
         localId = `${baseId}:history-${++suffix}`
       }
     }
-    occupiedIds.add(localId)
     assignedIds.add(localId)
     return {
       hostTabId: tab.id,

@@ -20,22 +20,20 @@ export function prepareAgentTabSnapshot(args: {
 }) {
   const { state, snapshot, environmentId, executionHostId, currentTabs, hostGroupIdByTabId } = args
   const receivedChats = directlyOpenedChatPublications(environmentId, snapshot.worktree)
-  const occupiedIds = receivedChats ? new Set<string>() : undefined
+  const currentTabsById = receivedChats ? new Map<string, Tab>() : undefined
   const currentDirectTabs: Tab[] = []
   const directlyOpenedWithIncomingGroup = new Set<string>()
-  if (receivedChats && occupiedIds) {
-    const directTabIds = new Set<string>()
+  if (receivedChats && currentTabsById) {
+    for (const tab of currentTabs) {
+      currentTabsById.set(tab.id, tab)
+    }
     for (const { tabId, hostTabId } of receivedChats.values()) {
-      directTabIds.add(tabId)
+      const tab = currentTabsById.get(tabId)
+      if (tab) {
+        currentDirectTabs.push(tab)
+      }
       if (hostGroupIdByTabId.has(hostTabId)) {
         directlyOpenedWithIncomingGroup.add(hostTabId)
-      }
-    }
-    for (const tab of currentTabs) {
-      const id = tab.id
-      occupiedIds.add(id)
-      if (directTabIds.has(id)) {
-        currentDirectTabs.push(tab)
       }
     }
   }
@@ -88,6 +86,6 @@ export function prepareAgentTabSnapshot(args: {
     framePublishesDirectChat,
     publishedAgentSessionIds,
     claimedAgentSessionIds,
-    projection: { occupiedIds, mayAdopt, mayProject }
+    projection: { currentTabsById, mayAdopt, mayProject }
   }
 }
