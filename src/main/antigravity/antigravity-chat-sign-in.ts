@@ -30,8 +30,9 @@ type Flow = {
 export type AntigravityChatSignInHost = {
   /** agy and the environment a chat on agy's own home runs it with. */
   agy(signal: AbortSignal): Promise<{ command: string; env: Record<string, string> }>
-  /** agy's login changed: whatever vouched for or ran on the previous one reads it again. */
-  signedIn(): void
+  /** agy's login changed: whatever vouched for or ran on the previous one reads it again, and an
+   *  added account is saved. */
+  signedIn(intent: accountTypes.AntigravityChatSignInIntent): void
 }
 
 let active: Flow | null = null
@@ -97,7 +98,7 @@ async function runFlow(current: Flow, host: AntigravityChatSignInHost): Promise<
     const failure = await logIn(current, host)
     if (failure === null) {
       publish(current, { phase: 'signedIn' }, 'signedIn')
-      host.signedIn()
+      host.signedIn(current.intent)
     } else if (!current.ended.signal.aborted) {
       publish(current, { phase: 'failed', error: failure })
     }

@@ -13,7 +13,7 @@ import {
   useAntigravityChatSignIn,
   useAntigravityChatSignInControls
 } from '@/components/provider-accounts/use-antigravity-chat-sign-in'
-import { AntigravityChatSignInFlowPanel } from '@/components/provider-accounts/AntigravityChatSignInAction'
+import { AntigravityChatSignInFlowPanel } from '@/components/provider-accounts/AntigravityChatSignInFlowPanel'
 import { useNativeChatAntigravityAuth } from '@/components/native-chat/antigravity-auth/native-chat-antigravity-auth'
 import { NativeChatAntigravityAuthChooser } from '@/components/native-chat/antigravity-auth/NativeChatAntigravityAuthChooser'
 import {

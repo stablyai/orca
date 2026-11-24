@@ -23530,8 +23530,6 @@
     },
     "antigravity": {
       "chatSignIn": "Войти",
-      "chatChangeAccount": "Сменить учётную запись",
-      "chatRetry": "Повторить вход",
       "chatCancel": "Отмена",
       "chatCopyLink": "Копировать ссылку входа",
       "chatCopyFailed": "Не удалось скопировать ссылку.",
@@ -23573,7 +23571,6 @@
       "enterpriseOption": "Лицензия вашей организации",
       "apiKeyGet": "Получить API-ключ",
       "location": "Расположение",
-      "enterpriseFieldsShort": "Укажите проект и расположение.",
       "loadFailed": "Не удалось загрузить учётные записи agy",
       "loading": "Загрузка учётных записей…",
       "notSignedIn": "Вход не выполнен",

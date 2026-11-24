@@ -19,9 +19,9 @@ import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'
 import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
-import { AntigravityChatSignInRow } from '../../../provider-accounts/AntigravityChatSignInRow'
+import { AntigravityChatAuthRows } from '../../../provider-accounts/AntigravityChatAuthRows'
 import { antigravityChatSignInBlocked } from '../../../provider-accounts/antigravity-chat-runtime-sign-in-policy'
-import { useAntigravityChatSignIn } from '../../../provider-accounts/use-antigravity-chat-sign-in'
+import { useAntigravityChatSignInControls } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
@@ -29,9 +29,9 @@ import { useOnLaterChange } from './use-on-later-change'
 import { useAntigravityAccountRun } from './use-antigravity-account-run'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 import {
-  AntigravityTerminalAccountRows,
+  AntigravityAgyAccountRows,
   type AntigravityAccountAction
-} from './AntigravityTerminalAccountRows'
+} from './AntigravityAgyAccountRows'
 
 function usageMatchesTarget(provenance: string, target: AntigravityAccountTarget): boolean {
   if (target.runtime === 'host' || target.wslDistro) {
@@ -79,7 +79,13 @@ export function AntigravityAccountsSection({
   const chatRuntime = useManagedRuntimeInstall(owner, 'antigravity', chats)
   // Install and Remove wait for a sign-in, which runs agy.
   const chatSignIn = chats && chatRuntime.kind === 'active'
-  const signIn = useAntigravityChatSignIn(chatSignIn ? owner : null)
+  // Signing agy in runs on this host, never in a WSL distro, and needs agy installed.
+  const signIn = useAntigravityChatSignInControls({
+    owner,
+    label,
+    disabled: chatRuntime.kind !== 'active' || !chats || antigravityChatSignInBlocked(chatRuntime)
+  })
+  const signInControls = chatSignIn ? signIn : undefined
 
   useEffect(() => {
     mounted.current = true
@@ -210,60 +216,29 @@ export function AntigravityAccountsSection({
       ? `${chatRuntime.snapshot.state.program}:${chatRuntime.snapshot.state.source}`
       : null
   useOnLaterChange(installKey, reread)
-  const agyMissing =
-    chatRuntime.kind === 'active' &&
-    chatRuntime.snapshot.kind === 'known' &&
-    chatRuntime.snapshot.state.source === null
-  const chatDescription = agyMissing
-    ? t('accounts.antigravity.chatDescriptionInstallAgyBelow', 'Chats run agy. Install it below.')
-    : state?.chatKeyOnAgy
+  // Signing in or adding an account changes agy's login, which the account rows read again.
+  const signedInFlow = signIn.flow?.phase === 'signedIn' ? signIn.flow.flowId : null
+  useOnLaterChange(signedInFlow, reread)
+  const description = windowsHost
+    ? t(
+        'accounts.antigravity.descriptionWindows',
+        "Chats and agy in the terminal share agy's Google accounts. Switching applies to the host default agy credential. Chats can sign in with a Gemini API key or gcloud instead."
+      )
+    : chats
       ? t(
-          'accounts.antigravity.chatDescriptionKeyOnAgy',
-          'Chats run agy with the sign-in below, kept apart from agy in the terminal.'
+          'accounts.antigravity.description',
+          "Chats and agy in the terminal share agy's Google accounts. Chats can sign in with a Gemini API key or gcloud instead."
         )
       : t(
-          'accounts.antigravity.chatDescriptionGoogle',
-          "Chats run agy and use agy's own Google sign-in, the same one agy uses in the terminal."
+          'accounts.antigravity.terminalDescription',
+          "Uses agy's own saved accounts. Switching applies to new agy sessions."
         )
-  const chatRows =
-    chats && chatRuntime.kind === 'active' ? (
-      <AntigravityChatSignInRow
-        owner={owner}
-        label={label}
-        signInDisabled={antigravityChatSignInBlocked(chatRuntime)}
-        runtime={runtimeRow}
-        onSaved={reread}
-      />
-    ) : null
 
   return (
     <div id={ACCOUNTS_SECTION_IDS.antigravity} className="scroll-mt-6 space-y-6">
-      {chatRows ? (
-        <SettingsGroup
-          title={logoTitle(t('accounts.antigravity.chatTitle', 'Antigravity Chat'))}
-          description={chatDescription}
-        >
-          {chatRows}
-        </SettingsGroup>
-      ) : null}
       <SettingsGroup
-        title={logoTitle(t('accounts.antigravity.terminalTitle', 'agy in the terminal'))}
-        description={
-          windowsHost
-            ? t(
-                'accounts.antigravity.terminalDescriptionWindows',
-                "Uses agy's own saved accounts. Switching applies to the host default agy credential."
-              )
-            : chats
-              ? t(
-                  'accounts.antigravity.terminalDescriptionGoogleChats',
-                  "Uses agy's own saved accounts. Switching applies to new agy sessions and to Antigravity chats on a Google account."
-                )
-              : t(
-                  'accounts.antigravity.terminalDescription',
-                  "Uses agy's own saved accounts. Switching applies to new agy sessions."
-                )
-        }
+        title={logoTitle(t('accounts.antigravity.title', 'Antigravity'))}
+        description={description}
         action={
           <Tooltip>
             <TooltipTrigger asChild>
@@ -287,14 +262,19 @@ export function AntigravityAccountsSection({
           </Tooltip>
         }
       >
-        <AntigravityTerminalAccountRows
+        {chats && chatRuntime.kind === 'active' ? (
+          <AntigravityChatAuthRows owner={owner} onSaved={reread} />
+        ) : null}
+        <AntigravityAgyAccountRows
           state={state}
           usage={usage}
           error={error}
           busy={busy}
           windowsHost={windowsHost}
           run={(action, accountId) => void run(action, accountId)}
+          {...(signInControls ? { signIn: signInControls } : {})}
         />
+        {runtimeRow}
       </SettingsGroup>
       {chats &&
       chatRuntime.kind !== 'active' &&

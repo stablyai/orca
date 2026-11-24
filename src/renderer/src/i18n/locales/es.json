@@ -22325,8 +22325,6 @@
     },
     "antigravity": {
       "chatSignIn": "Iniciar sesión",
-      "chatChangeAccount": "Cambiar de cuenta",
-      "chatRetry": "Reintentar inicio de sesión",
       "chatCancel": "Cancelar",
       "chatCopyLink": "Copiar enlace de inicio de sesión",
       "chatCopyFailed": "No se pudo copiar el enlace.",
@@ -22368,7 +22366,6 @@
       "enterpriseOption": "La licencia de tu organización",
       "apiKeyGet": "Obtener clave API",
       "location": "Ubicación",
-      "enterpriseFieldsShort": "Introduce un proyecto y una ubicación.",
       "loadFailed": "No se pudieron cargar las cuentas de agy",
       "loading": "Cargando cuentas…",
       "notSignedIn": "Sin sesión iniciada",

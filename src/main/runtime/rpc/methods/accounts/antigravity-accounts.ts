@@ -124,8 +124,23 @@ const agySignInHost = (runtime: OrcaRuntimeService): AntigravityChatSignInHost =
     }
     return { command: input.command, env }
   },
-  signedIn: () => forgetAgyLogin(runtime)
+  signedIn: (intent) => {
+    forgetAgyLogin(runtime)
+    if (intent === 'changeAccount') {
+      void saveCurrentAgyLogin()
+    }
+  }
 })
+
+/** Keeps agy's current login among the saved accounts, so adding another can't lose it; a host
+ *  signed out has nothing to save. */
+async function saveCurrentAgyLogin(): Promise<void> {
+  try {
+    await (await getAntigravityAccountService({ runtime: 'host' })).addCurrentAccount()
+  } catch (error) {
+    console.warn("[antigravity] agy's current login wasn't saved:", error)
+  }
+}
 
 /** The caller a sign-in belongs to, as its transport proved it; one it can't name gets none. */
 function signInOwner({ caller }: Pick<RpcContext, 'caller'>): string {
@@ -190,8 +205,14 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     name: 'accounts.antigravityChatSignInStart',
     permission: 'accounts-admin',
     params: AntigravityChatSignInStartParams,
-    handler: async ({ intent }, ctx) =>
-      startAntigravityChatSignIn(agySignInHost(ctx.runtime), signInOwner(ctx), intent)
+    handler: async ({ intent }, ctx) => {
+      const owner = signInOwner(ctx)
+      // Adding an account replaces agy's login, so the one it has is saved first.
+      if (intent === 'changeAccount') {
+        await saveCurrentAgyLogin()
+      }
+      return startAntigravityChatSignIn(agySignInHost(ctx.runtime), owner, intent)
+    }
   }),
   defineStreamingMethod({
     name: 'accounts.antigravityChatSignInSubscribe',

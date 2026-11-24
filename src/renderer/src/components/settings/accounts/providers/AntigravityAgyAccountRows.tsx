@@ -9,6 +9,8 @@ import { formatTimeAgo } from '../../../status-bar/usage/provider-usage-panel'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
+import { AntigravityChatSignInFlowPanel } from '../../../provider-accounts/AntigravityChatSignInFlowPanel'
+import type { AntigravityChatSignInControls } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 
 export type AntigravityAccountAction = 'List' | 'AddCurrent' | 'Select' | 'Remove' | 'Usage'
 
@@ -19,14 +21,16 @@ export function formatUsageReading(usage: ProviderRateLimits, t: Translate = tra
   })
 }
 
-/** The agy terminal card's rows: the current native login, then saved accounts. */
-export function AntigravityTerminalAccountRows({
+/** agy's Google logins, which agy in the terminal and Google-account chats share: the current
+ *  login, then saved accounts. With `signIn`, signing in and adding an account run in Orca. */
+export function AntigravityAgyAccountRows({
   state,
   usage,
   error,
   busy,
   windowsHost,
-  run
+  run,
+  signIn
 }: {
   state: AntigravityAccountState | null
   usage: ProviderRateLimits | null
@@ -34,8 +38,12 @@ export function AntigravityTerminalAccountRows({
   busy: boolean
   windowsHost: boolean
   run: (action: AntigravityAccountAction, accountId?: string) => void
+  /** This host's in-app agy sign-in; absent where Orca can't run it (a WSL distro). */
+  signIn?: AntigravityChatSignInControls
 }): React.JSX.Element {
   const t = useTranslate()
+  const signingIn = signIn?.ownFlow === true
+  const signInAlert = signIn?.alert ? <ActionError message={signIn.alert} /> : null
   const changed = Boolean(
     state?.selectedAccountId && state.activeAccountId !== state.selectedAccountId
   )
@@ -106,28 +114,52 @@ export function AntigravityTerminalAccountRows({
       />
     )
   }
-  if (state && !state.currentAccount) {
+  if (signingIn) {
+    terminalRows.push(
+      <div key="signing-in" data-settings-row="" className="py-3">
+        <AntigravityChatSignInFlowPanel
+          signIn={signIn}
+          alert={null}
+          title={
+            <p className="text-sm font-medium">
+              {t('accounts.antigravity.signInGoogle', 'Sign in with Google')}
+            </p>
+          }
+        />
+      </div>
+    )
+  } else if (state && !state.currentAccount) {
     terminalRows.push(
       <AntigravityAccountRow
         key="signed-out"
         title={t('accounts.antigravity.notSignedIn', 'Not signed in')}
         detail={
           <>
-            <span>
-              {t('accounts.antigravity.runAgy', 'Run agy on this host to sign in')}
-              {' · '}
-              <a
-                className="text-foreground underline underline-offset-2"
-                href="https://antigravity.google/docs/cli/install/"
-                target="_blank"
-                onClick={openAppHttpLinkFromAnchor}
-                rel="noopener noreferrer"
-              >
-                {t('accounts.antigravity.signInHelp', 'Sign-in help')}
-              </a>
-            </span>
+            {signInAlert ??
+              (signIn ? null : (
+                <span>
+                  {t('accounts.antigravity.runAgy', 'Run agy on this host to sign in')}
+                  {' · '}
+                  <a
+                    className="text-foreground underline underline-offset-2"
+                    href="https://antigravity.google/docs/cli/install/"
+                    target="_blank"
+                    onClick={openAppHttpLinkFromAnchor}
+                    rel="noopener noreferrer"
+                  >
+                    {t('accounts.antigravity.signInHelp', 'Sign-in help')}
+                  </a>
+                </span>
+              ))}
             {changed ? <span className="text-status-warning-text">{changedText}</span> : null}
           </>
+        }
+        actions={
+          signIn ? (
+            <Button size="xs" disabled={signIn.signInDisabled} onClick={signIn.start}>
+              {t('accounts.antigravity.signInGoogle', 'Sign in with Google')}
+            </Button>
+          ) : undefined
         }
       />
     )
@@ -200,21 +232,46 @@ export function AntigravityTerminalAccountRows({
       />
     )
   }
-  if (state?.currentAccount) {
+  if (state?.currentAccount && !signingIn) {
     terminalRows.push(
-      <div
-        key="add-account"
-        data-settings-row=""
-        className="flex items-center gap-2 py-3 text-xs text-muted-foreground"
-      >
-        <UserPlus className="size-3.5 shrink-0" />
-        <span>
-          {t(
-            'accounts.antigravity.addAccountHelp',
-            'To add an account, run /logout in agy, sign in again, then Save it here.'
-          )}
-        </span>
-      </div>
+      signIn ? (
+        <AntigravityAccountRow
+          key="add-account"
+          title={null}
+          detail={
+            signInAlert ??
+            t(
+              'accounts.antigravity.addAccountInApp',
+              'Sign in to another Google account. Both stay saved here to switch between.'
+            )
+          }
+          actions={
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={busy || signIn.signInDisabled}
+              onClick={signIn.addAccount}
+            >
+              <UserPlus />
+              {t('accounts.antigravity.addAccount', 'Add account')}
+            </Button>
+          }
+        />
+      ) : (
+        <div
+          key="add-account"
+          data-settings-row=""
+          className="flex items-center gap-2 py-3 text-xs text-muted-foreground"
+        >
+          <UserPlus className="size-3.5 shrink-0" />
+          <span>
+            {t(
+              'accounts.antigravity.addAccountHelp',
+              'To add an account, run /logout in agy, sign in again, then Save it here.'
+            )}
+          </span>
+        </div>
+      )
     )
   }
   return <>{terminalRows}</>

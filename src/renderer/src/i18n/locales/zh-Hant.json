@@ -22431,8 +22431,6 @@
     },
     "antigravity": {
       "chatSignIn": "登入",
-      "chatChangeAccount": "變更帳戶",
-      "chatRetry": "重試登入",
       "chatCancel": "取消",
       "chatCopyLink": "複製登入連結",
       "chatCopyFailed": "無法複製連結。",
@@ -22474,7 +22472,6 @@
       "enterpriseOption": "你所屬組織的授權",
       "apiKeyGet": "取得 API 金鑰",
       "location": "位置",
-      "enterpriseFieldsShort": "請輸入專案和位置。",
       "loadFailed": "無法載入 agy 帳戶",
       "loading": "正在載入帳戶…",
       "notSignedIn": "尚未登入",

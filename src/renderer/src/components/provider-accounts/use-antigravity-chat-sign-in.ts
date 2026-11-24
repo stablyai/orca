@@ -156,6 +156,8 @@ export function useAntigravityChatSignInControls(props: {
     recoveryDisabled: props.disabled || pending || otherClients(flow),
     start: () =>
       act(() => startAntigravityChatSignIn(owner, action === 'retry' ? view.retryIntent : action)),
+    /** Signs agy in to another Google account; the host saves both logins. */
+    addAccount: () => act(() => startAntigravityChatSignIn(owner, 'changeAccount')),
     cancel: () => act(() => cancelAntigravityChatSignIn(owner)),
     send: (pasted: string, refused: (message: string) => void) =>
       act(async () => {
