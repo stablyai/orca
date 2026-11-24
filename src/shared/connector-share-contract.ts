@@ -52,6 +52,21 @@ export const ShareAcceptDelivery = z
   })
   .refine(isOnItsShare)
 
+// The contract's maxHeldMessageChars: one held message keeps under the cloud's 1 MiB request cap.
+const MAX_HELD_MESSAGE_CHARS = 1024 * 1024 - 4 * 1024
+
+// A teammate's message held while the host was away, sealed to the host's hello hostKey. Only the
+// host can open it; the sender it names is checked against the host's own share device rows.
+export const ShareSendDelivery = z
+  .object({
+    ...ShareDeliveryFields,
+    kind: z.literal('share_send'),
+    accountId: Id,
+    clientMessageId: Id,
+    sealed: z.string().min(1).max(MAX_HELD_MESSAGE_CHARS)
+  })
+  .refine(isOnItsShare)
+
 /** PUT `${bots}/<bot id>/shares/<share id>/offer`: the accept's answer, sealed to its sealKey. */
 export type ConnectorShareOfferRequest = { v: 1; devicePublicKey: string; sealedOffer: string }
 

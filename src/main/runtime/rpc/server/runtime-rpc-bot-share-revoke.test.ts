@@ -163,6 +163,8 @@ describe('revoking a teammate’s share devices', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const devices = {
       mintBotShareOffer: vi.fn(),
+      getE2EEPublicKey: vi.fn(),
+      deliverBotShareHeldMessage: vi.fn(),
       revokeBotShareDevices: vi.fn(async () => {
         throw new Error('disk full')
       })

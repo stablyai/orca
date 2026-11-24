@@ -90,7 +90,13 @@ export async function recordedDeliveryResult(
 
 export type DispatchMachine = Pick<
   ConnectorMachine,
-  'runTrigger' | 'webhookNotice' | 'turnAutomations' | 'prEvent' | 'shareResolved' | 'shareAccept'
+  | 'runTrigger'
+  | 'webhookNotice'
+  | 'turnAutomations'
+  | 'prEvent'
+  | 'shareResolved'
+  | 'shareAccept'
+  | 'shareSend'
 >
 export type RequestDelivery = Extract<ConnectorDelivery, { kind: 'start' | 'send' }>
 export type SendDelivery = Extract<ConnectorDelivery, { kind: 'send' }>
@@ -99,7 +105,8 @@ const THREADLESS_KINDS = [
   'webhook_notice',
   'pr_event',
   'share_resolved',
-  'share_accept'
+  'share_accept',
+  'share_send'
 ] as const
 const THREADLESS: ReadonlySet<string> = new Set(THREADLESS_KINDS)
 export type ThreadDelivery = Exclude<ConnectorDelivery, { kind: (typeof THREADLESS_KINDS)[number] }>
@@ -183,6 +190,13 @@ export function dispatchDelivery(
   }
   if (delivery.kind === 'share_accept') {
     return doneOnly(deliveryId, machine.shareAccept, delivery, UNKNOWN_SHARE_REFUSAL)
+  }
+  if (delivery.kind === 'share_send') {
+    const take = machine.shareSend
+    // Done once the message is in the chat's journal, or refused with why.
+    return take
+      ? { deliveryId, received: false, done: settle(() => take.deliver(delivery)) }
+      : refuse(deliveryId, { outcome: 'unsupported' })
   }
   if (delivery.kind === 'pr_event') {
     const hold = machine.prEvent

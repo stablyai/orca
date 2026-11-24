@@ -128,6 +128,13 @@ function ownerName(machine: ConnectorMachine): { ownerName?: string } {
   return name ? { ownerName: name } : {}
 }
 
+// The key teammates seal held messages to, only from a machine that takes share_send: without it,
+// the cloud holds nothing for this machine.
+function hostKey(machine: ConnectorMachine): { hostKey?: string } {
+  const key = machine.shareSend?.hostKey()
+  return key ? { hostKey: key } : {}
+}
+
 /**
  * The hello body. Inline bots always fit: each is cut to its share of the request cap
  * (connector-places.ts), which leaves room for triggers up to their cap.
@@ -146,6 +153,7 @@ export function connectorHello(
     runtime: machine.runtime,
     hostName: machine.hostName(),
     ...ownerName(machine),
+    ...hostKey(machine),
     // Older clouds require both lists; they stay empty now that only bots start conversations.
     // TODO: drop both once every connector cloud ships the contract without them.
     agents: [],

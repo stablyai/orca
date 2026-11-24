@@ -2,6 +2,7 @@ import type { ConnectorTurnEvents } from './connector-turn-events'
 import type {
   ConnectorBot,
   ConnectorDelivery,
+  ConnectorDeliveryResult,
   ConnectorTrigger
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorTurnAutomation } from '../../shared/connector-trigger-event-contract'
@@ -44,6 +45,14 @@ export type ConnectorMachine = {
   ) => Promise<boolean>
   /** A teammate's device asked to reach a bot shared with them; false once the share isn't theirs. */
   shareAccept?: (delivery: Extract<ConnectorDelivery, { kind: 'share_accept' }>) => Promise<boolean>
+  /** Teammates' messages held while this machine was away. `hostKey`, read per hello, is the key they
+   *  are sealed to; null (no pairing identity) holds nothing. `deliver` settles once it is written. */
+  shareSend?: {
+    hostKey: () => string | null
+    deliver: (
+      delivery: Extract<ConnectorDelivery, { kind: 'share_send' }>
+    ) => Promise<ConnectorDeliveryResult>
+  }
   /** The cloud took a hello: what it takes now, and the hooks deleted while this machine was away. */
   helloAnswered?: (answer: { webhookTombstones?: string[] }) => void
   /** Signed out or switched account: drop what the linked conversations' cloud was last shown. */

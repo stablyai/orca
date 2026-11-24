@@ -21,6 +21,7 @@ import type { JournalConnectorReplyOutcome } from '../agent-session/journal/jour
 import {
   ShareAcceptDelivery,
   ShareResolvedDelivery,
+  ShareSendDelivery,
   type ConnectorBotShare
 } from '../connector-share-contract'
 
@@ -231,7 +232,8 @@ export const ConnectorDelivery = z.discriminatedUnion('kind', [
   }),
   // A shared bot's people (connector-share-contract.ts), on the share's own conversation.
   ShareResolvedDelivery,
-  ShareAcceptDelivery
+  ShareAcceptDelivery,
+  ShareSendDelivery
 ])
 export type ConnectorDelivery = z.infer<typeof ConnectorDelivery>
 

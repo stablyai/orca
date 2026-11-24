@@ -172,6 +172,13 @@ export function createConnectorCloud({
           },
           delivery
         ),
+      shareSend: {
+        hostKey: () => runtime.botShareDevices?.getE2EEPublicKey() ?? null,
+        deliver: async (delivery) =>
+          runtime.botShareDevices
+            ? await runtime.botShareDevices.deliverBotShareHeldMessage(delivery)
+            : { outcome: 'refused', reason: 'unknown_device' }
+      },
       helloAnswered: (answer) => {
         webhooks.helloAnswered(answer)
         migratePlaces()
