@@ -178,6 +178,16 @@ export async function crossSiteFrameTargets(
       }
     }
   }
+  if (Array.isArray(infos)) {
+    // Detach events only reach a proxy client, so drop sessions of frames that are gone here.
+    for (const [targetId, sessionId] of sessions.sessionIdByTargetId) {
+      if (!ids.has(targetId)) {
+        sessions.sessionIdByTargetId.delete(targetId)
+        sessions.ownedSessionIds.delete(sessionId)
+        sessions.emulatedSessionIds.delete(sessionId)
+      }
+    }
+  }
   sessions.crossSiteTargets = { ids, at: Date.now() }
   return ids
 }
