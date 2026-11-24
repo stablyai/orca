@@ -111,7 +111,8 @@ export async function startWorker(
       task: existingTask,
       taskDeps,
       orchestrationMutation,
-      callerSession: orchestrationCaller
+      callerSession: orchestrationCaller,
+      chatLineage
     })
     await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
     const placed = receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt
@@ -255,11 +256,7 @@ export async function prepareWorkerStart(
     )
   }
   if (helperCreator && !followUp) {
-    assertHelperStartScope(db, helperCreator, {
-      task: existingTask,
-      params,
-      ...(followUp ? { followUp } : {})
-    })
+    assertHelperStartScope(db, helperCreator, { task: existingTask, params })
   }
   if (existingTask) {
     await assertWorkerStartTaskSpecWithinPromptBudget(existingTask.spec)

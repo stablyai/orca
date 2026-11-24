@@ -129,6 +129,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
   const started = db.createStartingWorkerDispatch({
     creator: resolveDispatchCreator(runtime, params.from, args.callerSession),
     maxDepth: runtime.getNestedWorkerMaxDepth(),
+    chatLineage: args.chatLineage,
     taskId: task?.id,
     taskSpec: params.spec,
     taskTitle: params.taskTitle,

@@ -11,6 +11,8 @@ import { taskNotFoundError } from '../../coordinator/dispatch/task-dispatch-refu
 import { claimTaskForStart } from '../tasks/task-start-claim'
 import { getFollowUpDispatch, takeFollowUpMail } from '../dispatch-context/worker-follow-up-lineage'
 
+const BOT_RUN_ACTIVE_WORKER_LIMIT = 8
+
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
   params: {
@@ -131,6 +133,14 @@ export function createStartingWorkerDispatch(
         { effectsApplied: false }
       )
     }
+    const chatLineage =
+      params.chatLineage === true ||
+      [params.retryOf, params.followUpOf].some(
+        (earlier) => earlier && this.getDispatchContextById(earlier)?.chat_lineage === 1
+      )
+    if (chatLineage) {
+      assertBotRunWorkerCapacity(this, task.run_id)
+    }
     const { priorFailures } = claimTaskForStart(this, task, { retryOf: params.retryOf })
 
     const id = generateId('ctx')
@@ -189,11 +199,7 @@ export function createStartingWorkerDispatch(
           .map((earlier) => (earlier ? this.getDispatchContextById(earlier)?.for_message_id : null))
           .find((ref) => ref) ??
         null,
-      chatLineage:
-        params.chatLineage === true ||
-        [params.retryOf, params.followUpOf].some(
-          (earlier) => earlier && this.getDispatchContextById(earlier)?.chat_lineage === 1
-        ),
+      chatLineage,
       ...recordedCreatorIdentity(params.creator)
     })
     if (params.takesMailOf) {
@@ -240,6 +246,26 @@ export function createStartingWorkerDispatch(
   } catch (error) {
     this.db.exec('ROLLBACK')
     throw error
+  }
+}
+
+// The write lock covers both the capacity check and the new starting row.
+function assertBotRunWorkerCapacity(db: OrchestrationDb, runId: string): void {
+  const full = db.db
+    .prepare(
+      `SELECT 1 FROM dispatch_contexts dc
+       JOIN worker_dispatches wd ON wd.dispatch_id = dc.id
+       WHERE dc.run_id = ?
+         AND wd.state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
+       LIMIT 1 OFFSET ?`
+    )
+    .get(runId, BOT_RUN_ACTIVE_WORKER_LIMIT - 1)
+  if (full) {
+    throw new OrchestrationError(
+      'bot_run_worker_limit',
+      `This Run already has ${BOT_RUN_ACTIVE_WORKER_LIMIT} active workers. Continue with an existing worker or wait for one to settle before starting another.`,
+      { effectsApplied: false }
+    )
   }
 }
 

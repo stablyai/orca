@@ -5,6 +5,13 @@ import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catal
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
 import { createStructuredWorkerSession } from '../../../structured-workers/orchestration-structured-worker-session'
+import type { OrchestrationSessionCaller } from '../../../../../../orchestration/addressing/orchestration-caller-identity'
+import { readAgentSessionRecordStore } from '../../../../../../orchestration/addressing/session-lineage/structured-session-lineage'
+import { botOfHome } from '../../../../../../../bots/bot-home-membership'
+import {
+  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
+  newChatPermissionMode
+} from '../../../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { dispatchReportMailbox } from '../../../../../../orchestration/workers/reports/dispatch-report-mailbox'
 
 export type WorkerEffect = {
@@ -94,11 +101,28 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   worktreeId: string
   agent: TuiAgent
   dispatchId: string
+  caller?: OrchestrationSessionCaller
   /** `--model`/`--effort`, laid over the saved selection; a leveled Antigravity `--model` replaces it. */
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
-  const options = narrowStructuredLaunchSeedOptions(args.launchPreferences)
+  const caller =
+    args.caller?.workspaceId === args.worktreeId
+      ? readAgentSessionRecordStore()?.getRecord(args.caller.sessionId)
+      : undefined
+  const bot =
+    caller?.location.workspaceId === args.worktreeId
+      ? botOfHome(args.runtime.bots, caller.location)
+      : undefined
+  const savedMode = caller?.permissionMode ?? bot?.permissionMode
+  const permissionMode =
+    savedMode && caller?.provider === args.agent && bot?.agent === args.agent
+      ? newChatPermissionMode(args.agent, savedMode)
+      : null
+  const launchOptions = narrowStructuredLaunchSeedOptions(args.launchPreferences)
+  const options = permissionMode
+    ? { ...launchOptions, [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode }
+    : launchOptions
   const created = await createStructuredWorkerSession({
     runtime: args.runtime,
     worktreeId: args.worktreeId,

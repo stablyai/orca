@@ -204,6 +204,7 @@ export async function startLocalWorker(args: {
       orchestrationRunId: run.id,
       resolvedWorktree,
       mode,
+      callerSession,
       agent,
       launch,
       effects,

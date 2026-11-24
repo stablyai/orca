@@ -8,6 +8,10 @@ import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catal
 import { executeAgentLaunch } from '../../../../../../../agent-launch/agent-launch-executor'
 import type { AgentLaunchSurfaceFactory } from '../../../../../../../agent-launch/agent-launch-surface-factories'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
+import {
+  sessionCallerOf,
+  type OrchestrationEntryCaller
+} from '../../../../../../orchestration/addressing/orchestration-caller-identity'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
 import { WORKER_START_VOCABULARY } from '../../../structured-workers/orchestration-worker-start-mode'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
@@ -62,6 +66,7 @@ type WorkerAgentPlacementArgs = {
   resolvedWorktree: PlacedWorktree | undefined
   /** Decided before the dispatch record; for an existing worktree, already settled on its host. */
   mode: WorkerStartModeReceipt
+  callerSession?: OrchestrationEntryCaller
   agent: TuiAgent | undefined
   launch: {
     preferences: AgentLaunchPreferences | undefined
@@ -262,6 +267,7 @@ function workerSurfaceFactory(
         worktreeId,
         agent,
         dispatchId: args.dispatchId,
+        caller: sessionCallerOf(args.callerSession),
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
         effects: args.effects
       })

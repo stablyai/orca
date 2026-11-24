@@ -185,7 +185,7 @@ export function botRequestView(
   const reply = (body: string) => `orca orchestration reply --id ${messageId} --body "${body}"`
   const kind =
     record.purpose === 'handoff'
-      ? 'handoff: the job is yours now'
+      ? 'handoff: own the job through completion. If a worker is needed, pass along the outcome, user constraints, approval requirements, skill references and verification in its task spec.'
       : 'question: answer it; the job stays theirs'
   const ref = botRequestAnswerRef(record)
   if (ref) {
