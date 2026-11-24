@@ -33,6 +33,7 @@ import type { PRAutoRefreshSettings } from '../source-control/hosted-review/revi
 import type { ManagedAccountNameSettings } from '../agent-accounts/managed-account-display-names'
 import type { NewTabMenuSettings } from '../new-tab-menu/new-tab-menu-layout'
 import type { UiLanguageSettings } from '../i18n/ui-language-settings'
+import type { NewWorkspaceDialogSettings } from '../new-workspace/new-workspace-dialog-settings'
 import type { ChatDeleteSettings } from '../agent-session/chat-deletion/orca-chat-delete'
 
 type DesktopWindowSettings = {
@@ -81,4 +82,5 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   ManagedAccountNameSettings &
   NewTabMenuSettings &
   UiLanguageSettings &
-  ChatDeleteSettings
+  ChatDeleteSettings &
+  NewWorkspaceDialogSettings

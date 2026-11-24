@@ -1393,7 +1393,9 @@
         "automation": "Deleting an automation",
         "title": "Confirmations",
         "running": "Closing a running chat or terminal",
-        "chat": "Deleting a chat"
+        "chat": "Deleting a chat",
+        "newWorkspace": "Creating a workspace",
+        "newWorkspaceHelp": "Ask for project, name and agent. Off creates one with the defaults."
       },
       "pages": {
         "folder": "Workspace folder",
@@ -1433,7 +1435,9 @@
           "custom": "custom",
           "indentation": "indentation",
           "long_lines": "long lines",
-          "about": "about"
+          "about": "about",
+          "create": "create",
+          "new": "new"
         }
       },
       "cli": {

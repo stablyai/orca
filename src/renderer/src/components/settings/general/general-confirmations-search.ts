@@ -67,6 +67,23 @@ export const getGeneralConfirmationSearchEntries = createLocalizedCatalog(() => 
       )
     ]
   },
+  newWorkspace: {
+    id: 'general-skip-new-workspace-dialog',
+    title: translate('settings.general.confirmations.newWorkspace', 'Creating a workspace'),
+    description: translate(
+      'settings.general.confirmations.newWorkspaceHelp',
+      'Ask for project, name and agent. Off creates one with the defaults.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.general.search.keywords.confirmations', 'confirmations'),
+      ...translateSearchKeyword('auto.components.settings.general.search.df10666259', 'worktree'),
+      ...translateSearchKeyword('auto.components.settings.general.search.7baf524b04', 'workspace'),
+      ...translateSearchKeyword('auto.components.settings.general.search.ca86dd6e27', 'dialog'),
+      ...translateSearchKeyword('auto.components.settings.general.search.7e9b556873', 'skip'),
+      ...translateSearchKeyword('settings.general.search.keywords.create', 'create'),
+      ...translateSearchKeyword('settings.general.search.keywords.new', 'new')
+    ]
+  },
   automation: {
     id: 'general-skip-delete-automation-confirm',
     title: translate('settings.general.confirmations.automation', 'Deleting an automation'),

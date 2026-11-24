@@ -36,6 +36,8 @@ export type ComposerModalData = {
   enableIssueAutomation?: boolean
   /** Creation-surface telemetry; each opener supplies it, otherwise use unknown. */
   telemetrySource?: WorkspaceCreateTelemetrySource
+  /** Create with the composer's defaults, showing the dialog only if it needs a choice. */
+  autoCreate?: boolean
   contextualTourSource?: string
   setupGuideTourRequestId?: string
 }

@@ -7,15 +7,18 @@ type NewWorkspaceShortcutModalData = {
   telemetrySource: 'shortcut'
   prefilledName?: string
   linkedWorkItem?: LinkedWorkItemSummary
+  autoCreate?: boolean
 }
 
 export function buildNewWorkspaceShortcutModalData(
-  state: Pick<AppState, 'activeView' | 'taskPageData'>
+  state: Pick<AppState, 'activeView' | 'taskPageData' | 'settings'>
 ): NewWorkspaceShortcutModalData {
   const linearIssue =
     state.activeView === 'tasks' ? (state.taskPageData.openLinearIssue ?? null) : null
   if (!linearIssue) {
-    return { telemetrySource: 'shortcut' }
+    return state.settings?.skipNewWorkspaceDialog
+      ? { telemetrySource: 'shortcut', autoCreate: true }
+      : { telemetrySource: 'shortcut' }
   }
 
   return {
@@ -27,7 +30,7 @@ export function buildNewWorkspaceShortcutModalData(
 }
 
 export function openNewWorkspaceFromShortcut(
-  state: Pick<AppState, 'activeModal' | 'activeView' | 'taskPageData' | 'openModal'>
+  state: Pick<AppState, 'activeModal' | 'activeView' | 'taskPageData' | 'settings' | 'openModal'>
 ): void {
   if (state.activeModal === 'new-workspace-composer') {
     return
