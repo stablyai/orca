@@ -88,6 +88,8 @@ export function useMobileNativeChatTailFollow(args: {
   const [following, setFollowingFlag] = useState(true)
   const [atTail, setAtTailFlag] = useState(true)
   const [showPreviousPrompt, setShowPreviousPrompt] = useState(false)
+  // A ↑ landing shows ↓ even near the tail, until following resumes or the reader scrolls.
+  const [steppedUp, setSteppedUp] = useState(false)
   // Event handlers read intent at event time, before a re-render lands.
   const followingRef = useRef(true)
   const atTailRef = useRef(true)
@@ -99,6 +101,9 @@ export function useMobileNativeChatTailFollow(args: {
 
   // Single writer, so the event-time ref and the render flag cannot disagree.
   const setFollowing = useCallback((next: boolean) => {
+    if (next) {
+      setSteppedUp(false)
+    }
     if (followingRef.current === next) {
       return
     }
@@ -170,6 +175,7 @@ export function useMobileNativeChatTailFollow(args: {
     (fromEnd: number, byReader: boolean) => {
       setAtTail(fromEnd <= AT_TAIL_SLOP)
       if (byReader) {
+        setSteppedUp(false)
         setFollowing(fromEnd <= 1)
       }
     },
@@ -209,6 +215,7 @@ export function useMobileNativeChatTailFollow(args: {
   const jumpToPreviousPrompt = useCallback(() => {
     listRef.current?.jumpToPreviousPrompt?.(() => {
       releaseFollow()
+      setSteppedUp(true)
       triggerSelection()
     })
   }, [releaseFollow])
@@ -216,6 +223,7 @@ export function useMobileNativeChatTailFollow(args: {
   const beginUserScroll = useCallback(() => {
     clearUserScrollSettle()
     userScrollActiveRef.current = true
+    setSteppedUp(false)
     setFollowing(false)
   }, [clearUserScrollSettle, setFollowing])
 
@@ -286,6 +294,7 @@ export function useMobileNativeChatTailFollow(args: {
     }
     scopeKeyRef.current = scopeKey
     viewport.reset()
+    setSteppedUp(false)
     const restored = restoredScopeRef.current === scopeKey
     restoredScopeRef.current = null
     // Rows still loading keep the chat's saved place, for the list to put back once they draw.
@@ -305,7 +314,7 @@ export function useMobileNativeChatTailFollow(args: {
       onPlaceRestored,
       onPreviousPromptAvailable
     },
-    showJumpToTail: !following && !atTail,
+    showJumpToTail: !following && (!atTail || steppedUp),
     showPreviousPrompt,
     pinToTail,
     pinToTailAfterContentResize,
