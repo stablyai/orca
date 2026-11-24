@@ -107,7 +107,8 @@ export function BotCollapsedPreview({
     })
   )
   const [openCardKey, setOpenCardKey] = useState<string | null>(null)
-  const [focusedKey, setFocusedKey] = useState<string | null>(null)
+  const [focusedFace, setFocusedFace] = useState<{ key: string; keyboard: boolean } | null>(null)
+  const focusedKey = focusedFace?.key ?? null
   const { ordered, indexByKey, attentionCount } = useMemo(() => {
     const ordered = rankBotsForPreview(facts).map((fact) => ({
       fact,
@@ -170,7 +171,7 @@ export function BotCollapsedPreview({
     setOpenCardKey(null)
   }
   if (focusedKey !== null && !indexByKey.has(focusedKey)) {
-    setFocusedKey(null)
+    setFocusedFace(null)
   }
   const openChat = (bot: Bot): void => {
     setOpenCardKey(null)
@@ -248,12 +249,13 @@ export function BotCollapsedPreview({
                       )}
                       style={{ left: botPreviewFaceStart(index) }}
                       onFocus={(event) => {
-                        setFocusedKey(key)
-                        if (event.currentTarget.matches(':focus-visible')) {
+                        const keyboard = event.currentTarget.matches(':focus-visible')
+                        setFocusedFace({ key, keyboard })
+                        if (keyboard) {
                           revealAvatar(index)
                         }
                       }}
-                      onBlur={() => setFocusedKey(null)}
+                      onBlur={() => setFocusedFace(null)}
                       onClick={() => openChat(fact.bot)}
                     >
                       <BotAvatar bot={fact.bot} className="size-5 rounded-full text-2xs" />
@@ -274,6 +276,7 @@ export function BotCollapsedPreview({
                     >
                       <CollapsedBotHoverDetails
                         fact={fact}
+                        showHostOnFocus={focusedFace?.key === key && focusedFace.keyboard}
                         onOpenHome={() => openHomePanel(fact.bot)}
                       />
                     </HoverCardContent>
@@ -295,7 +298,22 @@ export function BotCollapsedPreview({
   )
 }
 
-function CollapsedBotHoverDetails({ fact, onOpenHome }: { fact: Facts; onOpenHome: () => void }) {
+function CollapsedBotHoverDetails({
+  fact,
+  showHostOnFocus,
+  onOpenHome
+}: {
+  fact: Facts
+  showHostOnFocus: boolean
+  onOpenHome: () => void
+}) {
   const details = useBotRowDetails(fact.bot, fact.home)
-  return <BotHoverDetails bot={fact.bot} details={details} onOpenHome={onOpenHome} />
+  return (
+    <BotHoverDetails
+      bot={fact.bot}
+      details={details}
+      showHostOnFocus={showHostOnFocus}
+      onOpenHome={onOpenHome}
+    />
+  )
 }

@@ -23868,7 +23868,6 @@
     "row": {
       "runsOn": "在 {{host}} 上執行",
       "disconnected": "已中斷連線",
-      "hostDisconnected": "{{host}} 已中斷連線",
       "idle": "閒置",
       "paused": "已暫停",
       "reading": "正在閱讀你的訊息",

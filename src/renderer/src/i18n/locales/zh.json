@@ -27648,7 +27648,6 @@
       "waitingFor": "正在等待 {{label}}",
       "waitingForUntil": "正在等待 {{label}} · 直到 {{time}}",
       "waitingCount": "正在等待 {{count}} 个事件",
-      "hostDisconnected": "{{host}} 已断开连接",
       "disconnected": "已断开连接",
       "runsOn": "在 {{host}} 上运行",
       "deleteTitle": "要删除 {{name}} 吗？",

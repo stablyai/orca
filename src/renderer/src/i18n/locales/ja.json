@@ -25518,7 +25518,6 @@
     "row": {
       "runsOn": "{{host}} で実行中",
       "disconnected": "切断済み",
-      "hostDisconnected": "{{host}} は切断されています",
       "idle": "アイドル",
       "paused": "一時停止中",
       "reading": "メッセージを読んでいます",
