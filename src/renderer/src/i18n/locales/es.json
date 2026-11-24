@@ -1007,6 +1007,9 @@
       },
       "pluginInstallLink": {
         "invalid": "Ese enlace de plugin no es válido."
+      },
+      "newFile": {
+        "failed": "No se pudo crear el archivo."
       }
     },
     "lib": {
@@ -3954,7 +3957,8 @@
             "1a8af49530": "CMD Prompt",
             "2148f65e04": "PowerShell",
             "7a9b4af2af": "Desplazar pestañas a la izquierda",
-            "232e075b07": "Desplazar pestañas a la derecha"
+            "232e075b07": "Desplazar pestañas a la derecha",
+            "newFile": "Nuevo archivo..."
           },
           "TabBarCreateEntry": {
             "d62d63b807": "Crear archivo",
@@ -16343,7 +16347,8 @@
           "folderEmpty": "La ruta de la carpeta no puede estar vacía",
           "folderOutsideWorkspace": "La carpeta debe estar dentro del espacio de trabajo actual",
           "nameTaken": "Ya existe un archivo con ese nombre",
-          "saveFailed": "No se pudo guardar el archivo"
+          "saveFailed": "No se pudo guardar el archivo",
+          "invalidName": "Escriba un nombre de archivo"
         },
         "export": {
           "active": {
@@ -16714,6 +16719,12 @@
           "tooLarge": "{{value0}} es demasiado grande para abrirse en {{value1}} ({{value2}}; el límite es {{value3}}).",
           "unsupported": "{{value0}} no puede leer este archivo desde donde está almacenado. Actualiza el servidor de Orca que lo aloja o cambia a Código fuente.",
           "readFailed": "No se pudo leer {{value0}} para {{value1}}. {{value2}}"
+        },
+        "NewFileDialog": {
+          "failed": "No se pudo crear el archivo.",
+          "title": "Nuevo archivo",
+          "description": "Escriba el nombre del archivo con su extensión y elija una carpeta.",
+          "create": "Crear"
         }
       },
       "diff": {
@@ -23755,7 +23766,8 @@
       "1524825c2c": "Alternar tablero de espacios de trabajo",
       "d286d1ab85": "Borrar título del panel",
       "botItemPrevious": "Elemento anterior",
-      "botItemNext": "Elemento siguiente"
+      "botItemNext": "Elemento siguiente",
+      "tabNewFile": "Nueva pestaña de archivo"
     },
     "group": {
       "global": "Global",

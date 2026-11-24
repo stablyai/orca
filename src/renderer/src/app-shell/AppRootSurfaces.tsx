@@ -10,6 +10,7 @@ import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/R
 import NewWorkspaceComposerModal from '../components/new-workspace/composer/NewWorkspaceComposerModal'
 import { CrashReportDialog } from '../components/crash-report/CrashReportDialog'
 import { MarkdownTemplatePicker } from '../components/editor/markdown/documents/MarkdownTemplatePicker'
+import { NewFileDialog } from '../components/editor/panel/untitled-rename/NewFileDialog'
 import RecentTabSwitcher from '../components/tab-bar/recent-switcher/RecentTabSwitcher'
 import { SkillFreshnessUpdateDialog } from '../components/skills/freshness/SkillFreshnessUpdateDialog'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
@@ -139,7 +140,6 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
   const hasSshCredentialRequest = useAppStore((s) => s.sshCredentialQueue.length > 0)
 
   const shouldMountSetupGuideTelemetryObserver = persistedUIReady
-  const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
   const shouldMountDictationController = voiceEnabled || dictationState !== 'idle'
   const renderPetOverlay = shouldRenderPetOverlay({ persistedUIReady, petEnabled, petVisible })
 
@@ -297,7 +297,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
       <MacosUpdateRequirementHost />
       <AppNotificationCards
         activeView={activeView}
-        shouldMountUpdateCard={shouldMountUpdateCard}
+        shouldMountUpdateCard={shouldMountUpdateCardForStatus(updateStatus)}
         chatUiHereCornerCardOpen={onboardingGate.chatUiHereCornerCardOpen}
         onChatUiHereCornerCardClose={() => onboardingGate.setChatUiHereCornerCardOpen(false)}
       />
@@ -341,6 +341,9 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
       ) : null}
       <ModalBoundary boundaryId="modal.markdown-template-picker" resetKey={activeModal}>
         <MarkdownTemplatePicker />
+      </ModalBoundary>
+      <ModalBoundary boundaryId="modal.new-file" resetKey={activeModal}>
+        <NewFileDialog />
       </ModalBoundary>
       <RecoverableRenderErrorBoundary
         boundaryId="modal.crash-report"

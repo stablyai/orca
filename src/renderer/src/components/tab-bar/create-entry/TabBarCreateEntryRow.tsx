@@ -2,6 +2,7 @@ import { tabAgentLaunchOptionDisabled } from './tab-agent-launch-options'
 import { terminalPendingLabel } from '../../agent/launch-menu/new-tab-agent-menu-model'
 import React, { useEffect, useRef, useState } from 'react'
 import {
+  FileCode,
   FilePlus,
   FileText,
   GitCompare,
@@ -284,6 +285,8 @@ function getActionPresentation(
         <Globe className="size-3.5 shrink-0" aria-hidden="true" />
       ) : option.option.kind === 'new-markdown' ? (
         <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />
+      ) : option.option.kind === 'new-file' ? (
+        <FileCode className="size-3.5 shrink-0" aria-hidden="true" />
       ) : option.option.kind === 'new-plugin-file' ? (
         <PluginContributionIcon
           url={option.option.pluginNewFile?.iconUrl}

@@ -1285,6 +1285,9 @@
       },
       "pluginInstallLink": {
         "invalid": "Ce lien de plugin n’est pas valide."
+      },
+      "newFile": {
+        "failed": "Impossible de créer le fichier."
       }
     },
     "lib": {
@@ -4247,7 +4250,8 @@
             "1a8af49530": "Invite CMD",
             "2148f65e04": "PowerShell",
             "7a9b4af2af": "Faire défiler les onglets vers la gauche",
-            "232e075b07": "Faire défiler les onglets vers la droite"
+            "232e075b07": "Faire défiler les onglets vers la droite",
+            "newFile": "Nouveau fichier..."
           },
           "TabBarCreateEntry": {
             "d62d63b807": "Créer un fichier",
@@ -16622,7 +16626,8 @@
           "folderEmpty": "Le chemin du dossier ne peut pas être vide",
           "folderOutsideWorkspace": "Le dossier doit se trouver dans l'espace de travail actuel",
           "nameTaken": "Un fichier portant ce nom existe déjà",
-          "saveFailed": "Impossible d'enregistrer le fichier"
+          "saveFailed": "Impossible d'enregistrer le fichier",
+          "invalidName": "Saisissez un nom de fichier"
         },
         "export": {
           "active": {
@@ -17007,6 +17012,12 @@
           "tooLarge": "{{value0}} est trop volumineux pour s’ouvrir dans {{value1}} ({{value2}} ; la limite est de {{value3}}).",
           "unsupported": "{{value0}} ne peut pas lire ce fichier depuis son emplacement. Mettez à jour le serveur Orca qui l’héberge ou passez à Source.",
           "readFailed": "Impossible de lire {{value0}} pour {{value1}}. {{value2}}"
+        },
+        "NewFileDialog": {
+          "failed": "Impossible de créer le fichier.",
+          "title": "Nouveau fichier",
+          "description": "Saisissez un nom de fichier avec son extension et choisissez un dossier.",
+          "create": "Créer"
         }
       },
       "diff": {
@@ -23776,7 +23787,8 @@
       "1524825c2c": "Afficher/masquer le tableau des espaces de travail",
       "d286d1ab85": "Effacer le titre du volet",
       "botItemPrevious": "Élément précédent",
-      "botItemNext": "Élément suivant"
+      "botItemNext": "Élément suivant",
+      "tabNewFile": "Nouvel onglet de fichier"
     },
     "group": {
       "global": "Global",

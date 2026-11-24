@@ -1652,6 +1652,9 @@
       },
       "pluginInstallLink": {
         "invalid": "Bu eklenti bağlantısı geçerli değil."
+      },
+      "newFile": {
+        "failed": "Dosya oluşturulamadı."
       }
     },
     "lib": {
@@ -4576,7 +4579,8 @@
             "1a8af49530": "CMD Prompt",
             "2148f65e04": "PowerShell",
             "7a9b4af2af": "Sekmeleri sola kaydır",
-            "232e075b07": "Sekmeleri sağa kaydır"
+            "232e075b07": "Sekmeleri sağa kaydır",
+            "newFile": "Yeni Dosya..."
           },
           "TabBarCreateEntry": {
             "d62d63b807": "Dosya oluştur",
@@ -16801,7 +16805,8 @@
           "folderEmpty": "Klasör yolu boş olamaz",
           "folderOutsideWorkspace": "Klasör mevcut çalışma alanının içinde olmalı",
           "nameTaken": "Bu adda bir dosya zaten var",
-          "saveFailed": "Dosya kaydedilemedi"
+          "saveFailed": "Dosya kaydedilemedi",
+          "invalidName": "Bir dosya adı girin"
         },
         "export": {
           "active": {
@@ -17179,6 +17184,12 @@
           "tooLarge": "{{value0}}, {{value1}} içinde açılamayacak kadar büyük ({{value2}}; sınır {{value3}}).",
           "unsupported": "{{value0}} bu dosyayı depolandığı yerden okuyamıyor. Dosyayı barındıran Orca sunucusunu güncelleyin veya Kaynak’a geçin.",
           "readFailed": "{{value0}}, {{value1}} için okunamadı. {{value2}}"
+        },
+        "NewFileDialog": {
+          "failed": "Dosya oluşturulamadı.",
+          "title": "Yeni Dosya",
+          "description": "Uzantısıyla birlikte bir dosya adı girin ve bir klasör seçin.",
+          "create": "Oluştur"
         }
       },
       "diff": {
@@ -23489,7 +23500,8 @@
       "1524825c2c": "Çalışma alanı panosunu göster/gizle",
       "d286d1ab85": "Bölme başlığını temizle",
       "botItemPrevious": "Önceki öğe",
-      "botItemNext": "Sonraki öğe"
+      "botItemNext": "Sonraki öğe",
+      "tabNewFile": "Yeni dosya sekmesi"
     },
     "group": {
       "global": "Genel",

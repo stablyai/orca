@@ -175,18 +175,29 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
     [activeWorktreeId, createBrowserTab]
   )
 
-  const handleNewFile = useCallback(async () => {
-    if (!activeWorktreeId) {
-      return
-    }
-    const targetGroupId =
-      useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
-      useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
-    if (!targetGroupId) {
-      return
-    }
-    await openNewMarkdownInActiveWorkspace(targetGroupId)
-  }, [activeWorktreeId, openNewMarkdownInActiveWorkspace])
+  const createFileInGroup = useCallback(
+    async (create: (groupId: string) => Promise<void>) => {
+      if (!activeWorktreeId) {
+        return
+      }
+      const state = useAppStore.getState()
+      const targetGroupId =
+        state.activeGroupIdByWorktree[activeWorktreeId] ??
+        state.groupsByWorktree[activeWorktreeId]?.[0]?.id
+      if (targetGroupId) {
+        await create(targetGroupId)
+      }
+    },
+    [activeWorktreeId]
+  )
+  const handleNewFile = useCallback(
+    () => createFileInGroup(openNewMarkdownInActiveWorkspace),
+    [createFileInGroup, openNewMarkdownInActiveWorkspace]
+  )
+  const handleNewNamedFile = useCallback(
+    () => createFileInGroup(useAppStore.getState().openNewFileInActiveWorkspace),
+    [createFileInGroup]
+  )
 
   return {
     handleNewTab,
@@ -195,7 +206,8 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
     handleNewBrowserTabSplitRight,
     handleOpenEntry,
     handleDuplicateBrowserTab,
-    handleNewFile
+    handleNewFile,
+    handleNewNamedFile
   }
 }
 

@@ -2435,6 +2435,9 @@
       },
       "pluginInstallLink": {
         "invalid": "That plugin link isn’t valid."
+      },
+      "newFile": {
+        "failed": "Couldn't create the file."
       }
     },
     "lib": {
@@ -5581,7 +5584,8 @@
             "1a8af49530": "CMD Prompt",
             "2148f65e04": "PowerShell",
             "7a9b4af2af": "Scroll tabs left",
-            "232e075b07": "Scroll tabs right"
+            "232e075b07": "Scroll tabs right",
+            "newFile": "New File..."
           },
           "TabBarCreateEntry": {
             "d62d63b807": "Create file",
@@ -18179,7 +18183,8 @@
           "folderEmpty": "Folder path cannot be empty",
           "folderOutsideWorkspace": "Folder must be inside the current workspace",
           "nameTaken": "A file with that name already exists",
-          "saveFailed": "Failed to save file"
+          "saveFailed": "Failed to save file",
+          "invalidName": "Enter a file name"
         },
         "export": {
           "active": {
@@ -18579,6 +18584,12 @@
           "open": "Open with default app",
           "downloadOpen": "Download & open",
           "openFailed": "No app on this computer opened this file."
+        },
+        "NewFileDialog": {
+          "failed": "Couldn't create the file.",
+          "title": "New File",
+          "description": "Enter a file name including its extension and pick a folder.",
+          "create": "Create"
         }
       },
       "diff": {
@@ -26561,7 +26572,8 @@
       "d286d1ab85": "Clear pane title",
       "botItemBack": "Back to items",
       "botItemPrevious": "Previous item",
-      "botItemNext": "Next item"
+      "botItemNext": "Next item",
+      "tabNewFile": "New file tab"
     },
     "group": {
       "global": "Global",

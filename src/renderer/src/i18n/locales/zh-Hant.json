@@ -1523,6 +1523,9 @@
       },
       "pluginInstallLink": {
         "invalid": "這個外掛連結無效。"
+      },
+      "newFile": {
+        "failed": "無法建立檔案。"
       }
     },
     "lib": {
@@ -4428,7 +4431,8 @@
             "1a8af49530": "命令提示字元",
             "2148f65e04": "PowerShell",
             "7a9b4af2af": "向左捲動分頁",
-            "232e075b07": "向右捲動分頁"
+            "232e075b07": "向右捲動分頁",
+            "newFile": "新增檔案..."
           },
           "TabBarCreateEntry": {
             "d62d63b807": "建立檔案",
@@ -16462,7 +16466,8 @@
           "folderEmpty": "資料夾路徑不可為空白",
           "folderOutsideWorkspace": "資料夾必須位於目前的工作區內",
           "nameTaken": "已存在同名檔案",
-          "saveFailed": "無法儲存檔案"
+          "saveFailed": "無法儲存檔案",
+          "invalidName": "請輸入檔案名稱"
         },
         "export": {
           "active": {
@@ -16836,6 +16841,12 @@
           "tooLarge": "{{value0}} 過大，無法在 {{value1}} 中開啟（{{value2}}；上限為 {{value3}}）。",
           "unsupported": "{{value0}} 無法從此檔案的儲存位置讀取它。請更新託管該檔案的 Orca 伺服器，或切換到原始碼。",
           "readFailed": "無法為 {{value1}} 讀取 {{value0}}。{{value2}}"
+        },
+        "NewFileDialog": {
+          "failed": "無法建立檔案。",
+          "title": "新增檔案",
+          "description": "輸入包含副檔名的檔案名稱並選擇一個資料夾。",
+          "create": "建立"
         }
       },
       "diff": {
@@ -23033,7 +23044,8 @@
       "1524825c2c": "顯示或隱藏工作區看板",
       "d286d1ab85": "清除窗格標題",
       "botItemPrevious": "上一個項目",
-      "botItemNext": "下一個項目"
+      "botItemNext": "下一個項目",
+      "tabNewFile": "新增檔案分頁"
     },
     "group": {
       "global": "全域",
