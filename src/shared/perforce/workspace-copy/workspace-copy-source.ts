@@ -1,5 +1,6 @@
 import { access } from 'node:fs/promises'
 import { basename, dirname, resolve, sep } from 'node:path'
+import { discoveredClientFor } from '../perforce-discovered-clients'
 import { WorkspaceCopyError } from './workspace-copy-errors'
 import type { WorkspaceCopyHost } from './workspace-copy-host'
 import { ownMarkerPathCandidate } from './workspace-copy-names'
@@ -47,6 +48,23 @@ export async function pathExists(path: string): Promise<boolean> {
 
 export const P4CLIENT_FROM_CONFIG = /^P4CLIENT=(\S+)\s+\(config '([^']+)'\s*\)/
 
+async function missingConfigMessage(
+  host: WorkspaceCopyHost,
+  dir: string,
+  line: string
+): Promise<string> {
+  const config = (await host.p4(['set', '-q', 'P4CONFIG'], { cwd: dir })).stdout
+    .trim()
+    .replace(/^P4CONFIG=/, '')
+    .split(';')[0]
+  const client = discoveredClientFor(dir)
+  if (config && client) {
+    return `This workspace's client ${client} is not named by a P4CONFIG file. Copies need one so each copy can name its own client: add ${config} to ${dir} containing P4CLIENT=${client}.`
+  }
+  const fileName = config ? ` (${config})` : ''
+  return `P4CLIENT does not come from a P4CONFIG file${fileName} (${line}). Copies need one inside the workspace so each copy can name its own client.`
+}
+
 /**
  * The workspace `dir` belongs to, refusing unless its client is named by a P4CONFIG file inside the
  * client root: every copy rebinds through that file, and it guarantees we act on the folder's own client.
@@ -65,10 +83,7 @@ export async function resolveCopySource(host: WorkspaceCopyHost, dir: string): P
   }
   const match = P4CLIENT_FROM_CONFIG.exec(line)
   if (!match) {
-    throw new WorkspaceCopyError(
-      'refused',
-      `P4CLIENT does not come from a P4CONFIG file (${line}). Copies need one inside the workspace so each copy can name its own client.`
-    )
+    throw new WorkspaceCopyError('refused', await missingConfigMessage(host, dir, line))
   }
   const client = match[1]
   const info = (await p4Tagged(host, ['-c', client, 'info'], dir))[0]

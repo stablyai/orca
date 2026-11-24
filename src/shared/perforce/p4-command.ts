@@ -2,6 +2,7 @@ import { access, constants } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { currentPerforceSettings } from './p4-settings-context'
+import { discoveredClientFor } from './perforce-discovered-clients'
 import { perforceEnvOverrides } from './perforce-settings'
 
 const P4_MAX_OUTPUT_BYTES = 64 * 1024 * 1024
@@ -87,12 +88,19 @@ export async function runP4(
 ): Promise<P4CommandResult> {
   const program = await resolveP4Binary()
   const settings = currentPerforceSettings()
+  const discoveredClient = discoveredClientFor(options.cwd)
   const result = await runProcess({
     program,
     args,
     cwd: options.cwd,
     // Why: p4 resolves relative paths and P4CONFIG from $PWD, not the process cwd, so an inherited PWD would point it at the wrong directory.
-    env: { ...process.env, ...perforceEnvOverrides(settings), PWD: options.cwd },
+    // Why: P4CLIENT from the environment yields to a P4CONFIG file, so a discovered client only fills in where none names one.
+    env: {
+      ...process.env,
+      ...(discoveredClient ? { P4CLIENT: discoveredClient } : {}),
+      ...perforceEnvOverrides(settings),
+      PWD: options.cwd
+    },
     input: options.input,
     signal: options.signal,
     timeoutMs: options.timeoutMs ?? settings.commandTimeoutSeconds * 1000,

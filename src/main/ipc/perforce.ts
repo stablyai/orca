@@ -27,7 +27,7 @@ export function registerPerforceHandlers(
   })
 
   // Why: Add Folder asks before the folder is a project, so it has no registered root yet. Only
-  // `p4 info` runs there, so this widens no file access.
+  // `p4 info` and `p4 clients` run there, so this widens no file access.
   ipcMain.handle(
     'perforce:detectFolder',
     async (_event, args: { folderPath?: unknown; connectionId?: unknown }) => {

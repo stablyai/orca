@@ -92,13 +92,25 @@ export type PerforceBackend = {
   info: (cwd: Cwd) => ReturnType<typeof getPerforceInfo>
 }
 
+// Why: detection remembers a client found by its root (no P4CONFIG file names it), and the
+// operation's p4 calls need it. Detection is cached, so this is usually free.
+function inWorkspace<A extends unknown[], R>(
+  operation: (cwd: Cwd, ...args: A) => Promise<R>
+): (cwd: Cwd, ...args: A) => Promise<R> {
+  return async (cwd, ...args) => {
+    await detectPerforceWorkspace(cwd)
+    return operation(cwd, ...args)
+  }
+}
+
 /** The operation changes which files are opened or what is on disk: the next status rescans. */
 function rescansAfter<A extends unknown[], R>(
   operation: (cwd: Cwd, ...args: A) => Promise<R>
 ): (cwd: Cwd, ...args: A) => Promise<R> {
+  const run = inWorkspace(operation)
   return async (cwd, ...args) => {
     try {
-      return await operation(cwd, ...args)
+      return await run(cwd, ...args)
     } finally {
       invalidateWorkspaceScan(cwd)
     }
@@ -108,8 +120,8 @@ function rescansAfter<A extends unknown[], R>(
 export const localPerforceBackend: PerforceBackend = {
   detect: detectPerforceWorkspace,
   status: getPerforceStatus,
-  history: getPerforceHistory,
-  diff: getPerforceDiff,
+  history: inWorkspace(getPerforceHistory),
+  diff: inWorkspace(getPerforceDiff),
   open: rescansAfter((cwd, filePaths: Files) => reconcileFiles(cwd, filePaths)),
   close: rescansAfter(closeFilesKeepingContent),
   edit: rescansAfter(editFiles),
@@ -120,19 +132,19 @@ export const localPerforceBackend: PerforceBackend = {
       : submitChangelist(cwd, changelist)
   ),
   sync: rescansAfter(syncLatest),
-  shelve: shelveChangelist,
+  shelve: inWorkspace(shelveChangelist),
   unshelve: rescansAfter(unshelveChangelist),
-  deleteShelf,
+  deleteShelf: inWorkspace(deleteShelf),
   unshelveFiles: rescansAfter(unshelveFiles),
   shelveAndRevertFiles: rescansAfter(shelveAndRevertFiles),
   unshelveFrom: rescansAfter(unshelveFrom),
-  createChangelist: createChangelistWithFiles,
-  editDescription: editChangelistDescription,
-  moveToChangelist: moveFilesToChangelist,
-  deleteChangelist: deleteEmptyChangelist,
+  createChangelist: inWorkspace(createChangelistWithFiles),
+  editDescription: inWorkspace(editChangelistDescription),
+  moveToChangelist: inWorkspace(moveFilesToChangelist),
+  deleteChangelist: inWorkspace(deleteEmptyChangelist),
   deleteChangelistWithFiles: rescansAfter(deleteChangelistWithFiles),
   checkoutIfReadOnly: rescansAfter(checkoutIfReadOnly),
-  isReadOnlyFile: isReadOnlyWorkspaceFile,
-  diffText: getPerforceDiffText,
-  info: getPerforceInfo
+  isReadOnlyFile: inWorkspace(isReadOnlyWorkspaceFile),
+  diffText: inWorkspace(getPerforceDiffText),
+  info: inWorkspace(getPerforceInfo)
 }
