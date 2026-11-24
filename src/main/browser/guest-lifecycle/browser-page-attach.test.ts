@@ -18,6 +18,7 @@ type Outcome = 'loads' | 'fails' | 'downloads'
 
 function openTab(pageId: string, url: string, outcome: Outcome = 'loads') {
   const loads: string[] = []
+  let current = ''
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the attach reads only the members faked here.
   const guest = Object.assign(new EventEmitter(), {
     id: Math.random(),
@@ -25,8 +26,10 @@ function openTab(pageId: string, url: string, outcome: Outcome = 'loads') {
     getType: () => 'webview',
     isDestroyed: () => false,
     isLoadingMainFrame: () => false,
+    getURL: () => current,
     loadURL: (loaded: string) => {
       loads.push(loaded)
+      guest.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false, url: loaded })
       // Like Electron: the load events fire, then loadURL settles the same way.
       return new Promise<void>((resolve, reject) =>
         setTimeout(() => {
@@ -37,6 +40,7 @@ function openTab(pageId: string, url: string, outcome: Outcome = 'loads') {
             guest.emit('did-stop-loading')
             reject(Object.assign(new Error('ERR_ABORTED'), { errno: -3 }))
           } else {
+            current = loaded
             guest.emit('did-finish-load')
             resolve()
           }
@@ -89,6 +93,30 @@ describe('claimBrowserPageFirstLoad', () => {
       void claimed?.load.then(() => (settled = true))
       await vi.advanceTimersByTimeAsync(0)
       expect(settled).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // A navigation after the first load, the user's or the page's own redirect, keeps the claim: the
+  // created URL is not requested again, and the tab reports where it ended up.
+  it.each([
+    ['the user navigates the new tab', 'https://example.com/elsewhere'],
+    ['the page redirects from onload', 'https://example.com/callback/done']
+  ])('requests the URL once when %s right after its first load', async (_case, next) => {
+    vi.useFakeTimers()
+    try {
+      const url = 'https://example.com/callback?code=2'
+      const { guest, loads } = openTab(`page-${next}`, url)
+      await vi.advanceTimersByTimeAsync(5)
+      void guest.loadURL(next)
+      await vi.advanceTimersByTimeAsync(5)
+
+      const claimed = claimBrowserPageFirstLoad(`page-${next}`, url)
+      expect(claimed?.guest).toBe(guest)
+      await claimed?.load
+      expect(loads).toEqual([url, next])
+      expect(guest.getURL()).toBe(next)
     } finally {
       vi.useRealTimers()
     }
