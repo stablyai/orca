@@ -1,36 +1,71 @@
 import { describe, expect, it } from 'vitest'
-import { pinnedHomeNarrowHideClassName } from './rendered-tab-strip'
-import { planTabStrip } from './tab-strip-condense-plan'
+import type { TabBarItem } from '../model/tab-bar-item-model'
+import type { TabBarItemProjection } from '../model/use-tab-bar-item-projection'
+import type { DropIndicator } from './drop-indicator'
+import {
+  newTabButtonHideClassName,
+  resolveRenderedTabStrip,
+  stripSizeClassName
+} from './rendered-tab-strip'
 
-// Action padding beside the strip once every pane action has folded away; the plan's room also drops the 1px border.
-const ACTION_PADDING_PX = 8
-
-function hideBelowPx(otherTabCount: number): number | null {
-  const match = /@max-\[(\d+)px\]/.exec(pinnedHomeNarrowHideClassName(otherTabCount))
-  return match ? Number(match[1]) : null
+function projection(
+  ids: string[],
+  indicators: [string, DropIndicator][] = []
+): TabBarItemProjection {
+  return {
+    orderedItems: ids.map((id) => ({ id }) as TabBarItem),
+    dropIndicatorByVisibleId: new Map(indicators)
+  } as TabBarItemProjection
 }
 
-describe('pinnedHomeNarrowHideClassName', () => {
-  it('hides Home only where the plan always shows the +N chip that leads with Home', () => {
-    for (let count = 2; count <= 8; count++) {
-      const below = hideBelowPx(count)
-      expect(below).not.toBeNull()
-      const ids = Array.from({ length: count }, (_, index) => `tab-${index}`)
-      // Every room a narrower strip can measure, plus a pixel of slack for border rounding.
-      for (let room = 0; room <= below! - ACTION_PADDING_PX; room++) {
-        const plan = planTabStrip({
-          width: room,
-          ids,
-          activeId: 'tab-0',
-          previousWindowStart: null
-        })
-        expect(plan.mode === 'condensed' && plan.hiddenIds.length > 0).toBe(true)
-      }
-    }
+function strip(ids: string[], pinned: string[]): ReturnType<typeof resolveRenderedTabStrip> {
+  return resolveRenderedTabStrip({
+    itemProjection: projection(ids),
+    pinnedSortableIds: pinned,
+    stripSortableIds: ids.filter((id) => !pinned.includes(id)),
+    clientHostedBrowserRows: []
+  })
+}
+
+describe('resolveRenderedTabStrip', () => {
+  it('keeps the pinned Home out of the scrolling strip and marks a drop before the first strip tab on Home', () => {
+    const resolved = resolveRenderedTabStrip({
+      itemProjection: projection(['home', 'a', 'b'], [['a', 'left']]),
+      pinnedSortableIds: ['home'],
+      stripSortableIds: ['a', 'b'],
+      clientHostedBrowserRows: []
+    })
+    expect(resolved.sortableIds).toEqual(['a', 'b'])
+    expect(resolved.pinnedCount).toBe(1)
+    expect(resolved.stripHasTabs).toBe(true)
+    expect([...resolved.dropIndicatorByVisibleId]).toEqual([['home', 'right']])
   })
 
-  it('keeps Home beside a single tab, which never gets a chip', () => {
-    expect(hideBelowPx(1)).toBeNull()
-    expect(hideBelowPx(0)).toBeNull()
+  it('reports an empty strip beside a lone Home', () => {
+    expect(strip(['home'], ['home']).stripHasTabs).toBe(false)
+  })
+})
+
+describe('newTabButtonHideClassName', () => {
+  it('keeps "+" in an empty group', () => {
+    expect(newTabButtonHideClassName(strip([], []))).toBe('')
+  })
+
+  it('hides "+" 40px earlier beside a pinned Home with other tabs', () => {
+    expect(newTabButtonHideClassName(strip(['a'], []))).toBe('@max-[86px]/tab-strip:hidden')
+    expect(newTabButtonHideClassName(strip(['home'], ['home']))).toBe(
+      '@max-[86px]/tab-strip:hidden'
+    )
+    expect(newTabButtonHideClassName(strip(['home', 'a'], ['home']))).toBe(
+      '@max-[126px]/tab-strip:hidden'
+    )
+  })
+})
+
+describe('stripSizeClassName', () => {
+  it('lets the strip give way first beside a pinned Home and drops its floor when empty', () => {
+    expect(stripSizeClassName(strip(['a'], []))).toBe('shrink min-w-10')
+    expect(stripSizeClassName(strip(['home', 'a'], ['home']))).toBe('shrink-[10000] min-w-10')
+    expect(stripSizeClassName(strip(['home'], ['home']))).toBe('shrink-[10000] min-w-0')
   })
 })
