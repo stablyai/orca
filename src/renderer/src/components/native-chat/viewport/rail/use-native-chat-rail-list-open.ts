@@ -1,6 +1,6 @@
 // One owner for the long-chat list: hover timers, keyboard opening, the Escape latch and teardown.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 export const NATIVE_CHAT_RAIL_LIST_OPEN_MS = 200
 export const NATIVE_CHAT_RAIL_LIST_CLOSE_MS = 150
@@ -43,10 +43,6 @@ export function useNativeChatRailListOpen({
   const openTimer = useRef<number | null>(null)
   const closeTimer = useRef<number | null>(null)
   const [latched, setLatched] = useState(false)
-  const latchedRef = useRef(false)
-  latchedRef.current = latched
-  const enabledRef = useRef(enabled)
-  enabledRef.current = enabled
   // Teardown: hidden, cleared, subagent view, narrow or short. Focus is the pane's to hand off.
   const [wasEnabled, setWasEnabled] = useState(enabled)
   if (wasEnabled !== enabled) {
@@ -56,9 +52,6 @@ export function useNativeChatRailListOpen({
       setLatched(false)
     }
   }
-  const modeRef = useRef(state.mode)
-  modeRef.current = state.mode
-
   const clearTimers = useCallback(() => {
     if (openTimer.current !== null) {
       window.clearTimeout(openTimer.current)
@@ -79,11 +72,7 @@ export function useNativeChatRailListOpen({
     )
   }, [clearTimers])
 
-  useEffect(() => {
-    if (!enabled) {
-      clearTimers()
-    }
-  }, [clearTimers, enabled])
+  useLayoutEffect(() => (enabled ? clearTimers : undefined), [clearTimers, enabled])
 
   // After Escape, hover stays closed until the pointer is seen outside the rail and list.
   useEffect(() => {
@@ -109,41 +98,41 @@ export function useNativeChatRailListOpen({
         window.clearTimeout(closeTimer.current)
         closeTimer.current = null
       }
-      if (latchedRef.current || openTimer.current !== null) {
+      if (latched || openTimer.current !== null) {
         return
       }
       openTimer.current = window.setTimeout(() => {
         openTimer.current = null
-        if (!enabledRef.current) {
-          return
-        }
         setState((current) => (current.open ? current : { ...current, open: true, mode: 'hover' }))
       }, NATIVE_CHAT_RAIL_LIST_OPEN_MS)
     },
-    [enabled]
+    [enabled, latched]
   )
 
-  const pointerLeave = useCallback((event: React.PointerEvent) => {
-    if (event.pointerType === 'touch') {
-      return
-    }
-    if (openTimer.current !== null) {
-      window.clearTimeout(openTimer.current)
-      openTimer.current = null
-    }
-    // Focus mode belongs to the keyboard: only focus leaving closes it.
-    if (modeRef.current === 'focus' || closeTimer.current !== null) {
-      return
-    }
-    closeTimer.current = window.setTimeout(() => {
-      closeTimer.current = null
-      setState((current) =>
-        current.open && current.mode === 'hover'
-          ? { ...current, open: false, openerId: null }
-          : current
-      )
-    }, NATIVE_CHAT_RAIL_LIST_CLOSE_MS)
-  }, [])
+  const pointerLeave = useCallback(
+    (event: React.PointerEvent) => {
+      if (!enabled || event.pointerType === 'touch') {
+        return
+      }
+      if (openTimer.current !== null) {
+        window.clearTimeout(openTimer.current)
+        openTimer.current = null
+      }
+      // Focus mode belongs to the keyboard: only focus leaving closes it.
+      if (state.mode === 'focus' || closeTimer.current !== null) {
+        return
+      }
+      closeTimer.current = window.setTimeout(() => {
+        closeTimer.current = null
+        setState((current) =>
+          current.open && current.mode === 'hover'
+            ? { ...current, open: false, openerId: null }
+            : current
+        )
+      }, NATIVE_CHAT_RAIL_LIST_CLOSE_MS)
+    },
+    [enabled, state.mode]
+  )
 
   const openFromKeyboard = useCallback(
     (openerId: string | null) => {
@@ -184,8 +173,6 @@ export function useNativeChatRailListOpen({
   const dropOpener = useCallback(() => {
     setState((current) => (current.openerId === null ? current : { ...current, openerId: null }))
   }, [])
-
-  useEffect(() => clearTimers, [clearTimers])
 
   return {
     ...state,

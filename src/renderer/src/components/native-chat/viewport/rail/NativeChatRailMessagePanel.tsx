@@ -1,11 +1,11 @@
 // The long-chat list beside the rail: inline (no portal, no global Escape) so hover mode never owns focus or keys.
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { MENU_SURFACE_CLASS } from '@/components/ui/menu-surface'
 import { cn } from '@/lib/class-names'
+import { useWindowedCommandVirtualizer } from '@/lib/list-interaction/use-windowed-command-virtualizer'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useNowSnapshot } from '@/lib/window-activity/use-now'
 import {
@@ -103,49 +103,26 @@ export function NativeChatRailMessagePanel({
     highlightIndex = active !== -1 ? active : query.trim() ? 0 : results.length - 1
   }
 
-  // Option ids stay with their message for the panel's life, so a moved result keeps its id.
-  const optionSerials = useRef(new Map<string, number>())
-  const optionId = (id: string): string => {
-    let serial = optionSerials.current.get(id)
-    if (serial === undefined) {
-      serial = optionSerials.current.size
-      optionSerials.current.set(id, serial)
-    }
-    return `${panelId}-opt-${serial}`
-  }
+  const optionId = (id: string): string => `${panelId}-opt-${encodeURIComponent(id)}`
 
-  const rangeExtractor = useCallback(
-    (range: Range) => {
-      const indexes = defaultRangeExtractor(range)
-      return highlightIndex < 0 || indexes.includes(highlightIndex)
-        ? indexes
-        : [...indexes, highlightIndex].sort((left, right) => left - right)
-    },
-    [highlightIndex]
-  )
-  const virtualizer = useVirtualizer({
-    count: results.length,
-    getScrollElement: () => listRef.current,
+  const resultIds = useMemo(() => results.map(({ item }) => item.id), [results])
+  const { virtualItems, viewportHeight, totalSize, scrollToIndex } = useWindowedCommandVirtualizer({
+    itemKeys: resultIds,
+    scrollElement: () => listRef.current,
     estimateSize: () => ROW_PX,
-    getItemKey: (index) => results[index]?.item.id ?? index,
+    activeIndex: highlightIndex,
     overscan: 10,
-    paddingStart: LIST_PAD_TOP_PX,
-    paddingEnd: LIST_PAD_BOTTOM_PX,
-    scrollPaddingStart: LIST_PAD_TOP_PX,
-    scrollPaddingEnd: LIST_PAD_BOTTOM_PX,
-    rangeExtractor
+    padding: { start: LIST_PAD_TOP_PX, end: LIST_PAD_BOTTOM_PX }
   })
-  const virtualItems = virtualizer.getVirtualItems()
-  const viewportHeight = virtualizer.scrollRect?.height ?? 0
 
   // Keep the highlight in view when it or the results move; wheel browsing changes neither.
   useLayoutEffect(() => {
     if (highlightIndex < 0 || viewportHeight === 0) {
       return
     }
-    virtualizer.scrollToIndex(highlightIndex, { align: alignRef.current })
+    scrollToIndex(highlightIndex, { align: alignRef.current })
     alignRef.current = 'auto'
-  }, [highlightIndex, results, viewportHeight, virtualizer])
+  }, [highlightIndex, results, viewportHeight, scrollToIndex])
 
   // A keyboard open moves focus to the filter, also when hover had already mounted the panel.
   useLayoutEffect(() => {
@@ -179,7 +156,7 @@ export function NativeChatRailMessagePanel({
       onPick(highlighted.item.id)
       return
     }
-    virtualizer.scrollToIndex(highlightIndex, { align: 'auto' })
+    scrollToIndex(highlightIndex, { align: 'auto' })
   }
 
   const matchCount = query.trim()
@@ -294,7 +271,7 @@ export function NativeChatRailMessagePanel({
             {t('components.native-chat.railNoMatches', 'No messages match')}
           </p>
         ) : null}
-        <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+        <div className="relative w-full" style={{ height: totalSize }}>
           {virtualItems.map((virtualItem) => {
             const result = results[virtualItem.index]
             if (!result) {

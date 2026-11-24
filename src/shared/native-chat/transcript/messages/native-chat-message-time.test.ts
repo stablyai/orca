@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getNativeChatMessageTimeFormatter } from './native-chat-message-time'
 
 describe('formatCompact', () => {
-  const formatter = getNativeChatMessageTimeFormatter('en-US', { timeZone: 'UTC' })
+  const formatter = getNativeChatMessageTimeFormatter('en-US')
   const now = new Date(2026, 10, 21, 15, 0)
 
   it("shows only the time for today's messages", () => {
