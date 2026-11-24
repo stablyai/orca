@@ -1,18 +1,11 @@
 import { botTidyUp, patchTidyUp } from '../bots/bot-tidy-up'
 import * as z from 'zod'
 import { lazyZodSchema } from '../schema/lazy-zod-schema'
-import {
-  BOT_AGENTS,
-  botMemberSource,
-  botSlackApps,
-  withoutBotMember,
-  withSlackMembersTagged,
-  type Bot,
-  type BotMember
-} from '../bot-types'
+import { BOT_AGENTS, withoutBotMember, type Bot, type BotMember } from '../bot-types'
 import { botMembersFullError, planBotMemberAdds } from '../bots/bot-member-capacity'
 import { BotTakeOverSchema } from '../bots/bot-take-over'
 import { membersInDiscordGuilds } from '../bots/bot-discord-members'
+import { membersInSlackWorkspaces } from '../bots/bot-slack-members'
 import { botLookAround, patchLookAround } from '../bots/bot-look-around'
 import { withBotOfferAnswer } from '../bots/bot-offer-answers'
 import { type BotCancelledWait, withBotCancelledWait } from '../bots/bot-cancelled-waits'
@@ -209,7 +202,11 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
   if (tidyUp) {
     next.tidyUp = patchTidyUp(botTidyUp(bot), tidyUp, Date.now())
   }
-  next.members = applyBotMemberUpdates(next.members, { removeMember, removeMembers, addMembers })
+  next.members = applyBotMemberUpdates(next.members, {
+    removeMember,
+    removeMembers,
+    addMembers
+  })
   // `slack` and `linear` mirror the first of their lists, for readers that know one workspace.
   if (rest.slackApps) {
     next.slack = rest.slackApps[0] ?? null
@@ -218,20 +215,7 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
   }
   if (next.slackApps) {
     // A workspace's people go with it, so a removed workspace never hands them to another.
-    // Untagged people are the first workspace's as it was before this update.
-    const first = botSlackApps(bot)[0] ?? botSlackApps(next)[0]
-    const teams = new Set(next.slackApps.map((app) => app.teamId))
-    const tagged = withSlackMembersTagged({
-      members: next.members,
-      slack: null,
-      slackApps: first ? [first] : []
-    }).members
-    next.members = tagged.filter(
-      (member) =>
-        botMemberSource(member) !== 'slack' ||
-        member.workspaceId === undefined ||
-        teams.has(member.workspaceId)
-    )
+    next.members = membersInSlackWorkspaces(bot, next)
   }
   if (rest.discord !== undefined) {
     next.members = membersInDiscordGuilds(next)
