@@ -2,6 +2,7 @@ import type {
   GitHistoryItem,
   GitHistoryResult
 } from '../../../../../../shared/git/history/git-history-types'
+import { BoundedMap } from '../../../../../../shared/collections/bounded-map'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 
 /** Which changes the Source Control list shows; Staged/Changes/Committed on Branch is `all`. */
@@ -23,17 +24,21 @@ export type SourceControlCommitScopeFiles =
 
 export const ALL_CHANGES_SCOPE: SourceControlChangeScope = { kind: 'all' }
 
-// Survives sidebar-tab unmounts for the same worktree; any worktree switch starts at All changes.
-let rememberedScope: { worktreeId: string; scope: SourceControlChangeScope; owner: string } | null =
-  null
+// Survives sidebar-tab unmounts per section (folder workspaces mount one per repo); any active worktree switch clears it.
+const rememberedScopes = new BoundedMap<string, SourceControlChangeScope>({ maxEntries: 64 })
+
+function rememberedScopeKey(worktreeId: string, owner: string): string {
+  return JSON.stringify([owner, worktreeId])
+}
 
 export function readRememberedChangeScope(
   worktreeId: string | null,
   owner: string
 ): SourceControlChangeScope {
-  return worktreeId && rememberedScope?.worktreeId === worktreeId && rememberedScope.owner === owner
-    ? rememberedScope.scope
-    : ALL_CHANGES_SCOPE
+  return (
+    (worktreeId ? rememberedScopes.get(rememberedScopeKey(worktreeId, owner)) : undefined) ??
+    ALL_CHANGES_SCOPE
+  )
 }
 
 export function rememberChangeScope(
@@ -41,7 +46,15 @@ export function rememberChangeScope(
   scope: SourceControlChangeScope,
   owner: string
 ): void {
-  rememberedScope = worktreeId ? { worktreeId, scope, owner } : null
+  if (!worktreeId) {
+    return
+  }
+  const key = rememberedScopeKey(worktreeId, owner)
+  if (scope.kind === 'all') {
+    rememberedScopes.delete(key)
+  } else {
+    rememberedScopes.set(key, scope)
+  }
 }
 
 let scopeSessionRevision = 0
@@ -57,7 +70,7 @@ export function subscribeChangeScopeSession(listener: () => void): () => void {
 }
 
 export function clearRememberedChangeScope(): void {
-  rememberedScope = null
+  rememberedScopes.clear()
   scopeSessionRevision += 1
   for (const listener of scopeSessionListeners) {
     listener()

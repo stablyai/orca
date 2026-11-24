@@ -4,6 +4,7 @@ import type {
   GitHistoryResult
 } from '../../../../../../shared/git/history/git-history-types'
 import {
+  clearRememberedChangeScope,
   commitScopeFromPage,
   readRememberedChangeScope,
   rememberChangeScope,
@@ -104,5 +105,17 @@ describe('remembered scope ownership', () => {
     expect(readRememberedChangeScope('A', 'host-a')).toEqual({ kind: 'uncommitted' })
     expect(readRememberedChangeScope('A', 'host-b')).toEqual({ kind: 'all' })
     expect(readRememberedChangeScope('B', 'host-a')).toEqual({ kind: 'all' })
+  })
+
+  it('keeps each folder section pick until the session clears them', () => {
+    rememberChangeScope('repo-a', { kind: 'uncommitted' }, 'local')
+    const pick = pickFrom(page(['c1']), 'c1')
+    rememberChangeScope('repo-b', pick, 'local')
+    expect(readRememberedChangeScope('repo-a', 'local')).toEqual({ kind: 'uncommitted' })
+    expect(readRememberedChangeScope('repo-b', 'local')).toBe(pick)
+
+    clearRememberedChangeScope()
+    expect(readRememberedChangeScope('repo-a', 'local')).toEqual({ kind: 'all' })
+    expect(readRememberedChangeScope('repo-b', 'local')).toEqual({ kind: 'all' })
   })
 })
