@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { app, BrowserWindow, webContents } from 'electron'
 import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
+import { writeElectronFixtureResult } from '../../electron-fixtures/electron-fixture-result'
 import {
   setupGrabShortcutForwarding,
   refreshGrabShortcutPolicies
@@ -271,29 +272,27 @@ async function run(): Promise<void> {
 
   const nonCommit = await verifyGrabChordNonCommit(page, chordPages, chord)
 
-  process.stdout.write(
-    `${JSON.stringify({
-      focusAfterArm,
-      searchValue,
-      forwardedWhileInField,
-      tabThenLetter,
-      scriptFocusThenLetter,
-      noteValue,
-      closedField,
-      forwardedOnButton,
-      offFieldBody,
-      pageSawToolKey,
-      altEdges,
-      agentForwarded,
-      chordOffField,
-      chordInField,
-      replacement,
-      afterCancellation,
-      chordRefresh,
-      nonCommit,
-      retiredPolicy
-    })}\n`
-  )
+  writeElectronFixtureResult({
+    focusAfterArm,
+    searchValue,
+    forwardedWhileInField,
+    tabThenLetter,
+    scriptFocusThenLetter,
+    noteValue,
+    closedField,
+    forwardedOnButton,
+    offFieldBody,
+    pageSawToolKey,
+    altEdges,
+    agentForwarded,
+    chordOffField,
+    chordInField,
+    replacement,
+    afterCancellation,
+    chordRefresh,
+    nonCommit,
+    retiredPolicy
+  })
   process.stderr.write(
     `[palette-proof] ${JSON.stringify({
       pid: process.pid,

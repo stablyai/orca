@@ -1,12 +1,13 @@
 import { runProcess } from '@orca/process-host'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { build } from 'vite'
 import { resolveElectronProbeLaunch } from './electron-probe-display-launch'
+import { ELECTRON_FIXTURE_RESULT_ENV } from './electron-fixture-result'
 
 export type ElectronFixtureRun = Awaited<ReturnType<typeof runProcess>> & {
-  /** The fixture's last stdout line, parsed as JSON; null when it printed none. */
+  /** What the fixture passed to `writeElectronFixtureResult`; null when it wrote none. */
   output: unknown
 }
 
@@ -81,15 +82,21 @@ export async function runElectronFixture(
         XDG_CACHE_HOME: join(env.HOME, 'cache')
       })
     }
+    const resultPath = join(root, 'result.json')
     const result = await runProcess({
       program: executable,
       args,
-      env: { ...baseEnvironment, ...env, ORCA_BACKGROUND_LAUNCH: '1' },
+      env: {
+        ...baseEnvironment,
+        ...env,
+        ORCA_BACKGROUND_LAUNCH: '1',
+        [ELECTRON_FIXTURE_RESULT_ENV]: resultPath
+      },
       timeoutMs: 45_000
     })
     let output: unknown = null
     try {
-      output = JSON.parse(result.stdout.trim().split('\n').at(-1) ?? '')
+      output = JSON.parse(await readFile(resultPath, 'utf8'))
     } catch {}
     return { ...result, output }
   } finally {

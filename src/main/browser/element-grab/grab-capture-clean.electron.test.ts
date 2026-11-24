@@ -28,7 +28,8 @@ describe("Draw's capture after the picker turns off", () => {
       },
       { isolatedEnvironment: true }
     )
-    for (const line of result.stderr
+    // Linux runs the fixture under xvfb-run, which merges its stderr into stdout.
+    for (const line of `${result.stdout}\n${result.stderr}`
       .split('\n')
       .filter((line) => line.startsWith('[palette-proof]'))) {
       process.stdout.write(`${line}\n`)
@@ -40,7 +41,10 @@ describe("Draw's capture after the picker turns off", () => {
       overlayVisibleBefore: expect.toSatisfy((n: number) => n > 1000),
       offColourAfterTeardown: 0
     }
-    expect(result.output).toEqual({
+    expect(
+      result.output,
+      `stdout:\n${result.stdout.slice(-2000)}\nstderr:\n${result.stderr.slice(-4000)}`
+    ).toEqual({
       pickedKinds: ['selected', 'selected'],
       recovery: {
         loadingObserved: true,

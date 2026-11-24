@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { app, BrowserWindow, webContents, nativeImage } from 'electron'
 import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
+import { writeElectronFixtureResult } from '../../electron-fixtures/electron-fixture-result'
 import { verifyGrabPickLifetime } from './grab-pick-lifetime-electron-fixture'
 import { verifyGrabExecutionRecovery } from './grab-execution-recovery-electron-fixture'
 
@@ -158,7 +159,7 @@ async function run(): Promise<void> {
     }
   }
 
-  process.stdout.write(`${JSON.stringify({ pickedKinds, recovery, pickLifetime, ...results })}\n`)
+  writeElectronFixtureResult({ pickedKinds, recovery, pickLifetime, ...results })
   process.stderr.write(
     `[palette-proof] ${JSON.stringify({
       pid: process.pid,

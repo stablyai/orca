@@ -31,14 +31,18 @@ describe('tool letters from a real page during a pick', () => {
         },
         { isolatedEnvironment: true }
       )
-      for (const line of result.stderr
+      // Linux runs the fixture under xvfb-run, which merges its stderr into stdout.
+      for (const line of `${result.stdout}\n${result.stderr}`
         .split('\n')
         .filter((line) => line.startsWith('[palette-proof]'))) {
         process.stdout.write(`${line}\n`)
       }
       expect(result.timedOut).toBe(false)
       expect(result.code, `${result.signal}\n${result.stdout}\n${result.stderr}`).toBe(0)
-      expect(result.output).toEqual({
+      expect(
+        result.output,
+        `stdout:\n${result.stdout.slice(-2000)}\nstderr:\n${result.stderr.slice(-4000)}`
+      ).toEqual({
         focusAfterArm: 'search',
         searchValue: 'cd',
         forwardedWhileInField: [],
