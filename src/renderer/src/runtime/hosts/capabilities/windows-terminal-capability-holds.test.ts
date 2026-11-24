@@ -8,7 +8,7 @@ const { readWindowsTerminalCapabilities } = vi.hoisted(() => ({
       wslDistros: ['Ubuntu'],
       pwshAvailable: true,
       gitBashAvailable: true,
-      hostPlatform: 'win32' as const,
+      hostPlatform: 'win32' as NodeJS.Platform | null,
       isLoading: false
     },
     gitBashProbed: true
