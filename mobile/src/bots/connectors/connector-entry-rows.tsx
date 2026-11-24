@@ -26,6 +26,7 @@ import { slackRowFace } from './mobile-slack-copy'
 import type { PhoneSlackView } from './use-phone-bot-slack'
 import type { PhoneLinearView } from './use-phone-connector-account'
 import { botMcpAppLine } from '../../../../src/shared/bots/bot-app-lines'
+import { AppLogoMark } from './MobileBotAddConnector'
 
 const ICON = 20
 
@@ -265,7 +266,7 @@ export function connectorRows(input: ConnectorRowsInput): ReactNode[] {
         rows.push(
           <ListRow
             key={entry.key}
-            leading={<Blocks size={ICON} color={colors.textSecondary} />}
+            leading={<AppLogoMark slug={connection.app} />}
             title={title}
             subtitle={
               problem
@@ -316,6 +317,7 @@ export function connectorRows(input: ConnectorRowsInput): ReactNode[] {
                   ? botMcpAppLine(entry.app, t)
                   : undefined
             }
+            leading={entry.app ? <AppLogoMark slug={entry.app.id} /> : undefined}
             tool={entry.tool}
             problem={entry.problem}
             hostName={input.hostName}

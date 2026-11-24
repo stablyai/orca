@@ -4721,7 +4721,6 @@
       "hookCount_one": "{{count}} 個 Hook",
       "hookCount_other": "{{count}} 個 Hook",
       "name": "Webhooks",
-      "hooks": "Hook",
       "addInChat": "在聊天中新增",
       "setUpDraft": "設定一個這樣的 Webhook：",
       "resumed": "Webhook 已恢復",
@@ -4787,8 +4786,7 @@
         "unverifiable": "無法驗證",
         "unverifiableDetail": "無法連線 {{bot}} 的電腦"
       },
-      "back": "返回 Webhook",
-      "howToCallShort": "任何工具或指令碼都能向 Webhook 的 URL 傳送 POST 請求。每個 Webhook 會啟動一個自動化。"
+      "back": "返回 Webhook"
     },
     "errors": {
       "generic": "出了點問題。請重試。"

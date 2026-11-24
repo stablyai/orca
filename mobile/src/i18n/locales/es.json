@@ -4837,7 +4837,6 @@
       "hookCount_one": "{{count}} hook",
       "hookCount_other": "{{count}} hooks",
       "name": "Webhooks",
-      "hooks": "Hooks",
       "addInChat": "Añadir en el chat",
       "setUpDraft": "Configura un webhook que ",
       "resumed": "Webhook reanudado",
@@ -4904,7 +4903,6 @@
         "unverifiableDetail": "No se puede conectar con el equipo de {{bot}}"
       },
       "back": "Volver a Webhooks",
-      "howToCallShort": "Cualquier herramienta o script puede hacer POST a la URL de un hook. Cada hook inicia una automatización.",
       "hookCount_many": "{{count}} hooks"
     },
     "errors": {

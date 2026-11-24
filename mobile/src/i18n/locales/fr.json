@@ -4837,7 +4837,6 @@
       "hookCount_one": "{{count}} hook",
       "hookCount_other": "{{count}} hooks",
       "name": "Webhooks",
-      "hooks": "Hooks",
       "addInChat": "Ajouter dans le chat",
       "setUpDraft": "Configure un webhook qui ",
       "resumed": "Webhook repris",
@@ -4904,7 +4903,6 @@
         "unverifiableDetail": "L’ordinateur de {{bot}} est injoignable"
       },
       "back": "Retour aux Webhooks",
-      "howToCallShort": "N’importe quel outil ou script peut envoyer un POST à l’URL d’un hook. Chaque hook lance une automatisation.",
       "hookCount_many": "{{count}} hooks"
     },
     "errors": {
