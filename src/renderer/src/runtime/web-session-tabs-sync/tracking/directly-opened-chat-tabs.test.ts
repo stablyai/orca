@@ -63,7 +63,7 @@ it('an older inventory cannot erase a directly opened chat and a newer inventory
   expect(newer.unifiedTabsByWorktree[WT] ?? []).toEqual([])
 })
 
-it('the first full inventory adopts its split layout after an early chat open', () => {
+it('the first current inventory adopts its split after an older empty frame', () => {
   const sessionId = 'cold-link'
   const hostTabId = 'agent-session:cold-link'
   const localTabId = 'local-cold-link'
@@ -101,6 +101,15 @@ it('the first full inventory adopts its split layout after an early chat open', 
     snapshotVersion: 5,
     initialGroupId: localGroupId
   })
+  const olderFrame = makeSnapshot([], {
+    snapshotVersion: 4,
+    activeGroupId: 'left',
+    tabGroupLayout: { type: 'leaf', groupId: 'left' },
+    tabGroups: [{ id: 'left', activeTabId: null, tabOrder: [] }]
+  })
+  const afterOlderFrame = { ...state, ...applyWebSessionTabsSnapshot(state, olderFrame, ENV) }
+  expect(afterOlderFrame.activeGroupIdByWorktree[WT]).toBe(localGroupId)
+
   const layout = {
     type: 'split',
     direction: 'horizontal',
@@ -138,7 +147,7 @@ it('the first full inventory adopts its split layout after an early chat open', 
       ]
     }
   )
-  const next = { ...state, ...applyWebSessionTabsSnapshot(state, frame, ENV) }
+  const next = { ...afterOlderFrame, ...applyWebSessionTabsSnapshot(afterOlderFrame, frame, ENV) }
   expect(next.layoutByWorktree[WT]).toEqual(layout)
   expect(next.activeGroupIdByWorktree[WT]).toBe('right')
   expect(next.groupsByWorktree[WT]?.find((group) => group.id === 'right')?.tabOrder).toEqual([

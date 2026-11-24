@@ -24,8 +24,6 @@ export function prepareWebSessionTabsSnapshotGroups(
     now,
     options,
     adoptsInitialHostGroups,
-    directlyOpened,
-    hostGroupIdByTabId,
     terminalSurfaceTabs,
     mirroredBrowserTabs,
     mirroredEditorTabs,
@@ -150,33 +148,9 @@ export function prepareWebSessionTabsSnapshotGroups(
       return null
     }
     if (snapshot.tabGroups && snapshot.tabGroups.length > 0) {
-      const hostGroups = snapshot.tabGroups
-      const linkedTabIdsByGroup = new Map<string, string[]>()
-      if (adoptsInitialHostGroups && directlyOpened) {
-        const groupIds = new Set(hostGroups.map((group) => group.id))
-        const fallback =
-          snapshot.activeGroupId && groupIds.has(snapshot.activeGroupId)
-            ? snapshot.activeGroupId
-            : hostGroups[0].id
-        for (const { hostTabId } of directlyOpened.values()) {
-          const wanted = hostGroupIdByTabId.get(hostTabId)
-          const groupId = wanted && groupIds.has(wanted) ? wanted : fallback
-          const ids = linkedTabIdsByGroup.get(groupId) ?? []
-          ids.push(hostTabId)
-          linkedTabIdsByGroup.set(groupId, ids)
-        }
-      }
       return buildMirroredHostGroups({
         currentGroups,
-        hostGroups:
-          linkedTabIdsByGroup.size > 0
-            ? hostGroups.map((group) => {
-                const ids = linkedTabIdsByGroup.get(group.id)
-                return ids
-                  ? { ...group, tabOrder: Array.from(new Set([...group.tabOrder, ...ids])) }
-                  : group
-              })
-            : hostGroups,
+        hostGroups: snapshot.tabGroups,
         hostToLocalTabId,
         mirroredUnifiedIds,
         nextActiveUnifiedTabId,

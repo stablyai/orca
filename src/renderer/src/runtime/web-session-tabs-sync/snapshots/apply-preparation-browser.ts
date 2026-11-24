@@ -56,15 +56,17 @@ export function prepareWebSessionTabsSnapshotBrowser(
   const currentUnifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const snapshotExecutionHostId = executionHostIdForSessionTabsOwner(environmentId)
   const receivedChats = directlyOpenedChatPublications(environmentId, worktreeId)
-  const adoptsInitialHostGroups = Boolean(
-    snapshot.tabGroups?.length &&
-    canAdoptInitialHostGroups(state, worktreeId, snapshotExecutionHostId, receivedChats)
-  )
   const directlyOpened = retainDirectlyOpenedChats(
     environmentId,
     snapshot,
     currentUnifiedTabs,
     hostGroupIdByTabId
+  )
+  // A frame that still needs the linked chat's proof cannot own its initial placement.
+  const adoptsInitialHostGroups = Boolean(
+    !directlyOpened &&
+    snapshot.tabGroups?.length &&
+    canAdoptInitialHostGroups(state, worktreeId, snapshotExecutionHostId, receivedChats)
   )
   const agentSnapshot = directlyOpened
     ? {
@@ -279,7 +281,6 @@ export function prepareWebSessionTabsSnapshotBrowser(
     ...base,
     targetGroupId,
     adoptsInitialHostGroups,
-    directlyOpened,
     hostGroupIdByTabId,
     currentUnifiedTabs,
     existingTabIndex,
