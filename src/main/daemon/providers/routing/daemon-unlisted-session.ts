@@ -1,6 +1,9 @@
-import { readdirSync } from 'node:fs'
+import { readdir } from 'node:fs/promises'
 import { isHoldingForNewerProtocolDaemon } from './daemon-newer-protocol-hold'
-import { legacyDaemonProcessMayBeAlive } from '../../launch/daemon-legacy-process-liveness'
+import {
+  legacyDaemonProcessMayBeAlive,
+  legacyDaemonProcessMayBeAliveAsync
+} from '../../launch/daemon-legacy-process-liveness'
 import type { DaemonClient } from '../../transport/client/daemon-client'
 import type { HistoryReader } from '../../history/restoration/history-reader'
 import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS } from '../../protocol/daemon-protocol-version'
@@ -40,29 +43,29 @@ export async function mayAnyDaemonRunSession(
  * Whether a daemon outside `asked` may still run sessions: one held for a newer protocol, or an older one
  * whose process may be alive. Their sessions are in no inventory Orca can read, so absence proves nothing.
  */
-export function mayUnaskedDaemonRunSessions(
+export async function mayUnaskedDaemonRunSessions(
   runtimeDir: string | null,
   asked: ReadonlySet<number>
-): boolean {
+): Promise<boolean> {
   if (runtimeDir === null || isHoldingForNewerProtocolDaemon()) {
     return true
   }
   let present: string[]
   try {
     // One directory read instead of a failed open per older protocol; only a present pid file can name a live daemon.
-    present = readdirSync(runtimeDir)
+    // Async: this runs on Electron main for every exit proof, so it must not block the thread.
+    present = await readdir(runtimeDir)
   } catch {
     return true
   }
   const older = new Set<number>(PREVIOUS_DAEMON_PROTOCOL_VERSIONS)
-  return present.some((name) => {
-    const version = Number(LEGACY_PID_FILE.exec(name)?.[1])
-    return (
-      older.has(version) &&
-      !asked.has(version) &&
-      legacyDaemonProcessMayBeAlive(runtimeDir, version)
-    )
-  })
+  const unasked = present
+    .map((name) => Number(LEGACY_PID_FILE.exec(name)?.[1]))
+    .filter((version) => older.has(version) && !asked.has(version))
+  const alive = await Promise.all(
+    unasked.map((version) => legacyDaemonProcessMayBeAliveAsync(runtimeDir, version))
+  )
+  return alive.some(Boolean)
 }
 
 const LEGACY_PID_FILE = /^daemon-v(\d+)\.pid$/

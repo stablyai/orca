@@ -134,7 +134,7 @@ function localStartupFinishedWithinSharedBudget(
  * Whether a local daemon this process lists nothing from may own a PTY: one held for a newer protocol, or
  * an older one still alive that no adapter reaches. Unreadable state counts as may-own.
  */
-function mayUnlistedLocalDaemonOwnPtys(): boolean {
+async function mayUnlistedLocalDaemonOwnPtys(): Promise<boolean> {
   if (isHoldingForNewerProtocolDaemon()) {
     return true
   }
@@ -146,7 +146,7 @@ function mayUnlistedLocalDaemonOwnPtys(): boolean {
   try {
     const asked = new Set(getAllDaemonAdapters(daemon).map((adapter) => adapter.protocolVersion))
     // The path only: the daemon created the directory, and an exit proof must not touch it.
-    return mayUnaskedDaemonRunSessions(
+    return await mayUnaskedDaemonRunSessions(
       daemonRuntimeDirFor(getAppEnvironment().getPath('userData')),
       asked
     )
@@ -160,14 +160,14 @@ export async function listLocalProcessesForExitProofFromRuntimeController(
   deps: Pick<PtyRuntimeControllerDeps, 'getLocalPtyProviderStartupPromise'>,
   readProvider: () => Pick<IPtyProvider, 'listProcesses'> = () => localProvider,
   startupBudgetMs = PTY_CONTROLLER_LIST_TIMEOUT_MS,
-  mayUnlistedDaemonOwnPtys: () => boolean = mayUnlistedLocalDaemonOwnPtys
+  mayUnlistedDaemonOwnPtys: () => boolean | Promise<boolean> = mayUnlistedLocalDaemonOwnPtys
 ): Promise<{ processes: PtyProcessInfo[]; inProcessOwner: boolean }> {
   const startup = deps.getLocalPtyProviderStartupPromise(LOCAL_EXECUTION_HOST_ID)
   if (startup && !(await localStartupFinishedWithinSharedBudget(startup, startupBudgetMs))) {
     throw new Error('Local terminals are still starting; a missing process proves nothing yet.')
   }
   const provider = readProvider()
-  if (!(provider instanceof LocalPtyProvider) && mayUnlistedDaemonOwnPtys()) {
+  if (!(provider instanceof LocalPtyProvider) && (await mayUnlistedDaemonOwnPtys())) {
     throw new Error(
       'A daemon outside the inventory may still run local terminals; absence proves nothing.'
     )

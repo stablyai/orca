@@ -20,23 +20,23 @@ describe('daemons outside the inventory', () => {
     return dir
   }
 
-  it('counts an older daemon that is still alive and no adapter asked', () => {
+  it('counts an older daemon that is still alive and no adapter asked', async () => {
     const dir = runtimeDir({ 'daemon-v5.pid': process.pid })
-    expect(mayUnaskedDaemonRunSessions(dir, new Set())).toBe(true)
-    expect(mayUnaskedDaemonRunSessions(dir, new Set([5]))).toBe(false)
+    await expect(mayUnaskedDaemonRunSessions(dir, new Set())).resolves.toBe(true)
+    await expect(mayUnaskedDaemonRunSessions(dir, new Set([5]))).resolves.toBe(false)
   })
 
-  it('ignores pid files that name no live process or no older protocol', () => {
-    expect(mayUnaskedDaemonRunSessions(runtimeDir({}), new Set())).toBe(false)
-    expect(
+  it('ignores pid files that name no live process or no older protocol', async () => {
+    await expect(mayUnaskedDaemonRunSessions(runtimeDir({}), new Set())).resolves.toBe(false)
+    await expect(
       mayUnaskedDaemonRunSessions(runtimeDir({ 'daemon-vx.pid': process.pid }), new Set())
-    ).toBe(false)
+    ).resolves.toBe(false)
   })
 
-  it('treats an unreadable runtime directory as possibly owned', () => {
-    expect(mayUnaskedDaemonRunSessions(join(tmpdir(), 'orca-missing-runtime-dir'), new Set())).toBe(
-      true
-    )
-    expect(mayUnaskedDaemonRunSessions(null, new Set())).toBe(true)
+  it('treats an unreadable runtime directory as possibly owned', async () => {
+    await expect(
+      mayUnaskedDaemonRunSessions(join(tmpdir(), 'orca-missing-runtime-dir'), new Set())
+    ).resolves.toBe(true)
+    await expect(mayUnaskedDaemonRunSessions(null, new Set())).resolves.toBe(true)
   })
 })
