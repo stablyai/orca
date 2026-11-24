@@ -12,8 +12,15 @@ export function lightPipelineV2Preset(
   if (checks.kind !== 'checks') {
     throw new Error('pipeline_check_requirement')
   }
-  implement.instructions =
-    'Complete the assigned task, verify the result against its requirements, and explain the evidence. Follow repository checks. Do not merge or deploy.'
+  implement.instructions = [
+    'Complete the assigned task, verify the result against its requirements, and explain the evidence. Follow repository checks.',
+    ...(kind === 'configurable-review'
+      ? [
+          'Commit only task changes before submitting, so review can pin a clean commit. If commit authorization is missing, report blocked.'
+        ]
+      : []),
+    'Do not merge or deploy.'
+  ].join(' ')
   implement.inputs.stageIds = []
   implement.outcomes = [
     {
@@ -32,6 +39,7 @@ export function lightPipelineV2Preset(
         : { kind: kind === 'configurable-review' ? 'next' : 'finish' }
   }))
   if (review.kind === 'agent') {
+    review.title = 'Review'
     review.independent = false
     review.executor.session = { kind: 'reuse', groupId: 'primary' }
     review.instructions =
