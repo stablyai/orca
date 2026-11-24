@@ -41,7 +41,7 @@ function chatTab(
   label: string,
   index: number,
   color: string | null = null
-): Tab {
+): Tab & { contentType: 'agent-session' } {
   return {
     id,
     entityId,
@@ -82,7 +82,7 @@ function BotHomeTabsFixture({
         index + 1
       )
     )
-  ] as (Tab & { contentType: 'agent-session' })[]
+  ]
   const order = tabs.slice(1).map((tab) => tab.id)
   order.splice(homeIndex, 0, tabs[0]!.id)
   const [activeTabId, setActiveTabId] = useState(tabs.at(-1)!.id)

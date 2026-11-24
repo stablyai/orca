@@ -11,13 +11,19 @@ import {
 const homeBot = { chatSessionId: 'home-chat' }
 
 function chatItem(id: string, entityId: string): TabBarItem {
-  return {
-    type: 'agent-session',
+  const data: Tab & { contentType: 'agent-session' } = {
     id,
-    unifiedTabId: id,
-    isPinned: false,
-    data: { id, entityId, contentType: 'agent-session' } as Tab & { contentType: 'agent-session' }
-  } as TabBarItem
+    entityId,
+    groupId: 'group',
+    worktreeId: 'folder:bot-home',
+    contentType: 'agent-session',
+    label: id,
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+  return { type: 'agent-session', id, unifiedTabId: id, isPinned: false, data }
 }
 
 describe('findPinnedHomeTabId', () => {
