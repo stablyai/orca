@@ -5312,7 +5312,7 @@
       "downloadFailed": "无法从此主机下载最新版本的应用",
       "hostProfileUnreadable": "无法在此设备上读取此主机的信息。请重试",
       "isolationUnavailable": "此设备的 WebView 版本过旧，无法安全打开工作区",
-      "isolationUnavailableAndroid": "Orca 需要 Android System WebView 或 Chrome 101 及以上版本。请在 Play 商店中更新，或在“开发者选项 > WebView 实现”中选择较新的版本",
+      "isolationUnavailableAndroid": "Orca 需要 Android System WebView 或 Chrome 99 及以上版本。请在 Play 商店中更新，或在“开发者选项 > WebView 实现”中选择较新的版本",
       "webViewInUse": "此设备使用的是 {{name}} {{version}}",
       "openingWorkspace": "正在打开工作区",
       "renderProcessGone": "工作区已停止响应",
