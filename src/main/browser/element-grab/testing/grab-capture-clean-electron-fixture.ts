@@ -45,6 +45,8 @@ async function run(): Promise<void> {
       backgroundThrottling: false
     }
   })
+  // Under CI load a hidden guest produced no frames for ~2 s after a page load, failing paint checks.
+  letFixtureWindowPaint(window)
   window.webContents.on('will-attach-webview', (_event, preferences) => {
     preferences.preload = process.env.ORCA_BROWSER_GUEST_PRELOAD
     preferences.sandbox = true
@@ -80,8 +82,6 @@ async function run(): Promise<void> {
   }
   const manager = new BrowserManager()
   const recovery = await verifyGrabExecutionRecovery(page, manager, PAGE)
-  // Recovery passes on Linux CI with the window hidden; the picks after it need frames there.
-  letFixtureWindowPaint(window)
   const pickLifetime = await verifyGrabPickLifetime(page, manager, PAGE)
   const center = { x: 280, y: 180 }
   const pickedKinds: string[] = []
