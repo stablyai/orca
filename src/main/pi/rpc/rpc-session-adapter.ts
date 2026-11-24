@@ -27,6 +27,7 @@ export type PiRpcSessionAdapterDeps = PiRpcSessionDeps & {
     [K in 'identity' | 'spawnToken']: StructuredAgentSessionAcquireInput[K]
   }) => Promise<PiRpcResolvedLaunch>
   readProcessStartTime?: (pid: number) => Promise<number | null>
+  atRestCommands?: StructuredAgentSessionAdapter['atRestCommands']
 }
 
 export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
@@ -35,7 +36,10 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly starts = new ProviderAcquisitionStarts<PiRpcConnection>()
   private readonly retiring = new Set<Promise<void>>()
   private readonly endings = new AgentSessionStartEndings()
-  constructor(private readonly deps: PiRpcSessionAdapterDeps) {}
+  readonly atRestCommands: StructuredAgentSessionAdapter['atRestCommands']
+  constructor(private readonly deps: PiRpcSessionAdapterDeps) {
+    this.atRestCommands = deps.atRestCommands
+  }
 
   supportsLocation = supportsSupervisedProviderChildLocation
   supportsCreate: NonNullable<StructuredAgentSessionAdapter['supportsCreate']> = (
@@ -276,11 +280,12 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   }
   async closeAll(): Promise<void> {
     this.endings.clear()
-    await Promise.all(
-      [...this.sessions.keys()].map((id) =>
+    await Promise.all([
+      this.atRestCommands?.closeAll?.(),
+      ...[...this.sessions.keys()].map((id) =>
         stopAgentSessionProviderRoot(() => this.closeSession(id))
       )
-    )
+    ])
   }
   async drainObservedExits(): Promise<void> {
     await Promise.all([

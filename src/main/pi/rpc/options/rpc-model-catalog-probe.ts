@@ -12,7 +12,7 @@ import {
   readAgentCliVersion,
   type AgentCliVersionReader
 } from '../../../agent-launch/preflight/agent-cli-version-probe'
-import { JsonlRpcAgentConnection } from '../../../jsonl-rpc/agent-connection'
+import { connectPiCatalog } from './rpc-catalog-connection'
 import type {
   AgentModelCatalogProgress,
   AgentModelCatalogProbe,
@@ -44,23 +44,6 @@ export type PiModelCatalogProbeDeps = {
   probeVersion?: AgentCliVersionReader
   connect?: (launch: ProviderProcessLaunch) => PiModelCatalogConnection
   homePath?: string
-}
-
-function connectPiModelCatalog(launch: ProviderProcessLaunch): PiModelCatalogConnection {
-  const connection: JsonlRpcAgentConnection = new JsonlRpcAgentConnection(launch, {
-    // Cancel dialogs after binding; Pi cannot read replies to session_start dialogs before binding.
-    onRecord: (frame) => {
-      if (
-        frame.type === 'extension_ui_request' &&
-        (typeof frame.id === 'string' || typeof frame.id === 'number')
-      ) {
-        void connection
-          .send({ type: 'extension_ui_response', id: frame.id, cancelled: true })
-          .catch(() => undefined)
-      }
-    }
-  })
-  return connection
 }
 
 export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentModelCatalogProbe {
@@ -115,7 +98,7 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
         })
         const success = await runAgentModelCatalogSession(
           () =>
-            (deps.connect ?? connectPiModelCatalog)({
+            (deps.connect ?? connectPiCatalog)({
               ...launch,
               args: [...launch.args, '--no-session']
             }),
