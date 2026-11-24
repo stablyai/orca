@@ -2,9 +2,10 @@ import { EpochMsSchema, OpaqueIdSchema, SequenceSchema } from '@orca-cloud/push-
 import { z } from 'zod'
 import { CONNECTOR_LIMITS } from './connector-limits.js'
 import {
-  CONNECTOR_SOURCES,
   ConnectorActsForSchema,
   ConnectorConversationSchema,
+  ConnectorInboxConversationSchema,
+  ConnectorShareConversationSchema,
   PlaceIdSchema
 } from './connector-wire-scalars.js'
 import { ConnectorEarlierOwnSchema } from './earlier-own-messages.js'
@@ -33,16 +34,13 @@ const DeliveryBase = {
   deliveryId: OpaqueIdSchema,
   seq: SequenceSchema,
   expiresAt: EpochMsSchema,
-  // An orca conversation is a share's, and carries only its deliveries.
-  conversation: ConnectorConversationSchema.extend({
-    source: z.enum(CONNECTOR_SOURCES).exclude(['orca'])
-  })
+  conversation: ConnectorConversationSchema
 }
 
 // A share's deliveries: one ordered queue per share, its conversation named by the share's id.
 const ShareDelivery = {
   ...DeliveryBase,
-  conversation: z.object({ source: z.literal('orca'), externalId: OpaqueIdSchema })
+  conversation: ConnectorShareConversationSchema
 }
 
 // Where a bot was asked: a Slack conversation by channel id; a GitHub issue or pull request as
@@ -266,7 +264,7 @@ export const ConnectorPollResponseSchema = z.object({
   holdMs: z.number().int().nonnegative().lt(CONNECTOR_LIMITS.pollTimeoutMs),
   // First poll after a hello only: deliveries received but never done, including by an earlier process.
   unsettled: z
-    .array(z.object({ deliveryId: OpaqueIdSchema, conversation: ConnectorConversationSchema }))
+    .array(z.object({ deliveryId: OpaqueIdSchema, conversation: ConnectorInboxConversationSchema }))
     .optional(),
   deliveries: z.array(ConnectorDeliverySchema).max(CONNECTOR_LIMITS.maxDeliveriesPerPoll),
   control: PollControlSchema.optional()

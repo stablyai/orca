@@ -19,11 +19,24 @@ export const CONNECTOR_SOURCES = ['slack', 'discord', 'linear', 'github', 'webho
 export const CONNECTOR_PLACE_SOURCES = ['slack', 'discord', 'linear', 'github'] as const
 export type ConnectorPlaceSource = (typeof CONNECTOR_PLACE_SOURCES)[number]
 
+// A conversation a source's adapter serves. A share's is apart: it has no adapter, only its deliveries.
 export const ConnectorConversationSchema = z.object({
-  source: z.enum(CONNECTOR_SOURCES),
+  source: z.enum(CONNECTOR_SOURCES).exclude(['orca']),
   externalId: OpaqueIdSchema
 })
 export type ConnectorConversation = z.infer<typeof ConnectorConversationSchema>
+
+// A share's one ordered queue in the inbox, named by the share's id (share-messages.ts).
+export const ConnectorShareConversationSchema = z.object({
+  source: z.literal('orca'),
+  externalId: OpaqueIdSchema
+})
+// Any inbox row's conversation.
+export const ConnectorInboxConversationSchema = z.union([
+  ConnectorConversationSchema,
+  ConnectorShareConversationSchema
+])
+export type ConnectorInboxConversation = z.infer<typeof ConnectorInboxConversationSchema>
 
 // Whom a bot's chat acts for, as its thread row keeps it: the owner, one member (a source user id), or
 // anyone the bot takes requests from.

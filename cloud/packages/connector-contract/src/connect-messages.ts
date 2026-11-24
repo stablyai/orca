@@ -66,10 +66,10 @@ export const ConnectorConnectRedeemSchema = z.object({
   sealedLogin: z.string().min(1).optional()
 })
 
-// The 409s: expired (unknown, used or past its 10 minutes, or voided by a later start or a
-// take-back), wrong_account (another account started the trip), already_linked (the account is
-// linked to someone else there and unlinks first), not_a_member (a Linear guest, inactive user or
-// app).
+// The 409s: expired (unknown, used or past its 10 minutes, or voided by a later start),
+// wrong_account (another account started the trip), not_a_member (a Linear guest, inactive user or
+// app). An account links several people and a person several accounts, so already_linked is no
+// longer sent; it stays listed for the Orcas that still read it.
 export const CONNECTOR_CONNECT_ERRORS = [
   'expired',
   'wrong_account',
