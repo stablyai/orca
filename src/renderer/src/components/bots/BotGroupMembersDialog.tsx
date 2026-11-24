@@ -70,6 +70,7 @@ export function BotGroupMembersDialog({
   // In pick order, by host-qualified key: the picture and the suggested name follow it.
   const [selected, setSelected] = useState<string[]>(savedKeys)
   const [query, setQuery] = useState('')
+  const [filterFocused, setFilterFocused] = useState(false)
   const [popped, setPopped] = useState<string | null>(null)
   const purposes = useBotPurposes()
   const [saving, setSaving] = useState(false)
@@ -98,6 +99,7 @@ export function BotGroupMembersDialog({
   const unchanged =
     group !== undefined && botGroupUnchanged({ name: group.name, botIds: savedKeys }, name, order)
   const shownBots = filterByName(allBots, query, (bot) => bot.name)
+  const showFilter = allBots.length > FILTER_FROM || (!group && (query !== '' || filterFocused))
   const noMatches = shownBots.length === 0 && query.trim() !== ''
   // Keep each row under the same parent when a computer appears or goes offline.
   const shownByHost = group ? null : Map.groupBy(shownBots, (bot) => bot.hostId)
@@ -195,15 +197,16 @@ export function BotGroupMembersDialog({
     >
       <DialogContent
         scrollable
+        density={group ? 'default' : 'compact'}
         className={
           group
             ? 'sm:max-w-md'
-            : 'w-[calc(100%-2rem)] max-w-md grid-rows-[auto_auto_auto_minmax(3.5rem,1fr)] gap-3.5 p-4 sm:max-w-md'
+            : 'w-[calc(100%-2rem)] max-w-md grid-rows-[auto_auto_auto_minmax(3.5rem,1fr)] sm:max-w-md'
         }
         {...(!group && { 'aria-describedby': undefined })}
       >
-        <DialogHeader className={group ? undefined : 'shrink-0 pr-6 text-left'}>
-          <DialogTitle className={group ? undefined : 'text-base'}>
+        <DialogHeader className={group ? undefined : 'shrink-0 text-left'}>
+          <DialogTitle size={group ? 'default' : 'compact'} className={group ? undefined : 'mr-6'}>
             {group
               ? t('bots.groups.manageMembers', 'Manage members')
               : t('bots.groups.newGroup', 'New group')}
@@ -231,8 +234,7 @@ export function BotGroupMembersDialog({
             </Label>
             <Input
               id="bot-group-name"
-              variant={group ? 'heading' : 'default'}
-              className={group ? undefined : 'h-9.5 font-medium not-focus:text-ellipsis'}
+              variant={group ? 'heading' : 'name'}
               autoFocus={!group}
               autoComplete="off"
               spellCheck={false}
@@ -266,12 +268,17 @@ export function BotGroupMembersDialog({
                   : null}
               </span>
             </div>
-            {allBots.length > FILTER_FROM ? (
-              <BotPickFilter value={query} onChange={setQuery} compact={!group} />
+            {showFilter ? (
+              <BotPickFilter
+                value={query}
+                onChange={setQuery}
+                onFocusChange={group ? undefined : setFilterFocused}
+                compact={!group}
+              />
             ) : null}
           </div>
           <BotPickRows role="group" labelledBy="bot-group-members" compact={!group}>
-            {!group && allBots.length > FILTER_FROM ? (
+            {!group && showFilter ? (
               <p
                 role="status"
                 aria-atomic="true"

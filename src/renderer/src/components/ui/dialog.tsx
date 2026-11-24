@@ -68,8 +68,12 @@ function DialogOverlay({
 const MEDIA_SURFACE_CLASS =
   'inset-0 h-dvh w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none data-[state=closed]:[--tw-exit-scale:1]! data-[state=open]:[--tw-enter-scale:1]! sm:max-w-none dark:shadow-none'
 
-const dialogContentSurfaceVariants = cva('', {
+const dialogContentVariants = cva('', {
   variants: {
+    density: {
+      default: '',
+      compact: 'gap-3.5 p-4'
+    },
     surface: {
       default: '',
       /** The tinted, edge-to-edge panel of the two-column feature tip dialogs. */
@@ -87,7 +91,7 @@ const dialogContentSurfaceVariants = cva('', {
       'media-gallery': `${MEDIA_SURFACE_CLASS} group/media-gallery`
     }
   },
-  defaultVariants: { surface: 'default' }
+  defaultVariants: { density: 'default', surface: 'default' }
 })
 
 function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }) {
@@ -133,6 +137,7 @@ function DialogContent({
   showCloseButton,
   closeButtonVariant = 'close',
   surface,
+  density,
   size,
   scrollable = false,
   phoneSheet = false,
@@ -140,7 +145,7 @@ function DialogContent({
   initialFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> &
-  VariantProps<typeof dialogContentSurfaceVariants> & {
+  VariantProps<typeof dialogContentVariants> & {
     overlayClassName?: string
     /** Defaults on, except for the unified sizes, whose footer Cancel closes instead. */
     showCloseButton?: boolean
@@ -178,7 +183,7 @@ function DialogContent({
               'gap-3 rounded-[10px] p-5 [&_[data-slot=checkbox][data-state=unchecked]]:border-muted-foreground',
               unifiedDialogSizeClass[size]
             ),
-          dialogContentSurfaceVariants({ surface }),
+          dialogContentVariants({ density, surface }),
           scrollable && 'max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek',
           phoneSheet &&
             'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none',

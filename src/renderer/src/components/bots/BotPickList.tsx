@@ -23,10 +23,12 @@ export function filterByName<T>(
 export function BotPickFilter({
   value,
   onChange,
+  onFocusChange,
   compact
 }: {
   value: string
   onChange: (value: string) => void
+  onFocusChange?: (focused: boolean) => void
   compact?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
@@ -40,10 +42,23 @@ export function BotPickFilter({
       />
       <Input
         density="compact"
-        inset="leadingIcon"
-        className={compact ? 'h-8.5 pl-[45px]' : undefined}
+        inset={compact ? 'wideLeadingIcon' : 'leadingIcon'}
+        className={compact ? 'h-8.5' : undefined}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onFocus={() => onFocusChange?.(true)}
+        onBlur={(event) => {
+          if (!onFocusChange) {
+            return
+          }
+          const input = event.currentTarget
+          // Let Tab move focus before the idle filter can unmount.
+          requestAnimationFrame(() => {
+            if (input.isConnected && input.ownerDocument.activeElement !== input) {
+              onFocusChange(false)
+            }
+          })
+        }}
         placeholder={t('bots.groups.filter', 'Filter bots')}
         aria-label={t('bots.groups.filter', 'Filter bots')}
         autoComplete="off"
