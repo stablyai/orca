@@ -9,6 +9,7 @@ const Caller = { botToken: OptionalString, callerSessionId: OptionalString }
 const Email = z.string().trim().toLowerCase().email().max(320)
 
 export const GoogleStatusParams = z.object({
+  ...Caller,
   /** Re-read every account's services now instead of showing the last check. */
   check: z.boolean().optional()
 })
@@ -55,6 +56,8 @@ export const GoogleBotAccessSetParams = z.object({
   ...Caller,
   botId: requiredString('Missing bot id'),
   on: z.boolean(),
+  /** With `on`: only these accounts; absent is every account, now and later. */
+  accounts: z.array(Email).min(1).max(100).optional(),
   /** Keys (botAskerKeys) of the askers the caller showed for confirmation; Google stays off when Who can ask no longer matches. */
   confirmedAskers: z.array(z.string()).max(1000).optional()
 })
