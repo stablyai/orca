@@ -55,9 +55,7 @@ export function addPairedPortForward(spec: ForwardSpec): Promise<PortForwardEntr
     await requireForwardableServer(spec.environmentId)
     // Held before any await, so a removal racing this start finds the server and closes it.
     const tunnel = tunnelFor(spec.environmentId)
-    await assertIpv6LoopbackPortFree(spec.localPort).catch(
-      retireIdleTunnelAfter(spec.environmentId)
-    )
+    await assertLoopbackPortFree(spec.localPort).catch(retireIdleTunnelAfter(spec.environmentId))
     const entry = await manager
       .addForward(
         spec.environmentId,
@@ -78,8 +76,11 @@ export function updatePairedPortForward(
 ): Promise<PortForwardEntry> {
   const remoteHost = requireLoopbackRemoteHost(spec.remoteHost)
   return serializePortForwardChange(forwardChangeKey(spec.environmentId), async () => {
-    // The forward being edited listens on 127.0.0.1 only, so it never answers this probe.
-    await assertIpv6LoopbackPortFree(spec.localPort)
+    const current = manager.listForwards(spec.environmentId).find((entry) => entry.id === spec.id)
+    // The forward being edited answers on its own port's 127.0.0.1, never on [::1].
+    await (current?.localPort === spec.localPort
+      ? assertIpv6LoopbackPortFree(spec.localPort)
+      : assertLoopbackPortFree(spec.localPort))
     try {
       return await manager.updateForward(
         spec.id,
@@ -248,15 +249,18 @@ function forwardChangeKey(environmentId: string): string {
   return `runtime:${environmentId}`
 }
 
+/** Throws EADDRINUSE when a local server already answers on the port: a [::] or [::1] one would take
+ *  a browser's localhost first, and macOS and Windows let a 127.0.0.1 bind shadow a 0.0.0.0 one. */
+async function assertLoopbackPortFree(port: number): Promise<void> {
+  await Promise.all([
+    assertIpv6LoopbackPortFree(port),
+    assertPortNotShadowingListener('127.0.0.1', port, LOOPBACK_PROBE_TIMEOUT_MS)
+  ])
+}
+
 async function loopbackPortAnswers(port: number): Promise<boolean> {
-  try {
-    // A [::] or [::1] server would take a browser's localhost first; a 0.0.0.0 one shadows 127.0.0.1 on macOS and Windows.
-    await Promise.all([
-      assertIpv6LoopbackPortFree(port),
-      assertPortNotShadowingListener('127.0.0.1', port, LOOPBACK_PROBE_TIMEOUT_MS)
-    ])
-    return false
-  } catch {
-    return true
-  }
+  return assertLoopbackPortFree(port).then(
+    () => false,
+    () => true
+  )
 }
