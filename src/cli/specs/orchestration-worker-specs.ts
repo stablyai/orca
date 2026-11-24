@@ -38,7 +38,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     ],
     identityFlagRoles: { from: 'caller', terminal: 'target' },
     notes: [
-      "--item <n> (from a bot's own chat) links the worker to that item and moves your own item to In progress; another bot's item keeps its status.",
+      "--item <n> (from a bot's own chat) links the worker to that item and moves your own item to In progress, unless it still asks your owner a question (it stays Needs you); another bot's item keeps its status. Link every worker you start for an item, reviewers included.",
       '--for <message id> links the worker to a question you took and are starting it to answer. The start never fails on it: the receipt says when the question could not be linked, and why.',
       'With --spec and no bound Run, a coordinator gets a new Run bound to it, named after the Task title; the receipt names the Run it created or joined.',
       'Current and existing worktrees never rerun setup; a fresh agent terminal is created unless --terminal is explicit.',

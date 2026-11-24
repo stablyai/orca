@@ -1,5 +1,4 @@
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { showBrowserOpenFailure } from '../workspace/workspace-browser-open-failure-toast'
 import type { OpenHttpLinkOptions } from './http-link-destinations'
 import type { BrowserOpenOutcome } from './browser-link-destination'
 
@@ -40,11 +39,7 @@ export function admissionForBrowserOutcome(outcome: BrowserOpenOutcome): HttpLin
 }
 
 export function reportHttpLinkBrowserOpenFailure(error: unknown): void {
-  toast.error(
-    error instanceof Error
-      ? error.message
-      : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.')
-  )
+  showBrowserOpenFailure(error)
 }
 
 // Main's shell:openUrl silently ignores anything but http(s); check first so a resolve means it opened.

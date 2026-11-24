@@ -6521,13 +6521,7 @@
       },
       "cancel": {
         "keep": "Keep",
-        "confirmMany": "Cancel {{count}}",
-        "titleMany": "Cancel {{count}} items?",
-        "titleOne": "Cancel {{title}}?",
-        "why": "The bot sees the reason. Nothing is deleted.",
-        "placeholder": "Reason",
-        "confirmOne": "Cancel item",
-        "offline": "{{host}} is offline. Your reason is kept; {{action}} works again when it’s back."
+        "confirmMany": "Cancel {{count}}"
       },
       "wait": {
         "titleOne": "What is {{title}} waiting on?",
@@ -6596,7 +6590,8 @@
         "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
         "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>",
         "replaced": "The agent asked a new question. Read it, then reply.",
-        "replacedByNewer": "Replaced by a newer question"
+        "replacedByNewer": "Replaced by a newer question",
+        "skipped": "Skipped"
       },
       "readFailedClosedPage": "Couldn’t read more closed items.",
       "skillLimit": "Message not sent. Keep at most {{limit}} selected skill files and try again."
@@ -7797,14 +7792,10 @@
         "continue": "Continue",
         "description": "Choose how {{bot}} signs in to your Gmail, Calendar and Drive.",
         "self": "Self hosted",
-        "selfNote": "You make your own Google Cloud app, so your sign-in stays on your computer. About 10 minutes.",
+        "selfNote": "Your own Google app.",
         "orca": "Orca hosted",
-        "orcaNote": "Sign in with Google. Nothing to set up.",
-        "comingSoon": "Coming soon",
-        "steps": "Steps",
-        "stepApp": "{{bot}} opens Google Cloud and sets up the app",
-        "stepSignIn": "You tick Google’s terms box and sign in",
-        "stepCheck": "{{bot}} checks that Gmail, Calendar and Drive work"
+        "orcaNote": "Sign in with Google.",
+        "soon": "Soon"
       },
       "importFromTeam": "Import a setup file from your team",
       "service": {

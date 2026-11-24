@@ -34,6 +34,7 @@ import {
 import { createRuntimeAutomationService } from '../automations/runtime-automation-service'
 import { createRendererShutdownCheckpointService } from './renderer-shutdown-checkpoint-service'
 import { initializeMainProcessPlugins } from '../startup/plugin-startup/main-process-plugins'
+import { scheduleStalePluginGitTempSweep } from '../plugins/installation/plugin-git-temp-sweep'
 import {
   collectWorktreeTrashSweepRoots,
   sweepStaleWorktreeTrash
@@ -274,6 +275,7 @@ export async function composeDesktopCore(
   })
   installFirstWorkRenameHookSubscription(firstWorkRenameDeps(store, runtime))
   await initializeMainProcessPlugins(core, store)
+  scheduleStalePluginGitTempSweep()
   core.starNag = new StarNagService(store, core.stats!)
   core.starNag.start()
   core.starNag.registerIpcHandlers()

@@ -13,7 +13,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
-import { openWorkspaceBrowserTabForLink } from '../workspace/workspace-browser-tab-open'
+import { openWorkspaceBrowserTabForLink } from '../workspace/workspace-browser-tab-open-for-link'
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/input/browser-focus'
 
 const mocks = vi.hoisted(() => ({ getState: vi.fn() }))
