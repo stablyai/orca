@@ -12,6 +12,26 @@ function resetOf(message: string, limits = new CodexUsageLimits(() => NOW, true)
   return fact?.kind === 'usageLimitReached' ? fact.usageLimit?.resetsAt : 'not a usage limit'
 }
 
+it('only reports explicit usage limit errors when the account report shows quota left', () => {
+  const limits = new CodexUsageLimits(() => NOW)
+  limits.observe('notification:account/rateLimits/updated', {
+    rateLimits: {
+      limitId: 'codex',
+      secondary: { usedPercent: 78, windowDurationMins: 10080, resetsAt: NOW / 1000 + 3600 }
+    }
+  })
+
+  expect(
+    limits.failure({
+      error: { codexErrorInfo: { responseTooManyFailedAttempts: { httpStatusCode: 429 } } }
+    })
+  ).toBeNull()
+  expect(limits.failure({ error: { codexErrorInfo: 'rateLimitExceeded' } })).toBeNull()
+  expect(limits.failure({ error: { codexErrorInfo: 'usageLimitExceeded' } })).toMatchObject({
+    kind: 'usageLimitReached'
+  })
+})
+
 it("reads the reset Codex's error text names when no report gave one", () => {
   const plus =
     'You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/settings/usage to purchase more credits or try again at 3:05 PM.'
