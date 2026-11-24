@@ -1,17 +1,18 @@
-// Linked Dispatches' workers with their reports and stop reasons, settled ones kept between reads so
-// the item views and the usage-limit pass re-read only running workers and lineages written since.
-import type { OrchestrationSessionWorker } from '../../shared/orchestration-session-workers'
+// Linked Dispatches' workers with their reports and stop reasons. Finished local workers are kept between
+// reads and checked each read against one batched fingerprint of their rows, so the item views and the
+// usage-limit pass re-read only running workers and workers whose rows changed.
+import type { WorkerLineage } from '../runtime/orchestration/db/dispatch-context/worker-follow-up-lineage'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
-import type { DispatchRowChange } from '../runtime/orchestration/db/worker-status-notice'
+import {
+  DISPATCH_CONTEXT_COLUMNS,
+  TASK_COLUMNS,
+  WORKER_DISPATCH_COLUMNS,
+  WORKER_TERMINAL_RESOURCE_COLUMNS
+} from '../runtime/orchestration/db/row-column-lists'
 import { readWorkerDockReasons } from '../runtime/orchestration/dock/worker-dock-read'
 import type { BotWorkRuntime } from './bot-work-runtime'
 import type { BotWorkWorker } from './bot-work-types'
-import { readWorkers, type WorkerReadTrace } from './bot-work-workers-read'
-import {
-  SETTLED_WORKER_STATES,
-  SettledDispatchReadCache,
-  workerStatusEvidence
-} from './settled-dispatch-read-cache'
+import { readWorkers } from './bot-work-workers-read'
 
 export type LinkedWorkerState = {
   worker: BotWorkWorker | null
@@ -20,119 +21,80 @@ export type LinkedWorkerState = {
   reason?: string | null
 }
 
-/** Every linked Dispatch of a big profile (thousands) stays kept. */
-const KEPT_WORKERS_MAX = 16_384
-const KEPT_SCOPE = 'items'
-/** Kept reports, one per lineage's Task, stay under this many characters in all (about 1 MB); the rest are
- *  read again with each pass, so thousands of kept workers never pin thousands of reports. */
-const KEPT_REPORTS_MAX_CHARS = 500_000
+/** Every linked Dispatch of a big profile (thousands) stays kept, within a few MB in all. */
+const KEPT_MAX = 16_384
+const KEPT_MAX_CHARS = 1_500_000
+const FINISHED_STATES = new Set<BotWorkWorker['state']>(['completed', 'failed', 'stopped'])
 
-/** A settled worker's read, kept until a Dispatch its walk read is written. */
-type KeptWorker = {
+type Kept = {
   worker: BotWorkWorker
-  reason: string | null
-  /** The dock's revision `reason` was read at; null: read again. */
-  dockRevision: number | null
-  session: Pick<OrchestrationSessionWorker, 'paneKey' | 'address'>
-  evidence: string
+  /** Undefined: too long to keep, read from its Task on use. */
+  report: LinkedWorkerState['report'] | undefined
+  /** Its newest Dispatch and that worker's resource, whose rows the fingerprint covers. */
+  dispatchId: string
+  resourceId: string | null
+  print: number
+  chars: number
 }
 
 export class LinkedWorkerStates {
-  private readonly kept = new SettledDispatchReadCache<KeptWorker>(KEPT_WORKERS_MAX, true)
-  /** Kept workers' reports by Task, oldest first; a Task write drops every read that shows it. */
-  private readonly reports = new Map<string, LinkedWorkerState['report']>()
-  private reportChars = 0
-  /** The cache's reset count the reports were kept under. */
-  private reportsAt = 0
-  /** The database's count of commits by other connections, which no row notice reports. */
-  private dataVersion: number | null = null
+  private readonly kept = new Map<string, Kept>()
+  private keptChars = 0
+  private source: unknown = null
+  /** Counts the database's row notices: a read that saw one while it ran keeps nothing. */
+  private writes = 0
 
   constructor(private readonly workRuntime: BotWorkRuntime) {}
 
-  /** The database's notice of a Dispatch row write: drops the kept reads that walked it. */
-  rowChanged(dispatchId: string | null, change: DispatchRowChange): void {
-    this.kept.rowChanged(dispatchId, change)
+  /** Any write to a Dispatch's rows, or a paired server's verdict on one. */
+  noteWrite(): void {
+    this.writes += 1
   }
 
-  /** These Dispatches' rows or verdicts changed. */
-  drop(dispatchIds: readonly string[]): void {
-    this.kept.drop(dispatchIds)
-  }
-
-  /** Each ref's worker, report and stop reason: kept ones as kept, the rest read in one batch. Left out
-   *  when unreadable; null when its records are gone. */
-  async readStates(
-    unique: readonly string[],
-    /** False on the one re-read of hits a write dropped while this read ran. */
-    recheck = true
-  ): Promise<Map<string, LinkedWorkerState | null>> {
+  /** Each ref's worker, report and stop reason: kept ones when their rows are unchanged, the rest read in
+   *  one batch. Left out when unreadable; null when its records are gone. */
+  async readStates(unique: readonly string[]): Promise<Map<string, LinkedWorkerState | null>> {
     const db = this.workRuntime.getOrchestrationDb()
-    this.dropFollowedUp(db)
-    // Another connection's write (a WSL move rewrites worktrees on its own) fires no notice here.
+    if (db !== this.source) {
+      this.forgetAll()
+      this.source = db
+    }
+    const writes = this.writes
+    // Another connection's commits fire no notice here; it counts them.
     const version = dataVersion(db)
-    if (version === null || version !== this.dataVersion) {
-      this.kept.drop(null)
-      this.dataVersion = version
-    }
-    const started = this.kept.begin(db)
-    if (this.kept.resets !== this.reportsAt) {
-      // Every kept read went (a reset, another database): their reports go too.
-      this.reports.clear()
-      this.reportChars = 0
-      this.reportsAt = this.kept.resets
-    }
-    const candidates = unique.map((ref) => [ref, this.kept.get(KEPT_SCOPE, ref)] as const)
-    // One status snapshot for the whole read, taken before it so a kept read's evidence is what it saw;
-    // none when nothing is read and no kept worker has a pane to check.
-    const statusRows = candidates.some(
-      ([, kept]) => !kept || kept.session.paneKey || kept.session.address
-    )
-      ? (this.workRuntime.getAgentStatusSnapshotFn?.() ?? [])
-      : []
-    const evidenceOf = workerStatusEvidence(statusRows)
-    const hits = new Map<string, KeptWorker>()
-    const missing: string[] = []
-    for (const [ref, kept] of candidates) {
-      if (kept && evidenceOf(kept.session) === kept.evidence) {
-        hits.set(ref, kept)
-      } else {
-        missing.push(ref)
-      }
-    }
-    const trace: WorkerReadTrace = {
-      walked: new Map(),
-      latest: new Map(),
-      resources: new Map(),
-      sessions: new Map(),
-      statusRows
-    }
-    const workers =
-      missing.length > 0 ? await readWorkers(this.workRuntime, missing, trace) : new Map()
-    // Read together, with no wait between: the reasons are those of this revision.
-    const revision = dockRevision(db)
-    const staleReasons = [...hits.values()].filter(
-      (kept) => revision === null || kept.dockRevision !== revision
-    )
-    const reasons = readWorkerDockReasons(db, [
-      ...[...workers.values()].flatMap((worker) => worker?.dispatchId ?? []),
-      ...staleReasons.map((kept) => kept.worker.dispatchId)
-    ])
-    for (const kept of staleReasons) {
-      kept.reason = reasons.get(kept.worker.dispatchId) ?? null
-      kept.dockRevision = revision
-    }
     const states = new Map<string, LinkedWorkerState | null>()
-    const unkept = readTaskReports(
+    const candidates = unique.flatMap((ref) => {
+      const kept = this.kept.get(ref)
+      return kept ? [[ref, kept] as const] : []
+    })
+    const prints = readPrints(
       db,
-      [...hits.values()].flatMap((kept) =>
-        this.reports.has(kept.worker.taskId) ? [] : [kept.worker.taskId]
-      )
+      candidates.map(([, kept]) => kept)
     )
-    for (const [ref, kept] of hits) {
-      const report = this.reports.get(kept.worker.taskId) ?? unkept.get(kept.worker.taskId)
-      states.set(ref, { worker: kept.worker, report: report ?? null, reason: kept.reason })
+    const missing = unique.filter((ref) => !this.kept.has(ref))
+    for (const [ref, kept] of candidates) {
+      const now = prints.get(printKey(kept))
+      if (now?.print !== kept.print) {
+        this.forget(ref)
+        missing.push(ref)
+        continue
+      }
+      // Most recently used last, so the oldest falls out first.
+      this.kept.delete(ref)
+      this.kept.set(ref, kept)
+      const report = kept.report === undefined ? this.report(kept.worker.taskId) : kept.report
+      states.set(ref, { worker: kept.worker, report: report ?? null, reason: now.reason })
     }
-    // Undefined: the Task couldn't be read, so the read shows no report and isn't kept.
+    const lineageOf = new Map<string, WorkerLineage>()
+    const workers =
+      missing.length > 0 ? await readWorkers(this.workRuntime, missing, lineageOf) : new Map()
+    const reasons = readWorkerDockReasons(
+      db,
+      [...workers.values()].flatMap((worker) => worker?.dispatchId ?? [])
+    )
+    // Rows written while the read ran may be newer than what it saw: keep nothing from it.
+    const keep = this.writes === writes && version !== null && dataVersion(db) === version
+    const finished: [string, Kept][] = []
     const reports = new Map<string, LinkedWorkerState['report'] | undefined>()
     for (const [ref, worker] of workers) {
       if (!worker) {
@@ -144,100 +106,78 @@ export class LinkedWorkerStates {
       }
       // A server worker shows no report, even when a local retry of its Task has one.
       const read = worker.host === 'local' ? reports.get(worker.taskId) : null
-      const report = read ?? null
-      if (read === undefined) {
-        this.forgetReport(worker.taskId)
-      }
-      const reason = reasons.get(worker.dispatchId) ?? null
-      states.set(ref, { worker, report, reason })
-      const session = trace.sessions.get(worker.dispatchId)
-      const latest = trace.latest.get(ref)
-      const walked = latest && trace.walked.get(latest.id)
-      const resource = trace.resources.get(ref)
+      states.set(ref, {
+        worker,
+        report: read ?? null,
+        reason: reasons.get(worker.dispatchId) ?? null
+      })
+      const lineage = lineageOf.get(ref)
+      const resource = lineage?.resource
       if (
+        keep &&
         read !== undefined &&
-        session &&
-        walked &&
-        latest &&
+        lineage &&
         worker.host === 'local' &&
-        latest.status !== 'pending' &&
-        latest.status !== 'dispatched' &&
-        SETTLED_WORKER_STATES.has(worker.state) &&
-        // A pane still bound reads as the fleet sees every Dispatch on it together, so it stays live.
-        (!resource || resource.ownership_state === 'released' || !resource.pane_key)
+        lineage.latest.status !== 'pending' &&
+        lineage.latest.status !== 'dispatched' &&
+        FINISHED_STATES.has(worker.state) &&
+        // A worker still on a pane reads as the fleet sees every Dispatch on it, so it stays live.
+        (!resource || resource.ownership_state === 'released')
       ) {
-        this.keepReport(worker.taskId, report)
-        const value: KeptWorker = {
-          worker,
-          reason,
-          dockRevision: revision,
-          session: { paneKey: session.paneKey, address: session.address },
-          evidence: evidenceOf(session)
-        }
+        const report = reportLength(read) <= 2_000 ? read : undefined
         // A copy: a kept substring would otherwise pin the whole Task spec or result it was cut from.
-        this.kept.set(KEPT_SCOPE, ref, structuredClone(value), latest.id, walked, started)
+        const value = structuredClone({ worker, report })
+        finished.push([
+          ref,
+          {
+            ...value,
+            dispatchId: lineage.latest.id,
+            resourceId: resource?.id ?? null,
+            print: 0,
+            chars: JSON.stringify(value).length
+          }
+        ])
       }
     }
-    if (recheck) {
-      // A follow-up inserted while this read ran drops its predecessor's kept read before the check.
-      this.dropFollowedUp(db)
-    }
-    const dropped = recheck
-      ? [...hits].flatMap(([ref, kept]) => (this.kept.holds(KEPT_SCOPE, ref, kept) ? [] : [ref]))
-      : []
-    if (dropped.length > 0) {
-      // Written while this read ran: what it kept from before is no longer current.
-      const again = await this.readStates(dropped, false)
-      for (const ref of dropped) {
-        states.delete(ref)
-        if (again.has(ref)) {
-          states.set(ref, again.get(ref) ?? null)
-        }
+    const finishedPrints = readPrints(
+      db,
+      finished.map(([, kept]) => kept)
+    )
+    for (const [ref, kept] of finished) {
+      const print = finishedPrints.get(printKey(kept))?.print
+      if (print !== undefined) {
+        this.keep(ref, { ...kept, print })
       }
     }
     return states
   }
 
-  /** A new follow-up continues its predecessor's worker: reads that walked it are read again. */
-  private dropFollowedUp(db: OrchestrationDb): void {
-    const inserts = this.kept.takeInserted()
-    try {
-      for (const before of followedUp(db, inserts)) {
-        this.kept.drop(before)
-      }
-    } catch (error) {
-      // An unread insert may continue any kept read.
-      this.kept.drop(null)
-      throw error
-    }
-  }
-
-  /** Keeps one copy of a Task's report within the budgets, dropping the oldest kept ones first. */
-  private keepReport(taskId: string, report: LinkedWorkerState['report']): void {
-    this.forgetReport(taskId)
-    const size = reportLength(report)
-    if (size > KEPT_REPORTS_MAX_CHARS) {
+  private keep(ref: string, kept: Kept): void {
+    this.forget(ref)
+    if (kept.chars > KEPT_MAX_CHARS) {
       return
     }
-    for (const oldest of this.reports.keys()) {
-      if (
-        this.reportChars + size <= KEPT_REPORTS_MAX_CHARS &&
-        this.reports.size < KEPT_WORKERS_MAX
-      ) {
+    for (const oldest of this.kept.keys()) {
+      if (this.kept.size < KEPT_MAX && this.keptChars + kept.chars <= KEPT_MAX_CHARS) {
         break
       }
-      this.forgetReport(oldest)
+      this.forget(oldest)
     }
-    // A copy: a kept substring would otherwise pin the whole Task result it was cut from.
-    this.reports.set(taskId, structuredClone(report))
-    this.reportChars += size
+    this.kept.set(ref, kept)
+    this.keptChars += kept.chars
   }
 
-  private forgetReport(taskId: string): void {
-    if (this.reports.has(taskId)) {
-      this.reportChars -= reportLength(this.reports.get(taskId) ?? null)
-      this.reports.delete(taskId)
+  private forget(ref: string): void {
+    const kept = this.kept.get(ref)
+    if (kept) {
+      this.kept.delete(ref)
+      this.keptChars -= kept.chars
     }
+  }
+
+  private forgetAll(): void {
+    this.kept.clear()
+    this.keptChars = 0
   }
 
   /** The report the worker ended with, as its Task recorded it (what worker cards show). */
@@ -248,6 +188,107 @@ export class LinkedWorkerStates {
       return undefined
     }
   }
+}
+
+/** Text that can be long counts by its length and ends; every other column by its value. */
+const LONG_COLUMNS = new Set([
+  'last_failure',
+  'origin_ref',
+  'chat_lineage',
+  'effects',
+  'residual_resources',
+  'start_options',
+  'last_error',
+  'prior_owner_dispatch_ids',
+  'resume_session',
+  'spec',
+  'result'
+])
+
+function rowPrint(alias: string, columns: readonly string[]): string {
+  return columns
+    .map((column) => {
+      const value = `${alias}.${column}`
+      return LONG_COLUMNS.has(column)
+        ? `ifnull(length(${value}) || substr(${value}, 1, 24) || substr(${value}, -24), '~')`
+        : `ifnull(${value}, '~')`
+    })
+    .join(' || char(31) || ')
+}
+
+// Every row a finished worker's read rests on: its newest Dispatch, worker, resource and Task, any
+// resource it now owns, a follow-up that continues it, and a paired-server record of it.
+const PRINT_SQL = `SELECT j.key AS i,
+  (SELECT ${rowPrint('d', DISPATCH_CONTEXT_COLUMNS)} FROM dispatch_contexts d WHERE d.id = json_extract(j.value, '$.d'))
+  || char(30) || ifnull((SELECT ${rowPrint('w', WORKER_DISPATCH_COLUMNS)} FROM worker_dispatches w WHERE w.dispatch_id = json_extract(j.value, '$.d')), '-')
+  || char(30) || ifnull((SELECT ${rowPrint('r', WORKER_TERMINAL_RESOURCE_COLUMNS)} FROM worker_terminal_resources r WHERE r.id = json_extract(j.value, '$.r')), '-')
+  || char(30) || ifnull((SELECT group_concat(o.id) FROM worker_terminal_resources o WHERE o.owner_dispatch_id = json_extract(j.value, '$.d')), '-')
+  || char(30) || ifnull((SELECT ${rowPrint('t', TASK_COLUMNS)} FROM dispatch_contexts td JOIN tasks t ON t.id = td.task_id WHERE td.id = json_extract(j.value, '$.d')), '-')
+  || char(30) || EXISTS(SELECT 1 FROM dispatch_contexts f WHERE f.follow_up_of_dispatch_id = json_extract(j.value, '$.d'))
+  || char(30) || EXISTS(SELECT 1 FROM federated_dispatches fd WHERE fd.dispatch_id = json_extract(j.value, '$.d')) AS print,
+  (SELECT reason FROM worker_dock_facts WHERE dispatch_id = json_extract(j.value, '$.d')) AS reason
+  FROM json_each(?) j`
+
+function printKey(kept: Pick<Kept, 'dispatchId' | 'resourceId'>): string {
+  return `${kept.dispatchId}\0${kept.resourceId ?? ''}`
+}
+
+/** Each kept worker's rows as one number, and its stop reason, in one read; a missing row reads as none. */
+function readPrints(
+  db: OrchestrationDb,
+  kept: readonly Pick<Kept, 'dispatchId' | 'resourceId'>[]
+): Map<string, { print: number; reason: string | null }> {
+  const keys = [...new Set(kept.map(printKey))]
+  if (keys.length === 0) {
+    return new Map()
+  }
+  const asked = keys.map((key) => {
+    const [d, r] = key.split('\0')
+    return { d, r: r || null }
+  })
+  try {
+    const rows = db.db.prepare(PRINT_SQL).all(JSON.stringify(asked))
+    const prints = new Map<string, { print: number; reason: string | null }>()
+    for (const row of rows) {
+      if (typeof row.print === 'string') {
+        prints.set(keys[Number(row.i)], {
+          print: hashText(row.print),
+          reason: typeof row.reason === 'string' ? row.reason : null
+        })
+      }
+    }
+    return prints
+  } catch {
+    return new Map()
+  }
+}
+
+/** A 53-bit string hash (cyrb53): a fingerprint compares as one number, not the text it came from. */
+function hashText(text: string): number {
+  let h1 = 0xdeadbeef
+  let h2 = 0x41c6ce57
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i)
+    h1 = Math.imul(h1 ^ c, 2654435761)
+    h2 = Math.imul(h2 ^ c, 1597334677)
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0)
+}
+
+/** SQLite's count of commits other connections made to this database; null when unreadable. */
+function dataVersion(db: OrchestrationDb): number | null {
+  try {
+    const row = db.db.prepare('PRAGMA data_version').get()
+    return typeof row?.data_version === 'number' ? row.data_version : null
+  } catch {
+    return null
+  }
+}
+
+function reportLength(report: LinkedWorkerState['report']): number {
+  return report ? report.subject.length + (report.body?.length ?? 0) : 0
 }
 
 /** A Task's result: a worker's `{ subject, body }` report, or plain text. */
@@ -265,67 +306,4 @@ function taskReport(result: string | null): LinkedWorkerState['report'] {
     // Plain text is its own report.
   }
   return { subject: result.trim(), body: null }
-}
-
-/** The Dispatches these inserted ones follow up, in one read. */
-function followedUp(db: OrchestrationDb, inserted: readonly string[]): string[] {
-  if (inserted.length === 0) {
-    return []
-  }
-  const rows = db.db
-    .prepare(
-      `SELECT d.follow_up_of_dispatch_id AS before FROM json_each(?) inserted
-        JOIN dispatch_contexts d ON d.id = inserted.value WHERE d.follow_up_of_dispatch_id IS NOT NULL`
-    )
-    .all(JSON.stringify(inserted))
-  return rows.map((row) => String(row.before))
-}
-
-function reportLength(report: LinkedWorkerState['report']): number {
-  return report ? report.subject.length + (report.body?.length ?? 0) : 0
-}
-
-/** These Tasks' reports in one read; a Task left out couldn't be read and shows none. */
-function readTaskReports(
-  db: OrchestrationDb,
-  taskIds: readonly string[]
-): Map<string, LinkedWorkerState['report']> {
-  if (taskIds.length === 0) {
-    return new Map()
-  }
-  try {
-    const rows = db.db
-      .prepare(
-        'SELECT t.id, t.result FROM json_each(?) selected JOIN tasks t ON t.id = selected.value'
-      )
-      .all(JSON.stringify([...new Set(taskIds)]))
-    return new Map(
-      rows.map((row) => [
-        String(row.id),
-        taskReport(typeof row.result === 'string' ? row.result : null)
-      ])
-    )
-  } catch {
-    return new Map()
-  }
-}
-
-/** SQLite's count of commits other connections made to this database; null when unreadable. */
-function dataVersion(db: OrchestrationDb): number | null {
-  try {
-    const row = db.db.prepare('PRAGMA data_version').get()
-    return typeof row?.data_version === 'number' ? row.data_version : null
-  } catch {
-    return null
-  }
-}
-
-/** The dock facts' revision, which every change to them bumps; null when unreadable. */
-function dockRevision(db: OrchestrationDb): number | null {
-  try {
-    const row = db.db.prepare('SELECT revision FROM worker_dock_revision WHERE id = 1').get()
-    return typeof row?.revision === 'number' ? row.revision : null
-  } catch {
-    return null
-  }
 }

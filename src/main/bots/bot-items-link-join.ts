@@ -13,7 +13,6 @@ import type { Automation } from '../../shared/automations/automation-definition'
 import type { IssueInfo, PRInfo } from '../../shared/github/pull-requests/pull-request-types'
 import type { BotItemLinkRecord } from './bot-items-schema'
 import type { BotWorkWorker } from './bot-work-types'
-import type { DispatchRowChange } from '../runtime/orchestration/db/worker-status-notice'
 import { workspaceReader, type BotWorkRuntime } from './bot-work-runtime'
 import { LinkedWorkerStates, type LinkedWorkerState } from './bot-items-linked-worker-states'
 
@@ -107,14 +106,10 @@ export class BotItemLinkJoin {
     return reads
   }
 
-  /** The database's notice of a Dispatch row write: drops the kept reads that walked it. */
-  rowChanged(dispatchId: string | null, change: DispatchRowChange): void {
-    this.states.rowChanged(dispatchId, change)
-  }
-
-  /** A paired server's verdicts on these Dispatches changed. */
-  dropWorkers(dispatchIds: readonly string[]): void {
-    this.states.drop(dispatchIds)
+  /** A write to any Dispatch's rows, or a paired server's verdict on one: a read running now keeps
+   *  nothing it read. */
+  workersWritten(): void {
+    this.states.noteWrite()
   }
 
   /** Server-hosted work shows no PR state until a remote PR read exists. */

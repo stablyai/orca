@@ -30,7 +30,7 @@ function newJoin(): BotItemLinkJoin {
     getOrchestrationFleetAgentStatusSnapshot: () => []
   } as unknown as BotWorkRuntime
   const join = new BotItemLinkJoin(runtime, () => ({ pr: {}, issue: {} }))
-  db.workerStatusListener = (dispatchId, change) => join.rowChanged(dispatchId, change)
+  db.workerStatusListener = () => join.workersWritten()
   return join
 }
 
@@ -87,5 +87,17 @@ describe('item worker links', () => {
     const walks = vi.spyOn(db, 'getDispatchContextById')
     expect((await itemLink(id, join)).report).toEqual({ subject: 'Done', body })
     expect(walks).not.toHaveBeenCalled()
+  })
+
+  it('show a kept worker’s new report once its Task changes', async () => {
+    const id = failedWorker('Agent process exited with code 1')
+    const join = newJoin()
+    expect((await itemLink(id, join)).report).toBeNull()
+    db.updateTaskStatus(
+      db.getDispatchContextById(id)!.task_id,
+      'failed',
+      JSON.stringify({ subject: 'Late report', body: null })
+    )
+    expect((await itemLink(id, join)).report).toEqual({ subject: 'Late report', body: null })
   })
 })

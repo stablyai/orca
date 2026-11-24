@@ -2,7 +2,12 @@
 // workers and Dispatches whose rows changed since. A write to any of a Dispatch's rows drops its read.
 import type { OrchestrationSessionWorker } from '../../shared/orchestration-session-workers'
 import type { DispatchRowChange } from '../runtime/orchestration/db/worker-status-notice'
-import { SETTLED_WORKER_STATES, SettledDispatchReadCache } from './settled-dispatch-read-cache'
+
+const SETTLED_STATES = new Set<OrchestrationSessionWorker['state']>([
+  'completed',
+  'failed',
+  'stopped'
+])
 
 /** Per bot, so one bot's many chats never evict another's. */
 export const BOT_CHAT_TREE_WORKER_CACHE_MAX = 4096
@@ -22,23 +27,37 @@ export type BotChatTreeWorkerRead = {
 }
 
 export class BotChatTreeWorkerCache {
-  private readonly reads: SettledDispatchReadCache<CachedWorker>
+  private readonly byBot = new Map<string, Map<string, CachedWorker>>()
+  /** Bumped by every drop; a read only stores what nothing dropped while it ran. */
+  private epoch = 0
+  private clearedAt = 0
+  private readonly droppedAt = new Map<string, number>()
+  private source: unknown = null
 
-  constructor(max = BOT_CHAT_TREE_WORKER_CACHE_MAX) {
-    this.reads = new SettledDispatchReadCache(max)
-  }
+  constructor(private readonly max = BOT_CHAT_TREE_WORKER_CACHE_MAX) {}
 
   async read(
     request: BotChatTreeWorkerRead,
     readFresh: (dispatchIds: readonly string[]) => Promise<OrchestrationSessionWorker[]>
   ): Promise<OrchestrationSessionWorker[]> {
-    const { botId, settled, evidenceOf } = request
-    const started = this.reads.begin(request.source)
+    const { settled, evidenceOf } = request
+    if (request.source !== this.source) {
+      this.source = request.source
+      this.drop(null)
+    }
+    let workers = this.byBot.get(request.botId)
+    if (!workers) {
+      workers = new Map()
+      this.byBot.set(request.botId, workers)
+    }
     const kept: OrchestrationSessionWorker[] = []
     const missing: string[] = []
     for (const id of request.dispatchIds) {
-      const cached = settled.has(id) ? this.reads.get(botId, id) : undefined
+      const cached = settled.has(id) ? workers.get(id) : undefined
       if (cached && evidenceOf(cached.worker) === cached.evidence) {
+        // Most recently used last, so the oldest falls out first.
+        workers.delete(id)
+        workers.set(id, cached)
         kept.push(cached.worker)
       } else {
         missing.push(id)
@@ -47,29 +66,74 @@ export class BotChatTreeWorkerCache {
     if (missing.length === 0) {
       return kept
     }
+    const started = this.epoch
     const fresh = await readFresh(missing)
-    for (const worker of fresh) {
-      const id = worker.dispatchId
-      if (settled.has(id) && SETTLED_WORKER_STATES.has(worker.state)) {
-        // A copy: a clipped summary's slice would otherwise keep its whole report alive while cached.
-        const value = { worker: structuredClone(worker), evidence: evidenceOf(worker) }
-        this.reads.set(botId, id, value, id, new Set([id]), started)
+    if (this.clearedAt <= started) {
+      for (const worker of fresh) {
+        const id = worker.dispatchId
+        if (
+          settled.has(id) &&
+          SETTLED_STATES.has(worker.state) &&
+          (this.droppedAt.get(id) ?? 0) <= started
+        ) {
+          // A copy: a clipped summary's slice would otherwise keep its whole report alive while cached.
+          workers.set(id, { worker: structuredClone(worker), evidence: evidenceOf(worker) })
+        }
       }
+      trim(workers, this.max)
     }
     return [...kept, ...fresh]
   }
 
   /** Forgets the reads of bots no longer on the host. */
   keepBots(botIds: readonly string[]): void {
-    this.reads.keepScopes(botIds)
+    const live = new Set(botIds)
+    for (const botId of this.byBot.keys()) {
+      if (!live.has(botId)) {
+        this.byBot.delete(botId)
+      }
+    }
   }
 
+  /** The database's notice of a Dispatch row write; one to a row no Dispatch owns changes no read. */
   rowChanged(dispatchId: string | null, change: DispatchRowChange): void {
-    this.reads.rowChanged(dispatchId, change)
+    if (dispatchId !== null || change === 'deleted') {
+      this.drop(dispatchId)
+    }
   }
 
   /** These Dispatches' rows changed; null drops every read (a reset). */
   drop(dispatchId: string | readonly string[] | null): void {
-    this.reads.drop(dispatchId)
+    if (dispatchId !== null && typeof dispatchId !== 'string') {
+      for (const id of dispatchId) {
+        this.drop(id)
+      }
+      return
+    }
+    this.epoch += 1
+    if (dispatchId === null) {
+      this.byBot.clear()
+      this.droppedAt.clear()
+      this.clearedAt = this.epoch
+      return
+    }
+    for (const workers of this.byBot.values()) {
+      workers.delete(dispatchId)
+    }
+    this.droppedAt.set(dispatchId, this.epoch)
+    if (this.droppedAt.size > this.max) {
+      // Older drops only guard reads that started before them; forgetting them all is as safe as a reset.
+      this.droppedAt.clear()
+      this.clearedAt = this.epoch
+    }
+  }
+}
+
+function trim(workers: Map<string, CachedWorker>, max: number): void {
+  for (const id of workers.keys()) {
+    if (workers.size <= max) {
+      return
+    }
+    workers.delete(id)
   }
 }
