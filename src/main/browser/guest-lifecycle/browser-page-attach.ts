@@ -154,12 +154,7 @@ const pendingLoads = new WeakMap<Electron.WebContents, Attach>()
 const freshLoads = new WeakMap<Electron.WebContents, { url: string; load: Promise<void> }>()
 
 /** Route pages call this only after their existing main-owned navigation grant. */
-export function startBrowserPageAttach(
-  guest: Electron.WebContents,
-  url?: string,
-  /** The profile's extensions are still starting, so this load can outrun their content scripts. */
-  racesExtensions = false
-): boolean {
+export function startBrowserPageAttach(guest: Electron.WebContents, url?: string): boolean {
   const attach = pendingLoads.get(guest)
   if (!attach) {
     return false
@@ -251,8 +246,8 @@ export function startBrowserPageAttach(
   })
   page.restoring = promise
   guestLoads.set(guest, promise)
-  // Why not while extensions start: tab create's own load waits for them, so it must still run.
-  if (!snapshot && !racesExtensions) {
+  // A page attaches only after its profile's extensions had their wait, so a second load adds nothing.
+  if (!snapshot) {
     freshLoads.set(guest, { url: url ?? attach.url, load: promise })
   }
   void promise
