@@ -1,5 +1,6 @@
 // Who a bot's running turn acts for: whom its conversation acts for (recorded when it started), and any
 // person the cloud stamped on a message the turn took, or another bot's request. Never the model's say-so.
+import type { AutomationRunMessage } from '../../shared/automations/automation-run-message'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
@@ -13,6 +14,7 @@ import {
   type AutomationTriggeredBy,
   type BotRequestAsker
 } from '../../shared/bots/bot-acts-for'
+import { originOf, requestsOriginPlace } from './bot-request-origin-place'
 import { typedInOrcaByOwner } from './bot-typed-in-orca'
 import { isRootTurnRecord, isRootUserMessage, turnMessages } from './bot-turn-messages'
 
@@ -27,6 +29,9 @@ export type BotWakingPlace = {
   url?: string
   /** The message itself as an action ref, from the cloud; a reaction goes on it. */
   messageRef?: string
+  /** An automation's event whose run posts its results somewhere else (none, its Chat, another
+   *  channel): the owner wants them there, so it is not where the turn's work started. */
+  resultsElsewhere?: true
 }
 
 /** What the running turn acts for. */
@@ -53,6 +58,9 @@ export type BotActingTurn = {
   /** The event this turn acts on, as the host recorded it: its automation prompt's, or the one the
    *  waking request carries. A request the turn sends carries it on, its text marked as content. */
   origin?: AutomationTriggeredBy
+  /** The thread, issue or pull request this turn's work started in: where it was woken, or the one
+   *  its waking request carries. Its requests carry it on and `bot item add` links it. */
+  originPlace?: BotWakingPlace
 }
 
 export type BotActingTurnLookups = {
@@ -62,8 +70,9 @@ export type BotActingTurnLookups = {
   botRequestActsFor: (messageId: string) => BotRequestActsFor | null
   /** Whom the conversation acts for, as Orca recorded it when the conversation started. */
   conversationActsFor: readonly BotRequestAsker[]
-  /** The thread, issue or pull request an automation run's event happened on. */
-  automationPlace?: () => BotWakingPlace | null
+  /** The thread, issue or pull request an automation run's event happened on: the run the prompt
+   *  records, when it records one. */
+  automationPlace?: (run?: AutomationRunMessage) => BotWakingPlace | null
   /** The workspace of the conversation this session answers, from its link. */
   conversationWorkspaceId: string | null
 }
@@ -74,6 +83,7 @@ export type BotRequestActsFor = {
   askers: BotRequestAsker[]
   askedBy?: BotRequestAsker[]
   origin?: AutomationTriggeredBy
+  originPlace?: BotWakingPlace
 }
 
 const MAX_REQUEST_TEXT = 500
@@ -124,7 +134,9 @@ function readItem(body: AgentJournalItemBody, lookups: BotActingTurnLookups): It
   if (body.asker) {
     return { kind: 'asker', ...stampedAsker(body.asker, lookups.conversationWorkspaceId) }
   }
-  const wokenAt = body.memorySource ? (lookups.automationPlace?.() ?? null) : undefined
+  const wokenAt = body.memorySource
+    ? (lookups.automationPlace?.(body.automationRun) ?? null)
+    : undefined
   // A person's connector message whose asker didn't parse is someone Orca can't name, never the owner;
   // an event no one asked through acts for its conversation, like an automation's prompt.
   if (body.origin === 'connector' && !body.memorySource) {
@@ -243,6 +255,7 @@ export function readBotActingTurnWithin(
   submissions: readonly AgentJournalSubmission[],
   newestTurns: number | null
 ): BotActingTurn | null {
+  // A turn only worker mail woke reads an older turn's askers, never its place: its work is no thread's.
   for (const [index, window] of turnWindows(items, submissions, newestTurns).entries()) {
     const readings = window.map((item) => ({ item, reading: readItem(item.body, lookups) }))
     const requestIds = readings.flatMap((entry) =>
@@ -254,6 +267,13 @@ export function readBotActingTurnWithin(
       // conversation's and anyone stamped in the same turn, so a mixed turn is held to the least trusted.
       const records = requestIds.map((messageId) => lookups.botRequestActsFor(messageId))
       const origin = records.find((record) => record?.origin)?.origin
+      const originPlace = requestsOriginPlace(
+        records.map((record) => record?.originPlace),
+        index > 0 ||
+          readings.some(
+            (entry) => entry.reading.kind === 'asker' || entry.reading.kind === 'conversation'
+          )
+      )
       const fromRequests = records.flatMap((record): BotRequestAsker[] =>
         record && record.askers.length > 0 ? record.askers : [{ kind: 'unknown' }]
       )
@@ -270,7 +290,8 @@ export function readBotActingTurnWithin(
         actingOnRequestId: requestIds[0] ?? null,
         requestIds,
         wokenAt: null,
-        ...(origin ? { origin } : {})
+        ...(origin ? { origin } : {}),
+        ...(originPlace ? { originPlace } : {})
       }
     }
     const openers = readings.flatMap((entry) =>
@@ -318,6 +339,9 @@ export function readBotActingTurnWithin(
         actingOnRequestId: null,
         requestIds: [],
         wokenAt: opener.reading.wokenAt ?? null,
+        ...(index === 0
+          ? originOf(openers.map((entry) => entry.reading.wokenAt ?? undefined))
+          : {}),
         ...(typedByOwner ? { typedByOwner: true as const } : {}),
         ...(opener.reading.kind === 'conversation' && opener.reading.triggeredBy
           ? { triggeredBy: opener.reading.triggeredBy }
