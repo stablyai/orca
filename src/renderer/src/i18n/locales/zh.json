@@ -22263,7 +22263,7 @@
         "ciResultLinesSearchChecks": "检查",
         "ciResultLinesSearchPr": "PR",
         "promptSuggestionsTitle": "建议的提示词",
-        "promptSuggestionsCopy": "Claude 回复后，它对你下一条消息的猜测会显示在空的消息框中。按 Tab 即可使用。每次猜测都是一次额外请求，会计入你的 Claude 用量。",
+        "promptSuggestionsCopy": "Claude 或 Codex 回复后，它对你下一条消息的猜测会显示在空的消息框中。按 Tab 即可使用。每次猜测都是一次额外请求，会计入该智能体的用量。",
         "promptSuggestionsSearchNext": "下一条提示词",
         "promptSuggestionsSearchGhost": "幽灵文本"
       },

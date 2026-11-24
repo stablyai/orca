@@ -21086,7 +21086,7 @@
         "turnDiffsSearchChangedFiles": "geänderte Dateien",
         "turnDiffsSearchEdits": "Änderungen",
         "promptSuggestionsTitle": "Vorgeschlagene Prompts",
-        "promptSuggestionsCopy": "Nachdem Claude geantwortet hat, erscheint sein Vorschlag für deine nächste Nachricht im leeren Eingabefeld. Drücke Tab, um ihn zu übernehmen. Jeder Vorschlag ist eine zusätzliche Anfrage, die auf deine Claude-Nutzung angerechnet wird.",
+        "promptSuggestionsCopy": "Nachdem Claude oder Codex geantwortet hat, erscheint ein Vorschlag für deine nächste Nachricht im leeren Eingabefeld. Drücke Tab, um ihn zu übernehmen. Jeder Vorschlag ist eine zusätzliche Anfrage, die auf die Nutzung dieses Agenten angerechnet wird.",
         "promptSuggestionsSearchNext": "nächster Prompt",
         "promptSuggestionsSearchGhost": "Geistertext"
       },

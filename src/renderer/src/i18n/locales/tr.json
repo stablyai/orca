@@ -21210,7 +21210,7 @@
         "turnDiffsSearchChangedFiles": "değişen dosyalar",
         "turnDiffsSearchEdits": "düzenlemeler",
         "promptSuggestionsTitle": "Önerilen istemler",
-        "promptSuggestionsCopy": "Claude yanıt verdikten sonra, bir sonraki mesajınız için tahmini boş mesaj kutusunda görünür. Kullanmak için Tab tuşuna basın. Her tahmin, Claude kullanımınıza sayılan ek bir istektir.",
+        "promptSuggestionsCopy": "Claude veya Codex yanıt verdikten sonra, bir sonraki mesajınız için tahmini boş mesaj kutusunda görünür. Kullanmak için Tab tuşuna basın. Her tahmin, o ajanın kullanımına sayılan ek bir istektir.",
         "promptSuggestionsSearchNext": "sonraki istem",
         "promptSuggestionsSearchGhost": "hayalet metin"
       },

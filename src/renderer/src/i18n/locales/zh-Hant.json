@@ -20766,7 +20766,7 @@
         "turnDiffsSearchChangedFiles": "已變更檔案",
         "turnDiffsSearchEdits": "編輯",
         "promptSuggestionsTitle": "建議的提示詞",
-        "promptSuggestionsCopy": "Claude 回覆後，它對你下一則訊息的猜測會顯示在空白的訊息框中。按 Tab 即可使用。每次猜測都是一次額外請求，會計入你的 Claude 用量。",
+        "promptSuggestionsCopy": "Claude 或 Codex 回覆後，它對你下一則訊息的猜測會顯示在空白的訊息框中。按 Tab 即可使用。每次猜測都是一次額外請求，會計入該代理程式的用量。",
         "promptSuggestionsSearchNext": "下一個提示詞",
         "promptSuggestionsSearchGhost": "幽靈文字"
       },
