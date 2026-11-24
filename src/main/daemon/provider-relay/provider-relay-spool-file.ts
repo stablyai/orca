@@ -41,16 +41,11 @@ export class SpoolFile {
   private removalQueued = false
   /** A new file starts empty even if its predecessor's unlink failed and left a torn row behind. */
   private truncateOnOpen = true
-  /** Settles once the latest write is done; later file work (a compaction) doesn't hold it. */
-  private writesDone: Promise<void> = Promise.resolve()
-  /** Resolved by the next removal, since a retired file has nothing left to read. */
-  private removed = this.nextRemoval()
-  /** One wait shared by every attach until a write or removal changes what it waits for. */
-  private sharedWait: {
-    writes: Promise<void>
-    removed: Promise<void>
-    wait: Promise<void>
-  } | null = null
+  /** Writes queued and writes done, by ordinal, so a wait needs no handler on a long-lived promise. */
+  private writesQueued = 0
+  private writesFinished = 0
+  /** Attaches waiting for writes; a removal frees them all, since a retired file has nothing to read. */
+  private readonly writeWaiters = new Set<{ target: number; resolve: () => void }>()
   private disposed = false
 
   constructor(
@@ -83,6 +78,7 @@ export class SpoolFile {
     }
     const write: SpoolWrite = { chunk: encoded, records: [record], bytes }
     const epoch = this.epoch
+    const ordinal = ++this.writesQueued
     this.queued = write
     this.waiting.add(write)
     // Each waiting write holds a callback in the chain, emptied or not, so a stall can't grow unseen.
@@ -123,7 +119,7 @@ export class SpoolFile {
         }
       })
       .catch(() => {})
-    this.writesDone = this.io
+      .finally(() => this.writeFinished(ordinal))
     return true
   }
 
@@ -188,8 +184,10 @@ export class SpoolFile {
     this.index.clear()
     this.writtenBytes = 0
     this.truncateOnOpen = true
-    this.removed.resolve()
-    this.removed = this.nextRemoval()
+    for (const waiter of this.writeWaiters) {
+      waiter.resolve()
+    }
+    this.writeWaiters.clear()
     if (this.removalQueued) {
       return
     }
@@ -204,19 +202,24 @@ export class SpoolFile {
   }
 
   /**
-   * Resolves once every write queued so far is done, or once the file is removed. A compaction
-   * after them isn't waited for: it reads this file and renames a copy in, so a reader sees either.
+   * Resolves once every write queued so far is done, or the file is removed, or `cancel` runs. A
+   * compaction after them isn't waited for: it reads this file and renames a whole copy in.
    */
-  writtenOrRemoved(): Promise<void> {
-    const { writesDone: writes, removed } = this
-    if (this.sharedWait?.writes !== writes || this.sharedWait.removed !== removed.promise) {
-      this.sharedWait = {
-        writes,
-        removed: removed.promise,
-        wait: Promise.race([writes, removed.promise])
-      }
+  waitForWrites(): { done: Promise<void>; cancel: () => void } {
+    const target = this.writesQueued
+    if (this.writesFinished >= target) {
+      return { done: Promise.resolve(), cancel: () => {} }
     }
-    return this.sharedWait.wait
+    let waiter!: { target: number; resolve: () => void }
+    const done = new Promise<void>((resolve) => {
+      waiter = { target, resolve }
+      this.writeWaiters.add(waiter)
+    })
+    const cancel = (): void => {
+      this.writeWaiters.delete(waiter)
+      waiter.resolve()
+    }
+    return { done, cancel }
   }
 
   dispose(): Promise<void> {
@@ -225,12 +228,14 @@ export class SpoolFile {
     return this.io
   }
 
-  private nextRemoval(): { promise: Promise<void>; resolve: () => void } {
-    let resolve!: () => void
-    const promise = new Promise<void>((done) => {
-      resolve = done
-    })
-    return { promise, resolve }
+  private writeFinished(ordinal: number): void {
+    this.writesFinished = ordinal
+    for (const waiter of this.writeWaiters) {
+      if (waiter.target <= ordinal) {
+        this.writeWaiters.delete(waiter)
+        waiter.resolve()
+      }
+    }
   }
 
   private async closeOpenHandle(): Promise<void> {

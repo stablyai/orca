@@ -49,6 +49,8 @@ export class ProviderRelaySpool {
   /** The client's last ack named a floor to keep (an open streamed item), so lines go to the file too. */
   private keeping = false
   private disposed = false
+  /** Ends the current attach's wait for writes once it is superseded, so its call can return. */
+  private cancelWait: (() => void) | null = null
   private readonly memoryCap: number
   private readonly fileCap: number
 
@@ -167,6 +169,7 @@ export class ProviderRelaySpool {
 
   /** Replays records after `fromSeq` through `deliver`, then streams live; returns the last replayed seq. */
   async attach(fromSeq: number): Promise<number> {
+    this.stopWaiting()
     const generation = ++this.attachGeneration
     this.mode = 'replaying'
     // A new client has confirmed nothing yet, so kept lines can't be released past the floor for it,
@@ -179,7 +182,9 @@ export class ProviderRelaySpool {
       generation === this.attachGeneration && this.mode === 'replaying' && !this.disposed
     // Writes are waited for only when the file holds records this replay reads.
     if (this.file.index.lastSeq > Math.max(fromSeq, this.acked)) {
-      await this.file.writtenOrRemoved()
+      const wait = this.file.waitForWrites()
+      this.cancelWait = wait.cancel
+      await wait.done
       // A superseded attach reads nothing, so a stalled write can't make each one reread the file.
       if (!current()) {
         return this.nextSeqValue - 1
@@ -235,7 +240,13 @@ export class ProviderRelaySpool {
     if (this.mode !== 'detached') {
       this.mode = 'replaying'
       this.attachGeneration++
+      this.stopWaiting()
     }
+  }
+
+  private stopWaiting(): void {
+    this.cancelWait?.()
+    this.cancelWait = null
   }
 
   detach(): Promise<void> {
@@ -244,6 +255,7 @@ export class ProviderRelaySpool {
     }
     this.mode = 'detached'
     this.attachGeneration++
+    this.stopWaiting()
     if (!this.file.failed) {
       this.spillMemory()
     }
@@ -253,6 +265,7 @@ export class ProviderRelaySpool {
 
   async dispose(): Promise<void> {
     this.disposed = true
+    this.stopWaiting()
     this.memory.takeAll()
     await this.file.dispose()
   }
