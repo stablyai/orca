@@ -1066,6 +1066,12 @@
       "turnDiff": {
         "changedFiles_one": "{{count}} changed file",
         "changedFiles_other": "{{count}} changed files"
+      },
+      "workerDock": {
+        "taskCount_one": "{{count}} task",
+        "taskCount_other": "{{count}} tasks",
+        "workerCount_one": "{{count}} worker",
+        "workerCount_other": "{{count}} workers"
       }
     },
     "worktreeAgentList": {

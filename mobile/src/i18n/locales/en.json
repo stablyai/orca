@@ -1758,6 +1758,24 @@
         "loading": "Loading Codex usage…",
         "account": "Account used by this chat",
         "retry": "Retry"
+      },
+      "workerDock": {
+        "coordinator": "Waiting on coordinator",
+        "starting": "Starting",
+        "idle": "Idle",
+        "saving": "Saving result…",
+        "failed": "Failed",
+        "unexpected": "Stopped unexpectedly",
+        "stopping": "Stopping…",
+        "workerCount_one": "{{count}} worker",
+        "workerCount_other": "{{count}} workers",
+        "taskCount_one": "{{count}} task",
+        "taskCount_other": "{{count}} tasks",
+        "failedCount": "{{count}} failed",
+        "needsYouCount": "{{count}} needs you",
+        "runningCount": "{{count}} running",
+        "workersRegion": "Workers",
+        "stopOnComputer": "Stop or clear workers on the computer they run on"
       }
     },
     "hostOfflineBanner": {
