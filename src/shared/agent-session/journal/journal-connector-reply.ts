@@ -48,7 +48,7 @@ export type JournalConnectorReplyFill = JournalConnectorReplyKey & {
   tookMs?: number
   /** The answering turn's turn-started `at`, as its conversation was told; absent when unknown. */
   turnStartedAt?: number
-  /** A turn done without an answer ran a tool call, so its line asks to check before retrying. */
+  /** A turn done without an answer ran a tool call that may have acted, so its line asks to check. */
   toolsRan?: true
 }
 

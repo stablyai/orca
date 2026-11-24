@@ -8,7 +8,7 @@ import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
 } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { structuredAgentSessionTurnReply } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
+import { structuredAgentSessionTurnReply } from '../../shared/agent-session/requests/structured-agent-session-turn-reply'
 import { structuredAgentSessionTurnFailure } from '../../shared/agent-session/requests/structured-agent-session-turn-failure'
 import { connectorFailure } from './external-conversation-failure'
 import type { ConversationReplyFill } from './external-conversation-reply-fill'

@@ -376,7 +376,7 @@ export type ConnectorEvent =
       failure?: ConnectorFailure
       links?: ConnectorWorkLink[]
       turnId?: number
-      /** A no_answer turn that ran a tool call; an older cloud ignores it. */
+      /** A no_answer turn that ran a tool call that may have acted; an older cloud ignores it. */
       toolsRan?: true
     } & { /** How long an answered turn ran. */ tookMs?: number })
   /** Whether workers its agent started still run; only to a cloud that lists `workers`. */

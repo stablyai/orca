@@ -268,23 +268,6 @@ export function structuredAgentSessionTurnAssistantMessage(
   return ''
 }
 
-/** What a turn's end tells the request it answered: its newest root prose
- *  (structuredAgentSessionTurnAssistantMessage), and whether any tool call ran inside it. */
-export function structuredAgentSessionTurnReply(
-  items: readonly AgentJournalRenderItem[],
-  turnItemId: string
-): { prose: string; toolsRan: boolean } {
-  return {
-    prose: structuredAgentSessionTurnAssistantMessage(items, turnItemId),
-    toolsRan: items.some(
-      (item) =>
-        item.body.kind === 'tool-call' &&
-        item.turnScope?.kind === 'turn' &&
-        item.turnScope.turnItemId === turnItemId
-    )
-  }
-}
-
 /** Newest root-agent prose in the latest user turn; skip child/tool-only output and clear at the user boundary. */
 export function latestStructuredAgentSessionAssistantMessage(
   items: readonly AgentJournalRenderItem[],

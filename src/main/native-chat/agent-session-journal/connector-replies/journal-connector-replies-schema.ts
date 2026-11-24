@@ -38,7 +38,7 @@ CREATE INDEX IF NOT EXISTS journal_connector_replies_open
 // Columns later builds added the same way, with no user_version change: an older build never reads
 // them. turn_started_at: the answering turn's turn-started `at`, which its reply names. cut_turn_id / cut_kind: the cut that owes the row; claim_message_id: the continuation that
 // claimed it. quiet_rule: the quiet-marker rule the row was admitted under. tools_ran: a turn done
-// without an answer ran a tool call.
+// without an answer ran a tool call that may have changed something.
 const ADDED_COLUMNS = [
   ['took_ms', 'INTEGER'],
   ['turn_started_at', 'INTEGER'],

@@ -26,7 +26,7 @@ export type EndedTurnReplies = {
   openerItemId?: string
   outcome: AgentJournalTurnOutcome
   prose: string
-  /** A tool call ran inside the turn. */
+  /** A tool call inside the turn may have changed something (toolCallHasSideEffects). */
   toolsRan?: boolean
   bot: boolean
   failure?: ConnectorFailure

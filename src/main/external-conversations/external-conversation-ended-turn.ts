@@ -10,9 +10,9 @@ import {
 import type { AgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import {
   latestStructuredAgentSessionAssistantMessage,
-  latestStructuredAgentSessionFailure,
-  structuredAgentSessionTurnReply
+  latestStructuredAgentSessionFailure
 } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
+import { structuredAgentSessionTurnReply } from '../../shared/agent-session/requests/structured-agent-session-turn-reply'
 import type { ConversationChat } from './external-conversation-chat'
 import {
   endedChatTurnRow,
@@ -30,7 +30,7 @@ export type EndedChatTurn = {
   /** The turn's opening message by position, for when `opener` can't be resolved. */
   latestOpener?: AgentJournalRenderItem | null
   /** The turn row's journal key, the connector deliveries it answered, and the root prose written
-   *  inside it (design item 125), and whether a tool call ran inside it. */
+   *  inside it (design item 125), and whether a tool call inside it may have acted. */
   turnItemId?: string
   stamps?: ConnectorReplyStamp[]
   turnProse?: string
