@@ -38,7 +38,7 @@ type Link = SharedHostRelayLink<PhoneSharedAgent>
 const HELD_POLL_MS = 30_000
 const HELD_POLL_MAX_MS = 5 * 60_000
 // Reads the phone answers from the host's last answer while it is away, as Home keeps a computer's list.
-const KEPT_READS: ReadonlySet<string> = new Set(['bots.chatTree'])
+const KEPT_READS: ReadonlySet<string> = new Set(['status.get', 'bots.list', 'bots.chatTree'])
 
 const failure = (method: string, code: string, message: string): RpcFailure => ({
   id: method,

@@ -42,8 +42,10 @@ export function useSharedAgentPage(hostId: string, environmentId: string): Share
   const [reads, setReads] = useState(0)
   const [bot, setBot] = useState<PhoneBot | undefined>(undefined)
   const [capabilities, setCapabilities] = useState<readonly string[] | null>(null)
+  const known = view !== undefined
+  // On open (while away the phone answers from the host's last answers), and each time the link comes up.
   useEffect(() => {
-    if (!live || !paired || !view) {
+    if (!paired || !view) {
       return
     }
     setReads((count) => count + 1)
@@ -56,8 +58,7 @@ export function useSharedAgentPage(hostId: string, environmentId: string): Share
     return () => {
       current = false
     }
-    // Read again only when the link comes up.
-  }, [live, paired, hostId])
+  }, [known, live, paired, hostId])
   if (views === null) {
     return { kind: 'loading' }
   }
