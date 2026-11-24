@@ -9,9 +9,12 @@ import { SettingsNote, SettingsSection } from './settings-screen-frame'
 import * as Notifications from 'expo-notifications'
 import { waitForPushFallback } from '../notifications/push-registration/push-fallback'
 import {
+  getHostPushRegisterFailure,
   getHostPushSupported,
   getHostPushSupportCompletion
 } from '../notifications/push-registration'
+import type { PushRegisterFailure } from '../notifications/push-registration/mobile-push-registration-operations'
+import type { MobilePushServiceProblem } from '../../../src/shared/notifications/mobile-push-contract'
 import { formatMobileNativeChatDuration } from '../session/native-chat/transcript/messages/native-chat-turn-status-copy'
 import type { Translate } from '../i18n/mobile-i18n'
 import { getNotificationPermissionState } from '../notifications/delivery-policy/notification-permissions'
@@ -190,11 +193,20 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
           continue
         }
         if (result?.reason === 'not_registered') {
-          unavailable = t(
-            'settings.notificationDisplayTest.registrationPending',
-            'Push registration is not ready on this desktop. Try again shortly.'
-          )
+          unavailable =
+            notRegisteredCopy(
+              result.pushServiceProblem ?? null,
+              getHostPushRegisterFailure(hostId),
+              t
+            ) ??
+            t(
+              'settings.notificationDisplayTest.registrationPending',
+              'Push registration is not ready on this desktop. Try again shortly.'
+            )
           continue
+        }
+        if (result?.pushServiceProblem === 'rate_limited') {
+          throw new Error(pushServiceProblemCopy('rate_limited', t))
         }
         throw new Error(
           result?.reason === 'rate_limited'
@@ -280,4 +292,54 @@ function clockSkewCopy(host: string, seconds: number, t: Translate): string {
         'The clock on {{host}} is off by {{duration}}, so Orca’s push service refused it. Set its clock to the correct time and try again.',
         { host, duration: formatMobileNativeChatDuration(seconds, t) }
       )
+}
+
+// Desktops that predate pushServiceProblem still return the reason they refused the token.
+function notRegisteredCopy(
+  problem: MobilePushServiceProblem | null,
+  registerFailure: PushRegisterFailure | null,
+  t: Translate
+): string | null {
+  if (problem) {
+    return pushServiceProblemCopy(problem, t)
+  }
+  switch (registerFailure) {
+    case 'gateway_unreachable':
+      return pushServiceProblemCopy('unreachable', t)
+    case 'gateway_rejected':
+      return pushServiceProblemCopy('refused', t)
+    case 'throttled':
+      return t(
+        'settings.notificationDisplayTest.registrationThrottled',
+        'This desktop received too many push registrations. Try again in a minute.'
+      )
+    case 'registration_storage_failed':
+      return t(
+        'settings.notificationDisplayTest.registrationStorageFailed',
+        'This desktop could not save the push registration. Restart Orca on the desktop and try again.'
+      )
+    case 'not_mobile':
+    case null:
+      return null
+  }
+}
+
+function pushServiceProblemCopy(problem: MobilePushServiceProblem, t: Translate): string {
+  switch (problem) {
+    case 'rate_limited':
+      return t(
+        'settings.notificationDisplayTest.pushServiceRateLimited',
+        'Orca’s push service is rate limiting this desktop. Alerts start once it accepts the desktop again.'
+      )
+    case 'unreachable':
+      return t(
+        'settings.notificationDisplayTest.pushServiceUnreachable',
+        'This desktop cannot reach Orca’s push service right now. Alerts start once it can.'
+      )
+    case 'refused':
+      return t(
+        'settings.notificationDisplayTest.pushServiceRefused',
+        'Orca’s push service refused this desktop. Update Orca on the desktop and try again.'
+      )
+  }
 }

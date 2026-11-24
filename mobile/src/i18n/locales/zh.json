@@ -4014,6 +4014,11 @@
       "noToken": "此手机上没有可用的推送令牌。",
       "unsupportedHost": "此桌面端不支持推送通知。请更新以接收推送。",
       "registrationPending": "此桌面端的推送注册尚未就绪。请稍后重试。",
+      "pushServiceRateLimited": "Orca 推送服务正在限制此桌面端的请求。服务重新接受此桌面端后即会开始推送提醒。",
+      "pushServiceUnreachable": "此桌面端目前无法连接 Orca 推送服务。连接恢复后即会开始推送提醒。",
+      "pushServiceRefused": "Orca 推送服务拒绝了此桌面端。请更新桌面端的 Orca 后重试。",
+      "registrationThrottled": "此桌面端收到的推送注册过多。请一分钟后重试。",
+      "registrationStorageFailed": "此桌面端无法保存推送注册。请重新启动桌面端的 Orca 后重试。",
       "liveFallbackScheduled": "{{reason}} 已安排本地测试。请检查通知。Orca 运行且保持连接时，可接收实时提醒。"
     },
     "notificationSettingsScreen": {

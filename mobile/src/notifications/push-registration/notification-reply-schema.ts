@@ -1,6 +1,7 @@
 import * as z from 'zod'
 import type {
   MobilePushRegisterResult,
+  MobilePushServiceProblem,
   MobilePushTestResult
 } from '../../../../src/shared/notifications/mobile-push-contract'
 import { hostUnionArms, salvagedOptional } from '../../../../src/shared/validation/zod-salvage'
@@ -19,6 +20,11 @@ export const PUSH_TEST_REFUSAL_REASONS = hostUnionArms<
   rate_limited: true,
   rejected: true
 })
+export const PUSH_SERVICE_PROBLEMS = hostUnionArms<MobilePushServiceProblem>({
+  rate_limited: true,
+  unreachable: true,
+  refused: true
+})
 export const PUSH_REGISTER_REFUSAL_REASONS = hostUnionArms<
   Extract<MobilePushRegisterResult, { registered: false }>['reason']
 >({
@@ -34,7 +40,8 @@ export const pushDeliveryTestResultSchema = z
   .looseObject({
     accepted: salvagedOptional('accepted', z.boolean()),
     reason: salvagedOptional('reason', z.enum(PUSH_TEST_REFUSAL_REASONS)),
-    clockSkewSeconds: salvagedOptional('clockSkewSeconds', z.number().finite())
+    clockSkewSeconds: salvagedOptional('clockSkewSeconds', z.number().finite()),
+    pushServiceProblem: salvagedOptional('pushServiceProblem', z.enum(PUSH_SERVICE_PROBLEMS))
   })
   .nullish()
   .catch(undefined)

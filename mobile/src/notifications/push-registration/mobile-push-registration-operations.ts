@@ -1,6 +1,7 @@
 import type {
   MobilePushFilter,
-  MobilePushRegisterInput
+  MobilePushRegisterInput,
+  MobilePushRegisterResult
 } from '../../../../src/shared/notifications/mobile-push-contract'
 import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import type { MobilePushToken } from './push-token'
@@ -35,11 +36,18 @@ export const pushRouteUnregister = bindDeferredRpcOperation(
 
 const REQUEST_TIMEOUT_MS = 5_000
 
+/** Why a desktop did not take this phone's push token; null when it gave no reason or no reply. */
+export type PushRegisterFailure = Extract<MobilePushRegisterResult, { registered: false }>['reason']
+
+export type PushRegisterOutcome =
+  | { registered: true }
+  | { registered: false; reason: PushRegisterFailure | null }
+
 export async function sendRegister(
   client: UnvalidatedRpcRequestPort,
   token: MobilePushToken,
   filter: MobilePushFilter
-): Promise<boolean> {
+): Promise<PushRegisterOutcome> {
   const params: Omit<MobilePushRegisterInput, 'deviceId'> = {
     platform: token.platform,
     token: token.token,
@@ -51,9 +59,11 @@ export async function sendRegister(
     .catch(() => null)
   const registration = reply && pushRouteRegister.interpret(reply)
   if (!registration?.accepted) {
-    return false
+    return { registered: false, reason: null }
   }
   return registration.value?.registered === true
+    ? { registered: true }
+    : { registered: false, reason: registration.value?.reason ?? null }
 }
 
 export async function sendUnregister(

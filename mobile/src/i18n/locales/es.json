@@ -3070,6 +3070,11 @@
       "noToken": "No hay ningún token push disponible en este teléfono.",
       "unsupportedHost": "Este ordenador no admite notificaciones push. Actualízalo para recibirlas.",
       "registrationPending": "El registro push aún no está listo en este ordenador. Inténtalo de nuevo en breve.",
+      "pushServiceRateLimited": "El servicio push de Orca está limitando las solicitudes de este ordenador. Las alertas empezarán cuando vuelva a aceptarlo.",
+      "pushServiceUnreachable": "Este ordenador no puede conectar con el servicio push de Orca ahora mismo. Las alertas empezarán cuando pueda.",
+      "pushServiceRefused": "El servicio push de Orca rechazó este ordenador. Actualiza Orca en el ordenador e inténtalo de nuevo.",
+      "registrationThrottled": "Este ordenador recibió demasiados registros push. Inténtalo de nuevo en un minuto.",
+      "registrationStorageFailed": "Este ordenador no pudo guardar el registro push. Reinicia Orca en el ordenador e inténtalo de nuevo.",
       "liveFallbackScheduled": "{{reason}} Prueba local programada. Comprueba si aparece la notificación. Las alertas en directo están disponibles mientras Orca está en ejecución y conectado."
     },
     "notificationSettingsScreen": {

@@ -2991,6 +2991,11 @@
       "noToken": "Auf diesem Telefon ist kein Push-Token verfügbar.",
       "unsupportedHost": "Dieser Desktop unterstützt keine Push-Benachrichtigungen. Aktualisiere ihn, um Push zu empfangen.",
       "registrationPending": "Die Push-Registrierung ist auf diesem Desktop noch nicht bereit. Versuche es in Kürze erneut.",
+      "pushServiceRateLimited": "Der Push-Dienst von Orca begrenzt gerade die Anfragen dieses Desktops. Benachrichtigungen starten, sobald er den Desktop wieder annimmt.",
+      "pushServiceUnreachable": "Dieser Desktop erreicht den Push-Dienst von Orca gerade nicht. Benachrichtigungen starten, sobald er ihn erreicht.",
+      "pushServiceRefused": "Der Push-Dienst von Orca hat diesen Desktop abgelehnt. Aktualisiere Orca auf dem Desktop und versuche es erneut.",
+      "registrationThrottled": "Dieser Desktop hat zu viele Push-Registrierungen erhalten. Versuche es in einer Minute erneut.",
+      "registrationStorageFailed": "Dieser Desktop konnte die Push-Registrierung nicht speichern. Starte Orca auf dem Desktop neu und versuche es erneut.",
       "liveFallbackScheduled": "{{reason}} Lokaler Test geplant. Prüfe, ob die Benachrichtigung erscheint. Live-Meldungen sind verfügbar, solange Orca läuft und verbunden ist."
     },
     "notificationSettingsScreen": {

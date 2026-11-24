@@ -2991,6 +2991,11 @@
       "noToken": "Bu telefonda kullanılabilir anlık bildirim belirteci yok.",
       "unsupportedHost": "Bu masaüstü anlık bildirimleri desteklemiyor. Almak için güncelleyin.",
       "registrationPending": "Bu masaüstünde anlık bildirim kaydı henüz hazır değil. Kısa süre sonra tekrar deneyin.",
+      "pushServiceRateLimited": "Orca anlık bildirim hizmeti bu masaüstünün isteklerini sınırlıyor. Masaüstünü yeniden kabul ettiğinde bildirimler başlar.",
+      "pushServiceUnreachable": "Bu masaüstü şu anda Orca anlık bildirim hizmetine ulaşamıyor. Ulaşabildiğinde bildirimler başlar.",
+      "pushServiceRefused": "Orca anlık bildirim hizmeti bu masaüstünü reddetti. Masaüstündeki Orca’yı güncelleyip tekrar deneyin.",
+      "registrationThrottled": "Bu masaüstü çok fazla anlık bildirim kaydı aldı. Bir dakika sonra tekrar deneyin.",
+      "registrationStorageFailed": "Bu masaüstü anlık bildirim kaydını kaydedemedi. Masaüstündeki Orca’yı yeniden başlatıp tekrar deneyin.",
       "liveFallbackScheduled": "{{reason}} Yerel test planlandı. Bildirimi kontrol edin. Orca çalışır ve bağlı durumdayken canlı uyarılar alınabilir."
     },
     "notificationSettingsScreen": {

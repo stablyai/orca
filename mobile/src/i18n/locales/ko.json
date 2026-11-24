@@ -3093,6 +3093,11 @@
       "noToken": "이 휴대전화에서 사용할 수 있는 푸시 토큰이 없습니다.",
       "unsupportedHost": "이 데스크톱은 푸시 알림을 지원하지 않습니다. 푸시를 받으려면 업데이트하세요.",
       "registrationPending": "이 데스크톱의 푸시 등록이 아직 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
+      "pushServiceRateLimited": "Orca 푸시 서비스가 이 데스크톱의 요청을 제한하고 있습니다. 다시 허용되면 알림이 시작됩니다.",
+      "pushServiceUnreachable": "이 데스크톱이 지금 Orca 푸시 서비스에 연결할 수 없습니다. 연결되면 알림이 시작됩니다.",
+      "pushServiceRefused": "Orca 푸시 서비스가 이 데스크톱을 거부했습니다. 데스크톱의 Orca를 업데이트한 후 다시 시도하세요.",
+      "registrationThrottled": "이 데스크톱에 푸시 등록 요청이 너무 많습니다. 1분 후에 다시 시도하세요.",
+      "registrationStorageFailed": "이 데스크톱이 푸시 등록을 저장하지 못했습니다. 데스크톱의 Orca를 다시 시작한 후 다시 시도하세요.",
       "liveFallbackScheduled": "{{reason}} 로컬 테스트를 예약했습니다. 알림을 확인하세요. Orca가 실행 중이고 연결되어 있는 동안 실시간 알림을 받을 수 있습니다."
     },
     "notificationSettingsScreen": {

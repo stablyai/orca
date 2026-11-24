@@ -130,6 +130,11 @@
       "noToken": "No push token is available on this phone.",
       "unsupportedHost": "This desktop does not support push notifications. Update it to receive push.",
       "registrationPending": "Push registration is not ready on this desktop. Try again shortly.",
+      "pushServiceRateLimited": "Orca’s push service is rate limiting this desktop. Alerts start once it accepts the desktop again.",
+      "pushServiceUnreachable": "This desktop cannot reach Orca’s push service right now. Alerts start once it can.",
+      "pushServiceRefused": "Orca’s push service refused this desktop. Update Orca on the desktop and try again.",
+      "registrationThrottled": "This desktop received too many push registrations. Try again in a minute.",
+      "registrationStorageFailed": "This desktop could not save the push registration. Restart Orca on the desktop and try again.",
       "liveFallbackScheduled": "{{reason}} Local test scheduled. Check for the notification. Live alerts are available while Orca is running and connected."
     },
     "notificationSettingsScreen": {
