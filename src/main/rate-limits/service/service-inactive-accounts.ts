@@ -5,12 +5,21 @@ import { INACTIVE_CODEX_PROBE_STAGGER_MS, INACTIVE_FETCH_DEBOUNCE_MS } from './s
 import { delayUnlessAborted } from '../../../shared/concurrency/abort-aware-delay'
 import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
+export type InactiveAccountsFetchReason = 'automatic' | 'manual'
+
 export abstract class RateLimitServiceInactiveAccounts extends RateLimitServicePolling {
-  async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
+  /**
+   * `manual` is the user asking for these rows now, so it passes the fetch debounce and the
+   * per-account Retry-After once; automatic callers keep honoring both.
+   */
+  async fetchInactiveClaudeAccountsOnOpen(
+    reason: InactiveAccountsFetchReason = 'automatic'
+  ): Promise<void> {
     if (!this.isClaudeOAuthUsageEnabled()) {
       return
     }
-    if (Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
+    const manual = reason === 'manual'
+    if (!manual && Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
       return
     }
     this.pruneInactiveClaudeState()
@@ -18,7 +27,8 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
       return
     }
     const accounts = (this.inactiveClaudeAccountsResolver?.() ?? []).filter(
-      (account) => !this.isRetryAfterActive(this.inactiveClaudeCache.get(account.id) ?? null)
+      (account) =>
+        manual || !this.isRetryAfterActive(this.inactiveClaudeCache.get(account.id) ?? null)
     )
     if (accounts.length === 0) {
       return
