@@ -3,6 +3,10 @@ import { ScrollView, Text, View } from 'react-native'
 import { MobileFooterRowsScrollerContext } from './transcript/agent-messages/use-mobile-footer-row-on-screen'
 import { createMobileNativeChatTailViewport } from './transcript/viewport/mobile-native-chat-tail-viewport'
 import {
+  MobileNativeChatDisclosureContext,
+  useMobileNativeChatDisclosures
+} from './transcript/viewport/mobile-native-chat-disclosure-store'
+import {
   Check,
   ChevronRight,
   Circle,
@@ -291,6 +295,8 @@ function SetupMail({ after }: { after: React.ReactNode }): React.JSX.Element | n
 /** Mounts with its scroller, so a scroller that empties and comes back starts its place afresh. */
 function SetupMailScroller({ after }: { after: React.ReactNode }): React.JSX.Element {
   const [viewport] = useState(() => createMobileNativeChatTailViewport(true))
+  // Its own open-state store: rows scrolled away drop their card and keep it.
+  const disclosures = useMobileNativeChatDisclosures('bot-setup-mail')
   return (
     <MobileFooterRowsScrollerContext.Provider value={viewport}>
       <ScrollView
@@ -300,7 +306,9 @@ function SetupMailScroller({ after }: { after: React.ReactNode }): React.JSX.Ele
         onContentSizeChange={(_width, height) => viewport.contentResized(height)}
         onLayout={(event) => viewport.laidOut(event.nativeEvent.layout.height)}
       >
-        {after}
+        <MobileNativeChatDisclosureContext.Provider value={disclosures}>
+          {after}
+        </MobileNativeChatDisclosureContext.Provider>
       </ScrollView>
     </MobileFooterRowsScrollerContext.Provider>
   )

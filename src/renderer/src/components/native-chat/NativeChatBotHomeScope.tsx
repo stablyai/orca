@@ -3,6 +3,10 @@ import { cn } from '@/lib/class-names'
 import { BotFirstScreen } from '../bots/BotFirstScreen'
 import { NativeChatWaitingAgentMailRows } from './queue/NativeChatWaitingAgentMailRows'
 import { NativeChatWaitingAgentMailRowsContext } from './queue/NativeChatWaitingAgentMailActions'
+import {
+  NativeChatDisclosureContext,
+  useNativeChatDisclosures
+} from './messages/disclosure/native-chat-disclosure-store'
 import { nativeChatFirstScreenSignIn } from '../../../../shared/bots/bot-first-screen'
 import {
   NativeChatBotKickoffContext,
@@ -69,24 +73,18 @@ export function NativeChatBotHomeScope({
             )}
             aria-hidden={firstScreen ? true : undefined}
           >
-            {/* While setup covers the transcript, its waiting mail is drawn once, over setup. */}
+            {/* While setup covers the transcript, its waiting mail is drawn once, below setup. */}
             <NativeChatWaitingAgentMailRowsContext.Provider value={firstScreen ? null : mail}>
               {children}
             </NativeChatWaitingAgentMailRowsContext.Provider>
           </div>
-          {firstScreen ? <BotFirstScreen firstScreen={firstScreen} isVisible={isVisible} /> : null}
-          {firstScreen && mail ? (
-            // Opaque, so the setup it covers never shows through the rows; kept while empty, so its
-            // first arrival is announced.
-            <div
-              className={cn(
-                'absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-(--chat-content-max-width) flex-col gap-2',
-                mail.length > 0
-                  ? 'max-h-1/2 scrollbar-sleek overflow-y-auto bg-chat-pane px-4 pt-2 pb-2'
-                  : 'pointer-events-none'
-              )}
-            >
-              <NativeChatWaitingAgentMailRows />
+          {firstScreen ? (
+            // Setup takes the room the waiting mail leaves, so the mail never covers its controls.
+            <div className="absolute inset-0 flex flex-col">
+              <div className="relative min-h-0 flex-1">
+                <BotFirstScreen firstScreen={firstScreen} isVisible={isVisible} />
+              </div>
+              {mail ? <NativeChatSetupWaitingMail shown={mail.length > 0} /> : null}
             </div>
           ) : null}
         </div>
@@ -94,5 +92,23 @@ export function NativeChatBotHomeScope({
         children
       )}
     </NativeChatBotKickoffContext.Provider>
+  )
+}
+
+/** Waiting mail under bot setup, below it rather than over it. Kept while empty, so its first
+ *  arrival is announced; its own open-state store, so rows scrolled away keep what was open. */
+function NativeChatSetupWaitingMail({ shown }: { shown: boolean }): React.JSX.Element {
+  const disclosures = useNativeChatDisclosures()
+  return (
+    <div
+      className={cn(
+        'mx-auto flex w-full max-w-(--chat-content-max-width) shrink-0 flex-col gap-2',
+        shown && 'max-h-1/2 scrollbar-sleek overflow-y-auto px-4 pt-2 pb-2'
+      )}
+    >
+      <NativeChatDisclosureContext.Provider value={disclosures}>
+        <NativeChatWaitingAgentMailRows />
+      </NativeChatDisclosureContext.Provider>
+    </div>
   )
 }
