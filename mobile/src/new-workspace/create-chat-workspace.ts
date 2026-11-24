@@ -10,6 +10,7 @@ import {
 } from '../session/agent-launch/agent-launch-request'
 import { agentLaunchReplayRun } from './creation/mobile-workspace-create-operations'
 import { chatWorkspaceCreate, chatWorkspaceNoteWrite } from './chat-workspace-operations'
+import { isMobileMethodUnavailableError } from '../transport/rpc/mobile-method-unavailable'
 
 export function newChatWorkspaceSubmission() {
   const draft = createChatWorkspaceDraft()
@@ -21,14 +22,24 @@ export function newChatWorkspaceSubmission() {
     async create(client: RpcClient, choice: { agent: TuiAgent | '__blank__'; note: string }) {
       intent ??= { ...choice, note: choice.note.trim() }
       if (!createdRepo) {
-        const reply = chatWorkspaceCreate.interpret(
-          await chatWorkspaceCreate.request(client, {
-            name: draft.name,
-            displayName: translate('chats.newProjectDate', 'New project-{{date}}', {
-              date: draft.date
-            })
+        const response = await chatWorkspaceCreate.request(client, {
+          name: draft.name,
+          displayName: translate('chats.newProjectDate', 'New project-{{date}}', {
+            date: draft.date
           })
-        )
+        })
+        if (
+          !response.ok &&
+          isMobileMethodUnavailableError(response.error.code, response.error.message)
+        ) {
+          throw new Error(
+            translate(
+              'chats.updateHost',
+              'Update Orca on the selected host to create a chat workspace.'
+            )
+          )
+        }
+        const reply = chatWorkspaceCreate.interpret(response)
         if ('error' in reply) {
           throw new Error(reply.error)
         }
@@ -92,7 +103,7 @@ export function newChatWorkspaceSubmission() {
       return {
         worktreeId: root.worktreeId,
         name: createdRepo.displayName,
-        noteSaved: !intent.note || noteSaved,
+        savedNote: noteSaved ? intent.note : null,
         warning: warnings.join(' ') || undefined
       }
     }

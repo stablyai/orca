@@ -30,6 +30,12 @@ export function mergeRuntimeFolderWorkspace(
   meta: Partial<WorktreeMeta>
 ): Worktree {
   const creatorProvenance = normalizeWorkspaceCreatorProvenance(meta.creatorProvenance)
+  const isMainWorktree = worktreeId === getRuntimeFolderWorkspaceRootId(repo)
+  const followsChatName =
+    isMainWorktree &&
+    repo.chatWorkspace &&
+    !meta.displayNameIsPinned &&
+    meta.displayName === repo.chatWorkspace.initialName
   return {
     id: worktreeId,
     ...(meta.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
@@ -44,8 +50,8 @@ export function mergeRuntimeFolderWorkspace(
     head: '',
     branch: '',
     isBare: false,
-    isMainWorktree: worktreeId === getRuntimeFolderWorkspaceRootId(repo),
-    displayName: meta.displayName || repo.displayName,
+    isMainWorktree,
+    displayName: followsChatName ? repo.displayName : meta.displayName || repo.displayName,
     comment: meta.comment || '',
     linkedIssue: meta.linkedIssue ?? null,
     linkedPR: meta.linkedPR ?? null,

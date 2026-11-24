@@ -5181,6 +5181,7 @@
     "create": "建立對話",
     "title": "對話",
     "noteFailed": "無法儲存備註",
-    "agentFailed": "無法確認代理是否啟動，請先檢查對話。"
+    "agentFailed": "無法確認代理是否啟動，請先檢查對話。",
+    "updateHost": "請更新所選主機上的 Orca，以建立對話工作區。"
   }
 }

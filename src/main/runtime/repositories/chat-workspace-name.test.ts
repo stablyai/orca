@@ -6,6 +6,8 @@ import { Store } from '../../persistence/loading-store/store'
 import { closeTestStores, createSqliteTestStore } from '../../persistence/persistence-test-harness'
 import { chatWorkspaceNameUpdate } from './chat-workspace-name'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
+import { listRuntimeFolderWorkspaces } from '../workspaces/catalog/runtime-worktree-filesystem'
+import { hostWorktreeTargetForRepo } from '../../persistence/host-qualified-worktree-meta'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -31,6 +33,9 @@ it('allocates one folder per creation and persists only the first submitted chat
   }
   expect(created.repo.path).toBe(join(root, 'chats', name))
   expect(created.repo.kind).toBe('folder')
+  expect(listRuntimeFolderWorkspaces(store, created.repo)[0]!.displayName).toBe(
+    'New project-20261124'
+  )
   expect(await controller.createChatWorkspace(name, 'New project-20261124')).toEqual(created)
   await expect(controller.createChatWorkspace('../outside', 'New project')).rejects.toThrow(
     'Invalid'
@@ -49,6 +54,13 @@ it('allocates one folder per creation and persists only the first submitted chat
   const reopened = createSqliteTestStore(Store, { dataFile })
   const saved = reopened.getRepo(created.repo.id)!
   expect(saved.displayName).toBe('Plan a release')
+  const workspace = listRuntimeFolderWorkspaces(reopened, saved)[0]!
+  expect(workspace.displayName).toBe('Plan a release')
+  reopened.setWorktreeMeta(hostWorktreeTargetForRepo(workspace.id, saved), {
+    displayName: 'My workspace',
+    displayNameIsPinned: true
+  })
+  expect(listRuntimeFolderWorkspaces(reopened, saved)[0]!.displayName).toBe('My workspace')
   expect(saved.chatWorkspace?.autoName).toBe(false)
   expect(chatWorkspaceNameUpdate(saved, later, submissions)).toBeNull()
   reopened.updateRepo(saved, { chatWorkspace: { initialName: saved.displayName, autoName: true } })

@@ -6,16 +6,22 @@ import WorktreeList from '../worktree-list/listing/WorktreeList'
 import { NewChatWorkspaceMenu } from './NewChatWorkspaceMenu'
 import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 
+export function useChatWorkspaceScroll() {
+  const scrollOffsetRef = useRef(0)
+  const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
+  return { scrollOffsetRef, scrollAnchorRef }
+}
+
 export function ChatWorkspaceSection({
-  onWorktreeCardClick
-}: {
+  onWorktreeCardClick,
+  scrollOffsetRef,
+  scrollAnchorRef
+}: ReturnType<typeof useChatWorkspaceScroll> & {
   onWorktreeCardClick?: () => void
 }) {
   const t = useTranslate()
   const repos = useAppStore((state) => state.repos)
   const hasChats = useMemo(() => repos.some((repo) => repo.chatWorkspace), [repos])
-  const scrollOffsetRef = useRef(0)
-  const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const collapsed = useAppStore((state) => state.collapsedGroups.has('sidebar:chats'))
   const toggle = useAppStore((state) => state.toggleCollapsedGroup)
   return (

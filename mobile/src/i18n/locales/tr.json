@@ -5187,6 +5187,7 @@
     "create": "Sohbet oluştur",
     "title": "Sohbetler",
     "noteFailed": "Not kaydedilemedi",
-    "agentFailed": "Aracı başlatılamadı. Yeniden başlatmadan önce sohbeti kontrol edin."
+    "agentFailed": "Aracı başlatılamadı. Yeniden başlatmadan önce sohbeti kontrol edin.",
+    "updateHost": "Sohbet çalışma alanı oluşturmak için seçili ana bilgisayardaki Orca’yı güncelleyin."
   }
 }

@@ -8567,6 +8567,7 @@
     "create": "Create chat",
     "title": "Chats",
     "noteFailed": "Could not save the note",
-    "agentFailed": "Could not start the agent. Check the chat before starting another."
+    "agentFailed": "Could not start the agent. Check the chat before starting another.",
+    "updateHost": "Update Orca on the selected host to create a chat workspace."
   }
 }

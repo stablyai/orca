@@ -23,7 +23,7 @@ function PopulatedSidebar() {
       <SidebarProjectsListSlot botsShown collapsed={collapsed}>
         <WorktreeList scrollOffsetRef={offset} scrollAnchorRef={anchor} />
       </SidebarProjectsListSlot>
-      <ChatWorkspaceSection />
+      <ChatWorkspaceSection scrollOffsetRef={chatOffset} scrollAnchorRef={chatAnchor} />
       <SidebarSectionHeader
         title="Bots"
         sectionId="bots"
@@ -42,7 +42,7 @@ export const empty = defineFixture({
     <DndContext>
       <div className="bg-worktree-sidebar pb-4">
         <ProjectsHeader />
-        <ChatWorkspaceSection />
+        <ChatWorkspaceSection scrollOffsetRef={chatOffset} scrollAnchorRef={chatAnchor} />
       </div>
     </DndContext>
   )
@@ -124,6 +124,8 @@ const projectRoot = makeWorktree(`repo-1::${project.path}`, 'main', {
   isMainWorktree: true,
   hostId: 'local'
 })
+const chatOffset = { current: 0 }
+const chatAnchor = { current: null }
 const offset = { current: 0 }
 const anchor = { current: null }
 

@@ -8331,6 +8331,7 @@
     "create": "创建对话",
     "title": "对话",
     "noteFailed": "无法保存备注",
-    "agentFailed": "无法确认智能体是否启动，请先检查对话。"
+    "agentFailed": "无法确认智能体是否启动，请先检查对话。",
+    "updateHost": "请更新所选主机上的 Orca，以创建对话工作区。"
   }
 }

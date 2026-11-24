@@ -5187,6 +5187,7 @@
     "create": "Chat erstellen",
     "title": "Chats",
     "noteFailed": "Notiz konnte nicht gespeichert werden",
-    "agentFailed": "Agent konnte nicht gestartet werden. Prüfe den Chat vor einem weiteren Start."
+    "agentFailed": "Agent konnte nicht gestartet werden. Prüfe den Chat vor einem weiteren Start.",
+    "updateHost": "Aktualisiere Orca auf dem ausgewählten Host, um einen Chat-Arbeitsbereich zu erstellen."
   }
 }

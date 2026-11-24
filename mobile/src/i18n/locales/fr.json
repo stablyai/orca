@@ -5299,6 +5299,7 @@
     "create": "Créer un chat",
     "title": "Chats",
     "noteFailed": "Impossible d’enregistrer la note",
-    "agentFailed": "Impossible de démarrer l’agent. Vérifiez le chat avant de réessayer."
+    "agentFailed": "Impossible de démarrer l’agent. Vérifiez le chat avant de réessayer.",
+    "updateHost": "Mettez à jour Orca sur l’hôte sélectionné pour créer un espace de travail de discussion."
   }
 }

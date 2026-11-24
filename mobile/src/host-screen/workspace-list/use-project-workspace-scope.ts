@@ -19,9 +19,14 @@ export function useProjectWorkspaceScope(inputs: HostListSectionsInputs) {
   )
   const scope = useMemo(() => {
     const chatKeys = new Set(repos.filter((repo) => repo.chatWorkspace).map(getRepoHostIdentity))
+    const hiddenChatKeys = new Set(
+      repos
+        .filter((repo) => repo.chatWorkspace && repo.hiddenAt !== undefined)
+        .map(getRepoHostIdentity)
+    )
     const projectRow = (row: { repoId: string; hostId?: string | null }) =>
       !chatKeys.has(getRepoHostIdentityForParts(row.repoId, row.hostId ?? 'local'))
-    return { chatKeys, projectRow }
+    return { chatKeys, hiddenChatKeys, projectRow }
   }, [repos])
   const scopedRows = useMemo(
     () =>
@@ -95,13 +100,13 @@ export function useProjectWorkspaceScope(inputs: HostListSectionsInputs) {
   const chatRows = useMemo(
     () =>
       scope.chatKeys.size
-        ? displayWorktrees.filter(
-            (row) =>
-              !scope.projectRow({
-                repoId: row.repoId,
-                hostId: resolveWorktreeHostId(row, state.repoHostIdByRepoId)
-              })
-          )
+        ? displayWorktrees.filter((row) => {
+            const hostId = resolveWorktreeHostId(row, state.repoHostIdByRepoId)
+            return (
+              !scope.projectRow({ repoId: row.repoId, hostId }) &&
+              !scope.hiddenChatKeys.has(getRepoHostIdentityForParts(row.repoId, hostId ?? 'local'))
+            )
+          })
         : [],
     [scope, displayWorktrees, state.repoHostIdByRepoId]
   )

@@ -87,8 +87,8 @@ export function NewChatWorkspaceModal(props: NewWorktreeModalProps) {
         agent: agents.selectedAgent.id,
         note
       })
-      if (result.noteSaved) {
-        setNote((current) => (current === note ? '' : current))
+      if (result.savedNote !== null) {
+        setNote((current) => (current.trim() === result.savedNote ? '' : current))
       }
       props.onClose()
       props.onCreated(result.worktreeId, result.name, result.warning)
@@ -103,12 +103,19 @@ export function NewChatWorkspaceModal(props: NewWorktreeModalProps) {
       setCreating(false)
     }
   }
+  function requestClose() {
+    if (creating) {
+      return
+    }
+    if (navigation.drawerView !== 'form') {
+      navigation.transitionDrawer('form')
+      return
+    }
+    props.onClose()
+  }
   const title = t('chats.create', 'Create chat')
   return (
-    <BottomDrawerModalHost
-      visible={props.visible}
-      onRequestClose={creating ? () => undefined : props.onClose}
-    >
+    <BottomDrawerModalHost visible={props.visible} onRequestClose={requestClose}>
       <BottomDrawer
         dismissible={!creating}
         visible={navigation.formSheetVisible}

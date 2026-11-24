@@ -5873,6 +5873,7 @@
     "create": "Criar chat",
     "title": "Chats",
     "noteFailed": "Não foi possível salvar a nota",
-    "agentFailed": "Não foi possível iniciar o agente. Verifique o chat antes de iniciar outro."
+    "agentFailed": "Não foi possível iniciar o agente. Verifique o chat antes de iniciar outro.",
+    "updateHost": "Atualize o Orca no host selecionado para criar um espaço de trabalho de chat."
   }
 }
