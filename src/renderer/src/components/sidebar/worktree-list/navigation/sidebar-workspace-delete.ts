@@ -8,8 +8,12 @@ import {
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import { getRenderedWorkspaceRowsInSidebarOrder } from './worktree-sidebar-row-preference'
-import { getCyclableRowIdentity, resolveActiveCycleIdentity } from './worktree-keyboard-cycle'
-import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { getCyclableRowIdentity } from './worktree-keyboard-cycle'
+import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/selection/active-workspace'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
@@ -31,13 +35,24 @@ export function getSidebarWorkspaceDeleteTargets(args: {
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
 }): readonly Worktree[] {
-  if (args.selectedWorktrees.length > 0 || args.activeWorktreeId === null) {
+  const { activeWorktreeId, activeWorkspaceExecutionHostId } = args
+  if (args.selectedWorktrees.length > 0 || activeWorktreeId === null) {
     return args.selectedWorktrees
   }
-  const rows = getRenderedWorkspaceRowsInSidebarOrder(args.rows, args.pinnedDisplayPolicy)
-  const activeIdentity = resolveActiveCycleIdentity({ ...args, rows })
-  const activeRow = rows.find((row) => getCyclableRowIdentity(row) === activeIdentity)
-  return activeRow ? [activeRow.worktree] : []
+  const active = { worktreeId: activeWorktreeId, hostId: activeWorkspaceExecutionHostId }
+  const activeIdentity = activeWorkspaceExecutionHostId
+    ? composeWorktreeHostIdentity(activeWorkspaceExecutionHostId, activeWorktreeId)
+    : null
+  const matches = getRenderedWorkspaceRowsInSidebarOrder(
+    args.rows,
+    args.pinnedDisplayPolicy
+  ).filter(
+    (row) =>
+      getCyclableRowIdentity(row) === activeIdentity ||
+      isActiveSidebarWorkspace(row.worktree, active)
+  )
+  // A host-less activation can match same-id workspaces on several hosts; never guess which to delete.
+  return new Set(matches.map(getCyclableRowIdentity)).size === 1 ? [matches[0].worktree] : []
 }
 
 export function resolveSidebarWorkspaceDeleteIntent(args: {
