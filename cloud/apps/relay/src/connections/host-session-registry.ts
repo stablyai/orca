@@ -975,7 +975,9 @@ export class HostSessionRegistry {
     if (this.hostConnectionsFull(session)) {
       capacityReservation?.release()
       this.failReservationBestEffort(reservation)
-      if (credentialActivityId) this.releaseActivityBestEffort(identity, credentialActivityId)
+      if (credentialActivityId) {
+        this.releaseActivityBestEffort(identity, credentialActivityId)
+      }
       this.rejectClient(socket, RELAY_CLOSE_CODE.LIMIT_EXCEEDED)
       return
     }
