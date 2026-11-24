@@ -26,6 +26,9 @@ export const UPDATE_CHECK_SILENT_SETTLE_DELAY_MS = 1_000
 export const UPDATE_CHECK_STALL_TIMEOUT_MS = 45_000
 // Squirrel re-reads/verifies the bundle through localhost; report prolonged silence instead of leaving staging invisible.
 export const MAC_DEFERRED_STAGING_TIMEOUT_MS = 120_000
+// Interactive staging re-reads and verifies a ~300 MB bundle; on a busy Mac it took up to ~9 minutes and still succeeded.
+// Only a much longer silence means Squirrel is stuck; until then the download card keeps showing progress.
+export const MAC_INTERACTIVE_STAGING_TIMEOUT_MS = 15 * 60 * 1000
 
 export type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
 export type MissingManifestPrereleaseFallbackResult = { userInitiated: boolean }

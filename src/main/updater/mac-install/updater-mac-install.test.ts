@@ -2,7 +2,10 @@ import { EventEmitter } from 'node:events'
 import { afterEach, expect, it, vi } from 'vitest'
 import { app, autoUpdater, powerMonitor } from 'electron'
 import { UpdaterSetup } from '../lifecycle/updater-setup'
-import { MAC_DEFERRED_STAGING_TIMEOUT_MS } from '../lifecycle/updater-state'
+import {
+  MAC_DEFERRED_STAGING_TIMEOUT_MS,
+  MAC_INTERACTIVE_STAGING_TIMEOUT_MS
+} from '../lifecycle/updater-state'
 import { beginMacUpdateDownload, isMacInstallerReady } from './updater-mac-install'
 
 vi.mock('electron', async () => {
@@ -53,7 +56,7 @@ it.runIf(process.platform === 'darwin')(
     await vi.advanceTimersByTimeAsync(0)
     updater.downloadUpdate()
     jsUpdater.emit('update-downloaded', { version })
-    vi.advanceTimersByTime(MAC_DEFERRED_STAGING_TIMEOUT_MS)
+    vi.advanceTimersByTime(MAC_INTERACTIVE_STAGING_TIMEOUT_MS)
     expect(updater.getUpdateStatus()).toMatchObject({ state: 'error', version, retryable: false })
 
     updater.downloadUpdate()
@@ -80,5 +83,25 @@ it.runIf(process.platform === 'darwin')(
       version,
       installOnQuit: true
     })
+  }
+)
+
+it.runIf(process.platform === 'darwin')(
+  'keeps slow but healthy macOS staging in progress until Squirrel finishes',
+  async () => {
+    vi.useFakeTimers({ now: 0 })
+    const updater = new UpdaterSetup()
+    updater.setupAutoUpdater(null, { getLastUpdateCheckAt: () => Date.now() })
+
+    updater.checkForUpdatesFromMenu()
+    await vi.advanceTimersByTimeAsync(0)
+    updater.downloadUpdate()
+    jsUpdater.emit('update-downloaded', { version })
+    // A busy Mac took minutes to stage; that is progress, not a failed download.
+    vi.advanceTimersByTime(Math.max(MAC_DEFERRED_STAGING_TIMEOUT_MS, 9 * 60 * 1000))
+    expect(updater.getUpdateStatus()).toEqual({ state: 'downloading', version, percent: 100 })
+
+    autoUpdater.emit('update-downloaded')
+    expect(updater.getUpdateStatus()).toMatchObject({ state: 'downloaded', version })
   }
 )

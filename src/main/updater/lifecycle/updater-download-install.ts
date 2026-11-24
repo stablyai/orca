@@ -11,7 +11,7 @@ import type { UpdateStatus } from '../../../shared/updater/update-status-types'
 import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import {
   AUTO_UPDATE_RETRY_INTERVAL_MS,
-  MAC_DEFERRED_STAGING_TIMEOUT_MS,
+  MAC_INTERACTIVE_STAGING_TIMEOUT_MS,
   QUIT_AND_INSTALL_DELAY_MS
 } from './updater-state'
 import { UpdaterRequiredRestart } from './updater-required-restart'
@@ -117,7 +117,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
           ...updaterCodedMessage('macStagingTimeout')
         })
       }
-    }, MAC_DEFERRED_STAGING_TIMEOUT_MS)
+    }, MAC_INTERACTIVE_STAGING_TIMEOUT_MS)
   }
 
   protected finishMacStaging(): string | null {
