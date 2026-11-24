@@ -28,12 +28,14 @@ export class AcpBackgroundTaskTimeline {
   }
 
   /** A task an earlier app saw start, as it saved it, still running; one Orca made of a call ends
-   *  with that call again. No row is written. */
-  restate(block: NativeChatBackgroundTaskBlock): void {
-    if (!this.running.has(block.taskId) && !isSettledBackgroundTaskState(block.state)) {
-      this.running.set(block.taskId, block)
-      this.tools.restateBackgrounded(block)
+   *  with that call again. Returns its update for the live work view; no row is written. */
+  restate(block: NativeChatBackgroundTaskBlock, thread: string): ProviderTimelineEvent | null {
+    if (this.running.has(block.taskId) || isSettledBackgroundTaskState(block.state)) {
+      return null
     }
+    this.running.set(block.taskId, block)
+    this.tools.restateBackgrounded(block)
+    return this.event(block, { thread })
   }
 
   reconcile(taskId: string, thread: string): ProviderTimelineEvent[] {
@@ -62,13 +64,20 @@ export class AcpBackgroundTaskTimeline {
         this.settled.delete(block.taskId)
         this.running.set(block.taskId, block)
       }
-      const parent = block.parentToolUseId ? this.tools.join(block.parentToolUseId) : {}
-      return {
-        type: 'item.update',
-        item: `background-task:${block.taskId}`,
-        body: backgroundTaskJournalBody(block),
-        join: { ...join, ...parent }
-      }
+      return this.event(block, join)
     })
+  }
+
+  private event(
+    block: NativeChatBackgroundTaskBlock,
+    join: ProviderTimelineJoin
+  ): ProviderTimelineEvent {
+    const parent = block.parentToolUseId ? this.tools.join(block.parentToolUseId) : {}
+    return {
+      type: 'item.update',
+      item: `background-task:${block.taskId}`,
+      body: backgroundTaskJournalBody(block),
+      join: { ...join, ...parent }
+    }
   }
 }
