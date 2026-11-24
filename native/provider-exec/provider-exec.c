@@ -823,12 +823,14 @@ struct tree_scan {
     unsigned char *state;
     size_t *chain;
     int leader_alive;
+    // A candidate whose tag couldn't be read might be a member, so absence can't be proven.
+    int doubt;
 };
 
 #if defined(__APPLE__)
 // Only a full read without the tag is cached per identity (most launchd orphans are unrelated).
 // A tagged process is read again each sweep, so one that execs without the tag drops out, and a
-// failed read is retried.
+// failed read (-1) is retried and leaves the sweep in doubt.
 static int tagged_once(struct watcher *w, const struct proc_row *row) {
     if (identity_find(&w->untagged, row->pid, row->start) != NULL) {
         return 0;
@@ -837,7 +839,7 @@ static int tagged_once(struct watcher *w, const struct proc_row *row) {
     if (tagged == 0 && identity_reserve(&w->untagged)) {
         identity_append(&w->untagged, row->pid, row->start);
     }
-    return tagged == 1;
+    return tagged;
 }
 #endif
 
@@ -1061,8 +1063,11 @@ static int resolve_members(struct watcher *w, struct tree_scan *scan) {
             continue;
         }
         // A member an earlier sweep proved vouches for its later children, though not its session.
-        int tagged = identity_find(&w->known, row->pid, row->start) != NULL || tagged_once(w, row);
-        if (tagged && same_identity(row)) {
+        int tagged = identity_find(&w->known, row->pid, row->start) != NULL ? 1 : tagged_once(w, row);
+        if (tagged < 0) {
+            scan->doubt = 1;
+        }
+        if (tagged == 1 && same_identity(row)) {
             for (size_t j = t.start[top]; j < t.start[top + 1]; j++) {
                 scan->state[t.order[j]] = TREE_TAGGED;
             }
@@ -1369,6 +1374,9 @@ static int sweep_once(struct watcher *w, int signal_number) {
         dropped = 1;
     }
     live = 0;
+    if (scan.doubt) {
+        dropped = 1;
+    }
     w->sweep_generation++;
     for (size_t i = 0; i < scan.n; i++) {
         struct proc_row *row = &scan.rows[i];
