@@ -24,7 +24,9 @@ import {
   type BotWorkWorker,
   type BotWorkWorkspace
 } from './bot-work-record'
-import { BotWorkStore, botWorkStoreFile, type BotWorkHost } from './bot-work-store'
+import type { BotWorkHost } from './bot-work-store'
+import { botWorkStoreFile, type BotWorkRemote } from './bot-work-ops'
+import type { BotsDbWorkerClient } from './db-worker/bots-db-worker-client'
 import type { BotWorkWorkspaceShow } from './bot-work-workspace-show'
 import type { ScopedWorktreeReads } from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -157,13 +159,17 @@ async function readTurnAddress(
   }
 }
 
-export function runtimeBotWork(runtime: BotWorkRuntime): BotWorkRecord {
-  const stores = new Map<string, BotWorkStore>()
+/** `db`: the runtime's bots DB worker, which runs the store's SQL. */
+export function runtimeBotWork(
+  runtime: BotWorkRuntime,
+  db: Pick<BotsDbWorkerClient, 'work'>
+): BotWorkRecord {
+  const stores = new Map<string, BotWorkRemote>()
   return new BotWorkRecord({
     // Per profile: a profile switch reads that profile's record.
     store: () => {
       const path = botWorkStoreFile(getProfileUserDataPath())
-      const store = stores.get(path) ?? BotWorkStore.open(path)
+      const store = stores.get(path) ?? db.work(path)
       stores.set(path, store)
       return store
     },

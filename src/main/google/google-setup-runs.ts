@@ -32,7 +32,7 @@ export { GoogleSetupError, isPersonOwnedStep, type GoogleSetupActor }
 const FileSchema = z.object({ runs: z.record(z.string(), GoogleSetupRunSchema).default({}) })
 
 export type GoogleSetupChange =
-  | { action: 'start'; mode?: GoogleSetupRunMode; browserPageId?: string }
+  | { action: 'start'; mode?: GoogleSetupRunMode; browserPageId?: string; newApp?: true }
   | {
       action: 'step'
       step: GoogleSetupStep
@@ -118,8 +118,17 @@ export class GoogleSetupRuns {
     const current = this.get(botId)
     if (change.action === 'start') {
       // A bot resumes a running setup rather than restarting it, which could lift Guide me here.
-      if (current?.state === 'running' && actor === 'bot') {
-        return current
+      // A new-app start only marks it: a running setup already makes its own app, and a key saved during it counts.
+      // One that imported the team's file makes none, so a new app starts over.
+      const imported = current?.answers.path?.values[0] === 'import'
+      if (
+        current?.state === 'running' &&
+        (actor === 'bot' || change.newApp) &&
+        !(change.newApp && imported)
+      ) {
+        return change.newApp && !current.newApp
+          ? this.save({ ...current, newApp: true, updatedAt: now, revision: current.revision + 1 })
+          : current
       }
       return this.save({
         id: randomUUID(),
@@ -129,6 +138,7 @@ export class GoogleSetupRuns {
         steps: {},
         answers: {},
         ...(change.browserPageId ? { browserPageId: change.browserPageId } : {}),
+        ...(change.newApp ? { newApp: true } : {}),
         startedAt: now,
         updatedAt: now,
         revision: (current?.revision ?? 0) + 1
@@ -185,6 +195,7 @@ export class GoogleSetupRuns {
         ...(current.kind ? { kind: current.kind } : {}),
         ...(current.services ? { services: current.services } : {}),
         ...(current.browserPageId ? { browserPageId: current.browserPageId } : {}),
+        ...(current.newApp ? { newApp: true } : {}),
         startedAt: now,
         updatedAt: now,
         revision

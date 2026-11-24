@@ -4,6 +4,7 @@
 // Hosts keep the waiting ask that pairing works out from what this file reads, writes or limits: any change
 // to it bumps WAITING_ASK_RULES (src/main/bots/bot-item-waiting-ask-keep.ts).
 import * as z from 'zod'
+import { markdownPlainLine } from '../markdown/markdown-plain-line'
 import { BOT_ITEM_LIMITS, type BotItem } from './bot-items'
 
 export const BOT_ITEM_ASK_LIMITS = {
@@ -59,18 +60,16 @@ export const BotItemAskSchema = z.object({
 
 export type BotItemAsk = z.infer<typeof BotItemAskSchema>
 
-/** A question's first line as plain words, for a one-line row: no `**`, `#`, list marks, code ticks
- *  or link syntax, so a question the agent wrote in Markdown reads cleanly there. */
+/** A question's first line with words, as plain words, for a one-line row, so a question the agent wrote in
+ *  Markdown reads cleanly there. */
 export function botItemQuestionLine(text: string): string {
-  const first = text.split('\n').find((line) => line.trim().length > 0) ?? ''
-  return first
-    .trim()
-    .replace(/^(#{1,6}|>|[-*+]|\d+[.)])\s+/, '')
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/(\*\*|__)(.+?)\1/g, '$2')
-    .replace(/(^|[^\w*])[*_]([^*_\s][^*_]*?)[*_](?=[^\w*]|$)/g, '$1$2')
-    .replace(/`([^`]*)`/g, '$1')
-    .trim()
+  for (const line of text.split('\n')) {
+    const plain = markdownPlainLine(line)
+    if (plain) {
+      return plain
+    }
+  }
+  return ''
 }
 
 /** The ask a stored question event carries (written by v1.4.265 hosts), or null. */

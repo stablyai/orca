@@ -5,14 +5,7 @@ import type { BotWorkerSummary } from '../../shared/bots/bot-work-list'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { ownPullRequest } from './bot-work-pr-match'
 import type { BotWorkPullRequest } from '../../shared/bots/bot-work-pull-request'
-import type {
-  BotWorkAddress,
-  BotWorkCloseReason,
-  BotWorkHost,
-  BotWorkRef,
-  BotWorkRow,
-  BotWorkStore
-} from './bot-work-store'
+import type { BotWorkAddress, BotWorkHost, BotWorkRow } from './bot-work-store'
 import { botWorkTurnNote, cleanBotWorkText } from './bot-work-turn-note'
 import { readBotWorkRows } from './bot-work-row-read'
 import type { BotTurnAddress, BotWorkCheck, BotWorkRecordDeps } from './bot-work-types'
@@ -63,7 +56,7 @@ export class BotWorkRecord {
   ): Promise<void> {
     const bind = { ...turn, ...start }
     const store = this.deps.store()
-    const rows = store.addressRows(turn.botId, turn.address)
+    const rows = await store.addressRows(turn.botId, turn.address)
     if (rows.some((row) => row.dispatchId === start.dispatchId)) {
       return
     }
@@ -74,17 +67,8 @@ export class BotWorkRecord {
     if (rows.some((row) => workers?.get(row.dispatchId)?.dispatchId === start.dispatchId)) {
       return
     }
-    // Another start, or a close, may land during the reads; storage then refuses this write, and
-    // one more try against what is there now makes this, the newest, current.
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const current = store.live(turn.botId, turn.address)
-      if (current?.dispatchId === start.dispatchId) {
-        return
-      }
-      if (current ? store.replace(current, bind) : store.bind(bind)) {
-        return
-      }
-    }
+    // One transaction in the worker: starts and closes landing meanwhile are each seen in turn.
+    await store.makeCurrent(bind)
   }
 
   /** Validates a live row, closing it on proof; null once it is closed, by this or anyone. */
@@ -100,10 +84,11 @@ export class BotWorkRecord {
     for await (const read of readBotWorkRows(this.deps, rows)) {
       if ('closeReason' in read) {
         // A failed close leaves the row live for the next read; the other rows still count.
-        try {
-          this.deps.store().close(read.row, read.closeReason)
-        } catch {}
-      } else if (this.isLive(read.row)) {
+        await this.deps
+          .store()
+          .close(read.row, read.closeReason)
+          .catch(() => {})
+      } else if (await this.deps.store().isOpen(read.row)) {
         // The reads await, and a close may have landed meanwhile.
         yield read
       }
@@ -117,8 +102,12 @@ export class BotWorkRecord {
   ): Promise<string | null> {
     this.handedOver(sessionId, message)
     const turn = await this.turnOf(sessionId)
-    const live = turn && this.deps.store().live(turn.botId, turn.address)
-    const checked = live && (await withTimeout(this.check(live), BOT_WORK_NOTE_TIMEOUT_MS, null))
+    const read = async () => {
+      const live = turn && (await this.deps.store().live(turn.botId, turn.address))
+      return live ? this.check(live) : null
+    }
+    // The store's read is within the wait too: a stalled worker never holds the turn back.
+    const checked = turn && (await withTimeout(read(), BOT_WORK_NOTE_TIMEOUT_MS, null))
     return checked ? botWorkTurnNote(checked) : null
   }
 
@@ -126,7 +115,7 @@ export class BotWorkRecord {
   async list(botId: string): Promise<BotWorkerSummary[]> {
     const items: BotWorkerSummary[] = []
     for await (const { row, worker, workspace } of this.checkAll(
-      this.deps.store().liveRows(botId)
+      await this.deps.store().liveRows(botId)
     )) {
       // A chat's own name; a connector conversation's only when its connector asked.
       const linked =
@@ -164,7 +153,7 @@ export class BotWorkRecord {
     const found: BotWorkPullRequest[] = []
     const read = async () => {
       for await (const { workspace } of this.checkAll(
-        this.deps.store().addressRows(botId, address)
+        await this.deps.store().addressRows(botId, address)
       )) {
         const pr = workspace && ownPullRequest(workspace)
         if (pr && found.length < max) {
@@ -181,28 +170,21 @@ export class BotWorkRecord {
   async forget(sessionId: string): Promise<boolean> {
     const turn = await this.turnOf(sessionId)
     const store = this.deps.store()
-    const rows = turn ? store.addressRows(turn.botId, turn.address) : []
-    return rows.filter((row) => store.close(row, 'owner_reset')).length > 0
+    const rows = turn ? await store.addressRows(turn.botId, turn.address) : []
+    const closed = await Promise.all(rows.map((row) => store.close(row, 'owner_reset')))
+    return closed.some(Boolean)
   }
 
-  close(ref: BotWorkRef, reason: BotWorkCloseReason): boolean {
-    return this.deps.store().close(ref, reason)
-  }
-
-  /** This profile's store; read only by the inert PR waker connector-cloud-install.ts still builds. */
-  store(): BotWorkStore {
-    return this.deps.store()
-  }
-
-  /** A deleted bot's rows. */
-  forgetBot(botId: string): void {
-    const store = this.deps.store()
-    for (const row of store.liveRows(botId)) {
-      store.close(row, 'bot_gone')
+  /** A deleted bot's rows; never rejects, so its caller needn't wait. Rows a failure leaves open
+   *  name a bot no lookup lists, so nothing reads them. */
+  async forgetBot(botId: string): Promise<void> {
+    try {
+      const store = this.deps.store()
+      for (const row of await store.liveRows(botId)) {
+        await store.close(row, 'bot_gone')
+      }
+    } catch (error) {
+      console.warn('[bots] closing a deleted bot work failed', error)
     }
-  }
-
-  private isLive(row: BotWorkRow): boolean {
-    return this.deps.store().isOpen(row)
   }
 }

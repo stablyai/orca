@@ -148,10 +148,11 @@ export function BotRow({
           />
         ) : null
       }
-      hoverDetails={() => (
+      hoverDetails={(keyboardFocus) => (
         <BotHoverDetails
           bot={bot}
           details={details}
+          showHostOnFocus={keyboardFocus}
           onOpenHome={() => openBotHomePanelFromSidebar(bot, onOpen)}
         />
       )}

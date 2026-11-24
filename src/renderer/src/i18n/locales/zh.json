@@ -8179,7 +8179,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "已删除配置文件\"{{value0}}\"",
-          "2d4bea7f35": "默认 cookie 已清除",
           "796d846483": "没有导入cookie",
           "c29648fe5b": "当前",
           "b4c167764d": "已从文件将 {{value0}} 个 Cookie 导入到 {{value1}}",
@@ -8187,10 +8186,7 @@
           "b4e9d3f2a1c5": "已从 {{value1}} 导入 {{value0}} 个 Cookie 到 {{value2}}",
           "c5a273a809": "从 {{value0}}",
           "80bffd32bf": "导入 Cookie",
-          "bd7d68f138": "从文件...",
-          "4054c458e1": "清除默认 cookie",
-          "3b662becd5": "要清除默认配置文件中的 cookie 吗？",
-          "f159cf5a3e": "这可能会让你退出此配置文件中的网站。"
+          "bd7d68f138": "从文件..."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "如果 cookie 导入不合适，“计算机使用”可以控制本地应用程序，并可以在适用的情况下使用现有的登录浏览器会话。安装 Orca Computer Use 技能； macOS 还需要隐私权限。",
@@ -18079,8 +18075,6 @@
             "ed8f54509d": "默认",
             "e5d31de1a9": "视口尺寸",
             "56f94f4ffa": "从文件...",
-            "eb280bfb11": "从 {{value0}}",
-            "2293adf620": "导入 Cookie",
             "cf7cdc67ef": "新档案...",
             "7b838540c7": "浏览器菜单",
             "a7a86702b3": "创建并切换到 {{value0}} 配置文件",
@@ -20426,7 +20420,6 @@
         "terminalRequired": "在终端中回答这个 OMP 问题",
         "openTerminal": "在终端中回答",
         "recommended": "推荐",
-        "stepAnswered": "{{value0}}，已回答",
         "stepOf": "第 {{value0}} 个，共 {{value1}} 个",
         "answered": "已回答",
         "title": "问题",
@@ -23355,6 +23348,13 @@
       "sshPage": {
         "stored": "已存储到 {{host}} 的浏览器。",
         "googleCookiesSkipped": "未导入 Google Cookie。请打开一个通过 {{host}} 浏览的页面，然后登录 Google。"
+      },
+      "picker": {
+        "menuItem": "导入 Cookie…",
+        "search": "搜索配置文件",
+        "lastUsed": "上次使用",
+        "noMatches": "无匹配项",
+        "googleNote": "Google 登录信息未导入"
       }
     },
     "googleCookieClear": {
@@ -27648,7 +27648,6 @@
       "waitingFor": "正在等待 {{label}}",
       "waitingForUntil": "正在等待 {{label}} · 直到 {{time}}",
       "waitingCount": "正在等待 {{count}} 个事件",
-      "hostDisconnected": "{{host}} 已断开连接",
       "disconnected": "已断开连接",
       "runsOn": "在 {{host}} 上运行",
       "deleteTitle": "要删除 {{name}} 吗？",
@@ -27804,12 +27803,7 @@
       },
       "cancel": {
         "confirmMany": "取消 {{count}} 项",
-        "confirmOne": "取消事项",
-        "keep": "保留",
-        "placeholder": "原因",
-        "titleMany": "要取消 {{count}} 个事项吗？",
-        "titleOne": "要取消“{{title}}”吗？",
-        "why": "bot 会看到原因。不会删除任何内容"
+        "keep": "保留"
       },
       "chat": {
         "added": "添加了 {{items}}",
@@ -27905,8 +27899,7 @@
         "serverPr": "服务器上的工作暂不显示 PR"
       },
       "menu": {
-        "cancel": "取消事项…",
-        "canceled": "已取消…",
+        "cancel": "取消事项",
         "done": "完成"
       },
       "pill": {
@@ -27967,7 +27960,8 @@
         "step": "第 {{n}} 个，共 {{total}} 个",
         "typeAnswer": "输入你的回答",
         "replaced": "智能体提出了新问题。请先阅读，再回复",
-        "replacedByNewer": "已由较新的问题取代"
+        "replacedByNewer": "已由较新的问题取代",
+        "skipped": "已跳过"
       },
       "readMoreClosedFailed": "无法读取更多已关闭的条目"
     },
@@ -28223,13 +28217,10 @@
       "hostChoice": {
         "description": "选择 {{bot}} 登录你的 Gmail、日历和云端硬盘的方式",
         "orca": "Orca 托管",
-        "comingSoon": "即将推出",
-        "orcaNote": "使用 Google 登录。无需任何设置",
+        "soon": "即将推出",
+        "orcaNote": "使用 Google 登录",
         "self": "自行托管",
-        "selfNote": "你将自行创建 Google Cloud 应用，因此你的登录信息会保留在你的电脑上。所有内容都不会经过 Orca 的服务器",
-        "stepApp": "{{bot}} 打开 Google Cloud 并设置应用",
-        "stepSignIn": "你勾选 Google 的条款复选框，然后登录",
-        "stepCheck": "{{bot}} 检查 Gmail、日历和云端硬盘能否正常使用",
+        "selfNote": "使用你自己的 Google 应用",
         "continue": "继续"
       },
       "connectDescription": "让你的 bots 能够访问 Gmail、日历和云端硬盘。你的登录信息会保留在 {{host}} 上",

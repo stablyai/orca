@@ -62,7 +62,10 @@ export function createBrowserProfileImportActions(
           ? ((await window.api.browser.sessionImportCookiesForClientHost(
               clientHostCookieImportTarget(initialState, runtimeEnvironmentId, profileId, pageRoute)
             )) ?? remoteCookieImportUnavailable())
-          : await window.api.browser.sessionImportCookies({ profileId })
+          : await window.api.browser.sessionImportCookies({
+              profileId,
+              ...(parsedHostId?.kind === 'ssh' ? { sshTargetId: parsedHostId.targetId } : {})
+            })
         if (result.ok) {
           get().recordFeatureInteraction?.('cookie-import')
           set((state) =>

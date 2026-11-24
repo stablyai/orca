@@ -58,7 +58,7 @@ export type BotSidebarRowProps = {
    *  it shows the row's working state; otherwise the row's end shows it. */
   trailing?: React.ReactNode
   /** What the hover card shows, rendered only while it is open. */
-  hoverDetails: () => React.ReactNode
+  hoverDetails: (keyboardFocus: boolean) => React.ReactNode
   /** Rename, Pin and Mark Read/Unread surround these items. */
   menuItems: React.ReactNode
   menuFooter: React.ReactNode
@@ -93,6 +93,7 @@ export function BotSidebarRow({
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const [renameRequested, setRenameRequested] = useState(false)
   const [hoverOpen, setHoverOpen] = useState(false)
+  const [keyboardFocus, setKeyboardFocus] = useState(false)
   const toggleUnread = (): void => setWorkspaceUnreadByUser(workspaceId, !isUnread, hostId)
   const togglePin = (): void => {
     void updateWorktreeMeta(workspaceId, { isPinned: !isPinned }, { executionHostId: hostId })
@@ -158,7 +159,11 @@ export function BotSidebarRow({
             onOpenChange={setHoverOpen}
             closeDelay={120}
             trigger={
-              <div className="flex min-w-0 flex-1 gap-1 self-stretch">
+              <div
+                className="flex min-w-0 flex-1 gap-1 self-stretch"
+                onFocus={(event) => setKeyboardFocus(event.target.matches(':focus-visible'))}
+                onBlur={() => setKeyboardFocus(false)}
+              >
                 <div className="flex min-w-0 flex-1 flex-col justify-center">
                   <div
                     className={cn(
@@ -217,7 +222,7 @@ export function BotSidebarRow({
               // Portal clicks still bubble to the row through React.
               onClick={(event) => event.stopPropagation()}
             >
-              {hoverOpen ? hoverDetails() : null}
+              {hoverOpen ? hoverDetails(keyboardFocus) : null}
             </HoverCardContent>
           </ActivityThreadHoverCardRoot>
         </div>

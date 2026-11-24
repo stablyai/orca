@@ -203,7 +203,10 @@
         "kimiProviderLimited": "Kimi atingiu um limite do provedor ou o provedor está ocupado. Aguarde antes de tentar novamente ou reduza a frequência das solicitações.",
         "kimiContextOverflow": "Kimi esgotou o contexto. Encurte o prompt ou inicie uma nova sessão e tente novamente.",
         "kimiConfigInvalid": "A configuração do Kimi é inválida. Verifique a configuração do modelo e do provedor no host de execução antes de tentar novamente.",
-        "kimiContinueSessionConflict": "Kimi recebeu opções conflitantes: --continue, --session. Corrija a receita de geração de texto ou os argumentos da CLI antes de tentar novamente."
+        "kimiContinueSessionConflict": "Kimi recebeu opções conflitantes: --continue, --session. Corrija a receita de geração de texto ou os argumentos da CLI antes de tentar novamente.",
+        "commandTemplateEmptyDictationCleanup": "O modelo de comando para a revisão do ditado está vazio.",
+        "dictationCleanupAgentUnsupported": "Escolha um agente compatível com a revisão por IA em Configurações -> Voz -> Revisão. Agentes compatíveis: {{agents}}, ou Comando personalizado.",
+        "agentCannotGenerateDictationCleanup": "O agente \"{{agent}}\" não é compatível com a revisão do ditado. Agentes compatíveis: {{agents}}, ou Comando personalizado."
       },
       "enableSourceControlAi": "Ative a IA de Controle de Versão em Configurações -> Git.",
       "chooseBaseBranch": "Escolha uma branch base antes de gerar.",
@@ -673,6 +676,30 @@
       "existingTitle": "Adicionar no host {{distro}} (recomendado)",
       "existingWhy": "{{distro}} já roda como host, então Git, arquivos e terminais rodam nativamente no Linux em vez de pelo compartilhamento de arquivos do Windows.",
       "existingAccept": "Adicionar no host"
+    },
+    "hiddenProjects": {
+      "hidden": "{{name}} oculto",
+      "hiddenDescription": "Os terminais e agentes dele continuam em execução. Para mostrá-lo novamente, acesse Projetos ocultos abaixo da lista.",
+      "undo": "Desfazer",
+      "hideFailed": "Não foi possível ocultar {{name}}. O host dele pode precisar de uma atualização do Orca.",
+      "showFailed": "Não foi possível mostrar {{name}} novamente.",
+      "listLabel": "Projetos ocultos",
+      "show": "Mostrar",
+      "showAriaLabel": "Mostrar {{name}} na barra lateral",
+      "settingsTitle": "Ocultar da barra lateral",
+      "settingsDescription": "Oculta a cópia do projeto neste host da barra lateral, dos seletores de projeto e do seletor de espaços de trabalho. Os terminais, agentes e automações dele continuam em execução. Em um servidor Orca pareado, isso oculta o projeto para todas as pessoas conectadas a esse servidor.",
+      "settingsToggleLabel": "Ocultar {{name}} da barra lateral",
+      "keywordHide": "ocultar",
+      "keywordHidden": "oculto",
+      "keywordSidebar": "barra lateral",
+      "hideFromSidebar": "Ocultar da barra lateral",
+      "sectionTitle": "Projetos ocultos ({{count}})",
+      "allHidden": "Todos os projetos estão ocultos. Mostre um em Projetos ocultos abaixo.",
+      "undoGone": "{{name}} foi removido do Orca.",
+      "settingsGroup": "Barra lateral",
+      "showOnHostAriaLabel": "Mostrar {{name}} no host {{host}} na barra lateral",
+      "keywordShow": "mostrar",
+      "keywordUnhide": "reexibir"
     },
     "cardSlot": {
       "needYouCount": "{{count}} precisam de você",
@@ -1419,6 +1446,13 @@
       "sshPage": {
         "stored": "Salvo no navegador de {{host}}.",
         "googleCookiesSkipped": "Os cookies do Google não foram importados. Abra uma página que navegue por {{host}} e entre no Google."
+      },
+      "picker": {
+        "menuItem": "Importar Cookies…",
+        "search": "Pesquisar perfis",
+        "lastUsed": "Usado por último",
+        "noMatches": "Nenhum resultado",
+        "googleNote": "Logins do Google ficam de fora"
       }
     },
     "googleCookieClear": {
@@ -1939,6 +1973,9 @@
       "modelListFallback": "Lista integrada. O Orca não conseguiu obter uma lista de modelos deste host.",
       "chatUnavailableOnWindows": "O {{value0}} Chat ainda não está disponível no Windows, então o {{value0}} abre em um terminal neste host. Chats em um host macOS ou Linux continuam funcionando.",
       "undetectedCommandHint": "Se a CLI do {{agent}} estiver instalada fora do PATH, informe o caminho completo do executável neste host.",
+      "agentActions": "Ações de {{agent}}",
+      "defaultAutoBadge": "Padrão · Auto",
+      "newAgentsTitle": "Novos agentes",
       "permissionMixed": "Misto",
       "choiceChipTooltip": "Adicionado por {{choice}}. Remova-o para usar o padrão.",
       "choiceChipRemove": "Remover {{flag}}"
@@ -2073,6 +2110,11 @@
       "save": "Salvar formatador",
       "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\"",
       "710343e374": "Comando do formatador"
+    },
+    "voice": {
+      "cleanup": {
+        "recipeDescription": "Revise o texto ditado antes de inseri-lo."
+      }
     },
     "general": {
       "openInMenu": {
@@ -7029,7 +7071,10 @@
               "shortcutDescription": "A tecla que inicia o ditado.",
               "shortcutKeyword": "teclado",
               "keepLoadedTitle": "Manter modelo carregado",
-              "gpuKeyword": "placa de vídeo"
+              "gpuKeyword": "placa de vídeo",
+              "cleanupDescription": "Corrija pontuação, números e correções faladas com seu agente antes de inserir o texto.",
+              "cleanupKeyword": "palavra de correção",
+              "cleanupScratchKeyword": "esqueça isso"
             }
           }
         },
@@ -8220,7 +8265,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "Perfil \"{{value0}}\" removido.",
-          "2d4bea7f35": "Cookies padrão limpos.",
           "796d846483": "Nenhum cookie importado",
           "c29648fe5b": "Ativo",
           "b4c167764d": "{{value0}} cookies importados do arquivo para {{value1}}.",
@@ -8228,10 +8272,7 @@
           "b4e9d3f2a1c5": "{{value0}} cookies importados de {{value1}} para {{value2}}.",
           "c5a273a809": "De {{value0}}",
           "80bffd32bf": "Importar Cookies",
-          "bd7d68f138": "De um Arquivo…",
-          "4054c458e1": "Limpar cookies padrão",
-          "3b662becd5": "Limpar os cookies do perfil padrão?",
-          "f159cf5a3e": "Isso pode desconectar você de sites neste perfil."
+          "bd7d68f138": "De um Arquivo…"
         },
         "GhosttyImportModal": {
           "f96688b6bc": "Cancelar",
@@ -8545,6 +8586,10 @@
           "workerAutoReleaseDescription": "Fecha o terminal ou chat de um worker 2 minutos após a conclusão, a menos que você escolha Manter aberto. Se ele voltar a trabalhar, os 2 minutos recomeçam quando terminar.",
           "workerAutoReleaseKeywordClose": "fechar",
           "workerAutoReleaseKeywordRelease": "liberar",
+          "coordinatorApprovalsTitle": "Permitir que coordenadores aprovem solicitações de permissão de workers",
+          "coordinatorApprovalsDescription": "Um agente coordenador pode permitir uma solicitação de permissão de um worker, com uma justificativa. Você ainda vê Permitir e Negar, e a primeira resposta é a que vale. Aplica-se a workers em execução neste computador.",
+          "coordinatorApprovalsKeywordApprove": "aprovar",
+          "coordinatorApprovalsKeywordPermission": "permissão",
           "8a94078d05": "Orquestração de Agentes"
         },
         "RuntimeAccessGrantList": {
@@ -9005,7 +9050,8 @@
           "title": "Remover {{value0}}?",
           "description": "Os dados também são removidos.",
           "cancel": "Cancelar",
-          "remove": "Remover"
+          "remove": "Remover",
+          "pausesAutomations": "As automações que ele criou ficam pausadas e continuam pausadas se você instalá-lo novamente."
         },
         "PluginRollbackDialog": {
           "title": "Reverter {{value0}}?",
@@ -10103,7 +10149,8 @@
           "sources": "Fontes do catálogo…"
         },
         "PluginSettingsOverview": {
-          "offTitle": "Os plugins estão desativados"
+          "offTitle": "Os plugins estão desativados",
+          "offAutomations": "As automações criadas por plugins ficam pausadas e continuam pausadas quando os plugins são reativados."
         },
         "pluginContributions": {
           "dark": "Escuro",
@@ -10219,6 +10266,24 @@
             "buckets": "grupos de modelos Gemini",
             "optional": "omitido quando um marcador dentro do grupo está vazio"
           }
+        },
+        "RepositoryRemoveProjectSection": {
+          "filesNoteVmRecipe": "As receitas de VM determinam se seus ambientes e arquivos são excluídos.",
+          "filesNote": "Os arquivos permanecem no disco, então você pode adicionar o projeto novamente mais tarde.",
+          "hostCount_one": "{{count}} host",
+          "hostCount_other": "{{count}} hosts",
+          "hostCount_many": "{{count}} hosts",
+          "checkoutCount_one": "{{count}} checkout",
+          "checkoutCount_other": "{{count}} checkouts",
+          "checkoutCount_many": "{{count}} checkouts",
+          "removeButton": "Remover…",
+          "dialogTitle": "Remover {{name}}?",
+          "terminalWarning_one": "{{count}} terminal aberto neste projeto será fechado.",
+          "terminalWarning_other": "{{count}} terminais abertos neste projeto serão fechados.",
+          "terminalWarning_many": "{{count}} terminais abertos neste projeto serão fechados.",
+          "cancel": "Cancelar",
+          "confirm": "Remover",
+          "unknownHost": "Host desconhecido"
         }
       },
       "right": {
@@ -13327,6 +13392,14 @@
           "inProgress": "Em andamento",
           "inReview": "Em revisão",
           "done": "Concluído"
+        },
+        "AddProjectMenu": {
+          "changeProjectHost": "Host do projeto: {{host}}",
+          "projectHost": "Host do projeto",
+          "addRemoteHost": "Adicionar host remoto…",
+          "browseFolder": "Procurar pasta…",
+          "cloneFromUrl": "Clonar a partir de URL…",
+          "createNewProject": "Criar novo projeto…"
         }
       },
       "editor": {
@@ -14698,7 +14771,9 @@
           "updateSkipped": "Atualização ignorada: {{value0}}",
           "updateAvailable": "Atualização disponível",
           "repairAvailable": "Reparo disponível",
-          "installAvailable": "Instalação disponível"
+          "installAvailable": "Instalação disponível",
+          "otherBuild": "Instalado por outra versão do Orca",
+          "otherBuildKept": "Mantido: gravado por outra versão do Orca"
         },
         "installResult": {
           "installed": "Instalada e verificada.",
@@ -14922,7 +14997,10 @@
           "notRunYet": "Ainda não executada",
           "usageDetail_one": "{{tokens}} tokens · {{known}}/{{count}} execução relatada",
           "usageDetail_many": "{{tokens}} tokens · {{known}}/{{count}} execuções relatadas",
-          "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} execuções relatadas"
+          "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} execuções relatadas",
+          "createdBy": "Criado por",
+          "createdByPluginTitle": "Plugin {{plugin}}",
+          "createdByEnded": "Plugin removido ou desativado; ele precisa pedir permissão antes de alterar esta automação"
         },
         "ExternalAutomationManagers": {
           "e02f970595": "Nenhum gerenciador de automação externa encontrado.",
@@ -17938,8 +18016,6 @@
             "ed8f54509d": "Padrão",
             "e5d31de1a9": "Tamanho da Viewport",
             "56f94f4ffa": "De Arquivo…",
-            "eb280bfb11": "De {{value0}}",
-            "2293adf620": "Importar Cookies",
             "cf7cdc67ef": "Novo Perfil…",
             "7b838540c7": "Menu do navegador",
             "a7a86702b3": "Perfil {{value0}} criado e ativado",
@@ -18105,6 +18181,8 @@
             "4c2990886e": "{{value0}}/{{value1}} excluídos",
             "86ba852118": "{{value0}}, {{value1}} falharam",
             "archivedStatus": "Arquivado",
+            "mergedStatus": "Mesclado",
+            "unchangedStatus": "Nenhum novo commit",
             "74f6c16279": "Voltar"
           },
           "backgroundRemoval": {
@@ -21124,7 +21202,6 @@
         "terminalRequired": "Responda a esta pergunta do OMP no terminal.",
         "openTerminal": "Responder no terminal",
         "recommended": "Recomendado",
-        "stepAnswered": "{{value0}}, respondida",
         "stepOf": "{{value0}} de {{value1}}",
         "answered": "Respondida",
         "title": "Pergunta",
@@ -21153,6 +21230,8 @@
           "reviewTitle": "Revisar plano proposto",
           "refineHint": "Refinar plano fecha a revisão para que você possa enviar o que deseja alterar."
         },
+        "answerNotApplied": "{{name}}: a resposta não chegou a esta solicitação",
+        "answerWorkerEnded": "{{name}} foi encerrado, então esta solicitação foi fechada",
         "needsAccess": "Precisa de acesso a",
         "needsNewerOrca": "Esta solicitação requer uma versão mais recente do Orca."
       },
@@ -21572,6 +21651,7 @@
         "reconnect": "Reconectar",
         "stopped": "{{distro}} está parado",
         "start": "Iniciar",
+        "connecting": "Conectando a {{distro}}…",
         "unverifiable": "O Orca não conseguiu verificar se {{distro}} está em execução",
         "startToSend": "Inicie {{distro}} para enviar.",
         "startDistro": "Iniciar {{distro}}",
@@ -22181,7 +22261,10 @@
             "dirty": "Com alterações",
             "unpushed": "Não enviado",
             "unknown": "Desconhecido"
-          }
+          },
+          "ignoredFilesBlocker": "Arquivos locais ignorados",
+          "ignoredFilesNamed": "Arquivos ignorados: {{value0}}",
+          "ignoredFilesUnchecked": "Arquivos ignorados não foram totalmente verificados"
         },
         "confirm": {
           "deletingTitle_one": "Excluindo {{count}} espaço de trabalho",
@@ -22221,6 +22304,9 @@
           "line_many": "As edições não salvas em {{count}} arquivos serão descartadas: {{files}}"
         },
         "ignoredFilesUnchecked": "Não foi possível verificar completamente os arquivos ignorados"
+      },
+      "atRiskLocalFiles": {
+        "namesAndMore": "{{names}} e outros"
       }
     },
     "agentSessionContinuation": {
@@ -22459,7 +22545,13 @@
           "listening": "{{model}} também está ouvindo…",
           "heardLabel": "{{model}} ouviu",
           "heardNothing": "Nenhuma palavra. Tente falar mais alto.",
-          "heardFailed": "{{model}} não conseguiu transcrever a gravação."
+          "heardFailed": "{{model}} não conseguiu transcrever a gravação.",
+          "cleaningUp": "Revisando…",
+          "tryCleanup": "Testar revisão",
+          "cleanupFailed": "Falha na revisão: {{reason}}",
+          "cleanupTimedOut": "A revisão demorou demais.",
+          "cleanupOff": "A revisão por IA está desativada.",
+          "afterCleanup": "Após a revisão · {{agent}}, {{model}} · {{seconds}} s"
         },
         "silenceStop": {
           "off": "Desativado",
@@ -22486,6 +22578,44 @@
         },
         "gpu": {
           "description": "Desative se o ditado travar o computador."
+        },
+        "cleanup": {
+          "consent": {
+            "goesToKnown": "{{company}}, por meio de {{agent}} neste computador. Contabilizado no seu plano {{plan}}.",
+            "goesToAgent": "Para o destino configurado no {{agent}} deste computador para o envio de prompts.",
+            "sentLabel": "Enviado",
+            "sent": "O texto ditado, seu vocabulário e suas instruções.",
+            "notSentLabel": "Não enviado",
+            "notSent": "Áudio, arquivos ou o que está na tela.",
+            "goesToLabel": "Destino",
+            "waitLabel": "Espera",
+            "wait": "O texto é inserido alguns segundos depois.",
+            "title": "Ativar a revisão por IA?",
+            "description": "Após cada ditado, o Orca envia o texto para {{agent}} revisá-lo antes de inseri-lo.",
+            "cancel": "Cancelar",
+            "confirm": "Ativar"
+          },
+          "instructions": {
+            "label": "Instruções",
+            "custom": "Suas próprias instruções.",
+            "builtIn": "Padrão: corrigir pontuação, números e correções. Manter minhas palavras.",
+            "edit": "Editar",
+            "emptyHint": "Deixe vazio para usar as instruções padrão.",
+            "reset": "Redefinir",
+            "cancel": "Cancelar",
+            "save": "Salvar"
+          },
+          "saveFailed": "Não foi possível salvar a revisão por IA.",
+          "noAgent": "Nenhum agente pode executar a revisão por IA. Escolha um abaixo.",
+          "title": "Revisão",
+          "label": "Revisão por IA",
+          "description": "Corrige pontuação, números e correções faladas antes de inserir o texto. Envia o texto para {{agent}}, nunca o áudio.",
+          "anAgent": "um agente de IA",
+          "agent": "Agente e modelo",
+          "agentDescription": "Executado neste computador. Um modelo pequeno e rápido reduz a espera.",
+          "correctionWord": "Palavra de correção",
+          "correctionWordDescription": "Diga essa palavra para desfazer o que acabou de dizer: “às quatro, {{word}}, às cinco”.",
+          "correctionWordOff": "Nenhuma"
         },
         "keepLoaded": {
           "label": "Manter modelo carregado",
@@ -22674,7 +22804,9 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "newAgent": "Novo agente"
+        "newAgent": "Novo agente",
+        "searchAgentsAndFiles": "Buscar agentes e arquivos",
+        "searchShort": "Buscar"
       }
     },
     "contextualTours": {
@@ -22740,7 +22872,16 @@
       "needsYou_many": "{{count}} precisam de você"
     },
     "dictation": {
-      "stoppedAfterSilenceSeconds": "Parado após {{seconds}} segundos de silêncio"
+      "stoppedAfterSilenceSeconds": "Parado após {{seconds}} segundos de silêncio",
+      "cleanupNotice": {
+        "timedOut": "A revisão demorou demais. O texto foi inserido como foi ouvido.",
+        "failed": "Falha na revisão. O texto foi inserido como foi ouvido.",
+        "dismiss": "Dispensar"
+      },
+      "DictationIndicator": {
+        "cleaningUp": "Revisando…",
+        "skipCleanup": "Pular revisão"
+      }
     },
     "toastFallbacks": {
       "worktreeCreateFailed": "Não foi possível criar a árvore de trabalho.",
@@ -23053,6 +23194,7 @@
       "changed": "A conta nativa mudou. Selecione uma conta salva novamente antes de iniciar o agy.",
       "refresh": "Atualizar contas",
       "usage": "Atualizar uso",
+      "usageWithReading": "Atualizar uso ({{reading}})",
       "usageReading": "Sessão: {{session}} · Semanal: {{weekly}}",
       "saved": "Conta Google salva",
       "remove": "Remover",
@@ -23074,7 +23216,23 @@
       "noReading": "Uso desconhecido: ainda não consultado",
       "windowsChanged": "A conta padrão do host foi alterada. Selecione uma conta salva para aplicá-la novamente.",
       "fd47b5a5dd": "Contas do Antigravity",
-      "apiKeyGet": "Obter chave de API"
+      "personalOption": "Seu plano pessoal do Google AI",
+      "enterpriseOption": "Licença da sua organização",
+      "apiKeyGet": "Obter chave de API",
+      "location": "Localização",
+      "enterpriseFieldsShort": "Informe um projeto e uma localização.",
+      "chatUseMethod": "Entre novamente para usar {{method}}",
+      "loadFailed": "Não foi possível carregar as contas do agy",
+      "loading": "Carregando contas…",
+      "notSignedIn": "Não conectado",
+      "runAgy": "Execute agy neste host para entrar",
+      "signInHelp": "Ajuda para entrar",
+      "currentLogin": "Login atual do agy",
+      "currentNotSaved": "Login atual do agy · não salvo",
+      "noEmailNotSaved": "agy não informou um e-mail · não salvo",
+      "saveShort": "Salvar",
+      "readAt": "Lido {{time}}",
+      "active": "Ativo"
     },
     "claude": {
       "added": "Conta adicionada. Selecione-a para usar no próximo Claude que iniciar.",
@@ -25007,8 +25165,8 @@
       "weekdays": "dias úteis, {{schedule}}"
     },
     "palette": {
-      "placeholder": "Buscar bots, chats, terminais, worktrees, configurações e ações...",
-      "description": "Buscar bots, chats, terminais, worktrees, configurações e ações",
+      "placeholder": "Buscar bots, chats, terminais, espaços de trabalho, tarefas, configurações e ações...",
+      "description": "Buscar bots, chats, terminais, espaços de trabalho, tarefas, configurações e ações",
       "scopedPlaceholder": "Buscar bots...",
       "scopedLabel": "Buscar bots",
       "scopeHint": "Digite @ para mostrar só bots",
@@ -25017,14 +25175,14 @@
       "searchEverything": "Buscar em tudo por \"{{text}}\"",
       "noMatch": "Nenhum bot corresponde a \"{{text}}\"",
       "noBotsYet": "Ainda não há bots",
-      "filtersPaused": "Os filtros se aplicam a worktrees, não a bots",
+      "filtersPaused": "Os filtros se aplicam a espaços de trabalho, não a bots",
       "showEverything": "Mostrar tudo",
       "footerBots": "Bots",
       "matchesPurpose": "Corresponde ao propósito.",
       "scopedStatus_one": "Mostrando só bots. {{count}} resultado encontrado.",
       "scopedStatus_other": "Mostrando só bots. {{count}} resultados encontrados.",
       "scopedStatus_many": "Mostrando só bots. {{count}} resultados encontrados.",
-      "sidebarSearchLabel": "Buscar bots, worktrees e abas do navegador",
+      "sidebarSearchLabel": "Buscar bots, espaços de trabalho e abas do navegador",
       "section": "Bots"
     },
     "templates": {
@@ -25164,7 +25322,6 @@
     "row": {
       "runsOn": "Em execução em {{host}}",
       "disconnected": "Desconectado",
-      "hostDisconnected": "{{host}} desconectado",
       "idle": "Inativo",
       "paused": "Pausado",
       "reading": "Lendo sua mensagem",
@@ -25194,7 +25351,8 @@
       "ask": {
         "notSentYet": "ainda não enviado",
         "replaced": "O agente fez uma nova pergunta. Leia e responda.",
-        "replacedByNewer": "Substituída por uma pergunta mais recente"
+        "replacedByNewer": "Substituída por uma pergunta mais recente",
+        "skipped": "Ignoradas"
       },
       "chat": {
         "moreItems": "+{{count}} a mais"
@@ -25623,6 +25781,20 @@
       "cancel": "Cancelar",
       "message": "{{plugin}} deseja abrir {{host}}",
       "alwaysAllow": "Sempre permitir {{host}} para este plugin"
+    },
+    "actionConfirmation": {
+      "cancel": "Cancelar",
+      "deleteAutomation": "{{plugin}} quer excluir a automação “{{automation}}”",
+      "deleteAutomationDetail": "O plugin não criou esta automação. O agendamento dela será interrompido e ela será removida de Automações.",
+      "delete": "Excluir",
+      "changeAutomation": "{{plugin}} quer alterar a automação “{{automation}}”",
+      "changeAutomationDetail": "O plugin não criou esta automação. Ele alteraria: {{fields}}.",
+      "change": "Alterar",
+      "changeElevatedAutomationDetail": "Esta automação executa o agente com configurações extras que você escolheu (argumentos, um modo de permissão ou um comando de pré-verificação). O plugin alteraria: {{fields}}.",
+      "newPrompt": "Novo prompt: “{{prompt}}”",
+      "unknownProject": "um projeto desconhecido",
+      "automationNewWorkspaces": "Automação {{id}}: em um novo espaço de trabalho de {{project}} a cada execução, conforme {{schedule}}.",
+      "automationInWorkspace": "Automação {{id}}: em {{project}} / {{workspace}}, conforme {{schedule}}."
     }
   },
   "checks": {
@@ -25633,6 +25805,15 @@
       "notInScan": "O repositório não foi encontrado no resultado da busca por repositórios aninhados",
       "notGitRepository": "Não é um repositório Git válido",
       "importFailed": "Não foi possível importar o repositório"
+    }
+  },
+  "usage": {
+    "failure": {
+      "unavailable": "O uso está indisponível. Tente Atualizar para reconectar.",
+      "setting": "Não foi possível confirmar a alteração no rastreamento. Tente alterá-lo novamente.",
+      "refresh": "A atualização anterior não pôde ser concluída. Tente Atualizar novamente.",
+      "read": "Não foi possível carregar o uso. Tente Atualizar novamente.",
+      "retry": "Atualizar"
     }
   },
   "crashReport": {
