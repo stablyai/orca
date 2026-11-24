@@ -3,13 +3,16 @@ import type { ActionSheetAction } from '../../../../components/sheets/ActionShee
 import { translate } from '../../../../i18n/mobile-i18n'
 
 // Dismiss the sheet before opening pickers because iOS cannot present them over its Modal.
+// A terminal's + passes only photos and files; a structured chat adds the rest.
 export function mobileNativeChatAttachActions(args: {
   onPhotos: (() => void) | undefined
   onFiles: (() => void) | undefined
-  onWorkspaceFile: () => void
-  onSkills: () => void
-  onCommands: () => void
-  skillCount: number
+  chat?: {
+    onWorkspaceFile: () => void
+    onSkills: () => void
+    onCommands: () => void
+    skillCount: number
+  }
 }): ActionSheetAction[] {
   const actions: ActionSheetAction[] = []
   if (args.onPhotos) {
@@ -31,38 +34,42 @@ export function mobileNativeChatAttachActions(args: {
       onPress: args.onFiles
     })
   }
+  const chat = args.chat
+  if (!chat) {
+    return actions
+  }
   actions.push(
     {
       id: 'workspaceFile',
       label: translate('session.nativeChatAttachActions.workspaceFile', 'Workspace file'),
       icon: AtSign,
       closeBeforePress: true,
-      onPress: args.onWorkspaceFile
+      onPress: chat.onWorkspaceFile
     },
     {
       id: 'skills',
       label: translate('session.nativeChatAttachActions.skills', 'Skills'),
-      ...(args.skillCount > 0
+      ...(chat.skillCount > 0
         ? {
             hint: translate(
               'session.nativeChatAttachActions.availableSkills',
               '{{count}} available',
               {
-                count: args.skillCount
+                count: chat.skillCount
               }
             )
           }
         : {}),
       icon: Package,
       closeBeforePress: true,
-      onPress: args.onSkills
+      onPress: chat.onSkills
     },
     {
       id: 'commands',
       label: translate('session.nativeChatAttachActions.commands', 'Commands'),
       icon: Terminal,
       closeBeforePress: true,
-      onPress: args.onCommands
+      onPress: chat.onCommands
     }
   )
   return actions

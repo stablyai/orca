@@ -1132,25 +1132,13 @@
     },
     "customKeyModal": {
       "add": "Añadir",
-      "addShortcut": "Añadir atajo",
-      "command": "Comando",
       "commandPlaceholder": "p. ej., pnpm build",
       "editing": "Edición",
       "function": "Función",
       "key": "Tecla",
-      "label": "Etiqueta",
       "labelPlaceholder": "p. ej., Compilar",
-      "manageShortcuts": "Gestionar atajos",
-      "manageShortcutsHint": "Muestra, oculta o reordena los atajos de teclado",
-      "modifiers": "Modificadores",
-      "moreKeys": "MÁS TECLAS",
       "navigation": "Navegación",
-      "pickKey": "Elige una tecla",
-      "pressEnter": "Pulsar Enter",
-      "shortcutCombo": "Combinación de teclas",
-      "shortcutComboHint": "Crea combinaciones de teclas con Ctrl, Alt y Shift",
-      "textMacro": "Macro de texto",
-      "textMacroHint": "Envía un comando de texto personalizado"
+      "pressEnter": "Pulsar Enter"
     },
     "dictationSetupSheet": {
       "description": "Descarga o elige un modelo y activa el dictado en el equipo emparejado. Todo desde aquí.",
@@ -2778,12 +2766,7 @@
       "messageModeLabel": "Modo mensaje: escribe y luego envía. Cambiar al modo teclas",
       "moreKeys": "Más teclas y acciones",
       "showKeyboard": "Mostrar teclado",
-      "dismissKeyboardHint": "Oculta el teclado en pantalla y mantiene abierta la sesión de terminal actual.",
-      "switchToDesktopMode": "Cambiar al modo de escritorio",
-      "switchToPhoneMode": "Cambiar al modo teléfono",
       "pasteFromClipboard": "Pegar desde el portapapeles",
-      "paste": "Pegar",
-      "addCustomShortcut": "Agregar atajo personalizado",
       "control": "Control",
       "alt": "Alt",
       "shift": "Shift"
@@ -2913,8 +2896,7 @@
     },
     "commandDock": {
       "liveInputHint": "El texto que escribes se envía directamente a la terminal activa.",
-      "liveInputLabel": "Entrada al terminal en tiempo real",
-      "tapToShowKeyboard": "Toca para mostrar el teclado"
+      "liveInputLabel": "Entrada al terminal en tiempo real"
     },
     "contentRow": {
       "dismissCreationWarning": "Descartar la advertencia de creación del espacio de trabajo"
@@ -3366,20 +3348,12 @@
       "switchToDesktop": "Cambiar al modo escritorio",
       "switchToPhone": "Cambiar al modo teléfono"
     },
-    "terminalInputActions": {
-      "attachFileHint": "Mantén pulsado para adjuntar un archivo en su lugar.",
-      "attachPhoto": "Adjuntar una foto",
-      "sendingImage": "Enviando imagen"
-    },
     "terminalLiveInputStatus": {
       "listening": "Escuchando",
-      "liveInput": "Entrada directa",
       "preparingMic": "Preparando micrófono",
       "processing": "Procesando",
       "releaseMicHint": "Suelta el micrófono para detener la grabación",
-      "startingMic": "Iniciando micrófono",
-      "uploadingImage": "Subiendo imagen al host",
-      "uploadingImageTitle": "Subiendo imagen"
+      "startingMic": "Iniciando micrófono"
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
@@ -3639,17 +3613,14 @@
     "terminalMoreKeys": {
       "sendKey": "Enviar {{label}}",
       "paste": "Pegar",
-      "sending": "Enviando…",
       "photo": "Foto",
       "file": "Archivo",
       "desktopWidth": "Ancho de escritorio",
       "phoneWidth": "Ancho de teléfono",
       "keys": "Teclas",
-      "combos": "Combinaciones",
       "yourKeys": "Tus teclas",
       "deleteKeyHint": "Mantén pulsado para eliminar esta tecla",
-      "addCustomKey": "Añadir tecla personalizada",
-      "addKey": "Añadir tecla"
+      "addCustomKey": "Añadir tecla personalizada"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, enfocado",
@@ -5801,7 +5772,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Vincular un ordenador",
       "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",
