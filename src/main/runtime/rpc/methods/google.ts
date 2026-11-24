@@ -115,12 +115,9 @@ const GOOGLE_ASKERS_CHANGED =
   'Who can ask changed while you were confirming. Review it and turn Google on again.'
 
 function sameKeys(shown: readonly string[], current: readonly string[]): boolean {
-  const sortedShown = [...shown].sort()
-  const sortedCurrent = [...current].sort()
-  return (
-    sortedShown.length === sortedCurrent.length &&
-    sortedShown.every((key, index) => key === sortedCurrent[index])
-  )
+  const a = new Set(shown)
+  const b = new Set(current)
+  return a.size === b.size && [...a].every((key) => b.has(key))
 }
 
 function sameGoogleAccess(

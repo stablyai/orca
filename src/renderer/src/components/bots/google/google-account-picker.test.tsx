@@ -79,7 +79,7 @@ describe('giving an agent an account signed in for it', () => {
     await expect(giveBotGoogleAccount(off, 'me@gmail.com', turnOn, async (b) => b)).resolves.toBe(
       true
     )
-    expect(turnOn).toHaveBeenCalledWith(off, ['me@gmail.com'])
+    expect(turnOn).toHaveBeenCalledWith(off, ['me@gmail.com'], { on: false })
     expect(setBotGoogle).not.toHaveBeenCalled()
   })
 })
@@ -126,11 +126,13 @@ describe('turning Google on for an agent', () => {
     })
     const bot = { id: 'scout', name: 'Scout', hostId: 'local' as const, members: [] }
     await act(async () => {
-      await expect(result.current(bot, ['me@gmail.com'])).resolves.toBe(true)
+      await expect(result.current(bot, ['me@gmail.com'], { on: false })).resolves.toBe(true)
     })
+    // What the caller read goes along, so a change made while confirming is refused.
     expect(setBotGoogle).toHaveBeenCalledWith(bot, true, {
       accounts: ['me@gmail.com'],
-      confirmedAskers: []
+      confirmedAskers: [],
+      basedOn: { on: false }
     })
   })
 })

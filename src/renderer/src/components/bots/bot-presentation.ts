@@ -1,4 +1,8 @@
-import { botFailureText, readBotFailure } from '../../../../shared/bots/bot-failure-copy'
+import {
+  botFailureText,
+  readBotFailure,
+  type BotFailure
+} from '../../../../shared/bots/bot-failure-copy'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
@@ -37,12 +41,17 @@ export function botRefusalText(refusal: AgentSessionRefusalReference, hostName?:
   )
 }
 
-/** A bot failure the host sent by code, in this reader's language; null when it sent none. */
-export function botFailureMessage(error: unknown): string | null {
+/** The bot failure code the host sent with an error; null when it sent none. */
+export function botFailureOf(error: unknown): BotFailure | null {
   const data = error instanceof RuntimeRpcCallError ? error.response.error.data : undefined
-  const failure = readBotFailure(
+  return readBotFailure(
     typeof data === 'object' && data !== null && 'botFailure' in data ? data.botFailure : undefined
   )
+}
+
+/** A bot failure the host sent by code, in this reader's language; null when it sent none. */
+export function botFailureMessage(error: unknown): string | null {
+  const failure = botFailureOf(error)
   return failure ? botFailureText(failure, translate) : null
 }
 

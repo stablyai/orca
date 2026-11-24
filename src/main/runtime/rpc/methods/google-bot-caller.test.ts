@@ -192,6 +192,14 @@ describe('a stale save', () => {
     expect(ctx.runtime.bots.list()[0]?.googleAccounts).toEqual(['me@gmail.com', 'me@home.com'])
     await set({ accounts: ['me@gmail.com'] })
     expect(ctx.runtime.bots.list()[0]?.googleAccounts).toEqual(['me@gmail.com'])
+
+    // A stray stored entry echoes back as read and still matches, so it never blocks a save.
+    ctx.runtime.bots.list()[0]!.googleAccounts = ['me@gmail.com', 'stray']
+    await set({
+      accounts: ['me@gmail.com'],
+      basedOn: { on: true, accounts: ['stray', 'me@gmail.com'] }
+    })
+    expect(ctx.runtime.bots.list()[0]?.googleAccounts).toEqual(['me@gmail.com'])
   })
 })
 

@@ -13,9 +13,11 @@ import type { Bot } from '../../../../../shared/bot-types'
 import { botAskerKeys } from '../../../../../shared/google/google-who-can-ask-warning'
 import { BotAppBrandLogo } from '../apps/BotAppBrandLogo'
 import { BotAppStepHeader, BotAppStepHeading } from '../apps/BotAppStepParts'
-import { botErrorMessage } from '../bot-presentation'
+import { botErrorMessage, botFailureOf } from '../bot-presentation'
+import { refreshBotHost } from '@/lib/bot-host-refresh'
+import { readFreshBot } from './give-bot-google-account'
 import { googleAccountChoiceSave, initialGoogleAccountChoice } from './google-account-choice'
-import { useGoogleHost } from './google-connect-client'
+import { refreshGoogle, useGoogleHost } from './google-connect-client'
 import { googleBotRead, setBotGoogle, type GoogleBotRead } from './set-bot-google'
 import { GoogleAccountPicker, type GoogleAccountPickerBot } from './GoogleAccountPicker'
 
@@ -34,6 +36,13 @@ export function useGoogleAccountChoice(
   save: () => Promise<boolean>
 } {
   const view = useGoogleHost(botTarget(bot))
+  // The bot as its host listed it after a save was refused as stale; dropped once the prop changes.
+  const [reread, setReread] = useState<{ prop: string; bot: GoogleBotRead } | null>(null)
+  const prop = JSON.stringify(googleBotRead(bot))
+  const listed =
+    reread?.prop === prop
+      ? { ...bot, google: reread.bot.on, googleAccounts: reread.bot.accounts }
+      : bot
   // When the owner started ticking: the bot's Google, so saving can't undo a newer edit, and the
   // accounts shown, so an older host's every-account save still covers one declined then signed out.
   const [picked, setPicked] = useState<{
@@ -45,7 +54,7 @@ export function useGoogleAccountChoice(
   const initial =
     view.status === 'ready'
       ? initialGoogleAccountChoice(
-          bot,
+          listed,
           view.google.accounts,
           view.google.defaultAccount ?? null,
           added
@@ -56,9 +65,19 @@ export function useGoogleAccountChoice(
   const setChosen: React.Dispatch<React.SetStateAction<string[]>> = (update) =>
     setPicked((current) => ({
       chosen: typeof update === 'function' ? update(current?.chosen ?? initial) : update,
-      basedOn: current?.basedOn ?? googleBotRead(bot),
+      basedOn: current?.basedOn ?? googleBotRead(listed),
       shown: current?.shown ?? shownNow
     }))
+  // A save refused as stale: start again from the bot and accounts as the host has them now.
+  const reload = async (): Promise<void> => {
+    const latest = await readFreshBot(bot).catch(() => null)
+    if (latest) {
+      setReread({ prop, bot: googleBotRead(latest) })
+    }
+    setPicked(null)
+    void refreshBotHost(bot.hostId)
+    await refreshGoogle(botTarget(bot))
+  }
   const save = async (): Promise<boolean> => {
     const next = googleAccountChoiceSave(chosen)
     setSaving(true)
@@ -70,14 +89,17 @@ export function useGoogleAccountChoice(
         ? {
             accounts: next.accounts,
             confirmedAskers: botAskerKeys(bot),
-            basedOn: picked?.basedOn ?? googleBotRead(bot),
+            basedOn: picked?.basedOn ?? googleBotRead(listed),
             shownAccounts: [...(picked?.shown ?? []), ...shownNow]
           }
         : {}
     ).then(
       () => true,
-      (error: unknown) => {
+      async (error: unknown) => {
         toast.error(botErrorMessage(error))
+        if (botFailureOf(error)?.code === 'googleAccountsChanged') {
+          await reload()
+        }
         return false
       }
     )

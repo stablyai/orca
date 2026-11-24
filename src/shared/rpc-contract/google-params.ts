@@ -62,7 +62,13 @@ export const GoogleBotAccessSetParams = z.object({
   allAccounts: z.literal(true).optional(),
   /** With `on`: the bot's Google as the caller read it; refused when it has changed since, so a
    *  stale save can't undo a newer edit. Absent (older clients) skips the check. */
-  basedOn: z.object({ on: z.boolean(), accounts: z.array(Email).max(100).optional() }).optional(),
+  basedOn: z
+    .object({
+      on: z.boolean(),
+      // As stored (bots.json keeps any short string), so a stray entry can't block every save.
+      accounts: z.array(z.string().min(1).max(320)).max(100).optional()
+    })
+    .optional(),
   /** Keys (botAskerKeys) of the askers the caller showed for confirmation; Google stays off when Who can ask no longer matches. */
   confirmedAskers: z.array(z.string()).max(1000).optional()
 })
