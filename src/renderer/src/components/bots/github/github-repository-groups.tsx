@@ -1,3 +1,4 @@
+// @protected-copy: the repositories a bot can work in, shown in the GitHub setup's trust decision.
 import React, { useState } from 'react'
 import { BookMarked, Building2, ChevronRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'

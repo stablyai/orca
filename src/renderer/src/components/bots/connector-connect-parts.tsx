@@ -210,7 +210,7 @@ export function ConnectorSetupHeader({
             {corner}
           </div>
           <DialogDescription asChild size={bare ? 'compact' : 'default'}>
-            <div className={bare ? 'min-w-0' : 'break-words'}>
+            <div className={bare ? 'min-w-0 break-words' : 'break-words'}>
               {line ?? (intro ? <BotHowToAsk text={intro} /> : null)}
             </div>
           </DialogDescription>

@@ -192,7 +192,8 @@ function BotGitHubSetupFlow({
             step.kind === 'connect' ||
             step.kind === 'waiting' ||
             step.kind === 'install' ||
-            trip.inSystemBrowser ||
+            // Still following a trip to GitHub (Orca's browser or the system one): × must not drop it.
+            record.waiting ||
             awaiting
           }
           onEnd={onClose}
