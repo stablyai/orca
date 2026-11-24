@@ -16,6 +16,7 @@ import { ProviderIdentityCard } from '../accounts/ProviderIdentityCard'
 import { UsageDisplayToggle } from './usage-meter'
 import { ProviderLetterBadge, ProviderSegment } from './StatusBarProviderSegment'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from '../composition/status-bar-context-menu-policy'
+import { HideProviderUsageMenuItem } from './HideProviderUsageMenuItem'
 
 export function ProviderDetailsMenu({
   provider,
@@ -94,6 +95,13 @@ export function ProviderDetailsMenu({
           {/* Why: the account card is already bordered, so a rule under it is redundant. */}
           {variant === 'account' && provider ? null : <DropdownMenuSeparator />}
           {children}
+        </>
+      ) : null}
+      {/* Submenus are usage-roster flyouts, so each offers the same way to hide its meter. */}
+      {asSubmenu && provider ? (
+        <>
+          <DropdownMenuSeparator />
+          <HideProviderUsageMenuItem provider={provider.provider} />
         </>
       ) : null}
     </>

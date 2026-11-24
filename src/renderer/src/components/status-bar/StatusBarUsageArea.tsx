@@ -16,7 +16,6 @@ import { ClaudeSwitcherMenu } from './accounts/ClaudeSwitcherMenu'
 import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
 import { ProviderDetailsMenu } from './usage/ProviderDetailsMenu'
 import { AntigravityUsageMenu } from './usage/AntigravityUsageMenu'
-import { HideProviderUsageMenuItem } from './usage/HideProviderUsageMenuItem'
 import {
   ClippedRowProviderSegment,
   ProviderSegment,
@@ -163,6 +162,7 @@ export function StatusBarUsageArea({
                   canSignIn={canSignInFromUsageRow}
                   onManageAccounts={handleManageAccounts}
                   onUsageDetails={handleUsageDetails}
+                  canHideProviders
                   renderRow={(p, rowNode) => {
                     // Why: a placeholder has nothing to drill into; its row opens the host's accounts.
                     if (isOwnerNotSetUpPlaceholder(p)) {
@@ -208,9 +208,7 @@ export function StatusBarUsageArea({
                           'auto.components.status.bar.UsageRosterPanel.openDetails',
                           'Open usage details'
                         )}
-                      >
-                        <HideProviderUsageMenuItem provider={p.provider} />
-                      </ProviderDetailsMenu>
+                      />
                     )
                   }}
                 />

@@ -10,7 +10,7 @@ const { unavailable } = vi.hoisted(() => ({
       provider,
       session: null,
       weekly: null,
-      updatedAt: Date.now(),
+      updatedAt: Date.parse('2026-11-22T12:00:00Z'),
       error: null,
       status: 'unavailable'
     })
@@ -59,7 +59,7 @@ function cursorReading(usedPercent: number): ProviderRateLimits {
     session: { usedPercent, windowMinutes: 300, resetsAt: null, resetDescription: null },
     weekly: null,
     buckets: [],
-    updatedAt: Date.now(),
+    updatedAt: Date.parse('2026-11-22T12:00:00Z'),
     error: null,
     status: 'ok'
   }
