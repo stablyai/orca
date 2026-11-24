@@ -136,10 +136,33 @@ describe('google.bot.set from the owner', () => {
     await expect(set({ on: true, accounts: ['me@gmail.com'] })).resolves.toMatchObject({
       bot: { google: true, accounts: ['me@gmail.com'] }
     })
-    expect((await set({ on: true })).bot).toEqual({ id: 'scout', name: 'Scout', google: true })
+    expect((await set({ on: true, allAccounts: true })).bot).toEqual({
+      id: 'scout',
+      name: 'Scout',
+      google: true
+    })
     await set({ on: true, accounts: ['me@gmail.com'] })
     expect((await set({ on: false })).bot).toEqual({ id: 'scout', name: 'Scout', google: false })
     expect(ctx.runtime.bots.list()[0]?.googleAccounts).toBeUndefined()
+  })
+
+  it('keeps a listed bot to its list on a plain on, and widens only for allAccounts', async () => {
+    const method = GOOGLE_METHODS.find((entry) => entry.name === 'google.bot.set')!
+    const ctx = { runtime: runtime({ google: true, googleAccounts: ['me@gmail.com'] }) }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these runtime fields.
+    const handler = method.handler as (params: unknown, ctx: unknown) => Promise<{ bot: unknown }>
+    const set = (params: Record<string, unknown>) =>
+      handler(method.params!.parse({ botId: 'scout', ...params }), ctx)
+    // A phone's or an older desktop's setup sends a plain on.
+    expect((await set({ on: true })).bot).toMatchObject({ accounts: ['me@gmail.com'] })
+    expect((await set({ on: true, allAccounts: true })).bot).toEqual({
+      id: 'scout',
+      name: 'Scout',
+      google: true
+    })
+    expect(ctx.runtime.bots.list()[0]?.googleAccounts).toBeUndefined()
+    // Saved before accounts could be chosen: no list stays every account.
+    expect((await set({ on: true })).bot).toEqual({ id: 'scout', name: 'Scout', google: true })
   })
 })
 

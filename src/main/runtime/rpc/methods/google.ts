@@ -233,15 +233,22 @@ export const GOOGLE_METHODS = [
     name: 'google.bot.set',
     permission: 'workspace',
     params: GoogleBotAccessSetParams,
-    handler: async ({ botToken, botId, on, accounts, confirmedAskers }, ctx) => {
+    handler: async ({ botToken, botId, on, accounts, allAccounts, confirmedAskers }, ctx) => {
       refuseFromBot(botToken, ctx)
       ctx.runtime.bots.assertEnabled()
       const bot = await ctx.runtime.bots.update(botId, (current) => {
         if (on && confirmedAskers && !sameAskers(confirmedAskers, botAskerKeys(current))) {
           throw new InvalidArgumentError(GOOGLE_ASKERS_CHANGED)
         }
-        // Off, or on with no list, clears the list: on is then every account, now and later.
-        return { google: on, googleAccounts: on && accounts ? [...new Set(accounts)] : undefined }
+        if (!on) {
+          return { google: false, googleAccounts: undefined }
+        }
+        if (accounts) {
+          return { google: true, googleAccounts: [...new Set(accounts)] }
+        }
+        // A plain on (phone setup, older clients) keeps a list; only allAccounts widens it.
+        const keep = current.google === true && allAccounts !== true
+        return { google: true, googleAccounts: keep ? current.googleAccounts : undefined }
       })
       // Settings confirms this before turning Google on; the CLI prints it.
       const warning = on ? googleWhoCanAskWarning(bot.name, botOtherAskers(bot)) : null

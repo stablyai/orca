@@ -90,6 +90,46 @@ describe('Calendar timers follow their rule', () => {
     checker.stop()
   })
 
+  it('starts no run from a timer once its account is taken off the bot', async () => {
+    let bot: { id: string; google: boolean; googleAccounts?: string[] } = {
+      id: 'b1',
+      google: true,
+      googleAccounts: ['a@x.com']
+    }
+    const runs: ((() => void) | undefined)[] = []
+    const runForEvent = vi.fn(async () => undefined)
+    const checker = new GoogleTriggerChecker({
+      automations: () => [
+        {
+          id: 'auto',
+          enabled: true,
+          bot: { botId: 'b1', runsIn: 'new', resultsTo: 'chat' },
+          on: [rule('r1', 'a@x.com', 10)]
+        }
+      ],
+      bots: () => [bot],
+      accounts: () => ['a@x.com', 'b@x.com'],
+      defaultAccount: async () => ({ email: 'a@x.com' }),
+      api: (account) => calendarApi(account),
+      runForEvent,
+      readState: () => ({ accounts: {}, listeners: {} }),
+      writeState: () => {},
+      now: () => NOW,
+      tickMs: 120_000,
+      setTimer: (run) => {
+        runs.push(run)
+        return setTimeout(() => {}, 0)
+      }
+    })
+    await checker.tick()
+    expect(runs).toHaveLength(1)
+    bot = { ...bot, googleAccounts: ['b@x.com'] }
+    runs[0]?.()
+    await Promise.resolve()
+    expect(runForEvent).not.toHaveBeenCalled()
+    checker.stop()
+  })
+
   it("keeps a sibling rule's timer for the same meeting when one rule moves", async () => {
     let rules = [rule('r1', 'a@x.com', 10), rule('r2', 'a@x.com', 10)]
     const created: ReturnType<typeof setTimeout>[] = []

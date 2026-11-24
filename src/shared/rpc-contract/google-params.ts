@@ -56,8 +56,10 @@ export const GoogleBotAccessSetParams = z.object({
   ...Caller,
   botId: requiredString('Missing bot id'),
   on: z.boolean(),
-  /** With `on`: only these accounts; absent is every account, now and later. */
+  /** With `on`: only these accounts. */
   accounts: z.array(Email).min(1).max(100).optional(),
+  /** With `on` and no `accounts`: every account, now and later. Without it a bot that has Google keeps its list. */
+  allAccounts: z.literal(true).optional(),
   /** Keys (botAskerKeys) of the askers the caller showed for confirmation; Google stays off when Who can ask no longer matches. */
   confirmedAskers: z.array(z.string()).max(1000).optional()
 })

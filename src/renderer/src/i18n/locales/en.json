@@ -28905,6 +28905,7 @@
       "useAnotherSignInDetail": "Uses your current Google app",
       "setUpNewAppDetail": "If your current app doesn’t work for this account or organization",
       "updateToSetUpNewApp": "Update Orca on {{host}} to set up a new Google app.",
+      "updateToChooseAccounts": "Update Orca on {{host}} to choose accounts.",
       "picker": {
         "label": "Google accounts",
         "addAccount": "Add another account",

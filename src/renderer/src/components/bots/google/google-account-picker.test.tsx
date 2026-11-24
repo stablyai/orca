@@ -10,7 +10,10 @@ import { ConfirmationDialogProvider } from '@/components/dismiss/confirmation/co
 
 const setBotGoogle = vi.hoisted(() => vi.fn())
 const toastError = vi.hoisted(() => vi.fn())
-vi.mock('./set-bot-google', () => ({ setBotGoogle }))
+vi.mock('./set-bot-google', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  setBotGoogle
+}))
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
 beforeEach(() => vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true))
