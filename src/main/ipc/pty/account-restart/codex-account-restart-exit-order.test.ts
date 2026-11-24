@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { PtyFencedTerminationOutcome } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 
 type ExitPayload = {
@@ -12,7 +12,7 @@ type ExitPayload = {
 const h = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => unknown>(),
   exitListener: null as ((payload: ExitPayload) => void) | null,
-  killFenced: null as unknown as ReturnType<typeof vi.fn>
+  killFenced: null as unknown as Mock<(...args: unknown[]) => Promise<PtyFencedTerminationOutcome>>
 }))
 
 vi.mock('../pty-host-bindings', () => ({
