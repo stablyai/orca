@@ -40,9 +40,6 @@ export const CLIENT_EVENT_METHODS = [
           },
           { consumesTerminalSideEffects: clientKind !== 'mobile' }
         )
-        // Only a connected remote client needs worktree removals the host's own watcher cannot see.
-        const releaseWorktreeReconcile =
-          connectionId === undefined ? undefined : runtime.retainRemoteClientWorktreeReconcile()
         const unregisterHostVolunteer =
           params.browserHostRequests === true &&
           clientKind === 'runtime' &&
@@ -74,6 +71,9 @@ export const CLIENT_EVENT_METHODS = [
               })
             : undefined
 
+        // Taken beside the cleanup that releases it so an earlier throw cannot leak the timer.
+        const releaseWorktreeReconcile =
+          connectionId === undefined ? undefined : runtime.retainRemoteClientWorktreeReconcile()
         const seq = ++clientEventSubscriptionSeq
         const subscriptionId = `runtime-client-events-${connectionId ?? 'inproc'}-${seq}`
         runtime.registerSubscriptionCleanup(

@@ -1,11 +1,9 @@
 export const REMOTE_CLIENT_WORKTREE_RECONCILE_INTERVAL_MS = 60_000
 
-type ProbeResult = Promise<string | null> | 'in-flight'
-
 type RemoteClientWorktreeReconcileDeps<R extends { id: string }> = {
   /** Local Git repos whose admin dir this process can read without waking a distro or a remote host. */
   listProbeableRepos: () => R[]
-  probe: (repo: R) => ProbeResult
+  probe: (repo: R) => Promise<string | null>
   notifyChanged: (repoId: string) => void
   intervalMs?: number
 }
@@ -13,17 +11,21 @@ type RemoteClientWorktreeReconcileDeps<R extends { id: string }> = {
 /** Without a live watcher (headless serve, hidden or closed window) a worktree removed in a shell would never reach paired clients; this probes while one is connected. */
 export class RemoteClientWorktreeReconcile<R extends { id: string }> {
   private retainers = 0
+  // Bumped when the last client leaves so a probe begun before the gap cannot seed the next baseline.
+  private epoch = 0
   private timer: ReturnType<typeof setInterval> | null = null
   private readonly fingerprints = new Map<string, string>()
+  // Own single-flight: timeouts do not cancel readdir/stat, so a wedged mount must not stack probes.
+  private readonly inFlight = new Set<string>()
 
   constructor(private readonly deps: RemoteClientWorktreeReconcileDeps<R>) {}
 
   retain(): () => void {
     this.retainers++
     if (this.retainers === 1) {
-      void this.tick()
+      this.runTick()
       this.timer = setInterval(
-        () => void this.tick(),
+        () => this.runTick(),
         this.deps.intervalMs ?? REMOTE_CLIENT_WORKTREE_RECONCILE_INTERVAL_MS
       )
       this.timer.unref?.()
@@ -40,10 +42,16 @@ export class RemoteClientWorktreeReconcile<R extends { id: string }> {
           clearInterval(this.timer)
           this.timer = null
         }
-        // A baseline from before a gap could not tell a change made while nobody listened.
+        this.epoch++
         this.fingerprints.clear()
       }
     }
+  }
+
+  private runTick(): void {
+    this.tick().catch((error) => {
+      console.error('[worktrees] remote-client worktree reconcile tick failed', error)
+    })
   }
 
   private async tick(): Promise<void> {
@@ -58,19 +66,27 @@ export class RemoteClientWorktreeReconcile<R extends { id: string }> {
   }
 
   private async reconcileRepo(repo: R): Promise<void> {
-    const probe = this.deps.probe(repo)
-    if (probe === 'in-flight') {
+    if (this.inFlight.has(repo.id)) {
       return
     }
-    const fingerprint = await probe.catch(() => null)
-    // Unknown means the filesystem could not answer; keep the baseline rather than report a change.
-    if (fingerprint === null || this.retainers === 0) {
-      return
-    }
-    const previous = this.fingerprints.get(repo.id)
-    this.fingerprints.set(repo.id, fingerprint)
-    if (previous !== undefined && previous !== fingerprint) {
-      this.deps.notifyChanged(repo.id)
+    const epoch = this.epoch
+    this.inFlight.add(repo.id)
+    try {
+      const fingerprint = await this.deps.probe(repo)
+      // Unknown means the filesystem could not answer; keep the baseline rather than report a change.
+      if (fingerprint === null || epoch !== this.epoch) {
+        return
+      }
+      const previous = this.fingerprints.get(repo.id)
+      this.fingerprints.set(repo.id, fingerprint)
+      if (previous !== undefined && previous !== fingerprint) {
+        this.deps.notifyChanged(repo.id)
+      }
+    } catch (error) {
+      // One bad repo must not abort the rest of the tick.
+      console.error('[worktrees] remote-client worktree reconcile failed for repo', repo.id, error)
+    } finally {
+      this.inFlight.delete(repo.id)
     }
   }
 }

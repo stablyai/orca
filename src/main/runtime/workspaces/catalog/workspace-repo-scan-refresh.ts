@@ -73,7 +73,7 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
             ).wslDistro
           )
       ),
-    probe: (repo) => this.startRepoWorktreeAdminFingerprintProbe(repo),
+    probe: (repo) => readRepoWorktreeAdminFingerprint(repo.path).catch(() => null),
     notifyChanged: (repoId) => this.notifyWorktreeCatalogChangedForRemoteClients(repoId)
   })
 
