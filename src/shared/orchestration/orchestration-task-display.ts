@@ -2,6 +2,8 @@ import { markdownPlainLine } from '../markdown/markdown-plain-line'
 
 export const ORCHESTRATION_TASK_TITLE_MAX_LENGTH = 80
 export const ORCHESTRATION_DISPLAY_NAME_MAX_LENGTH = 160
+// Bounds the Markdown pass on one huge spec line; a heading's link fits well within it.
+const SPEC_LINE_SCAN_LIMIT = 4_000
 
 export type OrchestrationTaskDisplayMetadata = {
   taskTitle: string
@@ -24,7 +26,7 @@ export function buildOrchestrationTaskDisplayMetadata(input: {
 function deriveTaskTitleFromSpec(spec: string): string {
   for (const line of spec.split(/\r?\n/)) {
     const title = normalizeSingleLine(
-      markdownPlainLine(line.slice(0, 400)),
+      markdownPlainLine(line.slice(0, SPEC_LINE_SCAN_LIMIT)),
       ORCHESTRATION_TASK_TITLE_MAX_LENGTH
     )
     if (title) {

@@ -7,7 +7,9 @@ describe('buildOrchestrationTaskDisplayMetadata', () => {
     expect(title('# Code review only: **check** the _parser_\n\nDetails')).toBe(
       'Code review only: check the parser'
     )
-    expect(title('\n## \n> Fix `snake_case_name` handling')).toBe('Fix snake_case_name handling')
+    expect(title('\n## \n> Fix `__init__` in [the loader](https://x.test/a_b_c)')).toBe(
+      'Fix __init__ in the loader'
+    )
     expect(
       buildOrchestrationTaskDisplayMetadata({ spec: '# x', taskTitle: '# Kept' }).taskTitle
     ).toBe('# Kept')
