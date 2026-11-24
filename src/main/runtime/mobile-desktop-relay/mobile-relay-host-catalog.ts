@@ -16,6 +16,7 @@ import {
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getWorkspaceSessionTabActivityIds } from '../../../shared/workspace-session/workspace-session-tab-activity'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
+import { worktreeMetaIdentityKey } from '../../../shared/worktree/identity'
 import { SERVER_FETCH_TIMEOUT_MS } from './server-worktree-fetch'
 import { normalizePairedServerRow } from '../../../shared/sidebar-list/feed-facts/paired-server-rows'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
@@ -45,6 +46,10 @@ export type ServerWorktreeRows = {
 /** A paired server's workspace as the plugin host's active-workspace context needs it. */
 export type PairedWorkspaceContext = {
   worktreeId: string
+  /** Host-qualified identity, which the plugin host lists as `workspaceId`. A paired row has a
+   *  durable instance id and a host, so its identity never falls back to the path-bearing id —
+   *  which also cannot tell two servers' copies of one workspace apart. */
+  identityKey?: string
   path: string
   branch: string
   displayName: string
@@ -142,8 +147,13 @@ export class MobileRelayHostCatalog {
       const row = normalizePairedServerRow(hostId, raw)
       if (row && (row.worktreeId === worktreeId || worktreeIdentityKey(row.worktreeId) === key)) {
         const displayName = [row.displayName, row.path].find((label) => label.trim().length > 0)
+        const identityKey = worktreeMetaIdentityKey(row.worktreeId, {
+          instanceId: row.instanceId,
+          hostId
+        })
         return {
           worktreeId: row.worktreeId,
+          ...(identityKey ? { identityKey } : {}),
           path: row.path,
           branch: row.branch,
           displayName: displayName?.trim() ?? ''
