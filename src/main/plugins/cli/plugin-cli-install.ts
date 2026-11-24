@@ -1,6 +1,7 @@
 import {
   buildPluginApprovalRequest,
   pluginNeedsCliApproval,
+  PLUGIN_APPROVAL_STALE_CODE,
   PLUGIN_INSTALL_FAILED_CODE,
   PluginApprovalRequiredError,
   PluginCliError,
@@ -8,13 +9,8 @@ import {
 } from '../../../shared/plugins/approval/plugin-cli-approval'
 import type { PluginConsentRequest } from '../../../shared/plugins/approval/plugin-consent-request'
 import { pluginUpdateGrowsAccess } from '../../../shared/plugins/approval/plugin-update-access-growth'
-import {
-  isSamePluginSource,
-  pluginSourceLabel
-} from '../../../shared/plugins/catalog/plugin-marketplace'
 import { parsePluginGitInstallInput } from '../../../shared/plugins/installation/plugin-git-install-input'
 import type { PluginInstallSourceInfo } from '../../../shared/plugins/installation/plugin-install-source-info'
-import type { PluginInstallSource } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import type { RpcCallerIdentity } from '../../runtime/rpc/callers/rpc-caller-identity'
 import type { PluginPolicySource } from '../activation/plugin-activation-policy'
 import {
@@ -23,13 +19,13 @@ import {
   readPreviewAccessGrowth
 } from '../catalog/plugin-update-approval'
 import { catalogInstallCandidate, type PluginCliCatalogs } from './plugin-cli-catalog-candidates'
+import { installedRecordOf, pluginInstallMove } from './plugin-cli-install-identity'
 import {
   gitInstallCandidate,
   installFailed,
   localInstallCandidate,
   type PluginCliCandidateHost,
-  type PluginCliInstallCandidate,
-  type PluginInstallLocation
+  type PluginCliInstallCandidate
 } from './plugin-cli-install-candidates'
 import {
   approvePluginFromCli,
@@ -127,60 +123,26 @@ async function candidateFor(
   }
 }
 
-function locationOf(source: PluginInstallSource): PluginInstallLocation | null {
-  switch (source.kind) {
-    case 'marketplace':
-      return { kind: 'repository', ...source.plugin }
-    case 'git':
-      return { kind: 'repository', url: source.url }
-    case 'local-path':
-      return { kind: 'folder', path: source.path }
-    case 'bundled':
-      return null
-  }
-}
-
-function locationLabel(location: PluginInstallLocation | null): string {
-  if (!location) {
-    return 'Orca (bundled)'
-  }
-  return location.kind === 'folder' ? location.path : pluginSourceLabel(location)
-}
-
-/** The repository or folder an install moves from, or null when it stays put. */
-export function pluginInstallMove(
-  previous: PluginInstallSource,
-  next: PluginInstallLocation
-): { from: string; to: string } | null {
-  const before = locationOf(previous)
-  const same =
-    before?.kind === 'repository' && next.kind === 'repository'
-      ? isSamePluginSource(before, next)
-      : before?.kind === 'folder' && next.kind === 'folder' && before.path === next.path
-  return same ? null : { from: locationLabel(before), to: locationLabel(next) }
-}
-
 /**
  * A failure after the candidate's bytes landed still says so: the error names the installed version
  * instead of reading as "nothing was installed". Read from the lockfile, not from the thrown error.
+ * An approval still owed after the write keeps its approval error, marked as installed from its source.
  */
 async function afterInstallFailure(
   deps: PluginCliInstallDeps,
   candidate: PluginCliInstallCandidate,
   error: unknown
 ): Promise<unknown> {
-  if (error instanceof PluginApprovalRequiredError) {
+  const lockfile = await deps.catalogs.installer.readInstallLockfile().catch(() => null)
+  const entry = installedRecordOf(lockfile, candidate)
+  if (!entry) {
     return error
   }
-  const entry = (await deps.catalogs.installer.readInstallLockfile().catch(() => null))?.plugins[
-    candidate.pluginKey
-  ]
-  if (
-    !entry ||
-    entry.version !== candidate.manifest.version ||
-    entry.contentHash !== candidate.contentHash
-  ) {
-    return error
+  if (error instanceof PluginApprovalRequiredError) {
+    return new PluginApprovalRequiredError(
+      { ...error.data, installed: { version: entry.version }, source: candidate.source },
+      error.code === PLUGIN_APPROVAL_STALE_CODE
+    )
   }
   const reason = error instanceof Error ? error.message : String(error)
   return new PluginCliError(

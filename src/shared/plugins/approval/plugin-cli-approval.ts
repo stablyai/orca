@@ -91,6 +91,8 @@ export type PluginApprovalRequest = {
   source?: PluginInstallSourceInfo
   /** Update: what it asks for beyond the running version. */
   update?: PluginApprovalUpdateInfo
+  /** Set when the install already landed and only this approval is still owed. */
+  installed?: { version: string }
 }
 
 export type PluginApprovalUpdateInfo = {
@@ -235,6 +237,11 @@ export function formatPluginApprovalMessage(request: PluginApprovalRequest, stal
     ? `That fingerprint does not match what ${request.pluginKey} would get now: the plugin changed since it was shown, or the fingerprint is for something else. Review the current grants.`
     : `${request.pluginKey} ${request.version} needs approval before it can run.`
   const lines = [
+    ...(request.installed
+      ? [
+          `${request.pluginKey} ${request.installed.version} is installed, but its approval is still pending.`
+        ]
+      : []),
     lead,
     `Approving ${request.name} (${request.pluginKey} ${request.version}${request.isDev ? ', development folder' : ''}) grants:`,
     `- ${request.grants.executionDescription}`,

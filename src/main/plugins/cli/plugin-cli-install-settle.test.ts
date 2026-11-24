@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { installCatalogReleaseWithApproval } from '../catalog/plugin-update-approval'
-import { PLUGIN_INSTALL_FAILED_CODE } from '../../../shared/plugins/approval/plugin-cli-approval'
+import {
+  buildPluginApprovalRequest,
+  PLUGIN_APPROVAL_REQUIRED_CODE,
+  PLUGIN_INSTALL_FAILED_CODE,
+  PluginApprovalRequiredError
+} from '../../../shared/plugins/approval/plugin-cli-approval'
+import { pluginManifestSchema } from '../../../shared/plugins/manifest/plugin-manifest'
+import { approvePluginFromCli } from './plugin-cli-approval'
 import { settlePluginCliCandidate, type PluginCliInstallDeps } from './plugin-cli-install'
 import type { PluginCliInstallCandidate } from './plugin-cli-install-candidates'
 
@@ -10,13 +17,37 @@ vi.mock('../catalog/plugin-update-approval', () => ({
   readApprovedPredecessor: () => null,
   readPreviewAccessGrowth: vi.fn()
 }))
+// Why: the post-write approval is the step under test; its outcome is set per case.
+vi.mock('./plugin-cli-approval', () => ({ approvePluginFromCli: vi.fn() }))
 
 const URL = 'https://github.com/samples/demo.git'
+const OTHER_URL = 'https://github.com/other/demo.git'
 const PLUGIN_KEY = 'samples.demo'
+const NEW_HASH = 'new-hash'
 
-/** Settles an update whose bytes are 1.1.0; the lockfile says what is installed after the attempt. */
-function settle(installed: { version: string; contentHash: string } | null) {
-  const lock = {
+// Why data: a content-only plugin's approval is not asked before the write, so only the post-write step can refuse.
+const dataManifest = pluginManifestSchema.parse({
+  manifestVersion: 2,
+  id: 'demo',
+  publisher: 'samples',
+  name: 'Demo',
+  version: '1.1.0',
+  execution: 'data',
+  license: 'MIT',
+  engines: { orca: '>=1.4.248' },
+  capabilities: [],
+  contributes: {}
+})
+
+type InstalledFixture = {
+  version: string
+  contentHash: string
+  /** Where the lockfile says the installed bytes came from; defaults to the candidate's repository. */
+  url?: string
+}
+
+function lockOf(installed: InstalledFixture | null) {
+  return {
     plugins: installed
       ? {
           [PLUGIN_KEY]: {
@@ -24,16 +55,30 @@ function settle(installed: { version: string; contentHash: string } | null) {
             version: installed.version,
             contentHash: installed.contentHash,
             resolvedCommit: 'a'.repeat(40),
-            source: { kind: 'git', url: URL, ref: 'main' }
+            source: { kind: 'git', url: installed.url ?? URL, ref: 'main' }
           }
         }
       : {}
   }
+}
+
+/**
+ * Settles an update of 1.1.0 bytes. The lockfile is read twice: `before` when settling starts, and
+ * `installed` after the write, which is what recovery reads.
+ */
+function settle(
+  installed: InstalledFixture | null,
+  options: { action?: 'install' | 'update'; before?: InstalledFixture | null } = {}
+) {
+  const readInstallLockfile = vi
+    .fn()
+    .mockResolvedValueOnce(lockOf(options.before ?? null))
+    .mockResolvedValue(lockOf(installed))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture carries only the fields settling reads
   const candidate = {
     pluginKey: PLUGIN_KEY,
-    manifest: { version: '1.1.0' },
-    contentHash: 'new-hash',
+    manifest: dataManifest,
+    contentHash: NEW_HASH,
     consentFingerprint: 'fingerprint',
     resolvedCommit: 'b'.repeat(40),
     source: { kind: 'git', url: URL, ref: 'main' },
@@ -48,12 +93,32 @@ function settle(installed: { version: string; contentHash: string } | null) {
       findValidPlugin: () => null,
       recordApprovalAudit: async () => undefined
     },
-    catalogs: { installer: { readInstallLockfile: async () => lock } },
+    catalogs: { installer: { readInstallLockfile } },
     applyConsent: vi.fn(),
     executionHost: 'the Orca host',
     caller: undefined
   } as unknown as PluginCliInstallDeps
-  return settlePluginCliCandidate(deps, candidate, 'update', undefined)
+  return settlePluginCliCandidate(deps, candidate, options.action ?? 'update', undefined)
+}
+
+function failureOf(run: Promise<unknown>): Promise<unknown> {
+  return run.then(
+    () => null,
+    (error: unknown) => error
+  )
+}
+
+/** The write landed: the install reports the new bytes, and the approval step is what settles next. */
+function landedInstall(needsReview: boolean) {
+  return {
+    ok: true as const,
+    pluginKey: PLUGIN_KEY,
+    version: '1.1.0',
+    contentHash: NEW_HASH,
+    consentFingerprint: 'fingerprint',
+    resolvedCommit: 'b'.repeat(40),
+    needsReview
+  }
 }
 
 describe('settlePluginCliCandidate after a failure', () => {
@@ -61,10 +126,7 @@ describe('settlePluginCliCandidate after a failure', () => {
     vi.mocked(installCatalogReleaseWithApproval).mockRejectedValueOnce(
       new Error('catalog refresh failed')
     )
-    const failure = await settle({ version: '1.1.0', contentHash: 'new-hash' }).then(
-      () => null,
-      (error: unknown) => error
-    )
+    const failure = await failureOf(settle({ version: '1.1.0', contentHash: NEW_HASH }))
     expect(failure).toMatchObject({
       code: PLUGIN_INSTALL_FAILED_CODE,
       message:
@@ -87,5 +149,71 @@ describe('settlePluginCliCandidate after a failure', () => {
       new Error('catalog refresh failed')
     )
     await expect(settle(null)).rejects.toThrow('catalog refresh failed')
+  })
+
+  it('keeps the original error when the same bytes came from another repository', async () => {
+    vi.mocked(installCatalogReleaseWithApproval).mockRejectedValueOnce(
+      new Error('catalog refresh failed')
+    )
+    // Why: same version and bytes, but the lockfile's install came from a different repository.
+    const failure = await failureOf(
+      settle({ version: '1.1.0', contentHash: NEW_HASH, url: OTHER_URL })
+    )
+    expect(failure).toBeInstanceOf(Error)
+    expect(failure).toMatchObject({ message: 'catalog refresh failed' })
+    expect(failure).not.toMatchObject({ code: PLUGIN_INSTALL_FAILED_CODE })
+  })
+
+  it('keeps its approval error and names the installed version when approval is owed after the write', async () => {
+    vi.mocked(installCatalogReleaseWithApproval).mockResolvedValueOnce(landedInstall(true))
+    const request = buildPluginApprovalRequest(
+      {
+        pluginKey: PLUGIN_KEY,
+        manifest: dataManifest,
+        consentFingerprint: 'fingerprint',
+        contentIdentity: NEW_HASH,
+        isDev: false
+      },
+      'install'
+    )
+    vi.mocked(approvePluginFromCli).mockRejectedValueOnce(new PluginApprovalRequiredError(request))
+    const failure = await failureOf(
+      settle({ version: '1.1.0', contentHash: NEW_HASH }, { action: 'install' })
+    )
+    expect(failure).toBeInstanceOf(PluginApprovalRequiredError)
+    expect(failure).toMatchObject({
+      code: PLUGIN_APPROVAL_REQUIRED_CODE,
+      message: expect.stringMatching(
+        /^samples\.demo 1\.1\.0 is installed, but its approval is still pending\./
+      ),
+      data: {
+        pluginKey: PLUGIN_KEY,
+        version: '1.1.0',
+        approvalFingerprint: request.approvalFingerprint,
+        installed: { version: '1.1.0' },
+        source: { kind: 'git', url: URL, ref: 'main' }
+      }
+    })
+  })
+
+  it('keeps the plain approval error when the same bytes came from another repository', async () => {
+    vi.mocked(installCatalogReleaseWithApproval).mockResolvedValueOnce(landedInstall(true))
+    const request = buildPluginApprovalRequest(
+      {
+        pluginKey: PLUGIN_KEY,
+        manifest: dataManifest,
+        consentFingerprint: 'fingerprint',
+        contentIdentity: NEW_HASH,
+        isDev: false
+      },
+      'install'
+    )
+    const original = new PluginApprovalRequiredError(request)
+    vi.mocked(approvePluginFromCli).mockRejectedValueOnce(original)
+    const failure = await failureOf(
+      settle({ version: '1.1.0', contentHash: NEW_HASH, url: OTHER_URL }, { action: 'install' })
+    )
+    // Why: the lockfile's install is not this candidate, so the approval error must not claim it.
+    expect(failure).toBe(original)
   })
 })
