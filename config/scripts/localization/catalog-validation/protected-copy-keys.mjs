@@ -29,6 +29,52 @@ const PROTECTED_COPY_FILE_SCOPE_RE = /^\s*\/\/ @protected-copy scope=file\s*$/m
 const RELATIVE_IMPORT_RE = /(?:^|\n)\s*(?:import|export)\s[^'"]*?from\s+['"](\.\/[^'"]+)['"]/g
 const PLURAL_SUFFIX_RE = /_(?:zero|one|two|few|many|other)$/
 const RESOLVE_EXTENSIONS = ['', '.ts', '.tsx', '/index.ts', '/index.tsx']
+const PERMISSION_PILL_DIR = path.join(
+  'src',
+  'renderer',
+  'src',
+  'components',
+  'native-chat',
+  'session',
+  'options',
+  'controls'
+)
+
+// Why written out rather than read from the manifest: a refactor that hides a key from the source
+// scan (a computed key) also drops it from the regenerated manifest, so only a hand-kept pin fails.
+export const PINNED_PROTECTED_COPY = [
+  {
+    // The pill says what the running agent may do, so a language pack must not reword it.
+    files: [
+      path.join(PERMISSION_PILL_DIR, 'NativeChatPermissionModePicker.tsx'),
+      path.join(PERMISSION_PILL_DIR, 'native-chat-permission-mode-labels.ts')
+    ],
+    keys: [
+      'components.native-chat.composer.permissionAcceptEdits',
+      'components.native-chat.composer.permissionAcceptEditsAntigravityDescription',
+      'components.native-chat.composer.permissionAcceptEditsDescription',
+      'components.native-chat.composer.permissionAgentSettings',
+      'components.native-chat.composer.permissionAgentSettingsUnnamedHint',
+      'components.native-chat.composer.permissionAgentSettingsUsedHint',
+      'components.native-chat.composer.permissionAppliesNextMessage',
+      'components.native-chat.composer.permissionAsk',
+      'components.native-chat.composer.permissionAskDescription',
+      'components.native-chat.composer.permissionAskSharedDescription',
+      'components.native-chat.composer.permissionAuto',
+      'components.native-chat.composer.permissionAutoDescription',
+      'components.native-chat.composer.permissionFromAgentSettings',
+      'components.native-chat.composer.permissionFullAccess',
+      'components.native-chat.composer.permissionFullAccessCodexDescription',
+      'components.native-chat.composer.permissionFullAccessDescription',
+      'components.native-chat.composer.permissionFullAccessSharedDescription',
+      'components.native-chat.composer.permissionReadOnly',
+      'components.native-chat.composer.permissionReadOnlyDescription',
+      'components.native-chat.composer.permissions',
+      'components.native-chat.composer.pillAccessibleName',
+      'components.native-chat.composer.planMode'
+    ]
+  }
+]
 
 /** Why a file's strings are protected, or null. */
 export function protectedCopyMarker(sourceText) {
@@ -53,6 +99,20 @@ function flattenCatalog(value, prefix = '', paths = new Set()) {
     }
   }
   return paths
+}
+
+// Why leaves only: flattenCatalog also yields namespace nodes, so a quoted namespace in a pinned
+// file's comment would look like an unpinned key.
+function flattenTranslationLeaves(value, prefix = '', leaves = new Set()) {
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = prefix ? `${prefix}.${key}` : key
+    if (typeof child === 'string') {
+      leaves.add(childPath)
+    } else if (typeof child === 'object' && child !== null) {
+      flattenTranslationLeaves(child, childPath, leaves)
+    }
+  }
+  return leaves
 }
 
 // Why same-directory only: a dialog's copy module and split-out footer sit beside it; deeper
@@ -104,6 +164,39 @@ export function collectProtectedCopyKeys(sources, englishPaths) {
   return { keys: [...keys].sort(), prefixes: [...new Set(prefixes)].sort() }
 }
 
+/** Pinned keys the manifest lost, and keys a pinned file renders that are not pinned yet. */
+export function findPinViolations(sources, englishLeaves, generated, root) {
+  const violations = []
+  for (const pin of PINNED_PROTECTED_COPY) {
+    for (const key of pin.keys) {
+      if (
+        !generated.keys.includes(key) &&
+        !generated.prefixes.some((prefix) => key.startsWith(prefix))
+      ) {
+        violations.push(`pinned key ${key} is no longer protected; keep it a literal t() key`)
+      }
+    }
+    const evidence = { literals: new Set(), dynamicPrefixes: new Set() }
+    for (const file of pin.files) {
+      const sourceText = sources.get(path.join(root, file))
+      // Why fail: a moved pinned file would otherwise be scanned as empty and never flag a new key.
+      if (sourceText === undefined) {
+        violations.push(`pinned file ${file} not found; update its path in PINNED_PROTECTED_COPY`)
+        continue
+      }
+      collectKeyLiterals(sourceText, evidence)
+    }
+    for (const literal of evidence.literals) {
+      const key = literal.replace(PLURAL_SUFFIX_RE, '')
+      const isTranslationKey = englishLeaves.has(key) || englishLeaves.has(`${key}_other`)
+      if (isTranslationKey && !pin.keys.includes(key)) {
+        violations.push(`${key} is rendered by ${pin.files.join(', ')} but not pinned`)
+      }
+    }
+  }
+  return [...new Set(violations)].sort()
+}
+
 async function readSources(root) {
   const sources = new Map()
   for (const sourceRoot of LOCALIZATION_SOURCE_ROOTS) {
@@ -116,9 +209,23 @@ async function readSources(root) {
 
 export async function main(root = process.cwd(), args = process.argv.slice(2)) {
   const english = JSON.parse(await fs.readFile(path.join(root, EN_CATALOG_PATH), 'utf8'))
-  const generated = collectProtectedCopyKeys(await readSources(root), flattenCatalog(english))
+  const englishPaths = flattenCatalog(english)
+  const sources = await readSources(root)
+  const generated = collectProtectedCopyKeys(sources, englishPaths)
   const expected = `${JSON.stringify(generated, null, 2)}\n`
   const outputPath = path.join(root, PROTECTED_COPY_KEYS_PATH)
+  const pinViolations = findPinViolations(
+    sources,
+    flattenTranslationLeaves(english),
+    generated,
+    root
+  )
+  if (pinViolations.length > 0) {
+    console.error(
+      `Protected copy pins in config/scripts/localization/catalog-validation/protected-copy-keys.mjs do not match source:\n${pinViolations.map((line) => `  ${line}`).join('\n')}`
+    )
+    return 1
+  }
   if (args.includes('--fix')) {
     await fs.writeFile(outputPath, expected)
     console.log(`Wrote ${generated.keys.length} protected copy keys to ${PROTECTED_COPY_KEYS_PATH}`)
