@@ -173,7 +173,9 @@ describe.skipIf(process.platform === 'win32')('settings applied to p4 calls', ()
   })
 
   it('previews only new files when modified files are hidden', async () => {
-    await withSettings({ showModifiedNotOpened: false }, () => localPerforceBackend.status(dir))
+    await withSettings({ showModifiedNotOpened: false }, () =>
+      localPerforceBackend.status(dir, { waitForUnopened: true })
+    )
     const reconcile = (await invocations()).find((call) => call.args[0] === 'reconcile')
     expect(reconcile?.args).toEqual(['reconcile', '-n', '-a', '...'])
   })
