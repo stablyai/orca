@@ -18,12 +18,12 @@ import {
 } from '../session/structured/read/document-viewer-visibility'
 import {
   nativeChatTextAppended,
-  playNativeChatTextReveal,
   playNativeChatTextRevealOnClock,
   receiveNativeChatText,
   startNativeChatTextReveal,
-  type NativeChatTextReveal,
-  type NativeChatTextRevealFrames
+  nativeChatSaveRevealMs,
+  nativeChatSaveStepMs,
+  type NativeChatTextReveal
 } from '../../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal'
 import { createNativeChatRevealScheduler } from '../../../../../shared/native-chat/transcript/row-content/native-chat-reveal-scheduler'
 
@@ -34,13 +34,6 @@ const FADE_MAX_CHARS = 1500
 
 /** Reduced motion still steps on the clock, so slow replies back off, but each step shows all it has. */
 const PLAIN_REVEAL_MS = 1
-
-/** The display's own frames, as main reveals each save, for a reply redrawn whole. */
-const ANIMATION_FRAMES: NativeChatTextRevealFrames = {
-  now: () => performance.now(),
-  request: (step) => requestAnimationFrame(step),
-  cancel: (frame) => cancelAnimationFrame(frame)
-}
 
 /** Text arrives every 60 ms; stepping faster would parse and draw the reply again between arrivals. */
 const ARRIVAL_STEP_MS = 60
@@ -161,6 +154,10 @@ export function useNativeChatPacedText(
   const [grew, setGrew] = useState(initial.shown < text.length)
   const heldTextSession = useContext(NativeChatHeldTextSessionContext)
   const heldDrawn = useRef(documentHeldDrawnCount(heldTextSession))
+  // When the last save came and how long after the one before it.
+  const lastSave = useRef<{ at: number; gap?: number }>(undefined)
+  const drawnAt = useRef(-Infinity)
+  const spreadsSaves = drawsWhole && streaming && !reducedMotion
   // A drawn streaming reply keeps its chat's live text unless it, and every other, shows saves only.
   useEffect(
     () =>
@@ -188,6 +185,10 @@ export function useNativeChatPacedText(
     heldDrawn.current = documentHeldDrawnCount(heldTextSession)
     // A reply showing only its saves keeps the last one through a catch-up; its next save shows more.
     if (!streaming || (caughtUp && !drawsWhole) || saved.current.revision !== savedRevision) {
+      if (streaming && saved.current.revision !== savedRevision) {
+        const at = performance.now()
+        lastSave.current = { at, gap: lastSave.current && at - lastSave.current.at }
+      }
       saved.current = { revision: savedRevision, text }
       if (drawsWhole) {
         setSavedState((held) =>
@@ -203,7 +204,7 @@ export function useNativeChatPacedText(
       // A save shown on catch-up is still revealed as main reveals it.
       drawsWhole ? reducedMotion : caughtUp,
       performance.now(),
-      revealMs
+      (spreadsSaves && nativeChatSaveRevealMs(lastSave.current?.gap)) || revealMs
     )
     if (drawsWhole) {
       pace.current = { ...pace.current, savedAt: saved.current.revision }
@@ -223,7 +224,8 @@ export function useNativeChatPacedText(
     heldTextSession,
     drawsWhole,
     reducedMotion,
-    savedRevision
+    savedRevision,
+    spreadsSaves
   ])
 
   // A save, or the turn's end, is the reveal's source in the render that brings it, as main's
@@ -243,29 +245,22 @@ export function useNativeChatPacedText(
       }
       return
     }
-    if (drawsWhole) {
-      // Main's own reveal of each save, on every display frame.
-      return playNativeChatTextReveal(
-        () => pace.current,
-        (next) => {
-          pace.current = next
-          reveals?.drawn.set(rowKey, next)
-          setShown(next.shown, true)
-        },
-        ANIMATION_FRAMES
-      )
-    }
     return playNativeChatTextRevealOnClock(
       () => pace.current,
       (next) => {
+        const now = performance.now()
+        if (spreadsSaves && now - drawnAt.current < nativeChatSaveStepMs(lastSave.current?.gap)) {
+          return false
+        }
         pace.current = next
         reveals?.drawn.set(rowKey, next)
         if (next.shown === onScreen.current) {
-          return
+          return true
         }
+        drawnAt.current = now
         // Rendered here, so a step's cost is its own render and never the work queued before it.
         const startedAt = performance.now()
-        flushSync(() => setShown(next.shown))
+        flushSync(() => setShown(next.shown, drawsWhole))
         frames.stepCost?.(performance.now() - startedAt)
         if (savedRevision !== undefined && frames.redrawsWhole?.() && !pace.current.drawsWhole) {
           // From here it shows each save as main does, finishing the reveal of the one it has.
@@ -288,9 +283,11 @@ export function useNativeChatPacedText(
           reveals?.drawn.set(rowKey, pace.current)
           setDrawsWhole(true)
         }
+        return true
       },
       frames,
-      revealMs
+      // Shown at its saves, a reply reveals each across the gap before it, so text keeps moving.
+      (spreadsSaves && nativeChatSaveRevealMs(lastSave.current?.gap)) || revealMs
     )
   }, [
     behind,
@@ -302,7 +299,8 @@ export function useNativeChatPacedText(
     frames,
     revealMs,
     drawsWhole,
-    savedRevision
+    savedRevision,
+    spreadsSaves
   ])
   const revealing = !reducedMotion && ((streaming && grew) || behind)
   const [lingering, setLingering] = useState(false)

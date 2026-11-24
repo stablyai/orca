@@ -31,21 +31,32 @@ type MemoizedMarkdownProps = React.ComponentProps<typeof Markdown> & {
 }
 
 /** Equal props, except that a settled block's moving fade point doesn't count until it renders plain. */
+// Runs for every block of a reply on every step, so it compares in place and allocates nothing.
 function sameBlockRender(previous: MemoizedMarkdownProps, next: MemoizedMarkdownProps): boolean {
-  const { fadeFrom: before, ...previousRest } = previous
-  const { fadeFrom: after, ...nextRest } = next
+  const before = previous.fadeFrom
+  const after = next.fadeFrom
   const holdsFade = next.fadeSettled === true && before !== undefined && after !== undefined
   if (before !== after && !holdsFade) {
     return false
   }
-  const previousEntries = Object.entries(previousRest)
-  const nextValues = new Map(Object.entries(nextRest))
-  return (
-    previousEntries.length === nextValues.size &&
-    previousEntries.every(
-      ([key, value]) => nextValues.has(key) && Object.is(nextValues.get(key), value)
-    )
-  )
+  const was: Readonly<Record<string, unknown>> = previous
+  const is: Readonly<Record<string, unknown>> = next
+  let count = 0
+  for (const key in was) {
+    if (key === 'fadeFrom') {
+      continue
+    }
+    count += 1
+    if (!Object.hasOwn(is, key) || !Object.is(was[key], is[key])) {
+      return false
+    }
+  }
+  for (const key in is) {
+    if (key !== 'fadeFrom') {
+      count -= 1
+    }
+  }
+  return count === 0
 }
 
 /** One render of the pipeline; memoized so an unchanged block is not parsed again. */
