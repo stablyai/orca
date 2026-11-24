@@ -29,7 +29,7 @@ export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] 
   const actions: ActionSheetAction[] = [
     {
       id: 'sourceControl',
-      label: translate('agentHistory.worktreeNavigationActions.sourceControl', 'Source Control'),
+      label: translate('agentHistory.worktreeNavigationActions.sourceControl', 'Source control'),
       icon: GitBranch,
       onPress: () => {
         const params = new URLSearchParams({ name: args.worktreeName, origin: 'host' })

@@ -37,6 +37,8 @@ import { useSlowPendingKeys } from './use-slow-pending-keys'
 import { useHostMutationDrafts } from '../../query/host-mutation-drafts'
 import { workspaceRenameDraftKey } from '../workspace-actions/workspace-rename-sheet'
 import type { HostScreenController } from '../use-host-screen-controller'
+import { isWorktreePinned } from '../../worktree/workspace-list/workspace-list-sections'
+import { folderIdOfSelector } from '../../../../src/shared/workspace/identity/workspace-scope'
 
 export function HostWorkspaceList({
   controller,
@@ -118,7 +120,12 @@ export function HostWorkspaceList({
   const { groupBy, agentActivityDisplayMode } = state.view
   const { toggleCollapsed, toggleWorktreeLineage } = settings
   const { setActionTarget } = state
-  const { openWorktreeSession } = actions
+  const { openWorktreeSession, setWorktreeUnread, togglePin } = actions
+  const { pinnedIds } = state
+  const toggleRead = useCallback(
+    (row: Worktree) => setWorktreeUnread(row, !row.unread),
+    [setWorktreeUnread]
+  )
   const statusLive = connState === 'connected'
 
   const renderSectionHeader = useCallback(
@@ -180,6 +187,14 @@ export function HostWorkspaceList({
           onToggleLineage={toggleWorktreeLineage}
           unsavedName={unsavedRename(renameDrafts, hostId, item)}
           pairedHostId={hostId ?? null}
+          // worktree.set resolves git worktrees only, so a folder workspace offers no swipe.
+          {...(swipeable(item, view)
+            ? {
+                onToggleRead: toggleRead,
+                onTogglePin: togglePin,
+                pinned: isWorktreePinned(item, pinnedIds)
+              }
+            : {})}
         />
       ),
     [
@@ -188,6 +203,9 @@ export function HostWorkspaceList({
       hostId,
       isReadOnly,
       cardDetails,
+      toggleRead,
+      togglePin,
+      pinnedIds,
       repoLookById,
       groupBy,
       agentActivityDisplayMode,
@@ -334,6 +352,15 @@ export function HostWorkspaceList({
       )}
       {bots.sheets}
     </>
+  )
+}
+
+function swipeable(row: Worktree, view: WorkspaceListItem['view']): boolean {
+  return (
+    folderIdOfSelector(row.worktreeId) === undefined &&
+    row.botHome !== true &&
+    !view.botWorkspace &&
+    !view.botFacts
   )
 }
 
