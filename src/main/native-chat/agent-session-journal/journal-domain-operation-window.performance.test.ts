@@ -470,4 +470,12 @@ it('reads an indexed-only window of the newest turn by index, and throws where o
     { rows: 75, thrown: true },
     { rows: 75, thrown: true }
   ])
+  // Tool calls are dropped row by row: past the cap the read stops on the index, before any is read.
+  expect([
+    read(chat(50, () => true, undefined, 0, 100)),
+    read(chat(50, () => true, undefined, 0, 5000))
+  ]).toEqual([
+    { rows: 16, sends: ['m48', 'm49'] },
+    { rows: 10, thrown: true }
+  ])
 })
