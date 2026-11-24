@@ -1,5 +1,4 @@
-// The top of a bot's Activity tab: its picture (edited in place), name, what it is doing now or does next,
-// and its settings.
+// The top of a bot's Home tab: its picture (edited in place), name, live/next status, and compact header actions.
 import { useMemo, useState } from 'react'
 import { Copy, MoreHorizontal, Pause, Play, Settings, Share2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -130,19 +129,22 @@ function BotNowLine({
 
 const NOTHING_RUNS: BotQuietFacts = { running: null, next: null }
 
-/** The picture's corner while nothing waits or runs: the stopped mark when a chat, worker or run is
- *  held at its usage limit, else Idle, so a stopped bot never reads as fine. */
-function QuietMark({ bot, home }: { bot: Bot; home: FolderWorkspace }): React.JSX.Element {
+/** The picture's corner while nothing waits or runs: shown only when held at a usage limit, so
+ *  healthy idle stays unmarked like the sidebar row. */
+function QuietMark({ bot, home }: { bot: Bot; home: FolderWorkspace }): React.JSX.Element | null {
   const { childWorktrees } = useBotWorkerWorkspaces(home)
   const workspaces = useMemo(
     () => [folderWorkspaceKey(home.id), ...childWorktrees.map((worktree) => worktree.id)],
     [home.id, childWorktrees]
   )
   const [stop] = useBotUsageLimitStops(bot, workspaces)
-  return stop ? (
-    <UsageLimitStopMark stop={stop} className="size-2.5" />
-  ) : (
-    <AgentStateDot state="idle" title={null} />
+  if (!stop) {
+    return null
+  }
+  return (
+    <span className="absolute -bottom-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-sidebar">
+      <UsageLimitStopMark stop={stop} className="size-2.5" />
+    </span>
   )
 }
 
@@ -178,38 +180,101 @@ export function BotPanelHeader({
     setRightSidebarTab('bot-activity')
   }
   const [sharing, setSharing] = useState(false)
+  const activeDotState =
+    now.needsYou > 0
+      ? ('waiting' as const)
+      : now.working > 0 || quiet.running !== null
+        ? ('working' as const)
+        : null
   return (
-    <div className="flex items-center gap-2.5 px-2 pb-1 pt-1 @max-[284px]:gap-1.5">
+    <div className="flex items-center gap-2.5 pl-2 pr-1 py-1 @max-[284px]:gap-2">
       <fieldset disabled={offline} className="contents">
         <BotPictureButton
           bot={bot}
           picture={picture}
-          avatarClassName="size-9 rounded-[9px] text-base"
-          className="rounded-[9px]"
+          avatarClassName="size-8 rounded-lg text-sm"
+          className="rounded-lg"
         >
-          {/* A down server's bot shows no live state, as its sidebar row doesn't. */}
-          {bot.paused || offline ? null : (
-            <span className="absolute -bottom-1 -right-1 flex size-3.5 items-center justify-center rounded-full bg-sidebar">
-              {now.needsYou > 0 || now.working > 0 || quiet.running !== null || !home ? (
-                <AgentStateDot
-                  state={
-                    now.needsYou > 0
-                      ? 'waiting'
-                      : now.working > 0 || quiet.running !== null
-                        ? 'working'
-                        : 'idle'
-                  }
-                  title={null}
-                />
-              ) : (
-                <QuietMark bot={bot} home={home} />
-              )}
+          {/* A down server's bot shows no live state, and healthy idle stays unmarked. */}
+          {bot.paused || offline ? null : activeDotState ? (
+            <span className="absolute -bottom-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-sidebar">
+              <AgentStateDot state={activeDotState} title={null} />
             </span>
-          )}
+          ) : home ? (
+            <QuietMark bot={bot} home={home} />
+          ) : null}
         </BotPictureButton>
       </fieldset>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold leading-5">{bot.name}</div>
+        <div className="flex min-w-0 items-center gap-1">
+          <div className="min-w-0 flex-1 truncate text-sm font-semibold leading-5" title={bot.name}>
+            {bot.name}
+          </div>
+          <div className="-my-0.5 flex shrink-0 items-center gap-0.5">
+            {filter}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="muted-field-icon"
+                  size="icon-xs"
+                  aria-label={settingsLabel}
+                  data-bot-panel-gear=""
+                  onClick={openSettings}
+                >
+                  <Settings />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                {settingsLabel}
+              </TooltipContent>
+            </Tooltip>
+            <fieldset disabled={offline} className="contents">
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="muted-field-icon" size="icon-xs" aria-label={moreLabel}>
+                        <MoreHorizontal className="size-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={4}>
+                    {moreLabel}
+                  </TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      void updateBot(bot, { paused: !bot.paused }).catch((error: unknown) =>
+                        toast.error(botErrorMessage(error))
+                      )
+                    }
+                  >
+                    {bot.paused ? <Play /> : <Pause />}
+                    {bot.paused
+                      ? t('bots.row.resume', 'Resume bot')
+                      : t('bots.row.pause', 'Pause bot')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setSharing(true)}>
+                    <Share2 />
+                    {t('bots.share.shareBot', 'Share bot…')}
+                  </DropdownMenuItem>
+                  {folderPath ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={() => window.api.ui.writeClipboardText(folderPath)}
+                      >
+                        <Copy />
+                        {t('bots.row.copyPath', 'Copy Path')}
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </fieldset>
+          </div>
+        </div>
         {home ? (
           <BotNowLine
             bot={bot}
@@ -224,64 +289,6 @@ export function BotPanelHeader({
           </BotPanelHostLine>
         )}
       </div>
-      {filter}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={settingsLabel}
-            data-bot-panel-gear=""
-            onClick={openSettings}
-          >
-            <Settings />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={4}>
-          {settingsLabel}
-        </TooltipContent>
-      </Tooltip>
-      <fieldset disabled={offline} className="contents">
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label={moreLabel}>
-                  <MoreHorizontal />
-                </Button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={4}>
-              {moreLabel}
-            </TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onSelect={() =>
-                void updateBot(bot, { paused: !bot.paused }).catch((error: unknown) =>
-                  toast.error(botErrorMessage(error))
-                )
-              }
-            >
-              {bot.paused ? <Play /> : <Pause />}
-              {bot.paused ? t('bots.row.resume', 'Resume bot') : t('bots.row.pause', 'Pause bot')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setSharing(true)}>
-              <Share2 />
-              {t('bots.share.shareBot', 'Share bot…')}
-            </DropdownMenuItem>
-            {folderPath ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => window.api.ui.writeClipboardText(folderPath)}>
-                  <Copy />
-                  {t('bots.row.copyPath', 'Copy Path')}
-                </DropdownMenuItem>
-              </>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </fieldset>
       {sharing ? <BotShareFlow bot={bot} onClose={() => setSharing(false)} /> : null}
     </div>
   )

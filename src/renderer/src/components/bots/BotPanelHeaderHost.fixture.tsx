@@ -76,7 +76,7 @@ function PanelFrame({ width, children }: { width: number; children: React.ReactN
 }
 
 const filterButton = (
-  <Button variant="ghost" size="icon-sm" aria-label="Filter">
+  <Button variant="muted-field-icon" size="icon-xs" className="relative" aria-label="Filter">
     <ListFilter />
   </Button>
 )
@@ -251,7 +251,7 @@ function groupRows(width: number): React.JSX.Element {
               working={row.working}
               next={{ bot: on(row.group.hostId), at: now + 2 * 3_600_000 }}
               now={now}
-              filter={null}
+              filter={row.members.length > 0 ? filterButton : null}
             />
           </PanelFrame>
         </div>

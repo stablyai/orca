@@ -36,7 +36,7 @@ export function BotPanelHostLine({
     <div className={`@container/host-line flex min-w-0 items-center gap-1 ${LINE}`}>
       {/* The host gives way before the status; on a line too short for both, only its icon stays. */}
       <span className="flex min-w-0 max-w-[40%] items-center gap-1" title={runsOn}>
-        <Server className="size-3 shrink-0" aria-hidden />
+        <Server className="size-3 shrink-0 text-muted-foreground/70" aria-hidden />
         {/* With no status beside it, the name stays and truncates instead. */}
         <span
           className={status == null ? 'truncate' : 'truncate @max-[10rem]/host-line:hidden'}

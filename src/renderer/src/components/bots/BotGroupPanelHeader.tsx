@@ -1,5 +1,5 @@
 // The top of a group's Items tab, in a bot header's shape: the group's own picture (its sidebar row's
-// faces) opening its member list, its name, a counts-only line, then the filter, gear and more.
+// faces) opening its member list, its name with compact top-row actions, and a full-width counts line.
 import { useState } from 'react'
 import { MoreHorizontal, Settings, Trash2, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -27,8 +27,8 @@ import { BotPanelHostLine } from './BotPanelHostLine'
 import { BotRowLineText, useBotRowLine } from './BotRowActivityLine'
 import { useBotGroupDelete } from './use-bot-group-delete'
 
-/** The header's picture slot, a bot header's `size-9`. */
-const PICTURE = 36
+/** The header's picture slot, matching a bot header's `size-8`. */
+const PICTURE = 32
 /** Members the menu lists before it scrolls. */
 const MENU_ROWS = 6
 /** Names the picture's label lists before "and N more". */
@@ -136,7 +136,7 @@ export function BotGroupPanelHeader({
           ? workingText
           : idle.text
   return (
-    <div className="flex items-center gap-2.5 px-2 pb-1 pt-1 @max-[284px]:gap-1.5">
+    <div className="flex items-center gap-2.5 pl-2 pr-1 py-1 @max-[284px]:gap-2">
       <DropdownMenu>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -144,16 +144,16 @@ export function BotGroupPanelHeader({
               <button
                 type="button"
                 aria-label={membersLabel}
-                className="relative size-9 shrink-0 rounded-[9px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring data-[state=open]:ring-1 data-[state=open]:ring-ring"
+                className="relative size-8 shrink-0 rounded-lg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring data-[state=open]:ring-1 data-[state=open]:ring-ring"
               >
                 {members.length > 0 ? (
                   <BotGroupFaces
                     faces={botGroupFaces(members, (bot) => bot.id, PICTURE / BOT_GROUP_FACE_SLOT)}
-                    className="size-9"
+                    className="size-8"
                   />
                 ) : (
-                  <span className="flex size-9 items-center justify-center rounded-full border border-dashed border-input text-muted-foreground">
-                    <Users className="size-4" />
+                  <span className="flex size-8 items-center justify-center rounded-full border border-dashed border-input text-muted-foreground">
+                    <Users className="size-3.5" />
                   </span>
                 )}
               </button>
@@ -178,7 +178,56 @@ export function BotGroupPanelHeader({
         </DropdownMenuContent>
       </DropdownMenu>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold leading-5">{group.name}</div>
+        <div className="flex min-w-0 items-center gap-1">
+          <div
+            className="min-w-0 flex-1 truncate text-sm font-semibold leading-5"
+            title={group.name}
+          >
+            {group.name}
+          </div>
+          <div className="-my-0.5 flex shrink-0 items-center gap-0.5">
+            {filter}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="muted-field-icon"
+                  size="icon-xs"
+                  aria-label={settingsLabel}
+                  onClick={() => setManaging(true)}
+                >
+                  <Settings />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                {settingsLabel}
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="muted-field-icon" size="icon-xs" aria-label={moreLabel}>
+                      <MoreHorizontal className="size-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}>
+                  {moreLabel}
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => setManaging(true)}>
+                  <Users />
+                  {t('bots.groups.manageMembersMenu', 'Manage members…')}
+                </DropdownMenuItem>
+                <DropdownMenuItem variant="destructive" onSelect={() => void deleteGroup(group)}>
+                  <Trash2 />
+                  {t('bots.groups.deleteGroupMenu', 'Delete group…')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
         <BotPanelHostLine hostId={group.hostId} offline={offline} title={fullLine}>
           {(compact) =>
             members.length > 0
@@ -187,46 +236,6 @@ export function BotGroupPanelHeader({
           }
         </BotPanelHostLine>
       </div>
-      {filter}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={settingsLabel}
-            onClick={() => setManaging(true)}
-          >
-            <Settings />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={4}>
-          {settingsLabel}
-        </TooltipContent>
-      </Tooltip>
-      <DropdownMenu>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={moreLabel}>
-                <MoreHorizontal />
-              </Button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={4}>
-            {moreLabel}
-          </TooltipContent>
-        </Tooltip>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => setManaging(true)}>
-            <Users />
-            {t('bots.groups.manageMembersMenu', 'Manage members…')}
-          </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onSelect={() => void deleteGroup(group)}>
-            <Trash2 />
-            {t('bots.groups.deleteGroupMenu', 'Delete group…')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
       {managing ? <BotGroupMembersDialog group={group} onClose={() => setManaging(false)} /> : null}
     </div>
   )

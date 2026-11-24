@@ -79,8 +79,8 @@ export function BotItemsFilterButton({
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="ghost"
-              size="icon-sm"
+              variant="muted-field-icon"
+              size="icon-xs"
               aria-label={
                 group?.named
                   ? t('bots.groups.items.filterNamed', 'Filter items, filtered by {{filter}}', {
@@ -94,7 +94,7 @@ export function BotItemsFilterButton({
               {on ? (
                 <span
                   aria-hidden
-                  className="absolute right-1 top-1 size-1.5 rounded-full bg-foreground"
+                  className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-foreground"
                 />
               ) : null}
             </Button>
