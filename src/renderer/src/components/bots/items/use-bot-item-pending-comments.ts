@@ -6,7 +6,8 @@ import {
   BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY,
-  BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY
+  BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY
 } from '../../../../../shared/bot-runtime-capabilities'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import {
@@ -38,7 +39,8 @@ export function useBotItemPendingComments(
         entry.requestId ?? undefined,
         entry.questionId ?? undefined,
         entry.plain,
-        entry.skills
+        entry.skills,
+        entry.skipped
       ),
     failed: (error, replaced) =>
       toast.error(
@@ -50,6 +52,7 @@ export function useBotItemPendingComments(
     requestIds: botHostTakes(bot, BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY),
     questionIds: botHostTakes(bot, BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY),
     plain: botHostTakes(bot, BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY),
-    skills: botHostTakes(bot, BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY)
+    skills: botHostTakes(bot, BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY),
+    skipped: botHostTakes(bot, BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY)
   })
 }

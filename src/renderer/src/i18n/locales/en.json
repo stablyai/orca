@@ -22739,7 +22739,6 @@
       },
       "googleOffer": {
         "useAccount": "Use {{email}} for Google.",
-        "useAnother": "Use another account",
         "reconnect": "Reconnect {{email}}",
         "use": "Use {{email}}",
         "staysDefault": "{{email}} stays the default"
@@ -27361,7 +27360,6 @@
       "waitingForUntil": "Waiting for {{label}} · until {{time}}",
       "waitingCount": "Waiting on {{count}} events",
       "settings": "Bot settings…",
-      "hostDisconnected": "{{host}} disconnected",
       "disconnected": "Disconnected",
       "runsOn": "Runs on {{host}}"
     },
@@ -28719,7 +28717,14 @@
         "noAccount": "Google signed in, but the host sent no account.",
         "alreadyRunning": "A Google sign-in is already running. Finish or cancel it first.",
         "notWaiting": "No Google sign-in is waiting. Start again."
-      }
+      },
+      "accessBlocked": "Seeing ‘Access blocked’?",
+      "setUpNewApp": "Set up a new Google app",
+      "useAnother": "Use another account",
+      "useAnotherSignIn": "Sign in with Google",
+      "useAnotherSignInDetail": "Uses your current Google app",
+      "setUpNewAppDetail": "If your current app doesn’t work for this account or organization",
+      "updateToSetUpNewApp": "Update Orca on {{host}} to set up a new Google app."
     },
     "googleSetup": {
       "receipt": {
@@ -30087,12 +30092,7 @@
       },
       "cancel": {
         "confirmMany": "Cancel {{count}}",
-        "confirmOne": "Cancel item",
-        "keep": "Keep",
-        "placeholder": "Reason",
-        "titleMany": "Cancel {{count}} items?",
-        "titleOne": "Cancel {{title}}?",
-        "why": "The bot sees the reason. Nothing is deleted."
+        "keep": "Keep"
       },
       "chat": {
         "added": "Added {{items}}",
@@ -30192,8 +30192,7 @@
         "automationEnded": "Ended"
       },
       "menu": {
-        "cancel": "Cancel…",
-        "canceled": "Canceled…",
+        "cancel": "Cancel",
         "done": "Done",
         "waiting": "Waiting…"
       },
@@ -30278,7 +30277,9 @@
         "recommended": "Recommended",
         "step": "{{n}} of {{total}}",
         "typeAnswer": "Type your answer",
-        "replaced": "The agent asked a new question. Read it, then reply."
+        "replaced": "The agent asked a new question. Read it, then reply.",
+        "replacedByNewer": "Replaced by a newer question",
+        "skipped": "Skipped"
       },
       "readMoreClosedFailed": "Reading more Closed items failed",
       "wait": {

@@ -45,8 +45,9 @@ export function googleSetupAnswerLine(card: GoogleSetupCard, values: readonly st
 }
 
 /** The line the bot reads when its owner starts a setup from Orca. */
-export function googleSetupStartLine(from: string): string {
-  return `Google setup started by your owner (from ${from}). Run \`orca bot google-setup show\` and carry on from there.`
+export function googleSetupStartLine(from: string, newApp?: true): string {
+  const what = newApp ? 'Setup of a new Google app' : 'Google setup'
+  return `${what} started by your owner (from ${from}). Run \`orca bot google-setup show\` and carry on from there.`
 }
 
 /** The run's bot, named by its run's token, and who is asking. A bot reaches only its own; anything a
@@ -269,7 +270,7 @@ export const GOOGLE_SETUP_METHODS = [
     params: GoogleSetupWrite,
     handler: async (params, context) => {
       const { botId, actor } = whose(params, context)
-      if (actor === 'bot' && params.change.action === 'start') {
+      if (actor === 'bot' && params.change.action === 'start' && !params.change.newApp) {
         const routed = await routeBotStart(context, botId, params.callerSessionId)
         if (routed) {
           return routed
@@ -315,7 +316,7 @@ export const GOOGLE_SETUP_METHODS = [
     name: 'bots.googleSetup.start',
     permission: 'workspace',
     params: GoogleSetupStart,
-    handler: async ({ botId, from }, context) => {
+    handler: async ({ botId, from, newApp }, context) => {
       // Set up Google is a button in the owner's Orca; a bot starts its own run with the CLI.
       if (isAgentRpcCaller(context.caller)) {
         throw new InvalidArgumentError('Only your owner starts Google setup from Orca.')
@@ -323,14 +324,14 @@ export const GOOGLE_SETUP_METHODS = [
       const { actor } = whose({ botId }, context)
       const current = googleSetupRuns().get(botId)
       // Pressing it again goes back to the setup already running, rather than starting over.
-      if (current?.state === 'running') {
+      if (current?.state === 'running' && (!newApp || current.newApp)) {
         return { run: current }
       }
       // The person clicks until the owner answers the path card.
-      const { prev, run } = applied(botId, actor, { action: 'start', mode: 'unchosen' })
+      const { prev, run } = applied(botId, actor, { action: 'start', mode: 'unchosen', newApp })
       const { sessionId } = await runtimeBotChats(context.runtime).sendToChat(
         botId,
-        googleSetupStartLine(from),
+        googleSetupStartLine(from, newApp),
         'card-answer'
       )
       writeGoogleSetupCards(sessionId, prev, run)
