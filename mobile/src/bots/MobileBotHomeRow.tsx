@@ -108,7 +108,10 @@ export function MobileBotHomeRow({
       onLongPress={onLongPress}
       titleTrailing={
         <>
-          {needsYou > 0 ? <MobileBotNeedsYouCount count={needsYou} /> : null}
+          {/* The line already says "N need you": the count once. */}
+          {needsYou > 0 && !(asking && limitText === null) ? (
+            <MobileBotNeedsYouCount count={needsYou} />
+          ) : null}
           {bot.upNext ? <MobileBotUpNextCount count={bot.upNext} /> : null}
           {/* A folded bot always keeps its chevron, so it can unfold before its chats are read; a
               down host's bot is its row alone. */}

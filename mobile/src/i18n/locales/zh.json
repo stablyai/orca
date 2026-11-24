@@ -5889,11 +5889,9 @@
       "runNow": "立即运行",
       "pause": "暂停 {{name}}",
       "resume": "恢复 {{name}}",
-      "empty": "在聊天中提出请求即可设置自动化",
       "newAutomation": "新建自动化",
       "runQueued": "自动化运行已排队",
       "runFailed": "无法开始运行",
-      "emptyTitle": "还没有自动化",
       "viewRuns": "查看运行记录",
       "paused": "已暂停",
       "newDraft": "设置一个自动化，用于 "
@@ -6656,7 +6654,6 @@
       "filter": {
         "needsYou": "仅显示需要你处理的",
         "label": "筛选事项",
-        "remove": "移除筛选条件 {{name}}",
         "clear": "清除筛选",
         "clearAll": "清除筛选"
       },
@@ -6773,9 +6770,6 @@
         "keep": "保留",
         "confirmMany": "取消 {{count}} 项"
       },
-      "strip": {
-        "view": "查看"
-      },
       "group": {
         "stale": "长期无活动",
         "closed": "已关闭",
@@ -6838,21 +6832,14 @@
       "skillLimit": "消息未发送。请最多选择 {{limit}} 个技能文件后重试。"
     },
     "needs": {
-      "permissionTool": "权限 · {{tool}}",
       "permission": "需要权限",
       "waiting": "等待你处理",
       "whereItRuns": "{{need}} · 请在它运行的位置打开",
-      "worker": "工作者：{{name}}",
       "actionFor": "{{action}}：{{title}}",
       "open": "打开",
       "chat": "你与 {{name}} 的聊天",
       "access": "{{person}} 请求访问权限",
-      "connector": "{{name}} 需要你重新登录或修复连接。",
-      "signIn": "{{name}} 需要你登录",
-      "signInAgain": "{{name}} 需要你重新登录",
-      "fixConnector": "打开 {{name}}",
-      "runSignIn": "你登录后才能运行。",
-      "openRun": "打开运行"
+      "fixConnector": "打开 {{name}}"
     },
     "chat": {
       "nothingToReport": "没有需要汇报的内容",
@@ -6908,7 +6895,7 @@
       "codexNoSandbox": "不使用 Codex 沙盒",
       "whoeverAskedApproves": "如果它请求批准，提问的人可以批准",
       "reachLinear": "以你的身份评论、更新和创建 Linear 议题",
-      "reachSlack": "以 @{{name}} 的身份在 Slack 中发消息",
+      "reachSlack": "以 {{name}} 的身份在 Slack 中发消息",
       "reachGitHub": "以你的身份在 GitHub 上评论、评审和推送",
       "reachGoogleEmail": "读取和发送你的邮件",
       "reachGoogleCalendar": "使用你的日历",

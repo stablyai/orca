@@ -230,7 +230,7 @@
       "reachLinear": "Comment on, update and create Linear issues as you",
       "reachPermission": "New conversations start in {{mode}}",
       "reachPermissionUnknown": "New conversations start from your chat permission setting",
-      "reachSlack": "Post in Slack as @{{name}}",
+      "reachSlack": "Post in Slack as {{name}}",
       "reject": "Reject",
       "removeAnyTime": "You can remove them from Who can ask at any time.",
       "review": "Review…",

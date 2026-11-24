@@ -5500,11 +5500,9 @@
       "runNow": "Run now",
       "pause": "Pause {{name}}",
       "resume": "Resume {{name}}",
-      "empty": "Ask in chat to set up an automation.",
       "newAutomation": "New automation",
       "runQueued": "Automation run queued.",
       "runFailed": "Couldn’t start the run",
-      "emptyTitle": "No automations yet",
       "viewRuns": "View runs",
       "paused": "Paused",
       "newDraft": "Set up an automation that "
@@ -6390,7 +6388,6 @@
       "filter": {
         "needsYou": "Needs you only",
         "label": "Filter items",
-        "remove": "Remove filter {{name}}",
         "clear": "Clear filter",
         "clearAll": "Clear filters"
       },
@@ -6519,9 +6516,6 @@
         "confirm": "Set Waiting",
         "offline": "{{host}} is offline. What you typed is kept; Set Waiting works again when it’s back."
       },
-      "strip": {
-        "view": "View"
-      },
       "group": {
         "stale": "Stale",
         "closed": "Closed",
@@ -6585,23 +6579,19 @@
       "skillLimit": "Message not sent. Keep at most {{limit}} selected skill files and try again."
     },
     "needs": {
-      "permissionTool": "Permission · {{tool}}",
       "permission": "Permission needed",
       "waiting": "Waiting for you",
       "whereItRuns": "{{need}} · open it where it runs",
-      "worker": "Worker: {{name}}",
       "actionFor": "{{action}}: {{title}}",
       "open": "Open",
       "chat": "Your chat with {{name}}",
       "access": "{{person}} asked for access",
-      "connector": "{{name}} needs you to sign in again or fix it.",
-      "signIn": "{{name}} needs you to sign in.",
-      "signInAgain": "{{name}} needs you to sign in again.",
       "fixConnector": "Open {{name}}",
-      "runSignIn": "Couldn’t run until you sign in.",
-      "openRun": "Open run",
       "pairedAsk": "{{from}} wants to message {{name}}",
-      "pairedAskDetail": "Permission · Message {{name}}"
+      "connectorFix": "Sign in or fix it",
+      "questions": "{{count}} questions",
+      "signInApps": "Sign in to {{count}} apps",
+      "listSeparator": ", "
     },
     "chat": {
       "nothingToReport": "Nothing to report",
@@ -6657,7 +6647,7 @@
       "codexNoSandbox": "No Codex sandbox.",
       "whoeverAskedApproves": "If it asks, whoever asked can approve.",
       "reachLinear": "Comment on, update and create Linear issues as you",
-      "reachSlack": "Post in Slack as @{{name}}",
+      "reachSlack": "Post in Slack as {{name}}",
       "reachGitHub": "Comment, review and push on GitHub as you",
       "reachGoogleEmail": "Read and send your email",
       "reachGoogleCalendar": "Use your calendar",
@@ -7939,6 +7929,9 @@
     "usageLimit": {
       "continuesAt": "Continues at {{time}}",
       "hitLimit": "Hit limit · resets {{time}}"
+    },
+    "upcoming": {
+      "needsSignIn": "Needs sign-in"
     }
   },
   "mobileWebShell": {

@@ -24684,7 +24684,7 @@
       "controlOne": "{{person}}, {{name}} botunu kullanarak {{computer}} üzerinde sizin adınıza çalışabilir: komut çalıştırabilir, dosyaları açıp değiştirebilir ve bağlı hesaplarınızı kullanabilir.",
       "executionComputer": "bu ajanın çalıştığı bilgisayar",
       "here": "burada",
-      "reachSlack": "Slack'te @{{name}} olarak mesaj gönderme",
+      "reachSlack": "Slack'te {{name}} olarak mesaj gönderme",
       "reject": "Reddet",
       "there": "orada",
       "thisComputer": "bu bilgisayar",

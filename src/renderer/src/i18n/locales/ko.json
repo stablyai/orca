@@ -27892,7 +27892,7 @@
       "controlBriefIfAdded": "추가하는 사람은 누구나 여기서 나를 대신해 작업할 수 있습니다.",
       "controlBriefOnHost": "이들은 {{computer}}에서 나를 대신해 작업할 수 있습니다.",
       "controlBriefIfAddedOnHost": "추가하는 사람은 누구나 {{computer}}에서 나를 대신해 작업할 수 있습니다.",
-      "reachSlack": "Slack에서 @{{name}}(으)로 게시",
+      "reachSlack": "Slack에서 {{name}}(으)로 게시",
       "here": "여기",
       "thisServer": "이 서버",
       "there": "그곳",

@@ -24585,7 +24585,7 @@
       "controlBriefIfAdded": "Alle, die du hinzufügst, können hier in deinem Namen handeln.",
       "controlBriefOnHost": "Sie können auf {{computer}} in deinem Namen handeln.",
       "controlBriefIfAddedOnHost": "Alle, die du hinzufügst, können auf {{computer}} in deinem Namen handeln.",
-      "reachSlack": "Als @{{name}} in Slack posten",
+      "reachSlack": "Als {{name}} in Slack posten",
       "here": "hier",
       "thisServer": "diesem Server",
       "there": "dort",
