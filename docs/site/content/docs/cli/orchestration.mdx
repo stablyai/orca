@@ -52,6 +52,8 @@ orca orchestration worker-start --task <taskId> --worktree current --agent claud
 
 A bot-led Run can have up to eight active supervised workers, including workers on paired computers and workers whose start or stop hasn't been confirmed. When the Run reaches the limit, continue with an existing worker or wait for one to settle.
 
+When a bot starts a fresh local structured worker with the same agent during a direct handoff, Orca includes a short excerpt of the handoff that opened the turn. The excerpt is quoted reference material. The worker follows its task spec and current approval rules.
+
 After starting workers, end your turn. Orca wakes the coordinator when a worker reports, asks, or stops. In a chat, each message arrives whole: act on it. When the wake names a `check` command (a terminal, or a chat message too large to deliver whole), run it and handle every message it prints:
 
 ```bash

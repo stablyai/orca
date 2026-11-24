@@ -16,6 +16,7 @@ import type { OrchestrationDb } from '../../../../../../orchestration/db/orchest
 import { WORKER_START_VOCABULARY } from '../../../structured-workers/orchestration-worker-start-mode'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { tearDownFailedWorkerStart } from '../readiness/failed-worker-start-teardown'
+import { readWorkerHandoffBrief } from '../worker-handoff-brief'
 import type { WorkerStartInput } from '../worker-start-input'
 import {
   createExistingWorktreeWorkerTerminal,
@@ -48,7 +49,7 @@ export type WorkerAgentPlacement = {
   warning?: string
   /** Set when a follow-up brought a closed worker back instead of launching one. */
   reopened?: ReopenedWorker
-  /** Context the fresh agent's Task carries in place of the conversation it could not reopen. */
+  /** Reference context from the bot handoff or the worker conversation it could not reopen. */
   extraSpec?: string
 }
 
@@ -57,6 +58,7 @@ type WorkerAgentPlacementArgs = {
   db: OrchestrationDb
   dispatchId: string
   taskId: string
+  taskSpec: string
   params: WorkerStartInput
   requestedWorktree: string
   /** Present only when this start creates a worktree. */
@@ -130,9 +132,20 @@ export async function placeWorkerAgent(
   }
   const launched = await launchWorkerAgent(args, existing)
   // A reopen refused before spawning anything: the fresh agent gets the earlier work instead.
-  return reopened === null && args.followUp?.earlierWork
-    ? { ...launched, extraSpec: args.followUp.earlierWork }
-    : launched
+  if (reopened === null && args.followUp?.earlierWork) {
+    return { ...launched, extraSpec: args.followUp.earlierWork }
+  }
+  if (launched.structuredSession && !args.followUp && args.agent) {
+    const extraSpec = await readWorkerHandoffBrief({
+      runtime: args.runtime,
+      db: args.db,
+      callerSession: args.callerSession,
+      workerAgent: args.agent,
+      taskSpec: args.taskSpec
+    })
+    return { ...launched, extraSpec }
+  }
+  return launched
 }
 
 async function launchWorkerAgent(
