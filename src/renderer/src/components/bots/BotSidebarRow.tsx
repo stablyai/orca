@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Bell, BellOff, Pencil, Pin, PinOff } from 'lucide-react'
+import { toast } from 'sonner'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -22,6 +23,7 @@ import {
   botAvatarBadgeCutout,
   useBotAvatarBadgeSleeping
 } from './bot-avatar-status-badge'
+import { botErrorMessage } from './bot-presentation'
 
 /** One row of the Bots section, a bot's or a group's: picture, name and time, then its newest line. */
 export type BotSidebarRowProps = {
@@ -92,7 +94,13 @@ export function BotSidebarRow({
   const [keyboardFocus, setKeyboardFocus] = useState(false)
   const toggleUnread = (): void => setWorkspaceUnreadByUser(workspaceId, !isUnread, hostId)
   const togglePin = (): void => {
-    void updateWorktreeMeta(workspaceId, { isPinned: !isPinned }, { executionHostId: hostId })
+    void updateWorktreeMeta(workspaceId, { isPinned: !isPinned }, { executionHostId: hostId }).then(
+      (result) => {
+        if (!result.ok) {
+          toast.error(botErrorMessage(new Error(result.error)))
+        }
+      }
+    )
   }
   // Working shows once, at the row's end, where every working row shows it.
   const badgeStatus = status === 'working' ? null : status
