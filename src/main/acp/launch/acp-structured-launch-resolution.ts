@@ -33,6 +33,7 @@ import {
 } from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecForAccount, resolveAcpLaunchCommand } from './acp-launch-command'
+import { homeBeforeFirstTurn } from './acp-launch-home-before-first-turn'
 import {
   nothingExchangedOn,
   type SavedProviderTurnReads
@@ -79,6 +80,8 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   launchModel?: string
   /** The launched program's version, when its check or managed release names it. */
   version?: string
+  /** The home this launch moved the chat to, which the chat keeps from now on. */
+  launchedAccountHome?: AgentSessionAccountHome
   resume: {
     sessionId: string
     key: string
@@ -180,8 +183,10 @@ export function acpStructuredLaunchPart(
 ): StructuredAgentLaunchPartResolver<AcpStructuredLaunch> {
   return async (basis, identity) => {
     const { record } = basis
+    const movedHome = await homeBeforeFirstTurn(agentSpec, record, basis, deps.dataDirectory)
+    const accountHome = movedHome ?? record.accountHome
     const { env, envToDelete, command, prefixArgs, spec, antigravityChatAuth, version } =
-      await resolveAcpLaunchInvocation(agentSpec, record.accountHome, {
+      await resolveAcpLaunchInvocation(agentSpec, accountHome, {
         resolveEnvironment: basis.baseEnvironment,
         resolveLaunchEnv: () => basis.launchEnv(),
         resolveCommandSettings: basis.commandSettings,
@@ -293,6 +298,7 @@ export function acpStructuredLaunchPart(
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
         ...(model ? { launchModel: model } : {}),
         ...(launchedVersion ? { version: launchedVersion } : {}),
+        ...(movedHome ? { launchedAccountHome: movedHome } : {}),
         resume: head
           ? {
               sessionId: head.handle.nativeId,
