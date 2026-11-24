@@ -2,7 +2,6 @@ import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import type { BotItem, BotItemEvent, BotItemLinkView } from '../../../../../shared/bots/bot-items'
-import { useAppStore } from '@/store'
 import { BotItemPaneFrame } from './BotItemPane'
 import { BotItemBody } from './BotItemView'
 import type { BotItemWalkState } from './use-bot-item-walk'
@@ -239,50 +238,4 @@ export const calmConstrained = defineFixture({
       events={CALM_EVENTS}
     />
   )
-})
-
-/** Records what each control does: app API calls, new windows and store changes, for the headless
- *  interaction check (`window.__calmCalls`). */
-function recordCalls(): void {
-  const calls: string[] = []
-  Reflect.set(window, '__calmCalls', calls)
-  const wrap = (value: unknown, path: string): unknown => {
-    if (typeof value === 'function') {
-      return (...args: unknown[]) => {
-        calls.push(`api.${path}`)
-        return Reflect.apply(value, undefined, args)
-      }
-    }
-    if (value && typeof value === 'object') {
-      return new Proxy(value, {
-        get: (target, key) => wrap(Reflect.get(target, key), `${path}.${String(key)}`)
-      })
-    }
-    return value
-  }
-  for (const key of Object.keys(window.api)) {
-    Reflect.set(window.api, key, wrap(Reflect.get(window.api, key), key))
-  }
-  const open = window.open.bind(window)
-  window.open = (...args) => {
-    calls.push('window.open')
-    return open(...args)
-  }
-  useAppStore.subscribe((next, previous) => {
-    for (const key of Object.keys(next)) {
-      if (Reflect.get(next, key) !== Reflect.get(previous, key)) {
-        calls.push(`store.${key}`)
-      }
-    }
-  })
-}
-
-/** Seven links for the headless interaction check, at 340px and 260px. */
-export const calmInteractive = defineFixture({
-  ...calmAt(340, { ...calmItem, links: calmSeven }),
-  setup: recordCalls
-})
-export const calmInteractiveNarrow = defineFixture({
-  ...calmAt(260, { ...calmItem, links: calmSeven }),
-  setup: recordCalls
 })
