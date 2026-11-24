@@ -10,6 +10,19 @@ const SUBMITTED_MARKER = 'ACCOUNT_RESTART_STUB_SUBMITTED'
 const ROLLOUT_DAY = path.join('2026', '11', '24')
 
 const argv = process.argv.slice(2)
+// Orca probes agent CLIs (version, app-server); answer them without counting a launch.
+if (argv.includes('--version') || argv.includes('-V')) {
+  process.stdout.write('codex-cli 0.0.0-e2e\n')
+  process.exit(0)
+}
+if (argv[0] === 'app-server') {
+  process.stderr.write("error: unrecognized subcommand 'app-server'\n")
+  process.exit(2)
+}
+// Only an interactive pane launch has a terminal; any other probe is not a Codex session.
+if (!process.stdin.isTTY) {
+  process.exit(0)
+}
 const resumeIndex = argv.indexOf('resume')
 const threadId =
   resumeIndex !== -1 && argv[resumeIndex + 1]
