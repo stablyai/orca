@@ -60,7 +60,7 @@ export async function offerBrowserDownloadCopy(
 export async function claimBrowserDownloadCopy(
   pairedDeviceId: string | undefined,
   copyId: string
-): Promise<{ handle: FileHandle; size: number }> {
+): Promise<{ handle: FileHandle; size: number; mtimeMs: number }> {
   const offer = offers.get(copyId)
   if (!offer || offer.pairedDeviceId !== pairedDeviceId) {
     throw new BrowserError(
@@ -92,7 +92,7 @@ export async function claimBrowserDownloadCopy(
         'The download changed on the server after it was saved. Download it again.'
       )
     }
-    return { handle, size: identity.size }
+    return { handle, size: identity.size, mtimeMs: identity.mtimeMs }
   } catch (error) {
     await handle.close().catch(() => {})
     throw error

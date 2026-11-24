@@ -24,7 +24,7 @@ export type BrowserDownloadCopyStreamTransport = {
  * fixed set of buffers: memory stays the window whatever the file's size.
  */
 export async function streamBrowserDownloadCopy(
-  file: { handle: FileHandle; size: number },
+  file: { handle: FileHandle; size: number; mtimeMs: number },
   transport: BrowserDownloadCopyStreamTransport
 ): Promise<void> {
   const { handle, size } = file
@@ -91,9 +91,20 @@ export async function streamBrowserDownloadCopy(
       )
       const buffer = buffers[index % frameCount]!
       const length = Math.min(BROWSER_DOWNLOAD_COPY_FRAME_BYTES, size - sent)
-      const { bytesRead } = await handle.read(buffer, 1, length, sent)
-      if (bytesRead !== length) {
-        throw new BrowserError('browser_error', 'The download could not be read on the server.')
+      for (let read = 0; read < length;) {
+        const { bytesRead } = await handle.read(buffer, 1 + read, length - read, sent + read)
+        if (bytesRead === 0) {
+          throw new BrowserError('browser_error', 'The download could not be read on the server.')
+        }
+        read += bytesRead
+      }
+      // Written to in place since it was claimed: the copy would mix two versions.
+      const now = await handle.stat()
+      if (now.size !== size || now.mtimeMs !== file.mtimeMs) {
+        throw new BrowserError(
+          'browser_error',
+          'The download changed on the server after it was saved. Download it again.'
+        )
       }
       if (sendBinary(buffer.subarray(0, 1 + length)) === false) {
         throw new BrowserError('browser_error', 'The connection to the desktop closed.')

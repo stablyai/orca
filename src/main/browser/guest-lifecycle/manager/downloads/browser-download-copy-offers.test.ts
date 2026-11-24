@@ -1,3 +1,4 @@
+import { utimesSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -74,6 +75,37 @@ describe('browser download copy offers', () => {
     expect(events).toEqual([{ type: 'start', size: bytes.length }, { type: 'end' }])
     expect(Buffer.concat(received).equals(bytes)).toBe(true)
     expect(maxAhead).toBeLessThanOrEqual(BROWSER_DOWNLOAD_COPY_WINDOW_BYTES)
+  })
+
+  it('stops when the file is written to in place mid-copy', async () => {
+    const { savePath } = await savedFile(Buffer.alloc(3 * BROWSER_DOWNLOAD_COPY_WINDOW_BYTES))
+    const file = await claimBrowserDownloadCopy(
+      'desk-a',
+      (await offerBrowserDownloadCopy('desk-a', savePath))!
+    )
+    let onAck: (bytes: Uint8Array) => void = () => {}
+    let written = 0
+    await expect(
+      streamBrowserDownloadCopy(file, {
+        emit: () => {},
+        registerBinaryMessageHandler: (handler) => {
+          onAck = handler
+          return () => {}
+        },
+        sendBinary: (frame) => {
+          if (written === 0) {
+            // Same inode and size, new contents.
+            writeFileSync(savePath, 'x', { flag: 'r+' })
+            utimesSync(savePath, 1_000_000, 2_000_000)
+          }
+          written += frame.byteLength - 1
+          const total = written
+          setImmediate(() => onAck(encodeBrowserDownloadCopyAck(total)))
+          return true
+        }
+      })
+    ).rejects.toThrow(/changed on the server/)
+    await file.handle.close()
   })
 
   it('stops on an ack for bytes it never sent', async () => {
