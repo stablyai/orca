@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
 const activate = vi.hoisted(() => vi.fn(async () => true))
-const revision = vi.hoisted(() => ({ current: 3 as number | undefined }))
+const revision = vi.hoisted((): { current: number | undefined } => ({ current: 3 }))
 
 vi.mock('@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle', () => ({
   activateWebRuntimeSessionTab: activate
