@@ -34,18 +34,26 @@ export class CloudSharesSupport {
 
   constructor(private readonly account: () => string | null) {}
 
-  /** Reads the shares route as the signed-in account; `forgot` hears when that dropped another
-   *  account's answer. An answer counts only while the account it was read as is still signed in. */
-  async read(cloud: SharedBotsCloud | null, forgot: () => void) {
+  /** Drops another account's answer once a different account (or none) is signed in, at once, even
+   *  while a read made as the last one is still out; `forgot` hears when one was dropped. */
+  forgetIfSwitched(forgot: () => void): void {
     const account = this.account()
-    if (account !== this.readAs) {
-      this.readAs = account
-      const known = this.value
-      this.value = null
-      if (known !== null) {
-        forgot()
-      }
+    if (account === this.readAs) {
+      return
     }
+    this.readAs = account
+    const known = this.value
+    this.value = null
+    if (known !== null) {
+      forgot()
+    }
+  }
+
+  /** Reads the shares route as the signed-in account. An answer counts only while the account it was
+   *  read as is still signed in. */
+  async read(cloud: SharedBotsCloud | null, forgot: () => void) {
+    this.forgetIfSwitched(forgot)
+    const account = this.readAs
     const answer = cloud ? await cloud.mine() : null
     if (this.account() === account && this.readAs === account) {
       this.value = sharesSupported(answer, this.value)

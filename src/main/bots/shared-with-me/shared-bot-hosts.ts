@@ -119,6 +119,8 @@ export class SharedBotHosts {
   /** Reads the account's shares, follows each one's pairing, and schedules the next read. One read
    *  at a time: one asked for meanwhile runs once after it, so no older answer lands last. */
   refresh(): Promise<void> {
+    // A sign-out or switch hides sharing now, not after a read still out for the last account.
+    this.sharing.forgetIfSwitched(() => this.publish())
     if (this.refreshing) {
       this.refreshAgain = true
       return this.refreshing

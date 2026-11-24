@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SharedBotHostsState } from '../../../shared/bots/shared-bot-hosts'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { ConnectorAccountTransport } from '../../connector-cloud/connector-transport'
@@ -16,16 +16,18 @@ afterEach(() => {
   }
 })
 
-type Reply = 'shares' | 'not-found' | 'unreachable'
+type Reply = 'shares' | 'not-found' | 'unreachable' | Promise<'shares'>
 
 /** The account's SharedBotHosts over the real shares client and connector transport; each read of
  *  the shares route gets the next reply. */
 function sharingHosts(replies: Reply[], account: () => string | null = () => 'ada') {
   const dir = mkdtempSync(join(tmpdir(), 'shared-bot-sharing-'))
   dirs.push(dir)
+  let fetches = 0
   const fetchImpl: typeof globalThis.fetch = async (input) => {
     expect(String(input)).toBe('https://cloud.test/v1/shares/mine')
-    const reply = replies.shift()
+    fetches += 1
+    const reply = await replies.shift()
     if (reply === 'unreachable') {
       throw new TypeError('fetch failed')
     }
@@ -48,7 +50,7 @@ function sharingHosts(replies: Reply[], account: () => string | null = () => 'ad
     homes: memorySharedBotHomes(dir).homes,
     now: () => 0
   })
-  return { hosts, published }
+  return { hosts, published, fetches: () => fetches }
 }
 
 describe('whether this account’s Orca Cloud takes shares', () => {
@@ -87,6 +89,37 @@ describe('whether this account’s Orca Cloud takes shares', () => {
       expect(published.map((state) => state.sharing)).toEqual([true, null, null])
       await hosts.refresh()
       expect(published.at(-1)!.sharing).toBe(true)
+    } finally {
+      hosts.stop()
+      await hosts.flushed()
+    }
+  })
+
+  it('hides sharing as soon as another account signs in, while a read as the last one is still out', async () => {
+    let account = 'ada'
+    let answerLate: (reply: 'shares') => void = () => {}
+    const late = new Promise<'shares'>((resolve) => {
+      answerLate = resolve
+    })
+    const { hosts, published, fetches } = sharingHosts(
+      ['shares', late, 'unreachable'],
+      () => account
+    )
+    try {
+      await hosts.refresh()
+      expect(published.at(-1)!.sharing).toBe(true)
+      const outstanding = hosts.refresh()
+      await vi.waitFor(() => expect(fetches()).toBe(2))
+      account = 'grace'
+      void hosts.refresh()
+      const switchedAt = published.length
+      expect(published.at(-1)!.sharing).toBeNull()
+      // The last account's answer lands after the switch and is not taken as this one's.
+      answerLate('shares')
+      await outstanding
+      expect(fetches()).toBe(3)
+      expect(published.slice(switchedAt).map((state) => state.sharing)).not.toContain(true)
+      expect(published.at(-1)!.sharing).toBeNull()
     } finally {
       hosts.stop()
       await hosts.flushed()
