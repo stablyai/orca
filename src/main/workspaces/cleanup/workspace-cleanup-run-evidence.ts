@@ -10,6 +10,7 @@ import type {
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
+import { WORKTREE_PS_LIMIT, listProjectFolderSiblings } from './workspace-cleanup-sibling-inventory'
 import {
   folderGroupOf,
   folderSiblingsByWorktree,
@@ -47,7 +48,6 @@ import { shortWorkspaceCleanupBranchName } from '../../../shared/workspace-clean
 import type { WorkspaceCleanupPaneAgentStates } from './workspace-cleanup-terminal-activity'
 
 const DAY_MS = 24 * 60 * 60 * 1000
-const WORKTREE_PS_LIMIT = 100_000
 const LIVE_AGENT_STATES = new Set(['working', 'blocked', 'waiting'])
 
 export type WorkspaceCleanupWorkspace = {
@@ -198,21 +198,15 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
   if (projectId && hasUnlistedFolderSibling(listed, folderSiblingsOf)) {
     // A folder workspace can span projects, and a run judges its worktrees as one group: a project's
     // preview reads the other projects' members too, so it shows what the run would remove.
-    // A consent comparison needs every member's project listed: a sibling project whose listing failed
-    // must fail the preview, not drop out of the group and let the change look harmless.
-    const all = await runtime.getWorktreePs(
-      WORKTREE_PS_LIMIT,
-      true,
-      false,
-      undefined,
-      undefined,
-      Boolean(args.comparison) || args.freshInventory
-    )
-    if (all.truncated) {
-      throw new Error('Could not list every workspace on this host.')
-    }
-    listed = [...listed, ...all.worktrees.filter((summary) => summary.repoId !== projectId)]
-    folderSiblingsOf = await folderSiblingsByWorktree(store, listed, readPairedFolderChildren)
+    ;({ listed, folderSiblingsOf } = await listProjectFolderSiblings({
+      runtime,
+      store,
+      listed,
+      projectId,
+      repos,
+      readPairedFolderChildren,
+      strict: Boolean(args.comparison || args.freshInventory)
+    }))
   }
   const owned = listed.filter((summary) => isOwnedSummary(summary, repos))
   const summaries =
@@ -282,7 +276,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
   }
   const dirtyEditors = dirtyEditorWorktreeIds(store, runtime)
   const scanned = new Set(gitTargets)
-  const routeUnverifiable = createCleanupRemovalRouteCheck(store)
+  const routeUnverifiable = createCleanupRemovalRouteCheck(store, [...repos.values()])
   return summaries.map((summary) => {
     const repo = repos.get(summary.repoId)!
     const candidate = candidates.get(summary.worktreeId)

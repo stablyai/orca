@@ -46,7 +46,7 @@ const RULES: WorkspaceCleanupRules = {
   keepWhen: 'any-local-files'
 }
 
-function row(worktreeId: string): RuntimeWorktreePsSummary {
+function row(worktreeId: string, folder = true): RuntimeWorktreePsSummary {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cleanup reads only these listing fields.
   return {
     workspaceKind: 'git',
@@ -62,20 +62,25 @@ function row(worktreeId: string): RuntimeWorktreePsSummary {
     unverifiableTerminalCount: 0,
     agents: [],
     parentWorktreeId: null,
-    workspaceLineage: { parentWorkspaceKey: 'folder:F' }
+    workspaceLineage: folder ? { parentWorkspaceKey: 'folder:F' } : null
   } as unknown as RuntimeWorktreePsSummary
 }
 
-it("fails a project's preview when its folder sibling's project could not be listed", async () => {
-  const rows = [row('repo-a::/a1'), row('repo-b::/b1')]
-  const repos = ['repo-a', 'repo-b'].map((id) => ({
+/** A runner over these listed rows; `listing` answers getWorktreePs as the real catalog would. */
+function makeRunner(
+  rows: RuntimeWorktreePsSummary[],
+  listing: (repoId?: string, fresh?: boolean) => RuntimeWorktreePsSummary[],
+  repoPaths: Record<string, string> = {}
+): WorkspaceCleanupRunner {
+  const repos = [...new Set(rows.map((summary) => summary.repoId))].map((id) => ({
     id,
-    path: `/${id}`,
+    path: repoPaths[id] ?? `/${id}`,
     displayName: id,
     badgeColor: '',
     addedAt: 0,
     ...(id === 'repo-a' ? { workspaceCleanupPolicy: { mode: 'off' as const } } : {})
   }))
+  const folderMembers = rows.filter((summary) => summary.workspaceLineage)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the evidence read uses only these store members.
   const store = {
     getRepos: () => repos,
@@ -84,7 +89,7 @@ it("fails a project's preview when its folder sibling's project could not be lis
     getWorktreeMeta: () => undefined,
     getAllWorkspaceLineage: () =>
       Object.fromEntries(
-        rows.map((summary) => [
+        folderMembers.map((summary) => [
           `worktree:${summary.worktreeId}`,
           { childWorkspaceKey: `worktree:${summary.worktreeId}`, parentWorkspaceKey: 'folder:F' }
         ])
@@ -93,7 +98,6 @@ it("fails a project's preview when its folder sibling's project could not be lis
     getAllCrossStoreWorkspaceLineage: () => ({}),
     getBots: () => []
   } as unknown as RuntimeStore
-  // repo-b's listing fails: an ordinary listing omits its rows, a strict one refuses.
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the evidence read uses only these runtime members.
   const runtime = {
     getWorktreePs: async (
@@ -103,27 +107,68 @@ it("fails a project's preview when its folder sibling's project could not be lis
       _worktreeId?: string,
       repoId?: string,
       fresh?: boolean
-    ) => {
-      if (!repoId && fresh) {
-        throw new Error('Could not list every workspace on this host.')
-      }
-      return {
-        worktrees: rows.filter((summary) =>
-          repoId ? summary.repoId === repoId : summary.repoId !== 'repo-b'
-        ),
-        truncated: false
-      }
-    },
+    ) => ({ worktrees: listing(repoId, fresh), truncated: false }),
     getExistingOrchestrationDb: () => null,
     listTerminals: async () => ({ terminals: [], totalCount: 0, truncated: false }),
     getLocalProvider: () => ({ listProcesses: async () => [] }),
     getRuntimeId: () => 'runtime-1',
     listOrchestrationWorkerServers: async () => []
   } as unknown as OrcaRuntimeService
-  const runner = new WorkspaceCleanupRunner({ store, runtime, historyDirectory: '/nonexistent' })
-  const read = runner.readPolicy('repo-a')
+  return new WorkspaceCleanupRunner({ store, runtime, historyDirectory: '/nonexistent' })
+}
+const turnOn = (runner: WorkspaceCleanupRunner) =>
+  runner.previewChange(
+    { scope: 'project', repoId: 'repo-a', policy: null },
+    runner.readPolicy('repo-a').state,
+    true
+  )
+
+it("fails a project's preview when its folder sibling's project could not be listed", async () => {
+  const rows = [row('repo-a::/a1'), row('repo-b::/b1')]
+  // repo-b's listing fails: an ordinary listing omits its rows, a strict one refuses.
+  const runner = makeRunner(rows, (repoId, fresh) => {
+    if (repoId === 'repo-b' && fresh) {
+      throw new Error('Could not list every workspace on this host.')
+    }
+    return rows.filter((summary) =>
+      repoId ? summary.repoId === repoId : summary.repoId !== 'repo-b'
+    )
+  })
   // Turning repo-a back on would free the folder group, repo-b's worktree included: consent must see it.
-  await expect(
-    runner.previewChange({ scope: 'project', repoId: 'repo-a', policy: null }, read.state, true)
-  ).rejects.toThrow('Could not list every workspace on this host.')
+  await expect(turnOn(runner)).rejects.toThrow('Could not list every workspace on this host.')
+})
+
+it("reviews a healthy folder group while an unrelated project's listing fails", async () => {
+  const rows = [row('repo-a::/a1'), row('repo-b::/b1'), row('repo-c::/c1', false)]
+  // repo-c's folder is missing: its listing fails strictly and drops out of an ordinary listing.
+  const runner = makeRunner(rows, (repoId, fresh) => {
+    if (fresh && (!repoId || repoId === 'repo-c')) {
+      throw new Error('Could not list every workspace on this host.')
+    }
+    return rows.filter(
+      (summary) => summary.repoId !== 'repo-c' && (!repoId || summary.repoId === repoId)
+    )
+  })
+  const { next } = await turnOn(runner)
+  expect(
+    Object.fromEntries(next.rows.map((preview) => [preview.worktreeId, preview.evaluation]))
+  ).toEqual({
+    'repo-a::/a1': { action: 'delete', reason: 'merged' },
+    'repo-b::/b1': { action: 'delete', reason: 'merged' }
+  })
+})
+
+it('keeps a WSL-routed checkout out of the deletions a preview lists', async () => {
+  const rows = [row('repo-a::/a1', false), row('repo-a::/a2', false)]
+  const runner = makeRunner(
+    rows,
+    (repoId) => rows.filter((summary) => !repoId || summary.repoId === repoId),
+    { 'repo-a': '\\\\wsl.localhost\\Ubuntu\\repo-a' }
+  )
+  const { next } = await turnOn(runner)
+  // Guarded removal refuses this route, so the change offers nothing for deletion here.
+  expect(next.rows.map((preview) => preview.evaluation)).toEqual([
+    { action: 'keep', cause: 'identity-unverified', reason: 'merged' },
+    { action: 'keep', cause: 'identity-unverified', reason: 'merged' }
+  ])
 })

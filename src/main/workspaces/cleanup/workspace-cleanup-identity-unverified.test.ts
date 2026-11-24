@@ -151,7 +151,7 @@ describe('a removal route that cannot verify the checkout keeps it', () => {
   it('does not offer a WSL-routed checkout for deletion in the preview or the run', async () => {
     const workspace = wslWorkspace()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a WSL path is decided before the store is read.
-    const routeUnverifiable = createCleanupRemovalRouteCheck({} as never)
+    const routeUnverifiable = createCleanupRemovalRouteCheck({} as never, [workspace.repo])
     expect(routeUnverifiable(workspace.repo, workspace.ref.path)).toBe(true)
     expect(
       await decideWorkspaceCleanup(
