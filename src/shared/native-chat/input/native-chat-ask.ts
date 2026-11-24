@@ -249,6 +249,7 @@ export function createPendingAskScanner(): {
   let contributors: AsyncQuestionContributor[] = []
   let answerPending = false
   const asyncSlots = new Map<string, number>()
+  // Replayed calls can arrive after their answers have cleared the pending questions.
   const asyncCallIds = new Set<string>()
   const resetBlocking = (): void => {
     outstanding = 0
@@ -259,7 +260,6 @@ export function createPendingAskScanner(): {
     resetBlocking()
     contributors = []
     answerPending = false
-    asyncCallIds.clear()
   }
   const append = (message: NativeChatMessage): readonly AsyncQuestionContributor[] => {
     const accepted: AsyncQuestionContributor[] = []
