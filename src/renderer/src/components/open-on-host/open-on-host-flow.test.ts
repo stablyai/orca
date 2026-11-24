@@ -49,6 +49,7 @@ const toastError = vi.spyOn(toast, 'error')
 const createWorktree = vi.fn()
 const pushBranch = vi.fn()
 const setupProjectClone = vi.fn()
+const setupProjectExistingFolder = vi.fn()
 
 const initialState = useAppStore.getState()
 
@@ -75,6 +76,7 @@ const target: OpenOnHostTarget = {
     detail: '',
     path: '/home/me/orca'
   },
+  unregisteredPath: null,
   disabledReason: null
 }
 const cloneTarget: OpenOnHostTarget = { ...target, existingSetup: null }
@@ -137,6 +139,7 @@ beforeEach(() => {
     createWorktree,
     pushBranch,
     setupProjectClone,
+    setupProjectExistingFolder,
     repos: [hostRepo],
     projectHostSetups: []
   })
@@ -243,9 +246,36 @@ describe('runOpenOnHost', () => {
       nameWasGenerated: true
     })
   })
+
+  it('registers a checkout the server has no setup for instead of cloning', async () => {
+    useAppStore.setState({ repos: [] })
+    setupProjectExistingFolder.mockResolvedValue({ repo: hostRepo })
+    const result = await runOpenOnHost({
+      ...base,
+      location: { kind: 'existing', repoId: null, path: '/home/me/orca' }
+    })
+    expect(result).toEqual({ worktreeId: 'w2', notice: null })
+    expect(setupProjectExistingFolder).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      hostId: 'runtime:buildbox',
+      path: '/home/me/orca',
+      displayName: 'orca'
+    })
+    expect(setupProjectClone).not.toHaveBeenCalled()
+  })
 })
 
 describe('resolveOpenOnHostLocation', () => {
+  it('reuses a checkout the server has no setup for', async () => {
+    expect(
+      await resolveOpenOnHostLocation(
+        { ...cloneTarget, unregisteredPath: '/home/me/orca' },
+        'https://github.com/o/orca.git'
+      )
+    ).toEqual({ kind: 'existing', repoId: null, path: '/home/me/orca' })
+    expect(defaultParent).not.toHaveBeenCalled()
+  })
+
   it('clones into the host-suggested folder when the default one is taken', async () => {
     defaultParent.mockResolvedValue('/home/me/orca/projects')
     rpc.mockResolvedValue({

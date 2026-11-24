@@ -22,6 +22,8 @@ export type OpenOnHostTarget = {
   label: string
   /** The project's ready location on that host, or null (clone needed). */
   existingSetup: ReadyProjectHostSetupOption | null
+  /** A ready checkout the relay shows but the server has no setup for; registered there on open. */
+  unregisteredPath: string | null
   disabledReason: string | null
 }
 
@@ -69,6 +71,7 @@ export function listOpenOnHostTargets(
       environmentId: parsed.environmentId,
       label: option.label,
       existingSetup,
+      unregisteredPath: option.kind === 'ready' && !existingSetup ? option.path : null,
       disabledReason: getDisabledReason(option, hostById.get(rpcHostId), existingSetup, input, t)
     })
   }
@@ -76,7 +79,7 @@ export function listOpenOnHostTargets(
 }
 
 // Why: on the relay the shown ready row can be the ssh: one, whose repoId the server does not know;
-// use the server's own setup at that path, or clone (null) when the server has none.
+// use the server's own setup at that path, or null so the open registers that checkout on the server.
 function getRuntimeReadySetup(
   option: ReadyProjectHostSetupOption,
   rpcHostId: ExecutionHostId,

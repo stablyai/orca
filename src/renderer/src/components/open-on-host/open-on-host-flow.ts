@@ -28,7 +28,8 @@ import { resolveHostRemoteBranch, type WorkspaceOnHostPlan } from './open-on-hos
 import type { OpenOnHostTarget } from './open-on-host-targets'
 
 export type OpenOnHostLocation =
-  | { kind: 'existing'; repoId: string; path: string }
+  /** repoId null: the checkout is on the host but the server has no setup for it yet. */
+  | { kind: 'existing'; repoId: string | null; path: string }
   | { kind: 'clone'; url: string; destination: string; folderName: string }
   | { kind: 'unavailable'; reason: string }
 
@@ -42,6 +43,9 @@ export async function resolveOpenOnHostLocation(
       repoId: target.existingSetup.repoId,
       path: target.existingSetup.path
     }
+  }
+  if (target.unregisteredPath) {
+    return { kind: 'existing', repoId: null, path: target.unregisteredPath }
   }
   const destination = await getRuntimeDefaultCreateProjectParent(target.environmentId, 15_000)
   const check = await checkCloneTargetOn(
@@ -82,24 +86,33 @@ export async function runOpenOnHost(
 ): Promise<OpenOnHostResult | 'failed-after-clone' | null> {
   const { projectId, displayName, target, location, workspace } = request
   const state = useAppStore.getState()
-  // setupProjectClone toasts its own failure.
+  // setupProjectExistingFolder and setupProjectClone toast their own failures.
+  const existingRepoId = location.kind === 'existing' ? location.repoId : null
   const hostRepo: Repo | null | undefined =
-    location.kind === 'existing'
-      ? (state.repos.find((repo) =>
-          repoMatchesHostIdentity(repo, location.repoId, target.hostId)
-        ) ?? null)
-      : (
-          await state.setupProjectClone({
-            projectId,
-            hostId: target.hostId,
-            url: location.url,
-            destination: location.destination,
-            ...(location.folderName ? { folderName: location.folderName } : {}),
-            displayName
-          })
-        )?.repo
+    existingRepoId !== null
+      ? (state.repos.find((repo) => repoMatchesHostIdentity(repo, existingRepoId, target.hostId)) ??
+        null)
+      : location.kind === 'existing'
+        ? (
+            await state.setupProjectExistingFolder({
+              projectId,
+              hostId: target.hostId,
+              path: location.path,
+              displayName
+            })
+          )?.repo
+        : (
+            await state.setupProjectClone({
+              projectId,
+              hostId: target.hostId,
+              url: location.url,
+              destination: location.destination,
+              ...(location.folderName ? { folderName: location.folderName } : {}),
+              displayName
+            })
+          )?.repo
   if (!hostRepo) {
-    if (location.kind === 'existing') {
+    if (existingRepoId !== null) {
       toast.error(
         translate(
           'openOnHost.hostCopyNotLoaded',

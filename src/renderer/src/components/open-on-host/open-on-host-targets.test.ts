@@ -204,9 +204,9 @@ describe('listOpenOnHostTargets', () => {
       { ...input, hosts: relayHosts, eligibleRepos, projectHostSetups: [sshSetup] },
       t
     )
-    expect(sshOnly.map((target) => [target.hostId, target.existingSetup])).toEqual([
-      ['runtime:devbox', null]
-    ])
+    expect(
+      sshOnly.map((target) => [target.hostId, target.existingSetup, target.unregisteredPath])
+    ).toEqual([['runtime:devbox', null, sshSetup.path]])
   })
 
   it('disables a relay-served server that cannot set up projects', () => {
