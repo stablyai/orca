@@ -1,6 +1,9 @@
 import type { ConnectorResult } from './connector-cloud-request'
 import type { ConnectorTransport } from './connector-machine'
 
+/** Orca Cloud answering again (the poll, after it or a call outside it didn't), or an account signing in. */
+export type ConnectorBack = 'answered' | 'signedIn'
+
 /** Whether the running poll's calls reach Orca Cloud, and what the cloud says when it refuses them. */
 export class ConnectorReach {
   // The running poll's last call got no answer from Orca Cloud, or a 5xx.
@@ -10,31 +13,27 @@ export class ConnectorReach {
   // The connector-token route refused this sign-in on the running poll's last call, after a fresh session.
   unauthorized = false
 
-  private readonly backListeners = new Set<() => void>()
-  // A call outside the poll got no answer: the poll's next answer is the cloud answering again for it. Once
-  // per run of misses, so a route that keeps failing while the poll answers is not retried at its pace.
+  private readonly backListeners = new Set<(why: ConnectorBack) => void>()
+  // A call outside the poll got no answer: the poll's next answer is the cloud answering again for it.
   private missed = false
-  private missRetried = false
 
   constructor(private readonly onChanged: () => void) {}
 
-  onBack(listener: () => void): () => void {
+  onBack(listener: (why: ConnectorBack) => void): () => void {
     this.backListeners.add(listener)
     return () => this.backListeners.delete(listener)
   }
 
   /** A call outside the poll (a bot's picture) the cloud didn't answer, or answered with a 5xx. */
   missedOutsidePoll(result: ConnectorResult<unknown>): void {
-    if (result.ok) {
-      this.missRetried = false
-    } else if ((result.status === null || result.status >= 500) && !this.missRetried) {
+    if (!result.ok && (result.status === null || result.status >= 500)) {
       this.missed = true
     }
   }
 
-  back(): void {
+  back(why: ConnectorBack): void {
     for (const listener of this.backListeners) {
-      listener()
+      listener(why)
     }
   }
 
@@ -70,9 +69,8 @@ export class ConnectorReach {
     const refusal = result.ok ? null : (result.message ?? null)
     const unauthorized = !result.ok && result.sessionRefused === true
     const cameBack = (this.unreachable || this.missed) && !unreachable
-    if (!unreachable && this.missed) {
+    if (!unreachable) {
       this.missed = false
-      this.missRetried = true
     }
     if (
       this.unreachable !== unreachable ||
@@ -85,7 +83,7 @@ export class ConnectorReach {
       this.onChanged()
     }
     if (cameBack) {
-      this.back()
+      this.back('answered')
     }
   }
 }

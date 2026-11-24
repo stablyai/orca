@@ -15,7 +15,7 @@ import {
   type ConnectorTokenMint
 } from './connector-transport'
 import { ConnectorTurnEvents } from './connector-turn-events'
-import { ConnectorReach } from './connector-reach'
+import { type ConnectorBack, ConnectorReach } from './connector-reach'
 import type { ConnectorReplyJournal } from './connector-reply-outbox'
 import { connectorRefResolver, type ConnectorRefResolver } from './connector-ref-resolution'
 import { postConnectorOutboxReply } from './connector-replies'
@@ -81,13 +81,13 @@ export class ConnectorCloud {
       this.lastAccount = account
       this.options.onAccountSwitched?.()
       if (account) {
-        this.reach.back()
+        this.reach.back('signedIn')
       }
     }
   }
 
   /** Orca Cloud answers again after it (or a call outside the poll) didn't, or a sign-in: a send may go. */
-  onBack(listener: () => void): () => void {
+  onBack(listener: (why: ConnectorBack) => void): () => void {
     return this.reach.onBack(listener)
   }
 

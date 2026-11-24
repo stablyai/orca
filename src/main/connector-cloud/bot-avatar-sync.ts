@@ -62,6 +62,9 @@ export class BotAvatarSync {
   private readonly icons = new Map<string, number>()
   // Bots whose drawn icon the cloud failed to take: sent again on a real step, never by the retry timer.
   private readonly owed = new Set<string>()
+  // Owed bots already resent once on the cloud answering again: until a real step, a sign-in or a success,
+  // they wait, so a picture route that keeps failing while the poll answers is never retried at its pace.
+  private readonly answeredRetried = new Set<string>()
   // Per bot, its drawn icon while a send of it is out (or none, until one is kept), by look and icon count.
   private readonly prepared = new Map<
     string,
@@ -91,12 +94,20 @@ export class BotAvatarSync {
     this.refused.clear()
     // A real step: drawn icons the cloud failed to take go again too.
     this.owed.clear()
+    this.answeredRetried.clear()
     this.pass()
   }
 
   /** Orca Cloud answers again, or an account signed in: only the drawn icons it failed to take go again. */
-  retryOwed(): void {
+  retryOwed(signedIn = false): void {
     for (const botId of this.owed) {
+      if (signedIn) {
+        this.answeredRetried.delete(botId)
+      } else if (this.answeredRetried.has(botId)) {
+        continue
+      } else {
+        this.answeredRetried.add(botId)
+      }
       this.owed.delete(botId)
       this.sent.delete(botId)
       if (!this.sending.has(botId)) {
@@ -109,6 +120,7 @@ export class BotAvatarSync {
   iconStored(botId: string): void {
     this.icons.set(botId, (this.icons.get(botId) ?? 0) + 1)
     this.owed.delete(botId)
+    this.answeredRetried.delete(botId)
     this.sent.delete(botId)
     // One in flight read no icon or an older one: it is sent again once it lands.
     if (!this.sending.has(botId)) {
@@ -179,7 +191,14 @@ export class BotAvatarSync {
     }
     // A deleted bot keeps nothing here. Only a bot write deletes one, so the retry timer's passes skip this.
     if (!fromTimer) {
-      for (const kept of [this.owed, this.icons, this.prepared, this.sent, this.refused]) {
+      for (const kept of [
+        this.owed,
+        this.answeredRetried,
+        this.icons,
+        this.prepared,
+        this.sent,
+        this.refused
+      ]) {
         for (const id of kept.keys()) {
           if (!present.has(id)) {
             kept.delete(id)
@@ -284,6 +303,7 @@ export class BotAvatarSync {
       this.resend(bot.id)
     } else if (sent) {
       this.owed.delete(bot.id)
+      this.answeredRetried.delete(bot.id)
       this.sent.set(bot.id, avatar)
       // Kept only for a retry: once taken, its bytes are let go.
       this.prepared.delete(bot.id)

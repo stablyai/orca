@@ -269,11 +269,28 @@ it('leaves a drawn icon the cloud failed to take for the next real step, not the
   await vi.advanceTimersByTimeAsync(2 * 60 * 60_000)
   expect(sent).toHaveLength(4)
 
+  // The cloud answering again resends it once; failing again, it waits for a real step, not the poll.
+  sync.retryOwed()
+  await vi.waitFor(() => expect(sent).toHaveLength(5))
+  await vi.advanceTimersByTimeAsync(60_000)
+  sync.retryOwed()
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(sent).toHaveLength(5)
+  // A real step that fails gets its one resend on the cloud answering again, and a sign-in always resends.
+  sync.changed()
+  await vi.waitFor(() => expect(sent).toHaveLength(6))
+  await vi.advanceTimersByTimeAsync(60_000)
+  sync.retryOwed()
+  await vi.waitFor(() => expect(sent).toHaveLength(7))
+  await vi.advanceTimersByTimeAsync(60_000)
+  sync.retryOwed(true)
+  await vi.waitFor(() => expect(sent).toHaveLength(8))
+
   // A real step (any bot write) sends it.
   up = true
   sync.changed()
-  await vi.waitFor(() => expect(sent).toHaveLength(5))
-  expect(sent[4]).toMatchObject({ kind: 'upload' })
+  await vi.waitFor(() => expect(sent).toHaveLength(9))
+  expect(sent[8]).toMatchObject({ kind: 'upload' })
   vi.useRealTimers()
 })
 
