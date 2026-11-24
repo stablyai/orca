@@ -210,4 +210,36 @@ describe('provider relay spool', () => {
     })
     expect([outcome, replayed]).toEqual(['done', ['1:whole']])
   })
+
+  it('names the kept lines it dropped at the file cap, and a later attach replays only what is left', async () => {
+    const delivered: number[] = []
+    const spool = new ProviderRelaySpool({
+      path: join(dir, 'r.ndjson'),
+      deliver: (record) => delivered.push(record.seq),
+      onPressureChanged: () => {},
+      fileCapBytes: 2048
+    })
+    await spool.attach(0)
+    spool.append('{"method":"item/started"}')
+    spool.ack(1, 1)
+    for (let i = 0; i < 10; i++) {
+      spool.append('x'.repeat(100))
+    }
+    spool.ack(11, 1)
+    // Under the cap, nothing kept is dropped.
+    expect([spool.ackedSeq, spool.truncatedThrough]).toEqual([0, 0])
+    for (let i = 0; i < 20; i++) {
+      spool.append('x'.repeat(100))
+    }
+    // Once its writes start, the kept span alone holds the agent paused at the cap, so the
+    // client's own acks release it.
+    spool.ack(31, 1)
+    await vi.waitFor(() => expect([spool.ackedSeq, spool.truncatedThrough]).toEqual([31, 31]))
+    spool.append('after')
+    await spool.detach()
+    delivered.length = 0
+    await spool.attach(0)
+    expect(delivered).toEqual([32])
+    await spool.dispose()
+  })
 })

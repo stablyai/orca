@@ -1,6 +1,7 @@
 import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-protocol'
 import { SpoolFile } from './provider-relay-spool-file'
 import { SpoolMemory, type HeldRecord } from './provider-relay-spool-memory'
+import { SpoolReaderSlot } from './provider-relay-spool-reader-slot'
 import { replayMemoryTail, replaySpoolFileRecords } from './provider-relay-spool-replay'
 
 export const RELAY_SPOOL_MEMORY_CAP_BYTES = 1024 * 1024
@@ -48,13 +49,12 @@ export class ProviderRelaySpool {
   private clientAcked = 0
   /** The client's last ack named a floor to keep (an open streamed item), so lines go to the file too. */
   private keeping = false
+  /** The last seq of kept lines dropped at the file cap, so an attach can say its replay starts mid-item. */
+  private truncatedThroughSeq = 0
   private disposed = false
   /** Ends the current attach's waits once it is superseded, so its call returns even on a stalled disk. */
   private cancelWait: (() => void) | null = null
-  /** A file replay is running, stale or not; one at a time, so stalled takeovers can't stack readers. */
-  private reading = false
-  /** Attaches waiting for that reader; freed when it closes its file or the file is retired. */
-  private readonly readerWaiters = new Set<() => void>()
+  private readonly reader = new SpoolReaderSlot()
   private readonly memoryCap: number
   private readonly fileCap: number
 
@@ -78,6 +78,10 @@ export class ProviderRelaySpool {
 
   get ackedSeq(): number {
     return this.acked
+  }
+
+  get truncatedThrough(): number {
+    return this.truncatedThroughSeq
   }
 
   get drained(): boolean {
@@ -197,14 +201,14 @@ export class ProviderRelaySpool {
       cancelStep = wait.cancel
       await wait.done
       // A stale reader stalled on the disk is waited out rather than joined by another.
-      while (this.reading && current() && this.file.index.lastSeq > Math.max(fromSeq, this.acked)) {
-        await new Promise<void>((resolve) => {
-          this.readerWaiters.add(resolve)
-          cancelStep = () => {
-            this.readerWaiters.delete(resolve)
-            resolve()
-          }
-        })
+      while (
+        this.reader.reading &&
+        current() &&
+        this.file.index.lastSeq > Math.max(fromSeq, this.acked)
+      ) {
+        const waiting = this.reader.waitForReader()
+        cancelStep = waiting.cancel
+        await waiting.done
       }
       // A superseded attach reads nothing, so a stalled write can't make each one reread the file.
       if (!current()) {
@@ -218,7 +222,7 @@ export class ProviderRelaySpool {
       fileLast > after
         ? // A read stalled on the disk sends nothing more once superseded, and the call returns.
           await Promise.race([
-            this.track(
+            this.reader.track(
               replaySpoolFileRecords({
                 path: this.options.path,
                 after,
@@ -271,25 +275,10 @@ export class ProviderRelaySpool {
     }
   }
 
-  private track<T>(replay: Promise<T>): Promise<T> {
-    this.reading = true
-    return replay.finally(() => {
-      this.reading = false
-      this.wakeReaderWaiters()
-    })
-  }
-
   /** A retired file has nothing left to read, so attaches waiting on its reader go on. */
   private retireFile(): void {
     this.file.remove()
-    this.wakeReaderWaiters()
-  }
-
-  private wakeReaderWaiters(): void {
-    for (const resolve of this.readerWaiters) {
-      resolve()
-    }
-    this.readerWaiters.clear()
+    this.reader.wake()
   }
 
   private stopWaiting(): void {
@@ -335,6 +324,7 @@ export class ProviderRelaySpool {
       this.holdsPause(this.pressure(0)) &&
       !this.holdsPause(this.pressure(this.clientAcked))
     ) {
+      this.truncatedThroughSeq = this.clientAcked
       this.releaseThrough(this.clientAcked)
     }
     const [held, cap] = this.pressure(0)

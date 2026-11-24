@@ -183,7 +183,17 @@ export class ProviderRelay {
     if (this.exitAnnounced) {
       this.sendExit()
     }
-    return this.attachResult(replayThroughSeq, pending, initializeResult !== null)
+    const { truncatedThrough } = this.spool
+    return {
+      replayThroughSeq,
+      pending: pending.map((record) => record.seq),
+      maxClientRequestId: this.pending.maxClientRequestId,
+      initializeResultSent: initializeResult !== null,
+      stderrTail: this.options.managed.stderrTail(),
+      exit: this.exitStatus,
+      // Lines the client already had before its cursor were never missing from its replay.
+      ...(truncatedThrough > cursor ? { truncatedThrough } : {})
+    }
   }
 
   private async sendEach(
@@ -196,21 +206,6 @@ export class ProviderRelay {
       }
     }
     return true
-  }
-
-  private attachResult(
-    replayThroughSeq: number,
-    pending: ProviderRelayRecord[],
-    initializeResultSent: boolean
-  ): ProviderRelayAttachResult {
-    return {
-      replayThroughSeq,
-      pending: pending.map((record) => record.seq),
-      maxClientRequestId: this.pending.maxClientRequestId,
-      initializeResultSent,
-      stderrTail: this.options.managed.stderrTail(),
-      exit: this.exitStatus
-    }
   }
 
   detach(clientId?: string): Promise<void> {
