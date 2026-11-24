@@ -15,20 +15,23 @@ import { SETTLE_SPRING } from '../../components/motion/sheet-motion-values'
 import { NavBarBadge } from '../../components/nav-bar/NavBarButton'
 import { useKeyboardPersistingTaps } from '../../platform/keyboard/keyboard-persisting-taps'
 import { useNow } from '../../hooks/use-now'
-import { agentStateLabel } from '../../worktree/agent-lineage/agent-row-display'
 import { colors, feedback, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import {
   buildMobileSessionTabSummary,
   countMobileSessionDesktopTabs,
-  isForkedChatTab,
+  mobileSessionSplitKey,
+  mobileSessionSwipeStops,
   type MobileSessionTabSummary
 } from './mobile-session-tab-rows'
-import { MobileSessionTabBarLayer, tabBarLayerStyles } from './MobileSessionTabBarLayer'
+import {
+  MobileSessionTabBarLayer,
+  mobileSessionTabBarLabels,
+  tabBarLayerStyles
+} from './MobileSessionTabBarLayer'
 import { MobileSessionTabsSheet } from './MobileSessionTabsSheet'
 import { useMobileSessionTabStopConfirm } from './MobileSessionTabStopConfirm'
-import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import type { MobileSessionController } from '../use-mobile-session-controller'
 
 // A drag that ends faster than this toward a tab moves there, however short it was.
@@ -38,6 +41,9 @@ const EDGE_RESISTANCE = 0.25
 // A tab a full width out of the middle is drawn this faint, so the arriving one brightens as it comes.
 const SIDE_OPACITY = 0.4
 const DRAG_CLICK_WINDOW_MS = 400
+// An upward drag claims the touch past this, and opens the switcher once past the second.
+const SWIPE_UP_START = 12
+const SWIPE_UP_OPENS = 24
 
 /** The tab you're in as one cell: tap for its actions, swipe for the next one; the count shows every tab, + adds one. */
 export function MobileSessionTabBar({
@@ -86,16 +92,26 @@ export function MobileSessionTabBar({
       }),
     [visibleTabs, terminals, now, activeSessionTabId, homeChatId, t]
   )
-  const activeIndex = rows.findIndex((row) => row.tab.id === activeSessionTabId)
-  const active: MobileSessionTabSummary | undefined = rows[activeIndex]
-  const previous = activeIndex > 0 ? rows[activeIndex - 1] : undefined
-  const next = activeIndex !== -1 ? rows[activeIndex + 1] : undefined
+  const active: MobileSessionTabSummary | undefined = rows.find(
+    (row) => row.tab.id === activeSessionTabId
+  )
+  // The pane last open in each split, so swiping back into a split returns to it.
+  const lastPaneRef = useRef(new Map<string, string>())
+  const activeSplit = active ? mobileSessionSplitKey(active.tab) : null
+  if (active && activeSplit) {
+    lastPaneRef.current.set(activeSplit, active.tab.id)
+  }
+  const { previous, next } = mobileSessionSwipeStops(rows, activeSessionTabId, lastPaneRef.current)
   const needYou = countMobileSessionDesktopTabs(
     rows.filter((row) => row.tab.id !== activeSessionTabId && row.group === 'needs-you')
   )
   const [sheetOpen, setSheetOpen] = useState(false)
   const [dragging, setDragging] = useState(false)
-  const stopConfirm = useMobileSessionTabStopConfirm(handleCloseSessionTab)
+  const stopConfirm = useMobileSessionTabStopConfirm(
+    handleCloseSessionTab,
+    rows,
+    activeSessionTabId
+  )
 
   const reducedMotion = useDrawerReducedMotion()
   const offset = useSharedValue(0)
@@ -161,6 +177,20 @@ export function MobileSessionTabBar({
       const target = direction === 1 ? previous : next
       offset.value = settle(target ? event.velocityX : event.velocityX * EDGE_RESISTANCE)
     })
+  // Swiping up on the tab opens the switcher, as on Safari's tab bar; the count stays the main way in.
+  const swipeUp = Gesture.Pan()
+    .runOnJS(true)
+    .activeOffsetY(-SWIPE_UP_START)
+    .failOffsetX([-10, 10])
+    .onStart(() => setDragging(true))
+    .onFinalize(() => setDragging(false))
+    .onEnd((event, success) => {
+      // oxlint-disable-next-line react/purity -- runs when the drag ends, never during render.
+      dragEndedAtRef.current = Date.now()
+      if (success && (event.translationY < -SWIPE_UP_OPENS || event.velocityY < -FLICK_VELOCITY)) {
+        setSheetOpen(true)
+      }
+    })
   // Each layer sits a width from its neighbour and fades with its distance from the middle.
   const layerStyle = (place: -1 | 0 | 1) => () => {
     const x = offset.value + place * width.value
@@ -172,26 +202,17 @@ export function MobileSessionTabBar({
   const currentStyle = useAnimatedStyle(layerStyle(0), [offset, width])
   const nextStyle = useAnimatedStyle(layerStyle(1), [offset, width])
 
-  const status = active?.dotState && active.dotState !== 'idle' ? active.dotState : undefined
   const tabCount = countMobileSessionDesktopTabs(rows)
-  const countLabel =
-    tabCount === 1
-      ? t('session.tabBar.oneTab', '1 tab')
-      : t('session.tabBar.tabCount', '{{count}} tabs', { count: tabCount })
-  const tabLabel = [
-    active && isForkedChatTab(active.tab) ? mobileForkAccessibleName(active.title) : active?.title,
-    status ? agentStateLabel(status) : null
-  ]
-    .filter(Boolean)
-    .join(', ')
-  const needYouLabel =
-    needYou === 1
-      ? t('session.tabBar.needYou_one', '{{count}} needs you', { count: needYou })
-      : t('session.tabBar.needYou_other', '{{count}} need you', { count: needYou })
-  const countAccessibilityLabel = needYou > 0 ? `${countLabel}, ${needYouLabel}` : countLabel
+  const { countLabel, tabLabel, countAccessibilityLabel } = mobileSessionTabBarLabels(
+    t,
+    active,
+    tabCount,
+    needYou
+  )
   const createDisabled = createTabBusy || connState !== 'connected'
   const openTabActions = () => {
     // The click a drag release produces on the web belongs to the drag.
+    // oxlint-disable-next-line react/purity -- runs on a tap, never during render.
     if (!active || Date.now() - dragEndedAtRef.current < DRAG_CLICK_WINDOW_MS) {
       return
     }
@@ -208,8 +229,8 @@ export function MobileSessionTabBar({
         </View>
       ) : (
         <>
-          {/* pan-y keeps vertical touches with the page on the web. */}
-          <GestureDetector gesture={pan} touchAction="pan-y">
+          {/* The bar takes both axes on the web: sideways steps tabs, up opens the switcher. */}
+          <GestureDetector gesture={Gesture.Race(pan, swipeUp)} touchAction="none">
             <View
               style={styles.tabCell}
               // Neighbours sit a whole cell aside, so none shows at rest and each arrives at the same inset.

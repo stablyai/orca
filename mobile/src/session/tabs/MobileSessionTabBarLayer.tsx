@@ -4,7 +4,9 @@ import { AgentStateDot } from '../../agents/presentation/AgentStateDot'
 import { ArrivalFade } from '../../components/motion/ArrivalFade'
 import { TailClippedText } from '../../components/list/TailClippedText'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
-import type { AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
+import { agentStateLabel, type AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import { colors } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -35,7 +37,7 @@ function ArrivingTabBarDot({ state }: { state: AgentDotState | undefined }) {
 }
 
 // A path keeps its end in view, as the sheet's detail lines do.
-const isPathTitle = (title: string) => /[\\/]/.test(title)
+export const isPathTitle = (title: string) => /[\\/]/.test(title)
 
 function TabBarTitle({ row }: { row: MobileSessionTabSummary }) {
   if (isForkedChatTab(row.tab)) {
@@ -83,6 +85,35 @@ export function MobileSessionTabBarLayer({
       <TabBarTitle row={row} />
     </>
   )
+}
+
+/** What a screen reader hears for the open tab and for the count. */
+export function mobileSessionTabBarLabels(
+  t: Translate,
+  active: MobileSessionTabSummary | undefined,
+  tabCount: number,
+  needYou: number
+) {
+  const countLabel =
+    tabCount === 1
+      ? t('session.tabBar.oneTab', '1 tab')
+      : t('session.tabBar.tabCount', '{{count}} tabs', { count: tabCount })
+  const status = active?.dotState && active.dotState !== 'idle' ? active.dotState : undefined
+  const tabLabel = [
+    active && isForkedChatTab(active.tab) ? mobileForkAccessibleName(active.title) : active?.title,
+    status ? agentStateLabel(status) : null
+  ]
+    .filter(Boolean)
+    .join(', ')
+  const needYouLabel =
+    needYou === 1
+      ? t('session.tabBar.needYou_one', '{{count}} needs you', { count: needYou })
+      : t('session.tabBar.needYou_other', '{{count}} need you', { count: needYou })
+  return {
+    countLabel,
+    tabLabel,
+    countAccessibilityLabel: needYou > 0 ? `${countLabel}, ${needYouLabel}` : countLabel
+  }
 }
 
 // The group room's thread bar draws its room with these too.

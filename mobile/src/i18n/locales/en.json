@@ -3298,7 +3298,12 @@
       "stopTitle": "Stop and close?",
       "stopWaiting": "{{title}} is waiting for you. Closing the tab stops it.",
       "stopWorking": "{{title}} is still working. Closing the tab stops it.",
-      "stopConfirm": "Stop and close"
+      "stopConfirm": "Stop and close",
+      "olderCount": "{{count}} older",
+      "closeFinished_one": "Close {{count}} finished tab",
+      "closeFinished_other": "Close {{count}} finished tabs",
+      "closeFinishedTitle_one": "Close {{count}} finished tab?",
+      "closeFinishedTitle_other": "Close {{count}} finished tabs?"
     },
     "tabMenu": {
       "closeTab": "Close tab"
@@ -3308,7 +3313,9 @@
       "markdown": "Markdown note",
       "file": "File",
       "chat": "Chat",
-      "terminal": "Terminal"
+      "terminal": "Terminal",
+      "asks": "Asks",
+      "allowTool": "Allow {{tool}}?"
     },
     "tabBar": {
       "oneTab": "1 tab",

@@ -1265,6 +1265,10 @@
       "needYou_other": "{{count}} need you"
     },
     "tabsSheet": {
+      "closeFinishedTitle_one": "Close {{count}} finished tab?",
+      "closeFinishedTitle_other": "Close {{count}} finished tabs?",
+      "closeFinished_one": "Close {{count}} finished tab",
+      "closeFinished_other": "Close {{count}} finished tabs",
       "panes_one": "{{count}} pane",
       "panes_other": "{{count}} panes"
     }
