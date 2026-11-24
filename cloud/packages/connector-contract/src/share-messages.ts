@@ -59,9 +59,11 @@ export const ShareDeliveryFields = {
 // An invited email signed in to Orca: the host rewrites that invite as this account. linkedSources:
 // the services that account linked (connector_identities), by name only, never who it is there; the
 // host shows them on the person's row. Absent from an older cloud; an older host ignores it.
+// Without email: the account's linked sources changed since, for a share the host already lists as
+// that account (the teammate's next `${shares}/mine` notices). One per (share, account, sources).
 export const ShareResolvedFields = {
   ...ShareDeliveryFields,
-  email: ShareEmailSchema,
+  email: ShareEmailSchema.optional(),
   accountId: OpaqueIdSchema,
   name: Name.optional(),
   linkedSources: z.array(z.enum(CONNECTOR_CONNECT_SOURCES)).max(16).optional()

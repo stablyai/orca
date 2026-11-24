@@ -209,6 +209,22 @@ describe('invite resolved on the host', () => {
     })
   })
 
+  it('updates the linked sources of an account already on the list, from a resolve without email', async () => {
+    const account: BotShare = {
+      kind: 'account',
+      shareId: 'share-carol',
+      accountId: 'acct-carol',
+      email: 'carol@example.com',
+      addedAt: 1,
+      linkedSources: ['github']
+    }
+    const { bots, writes } = hostWith([account], [account])
+    const { email: _email, ...later } = resolved
+    const delivery = ShareResolvedDelivery.parse({ ...later, linkedSources: ['github', 'slack'] })
+    await expect(resolveBotShareInvite(bots, delivery)).resolves.toBe(true)
+    expect(writes).toEqual([[{ ...account, linkedSources: ['github', 'slack'] }]])
+  })
+
   it('is refused, writing nothing, when the invite was removed before or during the write', async () => {
     const removedBefore = hostWith([], [])
     await expect(resolveBotShareInvite(removedBefore.bots, resolved)).resolves.toBe(false)

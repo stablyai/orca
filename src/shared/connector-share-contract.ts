@@ -34,12 +34,13 @@ const isOnItsShare = (delivery: { shareId: string; conversation: { externalId: s
   delivery.conversation.externalId === delivery.shareId
 
 // An invited email signed in to Orca: the host rewrites that invite as this account, with the
-// services that account linked (Share dialog marks).
+// services that account linked (Share dialog marks). Without email: that account's linked sources
+// changed since, for its share already on the host's list.
 export const ShareResolvedDelivery = z
   .object({
     ...ShareDeliveryFields,
     kind: z.literal('share_resolved'),
-    email: BotShareEmailSchema,
+    email: BotShareEmailSchema.optional(),
     accountId: Id,
     name: Name.optional(),
     linkedSources: BotShareLinkedSourcesSchema.optional()

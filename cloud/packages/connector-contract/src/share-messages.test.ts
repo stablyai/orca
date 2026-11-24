@@ -88,6 +88,8 @@ describe('bot shares contract', () => {
     expect(ConnectorDeliverySchema.safeParse({ ...resolved, conversation: onShare }).success).toBe(true)
     const linked = { ...resolved, conversation: onShare, linkedSources: ['slack', 'github'] }
     expect(ConnectorDeliverySchema.parse(linked)).toMatchObject({ linkedSources: ['slack', 'github'] })
+    const { email: _email, ...later } = linked
+    expect(ConnectorDeliverySchema.safeParse(later).success).toBe(true)
     // Source names only.
     expect(ConnectorDeliverySchema.safeParse({ ...linked, linkedSources: ['U123'] }).success).toBe(false)
     // Another share's queue would let it pass that share's accept.

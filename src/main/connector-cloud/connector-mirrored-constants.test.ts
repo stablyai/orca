@@ -32,5 +32,9 @@ describe('mirrored connector constants', () => {
     })
     expect(ConnectorDelivery.parse(linked)).toMatchObject({ linkedSources: CLOUD_CONNECT_SOURCES })
     expect(ConnectorDelivery.parse(old)).not.toHaveProperty('linkedSources')
+    // A later change of sources, for a share the host already lists as that account: no email.
+    const { email: _email, ...later } = linked
+    expect(z.object(ShareResolvedFields).parse(later)).not.toHaveProperty('email')
+    expect(ConnectorDelivery.parse(later)).toMatchObject({ linkedSources: CLOUD_CONNECT_SOURCES })
   })
 })
