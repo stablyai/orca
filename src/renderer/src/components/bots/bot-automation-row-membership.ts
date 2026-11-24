@@ -8,7 +8,41 @@ import type { BotRowState } from './BotPanelRow'
 import { useOrcaCloudSignedOut } from './orca-cloud-signed-out'
 
 export type NormalAutomationCardRow = Extract<BotAutomationCardRow, { kind: 'automation' }>
-export type AutomationEnabledOverride = { enabled: boolean; from: number }
+/** The bot visit, Activity authority and row a Pause/Resume save was asked from. */
+export type AutomationOverrideOwner = { generation: symbol; authorityKey: string; rowKey: string }
+/** A row's own Pause/Resume result until the list re-reads; `from` is the record it changed. */
+export type AutomationEnabledOverride = {
+  enabled: boolean
+  from: number
+  owner: AutomationOverrideOwner
+}
+
+/**
+ * A save counts only for the owner that asked for it, so a re-pair (or a late reply from before one)
+ * cannot speak for the replacement's row even with the same id and timestamp.
+ */
+export function ownedOverride(
+  saved: AutomationEnabledOverride | null,
+  owner: AutomationOverrideOwner | null
+): AutomationEnabledOverride | null {
+  return saved &&
+    owner &&
+    saved.owner.generation === owner.generation &&
+    saved.owner.authorityKey === owner.authorityKey &&
+    saved.owner.rowKey === owner.rowKey
+    ? saved
+    : null
+}
+
+/** The enabled state a row shows and Delete admits with: an owned save of the record shown. */
+export function automationEnabled(
+  automation: { enabled: boolean; updatedAt: number },
+  saved: AutomationEnabledOverride | null,
+  owner: AutomationOverrideOwner | null
+): boolean {
+  const owned = ownedOverride(saved, owner)
+  return owned?.from === automation.updatedAt ? owned.enabled : automation.enabled
+}
 
 export function useBotAutomationMembership(bot: Bot, hasConnectorNeed: boolean) {
   return {

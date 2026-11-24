@@ -1,10 +1,14 @@
 // Main rotates pairing revisions during managed updates. First stale-revision refusal refreshes renderer catalog, letting revision-keyed subscribers reconnect and requests use current credentials.
 import { hasRecentUserGestureFor } from '../calls/runtime-rpc-background-read'
+import {
+  snapshotRuntimeEnvironmentRegistrations,
+  type RuntimeEnvironmentRegistration
+} from './runtime-environment-revision'
 const PAIRING_CHANGED_MESSAGE = 'Runtime environment pairing changed'
 
-type CatalogRegistration = { id: string; createdAt: number; pairingRevision?: number }
-type CatalogRefresher = () => Promise<readonly CatalogRegistration[]>
-type CatalogSample = ReadonlyMap<string, number>
+/** The registrations this read published, taken in its publishing turn. */
+type CatalogSample = ReadonlyMap<string, RuntimeEnvironmentRegistration>
+type CatalogRefresher = () => Promise<CatalogSample>
 
 let refreshCatalog: CatalogRefresher | null = null
 let inFlight: Promise<CatalogSample | null> | null = null
@@ -12,6 +16,21 @@ let trailing: Promise<CatalogSample | null> | null = null
 
 export function setRuntimeEnvironmentCatalogRefresher(refresher: CatalogRefresher | null): void {
   refreshCatalog = refresher
+}
+
+/** Installs the catalog read and the publication of what it read. */
+export function setRuntimeEnvironmentCatalogSource<T extends { id: string }>(
+  source: { list: () => Promise<readonly T[]>; publish: (rows: readonly T[]) => void } | null
+): void {
+  setRuntimeEnvironmentCatalogRefresher(
+    source &&
+      (async () => {
+        const rows = await source.list()
+        source.publish(rows)
+        // Same turn as the publication: a queued later one cannot lend recovery its registration.
+        return snapshotRuntimeEnvironmentRegistrations(rows.map(({ id }) => id))
+      })
+  )
 }
 
 export function runtimeEnvironmentPairingChangedError(): Error {
@@ -56,10 +75,7 @@ export function refreshRuntimeEnvironmentCatalogWithResult(): Promise<CatalogSam
 
 async function readCatalog(refresh: CatalogRefresher): Promise<CatalogSample | null> {
   try {
-    const environments = await refresh()
-    return new Map(
-      environments.map(({ id, pairingRevision, createdAt }) => [id, pairingRevision ?? createdAt])
-    )
+    return await refresh()
   } catch (error) {
     console.warn('[runtime-environments] Could not re-read a re-paired environment:', error)
     return null

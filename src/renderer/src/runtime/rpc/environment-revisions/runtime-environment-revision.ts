@@ -1,4 +1,4 @@
-type RuntimeEnvironmentRegistration = Readonly<{ revision: number }>
+export type RuntimeEnvironmentRegistration = Readonly<{ revision: number }>
 
 const registrations = new Map<string, RuntimeEnvironmentRegistration>()
 // Pairings proven to continue the same machine: old revision → the revision that replaced it.
@@ -105,6 +105,21 @@ export function getRuntimeEnvironmentRegistration(
   environmentId: string
 ): RuntimeEnvironmentRegistration | undefined {
   return registrations.get(environmentId)
+}
+
+/**
+ * The registrations `environmentIds` hold right now. A publisher takes this in the same turn it
+ * publishes, so a later publication (even of an equal revision after a removal) cannot lend it its identity.
+ */
+export function snapshotRuntimeEnvironmentRegistrations(
+  environmentIds: readonly string[]
+): ReadonlyMap<string, RuntimeEnvironmentRegistration> {
+  return new Map(
+    environmentIds.flatMap((id) => {
+      const registration = registrations.get(id)
+      return registration ? [[id, registration] as const] : []
+    })
+  )
 }
 
 /** Selected catalog projection also changes when a pending host key is proved at the same revision. */

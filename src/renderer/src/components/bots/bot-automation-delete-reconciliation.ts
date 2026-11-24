@@ -57,11 +57,14 @@ function waitForCatalog(
     onPublish()
     if (!finished) {
       void refreshRuntimeEnvironmentCatalogWithResult().then((sample) => {
+        // The sample is the registration its own publication installed. Anything published since
+        // (even an equal revision after a removal) is another registration and proves nothing here.
         const sampled = sample?.get(authority.environmentId)
-        const current = currentRegistration()
         finish(
-          !pairingChanged && sampled === authority.pairingRevision && current?.revision === sampled
-            ? current
+          !pairingChanged &&
+            sampled?.revision === authority.pairingRevision &&
+            sampled === currentRegistration()
+            ? sampled
             : undefined
         )
       })

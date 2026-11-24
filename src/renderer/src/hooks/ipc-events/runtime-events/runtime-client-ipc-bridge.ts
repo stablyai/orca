@@ -11,7 +11,7 @@ import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat/launch
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   refreshRuntimeEnvironmentCatalog,
-  setRuntimeEnvironmentCatalogRefresher
+  setRuntimeEnvironmentCatalogSource
 } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 import {
   applyRuntimeEnvironmentSshStateChanged,
@@ -213,12 +213,11 @@ export function registerRuntimeClientIpcBridge(
       })
   }
 
-  setRuntimeEnvironmentCatalogRefresher(async () => {
-    const environments = await window.api.runtimeEnvironments.list()
-    useAppStore.getState().setRuntimeEnvironments(environments)
-    return environments
+  setRuntimeEnvironmentCatalogSource({
+    list: () => window.api.runtimeEnvironments.list(),
+    publish: (environments) => useAppStore.getState().setRuntimeEnvironments(environments)
   })
-  unsubs.push(() => setRuntimeEnvironmentCatalogRefresher(null))
+  unsubs.push(() => setRuntimeEnvironmentCatalogSource(null))
   // `orca environment add/rm` edits the registry without any renderer request (#25251).
   const stopCatalogChanged = window.api.runtimeEnvironments?.onCatalogChanged?.(() => {
     void refreshRuntimeEnvironmentCatalog()

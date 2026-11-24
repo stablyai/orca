@@ -29,8 +29,10 @@ import {
 } from '../automations/hosts/automation-host-client'
 import type { BotAutomationCardRow } from './bot-automation-card'
 import {
+  automationEnabled,
   botAutomationMembershipState,
   type AutomationEnabledOverride,
+  type AutomationOverrideOwner,
   type BotAutomationMembership,
   type NormalAutomationCardRow
 } from './bot-automation-row-membership'
@@ -128,6 +130,8 @@ export type BotAutomationRowDeletion = {
   /** Offline or deleting. */
   disabled: boolean
   request: () => void
+  /** The visit and Activity authority showing this row; null before a read lands. */
+  owner: AutomationOverrideOwner | null
   commitSaved: (rowKey: string, saved: AutomationEnabledOverride | null) => void
 }
 
@@ -162,7 +166,8 @@ function AutomationRow({
     }
     return undefined
   }, [commitSaved, rowKey, saved])
-  const enabled = saved?.from === automation.updatedAt ? saved.enabled : automation.enabled
+  const owner = deletion?.owner ?? null
+  const enabled = automationEnabled(automation, saved, owner)
   const membershipState = botAutomationMembershipState(card, membership, t, enabled)
   const trouble = isBotRowTrouble(membershipState)
   const pending = deletion?.pending === true
@@ -174,9 +179,12 @@ function AutomationRow({
     : membershipState
   const when = botAutomationWhen(automation)
   const setEnabled = (next: boolean): void => {
+    // Owned by what showed the row when asked: a reply after a re-pair cannot speak for the new one.
+    const asked = owner
+    const from = automation.updatedAt
     setSaving(true)
     void updateAutomationForTarget(automation, { enabled: next }, botTarget(bot))
-      .then((updated) => setSaved({ enabled: updated.enabled, from: automation.updatedAt }))
+      .then((updated) => setSaved(asked ? { enabled: updated.enabled, from, owner: asked } : null))
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
       .finally(() => setSaving(false))
   }

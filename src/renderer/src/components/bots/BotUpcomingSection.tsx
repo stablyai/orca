@@ -24,12 +24,15 @@ import {
 import { UpcomingItem, type BotAutomationRowDeletion } from './BotUpcomingRows'
 import { isBotRowTrouble } from './BotPanelRow'
 import {
+  automationEnabled,
   botAutomationMembershipState,
+  ownedOverride,
   useBotAutomationMembership,
   type AutomationEnabledOverride,
+  type AutomationOverrideOwner,
   type NormalAutomationCardRow
 } from './bot-automation-row-membership'
-import { botReadAuthorityKey } from './bot-read-authority'
+import { botReadAuthorityKey, type BotReadAuthority } from './bot-read-authority'
 import type { BotAutomationDeletion } from './use-bot-automation-delete'
 import type { BotActivityWithAuthority } from './use-bot-activity'
 import {
@@ -38,6 +41,18 @@ import {
 } from './use-bot-automation-delete-focus'
 
 type DeleteTarget = Omit<BotAutomationFocusIntent, 'admittedAsTrouble' | 'saved'>
+
+function overrideOwner(route: {
+  generation: symbol
+  authority: BotReadAuthority
+  rowKey: string
+}): AutomationOverrideOwner {
+  return {
+    generation: route.generation,
+    authorityKey: botReadAuthorityKey(route.authority),
+    rowKey: route.rowKey
+  }
+}
 
 export function BotUpcomingSection({
   bot,
@@ -94,10 +109,10 @@ export function BotUpcomingSection({
   }, [membership])
   const hasTrouble = (
     card: NormalAutomationCardRow,
-    saved: AutomationEnabledOverride | null
+    saved: AutomationEnabledOverride | null,
+    owner: AutomationOverrideOwner
   ): boolean => {
-    const { automation } = card.row
-    const enabled = saved?.from === automation.updatedAt ? saved.enabled : automation.enabled
+    const enabled = automationEnabled(card.row.automation, saved, owner)
     return isBotRowTrouble(
       botAutomationMembershipState(card, membershipAtCommit.current, t, enabled)
     )
@@ -107,7 +122,7 @@ export function BotUpcomingSection({
     cards: readonly BotAutomationCardRow[]
   ): boolean => {
     const card = cards.find((row) => row.key === intent.rowKey)
-    return card?.kind === 'automation' && !hasTrouble(card, intent.saved)
+    return card?.kind === 'automation' && !hasTrouble(card, intent.saved, overrideOwner(intent))
   }
   const { section, newButton, newShown, setNewShown, follow, onCloseAutoFocus } =
     useBotAutomationDeleteFocus({
@@ -124,11 +139,13 @@ export function BotUpcomingSection({
     if (card?.kind !== 'automation') {
       return false
     }
-    const saved = savedByRow.current.get(route.rowKey) ?? null
+    // The route's authority is the current read's, so this is the owner its row shows saves for.
+    const owner = overrideOwner(route)
+    const saved = ownedOverride(savedByRow.current.get(route.rowKey) ?? null, owner)
     const intent: BotAutomationFocusIntent = {
       ...route,
       saved,
-      admittedAsTrouble: hasTrouble(card, saved)
+      admittedAsTrouble: hasTrouble(card, saved, owner)
     }
     const admission = deletion.admit(
       intent,
@@ -197,6 +214,13 @@ export function BotUpcomingSection({
       admittedAsTrouble: pending?.admittedAsTrouble ?? false,
       disabled: Boolean(pending) || deletion.offline || !deletion.authority,
       request: () => request(row),
+      owner: deletion.authority
+        ? overrideOwner({
+            generation: deletion.generation,
+            authority: deletion.authority,
+            rowKey: row.key
+          })
+        : null,
       commitSaved
     }
   }
