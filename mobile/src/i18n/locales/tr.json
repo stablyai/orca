@@ -4617,8 +4617,7 @@
         "title": "Öğe",
         "placeOf": "{{index}} / {{total}}",
         "previous": "Önceki öğe",
-        "next": "Sonraki öğe",
-        "subWhere": "Öğe {{number}} · {{chat}}"
+        "next": "Sonraki öğe"
       },
       "write": {
         "offline": "{{host}} çevrimdışı."
@@ -4627,7 +4626,6 @@
       "readFailedClosedPage": "Daha fazla kapalı öğe okunamadı.",
       "skillLimit": "Mesaj gönderilmedi. En fazla {{limit}} beceri dosyası seçip yeniden deneyin.",
       "ask": {
-        "notSentYet": "henüz gönderilmedi",
         "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın.",
         "replacedByNewer": "Daha yeni bir soruyla değiştirildi",
         "skipped": "Atlandı"

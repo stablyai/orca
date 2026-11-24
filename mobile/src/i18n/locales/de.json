@@ -4617,8 +4617,7 @@
         "title": "Element",
         "placeOf": "{{index}} von {{total}}",
         "previous": "Vorheriges Element",
-        "next": "Nächstes Element",
-        "subWhere": "Element {{number}} · {{chat}}"
+        "next": "Nächstes Element"
       },
       "write": {
         "offline": "{{host}} ist offline."
@@ -4627,7 +4626,6 @@
       "readFailedClosedPage": "Weitere geschlossene Elemente konnten nicht gelesen werden.",
       "skillLimit": "Nachricht nicht gesendet. Wähle höchstens {{limit}} Skill-Dateien aus und versuche es erneut.",
       "ask": {
-        "notSentYet": "noch nicht gesendet",
         "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann.",
         "replacedByNewer": "Durch eine neuere Frage ersetzt",
         "skipped": "Übersprungen"

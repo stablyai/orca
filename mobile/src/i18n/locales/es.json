@@ -4726,8 +4726,7 @@
         "title": "Elemento",
         "placeOf": "{{index}} de {{total}}",
         "previous": "Elemento anterior",
-        "next": "Elemento siguiente",
-        "subWhere": "Elemento {{number}} · {{chat}}"
+        "next": "Elemento siguiente"
       },
       "write": {
         "offline": "{{host}} está sin conexión."
@@ -4736,7 +4735,6 @@
       "readFailedClosedPage": "No se pudieron leer más elementos cerrados.",
       "skillLimit": "Mensaje no enviado. Selecciona como máximo {{limit}} archivos de habilidades e inténtalo de nuevo.",
       "ask": {
-        "notSentYet": "aún no enviado",
         "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde.",
         "replacedByNewer": "Sustituida por una pregunta más reciente",
         "skipped": "Omitidas"

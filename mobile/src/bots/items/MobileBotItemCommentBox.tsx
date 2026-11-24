@@ -4,15 +4,7 @@
 // question waits, "Replying to" names it, as on the desktop; its × sends the comment as one of its own.
 // The chat's field and mic: the session's dictation lands here while the box is its target. Photos
 // attach with the chat's + and thumbnails, each named [Image #N] in the words.
-import {
-  useCallback,
-  useContext,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-  type Ref
-} from 'react'
+import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { Pressable, Text, View, type HostInstance, type TextInputInstance } from 'react-native'
 import { WifiOff, X } from 'lucide-react-native'
 import type { BotItem, BotItemCommentSkill } from '../../../../src/shared/bots/bot-items'
@@ -58,14 +50,6 @@ const pickedSkills = new Map<string, readonly BotItemCommentSkill[]>()
 const NO_SKILLS: readonly BotItemCommentSkill[] = []
 const NO_FILES: readonly never[] = []
 
-export type BotItemCommentBoxHandle = {
-  /** Put `text` in the box in place of its words, to add to before sending; `plain`: as a comment
-   *  of its own, with "Replying to" hidden; else as the answer, naming the question. */
-  fill: (text: string, plain?: boolean) => void
-  /** Focus the box to answer the waiting question in your own words, naming it. */
-  answer: () => void
-}
-
 /** The agent's question the item waits on, and who asked it. */
 export type BotItemWaitingQuestion = BotItemWaitingLine & { asker: string }
 
@@ -79,8 +63,7 @@ export function MobileBotItemCommentBox({
   question = null,
   attachTo,
   onSend,
-  showToast,
-  ref
+  showToast
 }: {
   client: RpcClient | null
   hostId: string
@@ -102,7 +85,6 @@ export function MobileBotItemCommentBox({
   showToast: (message: string) => void
   /** The agent's question waiting on the owner (what is sent is the reply). */
   question?: BotItemWaitingQuestion | null
-  ref?: Ref<BotItemCommentBoxHandle>
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -235,17 +217,6 @@ export function MobileBotItemCommentBox({
       photos.clearSent(photos.images.map((image) => image.id))
     }
   }
-  useImperativeHandle(ref, () => ({
-    fill: (words, plain) => {
-      setUnmarked(plain ? (question?.id ?? null) : null)
-      setText(`${words} `)
-      input.current?.focus()
-    },
-    answer: () => {
-      setUnmarked(null)
-      input.current?.focus()
-    }
-  }))
   const notice = !online
     ? t(
         'bots.items.comment.offline',

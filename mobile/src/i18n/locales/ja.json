@@ -4698,8 +4698,7 @@
         "title": "アイテム",
         "placeOf": "{{total}} 件中 {{index}} 件目",
         "previous": "前の項目",
-        "next": "次の項目",
-        "subWhere": "項目 {{number}} · {{chat}}"
+        "next": "次の項目"
       },
       "write": {
         "offline": "{{host}} はオフラインです。"
@@ -4708,7 +4707,6 @@
       "readFailedClosedPage": "クローズ済みの項目をこれ以上読み込めませんでした。",
       "skillLimit": "メッセージは送信されませんでした。選択するスキルファイルを {{limit}} 個以内にして、もう一度お試しください。",
       "ask": {
-        "notSentYet": "まだ送信されていません",
         "replaced": "Agent が新たな質問をしました。確認してから返信してください。",
         "replacedByNewer": "新しい質問に置き換えられました",
         "skipped": "スキップ済み"
