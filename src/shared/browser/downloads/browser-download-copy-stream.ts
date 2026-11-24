@@ -5,6 +5,9 @@
  */
 export const BROWSER_DOWNLOAD_COPY_FRAME_BYTES = 256 * 1024
 export const BROWSER_DOWNLOAD_COPY_WINDOW_BYTES = 8 * BROWSER_DOWNLOAD_COPY_FRAME_BYTES
+// Leads every file frame: a payload starting like a compressed transport frame (0x7a) must not be
+// read as one.
+export const BROWSER_DOWNLOAD_COPY_FRAME_KIND = 0x64
 
 /** JSON events around the binary frames: the size first, then `end` once every byte is acked. */
 export type BrowserDownloadCopyStreamEvent = { type: 'start'; size: number } | { type: 'end' }

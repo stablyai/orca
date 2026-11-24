@@ -1,6 +1,7 @@
 import type { FileHandle } from 'node:fs/promises'
 import {
   BROWSER_DOWNLOAD_COPY_FRAME_BYTES,
+  BROWSER_DOWNLOAD_COPY_FRAME_KIND,
   BROWSER_DOWNLOAD_COPY_WINDOW_BYTES,
   decodeBrowserDownloadCopyAck,
   type BrowserDownloadCopyStreamEvent
@@ -75,9 +76,11 @@ export async function streamBrowserDownloadCopy(
   }
 
   const frameCount = BROWSER_DOWNLOAD_COPY_WINDOW_BYTES / BROWSER_DOWNLOAD_COPY_FRAME_BYTES
-  const buffers = Array.from({ length: frameCount }, () =>
-    Buffer.allocUnsafe(BROWSER_DOWNLOAD_COPY_FRAME_BYTES)
-  )
+  const buffers = Array.from({ length: frameCount }, () => {
+    const buffer = Buffer.allocUnsafe(1 + BROWSER_DOWNLOAD_COPY_FRAME_BYTES)
+    buffer[0] = BROWSER_DOWNLOAD_COPY_FRAME_KIND
+    return buffer
+  })
   let sent = 0
   try {
     emit({ type: 'start', size })
@@ -88,11 +91,11 @@ export async function streamBrowserDownloadCopy(
       )
       const buffer = buffers[index % frameCount]!
       const length = Math.min(BROWSER_DOWNLOAD_COPY_FRAME_BYTES, size - sent)
-      const { bytesRead } = await handle.read(buffer, 0, length, sent)
+      const { bytesRead } = await handle.read(buffer, 1, length, sent)
       if (bytesRead !== length) {
         throw new BrowserError('browser_error', 'The download could not be read on the server.')
       }
-      if (sendBinary(buffer.subarray(0, length)) === false) {
+      if (sendBinary(buffer.subarray(0, 1 + length)) === false) {
         throw new BrowserError('browser_error', 'The connection to the desktop closed.')
       }
       sent += length

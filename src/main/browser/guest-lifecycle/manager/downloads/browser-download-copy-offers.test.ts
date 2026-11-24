@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  BROWSER_DOWNLOAD_COPY_FRAME_KIND,
   BROWSER_DOWNLOAD_COPY_WINDOW_BYTES,
   encodeBrowserDownloadCopyAck
 } from '../../../../../shared/browser/downloads/browser-download-copy-stream'
@@ -57,11 +58,12 @@ describe('browser download copy offers', () => {
         return () => {}
       },
       sendBinary: (frame) => {
-        received.push(Buffer.from(frame))
+        expect(frame[0]).toBe(BROWSER_DOWNLOAD_COPY_FRAME_KIND)
+        received.push(Buffer.from(frame.subarray(1)))
         const total = received.reduce((n, b) => n + b.length, 0)
         maxAhead = Math.max(maxAhead, total - written)
         setImmediate(() => {
-          written += frame.byteLength
+          written += frame.byteLength - 1
           onAck(encodeBrowserDownloadCopyAck(written))
         })
         return true

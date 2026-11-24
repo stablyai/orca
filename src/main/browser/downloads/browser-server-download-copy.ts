@@ -1,6 +1,8 @@
 import { open, type FileHandle } from 'node:fs/promises'
 import type { BrowserServerDownloadCopyArgs } from '../../../shared/browser/downloads/browser-server-download-copy'
 import {
+  BROWSER_DOWNLOAD_COPY_FRAME_BYTES,
+  BROWSER_DOWNLOAD_COPY_FRAME_KIND,
   BROWSER_DOWNLOAD_COPY_WINDOW_BYTES,
   encodeBrowserDownloadCopyAck,
   readBrowserDownloadCopyStreamEvent
@@ -13,6 +15,7 @@ import {
 } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import { runtimeEnvironmentRevisionFailure } from '../../ipc/runtime-environments/requests/runtime-environment-revision-guard'
 import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/catalog/runtime-environment-registry-root'
+import { onRuntimeEnvironmentTransportGenerationRetired } from '../../ipc/runtime-environments/connections/runtime-environment-transport-generation'
 import {
   cleanupLocalTransferPath,
   createSiblingTransferPath,
@@ -45,6 +48,12 @@ export async function copyBrowserServerDownloadHere(
   const controller = new AbortController()
   runningCopies.set(copyId, controller)
   const signal = AbortSignal.any([controller.signal, rendererGone])
+  // Removing or re-pairing the server retires its transport; this copy's socket goes with it.
+  const stopRetirement = onRuntimeEnvironmentTransportGenerationRetired((retired) => {
+    if (retired === environmentId) {
+      controller.abort(new Error('The connection to the server changed. Download it again.'))
+    }
+  })
 
   let reservationKey: string | null = null
   const retryReservationKeys: string[] = []
@@ -88,20 +97,26 @@ export async function copyBrowserServerDownloadHere(
           resolve()
         }
       }
+      const abortReason = (): Error =>
+        signal.reason instanceof Error ? signal.reason : new Error('Canceled.')
       if (signal.aborted) {
-        fail(new Error('Canceled.'))
+        fail(abortReason())
         return
       }
-      signal.addEventListener('abort', () => fail(new Error('Canceled.')), { once: true })
-      const onBinary = (bytes: Uint8Array): void => {
+      signal.addEventListener('abort', () => fail(abortReason()), { once: true })
+      const onBinary = (frame: Uint8Array): void => {
+        // Every frame but the last is full, so at most a window of writes ever waits here.
+        const bytes = frame.subarray(1)
+        const expected =
+          size === null ? 0 : Math.min(BROWSER_DOWNLOAD_COPY_FRAME_BYTES, size - received)
         received += bytes.byteLength
-        // The server sends nothing before its size, past it, or more than a window ahead.
         if (
-          size === null ||
-          received > size ||
+          frame[0] !== BROWSER_DOWNLOAD_COPY_FRAME_KIND ||
+          expected === 0 ||
+          bytes.byteLength !== expected ||
           received - written > BROWSER_DOWNLOAD_COPY_WINDOW_BYTES
         ) {
-          fail(new Error('The server sent more than the file.'))
+          fail(new Error('The server sent an unexpected part of the file.'))
           return
         }
         writes = writes.then(async () => {
@@ -195,6 +210,7 @@ export async function copyBrowserServerDownloadHere(
     saved = true
     return { destinationPath }
   } finally {
+    stopRetirement()
     runningCopies.delete(copyId)
     stream.subscription?.close()
     for (const key of [reservationKey, ...retryReservationKeys]) {
