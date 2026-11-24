@@ -1,7 +1,7 @@
 export const REMOTE_CLIENT_WORKTREE_RECONCILE_INTERVAL_MS = 60_000
 export const REMOTE_CLIENT_WORKTREE_PROBE_TIMEOUT_MS = 5_000
-// A hung mount strands one libuv thread per abandoned probe, so only a bounded number may pile up per repo.
-const MAX_ABANDONED_PROBES_PER_REPO = 2
+// A hung mount strands libuv threads (the pool has 4) per abandoned probe, so a repo is not re-probed until its abandoned probe settles.
+const MAX_ABANDONED_PROBES_PER_REPO = 1
 
 type RemoteClientWorktreeReconcileDeps<R extends { id: string }> = {
   /** Local Git repos whose admin dir this process can read without waking a distro or a remote host. */

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -13,8 +13,14 @@ async function makeRepo(): Promise<string> {
   return root
 }
 
-// Filesystem timestamps are coarse on some platforms.
-const pause = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 30))
+// Fixed, distinct timestamps stand in for a clock that advances between probes.
+let clock = 1_700_000_000
+async function advanceClock(repo: string): Promise<void> {
+  clock += 10
+  for (const dir of [path.join(repo, '.git', 'worktrees'), path.join(repo, '.git')]) {
+    await utimes(dir, clock, clock).catch(() => {})
+  }
+}
 
 describe('readRepoWorktreeReconcileProbe', () => {
   afterEach(async () => {
@@ -23,12 +29,13 @@ describe('readRepoWorktreeReconcileProbe', () => {
 
   it('differs after a worktree is added and removed when none existed', async () => {
     const repo = await makeRepo()
+    await advanceClock(repo)
     const before = await readRepoWorktreeReconcileProbe(repo)
-    await pause()
+    await advanceClock(repo)
     await mkdir(path.join(repo, '.git', 'worktrees', 'tmp'), { recursive: true })
-    await pause()
+    await advanceClock(repo)
     await rm(path.join(repo, '.git', 'worktrees'), { recursive: true })
-    await pause()
+    await advanceClock(repo)
     const after = await readRepoWorktreeReconcileProbe(repo)
     expect(before).not.toBeNull()
     expect(after).not.toBe(before)
@@ -37,13 +44,13 @@ describe('readRepoWorktreeReconcileProbe', () => {
   it('differs after a worktree is added and removed beside an existing one', async () => {
     const repo = await makeRepo()
     await mkdir(path.join(repo, '.git', 'worktrees', 'keep'), { recursive: true })
-    await pause()
+    await advanceClock(repo)
     const before = await readRepoWorktreeReconcileProbe(repo)
-    await pause()
+    await advanceClock(repo)
     await mkdir(path.join(repo, '.git', 'worktrees', 'tmp'))
-    await pause()
+    await advanceClock(repo)
     await rm(path.join(repo, '.git', 'worktrees', 'tmp'), { recursive: true })
-    await pause()
+    await advanceClock(repo)
     const after = await readRepoWorktreeReconcileProbe(repo)
     expect(after).not.toBe(before)
   })

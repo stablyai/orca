@@ -154,7 +154,7 @@ describe('RemoteClientWorktreeReconcile', () => {
     expect(notifyChanged).toHaveBeenCalledExactlyOnceWith('repo-1')
   })
 
-  it('frees a wedged repo after the timeout and drops the late answer', async () => {
+  it('stops waiting on a wedged repo, does not stack probes behind it, and drops its late answer', async () => {
     vi.useFakeTimers()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const lateAnswers: ((value: string) => void)[] = []
@@ -173,12 +173,13 @@ describe('RemoteClientWorktreeReconcile', () => {
     })
 
     reconcile.retain()
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(probe).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(probe).toHaveBeenCalledTimes(1)
 
     lateAnswers[0]('stale-from-hung-mount')
     await vi.advanceTimersByTimeAsync(1000)
-    expect(probe).toHaveBeenCalledTimes(3)
+    expect(probe).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1000)
     expect(notifyChanged).not.toHaveBeenCalled()
   })
 })
