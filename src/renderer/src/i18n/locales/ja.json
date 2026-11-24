@@ -1733,12 +1733,16 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "構造化 Agent セッションはまだ利用できません。しばらくしてから再試行してください。",
         "gone": "このチャットはこのホスト上に存在しないため、ここで再度開くことはできません。",
         "hostCannotOpen": "Orca が更新されるまで、このチャットを再度開くことはできません。",
         "worktreeDeleted": "ワークツリーは削除されました。",
         "projectRemoved": "プロジェクトは Orca から削除されました。",
-        "folderWorkspaceRemoved": "フォルダーワークスペースは削除されました。"
+        "folderWorkspaceRemoved": "フォルダーワークスペースは削除されました。",
+        "chatStillStarting": "チャットは起動中です。後でもう一度お試しください。",
+        "chatOpenFailed": "このチャットを開けませんでした。",
+        "chatOpenRetry": "再試行",
+        "chatOpenShowDetails": "詳細を表示",
+        "chatOpenHideDetails": "詳細を非表示"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "プロビジョニングされたルートレシピはスパースチェックアウトをサポートしません。"
@@ -21549,7 +21553,6 @@
       "showDetails": "{{name}} のタスクと最新のメッセージを表示",
       "task": "タスク",
       "openFailed": "{{name}}: {{detail}}",
-      "chatUnavailable": "このホストではチャットを開けません。もう一度お試しください。",
       "terminalExited": "このターミナルは終了しています。",
       "openOnHost": "{{host}} でこの Agent を開いてください。",
       "cannotLocate": "このホストではこの Agent が見つかりません。もう一度お試しください。"

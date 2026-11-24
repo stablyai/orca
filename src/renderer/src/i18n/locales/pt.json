@@ -3164,12 +3164,16 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "A sessão estruturada do agente ainda não está disponível. Tente novamente em um momento.",
         "gone": "Este chat não está mais neste host, então não pode ser reaberto aqui.",
         "hostCannotOpen": "Este chat não pode ser reaberto até que o Orca seja atualizado.",
         "worktreeDeleted": "A worktree foi excluída.",
         "projectRemoved": "O projeto foi removido do Orca.",
-        "folderWorkspaceRemoved": "O espaço de trabalho de pasta foi removido."
+        "folderWorkspaceRemoved": "O espaço de trabalho de pasta foi removido.",
+        "chatStillStarting": "O chat ainda está iniciando. Tente em breve.",
+        "chatOpenFailed": "Não foi possível abrir este chat.",
+        "chatOpenRetry": "Tentar novamente",
+        "chatOpenShowDetails": "Mostrar detalhes",
+        "chatOpenHideDetails": "Ocultar detalhes"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Receitas de raiz provisionada não suportam sparse checkout."
@@ -22864,7 +22868,6 @@
       "copyAddress": "Copiar endereço",
       "showDetails": "Mostrar a tarefa e a última mensagem de {{name}}",
       "task": "Tarefa",
-      "chatUnavailable": "Este host não pode abrir o chat. Tente novamente.",
       "terminalExited": "Este terminal foi encerrado.",
       "openOnHost": "Abra este agente em {{host}}.",
       "cannotLocate": "Este host não pode localizar este agente. Tente novamente.",

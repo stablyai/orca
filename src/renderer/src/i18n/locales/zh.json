@@ -2151,14 +2151,18 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "结构化代理会话尚不可用，请稍后重试",
         "gone": "此聊天已不在这台主机上，无法在此重新打开",
         "hostCannotOpen": "更新 Orca 后才能重新打开此聊天",
         "notLocatedNamed": "Orca 找不到 {{agent}} 的运行位置，因此无法打开它",
         "notLocated": "Orca 找不到此智能体的运行位置，因此无法打开它",
         "worktreeDeleted": "工作树已删除。",
         "projectRemoved": "项目已从 Orca 中移除。",
-        "folderWorkspaceRemoved": "文件夹工作区已移除。"
+        "folderWorkspaceRemoved": "文件夹工作区已移除。",
+        "chatStillStarting": "此聊天仍在启动，请稍后重试",
+        "chatOpenFailed": "无法打开此聊天",
+        "chatOpenRetry": "重试",
+        "chatOpenShowDetails": "显示详情",
+        "chatOpenHideDetails": "隐藏详情"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root 配方不支持稀疏检出"
@@ -22947,7 +22951,6 @@
       "showDetails": "显示 {{name}} 的任务和最新消息",
       "task": "任务",
       "openFailed": "{{name}}：{{detail}}",
-      "chatUnavailable": "此主机无法打开该聊天，请重试",
       "terminalExited": "此终端已退出",
       "openOnHost": "请在 {{host}} 上打开此智能体",
       "cannotLocate": "此主机找不到此智能体，请重试",

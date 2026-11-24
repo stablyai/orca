@@ -1928,12 +1928,16 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "結構化代理程式工作階段尚不可用。稍後重試。",
         "gone": "此聊天不再在此主機上，因此無法在此處重新開啟。",
         "hostCannotOpen": "在 Orca 更新之前，無法重新開啟此聊天。",
         "worktreeDeleted": "工作樹已刪除。",
         "projectRemoved": "專案已從 Orca 移除。",
-        "folderWorkspaceRemoved": "資料夾工作區已移除。"
+        "folderWorkspaceRemoved": "資料夾工作區已移除。",
+        "chatStillStarting": "此聊天仍在啟動中。請稍後再試。",
+        "chatOpenFailed": "無法開啟此聊天。",
+        "chatOpenRetry": "重試",
+        "chatOpenShowDetails": "顯示詳細資料",
+        "chatOpenHideDetails": "隱藏詳細資料"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "使用已佈建根目錄的配方不支援稀疏檢出。"

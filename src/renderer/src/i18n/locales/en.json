@@ -2872,14 +2872,18 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "The structured agent session is not available yet. Retry in a moment.",
         "gone": "This chat is no longer on this host, so it cannot be reopened here.",
         "hostCannotOpen": "This chat can't be reopened until Orca is updated.",
         "notLocatedNamed": "Orca can't find where {{agent}} is running, so it can't open it.",
         "notLocated": "Orca can't find where this agent is running, so it can't open it.",
         "worktreeDeleted": "The worktree was deleted.",
         "projectRemoved": "The project was removed from Orca.",
-        "folderWorkspaceRemoved": "The folder workspace was removed."
+        "folderWorkspaceRemoved": "The folder workspace was removed.",
+        "chatStillStarting": "This chat is still starting. Try again in a moment.",
+        "chatOpenFailed": "Couldn't open this chat.",
+        "chatOpenRetry": "Retry",
+        "chatOpenShowDetails": "Show details",
+        "chatOpenHideDetails": "Hide details"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
@@ -24040,7 +24044,6 @@
       "showDetails": "Show {{name}}'s task and reply",
       "task": "Task",
       "openFailed": "{{name}}: {{detail}}",
-      "chatUnavailable": "This host cannot open the chat. Try again.",
       "terminalExited": "This terminal has exited.",
       "openOnHost": "Open this agent on {{host}}.",
       "cannotLocate": "This host cannot locate this agent. Try again.",
