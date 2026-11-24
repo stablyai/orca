@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
-import { TEST_REPO } from '../../store/repos/repo.test-fixture'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import { TEST_REPO } from '../../../store/repos/repo.test-fixture'
 import {
   isSetupScriptPromptActionable,
   type SetupScriptPromptState
