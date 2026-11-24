@@ -22,6 +22,7 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -375,6 +376,10 @@ struct proc_row {
 static void row_from_kinfo(const struct kinfo_proc *k, struct proc_row *row) {
     row->pid = k->kp_proc.p_pid;
     row->ppid = k->kp_eproc.e_ppid;
+    // Attaching a debugger reparents its target to it; the parent it was born to is kept aside.
+    if (k->kp_proc.p_flag & P_TRACED) {
+        row->ppid = k->kp_proc.p_oppid > 0 ? k->kp_proc.p_oppid : 0;
+    }
     row->pgid = k->kp_eproc.e_pgid;
     row->uid = k->kp_eproc.e_ucred.cr_uid;
     row->start = (long long)k->kp_proc.p_starttime.tv_sec * 1000000LL +
@@ -628,6 +633,125 @@ static struct proc_row *read_table(size_t *count) {
     *count = n;
     return rows;
 }
+
+static int compare_pid(const void *a, const void *b) {
+    pid_t left = *(const pid_t *)a;
+    pid_t right = *(const pid_t *)b;
+    return (left > right) - (left < right);
+}
+
+static int append_pid(pid_t **pids, size_t *n, size_t *capacity, long pid) {
+    if (pid <= 0 || pid > INT_MAX) {
+        return -1;
+    }
+    if (*n == *capacity) {
+        size_t grown_capacity = *capacity > 0 ? *capacity * 2 : 64;
+        pid_t *grown = realloc(*pids, grown_capacity * sizeof **pids);
+        if (grown == NULL) {
+            return -1;
+        }
+        *pids = grown;
+        *capacity = grown_capacity;
+    }
+    (*pids)[(*n)++] = (pid_t)pid;
+    return 0;
+}
+
+// Appends the children of each of pid's threads. 0 read (or pid gone), 1 a list was hidden,
+// -1 failed.
+static int append_children(pid_t pid, pid_t **pids, size_t *n, size_t *capacity) {
+    char path[64];
+    snprintf(path, sizeof path, "/proc/%ld/task", (long)pid);
+    DIR *tasks = opendir(path);
+    if (tasks == NULL) {
+        return errno == ENOENT || errno == ESRCH ? 0 : errno == EACCES || errno == EPERM ? 1 : -1;
+    }
+    int result = 0;
+    struct dirent *entry;
+    for (errno = 0; result >= 0 && (entry = readdir(tasks)) != NULL; errno = 0) {
+        unsigned tid;
+        if (parse_ms(entry->d_name, INT_MAX, &tid) != 0) {
+            continue;
+        }
+        snprintf(path, sizeof path, "/proc/%ld/task/%u/children", (long)pid, tid);
+        FILE *children = fopen(path, "re");
+        if (children == NULL) {
+            if (errno == EACCES || errno == EPERM) {
+                result = 1;
+            } else if (errno != ENOENT && errno != ESRCH) {
+                result = -1;
+            }
+            continue;
+        }
+        long child;
+        while (result >= 0 && fscanf(children, "%ld", &child) == 1) {
+            if (append_pid(pids, n, capacity, child) != 0) {
+                result = -1;
+            }
+        }
+        if (ferror(children)) {
+            result = -1;
+        }
+        fclose(children);
+    }
+    if (result >= 0 && errno != 0) {
+        result = -1;
+    }
+    closedir(tasks);
+    return result;
+}
+
+// Reads the subreaper and its descendants through each thread's children list, so the cost follows
+// the chat's tree rather than the host. A child missed while its parent exits is adopted by the
+// subreaper, whose list the absence proof reads. Sets no_lists when the kernel has no such lists.
+static struct proc_row *read_tree_table(pid_t reaper, size_t *count, int *no_lists) {
+    table_has_hidden_row = 0;
+    char path[64];
+    snprintf(path, sizeof path, "/proc/%ld/task/%ld/children", (long)reaper, (long)reaper);
+    if (access(path, R_OK) != 0) {
+        *no_lists = errno == ENOENT;
+        return NULL;
+    }
+    pid_t *pids = NULL;
+    size_t n = 0;
+    size_t capacity = 0;
+    struct proc_row *rows = NULL;
+    int failed = append_pid(&pids, &n, &capacity, reaper) != 0;
+    // A PID reused mid-walk could list a process twice; the cap bounds any such repetition.
+    for (size_t i = 0; !failed && i < n; i++) {
+        int got = append_children(pids[i], &pids, &n, &capacity);
+        failed = got < 0 || n > (size_t)INT_MAX / 4;
+        if (got == 1) {
+            table_has_hidden_row = 1;
+        }
+    }
+    if (!failed) {
+        qsort(pids, n, sizeof *pids, compare_pid);
+        rows = malloc((n > 0 ? n : 1) * sizeof *rows);
+        failed = rows == NULL;
+    }
+    size_t kept = 0;
+    for (size_t i = 0; !failed && i < n; i++) {
+        if (i > 0 && pids[i] == pids[i - 1]) {
+            continue;
+        }
+        int found = read_row(pids[i], &rows[kept]);
+        if (found < 0) {
+            failed = 1;
+        } else if (found == 2) {
+            table_has_hidden_row = 1;
+        } else if (found > 0) {
+            kept++;
+        }
+    }
+    free(pids);
+    if (failed) {
+        free(rows);
+        return NULL;
+    }
+    *count = kept;
+    return rows;
+}
 #endif
 
 #if defined(__APPLE__) || defined(__linux__)
@@ -651,9 +775,6 @@ struct tree_scan {
     size_t n;
     unsigned char *state;
     size_t *chain;
-    pid_t *sids;
-    size_t sid_count;
-    size_t sid_sorted;
     int leader_alive;
 };
 
@@ -671,29 +792,6 @@ static int tagged_once(struct watcher *w, const struct proc_row *row) {
     }
     return tagged == 1;
 }
-
-static int compare_sid(const void *a, const void *b) {
-    pid_t left = *(const pid_t *)a;
-    pid_t right = *(const pid_t *)b;
-    return (left > right) - (left < right);
-}
-
-static int member_session(const struct tree_scan *scan, pid_t sid) {
-    return bsearch(&sid, scan->sids, scan->sid_sorted, sizeof *scan->sids, compare_sid) != NULL;
-}
-
-// Sorts and dedupes the sessions after a round's appends, keeping member_session a binary search.
-static void settle_member_sessions(struct tree_scan *scan) {
-    qsort(scan->sids, scan->sid_count, sizeof *scan->sids, compare_sid);
-    size_t kept = 0;
-    for (size_t i = 0; i < scan->sid_count; i++) {
-        if (kept == 0 || scan->sids[kept - 1] != scan->sids[i]) {
-            scan->sids[kept++] = scan->sids[i];
-        }
-    }
-    scan->sid_count = kept;
-    scan->sid_sorted = kept;
-}
 #endif
 
 // The row's process still holds that PID, so whatever was read about it since the row is its own.
@@ -704,37 +802,14 @@ static int same_identity(const struct proc_row *row) {
 
 enum { TREE_UNKNOWN, TREE_ANCESTRY, TREE_OUTSIDE, TREE_TAGGED };
 
-// TREE_ANCESTRY: kernel parent links or a proven session lead to the CLI. TREE_TAGGED: a launchd
-// orphan known only by the tag, which admits itself and its live descendants but never its
-// session, since a tag alone does not prove who else shares it.
-static int tree_root(struct watcher *w, const struct tree_scan *scan, const struct proc_row *row) {
-#if defined(__linux__)
-    (void)scan;
-    return row->ppid == w->reaper ? TREE_ANCESTRY : TREE_UNKNOWN;
-#else
-    if (scan->leader_alive && row->ppid == w->group) {
-        return TREE_ANCESTRY;
-    }
-    if (row->ppid != 1 || row->uid != geteuid() || row->start < w->leader_start || row->zombie) {
-        return TREE_UNKNOWN;
-    }
-    pid_t sid = getsid(row->pid);
-    // A member an earlier sweep proved vouches for its later children, though not for its session.
-    int kind = sid > 0 && member_session(scan, sid)                   ? TREE_ANCESTRY
-               : identity_find(&w->known, row->pid, row->start) != NULL ? TREE_TAGGED
-               : tagged_once(w, row)                                   ? TREE_TAGGED
-                                                                       : TREE_UNKNOWN;
-    return kind != TREE_UNKNOWN && same_identity(row) ? kind : TREE_UNKNOWN;
-#endif
-}
-
 static int tree_member(unsigned char state) {
     return state == TREE_ANCESTRY || state == TREE_TAGGED;
 }
 
-// Resolved once along each ancestor chain; descendants take their root's kind. A stale row is
-// neither a member nor a parent.
-static void resolve_members(struct watcher *w, struct tree_scan *scan) {
+#if defined(__linux__)
+// Resolved once along each ancestor chain; a row is a member if its chain reaches the subreaper.
+// A stale row is neither a member nor a parent.
+static int resolve_members(struct watcher *w, struct tree_scan *scan) {
     pid_t self = getpid();
     memset(scan->state, 0, scan->n);
     for (size_t i = 0; i < scan->n; i++) {
@@ -747,9 +822,8 @@ static void resolve_members(struct watcher *w, struct tree_scan *scan) {
             if (row->stale || row->pid == self || row->pid == w->reaper || row->pid <= 1) {
                 break;
             }
-            int root = tree_root(w, scan, row);
-            if (root != TREE_UNKNOWN) {
-                verdict = (unsigned char)root;
+            if (row->ppid == w->reaper) {
+                verdict = TREE_ANCESTRY;
                 break;
             }
             const struct proc_row *parent = find_row(scan->rows, scan->n, row->ppid);
@@ -765,34 +839,205 @@ static void resolve_members(struct watcher *w, struct tree_scan *scan) {
             scan->state[scan->chain[d]] = verdict;
         }
     }
+    return 0;
+}
+#else
+#define NO_TOP SIZE_MAX
+#define UNRESOLVED_TOP (SIZE_MAX - 1)
+
+// A launchd orphan that may head part of the tree, keyed by its session.
+struct session_root {
+    pid_t sid;
+    size_t row;
+    int opened;
+};
+
+struct launchd_tree {
+    size_t *top;
+    size_t *start;
+    size_t *order;
+    size_t *queue;
+    size_t queued;
+    struct session_root *roots;
+    size_t root_count;
+};
+
+static int compare_session_root(const void *a, const void *b) {
+    pid_t left = ((const struct session_root *)a)->sid;
+    pid_t right = ((const struct session_root *)b)->sid;
+    return (left > right) - (left < right);
 }
 
-#if defined(__APPLE__)
+// A row's top is its nearest ancestor, or itself, that is a child of the live leader or of launchd;
+// rows under a top take its kind. Memoised, so the table is walked once.
+static size_t row_top(struct watcher *w, struct tree_scan *scan, size_t *top, size_t i) {
+    pid_t self = getpid();
+    size_t depth = 0;
+    size_t at = i;
+    size_t found = NO_TOP;
+    while (top[at] == UNRESOLVED_TOP && depth < scan->n) {
+        scan->chain[depth++] = at;
+        const struct proc_row *row = &scan->rows[at];
+        if (row->stale || row->pid == self || row->pid == w->reaper || row->pid <= 1) {
+            break;
+        }
+        if ((scan->leader_alive && row->ppid == w->group) || row->ppid == 1) {
+            found = at;
+            break;
+        }
+        const struct proc_row *parent = find_row(scan->rows, scan->n, row->ppid);
+        if (parent == NULL) {
+            break;
+        }
+        at = (size_t)(parent - scan->rows);
+    }
+    if (top[at] != UNRESOLVED_TOP) {
+        found = top[at];
+    }
+    for (size_t d = 0; d < depth; d++) {
+        top[scan->chain[d]] = found;
+    }
+    return found;
+}
+
+// Admits every launchd orphan in a session a member holds, the first time that session is seen.
 // Only a session read between two identity checks of a member is that member's session.
-static void collect_member_sessions(struct watcher *w, struct tree_scan *scan) {
-    scan->sid_count = 0;
-    scan->sids[scan->sid_count++] = w->group;
-    scan->sid_sorted = 1;
-    for (;;) {
-        resolve_members(w, scan);
-        size_t before = scan->sid_count;
-        for (size_t i = 0; i < scan->n; i++) {
+static void open_session(struct tree_scan *scan, struct launchd_tree *t, pid_t sid) {
+    struct session_root key = {.sid = sid};
+    size_t low = 0;
+    size_t high = t->root_count;
+    while (low < high) {
+        size_t mid = low + (high - low) / 2;
+        if (compare_session_root(&t->roots[mid], &key) < 0) {
+            low = mid + 1;
+        } else {
+            high = mid;
+        }
+    }
+    if (low == t->root_count || t->roots[low].sid != sid || t->roots[low].opened) {
+        return;
+    }
+    t->roots[low].opened = 1;
+    for (size_t k = low; k < t->root_count && t->roots[k].sid == sid; k++) {
+        size_t row = t->roots[k].row;
+        if (scan->state[row] == TREE_OUTSIDE) {
+            // A root that changed identity is left out, as a reused PID proves nothing.
+            scan->state[row] = same_identity(&scan->rows[row]) ? TREE_ANCESTRY : TREE_UNKNOWN;
+            if (scan->state[row] == TREE_ANCESTRY) {
+                t->queue[t->queued++] = row;
+            }
+        }
+    }
+}
+
+static int session_unopened(const struct launchd_tree *t, pid_t sid) {
+    struct session_root key = {.sid = sid};
+    const struct session_root *hit =
+        bsearch(&key, t->roots, t->root_count, sizeof *t->roots, compare_session_root);
+    if (hit == NULL) {
+        return 0;
+    }
+    // bsearch may land anywhere in the run; the run's first entry carries the flag.
+    while (hit > t->roots && hit[-1].sid == sid) {
+        hit--;
+    }
+    return !hit->opened;
+}
+
+// Admits rows top by top: the leader's children, then each launchd orphan in a member's session,
+// whose members may open further sessions; tops left over are admitted only by the tag or an
+// earlier proof, which never vouch for their session. Each row and each session is visited once.
+static int resolve_members(struct watcher *w, struct tree_scan *scan) {
+    size_t n = scan->n;
+    size_t slots = n > 0 ? n : 1;
+    struct launchd_tree t = {
+        .top = malloc(slots * sizeof *t.top),
+        .start = calloc(n + 1, sizeof *t.start),
+        .order = malloc(slots * sizeof *t.order),
+        .queue = malloc(slots * sizeof *t.queue),
+        .roots = malloc(slots * sizeof *t.roots),
+    };
+    int result = -1;
+    if (t.top == NULL || t.start == NULL || t.order == NULL || t.queue == NULL || t.roots == NULL) {
+        goto done;
+    }
+    for (size_t i = 0; i < n; i++) {
+        t.top[i] = UNRESOLVED_TOP;
+        scan->state[i] = TREE_OUTSIDE;
+    }
+    for (size_t i = 0; i < n; i++) {
+        size_t top = row_top(w, scan, t.top, i);
+        if (top != NO_TOP) {
+            t.start[top + 1]++;
+        }
+    }
+    for (size_t i = 0; i < n; i++) {
+        t.start[i + 1] += t.start[i];
+    }
+    // order lists each top's rows contiguously; queue serves as the fill cursor until it is used.
+    memcpy(t.queue, t.start, n * sizeof *t.queue);
+    for (size_t i = 0; i < n; i++) {
+        if (t.top[i] != NO_TOP) {
+            t.order[t.queue[t.top[i]]++] = i;
+        }
+    }
+    for (size_t i = 0; i < n; i++) {
+        const struct proc_row *row = &scan->rows[i];
+        if (t.top[i] != i) {
+            continue;
+        }
+        if (scan->leader_alive && row->ppid == w->group) {
+            scan->state[i] = TREE_ANCESTRY;
+            t.queue[t.queued++] = i;
+        } else if (row->uid == geteuid() && row->start >= w->leader_start && !row->zombie) {
+            pid_t sid = getsid(row->pid);
+            t.roots[t.root_count++] = (struct session_root){.sid = sid > 0 ? sid : 0, .row = i};
+        }
+    }
+    qsort(t.roots, t.root_count, sizeof *t.roots, compare_session_root);
+    open_session(scan, &t, w->group);
+    for (size_t head = 0; head < t.queued; head++) {
+        size_t top = t.queue[head];
+        for (size_t k = t.start[top]; k < t.start[top + 1]; k++) {
+            size_t i = t.order[k];
             const struct proc_row *row = &scan->rows[i];
-            if (scan->state[i] != TREE_ANCESTRY || row->zombie) {
+            scan->state[i] = TREE_ANCESTRY;
+            if (row->zombie) {
                 continue;
             }
             pid_t sid = getsid(row->pid);
-            if (sid > 0 && !member_session(scan, sid) && scan->sid_count <= scan->n &&
-                    same_identity(row)) {
-                scan->sids[scan->sid_count++] = sid;
+            if (sid > 0 && session_unopened(&t, sid) && same_identity(row)) {
+                open_session(scan, &t, sid);
             }
         }
-        // member_session sees only the sorted prefix, so a duplicate appended here is removed now.
-        settle_member_sessions(scan);
-        if (scan->sid_count == before) {
-            return;
+    }
+    for (size_t k = 0; k < t.root_count; k++) {
+        size_t top = t.roots[k].row;
+        const struct proc_row *row = &scan->rows[top];
+        if (scan->state[top] != TREE_OUTSIDE) {
+            continue;
+        }
+        // A member an earlier sweep proved vouches for its later children, though not its session.
+        int tagged = identity_find(&w->known, row->pid, row->start) != NULL || tagged_once(w, row);
+        if (tagged && same_identity(row)) {
+            for (size_t j = t.start[top]; j < t.start[top + 1]; j++) {
+                scan->state[t.order[j]] = TREE_TAGGED;
+            }
         }
     }
+    for (size_t i = 0; i < n; i++) {
+        if (scan->state[i] == TREE_UNKNOWN) {
+            scan->state[i] = TREE_OUTSIDE;
+        }
+    }
+    result = 0;
+done:
+    free(t.top);
+    free(t.start);
+    free(t.order);
+    free(t.queue);
+    free(t.roots);
+    return result;
 }
 #endif
 
@@ -990,7 +1235,15 @@ static int sweep_once(struct watcher *w, int signal_number) {
         return TREE_UNPROVABLE;
     }
 #endif
+#if defined(__linux__)
+    int no_lists = 0;
+    scan.rows = read_tree_table(w->reaper, &scan.n, &no_lists);
+    if (no_lists) {
+        scan.rows = read_table(&scan.n);
+    }
+#else
     scan.rows = read_table(&scan.n);
+#endif
     if (scan.rows == NULL) {
         return -1;
     }
@@ -998,9 +1251,8 @@ static int sweep_once(struct watcher *w, int signal_number) {
     qsort(scan.rows, scan.n, sizeof *scan.rows, compare_row_pid);
     scan.state = malloc(slots);
     scan.chain = malloc(slots * sizeof *scan.chain);
-    scan.sids = malloc((slots + 1) * sizeof *scan.sids);
     int live = -1;
-    if (scan.state == NULL || scan.chain == NULL || scan.sids == NULL) {
+    if (scan.state == NULL || scan.chain == NULL) {
         goto done;
     }
 #if defined(__linux__)
@@ -1031,11 +1283,9 @@ static int sweep_once(struct watcher *w, int signal_number) {
     int dropped = 0;
 #endif
     for (;;) {
-#if defined(__APPLE__)
-        collect_member_sessions(w, &scan);
-#else
-        resolve_members(w, &scan);
-#endif
+        if (resolve_members(w, &scan) != 0) {
+            goto done;
+        }
         if (!drop_stale_members(&scan, leader)) {
             break;
         }
@@ -1090,7 +1340,6 @@ done:
     free(scan.rows);
     free(scan.state);
     free(scan.chain);
-    free(scan.sids);
     return live;
 }
 
