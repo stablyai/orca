@@ -27,9 +27,12 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
     setActiveFile,
     setActiveTabType,
     setSaveDialogFileId,
+    setSaveDialogKind,
     windowCloseAfterDirtyRef
   } = controller
   const closeTabIds = useRef(new Map<string, string>())
+  // Files whose editor frame kept edits a flush could not hand over; their prompts hide Save.
+  const draftBlockedCloseFileIds = useRef(new Set<string>())
   const queuedEditorCloseTabId = useCallback(
     (fileId: string) => closeTabIds.current.get(fileId),
     []
@@ -69,6 +72,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
   const settleQueuedClose = useCallback(
     (fileId: string) => {
       closeTabIds.current.delete(fileId)
+      draftBlockedCloseFileIds.current.delete(fileId)
       pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
         (queuedId) => queuedId !== fileId
       )
@@ -96,6 +100,9 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
         settleQueuedClose(fileId)
         continue
       }
+      if (draftBlockedCloseFileIds.current.has(fileId)) {
+        return fileId
+      }
       if (tab ? !editorTabNeedsSavePrompt(state, tab) : !needsSavePromptOnClose(state, fileId)) {
         if (tab) {
           state.closeUnifiedTab(tab.id)
@@ -108,7 +115,13 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       return fileId
     }
     return null
-  }, [closeFile, inFlightSaveFileIdRef, pendingEditorCloseQueueRef, settleQueuedClose])
+  }, [
+    closeFile,
+    draftBlockedCloseFileIds,
+    inFlightSaveFileIdRef,
+    pendingEditorCloseQueueRef,
+    settleQueuedClose
+  ])
 
   const advanceEditorCloseQueue = useCallback(() => {
     const nextFileId = getNextQueuedEditorClose()
@@ -126,6 +139,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       }
       setActiveFile(nextFileId, workspaceId ?? undefined)
       setActiveTabType('editor', workspaceId)
+      setSaveDialogKind(draftBlockedCloseFileIds.current.has(nextFileId) ? 'plugin-draft' : 'dirty')
       setSaveDialogFileId(nextFileId)
       return
     }
@@ -136,16 +150,22 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       proceedToNativeWindowClose(pendingWindowClose.isQuitting)
     }
   }, [
+    draftBlockedCloseFileIds,
     getNextQueuedEditorClose,
     proceedToNativeWindowClose,
     setActiveFile,
     setActiveTabType,
     setSaveDialogFileId,
+    setSaveDialogKind,
     windowCloseAfterDirtyRef
   ])
 
   const queueEditorCloseRequests = useCallback(
-    (fileIds: string[], pendingWindowClose?: { isQuitting: boolean }) => {
+    (
+      fileIds: string[],
+      pendingWindowClose?: { isQuitting: boolean },
+      draftBlockedIds?: readonly string[]
+    ) => {
       if (pendingWindowClose) {
         windowCloseAfterDirtyRef.current = pendingWindowClose
       }
@@ -153,6 +173,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       if (pendingEditorCloseQueueRef.current.length === 0) {
         closeTabIds.current.clear()
       }
+      const draftIds = draftBlockedIds ? new Set(draftBlockedIds) : null
       const requests = fileIds.flatMap((id) => {
         const { file, tab } = editorCloseTarget(state, id)
         if (!file) {
@@ -163,6 +184,10 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
         } else {
           closeTabIds.current.delete(file.id)
         }
+        // A blocked draft may arrive as its tab id; the prompt is per file either way.
+        if (draftIds && (draftIds.has(id) || draftIds.has(file.id))) {
+          draftBlockedCloseFileIds.current.add(file.id)
+        }
         return [file.id]
       })
       pendingEditorCloseQueueRef.current = appendUniqueOpenFileIds(
@@ -172,7 +197,12 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       )
       advanceEditorCloseQueue()
     },
-    [advanceEditorCloseQueue, pendingEditorCloseQueueRef, windowCloseAfterDirtyRef]
+    [
+      advanceEditorCloseQueue,
+      draftBlockedCloseFileIds,
+      pendingEditorCloseQueueRef,
+      windowCloseAfterDirtyRef
+    ]
   )
 
   const handleCloseFile = useCallback(
@@ -190,10 +220,16 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       ) {
         return
       }
-      runAfterEditorFramesFlush(state, [file.id], () => {
+      runAfterEditorFramesFlush([file.id], ({ blocked }) => {
         const latest = useAppStore.getState()
         const live = tab ? editorCloseTarget(latest, tab.id).tab : undefined
         if (tab && !live) {
+          return
+        }
+        if (blocked.has(file.id)) {
+          // The frame kept edits the dirty check cannot see; prompt instead of dropping them.
+          const targetId = live?.id ?? file.id
+          queueEditorCloseRequests([targetId], undefined, [targetId])
           return
         }
         if (
@@ -212,6 +248,10 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
     [activeWorktreeId, closeFile, queueEditorCloseRequests]
   )
 
+  const clearQueuedDraftBlocked = useCallback(() => {
+    draftBlockedCloseFileIds.current.clear()
+  }, [draftBlockedCloseFileIds])
+
   return {
     queuedEditorCloseTabId,
     waitForFileClosed,
@@ -219,6 +259,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
     getNextQueuedEditorClose,
     advanceEditorCloseQueue,
     queueEditorCloseRequests,
+    clearQueuedDraftBlocked,
     handleCloseFile
   }
 }

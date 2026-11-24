@@ -16,6 +16,7 @@ import {
   EDITOR_STALE_SAVE_MESSAGE
 } from '../../editor/save/queue/editor-save-disk-precondition'
 import { discardEditorFileChangesAndClose } from '../../editor/save/flush/discard-editor-file-changes'
+import { discardEditorFrames } from '../../editor/save/flush/editor-pending-flush'
 import { translate } from '@/i18n/i18n'
 import type { TerminalEditorCloseQueueController } from './use-terminal-editor-close-queue'
 
@@ -23,6 +24,7 @@ export type TerminalEditorCloseDialogActionsInput = Pick<
   TerminalEditorCloseQueueController,
   | 'queuedEditorCloseTabId'
   | 'advanceEditorCloseQueue'
+  | 'clearQueuedDraftBlocked'
   | 'closedReactionsRef'
   | 'inFlightSaveFileIdRef'
   | 'isClosingRef'
@@ -41,6 +43,7 @@ export function useTerminalEditorCloseDialogActions(
 ) {
   const {
     advanceEditorCloseQueue,
+    clearQueuedDraftBlocked,
     queuedEditorCloseTabId,
     closedReactionsRef,
     inFlightSaveFileIdRef,
@@ -138,6 +141,8 @@ export function useTerminalEditorCloseDialogActions(
     isClosingRef.current = true
     const fileId = saveDialogFileId
     setSaveDialogFileId(null)
+    // Drop the frame's draft before any close so unmount cannot re-apply it into the record.
+    discardEditorFrames([fileId])
     const tabId = queuedEditorCloseTabId(fileId)
     const state = useAppStore.getState()
     const tab = tabId ? editorCloseTarget(state, tabId).tab : undefined
@@ -167,6 +172,7 @@ export function useTerminalEditorCloseDialogActions(
     }
     isClosingRef.current = true
     pendingEditorCloseQueueRef.current = []
+    clearQueuedDraftBlocked()
     closedReactionsRef.current.clear()
     if (windowCloseAfterDirtyRef.current) {
       window.api.ui.cancelWindowClose()
@@ -175,6 +181,7 @@ export function useTerminalEditorCloseDialogActions(
     setSaveDialogFileId(null)
     releaseCloseDialogGuardAfterDebounce()
   }, [
+    clearQueuedDraftBlocked,
     closedReactionsRef,
     isClosingRef,
     pendingEditorCloseQueueRef,
@@ -194,7 +201,11 @@ export function useTerminalEditorCloseDialogActions(
       if (onClosed) {
         closedReactionsRef.current.set(fileId, onClosed)
       }
-      queueEditorCloseRequests([customEvent.detail.tabId ?? fileId])
+      queueEditorCloseRequests(
+        [customEvent.detail.tabId ?? fileId],
+        undefined,
+        customEvent.detail.draftBlocked ? [fileId] : undefined
+      )
     }
     window.addEventListener(
       ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,

@@ -354,7 +354,10 @@ Orca calls `merge(base, outside, mine)` with `base` the disk content those edits
 the tab keeps the merged result unsaved, and its Reload/Overwrite banner is not shown. This
 applies to a local file open in one editor view; elsewhere, without `merge`, or when the editor
 does not answer within a second, that banner decides. It answers Orca's `editor.flush`
-itself before a save. Bytes editors pass both `decode` and `encode`. Check `'session' in
+itself before a save, and again before the tab closes or the window quits. If `flush()`
+resolves `false` or does not answer within a second then, Orca keeps the tab open and asks
+**Return to editor** (your draft stays) or **Discard and close** (Orca drops it). Bytes editors
+pass both `decode` and `encode`. Check `'session' in
 orca.document` to support older Orca.
 
 Orca keeps no undo history for a custom editor: Cmd/Ctrl+Z reaches the frame, and the editor owns
@@ -367,7 +370,7 @@ const doc = await orca.document.get() // { version, readOnly, content, fileType?
 // The current document right away, then each one Orca sends when the file changes outside the editor.
 orca.document.onDidChange((doc) => render(doc))
 await orca.document.applyEdit({ baseVersion: doc.version, content: { kind: 'text', text } })
-orca.on('editor.flush', () => sendPendingEdit()) // before a save; Orca waits for the promise
+orca.on('editor.flush', () => sendPendingEdit()) // before a save, a tab close or a quit; Orca waits for the promise
 ```
 
 `content` is `{ kind: 'text', text }` for a text editor (the default `contentKind`). An edit is

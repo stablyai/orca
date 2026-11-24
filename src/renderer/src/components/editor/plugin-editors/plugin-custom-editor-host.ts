@@ -219,9 +219,20 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
     reportUnapplied()
   }
 
-  const settleFlushes = (): void => {
+  /** What a view switch and an explicit discard share: no held edit, no unanswered flush. */
+  const clearPendingEdits = (settled: boolean): void => {
+    if (heldTimer !== null) {
+      clearTimeout(heldTimer)
+      heldTimer = null
+    }
+    heldEdit = null
+    heldId = null
+    supersededIds = []
+    lostAfterHeld = false
+    lostEdit = false
+    reportUnapplied()
     for (const settle of pendingFlushes.values()) {
-      settle(true)
+      settle(settled)
     }
     pendingFlushes.clear()
   }
@@ -304,6 +315,10 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
     currentText() {
       return frameText ?? options.getDocument().text
     },
+    discardPending() {
+      // Drop, don't apply: an explicit discard must not push the draft into the buffer.
+      clearPendingEdits(false)
+    },
     reset() {
       // Why apply, not drop: a view switch unmounts the frame, and a held edit is the newest content.
       if (heldEdit !== null) {
@@ -315,15 +330,7 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
       frameText = null
       frameReadOnly = null
       frameBinary = null
-      heldEdit = null
-      heldId = null
-      lostEdit = false
-      if (heldTimer !== null) {
-        clearTimeout(heldTimer)
-        heldTimer = null
-      }
-      reportUnapplied()
-      settleFlushes()
+      clearPendingEdits(true)
     }
   }
 }

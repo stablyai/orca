@@ -251,9 +251,7 @@ function EditorPanelInner({
   }
   const handleEditorToggleChange = (next: EditorToggleValue): void => {
     // Why: leaving a custom editor unmounts its frame, which may still hold debounced edits.
-    runAfterEditorFramesFlush(useAppStore.getState(), [activeFile.id], () =>
-      applyEditorToggle(next)
-    )
+    runAfterEditorFramesFlush([activeFile.id], () => applyEditorToggle(next))
   }
   const applyEditorToggle = (next: EditorToggleValue): void => {
     const fileId = activeFile.id

@@ -54,4 +54,7 @@ export type CustomEditorHost = {
    *  with the merged text once the session's merged edit is in the buffer; null when the frame
    *  cannot or does not within the flush deadline, so the caller keeps the banner. */
   mergeOutsideChange: (diskText: string, ancestorText: string) => Promise<string | null>
+  /** An explicit discard: drops held and pending edits instead of applying them, so closing the
+   *  tab throws the frame's draft away without it landing in the buffer on unmount. */
+  discardPending: () => void
 }

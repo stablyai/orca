@@ -74,9 +74,7 @@ export function handleTerminalWorkspaceEditorShortcut({
         notifyTerminalCapture('editor.toggleChangesView')
         const nextMode = state.editorViewMode[file.id] === 'changes' ? 'edit' : 'changes'
         // Why: leaving a custom editor unmounts its frame, which may still hold debounced edits.
-        runAfterEditorFramesFlush(state, [file.id], () =>
-          state.setEditorViewMode(file.id, nextMode)
-        )
+        runAfterEditorFramesFlush([file.id], () => state.setEditorViewMode(file.id, nextMode))
       }
       return true
     }

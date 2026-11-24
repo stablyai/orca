@@ -6,16 +6,18 @@ import {
 } from '@/store/slices/editor/buffers/editor-buffer-views'
 import { discardEditorGenerations } from './editor-discard-epoch'
 import { requestEditorSaveQuiesce } from '../../autosave/editor-autosave'
-import { flushPendingEditorBuffer } from './editor-pending-flush'
+import { discardEditorFrames, flushPendingEditorBuffer } from './editor-pending-flush'
 
 /** Discard only the last view’s unsaved record; return an autosave hold release for use after tab cleanup. */
 export async function discardEditorBuffer(fileId: string): Promise<() => void> {
   let release = (): void => {}
+  const before = useAppStore.getState()
+  // The closing view's frame drops its draft even when sibling views keep the buffer alive.
+  discardEditorFrames([fileId])
   if (!isLastEditorBufferView(useAppStore.getState(), fileId)) {
     return release
   }
   // Fence pending edits before flushing so intentional discards stay silent.
-  const before = useAppStore.getState()
   discardEditorGenerations(
     editorBufferIdOfView(before, fileId),
     editorBufferSiblingViewIds(before, fileId)

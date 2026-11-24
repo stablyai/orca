@@ -110,7 +110,7 @@ export function createWorkspaceTabCloseCommands({
       closeUnifiedTab(item.id)
     } else {
       // Why: a custom editor frame may still hold edits the dirty check must see.
-      runAfterEditorFramesFlush(useAppStore.getState(), [item.entityId], (deferred) => {
+      runAfterEditorFramesFlush([item.entityId], ({ deferred, blocked }) => {
         // A rename during the flush keeps the tab id but moves its entity; act on the live one.
         const live = deferred
           ? (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).find(
@@ -118,6 +118,15 @@ export function createWorkspaceTabCloseCommands({
             )
           : item
         if (!live || !isEditorTabContentType(live.contentType)) {
+          return
+        }
+        if (blocked.has(live.entityId)) {
+          // The frame kept edits the dirty check cannot see; prompt instead of dropping them.
+          requestEditorFileClose(live.entityId, {
+            tabId: item.id,
+            draftBlocked: true,
+            ...(whenEmptied ? { onClosed: whenEmptied } : {})
+          })
           return
         }
         if (closeEditorIfUnreferenced(live.entityId, item.id, whenEmptied)) {

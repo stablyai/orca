@@ -64,17 +64,22 @@ export function useTerminalWindowLifecycle(
       windowCloseAfterDirtyRef.current = pendingClose
       // Why: a custom editor frame may still hold debounced edits the dirty check must see.
       runAfterEditorFramesFlush(
-        state,
         state.openFiles.map((file) => file.id),
-        () => {
+        ({ blocked }) => {
           if (windowCloseAfterDirtyRef.current !== pendingClose) {
             return
           }
-          const dirtyFiles = useAppStore.getState().openFiles.filter((file) => file.isDirty)
-          if (dirtyFiles.length > 0) {
+          const latest = useAppStore.getState()
+          const dirtyFiles = latest.openFiles.filter((file) => file.isDirty)
+          // A frame's draft never shows up in isDirty, so queue it alongside the dirty files.
+          const blockedIds = [...blocked].filter((fileId) =>
+            latest.openFiles.some((file) => file.id === fileId)
+          )
+          if (dirtyFiles.length > 0 || blockedIds.length > 0) {
             queueEditorCloseRequests(
-              dirtyFiles.map((file) => file.id),
-              pendingClose
+              [...new Set([...dirtyFiles.map((file) => file.id), ...blockedIds])],
+              pendingClose,
+              blockedIds
             )
             return
           }

@@ -33,7 +33,7 @@ export function useRemovalUnsavedFiles(
       const fileIds = worktreePurgeClosedFileIds(state, targets)
       flushRemovalPendingEdits(state, fileIds)
       // Custom editor frames answer asynchronously; the list re-renders when their edits land.
-      runAfterEditorFramesFlush(state, fileIds, () => {})
+      runAfterEditorFramesFlush(fileIds, () => {})
     }
   }, [enabled, targets])
 
