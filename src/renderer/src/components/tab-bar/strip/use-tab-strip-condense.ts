@@ -102,7 +102,8 @@ export function useTabStripCondense({
   ids,
   activeId,
   frozen,
-  hasOverflow
+  hasOverflow,
+  disabled = false
 }: {
   /** Strip entries in order: unified tabs, then paired-client rows. */
   ids: readonly string[]
@@ -110,6 +111,8 @@ export function useTabStripCondense({
   /** Hold membership while a tab drag would otherwise reshuffle tabs under the pointer. */
   frozen: boolean
   hasOverflow: boolean
+  /** Fit mode uses horizontal scrolling instead of condensing tabs into icons or a "+N" chip. */
+  disabled?: boolean
 }): TabStripCondense {
   const [surface, setSurface] = useState<HTMLDivElement | null>(null)
   const [plan, setPlan] = useState<TabStripPlan>(TITLED_TAB_STRIP_PLAN)
@@ -118,10 +121,10 @@ export function useTabStripCondense({
   const [heldIconIds, setHeldIconIds] = useState<ReadonlySet<string>>(NO_HIDDEN)
   const planRef = useRef(plan)
   const windowStartRef = useRef<number | null>(null)
-  const inputsRef = useRef({ ids, activeId, frozen, heldWidths, heldIconIds })
+  const inputsRef = useRef({ ids, activeId, frozen, heldWidths, heldIconIds, disabled })
   // Declared before the effects that read it, so they see this render's inputs.
   useLayoutEffect(() => {
-    inputsRef.current = { ids, activeId, frozen, heldWidths, heldIconIds }
+    inputsRef.current = { ids, activeId, frozen, heldWidths, heldIconIds, disabled }
   })
 
   const replanRef = useRef<() => void>(() => {})
@@ -133,8 +136,20 @@ export function useTabStripCondense({
       ids: currentIds,
       activeId: currentActive,
       frozen: isFrozen,
-      heldWidths: held
+      heldWidths: held,
+      disabled: isDisabled
     } = inputsRef.current
+    if (isDisabled) {
+      windowStartRef.current = null
+      if (planRef.current.mode !== 'titled') {
+        planRef.current = TITLED_TAB_STRIP_PLAN
+        setPlan(TITLED_TAB_STRIP_PLAN)
+      }
+      if (held) {
+        setHeldWidths(null)
+      }
+      return
+    }
     const width = measureTabRoom(surface)
     if (held) {
       let total = 0
@@ -188,7 +203,7 @@ export function useTabStripCondense({
   const idsKey = ids.join('\u0000')
   useLayoutEffect(() => {
     replan()
-  }, [replan, idsKey, activeId, frozen, heldWidths])
+  }, [replan, idsKey, activeId, frozen, heldWidths, disabled])
 
   // Hold widths so the next close button stays under the pointer.
   const pointerInsideRef = useRef(false)
@@ -241,13 +256,16 @@ export function useTabStripCondense({
     setRenameOverflow(hasOverflow && !!surface?.querySelector('[data-tab-rename-input]'))
   }, [hasOverflow, surface])
 
-  const effectivePlan = useMemo(() => reconcilePlan(plan, ids), [plan, ids])
+  const effectivePlan = useMemo(
+    () => (disabled ? TITLED_TAB_STRIP_PLAN : reconcilePlan(plan, ids)),
+    [disabled, plan, ids]
+  )
   const hiddenIds = useMemo(
     () => (effectivePlan.mode === 'condensed' ? new Set(effectivePlan.hiddenIds) : NO_HIDDEN),
     [effectivePlan]
   )
   const density = useMemo<TabStripDensity>(() => {
-    if (effectivePlan.mode === 'titled' && !heldWidths) {
+    if (disabled || (effectivePlan.mode === 'titled' && !heldWidths)) {
       return TITLED_TAB_STRIP_DENSITY
     }
     return {
@@ -257,15 +275,21 @@ export function useTabStripCondense({
         : new Set(effectivePlan.mode === 'condensed' ? effectivePlan.iconIds : []),
       heldWidths
     }
-  }, [effectivePlan, heldWidths, heldIconIds])
+  }, [disabled, effectivePlan, heldWidths, heldIconIds])
 
   const stripPointerHandlers = useMemo(
     () => ({
       onPointerDownCapture: () => {
-        const { ids: currentIds, heldWidths: held, heldIconIds: heldIcons } = inputsRef.current
+        const {
+          ids: currentIds,
+          heldWidths: held,
+          heldIconIds: heldIcons,
+          disabled: isDisabled
+        } = inputsRef.current
         // Hidden tabs have no width to hold; only a fully visible strip keeps its geometry.
         if (
           !surface ||
+          isDisabled ||
           (planRef.current.mode === 'condensed' && planRef.current.hiddenIds.length > 0)
         ) {
           snapshotRef.current = null
@@ -297,7 +321,7 @@ export function useTabStripCondense({
     plan: effectivePlan,
     hiddenIds,
     density,
-    showScrollArrows: renameOverflow,
+    showScrollArrows: disabled ? hasOverflow : renameOverflow,
     surface,
     setSurface,
     stripPointerHandlers

@@ -34,6 +34,7 @@ import { GeneralConfirmationsSection } from './GeneralConfirmationsSection'
 import { GeneralSearchResults } from './GeneralSearchResults'
 import { getGeneralSubPageTitle, type GeneralSubPage } from './general-sub-pages'
 import { useOpenInMenuDraft } from './OpenInMenuSetting'
+import { TabWidthSettings } from './TabWidthSettings'
 
 export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | 'win32' | 'other' {
   if (userAgent.includes('Mac')) {
@@ -183,6 +184,7 @@ function GeneralRootSettings({
             keywords={getTabOrderControlSearchKeywords(tabsEntries)}
             updateSettings={updateSettings}
           />
+          <TabWidthSettings settings={settings} updateSettings={updateSettings} />
           <SearchableSetting
             title={t('settings.general.previewTabs.title', 'Preview tabs')}
             description={t(

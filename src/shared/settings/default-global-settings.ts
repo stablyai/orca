@@ -23,6 +23,7 @@ import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from '../source-control/listing/so
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../terminal/replay/terminal-scrollback-policy'
 import { NESTED_WORKER_MAX_DEPTH_DEFAULT } from '../orchestration/workers/nested-worker-depth'
 import { getDefaultWorkspaceCleanupRules } from '../workspace-cleanup/workspace-cleanup-policy'
+import { TAB_MAX_WIDTH_DEFAULT_PX } from '../workspace-layout/tab-groups/tab-width-settings'
 
 export function buildDefaultSettings(args: {
   workspaceDir: string
@@ -199,6 +200,8 @@ export function buildDefaultSettings(args: {
     showMobileButton: true,
     showPinnedWorktreesInGroups: false,
     ctrlTabOrderMode: 'mru',
+    tabWidthMode: 'default',
+    tabMaxWidth: TAB_MAX_WIDTH_DEFAULT_PX,
     // Why: Orca-first keeps core shortcuts working from a focused terminal; TUI-ownership users opt in.
     terminalShortcutPolicy: 'orca-first',
     floatingTerminalEnabled: true,
