@@ -125,11 +125,10 @@ async function run(): Promise<void> {
   const forwardedWhileInField = [...forwarded]
 
   // Page script moves focus into a shadow-root field mid-pick.
-  await evalPage(`document.getElementById('host').shadowRoot.getElementById('note').focus()`)
+  const NOTE = `document.getElementById('host').shadowRoot.getElementById('note')`
+  await evalPage(`${NOTE}.focus()`)
   await press('g')
-  const noteValue = await evalPage(
-    `document.getElementById('host').shadowRoot.getElementById('note').value`
-  )
+  const noteValue = await evalPage(`${NOTE}.value`)
 
   await evalPage(
     `(() => { const host = document.createElement('div'); host.id = 'closed'; const input = document.createElement('input'); host.attachShadow({mode:'closed'}).append(input); document.body.append(host); window.__closedInput = input; input.focus() })()`
@@ -144,12 +143,17 @@ async function run(): Promise<void> {
   // Tab into a field, then a letter at once: Tab makes the state unknown, so the letter types into the field.
   await evalPage(`document.getElementById('buy').focus()`)
   const beforeTab = forwarded.length
+  const noteGs = async (): Promise<number> =>
+    Number(await evalPage(`${NOTE}.value.split('g').length - 1`))
+  const noteGsBeforeTab = await noteGs()
   page.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' })
   page.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' })
   await press('g')
   const tabThenLetter = {
     focused: await evalPage(`document.activeElement && document.activeElement.id`),
-    forwarded: forwarded.slice(beforeTab)
+    forwarded: forwarded.slice(beforeTab),
+    // The letter must land in the field Tab focused, not be dropped.
+    typedIntoField: (await noteGs()) - noteGsBeforeTab
   }
 
   // Script refocus into a field, then a letter right away.
@@ -241,12 +245,13 @@ async function run(): Promise<void> {
 
   await evalPage("document.getElementById('buy').focus();window.__pageKeys=[]")
   const selection = manager.awaitGrabSelection('page-1', 'cancel-from-page', page)
+  const selectionDeadline = Date.now() + 10_000
   while (
     !(await evalPage(
       "Boolean(document.getElementById('__orca-grab-host')?.hasAttribute('data-orca-grab-awaiting'))"
     ))
   ) {
-    if (Date.now() > deadline + 10_000) {
+    if (Date.now() > selectionDeadline) {
       throw new Error('Selection did not start')
     }
     await wait(20)

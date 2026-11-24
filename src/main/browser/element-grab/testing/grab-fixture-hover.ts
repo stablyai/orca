@@ -24,9 +24,13 @@ export async function hoverForPick(page: WebContents, point: { x: number; y: num
     await wait(20)
   }
   // The picker's listener ran first and queued its hover for the next frame; two frames cover it.
-  // Bounded, since a hidden window that is throttled may produce no frames at all.
-  await page.executeJavaScript(`new Promise((resolve) => {
+  // Bounded: a throttled hidden window may produce no frames, which fails here instead of hanging.
+  const painted: boolean = await page.executeJavaScript(`new Promise((resolve) => {
     const timer = setTimeout(() => resolve(false), 1000);
     requestAnimationFrame(() => requestAnimationFrame(() => { clearTimeout(timer); resolve(true) }));
   })`)
+  // Fail at the hover rather than let the click cancel the pick for want of a hovered element.
+  if (!painted) {
+    throw new Error('The page produced no frame after the pointer move, so the pick has no target')
+  }
 }
