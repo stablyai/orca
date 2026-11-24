@@ -11,7 +11,7 @@ import type { AcpStructuredChild } from '../children/acp-structured-child'
 const READ_BATCH = 16
 
 /**
- * Background tasks still running when the earlier app quit: their turns ended, so their starts
+ * Background tasks (and subagents) still running when the earlier app quit: their turns ended, so their starts
  * were acked and won't replay. Before output is let through, each is restated from its saved row,
  * and published as running (not unavailable), and a call Orca made it of reports to it again: the
  * call's final update settles the task instead of replacing the closed call row. No row is written.
@@ -22,8 +22,17 @@ export async function carryKeptAcpBackgroundWork(
 ): Promise<void> {
   const { kept } = child.connection
   // One that ended while Orca was closed is restated too: its replayed end then settles the row.
-  const taskIds = kept ? [...kept.openWork('task'), ...kept.openWork('task', true)] : []
+  const carried = (group: string) =>
+    kept ? [...kept.openWork(group), ...kept.openWork(group, true)] : []
+  const taskIds = carried('task')
   const translator = child.lane?.translator
+  const subagentIds = carried('subagent')
+  if (translator && subagentIds.length > 0) {
+    // The host keeps each subagent's record; this run's evidence keeps it (and the agent) live.
+    const join = { thread: translator.providerSessionId }
+    const working = subagentIds.map((id) => ({ id, state: 'working' as const }))
+    child.lane?.apply(translator.subagents.translate(working, join, Date.now()))
+  }
   const history = child.events?.journalHistory?.()
   if (taskIds.length === 0 || !translator || !history) {
     return
