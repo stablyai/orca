@@ -52,21 +52,42 @@ export class PhoneSharedAgentKeptReads {
     }
   }
 
-  /** Streams the chat's kept transcript to `onData`; false when none is kept. */
+  /** Streams the chat's kept transcript to `onData`; null when none is kept, else its stop. */
   replay(
     shareId: string,
     method: string,
     params: unknown,
     onData: (data: unknown) => void
-  ): boolean {
+  ): (() => void) | null {
     const key = transcriptKey(shareId, method, params)
     const kept = key === null ? undefined : this.transcripts.get(key)
     if (!kept) {
-      return false
+      return null
     }
     const events = [...kept]
-    void Promise.resolve().then(() => events.forEach(onData))
-    return true
+    let stopped = false
+    void Promise.resolve().then(() => {
+      for (const event of events) {
+        if (stopped) {
+          return
+        }
+        onData(event)
+      }
+    })
+    return () => {
+      stopped = true
+    }
+  }
+
+  /** Drops what was kept for a share this phone no longer has. */
+  forget(shareId: string): void {
+    for (const store of [this.answers, this.transcripts]) {
+      for (const key of store.keys()) {
+        if (key.startsWith(`${shareId}\0`)) {
+          store.delete(key)
+        }
+      }
+    }
   }
 }
 

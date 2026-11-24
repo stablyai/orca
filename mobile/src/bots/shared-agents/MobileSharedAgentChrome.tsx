@@ -12,6 +12,8 @@ import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileBotAvatar } from '../MobileBotAvatar'
+import { StatusDot } from '../../components/feedback/StatusDot'
+import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { MobileBotAvatarSource } from '../host-bot-row-facts'
 
 export function MobileSharedAgentNavBar({
@@ -20,7 +22,8 @@ export function MobileSharedAgentNavBar({
   subtitle,
   onBack,
   labeledBack = false,
-  trailing
+  trailing,
+  link
 }: {
   name: string
   avatar: MobileBotAvatarSource
@@ -29,6 +32,8 @@ export function MobileSharedAgentNavBar({
   /** "‹ Bots", where Back returns to the list; a chat's Back is the bare chevron. */
   labeledBack?: boolean
   trailing?: React.ReactNode
+  /** The dot beside the subtitle: whether the agent's host is reachable now. */
+  link?: ConnectionState
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -64,9 +69,12 @@ export function MobileSharedAgentNavBar({
             </Text>
           </View>
           {subtitle ? (
-            <Text style={styles.subtitle} numberOfLines={1}>
-              {subtitle}
-            </Text>
+            <View style={styles.titleRow}>
+              {link ? <StatusDot state={link} /> : null}
+              <Text style={styles.subtitle} numberOfLines={1}>
+                {subtitle}
+              </Text>
+            </View>
           ) : null}
         </View>
       }

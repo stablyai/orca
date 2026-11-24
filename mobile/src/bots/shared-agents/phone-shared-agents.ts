@@ -142,6 +142,7 @@ export class PhoneSharedAgents {
         ) {
           this.links.get(entry.shareId)?.close()
           this.links.delete(entry.shareId)
+          this.kept.forget(entry.shareId)
         }
       }
       await syncComputerShares(
@@ -231,7 +232,8 @@ export class PhoneSharedAgents {
       }
       if (link !== 'live') {
         // While away, a chat shows what its host last streamed of it, if this launch saw it.
-        if (!this.kept.replay(entry.shareId, method, params, onData)) {
+        stop = this.kept.replay(entry.shareId, method, params, onData)
+        if (!stop) {
           onData({ type: 'error', message: this.offline(entry, method).error.message })
         }
         return

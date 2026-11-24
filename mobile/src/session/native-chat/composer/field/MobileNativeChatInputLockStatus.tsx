@@ -1,4 +1,6 @@
 import { Pressable, Text, View } from 'react-native'
+import { CloudOff } from 'lucide-react-native'
+import { colors } from '../../../../theme/mobile-theme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { styles } from '../../mobile-native-chat-view-styles'
 import type { MobileNativeChatInputLockReason } from '../../MobileNativeChatView'
@@ -20,6 +22,7 @@ export function MobileNativeChatInputLockStatus({
   // Why always mounted: the polite live region must exist before its text changes.
   return (
     <View style={text ? styles.inputLockStatusRow : undefined}>
+      {text && outage?.holdsSends ? <CloudOff size={15} color={colors.textMuted} /> : null}
       <Text style={text ? styles.inputLockStatus : undefined} accessibilityLiveRegion="polite">
         {text}
       </Text>

@@ -103,24 +103,31 @@ export function MobileSharedAgentChat() {
     }
     return { pending: shown.pending, notices }
   }, [held, sessionId, ownerName, environmentId, sendAgain, showToast, t])
-  // A new chat started while the host was away moves to the chat the host starts for it.
+  // A new chat started while the host was away moves to the chat the host starts for it, once each
+  // time its link comes up.
   const swap = agent?.live && agent.client && isSharedBotNewChatId(sessionId) ? agent : null
+  const swapping = swap !== null
   useEffect(() => {
     if (!swap?.client) {
       return
     }
+    let current = true
     void botSessionStart
       .request(swap.client, { botId: swap.view.botId, newChatId: sessionId })
       .then((reply) => botSessionStart.interpret(reply).sessionId)
-      .then((started) =>
-        router.replace(sharedAgentChatHref(hostId, environmentId, started, params.title))
-      )
+      .then((started) => {
+        if (current) {
+          router.replace(sharedAgentChatHref(hostId, environmentId, started, params.title))
+        }
+      })
       .catch(() => {})
-    // Once per link coming up.
-  }, [swap?.reads])
+    return () => {
+      current = false
+    }
+  }, [swapping])
   const back = () => router.back()
   if (page.kind !== 'agent') {
-    return <MobileSharedAgentUnavailable page={page} onBack={back} />
+    return <MobileSharedAgentUnavailable page={page} onBack={() => router.dismissTo('/')} />
   }
   const { view, bot } = page
   const name = bot?.name ?? view.botName
@@ -134,6 +141,7 @@ export function MobileSharedAgentChat() {
           owner: view.ownerName
         })}
         onBack={back}
+        link={page.live ? 'connected' : 'disconnected'}
         trailing={<MobileSharedAgentChatMenu />}
       />
       <View style={styles.chat}>

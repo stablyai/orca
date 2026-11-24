@@ -33,6 +33,11 @@ describe('a shared agent’s chat while its host is away', () => {
     expect(passed).toEqual(events)
     expect(await replayed(kept, chat)).toEqual([events[1], events[2]])
     expect(await replayed(kept, { sessionId: 'chat-2' })).toBeNull()
+    // A chat closed before its replay runs gets nothing.
+    const late: unknown[] = []
+    kept.replay('share-1', SUBSCRIBE, chat, (data) => late.push(data))?.()
+    await Promise.resolve()
+    expect(late).toEqual([])
 
     live({ type: 'reset' })
     expect(await replayed(kept, chat)).toBeNull()
@@ -46,5 +51,8 @@ describe('a shared agent’s chat while its host is away', () => {
     expect(kept.answer('share-1', 'bots.chatTree', { botId: 'b' })).toBe(tree)
     expect(kept.answer('share-1', 'bots.chatTree', { botId: 'c' })).toBeUndefined()
     expect(kept.answer('share-1', 'agentSession.send', {})).toBeUndefined()
+    // A share this phone no longer has keeps nothing.
+    kept.forget('share-1')
+    expect(kept.answer('share-1', 'bots.chatTree', { botId: 'b' })).toBeUndefined()
   })
 })
