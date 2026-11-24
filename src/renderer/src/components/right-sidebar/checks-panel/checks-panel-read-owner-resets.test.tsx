@@ -17,8 +17,13 @@ type HostedReviewCacheEntry = ReturnType<typeof useAppStore.getState>['hostedRev
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
-/** Test doubles supply only the fields the code under test reads. */
-function testDouble<T>(value: object): T {
+type FixtureFields<T> = T extends (...args: never[]) => unknown
+  ? T
+  : T extends object
+    ? { [Key in keyof T]?: FixtureFields<T[Key]> }
+    : T
+
+function testDouble<T>(value: FixtureFields<T>): T {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each double supplies every field the hook or helper under test reads; the rest of the panel model is unused here.
   return value as T
 }
@@ -34,15 +39,16 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
-  Reflect.set(window, 'api', {
-    ...Reflect.get(window, 'api'),
-    gh: { onWorkItemMutated: () => () => {} }
+  vi.stubGlobal('api', {
+    ...window.api,
+    gh: { ...window.api?.gh, onWorkItemMutated: () => () => {} }
   })
 })
 
 afterEach(() => {
   act(() => root.unmount())
   container.remove()
+  vi.unstubAllGlobals()
   vi.useRealTimers()
 })
 
@@ -294,7 +300,7 @@ describe('manual refresh lookups', () => {
   })
 
   function gitLabReview(number: number, headSha: string) {
-    return { provider: 'gitlab', number, headSha, state: 'open', title: `MR ${number}` }
+    return { provider: 'gitlab', number, headSha, state: 'open', title: `MR ${number}` } as const
   }
 
   function gitLabRefreshModel(
