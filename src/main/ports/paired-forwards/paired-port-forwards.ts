@@ -12,6 +12,7 @@ import { PairedPortForwardTunnel } from './paired-port-forward-tunnel'
 const LOOPBACK_PROBE_TIMEOUT_MS = 150
 // Keep the remote number when free, else the next few; past them, any free port beats a long scan.
 const NEXT_PORT_ATTEMPTS = 20
+const OS_PORT_ATTEMPTS = 5
 
 type PairedPortForwardsDeps = {
   resolveConnection: (environmentId: string) => Promise<PairedRuntimeConnection>
@@ -141,10 +142,31 @@ export function ensurePairedPortForward(args: {
       // Lost races and privileged ports move on to the next number.
       entry = await add(candidate).catch(() => null)
     }
-    entry ??= await add(0).catch(retireIdleTunnelAfter(args.environmentId))
+    entry ??= await addOnFreeOsPort(add).catch(retireIdleTunnelAfter(args.environmentId))
     deps?.onChanged(args.environmentId)
     return { entry, created: true }
   })
+}
+
+/** An OS-chosen port is free on 127.0.0.1 only; one a [::1] server holds would take the browser's localhost. */
+async function addOnFreeOsPort(
+  add: (localPort: number) => Promise<PortForwardEntry>
+): Promise<PortForwardEntry> {
+  for (let attempt = 1; ; attempt++) {
+    const entry = await add(0)
+    // Only [::1] is probed: this forward itself now answers on 127.0.0.1.
+    const ipv6Free = await assertIpv6LoopbackPortFree(entry.localPort).then(
+      () => true,
+      () => false
+    )
+    if (ipv6Free) {
+      return entry
+    }
+    await manager.removeForwardAndWait(entry.id)
+    if (attempt >= OS_PORT_ATTEMPTS) {
+      throw new Error('No free loopback port for this forward')
+    }
+  }
 }
 
 /** A person removed or disconnected the server: its forwards stop listening here. Queued behind
