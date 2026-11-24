@@ -6,8 +6,14 @@ import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { findCopyRows } from './worktree-diff-comments-selector'
 import { diffCommentOwnerKey, findOwnedFolder, type DiffCommentOwner } from './diff-comment-owner'
 import type { getExecutionHostIdForFolderWorkspace } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
-import { readDiffCommentsFromHost, writeDiffCommentsToHost } from './diff-comment-host-write'
+import { rewriteDiffCommentsOnHost, writeDiffCommentsToHost } from './diff-comment-host-write'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import {
+  addKnownList,
+  createKnownNoteVersions,
+  recoveryWrite,
+  type KnownNoteVersions
+} from './diff-comment-recovery-write'
 
 export function normalizeDiffComment(comment: DiffComment): DiffComment {
   const rawSource = (comment as { source?: unknown }).source
@@ -60,8 +66,8 @@ const lastMutationNextByQueue = new Map<string, DiffComment[]>()
 const floorSeedEpochByQueue = new Map<string, number>()
 
 // Why: a failed write may still have landed, so until a write succeeds this copy can't name what the host holds.
-// The ids are every note this copy listed or tried to write since: only those are its to change on the host.
-const ownNoteIdsAfterFailure = new Map<string, Set<string>>()
+// These are every note version it confirmed or tried to write since: a host version outside them is another device's.
+const knownVersionsAfterFailure = new Map<string, KnownNoteVersions>()
 
 /** One change to one copy's notes; the owner alone says which rows it reads, writes and rolls back. */
 export type DiffCommentMutation = {
@@ -121,28 +127,23 @@ export function enqueueDiffCommentPersist(
         ? lastPersistedByQueue.get(floorKey)
         : mutation.previous) ?? []
     ).map(normalizeDiffComment)
-    let sent: DiffComment[] = []
+    // Undefined until a list is handed to the host: a write refused before that left nothing there.
+    let sent: DiffComment[] | undefined
     // What this copy last saw on disk; the host merges only the edits since then.
-    // Why not always a promise: a write with nothing to re-read leaves in the turn it was dequeued in.
-    const baseFor = (requested: DiffComment[]): DiffComment[] | Promise<DiffComment[]> => {
+    // Why not always a re-read: a write with nothing to recover leaves in the turn it was dequeued in.
+    const save = (requested: DiffComment[]): Promise<void> => {
       sent = requested
-      const own = ownNoteIdsAfterFailure.get(floorKey)
-      if (!own) {
-        return floor
+      const known = knownVersionsAfterFailure.get(floorKey)
+      if (!known) {
+        return writeDiffCommentsToHost(mutation.owner, requested, floor)
       }
       // Why re-read: a failed write may still have landed, so the floor may not be what the host holds.
-      // Never send no base: the host would replace the list and drop notes another device saved.
-      return rereadBase(own, requested)
-    }
-    const rereadBase = async (
-      own: ReadonlySet<string>,
-      requested: DiffComment[]
-    ): Promise<DiffComment[]> => {
-      // After a failed write the host is asked what it holds: its notes this copy never listed are
-      // another device's and stay; the rest become what this copy shows.
-      const held = await readDiffCommentsFromHost(mutation.owner)
-      const mine = new Set([...own, ...[...floor, ...requested].map((note) => note.id)])
-      return held.filter((note) => mine.has(note.id)).map(normalizeDiffComment)
+      // Never send no base: a merging host would replace the list and drop notes another device saved.
+      // A floor re-seeded by a refresh is also a list the host held.
+      addKnownList(known, floor)
+      return rewriteDiffCommentsOnHost(mutation.owner, (held) =>
+        recoveryWrite(held.map(normalizeDiffComment), requested, known)
+      )
     }
     try {
       const scope = parseWorkspaceKey(worktreeId)
@@ -152,13 +153,7 @@ export function enqueueDiffCommentPersist(
           throw new Error('The workspace copy is gone; review notes were not saved.')
         }
         stateList = folderWorkspace.diffComments
-        const requested = (stateList ?? []).map(normalizeDiffComment)
-        const base = baseFor(requested)
-        await writeDiffCommentsToHost(
-          mutation.owner,
-          requested,
-          base instanceof Promise ? await base : base
-        )
+        await save((stateList ?? []).map(normalizeDiffComment))
       } else if (mutation.owner.kind === 'worktree') {
         const rows = findCopyRows(get(), worktreeId, mutation.owner.authority)
         // Why: the copy these notes were made on is gone; never send another's list.
@@ -166,13 +161,7 @@ export function enqueueDiffCommentPersist(
           throw new Error('The workspace copy is gone; review notes were not saved.')
         }
         stateList = rows.at(-1)?.diffComments
-        const requested = (stateList ?? []).map(normalizeDiffComment)
-        const base = baseFor(requested)
-        await writeDiffCommentsToHost(
-          mutation.owner,
-          requested,
-          base instanceof Promise ? await base : base
-        )
+        await save((stateList ?? []).map(normalizeDiffComment))
       }
     } catch (err) {
       // Why: converge to what actually landed; rollback's identity guard no-ops when a later mutation owns the array.
@@ -181,14 +170,15 @@ export function enqueueDiffCommentPersist(
         ? lastPersistedByQueue.get(floorKey)
         : mutation.previous
       rollback(set, worktreeId, rollbackFloor, mutation)
-      const own = ownNoteIdsAfterFailure.get(floorKey) ?? new Set<string>()
-      for (const note of [...floor, ...sent]) {
-        own.add(note.id)
+      const known = knownVersionsAfterFailure.get(floorKey) ?? createKnownNoteVersions()
+      addKnownList(known, floor)
+      if (sent) {
+        addKnownList(known, sent)
       }
-      ownNoteIdsAfterFailure.set(floorKey, own)
+      knownVersionsAfterFailure.set(floorKey, known)
       throw err
     }
-    ownNoteIdsAfterFailure.delete(floorKey)
+    knownVersionsAfterFailure.delete(floorKey)
     // Out-of-band replacement during await reseeded floor; never restore the older captured list as floor.
     if (floorSeedEpochByQueue.get(floorKey) === seedEpoch) {
       lastPersistedByQueue.set(floorKey, stateList)
