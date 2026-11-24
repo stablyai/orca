@@ -216,6 +216,8 @@ class GrabGuestExecution {
       clearTimeout(task.timer)
       task.timer = setTimeout(
         () => {
+          // Its caller is told it failed, so a timed-out arm must not go live later.
+          settleGrabOverlayArm(this.scope, task.id, null)
           this.finish(task, { ok: false }, false)
           // Recover an already-completed private result if only its reply was lost.
           sendPrivate(task.frame, { kind: 'hello', id: task.id })

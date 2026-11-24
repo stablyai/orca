@@ -100,3 +100,21 @@ it('cancel while a replacement arm is still running retires both pickers', async
   await delivered()
   expect(hosts.get('held-replacement')?.isConnected).toBe(false)
 })
+
+it('an arm that outlasts its timeout never goes live after its caller saw it fail', async () => {
+  const { guest, hosts, finishHeldArm } = pickerPage()
+  await expect(executeGrabScript(guest, 'first', { overlayControl: true })).resolves.toBe(true)
+  const replacement = executeGrabScript(guest, 'held-replacement', { overlayControl: true })
+  await expect(replacement).resolves.toBeNull()
+  const scope = grabDocumentScope(guest)
+  expect(scope.pendingOverlayId).toBeNull()
+
+  // The page finishes the arm late: it must fail there, leaving the first picker live and named.
+  finishHeldArm()
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(hosts.get('held-replacement')?.isConnected).toBe(false)
+  expect(hosts.get('first')?.isConnected).toBe(true)
+  retireGrabOverlay(scope)
+  await delivered()
+  expect(hosts.get('first')?.isConnected).toBe(false)
+}, 10_000)
