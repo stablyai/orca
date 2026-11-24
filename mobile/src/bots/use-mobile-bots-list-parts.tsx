@@ -28,7 +28,8 @@ export function useMobileBotsListParts(controller: HostScreenController) {
     section: Section,
     collapsedKeys: ReadonlySet<string>,
     pendingKeys: ReadonlySet<string>,
-    toggle: (collapseKey: string) => void
+    toggle: (collapseKey: string) => void,
+    first: boolean
   ): ReactElement | null => {
     if (!section.title || !section.botPreview) {
       return null
@@ -43,6 +44,7 @@ export function useMobileBotsListParts(controller: HostScreenController) {
         section={section}
         collapsed={collapsedKeys.has(collapseKey)}
         pending={pendingKeys.has(collapseKey)}
+        first={first}
         onToggle={() => toggle(collapseKey)}
         onNew={newBotHostId ? onNew : null}
       />

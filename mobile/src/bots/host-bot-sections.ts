@@ -155,7 +155,8 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
     groupHomes(listing, hostRows).forEach((identity) => listedIdentities.add(identity))
   }
   const newBotHostId = defaultNewBotHostId(listings)
-  if (total === 0 && !newBotHostId && endLines.length === 0) {
+  // With no bots the section goes; Home's Bots tab makes the first one.
+  if (total === 0 && endLines.length === 0) {
     return { sections: [], listedIdentities }
   }
   // The paired computer's Bot options order and filter every computer's bots: Manual keeps this
@@ -181,12 +182,7 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
     ? pausedMatches > 0
       ? [{ key: 'paused-matches', text: pausedMatchesLine(pausedMatches) }]
       : []
-    : [
-        ...(total === 0 && newBotHostId
-          ? [{ key: 'no-bots', text: translate('bots.list.noBotsYet', 'No bots yet.') }]
-          : []),
-        ...endLines
-      ]
+    : endLines
   return {
     sections: [
       botsSection({

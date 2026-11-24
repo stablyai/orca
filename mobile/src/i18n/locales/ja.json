@@ -1162,12 +1162,8 @@
       "placeholder": "ワークスペース名"
     },
     "worktreeListRow": {
-      "child": "子ワークスペース",
       "children_one": "{{count}} 件の子ワークスペース",
-      "children_other": "{{count}} 件の子ワークスペース",
-      "folder": "フォルダー",
-      "project": "プロジェクト {{repo}}",
-      "remoteHost": "リモートホスト"
+      "children_other": "{{count}} 件の子ワークスペース"
     },
     "nativeScreenRecovery": {
       "title": "問題が発生しました",

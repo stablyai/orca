@@ -1165,12 +1165,8 @@
       "placeholder": "工作區名稱"
     },
     "worktreeListRow": {
-      "child": "子工作區",
       "children_one": "{{count}} 個子工作區",
-      "children_other": "{{count}} 個子工作區",
-      "folder": "資料夾",
-      "project": "專案 {{repo}}",
-      "remoteHost": "遠端主機"
+      "children_other": "{{count}} 個子工作區"
     },
     "nativeScreenRecovery": {
       "title": "發生錯誤",

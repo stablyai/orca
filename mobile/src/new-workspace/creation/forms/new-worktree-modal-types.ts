@@ -63,7 +63,11 @@ export type NewWorktreeModalProps = {
   ) => void
   onClose: () => void
   folderLaunch?: NewWorktreeFolderLaunch
+  /** The project to start in, picked once it is listed. */
+  initialRepo?: NewWorktreeInitialRepo | null
 }
+
+export type NewWorktreeInitialRepo = { id: string; executionHostId: ExecutionHostId }
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
 

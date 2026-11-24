@@ -1076,12 +1076,6 @@
         "workerCount_other": "{{count}} workers"
       }
     },
-    "worktreeAgentList": {
-      "hideChildAgents_one": "Hide {{count}} child agent",
-      "hideChildAgents_other": "Hide {{count}} child agents",
-      "showChildAgents_one": "Show {{count}} child agent",
-      "showChildAgents_other": "Show {{count}} child agents"
-    },
     "worktreeListRow": {
       "children_one": "{{count}} child",
       "children_other": "{{count}} children"

@@ -1791,12 +1791,8 @@
       "placeholder": "Çalışma alanı adı"
     },
     "worktreeListRow": {
-      "child": "Alt çalışma alanı",
       "children_one": "{{count}} alt çalışma alanı",
       "children_other": "{{count}} alt çalışma alanı",
-      "folder": "Klasör",
-      "project": "{{repo}} projesi",
-      "remoteHost": "Uzak sunucu",
       "unsavedName": "Kaydedilmemiş ad: {{name}}"
     },
     "nativeScreenRecovery": {

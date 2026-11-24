@@ -1893,14 +1893,10 @@
       "placeholder": "Название рабочего пространства"
     },
     "worktreeListRow": {
-      "child": "Дочернее",
       "children_few": "{{count}} дочерних",
       "children_many": "{{count}} дочерних",
       "children_one": "{{count}} дочернее",
       "children_other": "{{count}} дочернего",
-      "folder": "Папка",
-      "project": "Проект {{repo}}",
-      "remoteHost": "Удалённый сервер",
       "unsavedName": "Несохранённое название: {{name}}"
     },
     "nativeScreenRecovery": {

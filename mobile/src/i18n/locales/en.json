@@ -869,6 +869,9 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "Creating workspace…"
     },
+    "hostSectionHeader": {
+      "newWorkspaceIn": "New workspace in {{project}}"
+    },
     "hostScreenHeader": {
       "backToHosts": "Back to hosts",
       "reconnect": "Reconnect",
@@ -1575,10 +1578,7 @@
       "description": "Pick a workspace from the sidebar to open its terminal here."
     },
     "worktreeListRow": {
-      "folder": "Folder",
-      "remoteHost": "Remote host",
-      "project": "Project {{repo}}",
-      "child": "Child",
+      "needsYou": "Needs you",
       "children_one": "{{count}} child",
       "children_other": "{{count}} children",
       "unsavedName": "Unsaved name: {{name}}"
@@ -1667,15 +1667,6 @@
     "mermaidDiagram": {
       "label": "Mermaid diagram",
       "expand": "Expand diagram"
-    },
-    "worktreeAgentList": {
-      "hideChildAgents_one": "Hide {{count}} child agent",
-      "hideChildAgents_other": "Hide {{count}} child agents",
-      "showChildAgents_one": "Show {{count}} child agent",
-      "showChildAgents_other": "Show {{count}} child agents",
-      "hideIdleChildren": "Hide {{count}} idle child agents",
-      "showIdleChildren": "Show {{count}} idle child agents",
-      "idleChildCount": "{{count}} idle"
     },
     "diffReviewFilesSheet": {
       "title": "Files",

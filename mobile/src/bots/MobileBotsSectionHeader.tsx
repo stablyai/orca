@@ -19,11 +19,14 @@ export function MobileBotsSectionHeader({
   collapsed: savedCollapsed,
   pending,
   onToggle,
-  onNew
+  onNew,
+  first
 }: {
   section: Section
   collapsed: boolean
   pending: boolean
+  /** No header sits above it, so it sits closer to the page title. */
+  first: boolean
   onToggle: () => void
   onNew: (() => void) | null
 }) {
@@ -46,7 +49,7 @@ export function MobileBotsSectionHeader({
     <AgentSpinner status="working" />
   ) : null
   return (
-    <View style={styles.header}>
+    <View style={[hostScreenStyles.sectionHeader, first && hostScreenStyles.sectionHeaderFirst]}>
       <Pressable
         onPress={onToggle}
         disabled={!canCollapse}
@@ -64,51 +67,59 @@ export function MobileBotsSectionHeader({
             working: preview.working
           }
         )}
+        hitSlop={HEADER_HIT_SLOP}
         style={({ pressed }) => [
-          hostScreenStyles.sectionHeader,
-          styles.toggle,
-          pressed && styles.togglePressed
+          hostScreenStyles.sectionToggle,
+          pressed && hostScreenStyles.sectionTogglePressed
         ]}
       >
-        <View style={hostScreenStyles.sectionChevron}>
-          {canCollapse ? (
-            <DisclosureChevron expanded={!collapsed} collapsedDeg={0} expandedDeg={90}>
-              <ChevronRight size={12} color={colors.textMuted} />
-            </DisclosureChevron>
-          ) : null}
-        </View>
-        <Text style={hostScreenStyles.sectionTitle}>{t('bots.section.title', 'Bots')}</Text>
-        <View
-          style={styles.countSlot}
-          pointerEvents="none"
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-        >
-          {count > 0 ? <Text style={hostScreenStyles.sectionCount}>{count}</Text> : null}
-        </View>
-        {pending ? (
-          <ActivityIndicator
-            size="small"
-            color={colors.textMuted}
-            style={hostScreenStyles.sectionPendingSpinner}
-          />
+        <Text style={hostScreenStyles.sectionTitle} numberOfLines={1}>
+          {t('bots.section.title', 'Bots')}
+        </Text>
+        {count > 0 ? (
+          <Text
+            style={hostScreenStyles.sectionCount}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
+            {count}
+          </Text>
         ) : null}
-        {mark ? <View style={styles.mark}>{mark}</View> : null}
+        {pending ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
+        {mark}
+        <View style={hostScreenStyles.sectionSpacer} />
       </Pressable>
       {onNew ? (
         <Pressable
           onPress={onNew}
           accessibilityRole="button"
           accessibilityLabel={t('bots.new.title', 'New bot')}
-          hitSlop={spacing.sm}
-          style={({ pressed }) => [styles.add, pressed && pressedStyle]}
+          hitSlop={ADD_HIT_SLOP}
+          style={({ pressed }) => [hostScreenStyles.sectionAdd, pressed && pressedStyle]}
         >
-          <Plus size={16} color={colors.textSecondary} />
+          <Plus size={18} color={colors.textMuted} />
+        </Pressable>
+      ) : null}
+      {canCollapse ? (
+        <Pressable
+          onPress={onToggle}
+          hitSlop={ADD_HIT_SLOP}
+          importantForAccessibility="no"
+          accessibilityElementsHidden
+          style={hostScreenStyles.sectionChevron}
+        >
+          <DisclosureChevron expanded={!collapsed} collapsedDeg={0} expandedDeg={90}>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </DisclosureChevron>
         </Pressable>
       ) : null}
     </View>
   )
 }
+
+// The header is 34 pt tall; these grow its targets to 44 without moving the text.
+const HEADER_HIT_SLOP = { top: 5, bottom: 5 } as const
+const ADD_HIT_SLOP = { top: 5, bottom: 5, left: 4, right: 4 } as const
 
 /** Quiet lines after the last bot: no bots yet, or a computer whose bots can't list. */
 export function MobileBotsListEnd({
@@ -132,18 +143,6 @@ export function MobileBotsListEnd({
 }
 
 const styles = themedStyleSheet(() => ({
-  header: { flexDirection: 'row', alignItems: 'center' },
-  toggle: { flex: 1, minWidth: 0 },
-  togglePressed: { backgroundColor: colors.translucentFill },
-  countSlot: { flex: 1 },
-  mark: { marginLeft: spacing.sm },
-  // The section header's vertical padding puts + on the title's line; 44 pt wide from the edge.
-  add: {
-    paddingTop: spacing.lg,
-    paddingBottom: 6,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.lg
-  },
   end: {
     paddingLeft: WORKTREE_ROW_LAYOUT.textInset,
     paddingRight: spacing.lg,

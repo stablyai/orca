@@ -1,14 +1,14 @@
 import { spacing } from '../../theme/mobile-theme'
 
-const ROW_ACCENT_WIDTH = 2
-const INDICATOR_WIDTH = 20
+const INDICATOR_WIDTH = 24
 
-/** The workspace row's horizontal grid; section headers and separators line up with it. */
+/** The workspace row's horizontal grid inside its project's group, as Home's rows lay out. */
 export const WORKTREE_ROW_LAYOUT = {
-  accentWidth: ROW_ACCENT_WIDTH,
   /** Left edge of the status-dot column. */
-  indicatorInset: ROW_ACCENT_WIDTH + spacing.lg,
+  indicatorInset: spacing.lg,
   indicatorWidth: INDICATOR_WIDTH,
-  /** Where the row's text starts. */
-  textInset: ROW_ACCENT_WIDTH + spacing.lg + INDICATOR_WIDTH + spacing.sm
+  /** Where the row's text starts; hairlines start here too. */
+  textInset: spacing.lg + INDICATOR_WIDTH,
+  /** The group's inset from the screen edge. */
+  groupInset: spacing.lg
 } as const

@@ -191,6 +191,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         hostLabelById={state.hostLabelById}
         existingWorktreePaths={existingWorktreePaths}
         existingWorktrees={state.worktrees}
+        initialRepo={state.newWorktreeRepo}
         // Use the platform opener: React Native Linking.openURL resolves without opening anything inside the shell’s WebView.
         openExternalUrl={openExternalLink}
         onCreated={(worktreeId, worktreeName, warning, executionHost) => {

@@ -1,18 +1,43 @@
 import { StyleSheet } from 'react-native'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { colors, radii, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
 
+/** One line per workspace, laid out like Home's grouped rows (home-list-styles.ts). */
 export const worktreeListRowStyles = themedStyleSheet(() => ({
+  // The project's group: each row carries its fill, the first and last round its corners.
+  groupRow: {
+    marginHorizontal: WORKTREE_ROW_LAYOUT.groupInset,
+    backgroundColor: colors.bgPanel,
+    overflow: 'hidden'
+  },
+  groupFirst: {
+    borderTopLeftRadius: radii.surface,
+    borderTopRightRadius: radii.surface
+  },
+  groupLast: {
+    borderBottomLeftRadius: radii.surface,
+    borderBottomRightRadius: radii.surface
+  },
+  // Between two rows of one group: the group's fill with a hairline from the text column. A whole
+  // point tall, so rows below it stay on whole points and every hairline lands on a device pixel.
+  groupSeparator: {
+    height: 1,
+    marginHorizontal: WORKTREE_ROW_LAYOUT.groupInset,
+    backgroundColor: colors.bgPanel
+  },
+  groupSeparatorLine: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: WORKTREE_ROW_LAYOUT.textInset,
+    backgroundColor: colors.borderSubtle
+  },
   worktreeRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: spacing.md,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.lg,
-    // Reserve the active accent bar width so active/inactive rows align.
-    borderLeftWidth: WORKTREE_ROW_LAYOUT.accentWidth,
-    borderLeftColor: 'transparent'
+    alignItems: 'center',
+    minHeight: 44,
+    paddingLeft: WORKTREE_ROW_LAYOUT.indicatorInset,
+    // Opaque, so a swipe's actions stay hidden until the row slides off them.
+    backgroundColor: colors.bgPanel
   },
   // The desktop's paused bot: its row and workspaces at 60%.
   worktreeRowDimmed: {
@@ -21,97 +46,74 @@ export const worktreeListRowStyles = themedStyleSheet(() => ({
   worktreeRowPressed: {
     backgroundColor: colors.bgRaised
   },
-  // The active row already wears bgPanel, so its press needs a wash that reads over it.
-  worktreeRowActivePressed: {
-    backgroundColor: colors.translucentFill
-  },
-  // Match desktop focused-worktree card with raised fill and left accent.
-  worktreeRowActive: {
-    backgroundColor: colors.bgPanel,
-    // Use desktop active-tab neutral accent, not blue.
-    borderLeftColor: colors.textSecondary
-  },
   indicatorCol: {
     width: WORKTREE_ROW_LAYOUT.indicatorWidth,
-    alignItems: 'center',
-    paddingTop: 6,
-    marginRight: spacing.sm,
-    gap: 4
-  },
-  unreadBell: {
-    marginTop: 2
+    alignItems: 'flex-start',
+    justifyContent: 'center'
   },
   worktreeMain: {
-    flex: 1
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: 12
   },
   worktreeNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm
+    gap: 6
   },
   worktreeName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    flexShrink: 1
+    flexShrink: 1,
+    fontSize: 16,
+    lineHeight: 20,
+    color: colors.textPrimary
   },
   worktreeNameUnread: {
-    fontWeight: '700'
+    fontWeight: '600'
+  },
+  // The repo's own checkout: there in every project, so it reads quieter than the work.
+  worktreeNameMain: {
+    color: colors.textSecondary
   },
   textReadOnly: {
     opacity: 0.5
   },
-  prBadge: {
+  // Centred on the row like Home's trailing column; ends 14 from the group's edge.
+  trailing: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: radii.pill
+    gap: 6,
+    paddingLeft: 10,
+    paddingRight: 14
+  },
+  time: {
+    fontSize: typography.metaSize,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums']
+  },
+  stateWord: {
+    fontSize: 13,
+    fontWeight: '600'
+  },
+  prMark: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2
   },
   prNumber: {
-    fontSize: 10,
-    color: colors.textSecondary
+    fontSize: typography.metaSize,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums']
   },
-  // Why: matches the desktop's compact repo chip, a small framed icon ahead of the title.
-  repoChip: {
-    width: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.mark,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised
-  },
-  folderBadge: {
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: radii.pill
-  },
-  folderBadgeText: {
-    fontSize: 10,
-    color: colors.textSecondary
-  },
-  worktreeMetaRow: {
+  // A row's children fold: the count and a chevron, at the trailing edge.
+  lineageToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
-    gap: spacing.xs
+    gap: 2
   },
-  repoName: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    maxWidth: 100
-  },
-  branchName: {
-    fontSize: 11,
+  lineageCount: {
+    fontSize: typography.metaSize,
     color: colors.textMuted,
-    fontFamily: typography.monoFamily,
-    // Why: path takes only leftover space so badges truncate last.
-    flex: 1
+    fontVariant: ['tabular-nums']
   },
   childBadge: {
     flexDirection: 'row',
@@ -136,29 +138,5 @@ export const worktreeListRowStyles = themedStyleSheet(() => ({
   },
   hostHealthText: {
     flexShrink: 0
-  },
-  lineageToggle: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.control
-  },
-  lineageTogglePressed: {
-    opacity: feedback.pressedOpacity
-  },
-  lineageToggleText: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: '600'
-  },
-  terminalCount: {
-    marginLeft: 'auto',
-    fontSize: typography.metaSize,
-    color: colors.textMuted
   }
 }))

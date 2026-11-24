@@ -1690,13 +1690,9 @@
       "placeholder": "工作区名称"
     },
     "worktreeListRow": {
-      "child": "子工作区",
       "children_one": "{{count}} 个子工作区",
       "children_other": "{{count}} 个子工作区",
-      "unsavedName": "未保存的名称：{{name}}",
-      "folder": "文件夹",
-      "project": "项目 {{repo}}",
-      "remoteHost": "远程主机"
+      "unsavedName": "未保存的名称：{{name}}"
     },
     "nativeScreenRecovery": {
       "title": "出了点问题",
@@ -1721,15 +1717,6 @@
     "mermaidDiagram": {
       "expand": "展开图表",
       "label": "Mermaid 图表"
-    },
-    "worktreeAgentList": {
-      "hideChildAgents_one": "隐藏 {{count}} 个子智能体",
-      "hideChildAgents_other": "隐藏 {{count}} 个子智能体",
-      "showChildAgents_one": "显示 {{count}} 个子智能体",
-      "showChildAgents_other": "显示 {{count}} 个子智能体",
-      "hideIdleChildren": "隐藏 {{count}} 个空闲子智能体",
-      "showIdleChildren": "显示 {{count}} 个空闲子智能体",
-      "idleChildCount": "{{count}} 个空闲"
     },
     "diffReviewFilesSheet": {
       "title": "文件",

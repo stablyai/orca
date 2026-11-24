@@ -33,7 +33,7 @@ import { openExternalLink } from '../../platform/external-links/external-link'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { prStateColor } from '../../worktree/row-presentation/WorktreeMetaGlyphs'
+import { prStateColor } from '../../worktree/row-presentation/pr-state-color'
 import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
 import { MobileBotWorkerRow } from '../MobileBotWorkerRow'
 

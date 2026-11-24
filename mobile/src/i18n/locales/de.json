@@ -1168,12 +1168,8 @@
       "placeholder": "Name des Arbeitsbereichs"
     },
     "worktreeListRow": {
-      "child": "Untergeordnet",
       "children_one": "{{count}} untergeordneter Arbeitsbereich",
-      "children_other": "{{count}} untergeordnete Arbeitsbereiche",
-      "folder": "Ordner",
-      "project": "Projekt {{repo}}",
-      "remoteHost": "Remote-Host"
+      "children_other": "{{count}} untergeordnete Arbeitsbereiche"
     },
     "nativeScreenRecovery": {
       "title": "Etwas ist schiefgelaufen",
