@@ -1,5 +1,4 @@
 import * as fs from 'node:fs'
-import type * as NodeFs from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { continueRebase } from './rebase-continue'
 import { getStatus } from '../status/status-read'
@@ -7,13 +6,13 @@ import { createConflictingRebaseRepo } from './rebase-real-git.test-fixture'
 
 const reads = vi.hoisted(() => ({ count: 0 }))
 vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFs>()
+  const actual = await importOriginal<typeof fs>()
   return {
     ...actual,
-    createReadStream: ((...args: Parameters<typeof actual.createReadStream>) => {
+    createReadStream: vi.fn((...args: Parameters<typeof actual.createReadStream>) => {
       reads.count++
       return actual.createReadStream(...args)
-    }) as typeof actual.createReadStream
+    })
   }
 })
 

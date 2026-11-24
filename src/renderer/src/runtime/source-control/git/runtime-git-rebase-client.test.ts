@@ -12,7 +12,7 @@ const missing = () =>
     id: '1',
     ok: false,
     error: { code: 'method_not_found', message: 'Unknown method' }
-  } as never)
+  })
 
 afterEach(() => {
   vi.unstubAllGlobals()
