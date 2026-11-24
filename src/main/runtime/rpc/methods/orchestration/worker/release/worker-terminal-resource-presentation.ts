@@ -109,3 +109,32 @@ export function retainedReason(resource: WorkerTerminalResourceRow): WorkerTermi
   }
   return 'identity_unproven'
 }
+
+/**
+ * The receipt of a release that did not make its own transition, from the row as it now is. Another
+ * dispatch's custody (or no row) reads as such, never as that owner's state, hold or output.
+ */
+export function receiptForUnchangedRelease(
+  dispatchId: string,
+  row: WorkerTerminalResourceRow | null | undefined,
+  processAction: WorkerReleaseReceipt['processAction'] = 'none'
+): WorkerReleaseReceipt {
+  if (!row || row.owner_dispatch_id !== dispatchId) {
+    return {
+      dispatchId,
+      state: 'retained',
+      reason: row ? 'ownership_transferred' : 'no_owned_resource',
+      processAction,
+      archive: null
+    }
+  }
+  return row.release_state === 'released'
+    ? { dispatchId, state: 'already_released', processAction, archive: archiveSummary(row) }
+    : {
+        dispatchId,
+        state: 'retained',
+        reason: retainedReason(row),
+        processAction,
+        archive: archiveSummary(row)
+      }
+}

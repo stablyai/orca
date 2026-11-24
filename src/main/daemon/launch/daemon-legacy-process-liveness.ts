@@ -1,9 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import {
-  parseDaemonPidFile,
-  salvagePidFromCorruptDaemonRecord
-} from '../endpoint/identity/daemon-pid-file-parse'
+import { parseDaemonPidFile } from '../endpoint/identity/daemon-pid-file-parse'
 import { hasErrorCode } from '../endpoint/identity/daemon-process-inspection'
 import { getDaemonPidPath } from './daemon-spawner'
 
@@ -29,9 +26,9 @@ export function legacyDaemonProcessMayBeAlive(
 
 /**
  * The strict, non-blocking form, for callers that read false as "no daemon here": exit proof, and
- * discovery deciding whether a record may be deleted. Only a missing pid file (ENOENT) or a positive
- * pid naming no process (ESRCH) proves the daemon gone; an unreadable record, or one naming no
- * positive pid (even after salvage), may still stand for a live daemon.
+ * discovery deciding whether a record may be deleted. Only a missing pid file (ENOENT) or a whole
+ * record's positive pid naming no process (ESRCH) proves the daemon gone; an unreadable or torn
+ * record, or one naming no positive pid, may still stand for a live daemon.
  */
 export async function legacyDaemonMayStillRun(
   runtimeDir: string,
@@ -39,8 +36,10 @@ export async function legacyDaemonMayStillRun(
 ): Promise<boolean> {
   try {
     const content = await readFile(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
-    const pid = parseDaemonPidFile(content)?.pid ?? salvagePidFromCorruptDaemonRecord(content)
-    // Signal 0 to zero or a negative pid probes a process group; its ESRCH says nothing about a daemon.
+    // Only a whole record proves which process it names: a torn one's integer prefix (of `12.5`, `12e3`,
+    // or a cut-off pid) may name another process, whose ESRCH says nothing about this daemon. Nor does
+    // signal 0 to zero or a negative pid, which probes a process group.
+    const pid = parseDaemonPidFile(content)?.pid ?? null
     if (pid === null || !Number.isSafeInteger(pid) || pid <= 0) {
       return true
     }

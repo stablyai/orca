@@ -11,7 +11,7 @@ import {
 } from '../../../../../orchestration/workers/archives/worker-output-archive'
 import { resolveStructuredWorkerForDispatch } from '../../structured-workers/orchestration-structured-worker-lifecycle'
 import type { WorkerReleaseReceipt } from './worker-release-completion'
-import { archiveSummary, retainedReason } from './worker-terminal-resource-presentation'
+import { receiptForUnchangedRelease } from './worker-terminal-resource-presentation'
 
 /** Exit-led release: the exact process is proven gone, so settle whatever the request state, keeping its output findable. */
 export async function settleProvenExitedWorkerTerminal(args: {
@@ -94,31 +94,9 @@ export function readRequestedWorkerReleaseState(
   resourceId: string
 ): WorkerReleaseReceipt | null {
   const current = db.getWorkerTerminalResource(resourceId)
-  if (!current || current.owner_dispatch_id !== dispatchId) {
-    return {
-      dispatchId,
-      state: 'retained',
-      reason: current ? 'ownership_transferred' : 'no_owned_resource',
-      processAction: 'none',
-      archive: null
-    }
-  }
-  if (current.release_state === 'released') {
-    return {
-      dispatchId,
-      state: 'already_released',
-      processAction: 'none',
-      archive: archiveSummary(current)
-    }
-  }
-  if (current.release_state === 'retained') {
-    return {
-      dispatchId,
-      state: 'retained',
-      reason: retainedReason(current),
-      processAction: 'none',
-      archive: archiveSummary(current)
-    }
-  }
-  return null
+  const stillThisRelease =
+    current?.owner_dispatch_id === dispatchId &&
+    current.release_state !== 'released' &&
+    current.release_state !== 'retained'
+  return stillThisRelease ? null : receiptForUnchangedRelease(dispatchId, current)
 }

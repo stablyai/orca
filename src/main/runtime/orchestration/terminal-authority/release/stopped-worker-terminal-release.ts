@@ -105,6 +105,7 @@ async function releaseExitedSlice(
     requestingDispatchId: string
     resourceId: string
     processIncarnation: string
+    hostScope: string | null
     terminalHandle: string
     attachedAt: string
   }[] = []
@@ -126,6 +127,7 @@ async function releaseExitedSlice(
       requestingDispatchId: resource.owner_dispatch_id,
       resourceId: resource.id,
       processIncarnation,
+      hostScope: resource.host_scope,
       terminalHandle: resource.terminal_handle,
       attachedAt:
         db.getWorkerDispatch(resource.owner_dispatch_id)?.created_at ?? resource.created_at

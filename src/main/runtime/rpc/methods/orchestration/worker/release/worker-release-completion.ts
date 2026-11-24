@@ -12,7 +12,7 @@ import type { WorkerTerminalReleaseRuntime } from '../../../../../orchestration/
 import { describeUnconfirmedAgentStop } from '../../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { inspectWorkerTerminal } from '../observation/worker-observation'
 import { orchestrationTimestampToMs } from '../output/worker-output'
-import { archiveSummary, retainedReason } from './worker-terminal-resource-presentation'
+import { archiveSummary, receiptForUnchangedRelease } from './worker-terminal-resource-presentation'
 import { classifyWorkerTerminalCloseError } from './worker-release-close-error'
 import { workerTerminalLeaseIsCurrent } from './worker-terminal-release-lease'
 import { resolveStructuredWorkerForDispatch } from '../../structured-workers/orchestration-structured-worker-lifecycle'
@@ -61,7 +61,8 @@ export function completeWorkerTerminalRelease(
     leads = true
     return completeWorkerTerminalReleaseOnce(args).then(async (receipt) => {
       if (active.recoveryRequested) {
-        args.db.recordWorkerTerminalRecoveryAttempt(args.resource.id)
+        // Bookkeeping for this custody only: a transfer during the proof leaves the new owner's row alone.
+        args.db.recordWorkerTerminalRecoveryAttempt(args.resource.id, args.dispatchId)
       }
       if (receipt.state === 'released' && !args.keepBound) {
         await closeWorkerBoundTerminals(args.runtime, args.db, args.resource.origin_dispatch_id)
@@ -97,35 +98,13 @@ async function completeWorkerTerminalReleaseOnce(
   }
   const worker = db.getWorkerDispatch(dispatchId)
   if (!worker || worker.agent_terminal_handle !== resource.terminal_handle) {
-    const retained = db.revertWorkerTerminalReleaseToRetained(
-      resource.id,
-      'identity_unproven',
-      dispatchId
-    )
-    return {
-      dispatchId,
-      state: 'retained',
-      reason: 'identity_unproven',
-      processAction: 'none',
-      archive: archiveSummary(retained)
-    }
+    return retainUnproven(db, dispatchId, resource.id)
   }
   const observation = await inspectWorkerTerminal(runtime, db, dispatchId)
   // Use inspectWorkerTerminal's proven live handle, including incarnation-fenced remints.
   const terminalHandle = observation.terminalHandle ?? resource.terminal_handle
   if (observation.status === 'identity_changed') {
-    const retained = db.revertWorkerTerminalReleaseToRetained(
-      resource.id,
-      'identity_unproven',
-      dispatchId
-    )
-    return {
-      dispatchId,
-      state: 'retained',
-      reason: 'identity_unproven',
-      processAction: 'none',
-      archive: archiveSummary(retained)
-    }
+    return retainUnproven(db, dispatchId, resource.id)
   }
   if (observation.status === 'missing' || observation.status === 'unattached') {
     // After remint fails, proven incarnation death settles before recovery deferral; never leave dead workers release_pending.
@@ -160,6 +139,9 @@ async function completeWorkerTerminalReleaseOnce(
       'The recorded terminal no longer resolves; whether its process is gone cannot be proven.',
       dispatchId
     )
+    if (unknown.release_state !== 'unknown') {
+      return receiptForUnchangedRelease(dispatchId, unknown)
+    }
     return {
       dispatchId,
       state: 'release_unknown',
@@ -170,19 +152,14 @@ async function completeWorkerTerminalReleaseOnce(
     }
   }
 
+  // The observation awaited: a retain and reuse may have handed the row on. Nothing below, from the resume
+  // capture to the close, may act on another dispatch's custody.
+  const current = db.getWorkerTerminalResource(resource.id)
+  if (current?.owner_dispatch_id !== dispatchId) {
+    return receiptForUnchangedRelease(dispatchId, current)
+  }
   if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource, terminalHandle)) {
-    const retained = db.revertWorkerTerminalReleaseToRetained(
-      resource.id,
-      'identity_unproven',
-      dispatchId
-    )
-    return {
-      dispatchId,
-      state: 'retained',
-      reason: 'identity_unproven',
-      processAction: 'none',
-      archive: archiveSummary(retained)
-    }
+    return retainUnproven(db, dispatchId, resource.id)
   }
   const archive = db.getWorkerTerminalArchive(dispatchId)
   const structured = resolveStructuredWorkerForDispatch(db, dispatchId)
@@ -214,19 +191,13 @@ async function completeWorkerTerminalReleaseOnce(
     archiveSource,
     archiveStatus
   })
-  const releasing = !isStillReleasing(committed)
+  const releasing = !isStillReleasing(committed, dispatchId)
     ? committed
     : !workerTerminalLeaseIsCurrent(runtime, db, dispatchId, committed, terminalHandle)
       ? db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven', dispatchId)
       : yieldAutoReleaseToWorkingAgent(runtime, committed)
-  if (!isStillReleasing(releasing)) {
-    return {
-      dispatchId,
-      state: 'retained',
-      reason: retainedReason(releasing),
-      processAction: 'none',
-      archive: archiveSummary(releasing)
-    }
+  if (!isStillReleasing(releasing, dispatchId)) {
+    return receiptForUnchangedRelease(dispatchId, releasing)
   }
   try {
     if (structured) {
@@ -244,6 +215,9 @@ async function completeWorkerTerminalReleaseOnce(
     if (!close.ptyKilled) {
       const reason = describeUnconfirmedAgentStop(close)
       const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, reason, dispatchId)
+      if (unknown.release_state !== 'unknown') {
+        return receiptForUnchangedRelease(dispatchId, unknown, 'closed_agent_terminal')
+      }
       return {
         dispatchId,
         state: 'release_unknown',
@@ -271,6 +245,9 @@ async function completeWorkerTerminalReleaseOnce(
         }
       }
       const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, reason, dispatchId)
+      if (unknown.release_state !== 'unknown') {
+        return receiptForUnchangedRelease(dispatchId, unknown)
+      }
       return {
         dispatchId,
         state: 'release_unknown',
@@ -281,27 +258,32 @@ async function completeWorkerTerminalReleaseOnce(
       }
     }
   }
+  const closed =
+    observation.status === 'exited' ? 'closed_exited_terminal' : 'closed_agent_terminal'
   const released = db.settleWorkerTerminalRelease(resource.id, dispatchId)
-  if (released.owner_dispatch_id !== dispatchId) {
-    // The fenced settle left another dispatch's row alone; this release announces nothing.
-    return {
-      dispatchId,
-      state: 'retained',
-      reason: 'ownership_transferred',
-      processAction: 'none',
-      archive: null
-    }
+  if (released.owner_dispatch_id !== dispatchId || released.release_state !== 'released') {
+    // A Keep open that won during the close, or another custody: no transition here, so nothing to announce.
+    return receiptForUnchangedRelease(dispatchId, released, closed)
   }
   runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
-  return {
-    dispatchId,
-    state: 'released',
-    processAction:
-      observation.status === 'exited' ? 'closed_exited_terminal' : 'closed_agent_terminal',
-    archive: archiveSummary(released)
-  }
+  return { dispatchId, state: 'released', processAction: closed, archive: archiveSummary(released) }
 }
 
-function isStillReleasing(resource: WorkerTerminalResourceRow): boolean {
-  return resource.ownership_state === 'owned' && resource.release_state === 'releasing'
+function retainUnproven(
+  db: OrchestrationDb,
+  dispatchId: string,
+  resourceId: string
+): WorkerReleaseReceipt {
+  return receiptForUnchangedRelease(
+    dispatchId,
+    db.revertWorkerTerminalReleaseToRetained(resourceId, 'identity_unproven', dispatchId)
+  )
+}
+
+function isStillReleasing(resource: WorkerTerminalResourceRow, dispatchId: string): boolean {
+  return (
+    resource.owner_dispatch_id === dispatchId &&
+    resource.ownership_state === 'owned' &&
+    resource.release_state === 'releasing'
+  )
 }

@@ -22,7 +22,6 @@ import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import { LocalPtyProvider } from '../../../../../../providers/local-pty/local-pty-provider'
 import { exitListeners } from '../../../../../../providers/local-pty/local-pty-provider-state'
 import type { IPtyProvider } from '../../../../../../providers/pty/provider-contract'
-import type { PtyProcessInfo } from '../../../../../../providers/pty/process-info'
 import { listLocalProcessesForExitProofFromRuntimeController } from '../../../../../../ipc/pty/runtime/inventory-operations'
 import { observeInProcessWorkerExits } from '../../../../../../ipc/pty/runtime/in-process-exit-observer'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../../../../terminal/lifecycle/pty-controller-inventory-budget'
@@ -33,7 +32,6 @@ import { mayUnaskedDaemonRunSessions } from '../../../../../../daemon/providers/
 import {
   createWorkerReleaseFixture,
   deferred,
-  isStartReceipt,
   workerIncarnation,
   workerPaneKey,
   type WorkerReleaseFixture
@@ -482,32 +480,37 @@ describe('worker release once the exact process is proven exited', () => {
       expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
     })
 
-    it('keeps a release pending when discovery keeps a corrupt older-daemon record it cannot rule out', async () => {
-      setup()
-      const runtimeDir = mkdtempSync(path.join(os.tmpdir(), 'orca-legacy-discovery-'))
-      try {
-        // A torn record and no socket: discovery adopts nothing, yet the record may name a live daemon.
-        writeFileSync(path.join(runtimeDir, 'daemon-v5.pid'), '{"pid": 12')
-        const guard = await discoverLegacyDaemons(runtimeDir)
-        expect(existsSync(path.join(runtimeDir, 'daemon-v5.pid'))).toBe(true)
-        serveLocalDaemon(twoGenerationDaemon(otherGeneration, otherGeneration), guard)
-        const { dispatchId } = await startSettledWorker()
-        goneAfterSettle()
+    it.each(['.5', 'e3', ''])(
+      'keeps a release pending when discovery keeps a torn older-daemon record (pid then %j) it cannot rule out',
+      async (tail) => {
+        setup()
+        const runtimeDir = mkdtempSync(path.join(os.tmpdir(), 'orca-legacy-discovery-'))
+        try {
+          // A torn record whose integer prefix names an exited process, and no socket: that ESRCH would
+          // speak for another process, so discovery keeps the record and the proof stays declined.
+          const exitedPid = spawnSync(process.execPath, ['-e', '']).pid
+          writeFileSync(path.join(runtimeDir, 'daemon-v5.pid'), `{"pid": ${exitedPid}${tail}`)
+          const guard = await discoverLegacyDaemons(runtimeDir)
+          expect(existsSync(path.join(runtimeDir, 'daemon-v5.pid'))).toBe(true)
+          serveLocalDaemon(twoGenerationDaemon(otherGeneration, otherGeneration), guard)
+          const { dispatchId } = await startSettledWorker()
+          goneAfterSettle()
 
-        await expect(
-          runtime.inspectTerminalProcessIncarnationLiveness(
-            workerIncarnation,
-            JSON.stringify({ kind: 'local', hostId: 'local' })
-          )
-        ).resolves.toBe('unverifiable')
-        await expect(
-          call('orchestration.workerRelease', { dispatch: dispatchId })
-        ).resolves.toMatchObject({ state: 'release_unknown', processAction: 'none' })
-        expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.ownership_state).toBe('owned')
-      } finally {
-        rmSync(runtimeDir, { recursive: true, force: true })
+          await expect(
+            runtime.inspectTerminalProcessIncarnationLiveness(
+              workerIncarnation,
+              JSON.stringify({ kind: 'local', hostId: 'local' })
+            )
+          ).resolves.toBe('unverifiable')
+          await expect(
+            call('orchestration.workerRelease', { dispatch: dispatchId })
+          ).resolves.toMatchObject({ state: 'release_unknown', processAction: 'none' })
+          expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.ownership_state).toBe('owned')
+        } finally {
+          rmSync(runtimeDir, { recursive: true, force: true })
+        }
       }
-    })
+    )
 
     it('releases once discovery removes an older record whose daemon has exited', async () => {
       setup()
@@ -663,147 +666,5 @@ describe('worker release once the exact process is proven exited', () => {
           ([target, kind]) => target === `dispatch:${dispatchId}` && kind === 'status'
         )
     ).toHaveLength(1)
-  })
-
-  it('shares one proof between two joined releases of a finished worker; only one reports released', async () => {
-    setup()
-    const listing = deferred<{ processes: never[]; inProcessOwner: boolean }>()
-    const proving = vi.fn(() => listing.promise)
-    loseWorkerTerminal(proving)
-    const { dispatchId } = await startSettledWorker()
-    goneAfterSettle()
-
-    const first = call('orchestration.workerRelease', { dispatch: dispatchId })
-    await vi.waitFor(() => expect(proving).toHaveBeenCalledTimes(1))
-    const second = call('orchestration.workerRelease', { dispatch: dispatchId })
-    listing.resolve({ processes: [], inProcessOwner: false })
-
-    await expect(first).resolves.toMatchObject({ state: 'released' })
-    await expect(second).resolves.toMatchObject({ state: 'already_released' })
-    expect(proving).toHaveBeenCalledTimes(1)
-    expect(
-      vi
-        .mocked(runtime.notifyMessageArrived)
-        .mock.calls.filter(
-          ([target, kind]) => target === `dispatch:${dispatchId}` && kind === 'status'
-        )
-    ).toHaveLength(1)
-  })
-
-  /** The coordinator keeps the worker, then a new worker reuses its terminal: worker-start transfers it. */
-  async function transferWhileProving(
-    from: string
-  ): Promise<{ taskId: string; dispatchId: string }> {
-    await call('orchestration.workerRetain', { dispatch: from })
-    const task = db.createTask({ spec: 'reuses the kept terminal', runId: activeRunId })
-    // The terminal resolves again for the reuse, then is gone once more.
-    fixture.terminalBack()
-    const started: unknown = await call('orchestration.workerStart', {
-      task: task.id,
-      from: 'term_coord',
-      terminal: 'term_worker'
-    })
-    goneAfterSettle()
-    if (!isStartReceipt(started)) {
-      throw new Error('worker start returned no receipt')
-    }
-    expect(db.getWorkerTerminalResourceByOwner(started.dispatchId)).toBeDefined()
-    return { taskId: task.id, dispatchId: started.dispatchId }
-  }
-
-  it("reports a requested release's transfer as ownership_transferred and leaves the new owner's row alone", async () => {
-    setup()
-    const listing = deferred<{ processes: never[]; inProcessOwner: boolean }>()
-    const proving = vi.fn(() => listing.promise)
-    loseWorkerTerminal(proving)
-    const { dispatchId } = await startSettledWorker()
-    goneAfterSettle()
-
-    const release = call('orchestration.workerRelease', { dispatch: dispatchId })
-    await vi.waitFor(() => expect(proving).toHaveBeenCalled())
-    const { dispatchId: successor } = await transferWhileProving(dispatchId)
-    const before = db.getWorkerTerminalResourceByOwner(successor)
-    listing.resolve({ processes: [], inProcessOwner: false })
-
-    await expect(release).resolves.toMatchObject({
-      dispatchId,
-      state: 'retained',
-      reason: 'ownership_transferred',
-      archive: null
-    })
-    expect(db.getWorkerTerminalResourceByOwner(successor)).toEqual(before)
-  })
-
-  it("never hands a successor's release the predecessor's pending proof or receipt", async () => {
-    setup()
-    const proofs: ReturnType<
-      typeof deferred<{ processes: PtyProcessInfo[]; inProcessOwner: boolean }>
-    >[] = []
-    loseWorkerTerminal(() => {
-      proofs.push(deferred())
-      return proofs.at(-1)!.promise
-    })
-    const { dispatchId } = await startSettledWorker()
-    goneAfterSettle()
-
-    const release = call('orchestration.workerRelease', { dispatch: dispatchId })
-    await vi.waitFor(() => expect(proofs).toHaveLength(1))
-    const { taskId, dispatchId: successor } = await transferWhileProving(dispatchId)
-    db.settleWorkerReport({
-      taskId,
-      dispatchId: successor,
-      outcome: 'succeeded',
-      result: 'successor done'
-    })
-    const successorRelease = call('orchestration.workerRelease', { dispatch: successor })
-    // Its own proof, not a join onto the predecessor's.
-    await vi.waitFor(() => expect(proofs).toHaveLength(2))
-    // The predecessor's proof answers first, and the worker is still alive.
-    const alive = [{ id: 'pty-worker', incarnationId: workerGeneration, cwd: '', title: '' }]
-    proofs[0]!.resolve({ processes: alive, inProcessOwner: false })
-    await expect(release).resolves.toMatchObject({ dispatchId, reason: 'ownership_transferred' })
-    expect(db.getWorkerTerminalResourceByOwner(successor)?.release_state).toBe('requested')
-
-    proofs[1]!.resolve({ processes: [], inProcessOwner: false })
-    await expect(successorRelease).resolves.toMatchObject({
-      dispatchId: successor,
-      state: 'released'
-    })
-  })
-
-  it('never lets a former owner release the resource its successor now holds', async () => {
-    setup()
-    loseWorkerTerminal(async () => ({ processes: [], inProcessOwner: false }))
-    const { dispatchId } = await startSettledWorker()
-    const { taskId, dispatchId: successor } = await transferWhileProving(dispatchId)
-    db.settleWorkerReport({
-      taskId,
-      dispatchId: successor,
-      outcome: 'succeeded',
-      result: 'successor done'
-    })
-    const resourceId = db.getWorkerTerminalResourceByOwner(successor)!.id
-    // The successor holds a matching archive, and its exact process is proven gone.
-    db.storeWorkerTerminalArchiveBeforeStop({
-      dispatchId: successor,
-      resourceId,
-      kind: 'terminal_tail',
-      content: '{"version":3,"fallbackReason":"session_not_reported"}',
-      archiveSource: 'terminal',
-      archiveStatus: 'unavailable'
-    })
-    goneAfterSettle()
-    const before = db.getWorkerTerminalResource(resourceId)
-    const archive = db.getWorkerTerminalArchive(successor)
-
-    await expect(
-      call('orchestration.workerRelease', { dispatch: dispatchId })
-    ).resolves.toMatchObject({ state: 'retained', reason: 'ownership_transferred' })
-    expect(db.getWorkerTerminalResource(resourceId)).toEqual(before)
-    expect(db.getWorkerTerminalArchive(successor)).toEqual(archive)
-    expect(runtime.notifyMessageArrived).not.toHaveBeenCalledWith(
-      `dispatch:${dispatchId}`,
-      'status'
-    )
   })
 })

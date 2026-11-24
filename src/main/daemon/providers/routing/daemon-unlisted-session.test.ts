@@ -66,6 +66,21 @@ describe('daemons outside the inventory', () => {
     }
   })
 
+  it('never lets a torn record name a process by its integer prefix', async () => {
+    const exited = spawnSync(process.execPath, ['-e', '']).pid
+    const kill = vi.spyOn(process, 'kill')
+    try {
+      for (const torn of [`{"pid": ${exited}.5`, `{"pid": ${exited}e3,`, `{"pid": ${exited}`]) {
+        await expect(
+          mayUnaskedDaemonRunSessions(runtimeDir({ 'daemon-v5.pid': torn }), new Set())
+        ).resolves.toBe(true)
+      }
+      expect(kill).not.toHaveBeenCalled()
+    } finally {
+      kill.mockRestore()
+    }
+  })
+
   it('ignores a live pid file for the current protocol, which the inventory already asks', async () => {
     await expect(
       mayUnaskedDaemonRunSessions(runtimeDir({ 'daemon-v9999.pid': process.pid }), new Set())

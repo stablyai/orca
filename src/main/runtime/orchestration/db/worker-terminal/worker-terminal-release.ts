@@ -172,16 +172,22 @@ export function releaseExitedWorkerTerminalInTransaction(
 /** One transaction, so a sweep's page wakes Crew readers once rather than once per row. */
 export function settleDeadWorkerTerminalReleases(
   this: OrchestrationDb,
-  releases: readonly DeadWorkerTerminalRelease[]
+  releases: readonly (DeadWorkerTerminalRelease & { hostScope: string | null })[]
 ): number {
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    const released = releases.filter(
-      (release) =>
-        // A retain or release request since the sweep read the row wins over the sweep.
-        this.getWorkerTerminalResource(release.resourceId)?.release_state === 'not_requested' &&
+    const released = releases.filter((release) => {
+      const current = this.getWorkerTerminalResource(release.resourceId)
+      return (
+        // A retain, release request or transfer since the sweep staged the row wins over the sweep:
+        // its proof spoke for the owner, host and process it staged, and for no other.
+        current?.release_state === 'not_requested' &&
+        current.owner_dispatch_id === release.requestingDispatchId &&
+        current.host_scope === release.hostScope &&
+        current.process_incarnation === release.processIncarnation &&
         releaseDeadWorkerTerminalInTransaction(this, release).release_state === 'released'
-    ).length
+      )
+    }).length
     this.db.exec('COMMIT')
     return released
   } catch (error) {
