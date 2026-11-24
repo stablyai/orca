@@ -13721,6 +13721,7 @@
             "rebaseEmptyStep": "No hay nada que confirmar en este paso. Aborta el rebase o termínalo en una terminal.",
             "rebaseStepUnreadable": "No se pudo comprobar este paso del rebase",
             "rebaseStepUnreadableShort": "No se pudo comprobar",
+            "rebaseCheckAgain": "Comprobar de nuevo",
             "rebaseRetryInspect": "Reintentar",
             "rebaseRetryInspectLabel": "Volver a comprobar el paso del rebase",
             "rebaseStoppedFinishInTerminal": "Git pausó este paso. Termínalo en una terminal o aborta.",

@@ -14479,6 +14479,7 @@
             "rebaseEmptyStep": "На этом шаге нечего коммитить. Прервите rebase или завершите его в терминале.",
             "rebaseStepUnreadable": "Не удалось проверить этот шаг rebase",
             "rebaseStepUnreadableShort": "Шаг не проверен",
+            "rebaseCheckAgain": "Проверить снова",
             "rebaseRetryInspect": "Повторить",
             "rebaseRetryInspectLabel": "Повторно проверить шаг rebase",
             "rebaseStoppedFinishInTerminal": "Git приостановил этот шаг. Завершите его в терминале или прервите.",

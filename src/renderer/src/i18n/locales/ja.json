@@ -14097,6 +14097,7 @@
             "rebaseEmptyStep": "このステップにはコミットする内容がありません。リベースを中止するか、ターミナルで完了してください。",
             "rebaseStepUnreadable": "このリベースステップを確認できませんでした",
             "rebaseStepUnreadableShort": "ステップを確認できません",
+            "rebaseCheckAgain": "再確認",
             "rebaseRetryInspect": "再試行",
             "rebaseRetryInspectLabel": "リベースステップを再確認",
             "rebaseStoppedFinishInTerminal": "Git がこのステップで一時停止しました。ターミナルで完了するか、中止してください。",

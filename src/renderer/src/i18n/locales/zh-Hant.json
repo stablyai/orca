@@ -13917,6 +13917,7 @@
             "rebaseEmptyStep": "此步驟沒有可提交的內容。請中止重定基底，或在終端機中完成它。",
             "rebaseStepUnreadable": "無法檢查此重定基底步驟",
             "rebaseStepUnreadableShort": "無法檢查步驟",
+            "rebaseCheckAgain": "再次檢查",
             "rebaseRetryInspect": "重試",
             "rebaseRetryInspectLabel": "重新檢查重定基底步驟",
             "rebaseStoppedFinishInTerminal": "Git 已在此步驟暫停。請在終端機中完成或中止。",

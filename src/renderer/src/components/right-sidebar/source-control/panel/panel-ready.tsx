@@ -108,6 +108,7 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
                     model.isRemoteOperationActive && model.inFlightRemoteOpKind === 'rebase',
                   isAbortingRebase: model.isAbortingOperation,
                   isContinuingRebase: model.isContinuingRebase,
+                  isRetryingRebaseInspect: model.isRetryingRebaseInspect,
                   hasGitOwner: !!model.activeRepoTarget,
                   onRebase: () => model.handleActionInvoke('rebase_base'),
                   onAbortRebase: () => void model.handleAbortRebase(),

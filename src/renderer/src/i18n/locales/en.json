@@ -15508,6 +15508,7 @@
             "rebaseEmptyStep": "Nothing to commit in this step. Abort the rebase or finish it in a terminal.",
             "rebaseStepUnreadable": "Couldn't check this rebase step",
             "rebaseStepUnreadableShort": "Couldn't check step",
+            "rebaseCheckAgain": "Check again",
             "rebaseRetryInspect": "Retry",
             "rebaseRetryInspectLabel": "Retry checking the rebase step",
             "rebaseStoppedFinishInTerminal": "Git paused this step. Finish it in a terminal or abort.",

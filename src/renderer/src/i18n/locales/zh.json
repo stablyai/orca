@@ -14590,6 +14590,7 @@
             "rebaseEmptyStep": "此步骤没有可提交的内容。请中止变基，或在终端中完成它。",
             "rebaseStepUnreadable": "无法检查此变基步骤",
             "rebaseStepUnreadableShort": "无法检查步骤",
+            "rebaseCheckAgain": "重新检查",
             "rebaseRetryInspect": "重试",
             "rebaseRetryInspectLabel": "重新检查变基步骤",
             "rebaseStoppedFinishInTerminal": "Git 已在此步骤暂停。请在终端中完成或中止。",

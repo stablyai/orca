@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { continueRuntimeGitRebase } from '@/runtime/source-control/git/runtime-git-rebase-client'
@@ -171,6 +171,7 @@ export function useSourceControlRebaseContinue({
   worktreePath: string | null
 }) {
   const scope = useSourceControlScope()
+  const [isRetryingRebaseInspect, setIsRetryingRebaseInspect] = useState(false)
   const previousStaged = useRef(stagedSignature)
   useEffect(() => {
     const changed = previousStaged.current !== stagedSignature
@@ -196,7 +197,7 @@ export function useSourceControlRebaseContinue({
       operationStore,
       statusHead,
       () => current
-    )
+    ).finally(() => setIsRetryingRebaseInspect(false))
     return () => {
       current = false
     }
@@ -265,9 +266,14 @@ export function useSourceControlRebaseContinue({
   const handleContinueRebase = runRebaseStep
   // Clearing the failure makes the stop unread again, which re-runs the inspect effect above.
   const handleRetryRebaseInspect = useCallback((): void => {
+    setIsRetryingRebaseInspect(true)
     operationStore.setState({ rebaseStop: null, rebaseStopInspectFailure: null })
   }, [operationStore])
-  return { handleContinueRebase, handleRetryRebaseInspect }
+  return {
+    handleContinueRebase,
+    handleRetryRebaseInspect,
+    isRetryingRebaseInspect: isRetryingRebaseInspect && shouldInspect && !!activeRepoTarget
+  }
 }
 
 export type SourceControlRebaseContinue = ReturnType<typeof useSourceControlRebaseContinue>
