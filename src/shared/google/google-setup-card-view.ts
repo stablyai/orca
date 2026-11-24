@@ -81,15 +81,18 @@ export function googleSetupShownStepStatus(
     : status
 }
 
-/** How many finished steps before the open one, and steps past the one after it, fold into a line each
+/** How many finished steps before the open one, and untouched steps past the one after it, fold into a line each
  *  on the phone; two or more, since one step is no shorter folded. */
 export function googleSetupFoldedSteps(
   run: GoogleSetupRun,
   steps: readonly GoogleSetupStep[]
 ): { before: number; after: number } {
-  const open = steps.findIndex((step) => run.steps[step]?.status !== 'done')
+  const status = (step: GoogleSetupStep) => run.steps[step]?.status ?? 'pending'
+  const open = steps.findIndex((step) => status(step) !== 'done')
   const finished = open === -1 ? steps.length : open
-  const rest = steps.length - finished - 2
+  // Only untouched steps fold at the end: the bot may be on, or past, a later one while one is open.
+  const lastTouched = steps.findLastIndex((step) => status(step) !== 'pending')
+  const rest = steps.length - Math.max(finished + 2, lastTouched + 1)
   return { before: finished >= 2 ? finished : 0, after: rest >= 2 ? rest : 0 }
 }
 

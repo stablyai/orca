@@ -136,6 +136,10 @@ export function GoogleReadinessGroup(props: {
         return readiness.detail ?? t('bots.google.state.error', 'Couldn’t check')
     }
   }
+  const rows = readinessRows(account.services, t)
+  if (rows.length === 0) {
+    return null
+  }
   return (
     <SettingsSection
       title={t('bots.google.bot.uses', 'What it can use')}
@@ -151,7 +155,7 @@ export function GoogleReadinessGroup(props: {
             )
       }
     >
-      {readinessRows(account.services, t).map((row) => {
+      {rows.map((row) => {
         const action = fix(account.email, row.readiness)
         const Icon = SERVICE_ICONS[row.key] ?? Mail
         return (
