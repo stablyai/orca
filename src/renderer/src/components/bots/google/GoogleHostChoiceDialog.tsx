@@ -109,9 +109,10 @@ export function GoogleHostChoiceDialog({
             {file.error}
           </p>
         ) : null}
-        <DialogFooter className="flex-row flex-wrap items-center justify-end [&_button]:px-2.5">
+        <DialogFooter className="@container flex-row flex-wrap items-center justify-end">
           <Button
             variant="ghost"
+            size="responsive-sm"
             className="mr-auto"
             disabled={file.busy}
             onClick={() => void file.pick()}
@@ -120,10 +121,10 @@ export function GoogleHostChoiceDialog({
           </Button>
           {/* Keep both actions on the same line when the footer wraps. */}
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            <Button variant="ghost" size="responsive-sm" onClick={() => onOpenChange(false)}>
               {t('common.cancel', 'Cancel')}
             </Button>
-            <Button onClick={() => start()}>
+            <Button size="responsive-sm" onClick={() => start()}>
               {t('bots.google.hostChoice.continue', 'Continue')}
             </Button>
           </div>
