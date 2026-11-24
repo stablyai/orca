@@ -1,7 +1,9 @@
-import type { HostUsageLimitCut } from './structured-agent-session-usage-limit-chain'
+import {
+  switchFreeIdentity,
+  type HostUsageLimitCut
+} from './structured-agent-session-usage-limit-chain'
 import type { UsageLimitAccountHolds } from './structured-agent-session-usage-limit-account-hold'
 import type { UsageLimitContinueDeps } from './structured-agent-session-usage-limit-continue-deps'
-import type { StructuredAgentSessionHostDeps as HostDeps } from '../host/structured-agent-session-host-types'
 
 export type UsageLimitCutReads = {
   sessions: ReadonlyMap<string, unknown>
@@ -10,11 +12,12 @@ export type UsageLimitCutReads = {
   readLoadedCut: (id: string) => Promise<HostUsageLimitCut | null>
 }
 
-type Deps = UsageLimitCutReads & {
-  logger: HostDeps['logger']
-  /** The cut with a switch standing in for its unknown reset (UsageLimitAccountHolds). */
-  switchReset: (id: string, cut: HostUsageLimitCut) => HostUsageLimitCut
-}
+type Deps = UsageLimitCutReads &
+  Pick<UsageLimitContinueDeps, 'host' | 'now'> & {
+    holds: UsageLimitAccountHolds
+    /** The cut with a switch standing in for its unknown reset (UsageLimitAccountHolds). */
+    switchReset: (id: string, cut: HostUsageLimitCut) => HostUsageLimitCut
+  }
 
 /** The cuts of chats that aren't loaded, read from history a few per pass. */
 export class UsageLimitColdCuts {
@@ -23,6 +26,8 @@ export class UsageLimitColdCuts {
   private readonly failures = new Map<string, number>()
   /** Chats whose sweep read threw, so each failure is logged once rather than every pass. */
   private readonly sweepFailures = new Set<string>()
+  /** The cut each loaded chat that isn't open was last attributed for. */
+  private readonly attributed = new Map<string, string>()
   private passes = 0
 
   constructor(private readonly deps: Deps) {}
@@ -62,7 +67,7 @@ export class UsageLimitColdCuts {
     } catch (error) {
       if (!this.sweepFailures.has(id)) {
         this.sweepFailures.add(id)
-        this.deps.logger.warn('usage-limit continue could not read a chat', {
+        this.deps.host.logger.warn('usage-limit continue could not read a chat', {
           scope: 'usage-limit-continue',
           sessionId: id,
           error
@@ -72,17 +77,21 @@ export class UsageLimitColdCuts {
     }
   }
 
-  /** Attributes the loaded chats that aren't open, which the sweep otherwise never reaches. */
-  async attributeUnopened(
-    open: ReadonlySet<string>,
-    holds: UsageLimitAccountHolds,
-    deps: Pick<UsageLimitContinueDeps, 'host' | 'now'>
-  ): Promise<void> {
-    for (const id of [...this.deps.sessions.keys()].filter((id) => !open.has(id))) {
-      const cut = await this.readForSweep(id)
-      if (cut && cut !== 'unreadable') {
-        await holds.attribute(id, deps.host, cut, deps.now())
-      }
+  /** Attributes a loaded chat that isn't open, which the sweep otherwise never reaches: once per
+   *  cut and per account move (its attribution's sources or launch changing), not every pass. */
+  async attributeUnopened(id: string, cut: HostUsageLimitCut, open: ReadonlySet<string>) {
+    const { holds, host, now } = this.deps
+    const key = switchFreeIdentity(cut)
+    if (open.has(id)) {
+      this.attributed.delete(id)
+    } else if (
+      this.attributed.get(id) !== key ||
+      !holds.bindingHolds(id, host, holds.attributionBinding(id))
+    ) {
+      this.attributed.set(id, key)
+      await holds.attribute(id, host, cut, now())
+    } else {
+      holds.askForMoveReading(id, cut.turnEndedAt)
     }
   }
 
@@ -97,7 +106,7 @@ export class UsageLimitColdCuts {
         this.failures.delete(id)
       } catch (error) {
         if (!this.failures.has(id)) {
-          this.deps.logger.warn('usage-limit continue could not read a chat', {
+          this.deps.host.logger.warn('usage-limit continue could not read a chat', {
             scope: 'usage-limit-continue',
             sessionId: id,
             error
@@ -116,6 +125,11 @@ export class UsageLimitColdCuts {
         }
       }
     }
+    for (const id of this.attributed.keys()) {
+      if (shown.has(id) || !this.deps.sessions.has(id)) {
+        this.attributed.delete(id)
+      }
+    }
     // Loaded chats are still swept while hidden; logging their failure once must survive that.
     for (const id of this.sweepFailures) {
       if (!shown.has(id) && !this.deps.sessions.has(id)) {
@@ -128,11 +142,13 @@ export class UsageLimitColdCuts {
     this.cuts.delete(id)
     this.failures.delete(id)
     this.sweepFailures.delete(id)
+    this.attributed.delete(id)
   }
 
   clear(): void {
     this.cuts.clear()
     this.failures.clear()
     this.sweepFailures.clear()
+    this.attributed.clear()
   }
 }

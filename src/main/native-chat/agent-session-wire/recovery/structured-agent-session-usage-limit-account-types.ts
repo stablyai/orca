@@ -19,4 +19,7 @@ export type UsageLimitAccountVerdict = {
   awaitingRoom: boolean
   /** A room reading, rather than a reset time, made this cut eligible. */
   releasedByRoom: boolean
+  /** The chat moved to another account that has no reading to decide from yet, so `resetsAt`
+   *  (capped at the move) is not yet known to be when it is free. */
+  moveUnread: boolean
 }

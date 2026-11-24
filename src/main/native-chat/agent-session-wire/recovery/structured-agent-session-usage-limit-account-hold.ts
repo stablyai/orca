@@ -25,6 +25,7 @@ import {
 } from './structured-agent-session-usage-limit-account-cache'
 import {
   accountHoldVerdict,
+  readingSince,
   type UsageLimitAccountHold
 } from './structured-agent-session-usage-limit-account-verdict'
 import type {
@@ -43,6 +44,8 @@ type AttributionHost = Pick<
 
 const GRACE_MS = 15_000
 const UNKNOWN_RESET_ASK_MS = 10 * 60_000
+/** How often an account a chat moved to is asked for a reading while it has none to decide from. */
+const MOVE_READING_ASK_MS = 60_000
 
 export class UsageLimitAccountHolds {
   private readonly holds = new Map<string, UsageLimitAccountHold>()
@@ -135,6 +138,17 @@ export class UsageLimitAccountHolds {
       now,
       limited.turnEndedAt
     )
+    this.askForMoveReading(id, limited.turnEndedAt)
+  }
+
+  /** The stop a moved chat publishes waits for a reading of the account it moved to, and the
+   *  poller may be idle (unfocused, no viewer): ask for one. */
+  askForMoveReading(id: string, turnEndedAt = Number.NEGATIVE_INFINITY): void {
+    const scope = this.scopes.get(id)
+    const ask = scope?.account?.refresh ?? scope?.bootstrap
+    if (this.movedSince.has(id) && !readingSince(scope?.account?.read(), turnEndedAt)) {
+      ask?.(MOVE_READING_ASK_MS)
+    }
   }
 
   /** What the chat's attribution was computed under; a send binds to this. */
@@ -203,7 +217,8 @@ export class UsageLimitAccountHolds {
         unknownReset: false,
         awaitingReading: false,
         awaitingRoom,
-        releasedByRoom: false
+        releasedByRoom: false,
+        moveUnread: movedCut
       }
     }
     if (
