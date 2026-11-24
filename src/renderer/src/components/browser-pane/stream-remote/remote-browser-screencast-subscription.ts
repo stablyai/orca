@@ -113,8 +113,8 @@ export async function openRemoteBrowserScreencastStream(
         pointerEvents: 1,
         pagePrompts: 1,
         contextMenus: 1,
-        // A web client's picked files have no paths to stage on the host, and it can't save a printed PDF or a download.
-        ...(isWebClientLocation() ? {} : { fileChoosers: 1, prints: 1, downloadCopies: 1 }),
+        // A web client's picked files have no paths to stage on the host, and it can't save a printed PDF.
+        ...(isWebClientLocation() ? {} : { fileChoosers: 1, prints: 1 }),
         agentCursor: 1,
         driverEvents: 1,
         downloads: 1,
@@ -229,7 +229,7 @@ function dispatchScreencastResponse(
     (event.type === 'downloadRequested' || event.type === 'downloadFinished') &&
     dialogPage.target.kind === 'environment'
   ) {
-    showRemoteBrowserDownloadNotice(event, dialogPage.target)
+    showRemoteBrowserDownloadNotice(event, dialogPage.target.environmentId)
   } else if (event.type === 'print') {
     void saveRemoteBrowserPagePrint(dialogPage, event)
   } else if (event.type === 'error') {

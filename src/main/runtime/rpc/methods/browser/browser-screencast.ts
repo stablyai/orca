@@ -6,9 +6,7 @@ import { runtimeBrowserCommandsFactoryIsAvailable } from '../../../browser/insta
 import {
   FileChooserAnswer,
   PagePromptAnswer,
-  ReadDownloadCopy,
   ReadPrintPdf,
-  ReleaseDownloadCopy,
   ReleasePrintPdf,
   Screencast,
   ScreencastAck,
@@ -22,13 +20,7 @@ import {
   readBrowserPrintPdf,
   releaseBrowserPrintPdf
 } from '../../../../browser/guest-lifecycle/prompts/browser-print-viewers'
-import {
-  readBrowserDownloadCopy,
-  releaseBrowserDownloadCopy
-} from '../../../../browser/guest-lifecycle/manager/downloads/browser-download-copy-offers'
 import { ownerOnly } from '../bots-caller-gates'
-
-const DOWNLOAD_COPY_OWNER_ONLY = 'Only a person at a desktop can copy a download to their computer.'
 
 export const BROWSER_SCREENCAST_METHODS = [
   defineStreamingMethod({
@@ -80,25 +72,6 @@ export const BROWSER_SCREENCAST_METHODS = [
     permission: 'workspace',
     params: ReleasePrintPdf,
     handler: async (params, { pairedDeviceId }) => releaseBrowserPrintPdf(pairedDeviceId, params)
-  }),
-  defineMethod({
-    name: 'browser.readDownloadCopy',
-    permission: 'workspace',
-    params: ReadDownloadCopy,
-    // Only the device the copy was offered to, and never an agent acting through it.
-    handler: async (params, context) => {
-      ownerOnly(context, DOWNLOAD_COPY_OWNER_ONLY)
-      return readBrowserDownloadCopy(context.pairedDeviceId, params)
-    }
-  }),
-  defineMethod({
-    name: 'browser.releaseDownloadCopy',
-    permission: 'workspace',
-    params: ReleaseDownloadCopy,
-    handler: async (params, context) => {
-      ownerOnly(context, DOWNLOAD_COPY_OWNER_ONLY)
-      return releaseBrowserDownloadCopy(context.pairedDeviceId, params)
-    }
   }),
   defineMethod({
     name: 'browser.screencast.reclaimForDesktop',
