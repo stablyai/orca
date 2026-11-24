@@ -28,6 +28,7 @@ import {
   startMode,
   type GoogleSetupActor
 } from './google-setup-rules'
+import { revivedGoogleSetupRun } from './google-setup-revive'
 
 export { GoogleSetupError, isPersonOwnedStep, type GoogleSetupActor }
 
@@ -58,7 +59,7 @@ export type GoogleSetupChange =
   /** Orca's own reading that a working sign-in shows these steps finished; never sent by a bot. */
   | { action: 'finished-outside'; steps: GoogleSetupStep[] }
   | { action: 'fail'; error: string }
-  | { action: 'cancel' }
+  | { action: 'cancel'; runId?: string }
 
 export class GoogleSetupRuns {
   private runs: Record<string, GoogleSetupRun> | null = null
@@ -148,9 +149,24 @@ export class GoogleSetupRuns {
         revision: (current?.revision ?? 0) + 1
       })
     }
-    const revived = current ? this.revive(current, actor, change, now) : null
+    const revived = current ? revivedGoogleSetupRun(current, actor, change, now) : null
     if (revived) {
       return this.save(revived)
+    }
+    // A second Stop (a double click, another device) is already done; a late one for an older run
+    // leaves the current one alone.
+    if (
+      change.action === 'cancel' &&
+      actor === 'owner' &&
+      current &&
+      (current.state === 'cancelled' || (change.runId !== undefined && change.runId !== current.id))
+    ) {
+      return current
+    }
+    if (current?.state === 'cancelled') {
+      throw new GoogleSetupError(
+        'Your owner stopped this Google setup. Start it again only if they ask.'
+      )
     }
     if (current?.state === 'done' && lateDone(change)) {
       return current
@@ -165,60 +181,6 @@ export class GoogleSetupRuns {
     next.updatedAt = now
     next.revision = current.revision + 1
     return this.save(next)
-  }
-
-  /** The owner's Start over (a new run keeping their choices) and Continue on a stopped run. */
-  private revive(
-    current: GoogleSetupRun,
-    actor: GoogleSetupActor,
-    change: GoogleSetupChange,
-    now: number
-  ): GoogleSetupRun | null {
-    if (actor !== 'owner' || change.action !== 'answer' || change.card !== 'step') {
-      return null
-    }
-    const answer = { values: change.values, at: now }
-    const revision = current.revision + 1
-    if (change.values[0] === 'start-over') {
-      // An imported app's path isn't kept: its skipped steps start again too.
-      const { path: chosen, services, account, kind } = current.answers
-      const path = chosen?.values[0] === 'import' ? undefined : chosen
-      return {
-        id: randomUUID(),
-        botId: current.botId,
-        state: 'running',
-        mode: current.mode,
-        steps: {},
-        answers: {
-          ...(path ? { path } : {}),
-          ...(services ? { services } : {}),
-          ...(account ? { account } : {}),
-          ...(kind ? { kind } : {}),
-          step: answer
-        },
-        // The account, kind, path and services stay (not an imported path); the steps start again.
-        ...(current.account ? { account: current.account } : {}),
-        ...(current.accounts ? { accounts: current.accounts } : {}),
-        ...(current.kind ? { kind: current.kind } : {}),
-        ...(current.services ? { services: current.services } : {}),
-        ...(current.browserPageId ? { browserPageId: current.browserPageId } : {}),
-        ...(current.newApp ? { newApp: true } : {}),
-        startedAt: now,
-        updatedAt: now,
-        revision
-      }
-    }
-    if (change.values[0] === 'resume' && current.state === 'failed') {
-      const { lastError: _gone, ...rest } = structuredClone(current)
-      return {
-        ...rest,
-        state: 'running',
-        answers: { ...rest.answers, step: answer },
-        updatedAt: now,
-        revision
-      }
-    }
-    return null
   }
 
   private all(): Record<string, GoogleSetupRun> {

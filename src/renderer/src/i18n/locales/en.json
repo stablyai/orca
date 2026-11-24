@@ -28667,7 +28667,8 @@
         "hostDefault": "{{host}}’s default",
         "computerDefault": "This computer’s default",
         "changeInSettings": "Change in Settings",
-        "alsoConnected": "Also connected"
+        "alsoConnected": "Also connected",
+        "settingUp": "Setting up"
       },
       "copied": "Copied. Send it to your Google admin.",
       "share": {
@@ -28841,7 +28842,8 @@
         "signedIn": "✓ Signed in",
         "done": "✓ Done",
         "takeOver": "✓ {{bot}} takes over from here",
-        "chose": "✓ You chose {{what}}"
+        "chose": "✓ You chose {{what}}",
+        "stopped": "Setup stopped"
       },
       "ended": "This Google setup ended.",
       "heading": "Connect Google",
@@ -28885,7 +28887,8 @@
         "waiting": "Waiting for you",
         "working": "Working",
         "heading": "Setting up Google",
-        "you": "You"
+        "you": "You",
+        "stopped": "Stopped"
       },
       "letMe": "Let me do this one",
       "step": {
@@ -28932,7 +28935,8 @@
         "checkFailed": "Orca couldn’t check {{services}}."
       },
       "notNow": "Not now",
-      "importSetupFile": "Import setup file"
+      "importSetupFile": "Import setup file",
+      "stop": "Stop setup"
     },
     "import": {
       "nudgeOne": "We found a bot in {{app}}.",
