@@ -137,7 +137,7 @@ export function SettingsSegmentedControl<T extends string | number>({
       aria-labelledby={ariaLabelledBy}
       aria-describedby={ariaDescribedBy}
       // Radiogroup keys: arrows and Home/End move focus and selection; Tab stops are unchanged.
-      onKeyDown={(event) => handleSegmentedControlKeyDown(event, options, onChange)}
+      onKeyDown={(event) => handleSegmentedControlKeyDown(event, options, value, onChange)}
       className={cn(
         'inline-flex items-center rounded-md border border-border bg-background/50 p-0.5',
         size === 'icon' && 'gap-0.5',

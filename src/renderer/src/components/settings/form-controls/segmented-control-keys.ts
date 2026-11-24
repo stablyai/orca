@@ -17,7 +17,7 @@ const STEPS: Readonly<Record<string, 1 | -1 | 'first' | 'last'>> = {
   End: 'last'
 }
 
-/** Radiogroup arrow keys: the enabled option a key moves to, wrapping; null when the key does nothing. */
+/** Radiogroup keys: the enabled option a key moves to (wrapping; may be the focused one), or null. */
 export function segmentedControlKeyTarget(
   key: string,
   current: number,
@@ -33,7 +33,7 @@ export function segmentedControlKeyTarget(
   for (let tried = 0; tried < count; tried += 1) {
     index = (index + delta + count) % count
     if (!disabled[index]) {
-      return index === current ? null : index
+      return index
     }
   }
   return null
@@ -43,6 +43,7 @@ export function segmentedControlKeyTarget(
 export function handleSegmentedControlKeyDown<T>(
   event: React.KeyboardEvent<HTMLElement>,
   options: readonly { value: T; disabled?: boolean }[],
+  value: T,
   onChange: (value: T) => void
 ): void {
   const radios = Array.from(event.currentTarget.querySelectorAll('[role="radio"]'))
@@ -62,6 +63,11 @@ export function handleSegmentedControlKeyDown<T>(
     return
   }
   event.preventDefault()
-  radio.focus()
-  onChange(option.value)
+  if (radio !== document.activeElement) {
+    radio.focus()
+  }
+  // Home on an unchecked first option keeps focus but must still select it; a checked one is not rewritten.
+  if (option.value !== value) {
+    onChange(option.value)
+  }
 }
