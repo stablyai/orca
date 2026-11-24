@@ -15,7 +15,7 @@ import type {
 import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
 import { readNativeChatDraftCache } from '../../native-chat/drafts/native-chat-draft-views'
 import { botItemCommentDraftScope } from './bot-item-comment-draft'
-import { botItemClearDeliveredAnswers } from './bot-item-held-answers'
+import { botItemClearDeliveredAnswers, botItemRefusedAnswerWords } from './bot-item-held-answers'
 import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
 
 afterEach(cleanup)
@@ -164,6 +164,18 @@ it('posts a typed answer with files at once, with the picks so far', () => {
   ])
 })
 
+it('posts images alone on the line the box names, by their marks', () => {
+  const { hook, posted } = steps('image-only')
+  act(() => hook.result.current.steps!.bind(1))
+  const line = hook.result.current.waitingLine!
+  expect(line.line).toBe(GO)
+  act(() => hook.result.current.fromBox('', ['/tmp/a.png', '/tmp/b.png'], line.id))
+  expect(posted.map(({ text, paths }) => ({ text, paths }))).toEqual([
+    { text: `${GO} → [Image #1] [Image #2]`, paths: ['/tmp/a.png', '/tmp/b.png'] }
+  ])
+  expect(posted[0]!.intent?.answers).toEqual([null, '[Image #1] [Image #2]'])
+})
+
 it('posts a typed answer naming a file at once, holding nothing', () => {
   const { hook, posted } = steps('file-pill')
   const line = hook.result.current.waitingLine!
@@ -295,4 +307,62 @@ it('clears only the delivered answers still as sent, keeping lines added since',
   // A line changed since it was sent stays.
   botItemClearDeliveredAnswers(scope, { askId: 'e2', shape: two, answers: [null, 'Yes'] })
   expect(readNativeChatDraftCache(scope)).toBe(`${GO} → No\nAnd later? → Soon`)
+})
+
+it('clears only the sent question when two that share a first line hold the same answer', () => {
+  const scope = 'bot-item-answers:test:shared-lead'
+  const shared = {
+    body: '',
+    decisions: ['# Target?\nStaging hosts', 'Target?\nProduction hosts'].map((question) => ({
+      question,
+      replies: []
+    }))
+  }
+  updateNativeChatComposerDraft(scope, { text: 'Target? → Yes\nTarget? → Yes' }, 'immediate')
+  botItemClearDeliveredAnswers(scope, { askId: 'e2', shape: shared, answers: ['Yes', null] })
+  // The first keeps its place, so the second's unsent Yes still reads as the second's.
+  expect(readNativeChatDraftCache(scope)).toBe('Target? →\nTarget? → Yes')
+  botItemClearDeliveredAnswers(scope, { askId: 'e2', shape: shared, answers: [null, 'Yes'] })
+  expect(readNativeChatDraftCache(scope)).toBe('')
+})
+
+it('gives back the words of a refused send that its held picks do not keep', () => {
+  const scope = 'bot-item-answers:test:refused'
+  const two = {
+    body: '',
+    decisions: [HOSTS, GO].map((question) => ({ question, replies: [] }))
+  }
+  updateNativeChatComposerDraft(scope, { text: `${HOSTS} → Yes` }, 'immediate')
+  // Picks alone: they stay held on the card, and nothing goes back.
+  expect(
+    botItemRefusedAnswerWords(
+      scope,
+      { askId: 'e2', shape: two, answers: ['Yes', null] },
+      `${HOSTS} → Yes`
+    )
+  ).toBe('')
+  // A line's words posted with files: they were never held.
+  expect(
+    botItemRefusedAnswerWords(
+      scope,
+      { askId: 'e2', shape: two, answers: ['Yes', 'see the shot'] },
+      `${HOSTS} → Yes\n${GO} → see the shot`
+    )
+  ).toBe('see the shot')
+  // Images alone give back no words.
+  expect(
+    botItemRefusedAnswerWords(
+      scope,
+      { askId: 'e2', shape: two, answers: ['Yes', '[Image #1]'] },
+      `${HOSTS} → Yes\n${GO} → [Image #1]`
+    )
+  ).toBe('')
+  // Words riding along with the picks, as posted.
+  expect(
+    botItemRefusedAnswerWords(
+      scope,
+      { askId: 'e2', shape: two, answers: ['Yes', null] },
+      `${HOSTS} → Yes\nWait for the dry run\n> ${GO} → later`
+    )
+  ).toBe(`Wait for the dry run\n> ${GO} → later`)
 })

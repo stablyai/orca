@@ -26,6 +26,12 @@ it('keeps each answer on its own line when two questions share a first line', ()
   // Held with the first still open, the second stays on its own line.
   const later = [null, 'none yet']
   expect(botItemNamedAnswers(shape, botItemHeldAnswersText(shape, later))).toEqual(later)
+  // Posted with the first left out, the second keeps its place too; a place after the last answer
+  // isn't written, and no answers write nothing.
+  expect(botItemAnswersText(shape, later)).toBe('Target? →\nTarget? → none yet')
+  expect(botItemNamedAnswers(shape, botItemAnswersText(shape, later))).toEqual(later)
+  expect(botItemAnswersText(shape, ['the internal ones', null])).toBe('Target? → the internal ones')
+  expect(botItemAnswersText(shape, [null, null])).toBe('')
 })
 
 it('leaves out of a recovery the lines a comment already answered', () => {

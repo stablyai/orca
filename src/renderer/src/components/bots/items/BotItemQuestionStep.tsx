@@ -37,7 +37,7 @@ export const BOT_ITEM_OPEN_QUESTION =
 const CHIP_PICKED =
   'flex items-center gap-1.5 border-foreground bg-foreground text-background hover:bg-foreground/90'
 
-/** Your own words, muted, with a pencil: a line with no quick replies, or words an older build held. */
+/** Your own words, muted, with a pencil: Type your answer on an open line, or words an older build held. */
 const CHIP_OWN_WORDS = 'flex items-center gap-1.5 text-muted-foreground'
 
 /** A chip's tooltip: Recommended on the recommended reply, over the reply's own detail. */
@@ -357,7 +357,8 @@ export function BotItemQuestionStep({
                   <span className="min-w-0 [overflow-wrap:anywhere]">{pick}</span>
                 </button>
               ) : null}
-              {decision.replies.length === 0 && pick === null ? (
+              {/* Your own words, the other way to answer: the box names this line. */}
+              {pick === null || !typed(index) ? (
                 <button
                   ref={target(`${index}:type`)}
                   type="button"

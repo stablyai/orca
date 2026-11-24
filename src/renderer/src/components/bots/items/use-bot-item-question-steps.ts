@@ -239,8 +239,10 @@ export function useBotItemQuestionSteps(
           return
         }
         // Files (attached, or named in the words as a file pill) and skills aren't held here: they
-        // post now, with the picks so far.
-        const next = picks.map((words, at) => (at === line ? text : words))
+        // post now, with the picks so far. Images alone still name their line, by the marks chat
+        // gives them, so the host can't pair them with another open line.
+        const words = text.trim() || paths.map((_, at) => `[Image #${at + 1}]`).join(' ')
+        const next = picks.map((held, at) => (at === line ? words : held))
         post(next, botItemAnswersText(shape, next), paths, skills)
       } else if (picks.some(Boolean)) {
         // The picks name their lines; the words ride along answering none.

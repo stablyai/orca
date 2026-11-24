@@ -73,6 +73,14 @@ describe('botItemRideAlongText', () => {
     expect(readBack(prompts, text)).toEqual([0])
   })
 
+  it('quotes a recovered line with an older question heading', () => {
+    const prompts = ['A?', 'Keep `_private_` helper?']
+    const shape = botItemQuestionShape(askEvent(prompts).data)
+    const text = botItemRideAlongText(shape, ['Yes', null], 'Keep private helper? → No')
+    expect(text).toBe('A? → Yes\n> Keep private helper? → No')
+    expect(readBack(prompts, text)).toEqual([0])
+  })
+
   it('leaves every other line as typed', () => {
     const prompts = ['A?', 'B?']
     const shape = botItemQuestionShape(askEvent(prompts).data)

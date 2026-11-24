@@ -13,14 +13,16 @@ import {
 import { botItemCommentImages } from './bot-items'
 import { stripSentImagePromptMarkers } from '../native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 
-/** Per question line, the answer a comment names for it ("Question → answer"), else null. A line
- *  belongs to the question with the longest matching lead, as one question's words may lead another's;
- *  questions whose first lines read the same take their lines in the ask's order, a bare "Question →"
- *  keeping an open one's place. */
-export function botItemNamedAnswers(shape: BotItemQuestionShape, text: string): (string | null)[] {
-  const answers: (string | null)[] = shape.decisions.map(() => null)
-  const taken = shape.decisions.map(() => false)
-  for (const line of text.split('\n').map((l) => l.trim())) {
+type NamedAnswerLine = { lineIndex: number; head: string; words: string }
+
+/** The comment line assigned to each question. A bare head reserves a question with no answer. */
+export function botItemNamedAnswerLines(
+  shape: BotItemQuestionShape,
+  text: string
+): (NamedAnswerLine | null)[] {
+  const named: (NamedAnswerLine | null)[] = shape.decisions.map(() => null)
+  text.split('\n').forEach((rawLine, lineIndex) => {
+    const line = rawLine.trim()
     const heads = botItemLineHeads(shape, line)
     let best = -1
     heads.forEach((head, index) => {
@@ -28,19 +30,22 @@ export function botItemNamedAnswers(shape: BotItemQuestionShape, text: string): 
         return
       }
       const longer = best === -1 || head.length > (heads[best]?.length ?? 0)
-      const free = head.length === heads[best]?.length && taken[best] && !taken[index]
+      const free =
+        head.length === heads[best]?.length && named[best] !== null && named[index] === null
       if (longer || free) {
         best = index
       }
     })
     const head = heads[best]
-    const words = head === undefined ? '' : line.slice(head.length).trim()
-    if (head !== undefined && !taken[best] && (words || line === head)) {
-      taken[best] = true
-      answers[best] = words || null
+    if (head !== undefined && named[best] === null) {
+      named[best] = { lineIndex, head, words: line.slice(head.length).trim() }
     }
-  }
-  return answers
+  })
+  return named
+}
+
+export function botItemNamedAnswers(shape: BotItemQuestionShape, text: string): (string | null)[] {
+  return botItemNamedAnswerLines(shape, text).map((line) => line?.words || null)
 }
 
 function answerLines(
@@ -65,12 +70,17 @@ function answerLines(
 }
 
 /** One comment for a set of answers: a line per answered question, in the ask's order; a picked quick
- *  reply writes exactly what its chip posts on its own. */
+ *  reply writes exactly what its chip posts on its own. An unanswered line whose first line a later
+ *  answered one shares keeps a bare "Question →", so that answer reads back on its own line, not on
+ *  the first line with its lead. */
 export function botItemAnswersText(
   shape: BotItemQuestionShape,
   answers: readonly (string | null)[]
 ): string {
-  return answerLines(shape, answers, () => false)
+  const leads = shape.decisions.map((decision) => botItemQuestionLine(decision.question))
+  return answerLines(shape, answers, (index) =>
+    leads.some((lead, at) => at > index && lead === leads[index] && Boolean(answers[at]?.trim()))
+  )
 }
 
 /** Answers held on this device as their draft stores them: an open line whose first line another
@@ -129,15 +139,9 @@ export function botItemRideAlongText(
   picks: readonly (string | null)[],
   text: string
 ): string {
-  const heads = shape.decisions.map((decision) => `${botItemQuestionLine(decision.question)} →`)
-  const rounds = Math.ceil(Math.max(0, ...heads.map((head) => head.length)) / 2) + 1
   const words = text.split('\n').map((line) => {
     let quoted = line
-    for (let round = 0; round < rounds; round += 1) {
-      const lead = quoted.trim()
-      if (!heads.some((head) => lead.startsWith(head))) {
-        break
-      }
+    while (botItemLineHeads(shape, quoted.trim()).some(Boolean)) {
       quoted = `> ${quoted}`
     }
     return quoted
