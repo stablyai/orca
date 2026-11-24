@@ -301,9 +301,10 @@ function WorkspaceCleanupDialogContent({
       >
         {removal.agentStopRequest ? (
           <WorkspaceCleanupConfirmStopAgents
-            candidates={removal.agentStopRequest.candidates}
+            request={removal.agentStopRequest}
+            activeGroup={activeGroup}
             onBack={removal.cancelStopAgents}
-            onConfirm={removal.confirmStopAgents}
+            onConfirm={() => removal.confirmStopAgents(liveConfirmCandidates)}
           />
         ) : run ? (
           <WorkspaceCleanupRunStep

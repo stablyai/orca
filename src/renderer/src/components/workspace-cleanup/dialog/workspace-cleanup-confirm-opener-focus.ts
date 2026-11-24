@@ -1,15 +1,18 @@
 import type { WorkspaceCleanupGroup } from '../../../../../shared/workspace-cleanup/workspace-cleanup-groups'
 import { getWorkspaceCleanupGroupTabId } from './workspace-cleanup-group-cards'
 
-/** What opened confirmation: one row's Remove, or the footer's bulk Delete. */
-export type WorkspaceCleanupConfirmOpener = { kind: 'row'; identity: string } | { kind: 'bulk' }
+export type WorkspaceCleanupConfirmOpener =
+  | { kind: 'row' | 'retry'; identity: string }
+  | { kind: 'bulk' }
 
 function findOpener(opener: WorkspaceCleanupConfirmOpener): HTMLElement | null {
   if (opener.kind === 'bulk') {
     return document.querySelector<HTMLElement>('[data-workspace-cleanup-bulk-delete]')
   }
-  for (const element of document.querySelectorAll<HTMLElement>('[data-workspace-cleanup-remove]')) {
-    if (element.dataset.workspaceCleanupRemove === opener.identity) {
+  const attribute =
+    opener.kind === 'row' ? 'data-workspace-cleanup-remove' : 'data-workspace-cleanup-retry'
+  for (const element of document.querySelectorAll<HTMLElement>(`[${attribute}]`)) {
+    if (element.getAttribute(attribute) === opener.identity) {
       return element
     }
   }
@@ -30,6 +33,9 @@ export function focusWorkspaceCleanupConfirmOpener(
       element.focus()
       return
     }
-    document.getElementById(getWorkspaceCleanupGroupTabId(group))?.focus()
+    const fallback =
+      document.getElementById(getWorkspaceCleanupGroupTabId(group)) ??
+      document.querySelector<HTMLElement>('[data-workspace-cleanup-run-action]')
+    fallback?.focus()
   })
 }

@@ -5,6 +5,31 @@ import type {
 import { getWorkspaceCleanupFailureIdentity } from './run/workspace-cleanup-run-reporter'
 
 export type WorkspaceCleanupRowFailures = Record<string, WorkspaceCleanupFailure>
+type BrowseSettlement = Pick<WorkspaceCleanupRemoveResult, 'removedIdentities' | 'failures'>
+
+export function startWorkspaceCleanupRowAttempt(
+  activeAttempts: Map<string, symbol>,
+  identities: readonly string[]
+): { owns: (identity: string) => boolean; settle: (result: BrowseSettlement) => BrowseSettlement } {
+  const attempt = Symbol()
+  for (const identity of identities) {
+    activeAttempts.set(identity, attempt)
+  }
+  const owns = (identity: string): boolean => activeAttempts.get(identity) === attempt
+  return {
+    owns,
+    settle: ({ removedIdentities, failures }) => {
+      const ownedFailures = failures.filter((failure) =>
+        owns(getWorkspaceCleanupFailureIdentity(failure))
+      )
+      // Late deletion still settles the actual workspace, even after another attempt starts.
+      for (const identity of removedIdentities) {
+        activeAttempts.delete(identity)
+      }
+      return { removedIdentities, failures: ownedFailures }
+    }
+  }
+}
 
 /**
  * Applies a settlement to Browse's per-row failures with the same rule as the run summary: a
@@ -14,8 +39,11 @@ export type WorkspaceCleanupRowFailures = Record<string, WorkspaceCleanupFailure
  */
 export function mergeWorkspaceCleanupRowFailures(
   current: WorkspaceCleanupRowFailures,
-  result: Pick<WorkspaceCleanupRemoveResult, 'removedIdentities' | 'failures'>
+  result: BrowseSettlement
 ): WorkspaceCleanupRowFailures {
+  if (result.removedIdentities.length === 0 && result.failures.length === 0) {
+    return current
+  }
   const next = { ...current }
   for (const identity of result.removedIdentities) {
     delete next[identity]

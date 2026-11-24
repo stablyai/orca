@@ -118,7 +118,11 @@ export function WorkspaceCleanupRunStep({
         />
       </ScrollArea>
       <DialogFooter variant="bar" className="flex-row justify-end">
-        <Button variant={running ? 'outline' : 'default'} onClick={running ? onClose : onDone}>
+        <Button
+          data-workspace-cleanup-run-action
+          variant={running ? 'outline' : 'default'}
+          onClick={running ? onClose : onDone}
+        >
           {running
             ? t('components.workspace.cleanup.deleting.runInBackground', 'Run in background')
             : t('components.workspace.cleanup.done.button', 'Done')}

@@ -7,16 +7,25 @@ import {
   resolveWorkspaceCleanupRemovalHostId
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { getWorktreeDeleteStateKey } from '@/store/slices/worktrees/teardown/worktree-delete-state'
-import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
+import type {
+  WorkspaceCleanupFailure,
+  WorkspaceCleanupRemoveResult
+} from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import {
   startWorkspaceCleanupBackgroundRemoval,
   type WorkspaceCleanupRemovalProgress
 } from './settlement/workspace-cleanup-background-removal'
-import { filterWorkspaceCleanupRemovalCandidates } from './workspace-cleanup-removal-candidates'
+import {
+  filterWorkspaceCleanupRemovalCandidates,
+  isWorkspaceCleanupRemovalBusy
+} from './workspace-cleanup-removal-candidates'
 import { createWorkspaceCleanupSnapshotPruneBatch } from './workspace-cleanup-snapshot-prune-batch'
 import { useWorkspaceCleanupUnverifiedRemoval } from './use-workspace-cleanup-unverified-removal'
 import { useWorkspaceCleanupRunStore } from './run/workspace-cleanup-run-store'
-import { mergeWorkspaceCleanupRowFailures } from './workspace-cleanup-row-failures'
+import {
+  mergeWorkspaceCleanupRowFailures,
+  startWorkspaceCleanupRowAttempt
+} from './workspace-cleanup-row-failures'
 import {
   createWorkspaceCleanupRunReporter,
   getWorkspaceCleanupFailureIdentity
@@ -46,7 +55,7 @@ export type WorkspaceCleanupRemovalController = {
   cancelConfirmRemove: () => void
   backToList: () => void
   agentStopRequest: WorkspaceCleanupAgentStopRequest | null
-  confirmStopAgents: () => void
+  confirmStopAgents: (candidates?: ConfirmationCandidates) => void
   cancelStopAgents: () => void
 }
 
@@ -74,8 +83,8 @@ export function useWorkspaceCleanupRemoval({
   >({})
   const [rowFailures, setRowFailures] = useState<Record<string, WorkspaceCleanupFailure>>({})
   const removalInFlightRef = useRef(false)
-  // Fence late settlements by batch so an earlier run cannot mutate newer row state.
-  const removalBatchIdRef = useRef(0)
+  // Browse keeps attempt ownership after Done dismisses the run summary.
+  const browseAttempts = useRef(new Map<string, symbol>())
 
   const resetRowFailures = useCallback(() => setRowFailures({}), [])
 
@@ -105,6 +114,7 @@ export function useWorkspaceCleanupRemoval({
   )
 
   const startUnverifiedRemoval = useWorkspaceCleanupUnverifiedRemoval({
+    browseAttempts,
     setRowFailures,
     setDeletionPhaseByIdentity,
     clearQueuedDeleteState,
@@ -126,12 +136,19 @@ export function useWorkspaceCleanupRemoval({
   const approveAgentStops = agentStopGate.approve
   const confirmUnverifiedRemoval = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
+      if (
+        removalInFlightRef.current ||
+        isWorkspaceCleanupRemovalBusy(candidate, useAppStore.getState().deleteStateByWorktreeId)
+      ) {
+        clearAgentStopRequest()
+        return
+      }
       const [approvedCandidate] = approveAgentStops([candidate], candidate) ?? []
       if (approvedCandidate) {
         startUnverifiedRemoval(approvedCandidate)
       }
     },
-    [approveAgentStops, startUnverifiedRemoval]
+    [approveAgentStops, clearAgentStopRequest, startUnverifiedRemoval]
   )
 
   const cancelConfirmRemove = useCallback(() => {
@@ -160,7 +177,7 @@ export function useWorkspaceCleanupRemoval({
   }, [])
 
   const confirmRemove = (candidates: ConfirmationCandidates = confirmCandidates): void => {
-    if (candidates.length === 0 || removalInFlightRef.current) {
+    if (removalInFlightRef.current) {
       return
     }
     const filteredCandidates = filterWorkspaceCleanupRemovalCandidates(
@@ -180,14 +197,16 @@ export function useWorkspaceCleanupRemoval({
     }
     removalInFlightRef.current = true
     setRemovalInFlight(true)
-    removalBatchIdRef.current += 1
-    const removalBatchId = removalBatchIdRef.current
     // Hung settlements retain callbacks indefinitely; capture IDs rather than candidate objects.
     const removableDeleteStateTargets = removableCandidates.map((candidate) => {
       const hostId = resolveWorkspaceCleanupRemovalHostId(candidate)
       return hostId ? { id: candidate.worktreeId, hostId } : candidate.worktreeId
     })
     const removableIdentities = removableCandidates.map(getWorkspaceCleanupCandidateIdentity)
+    const browseAttempt = startWorkspaceCleanupRowAttempt(
+      browseAttempts.current,
+      removableIdentities
+    )
     setRowFailures({})
     const runReporter = createWorkspaceCleanupRunReporter(
       useWorkspaceCleanupRunStore.getState().startRun(removableCandidates)
@@ -196,6 +215,16 @@ export function useWorkspaceCleanupRemoval({
       Object.fromEntries(removableIdentities.map((identity) => [identity, 'queued' as const]))
     )
     markWorktreesQueuedForDeletion(removableDeleteStateTargets)
+    const reportBrowseResult = (result: WorkspaceCleanupRemoveResult): void => {
+      const settlement = browseAttempt.settle(result)
+      for (const failure of settlement.failures) {
+        clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
+      }
+      if (mountedRef.current) {
+        setRowFailures((current) => mergeWorkspaceCleanupRowFailures(current, settlement))
+        onDeselect(settlement.removedIdentities)
+      }
+    }
     const handleRemovalError = (): void => {
       runReporter.onError()
       for (const target of removableDeleteStateTargets) {
@@ -227,42 +256,31 @@ export function useWorkspaceCleanupRemoval({
         onRowStarted: runReporter.onRowStarted,
         onRowRemoved: runReporter.onRowRemoved,
         onRowFailed: (failure) => {
-          clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
           runReporter.onRowFailed(failure)
-          if (!mountedRef.current) {
+          const identity = getWorkspaceCleanupFailureIdentity(failure)
+          if (!browseAttempt.owns(identity)) {
             return
           }
-          const identity = getWorkspaceCleanupFailureIdentity(failure)
-          setDeletionPhaseByIdentity((current) => {
-            const next = { ...current }
-            delete next[identity]
-            return next
-          })
+          clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
+          if (mountedRef.current) {
+            setDeletionPhaseByIdentity((current) => {
+              const next = { ...current }
+              delete next[identity]
+              return next
+            })
+          }
         },
         onResult: (result) => {
           runReporter.onResult(result)
-          for (const failure of result.failures) {
-            // Why: defensively covers failures that never reached onRowFailed.
-            clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
-          }
+          reportBrowseResult(result)
           if (mountedRef.current) {
-            setRowFailures((current) => mergeWorkspaceCleanupRowFailures(current, result))
-            onDeselect(result.removedIdentities)
             settle()
           }
           removalInFlightRef.current = false
         },
         onLateResult: (result) => {
           runReporter.onLateResult(result)
-          for (const failure of result.failures) {
-            // Late preflight failures may never reach deleting; clear their queued overlay too.
-            clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
-          }
-          if (!mountedRef.current || removalBatchIdRef.current !== removalBatchId) {
-            return
-          }
-          setRowFailures((current) => mergeWorkspaceCleanupRowFailures(current, result))
-          onDeselect(result.removedIdentities)
+          reportBrowseResult(result)
         },
         onError: handleRemovalError
       })
@@ -272,11 +290,11 @@ export function useWorkspaceCleanupRemoval({
   }
 
   const agentStopRequest = agentStopGate.request
-  const confirmStopAgents = (): void => {
+  const confirmStopAgents = (candidates?: ConfirmationCandidates): void => {
     if (agentStopRequest?.unverifiedCandidate) {
       confirmUnverifiedRemoval(agentStopRequest.unverifiedCandidate)
     } else {
-      confirmRemove()
+      confirmRemove(candidates)
     }
   }
 

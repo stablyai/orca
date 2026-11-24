@@ -29,6 +29,92 @@ afterEach(() => {
 })
 
 describe('useWorkspaceCleanupRemoval Browse failures', () => {
+  it('guards a permanent retry against the busy marker for its own host', () => {
+    const local = makeCandidate({ executionHostId: 'local' })
+    const remote = { ...local, executionHostId: 'ssh:workbench' } as const
+    useAppStore
+      .getState()
+      .markWorktreesQueuedForDeletion([{ id: remote.worktreeId, hostId: remote.executionHostId }])
+    useAppStore.setState({
+      removeWorkspaceCleanupCandidates: () => new Promise(() => {})
+    })
+    const { result } = renderHook(() =>
+      useWorkspaceCleanupRemoval({ onDeselect: () => {}, closeModal: () => {} })
+    )
+
+    act(() => result.current.confirmUnverifiedRemoval(remote))
+    expect(useWorkspaceCleanupRunStore.getState().run).toBeNull()
+
+    act(() => result.current.confirmUnverifiedRemoval(local))
+    expect(useWorkspaceCleanupRunStore.getState().run?.rows[0]?.identity).toBe(
+      getWorkspaceCleanupCandidateIdentity(local)
+    )
+  })
+
+  it.each([
+    { older: 'ordinary', newer: 'force' },
+    { older: 'force', newer: 'ordinary' }
+  ] as const)(
+    'keeps the newer $newer error when the earlier $older removal fails late',
+    async ({ older, newer }) => {
+      const row = makeCandidate({ executionHostId: 'local' })
+      const identity = getWorkspaceCleanupCandidateIdentity(row)
+      const pending = Promise.withResolvers<WorkspaceCleanupRemoveResult>()
+      const newerFailure = {
+        worktreeId: row.worktreeId,
+        executionHostId: row.executionHostId,
+        displayName: row.displayName,
+        message: 'Newer attempt could not delete the workspace',
+        canDeleteAnyway: newer === 'ordinary'
+      }
+      useAppStore.setState({
+        removeWorkspaceCleanupCandidates: vi
+          .fn<() => Promise<WorkspaceCleanupRemoveResult>>()
+          .mockReturnValueOnce(pending.promise)
+          .mockResolvedValueOnce({
+            removedIds: [],
+            removedIdentities: [],
+            failures: [newerFailure]
+          })
+      })
+      const { result } = renderHook(() =>
+        useWorkspaceCleanupRemoval({ onDeselect: () => {}, closeModal: () => {} })
+      )
+      const submit = (mode: 'ordinary' | 'force'): void => {
+        if (mode === 'force') {
+          result.current.confirmUnverifiedRemoval(row)
+        } else {
+          result.current.confirmRemove([row])
+        }
+      }
+
+      act(() => submit(older))
+      await act(() =>
+        vi.advanceTimersByTimeAsync(UNRESOLVED_AFTER_MS + WORKSPACE_CLEANUP_PROVISIONAL_CEILING_MS)
+      )
+      act(() => useWorkspaceCleanupRunStore.getState().dismissRun())
+
+      act(() => submit(newer))
+      await act(() => vi.advanceTimersByTimeAsync(0))
+      expect(result.current.rowFailures[identity]).toEqual(newerFailure)
+      act(() => useWorkspaceCleanupRunStore.getState().dismissRun())
+
+      pending.resolve({
+        removedIds: [],
+        removedIdentities: [],
+        failures: [
+          {
+            ...newerFailure,
+            message: 'Older failure',
+            canDeleteAnyway: !newerFailure.canDeleteAnyway
+          }
+        ]
+      })
+      await act(() => vi.advanceTimersByTimeAsync(0))
+      expect(result.current.rowFailures[identity]).toEqual(newerFailure)
+    }
+  )
+
   it('keeps the definitive retry error and its Delete anyway through Done', async () => {
     const rows = ['/repo/café', '/repo/café', '/repo/café/child'].map((path) =>
       makeCandidate({ worktreeId: `repo-1::${path}`, path })
