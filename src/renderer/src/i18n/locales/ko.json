@@ -14546,7 +14546,6 @@
             "noRebaseInProgress": "진행 중인 리베이스가 없습니다",
             "rebaseStopMovedOn": "리베이스가 이미 다음 단계로 진행되었습니다. 패널을 확인하고 다시 시도하세요.",
             "rebaseEmptyStep": "이 단계에는 커밋할 내용이 없습니다. 리베이스를 중단하거나 터미널에서 마무리하세요.",
-            "rebaseStepUnreadable": "이 리베이스 단계를 확인하지 못했습니다",
             "rebaseStepUnreadableShort": "단계 확인 실패",
             "rebaseCheckAgain": "다시 확인",
             "rebaseRetryInspect": "다시 시도",

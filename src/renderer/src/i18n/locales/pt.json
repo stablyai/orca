@@ -10565,7 +10565,6 @@
             "noRebaseInProgress": "Nenhum rebase em andamento",
             "rebaseStopMovedOn": "O rebase já avançou. Verifique o painel e tente novamente.",
             "rebaseEmptyStep": "Nada para fazer commit nesta etapa. Aborte o rebase ou conclua-o em um terminal.",
-            "rebaseStepUnreadable": "Não foi possível verificar esta etapa do rebase",
             "rebaseStepUnreadableShort": "Etapa não verificada",
             "rebaseCheckAgain": "Verificar novamente",
             "rebaseRetryInspect": "Tentar novamente",

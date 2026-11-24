@@ -14009,7 +14009,6 @@
             "noRebaseInProgress": "Aucun rebase en cours",
             "rebaseStopMovedOn": "Le rebase a déjà avancé. Vérifiez le panneau et réessayez.",
             "rebaseEmptyStep": "Rien à commiter à cette étape. Annulez le rebase ou terminez-le dans un terminal.",
-            "rebaseStepUnreadable": "Impossible de vérifier cette étape du rebase",
             "rebaseStepUnreadableShort": "Étape non vérifiée",
             "rebaseCheckAgain": "Vérifier à nouveau",
             "rebaseRetryInspect": "Réessayer",
