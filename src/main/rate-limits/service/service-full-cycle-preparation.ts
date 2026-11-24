@@ -8,6 +8,7 @@ import { readCursorAuthSession } from '../providers/cursor/cursor-auth'
 import { fetchZcodeRateLimits } from '../providers/zcode/zcode-usage-fetcher'
 import { fetchAntigravityRateLimits } from '../providers/antigravity/antigravity-usage-fetcher'
 import { antigravityUsageDisabledSnapshot } from '../providers/antigravity/antigravity-usage-snapshot'
+import { disabledUsageSnapshot } from './disabled-usage-snapshot'
 import { ZCODE_PLAN_SITE_BASE_URLS } from '../../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 import { fetchMiniMaxRateLimits } from '../providers/minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
@@ -53,6 +54,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     }
     const antigravityGeneration = this.antigravityFetchGeneration
     const antigravityTarget = this.antigravityFetchTarget
+    // Hidden Cursor skips its keychain read and settles idle (null would read as loading).
+    const cursorFetchAllowed = this.cursorUsageEnabledResolver?.() ?? true
     const codexFetchGated = codexHome.skip
     const codexHomePath = codexHome.homePath
     const codexProvenance = codexFetchGated
@@ -152,21 +155,25 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
       grok: this.withFetchingStatus(previousState.grok, 'grok'),
-      cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
+      cursor: cursorFetchAllowed
+        ? this.withFetchingStatus(previousState.cursor, 'cursor')
+        : disabledUsageSnapshot('cursor'),
       zcode: zcodeConfigChanged
         ? this.withFetchingStatus(null, 'zcode')
         : this.withFetchingStatus(previousState.zcode, 'zcode')
     })
     // Async Keychain/worker DB reads must not delay other providers.
-    const cursorResultPromise = readCursorAuthSession()
-      .then((authReadResult) => {
-        this.cursorAuthConfigured = authReadResult.status === 'ok'
-        return fetchCursorRateLimits({ signal, authReadResult })
-      })
-      .then(
-        (value) => ({ status: 'fulfilled', value }) as const,
-        (reason) => ({ status: 'rejected', reason }) as const
-      )
+    const cursorResultPromise = (
+      cursorFetchAllowed
+        ? readCursorAuthSession().then((authReadResult) => {
+            this.cursorAuthConfigured = authReadResult.status === 'ok'
+            return fetchCursorRateLimits({ signal, authReadResult })
+          })
+        : Promise.resolve(disabledUsageSnapshot('cursor'))
+    ).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
     const zcodeResultPromise = (
       zcodePlanConfigResult.error
         ? Promise.resolve(this.getZcodePlanCredentialError(zcodePlanConfigResult.error))
@@ -289,6 +296,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       zcodeConfigChanged,
       zcodeGeneration,
       antigravityGeneration,
+      cursorFetchAllowed,
       claudeFetchGated,
       results: [
         claudeResult,

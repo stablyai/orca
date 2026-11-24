@@ -85,8 +85,11 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     }
     // A hidden Muse meter keeps an idle snapshot, which must not force a full refresh on every focus.
     const museEnabled = this.museUsageEnabledResolver?.() ?? true
+    // A hidden Cursor meter's idle snapshot is likewise intentional, not a failure to recover from.
+    const cursorEnabled = this.cursorUsageEnabledResolver?.() ?? true
     return Object.entries(byProvider)
       .filter(([provider]) => provider !== 'muse' || museEnabled)
+      .filter(([provider]) => provider !== 'cursor' || cursorEnabled)
       .filter(([provider]) => provider !== 'claude' || this.isClaudeOAuthUsageEnabled())
       .map(([provider, limits]) => ({
         provider: provider as ActiveRateLimitProvider,

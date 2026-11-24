@@ -6329,6 +6329,10 @@
           "UsageDisplayToggle": {
             "showRemaining": "Show remaining usage",
             "showUsed": "Show used usage"
+          },
+          "HideProviderUsageMenuItem": {
+            "hide": "Hide {{provider}} usage",
+            "restoreHint": "Right-click status bar to restore"
           }
         }
       },
@@ -13957,7 +13961,9 @@
           "resets": "Resets {{when}}",
           "usageLabel": "Usage",
           "noAllowance": "Cursor reported no usage allowance for this account.",
-          "staleUsage": "Last known usage — the latest refresh failed: {{reason}}"
+          "staleUsage": "Last known usage — the latest refresh failed: {{reason}}",
+          "showInStatusBar": "Show Cursor usage in status bar",
+          "showInStatusBarDescription": "Turn off if you no longer use Cursor. Orca then stops reading your Cursor sign-in in the background."
         },
         "UnsealedCredentialNotice": {
           "body": "{{credential}} is stored unencrypted — this system has no OS keyring Orca can use. Anyone who can read your disk or a backup of it can read the credential. Install and unlock gnome-keyring or kwallet, then save it again to seal it."

@@ -158,6 +158,8 @@ export function createProviderAccountServices(
   )
   // Hidden Muse meters must not spawn the Muse CLI.
   rateLimits.setMuseUsageEnabledResolver(() => store.getUI().statusBarItems.includes('muse'))
+  // Hidden Cursor meters must not keep reading Cursor's keychain item or IDE auth store.
+  rateLimits.setCursorUsageEnabledResolver(() => store.getUI().statusBarItems.includes('cursor'))
   setAntigravityNativeCredentialChangeListener(() =>
     rateLimits.invalidateAntigravityCredentialState()
   )

@@ -8,6 +8,8 @@ import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
+import { Label } from '../../../ui/label'
+import { Switch } from '../../../ui/switch'
 import type { CursorAccountStatus } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
@@ -46,6 +48,9 @@ export function CursorAccountsSection(): React.JSX.Element {
   const t = useTranslate()
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const cursorUsage = useAppStore((s) => s.rateLimits.cursor)
+  const showInStatusBar = useAppStore((s) => s.statusBarItems.includes('cursor'))
+  const setStatusBarItemVisible = useAppStore((s) => s.setStatusBarItemVisible)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [status, setStatus] = useState<CursorAccountStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -91,6 +96,15 @@ export function CursorAccountsSection(): React.JSX.Element {
       await refreshRateLimits()
     } finally {
       setRefreshing(false)
+    }
+  }
+
+  // Main skips Cursor reads while hidden, so re-showing must fetch now, not at the next poll.
+  const handleShowInStatusBarChange = async (checked: boolean): Promise<void> => {
+    recordFeatureInteraction('usage-tracking')
+    await setStatusBarItemVisible('cursor', checked)
+    if (checked) {
+      await handleRefreshUsage()
     }
   }
 
@@ -208,6 +222,40 @@ export function CursorAccountsSection(): React.JSX.Element {
             {t('auto.components.settings.CursorAccountsSection.refreshUsage', 'Refresh usage')}
           </Button>
         </div>
+
+        <SearchableSetting
+          title={t(
+            'auto.components.settings.CursorAccountsSection.showInStatusBar',
+            'Show Cursor usage in status bar'
+          )}
+          description={t(
+            'auto.components.settings.CursorAccountsSection.showInStatusBarDescription',
+            'Turn off if you no longer use Cursor. Orca then stops reading your Cursor sign-in in the background.'
+          )}
+          keywords={[...SEARCH_KEYWORDS, 'status bar', 'hide', 'remove', 'disable']}
+          className="flex items-center justify-between gap-4 py-3"
+        >
+          <div className="min-w-0 space-y-0.5">
+            <Label htmlFor="cursor-usage-status-bar">
+              {t(
+                'auto.components.settings.CursorAccountsSection.showInStatusBar',
+                'Show Cursor usage in status bar'
+              )}
+            </Label>
+            <p id="cursor-usage-status-bar-description" className="text-xs text-muted-foreground">
+              {t(
+                'auto.components.settings.CursorAccountsSection.showInStatusBarDescription',
+                'Turn off if you no longer use Cursor. Orca then stops reading your Cursor sign-in in the background.'
+              )}
+            </p>
+          </div>
+          <Switch
+            id="cursor-usage-status-bar"
+            aria-describedby="cursor-usage-status-bar-description"
+            checked={showInStatusBar}
+            onCheckedChange={(checked) => void handleShowInStatusBarChange(checked)}
+          />
+        </SearchableSetting>
 
         {pools.length > 0 || monthly ? (
           <SearchableSetting
