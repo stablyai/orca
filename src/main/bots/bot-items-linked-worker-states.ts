@@ -10,6 +10,7 @@ import { readWorkers } from './bot-work-workers-read'
 import { dataVersion, dockRevision, printKey, readPrints } from './bot-items-linked-worker-prints'
 import {
   finishedOf,
+  firstOf,
   plainChain,
   reportLength,
   taskReport,
@@ -243,7 +244,7 @@ export class LinkedWorkerStates {
     }
     const slice: [string, Kept][] = []
     let sliceChars = 0
-    for (const item of [...pending.items.values()].slice(0, KEEP_SLICE)) {
+    for (const item of firstOf(pending.items.values(), KEEP_SLICE)) {
       pending.items.delete(item.ref)
       const chain = this.kept.has(item.ref) ? null : plainChain(db, item)
       if (!chain || JSON.stringify(item.worker).length > KEPT_WORKER_MAX_CHARS) {

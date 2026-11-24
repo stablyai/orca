@@ -42,6 +42,10 @@ export function finishedOf(
   ) {
     return null
   }
+  // A plain chain's terminal had at most CHAIN_MAX owners; a longer history reads live, unparsed.
+  if (resource && holdsMoreThan(resource.prior_owner_dispatch_ids, CHAIN_MAX)) {
+    return null
+  }
   const prior = resource ? parseWorkerTerminalPriorOwnerIds(resource.prior_owner_dispatch_ids) : []
   if (prior === null) {
     return null
@@ -82,6 +86,41 @@ export function plainChain(db: OrchestrationDb, finished: Finished): string[] | 
   }
   const members = new Set(chain)
   return finished.resource?.owners.some((owner) => !members.has(owner)) ? null : chain
+}
+
+/** Whether a JSON array of strings has more than `max` entries, scanning only as far as entry max + 1. */
+function holdsMoreThan(json: string, max: number): boolean {
+  let entries = 0
+  let inString = false
+  for (let i = 0; i < json.length; i++) {
+    const c = json[i]
+    if (inString) {
+      if (c === '\\') {
+        i++
+      } else if (c === '"') {
+        inString = false
+      }
+    } else if (c === '"') {
+      inString = true
+      entries += 1
+      if (entries > max) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+/** The first `count` values, read straight off the iterator: a long queue is never copied whole. */
+export function firstOf<T>(values: Iterable<T>, count: number): T[] {
+  const first: T[] = []
+  for (const value of values) {
+    if (first.length >= count) {
+      break
+    }
+    first.push(value)
+  }
+  return first
 }
 
 export function reportLength(report: LinkedWorkerState['report'] | undefined): number {
