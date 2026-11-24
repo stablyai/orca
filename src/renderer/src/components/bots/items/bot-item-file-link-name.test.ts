@@ -18,6 +18,10 @@ describe('botItemFileLinkName', () => {
 
   it('keeps words chosen for the link, bare names and web links', () => {
     expect(botItemFileLinkName(createNativeChatFileHref('/a/b.md'), 'the runbook')).toBeNull()
+    expect(botItemFileLinkName('docs/deployment.md', 'CI/CD')).toBeNull()
+    expect(botItemFileLinkName('docs/Deployment%20Plan.md', 'docs/Deployment Plan.md')).toBe(
+      'Deployment Plan.md'
+    )
     expect(botItemFileLinkName(createNativeChatFileHref('README.md'), 'README.md')).toBeNull()
     expect(
       botItemFileLinkName('https://example.com/a/b.html', 'https://example.com/a/b.html')

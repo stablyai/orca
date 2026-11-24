@@ -5,12 +5,14 @@ import { botItemFileName } from '../../../../../shared/bots/bot-item-link-names'
 /** The file name a file link shows in place of its text, or null to keep the text: only a link to a
  *  file whose text is itself a path (a bare path, not words someone chose for the link). */
 export function botItemFileLinkName(href: string | undefined, text: string): string | null {
-  if (routeNativeChatHref(href).kind !== 'file') {
+  const target = routeNativeChatHref(href)
+  if (target.kind !== 'file') {
     return null
   }
-  const path = text.trim().replace(/[\\/]+$/, '')
-  if (!/[\\/]/.test(path) || /\s/.test(path)) {
+  const label = text.trim()
+  if (label !== target.pathText && label !== href?.trim()) {
     return null
   }
-  return botItemFileName(path) || null
+  const path = label.replace(/[\\/]+$/, '')
+  return /[\\/]/.test(path) ? botItemFileName(path) : null
 }
