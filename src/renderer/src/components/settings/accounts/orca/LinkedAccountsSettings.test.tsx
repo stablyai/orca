@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act } from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmationDialogProvider } from '@/components/dismiss/confirmation/confirmation-dialog'
 import type { ConnectorLink } from '../../../../../../shared/connectors/connector-links-contract'
 import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { LinkedAccountsSettings } from './LinkedAccountsSettings'
+import { installSharedBotHostCatalog } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: mocks.call }))
@@ -37,9 +39,31 @@ const LINKS: ConnectorLink[] = [
 ]
 const SERVER = toRuntimeExecutionHostId('env_lab')
 
+let uninstallCatalog = (): void => {}
+
+/** This account's Orca Cloud, as main reports whether it takes shares. */
+async function cloudTakesShares(sharing: boolean): Promise<void> {
+  uninstallCatalog()
+  Reflect.set(window, 'api', {
+    sharedBotHosts: {
+      list: async () => ({ hosts: [], sharing }),
+      onChanged: () => () => {}
+    }
+  })
+  await act(async () => {
+    uninstallCatalog = installSharedBotHostCatalog()
+  })
+}
+
+beforeEach(async () => {
+  await cloudTakesShares(true)
+})
+
 afterEach(() => {
   cleanup()
   mocks.call.mockReset()
+  uninstallCatalog()
+  Reflect.deleteProperty(window, 'api')
 })
 
 /** The server answers its links list and unlinks; other connector reads fail quietly. */
@@ -68,6 +92,15 @@ function show(): void {
 }
 
 describe('Linked accounts', () => {
+  it('stays hidden, and asks nothing, on a cloud that doesn’t take shares', async () => {
+    serve()
+    await cloudTakesShares(false)
+    show()
+    await act(async () => {})
+    expect(screen.queryByText('Linked accounts')).toBeNull()
+    expect(mocks.call).not.toHaveBeenCalled()
+  })
+
   it("lists a paired server's links, several per service", async () => {
     serve()
     show()

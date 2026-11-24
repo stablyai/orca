@@ -25,6 +25,7 @@ import type {
   ConnectorLinkSource
 } from '../../../../../../shared/connectors/connector-links-contract'
 import { LinkedAccountsList, type LinkedAccountsTrip } from './LinkedAccountsList'
+import { useTeamSharingOffered } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 function linksErrorMessage(code: string, hostName: string | null): string {
   switch (code) {
@@ -74,13 +75,17 @@ function useTrip(
   }
 }
 
-export function LinkedAccountsSettings({
+type LinkedAccountsProps = { hostId: ExecutionHostId; hostName: string | null }
+
+/** Hidden, and never asks the host, until this account's Orca Cloud takes shares. */
+export function LinkedAccountsSettings(props: LinkedAccountsProps): React.JSX.Element | null {
+  return useTeamSharingOffered() ? <LinkedAccountsSection {...props} /> : null
+}
+
+function LinkedAccountsSection({
   hostId,
   hostName
-}: {
-  hostId: ExecutionHostId
-  hostName: string | null
-}): React.JSX.Element | null {
+}: LinkedAccountsProps): React.JSX.Element | null {
   const t = useTranslate()
   const confirm = useConfirmationDialog()
   const view = useConnectorLinks(hostId)
