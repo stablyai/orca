@@ -223,6 +223,8 @@ export class ConnectorCloud {
   /** The sign-out ended, either way; a sign-in that finished meanwhile resumes here. */
   signOutFinished(): void {
     this.signingOut = false
+    // A sign-in that finished meanwhile was seen as none: the account it left is taken up now.
+    this.noteAccount()
     this.reconcile()
     this.options.onStatusChanged?.()
   }

@@ -16,6 +16,8 @@ import {
 } from '../bots/bot-slack-icon-store'
 import { BotSlackIconShownRecords } from '../bots/bot-slack-icon-shown'
 import { BotAvatarSync } from './bot-avatar-sync'
+import { ConnectorCloud } from './connector-cloud'
+import type { ConnectorMachine } from './connector-machine'
 
 let home: string | null = null
 
@@ -566,4 +568,75 @@ it('saves a record whose save failed when a new drawing is stored, even if its u
   })
   sync.iconStored('bot-1')
   await vi.waitFor(() => expect(onDisk.get('bot-1')).toEqual(drawing))
+})
+
+it('sends again to an account that signed in while an upload was out, and keeps no record for it', async () => {
+  const bot = {
+    id: 'bot-1',
+    folderWorkspaceId: 'home-1',
+    avatar: 'mascot:A1',
+    avatarColor: null,
+    avatarOutfit: null,
+    slack: { appId: 'A1', teamId: 'T1' },
+    github: null
+  }
+  let account = 'acct-1'
+  const sentAs: string[] = []
+  let answer = (): void => {}
+  const sync = new BotAvatarSync({
+    bots: {
+      enabled: () => true,
+      list: () => [bot],
+      readAvatarImage: async () => null,
+      slackIcons: {
+        shownRecords: new BotSlackIconShownRecords({
+          read: async () => null,
+          write: async () => {},
+          exists: () => true
+        }),
+        read: async () => null
+      }
+    },
+    cloud: () => ({
+      knownAccount: () => account,
+      call: async <T extends z.ZodType>(
+        _path: string,
+        _body: unknown,
+        schema: T
+      ): Promise<ConnectorResult<z.infer<T>>> => {
+        sentAs.push(account)
+        if (sentAs.length === 1) {
+          await new Promise<void>((resolve) => (answer = resolve))
+        }
+        return { ok: true, value: schema.parse(undefined) }
+      }
+    })
+  })
+  sync.changed()
+  await vi.waitFor(() => expect(sentAs).toEqual(['acct-1']))
+  account = 'acct-2'
+  sync.retryOwed('signedIn')
+  answer()
+  await vi.waitFor(() => expect(sentAs).toEqual(['acct-1', 'acct-2']))
+})
+
+it('takes up the account a sign-in left while a sign-out was running', () => {
+  let account: string | null = 'acct-1'
+  const connector = new ConnectorCloud({
+    userDataPath: join(tmpdir(), 'connector-cloud-no-such-profile'),
+    origin: 'https://cloud.invalid',
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a connector that never connects never uses its machine.
+    machine: {} as ConnectorMachine,
+    account: () => account,
+    isFenced: () => false,
+    mintFor: () => {
+      throw new Error('not minted here')
+    }
+  })
+  connector.signOutStarted()
+  account = 'acct-2'
+  connector.accountChanged()
+  expect(connector.knownAccount()).toBeNull()
+  connector.signOutFinished()
+  expect(connector.knownAccount()).toBe('acct-2')
 })
