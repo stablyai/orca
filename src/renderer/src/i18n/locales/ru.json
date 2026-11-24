@@ -20577,7 +20577,6 @@
         "terminalRequired": "Ответьте на этот вопрос OMP в терминале.",
         "openTerminal": "Ответить в терминале",
         "recommended": "Рекомендуется",
-        "stepAnswered": "{{value0}}, есть ответ",
         "stepOf": "{{value0}} из {{value1}}",
         "answered": "Есть ответ",
         "title": "Вопрос",

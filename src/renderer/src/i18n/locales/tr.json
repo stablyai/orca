@@ -20043,7 +20043,6 @@
         "terminalRequired": "Bu OMP sorusunu terminalde yanıtlayın.",
         "openTerminal": "Terminalde yanıtla",
         "recommended": "Önerilen",
-        "stepAnswered": "{{value0}}, yanıtlandı",
         "stepOf": "{{value0}} / {{value1}}",
         "answered": "Yanıtlandı",
         "title": "Soru",

@@ -21201,7 +21201,6 @@
         "terminalRequired": "Responda a esta pergunta do OMP no terminal.",
         "openTerminal": "Responder no terminal",
         "recommended": "Recomendado",
-        "stepAnswered": "{{value0}}, respondida",
         "stepOf": "{{value0}} de {{value1}}",
         "answered": "Respondida",
         "title": "Pergunta",

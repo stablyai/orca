@@ -19618,7 +19618,6 @@
         "terminalRequired": "請在終端機中回答這個 OMP 問題。",
         "openTerminal": "在終端機中回答",
         "recommended": "推薦",
-        "stepAnswered": "{{value0}}，已回答",
         "stepOf": "第 {{value0}} 個，共 {{value1}} 個",
         "answered": "已回答",
         "title": "問題",

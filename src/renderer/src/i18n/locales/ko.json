@@ -20528,7 +20528,6 @@
         "terminalRequired": "터미널에서 이 OMP 질문에 대답하세요.",
         "openTerminal": "터미널에서 응답",
         "recommended": "추천",
-        "stepAnswered": "{{value0}}, 답변함",
         "stepOf": "{{value0}}/{{value1}}",
         "answered": "답변함",
         "title": "질문",
