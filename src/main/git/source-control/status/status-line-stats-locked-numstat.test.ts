@@ -6,7 +6,7 @@ const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn
 
 const { numstatCacheInputs } = vi.hoisted(() => {
   type ConfigInputs = { values: Map<string, string>; files: string[]; attributeFiles: string[] }
-  type StampInputs = { value: string; newestMtimeMs: number; capturedAtMs: number }
+  type StampInputs = { value: string; newestTimestampMs: number; capturedAtMs: number }
   const state: { config: ConfigInputs | null; stamp: StampInputs | null } = {
     config: null,
     stamp: null
@@ -81,7 +81,7 @@ describe('numstat reuse when a path cannot be hashed', () => {
     numstatCacheInputs.config = { values: new Map(), files: [], attributeFiles: [] }
     numstatCacheInputs.stamp = {
       value: 'settled-inputs',
-      newestMtimeMs: Date.now() - 10_000,
+      newestTimestampMs: Date.now() - 10_000,
       capturedAtMs: Date.now()
     }
   })
