@@ -1152,13 +1152,10 @@
     "voiceModelList": {
       "deleteModel": "{{label}} löschen",
       "downloadModel": "{{label}} herunterladen",
-      "inUse": "In Verwendung",
       "modelExtracting": "{{size}} · wird entpackt…",
       "modelProgress": "{{size}} · {{progress}} %",
       "modelSize": "{{size}} MB",
-      "recommended": "Empfohlen",
-      "use": "Verwenden",
-      "useModel": "{{label}} verwenden"
+      "recommended": "Empfohlen"
     },
     "workspaceDetailPlaceholder": {
       "description": "Einen Arbeitsbereich in der Seitenleiste auswählen, um dessen Terminal hier zu öffnen.",
@@ -3013,21 +3010,13 @@
     "voiceSettingsScreen": {
       "connectDesktop": "Mit einem Desktop verbinden, um die Einstellungen für die Spracheingabe zu verwalten.",
       "deleteFailed": "Löschen fehlgeschlagen",
-      "dictationDescription": "Text in jeden fokussierten Bereich auf dem Desktop diktieren.",
-      "dictationHeading": "Diktat",
-      "dictationMode": "Diktatmodus",
-      "dictationModeDescription": "Umschalten: einmal zum Starten und erneut zum Stoppen drücken. Gedrückt halten: währenddessen diktieren.",
-      "dictationModeWithAutoDescription": "Automatisch: Tippen zum Starten und Stoppen; am Computer nimmt das Gedrückthalten des Kürzels auf, bis Sie loslassen. Gedrückt halten: währenddessen diktieren. Umschalten: einmal zum Starten und erneut zum Stoppen drücken.",
       "autoMode": "Automatisch",
       "downloadFailed": "Download fehlgeschlagen",
-      "enableDictation": "Diktat aktivieren",
       "holdMode": "Gedrückt halten",
       "loadFailed": "Einstellungen für die Spracheingabe konnten nicht geladen werden.",
       "loadFailedMessage": "Die Einstellungen für die Spracheingabe konnten nicht geladen werden.",
       "noneSelected": "Keines ausgewählt",
       "selectModelFailed": "Modell konnte nicht ausgewählt werden",
-      "speechModel": "Spracherkennungsmodell",
-      "speechModelHeading": "Spracherkennungsmodell",
       "title": "Spracheingabe",
       "toggleMode": "Umschalten",
       "updateFailed": "Aktualisierung fehlgeschlagen"
@@ -3037,7 +3026,6 @@
     },
     "voiceTranscribeOn": {
       "heading": "Transkribieren auf",
-      "description": "Was dieses Telefon hört, bleibt auf ihm. Automatisch nutzt deinen Computer, wenn dieses Telefon nicht transkribieren kann.",
       "automatic": "Automatisch",
       "phone": "Dieses Telefon",
       "computer": "Computer",

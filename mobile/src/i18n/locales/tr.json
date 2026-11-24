@@ -1775,13 +1775,10 @@
     "voiceModelList": {
       "deleteModel": "{{label}} modelini sil",
       "downloadModel": "{{label}} modelini indir",
-      "inUse": "Kullanımda",
       "modelExtracting": "{{size}} · çıkarılıyor…",
       "modelProgress": "{{size}} · %{{progress}}",
       "modelSize": "{{size}} MB",
-      "recommended": "Önerilen",
-      "use": "Kullan",
-      "useModel": "{{label}} modelini kullan"
+      "recommended": "Önerilen"
     },
     "workspaceDetailPlaceholder": {
       "description": "Terminalini burada açmak için kenar çubuğundan bir çalışma alanı seçin.",
@@ -4150,21 +4147,13 @@
     "voiceSettingsScreen": {
       "connectDesktop": "Ses ayarlarını yönetmek için bir masaüstüne bağlanın.",
       "deleteFailed": "Silinemedi",
-      "dictationDescription": "Masaüstünüzde odaktaki herhangi bir bölmeye metin dikte edin.",
-      "dictationHeading": "Dikte",
-      "dictationMode": "Dikte Modu",
-      "dictationModeDescription": "Aç/kapat: başlatmak için bir kez, durdurmak için tekrar basın. Basılı tut: basılı tuttuğunuz sürece dikte edin.",
-      "dictationModeWithAutoDescription": "Otomatik: başlatmak ve durdurmak için dokunun; bilgisayarınızda kısayolu basılı tutmak bırakana kadar kaydeder. Basılı tut: basılı tuttuğunuz sürece dikte edin. Aç/kapat: başlatmak için bir kez, durdurmak için tekrar basın.",
       "autoMode": "Otomatik",
       "downloadFailed": "İndirme tamamlanamadı",
-      "enableDictation": "Sesli Dikteyi Etkinleştir",
       "holdMode": "Basılı Tut",
       "loadFailed": "Ses ayarları yüklenemedi",
       "loadFailedMessage": "Ses ayarları yüklenemedi.",
       "noneSelected": "Seçim yok",
       "selectModelFailed": "Model seçilemedi",
-      "speechModel": "Konuşma Modeli",
-      "speechModelHeading": "Konuşma modeli",
       "title": "Ses",
       "toggleMode": "Aç/kapat",
       "updateFailed": "Güncellenemedi",
@@ -4175,7 +4164,6 @@
     },
     "voiceTranscribeOn": {
       "heading": "Yazıya dökme yeri",
-      "description": "Bu telefonun duyduğu konuşma telefonda kalır. Otomatik, bu telefon yazıya dökemediğinde bilgisayarınızı kullanır.",
       "automatic": "Otomatik",
       "phone": "Bu telefon",
       "computer": "Bilgisayar",

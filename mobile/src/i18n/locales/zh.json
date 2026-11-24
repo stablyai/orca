@@ -1674,13 +1674,10 @@
     "voiceModelList": {
       "deleteModel": "删除 {{label}}",
       "downloadModel": "下载 {{label}}",
-      "inUse": "使用中",
       "modelExtracting": "{{size}} · 解压中…",
       "modelProgress": "{{size}} · {{progress}}%",
       "modelSize": "{{size}} MB",
-      "recommended": "推荐",
-      "use": "使用",
-      "useModel": "使用 {{label}}"
+      "recommended": "推荐"
     },
     "workspaceDetailPlaceholder": {
       "description": "从侧边栏选择一个工作区，即可在此处打开其终端",
@@ -4035,22 +4032,14 @@
     "voiceSettingsScreen": {
       "connectDesktop": "连接到桌面后即可管理语音设置",
       "deleteFailed": "删除失败",
-      "dictationDescription": "通过听写向桌面上任意获得焦点的窗格输入文本",
-      "dictationHeading": "听写",
-      "dictationMode": "听写模式",
-      "dictationModeDescription": "切换：按一次开始，再按一次停止。按住：按住期间进行听写",
-      "dictationModeWithAutoDescription": "自动：轻按开始和停止；在电脑上按住快捷键会一直录音，直到松开。按住：按住期间进行听写。切换：按一次开始，再按一次停止。",
       "autoMode": "自动",
       "downloadFailed": "下载失败",
-      "enableDictation": "启用语音听写",
       "holdMode": "按住",
       "loadFailed": "加载语音设置失败",
       "loadFailedMessage": "加载语音设置失败",
       "noneSelected": "未选择",
       "selectModelFailed": "无法选择模型",
-      "speechModel": "语音模型",
       "loading": "正在加载语音设置…",
-      "speechModelHeading": "语音模型",
       "title": "语音",
       "toggleMode": "切换",
       "updateFailed": "无法更新"
@@ -4060,7 +4049,6 @@
     },
     "voiceTranscribeOn": {
       "heading": "转写位置",
-      "description": "此手机听到的语音只留在手机上。选择“自动”时，如果此手机无法转写，会改用你的电脑。",
       "automatic": "自动",
       "phone": "此手机",
       "computer": "电脑",

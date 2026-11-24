@@ -167,23 +167,23 @@
       "title": "Voice",
       "connectDesktop": "Connect to a desktop to manage voice settings.",
       "loadFailedMessage": "Failed to load voice settings.",
-      "dictationHeading": "Dictation",
-      "enableDictation": "Enable Voice Dictation",
-      "dictationDescription": "Dictate text into any focused pane on your desktop.",
-      "dictationMode": "Dictation Mode",
-      "dictationModeDescription": "Toggle: press once to start, again to stop. Hold: dictate while held.",
-      "dictationModeWithAutoDescription": "Auto: tap to start and stop; on your computer, holding the shortcut records until you let go. Hold: dictate while held. Toggle: press once to start, again to stop.",
       "autoMode": "Auto",
-      "speechModelHeading": "Speech model",
-      "speechModel": "Speech Model",
-      "loading": "Loading voice settings…"
+      "loading": "Loading voice settings…",
+      "toggleModeHint": "Tap to start, tap again to stop",
+      "holdModeHint": "Talk while you hold",
+      "autoModeHint": "Tap to start and stop; hold the shortcut on the computer",
+      "dictation": "Dictation",
+      "mode": "Mode",
+      "model": "Model",
+      "runsOn": "Runs on {{name}}",
+      "dictationOffFooter": "Talk instead of typing in chats and terminals.",
+      "swipeToDelete": "Swipe a downloaded model left to delete it."
     },
     "agents": {
       "permissionOwnAll": "Agents' own settings"
     },
     "voiceTranscribeOn": {
       "heading": "Transcribe on",
-      "description": "Speech heard on this phone stays on it. Automatic uses your computer when this phone can’t transcribe.",
       "automatic": "Automatic",
       "phone": "This phone",
       "computer": "Computer",
@@ -193,7 +193,8 @@
       "phoneUnsupported": "Not available on this phone",
       "download": "Download for this phone",
       "downloadSize": "About {{size}} MB",
-      "phoneChecking": "Checking…"
+      "phoneChecking": "Checking…",
+      "footer": "Automatic uses this phone when it can."
     },
     "bots": {
       "slackStatus": {
@@ -1562,11 +1563,9 @@
       "modelProgress": "{{size}} · {{progress}}%",
       "modelExtracting": "{{size}} · extracting…",
       "recommended": "Recommended",
-      "inUse": "In use",
-      "useModel": "Use {{label}}",
-      "use": "Use",
       "deleteModel": "Delete {{label}}",
-      "downloadModel": "Download {{label}}"
+      "downloadModel": "Download {{label}}",
+      "delete": "Delete"
     },
     "workspaceDetailPlaceholder": {
       "title": "No workspace open",

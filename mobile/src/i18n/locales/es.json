@@ -1194,13 +1194,10 @@
     "voiceModelList": {
       "deleteModel": "Eliminar {{label}}",
       "downloadModel": "Descargar {{label}}",
-      "inUse": "En uso",
       "modelExtracting": "{{size}} · extrayendo…",
       "modelProgress": "{{size}} · {{progress}} %",
       "modelSize": "{{size}} MB",
-      "recommended": "Recomendado",
-      "use": "Usar",
-      "useModel": "Usar {{label}}"
+      "recommended": "Recomendado"
     },
     "workspaceDetailPlaceholder": {
       "description": "Elige un espacio de trabajo de la barra lateral para abrir su terminal aquí.",
@@ -3093,21 +3090,13 @@
     "voiceSettingsScreen": {
       "connectDesktop": "Conéctate a un escritorio para gestionar los ajustes de voz.",
       "deleteFailed": "Error al eliminar",
-      "dictationDescription": "Dicta texto en cualquier panel que tenga el foco en tu escritorio.",
-      "dictationHeading": "Dictado",
-      "dictationMode": "Modo de dictado",
-      "dictationModeDescription": "Alternar: pulsa una vez para iniciar y otra para detener. Mantener pulsado: dicta sin soltar.",
-      "dictationModeWithAutoDescription": "Automático: toca para iniciar y detener; en tu ordenador, mantener el atajo graba hasta que lo sueltes. Mantener pulsado: dicta sin soltar. Alternar: pulsa una vez para iniciar y otra para detener.",
       "autoMode": "Automático",
       "downloadFailed": "Falló la descarga",
-      "enableDictation": "Habilitar dictado de voz",
       "holdMode": "Mantener",
       "loadFailed": "No se pudo cargar la configuración de voz",
       "loadFailedMessage": "No se pudieron cargar los ajustes de voz.",
       "noneSelected": "Ninguno seleccionado",
       "selectModelFailed": "No se pudo seleccionar el modelo",
-      "speechModel": "Modelo de voz",
-      "speechModelHeading": "Modelo de voz",
       "title": "Voz",
       "toggleMode": "Alternar",
       "updateFailed": "No se pudo actualizar"
@@ -3117,7 +3106,6 @@
     },
     "voiceTranscribeOn": {
       "heading": "Transcribir en",
-      "description": "Lo que escucha este teléfono se queda en él. Automático usa tu ordenador cuando este teléfono no puede transcribir.",
       "automatic": "Automático",
       "phone": "Este teléfono",
       "computer": "Ordenador",

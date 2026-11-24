@@ -1146,13 +1146,10 @@
     "voiceModelList": {
       "deleteModel": "{{label}} 삭제",
       "downloadModel": "{{label}} 다운로드",
-      "inUse": "사용 중",
       "modelExtracting": "{{size}} · 압축 해제 중…",
       "modelProgress": "{{size}} · {{progress}}%",
       "modelSize": "{{size}} MB",
-      "recommended": "권장",
-      "use": "사용",
-      "useModel": "{{label}} 사용"
+      "recommended": "권장"
     },
     "workspaceDetailPlaceholder": {
       "description": "사이드바에서 워크스페이스를 선택하면 해당 터미널이 여기에 열립니다.",
@@ -3115,21 +3112,13 @@
     "voiceSettingsScreen": {
       "connectDesktop": "음성 설정을 관리하려면 데스크톱에 연결하세요.",
       "deleteFailed": "삭제 실패",
-      "dictationDescription": "데스크톱에서 포커스가 있는 창에 음성으로 텍스트를 입력합니다.",
-      "dictationHeading": "받아쓰기",
-      "dictationMode": "받아쓰기 모드",
-      "dictationModeDescription": "토글: 한 번 누르면 받아쓰기를 시작하고, 다시 누르면 중지합니다. 길게 누르기: 누르고 있는 동안 받아쓰기합니다.",
-      "dictationModeWithAutoDescription": "자동: 탭하여 시작하고 중지합니다. 컴퓨터에서는 단축키를 길게 누르면 손을 뗄 때까지 녹음합니다. 길게 누르기: 누르고 있는 동안 받아쓰기합니다. 토글: 한 번 누르면 시작하고, 다시 누르면 중지합니다.",
       "autoMode": "자동",
       "downloadFailed": "다운로드 실패",
-      "enableDictation": "음성 받아쓰기 활성화",
       "holdMode": "길게 누르기",
       "loadFailed": "음성 설정을 불러오지 못했습니다.",
       "loadFailedMessage": "음성 설정을 불러오지 못했습니다.",
       "noneSelected": "선택 안 됨",
       "selectModelFailed": "모델을 선택하지 못했습니다.",
-      "speechModel": "음성 모델",
-      "speechModelHeading": "음성 모델",
       "title": "음성",
       "toggleMode": "토글",
       "updateFailed": "업데이트하지 못했습니다."
@@ -3139,7 +3128,6 @@
     },
     "voiceTranscribeOn": {
       "heading": "받아쓰기 위치",
-      "description": "이 휴대폰이 들은 음성은 휴대폰 밖으로 나가지 않습니다. 자동은 이 휴대폰이 받아쓸 수 없을 때 컴퓨터를 사용합니다.",
       "automatic": "자동",
       "phone": "이 휴대폰",
       "computer": "컴퓨터",

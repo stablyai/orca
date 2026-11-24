@@ -1275,13 +1275,10 @@
     "voiceModelList": {
       "deleteModel": "Excluir {{label}}",
       "downloadModel": "Baixar {{label}}",
-      "inUse": "Em uso",
       "modelExtracting": "{{size}} · extraindo…",
       "modelProgress": "{{size}} · {{progress}}%",
       "modelSize": "{{size}} MB",
-      "recommended": "Recomendado",
-      "use": "Usar",
-      "useModel": "Usar {{label}}"
+      "recommended": "Recomendado"
     },
     "workspaceDetailPlaceholder": {
       "description": "Selecione um espaço de trabalho na barra lateral para abrir seu terminal aqui.",
@@ -3490,21 +3487,13 @@
     "voiceSettingsScreen": {
       "connectDesktop": "Conecte-se a um desktop para gerenciar as configurações de voz.",
       "deleteFailed": "Falha ao excluir",
-      "dictationDescription": "Dite texto em qualquer painel em foco no seu desktop.",
-      "dictationHeading": "Ditado",
-      "dictationMode": "Modo de Ditado",
-      "dictationModeDescription": "Alternar: pressione uma vez para iniciar e novamente para parar. Manter pressionado: pressione e segure para ditar.",
-      "dictationModeWithAutoDescription": "Automático: toque para iniciar e parar; no computador, manter o atalho pressionado grava até você soltar. Manter pressionado: pressione e segure para ditar. Alternar: pressione uma vez para iniciar e novamente para parar.",
       "autoMode": "Automático",
       "downloadFailed": "Falha no download",
-      "enableDictation": "Ativar Ditado por Voz",
       "holdMode": "Manter Pressionado",
       "loadFailed": "Falha ao carregar as configurações de voz",
       "loadFailedMessage": "Falha ao carregar as configurações de voz.",
       "noneSelected": "Nenhum selecionado",
       "selectModelFailed": "Não foi possível selecionar o modelo",
-      "speechModel": "Modelo de Voz",
-      "speechModelHeading": "Modelo de voz",
       "title": "Voz",
       "toggleMode": "Alternar",
       "updateFailed": "Não foi possível atualizar",
@@ -3515,7 +3504,6 @@
     },
     "voiceTranscribeOn": {
       "heading": "Transcrever em",
-      "description": "O que este celular ouve fica nele. Automático usa seu computador quando este celular não consegue transcrever.",
       "automatic": "Automático",
       "phone": "Este celular",
       "computer": "Computador",

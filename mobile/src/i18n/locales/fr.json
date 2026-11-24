@@ -1194,13 +1194,10 @@
     "voiceModelList": {
       "deleteModel": "Supprimer {{label}}",
       "downloadModel": "Télécharger {{label}}",
-      "inUse": "Utilisé",
       "modelExtracting": "{{size}} · extraction…",
       "modelProgress": "{{size}} · {{progress}} %",
       "modelSize": "{{size}} Mo",
-      "recommended": "Recommandé",
-      "use": "Utiliser",
-      "useModel": "Utiliser {{label}}"
+      "recommended": "Recommandé"
     },
     "workspaceDetailPlaceholder": {
       "description": "Choisissez un espace de travail dans la barre latérale pour ouvrir son terminal ici.",
@@ -3093,21 +3090,13 @@
     "voiceSettingsScreen": {
       "connectDesktop": "Connectez-vous à un ordinateur pour gérer les paramètres vocaux.",
       "deleteFailed": "Échec de la suppression",
-      "dictationDescription": "Dictez du texte dans n'importe quel volet actif de votre ordinateur.",
-      "dictationHeading": "Dictée",
-      "dictationMode": "Mode de dictée",
-      "dictationModeDescription": "Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter. Maintien : dictez tant que vous maintenez l'appui.",
-      "dictationModeWithAutoDescription": "Auto : appuyez pour démarrer et arrêter ; sur votre ordinateur, maintenir le raccourci enregistre jusqu’à ce que vous relâchiez. Maintien : dictez tant que vous maintenez l’appui. Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter.",
       "autoMode": "Auto",
       "downloadFailed": "Échec du téléchargement",
-      "enableDictation": "Activer la dictée vocale",
       "holdMode": "Maintien",
       "loadFailed": "Impossible de charger les paramètres de voix",
       "loadFailedMessage": "Impossible de charger les paramètres vocaux.",
       "noneSelected": "Aucun modèle sélectionné",
       "selectModelFailed": "Impossible de sélectionner le modèle",
-      "speechModel": "Modèle vocal",
-      "speechModelHeading": "Modèle vocal",
       "title": "Voix",
       "toggleMode": "Bascule",
       "updateFailed": "Impossible de mettre à jour"
@@ -3117,7 +3106,6 @@
     },
     "voiceTranscribeOn": {
       "heading": "Transcrire sur",
-      "description": "Ce que ce téléphone entend reste sur ce téléphone. Automatique utilise votre ordinateur quand ce téléphone ne peut pas transcrire.",
       "automatic": "Automatique",
       "phone": "Ce téléphone",
       "computer": "Ordinateur",
