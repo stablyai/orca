@@ -73,6 +73,7 @@ export function renderFloatingTerminalPanelSurface(
     orchestrationDialogOpen,
     refreshOrchestrationSetupVisibility
   }: ReturnType<typeof useFloatingTerminalPanelController>,
+  opacity: number,
   t?: Translate
 ): React.JSX.Element {
   return (
@@ -82,9 +83,10 @@ export function renderFloatingTerminalPanelSurface(
       data-floating-terminal-panel
       aria-hidden={!open}
       tabIndex={-1}
-      className={`fixed z-[45] flex min-h-[280px] min-w-[420px] rounded-lg bg-transparent text-card-foreground shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] outline-none dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)] ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
+      className={`fixed z-[45] flex min-h-[280px] min-w-[420px] rounded-lg bg-transparent text-card-foreground shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] outline-none dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)] ${open ? '' : 'invisible pointer-events-none'}`}
       style={{
         visibility: open ? 'visible' : 'hidden',
+        opacity: open ? opacity : 0,
         left: bounds.left,
         top: bounds.top,
         width: bounds.width,

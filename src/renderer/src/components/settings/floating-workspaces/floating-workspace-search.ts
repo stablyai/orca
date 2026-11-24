@@ -67,7 +67,9 @@ function buildFloatingWorkspaceSearchEntries(includeBrowser: boolean) {
         ...translateSearchKeyword(
           'auto.components.settings.floating.workspace.search.94f4d013c8',
           'status bar'
-        )
+        ),
+        translate('settings.floatingWorkspace.panelOpacity', 'Floating panel opacity'),
+        ...translateSearchKeyword('settings.floatingWorkspace.transparency', 'transparency')
       ]
     }
   ]
