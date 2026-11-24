@@ -19,6 +19,16 @@ export type AntigravityListedModel = {
 
 const LEVEL_SUFFIX = new RegExp(`^(.+)-(${ANTIGRAVITY_EFFORT_LEVELS.join('|')})$`, 'i')
 
+/** Split `<family>-<level>` case-insensitively, normalizing `level` to lowercase. */
+export function splitAntigravityLeveledModelId(
+  modelId: string
+): { family: string; level: AntigravityEffortLevel } | null {
+  const match = LEVEL_SUFFIX.exec(modelId)
+  const rawLevel = match?.[2].toLowerCase()
+  const level = ANTIGRAVITY_EFFORT_LEVELS.find((candidate) => candidate === rawLevel)
+  return match && level ? { family: match[1], level } : null
+}
+
 function* iterateOutputLines(output: string): Generator<string> {
   let lineStart = 0
   for (let index = 0; index < output.length; index++) {
@@ -95,14 +105,14 @@ export function antigravityModelChoices(
   const ids = new Set(models.map((model) => model.modelId))
   const levels = new Map<string, number>()
   for (const model of models) {
-    const family = LEVEL_SUFFIX.exec(model.modelId)?.[1]
+    const family = splitAntigravityLeveledModelId(model.modelId)?.family
     if (family && !ids.has(family)) {
       levels.set(family, (levels.get(family) ?? 0) + 1)
     }
   }
   const choices = new Map<string, string>()
   for (const model of models) {
-    const family = LEVEL_SUFFIX.exec(model.modelId)?.[1]
+    const family = splitAntigravityLeveledModelId(model.modelId)?.family
     if (family && (levels.get(family) ?? 0) > 1) {
       if (!choices.has(family)) {
         choices.set(family, model.name.replace(/\s*\([^()]+\)$/, ''))

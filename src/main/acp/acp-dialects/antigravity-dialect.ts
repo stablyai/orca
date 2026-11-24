@@ -12,10 +12,10 @@ import type { StructuredAgentListedSelection } from '../../native-chat/agent-ses
 import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
 import { acpReplyNoticeFailure } from './acp-reply-notice-failure'
 import { antigravityExecutorErrorWords } from './antigravity-executor-error'
-import { ANTIGRAVITY_LEVEL_SUFFIX } from '../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-antigravity'
 import {
   antigravityFamilyEfforts,
-  antigravityModelChoices
+  antigravityModelChoices,
+  splitAntigravityLeveledModelId
 } from '../../../shared/agent-session/options/model-catalog/antigravity-model-families'
 
 export { antigravityModelChoices }
@@ -171,7 +171,10 @@ export const antigravityListedFamilySelection: StructuredAgentListedSelection = 
   options,
   listed
 ) => {
-  const [, family, level] = ANTIGRAVITY_LEVEL_SUFFIX.exec(options.model ?? '') ?? []
+  const { family, level } = splitAntigravityLeveledModelId(options.model ?? '') ?? {}
+  if (!family || !level) {
+    return null
+  }
   const offered = listed.find((model) => model.id === family)?.efforts.map(({ value }) => value)
   const effort = options.effort ?? level
   return offered?.includes(level) &&
