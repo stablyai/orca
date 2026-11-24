@@ -21270,6 +21270,12 @@
       "caveat": "Esto abre una nueva página en el host remoto en la última dirección de esta página. El estado de sesión iniciada y otros estados transitorios pueden diferir, y una página que provenga del envío de un formulario se abrirá en blanco.",
       "failed": "No se pudo abrir esta página en el host remoto. Comprueba la conexión y vuelve a intentarlo."
     },
+    "deviceMove": {
+      "toThisComputer": "Abrir en este ordenador",
+      "toHost": "Abrir en {{host}}",
+      "tooltip": "Abre esta dirección en una pestaña nueva en el otro lado y cierra esta. Puede que tengas que volver a iniciar sesión.",
+      "failedToThisComputer": "No se pudo abrir esta página en este ordenador."
+    },
     "sshRoute": {
       "preparingTitle": "Conectando a través del host SSH",
       "errorTitle": "Enrutamiento del navegador por SSH no disponible",

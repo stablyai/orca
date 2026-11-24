@@ -393,6 +393,12 @@
       "caveat": "Dies öffnet auf dem Remote-Host eine neue Seite mit der zuletzt verwendeten Adresse dieser Seite. Der Anmeldestatus und andere vorübergehende Seitenzustände können abweichen. Eine durch Formularübermittlung entstandene Seite wird leer geöffnet.",
       "failed": "Diese Seite konnte auf dem Remote-Host nicht geöffnet werden. Die Verbindung prüfen und erneut versuchen."
     },
+    "deviceMove": {
+      "toThisComputer": "Auf diesem Computer öffnen",
+      "toHost": "Auf {{host}} öffnen",
+      "tooltip": "Öffnet diese Adresse in einem neuen Tab auf der anderen Seite und schließt diesen. Eventuell musst du dich erneut anmelden.",
+      "failedToThisComputer": "Diese Seite konnte auf diesem Computer nicht geöffnet werden."
+    },
     "sshRoute": {
       "preparingTitle": "Verbindung über den SSH-Host wird hergestellt",
       "errorTitle": "SSH-Routing für den Browser nicht verfügbar",

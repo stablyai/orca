@@ -23222,6 +23222,12 @@
       "caveat": "这会在远程主机上按此页面最后的地址打开新页面，登录状态及其他临时页面状态可能不同，如果页面来自表单提交，新页面将为空白",
       "failed": "无法在远程主机上打开此页面，请检查连接后重试"
     },
+    "deviceMove": {
+      "toThisComputer": "在这台电脑上打开",
+      "toHost": "在 {{host}} 上打开",
+      "tooltip": "在另一端的新标签页中打开此地址，并关闭此标签页。你可能需要重新登录。",
+      "failedToThisComputer": "无法在这台电脑上打开此页面。"
+    },
     "sshRoute": {
       "preparingTitle": "正在通过 SSH 主机连接",
       "errorTitle": "SSH 浏览器路由不可用",

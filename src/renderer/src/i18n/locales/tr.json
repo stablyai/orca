@@ -393,6 +393,12 @@
       "caveat": "Bu işlem, uzak sunucuda bu sayfanın son adresinde yeni bir sayfa açar. Oturum açma durumu ve diğer geçici sayfa verileri farklı olabilir, form gönderiminden gelen bir sayfa boş açılır.",
       "failed": "Bu sayfa uzak sunucuda açılamadı. Bağlantıyı kontrol edip tekrar deneyin."
     },
+    "deviceMove": {
+      "toThisComputer": "Bu bilgisayarda aç",
+      "toHost": "{{host}} üzerinde aç",
+      "tooltip": "Bu adresi diğer tarafta yeni bir sekmede açar ve bunu kapatır. Yeniden oturum açmanız gerekebilir.",
+      "failedToThisComputer": "Bu sayfa bu bilgisayarda açılamadı."
+    },
     "sshRoute": {
       "preparingTitle": "SSH sunucusu üzerinden bağlanılıyor",
       "errorTitle": "SSH tarayıcı yönlendirmesi kullanılamıyor",
