@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { z } from 'zod'
 import { requestConnector } from '../../../connector-cloud/connector-cloud-request'
-import { BOT_LINKS_METHODS } from './bots-links'
+import { BOT_LINKS_LIST as list, BOT_LINKS_UNLINK as unlink } from './bots-links'
 
-const [list, unlink] = BOT_LINKS_METHODS
-type Context = Parameters<NonNullable<typeof list>['handler']>[1]
+type Context = Parameters<typeof list.handler>[1]
 
 /** The host's connector cloud over a fake Orca Cloud, through the real request and schema parsing. */
 function host(answer: (method: string, path: string) => Response) {
@@ -78,7 +77,7 @@ describe('bots.links.*', () => {
         ]
       })
     )
-    const result = await list!.handler(null, context)
+    const result = await list.handler(undefined, context)
     expect(result).toEqual({
       ok: true,
       value: {
@@ -114,7 +113,7 @@ describe('bots.links.*', () => {
 
   it('unlinks exactly the named link, with each segment encoded', async () => {
     const { calls, context } = host(() => new Response(null, { status: 204 }))
-    const result = await unlink!.handler(
+    const result = await unlink.handler(
       { source: 'linear', workspaceId: 'org/1', userId: 'user 2' },
       context
     )
@@ -126,7 +125,7 @@ describe('bots.links.*', () => {
 
   it("answers not_linked for a link that isn't the caller's", async () => {
     const { context } = host(() => json({ error: 'not_linked' }, 404))
-    const result = await unlink!.handler(
+    const result = await unlink.handler(
       { source: 'github', workspaceId: 'github.com', userId: '9' },
       context
     )
@@ -135,6 +134,6 @@ describe('bots.links.*', () => {
 
   it('reads a bare 404 as a cloud from before linked accounts', async () => {
     const { context } = host(() => new Response('', { status: 404 }))
-    expect(await list!.handler(null, context)).toEqual({ ok: false, error: 'links_off' })
+    expect(await list.handler(undefined, context)).toEqual({ ok: false, error: 'links_off' })
   })
 })
