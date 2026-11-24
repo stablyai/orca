@@ -46,6 +46,16 @@ export function resolveTerminalHttpLinkSourceOwner(
   return { kind: 'local' }
 }
 
+/** Positive evidence the pane's process runs on this computer: a live PTY that resolves local.
+ *  A restored pane with an inert transport also resolves `local`, but only as a fallback. */
+export function isConfirmedLocalTerminalSource(
+  transport: OwnerTransport | null | undefined
+): boolean {
+  return (
+    Boolean(transport?.getPtyId()) && resolveTerminalHttpLinkSourceOwner(transport).kind === 'local'
+  )
+}
+
 /** The pane's terminal handle on its paired server; null for a pane no server runs. */
 export function resolveTerminalRuntimeHandle(
   transport: Pick<PtyTransport, 'getPtyId'> | null | undefined

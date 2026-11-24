@@ -104,7 +104,9 @@ export function httpLinkActionDestinationsFor(
   settings: { openLinksInApp?: boolean } | null | undefined,
   sourceOwner: HttpLinkSourceOwner,
   canOpenOwnedBrowser: boolean,
-  url?: string
+  url?: string,
+  /** False when `local` is only a fallback (a restored pane with no live process): no localhost shortcut. */
+  localOwnerConfirmed = true
 ): HttpLinkActionDestinations {
   if (!canSourceOwnerOpenInOrca(sourceOwner, canOpenOwnedBrowser)) {
     return { primary: 'system' }
@@ -113,7 +115,7 @@ export function httpLinkActionDestinationsFor(
     settings?.openLinksInApp === true || isRemoteLoopbackHttpLink(url, sourceOwner)
       ? { primary: 'orca', alternate: 'system' }
       : { primary: 'system', alternate: 'orca' }
-  return isDesktopLocalhostLink(url, sourceOwner)
+  return localOwnerConfirmed && isDesktopLocalhostLink(url, sourceOwner)
     ? { ...destinations, plainClick: { primary: 'orca', alternate: 'system' } }
     : destinations
 }

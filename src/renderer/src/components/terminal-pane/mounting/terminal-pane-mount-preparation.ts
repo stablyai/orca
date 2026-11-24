@@ -9,6 +9,7 @@ import '@/lib/browser/workspace/workspace-browser-tab-open'
 import { canOpenRemoteLinkInWorkspaceBrowser } from '@/lib/browser/workspace/workspace-browser-route-eligibility'
 import { resolvePaneWslDistro } from '../host-state/terminal-pane-wsl-distro'
 import {
+  isConfirmedLocalTerminalSource,
   resolveTerminalHttpLinkSourceOwner,
   resolveTerminalLinkRuntimeEnvironmentId,
   resolveTerminalRuntimeHandle
@@ -124,7 +125,8 @@ export function prepareTerminalPaneMount(
       deps.settingsRef.current,
       getHttpLinkSourceOwnerForPane(paneId),
       canOpenOwnedBrowserForPane(paneId),
-      url
+      url,
+      isConfirmedLocalTerminalSource(paneTransports.get(paneId))
     )
   const getLinkActionContext = (paneId: number): TerminalLinkActionContext | null => {
     const plainClickBehavior = terminalLinkClickBehaviorFor(deps.settingsRef.current)

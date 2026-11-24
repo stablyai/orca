@@ -5,6 +5,10 @@ import type { TerminalLinkActionContext } from '../terminal-link-action-request'
 import type * as HttpLinkDestinations from '@/lib/browser/navigation/http-link-destinations'
 import { httpLinkActionDestinationsFor } from '@/lib/browser/navigation/http-link-destinations'
 import { handleTerminalHttpLink } from './terminal-url-link-hit-testing'
+import {
+  isConfirmedLocalTerminalSource,
+  resolveTerminalHttpLinkSourceOwner
+} from './terminal-http-link-source-owner'
 
 const { openRoutedHttpLink } = vi.hoisted(() => ({ openRoutedHttpLink: vi.fn() }))
 vi.mock('@/lib/browser/navigation/http-link-destinations', async (importOriginal) => ({
@@ -161,4 +165,46 @@ describe('a localhost link from this machine', () => {
       expect(forced()).toEqual(['orca', 'system'])
     })
   }
+})
+
+// "local" from an inert transport is a fallback, not evidence: restored SSH scrollback keeps asking.
+describe('the localhost shortcut needs a pane known to run on this computer', () => {
+  const LOCALHOST = 'http://localhost:5173/'
+  function transport(ptyId: string | null) {
+    return {
+      getPtyId: () => ptyId,
+      getRuntimeEnvironmentId: () => null,
+      getConnectionId: () => null
+    }
+  }
+
+  function plainClick(ptyId: string | null): LinkActionRequest[] {
+    const requests: LinkActionRequest[] = []
+    const pane = transport(ptyId)
+    const owner = resolveTerminalHttpLinkSourceOwner(pane)
+    handleTerminalHttpLink(LOCALHOST, click(), {
+      worktreeId: 'w',
+      sourceTabId: 'tab',
+      sourceOwner: owner,
+      linkActionContext: linkContext('actions', requests),
+      actionDestinations: httpLinkActionDestinationsFor(
+        { openLinksInApp: false },
+        owner,
+        false,
+        LOCALHOST,
+        isConfirmedLocalTerminalSource(pane)
+      )
+    })
+    return requests
+  }
+
+  it('asks for a link in a restored pane with no live process, and opens nothing', () => {
+    expect(plainClick(null)).toHaveLength(1)
+    expect(openRoutedHttpLink).not.toHaveBeenCalled()
+  })
+
+  it('opens a link from a live local pane in Orca without asking', () => {
+    expect(plainClick('pty-local-1')).toEqual([])
+    expect(openRoutedHttpLink.mock.calls.map(([, deps]) => deps.forceDestination)).toEqual(['orca'])
+  })
 })
