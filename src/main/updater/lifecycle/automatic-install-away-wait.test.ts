@@ -4,7 +4,8 @@ import { AutomaticInstallAwayWait } from './automatic-install-away-wait'
 const TEN_MINUTES_MS = 10 * 60_000
 
 function setup(initial: { present: boolean; pending: boolean }) {
-  const state = { ...initial, installs: [] as string[] }
+  const installs: string[] = []
+  const state = { ...initial, installs }
   const wait = new AutomaticInstallAwayWait({
     mustWait: () => state.present,
     isPending: () => state.pending,
