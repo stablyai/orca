@@ -159,12 +159,13 @@ export async function reopenWorkerChat(
   }
 }
 
-/** Read the exact chat before claiming the follow-up. Only a committed claim may publish it. */
+/** Recheck the exact chat and its placement just before claiming the follow-up. */
 export function prepareRetainedWorkerChat(
   runtime: Pick<OrcaRuntimeService, 'publishStructuredAgentSessionTab'>,
   db: OrchestrationDb,
   selected: RetainedWorkerTerminal,
-  worktreeId: string | undefined
+  worktreeId: string | undefined,
+  open: boolean
 ): {
   authority: RetainedWorkerAuthority
   worktreeId: string
@@ -181,10 +182,13 @@ export function prepareRetainedWorkerChat(
     )
   }
   const running = requireRunningStructuredWorker(identity)
-  if (running.record.location.workspaceId !== worktreeId || workerChatTabVisible(host, running)) {
+  if (
+    running.record.location.workspaceId !== worktreeId ||
+    workerChatTabVisible(host, running) !== open
+  ) {
     throw new OrchestrationError(
       'worker_identity_changed',
-      `Worker ${selected.handle} no longer has a closed chat in its workspace. No effects were applied.`,
+      `Worker ${selected.handle} no longer has an ${open ? 'open' : 'available closed'} chat in its workspace. No effects were applied.`,
       { effectsApplied: false }
     )
   }

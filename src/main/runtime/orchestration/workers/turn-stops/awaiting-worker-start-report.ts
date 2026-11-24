@@ -131,7 +131,7 @@ export function settleRestartCutStart(
   const worker = db.getWorkerDispatch(dispatchId)
   const runtimeId = runtime.getRuntimeId()
   const cut = worker?.state === 'starting' && worker.runtime_epoch !== runtimeId
-  // A chat records dispatch_input before submitting the brief. Attaching its authority only owns the chat.
+  // Older writers could submit while still at authority_attached.
   const chatBeforeBrief = cut && chatStartBeforeBrief(worker)
   if (
     cut &&

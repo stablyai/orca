@@ -96,7 +96,7 @@ export function describeStop(stop: WorkerTurnStop, context: StopContext): string
         ? `Worker ${stop.from} never became ready for task ${task}. ${cause ?? 'Orca never typed its brief.'}`
         : stop.reason === 'start-unconfirmed'
           ? stop.startSurface === 'chat'
-            ? `Your worker's brief may not have been submitted; check it. Orca sent task ${task} to worker ${stop.from}, but never saw it start the task.`
+            ? `Your worker's brief may not have been submitted. Orca never saw worker ${stop.from} start task ${task}. Check the chat before retrying.`
             : stop.startEvidence?.continuePrompt
               ? `Your worker's continue prompt may not have been submitted; check it. Orca resumed worker ${stop.from} on task ${task} after a restart and typed its continue prompt, but did not press Enter: the prompt may still be waiting.`
               : `Your worker's brief may not have been submitted; check it. Orca typed task ${task} into worker ${stop.from}, but never saw its turn start: the brief may still be waiting in its prompt.`

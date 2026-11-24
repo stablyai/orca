@@ -1,6 +1,7 @@
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 import { dispatchAssigneeOrcaSessionId } from '../../addressing/session-lineage/dispatch-assignee-orca-session-id'
+import type { RETAINED_CHAT_BEFORE_BRIEF_STAGE } from './restart-cut-worker-start'
 
 export function prepareStartingWorkerAuthority(
   this: OrchestrationDb,
@@ -15,6 +16,7 @@ export function prepareStartingWorkerAuthority(
     effects: unknown[]
     setupState: string
     hostScope?: string | null
+    stage?: typeof RETAINED_CHAT_BEFORE_BRIEF_STAGE
     // Created terminals acquire custody; external reuse transfers only an exact owned settled resource.
     terminalOwnership?: 'created' | 'external'
     /** The process Agent Sleep stopped in this same pane before resuming it as this one. */
@@ -97,11 +99,12 @@ export function prepareStartingWorkerAuthority(
     const workerUpdate = this.db
       .prepare(
         `UPDATE worker_dispatches
-         SET stage = 'authority_attached', worktree_id = ?, agent_terminal_handle = ?,
+         SET stage = ?, worktree_id = ?, agent_terminal_handle = ?,
              setup_state = ?, effects = ?, residual_resources = ?, updated_at = datetime('now')
          WHERE dispatch_id = ? AND state = 'starting'`
       )
       .run(
+        params.stage ?? 'authority_attached',
         params.worktreeId,
         params.handle,
         params.setupState,

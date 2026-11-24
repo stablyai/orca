@@ -200,7 +200,8 @@ export async function startLocalWorker(args: {
       launch,
       effects,
       onStage,
-      followUp: retained && followUp ? { ...followUp, reopen: retained.publish } : followUp
+      followUp:
+        retained && followUp && !terminal ? { ...followUp, reopen: retained.publish } : followUp
     })
     // New worktrees resolve host support after creation, so the final mode receipt may differ from preflight.
     mode = placed.mode

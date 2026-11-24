@@ -1,7 +1,13 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { dispatchReportMailbox } from '../../../orchestration/workers/reports/dispatch-report-mailbox'
+import { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
+import { observeWorkerWorking } from '../../../orchestration/workers/turn-stops/worker-working-observation'
+import { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -68,6 +74,7 @@ describe('follow-up custody for a closed retained worker chat', () => {
   let owner: { id: string; task_id: string }
   let visible: Set<string>
   let observedCustody: unknown[]
+  let observedStages: unknown[]
   let deliveredTo: { sessionId: string; expectedRuntimeFence: number | null }[]
 
   function custodyRows(): unknown[] {
@@ -77,6 +84,18 @@ describe('follow-up custody for a closed retained worker chat', () => {
            FROM worker_terminal_resources WHERE terminal_handle = ? ORDER BY id`
       )
       .all(handle)
+  }
+
+  function recordCustody() {
+    observedCustody.push(custodyRows())
+    observedStages.push(
+      h.db.db
+        .prepare(
+          `SELECT w.stage FROM worker_dispatches w JOIN worker_terminal_resources r
+             ON r.owner_dispatch_id = w.dispatch_id WHERE r.terminal_handle = ?`
+        )
+        .get(handle)?.stage
+    )
   }
 
   function settledWorker(withCustody = true) {
@@ -123,6 +142,7 @@ describe('follow-up custody for a closed retained worker chat', () => {
   beforeEach(async () => {
     visible = new Set([SESSION_X])
     observedCustody = []
+    observedStages = []
     deliveredTo = []
     h = createSessionCallerHarness(hostRef, () => ({
       present: true,
@@ -148,7 +168,7 @@ describe('follow-up custody for a closed retained worker chat', () => {
       send: async (_caller, request) => {
         const { sessionId, expectedRuntimeFence, clientOperationId } = request.envelope
         deliveredTo.push({ sessionId, expectedRuntimeFence })
-        observedCustody.push(custodyRows())
+        recordCustody()
         return {
           ok: true,
           replayed: false,
@@ -168,7 +188,7 @@ describe('follow-up custody for a closed retained worker chat', () => {
       supported: true
     })
     vi.spyOn(h.runtime, 'publishStructuredAgentSessionTab').mockImplementation(async (input) => {
-      observedCustody.push(custodyRows())
+      recordCustody()
       visible.add(input.sessionId)
     })
     runId = idOf(
@@ -210,12 +230,36 @@ describe('follow-up custody for a closed retained worker chat', () => {
     ]
     expect(custodyRows()).toEqual(expected)
     expect(observedCustody).toEqual([expected, expected])
+    expect(observedStages).toEqual(['retained_chat_before_brief', 'dispatch_input'])
+    expect(h.db.getWorkerTerminalResourceFormerlyOwnedBy(owner.id)?.id).toBe(resource?.id)
     expect(deliveredTo).toEqual([{ sessionId: SESSION_Y, expectedRuntimeFence: 7 }])
     expect(h.db.getDispatchContextById(newOwner)).toMatchObject({
       assignee_handle: handle,
       assignee_orca_session_id: SESSION_Y,
       creator_orca_session_id: SESSION_X
     })
+  })
+
+  it('reconciles a replacement history that ends in the outgoing owner', async () => {
+    const resource = h.db.getWorkerTerminalResourceByOwner(owner.id)!
+    const rewrite = h.db.db.prepare(
+      'UPDATE worker_terminal_resources SET prior_owner_dispatch_ids = ? WHERE id = ?'
+    )
+    rewrite.run('["old-a","old-b"]', resource.id)
+    const receipt = resultOf(await send())
+    const successor = String(receipt.dispatchId)
+    expect(h.db.getWorkerTerminalResourceByOwner(successor)?.prior_owner_dispatch_ids).toBe(
+      JSON.stringify(['old-a', 'old-b', owner.id])
+    )
+    expect(h.db.getWorkerTerminalResourceFormerlyOwnedBy('old-a')?.id).toBe(resource.id)
+    h.db.db
+      .prepare(
+        `UPDATE worker_terminal_resources
+         SET owner_dispatch_id = ?, prior_owner_dispatch_ids = ? WHERE id = ?`
+      )
+      .run(owner.id, JSON.stringify(['replacement', 'old-b', owner.id, successor]), resource.id)
+    expect(h.db.getWorkerTerminalResourceFormerlyOwnedBy('old-a')).toBeUndefined()
+    expect(h.db.getWorkerTerminalResourceFormerlyOwnedBy('replacement')?.id).toBe(resource.id)
   })
 
   it('continues a persisted lineage whose successor is already open', async () => {
@@ -244,6 +288,39 @@ describe('follow-up custody for a closed retained worker chat', () => {
       }
     ])
     expect(deliveredTo).toEqual([{ sessionId: SUCCESSOR, expectedRuntimeFence: 7 }])
+  })
+
+  it('reopens a retained chat retired during workspace lookup', async () => {
+    const lookup = Promise.withResolvers<void>()
+    const workspace = Promise.withResolvers<typeof worktree>()
+    h.records.set(SESSION_Y, sessionRecord(SESSION_Y))
+    visible.add(SESSION_Y)
+    vi.mocked(h.runtime.showManagedTerminalWorkspace).mockImplementationOnce(() => {
+      lookup.resolve()
+      return workspace.promise
+    })
+    const pending = send()
+    await lookup.promise
+    visible.delete(SESSION_Y)
+    h.records.set(
+      SESSION_Y,
+      sessionRecord(SESSION_Y, {
+        lease: { claimStatus: 'released', ownerProcess: null, reservedSpawnToken: null }
+      })
+    )
+    workspace.resolve(worktree)
+    const resource = h.db.getWorkerTerminalResourceByOwner(owner.id)!
+    const receipt = resultOf(await pending)
+    expect(receipt).toMatchObject({ delivery: 'reopened', followUpOf: owner.id })
+    expect(custodyRows()).toEqual([
+      {
+        id: resource.id,
+        owner_dispatch_id: receipt.dispatchId,
+        prior_owner_dispatch_ids: JSON.stringify([owner.id]),
+        ownership_state: 'owned'
+      }
+    ])
+    expect(deliveredTo).toEqual([{ sessionId: SESSION_Y, expectedRuntimeFence: 7 }])
   })
 
   it('stores a competing send on the follow-up that published the tab first', async () => {
@@ -307,7 +384,7 @@ describe('follow-up custody for a closed retained worker chat', () => {
   })
 
   it.each([
-    ['authority_attached', 'failed', 'failed', 'failed', 'before sending'],
+    ['retained_chat_before_brief', 'failed', 'failed', 'failed', 'before sending'],
     ['dispatch_input', 'start_unknown', 'pending', 'blocked', 'never saw']
   ] as const)(
     'recovers a restart at %s with one coordinator report',
@@ -336,7 +413,7 @@ describe('follow-up custody for a closed retained worker chat', () => {
       })
       expect(h.db.getWorkerDispatch(dispatch.id)).toMatchObject({
         state: 'starting',
-        stage: 'authority_attached',
+        stage: 'retained_chat_before_brief',
         agent_terminal_handle: handle
       })
       if (stage === 'dispatch_input') {
@@ -353,6 +430,70 @@ describe('follow-up custody for a closed retained worker chat', () => {
         h.db.getAllMessagesForHandle(mailbox).filter((mail) => mail.payload?.includes(dispatch.id))
       ).toEqual([expect.objectContaining({ body: expect.stringContaining(wording) })])
       expect(deliveredTo).toEqual([])
+    }
+  )
+
+  it.each(['starting', 'start_unknown'] as const)(
+    'recovers a saved legacy %s chat without revoking authority',
+    async (state) => {
+      const { dispatch, task } = h.db.createStartingWorkerDispatch({
+        taskSpec: 'Work from an older runtime',
+        taskRunId: runId,
+        creator: { kind: 'session', orcaSessionId: SESSION_X },
+        maxDepth: 3,
+        startOptions: {},
+        runtimeEpoch: 'legacy-runtime'
+      })
+      const legacyHandle = mintStructuredWorkerHandle()
+      h.db.prepareStartingWorkerAuthority({
+        dispatchId: dispatch.id,
+        handle: legacyHandle,
+        paneKey: mintStructuredWorkerPaneKey(SUCCESSOR),
+        processIncarnation: structuredWorkerProcessIncarnation(SUCCESSOR),
+        hostScope,
+        worktreeId: WORKSPACE_X,
+        setupState: 'not_applicable',
+        effects: [],
+        terminalOwnership: 'created'
+      })
+      if (state === 'start_unknown') {
+        h.db.markWorkerStartUnknown(dispatch.id, 'authority_attached', 'Interrupted legacy start')
+      }
+      const directory = mkdtempSync(join(tmpdir(), 'orca-legacy-worker-'))
+      try {
+        const path = join(directory, 'orchestration.db')
+        await h.db.db.backup(path)
+        const db = new OrchestrationDb(path)
+        try {
+          expect(db.getWorkerDispatch(dispatch.id)).toMatchObject({
+            state,
+            stage: 'authority_attached'
+          })
+          const runtime = new OrcaRuntimeService()
+          runtime.setOrchestrationDb(db)
+          await runtime.reportUnconfirmedWorkerStart(dispatch.id)
+          await runtime.reportUnconfirmedWorkerStart(dispatch.id)
+          expect(db.getWorkerDispatch(dispatch.id)?.state).toBe('start_unknown')
+          const pending = db.getDispatchContextById(dispatch.id)!
+          expect(pending).toMatchObject({ status: 'pending', capability_revoked_at: null })
+          expect(db.getTask(task.id)?.status).toBe('blocked')
+          const mailbox = dispatchReportMailbox(db, pending)
+          expect(
+            db
+              .getAllMessagesForHandle(mailbox)
+              .filter((mail) => mail.payload?.includes(dispatch.id))
+          ).toEqual([expect.objectContaining({ body: expect.stringContaining('never saw') })])
+          observeWorkerWorking(db, { kind: 'local', dispatch: pending }, true)
+          expect(db.getWorkerDispatch(dispatch.id)?.state).toBe('ready')
+          expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+          expect(db.getTask(task.id)?.status).toBe('dispatched')
+        } finally {
+          await Promise.resolve()
+          db.close()
+        }
+      } finally {
+        rmSync(directory, { recursive: true, force: true })
+      }
     }
   )
 

@@ -17,6 +17,7 @@ import {
   requireRetainedWorkerTerminal,
   type RetainedWorkerAuthority
 } from '../worker-terminal/worker-terminal-transfer'
+import { RETAINED_CHAT_BEFORE_BRIEF_STAGE } from './restart-cut-worker-start'
 
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
@@ -220,7 +221,8 @@ export function createStartingWorkerDispatch(
         ...authority,
         worktreeId: retained.worktreeId,
         effects: retained.effects,
-        setupState: 'not_applicable'
+        setupState: 'not_applicable',
+        stage: RETAINED_CHAT_BEFORE_BRIEF_STAGE
       })
       this.transferWorkerTerminalResourceStatement({
         ...authority,

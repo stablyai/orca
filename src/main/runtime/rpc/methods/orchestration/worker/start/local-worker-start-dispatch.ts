@@ -62,7 +62,13 @@ export function createLocalWorkerStartDispatch(
   }
   // No await from the native tab and claim checks through the Dispatch insert.
   const retained = followUp?.retainedChat
-    ? prepareRetainedWorkerChat(runtime, db, followUp.retainedChat, resolvedWorktreeId)
+    ? prepareRetainedWorkerChat(
+        runtime,
+        db,
+        followUp.retainedChat,
+        resolvedWorktreeId,
+        Boolean(params.terminal)
+      )
     : undefined
   refuseClaimedWorkerTerminal(
     db,

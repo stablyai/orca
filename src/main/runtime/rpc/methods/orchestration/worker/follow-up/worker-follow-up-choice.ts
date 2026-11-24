@@ -68,7 +68,8 @@ export async function chooseWorkerFollowUpPlacement(
     await runtime.ensureStructuredAgentSessionHost()
   }
   assertWorkerFollowUpUnclaimed(db, latest.id)
-  const openRetainedChat = structured && !released(found) && chatTabOpen(db, found)
+  // A tab that appears during lookup may belong to the user; only a previously open tab can be reused.
+  const wasOpen = structured && !released(found) && chatTabOpen(db, found)
   const workspace = await runtime.showManagedTerminalWorkspace(`id:${worktreeId}`).catch(() => null)
   if (!workspace) {
     throw new OrchestrationError(
@@ -83,8 +84,14 @@ export async function chooseWorkerFollowUpPlacement(
   if (resource && structured) {
     refuseUnsettledWorkerTerminalRelease(resource)
     const handle = resource.terminal_handle
-    if (!released(resource) && openRetainedChat) {
-      return { delivery: 'follow_up', worktreeId, terminal: handle }
+    const retainedChat = { resourceId: found.id, ownerDispatchId: found.owner_dispatch_id, handle }
+    if (!released(resource) && wasOpen && chatTabOpen(db, resource)) {
+      return {
+        delivery: 'follow_up',
+        worktreeId,
+        terminal: handle,
+        ...(resource.ownership_state === 'owned' ? { retainedChat } : {})
+      }
     }
     return {
       delivery: 'reopened',
@@ -92,13 +99,7 @@ export async function chooseWorkerFollowUpPlacement(
       ...(options.agent ? { agent: options.agent } : {}),
       ...(released(resource)
         ? { reopen: () => reopenWorkerChat(runtime, db, handle) }
-        : {
-            retainedChat: {
-              resourceId: found.id,
-              ownerDispatchId: found.owner_dispatch_id,
-              handle
-            }
-          })
+        : { retainedChat })
     }
   }
   const open =
