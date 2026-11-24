@@ -25067,7 +25067,9 @@
         "lastItem": "Последний элемент",
         "previous": "Предыдущий элемент",
         "next": "Следующий элемент",
-        "linkCount": "Ссылки: {{count}}"
+        "linkCount": "Ссылки: {{count}}",
+        "questionAbove": "К вопросу выше",
+        "questionBelow": "К вопросу ниже"
       },
       "activity": {
         "linked": "связал {{links}}",

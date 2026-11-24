@@ -130,6 +130,7 @@ export function useBotItemNeedsYouJump({
         waiting={eligible && activityShown}
         loadingTarget={loadingTarget}
         showLatest={showLatest}
+        busy={pending}
         onNeedsYou={jump}
         onLatest={jumpToLatest}
       />
@@ -146,6 +147,7 @@ function BotItemJumpPill({
   waiting,
   loadingTarget,
   showLatest,
+  busy,
   onNeedsYou,
   onLatest
 }: {
@@ -153,6 +155,8 @@ function BotItemJumpPill({
   waiting: boolean
   loadingTarget: boolean
   showLatest: boolean
+  /** A jump waits on earlier pages to draw the question. */
+  busy: boolean
   onNeedsYou: () => void
   onLatest: () => void
 }): React.JSX.Element {
@@ -177,6 +181,14 @@ function BotItemJumpPill({
       visible={next.shown}
       onJump={look.needsYou ? onNeedsYou : onLatest}
       label={look.needsYou ? t('bots.items.status.needsYou', 'Needs you') : undefined}
+      ariaLabel={
+        !look.needsYou
+          ? undefined
+          : look.direction === 'up'
+            ? t('bots.items.view.questionAbove', 'Go to the question above')
+            : t('bots.items.view.questionBelow', 'Go to the question below')
+      }
+      busy={look.needsYou && busy}
       direction={look.direction}
       needsYou={look.needsYou}
     />

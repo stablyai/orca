@@ -1,6 +1,5 @@
-// The open item's top, two rows: number and title, then its status, its links and (while its question is
-// off screen) Reply; a snooze adds its line. It sits above the Activity's scroller, so the links stay in
-// reach while the owner reads the activity below.
+// The open item's top, two rows: number and title, then its status and its links; a snooze adds its line.
+// It sits above the Activity's scroller, so the links stay in reach while the owner reads the activity below.
 import { AlarmClock, Check, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {

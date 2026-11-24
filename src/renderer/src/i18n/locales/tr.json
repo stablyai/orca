@@ -24409,7 +24409,9 @@
         "lastItem": "Son öğe",
         "previous": "Önceki öğe",
         "next": "Sonraki öğe",
-        "linkCount": "{{count}} bağlantı"
+        "linkCount": "{{count}} bağlantı",
+        "questionAbove": "Yukarıdaki soruya git",
+        "questionBelow": "Aşağıdaki soruya git"
       },
       "activity": {
         "linked": "{{links}} bağlantılarını bağladı",

@@ -203,7 +203,11 @@ export const [pendingJump260, pendingJump340] = both(
   () => (
     <Pane item={olderHost} view={read(olderHost, activity(null).slice(9), { hasEarlier: true })} />
   ),
-  (frame) => clickPill(frame, 200)
+  async (frame) => {
+    // The Activity, and with it the pill, draws a frame after the top.
+    await wait(150)
+    await clickPill(frame, 200)
+  }
 )
 
 const remoteBot = stampBotHost('runtime:fixture-remote', bot)

@@ -23951,7 +23951,9 @@
         "lastItem": "最後一個項目",
         "previous": "上一個項目",
         "next": "下一個項目",
-        "linkCount": "{{count}} 個連結"
+        "linkCount": "{{count}} 個連結",
+        "questionAbove": "前往上方的問題",
+        "questionBelow": "前往下方的問題"
       },
       "activity": {
         "linked": "連結了 {{links}}",

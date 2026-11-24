@@ -27827,7 +27827,9 @@
         "showEarlier": "显示更早的",
         "place": "{{index}} / {{total}}",
         "deleted": "此事项已被删除",
-        "loading": "正在加载事项…"
+        "loading": "正在加载事项…",
+        "questionAbove": "前往上方的问题",
+        "questionBelow": "前往下方的问题"
       },
       "activity": {
         "canceled": "取消了此事项",

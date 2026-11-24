@@ -25764,7 +25764,9 @@
         "lastItem": "最後の項目",
         "previous": "前の項目",
         "next": "次の項目",
-        "linkCount": "リンク{{count}}件"
+        "linkCount": "リンク{{count}}件",
+        "questionAbove": "上の質問へ移動",
+        "questionBelow": "下の質問へ移動"
       },
       "activity": {
         "linked": "が {{links}} をリンクしました",

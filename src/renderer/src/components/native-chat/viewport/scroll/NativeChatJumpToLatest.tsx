@@ -17,7 +17,9 @@ export function NativeChatJumpToLatest({
   onJump,
   label,
   direction = 'down',
-  needsYou = false
+  needsYou = false,
+  ariaLabel,
+  busy = false
 }: {
   visible: boolean
   onJump: () => void
@@ -27,6 +29,10 @@ export function NativeChatJumpToLatest({
   direction?: 'up' | 'down'
   /** Leads to a waiting question: its orange dot before the label. */
   needsYou?: boolean
+  /** Names where it leads when the label alone doesn't. */
+  ariaLabel?: string
+  /** Its target is still being read. */
+  busy?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const Arrow = direction === 'up' ? ArrowUp : ArrowDown
@@ -37,11 +43,13 @@ export function NativeChatJumpToLatest({
       data-native-chat-jump-latest=""
       inert={!visible}
       aria-hidden={!visible || undefined}
+      aria-label={ariaLabel}
+      aria-busy={busy || undefined}
       onMouseDown={keepFocus}
       onClick={onJump}
       className="absolute bottom-[max(calc(var(--spacing)*3),var(--native-chat-worker-jump-lift,0px))] left-1/2 flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full border border-transparent bg-[color-mix(in_srgb,var(--secondary-foreground)_5%,var(--secondary))] px-3 text-xs font-medium text-[color-mix(in_srgb,var(--secondary-foreground)_75%,black)] shadow-floating transition-[opacity,translate,background-color,color] duration-150 ease-out hover:bg-[color-mix(in_srgb,var(--secondary-foreground)_10%,var(--secondary))] dark:bg-accent dark:text-[color-mix(in_srgb,var(--accent-foreground)_75%,white)] dark:hover:bg-[color-mix(in_srgb,var(--accent-foreground)_8%,var(--accent))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none [[data-worker-dock-cramped]_&]:invisible data-[shown=false]:pointer-events-none data-[shown=false]:translate-y-1 data-[shown=false]:opacity-0"
     >
-      <Arrow className="size-3.5" />
+      <Arrow aria-hidden className="size-3.5" />
       {needsYou ? (
         <span aria-hidden className="size-2.5 shrink-0 rounded-full bg-agent-question" />
       ) : null}

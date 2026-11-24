@@ -25039,7 +25039,9 @@
         "lastItem": "Último elemento",
         "previous": "Elemento anterior",
         "next": "Elemento siguiente",
-        "linkCount": "{{count}} enlaces"
+        "linkCount": "{{count}} enlaces",
+        "questionAbove": "Ir a la pregunta de arriba",
+        "questionBelow": "Ir a la pregunta de abajo"
       },
       "activity": {
         "linked": "enlazó {{links}}",
