@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
+import { ChevronDown, ChevronRight, GitMerge } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import { triggerMediumImpact } from '../../platform/haptics/haptics'
 import { colors } from '../../theme/mobile-theme'
@@ -26,6 +26,8 @@ import { useSharedNow } from '../../hooks/use-now'
 import { AgentSpinner } from '../../agents/presentation/AgentSpinner'
 import { HostContextPill } from './HostContextPill'
 import { HostKindIcon } from '../../components/icons/HostKindIcon'
+import { MobileRepoIcon } from '../../components/icons/MobileRepoIcon'
+import type { RepoLook } from '../../host-screen/catalog/host-repo-looks'
 import { prStateColor } from './pr-state-color'
 import { worktreeListRowStyles as styles } from './worktree-list-row-styles'
 import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
@@ -46,6 +48,10 @@ type Props = {
   unsavedName?: string
   /** The paired computer, for a bot row's usage-limit stops. */
   pairedHostId?: string | null
+  /** Its project's icon, where no project heading above the row names it. */
+  repoLook?: RepoLook | null
+  /** The tablet sidebar marks the workspace its detail pane shows. */
+  showSelection?: boolean
 }
 
 const NEEDS_YOU_RANK = AGENT_LIST_STATUS_RANK.permission
@@ -64,7 +70,9 @@ function WorktreeListRowComponent({
   onLongPress,
   onToggleLineage,
   unsavedName,
-  pairedHostId = null
+  pairedHostId = null,
+  repoLook = null,
+  showSelection = false
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -134,6 +142,7 @@ function WorktreeListRowComponent({
       style={({ pressed }) => [
         styles.worktreeRow,
         indent > 0 && { paddingLeft: WORKTREE_ROW_LAYOUT.indicatorInset + indent },
+        showSelection && item.isActive && styles.worktreeRowSelected,
         view.dimmed && styles.worktreeRowDimmed,
         pressed && styles.worktreeRowPressed
       ]}
@@ -152,6 +161,11 @@ function WorktreeListRowComponent({
           {view.botWorkspace ? <BotWorkspaceLogos item={item} /> : null}
           {isRemoteExecutionHostId(hostId) && !view.botWorkspace ? (
             <HostKindIcon hostId={hostId} size={12} />
+          ) : null}
+          {repoLook ? (
+            <View accessibilityLabel={item.repo}>
+              <MobileRepoIcon repoIcon={repoLook.icon} size={14} color={repoLook.color} />
+            </View>
           ) : null}
           <Text
             style={[
@@ -178,7 +192,7 @@ function WorktreeListRowComponent({
         {view.botWorkspace ? null : agents.length > 0 ? (
           <WorktreeAgentFacts item={item} agents={agents} />
         ) : (
-          <PrMark pr={item.linkedPR} />
+          <PrMark item={item} />
         )}
         {count > 0 && onToggleLineage ? (
           <Pressable
@@ -250,7 +264,7 @@ function WorktreeAgentFacts({
   const latest = Math.max(...agents.map(agentRowTimeAt))
   return (
     <>
-      <PrMark pr={item.linkedPR} />
+      <PrMark item={item} />
       <AgentLogos agents={agents} now={now} />
       {failed ? (
         <Text style={[styles.stateWord, { color: colors.statusRed }]}>
@@ -263,17 +277,25 @@ function WorktreeAgentFacts({
   )
 }
 
-function PrMark({ pr }: { pr: Worktree['linkedPR'] }) {
-  if (!pr) {
-    return null
+// A GitHub PR in its state's colour, else a GitLab MR, whose row carries only its number.
+function PrMark({ item }: { item: Worktree }) {
+  const pr = item.linkedPR
+  if (pr) {
+    const color = prStateColor(pr.state)
+    return (
+      <View style={styles.prMark}>
+        <PrStateIcon state={pr.state} size={12} color={color} strokeWidth={2.4} />
+        <Text style={[styles.prNumber, { color }]}>{pr.number}</Text>
+      </View>
+    )
   }
-  const color = prStateColor(pr.state)
-  return (
+  const mr = item.linkedGitLabMR
+  return mr ? (
     <View style={styles.prMark}>
-      <PrStateIcon state={pr.state} size={12} color={color} strokeWidth={2.4} />
-      <Text style={[styles.prNumber, { color }]}>{pr.number}</Text>
+      <GitMerge size={12} color={colors.textMuted} strokeWidth={2.4} />
+      <Text style={[styles.prNumber, { color: colors.textMuted }]}>{mr}</Text>
     </View>
-  )
+  ) : null
 }
 
 function AgentLogos({ agents, now }: { agents: readonly RuntimeWorktreeAgentRow[]; now: number }) {

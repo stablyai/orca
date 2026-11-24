@@ -208,6 +208,11 @@ export function HostWorkspaceList({
             onToggleLineage={toggleWorktreeLineage}
             unsavedName={unsavedRename(renameDrafts, hostId, item)}
             pairedHostId={hostId ?? null}
+            // Outside its project's group, or nested under another project, the row names its own.
+            repoLook={
+              groupBy !== 'repo' || view.showProjectName ? repoLookById.get(item.repoId) : null
+            }
+            showSelection={embedded}
           />
         )}
       </View>
@@ -219,7 +224,10 @@ export function HostWorkspaceList({
       isReadOnly,
       openWorktreeSession,
       setActionTarget,
-      toggleWorktreeLineage
+      toggleWorktreeLineage,
+      repoLookById,
+      groupBy,
+      embedded
     ]
   )
 

@@ -43,6 +43,10 @@ export const worktreeListRowStyles = themedStyleSheet(() => ({
   worktreeRowDimmed: {
     opacity: 0.6
   },
+  // The tablet sidebar's open workspace, filled like a pressed row.
+  worktreeRowSelected: {
+    backgroundColor: colors.bgRaised
+  },
   worktreeRowPressed: {
     backgroundColor: colors.bgRaised
   },
