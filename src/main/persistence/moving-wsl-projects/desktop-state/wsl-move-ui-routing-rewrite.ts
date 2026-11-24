@@ -39,6 +39,7 @@ export type WslMoveUiRoutingState = Pick<
   | 'workspaceHostOrder'
   | 'setupScriptPromptDismissedRepoIds'
   | 'collapsedGroups'
+  | 'expandedLineageGroups'
 >
 
 // Mirrors the renderer's keys (setup-script-prompt.ts, group-keys.ts); main cannot import them.
@@ -126,6 +127,10 @@ export function rewriteWslMoveUiRouting(
   const collapsed = addHostLineageGroups(ui.collapsedGroups, scope)
   if (collapsed) {
     updates.collapsedGroups = collapsed
+  }
+  const expandedLineages = addHostLineageGroups(ui.expandedLineageGroups, scope)
+  if (expandedLineages) {
+    updates.expandedLineageGroups = expandedLineages
   }
   return updates
 }

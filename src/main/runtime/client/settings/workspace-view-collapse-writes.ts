@@ -1,4 +1,5 @@
 import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
+import { reconcileExpandedLineageGroupsList } from '../../../../shared/sidebar-list/lineage/auto-collapse-lineage-state'
 import type {
   SetCollapsedRequest,
   SetCollapsedResult
@@ -35,8 +36,11 @@ function slotOf(key: string, writer: string): string {
 }
 
 type CollapseUiState = {
-  getUIState(): Pick<PersistedUIState, 'collapsedGroups'>
-  updateUIState(updates: Pick<PersistedUIState, 'collapsedGroups'>): unknown
+  getUIState(): Pick<PersistedUIState, 'collapsedGroups' | 'expandedLineageGroups'>
+  updateUIState(
+    updates: Partial<Pick<PersistedUIState, 'collapsedGroups' | 'expandedLineageGroups'>>
+  ): unknown
+  isStartChildWorkspacesCollapsedEnabled?(): boolean
 }
 
 export function setCollapsedSection(
@@ -44,16 +48,30 @@ export function setCollapsedSection(
   order: CollapseWriteOrder,
   request: SetCollapsedRequest
 ): SetCollapsedResult {
-  const current = ui.getUIState().collapsedGroups
+  const uiState = ui.getUIState()
+  const current = uiState.collapsedGroups
   const collapsed = current.includes(request.key)
   if (order.isSettled(request)) {
     return { collapsed, applied: false }
   }
-  if (collapsed !== request.collapsed) {
+  const nextExpandedLineageGroups = reconcileExpandedLineageGroupsList({
+    key: request.key,
+    collapsed: request.collapsed,
+    previousExpanded: uiState.expandedLineageGroups,
+    trackExplicitExpands: ui.isStartChildWorkspacesCollapsedEnabled?.() === true
+  })
+  if (collapsed !== request.collapsed || nextExpandedLineageGroups !== undefined) {
     ui.updateUIState({
-      collapsedGroups: request.collapsed
-        ? [...current, request.key]
-        : current.filter((key) => key !== request.key)
+      ...(collapsed !== request.collapsed
+        ? {
+            collapsedGroups: request.collapsed
+              ? [...current, request.key]
+              : current.filter((key) => key !== request.key)
+          }
+        : {}),
+      ...(nextExpandedLineageGroups !== undefined
+        ? { expandedLineageGroups: nextExpandedLineageGroups }
+        : {})
     })
   }
   order.record(request)

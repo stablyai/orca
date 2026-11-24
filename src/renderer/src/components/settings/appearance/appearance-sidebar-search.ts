@@ -119,6 +119,50 @@ export const getShowPinnedWorktreesInGroupsEntry = createLocalizedCatalog(
   })
 )
 
+export const getStartChildWorkspacesCollapsedEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.appearance.search.startChildWorkspacesCollapsed.title',
+      'Start child workspaces collapsed'
+    ),
+    description: translate(
+      'auto.components.settings.appearance.search.startChildWorkspacesCollapsed.description',
+      "Collapse a parent's child workspaces the first time it gets a child."
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.startChildWorkspacesCollapsed.child',
+        'child'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.startChildWorkspacesCollapsed.children',
+        'children'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.startChildWorkspacesCollapsed.collapse',
+        'collapse'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.startChildWorkspacesCollapsed.collapsed',
+        'collapsed'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.startChildWorkspacesCollapsed.lineage',
+        'lineage'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.showPinnedWorktreesInGroups.workspace',
+        'workspace'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.showPinnedWorktreesInGroups.worktree',
+        'worktree'
+      )
+    ]
+  })
+)
+
 export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.appearance.search.9bc701a4d1', 'Show tasks button'),
@@ -185,5 +229,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   },
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
-  getShowPinnedWorktreesInGroupsEntry()
+  getShowPinnedWorktreesInGroupsEntry(),
+  getStartChildWorkspacesCollapsedEntry()
 ])
