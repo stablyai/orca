@@ -1,4 +1,4 @@
-import { persistGuardedProjectPolicy } from '../../workspaces/cleanup/workspace-cleanup-policy-write'
+import { persistGuardedProjectPolicy } from '../../workspaces/cleanup/workspace-cleanup-policy-durability'
 import type { WorkspaceCleanupPolicyGuard } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { isRepoHidden } from '../../../shared/project/catalog/hidden-projects'

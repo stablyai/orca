@@ -1,4 +1,4 @@
-import { persistGuardedProjectPolicy } from '../../workspaces/cleanup/workspace-cleanup-policy-write'
+import { persistGuardedProjectPolicy } from '../../workspaces/cleanup/workspace-cleanup-policy-durability'
 import type { WorkspaceCleanupPolicyGuard } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'

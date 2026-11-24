@@ -11,11 +11,13 @@ import {
 } from '../../../../../shared/rpc-contract/workspace-cleanup/workspace-cleanup-change-params'
 import {
   settleWorkspaceCleanupPolicyWrite,
-  persistWorkspaceCleanupPolicy,
-  readDurableWorkspaceCleanupPolicy,
   reserveWorkspaceCleanupPolicyWrite,
   recoverWorkspaceCleanupPolicyWrites
 } from '../../../../workspaces/cleanup/workspace-cleanup-policy-write'
+import {
+  persistWorkspaceCleanupPolicy,
+  readDurableWorkspaceCleanupPolicy
+} from '../../../../workspaces/cleanup/workspace-cleanup-policy-durability'
 import {
   pinWorkspaceForCleanup,
   pinWorkspacesForCleanup

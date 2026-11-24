@@ -4,9 +4,10 @@ import { readWorktreeMetaForHost } from '../../persistence/host-qualified-worktr
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import { WorktreeRemovalNotStartedError } from '../removal/worktree-removal-expectation'
 import { isWorktreeIdentityUnverifiable } from '../../../shared/worktree/removal/worktree-checkout-identity'
+import type { WorkspaceCleanupPolicyAuthority } from './workspace-cleanup-policy-durability'
 
 type CleanupAdmission<T> =
-  | { admitted: false; cause: 'pinned' | 'git-unknown' | 'removing' }
+  | { admitted: false; cause: 'pinned' | 'git-unknown' | 'removing' | 'rules-changed' }
   | { admitted: true; completion: Promise<T> }
 
 const admissions = new WeakMap<RuntimeStore, Map<string, string>>()
@@ -23,7 +24,8 @@ export function hasWorkspaceCleanupAdmission(
 export async function admitWorkspaceCleanup<T>(
   store: RuntimeStore,
   ref: WorkspaceCleanupWorkspaceRef,
-  submit: () => Promise<T>
+  submit: () => Promise<T>,
+  rules?: WorkspaceCleanupPolicyAuthority
 ): Promise<CleanupAdmission<T>> {
   const { worktreeId, instanceId } = ref
   if (!store.runDurableMutation) {
@@ -36,6 +38,13 @@ export async function admitWorkspaceCleanup<T>(
     }
     if (meta.isPinned) {
       return { value: { admitted: false as const, cause: 'pinned' as const }, persist: false }
+    }
+    // Rules written, or still being saved, since the decision read them didn't authorize it.
+    if (rules && !rules.stillCurrent()) {
+      return {
+        value: { admitted: false as const, cause: 'rules-changed' as const },
+        persist: false
+      }
     }
     const admitted = admissions.get(store) ?? new Map<string, string>()
     if (admitted.get(worktreeId) === instanceId) {

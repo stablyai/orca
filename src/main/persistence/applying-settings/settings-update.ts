@@ -1,5 +1,6 @@
 import type { WorkspaceCleanupGuardedUpdate } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import { beginWorkspaceCleanupPolicyWrite } from '../../workspaces/cleanup/workspace-cleanup-policy-write'
+import { noteWorkspaceCleanupPolicyWrite } from '../../workspaces/cleanup/workspace-cleanup-policy-durability'
 import { publishSettingsUpdate } from './settings-update-effects'
 import { legacyChatPermissionWrite } from './legacy-chat-permission-write'
 import { stampDefaultOnMigrationGuards } from './default-on-migration-guards'
@@ -67,6 +68,9 @@ export function updateSettings(
     throw new Error('workspace_cleanup_policy_conflict')
   }
   beginWorkspaceCleanupPolicyWrite(operations.state, workspaceCleanupGuard, null)
+  if ('workspaceCleanupPolicy' in updates) {
+    noteWorkspaceCleanupPolicyWrite()
+  }
   const sanitizedUpdates = normalizeWorkspaceDirSetting(stripRetiredGlobalSettings(policyUpdates))
   const linkBehavior = updates.terminalLinkClickBehavior
   if (linkBehavior === 'actions' || linkBehavior === 'open' || linkBehavior === 'none') {

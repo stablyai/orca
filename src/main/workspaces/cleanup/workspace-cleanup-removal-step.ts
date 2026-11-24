@@ -1,4 +1,7 @@
-import { settledWorkspaceCleanupPolicySaves } from './workspace-cleanup-policy-write'
+import {
+  captureWorkspaceCleanupPolicyAuthority,
+  type WorkspaceCleanupPolicyAuthority
+} from './workspace-cleanup-policy-durability'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import {
@@ -107,19 +110,34 @@ type RemovalOutcome = Pick<
 
 /** Re-reads every piece of evidence, its folder siblings' too, right before removing one workspace;
  * removal itself goes through the lifecycle queue. */
-export async function removeWorkspaceForCleanup(args: {
+type RemovalArgs = {
   runtime: OrcaRuntimeService
   store: RuntimeStore
   globalRules: () => WorkspaceCleanupRules
   workspace: WorkspaceCleanupWorkspace
   now: () => number
   signal?: AbortSignal
-}): Promise<RemovalOutcome> {
+}
+const RULES_CHANGED = Symbol('rules-changed')
+
+export async function removeWorkspaceForCleanup(args: RemovalArgs): Promise<RemovalOutcome> {
+  // Rules written while deciding didn't authorize the decision: decide again under the new ones.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const outcome = await removeUnderRules(args, await captureWorkspaceCleanupPolicyAuthority())
+    if (outcome !== RULES_CHANGED) {
+      return outcome
+    }
+  }
+  return { outcome: 'kept', keepCause: 'identity-unverified', keptOnRecheck: true }
+}
+
+async function removeUnderRules(
+  args: RemovalArgs,
+  rules: WorkspaceCleanupPolicyAuthority
+): Promise<RemovalOutcome | typeof RULES_CHANGED> {
   const { runtime, store, workspace } = args
   const selector = selectorFor(workspace)
   try {
-    // Rules still being saved are not yet the user's: wait until they land or roll back.
-    await settledWorkspaceCleanupPolicySaves()
     // Earlier removals in this run took time: decide on what is true now, not what the scan saw.
     // A folder member is re-read with its folder as listed now: a sibling added here since holds it
     // too. Paired servers' members are as the scan read them; they're asked once per run.
@@ -151,52 +169,64 @@ export async function removeWorkspaceForCleanup(args: {
     // Only reachable once WORKSPACE_ARCHIVE_SUPPORTED is on; archive keeps the branch and the row.
     if (recheck.action === 'archive') {
       const hostId = workspace.ref.executionHostId
-      const admission = await admitWorkspaceCleanup(store, fresh.ref, () =>
-        queueWorkspaceArchive(
-          runtime,
-          selector,
-          hostId,
-          () =>
-            runtime.archiveManagedWorktree(selector, {
-              ...(hostId ? { hostId } : {}),
-              expectedWorktree: {
-                worktreeId: fresh.ref.worktreeId,
-                instanceId: fresh.ref.instanceId!,
-                checkoutIdentity: fresh.checkoutIdentity
-              }
-            }),
-          {
-            worktreeId: fresh.ref.worktreeId,
-            instanceId: fresh.ref.instanceId!,
-            checkoutIdentity: fresh.checkoutIdentity
-          }
-        )
+      const admission = await admitWorkspaceCleanup(
+        store,
+        fresh.ref,
+        () =>
+          queueWorkspaceArchive(
+            runtime,
+            selector,
+            hostId,
+            () =>
+              runtime.archiveManagedWorktree(selector, {
+                ...(hostId ? { hostId } : {}),
+                expectedWorktree: {
+                  worktreeId: fresh.ref.worktreeId,
+                  instanceId: fresh.ref.instanceId!,
+                  checkoutIdentity: fresh.checkoutIdentity
+                }
+              }),
+            {
+              worktreeId: fresh.ref.worktreeId,
+              instanceId: fresh.ref.instanceId!,
+              checkoutIdentity: fresh.checkoutIdentity
+            }
+          ),
+        rules
       )
       if (!admission.admitted) {
-        return { outcome: 'kept', keepCause: admission.cause, keptOnRecheck: true }
+        return admission.cause === 'rules-changed'
+          ? RULES_CHANGED
+          : { outcome: 'kept', keepCause: admission.cause, keptOnRecheck: true }
       }
       const archived = await admission.completion
       return { outcome: 'archived', reason: recheck.reason, branchKept: archived.branch }
     }
     // Never forced: Git's own dirty-checkout refusal stays the last guard.
-    const admission = await admitWorkspaceCleanup(store, fresh.ref, () =>
-      queueWorkspaceDelete(
-        runtime,
-        selector,
-        workspace.ref.executionHostId,
-        {
-          expectedWorktree: {
-            worktreeId: fresh.ref.worktreeId,
-            instanceId: fresh.ref.instanceId!,
-            checkoutIdentity: fresh.checkoutIdentity
-          }
-        },
-        (removal) =>
-          runtime.removeManagedWorktree(selector, { ...removal, waitForBackgroundRemoval: true })
-      )
+    const admission = await admitWorkspaceCleanup(
+      store,
+      fresh.ref,
+      () =>
+        queueWorkspaceDelete(
+          runtime,
+          selector,
+          workspace.ref.executionHostId,
+          {
+            expectedWorktree: {
+              worktreeId: fresh.ref.worktreeId,
+              instanceId: fresh.ref.instanceId!,
+              checkoutIdentity: fresh.checkoutIdentity
+            }
+          },
+          (removal) =>
+            runtime.removeManagedWorktree(selector, { ...removal, waitForBackgroundRemoval: true })
+        ),
+      rules
     )
     if (!admission.admitted) {
-      return { outcome: 'kept', keepCause: admission.cause, keptOnRecheck: true }
+      return admission.cause === 'rules-changed'
+        ? RULES_CHANGED
+        : { outcome: 'kept', keepCause: admission.cause, keptOnRecheck: true }
     }
     const result = await admission.completion
     return {

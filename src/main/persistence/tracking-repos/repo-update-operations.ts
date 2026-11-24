@@ -1,5 +1,6 @@
 import type { WorkspaceCleanupPolicyGuard } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import { beginWorkspaceCleanupPolicyWrite } from '../../workspaces/cleanup/workspace-cleanup-policy-write'
+import { noteWorkspaceCleanupPolicyWrite } from '../../workspaces/cleanup/workspace-cleanup-policy-durability'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import {
@@ -153,6 +154,9 @@ export class RepoUpdatePersistenceOperations {
       repo.id,
       getRepoExecutionHostId(repo)
     )
+    if ('workspaceCleanupPolicy' in updates) {
+      noteWorkspaceCleanupPolicyWrite()
+    }
     assertKindChangeKeepsFolderWorkspaces(repo, updates.kind, this.state.worktreeMeta)
     const previousGhAccount = repo.ghAccount
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(policyUpdates)

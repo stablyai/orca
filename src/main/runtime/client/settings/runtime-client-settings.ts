@@ -1,4 +1,4 @@
-import { persistGuardedSettingsPolicy } from '../../../workspaces/cleanup/workspace-cleanup-policy-write'
+import { persistGuardedSettingsPolicy } from '../../../workspaces/cleanup/workspace-cleanup-policy-durability'
 import { publishedLegacyChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'

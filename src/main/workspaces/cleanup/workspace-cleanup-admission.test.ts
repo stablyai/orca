@@ -182,3 +182,20 @@ it('releases the admission when the removal route refused to delete an unverifia
   expect(again.admitted).toBe(true)
   expect(again.admitted && (await again.completion)).toBe('removed')
 })
+it('refuses admission when the rules changed after the decision', async () => {
+  const { store, rows } = fixture(false)
+  const ref = {
+    ...rows[0],
+    repoId: 'repo',
+    repoName: 'Fixture',
+    displayName: 'a',
+    path: join(testState.dir, 'a'),
+    branch: 'a'
+  }
+  const submit = vi.fn(async () => 'removed')
+  expect(await admitWorkspaceCleanup(store, ref, submit, { stillCurrent: () => false })).toEqual({
+    admitted: false,
+    cause: 'rules-changed'
+  })
+  expect(submit).not.toHaveBeenCalled()
+})

@@ -34,6 +34,7 @@ vi.mock('./workspace-cleanup-terminal-activity', () => ({
 
 import { decideWorkspaceCleanup, removeWorkspaceForCleanup } from './workspace-cleanup-removal-step'
 import { createCleanupRemovalRouteCheck } from './workspace-cleanup-removal-route'
+import { noteWorkspaceCleanupPolicyWrite } from './workspace-cleanup-policy-durability'
 import {
   execFileCapture,
   execFileCaptureToTermination
@@ -161,5 +162,37 @@ describe('a removal route that cannot verify the checkout keeps it', () => {
         Date.UTC(2026, 10, 20)
       )
     ).toEqual({ action: 'keep', cause: 'identity-unverified', reason: 'merged' })
+  })
+
+  it('decides again when rules are written between the decision and admission', async () => {
+    const workspace = wslWorkspace()
+    fresh.workspace = workspace
+    const decisions: boolean[] = []
+    admit.mockClear()
+    admit.mockImplementation(async (...args: unknown[]) => {
+      const rules = args[3] as { stillCurrent: () => boolean } | undefined
+      if (!decisions.length) {
+        // Another client writes the rules while this decision is on its way to admission.
+        noteWorkspaceCleanupPolicyWrite()
+      }
+      decisions.push(rules?.stillCurrent() ?? true)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the removal step reads only admitted, cause and completion.
+      return (
+        decisions.at(-1)
+          ? { admitted: true, completion: Promise.resolve({}) }
+          : { admitted: false, cause: 'rules-changed' }
+      ) as never
+    })
+    const outcome = await removeWorkspaceForCleanup({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission and evidence are mocked.
+      runtime: {} as unknown as OrcaRuntimeService,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission and evidence are mocked.
+      store: {} as unknown as RuntimeStore,
+      globalRules: () => RULES,
+      workspace,
+      now: () => Date.UTC(2026, 10, 20)
+    })
+    expect(decisions).toEqual([false, true])
+    expect(outcome).toMatchObject({ outcome: 'removed', reason: 'merged' })
   })
 })
