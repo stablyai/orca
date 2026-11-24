@@ -22,6 +22,7 @@ import { loadMoreInView } from './git-graph-viewport-paging'
 import { GitGraphDetails } from './git-graph-details'
 import { GitGraphRefs, useGitGraphWorkspaces } from './git-graph-ref-menu'
 import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 const sameGroup = () => undefined
@@ -93,12 +94,21 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
       controller.clearReveal()
     }
   }, [revealIndex, revealRow, controller])
+  // Switching to another tab unmounts this view; only closing Git Graph cancels a pending Open diff.
+  const isGraphOpen = useCallback(
+    () =>
+      useAppStore
+        .getState()
+        .openFiles.some((file) => file.worktreeId === worktreeId && file.mode === 'git-graph'),
+    [worktreeId]
+  )
   const actions = useGitHistoryCommitActions({
     activeWorktreeId: worktreeId,
     worktreePath: scope?.worktree.path ?? null,
     activeRepoTarget: scope?.target ?? null,
     ownerConnectionId: scope?.connectionId,
-    resolveSplitTargetGroupId: sameGroup
+    resolveSplitTargetGroupId: sameGroup,
+    isSurfaceOpen: isGraphOpen
   })
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">

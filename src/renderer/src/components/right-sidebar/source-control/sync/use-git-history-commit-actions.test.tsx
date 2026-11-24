@@ -59,12 +59,19 @@ function compare(path: string, commitOid = COMMIT.id, parentOid = 'p1'): GitComm
 
 let latest: ReturnType<typeof useGitHistoryCommitActions> | null = null
 
-function Probe({ worktreeId }: { worktreeId: string }): null {
+function Probe({
+  worktreeId,
+  isSurfaceOpen
+}: {
+  worktreeId: string
+  isSurfaceOpen?: () => boolean
+}): null {
   latest = useGitHistoryCommitActions({
     activeWorktreeId: worktreeId,
     worktreePath: `/${worktreeId}`,
     activeRepoTarget: { kind: 'local' },
-    resolveSplitTargetGroupId: () => undefined
+    resolveSplitTargetGroupId: () => undefined,
+    isSurfaceOpen
   })
   return null
 }
@@ -159,7 +166,54 @@ describe('useGitHistoryCommitActions context fencing', () => {
     expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
-  it('keeps the replacement Graph diff after the closed Graph settles', async () => {
+  it('opens a pending diff after switching away from a still-open Graph', async () => {
+    const pending = Promise.withResolvers<GitCommitCompareResult>()
+    mocks.getRuntimeGitCommitCompare.mockReturnValueOnce(pending.promise)
+    const root = render(<Probe worktreeId="A" isSurfaceOpen={() => true} />)
+    const opening = latest!.openHistoryCommitDiff(COMMIT)
+    // Another editor tab became active, which unmounts the Graph view without closing it.
+    root.unmount()
+    pending.resolve(compare('kept.ts'))
+    await opening
+
+    expect(mocks.openCommitAllDiffs.mock.lastCall?.[3]).toEqual([
+      { path: 'kept.ts', status: 'modified' }
+    ])
+  })
+
+  it('shows a pending error after switching away from a still-open Graph', async () => {
+    const pending = Promise.withResolvers<GitCommitCompareResult>()
+    mocks.getRuntimeGitCommitCompare.mockReturnValueOnce(pending.promise)
+    const root = render(<Probe worktreeId="A" isSurfaceOpen={() => true} />)
+    const opening = latest!.openHistoryCommitDiff(COMMIT)
+    root.unmount()
+    pending.reject(new Error('Compare failed'))
+    await opening
+
+    expect(mocks.toastError).toHaveBeenCalledWith('Compare failed')
+  })
+
+  it('drops a pending diff and its error once the Graph closes', async () => {
+    let graphOpen = true
+    const success = Promise.withResolvers<GitCommitCompareResult>()
+    const failure = Promise.withResolvers<GitCommitCompareResult>()
+    mocks.getRuntimeGitCommitCompare
+      .mockReturnValueOnce(success.promise)
+      .mockReturnValueOnce(failure.promise)
+    const root = render(<Probe worktreeId="A" isSurfaceOpen={() => graphOpen} />)
+    const opening = latest!.openHistoryCommitDiff(COMMIT)
+    const failing = latest!.openHistoryCommitDiff({ ...COMMIT, id: 'c2' })
+    root.unmount()
+    graphOpen = false
+    success.resolve(compare('closed.ts'))
+    failure.reject(new Error('Closed Graph failure'))
+    await Promise.all([opening, failing])
+
+    expect(mocks.openCommitAllDiffs).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it('keeps the reopened Graph diff when the earlier Graph view settles later', async () => {
     const first = Promise.withResolvers<GitCommitCompareResult>()
     const retired = Promise.withResolvers<GitCommitCompareResult>()
     const fresh = Promise.withResolvers<GitCommitCompareResult>()

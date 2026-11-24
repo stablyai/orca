@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { requireGitOwnerTarget } from './worktree-git-owner-target'
 import {
   commitDiffErrorMessage,
@@ -29,10 +29,10 @@ import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-brows
 
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 
-type CommitCompareGeneration = CommitCompareReads & {
-  key: string
-  live: boolean
-}
+type CommitCompareGeneration = CommitCompareReads & { key: string }
+
+// Latest Open diff per owner and commit across mounts, so a reopened view's open is not overwritten by an older one.
+const latestCommitDiffOpens = new Map<string, object>()
 
 type GitHistoryCommitActions = {
   loadCommitFiles: (item: GitHistoryItem) => Promise<GitBranchChangeEntry[]>
@@ -50,13 +50,16 @@ export function useGitHistoryCommitActions({
   worktreePath,
   activeRepoTarget,
   ownerConnectionId,
-  resolveSplitTargetGroupId
+  resolveSplitTargetGroupId,
+  isSurfaceOpen
 }: {
   activeWorktreeId: string | null | undefined
   worktreePath: string | null
   activeRepoTarget: RuntimeClientTarget | null
   ownerConnectionId?: string | null
   resolveSplitTargetGroupId: (event?: SourceControlRowOpenEvent) => string | undefined
+  /** False once the view that asked for an Open diff has closed; a hidden tab still counts as open. */
+  isSurfaceOpen?: () => boolean
 }): GitHistoryCommitActions {
   const scope = useSourceControlScope()
   const executionHostId = scope?.executionHostId
@@ -74,22 +77,12 @@ export function useGitHistoryCommitActions({
   ])
   const generationRef = useRef<CommitCompareGeneration>({
     key: generationKey,
-    live: true,
     cache: new Map(),
     pending: new Map()
   })
-  useLayoutEffect(() => {
-    if (generationRef.current.key !== generationKey || !generationRef.current.live) {
-      generationRef.current = {
-        key: generationKey,
-        live: true,
-        cache: new Map(),
-        pending: new Map()
-      }
-    }
-    const generation = generationRef.current
-    return () => {
-      generation.live = false
+  useEffect(() => {
+    if (generationRef.current.key !== generationKey) {
+      generationRef.current = { key: generationKey, cache: new Map(), pending: new Map() }
     }
   }, [generationKey])
 
@@ -131,11 +124,19 @@ export function useGitHistoryCommitActions({
         return
       }
       const generation = generationRef.current
+      const openKey = JSON.stringify([generation.key, item.id])
+      const open = {}
+      latestCommitDiffOpens.set(openKey, open)
+      // A worktree or host change, a newer open of this commit, or closing the view drops the open.
+      // Switching away from a still-open tab does not, and neither does a scope change in the list.
+      const stillWanted = (): boolean =>
+        generationRef.current === generation &&
+        latestCommitDiffOpens.get(openKey) === open &&
+        (isSurfaceOpen?.() ?? true)
       try {
         const compare = await (generation.pending.get(item.id)?.completion.promise ??
           loadCommitCompare(item))
-        // A worktree or host change while loading drops the open; a scope change in the list does not.
-        if (!compare || !generation.live) {
+        if (!compare || !stillWanted()) {
           return
         }
         useAppStore
@@ -150,13 +151,18 @@ export function useGitHistoryCommitActions({
             { placementWorkspaceId, runtimeEnvironmentId, executionHostId }
           )
       } catch (error) {
-        if (generation.live) {
+        if (stillWanted()) {
           toast.error(commitDiffErrorMessage(error))
+        }
+      } finally {
+        if (latestCommitDiffOpens.get(openKey) === open) {
+          latestCommitDiffOpens.delete(openKey)
         }
       }
     },
     [
       activeWorktreeId,
+      isSurfaceOpen,
       loadCommitCompare,
       placementWorkspaceId,
       executionHostId,
