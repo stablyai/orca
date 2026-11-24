@@ -33,6 +33,8 @@ export type BotToolSignInFailure =
   | 'issuer-mismatch'
   | 'refused'
   | 'superseded'
+  /** The computer has no system keyring, so Orca can't keep the tokens a sign-in would return. */
+  | 'no-keyring'
   /** Started from a phone or the web: v1 signs in only from Orca on the bot's computer. */
   | 'desktop-only'
 
@@ -77,6 +79,11 @@ export function botToolSignInFailureWords(
       )
     case 'no-tool':
       return t('bots.tools.signInFailure.noTool', 'This bot no longer has that tool.')
+    case 'no-keyring':
+      return t(
+        'bots.tools.signInFailure.noKeyring',
+        'This computer has no system keyring, so Orca can’t save a sign-in here.'
+      )
     case 'desktop-only':
       return t('bots.tools.signInFailure.desktopOnly', 'Sign in from Orca on {{host}}.', { host })
     case 'denied':
