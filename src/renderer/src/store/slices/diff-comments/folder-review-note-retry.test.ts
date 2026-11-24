@@ -97,8 +97,9 @@ function createHost(row: FolderWorkspace, { merges }: { merges: boolean }) {
         })
       }
     },
-    bodies(): string[] {
-      return (host.row.diffComments ?? []).map((entry) => entry.body)
+    /** Ids and values the host holds, in its order. */
+    notes(): { id: string; body: string }[] {
+      return (host.row.diffComments ?? []).map(({ id, body }) => ({ id, body }))
     }
   }
   return host
@@ -230,51 +231,86 @@ describe('folder review notes after a failed save', () => {
       const { host, add, shown } = setup(hostCase)
       host.dropNextAck = true
       // The save is reported as failed even though the host kept it.
+      const mine = { id: expect.any(String), body: 'my note' }
       expect(await add('my note')).toBeNull()
-      expect(host.bodies()).toEqual(['my note'])
+      expect(host.notes()).toEqual([mine])
 
       host.peerEdit((notes) => [...notes, note('peer', 'from another device', 2)])
       expect(await add('my note again')).not.toBeNull()
 
       // This copy's own notes converge to what it shows (the failed one was rolled back);
       // the note it never listed is another device's and stays.
-      expect(host.bodies()).toEqual(['from another device', 'my note again'])
+      expect(host.notes()).toEqual([
+        { id: 'peer', body: 'from another device' },
+        { id: expect.any(String), body: 'my note again' }
+      ])
       expect(shown()).toEqual(['my note again'])
+      // Recovery reads the one row it writes, never the whole catalog.
+      expect(folderWorkspacesList).not.toHaveBeenCalled()
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'folderWorkspace.list' })
+      )
     }
   )
 
-  it("keeps another device's edit to a note this copy still shows unchanged", async () => {
-    const { host, add } = setup(LOCAL, [note('x', 'v1')])
-    host.refuseNext = true
-    expect(await add('unrelated')).toBeNull()
+  const MIXED_HOSTS = [
+    ['this computer', LOCAL],
+    ['an older paired server that replaces the list', OLDER_PAIRED]
+  ] as const
 
-    host.peerEdit((notes) => notes.map((entry) => ({ ...entry, body: 'v2 from another device' })))
-    expect(await add('mine', 3)).not.toBeNull()
+  it.each(MIXED_HOSTS)(
+    "keeps another device's edit to a note this copy still shows unchanged (%s)",
+    async (_name, hostCase) => {
+      const { host, add } = setup(hostCase, [note('x', 'v1')])
+      host.refuseNext = true
+      expect(await add('unrelated')).toBeNull()
+      // Refused before it reached the host: nothing changed there.
+      expect(host.notes()).toEqual([{ id: 'x', body: 'v1' }])
 
-    expect(host.bodies()).toEqual(['v2 from another device', 'mine'])
-  })
+      host.peerEdit((notes) => notes.map((entry) => ({ ...entry, body: 'v2 from another device' })))
+      expect(await add('mine', 3)).not.toBeNull()
 
-  it('does not bring back a note another device deleted while this copy still shows it', async () => {
-    const { host, add } = setup(LOCAL, [note('x', 'v1')])
-    host.refuseNext = true
-    expect(await add('unrelated')).toBeNull()
+      expect(host.notes()).toEqual([
+        { id: 'x', body: 'v2 from another device' },
+        { id: expect.any(String), body: 'mine' }
+      ])
+    }
+  )
 
-    host.peerEdit(() => [])
-    expect(await add('mine', 3)).not.toBeNull()
+  it.each(MIXED_HOSTS)(
+    'does not bring back a note another device deleted while this copy still shows it (%s)',
+    async (_name, hostCase) => {
+      const { host, add } = setup(hostCase, [note('x', 'v1')])
+      host.refuseNext = true
+      expect(await add('unrelated')).toBeNull()
+      expect(host.notes()).toEqual([{ id: 'x', body: 'v1' }])
 
-    expect(host.bodies()).toEqual(['mine'])
-  })
+      host.peerEdit(() => [])
+      expect(await add('mine', 3)).not.toBeNull()
 
-  it("keeps another device's edit to a note whose save landed unacknowledged", async () => {
-    const { host, add } = setup(LOCAL)
-    host.dropNextAck = true
-    expect(await add('landed')).toBeNull()
+      expect(host.notes()).toEqual([{ id: expect.any(String), body: 'mine' }])
+      expect(host.notes()[0].id).not.toBe('x')
+    }
+  )
 
-    host.peerEdit((notes) => notes.map((entry) => ({ ...entry, body: 'edited elsewhere' })))
-    expect(await add('mine', 3)).not.toBeNull()
+  it.each(MIXED_HOSTS)(
+    "keeps another device's edit to a note whose save landed unacknowledged (%s)",
+    async (_name, hostCase) => {
+      const { host, add } = setup(hostCase)
+      host.dropNextAck = true
+      expect(await add('landed')).toBeNull()
+      const [landed] = host.notes()
+      expect(landed.body).toBe('landed')
 
-    expect(host.bodies()).toEqual(['edited elsewhere', 'mine'])
-  })
+      host.peerEdit((notes) => notes.map((entry) => ({ ...entry, body: 'edited elsewhere' })))
+      expect(await add('mine', 3)).not.toBeNull()
+
+      expect(host.notes()).toEqual([
+        { id: landed.id, body: 'edited elsewhere' },
+        { id: expect.any(String), body: 'mine' }
+      ])
+    }
+  )
 
   it("still saves this copy's own edit of a note after a failed save", async () => {
     const { host, add, edit } = setup(LOCAL, [note('x', 'v1')])
@@ -283,6 +319,6 @@ describe('folder review notes after a failed save', () => {
 
     expect(await edit('x', 'v1 edited here')).toBe(true)
 
-    expect(host.bodies()).toEqual(['v1 edited here'])
+    expect(host.notes()).toEqual([{ id: 'x', body: 'v1 edited here' }])
   })
 })

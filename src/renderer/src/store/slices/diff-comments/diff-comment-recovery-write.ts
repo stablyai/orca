@@ -55,8 +55,11 @@ function isKnown(known: KnownNoteVersions, id: string, note: DiffComment | undef
  * - Another device changed, added or deleted it and this copy did not edit it: the change stays.
  * - Both changed it: the rule of a save without a failure, so this copy's edit or delete wins over
  *   another device's edit, and another device's delete wins over this copy's edit.
- * The whole intended list is sent with the host's list as its base: a host that merges keeps any
- * change made after the read, and an older host that replaces the list still ends with this result.
+ * The whole intended list is sent, so an older host that replaces the list still ends with this
+ * result. Its base is the host's list as read, so a host that merges keeps a change made after the
+ * read. Past the size budget the base names only the notes this write changes: untouched notes are
+ * then never sent twice, at the cost of a note another device deletes between the read and the
+ * write coming back.
  */
 export function recoveryWrite(
   held: readonly DiffComment[],
@@ -81,5 +84,21 @@ export function recoveryWrite(
       heldIds.has(note.id) ? [] : (intended(note.id, undefined) ?? [])
     )
   ]
-  return { diffComments, diffCommentsBase: [...held] }
+  if (byteLength(held) + byteLength(diffComments) <= RECOVERY_FULL_BASE_MAX_BYTES) {
+    return { diffComments, diffCommentsBase: [...held] }
+  }
+  const intendedById = new Map(diffComments.map((note) => [note.id, note]))
+  return {
+    diffComments,
+    diffCommentsBase: held.filter(
+      (note) => versionOf(intendedById.get(note.id)) !== versionOf(note)
+    )
+  }
+}
+
+// Why half: a sealed paired request is capped at 1 MiB, and the update carries other fields too.
+export const RECOVERY_FULL_BASE_MAX_BYTES = 512 * 1024
+
+function byteLength(notes: readonly DiffComment[]): number {
+  return new TextEncoder().encode(JSON.stringify(notes)).length
 }
