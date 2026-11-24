@@ -165,6 +165,8 @@ export function NativeChatRailMessagePanel({
         total: items.length
       })
     : null
+  const noMatches =
+    results.length === 0 ? t('components.native-chat.railNoMatches', 'No messages match') : null
   // The list keeps the full list's height while filtering, so the field never moves.
   const listHeight = items.length * ROW_PX + LIST_PAD_TOP_PX + LIST_PAD_BOTTOM_PX
   const filterLabel = t('components.native-chat.railFilterPlaceholder', 'Filter your messages')
@@ -255,23 +257,31 @@ export function NativeChatRailMessagePanel({
           }}
         />
         {matchCount === null ? null : (
-          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{matchCount}</span>
+          <span aria-hidden className="shrink-0 text-xs text-muted-foreground tabular-nums">
+            {matchCount}
+          </span>
         )}
+      </div>
+      <div role="status" aria-hidden={!focused} className="sr-only">
+        {noMatches ?? matchCount}
       </div>
       <div
         ref={listRef}
-        id={listId}
-        role={focused ? 'listbox' : undefined}
-        aria-label={focused ? t('components.native-chat.railLabel', 'Your messages') : undefined}
         className="scrollbar-sleek relative min-h-0 shrink overflow-y-auto overscroll-contain px-2"
         style={{ height: listHeight }}
       >
-        {results.length === 0 ? (
-          <p className="px-2 pt-2 text-xs text-muted-foreground" role="status">
-            {t('components.native-chat.railNoMatches', 'No messages match')}
+        {noMatches === null ? null : (
+          <p aria-hidden className="px-2 pt-2 text-xs text-muted-foreground">
+            {noMatches}
           </p>
-        ) : null}
-        <div className="relative w-full" style={{ height: totalSize }}>
+        )}
+        <div
+          id={listId}
+          role={focused ? 'listbox' : undefined}
+          aria-label={focused ? t('components.native-chat.railLabel', 'Your messages') : undefined}
+          className="relative w-full"
+          style={{ height: totalSize }}
+        >
           {virtualItems.map((virtualItem) => {
             const result = results[virtualItem.index]
             if (!result) {
@@ -295,7 +305,7 @@ export function NativeChatRailMessagePanel({
                 data-selected={focused && selected}
                 data-current={current || undefined}
                 onPointerMove={() => {
-                  if (highlightId !== item.id) {
+                  if (focused && highlightId !== item.id) {
                     setHighlightId(item.id)
                   }
                 }}
