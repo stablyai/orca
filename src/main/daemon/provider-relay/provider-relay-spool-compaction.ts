@@ -10,7 +10,8 @@ const READ_CHUNK_BYTES = 64 * 1024
 /** Streams rows through, keeping those after `acked`; a row is never joined, however long. */
 class RowFilter {
   bytes = 0
-  private prefix = ''
+  /** The start of a row too short yet to show its seq; written with the row once it is decided. */
+  private undecided = ''
   private keep: boolean | null = null
   private rowStart = 0
   /** Output is written in batches, so a file of tiny rows isn't one write per row. */
@@ -22,13 +23,17 @@ class RowFilter {
     private readonly acked: number
   ) {}
 
-  async piece(text: string, endsRow: boolean): Promise<void> {
+  async piece(piece: string, endsRow: boolean): Promise<void> {
+    let text = piece
     if (this.keep === null) {
-      this.prefix += text.slice(0, ROW_PREFIX_CHARS)
-      if (this.prefix.length >= ROW_PREFIX_CHARS || endsRow) {
-        const seq = ROW_SEQ.exec(this.prefix)
-        this.keep = seq !== null && Number(seq[1]) > this.acked
+      text = this.undecided + piece
+      if (text.length < ROW_PREFIX_CHARS && !endsRow) {
+        this.undecided = text
+        return
       }
+      this.undecided = ''
+      const seq = ROW_SEQ.exec(text.slice(0, ROW_PREFIX_CHARS))
+      this.keep = seq !== null && Number(seq[1]) > this.acked
     }
     if (this.keep && text.length > 0) {
       await this.write(text)
@@ -37,7 +42,6 @@ class RowFilter {
       if (this.keep) {
         await this.write('\n')
       }
-      this.prefix = ''
       this.keep = null
       this.rowStart = this.bytes
     }
