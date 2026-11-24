@@ -179,6 +179,8 @@ export type ClaudeInitProof = {
   refuse: () => void
   /** The proof seen so far, or null; throws when it was refused or the child failed first. */
   seen: () => ClaudeInitObservation | null
+  /** The refusal already recorded, or null; a refusal outlives the callback that missed it. */
+  refused: () => Error | null
   /** Refusals after startup must end the published session. */
   onRefusal: ((error: Error) => void) | null
 }
@@ -192,6 +194,7 @@ export function createClaudeInitProof(): ClaudeInitProof {
   })
   void promise.catch(() => {})
   let outcome: { init: ClaudeInitObservation } | { error: Error } | null = null
+  let refusal: Error | null = null
   const reject = (error: Error): void => {
     outcome ??= { error }
     rejectPromise(error)
@@ -208,6 +211,7 @@ export function createClaudeInitProof(): ClaudeInitProof {
         return
       }
       const error = new Error('claude provider session expected')
+      refusal = error
       reject(error)
       proof.onRefusal?.(error)
     },
@@ -217,6 +221,7 @@ export function createClaudeInitProof(): ClaudeInitProof {
       }
       return outcome?.init ?? null
     },
+    refused: () => refusal,
     onRefusal: null
   }
   return proof

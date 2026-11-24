@@ -229,10 +229,18 @@ export async function openClaudeSession(input: {
       new Error('claude session closed before startup completed')
     )
   }
-  initialized.initProof.onRefusal = (error) => {
+  const refuse = (error: Error): void => {
     if (input.isCurrent()) {
       input.onLateRefusal(error)
     }
+  }
+  initialized.initProof.onRefusal = refuse
+  // A foreign init that landed before this callback was installed had nobody to run it: the
+  // session it names is not this one, so the start ends instead of opening it.
+  const refusal = initialized.initProof.refused()
+  if (refusal) {
+    refuse(refusal)
+    throw refusal
   }
   applyClaudeInitializeFacts(session, initialized)
   const result: ClaudeOpenFacts = {
