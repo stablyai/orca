@@ -24,20 +24,26 @@ async function loopbackPortAnswers(port: number): Promise<boolean> {
   )
 }
 
-/**
- * Starts a forward of `remotePort` on the same port number here when nothing answers on it, else the
- * next free one, else one the OS picks. `holdsIpv6Loopback` says whether the forward listens on [::1]
- * too; when it doesn't, an OS-picked port is checked there, since a browser tries [::1] first.
- */
-export async function addForwardOnFreeLocalPort(
-  remotePort: number,
-  add: (localPort: number) => Promise<PortForwardEntry>,
-  remove: (id: string) => Promise<unknown>,
+type FreeLocalPortForward = {
+  remotePort: number
+  add: (localPort: number) => Promise<PortForwardEntry>
+  remove: (id: string) => Promise<unknown>
+  /** Whether the forward listens on [::1] too; when it doesn't, an OS-picked port is checked there,
+   *  since a browser tries [::1] first. */
   holdsIpv6Loopback: boolean
+  /** Local ports saved for other forwards that aren't listening now; taking one would replace them. */
+  reservedLocalPorts?: ReadonlySet<number>
+}
+
+/** Starts a forward of `remotePort` on the same port number here when nothing answers on it, else
+ *  the next free one, else one the OS picks. */
+export async function addForwardOnFreeLocalPort(
+  forward: FreeLocalPortForward
 ): Promise<PortForwardEntry> {
+  const { remotePort, add, reservedLocalPorts } = forward
   const lastCandidate = Math.min(remotePort + NEXT_PORT_ATTEMPTS - 1, 65_535)
   for (let candidate = remotePort; candidate <= lastCandidate; candidate++) {
-    if (await loopbackPortAnswers(candidate)) {
+    if (reservedLocalPorts?.has(candidate) || (await loopbackPortAnswers(candidate))) {
       continue
     }
     try {
@@ -49,19 +55,29 @@ export async function addForwardOnFreeLocalPort(
       }
     }
   }
-  return addOnFreeOsPort(add, remove, holdsIpv6Loopback)
+  return addOnFreeOsPort(forward)
 }
 
 /** The OS picks a port free on 127.0.0.1 only. Where the forward holds [::1] too, a collision there
- *  fails the start; where it doesn't, [::1] is probed. Either way, pick again. */
-async function addOnFreeOsPort(
-  add: (localPort: number) => Promise<PortForwardEntry>,
-  remove: (id: string) => Promise<unknown>,
-  holdsIpv6Loopback: boolean
-): Promise<PortForwardEntry> {
+ *  fails the start; where it doesn't, [::1] is probed. Either way, or on a reserved port, pick again. */
+async function addOnFreeOsPort({
+  add,
+  remove,
+  holdsIpv6Loopback,
+  reservedLocalPorts
+}: FreeLocalPortForward): Promise<PortForwardEntry> {
   for (let attempt = 1; ; attempt++) {
     try {
       const entry = await add(0)
+      if (reservedLocalPorts?.has(entry.localPort)) {
+        await remove(entry.id)
+        throw Object.assign(
+          new Error(`Local port ${entry.localPort} is saved for another forward`),
+          {
+            code: 'EADDRINUSE'
+          }
+        )
+      }
       if (!holdsIpv6Loopback) {
         await assertIpv6LoopbackPortFree(entry.localPort).catch(async (error: unknown) => {
           await remove(entry.id)

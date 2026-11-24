@@ -10,6 +10,7 @@ import { clearForwardFailure, listUnrestoredPortForwards } from './ssh-port-forw
 import { PortForwardTornDownError } from '../../ssh/port-forwarding/ssh-port-forward'
 import { assertIpv6LoopbackPortFree } from '../../ssh/port-forwarding/local-forward-ipv6-loopback-probe'
 import { addForwardOnFreeLocalPort } from '../../ssh/port-forwarding/forward-local-port-choice'
+import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { loopbackPortForwardDialHost } from '../../../shared/workspace/ports/port-forward-loopback-host'
 import { broadcastPortForwards, enrichDetected } from './ssh-renderer-broadcast'
 
@@ -67,14 +68,17 @@ export function registerSshPortForwardHandlers(handle: RegisterSshRequest): void
       if (!conn) {
         throw new Error(`SSH connection "${targetId}" not found`)
       }
-      // SSH forwards listen on 127.0.0.1 only.
-      const entry = await addForwardOnFreeLocalPort(
+      const saved = getSshTargetRegistryStore()?.getTarget(targetId)?.portForwards ?? []
+      const entry = await addForwardOnFreeLocalPort({
         remotePort,
-        (localPort) =>
+        add: (localPort) =>
           portForwardManager!.addForward(targetId, conn, localPort, 'localhost', remotePort),
-        (id) => portForwardManager!.removeForwardAndWait(id),
-        false
-      )
+        remove: (id) => portForwardManager!.removeForwardAndWait(id),
+        // SSH forwards listen on 127.0.0.1 only.
+        holdsIpv6Loopback: false,
+        // A saved forward that couldn't restore keeps its port; persisting a new one there would drop it.
+        reservedLocalPorts: new Set(saved.map((forward) => forward.localPort))
+      })
       clearForwardFailure(targetId, entry)
       persistPortForwards(targetId)
       broadcastPortForwards(targetId)

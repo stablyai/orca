@@ -133,12 +133,12 @@ export function ensurePairedPortForward(args: {
         args.remotePort,
         args.label
       )
-    const entry = await addForwardOnFreeLocalPort(
-      args.remotePort,
+    const entry = await addForwardOnFreeLocalPort({
+      remotePort: args.remotePort,
       add,
-      (id) => manager.removeForwardAndWait(id),
-      holdsIpv6Loopback(process.platform)
-    ).catch(retireIdleTunnelAfter(args.environmentId))
+      remove: (id) => manager.removeForwardAndWait(id),
+      holdsIpv6Loopback: holdsIpv6Loopback(process.platform)
+    }).catch(retireIdleTunnelAfter(args.environmentId))
     deps?.onChanged(args.environmentId)
     return { entry, created: true }
   })

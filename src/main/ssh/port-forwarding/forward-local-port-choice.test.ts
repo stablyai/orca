@@ -33,9 +33,9 @@ describe('addForwardOnFreeLocalPort', () => {
       return // No IPv6 loopback on this machine.
     }
     const tried: number[] = []
-    const entry = await addForwardOnFreeLocalPort(
-      taken,
-      async (localPort) => {
+    const entry = await addForwardOnFreeLocalPort({
+      remotePort: taken,
+      add: async (localPort) => {
         tried.push(localPort)
         const port = await listen('127.0.0.1', localPort)
         const entry: PortForwardEntry = {
@@ -47,9 +47,9 @@ describe('addForwardOnFreeLocalPort', () => {
         }
         return entry
       },
-      async () => undefined,
-      false
-    )
+      remove: async () => undefined,
+      holdsIpv6Loopback: false
+    })
     expect(tried).not.toContain(taken)
     expect(entry.localPort).not.toBe(taken)
   })
