@@ -29,13 +29,15 @@ function unopenedChat(current: LegacyAgentSessionAccountHome) {
     now: number
     launchHomeReads: number
     refreshes: number
+    usageFailures: number
   } = {
     current,
     reading: null,
     witness: 'selection-1',
     now: SWITCHED,
     launchHomeReads: 0,
-    refreshes: 0
+    refreshes: 0,
+    usageFailures: 0
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only these fields
   const deps = {
@@ -71,17 +73,23 @@ function unopenedChat(current: LegacyAgentSessionAccountHome) {
         isEnabled: () => true,
         isWorkspaceAsleep: () => false,
         accountWitness: () => world.witness,
-        accountUsage: async (_provider: string, home: LegacyAgentSessionAccountHome) => ({
-          scope: home.path,
-          account: {
-            key: home.path,
-            read: () => world.reading,
-            refresh: () => {
-              world.refreshes += 1
-              return true
+        accountUsage: async (_provider: string, home: LegacyAgentSessionAccountHome) => {
+          if (world.usageFailures > 0) {
+            world.usageFailures -= 1
+            throw new Error('usage service unavailable')
+          }
+          return {
+            scope: home.path,
+            account: {
+              key: home.path,
+              read: () => world.reading,
+              refresh: () => {
+                world.refreshes += 1
+                return true
+              }
             }
           }
-        })
+        }
       }
     }
   } as unknown as ConstructorParameters<typeof StructuredAgentSessionUsageLimitContinue>[0]
@@ -144,6 +152,16 @@ describe('a usage-limit stop after the chat moved to another account', () => {
     chat.world.reading = reading(10, SWITCHED + 3 * 3_600_000)
     await chat.continuer.tick()
     await chat.continuer.tick()
+    expect(chat.world.launchHomeReads).toBe(2)
+    expect(chat.stop()).toBeNull()
+  })
+  it('attributes it again on the next pass when reading its account failed', async () => {
+    const chat = unopenedChat(NEXT)
+    chat.world.usageFailures = 1
+    chat.world.reading = reading(10, SWITCHED + 3 * 3_600_000)
+    await chat.continuer.tick()
+    await chat.continuer.tick()
+    chat.world.now = SWITCHED + 10_000
     expect(chat.world.launchHomeReads).toBe(2)
     expect(chat.stop()).toBeNull()
   })

@@ -68,14 +68,14 @@ export class UsageLimitAccountHolds {
 
   /** Re-attributed each pass: the account a chat continues on follows the host's selection. The
    *  account the cut hit is the one its turn's runtime launched under, when the record still names
-   *  that launch. */
+   *  that launch. True once it settled: its sources resolved and still hold. */
   async attribute(
     id: string,
     host: AttributionHost,
     limited: Pick<HostUsageLimitCut, 'turnItemId' | 'resetsAt' | 'turnEndedAt' | 'fence'> &
       SwitchReset,
     now = Date.now()
-  ): Promise<void> {
+  ): Promise<boolean> {
     const record = host.store.getRecord(id)
     const cutLaunch = usageLimitCutLaunch(record?.launchedAccount, limited.fence)
     const hit = { cut: switchFreeIdentity(limited), ...cutLaunch }
@@ -88,6 +88,7 @@ export class UsageLimitAccountHolds {
     let scope: UsageLimitAccountScope | undefined
     let movedTo: AgentSessionAccountHome | null = null
     let relaunchedOn: AgentSessionAccountHome | null = null
+    let settled = true
     try {
       // WSL readings never reach this host, so a WSL launch keeps the cut's own reset.
       if (record && record.location.wslDistro === null) {
@@ -115,9 +116,10 @@ export class UsageLimitAccountHolds {
       }
     } catch {
       // No attributable account this pass: the cut's own reset and any hold already seen decide.
+      settled = false
     }
     if (record && !this.bindingHolds(id, host, binding)) {
-      return
+      return false
     }
     this.scopes.set(id, scope)
     this.bindings.set(id, binding)
@@ -139,6 +141,7 @@ export class UsageLimitAccountHolds {
       limited.turnEndedAt
     )
     this.askForMoveReading(id, limited.turnEndedAt)
+    return settled
   }
 
   /** The stop a moved chat publishes waits for a reading of the account it moved to, and the
