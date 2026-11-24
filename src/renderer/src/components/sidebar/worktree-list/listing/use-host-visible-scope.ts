@@ -14,7 +14,10 @@ import {
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from '../../../../../../shared/sidebar-list/hosts/host-filtering'
-import { isDoneWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
+import {
+  filterProjectGroupsWithVisibleContent,
+  scopeVisibleFolderWorkspacesByDone
+} from '../../../../../../shared/sidebar-list/feed/sidebar-feed-visible-folders'
 
 // Apply host/device scope consistently to repos, project groups and folder workspaces.
 export function useSidebarHostVisibleScope(args: {
@@ -48,11 +51,7 @@ export function useSidebarHostVisibleScope(args: {
       return visibleHostIdSet.has(hostId)
     })
   }, [defaultHostId, repos, visibleHostIdSet])
-  const visibleProjectGroupsForRows = useMemo(
-    () => filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
-    [defaultHostId, projectGroups, visibleHostIdSet]
-  )
-  const visibleFolderWorkspacesForRows = useMemo(() => {
+  const folderScopeForRows = useMemo(() => {
     const hostVisibleWorkspaces = filterFolderWorkspacesForVisibleHosts(
       withoutBotListedFolderWorkspaces(folderWorkspaces, args.botListedWorktreeIdentities),
       projectGroups,
@@ -65,9 +64,7 @@ export function useSidebarHostVisibleScope(args: {
           args.pairedDeviceIdsByEnvironment
         )
       : hostVisibleWorkspaces
-    return hideDoneWorkspaces
-      ? visibleWorkspaces.filter((folder) => !isDoneWorkspaceStatus(folder.workspaceStatus))
-      : visibleWorkspaces
+    return scopeVisibleFolderWorkspacesByDone(visibleWorkspaces, hideDoneWorkspaces)
   }, [
     args.botListedWorktreeIdentities,
     args.pairedDeviceIdsByEnvironment,
@@ -78,6 +75,17 @@ export function useSidebarHostVisibleScope(args: {
     projectGroups,
     visibleHostIdSet
   ])
+  const visibleFolderWorkspacesForRows = folderScopeForRows.folders
+  const visibleProjectGroupsForRows = useMemo(
+    () =>
+      filterProjectGroupsWithVisibleContent({
+        groups: filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
+        visibleRepos: visibleReposForRows,
+        visibleFolders: folderScopeForRows.folders,
+        emptiedGroupIds: folderScopeForRows.emptiedGroupIds
+      }),
+    [defaultHostId, folderScopeForRows, projectGroups, visibleHostIdSet, visibleReposForRows]
+  )
 
   return { visibleReposForRows, visibleProjectGroupsForRows, visibleFolderWorkspacesForRows }
 }

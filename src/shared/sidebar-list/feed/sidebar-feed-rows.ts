@@ -32,7 +32,10 @@ import {
   filterReposForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from '../hosts/host-filtering'
-import { sidebarFeedVisibleFolderWorkspaces } from './sidebar-feed-visible-folders'
+import {
+  filterProjectGroupsWithVisibleContent,
+  sidebarFeedVisibleFolderScope
+} from './sidebar-feed-visible-folders'
 import { deferHostSectionCollapse, scopeHostSectionCollapse } from '../hosts/host-section-collapse'
 import { orderHostSectionOptions } from '../hosts/host-section-order'
 import {
@@ -140,36 +143,39 @@ export function planSidebarFeedRows(
   const pairedDeviceIdsByEnvironment = feedPairedDeviceIdsByEnvironment(domains)
   const hiddenProjects = indexHiddenProjects(repos, defaultHostId)
 
+  const rowFacts = {
+    isArchived: (worktree: Worktree) => worktree.isArchived,
+    ...hiddenProjectRowFacts(hiddenProjects),
+    isFolderWorkspace: () => false,
+    repoId: (worktree: Worktree) => worktree.repoId,
+    hostId: (worktree: Worktree) => feedWorktreeHostId(index, worktree, defaultHostId),
+    isOtherClient: (worktree: Worktree) =>
+      isWorkspaceOwnedBySomeoneElse(worktree, pairedDeviceIdsByEnvironment),
+    isDefaultBranch: (worktree: Worktree) => factsOf(worktree)?.defaultBranch === true,
+    isAutomationCreated: (worktree: Worktree) => factsOf(worktree)?.automationCreated === true,
+    isCliCreated: (worktree: Worktree) => factsOf(worktree)?.cliCreated === true,
+    isDetachedHead: (worktree: Worktree) => factsOf(worktree)?.detachedHead === true,
+    isDone: (worktree: Worktree) => worktree.workspaceStatus === 'completed',
+    isMainWorktree: (worktree: Worktree) => worktree.isMainWorktree,
+    isSleeping: (worktree: Worktree) => {
+      const identity = getWorktreeHostIdentity(worktree)
+      const activity = domains.activity.get(identity)
+      return !retained.has(identity) && (!activity || isIdleWorkspaceActivity(activity))
+    }
+  }
   const visibleWorktrees = selectVisibleSidebarWorktrees({
     rows: withoutBotListedWorktrees(allWorktrees, extras.botListedWorktreeIdentities),
     ancestorByIdentity,
     rankOf: (worktree) => rankByIdentity.get(getWorktreeHostIdentity(worktree)),
     filters: view.filters,
-    facts: {
-      isArchived: (worktree) => worktree.isArchived,
-      ...hiddenProjectRowFacts(hiddenProjects),
-      isFolderWorkspace: () => false,
-      repoId: (worktree) => worktree.repoId,
-      hostId: (worktree) => feedWorktreeHostId(index, worktree, defaultHostId),
-      isOtherClient: (worktree) =>
-        isWorkspaceOwnedBySomeoneElse(worktree, pairedDeviceIdsByEnvironment),
-      isDefaultBranch: (worktree) => factsOf(worktree)?.defaultBranch === true,
-      isAutomationCreated: (worktree) => factsOf(worktree)?.automationCreated === true,
-      isCliCreated: (worktree) => factsOf(worktree)?.cliCreated === true,
-      isDetachedHead: (worktree) => factsOf(worktree)?.detachedHead === true,
-      isDone: (worktree) => worktree.workspaceStatus === 'completed',
-      isMainWorktree: (worktree) => worktree.isMainWorktree,
-      isSleeping: (worktree) => {
-        const identity = getWorktreeHostIdentity(worktree)
-        const activity = domains.activity.get(identity)
-        return !retained.has(identity) && (!activity || isIdleWorkspaceActivity(activity))
-      }
-    },
+    facts: rowFacts,
     worktreeLineageById: NO_LINEAGE_MAP,
     lineageParentIdentities: index.lineageParentIdentities,
     filterRepoIds: view.filters.filterRepoIds,
     preserveLineageParentOrder: view.sortBy === 'manual',
-    forcedVisibleWorktreeIds: extras.forcedVisibleWorktreeIds
+    forcedVisibleWorktreeIds: extras.forcedVisibleWorktreeIds,
+    includeLineageAncestor: (worktree) =>
+      !view.filters.hideDoneWorkspaces || !rowFacts.isDone(worktree)
   })
 
   const visibleHostIdSet = getVisibleSidebarHostIdSet(
@@ -177,7 +183,7 @@ export function planSidebarFeedRows(
     view.workspaceHostScope
   )
   const visibleRepos = filterReposForVisibleHosts(repos, visibleHostIdSet, defaultHostId)
-  const visibleFolderWorkspaces = sidebarFeedVisibleFolderWorkspaces({
+  const folderScope = sidebarFeedVisibleFolderScope({
     folderWorkspaces: withoutBotListedFolderWorkspaces(
       folderWorkspaces,
       extras.botListedWorktreeIdentities
@@ -189,11 +195,13 @@ export function planSidebarFeedRows(
     pairedDeviceIdsByEnvironment,
     hideDoneWorkspaces: view.filters.hideDoneWorkspaces
   })
-  const visibleProjectGroups = filterProjectGroupsForVisibleHosts(
-    projectGroups,
-    visibleHostIdSet,
-    defaultHostId
-  )
+  const visibleFolderWorkspaces = folderScope.folders
+  const visibleProjectGroups = filterProjectGroupsWithVisibleContent({
+    groups: filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
+    visibleRepos,
+    visibleFolders: visibleFolderWorkspaces,
+    emptiedGroupIds: folderScope.emptiedGroupIds
+  })
   const listed = new Set(workspaces.map((entry) => entry.worktree.id))
   const pendingCreations = [...domains.creations].flatMap(([creationId, creation]) =>
     creation.worktreeId !== undefined && listed.has(creation.worktreeId)

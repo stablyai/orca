@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
-import { sidebarFeedVisibleFolderWorkspaces } from './sidebar-feed-visible-folders'
+import type { ProjectGroup } from '../../project/groups/project-group-types'
+import type { Repo } from '../../repository/repo-types'
+import {
+  filterProjectGroupsWithVisibleContent,
+  scopeVisibleFolderWorkspacesByDone,
+  sidebarFeedVisibleFolderWorkspaces
+} from './sidebar-feed-visible-folders'
 
 function folder(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
   return {
@@ -43,4 +49,58 @@ describe('sidebarFeedVisibleFolderWorkspaces', () => {
     expect(visibleFolders(folders, false)).toEqual(['todo', 'done'])
     expect(visibleFolders(folders, true)).toEqual(['todo'])
   })
+
+  it('reports groups emptied by Hide Done only', () => {
+    const folders = [
+      folder({ id: 'todo', projectGroupId: 'kept', workspaceStatus: 'todo' }),
+      folder({ id: 'done', projectGroupId: 'emptied', workspaceStatus: 'completed' })
+    ]
+
+    const scope = scopeVisibleFolderWorkspacesByDone(folders, true)
+    expect(scope.folders.map((item) => item.id)).toEqual(['todo'])
+    expect([...scope.emptiedGroupIds]).toEqual(['emptied'])
+
+    const groups: ProjectGroup[] = [group('kept'), group('emptied'), group('already-empty')]
+    const visibleRepos: Pick<Repo, 'projectGroupId'>[] = []
+    const filtered = filterProjectGroupsWithVisibleContent({
+      groups,
+      visibleRepos,
+      visibleFolders: scope.folders,
+      emptiedGroupIds: scope.emptiedGroupIds
+    })
+    expect(filtered.map((item) => item.id)).toEqual(['kept', 'already-empty'])
+  })
+
+  it('keeps an emptied group when another visible repo belongs to it', () => {
+    const scope = scopeVisibleFolderWorkspacesByDone(
+      [folder({ id: 'done', projectGroupId: 'kept', workspaceStatus: 'completed' })],
+      true
+    )
+    const filtered = filterProjectGroupsWithVisibleContent({
+      groups: [group('kept')],
+      visibleRepos: [repo('kept')],
+      visibleFolders: scope.folders,
+      emptiedGroupIds: scope.emptiedGroupIds
+    })
+    expect(filtered.map((item) => item.id)).toEqual(['kept'])
+  })
 })
+
+function group(id: string): ProjectGroup {
+  return {
+    id,
+    name: id,
+    parentPath: null,
+    parentGroupId: null,
+    createdFrom: 'manual',
+    tabOrder: 0,
+    isCollapsed: false,
+    color: null,
+    createdAt: 0,
+    updatedAt: 0
+  }
+}
+
+function repo(projectGroupId: string): Pick<Repo, 'projectGroupId'> {
+  return { projectGroupId }
+}

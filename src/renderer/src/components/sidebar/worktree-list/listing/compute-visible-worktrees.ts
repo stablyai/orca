@@ -64,6 +64,7 @@ export function computeVisibleWorktrees(
   const keyOf = opts.sortedByHostIdentity
     ? getWorktreeHostIdentity
     : (worktree: Worktree) => worktree.id
+  const facts = buildDesktopWorkspaceRowFactReader(opts)
   return selectVisibleSidebarWorktrees({
     rows: withoutBotListedWorktrees(
       getIndexedAllWorktrees(worktreesByRepo),
@@ -72,13 +73,14 @@ export function computeVisibleWorktrees(
     ancestorByIdentity: getLineageAncestorIndex(worktreesByRepo),
     rankOf: (worktree) => rankByKey.get(keyOf(worktree)),
     filters: sidebarWorkspaceRowFilters(opts),
-    facts: buildDesktopWorkspaceRowFactReader(opts),
+    facts,
     worktreeLineageById: opts.worktreeLineageById,
     lineageParentIdentities: opts.lineageParentIdentities,
     filterRepoIds: opts.filterRepoIds,
     injectLineageAncestors: opts.injectLineageAncestors,
     preserveLineageParentOrder: opts.preserveLineageParentOrder,
-    forcedVisibleWorktreeIds: opts.forcedVisibleWorktreeIds
+    forcedVisibleWorktreeIds: opts.forcedVisibleWorktreeIds,
+    includeLineageAncestor: (worktree) => !opts.hideDoneWorkspaces || !facts.isDone(worktree)
   })
 }
 
