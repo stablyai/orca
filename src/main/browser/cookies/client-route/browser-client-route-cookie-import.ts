@@ -200,7 +200,7 @@ function deriveRoutePartition(
   })
 }
 
-/** The jar a page or import already bound for this profile on the route; null when none has. Never binds. */
+/** The jar a page or import already bound for this profile on the route; null when none has. Never creates a binding; it migrates an older build's one the same way import does. */
 export function boundRoutePartition(
   routeIdentity: ClientRouteIdentity,
   browserProfileId: string

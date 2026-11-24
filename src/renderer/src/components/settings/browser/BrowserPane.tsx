@@ -49,10 +49,7 @@ import {
   browserSessionHostOption,
   resolveAvailableBrowserSessionHostId
 } from './profiles/browser-session-host-selection'
-import {
-  getBrowserProfileHostId,
-  getDefaultBrowserProfileForHost
-} from '@/store/slices/browser/hosts/browser-host-state'
+import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/hosts/browser-host-state'
 import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 
 type BrowserPaneProps = {
@@ -253,8 +250,7 @@ export function BrowserPane({
       {showBrowserUse ? (
         <SettingsGroup>
           <BrowserUseSetup
-            // An SSH host in the Host list is about its pages' cookies; Browser Use setup stays as before.
-            hostId={getBrowserProfileHostId(selectedBrowserSessionHostId)}
+            hostId={selectedBrowserSessionHostId}
             onConfigureMoreBrowsers={scrollToSessionCookies}
             onOpenComputerUse={onOpenComputerUse}
           />

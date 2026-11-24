@@ -256,12 +256,13 @@ browserSessionRegistry.onProfileDeleted = async (profileId) => {
   const partitions = new Set<string>()
   try {
     await releasePreparedPartitions((pending) => pending.browserProfileId === profileId, partitions)
+  } finally {
     // A jar an earlier launch or a Settings import bound has no prepared record; find it by host.
+    // Runs even when a prepared jar failed to release, so the profile's other jars still go.
     const targetIds = (getSshTargetRegistryStore()?.listTargets() ?? []).map((target) => target.id)
     for (const bound of boundLocalSshBrowserPartitionsForProfile(targetIds, profileId)) {
       partitions.add(bound)
     }
-  } finally {
     await releaseEvictedBrowserRoutePartitionStorage(
       [...partitions],
       isBrowserRoutePartitionRetainedByAnyOwner
