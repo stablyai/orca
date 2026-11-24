@@ -376,10 +376,14 @@ export async function main(root, argv) {
   if (process.platform === 'win32') {
     return runChangedChecks(root, options)
   }
-  const setting = spawnSync('git', ['config', '--bool', '--get', 'orca.serializeChangedChecks'], {
-    cwd: root,
-    encoding: 'utf8'
-  })
+  const setting = spawnSync(
+    'git',
+    ['config', '--local', '--bool', '--get', 'orca.serializeChangedChecks'],
+    {
+      cwd: root,
+      encoding: 'utf8'
+    }
+  )
   if (setting.status === 1 || setting.stdout?.trim() === 'false') {
     return runChangedChecks(root, options)
   }
