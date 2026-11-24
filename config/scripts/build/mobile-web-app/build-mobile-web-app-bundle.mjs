@@ -486,16 +486,9 @@ export async function readLocaleCatalogs(directory = localeCatalogDir) {
       const catalog = JSON.parse(await readFile(join(directory, name), 'utf8'))
       const bytes = Buffer.from(JSON.stringify(catalog), 'utf8')
       const sha256 = sha256Hex(bytes)
-      return selectMobileWebCatalogFile(
-        {
-          locale: name.slice(0, -'.json'.length),
-          bytes,
-          path: `catalogs/${sha256}.json`,
-          sha256,
-          byteLength: bytes.byteLength
-        },
-        catalog
-      )
+      const locale = name.slice(0, -'.json'.length)
+      const entry = { locale, bytes, sha256, byteLength: bytes.byteLength }
+      return selectMobileWebCatalogFile({ ...entry, path: `catalogs/${sha256}.json` }, catalog)
     })
   )
 }
