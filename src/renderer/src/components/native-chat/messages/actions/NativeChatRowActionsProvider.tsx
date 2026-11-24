@@ -56,7 +56,7 @@ export function NativeChatRowActionsProvider({
                 structuredSession: { sessionId: sourceSessionId, workspaceId: worktreeId },
                 agent
               },
-              target
+              { target, retry: 'open' }
             )
         : undefined,
     [agent, target, worktreeId, sourceOpenable]

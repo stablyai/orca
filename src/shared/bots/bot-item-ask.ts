@@ -193,8 +193,13 @@ export function botItemIsQuickReplyText(
   if (!text.endsWith(` ${reply.label}`)) {
     return false
   }
-  const head = botItemLineHeads(shape, text)[index]
-  return head !== undefined && text === `${head} ${reply.label}`
+  const heads = botItemLineHeads(shape, text)
+  const head = heads[index]
+  return (
+    head !== undefined &&
+    text === `${head} ${reply.label}` &&
+    !heads.some((candidate) => candidate !== undefined && candidate.length > head.length)
+  )
 }
 
 /** The quick replies an owner's reply picked for each question line, none where they wrote their own
