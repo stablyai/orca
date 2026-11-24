@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import React, { useRef } from 'react'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
@@ -33,6 +33,11 @@ function controller(
   return {
     cards,
     queueCapable: true,
+    holds: () => false,
+    agentMail: [],
+    agentMailEditable: () => false,
+    mailLeads: false,
+    stopping: false,
     clearCapable: true,
     pause: null,
     resume: vi.fn(async () => true),
@@ -214,6 +219,39 @@ it('preserves expanded sortable rows and moves focus off a row before reducing t
   await act(async () => view.rerender(pane(true)))
   expect(screen.getAllByRole('listitem')).toHaveLength(3)
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Queued' }))
+})
+
+// Hidden at rest: the row's tools fade in only on hover or keyboard focus (CSS the test DOM does not run).
+function hiddenAtRest(element: HTMLElement): boolean {
+  for (
+    let node: HTMLElement | null = element;
+    node && node.tagName !== 'LI';
+    node = node.parentElement
+  ) {
+    if (
+      node.hidden ||
+      ['opacity-0', 'invisible', 'hidden', 'sr-only'].some((name) => node!.classList.contains(name))
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+it('gives every queued row its own Steer at rest, with Edit and Delete hidden until hover or focus', () => {
+  const queue = controller([card(1), card(2), card(3)], { isWorking: true })
+  renderQueue(queue)
+  const rows = screen.getAllByRole('listitem')
+  expect(rows).toHaveLength(3)
+  rows.forEach((row, index) => {
+    const steer = within(row).getByRole('button', { name: 'Steer' })
+    expect(hiddenAtRest(steer)).toBe(false)
+    expect(hiddenAtRest(within(row).getByRole('button', { name: 'Edit message' }))).toBe(true)
+    expect(hiddenAtRest(within(row).getByRole('button', { name: 'Delete' }))).toBe(true)
+    // Each Steer sends its own message, not the head's.
+    fireEvent.click(steer)
+    expect(queue.steer).toHaveBeenLastCalledWith(`m${index + 1}`)
+  })
 })
 
 it("shows a send-failed card as Couldn't send with Retry, which sends it again", () => {

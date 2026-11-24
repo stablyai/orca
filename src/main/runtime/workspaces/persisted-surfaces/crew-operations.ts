@@ -11,8 +11,17 @@ import { CrewChanges } from '../../orchestration/crew/crew-changes'
 import { OrcaRuntimeWithWebhookOperations } from './webhook-operations'
 import { subscribeWorkerApprovals } from '../../orchestration/crew/worker-approval-stream'
 import { readCrewApprovals } from '../../orchestration/crew/crew-query'
-import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
+import {
+  formatOrcaSessionAddress,
+  isOrcaSessionId,
+  parseOrcaSessionAddress
+} from '../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationWorkerApprovalsFrame } from '../../../../shared/orchestration/orchestration-crew'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import {
+  workerDockSourceOfSession,
+  workerDockSourceSessions
+} from '../../orchestration/dock/worker-dock-source'
 
 export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithWebhookOperations {
   abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
@@ -27,12 +36,39 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithWebho
 
   protected bindCrewChanges(db: OrchestrationDb): void {
     this.unwatchCrewDb?.()
-    this.unwatchCrewDb = db.crewChanges.subscribe((facets) => {
+    let queued = false
+    const publishSources = () => {
+      if (queued || !db.workerDockSources.hasChanges) {
+        return
+      }
+      queued = true
+      queueMicrotask(() => {
+        queued = false
+        if (db.db.isTransaction) {
+          return
+        }
+        const host = getStructuredAgentSessionHost()
+        for (const source of db.workerDockSources.changedSources()) {
+          // A cleared chat shows a later session of the source's lineage.
+          for (const sessionId of workerDockSourceSessions(source)) {
+            host?.publishBackgroundTasks(sessionId)
+          }
+        }
+      })
+    }
+    const unwatchSources = db.workerDockSources.watch(publishSources)
+    const unwatchDb = db.crewChanges.subscribe((facets) => {
+      publishSources()
       this.orchestrationDbChanges.notify(facets)
       this.crewChanges.notify(facets)
     })
+    this.unwatchCrewDb = () => {
+      unwatchSources()
+      unwatchDb()
+    }
     this.orchestrationDbChanges.notify()
     this.crewChanges.notify()
+    publishSources()
   }
 
   private readonly crewReadModel = new CrewReadModel(
@@ -72,14 +108,16 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithWebho
     party: string,
     emit: (frame: OrchestrationWorkerApprovalsFrame) => void
   ): () => void {
-    const orcaSessionId = parseOrcaSessionAddress(party)
+    const parsed = parseOrcaSessionAddress(party)
     return subscribeWorkerApprovals(
       {
         mailboxes: () => {
           const db = this._orchestrationDb
-          return db && orcaSessionId
+          // Workers address a cleared chat (a bot's Home Chat) at its /clear root.
+          const orcaSessionId = parsed && workerDockSourceOfSession(parsed)
+          return db && orcaSessionId && isOrcaSessionId(orcaSessionId)
             ? [
-                party,
+                ...new Set([party, formatOrcaSessionAddress(orcaSessionId)]),
                 ...db
                   .runsBoundToCoordinator({ orcaSessionId, paneKey: null, terminalHandle: null })
                   .map((run) => `run:${run.id}`)

@@ -63,5 +63,7 @@ export type BrowserClientPageCommandExecutorDependencies = BrowserClientPageAuth
   // Remote uploads require both a negotiated file channel and upload staging.
   fileChannel?: BrowserClientFileChannelTransport
   uploadStaging?: BrowserClientUploadStaging
+  /** Marks the page's next download as the agent's, for its host to save; see `claimNextDownload`. */
+  claimRelayedDownload?(guestWebContentsId: number): { started: Promise<boolean>; release(): void }
   maxPages?: number
 }

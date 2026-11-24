@@ -24,6 +24,8 @@ export type WorkerTurnStopReason =
   | 'start-unconfirmed'
   | 'start-blocked'
   | 'never-ready'
+  /** The start failed before its worker ran, so nothing of it was lost. */
+  | 'start-failed'
   /** The turn ended while background tasks the worker started still run: news only once it outlasts the bound. */
   | 'background-wait'
 
@@ -40,7 +42,7 @@ export type WorkerTurnStop = {
   approval?: WorkerApprovalPayload
   /** When the stopping turn began, on this host's clock; absent when unknown, which mutes nothing. */
   turnStartedAt?: number
-  /** Why the worker went away, for an `exited` or `lost` stop. */
+  /** Why the worker went away, for an `exited`, `lost` or `start-failed` stop. */
   cause?: string
   /** An exited chat: mail starts it again, keeping its history. */
   restartsOnMail?: true
@@ -277,6 +279,18 @@ export function relayWorkerMail(
     })
   })
   return true
+}
+
+const FAILED_LEAD_FENCE_PREFIX = 'failed-lead:'
+
+/** Names a lead turn that failed under live children by its end: a restart that remints the process id,
+ *  a prompt in between, or the later all-clear is the same failure, under one stable report id. */
+export function failedLeadTurnFence(since: number): string {
+  return `${FAILED_LEAD_FENCE_PREFIX}${since}`
+}
+
+export function isFailedLeadTurnFence(fence: string | null): fence is string {
+  return fence?.startsWith(FAILED_LEAD_FENCE_PREFIX) === true
 }
 
 /** A stable message id: writing the same report twice is a no-op. */

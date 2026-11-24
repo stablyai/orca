@@ -1,5 +1,4 @@
 import { NativeChatThreadGoalBanner } from '../../session/goals/NativeChatThreadGoalBanner'
-import { NativeChatStructuredWorkerLifetimeStrip } from '../../worker-lifetime/NativeChatStructuredWorkerLifetimeStrip'
 import type { StructuredAgentSessionThreadGoal } from '../../session/goals/use-structured-agent-session-thread-goal'
 import type { NativeChatImageRuntimeContext } from '../../media/images/native-chat-image-runtime-context'
 import { NativeChatTextAttachments } from '../../media/text/NativeChatTextAttachments'
@@ -9,9 +8,8 @@ import { NativeChatComposerExtensionUi } from '../../composer/controls/NativeCha
 import type { AgentSessionExtensionStripRows } from '../../../../../../shared/agent-session/view/agent-session-extension-ui'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
-/** The strips on the composer's top edge: the thread goal, a temporary worker's lifetime, extension widgets, then `/mcp`'s tray. */
+/** The strips on the composer's top edge: the thread goal, extension widgets, then `/mcp`'s tray. */
 export function NativeChatStructuredComposerTabStrips(props: {
-  tabId: string
   target: RuntimeClientTarget
   focusComposer: () => void
   runtimeContext: NativeChatImageRuntimeContext
@@ -27,11 +25,6 @@ export function NativeChatStructuredComposerTabStrips(props: {
   return (
     <>
       <NativeChatStructuredGoalStrip {...props} sessionId={props.transport.sessionId} />
-      <NativeChatStructuredWorkerLifetimeStrip
-        tabId={props.tabId}
-        transport={props.transport}
-        isVisible={props.isVisible}
-      />
       <NativeChatComposerExtensionUi rows={props.extensionUi} placement="above" />
       {mcpPanel?.isOpen ? (
         <NativeChatMcpTray

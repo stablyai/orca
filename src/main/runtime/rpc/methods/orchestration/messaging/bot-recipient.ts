@@ -10,19 +10,18 @@ import { botOfSession } from '../../../../../bots/bot-session-tabs'
 import { requireStructuredHost } from '../../../../../bots/bot-chat-session'
 import { readBotConversationActsFor } from '../../../../../bots/bot-conversation-acts-for'
 import {
-  firstMessageActsFor,
   readBotActingTurn,
-  readBotActingTurnWithin,
-  type BotActingTurnLookups,
   type BotActingTurn,
   type BotRequestConversation,
   type BotWakingPlace
 } from '../../../../../bots/bot-request-asker'
+import { readNewestBotActingTurn } from '../../../../../bots/bot-acting-turn-read'
 import type {
   AutomationTriggeredBy,
   BotRequestAsker
 } from '../../../../../../shared/bots/bot-acts-for'
-import { botRequestActsFor, botRequestRecord } from './bot-request-record'
+import { botRequestActsFor } from './bot-request-record'
+import { readFirstMessageActsFor } from './bot-first-message-acts-for'
 import type {
   AgentJournalMessageItem,
   AgentJournalRenderItem
@@ -39,7 +38,6 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { currentRunCoordinatorOrcaSessionId } from '../../../../orchestration/db/runs/run-coordinator-orca-session'
 import { readAgentSessionRecordStore } from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { JournalSqlReads } from '../../../../../native-chat/agent-session-journal/journal-sql-reads'
 import { mayNameSession, readSessionRecipient } from './session-recipient'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import {
@@ -295,12 +293,8 @@ export async function readBotTurn(
   let recorded = readBotConversationActsFor(runtime, root)
   if (!recorded) {
     // Conversations from before Orca recorded this, and ones a person opened: their first message
-    // says, and is kept as the record. A cleared chat reads its root's.
-    const firstPrompt = await (await host.journalReads(root)).promptItem('first')
-    const first = firstMessageActsFor(firstPrompt ? [firstPrompt] : [], {
-      botRequestAskers: (messageId) => botRequestRecord(db, messageId)?.askers ?? null,
-      conversationWorkspaceId: workspaceId
-    })
+    // says, and is kept as the record.
+    const first = await readFirstMessageActsFor(db, host.journalReads(root), workspaceId)
     if (first) {
       db.recordBotConversationActsFor(root, { actsFor: first })
       recorded = { actsFor: first }
@@ -316,34 +310,10 @@ export async function readBotTurn(
   }
   const turn = opening
     ? readBotActingTurn([openingItem(opening)], lookups, [])
-    : await readNewestActingTurn(await host.journalReads(sessionId), lookups)
+    : await readNewestBotActingTurn(await host.journalReads(sessionId), lookups)
   // The prompt that opened the turn names its event; a conversation an automation or request started keeps it.
   const triggeredBy = turn.triggeredBy ?? recorded?.triggeredBy ?? null
   return { turn, conversation, actsFor, triggeredBy }
-}
-
-/** The acting turn from the newest turns back, widening the read until one decides it or the read
- *  holds the whole chat: a turn woken only by a worker's report reads the one before it. */
-async function readNewestActingTurn(
-  reads: Pick<JournalSqlReads, 'operationWindow'>,
-  lookups: BotActingTurnLookups
-): Promise<BotActingTurn> {
-  for (let newestTurns = 8; ; newestTurns *= 4) {
-    const { snapshot, complete } = await reads.operationWindow({
-      latestTurns: newestTurns,
-      // Who a turn acted for is in its messages and turn rows; its tool calls would only fill memory.
-      turnShape: true
-    })
-    const turn = readBotActingTurnWithin(
-      snapshot.items,
-      lookups,
-      snapshot.submissions,
-      complete ? null : newestTurns
-    )
-    if (turn) {
-      return turn
-    }
-  }
 }
 
 /** A message not yet in the journal, as the one row of the turn it opens. */

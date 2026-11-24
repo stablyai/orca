@@ -56,6 +56,12 @@ const focusOn =
     await new Promise(requestAnimationFrame)
   }
 
+// The header's → arrow, with a frame for the step to render.
+const nextQuestion = async (frame: HTMLElement): Promise<void> => {
+  frame.querySelector<HTMLButtonElement>('button[aria-label="Next question"]')?.click()
+  await new Promise(requestAnimationFrame)
+}
+
 // Keyboard focus on Skip: the same outline the options take.
 export const keyboardFocus = defineFixture({
   width: 720,
@@ -89,8 +95,7 @@ export const skippedLastStep = defineFixture({
   render: () => <FocusedQuestion steps={2} />,
   interact: async (frame) => {
     frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
-    frame.querySelectorAll<HTMLButtonElement>('[data-native-chat-question-step]')[1]?.click()
-    await new Promise(requestAnimationFrame)
+    await nextQuestion(frame)
   }
 })
 
@@ -124,19 +129,13 @@ export const pickedFocus = defineFixture({
   }
 })
 
-const questionStep = (frame: HTMLElement, index: number): HTMLButtonElement | undefined =>
-  frame.querySelectorAll<HTMLButtonElement>(
-    'button[data-native-chat-question-step]:not([aria-label="Previous question"]):not([aria-label="Next question"])'
-  )[index]
-
 // Answered the first step; the required last step keeps Submit idle until it is answered.
 export const requiredLastStep = defineFixture({
   width: 720,
   render: () => <FocusedQuestion steps={2} requiredStep={1} />,
   interact: async (frame) => {
     frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
-    questionStep(frame, 1)?.click()
-    await new Promise(requestAnimationFrame)
+    await nextQuestion(frame)
   }
 })
 
@@ -145,25 +144,23 @@ export const requiredSkippedStep = defineFixture({
   width: 720,
   render: () => <FocusedQuestion steps={2} requiredStep={0} />,
   interact: async (frame) => {
-    questionStep(frame, 1)?.click()
-    await new Promise(requestAnimationFrame)
+    await nextQuestion(frame)
     frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
     await new Promise((resolve) => setTimeout(resolve, 600))
     await new Promise(requestAnimationFrame)
   }
 })
 
-// Answered step 1, then passed the required step 2 by its chip: the last step says Next, since its
+// Answered step 1, then passed the required step 2 by the header arrow: the last step says Next, since its
 // press returns there instead of sending.
 export const requiredPassedStep = defineFixture({
   width: 720,
   render: () => <FocusedQuestion steps={3} requiredStep={1} />,
   interact: async (frame) => {
-    questionStep(frame, 0)?.click()
-    await new Promise(requestAnimationFrame)
     frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
     await new Promise(requestAnimationFrame)
-    questionStep(frame, 2)?.click()
-    await new Promise(requestAnimationFrame)
+    // The arrow cancels the pick's auto-advance, so two presses reach the last step.
+    await nextQuestion(frame)
+    await nextQuestion(frame)
   }
 })

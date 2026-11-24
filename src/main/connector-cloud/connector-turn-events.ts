@@ -11,7 +11,7 @@ import type {
   ConversationEvent,
   ConversationSnapshot
 } from '../external-conversations/external-conversation-events'
-import { SIGNED_OUT } from './connector-cloud-request'
+import { SIGNED_OUT, type ConnectorFailure } from './connector-cloud-request'
 import { ConnectorOutbox, type ConnectorOutboxHead, type ConnectorStamp } from './connector-outbox'
 import { ConnectorTurnEndFile } from './connector-turn-outbox-file'
 import { connectorSnapshot, jsonBytes } from './connector-snapshot'
@@ -26,6 +26,7 @@ import type { ConnectorCallObserver } from './connector-transport'
 import {
   ConnectorReplyOutbox,
   isReplyEvent,
+  replyDeliveryIds,
   type ConnectorReplyClient,
   type ConnectorReplyJournal,
   type ConnectorReplyRoute
@@ -124,6 +125,8 @@ export class ConnectorTurnEvents {
   private replyFlush: (() => void) | null = null
   // Whether the current hello's answer listed replies.outbox; undefined before one.
   private repliesOutbox: boolean | undefined
+  // Delivery ids of replies refused as invalid under the current hello, held until the next one.
+  private readonly setAside = new Set<string>()
 
   constructor(
     userDataPath: string,
@@ -155,10 +158,17 @@ export class ConnectorTurnEvents {
         void this.replies.accepted(batch)
       },
       onSplit: (batch) => this.trace.split(batch),
-      onDropped: (item, stamp) => {
+      onDropped: (item, stamp, failure) => {
         this.trace.dropped(item, stamp)
-        // Its row stays unsent until the cloud takes it: a later drain hands it over again.
-        this.replies.forget([item])
+        // A reply refused as invalid can't succeed as sent under this hello: it stays in flight
+        // until the next one (its row stays unsent). Any other refusal (a 413, or a 503 outcome
+        // that doesn't stand yet) goes again later.
+        if (failure?.status === 400) {
+          replyDeliveryIds([item]).forEach((id) => this.setAside.add(id))
+          return
+        }
+        // A sibling of a held reply (one answer split across events) leaves the held ids held.
+        this.replies.forget(replyDeliveryIds([item]).filter((id) => !this.setAside.has(id)))
         this.replies.retryLater()
       }
     })
@@ -276,7 +286,8 @@ export class ConnectorTurnEvents {
       }
       return kept
     })
-    this.replies.forget(released)
+    this.replies.forget([...this.setAside, ...replyDeliveryIds(released)])
+    this.setAside.clear()
   }
 
   /** True until the next snapshot once the caps dropped an event. */
@@ -326,14 +337,15 @@ export class ConnectorTurnEvents {
     this.outbox.accepted(stamp)
   }
 
-  refused(stamp: ConnectorStamp): ConnectorEvent | null {
-    return this.outbox.refused(stamp)
+  refused(stamp: ConnectorStamp, failure?: ConnectorFailure): ConnectorEvent | null {
+    return this.outbox.refused(stamp, failure)
   }
 
   /** Drops everything, file included: no other account can report these turns. */
   clear(): void {
     this.stored.clear()
     this.replies.retire()
+    this.setAside.clear()
     this.outbox.restart([], () => false)
     this.trace.flush()
   }

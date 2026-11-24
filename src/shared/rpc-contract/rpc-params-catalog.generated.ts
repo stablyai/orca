@@ -35,6 +35,11 @@ import { BrowserClientHostRequestResultParams } from '../browser/client-hosting/
 import { BrowserClientPageMetadataParams } from '../browser/client-hosting/browser-client-page-metadata-protocol'
 import { BrowserPageInitializationActionParams } from '../browser/client-hosting/browser-page-initialization-action'
 import {
+  DesktopBrowserBridgeDownloadAbortParams,
+  DesktopBrowserBridgeDownloadWriteParams,
+  DesktopBrowserBridgeFileReadParams
+} from '../browser/client-hosting/desktop-browser-bridge-file-transfer-protocol'
+import {
   DesktopBrowserBridgeAttachParams,
   DesktopBrowserBridgeResultChunkParams,
   DesktopBrowserBridgeResultParams
@@ -43,6 +48,13 @@ import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rp
 import { MobileWebBundleLocaleCatalogParamsSchema } from '../mobile-web-bundle/locale-catalog-contract'
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
+import {
+  WorkerDockAcknowledge,
+  WorkerDockRead,
+  WorkerDockResultRead,
+  WorkerDockStop,
+  WorkerDockSubscribe
+} from '../orchestration/dock/worker-dock'
 import {
   CrewSubscribeParams,
   WorkerApprovalsSubscribeParams,
@@ -241,12 +253,15 @@ import {
   AudioMuted,
   CertificateProceed,
   FindInPage,
+  PageMenuImage,
+  PageMenuWord,
   PageZoom,
+  ReadImage,
   Reload,
   SiteColorScheme
 } from './browser/browser-core-params'
 import { ExtensionList, ExtensionReload } from './browser/browser-extension-params'
-import { MouseClick } from './browser/browser-extras-params'
+import { DropFiles, MouseClick } from './browser/browser-extras-params'
 import {
   GrabAwait,
   GrabCaptureSelection,
@@ -281,10 +296,9 @@ import {
   MouseButton,
   MouseWheel,
   MouseXY,
-  ProfileClearGoogleCookies,
+  ProfileClearCookies,
   ProfileDelete,
   ProfileImportFromBrowser,
-  Screencast,
   Scroll,
   Select,
   SelectorPath,
@@ -308,8 +322,13 @@ import {
   Wait
 } from './browser/browser-params'
 import {
+  FileChooserAnswer,
   PagePromptAnswer,
+  ReadPrintPdf,
+  ReleasePrintPdf,
+  Screencast,
   ScreencastAck,
+  ScreencastReclaimForDesktop,
   ScreencastUnsubscribe
 } from './browser/browser-screencast-params'
 import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser/browser-tab-create-params'
@@ -503,6 +522,7 @@ import {
 } from './google-files-params'
 import {
   GoogleBotAccessSetParams,
+  GoogleBotConnectedParams,
   GoogleClientExportParams,
   GoogleClientImportParams,
   GoogleDefaultSetParams,
@@ -921,6 +941,7 @@ import {
   SleepWorkspaceParams,
   SubscribeTurnCompletionsParams,
   ThreadGoalParams,
+  ToolCallerParams,
   UnsubscribeParams
 } from './structured-agent-session/structured-agent-session-params'
 import { RespondToQuestionParams } from './structured-agent-session/structured-agent-session-question-params'
@@ -939,6 +960,7 @@ import { TerminalDaemonRestartSeveredParams } from './terminal/terminal-daemon-p
 import { TerminalLimitUpdateParams } from './terminal/terminal-limit-params'
 import { TerminalAdoptOrphans } from './terminal/terminal-orphan-params'
 import { TerminalQuickCommandsUpdate } from './terminal/terminal-quick-command-params'
+import { TerminalSplit } from './terminal/terminal-split-params'
 import {
   TerminalAckOutput,
   TerminalMultiplex,
@@ -966,7 +988,6 @@ import {
   TerminalSend,
   TerminalSetPaneTitle,
   TerminalSetViewerColors,
-  TerminalSplit,
   TerminalStopExact,
   TerminalViewClaudeAgent,
   TerminalWait
@@ -1124,6 +1145,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentActivity.setRead': AgentActivitySetReadParams,
   'agentCliUpdate.check': AgentCliUpdateCheckParams,
   'agentCliUpdate.run': AgentCliUpdateRunParams,
+  'agentCliUpdate.subscribe': null,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
   'agentSession.accountUsage': OptionsParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
@@ -1178,6 +1200,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.subscribeStatus': null,
   'agentSession.subscribeTurnCompletions': SubscribeTurnCompletionsParams,
   'agentSession.threadGoal': ThreadGoalParams,
+  'agentSession.toolCaller': ToolCallerParams,
   'agentSession.unsubscribe': UnsubscribeParams,
   'agentSessionAttachment.read': AttachmentReadParams,
   'agentSessionAttachment.readTextChunk': AttachmentTextReadParams,
@@ -1349,6 +1372,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.update': BotUpdate,
   'bots.work.forget': BotWorkForget,
   'bots.work.list': BotWorkList,
+  'browser.addWordToDictionary': PageMenuWord,
   'browser.back': ExpectUrlBrowserTarget,
   'browser.capture.start': BrowserTarget,
   'browser.capture.stop': BrowserTarget,
@@ -1377,10 +1401,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.dialogDismiss': ExpectUrlBrowserTarget,
   'browser.download': SelectorPath,
   'browser.drag': Drag,
+  'browser.dropFiles': DropFiles,
   'browser.eval': Eval,
   'browser.exec': Exec,
   'browser.extensionList': ExtensionList,
   'browser.extensionReload': ExtensionReload,
+  'browser.fileChooserAnswer': FileChooserAnswer,
   'browser.fill': Fill,
   'browser.find': Find,
   'browser.findInPage': FindInPage,
@@ -1416,16 +1442,23 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.openUrl': BrowserOpenUrlParams,
   'browser.pagePromptAnswer': PagePromptAnswer,
   'browser.pdf': BrowserTarget,
+  'browser.profileClearCookies': ProfileClearCookies,
   'browser.profileClearDefaultCookies': null,
-  'browser.profileClearGoogleCookies': ProfileClearGoogleCookies,
+  'browser.profileClearGoogleCookies': ProfileClearCookies,
   'browser.profileCreate': ProfileCreate,
   'browser.profileDelete': ProfileDelete,
   'browser.profileDetectBrowsers': null,
   'browser.profileImportFromBrowser': ProfileImportFromBrowser,
   'browser.profileList': null,
+  'browser.readImage': ReadImage,
+  'browser.readPrintPdf': ReadPrintPdf,
+  'browser.releasePrintPdf': ReleasePrintPdf,
   'browser.reload': Reload,
+  'browser.replaceMisspelling': PageMenuWord,
+  'browser.saveImage': PageMenuImage,
   'browser.screencast': Screencast,
   'browser.screencast.ack': ScreencastAck,
+  'browser.screencast.reclaimForDesktop': ScreencastReclaimForDesktop,
   'browser.screencast.unsubscribe': ScreencastUnsubscribe,
   'browser.screenshot': Screenshot,
   'browser.scroll': Scroll,
@@ -1493,6 +1526,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'connector.slackMirror.status': ConnectorSlackMirrorStatus,
   'desktop.openWindowInBackground': null,
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
+  'desktopBrowserBridge.downloadAbort': DesktopBrowserBridgeDownloadAbortParams,
+  'desktopBrowserBridge.downloadWrite': DesktopBrowserBridgeDownloadWriteParams,
+  'desktopBrowserBridge.fileRead': DesktopBrowserBridgeFileReadParams,
   'desktopBrowserBridge.result': DesktopBrowserBridgeResultParams,
   'desktopBrowserBridge.resultChunk': DesktopBrowserBridgeResultChunkParams,
   'diagnostics.memory': null,
@@ -1687,6 +1723,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'gitlab.updateMRState': UpdateMrState,
   'gitlab.workItemByPath': WorkItemByPath,
   'gitlab.workItemDetails': WorkItemDetailsOfGitlabParams,
+  'google.bot.connected': GoogleBotConnectedParams,
   'google.bot.set': GoogleBotAccessSetParams,
   'google.calendar.calendars': CalendarCalendarsParams,
   'google.calendar.create': CalendarCreateParams,
@@ -1919,6 +1956,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerApprovalsUnsubscribe': WorkerApprovalsUnsubscribeParams,
   'orchestration.workerAutoClose': OrchestrationWorkerSubjectParams,
   'orchestration.workerChatTouch': OrchestrationWorkerSubjectParams,
+  'orchestration.workerDockAcknowledge': WorkerDockAcknowledge,
+  'orchestration.workerDockRead': WorkerDockRead,
+  'orchestration.workerDockResult': WorkerDockResultRead,
+  'orchestration.workerDockStop': WorkerDockStop,
+  'orchestration.workerDockSubscribe': WorkerDockSubscribe,
   'orchestration.workerKeepOpen': OrchestrationWorkerKeepOpenParams,
   'orchestration.workerList': WorkerListParams,
   'orchestration.workerRead': WorkerReadParams,

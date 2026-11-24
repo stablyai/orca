@@ -46,8 +46,11 @@ export type BrowserRouteGuestPopupDependencies = {
     observed: ObservedBrowserGuestGesture | null,
     childOpener?: Electron.WebFrameMain | null
   ) => boolean
-  /** The desktop user's own input in a popup takes its opener's page back from the agent. */
+  /** A person's own input in a popup takes its opener's page back from the agent. */
   releaseAgentLead?: (openerWebContentsId: number) => void
+  isAgentCommandShownHere?: (webContentsId: number) => boolean
+  /** Injected input reaching this popup now is a paired viewer's, not an agent's. */
+  isPersonCommandRunning?: (webContentsId: number) => boolean
   openPopupWindow?: (
     options: PopupChildWindowOptions,
     targetUrl: string,
@@ -81,7 +84,8 @@ export function createBrowserRouteGuestPopupController(input: {
   const popups = new Set<BrowserRouteGuestPopupWindow>()
   const gestures = new Set<BrowserGuestInputGesture>()
   const popupWebContentsIds = new Set<number>()
-  const openerGesture = trackBrowserGuestInputGesture(input.opener)
+  const { isAgentCommandShownHere } = input.dependencies
+  const openerGesture = trackBrowserGuestInputGesture(input.opener, { isAgentCommandShownHere })
   gestures.add(openerGesture)
   // Only disposal is permanent; navigation authority may return after reconnect.
   let disposed = false
@@ -120,8 +124,9 @@ export function createBrowserRouteGuestPopupController(input: {
       return false
     }
     const gesture = trackBrowserGuestInputGesture(contents, {
+      isAgentCommandShownHere,
       onActivatingInput: (byAgent) => {
-        if (byAgent) {
+        if (byAgent && !input.dependencies.isPersonCommandRunning?.(contents.id)) {
           return
         }
         try {

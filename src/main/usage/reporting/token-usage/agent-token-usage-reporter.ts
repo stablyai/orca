@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import type { UsageTelemetryHost } from '../../usage-store-host'
 import { UsageCacheSnapshotWriter } from '../../cache/usage-cache-snapshot-writer'
-import { getLocalUsageDay } from '../range-query/usage-calendar-range'
+import { getLocalUsageDay, shiftDay } from '../range-query/usage-calendar-range'
 import type { AgentTokenDay } from './agent-token-usage'
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/
@@ -54,12 +54,6 @@ const isZero = (c: AgentTokenCounts): boolean =>
 
 function localDay(date: Date): string {
   return getLocalUsageDay(date.toISOString()) ?? date.toISOString().slice(0, 10)
-}
-
-function shiftDay(day: string, days: number): string {
-  const date = new Date(`${day}T00:00:00Z`)
-  date.setUTCDate(date.getUTCDate() + days)
-  return date.toISOString().slice(0, 10)
 }
 
 /** Sends each finished local day's token totals once, then only growth found for it later. */

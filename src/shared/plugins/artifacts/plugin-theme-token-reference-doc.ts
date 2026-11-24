@@ -73,6 +73,8 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--chat-selection': 'Selected text in chat; may be translucent, it paints over the chat',
   '--chat-selection-foreground': 'Text inside a chat selection',
   '--text-link': 'Links in Markdown previews, editors and agent chat',
+  '--theme-accent-foreground':
+    "Label on a fill of `--text-link` (the accent). Derived from the accent when omitted: near-black or white, whichever reads better. If no label reads on the accent, that fill uses Orca's accent instead; links keep the theme's",
   '--editor-selection':
     'Selected text in the code editor; keep it translucent so find matches show through. An unfocused editor shows it at half its opacity',
   '--diff-added': 'Added-line hue: Monaco overview ruler and chat diff text',
