@@ -2,12 +2,9 @@ import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { hostSnapshotAffirmsWorktreeContents } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
-import {
-  throwIfSignalAborted,
-  waitForPromiseWithSignal
-} from '../../../../../shared/concurrency/abort-signal-reason'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { structuredAgentSessionOwnerForTab } from '../../native-chat/session-ownership/structured-agent-session-owner'
+import { createRuntimeRpcAbortError } from '../../rpc/calls/abortable-runtime-environment-call'
 import { callRuntimeRpcResponse } from '../../rpc/calls/runtime-rpc-call'
 import { getRuntimeEnvironmentRegistration } from '../../rpc/environment-revisions/runtime-environment-revision'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
@@ -18,7 +15,6 @@ import { chooseTargetGroupId } from '../placement/tab-group-layout-tree'
 import {
   latestReceivedSessionTabsSnapshotByWorktree,
   latestSessionTabsSnapshotByWorktree,
-  nextReceivedSessionTabsFrame,
   sessionTabsFreshnessKey
 } from '../state'
 import { buildMirroredAgentTabs } from '../tab-projection/terminal-surfaces'
@@ -26,6 +22,7 @@ import { recordDirectlyOpenedChat } from '../tracking/directly-opened-chat-tabs'
 import { getSessionTabsRuntimeIdFromResponse } from '../tracking/publisher-identity-fences'
 import { isWebSessionTabsWorktreeRemovalFrame } from '../tracking/session-tabs-inventory-absence'
 import { canProjectWebSessionTabsRead } from '../tracking/tracking'
+import { waitForChatLinkSessionTabs } from './remote-runtime-session-tabs-inflight'
 
 /** Materialize one listed chat before its subscription frame arrives. */
 export async function readPairedChatTab(args: {
@@ -42,28 +39,38 @@ export async function readPairedChatTab(args: {
   }
   const registration = getRuntimeEnvironmentRegistration(environmentId)
   const connectionGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
-  const receivedFrame = nextReceivedSessionTabsFrame()
-  // Share the ordinary runtime connection; this link owns only its wait for the reply.
-  const response = await waitForPromiseWithSignal(
-    callRuntimeRpcResponse<RuntimeMobileSessionTabsResult>(
-      { kind: 'environment', environmentId },
-      'session.tabs.list',
-      { worktree: toRuntimeWorktreeSelector(worktreeId) },
-      {
-        timeoutMs: args.timeoutMs,
-        beforeSend: () => throwIfSignalAborted(signal),
-        expectedEnvironmentPairingRevision: registration?.revision
+  const isSameConnection = (): boolean =>
+    getRuntimeEnvironmentRegistration(environmentId) === registration &&
+    getRuntimeEnvironmentConnectionGeneration(environmentId) === connectionGeneration
+  const { snapshot, receivedFrame, runtimeId } = await waitForChatLinkSessionTabs({
+    environmentId,
+    worktreeId,
+    scope: { registration, connectionGeneration, timeoutMs: args.timeoutMs },
+    signal,
+    load: async (hasWaiters) => {
+      const beforeSend = (): void => {
+        if (!isSameConnection() || !hasWaiters()) {
+          throw createRuntimeRpcAbortError()
+        }
       }
-    ),
-    signal
-  )
-  const snapshot = response.result
-  const runtimeId = getSessionTabsRuntimeIdFromResponse(response)
+      beforeSend()
+      const response = await callRuntimeRpcResponse<RuntimeMobileSessionTabsResult>(
+        { kind: 'environment', environmentId },
+        'session.tabs.list',
+        { worktree: toRuntimeWorktreeSelector(worktreeId) },
+        {
+          timeoutMs: args.timeoutMs,
+          beforeSend,
+          expectedEnvironmentPairingRevision: registration?.revision
+        }
+      )
+      return { snapshot: response.result, runtimeId: getSessionTabsRuntimeIdFromResponse(response) }
+    }
+  })
   if (
     signal.aborted ||
     !current() ||
-    getRuntimeEnvironmentRegistration(environmentId) !== registration ||
-    getRuntimeEnvironmentConnectionGeneration(environmentId) !== connectionGeneration ||
+    !isSameConnection() ||
     snapshot?.worktree !== worktreeId ||
     isWebSessionTabsWorktreeRemovalFrame(snapshot) ||
     !hostSnapshotAffirmsWorktreeContents(snapshot) ||
