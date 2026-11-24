@@ -316,7 +316,7 @@
       "title": "Worktree kartları",
       "exampleChildren": "1 alt worktree",
       "statusCaption": "Başlık, ilginizi bekleyen ajanları belirtir",
-      "childrenCaption": "Üst çalışma ağaçları, alt çalışma ağaçlarının durumunu özetler",
+      "childrenCaption": "Üst worktree'ler, alt worktree'lerin durumunu özetler",
       "unreadCaption": "<label>Mavi nokta:</label> okunmadı",
       "dismiss": "Kapat"
     }
@@ -1074,7 +1074,7 @@
         "edit": "Düzenle",
         "copy": "Parolayı kopyala",
         "delete": "Sil…",
-        "neverHeading": "{{count}} site için parola kaydetme",
+        "neverHeading": "Parolası hiç kaydedilmeyen {{count}} site",
         "removeNever": "Kaldır",
         "importFailed": "Parolalar içe aktarılamadı",
         "importDuplicates": "{{count}} parola zaten kayıtlı",
@@ -1467,7 +1467,7 @@
       "agentStatusOff": "Ajan durumu kapalı. Ayarlar → Ajanlar bölümünden açmadığınız sürece Orca kancaları yeniden eklemez.",
       "loadFailed": "Orca kendi kurduğu bileşenleri denetleyemedi.",
       "tryAgain": "Yeniden deneyin",
-      "keeps": "Projeler, çalışma ağaçları ve Orca ayarları korunur.",
+      "keeps": "Projeler, worktree'ler ve Orca ayarları korunur.",
       "keepsShared": "{{name}} da kurulu olduğu için paylaştığı kancalar korunur.",
       "closesTerminals": "Açık terminaller kapanacak.",
       "removing": "Kaldırılıyor…",
@@ -1983,7 +1983,7 @@
       "saveFailed": "Otomatik güncelleme ayarı kaydedilemedi."
     },
     "accounts": {
-      "codexRemoveHome": "Orca, bu hesaba ait Codex klasörünü {{host}} üzerinden siler. Kayıtlı oturum açma bilgileri, MCP oturumları ve yalnızca bu klasörde saklanan Codex geçmişi de silinir. Bu işlem geri alınamaz. Bu hesap seçiliyse bir sonraki Codex oturumu sistem varsayılanıyla açılır.",
+      "codexRemoveHome": "Orca, bu hesaba ait Codex klasörünü {{host}} üzerinden siler. Kayıtlı oturum açma bilgileri ve MCP oturumları da silinir. Bu işlem geri alınamaz. Bu hesap seçiliyse bir sonraki Codex oturumu sistem varsayılanıyla açılır.",
       "claudeRemoveProfile": "Orca, bu hesaba ait Claude klasörünü ve klasörde saklanan oturum açma bilgilerini {{host}} üzerinden siler. Sistem varsayılanı oturumu ve onunla paylaşılan sohbet geçmişi korunur. Bu hesap seçiliyse bir sonraki Claude oturumu sistem varsayılanıyla açılır."
     },
     "openInApp": {
@@ -14130,8 +14130,8 @@
           "windowsBuildUnsupported": "Bu sunucuda Windows 10 ve Windows Server 2016'dan eski bir Windows sürümü çalışıyor; bu nedenle Orca sunucusu çalıştırılamaz. Daha yeni bir Windows sürümü olan bir sunucu ya da Linux veya macOS sunucusu kullanın.",
           "windowsNoExtractor": "Bu Windows sunucusunda ne tar.exe ne de PowerShell'in Expand-Archive komutu var; bu yüzden Orca sunucusunun paketi burada açılamıyor. Sunucuya Windows PowerShell 5.1 yükleyin, ardından yeniden bağlanın.",
           "setupFreeHostSpace": "Bu cihazda Orca sunucusu başlatılırken sunucu verilerini yedeklemek için yeterli boş alan yok. Cihazda yer açıp yeniden bağlanın.",
-          "setupStopUnmanagedRuntime": "Bu uygulamanın başlatmadığı bir Orca sunucusu hâlâ bu cihazın Orca verilerini kullanıyor görünüyor. Sunucuyu cihazda durdurup yeniden bağlanın. İşlemin adı Ayarlar > SSH Cihazları bölümünde, cihazın Ayrıntılar ekranında görünür.",
-          "setupSeeDetails": "Orca bu cihazdaki sunucusunu başlatamadı. Nedeni Ayarlar > SSH Cihazları bölümünde, cihazın Ayrıntılar ekranında görebilirsiniz.",
+          "setupStopUnmanagedRuntime": "Bu uygulamanın başlatmadığı bir Orca sunucusu hâlâ bu sunucunun Orca verilerini kullanıyor görünüyor. Onu sunucuda durdurup yeniden bağlanın. İşlemin adı Ayarlar > SSH Sunucuları bölümünde, bu sunucunun Ayrıntılar ekranında görünür.",
+          "setupSeeDetails": "Orca bu sunucuda kendi sunucusunu başlatamadı. Nedenini Ayarlar > SSH Sunucuları bölümünde, bu sunucunun Ayrıntılar ekranında görebilirsiniz.",
           "linkedProjects": "Bu ana makinenin Orca sunucusunda {{paths}} zaten bulunduğu için bu masaüstü artık sunucudaki kopyayı kullanıyor. Bu masaüstünün oradaki sekmeleri ve {{count}} otomasyonu taşınmadı; orada oluşturduğu worktree'ler ise harici worktree olarak görünüyor.",
           "olderTerminals": "Orca'nın eski bir sürümünün başlattığı {{count}} terminal bu ana makinede hâlâ çalışıyor ve kendiliğinden durmuyor. İlgili Orca sürümünde kapatın veya ana makinede sonlandırın, ardından yeniden bağlanın."
         },
@@ -16943,10 +16943,10 @@
                 "hint": {
                   "42997fb707": "Bir ad oluşturmak veya bir kaynak bulmak için yazmaya başlayın.",
                   "b2bc38e7d7": "GitHub’daki çekme isteklerini ve iş kayıtlarını aramak için yazmaya başlayın.",
-                  "b1418294ea": "GitLab’daki birleştirme isteklerini ve iş kayıtlarını aramak için yazmaya başlayın.",
+                  "b1418294ea": "GitLab merge request'lerini ve sorunlarını aramak için yazmaya başlayın.",
                   "80e7791c93": "Eşleşen branch yok.",
                   "b4e65d98a6": "Linear’daki iş kayıtlarını aramak için yazmaya başlayın.",
-                  "5ba5d3e516": "Jira’da iş kaydı aramak için yazmaya başlayın veya iş kaydının bağlantısını yapıştırın."
+                  "5ba5d3e516": "Jira sorunlarını aramak için yazmaya başlayın veya bir sorun URL'si yapıştırın."
                 }
               }
             }
@@ -18608,14 +18608,14 @@
           "browser": "{{value0}} yalnızca yalıtılmış bir çerçevede çalışır. Tarayıcı istemcileri böyle bir çerçeve sağlayamaz.",
           "isolationOff": "{{value0}} yalnızca yalıtılmış bir çerçevede çalışır ancak yalıtılmış eklenti çerçeveleri kapalı.",
           "heading": "Bu düzenleyici için Orca masaüstü uygulaması gerekiyor",
-          "openSource": "Açık Kaynak"
+          "openSource": "Kaynağı Aç"
         },
         "MarkdownDefaultViewContextMenu": {
           "label": "Varsayılan Markdown görünümü"
         },
         "fileLoadError": {
           "fileNotFound": "ENOENT: {{path}} açılamadı; böyle bir dosya veya dizin yok",
-          "pathAccessDenied": "Erişim reddedildi: Yol, izin verilen dizinlerin dışında bir konuma çıkıyor. Bu kısıtlama normal çalışmanızı engelliyorsa lütfen GitHub’da bir iş kaydı açın.",
+          "pathAccessDenied": "Erişim reddedildi: Yol, izin verilen dizinlerin dışında bir konuma çıkıyor. Bu kısıtlama normal çalışmanızı engelliyorsa lütfen GitHub'da bir sorun açın.",
           "changedDuringRead": "Dosya yüklenirken diskteki içeriği değişti. Son sürümü görmek için dosyayı yeniden yükleyin.",
           "remotePathIsDirectory": "Uzak konum bir dosya değil, bir dizin",
           "remotePagedReadUnsupported": "Uzak dosya, bu Orca sunucusunun gönderebildiği 512 KB sınırını aşıyor. Dosyayı açmak için sunucuyu güncelleyin.",
@@ -23490,7 +23490,7 @@
         "usageLimitContinueUpdateFailed": "{{host}} üzerindeki ayar güncellenemedi.",
         "openedPullRequestsSearchPr": "PR",
         "ciResultLinesTitle": "CI sonuç satırları",
-        "ciResultLinesCopy": "Ajanın açtığı veya commit gönderdiği bir çekme isteğinde CI tamamlandığında sohbette bir sonuç satırı gösterilir.",
+        "ciResultLinesCopy": "Ajanın açtığı veya push ettiği bir pull request'te CI tamamlandığında sohbette bir sonuç satırı gösterilir.",
         "ciResultLinesSearchChecks": "kontroller",
         "ciResultLinesSearchPr": "PR"
       },
@@ -23723,7 +23723,7 @@
         "folderDescription": "Çalışma alanı oluşturulurken veya kaldırılırken bu klasörde çalışan betikler. Tüm çalışma alanları aynı klasörü kullanır. Yerel betikler bu bilgisayarda saklanır; `orca.yaml` içindeki betikler ekibinizle paylaşılır.",
         "folderSetupDescription": "Yeni bir çalışma alanı oluşturulduktan sonra çalışan yerel ve paylaşılan betikler.",
         "folderArchiveDescription": "Çalışma alanı kaldırılmadan önce çalışan yerel ve paylaşılan betikler.",
-        "folderSetupFieldDescription": "Yeni çalışma alanı oluşturulduktan sonra çalışır. Alt çalışma ağaçları oluşturmak, bağımlılıkları kurmak veya ortam dosyalarını kopyalamak için kullanabilirsiniz.",
+        "folderSetupFieldDescription": "Yeni çalışma alanı oluşturulduktan sonra çalışır. Alt worktree'ler oluşturmak, bağımlılıkları kurmak veya ortam dosyalarını kopyalamak için kullanabilirsiniz.",
         "folderArchiveFieldDescription": "Çalışma alanı kaldırılmadan önce çalışır."
       },
       "workspaceCleanup": {
@@ -23748,7 +23748,7 @@
           "hideMatches": "Gizle",
           "showMatches": "Göster",
           "merged": "Birleştirilmiş çalışma alanlarını sil",
-          "mergedDescription": "Çekme isteği birleştirilmiş ve çalışma alanındaki tüm değişiklikler bu isteğe dâhil edilmiş.",
+          "mergedDescription": "Pull request merge edilmiş ve çalışma alanındaki tüm değişiklikleri içeriyor.",
           "unchanged": "Değişiklik yapılmamış çalışma alanlarını sil",
           "unchangedDescription": "Varsayılan branch'e göre ek commit veya dosya değişikliği yok.",
           "inactiveCleanUp": "Etkin olmayan çalışma alanlarını temizle",
@@ -26104,7 +26104,7 @@
       "noTransition": "{{key}} için {{column}} durumuna geçiş kullanılamıyor.",
       "queryTooLong": "Jira sorgusu çok uzun. Sorguyu kısaltın veya filtreleri temizleyin.",
       "reorderColumn": "{{column}} sütununu yeniden sırala",
-      "reorderColumnHint": "Bu sütundaki iş kaydı sayısı: {{count}}. Sütunu taşımak için sol ve sağ ok tuşlarını kullanın."
+      "reorderColumnHint": "Bu sütundaki sorun sayısı: {{count}}. Sütunu taşımak için sol ve sağ ok tuşlarını kullanın."
     },
     "favourites": {
       "loadFailed": "Jira favorileri yüklenemedi.",
@@ -26256,7 +26256,7 @@
       "orca": "Orca",
       "agents": "Ajanlar",
       "otherTerminals": "Diğer terminaller",
-      "privateBytes": "Orca ve terminaller için ayrılmış bellek"
+      "privateBytes": "Orca, ajanlar ve terminaller için ayrılmış bellek"
     },
     "chatRow": {
       "tooltip": "Altında çalışan işlemler dahil {{agent}} sohbeti"
@@ -26788,7 +26788,7 @@
     "pasteImageFile": "GitHub’a eklemek için görseli dosya olarak yapıştırın.",
     "imageUploadFailed": "Görsel eklenemedi: {{message}}",
     "imageUploadError": "GitHub bu görseli yükleyemedi.",
-    "waitForImageUploads": "Görsellerin yüklenmesini bekleyin, ardından çekme isteğini oluşturmayı yeniden deneyin."
+    "waitForImageUploads": "Görsellerin yüklenmesini bekleyin, ardından pull request oluşturmayı yeniden deneyin."
   },
   "wslMove": {
     "entry": {
@@ -26928,7 +26928,7 @@
       "mixedLocations": "Klasörlerinden bazıları bu dağıtımın dışında olduğu için bu bilgisayarda kalır.",
       "notLocal": "Zaten başka bir ana makinede çalışıyor.",
       "other": "Taşınamaz.",
-      "windowsGitWorktrees": "Bazı çalışma ağaçlarının kayıtlarını Git for Windows oluşturmuş; sonradan silinenlerin kayıtları da buna dâhil. WSL ana bilgisayarındaki Git bu kayıtları kullanamaz. Bu çalışma ağaçlarını kaldırın veya WSL içinden git worktree repair komutunu çalıştırın. Ardından projeyi taşıyın.",
+      "windowsGitWorktrees": "Bazı worktree'lerin kayıtlarını Git for Windows oluşturmuş; sonradan silinenlerin kayıtları da buna dâhil. WSL ana bilgisayarındaki Git bu kayıtları kullanamaz. Bu worktree'leri kaldırın veya WSL içinden git worktree repair komutunu çalıştırın. Ardından projeyi taşıyın.",
       "windowsGitDir": "Git klasörü bir Windows yoluyla bağlanmış. Bu, Git for Windows’un oluşturduğu bir worktree veya ayrı bir Git klasörü olabilir. WSL ana bilgisayarındaki Git bu yolu çözümleyemiyor.",
       "gitUnreadable": "Orca, Git bilgilerini denetlemek için zamanında okuyamadı. Proje bu bilgisayarda kaldı. Biraz sonra yeniden kontrol edin.",
       "mappedDriveUnverifiable": "Orca sürücü harfinin hangi konuma karşılık geldiğini denetleyemedi. Sürücünün bağlı olduğundan emin olup yeniden kontrol edin."
@@ -27059,10 +27059,10 @@
       "search": "Botlarda ve projelerde ara…",
       "searchEmpty": "Aramanızla eşleşen bot veya proje yok.",
       "resultsToLinear": "Bir Linear kaydı",
-      "resultsToLinearNeedsLinear": "Bir Linear iş kaydı (önce Linear’ı bağlayın)",
+      "resultsToLinearNeedsLinear": "Bir Linear sorunu (önce Linear’ı bağlayın)",
       "linearIssuePlaceholder": "İş kaydı anahtarı (ör. ENG-123) veya Linear bağlantısı",
       "linearIssueLabel": "Linear kaydı",
-      "linearIssueInvalid": "Sonuçların gönderileceği Linear iş kaydının anahtarını girin (ör. ENG-123).",
+      "linearIssueInvalid": "Sonuçların gönderileceği Linear sorununun anahtarını girin (ör. ENG-123).",
       "never": "Hiçbir zaman",
       "noSchedule": "Yalnızca olay olduğunda",
       "onEvents": "Bir olay gerçekleştiğinde…",
@@ -27096,8 +27096,8 @@
         "githubRepo_other": "{{count}} repository",
         "linearTeam_one": "bir Linear ekibi",
         "linearTeam_other": "{{count}} Linear ekibi",
-        "githubSubject": "bir iş kaydı veya çekme isteği",
-        "linearSubject": "bir Linear iş kaydı",
+        "githubSubject": "bir sorun veya pull request",
+        "linearSubject": "bir Linear sorunu",
         "people_one": "{{count}} kişi",
         "people_other": "{{count}} kişi",
         "slackChannel": "{{count}} Slack kanalı",
@@ -27682,7 +27682,7 @@
         },
         "events": {
           "pr-merged": {
-            "trigger": "Bir çekme isteği birleştirildiğinde",
+            "trigger": "Bir pull request merge edildiğinde",
             "action": "Kontrol et"
           }
         }
@@ -27812,7 +27812,7 @@
         "example2": "#2214 için sürüm ve yeniden üretme adımları belirtilmemiş. Bu bilgiler istensin mi?",
         "events": {
           "issue-opened": {
-            "trigger": "Bir iş kaydı açıldığında",
+            "trigger": "Bir sorun açıldığında",
             "action": "Etiket öner ve olası yinelenen kayıtları göster"
           }
         }
@@ -28438,13 +28438,13 @@
         "issue": "Sorun #{{number}}",
         "notRead": "Henüz okunmadı",
         "pr": "PR #{{number}}",
-        "serverPr": "Sunucuda yürütülen işler için çekme isteği henüz gösterilmiyor",
+        "serverPr": "Sunucuda yürütülen işler için PR henüz gösterilmiyor",
         "automation": "Otomasyon",
         "automationOn": "Bu öğe için ajanı uyandıracak",
         "automationEnded": "Sona erdi"
       },
       "menu": {
-        "cancel": "İptal et…",
+        "cancel": "İptal et",
         "done": "Tamam",
         "waiting": "Bekleniyor…"
       },
@@ -28683,31 +28683,31 @@
         "slackMentioned": "Slack’te sizden bahsedildiğinde",
         "slackMessage": "Bir Slack mesajı geldiğinde",
         "slackReaction": "Slack’te tepki eklendiğinde",
-        "githubIssueOpened": "Bir iş kaydı açıldığında",
-        "githubPrOpened": "Bir çekme isteği açıldığında",
-        "githubPrPushed": "Bir çekme isteğine commit gönderildiğinde",
-        "githubPrMerged": "Bir çekme isteği birleştirildiğinde",
+        "githubIssueOpened": "Bir sorun açıldığında",
+        "githubPrOpened": "Bir pull request açıldığında",
+        "githubPrPushed": "Bir pull request'e push yapıldığında",
+        "githubPrMerged": "Bir pull request merge edildiğinde",
         "githubComment": "GitHub’da yorum yapıldığında",
         "githubReviewComment": "İnceleme yorumu yapıldığında",
-        "githubReview": "Bir çekme isteği incelendiğinde",
+        "githubReview": "Bir pull request incelendiğinde",
         "githubMentioned": "GitHub’da sizden bahsedildiğinde",
         "githubReviewRequested": "İnceleme istendiğinde",
         "githubAssigned": "GitHub’da size görev atandığında",
         "githubCiFailed": "CI başarısız olduğunda",
         "githubCiFinished": "CI tamamlandığında",
         "githubCiPassed": "CI başarılı olduğunda",
-        "githubPrConflicted": "Bir çekme isteğinde çakışma olduğunda",
-        "githubPrClosed": "Bir çekme isteği kapatıldığında",
-        "githubPrReady": "Bir çekme isteği incelemeye hazır olduğunda",
+        "githubPrConflicted": "Bir pull request'te çakışma olduğunda",
+        "githubPrClosed": "Bir pull request kapatıldığında",
+        "githubPrReady": "Bir pull request incelemeye hazır olduğunda",
         "githubLabeled": "Etiket eklendiğinde",
-        "githubIssueClosed": "Bir iş kaydı kapatıldığında",
+        "githubIssueClosed": "Bir sorun kapatıldığında",
         "githubDeployFinished": "Dağıtım tamamlandığında",
         "githubSecurityAlert": "Güvenlik uyarısı geldiğinde",
         "githubWorkflowFinished": "İş akışının çalışması sona erdiğinde",
         "linearAssigned": "Linear’da size görev atandığında",
         "linearMentioned": "Linear’da sizden bahsedildiğinde",
-        "linearIssueCreated": "Linear’da iş kaydı oluşturulduğunda",
-        "linearIssueMoved": "Linear’da bir iş kaydı taşındığında",
+        "linearIssueCreated": "Bir Linear sorunu oluşturulduğunda",
+        "linearIssueMoved": "Bir Linear sorunu taşındığında",
         "webhookCall": "Botun webhook’u çağrıldığında",
         "gmailNewEmail": "Yeni bir e-posta geldiğinde",
         "calendarStartingSoon": "Toplantı başlamadan önce"
@@ -29616,7 +29616,7 @@
       "updateServer": "Google’ı bağlamak için bu sunucuyu güncelleyin.",
       "retry": "Yeniden deneyin",
       "onFor": "Şu botlar için açık: {{bots}}.",
-      "turnOnForBot": "Bir bota Google erişimi vermek için botun Bağlantılar bölümünü kullanın.",
+      "turnOnForBot": "Bir bota Google erişimi vermek için botun Bağlayıcılar bölümünü kullanın.",
       "add": {
         "title": "Google hizmeti ekle",
         "allOn": "Botlarınız zaten tüm hizmetleri kullanabiliyor.",
@@ -29673,9 +29673,9 @@
         "description": "{{bot}} botunun Gmail, Takvim ve Drive hesaplarınıza nasıl giriş yapacağını seçin.",
         "orca": "Orca’da barındırılıyor",
         "soon": "Yakında",
-        "orcaNote": "Google ile oturum açın. Kurulum gerekmez.",
+        "orcaNote": "Google ile oturum açın.",
         "self": "Kendi sunucunuzda",
-        "selfNote": "Kendi Google Cloud uygulamanızı oluşturursunuz; böylece oturum bilgileriniz bilgisayarınızda kalır. Orca sunucularından hiçbir veri geçmez.",
+        "selfNote": "Kendi Google uygulamanız.",
         "continue": "Devam et"
       },
       "connectDescription": "Botlarınıza Gmail, Takvim ve Drive erişimi verin. Oturum bilgileriniz {{host}} üzerinde kalır.",
@@ -29692,34 +29692,34 @@
       "notes": {
         "project": {
           "account": "Sağ üst köşedeki hesabın kullanmak istediğiniz hesap olduğunu doğrulayın.",
-          "create": "<b>Oluştur</b> düğmesine tıklayın. Adı önemli değil."
+          "create": "<b>Create</b> düğmesine tıklayın. Adı önemli değil."
         },
         "apis": {
           "project": "Üstte seçili projenin az önce oluşturduğunuz proje olduğunu doğrulayın.",
-          "enable": "Önce <b>İleri</b>, ardından <b>Etkinleştir</b> düğmesine tıklayın."
+          "enable": "Önce <b>Next</b>, ardından <b>Enable</b> düğmesine tıklayın."
         },
         "branding": {
-          "start": "<b>Başlayın</b> düğmesine tıklayın.",
+          "start": "<b>Get started</b> düğmesine tıklayın.",
           "name": "Uygulama adı olarak <b>Orca</b>, destek e-postası olarak kendi e-posta adresinizi girin.",
-          "external": "Hedef kitle: <b>Harici</b>.",
-          "internal": "Hedef kitle: <b>Dahili</b>.",
+          "external": "Audience: <b>External</b>.",
+          "internal": "Audience: <b>Internal</b>.",
           "contact": "İletişim e-postası olarak kendi e-posta adresinizi girin.",
-          "agree": "<b>Google API Hizmetleri: Kullanıcı Verileri Politikası’nı kabul ediyorum</b> kutusunu işaretleyin, ardından <b>Oluştur</b> düğmesine tıklayın.",
-          "either": "Hedef kitle olarak Gmail hesabı için <b>Harici</b>, iş hesabı için <b>Dahili</b> seçin."
+          "agree": "<b>I agree to the Google API Services: User Data Policy</b> kutusunu işaretleyin, ardından <b>Create</b> düğmesine tıklayın.",
+          "either": "Audience olarak Gmail hesabı için <b>External</b>, iş hesabı için <b>Internal</b> seçin."
         },
         "links": {
-          "domain": "<b>Uygulama alanı</b> bölümüne ana sayfa ve gizlilik politikası bağlantılarını yapıştırın.",
-          "authorized": "<b>Yetkili alanlar</b> bölümüne alan adını ekleyin.",
-          "save": "<b>Kaydet</b> düğmesine tıklayın."
+          "domain": "<b>App domain</b> bölümüne ana sayfa ve gizlilik politikası bağlantılarını yapıştırın.",
+          "authorized": "<b>Authorized domains</b> bölümüne alan adını ekleyin.",
+          "save": "<b>Save</b> düğmesine tıklayın."
         },
         "publish": {
-          "publish": "Önce <b>Uygulamayı yayımla</b>, ardından <b>Onayla</b> düğmesine tıklayın.",
+          "publish": "Önce <b>Publish app</b>, ardından <b>Confirm</b> düğmesine tıklayın.",
           "why": "Uygulama yayımlandığında oturumunuz 7 günden sonra da açık kalır."
         },
         "client": {
-          "type": "Uygulama türü olarak <b>Masaüstü uygulaması</b> seçin, ardından <b>Oluştur</b> düğmesine tıklayın.",
-          "agent": "<b>Bu istemciyi yapay zekâ destekli bir ajan için kullan</b> seçeneği görünüyorsa işaretleyin.",
-          "download": "<b>JSON’u indir</b> düğmesine tıklayın. Orca anahtarı kaydeder."
+          "type": "Application type olarak <b>Desktop app</b> seçin, ardından <b>Create</b> düğmesine tıklayın.",
+          "agent": "<b>Use this client for an AI-powered agent</b> seçeneği görünüyorsa işaretleyin.",
+          "download": "<b>Download JSON</b> düğmesine tıklayın. Orca anahtarı kaydeder."
         }
       },
       "pasteHint": "“İzin ver”e tıkladıktan sonra sayfa yüklenmeyecek. Sayfanın adresini buraya yapıştırın.",
@@ -29920,8 +29920,8 @@
         "offlineNext": "{{host}} üzerinde Orca'nın çalıştığını kontrol edip yeniden bağlanın. {{host}} yeniden bağlandığında Slack kurulumu devam eder.",
         "otherUser": "Bağlantıyı başka bir Slack hesabı onayladı.",
         "otherUserNext": "Slack bağlantısını başka bir hesap onayladığı için {{bot}} sizin adınıza işlem yapamıyor. Yeni bir bağlantı alın ve kendi Slack hesabınızda oturum açtıktan sonra onaylayın.",
-        "expired": "Bağlantı onaylanmadan önce Slack bağlantısının süresi doldu.",
-        "expiredNext": "Yeni bir bağlantı alın ve bağlantıyı Slack'te onaylayın.",
+        "expired": "Slack oturum açma işlemi tamamlanmadı.",
+        "expiredNext": "Slack bağlantısının süresi, bağlantı onaylanmadan doldu.",
         "tokenRejected": "Slack bu çalışma alanının belirtecini reddetti.",
         "tokenRejectedNext": "Slack uygulaması kaldırılmış veya belirteç iptal edilmiş olabilir. {{bot}} kurulumunu yinelemek için belirteci değiştirin.",
         "reconnect": "Yeniden bağlan",
@@ -29948,7 +29948,7 @@
       "owner": "Sahip",
       "needsSlack": "Çalışma alanınızdan kişi seçebilmek için önce {{name}} botunu Slack’e ekleyin.",
       "outsiders": "{{workspace}} çalışma alanındaki diğer kişilere, size başvurmalarını isteyen özel bir mesaj gönderilir.",
-      "removePerson": "{{name}} klasörünü kaldır",
+      "removePerson": "{{name}} adlı kişiyi kaldır",
       "showMore": "{{count}} tane daha göster",
       "selectedHeading": "Seçili",
       "canAsk": "Soru sorabilir",
@@ -30078,7 +30078,7 @@
     "linear": {
       "connection": {
         "unlinked": "{{workspace}} çalışma alanındaki Linear hesabınızı bağlamak için kurulumu tamamlayın.",
-        "removeNote": "{{workspace}} çalışma alanındaki kişiler artık bota iş kaydı atayamaz. Botun Linear kullanıcı listesi temizlenir. Orca bu çalışma alanında kurulu kalır.",
+        "removeNote": "{{workspace}} çalışma alanındaki kişiler artık bota sorun atayamaz. Botun Linear kullanıcı listesi temizlenir. Orca bu çalışma alanında kurulu kalır.",
         "removeConfirm": "Kaldır",
         "finishSetup": "Kurulumu tamamla"
       },
@@ -30096,7 +30096,7 @@
         "titleOn": "Linear’da {{name}}",
         "isOn": "{{name}} Linear’a bağlı",
         "connectTitle": "Linear'ı bağla",
-        "tryIt": "Herhangi bir Linear iş kaydında deneyin",
+        "tryIt": "Herhangi bir Linear sorununda deneyin",
         "orLabel": "veya etiketi ekleyin",
         "actsOnHost": "Orca, {{host}} üzerinden bu Linear kullanıcısı adına işlem yapar.",
         "actsAsYou": "Orca bu bilgisayardan Linear’da sizin adınıza işlem yapar."
@@ -30114,14 +30114,14 @@
         "description": "Linear’ın hangi isteklerin size ait olduğunu belirlemek için kullandığı, her çalışma alanındaki Linear hesabınız.",
         "linkedAs": "{{name}} olarak bağlandı",
         "unlink": "Bağlantıyı kaldır",
-        "linkHelp": "Linear hesabınızı bağlamak veya başka bir Orca hesabından buraya taşımak için bir botun Bağlantılar bölümünden Linear’ı bağlayın.",
+        "linkHelp": "Linear hesabınızı bağlamak veya başka bir Orca hesabından buraya taşımak için bir botun Bağlayıcılar bölümünden Linear’ı bağlayın.",
         "descriptionOnHost": "{{host}} üzerindeki botların sahibi olan ve adına işlem yaptıkları Linear kullanıcısı. Oturum bilgileri {{host}} üzerinde kalır.",
         "reconnect": "Yeniden bağlan",
         "linkFromApp": "Linear hesabınızı {{host}} ile eşleştirilmiş bir bilgisayarda Orca üzerinden bağlayın."
       },
       "errors": {
         "off": "Linear desteği yakında geliyor.",
-        "notLinked": "Hesabınızı bağlamak için bir botun Bağlantılar bölümünden Linear’ı seçin.",
+        "notLinked": "Hesabınızı bağlamak için bir botun Bağlayıcılar bölümünden Linear’ı bağlayın.",
         "alreadyLinked": "Bu Orca hesabı, o çalışma alanında başka bir Linear kullanıcısına bağlı. Önce Ayarlar › Botlar › Linear bölümünden mevcut bağlantıyı kaldırın.",
         "notAMember": "Linear çalışma alanından kişi seçebilmek için o alanın tam üyesi olmanız gerekir.",
         "rateLimited": "Çok fazla deneme yapıldı. Bir dakika bekleyip yeniden deneyin.",
@@ -30131,7 +30131,7 @@
         "wrongAccount": "Oturum açma işlemi başka bir Orca hesabından başlatılmış. Linear’ı bu hesaptan yeniden bağlayın.",
         "replaced": "Linear bağlantısı tamamlanmadı. Sonradan başlatılan bir Linear veya GitHub bağlantısı bu işlemin yerini almış olabilir. Baştan başlayın."
       },
-      "howToAsk": "Bir iş kaydında <code>@Orca {{handle}}</code> yazarak bottan bahsedin veya <code>bot:{{handle}}</code> etiketini ekleyin.",
+      "howToAsk": "Bir sorunda <code>@Orca {{handle}}</code> yazarak bottan bahsedin veya <code>bot:{{handle}}</code> etiketini ekleyin.",
       "connect": {
         "who": "{{workspace}} çalışma alanında {{name}}",
         "button": "Linear'ı bağla",
@@ -30187,9 +30187,9 @@
         "openAgain": "Yeniden aç",
         "added": "GitHub’dan eklenenler: {{names}}.",
         "pushesOnHost": "{{name}}, {{host}} üzerinden kendi Git kimlik bilgilerini kullanarak kod gönderir.",
-        "tryIt": "Herhangi bir iş kaydında veya çekme isteğinde deneyin",
+        "tryIt": "Herhangi bir sorunda veya PR'da deneyin",
         "preview": {
-          "label": "{{name}} botuna soru sormak için bir iş kaydında veya çekme isteğinde {{command}} yazın. Örneğin “{{command}} {{ask}}” yazarsanız {{name}} şu yanıtı verir: “{{reply}}”.",
+          "label": "{{name}} botuna soru sormak için bir sorunda veya pull request'te {{command}} yazın. Örneğin “{{command}} {{ask}}” yazarsanız {{name}} şu yanıtı verir: “{{reply}}”.",
           "commented": "az önce yorum yaptı",
           "ask": "bu PR’ı incele",
           "bot": "bot",
@@ -30216,7 +30216,7 @@
         "description": "Botlarınızın hangi yorumların size ait olduğunu anlamak için kullandığı GitHub hesabınız.",
         "linked": "Bu Orca hesabına bağlı",
         "unlink": "Bağlantıyı kaldır",
-        "unlinked": "Hesabınızı bağlamak için bir botun Bağlantılar bölümünden GitHub’ı ekleyin.",
+        "unlinked": "Hesabınızı bağlamak için bir botun Bağlayıcılar bölümünden GitHub’ı ekleyin.",
         "descriptionOnHost": "{{host}} üzerindeki botların sahibi olan ve adına işlem yaptıkları GitHub kullanıcısı.",
         "descriptionPlural": "Botlarınızın hangi yorumların size ait olduğunu anlamak için kullandığı GitHub hesaplarınız.",
         "descriptionOnHostPlural": "{{host}} üzerindeki botların sahibi olan ve adına işlem yaptıkları GitHub kullanıcıları.",
@@ -30235,7 +30235,7 @@
         "alreadyLinked": "Bu Orca hesabı başka bir GitHub kullanıcısına bağlı. Önce Ayarlar › Botlar › GitHub bölümünden mevcut bağlantıyı kaldırın.",
         "replaced": "GitHub bağlantısı tamamlanmadı. Sonradan başlatılan bir Linear veya GitHub bağlantısı bu işlemin yerini almış olabilir. Baştan başlayın."
       },
-      "howToAsk": "Bir iş kaydında veya çekme isteğinde <code>{{mention}} {{handle}} …</code> yazarak bottan bahsedin.",
+      "howToAsk": "Bir sorunda veya pull request'te <code>{{mention}} {{handle}} …</code> yazarak bottan bahsedin.",
       "allRepositories": "{{account}} hesabındaki tüm repository'ler",
       "connect": {
         "button": "GitHub’a bağlan",
@@ -30531,7 +30531,7 @@
       "putBack": "{{reason}} {{name}} olduğu yerde kaldı.",
       "movedSince": "{{reason}} {{name}} taşıdığınız yerde kalır.",
       "leftMoved": "{{reason}} {{name}} artık {{bot}} altında; menüsünden geri taşıyabilirsiniz.",
-      "newBotOrigin": "{{name}} şablonundan. Oluşturduğunuzda çalışma alanını devralır.",
+      "newBotOrigin": "{{name}} çalışma alanından. Oluşturduğunuzda çalışma alanını devralır.",
       "title": "{{name}} öğesini bir bota devret",
       "noAgents": "Çalışan ajanı yok.",
       "oneAgent": "Ajanı çalışmaya devam eder ve bot için çalışır.",
@@ -30542,7 +30542,7 @@
       "hasIt": "Artık onda",
       "goal": "Bununla ne yapmalı?",
       "optional": "(isteğe bağlı)",
-      "goalPlaceholder": "ör. cumaya kadar birleştirilmesini sağla",
+      "goalPlaceholder": "ör. cumaya kadar merge edilmesini sağla",
       "moveNote": "Bu çalışma alanı artık {{owner}} botunda. Devretmek, onu ajanlarıyla birlikte {{bot}} botuna taşır.",
       "moveTo": "{{bot}} botuna taşı",
       "handOver": "Devret",
@@ -31002,7 +31002,7 @@
     "moveUp": "Yukarı taşı",
     "moveDown": "Aşağı taşı",
     "hide": "Gizle",
-    "show": "{{name}} adlı çalışanı göster",
+    "show": "{{name}} panelini göster",
     "dragStart": "{{name}} öğesi tutuldu",
     "dragOver": "{{name}}, {{target}} üzerinde",
     "dragEnd": "{{name}} bırakıldı",
@@ -31073,7 +31073,7 @@
     "statusCount_one": "{{count}} CLI güncellemesi",
     "statusCount_other": "{{count}} CLI güncellemesi",
     "statusTooltip": "Ajan CLI'lerinin yeni sürümleri çıktı",
-    "failedButton": "Güncelleme başarısız oldu",
+    "failedButton": "Güncellenemedi",
     "failedChip": "güncellenemedi",
     "failedChipLabel": "Güncellenemedi: hatayı görüntüle",
     "failedChipTooltip": "Güncelleme yapılamadı. Ayrıntılar için tıklayın.",

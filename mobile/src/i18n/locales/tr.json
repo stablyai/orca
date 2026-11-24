@@ -1005,7 +1005,7 @@
         "orphaned": "Bağlı değil",
         "pending": "Kuruluyor",
         "noCalls": "Henüz çağrı yok",
-        "lastCall": "Son çağrı: {{ago}} önce",
+        "lastCall": "Son çağrı: {{ago}}",
         "copied": "Kopyalandı",
         "copyUrl": "URL'yi kopyala",
         "copyFailed": "Kopyalamayı yeniden dene"
@@ -1117,34 +1117,34 @@
         "notes": {
           "project": {
             "account": "Sağ üst köşedeki hesabın kullanmak istediğiniz hesap olduğunu doğrulayın.",
-            "create": "<b>Oluştur</b> düğmesine tıklayın. Adı önemli değil."
+            "create": "<b>Create</b> düğmesine tıklayın. Adı önemli değil."
           },
           "apis": {
             "project": "Üstte seçili projenin az önce oluşturduğunuz proje olduğunu doğrulayın.",
-            "enable": "Önce <b>İleri</b>, ardından <b>Etkinleştir</b> düğmesine tıklayın."
+            "enable": "Önce <b>Next</b>, ardından <b>Enable</b> düğmesine tıklayın."
           },
           "branding": {
-            "start": "<b>Başlayın</b> düğmesine tıklayın.",
+            "start": "<b>Get started</b> düğmesine tıklayın.",
             "name": "Uygulama adı olarak <b>Orca</b>, destek e-postası olarak kendi e-posta adresinizi girin.",
-            "external": "Hedef kitle: <b>Harici</b>.",
-            "internal": "Hedef kitle: <b>Dahili</b>.",
-            "either": "Hedef kitle olarak Gmail hesabı için <b>Harici</b>, iş hesabı için <b>Dahili</b> seçin.",
+            "external": "Audience: <b>External</b>.",
+            "internal": "Audience: <b>Internal</b>.",
+            "either": "Audience olarak Gmail hesabı için <b>External</b>, iş hesabı için <b>Internal</b> seçin.",
             "contact": "İletişim e-postası olarak kendi e-posta adresinizi girin.",
-            "agree": "<b>Google API Hizmetleri: Kullanıcı Verileri Politikası’nı kabul ediyorum</b> kutusunu işaretleyin, ardından <b>Oluştur</b> düğmesine tıklayın."
+            "agree": "<b>I agree to the Google API Services: User Data Policy</b> kutusunu işaretleyin, ardından <b>Create</b> düğmesine tıklayın."
           },
           "links": {
-            "domain": "<b>Uygulama alanı</b> bölümüne ana sayfa ve gizlilik politikası bağlantılarını yapıştırın.",
-            "authorized": "<b>Yetkili alanlar</b> bölümüne alan adını ekleyin.",
-            "save": "<b>Kaydet</b> düğmesine tıklayın."
+            "domain": "<b>App domain</b> bölümüne ana sayfa ve gizlilik politikası bağlantılarını yapıştırın.",
+            "authorized": "<b>Authorized domains</b> bölümüne alan adını ekleyin.",
+            "save": "<b>Save</b> düğmesine tıklayın."
           },
           "publish": {
-            "publish": "Önce <b>Uygulamayı yayımla</b>, ardından <b>Onayla</b> düğmesine tıklayın.",
+            "publish": "Önce <b>Publish app</b>, ardından <b>Confirm</b> düğmesine tıklayın.",
             "why": "Uygulama yayımlandığında oturumunuz 7 günden sonra da açık kalır."
           },
           "client": {
-            "type": "Uygulama türü olarak <b>Masaüstü uygulaması</b> seçin, ardından <b>Oluştur</b> düğmesine tıklayın.",
-            "agent": "<b>Bu istemciyi yapay zekâ destekli bir ajan için kullan</b> seçeneği görünüyorsa işaretleyin.",
-            "download": "<b>JSON’u indir</b> düğmesine tıklayın. Orca anahtarı kaydeder."
+            "type": "Application type olarak <b>Desktop app</b> seçin, ardından <b>Create</b> düğmesine tıklayın.",
+            "agent": "<b>Use this client for an AI-powered agent</b> seçeneği görünüyorsa işaretleyin.",
+            "download": "<b>Download JSON</b> düğmesine tıklayın. Orca anahtarı kaydeder."
           }
         },
         "blocker": {
@@ -1231,7 +1231,7 @@
         "keyPurpose": "Composio proje anahtarınız, botlarınızın Composio’ya bağladığınız uygulamaları kullanmasını sağlar. Anahtar bilgisayarınızda kalır; botlar anahtarı hiçbir zaman göremez.",
         "checking": "Kontrol ediliyor…",
         "replaceKey": "Anahtarı değiştir",
-        "addKey": "Tuş ekle",
+        "addKey": "Anahtar ekle",
         "getKey": "Anahtar alın",
         "dismiss": "Kapat",
         "goneHeading": "Kurulum gerekiyor",
@@ -1510,8 +1510,8 @@
     "diffReviewFooter": {
       "nextFile": "Sonraki dosya",
       "previousFile": "Önceki dosya",
-      "stageNext": "Hazırlama alanına ekle · sonraki dosya",
-      "viewedNext": "Görüntülendi olarak işaretle · sonraki dosya",
+      "stageNext": "Stage · sonraki dosya",
+      "viewedNext": "Görüldü · sonraki dosya",
       "nextFileButton": "Sonraki dosya"
     },
     "diffReviewHeader": {
@@ -1932,7 +1932,7 @@
       "viewedFile": "{{path}} görüntülendi"
     },
     "hostOfflineBanner": {
-      "offline": "{{host}} çevrimdışı",
+      "offline": "{{host}} cihazına ulaşılamıyor",
       "reconnecting": "{{host}} cihazına yeniden bağlanılıyor…",
       "asOf": "{{time}} itibarıyla"
     },
@@ -2764,7 +2764,7 @@
       "reopenConfirmTitle": "Pull request yeniden açılsın mı?",
       "unlinkButton": "Bağlantıyı kaldır",
       "unlinkFailed": "Pull request bağlantısı kaldırılamadı.",
-      "mergeConfirmTitle": "Pull request birleştirilsin mi?",
+      "mergeConfirmTitle": "Pull request merge edilsin mi?",
       "mergeButton": "Birleştir"
     },
     "prActionsState": {
@@ -2893,9 +2893,9 @@
       "createPullRequest": "Pull request oluştur",
       "mergedInto": "{{base}} içine merge edildi",
       "merged": "Birleştirildi",
-      "cantMergeYet": "Henüz birleştirilemiyor:",
-      "willMergeWhenReady": "Hazır olduğunda birleştirilecek",
-      "mergeWhenReady": "Hazır olduğunda birleştir",
+      "cantMergeYet": "Henüz merge edilemiyor:",
+      "willMergeWhenReady": "Hazır olduğunda merge edilecek",
+      "mergeWhenReady": "Hazır olduğunda merge et",
       "viewedOf": "{{total}} dosyadan {{viewed}} tanesi görüntülendi",
       "commentsOnFiles": "{{files}} dosyada {{comments}} yorum",
       "filesChanged_one": "{{count}} dosya değişti",
@@ -2911,7 +2911,7 @@
       "copied": "Kopyalandı",
       "copyLink": "Bağlantıyı kopyala",
       "editTitle": "Başlığı düzenle",
-      "autoMerge": "Otomatik birleştir",
+      "autoMerge": "Otomatik merge",
       "markDraft": "Taslak olarak işaretle",
       "unlink": "Çalışma alanıyla bağlantısını kaldır",
       "close": "Pull request'i kapat"
@@ -2920,7 +2920,7 @@
       "squashDetail": "{{base}} üzerinde tek commit",
       "mergeDetail": "Her commit’i korur",
       "rebaseDetail": "Her commit’i {{base}} üzerine yeniden uygular",
-      "title": "#{{number}} birleştir",
+      "title": "#{{number}} merge et",
       "subtitle": "Hedef branch: {{base}}"
     },
     "editSheet": {
@@ -2929,7 +2929,7 @@
     },
     "createSheet": {
       "base": "Temel",
-      "searchBranches": "Dallarda ara",
+      "searchBranches": "Branch'lerde ara",
       "branchSearchFailed": "Branch araması başarısız oldu.",
       "noBranches": "Eşleşen branch yok",
       "title": "{{reviewLabel}} oluştur",
@@ -4004,7 +4004,7 @@
       "history": "Geçmiş",
       "keyLabel": "{{word}}, {{combo}} tuş birleşimini gönderir",
       "mode": "Mod",
-      "no": "Yok",
+      "no": "Hayır",
       "queue": "Kuyruğa ekle",
       "reject": "Reddet",
       "rewind": "Geri dön",
@@ -4539,7 +4539,7 @@
       "pushCommits_other": "{{count}} commit push et",
       "pullCommits_one": "{{count}} commit pull et",
       "pullCommits_other": "{{count}} commit pull et",
-      "stageAll": "Tümünü hazırlama alanına ekle"
+      "stageAll": "Tümünü stage et"
     },
     "remoteDropdown": {
       "branchAlreadyPublished": "Branch zaten yayımlandı",
@@ -4758,18 +4758,18 @@
       "onOrigin": "origin üzerinde {{count}}"
     },
     "nextStep": {
-      "willMergeWhenReady": "Hazır olduğunda birleştirilecek",
+      "willMergeWhenReady": "Hazır olduğunda merge edilecek",
       "cancelAutoMerge": "İptal",
-      "cancelAutoMergeLabel": "Otomatik birleştirmeyi iptal et",
+      "cancelAutoMergeLabel": "Otomatik merge'ü iptal et",
       "mergedInto": "{{base}} içine merge edildi",
       "merged": "Birleştirildi",
       "genericAgent": "Yapay zekâ",
       "resolveWithAgent": "{{agent}} ile çöz",
       "fixWithAgent": "{{agent}} ile düzelt",
-      "cantMergeYet": "Henüz birleştirilemiyor:",
+      "cantMergeYet": "Henüz merge edilemiyor:",
       "checksFailing_one": "{{count}} kontrol başarısız",
       "checksFailing_other": "{{count}} kontrol başarısız",
-      "mergeWhenReady": "Hazır olduğunda birleştir",
+      "mergeWhenReady": "Hazır olduğunda merge et",
       "pushAndCreateReview": "Gönder ve {{review}} oluştur",
       "createReview": "{{review}} oluştur",
       "merge": "Birleştir",
@@ -4803,7 +4803,7 @@
     },
     "fileList": {
       "stageAll": "Tümünü hazırlama alanına ekle",
-      "mergedCleanly": "Çakışma olmadan birleştirildi",
+      "mergedCleanly": "Çakışma olmadan merge edildi",
       "unstageAll": "Tümünü stage'den çıkar",
       "onThisBranch": "Bu branch'te: {{count}}",
       "versusBase": "{{base}} ile karşılaştır"
@@ -5762,7 +5762,7 @@
       "linearIssuePlaceholder": "İş kaydı anahtarı (ör. ENG-123) veya Linear bağlantısı",
       "linearIssueLabel": "Linear kaydı",
       "channelMissing": "Sonuçların gönderileceği kanalı girin.",
-      "linearIssueInvalid": "Sonuçların gönderileceği Linear iş kaydının anahtarını girin (ör. ENG-123).",
+      "linearIssueInvalid": "Sonuçların gönderileceği Linear sorununun anahtarını girin (ör. ENG-123).",
       "letBotReact": "{{name}} tepki verebilsin",
       "letBotReactHelp": "Her sonuç yeni bir sohbet turu başlatır; böylece {{name}} sonuca göre işlem yapabilir.",
       "time": "Saat",
@@ -6030,8 +6030,8 @@
       "confirmComputer": "Komut çalıştırma ve dosyaları değiştirme",
       "confirmNoApprovals": "Önce sormadan işlem yapar",
       "confirmMaySkipApprovals": "Önce sormadan işlem yapabilir",
-      "confirmApproveOne": "{{person}} istemlerini onaylayabilir",
-      "confirmApproveMany": "İstemlerini onaylayabilirler",
+      "confirmApproveOne": "{{person}} botun onay isteklerini onaylayabilir",
+      "confirmApproveMany": "Botun onay isteklerini onaylayabilirler",
       "confirmGoogle": "Google hesabınızı kullanma",
       "confirmGitHub": "GitHub'da sizin adınıza yorum yapma ve push etme",
       "confirmLinear": "Linear sorunlarını sizin adınıza güncelleme",
@@ -6069,7 +6069,7 @@
       "codexNoSandbox": "Codex için korumalı ortam yok.",
       "whoeverAskedApproves": "Bot onay isterse isteği gönderen kişi onay verebilir.",
       "reachLinear": "Linear’da sizin adınıza iş kayıtları oluşturma, güncelleme ve bunlara yorum yazma",
-      "reachSlack": "Slack'te @{{name}} olarak mesaj gönderme",
+      "reachSlack": "Slack'te {{name}} olarak mesaj gönderme",
       "reachGitHub": "GitHub’da sizin adınıza yorum yapma, değişiklikleri inceleme ve kod gönderme",
       "reachGoogleEmail": "E-postalarınızı okuma ve sizin adınıza e-posta gönderme",
       "reachGoogleCalendar": "Takviminizi kullanma",
@@ -6394,17 +6394,17 @@
         "off": "Linear desteği yakında geliyor.",
         "replaced": "Linear bağlantısı tamamlanmadı. Sonradan başlatılan bir Linear veya GitHub bağlantısı bu işlemin yerini almış olabilir. Baştan başlayın.",
         "wrongAccount": "Oturum açma işlemi başka bir Orca hesabından başlatılmış. Linear’ı bu hesaptan yeniden bağlayın.",
-        "alreadyLinked": "Bu Orca hesabı, o çalışma alanında başka bir Linear kullanıcısına bağlı. Önce Ayarlar › Botlar › Linear bölümünden mevcut bağlantıyı kaldırın.",
+        "alreadyLinked": "Bu Orca hesabı, o çalışma alanında başka bir Linear kullanıcısına bağlı. Önce Linear sayfasındaki ⋯ menüsünden bağlantıyı kaldırın.",
         "notAMember": "Linear çalışma alanından kişi seçebilmek için o alanın tam üyesi olmanız gerekir.",
         "rateLimited": "Çok fazla deneme yapıldı. Bir dakika bekleyip yeniden deneyin.",
         "unavailable": "Linear yanıt vermedi. Yeniden deneyin."
       },
       "connection": {
-        "removeNote": "{{workspace}} çalışma alanındaki kişiler artık bota iş kaydı atayamaz. Botun Linear kullanıcı listesi temizlenir. Orca bu çalışma alanında kurulu kalır.",
+        "removeNote": "{{workspace}} çalışma alanındaki kişiler artık bota sorun atayamaz. Botun Linear kullanıcı listesi temizlenir. Orca bu çalışma alanında kurulu kalır.",
         "removeConfirm": "Kaldır",
         "finishSetup": "Kurulumu tamamla"
       },
-      "howToAskPlain": "Bir iş kaydında @Orca {{handle}} yazarak bottan bahsedin veya bot:{{handle}} etiketini ekleyin.",
+      "howToAskPlain": "Bir sorunda @Orca {{handle}} yazarak bottan bahsedin veya bot:{{handle}} etiketini ekleyin.",
       "setup": {
         "isOn": "{{name}} Linear’a bağlı",
         "checking": "Linear denetleniyor…",
@@ -6415,7 +6415,7 @@
         "copied": "Bağlantı kopyalandı.",
         "connectTitle": "Linear'ı bağla",
         "close": "Kapat",
-        "tryIt": "Herhangi bir Linear iş kaydında deneyin",
+        "tryIt": "Herhangi bir Linear sorununda deneyin",
         "orLabelLine": "Ya da {{label}} etiketini ekleyin."
       },
       "connect": {
@@ -6445,7 +6445,7 @@
         "off": "GitHub desteği yakında geliyor.",
         "replaced": "GitHub bağlantısı tamamlanmadı. Sonradan başlatılan bir Linear veya GitHub bağlantısı bu işlemin yerini almış olabilir. Baştan başlayın.",
         "wrongAccount": "Oturum açma işlemi başka bir Orca hesabından başlatılmış. Bu Orca hesabından GitHub ile yeniden oturum açın.",
-        "alreadyLinked": "Bu Orca hesabı başka bir GitHub kullanıcısına bağlı. Önce Ayarlar › Botlar › GitHub bölümünden mevcut bağlantıyı kaldırın.",
+        "alreadyLinked": "Bu Orca hesabı başka bir GitHub kullanıcısına bağlı. Önce GitHub sayfasındaki ⋯ menüsünden bağlantıyı kaldırın.",
         "unavailable": "GitHub yanıt vermedi. Yeniden deneyin."
       },
       "setup": {
@@ -6458,7 +6458,7 @@
         "finish": "Tamam",
         "connectTitle": "GitHub’a bağlan",
         "close": "Kapat",
-        "tryIt": "Herhangi bir iş kaydında veya çekme isteğinde deneyin",
+        "tryIt": "Herhangi bir sorunda veya PR'da deneyin",
         "preview": {
           "ask": "bu PR’ı incele"
         },
@@ -6476,7 +6476,7 @@
         "unlink": "GitHub hesabının bağlantısını kaldır",
         "reconnect": "Yeniden bağlan"
       },
-      "howToAskPlain": "Bir iş kaydında veya çekme isteğinde {{mention}} {{handle}} … yazarak bottan bahsedin.",
+      "howToAskPlain": "Bir sorunda veya pull request'te {{mention}} {{handle}} … yazarak bottan bahsedin.",
       "addMore": "Repository veya kuruluş ekle",
       "checkingInstalls": "GitHub’daki değişiklikler kontrol ediliyor…",
       "connect": {
@@ -6523,9 +6523,9 @@
         "continue": "Devam et",
         "description": "{{bot}} botunun Gmail, Takvim ve Drive hesaplarınıza nasıl giriş yapacağını seçin.",
         "self": "Kendi sunucunuzda",
-        "selfNote": "Kendi Google Cloud uygulamanızı oluşturursunuz; böylece oturum bilgileriniz bilgisayarınızda kalır. Bu işlem yaklaşık 10 dakika sürer.",
+        "selfNote": "Kendi Google uygulamanız.",
         "orca": "Orca’da barındırılıyor",
-        "orcaNote": "Google ile oturum açın. Kurulum gerekmez.",
+        "orcaNote": "Google ile oturum açın.",
         "soon": "Yakında"
       },
       "importFromTeam": "Ekibinizin kurulum dosyasını içe aktarın",
@@ -6558,7 +6558,7 @@
         "error": "Denetlenemedi"
       },
       "headline": {
-        "ended": "Google erişimi sona erdi. Yeniden bağlanın.",
+        "ended": "Google erişimi sona erdi.",
         "endedOnHost": "Google erişimi sona erdi. {{host}} üzerinde yeniden oturum açın.",
         "connected": "Google bağlı",
         "toFixOne": "Son bir düzeltme kaldı",
@@ -6932,7 +6932,7 @@
         },
         "events": {
           "pr-merged": {
-            "trigger": "Bir çekme isteği birleştirildiğinde",
+            "trigger": "Bir pull request merge edildiğinde",
             "action": "Kontrol et"
           }
         }
@@ -7062,7 +7062,7 @@
         "example2": "#2214 için sürüm ve yeniden üretme adımları belirtilmemiş. Bu bilgiler istensin mi?",
         "events": {
           "issue-opened": {
-            "trigger": "Bir iş kaydı açıldığında",
+            "trigger": "Bir sorun açıldığında",
             "action": "Etiket öner ve olası yinelenen kayıtları göster"
           }
         }
@@ -7401,7 +7401,7 @@
         "checksPending": "Denetimler bekleniyor",
         "pr": "PR #{{number}}",
         "issue": "Sorun #{{number}}",
-        "serverPr": "Sunucuda yürütülen işler için çekme isteği henüz gösterilmiyor",
+        "serverPr": "Sunucuda yürütülen işler için PR henüz gösterilmiyor",
         "openInBrowser": "Tarayıcıda aç",
         "copyLink": "Bağlantıyı kopyala",
         "copyPath": "Yolu kopyala",
@@ -8369,23 +8369,23 @@
         "reaction": "Slack’te tepki eklendiğinde"
       },
       "github": {
-        "issueOpened": "Bir iş kaydı açıldığında",
-        "prOpened": "Bir çekme isteği açıldığında",
-        "prPushed": "Bir çekme isteğine commit gönderildiğinde",
-        "prMerged": "Bir çekme isteği birleştirildiğinde",
+        "issueOpened": "Bir sorun açıldığında",
+        "prOpened": "Bir pull request açıldığında",
+        "prPushed": "Bir pull request'e push yapıldığında",
+        "prMerged": "Bir pull request merge edildiğinde",
         "comment": "GitHub’da yorum yapıldığında",
         "reviewComment": "İnceleme yorumu yapıldığında",
-        "review": "Bir çekme isteği incelendiğinde",
+        "review": "Bir pull request incelendiğinde",
         "mentioned": "GitHub’da sizden bahsedildiğinde",
         "reviewRequested": "İnceleme istendiğinde",
         "assigned": "GitHub’da size görev atandığında",
         "ciFailed": "CI başarısız olduğunda",
         "ciPassed": "CI başarılı olduğunda",
-        "prConflicted": "Bir çekme isteğinde çakışma olduğunda",
-        "prClosed": "Bir çekme isteği kapatıldığında",
-        "prReady": "Bir çekme isteği incelemeye hazır olduğunda",
+        "prConflicted": "Bir pull request'te çakışma olduğunda",
+        "prClosed": "Bir pull request kapatıldığında",
+        "prReady": "Bir pull request incelemeye hazır olduğunda",
         "labeled": "Etiket eklendiğinde",
-        "issueClosed": "Bir iş kaydı kapatıldığında",
+        "issueClosed": "Bir sorun kapatıldığında",
         "deployFinished": "Dağıtım tamamlandığında",
         "securityAlert": "Güvenlik uyarısı geldiğinde",
         "workflowFinished": "İş akışının çalışması sona erdiğinde"
@@ -8393,8 +8393,8 @@
       "linear": {
         "assigned": "Linear’da size görev atandığında",
         "mentioned": "Linear’da sizden bahsedildiğinde",
-        "issueCreated": "Linear’da iş kaydı oluşturulduğunda",
-        "issueMoved": "Linear’da bir iş kaydı taşındığında"
+        "issueCreated": "Bir Linear sorunu oluşturulduğunda",
+        "issueMoved": "Bir Linear sorunu taşındığında"
       },
       "slackFallback": "Bir Slack olayı olduğunda",
       "githubFallback": "Bir GitHub olayı olduğunda",
@@ -8481,7 +8481,7 @@
   "hostMutation": {
     "renameOffline": "{{host}} çevrimdışı. Metniniz, kaydedebilene kadar burada kalır.",
     "renameUnconfirmed": "Henüz doğrulanmadı. {{host}} yeniden bağlandığında Orca adı kontrol edecek.",
-    "saving": "Kaydetme",
+    "saving": "Kaydediliyor",
     "serverUnreachable": "Sunucusuna ulaşılamıyor."
   },
   "agents": {
@@ -8499,8 +8499,8 @@
       "unread": "Okunmadı",
       "noDesktopTitle": "Bağlı bilgisayar yok",
       "noDesktopBody": "Bir bilgisayar bağlandığında ajanları burada görünür.",
-      "hideWorkers": "{{workers}} alt ajanı gizle",
-      "showWorkers": "{{workers}} alt ajanı göster"
+      "hideWorkers": "Gizle: {{workers}}",
+      "showWorkers": "Göster: {{workers}}"
     },
     "actions": {
       "offlineHint": "Ajanın çalıştığı bilgisayar çevrimdışı.",
@@ -8544,7 +8544,7 @@
     "sections": {
       "needsYou": "Sizi bekliyor",
       "working": "Çalışıyor",
-      "done": "Tamam",
+      "done": "Tamamlananlar",
       "offline": "Çevrimdışı",
       "offlineSeenAgo": "Çevrimdışı · en son {{ago}} önce görüldü",
       "offlineSeenJustNow": "Çevrimdışı · az önce görüldü",
