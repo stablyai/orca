@@ -59,14 +59,16 @@ export async function materializeWorktreeContentPaths(
 
   if (sharedDirectories.length > 0) {
     await timing.time('create_shared_directories', () =>
-      createWorktreeSharedPaths(repo.path, worktreePath, sharedDirectories)
+      createWorktreeSharedPaths(repo.path, worktreePath, sharedDirectories, {
+        onFailure: sharedSkips.add
+      })
     )
   }
   const skippedCopies =
     includePaths.length > 0
       ? await timing.time('copy_worktreeinclude', () =>
           createWorktreeCopiedPaths(repo.path, worktreePath, includePaths, {
-            onCopyFailure: copyFailures.add
+            onFailure: copyFailures.add
           })
         )
       : []
