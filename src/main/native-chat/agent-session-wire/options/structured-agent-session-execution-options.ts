@@ -53,15 +53,16 @@ export function captureStructuredExecutionOptions(
   return refusal ? { refusal } : { options }
 }
 
-/** The model and effort the chat was created with, which its opening message runs on as a send's
- *  carried ones do. */
+/** Carry the opening turn's choices, including Fast, so later unchanged sends can steer it. */
 export function openingMessageOptions(options: Readonly<Record<string, string>> | undefined): {
   options?: AgentSessionExecutionOptions
 } {
-  const { model, effort, interactionMode } = options ?? {}
+  const { model, effort, interactionMode, serviceTier, fastMode } = options ?? {}
   const captured = readAgentSessionExecutionOptions({
     ...(model ? { model, ...(effort ? { effort } : {}) } : {}),
-    ...(interactionMode ? { interactionMode } : {})
+    ...(interactionMode ? { interactionMode } : {}),
+    ...(serviceTier ? { serviceTier } : {}),
+    ...(fastMode ? { fastMode } : {})
   })
   return captured && Object.keys(captured).length > 0 ? { options: captured } : {}
 }
