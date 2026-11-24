@@ -5767,26 +5767,12 @@
       "needsTwoBots": "Needs 2 bots on {{host}}",
       "startAConversationWithThisGroupMentionBots": "Start a conversation with this group. Mention bots with @Name or @everyone.",
       "items": {
-        "thisGroup": "This group",
-        "thread": "Thread",
-        "all": "All their work",
-        "orNames": "{{names}} or {{last}}",
-        "outsideRoom_one": "{{count}} more outside this room",
-        "outsideRoom_other": "{{count}} more outside this room",
-        "outsideThread_one": "{{count}} more outside this thread",
-        "outsideThread_other": "{{count}} more outside this thread",
-        "outside_one": "{{count}} more outside this group",
-        "outside_other": "{{count}} more outside this group",
         "emptyTitle": "No items from this group yet",
-        "emptyBody": "When {{names}} take something on in this group, it shows up here.",
         "needsYouCount_one": "{{count}} needs you",
         "needsYouCount_other": "{{count}} needs you",
         "workingCount_one": "{{count}} working",
         "workingCount_other": "{{count}} working",
         "filterBot": "Bot",
-        "outsideRoom": "{{count}} more outside this room",
-        "outsideThread": "{{count}} more outside this thread",
-        "outside": "{{count}} more outside this group",
         "needsYouCount": "{{count}} needs you",
         "workingCount": "{{count}} working"
       },
@@ -6404,8 +6390,7 @@
         "label": "Filter items",
         "remove": "Remove filter {{name}}",
         "clear": "Clear filter",
-        "clearAll": "Clear filters",
-        "chat": "Chat"
+        "clearAll": "Clear filters"
       },
       "tab": "Items",
       "field": {
