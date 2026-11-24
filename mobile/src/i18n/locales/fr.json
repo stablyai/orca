@@ -820,12 +820,8 @@
       "monitoring": "Surveillance des tâches en arrière-plan",
       "unverifiable": "Aucune mise à jour récente"
     },
-    "authFailedBanner": {
-      "message": "Échec de l'authentification — essayez d'abord de vous reconnecter ; si l'échec persiste, recommencez l'appairage depuis votre ordinateur."
-    },
     "authFailedBannerActions": {
-      "repair": "Appairer à nouveau",
-      "webNote": "Reconnectez cet hôte ou supprimez-le depuis l'application Orca."
+      "repair": "Appairer à nouveau"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "Réinitialisation déjà appliquée",
@@ -986,9 +982,6 @@
       "sameNetworkOnlyHint": "Se connecte uniquement sur le même Wi-Fi ou via Tailscale. Pour vous connecter de partout, connectez-vous sur votre ordinateur et appairez de nouveau",
       "unlockHint": "Déverrouillez votre téléphone, puis touchez pour réessayer.",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} en activité"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "Voir les diagnostics réseau"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Vérification de la compatibilité de l'hôte"
@@ -1714,7 +1707,6 @@
     },
     "hostScreenHeader": {
       "accounts": "Comptes",
-      "backToHosts": "Retour aux hôtes",
       "floatingWorkspace": "Espace de travail flottant",
       "hideSidebar": "Masquer la barre latérale",
       "reconnect": "Reconnecter",

@@ -1,4 +1,4 @@
-import { colors, typography } from '../theme/mobile-theme'
+import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const hostScreenPrimaryStyles = themedStyleSheet(() => ({
@@ -14,14 +14,5 @@ export const hostScreenPrimaryStyles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     fontSize: 12,
     lineHeight: 16
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
   }
 }))

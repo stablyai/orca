@@ -873,9 +873,10 @@
       "newWorkspaceIn": "New workspace in {{project}}"
     },
     "hostScreenHeader": {
-      "backToHosts": "Back to hosts",
       "reconnect": "Reconnect",
-      "floatingWorkspace": "Floating Workspace",
+      "offlineSince": "Offline since {{time}}",
+      "notConnected": "Not connected",
+      "floatingWorkspace": "Floating workspace",
       "hideSidebar": "Hide sidebar",
       "accounts": "Accounts",
       "tasks": "Tasks",
@@ -1170,13 +1171,15 @@
     },
     "hostWorkspaceListStates": {
       "checkHost": "Check that your computer is awake and Orca is running",
-      "loadFailed": "Could not load workspaces from this host",
+      "loadFailed": "Couldn’t load workspaces",
+      "pairingRefused": "Pairing was refused",
+      "pairAgain": "Pair again from Orca on your computer.",
+      "clearFilters": "Clear filters",
       "noFilterMatches": "No workspaces match filters",
       "empty": "No workspaces",
       "reopen": "Reopen to update",
       "reopenDetail": "This host lists workspaces in a way this page does not know yet.",
-      "loading": "Loading workspaces…",
-      "retryingAutomatically": "Retrying automatically."
+      "loading": "Loading workspaces…"
     },
     "workspaceListSections": {
       "pinned": "Pinned",
@@ -1202,12 +1205,8 @@
       "monitoring": "Monitoring background tasks",
       "unverifiable": "No recent update"
     },
-    "authFailedBanner": {
-      "message": "Authentication failed — try reconnecting first; if it keeps failing, re-pair from desktop."
-    },
     "authFailedBannerActions": {
-      "repair": "Re-pair",
-      "webNote": "Reconnect or remove this host from the Orca app."
+      "repair": "Re-pair"
     },
     "codexResetCreditAction": {
       "earnedReset": "Earned Codex rate-limit reset",
@@ -1245,9 +1244,6 @@
       "reorderHint": "Use the move up and move down actions to reorder without dragging",
       "moveUp": "Move up",
       "moveDown": "Move down"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "View network diagnostics"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Checking host compatibility"

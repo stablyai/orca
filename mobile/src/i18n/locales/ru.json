@@ -1443,12 +1443,8 @@
       "monitoring": "Наблюдает за фоновыми задачами",
       "unverifiable": "Давно не было обновлений"
     },
-    "authFailedBanner": {
-      "message": "Ошибка аутентификации — попробуйте подключиться заново. Если ошибка повторяется, повторите сопряжение с компьютера."
-    },
     "authFailedBannerActions": {
-      "repair": "Повторить сопряжение",
-      "webNote": "Подключитесь заново или удалите этот сервер из приложения Orca."
+      "repair": "Повторить сопряжение"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "Сброс уже выполнен",
@@ -1649,9 +1645,6 @@
       "sameNetworkOnlyHint": "Подключается только в той же сети Wi-Fi или через Tailscale. Чтобы подключаться откуда угодно, войдите в учётную запись на компьютере и выполните сопряжение заново",
       "unlockHint": "Разблокируйте телефон, затем нажмите, чтобы повторить попытку",
       "worktreeAccessibilitySummary": "{{summary}}, активных: {{activeCount}}"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "Открыть диагностику сети"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Проверка совместимости сервера"
@@ -2588,7 +2581,6 @@
     },
     "hostScreenHeader": {
       "accounts": "Учётные записи",
-      "backToHosts": "Назад к серверам",
       "floatingWorkspace": "Плавающее рабочее пространство",
       "hideSidebar": "Скрыть боковую панель",
       "reconnect": "Подключиться снова",

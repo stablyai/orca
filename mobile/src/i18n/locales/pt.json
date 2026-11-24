@@ -854,12 +854,8 @@
       "monitoring": "Monitorando tarefas em segundo plano",
       "unverifiable": "Nenhuma atualização recente"
     },
-    "authFailedBanner": {
-      "message": "Falha na autenticação — tente se reconectar primeiro; se a falha persistir, faça o pareamento novamente pelo desktop."
-    },
     "authFailedBannerActions": {
-      "repair": "Parear novamente",
-      "webNote": "Reconecte ou remova este host pelo aplicativo Orca."
+      "repair": "Parear novamente"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "Redefinição já aplicada",
@@ -1053,9 +1049,6 @@
       "sameNetworkOnlyHint": "Só conecta na mesma rede Wi-Fi ou pelo Tailscale. Para se conectar de qualquer lugar, entre na sua conta no desktop e pareie novamente",
       "unlockHint": "Desbloqueie seu celular e depois toque para tentar novamente",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} em atividade"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "Ver diagnósticos de rede"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Verificando a compatibilidade do host"
@@ -1839,7 +1832,6 @@
     },
     "hostScreenHeader": {
       "accounts": "Contas",
-      "backToHosts": "Voltar aos hosts",
       "floatingWorkspace": "Espaço de Trabalho Flutuante",
       "hideSidebar": "Ocultar barra lateral",
       "reconnect": "Reconectar",
@@ -4774,8 +4766,7 @@
       "noFilterMatches": "Nenhum espaço de trabalho corresponde aos filtros",
       "reopen": "Reabrir para atualizar",
       "reopenDetail": "Este host lista os espaços de trabalho em um formato que esta página ainda não reconhece.",
-      "loading": "Carregando espaços…",
-      "retryingAutomatically": "Tentando novamente automaticamente."
+      "loading": "Carregando espaços…"
     },
     "workspaceListSections": {
       "all": "Todos",

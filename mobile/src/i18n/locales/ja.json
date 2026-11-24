@@ -775,12 +775,8 @@
       "monitoring": "バックグラウンドタスクを監視中",
       "unverifiable": "最近の更新なし"
     },
-    "authFailedBanner": {
-      "message": "認証に失敗しました。まず再接続してください。失敗が続く場合は、デスクトップから再ペアリングしてください。"
-    },
     "authFailedBannerActions": {
-      "repair": "再ペアリング",
-      "webNote": "Orca アプリで、このホストに再接続するか、削除してください。"
+      "repair": "再ペアリング"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "リセット適用済み",
@@ -938,9 +934,6 @@
       "sameNetworkOnlyHint": "同じ Wi-Fi または Tailscale でのみ接続できます。どこからでも接続するには、デスクトップでサインインしてもう一度ペアリングしてください",
       "unlockHint": "スマートフォンのロックを解除してから、タップして再試行してください。",
       "worktreeAccessibilitySummary": "{{summary}}、{{activeCount}} 件がアクティブ"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "ネットワーク診断を表示"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "ホストの互換性を確認中"
@@ -1663,7 +1656,6 @@
     },
     "hostScreenHeader": {
       "accounts": "アカウント",
-      "backToHosts": "ホスト一覧に戻る",
       "floatingWorkspace": "フローティングワークスペース",
       "hideSidebar": "サイドバーを非表示",
       "reconnect": "再接続",

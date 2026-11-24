@@ -1355,12 +1355,8 @@
       "monitoring": "Arka plan görevleri izleniyor",
       "unverifiable": "Yakın zamanda güncelleme yok"
     },
-    "authFailedBanner": {
-      "message": "Kimlik doğrulanamadı — önce yeniden bağlanmayı deneyin; sorun sürerse masaüstü uygulamasından yeniden eşleştirin."
-    },
     "authFailedBannerActions": {
-      "repair": "Yeniden eşleştir",
-      "webNote": "Orca uygulamasından bu sunucuya yeniden bağlanın veya sunucuyu kaldırın."
+      "repair": "Yeniden eşleştir"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "Sıfırlama zaten uygulandı",
@@ -1547,9 +1543,6 @@
       "sameNetworkOnlyHint": "Yalnızca aynı Wi-Fi ağında veya Tailscale üzerinden bağlanır. Her yerden bağlanmak için masaüstünde oturum açıp yeniden eşleştirin",
       "unlockHint": "Telefonunuzun kilidini açın, ardından yeniden denemek için dokunun",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} etkin"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "Ağ tanılamasını görüntüle"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Sunucu uyumluluğu kontrol ediliyor"
@@ -2464,7 +2457,6 @@
     },
     "hostScreenHeader": {
       "accounts": "Hesaplar",
-      "backToHosts": "Sunuculara dön",
       "floatingWorkspace": "Yüzen Çalışma Alanı",
       "hideSidebar": "Kenar çubuğunu gizle",
       "reconnect": "Yeniden bağlan",

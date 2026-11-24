@@ -1254,12 +1254,8 @@
       "monitoring": "监控后台任务",
       "unverifiable": "暂无近期更新"
     },
-    "authFailedBanner": {
-      "message": "身份验证失败。请先尝试重新连接；若仍失败，请在桌面端重新配对"
-    },
     "authFailedBannerActions": {
-      "repair": "重新配对",
-      "webNote": "请在 Orca 应用中重新连接或移除此主机"
+      "repair": "重新配对"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "已执行重置",
@@ -1446,9 +1442,6 @@
       "sameNetworkOnlyHint": "仅能在同一 Wi-Fi 或 Tailscale 下连接。如需随时随地连接，请在桌面端登录并重新配对",
       "unlockHint": "解锁手机后，轻点重试",
       "worktreeAccessibilitySummary": "{{summary}}，{{activeCount}} 个活跃"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "查看网络诊断"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "正在检查主机兼容性"
@@ -2335,7 +2328,6 @@
     },
     "hostScreenHeader": {
       "accounts": "账户",
-      "backToHosts": "返回主机列表",
       "floatingWorkspace": "浮动工作区",
       "hideSidebar": "隐藏侧边栏",
       "reconnect": "重新连接",
@@ -5348,8 +5340,7 @@
       "noFilterMatches": "没有符合筛选条件的工作区",
       "reopen": "重新打开以更新",
       "reopenDetail": "此页面尚无法识别此主机的工作区列表格式",
-      "loading": "正在加载工作区…",
-      "retryingAutomatically": "正在自动重试"
+      "loading": "正在加载工作区…"
     },
     "workspaceListSections": {
       "all": "全部",

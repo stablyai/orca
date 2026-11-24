@@ -1,15 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, type ReactElement } from 'react'
 import { Animated, Platform, RefreshControl, View } from 'react-native'
 import { isBotsListRow, useMobileBotsListParts } from '../../bots/use-mobile-bots-list-parts'
-import { AuthFailedBanner } from '../../components/host-connection/AuthFailedBanner'
-import { Presence } from '../../components/motion/AutoHeight'
-import { HostDiagnosticsLink } from '../../components/host-connection/HostDiagnosticsLink'
-import {
-  HostOfflineBanner,
-  useHostOfflineBanner
-} from '../../components/host-connection/HostOfflineBanner'
+import { TransientToast, useTransientToast } from '../../components/feedback/TransientToast'
 import { isConnectionOutage } from '../../transport/connection/connection-health'
-import { HostRouteNoticeBanner } from '../../components/host-connection/HostRouteNoticeBanner'
 import type { CollapsingTitle } from '../../components/nav-bar/PageTitle'
 import { WorktreeListRow } from '../../worktree/row-presentation/WorktreeListRow'
 import { colors, spacing } from '../../theme/mobile-theme'
@@ -59,21 +52,16 @@ export function HostWorkspaceList({
     actions,
     activeWorktreeScroll,
     catalog,
-    client,
     connState,
     contentMaxWidth,
     displayWorktrees,
     embedded,
     forceReconnectHost,
-    hostDisplay,
     hostId,
     insets,
     isReadOnly,
     isWideLayout,
-    lastConnectedAt,
     noticeParam,
-    reconnectAttempts,
-    relayRecovery,
     routeNotice,
     router,
     sectionsResult,
@@ -91,17 +79,31 @@ export function HostWorkspaceList({
       [pending]
     )
   )
-  const hasRows = sections.length > 0
-  const offlineBanner = useHostOfflineBanner({
-    client,
-    connState,
-    lastConnectedAt,
-    outage: isConnectionOutage(controller.connectionVerdict),
-    forceReconnect: hostId && forceReconnectHost ? () => void forceReconnectHost(hostId) : null,
-    // Group headers can stand with no rows under them; that list says "unreachable" in its body.
-    hasData: (controller.feed ? sections.length : displayWorktrees.length) > 0,
-    asOf: catalog.readAt
-  })
+  const refused = controller.connectionVerdict.kind === 'auth-failed'
+  const hasRows = sections.length > 0 && !refused
+  // Offline, the rows stay readable from the last read, quieter than live ones.
+  const offline = isConnectionOutage(controller.connectionVerdict)
+  const toast = useTransientToast()
+  const { showToast } = toast
+  // Notices and action errors are one-line toasts, not banners stacked over the title.
+  useEffect(() => {
+    if (state.actionError !== '') {
+      showToast(state.actionError)
+      state.setActionError('')
+    }
+  }, [state, showToast])
+  useEffect(() => {
+    if (state.serverNotice) {
+      showToast(state.serverNotice)
+      state.setServerNotice(null)
+    }
+  }, [state, showToast])
+  useEffect(() => {
+    if (routeNotice) {
+      showToast(routeNotice)
+      setDismissedNotice(noticeParam ?? null)
+    }
+  }, [routeNotice, noticeParam, setDismissedNotice, showToast])
   const renameDrafts = useHostMutationDrafts()
   const resetTitle = pageTitle?.collapsing.reset
   useEffect(() => {
@@ -209,34 +211,36 @@ export function HostWorkspaceList({
           index === section.data.length - 1 && rowStyles.groupLast
         ]}
       >
-        {bots.groupRow(item, view, isReadOnly) ?? (
-          <WorktreeListRow
-            item={item}
-            view={view}
-            isReadOnly={isReadOnly}
-            status={hasWorktreeAgentState(item) ? getWorktreeDotStatus(item) : null}
-            onPress={openWorktreeSession}
-            onAgentPress={openWorktreeSession}
-            // A bot's home goes through the bot's own delete, not the workspace menu.
-            onLongPress={item.botHome === true || view.botFacts ? undefined : setActionTarget}
-            onToggleLineage={toggleWorktreeLineage}
-            unsavedName={unsavedRename(renameDrafts, hostId, item)}
-            pairedHostId={hostId ?? null}
-            // Outside its project's group, or nested under another project, the row names its own.
-            repoLook={
-              groupBy !== 'repo' || view.showProjectName ? repoLookById.get(item.repoId) : null
-            }
-            showSelection={embedded}
-            // worktree.set resolves git worktrees only, so a folder workspace offers no swipe.
-            {...(swipeable(item, view)
-              ? {
-                  onToggleRead: toggleRead,
-                  onTogglePin: toggleRowPin,
-                  pinned: isWorktreePinned(item, pinnedIds)
-                }
-              : {})}
-          />
-        )}
+        <View style={offline && rowStyles.worktreeRowDimmed}>
+          {bots.groupRow(item, view, isReadOnly) ?? (
+            <WorktreeListRow
+              item={item}
+              view={view}
+              isReadOnly={isReadOnly}
+              status={hasWorktreeAgentState(item) ? getWorktreeDotStatus(item) : null}
+              onPress={openWorktreeSession}
+              onAgentPress={openWorktreeSession}
+              // A bot's home goes through the bot's own delete, not the workspace menu.
+              onLongPress={item.botHome === true || view.botFacts ? undefined : setActionTarget}
+              onToggleLineage={toggleWorktreeLineage}
+              unsavedName={unsavedRename(renameDrafts, hostId, item)}
+              pairedHostId={hostId ?? null}
+              // Outside its project's group, or nested under another project, the row names its own.
+              repoLook={
+                groupBy !== 'repo' || view.showProjectName ? repoLookById.get(item.repoId) : null
+              }
+              showSelection={embedded}
+              // worktree.set resolves git worktrees only, so a folder workspace offers no swipe.
+              {...(swipeable(item, view)
+                ? {
+                    onToggleRead: toggleRead,
+                    onTogglePin: toggleRowPin,
+                    pinned: isWorktreePinned(item, pinnedIds)
+                  }
+                : {})}
+            />
+          )}
+        </View>
       </View>
     ),
     [
@@ -252,7 +256,8 @@ export function HostWorkspaceList({
       pinnedIds,
       repoLookById,
       groupBy,
-      embedded
+      embedded,
+      offline
     ]
   )
 
@@ -274,63 +279,18 @@ export function HostWorkspaceList({
         onShowPausedBots={sectionsResult.showPausedBots}
         bottomInset={hasRows ? 0 : Math.max(bottomBarHeight, insets.bottom)}
         onClearSearch={() => state.setSearch('')}
-        onReconnect={hostId && forceReconnectHost ? () => void forceReconnectHost(hostId) : null}
+        onReconnect={controller.reconnect}
+        // A refusal's Retry rebuilds the client; a page's nudge can't clear one.
+        onRetryPairing={hostId && forceReconnectHost ? () => void forceReconnectHost(hostId) : null}
+        onNewWorkspace={canCreate ? () => openNewWorktreeModal() : null}
+        onClearFilters={settings.clearFilters}
+        onRetryLoad={() => void catalog.onRefresh()}
+        onRepair={() => router.push('/pair-scan')}
       />
     )
 
   return (
     <>
-      {/* Banners ease in and out; a dismissed one keeps its message while it leaves. */}
-      <Presence>
-        {(connState === 'auth-failed' || relayRecovery.pairingRejected) && (
-          <AuthFailedBanner
-            canRetry={!!hostId && forceReconnectHost !== null}
-            onRetry={() => hostId && forceReconnectHost && void forceReconnectHost(hostId)}
-            onRepair={() => router.push('/pair-scan')}
-            onRemove={() => state.setConfirmRemoveHost(true)}
-          />
-        )}
-      </Presence>
-
-      {connState !== 'connected' &&
-      !relayRecovery.pairingRejected &&
-      reconnectAttempts >= 3 &&
-      hostId ? (
-        <HostDiagnosticsLink
-          onPress={() =>
-            router.push({ pathname: '/connection-log', params: { hostId: String(hostId) } })
-          }
-        />
-      ) : null}
-
-      <Presence>
-        {routeNotice && (
-          <HostRouteNoticeBanner
-            message={routeNotice}
-            onDismiss={() => setDismissedNotice(noticeParam ?? null)}
-          />
-        )}
-      </Presence>
-      <Presence>
-        {state.serverNotice ? (
-          <HostRouteNoticeBanner
-            message={state.serverNotice}
-            onDismiss={() => state.setServerNotice(null)}
-          />
-        ) : null}
-      </Presence>
-
-      {/* Keep action errors above the list so the header and reopened confirm remain usable. */}
-      <Presence>
-        {state.actionError !== '' && (
-          <HostRouteNoticeBanner
-            message={state.actionError}
-            tone="failure"
-            onDismiss={() => state.setActionError('')}
-          />
-        )}
-      </Presence>
-
       {hasRows ? null : pageTitle?.element}
 
       {controller.feed?.kind === 'reopen' ? (
@@ -339,22 +299,10 @@ export function HostWorkspaceList({
         listState
       )}
 
-      {sections.length > 0 && (
+      {hasRows && (
         <Animated.SectionList
           ref={activeWorktreeScroll.sectionListRef}
-          ListHeaderComponent={
-            <>
-              {pageTitle?.element}
-              {offlineBanner ? (
-                <HostOfflineBanner
-                  hostName={hostDisplay.title}
-                  offline={offlineBanner.offline}
-                  asOf={offlineBanner.asOf}
-                  onRetry={offlineBanner.retry}
-                />
-              ) : null}
-            </>
-          }
+          ListHeaderComponent={pageTitle?.element}
           ListFooterComponent={listState ?? undefined}
           onScroll={pageTitle?.collapsing.onScroll}
           {...pageTitle?.collapsing.touchHandlers}
@@ -391,6 +339,7 @@ export function HostWorkspaceList({
         />
       )}
       {bots.sheets}
+      <TransientToast message={toast.message} bottomInset={bottomBarHeight} />
     </>
   )
 }

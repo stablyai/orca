@@ -775,12 +775,8 @@
       "monitoring": "백그라운드 작업 모니터링 중",
       "unverifiable": "최근 업데이트 없음"
     },
-    "authFailedBanner": {
-      "message": "인증에 실패했습니다. 먼저 다시 연결하고, 계속 실패하면 데스크톱에서 다시 페어링하세요."
-    },
     "authFailedBannerActions": {
-      "repair": "다시 페어링",
-      "webNote": "Orca 앱에서 이 호스트에 다시 연결하거나 호스트를 제거하세요."
+      "repair": "다시 페어링"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "이미 재설정됨",
@@ -938,9 +934,6 @@
       "sameNetworkOnlyHint": "같은 Wi-Fi 또는 Tailscale에서만 연결됩니다. 어디서나 연결하려면 데스크톱에서 로그인한 후 다시 페어링하세요",
       "unlockHint": "휴대폰 잠금을 해제한 후 탭하여 다시 시도하세요.",
       "worktreeAccessibilitySummary": "{{summary}}, 활성 {{activeCount}}개"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "네트워크 진단 보기"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "호스트 호환성 확인 중"
@@ -1663,7 +1656,6 @@
     },
     "hostScreenHeader": {
       "accounts": "계정",
-      "backToHosts": "호스트 목록으로 돌아가기",
       "floatingWorkspace": "플로팅 워크스페이스",
       "hideSidebar": "사이드바 숨기기",
       "reconnect": "다시 연결",

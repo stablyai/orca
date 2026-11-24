@@ -25,9 +25,9 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
 import {
   isConnectionOutage,
-  verdictDisplayLabel,
   type ConnectionVerdict
 } from '../transport/connection/connection-health'
+import { formatOfflineAsOfTime } from '../components/host-connection/offline-as-of-time'
 import type { HostScreenController } from './use-host-screen-controller'
 import { HostSharedLinksSheet } from './host-shared-links-sheet'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host/execution-host'
@@ -36,22 +36,42 @@ function isErrorVerdict(v: ConnectionVerdict): boolean {
   return isConnectionOutage(v) || v.kind === 'auth-failed'
 }
 
-// The host's status line: under the page title at the top, and under the bar title once scrolled.
-export function HostConnectionStatus({ controller }: { controller: HostScreenController }) {
+/** The computer's one status line: under the page title, and under the bar title once scrolled.
+ *  Offline, it says since when, and the page title's copy offers the one Reconnect. */
+export function HostConnectionStatus({
+  controller,
+  withReconnect = false
+}: {
+  controller: HostScreenController
+  /** The page title's line, which has room for Reconnect; the bar's stays one quiet line. */
+  withReconnect?: boolean
+}) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const { connectionVerdict, connState, forceReconnectHost, hostId, hostDisplay, lastConnectedAt } =
-    controller
+  const { connectionVerdict, connState, hostDisplay, lastConnectedAt } = controller
   // Why: a drop healed in a few seconds must not flash the host dot amber.
   const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
   const calmed = presentedConnState !== connState && !isErrorVerdict(connectionVerdict)
-  const statusText = isErrorVerdict(connectionVerdict)
-    ? verdictDisplayLabel(connectionVerdict)
-    : presentedConnState === 'connected'
-      ? (hostDisplay.machineLine ??
-        hostDisplay.descriptorLine ??
-        t('connection.connectionHealth.connected', 'Connected'))
-      : connectionVerdict.label
+  const outage = isConnectionOutage(connectionVerdict)
+  const statusText =
+    outage && lastConnectedAt !== null
+      ? t('hostScreen.hostScreenHeader.offlineSince', 'Offline since {{time}}', {
+          time: formatOfflineAsOfTime(lastConnectedAt)
+        })
+      : connectionVerdict.kind === 'auth-failed'
+        ? t('hostScreen.hostScreenHeader.notConnected', 'Not connected')
+        : isErrorVerdict(connectionVerdict)
+          ? connectionVerdict.label
+          : presentedConnState === 'connected'
+            ? (hostDisplay.machineLine ??
+              hostDisplay.descriptorLine ??
+              t('connection.connectionHealth.connected', 'Connected'))
+            : connectionVerdict.label
+  // An empty list offers Reconnect in its own body instead.
+  const reconnect =
+    withReconnect && outage && controller.sectionsResult.sections.length > 0
+      ? controller.reconnect
+      : null
   return (
     <>
       {calmed ? (
@@ -60,14 +80,12 @@ export function HostConnectionStatus({ controller }: { controller: HostScreenCon
         <StatusDot state={connState} verdict={connectionVerdict} />
       )}
       <NavBarSubtitleText>{statusText}</NavBarSubtitleText>
-      {/* auth-failed has its own banner; the page cannot re-dial the connection the shell owns. */}
-      {isConnectionOutage(connectionVerdict) && hostId && forceReconnectHost !== null ? (
+      {reconnect ? (
         <Pressable
-          style={({ pressed }) => pressed && pressedStyle}
-          onPress={() => void forceReconnectHost(hostId)}
+          style={({ pressed }) => [styles.reconnect, pressed && pressedStyle]}
+          onPress={reconnect}
           accessibilityRole="button"
-          accessibilityLabel={t('hostScreen.hostScreenHeader.reconnect', 'Reconnect')}
-          hitSlop={8}
+          hitSlop={RECONNECT_HIT_SLOP}
         >
           <Text style={styles.reconnectText}>
             {t('hostScreen.hostScreenHeader.reconnect', 'Reconnect')}
@@ -77,6 +95,9 @@ export function HostConnectionStatus({ controller }: { controller: HostScreenCon
     </>
   )
 }
+
+// Grows Reconnect's 14 pt line to a 44 pt target without moving the title.
+const RECONNECT_HIT_SLOP = { top: 15, bottom: 15, left: 12, right: 12 } as const
 
 export function HostScreenHeader({
   controller,
@@ -150,7 +171,7 @@ export function HostScreenHeader({
       ? [
           {
             id: 'floating-workspace',
-            label: t('hostScreen.hostScreenHeader.floatingWorkspace', 'Floating Workspace'),
+            label: t('hostScreen.hostScreenHeader.floatingWorkspace', 'Floating workspace'),
             icon: SquareTerminal,
             disabled: disconnected,
             closeBeforePress: true,
@@ -171,7 +192,7 @@ export function HostScreenHeader({
           <>
             <NavBarButton
               icon={ChevronLeft}
-              accessibilityLabel={t('hostScreen.hostScreenHeader.backToHosts', 'Back to hosts')}
+              accessibilityLabel={t('common.back', 'Back')}
               onPress={actions.leaveHost}
             />
             {embedded && onHideSidebar ? (
@@ -216,9 +237,15 @@ export function HostScreenHeader({
 }
 
 const styles = themedStyleSheet(() => ({
+  // Right-aligned on the subtitle line, like a section's link.
+  reconnect: {
+    marginLeft: 'auto'
+  },
+  // Held to the subtitle's line so the title block keeps its height when Reconnect appears.
   reconnectText: {
-    color: colors.textPrimary,
-    fontSize: 12,
+    color: colors.accentBlue,
+    fontSize: 13,
+    lineHeight: 14,
     fontWeight: '600'
   }
 }))

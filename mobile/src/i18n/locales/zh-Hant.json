@@ -778,12 +778,8 @@
       "monitoring": "監控背景任務",
       "unverifiable": "暫無近期更新"
     },
-    "authFailedBanner": {
-      "message": "身分驗證失敗，請先嘗試重新連線；若仍失敗，請在電腦端重新配對。"
-    },
     "authFailedBannerActions": {
-      "repair": "重新配對",
-      "webNote": "請在 Orca 應用程式中重新連線或移除此主機。"
+      "repair": "重新配對"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "已套用重設",
@@ -941,9 +937,6 @@
       "sameNetworkOnlyHint": "僅能在同一 Wi-Fi 或 Tailscale 下連線。若要隨時隨地連線，請在電腦上登入並重新配對",
       "unlockHint": "解鎖手機後，點一下以重試",
       "worktreeAccessibilitySummary": "{{summary}}，{{activeCount}} 個使用中"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "檢視網路診斷"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "正在檢查主機相容性"
@@ -1666,7 +1659,6 @@
     },
     "hostScreenHeader": {
       "accounts": "帳戶",
-      "backToHosts": "返回主機清單",
       "floatingWorkspace": "浮動工作區",
       "hideSidebar": "隱藏側邊欄",
       "reconnect": "重新連線",

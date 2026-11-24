@@ -7,10 +7,6 @@ const SECTION_HEADER_TEXT_GAP = 7
 const SECTION_HEADER_HEIGHT = 20 + SECTION_HEADER_TEXT_GAP * 2
 
 export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize
-  },
   list: {
     paddingBottom: spacing.lg
   },
