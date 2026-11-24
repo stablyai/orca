@@ -1,3 +1,5 @@
+import { markdownPlainLine } from '../markdown/markdown-plain-line'
+
 export const ORCHESTRATION_TASK_TITLE_MAX_LENGTH = 80
 export const ORCHESTRATION_DISPLAY_NAME_MAX_LENGTH = 160
 
@@ -21,7 +23,10 @@ export function buildOrchestrationTaskDisplayMetadata(input: {
 
 function deriveTaskTitleFromSpec(spec: string): string {
   for (const line of spec.split(/\r?\n/)) {
-    const title = normalizeSingleLine(line, ORCHESTRATION_TASK_TITLE_MAX_LENGTH)
+    const title = normalizeSingleLine(
+      markdownPlainLine(line.slice(0, 400)),
+      ORCHESTRATION_TASK_TITLE_MAX_LENGTH
+    )
     if (title) {
       return title
     }

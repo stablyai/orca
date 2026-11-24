@@ -55,6 +55,7 @@ export function formatBotItemWrite(view: BotItemWriteView): string {
       ...(item.madeBy && item.owner.botId !== item.madeBy.botId
         ? [`for ${item.owner.name ?? item.owner.botId}`]
         : []),
+      item.title,
       chatWords(item),
       ...(view.unchanged ? ['nothing changed'] : [])
     ].join(' · ')

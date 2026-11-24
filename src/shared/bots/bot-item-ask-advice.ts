@@ -3,12 +3,7 @@
 // fixed-width patterns; code, links and paths are skipped, since the bot marked or linked them.
 import type { BotItemAsk } from './bot-item-ask'
 
-export type BotItemAskAdviceCode =
-  | 'prose_choices'
-  | 'no_question'
-  | 'long_question'
-  | 'long_context'
-  | 'jargon'
+export type BotItemAskAdviceCode = 'prose_choices' | 'no_question' | 'long_question' | 'jargon'
 
 export type BotItemAskAdvice = {
   /** Every code that fired, in priority order. */
@@ -20,16 +15,12 @@ export type BotItemAskAdvice = {
 const SCAN_LIMIT = 8_000
 const QUESTION_LIMIT = 140
 const LEAD_LIMIT = 300
-const CONTEXT_LIMIT = 300
-const CONTEXT_LINES = 5
 const PIECE_LIMIT = 200
 
 const TIPS: Record<BotItemAskAdviceCode, string> = {
   prose_choices: 'Give the choices as --option values after --ask, so they show as quick replies.',
   no_question: 'Lead with the question itself, ending in a question mark.',
   long_question: 'Keep the question to one line under 140 characters; put the why in --comment.',
-  long_context:
-    'Keep --comment short or link to details; longer context fits in the same call with --comment-file instead.',
   jargon: 'Say in plain words what each hash or ID is, or link it instead.'
 }
 
@@ -38,7 +29,6 @@ const ORDER: readonly BotItemAskAdviceCode[] = [
   'prose_choices',
   'no_question',
   'long_question',
-  'long_context',
   'jargon'
 ]
 
@@ -257,17 +247,18 @@ export function botItemAskAdvice({
     if (prompts.some((prompt) => prompt.length > QUESTION_LIMIT)) {
       found.add('long_question')
     }
-    const lines = context.split('\n').filter((line) => line.trim()).length
-    if (context.length > CONTEXT_LIMIT || lines > CONTEXT_LINES) {
-      found.add('long_context')
-    }
     const options = ask.questions.flatMap((question) =>
       question.options.flatMap((option) => [option.label, option.detail ?? ''])
     )
     // Each field is masked on its own, so code never pairs across two of them.
     const written = [context, ...prompts].map(prose)
-    // Choices the bot wrote into its question or context rather than as buttons.
-    if (hasProseChoices(written.join('\n'))) {
+    // Choices spelled in prose instead of buttons; once every question has options, choices named in
+    // the context are those buttons.
+    const bare = ask.questions.filter((question) => question.options.length === 0)
+    if (
+      bare.length > 0 &&
+      hasProseChoices([context, ...bare.map((q) => q.prompt)].map(prose).join('\n'))
+    ) {
       found.add('prose_choices')
     }
     words = [...written, ...options.map(prose)].join('\n')
