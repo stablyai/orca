@@ -51,6 +51,8 @@ export class ProviderRelaySpool {
   private disposed = false
   /** Ends the current attach's waits once it is superseded, so its call returns even on a stalled disk. */
   private cancelWait: (() => void) | null = null
+  /** The file replay still running, stale or not; one at a time, so stalled takeovers can't stack readers. */
+  private reading: Promise<unknown> | null = null
   private readonly memoryCap: number
   private readonly fileCap: number
 
@@ -192,6 +194,10 @@ export class ProviderRelaySpool {
       const wait = this.file.waitForWrites()
       cancelWrites = wait.cancel
       await wait.done
+      // A stale reader stalled on the disk is waited out rather than joined by another.
+      while (this.reading && current()) {
+        await Promise.race([this.reading, superseded])
+      }
       // A superseded attach reads nothing, so a stalled write can't make each one reread the file.
       if (!current()) {
         return this.nextSeqValue - 1
@@ -204,14 +210,16 @@ export class ProviderRelaySpool {
       fileLast > after
         ? // A read stalled on the disk sends nothing more once superseded, and the call returns.
           await Promise.race([
-            replaySpoolFileRecords({
-              path: this.options.path,
-              after,
-              index: this.file.index,
-              current,
-              deliver: this.options.deliver,
-              drained: this.options.drained
-            }),
+            this.track(
+              replaySpoolFileRecords({
+                path: this.options.path,
+                after,
+                index: this.file.index,
+                current,
+                deliver: this.options.deliver,
+                drained: this.options.drained
+              })
+            ),
             superseded.then(() => ({ outcome: 'stale' as const, highest: after }))
           ])
         : { outcome: 'done', highest: after }
@@ -253,6 +261,16 @@ export class ProviderRelaySpool {
       this.attachGeneration++
       this.stopWaiting()
     }
+  }
+
+  private track<T>(replay: Promise<T>): Promise<T> {
+    const reading = replay.finally(() => {
+      if (this.reading === reading) {
+        this.reading = null
+      }
+    })
+    this.reading = reading
+    return reading
   }
 
   private stopWaiting(): void {
