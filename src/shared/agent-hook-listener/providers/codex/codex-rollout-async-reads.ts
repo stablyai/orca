@@ -14,7 +14,33 @@ import {
 // Why: an open stalled by an on-access scan holds a libuv thread (4 by default); leave one free for other file work.
 const MAX_CONCURRENT_ROLLOUT_READS = 3
 let rolloutReadsInFlight = 0
-const rolloutReadQueue: (() => void)[] = []
+type RolloutReadWaiter = { batch: RolloutReadBatch; grant: (granted: boolean) => void }
+const rolloutReadQueue: RolloutReadWaiter[] = []
+
+// Why: while every slot is stalled, a retired owner's queued read would otherwise wait, and hold its caller, until one frees.
+function settleUnwantedWaiters(): void {
+  let kept = 0
+  for (const waiter of rolloutReadQueue) {
+    if (waiter.batch.wanted()) {
+      rolloutReadQueue[kept++] = waiter
+    } else {
+      waiter.grant(false)
+    }
+  }
+  rolloutReadQueue.length = kept
+}
+
+/** A freed slot passes straight to the oldest wanted waiter, so the count never overshoots. */
+function releaseRolloutReadSlot(): void {
+  for (let next = rolloutReadQueue.shift(); next; next = rolloutReadQueue.shift()) {
+    if (next.batch.wanted()) {
+      next.grant(true)
+      return
+    }
+    next.grant(false)
+  }
+  rolloutReadsInFlight -= 1
+}
 
 // Why: buffers live until their poll or hook applies them; cap what all pending batches hold so many queued panes cannot pile up megabytes each.
 const MAX_HELD_ROLLOUT_BYTES = 16 * 1024 * 1024
@@ -73,30 +99,32 @@ export class RolloutReadBatch {
     this.held = 0
     this.released = true
     batchesHoldingBytes.delete(this)
+    settleUnwantedWaiters()
   }
 }
 
-/** `wanted` is rechecked once a slot is granted, so work its caller abandoned while queued never touches the disk. */
+/** `wanted` is rechecked once a slot is granted; a waiter whose caller retired settles without one. */
 async function withRolloutReadSlot<T>(
   run: () => Promise<T>,
   batch: RolloutReadBatch,
   unwanted: T
 ): Promise<T> {
+  if (!batch.wanted()) {
+    return unwanted
+  }
   if (rolloutReadsInFlight < MAX_CONCURRENT_ROLLOUT_READS) {
     rolloutReadsInFlight += 1
   } else {
-    // A freed slot passes straight to the oldest waiter, so the count never overshoots.
-    await new Promise<void>((resolve) => rolloutReadQueue.push(resolve))
+    settleUnwantedWaiters()
+    const granted = await new Promise<boolean>((grant) => rolloutReadQueue.push({ batch, grant }))
+    if (!granted) {
+      return unwanted
+    }
   }
   try {
     return batch.wanted() ? await run() : unwanted
   } finally {
-    const next = rolloutReadQueue.shift()
-    if (next) {
-      next()
-    } else {
-      rolloutReadsInFlight -= 1
-    }
+    releaseRolloutReadSlot()
   }
 }
 
