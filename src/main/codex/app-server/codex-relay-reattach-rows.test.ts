@@ -88,6 +88,6 @@ describe('codex rows across a reattach', () => {
       }
     ])
     expect(tracker.relayOpenWork(false).command).toEqual([['main', 'c1']])
-    expect(tracker.state?.tasks.map((task) => task.kind)).toEqual(['command'])
+    expect(tracker.state?.tasks?.map((task) => task.kind)).toEqual(['command'])
   })
 })
