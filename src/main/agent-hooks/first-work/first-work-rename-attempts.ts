@@ -7,6 +7,11 @@ import {
   recordFirstWorkGenerationFailure,
   resetFirstWorkGenerationBackoff
 } from './first-work-generation-backoff'
+import {
+  armFirstWorkDetachedHeadCooldown,
+  clearFirstWorkDetachedHeadCooldown,
+  resetFirstWorkDetachedHeadCooldowns
+} from './first-work-detached-head-cooldown'
 
 export type FirstWorkRenameVerdict = {
   outcome: BranchAutoRenameOutcome
@@ -14,6 +19,8 @@ export type FirstWorkRenameVerdict = {
   settles: boolean
   /** Counts toward the automatic backoff. */
   generationFailed?: true
+  /** Git confirmed a detached HEAD; pauses automatic attempts. */
+  detachedHead?: true
 }
 
 export type FirstWorkAttemptResult = {
@@ -50,6 +57,8 @@ type AttemptEntry = {
   incarnation: string
   attemptId: number
   lookupExpired: boolean
+  /** False once a manual Retry joined: the click must not leave a pause behind. */
+  armsCooldown: boolean
   promise: Promise<FirstWorkAttemptResult>
 }
 
@@ -69,6 +78,7 @@ export function resetFirstWorkBranchRenameState(): void {
   inFlight.clear()
   settled.clear()
   resetFirstWorkGenerationBackoff()
+  resetFirstWorkDetachedHeadCooldowns()
 }
 
 export function isFirstWorkRenameSettled(worktreeId: string, incarnation: string): boolean {
@@ -87,6 +97,20 @@ export function runningFirstWorkAttempt(
 ): { attemptId: number; promise: Promise<FirstWorkAttemptResult> } | null {
   const entry = inFlight.get(worktreeId)
   return entry && entry.incarnation === incarnation && !entry.lookupExpired ? entry : null
+}
+
+/** Manual Retry: clears the detached-HEAD pause before joining, so a joined attempt cannot re-arm it. */
+export function joinFirstWorkAttemptForRetry(
+  worktreeId: string,
+  incarnation: string
+): { attemptId: number; promise: Promise<FirstWorkAttemptResult> } | null {
+  clearFirstWorkDetachedHeadCooldown(worktreeId)
+  const entry = inFlight.get(worktreeId)
+  if (!entry || entry.incarnation !== incarnation || entry.lookupExpired) {
+    return null
+  }
+  entry.armsCooldown = false
+  return entry
 }
 
 function rememberSettled(worktreeId: string, incarnation: string): void {
@@ -115,6 +139,7 @@ export function startFirstWorkAttempt(
     incarnation,
     attemptId,
     lookupExpired: false,
+    armsCooldown: true,
     promise: Promise.resolve({ attemptId, outcome: { kind: 'failed' }, finishedAt: 0 })
   }
   const attempt: FirstWorkAttempt = {
@@ -158,16 +183,22 @@ async function settleAttempt(
       settles: false
     }
   }
-  // A replaced workspace's verdict must not gate or back off its successor.
-  if (incarnationCurrent()) {
+  // One synchronous check: a replaced or superseded attempt must not gate, pause or back off its successor.
+  const isEntry = inFlight.get(worktreeId) === entry
+  if (isEntry && incarnationCurrent()) {
     if (verdict.settles) {
       clearFirstWorkGenerationFailures(worktreeId)
       rememberSettled(worktreeId, entry.incarnation)
     } else if (verdict.generationFailed) {
       recordFirstWorkGenerationFailure(worktreeId, entry.incarnation)
     }
+    if (verdict.detachedHead && entry.armsCooldown) {
+      armFirstWorkDetachedHeadCooldown(worktreeId, entry.incarnation)
+    } else {
+      clearFirstWorkDetachedHeadCooldown(worktreeId)
+    }
   }
-  if (inFlight.get(worktreeId) === entry) {
+  if (isEntry) {
     inFlight.delete(worktreeId)
   }
   const result = { attemptId: entry.attemptId, outcome: verdict.outcome, finishedAt: Date.now() }

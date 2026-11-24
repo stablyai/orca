@@ -1,4 +1,3 @@
-import { getGitCurrentBranchName } from '../../../shared/git/refs/git-current-branch'
 import type { FirstWorkBranchRenameEvent } from './first-work-branch-rename-event'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../shared/repository/repo-types'
@@ -40,6 +39,8 @@ import { resolveGenerationTarget } from './first-work-generation-target'
 import { runFolderWorkspaceTitleAutoRename } from './first-work-workspace-title-rename'
 import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { isFirstWorkGenerationBackingOff } from './first-work-generation-backoff'
+import { isFirstWorkDetachedHeadCoolingDown } from './first-work-detached-head-cooldown'
+import { readFirstWorkHeadState } from './first-work-head-state'
 import {
   isFirstWorkRenameSettled,
   runningFirstWorkAttempt,
@@ -113,7 +114,8 @@ export async function maybeAutoRenameBranchOnFirstWork(
     !incarnation ||
     isFirstWorkRenameSettled(worktreeId, incarnation) ||
     runningFirstWorkAttempt(worktreeId, incarnation) ||
-    isFirstWorkGenerationBackingOff(worktreeId, incarnation)
+    isFirstWorkGenerationBackingOff(worktreeId, incarnation) ||
+    isFirstWorkDetachedHeadCoolingDown(worktreeId, incarnation)
   ) {
     return
   }
@@ -182,10 +184,14 @@ async function runAutoRename(
   }
   const exec: GitExec = (args) => gitExecFileAsync(args, { cwd: worktreePath })
 
-  const currentBranch = await getGitCurrentBranchName(exec)
-  if (!currentBranch) {
+  const head = await readFirstWorkHeadState(exec)
+  if (head.kind === 'detached') {
+    return { ...defer('interrupted', 'detached HEAD'), detachedHead: true }
+  }
+  if (head.kind === 'unknown') {
     return defer('interrupted', 'no checked-out branch')
   }
+  const currentBranch = head.name
   if (!deps.canRenameOrcaCreatedBranch(worktreeId)) {
     return stop('name-chosen', 'worktree is not eligible for auto-rename', true)
   }
