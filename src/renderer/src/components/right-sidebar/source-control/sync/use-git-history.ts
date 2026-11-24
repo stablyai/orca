@@ -103,21 +103,13 @@ export function useSourceControlGitHistory({
     ? presentGitHistoryEntry(entry, historyFence)
     : EMPTY_GIT_HISTORY_STATE
 
+  const consumesSlot = activeWorktreeId !== null && worktreeMap.has(activeWorktreeId)
   useEffect(() => {
-    const mounted = activeWorktreeId && worktreeMap.has(activeWorktreeId)
-    if (mounted) {
-      mountedHistoryConsumers.set(slotKey, (mountedHistoryConsumers.get(slotKey) ?? 0) + 1)
+    if (!consumesSlot) {
+      return
     }
-    for (const [key, request] of latestGitHistoryRequest) {
-      if (!worktreeMap.has(request.worktreeId) && !mountedHistoryConsumers.has(key)) {
-        gitHistorySlots.delete(key)
-        latestGitHistoryRequest.delete(key)
-      }
-    }
+    mountedHistoryConsumers.set(slotKey, (mountedHistoryConsumers.get(slotKey) ?? 0) + 1)
     return () => {
-      if (!mounted) {
-        return
-      }
       const remaining = (mountedHistoryConsumers.get(slotKey) ?? 1) - 1
       if (remaining) {
         mountedHistoryConsumers.set(slotKey, remaining)
@@ -125,7 +117,18 @@ export function useSourceControlGitHistory({
         mountedHistoryConsumers.delete(slotKey)
       }
     }
-  }, [activeWorktreeId, slotKey, worktreeMap])
+  }, [consumesSlot, slotKey])
+
+  // Prune only when the catalog changes: a workspace switch must not sweep every retained request.
+  // Declared after registration so a consumer whose worktree left the catalog has already released its slot.
+  useEffect(() => {
+    for (const [key, request] of latestGitHistoryRequest) {
+      if (!worktreeMap.has(request.worktreeId) && !mountedHistoryConsumers.has(key)) {
+        gitHistorySlots.delete(key)
+        latestGitHistoryRequest.delete(key)
+      }
+    }
+  }, [worktreeMap])
 
   const refreshGitHistory = useCallback(
     async (options?: HistoryRefresh): Promise<void> => {
