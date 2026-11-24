@@ -33,6 +33,8 @@ function editorTabViewOf(file: OpenFile): EditorTabView | null {
       return { mode: 'conflict-review', ...pickStoredFields(file, ['conflictReview']) }
     case 'git-graph':
       return { mode: 'git-graph' }
+    case 'pipeline-run':
+      return { mode: 'pipeline-run' }
     case 'check-details':
       return { mode: 'check-details', ...pickStoredFields(file, ['checkRunDetails']) }
   }

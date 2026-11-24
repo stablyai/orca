@@ -13,6 +13,7 @@ import { customEditorTakeover } from './plugin-custom-editor-takeover'
 import { fileList } from './plugin-contribution-file-list'
 import {
   fontContributionRows,
+  pipelineContributionRows,
   statusBarContributionRows,
   statusBarItemTitles,
   withMode
@@ -36,6 +37,7 @@ export type PluginContribution = {
 
 /** What a plugin adds, minus commands, from either its manifest or Orca's live registrations. */
 export type PluginContributionSource = {
+  pipelineProfiles?: readonly string[]
   themes: readonly { id: string; label: string; base?: 'light' | 'dark' }[]
   terminalThemes: readonly { id: string; label: string; mode?: 'light' | 'dark' | 'unknown' }[]
   iconThemes: readonly { id: string; label: string }[]
@@ -96,6 +98,7 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
   })
   return {
     themes: contributes.themes.map(titled),
+    pipelineProfiles: contributes.pipelineProfiles.map((profile) => profile.title),
     terminalThemes: contributes.terminalThemes.map(titled),
     iconThemes: contributes.iconThemes.map(titled),
     fonts: contributes.fonts.map((font) => font.family),
@@ -127,6 +130,7 @@ export function summaryContributionSource(
       label: item.name,
       base: base(item.name)
     })),
+    pipelineProfiles: of('pipelineProfiles').map((item) => item.name),
     terminalThemes: of('terminalThemes').map((item) => ({
       id: item.name,
       label: item.name,
@@ -190,7 +194,7 @@ export function describePluginContributions(
   t: Translate = translate,
   intlLocale?: string
 ): PluginContribution[] {
-  const rows: PluginContribution[] = []
+  const rows: PluginContribution[] = pipelineContributionRows(source.pipelineProfiles ?? [], t)
   for (const theme of source.themes) {
     rows.push({
       key: `themes:${theme.id}`,

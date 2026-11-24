@@ -1,4 +1,5 @@
 import { isTerminalInputPaused } from '../../../runtime/terminal/input/terminal-input-admission'
+import { preparePipelineV2Input } from '../../../runtime/pipelines/v2/pipeline-v2-input-events'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import type { PtyRendererDelivery } from '../session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
@@ -87,17 +88,23 @@ export function createPtyWriteInput(deps: {
     ) {
       return false
     }
-    noteRendererPtyInput(args)
-    const chunks = iterateTerminalInputChunks(data)
-    const first = chunks.next()
-    if (first.done) {
-      return writeChunk(provider, id, data, verify)
+    const write = (): boolean | Promise<boolean> => {
+      noteRendererPtyInput(args)
+      const chunks = iterateTerminalInputChunks(data)
+      const first = chunks.next()
+      if (first.done) {
+        return writeChunk(provider, id, data, verify)
+      }
+      const second = chunks.next()
+      if (second.done) {
+        return writeChunk(provider, id, first.value, verify)
+      }
+      return writePtyProviderInputChunks(provider, id, chunks, first.value, second.value, verify)
     }
-    const second = chunks.next()
-    if (second.done) {
-      return writeChunk(provider, id, first.value, verify)
-    }
-    return writePtyProviderInputChunks(provider, id, chunks, first.value, second.value, verify)
+    const preparing = runtime
+      ? preparePipelineV2Input(runtime, { ptyId: id }, args.inputKind, data)
+      : undefined
+    return preparing ? preparing.then(write) : write()
   }
 
   const acceptedSettlement = (id: string, settlement: WriteSettlement): boolean => {

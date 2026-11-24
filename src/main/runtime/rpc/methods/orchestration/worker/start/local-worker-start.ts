@@ -1,16 +1,9 @@
+import type { LocalWorkerStartArgs } from './local-worker-start-args'
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
+import * as system from '../system-worker-coordinator'
 import { refuseClaimedWorkerTerminal } from '../../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { probeWorkerOpenCodeModelLaunchSupport } from './launch/worker-opencode-model-preflight'
 import { resolveWorkerConfiguredAgentParams } from './launch/worker-configured-agent-preflight'
-import type { OrcaRuntimeService } from '../../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
-import type {
-  DispatchContextRow,
-  RunRow,
-  TaskRow
-} from '../../../../../orchestration/db/orchestration-records'
-import type { OrchestrationEntryCaller } from '../../../../../orchestration/addressing/orchestration-caller-identity'
-import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
 import {
   refuseUnmatchedWorkerSelector,
@@ -18,11 +11,9 @@ import {
 } from './worker-start-selector-refusal'
 import { resolveWorkerStartModeOnHost } from '../../structured-workers/orchestration-worker-start-mode'
 import { lineageModeForResolvedAgent } from './worker-chat-lineage'
-import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './placement/worker-start-agent-placement'
 import { resolveExistingWorkerWorkspace } from './placement/folder-worktree-placement'
 import { resolveWorkerWorktreeCreationTarget } from './placement/worker-worktree-creation'
-import type { WorkerStartInput } from './worker-start-input'
 import {
   persistGatedSetupSpawnFailure,
   persistWorkerReadinessStage
@@ -43,34 +34,19 @@ import { requireWorkerAuthority, type WorkerEffect } from './placement/worker-pl
 import { prepareLocalWorkerStart } from './launch/worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './readiness/worker-start-readiness-settlement'
 import { handOverWhenReady } from './readiness/placed-worker-readiness'
-import type { WorkerStartMutation } from './worker-start-mutation'
 import {
   prepareWorkerStartCard,
   recordWorkerStartOutcome
 } from '../../../../../orchestration/workers/launch/worker-start-card'
 import { rebindReusedStructuredWorker } from '../../structured-workers/orchestration-structured-worker-session'
-import { placedWorkerParty, type WorkerFollowUp } from '../follow-up/worker-follow-up-placement'
+import { placedWorkerParty } from '../follow-up/worker-follow-up-placement'
 
-export async function startLocalWorker(args: {
-  params: WorkerStartInput
-  runtime: OrcaRuntimeService
-  db: OrchestrationDb
-  /** Called only once effect-free validation passes, so a refused start binds no new Run. */
-  bindRun: () => RunRow
-  taskDeps: string[] | undefined
-  coordinator: OrchestrationCallerIdentity | null
-  callerSession?: OrchestrationEntryCaller
-  existingTask?: TaskRow
-  orchestrationMutation?: WorkerStartMutation
-  /** Settings-driven; the executing host still gets to refuse below. */
-  mode: WorkerStartModeReceipt
-  /** Stamped on the Dispatch so the workers this one starts start as chats too. */
-  chatLineage?: boolean
-  /** Set when a worker starts its own helper; the helper reports to this Dispatch. */
-  helperCreator?: DispatchContextRow
-  followUp?: WorkerFollowUp
-}): Promise<unknown> {
+export async function startLocalWorker(args: LocalWorkerStartArgs): Promise<unknown> {
   const { runtime, db, coordinator, callerSession, orchestrationMutation } = args
+  const callerWorkspace = () =>
+    args.systemCoordinator
+      ? Promise.resolve(args.systemCoordinator.workspaceId)
+      : resolveDispatchCallerWorktreeId(runtime, args.params.from, callerSession)
   const recordStart = prepareWorkerStartCard(runtime, callerSession)
   // `--terminal` names a party: a chat by its `/clear` root address, as its Dispatch does.
   const terminal = args.params.terminal && resolveDispatchAssigneeParty(args.params.terminal, db)
@@ -89,7 +65,7 @@ export async function startLocalWorker(args: {
     })
   const coordinatorWorktreeId = await refuseUnmatchedWorkerSelector(
     { flag: '--from', value: params.from },
-    () => resolveDispatchCallerWorktreeId(runtime, params.from, callerSession)
+    callerWorkspace
   )
   const existingWorktree =
     requestedWorktree === 'current' ? `id:${coordinatorWorktreeId}` : requestedWorktree
@@ -114,6 +90,7 @@ export async function startLocalWorker(args: {
     runtime,
     openCodeModelLaunchSupported
   })
+  system.applySystemWorkerLaunch(args.systemCoordinator, launch)
 
   const creationTarget = createsWorktree
     ? await creationTargetFor(coordinatorWorktreeId)
@@ -133,8 +110,15 @@ export async function startLocalWorker(args: {
     })
   }
   const decided = lineageModeForResolvedAgent(runtime, args.mode, { ...args, params, agent })
-  const hostMode = resolveWorkerStartModeOnHost(runtime, decided, resolvedWorktree?.id, agent)
+  const hostMode = resolveWorkerStartModeOnHost(
+    runtime,
+    decided,
+    resolvedWorktree?.id,
+    agent,
+    Boolean(chat)
+  )
   let mode = chatWorkerMode(await hostMode, chat)
+  system.assertSystemWorkerMode(args.systemCoordinator, mode.mode)
 
   // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
   refuseClaimedWorkerTerminal(db, params.terminal, runtime, args.followUp?.of)
@@ -208,9 +192,9 @@ export async function startLocalWorker(args: {
       launch,
       effects,
       onStage,
-      followUp: args.followUp
+      followUp: args.followUp,
+      requiredMode: args.systemCoordinator?.requiredMode
     })
-    // New worktrees resolve host support after creation, so the final mode receipt may differ from preflight.
     mode = placed.mode
     resolvedWorktree = placed.worktree
     terminalHandle = placed.terminalHandle
@@ -233,7 +217,6 @@ export async function startLocalWorker(args: {
 
     const launchedAt = Date.now()
     failedStage = 'agent_readiness'
-    // A structured worker's setup gate and its preamble's wait share one deadline: the timeout.
     const timeoutMs = params.timeoutMs ?? 60_000
     const readinessDeadline = Date.now() + timeoutMs
     const readiness = {
@@ -246,7 +229,7 @@ export async function startLocalWorker(args: {
     const handle = terminalHandle
     const worktreeId = resolvedWorktree.id
     // A hand-over from the background wait gets a fresh delivery budget; one in time keeps the shared one.
-    const bindTerminal = (): void => {
+    const bindTerminal = async (): Promise<void> => {
       const terminalAuthority = authority ?? requireWorkerAuthority(runtime, handle)
       db.prepareStartingWorkerAuthority({
         dispatchId: started.dispatch.id,
@@ -257,9 +240,16 @@ export async function startLocalWorker(args: {
         setupState: setupReceipt.state,
         terminalOwnership: external ? 'external' : 'created'
       })
+      await system.bindSystemWorkerCoordinator(
+        args.systemCoordinator,
+        db,
+        terminalAuthority.paneKey,
+        started.dispatch.id,
+        handle
+      )
     }
     const handOver = async (deliveryDeadline = readinessDeadline): Promise<unknown> => {
-      bindTerminal()
+      await bindTerminal()
       if (workerChat) {
         rebindReusedStructuredWorker(handle, db)
       }
@@ -284,6 +274,8 @@ export async function startLocalWorker(args: {
         mode,
         timeoutMs,
         readinessDeadline: deliveryDeadline,
+        taskOnly: args.systemCoordinator?.taskOnly,
+        decorateTask: args.systemCoordinator?.decorateTask,
         effects,
         terminalRevealWarning: placement.warning,
         onStage

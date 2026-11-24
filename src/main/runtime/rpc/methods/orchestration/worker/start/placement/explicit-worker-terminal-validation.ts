@@ -34,15 +34,17 @@ export async function assertExplicitWorkerTerminalUsable(args: {
   // Structured coordinators may have no showable terminal; compare their handle/pane identity, or session address for handle-less callers.
   // A paired Orca's coordinator has no terminal here either; its address is its handle.
   const coordinatorHandle =
-    coordinator?.terminalHandle === null || isPeerCaller(coordinator)
-      ? coordinator.address
-      : isStructuredWorkerHandle(from)
-        ? from
-        : (
-            await refuseUnmatchedWorkerSelector({ flag: '--from', value: from }, () =>
-              runtime.showTerminal(from)
-            )
-          ).handle
+    coordinator === null && !from
+      ? null
+      : coordinator?.terminalHandle === null || isPeerCaller(coordinator)
+        ? coordinator.address
+        : isStructuredWorkerHandle(from)
+          ? from
+          : (
+              await refuseUnmatchedWorkerSelector({ flag: '--from', value: from }, () =>
+                runtime.showTerminal(from)
+              )
+            ).handle
   if (
     explicitTerminal.handle === coordinatorHandle ||
     (targetPane !== null && targetPane === callerPane)

@@ -1,6 +1,7 @@
 import { withFolderSetupSupportWarning } from './folder-setup-support-warning'
 import { withWorktreeSelectorRecovery } from './worktree-selector-recovery'
 import { cliCaller } from '../automations/automation-caller-chat'
+import { readWorktreePipeline } from '../pipelines/worktree-create-pipeline'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreeRecord,
@@ -116,6 +117,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const explicitParentWorktree = explicitParent.parentWorktree
     const explicitParentWorkspace = explicitParent.parentWorkspace
     const startupAgent = getOptionalStartupAgent(flags)
+    const pipeline = await readWorktreePipeline(context, startupAgent)
     // Read before any request, so a bad prompt, model or effort creates nothing.
     const agentLaunch = startupAgent
       ? readCliAgentLaunch(flags, startupAgent, { createsWorktree: true })
@@ -160,6 +162,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       await assertReferenceWritesSupported(client)
     }
     const create = {
+      ...pipeline,
       // Older hosts drop `repoHostId` and keep refusing an id on several hosts, as before.
       ...repoTarget,
       name,

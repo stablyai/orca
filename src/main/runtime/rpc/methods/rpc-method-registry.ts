@@ -126,9 +126,11 @@ import {
 } from './workspace-layout/workspace-layout'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
+import { PIPELINE_METHODS } from './pipelines/pipelines'
 
 // Keep registration order and the full RPC/security surface visible in one manifest.
 const CORE_RPC_METHODS = [
+  ...PIPELINE_METHODS,
   ...STATUS_METHODS,
   ...PAIRED_SERVER_ASKS_METHODS,
   ...DESKTOP_WINDOW_METHODS,

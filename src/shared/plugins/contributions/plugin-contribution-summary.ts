@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import {
   PLUGIN_CONTRIBUTION_POINTS,
@@ -68,6 +68,7 @@ export function pluginContributionSummary(
       return { kind, name: name(item), ...(extra ? { detail: extra } : {}) }
     })
   return [
+    ...named('pipelineProfiles', c.pipelineProfiles, (profile) => profile.title),
     ...named('panels', c.panels, (panel) => panel.title),
     ...named('commands', c.commands, (command) => command.title),
     ...named('events', c.events, (event) => event.on),

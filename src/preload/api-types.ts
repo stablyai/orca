@@ -18,6 +18,7 @@ import type {
   RateLimitsApi
 } from './api/agent-usage/agent-usage-api'
 import type { AiVaultApi } from './api/ai-vault/ai-vault-api'
+import type { PipelineOwnerApi } from './api/pipeline-owner-api'
 import type { AppApi, E2EApi, PlatformApi } from './api/app-api'
 import type { AutomationsApi } from './api/automations/automation-api'
 import type { BrowserApi } from './api/browser/browser-api'
@@ -97,6 +98,7 @@ import type {
 type Merged<T> = { [K in keyof T]: T[K] }
 
 export type PreloadApi = {
+  pipelineOwner: PipelineOwnerApi
   app: AppApi
   orcaProfiles: OrcaProfileApi
   platform: PlatformApi

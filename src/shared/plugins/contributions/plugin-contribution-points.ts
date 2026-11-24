@@ -1,4 +1,5 @@
-import { z } from 'zod'
+import * as z from 'zod'
+import { PipelineProfile } from '../../pipelines/pipeline-contracts'
 import type { PluginCatalogType } from '../catalog/plugin-catalog-types'
 import {
   PLUGIN_COMMAND_LIMIT,
@@ -72,7 +73,8 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
   'customEditors',
   'newFiles',
   'settings',
-  'statusBarItems'
+  'statusBarItems',
+  'pipelineProfiles'
 ] as const
 
 export type PluginContributionPoint = (typeof PLUGIN_CONTRIBUTION_POINTS)[number]
@@ -139,6 +141,15 @@ const V1 = PLUGIN_SCHEMA_SINCE_V1
 const NEXT = PLUGIN_MANIFEST_V2_SINCE
 
 export const pluginContributesFields = {
+  pipelineProfiles: contributionList(
+    PipelineProfile,
+    16,
+    'Versioned native task pipelines. Commands for checks are configured separately by the project owner.',
+    '1.4.255'
+  ).refine(
+    (profiles) => new Set(profiles.map((profile) => profile.id)).size === profiles.length,
+    'Pipeline profile ids must be unique'
+  ),
   panels: contributionList(
     pluginPanelContributionSchema,
     PLUGIN_PANEL_LIMIT,
@@ -260,6 +271,7 @@ export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   PluginContributionPoint,
   ContributionPointPolicy
 > = {
+  pipelineProfiles: { execution: 'declarative', catalogType: 'instructions', bindsContent: true },
   panels: { execution: 'sandboxed-ui', catalogType: 'panel', bindsContent: false },
   // Why unbound: an alias command only names a built-in action; it carries no bytes.
   commands: { execution: 'declarative', catalogType: 'instructions', bindsContent: false },

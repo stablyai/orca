@@ -8,6 +8,7 @@
 import { BOT_JOURNAL_ITEM_BODIES } from './agent-session-journal-bot-item-schemas'
 import { BoundedPayload, ProviderFrame } from './agent-session-journal-bounded-payload-schema'
 import * as z from 'zod'
+import { AgentSessionTurnTokenAccountingSchema } from '../conversation-context/agent-session-turn-token-accounting'
 import { AgentSessionContextUsageSchema } from '../conversation-context/agent-session-context-usage-schema'
 import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-thread-goal-schema'
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
@@ -263,6 +264,7 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     kind: z.literal('turn'),
     ...TurnLifecycleFields,
     contextUsage: AgentSessionContextUsageSchema.optional(),
+    tokenAccounting: AgentSessionTurnTokenAccountingSchema.optional(),
     providerTurnId: z.string().min(1).optional()
   }),
   ...BOT_JOURNAL_ITEM_BODIES

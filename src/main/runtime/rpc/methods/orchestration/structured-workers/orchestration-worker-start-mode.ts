@@ -53,8 +53,12 @@ export async function resolveWorkerStartModeOnHost(
   runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
   mode: WorkerStartModeReceipt,
   worktreeId: string | undefined,
-  agent: TuiAgent | undefined
+  agent: TuiAgent | undefined,
+  existingChat = false
 ): Promise<WorkerStartModeReceipt> {
+  if (existingChat) {
+    return mode
+  }
   return resolveAgentLaunchModeOnHost(runtime, mode, worktreeId, agent, WORKER_START_VOCABULARY)
 }
 

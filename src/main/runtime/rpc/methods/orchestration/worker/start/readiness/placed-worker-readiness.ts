@@ -37,7 +37,7 @@ export async function handOverWhenReady(
       'runId' | 'taskId' | 'launch' | 'mode'
     >
     handOver: (deliveryDeadline?: number) => Promise<unknown>
-    bindTerminal: () => void
+    bindTerminal: () => void | Promise<void>
     onHandedOver: (outcome: unknown) => void
     fail: (error: unknown, failedStage?: string) => Promise<unknown>
   }

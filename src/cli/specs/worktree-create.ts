@@ -15,6 +15,13 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     'project-host-setup',
     'name',
     'agent',
+    'pipeline',
+    'api-version',
+    'pipeline-project-id',
+    'pipeline-runtime-id',
+    'pipeline-task',
+    'pipeline-task-file',
+    'request-id',
     'prompt',
     'model',
     'effort',
@@ -38,6 +45,8 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     'activate'
   ],
   notes: [
+    'For native v2, add --api-version 2 --pipeline-project-id <repo-id> and one of --pipeline-task <text> or --pipeline-task-file <plain-UTF8-file>. The selected published version, digest and runtime identity are pinned before creation. --pipeline-runtime-id can require a specific runtime. The task is preserved literally; v1 keeps its existing name/comment task.',
+    '--pipeline <profile-id> selects an enabled versioned profile and owns agent startup. Local Git only. See `orca pipeline profiles --json`; put task criteria in --comment. Profile checks must be owner-configured before creation.',
     'Repeat --reference to attach full issue or review URLs, or Jira issue keys, before setup or agent startup. Use --reference-site to choose the Jira site for keys. Other providers require full URLs. Cannot combine with legacy link flags.',
     'This creates a new checkout. For a fresh agent in an existing worktree, use `orca agent launch` instead.',
     'By default, Orca records the new worktree as a child of the caller context when it can infer one from the Orca terminal or current directory.',

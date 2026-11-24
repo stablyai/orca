@@ -38,6 +38,7 @@ export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
 
 /** Session-only creation intent, including script checks and compatibility planning retained for Retry. */
 export type WorktreeCreationRequest = {
+  pipeline?: CreateWorktreeArgs['pipeline']
   repoId: string
   /** Execution owner retained after script preparation, including retries. */
   executionHostId?: ExecutionHostId

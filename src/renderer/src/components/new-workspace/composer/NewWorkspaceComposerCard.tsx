@@ -1,4 +1,5 @@
 import React from 'react'
+import { NewWorkspaceComposerNoteField } from '../NewWorkspaceComposerNoteField'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
@@ -335,6 +336,14 @@ export default function NewWorkspaceComposerCard(
           selectedProjectName={selectedProjectName}
         />
         <NewWorkspaceComposerNameSection {...props} onNamePlainEnter={handleNamePlainEnter} />
+        {props.pipelinePicker}
+        {props.pipelineSelected && (
+          <NewWorkspaceComposerNoteField
+            note={props.note}
+            onNoteChange={props.onNoteChange}
+            pipeline
+          />
+        )}
         <NewWorkspaceComposerAgentSection
           {...props}
           createDisabled={props.createDisabled || sparseEditing}

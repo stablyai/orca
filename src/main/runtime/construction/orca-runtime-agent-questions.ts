@@ -1,3 +1,5 @@
+import type { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
+import { peekOpenedAgentSessionRecordStore } from '../agent-session/records/agent-session-record-store-slot'
 // The runtime layer that decides when an agent question's asker is told its taker stopped without
 // answering: it reads each party's chat, terminal and deliveries for the question reconciler.
 import { OrcaRuntimeWithAgentTransitions } from './orca-runtime-agent-transitions'
@@ -21,6 +23,11 @@ const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDE
   : OrcaRuntimeWithAgentTransitions
 
 export abstract class OrcaRuntimeWithAgentQuestions extends OrcaRuntimeSidebarBase {
+  /** Return the already-open record store without waiting. */
+  openedAgentSessionRecordStore(): AgentSessionRecordStore | null {
+    return peekOpenedAgentSessionRecordStore()
+  }
+
   /** Decides when an agent question's asker is told its taker stopped without answering. */
   questionReconciler: QuestionReconciler | null = null
   private stopQuestionReconciler: (() => void) | undefined

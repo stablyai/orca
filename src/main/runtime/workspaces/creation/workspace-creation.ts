@@ -23,6 +23,7 @@ import {
 } from './runtime-local-worktree-setup'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import { startRuntimeLocalWorktreeTerminals } from '../startup/runtime-local-worktree-terminal-startup'
+import { runtimeStartupTerminalReceipt } from '../startup/runtime-startup-terminal-receipt'
 import { trackRuntimeWorkspaceCreate } from '../../../workspaces/creation/workspace-create-telemetry'
 import type { RuntimeWorkspaceCreateEvents } from '../../../workspaces/creation/workspace-create-telemetry'
 
@@ -35,8 +36,12 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host/execut
 import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace-create-plugin-hook'
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
 import { createdWorktreeLifecycleIdentity } from '../lifecycle/worktree-lifecycle-event'
+import type { PipelineRuntime } from '../../pipelines/pipeline-runtime'
+import * as pipelines from '../../pipelines/pipeline-workspace-creation'
+import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGroupFolderSetup {
+  abstract readonly pipelineRuntime: PipelineRuntime
   abstract resolveLineageForWorktreeCreate(
     input?: WorktreeLineageInput,
     childRepo?: Repo
@@ -69,6 +74,11 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     )
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
+    const pipelineCreation = await pipelines.preparePipelineCreation(this, args, repo)
+    if (pipelineCreation.replay) {
+      return pipelineCreation.replay
+    }
+    args = pipelineCreation.args
     return withProjectWorktreeCreate(repo, async () => {
       const request = await applyWorkspaceCreatePluginHook(args, repo)
       // Listed from here: a create refused before its project resolved has nothing to show.
@@ -185,6 +195,9 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     const { worktree, worktreePath, includeCopyWarning, created, addResult, metadataResult } =
       localCreate
     const { lineage, workspaceLineage } = metadataResult
+    const pipelineRun = await pipelines.bindCreatedPipeline(this, args, worktree, (pipeline) =>
+      store.setWorktreeMeta(hostWorktreeTargetForRepo(worktree.id, repo), { pipeline })
+    )
 
     const preparedSetup = await prepareRuntimeLocalWorktreeSetup({
       request: args,
@@ -196,7 +209,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       warning:
         [includeCopyWarning, addResult.upstreamWarning].filter(Boolean).join(' ') || undefined
     })
-    const { setup, defaultTabs, setupTrustMismatch } = preparedSetup
+    const { setup, setupTrustMismatch } = preparedSetup
+    const defaultTabs = args.pipeline ? undefined : preparedSetup.defaultTabs
     let { warning } = preparedSetup
 
     this.invalidateResolvedWorktreeCache()
@@ -205,17 +219,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     invalidateAuthorizedRootsCacheForRepo(store, repo)
 
     notifyLineageRepos(this.notifyWorktreesChanged.bind(this), repo.id, lineage?.parentWorktreeId)
-    const {
-      warning: terminalWarning,
-      returnedSetup,
-      didSpawnSetup,
-      didSpawnStartup,
-      setupTerminalHandle,
-      startupTerminalHandle,
-      startupTerminalTabId,
-      startupTerminalPaneKey,
-      startupTerminalPtyId
-    } = await startRuntimeLocalWorktreeTerminals({
+    const terminalResult = await startRuntimeLocalWorktreeTerminals({
       request: args,
       repo,
       worktree,
@@ -230,7 +234,21 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       warning,
       ports: this.localWorktreeTerminalPorts(args, activationCallbacks.local, worktree)
     })
+    const {
+      warning: terminalWarning,
+      returnedSetup,
+      didSpawnSetup,
+      setupTerminalHandle
+    } = terminalResult
     warning = terminalWarning
+    if (pipelineRun) {
+      pipelines.settlePipelineCreationSetup(
+        this.pipelineRuntime,
+        pipelineRun.id,
+        preparedSetup,
+        setupTerminalHandle
+      )
+    }
     this.emitWorktreeLifecycle({
       kind: 'created',
       worktreeId: worktree.id,
@@ -268,18 +286,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       ...(addResult.localBaseRefUpdateSuggestion
         ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
         : {}),
-      ...(didSpawnStartup && startupTerminalHandle
-        ? {
-            startupTerminal: {
-              spawned: true,
-              handle: startupTerminalHandle,
-              ...(startupTerminalTabId ? { tabId: startupTerminalTabId } : {}),
-              ...(startupTerminalPaneKey ? { paneKey: startupTerminalPaneKey } : {}),
-              ...(startupTerminalPtyId ? { ptyId: startupTerminalPtyId } : {}),
-              surface: 'background' as const
-            }
-          }
-        : {})
+      ...runtimeStartupTerminalReceipt(terminalResult)
     }
   }
 

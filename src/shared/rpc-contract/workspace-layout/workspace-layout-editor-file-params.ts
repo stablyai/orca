@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { EditorTabView } from '../../editor/views/editor-tab-view-types'
 
 /** An edit-mode file's restorable record, as the window saves it. */
@@ -18,6 +18,7 @@ const EDITOR_VIEW_MODES: ReadonlySet<unknown> = new Set<EditorTabView['mode']>([
   'markdown-preview',
   'conflict-review',
   'check-details',
+  'pipeline-run',
   'git-graph'
 ])
 

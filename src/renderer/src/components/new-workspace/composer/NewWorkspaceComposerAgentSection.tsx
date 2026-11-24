@@ -11,6 +11,7 @@ import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-car
 type NewWorkspaceComposerAgentSectionProps = Pick<
   NewWorkspaceComposerCardProps,
   | 'quickAgent'
+  | 'pipelineSelected'
   | 'agentSurfaceRows'
   | 'agentPickerDraft'
   | 'agentSetupDisabled'
@@ -32,6 +33,7 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
 
 export function NewWorkspaceComposerAgentSection({
   quickAgent,
+  pipelineSelected = false,
   agentSurfaceRows,
   agentPickerDraft,
   agentSetupDisabled,
@@ -48,47 +50,51 @@ export function NewWorkspaceComposerAgentSection({
   const t = useTranslate()
   return (
     <>
-      <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-agent">
-        <div className="flex items-center justify-between gap-2">
-          <label className="text-xs font-medium text-muted-foreground">
-            {t('components.newWorkspace.agentOptional', 'Agent [Optional]')}
-          </label>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                onClick={(event) => onOpenAgentSettings(event.currentTarget)}
-                tabIndex={-1}
-                className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-                aria-label={t(
-                  'auto.components.NewWorkspaceComposerCard.ab63f25397',
-                  'Open agent settings'
-                )}
-              >
-                <Settings2 className="size-3" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={6}>
-              {t('auto.components.NewWorkspaceComposerCard.ba64270bdb', 'Configure agents')}
-            </TooltipContent>
-          </Tooltip>
+      {!pipelineSelected && (
+        <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-agent">
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-xs font-medium text-muted-foreground">
+              {t('components.newWorkspace.agentOptional', 'Agent [Optional]')}
+            </label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={(event) => onOpenAgentSettings(event.currentTarget)}
+                  tabIndex={-1}
+                  className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
+                  aria-label={t(
+                    'auto.components.NewWorkspaceComposerCard.ab63f25397',
+                    'Open agent settings'
+                  )}
+                >
+                  <Settings2 className="size-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6}>
+                {t('auto.components.NewWorkspaceComposerCard.ba64270bdb', 'Configure agents')}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+          <AgentLaunchPicker
+            model={agentSurfaceRows?.model ?? { state: 'loading', placeholderCount: 2 }}
+            agent={quickAgent}
+            value={agentPickerDraft}
+            cli={agentSurfaceRows?.selection.cli === true}
+            setupDisabled={agentSetupDisabled}
+            onTriggerEnter={createDisabled ? undefined : onCreate}
+            emptyLabel={t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
+            defaultAgent={defaultTuiAgent}
+            onSetDefault={handleSetDefaultAgent}
+            onSelectBlankTerminal={() => onQuickAgentChange(null)}
+            onPick={(agent, draft, entry) =>
+              onQuickAgentChange(agent, draft?.surface, draft, entry)
+            }
+          />
         </div>
-        <AgentLaunchPicker
-          model={agentSurfaceRows?.model ?? { state: 'loading', placeholderCount: 2 }}
-          agent={quickAgent}
-          value={agentPickerDraft}
-          cli={agentSurfaceRows?.selection.cli === true}
-          setupDisabled={agentSetupDisabled}
-          onTriggerEnter={createDisabled ? undefined : onCreate}
-          emptyLabel={t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
-          defaultAgent={defaultTuiAgent}
-          onSetDefault={handleSetDefaultAgent}
-          onSelectBlankTerminal={() => onQuickAgentChange(null)}
-          onPick={(agent, draft, entry) => onQuickAgentChange(agent, draft?.surface, draft, entry)}
-        />
-      </div>
+      )}
 
       <div className="!mb-2">
         <Button

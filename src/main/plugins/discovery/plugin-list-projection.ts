@@ -261,6 +261,9 @@ export async function buildPluginList(
           ...(command.replaces ? { replaces: command.replaces } : {})
         })),
         statusBarItems: plugin.manifest.contributes.statusBarItems,
+        pipelineProfiles: plugin.manifest.contributes.pipelineProfiles.map(
+          ({ id, title, version }) => ({ id, title, version })
+        ),
         hooks: plugin.manifest.contributes.hooks.map((hook) => hook.event),
         hasWorker: Boolean(plugin.manifest.main),
         vmRecipes: service.contentPacks.vmRecipes.preview(plugin.pluginKey).map(({ recipe }) => ({

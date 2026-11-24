@@ -52,6 +52,8 @@ const NO_EFFECTS = { effectsApplied: false } as const
 
 /** A released (sleeping) session is still itself, so its background commands may act, except here. */
 const NEEDS_RUNNING_AGENT: ReadonlySet<string> = new Set([
+  'pipeline.submit',
+  'pipeline.v2.submit',
   // Each reads, or waits on and so holds back, the mail that wakes the session.
   'orchestration.check',
   'orchestration.ask',
@@ -75,7 +77,11 @@ export function needsOrchestrationCallerResolution(
   if (SESSION_CALLER_METHODS.has(request.method)) {
     return request.orchestrationCompatibilityEvidence?.agentSessionId !== undefined
   }
-  if (!request.method.startsWith('orchestration.')) {
+  if (
+    !request.method.startsWith('orchestration.') &&
+    request.method !== 'pipeline.submit' &&
+    request.method !== 'pipeline.v2.submit'
+  ) {
     return false
   }
   return (

@@ -1,4 +1,6 @@
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
+import { sendPipelineSessionDiscussion } from '@/components/pipelines/pipeline-session-discussion-send'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   hasNativeChatStagedFiles,
   captureNativeChatStagedInput
@@ -202,19 +204,45 @@ export function useNativeChatStructuredComposerSend({
       }
       const prepareAttachments: StructuredAgentSessionAttachmentPreparation | undefined =
         stagedInput ? (input) => stagedInput.prepare(input, structuredTransport) : undefined
-      return dispatchNativeChatStructuredComposerText(
-        structuredTransport,
-        text,
-        attachments,
-        promptSkillRefs(submission.draft?.document),
-        {
-          ...intent,
-          ...(prepareAttachments
-            ? { prepareAttachments, onSettled: () => stagedInput?.release() }
-            : {})
-        },
-        consume
-      )
+      const dispatch = async () => {
+        if (
+          !hostCommand &&
+          structuredTransport.runtimeEnvironmentId === null &&
+          window.api?.pipelineOwner
+        ) {
+          const result = await sendPipelineSessionDiscussion({
+            requestId: createBrowserUuid(),
+            sessionId: structuredTransport.sessionId,
+            message: text,
+            hasAttachments: attachments.length > 0 || Boolean(stagedInput)
+          })
+          if (result.handled) {
+            return {
+              accepted: result.accepted,
+              error: result.accepted
+                ? null
+                : (result.rejected ??
+                  'Pipeline discussion delivery is unconfirmed. Inspect the run before retrying.'),
+              revealsTranscript: result.accepted,
+              refusedWhile: undefined
+            }
+          }
+        }
+        return dispatchNativeChatStructuredComposerText(
+          structuredTransport,
+          text,
+          attachments,
+          promptSkillRefs(submission.draft?.document),
+          {
+            ...intent,
+            ...(prepareAttachments
+              ? { prepareAttachments, onSettled: () => stagedInput?.release() }
+              : {})
+          },
+          consume
+        )
+      }
+      return dispatch()
         .then(({ accepted, error, refusedWhile, revealsTranscript }) => {
           if (!hostCommand || isCurrent()) {
             structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
