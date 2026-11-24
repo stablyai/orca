@@ -28371,10 +28371,6 @@
     "google": {
       "bot": {
         "account": "계정",
-        "hostDefault": "{{host}}의 기본값",
-        "computerDefault": "이 컴퓨터의 기본값",
-        "changeInSettings": "설정에서 변경",
-        "alsoConnected": "함께 연결됨",
         "settingUp": "설정 중"
       },
       "disconnect": {
@@ -28384,7 +28380,6 @@
       "hostChoice": {
         "soon": "출시 예정"
       },
-      "addAccount": "다른 Google 계정 추가",
       "defaultBadge": "기본값",
       "row": {
         "signedOut": "Google에 의해 로그아웃됨",
