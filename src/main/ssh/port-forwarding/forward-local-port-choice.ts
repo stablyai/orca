@@ -1,6 +1,7 @@
 import type { PortForwardEntry } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { assertPortNotShadowingListener } from '../../runtime/rpc/transports/websocket/shadowed-port-probe'
 import { assertIpv6LoopbackPortFree } from './local-forward-ipv6-loopback-probe'
+import { serializePortForwardChange } from '../../ipc/ssh/ssh-managed-port-forward-restore'
 
 // Loopback answers at once on POSIX; Windows retries a refused SYN for seconds, which also means nothing listens.
 const LOOPBACK_PROBE_TIMEOUT_MS = 150
@@ -28,7 +29,7 @@ const LISTENER_POLL_MS = 100
 
 /** Resolves once something accepts connections on 127.0.0.1:`port`; throws after `timeoutMs` or once
  *  the forward closes. A system SSH forward reports started before OpenSSH has logged in and bound. */
-export async function waitForLoopbackListener(
+async function waitForLoopbackListener(
   port: number,
   timeoutMs: number,
   isOpen: () => boolean
@@ -65,13 +66,36 @@ type FreeLocalPortForward = {
   holdsIpv6Loopback: boolean
   /** Local ports saved for other forwards that aren't listening now; taking one would replace them. */
   reservedLocalPorts?: ReadonlySet<number>
+  /** For a forward whose start can return before it listens: wait this long for 127.0.0.1 to answer,
+   *  while `isOpen` says the forward is still up. */
+  listening?: { timeoutMs: number; isOpen: (entry: PortForwardEntry) => boolean }
 }
+
+// One automatic start at a time across every host: a start that hasn't bound yet leaves its port
+// looking free, and a second host's start could take it and answer the first one's probe.
+const AUTOMATIC_FORWARD_START_KEY = 'automatic-forward-start'
 
 /** Starts a forward of `remotePort` on the same port number here when nothing answers on it, else
  *  the next free one, else one the OS picks. */
-export async function addForwardOnFreeLocalPort(
+export function addForwardOnFreeLocalPort(
   forward: FreeLocalPortForward
 ): Promise<PortForwardEntry> {
+  return serializePortForwardChange(AUTOMATIC_FORWARD_START_KEY, async () => {
+    const entry = await startOnFreeLocalPort(forward)
+    const { listening } = forward
+    if (listening) {
+      await waitForLoopbackListener(entry.localPort, listening.timeoutMs, () =>
+        listening.isOpen(entry)
+      ).catch(async (error: unknown) => {
+        await forward.remove(entry.id)
+        throw error
+      })
+    }
+    return entry
+  })
+}
+
+async function startOnFreeLocalPort(forward: FreeLocalPortForward): Promise<PortForwardEntry> {
   const { remotePort, add, reservedLocalPorts } = forward
   const lastCandidate = Math.min(remotePort + NEXT_PORT_ATTEMPTS - 1, 65_535)
   for (let candidate = remotePort; candidate <= lastCandidate; candidate++) {

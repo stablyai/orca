@@ -9,10 +9,7 @@ import { serializePortForwardChange } from './ssh-managed-port-forward-restore'
 import { clearForwardFailure, listUnrestoredPortForwards } from './ssh-port-forward-unrestored'
 import { PortForwardTornDownError } from '../../ssh/port-forwarding/ssh-port-forward'
 import { assertIpv6LoopbackPortFree } from '../../ssh/port-forwarding/local-forward-ipv6-loopback-probe'
-import {
-  addForwardOnFreeLocalPort,
-  waitForLoopbackListener
-} from '../../ssh/port-forwarding/forward-local-port-choice'
+import { addForwardOnFreeLocalPort } from '../../ssh/port-forwarding/forward-local-port-choice'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { loopbackPortForwardDialHost } from '../../../shared/workspace/ports/port-forward-loopback-host'
 import { broadcastPortForwards, enrichDetected } from './ssh-renderer-broadcast'
@@ -83,17 +80,14 @@ export function registerSshPortForwardHandlers(handle: RegisterSshRequest): void
         // SSH forwards listen on 127.0.0.1 only.
         holdsIpv6Loopback: false,
         // A saved forward that couldn't restore keeps its port; persisting a new one there would drop it.
-        reservedLocalPorts: new Set(saved.map((forward) => forward.localPort))
-      })
-      // The caller opens the address next; a slow SSH login must not hand it a port nothing answers yet.
-      const isOpen = (): boolean =>
-        portForwardManager!.listForwards(targetId).some((forward) => forward.id === entry.id)
-      await waitForLoopbackListener(entry.localPort, FORWARD_LISTENER_TIMEOUT_MS, isOpen).catch(
-        async (error: unknown) => {
-          await portForwardManager!.removeForwardAndWait(entry.id)
-          throw error
+        reservedLocalPorts: new Set(saved.map((forward) => forward.localPort)),
+        // The caller opens the address next; a slow SSH login must not hand it a port nothing answers yet.
+        listening: {
+          timeoutMs: FORWARD_LISTENER_TIMEOUT_MS,
+          isOpen: (entry) =>
+            portForwardManager!.listForwards(targetId).some((forward) => forward.id === entry.id)
         }
-      )
+      })
       clearForwardFailure(targetId, entry)
       persistPortForwards(targetId)
       broadcastPortForwards(targetId)
