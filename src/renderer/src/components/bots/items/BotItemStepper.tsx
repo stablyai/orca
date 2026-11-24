@@ -13,7 +13,7 @@ import { useKeepFloatingTerminalTriggerClear } from '../../floating-terminal/tri
 
 export type BotItemStepDirection = 'previous' | 'next'
 
-/** Whether the arrows wait on a read: the comment box holds as it is, so their spinner stays in view. */
+/** Whether the arrows wait on a read, so their loading feedback stays in view. */
 export const BotItemSteppingContext = createContext(false)
 
 /** The arrow for `direction`: its attribute marks it for focus moves across a step. */

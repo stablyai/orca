@@ -2,6 +2,7 @@
 // to the comment box, like the chat composer. Shortcuts (Cmd, Ctrl or Alt), Esc, arrows, Tab and
 // keys an IME is composing stay where they are.
 import {
+  shouldFocusNativeChatInputForPaste,
   shouldRedirectNativeChatTyping,
   type KeyboardRedirectEvent
 } from '@/components/native-chat/composer/focus/native-chat-typing-redirect'
@@ -24,21 +25,6 @@ function picksChoice(key: string, pane: HTMLElement | null): boolean {
   return Number(key) <= Number(card?.dataset.nativeChatQuestionOptions ?? 0)
 }
 
-/** The platform's paste chord (Cmd+V on macOS, Ctrl+V elsewhere; Shift for plain text), from no field. */
-function pastesHere(event: BotItemTypingEvent): boolean {
-  const mac = getShortcutPlatform() === 'darwin'
-  const target = event.target
-  return (
-    event.key.toLowerCase() === 'v' &&
-    !event.altKey &&
-    (mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey) &&
-    !(
-      target instanceof Element &&
-      target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')
-    )
-  )
-}
-
 /** The open item's pane key handler: sends a typed character to `comment` when it should go there, and
  *  a paste: the box takes focus before it lands, so the paste goes in (and the box opens) as typed. */
 export function typeIntoBotItemComment(
@@ -48,14 +34,15 @@ export function typeIntoBotItemComment(
 ): void {
   // Portaled menus and dialogs bubble here through React; only keys from this pane count.
   const inPane = event.target instanceof Node && pane?.contains(event.target) === true
-  if (inPane && !isImeOwnedKeyboardEvent(event) && pastesHere(event)) {
+  if (!inPane || isImeOwnedKeyboardEvent(event)) {
+    return
+  }
+  if (shouldFocusNativeChatInputForPaste(event, getShortcutPlatform() === 'darwin')) {
     comment?.focusEnd?.()
     return
   }
   if (
-    !inPane ||
     event.altKey ||
-    isImeOwnedKeyboardEvent(event) ||
     !shouldRedirectNativeChatTyping(event, false) ||
     // While the open question's card shows its choices, a digit that names one picks it (the card's
     // own keys); any other digit is typing like any other key.

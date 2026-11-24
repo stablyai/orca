@@ -420,9 +420,7 @@ function BotItemCommentField({
           </div>
           {compact ? null : (
             <>
-              {session ? (
-                <NativeChatAttachButton onAttach={fileDrops.pickAttachments} />
-              ) : null}
+              {session ? <NativeChatAttachButton onAttach={fileDrops.pickAttachments} /> : null}
               {nav}
               <BotItemCommentMic dictation={dictation} />
             </>

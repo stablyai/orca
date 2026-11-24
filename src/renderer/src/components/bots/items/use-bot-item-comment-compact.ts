@@ -4,7 +4,7 @@ const RESIZE_MS = 140
 
 /** Whether the comment box sits as one compact row: until focus comes into it, and again once focus
  *  leaves it empty. `held` (text, files, a recording, a list open) keeps it full whatever the focus;
- *  `stepping` (the arrows wait on a read) keeps it as it is, so the stepper's spinner stays in view.
+ *  `stepping` keeps the stepper's loading feedback visible while the arrows wait on a read.
  *  A press inside the box never folds it, even on its padding or a control that drops focus as it
  *  goes; a window losing focus (a file picker, another app) leaves the box as it was.
  *  The box's height eases between the two (none under reduced motion). */
@@ -56,7 +56,7 @@ export function useBotItemCommentCompact(
     },
     []
   )
-  const compact = !focused && !held
+  const compact = !focused && !held && !stepping
   useBoxResizeEase(box, compact)
   return {
     compact,
