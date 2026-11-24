@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
+import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import {
@@ -34,9 +35,12 @@ export function WorktreeCopySubMenu({ model }: { model: WorktreeContextMenuModel
   const t = useTranslate()
   const { isDeleting } = model
   const tabs = useAppStore((s) => s.unifiedTabsByWorktree[model.worktree.id])
+  const rowHostId = model.worktree.runtimeOwnerEnvironmentId
+    ? toRuntimeExecutionHostId(model.worktree.runtimeOwnerEnvironmentId)
+    : model.worktree.hostId
   const agentSessionTabs = useMemo(
-    () => (model.isMultiContext ? [] : agentSessionTabsOfRow(tabs ?? [], model.worktree.hostId)),
-    [model.isMultiContext, model.worktree.hostId, tabs]
+    () => (model.isMultiContext ? [] : agentSessionTabsOfRow(tabs ?? [], rowHostId)),
+    [model.isMultiContext, rowHostId, tabs]
   )
   const [singleAgentTab] = agentSessionTabs
   return (
@@ -123,7 +127,7 @@ function CopyAgentTabsSubMenu({
         <Copy className="size-3.5" />
         {label}
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent>
+      <DropdownMenuSubContent scrollable>
         {agentSessionTabs.map((tab) => (
           <DropdownMenuItem key={tab.id} onSelect={() => onCopy(tab)} disabled={isDeleting}>
             <Copy className="size-3.5" />
