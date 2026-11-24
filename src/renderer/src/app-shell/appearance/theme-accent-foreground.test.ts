@@ -107,10 +107,9 @@ describe('bundled themes: accent label contrast', () => {
   })
 
   it.each(bundledThemes.map((path) => [basename(path), path]))('%s', (_name, path) => {
-    const theme = JSON.parse(readFileSync(path, 'utf8')) as {
-      base: 'light' | 'dark'
-      tokens: Record<string, string>
-    }
+    const theme: { base: 'light' | 'dark'; tokens: Record<string, string> } = JSON.parse(
+      readFileSync(path, 'utf8')
+    )
     const builtIns = {
       '--text-link': theme.base === 'light' ? lightAccent : darkAccent,
       '--theme-accent-foreground': theme.base === 'light' ? lightLabel : darkLabel
