@@ -74,7 +74,10 @@ export async function openResourceChat(
     const listed = await whenLocalBotGroupsListed()
     const session = { structuredSession: { workspaceId: worktreeId, sessionId: agentSessionId } }
     if (!listed || !botGroupRoomOfRow(readBotGroups(), session)) {
-      structuredSessionOpenFeedback.unavailable('')
+      structuredSessionOpenFeedback.unavailable('', {
+        detail: listed ? 'Group room not found.' : 'Group list not loaded.',
+        retry: () => void openResourceChat(worktreeId, agentSessionId, runtimeHostId)
+      })
       return
     }
   }

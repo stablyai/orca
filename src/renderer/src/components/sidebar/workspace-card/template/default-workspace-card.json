@@ -53,7 +53,11 @@
               "el": "Row",
               "props": { "grow": true, "align": "center", "gap": "md" },
               "children": [
-                { "el": "RepoChip", "when": "vars.pinnedRepo" },
+                {
+                  "el": "RepoChip",
+                  "when": "vars.pinnedRepo",
+                  "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
+                },
                 {
                   "el": "SshControl",
                   "when": "host.kind == 'ssh'",
@@ -63,7 +67,11 @@
                   "el": "RuntimeHostMark",
                   "when": "host.kind == 'runtime' && place.lineHostLabel == null"
                 },
-                { "el": "RepoChip", "when": "vars.inlineRepo" },
+                {
+                  "el": "RepoChip",
+                  "when": "vars.inlineRepo",
+                  "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
+                },
                 { "el": "LineAgents", "when": "place.compactLine" },
                 { "el": "LineAgentMore", "when": "place.compactLine" },
                 {
@@ -116,7 +124,12 @@
                       "el": "Row",
                       "when": "vars.lineRepo",
                       "props": { "keep": true },
-                      "children": [{ "el": "RepoChip" }]
+                      "children": [
+                        {
+                          "el": "RepoChip",
+                          "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
+                        }
+                      ]
                     },
                     {
                       "el": "Row",
@@ -155,7 +168,11 @@
               "el": "Row",
               "props": { "grow": true, "align": "center", "gap": "md", "overflow": "clip" },
               "children": [
-                { "el": "MetaRepoBadge", "when": "vars.metaRepo" },
+                {
+                  "el": "MetaRepoBadge",
+                  "when": "vars.metaRepo",
+                  "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
+                },
                 {
                   "el": "HostBadge",
                   "when": "vars.metaRow && vars.hostBadge",

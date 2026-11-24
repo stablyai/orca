@@ -20,7 +20,7 @@ import { useAgentDashboardTelemetry } from './board/use-agent-dashboard-telemetr
 import { useTranslate } from '@/i18n/use-translate'
 import { trackSidebarLiveWidth } from '@/components/sidebar/chrome/sidebar-live-width'
 import { resolveSidebarDrawerLeftEdge } from '@/components/sidebar/chrome/sidebar-drawer-left-edge'
-import { selectAppRailWidth } from '@/components/app-rail/app-rail-layout'
+import { selectAppRailWidth, selectWorkspaceListOpen } from '@/components/app-rail/app-rail-layout'
 
 // Nested interactive overlays own Escape before the companion sheet; exclude the sheet’s own role=dialog marker.
 const AGENT_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR = [
@@ -99,7 +99,7 @@ export function AgentDashboardDrawer({
   const t = useTranslate()
   const open = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
-  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  const sidebarOpen = useAppStore(selectWorkspaceListOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const [menuOpen, setMenuOpen] = useState(false)
   const boardRef = useRef<HTMLDivElement | null>(null)

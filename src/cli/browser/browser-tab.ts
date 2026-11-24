@@ -1,3 +1,4 @@
+import { getWslCallerDistro } from '../hosts/wsl-caller-distro'
 import type {
   BrowserTabAnnotationsResult,
   BrowserTabCurrentResult,
@@ -111,7 +112,12 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   exec: async ({ flags, client, cwd, json }) => {
     const command = getRequiredStringFlag(flags, 'command')
     const target = await getBrowserCommandTarget(flags, cwd, client)
-    const result = await client.call<unknown>('browser.exec', { command, ...target })
+    // A paired runtime reads another filesystem, so only a local caller's directory applies.
+    const result = await client.call<unknown>('browser.exec', {
+      command,
+      ...(client.isRemote ? {} : { cwd, wslDistro: getWslCallerDistro(cwd) ?? undefined }),
+      ...target
+    })
     printResult(result, json, (v) => JSON.stringify(v, null, 2))
   }
 }

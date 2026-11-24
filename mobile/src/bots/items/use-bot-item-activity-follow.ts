@@ -137,10 +137,16 @@ export function useBotItemActivityFollow(args: { scopeKey: string; hasItems: boo
     },
     [release, scopeKey]
   )
+  /** Back to the page's top, no longer following the end. */
+  const top = useCallback(() => {
+    centring.current = null
+    release()
+    scroll.current?.scrollTo({ y: 0, animated: false })
+  }, [release])
   const followTail = tail.jumpToTail
   const jumpToTail = useCallback(() => {
     centring.current = null
     followTail()
   }, [followTail])
-  return { tail, ref, onScroll, onContentSizeChange, onLayout, center, jumpToTail }
+  return { tail, ref, onScroll, onContentSizeChange, onLayout, center, top, jumpToTail }
 }

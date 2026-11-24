@@ -24,6 +24,9 @@ export const WINDOWS_ARGUMENT_CORPUS: readonly { name: string; value: string }[]
   { name: 'semicolon-comma', value: 'a;b,c' },
   { name: 'unicode', value: '日本語 café' },
   { name: 'combined', value: 'x"y&z%F%' },
+  { name: 'json', value: '{"disableAllHooks":true}' },
+  { name: 'json-backslash-before-quote', value: '{"p":"C:\\\\x\\\\"}' },
+  { name: 'escaped-quotes-trailing-backslash', value: '\\"x\\"\\' },
   { name: 'agent-prompt', value: 'Fix "src/a b.ts" & run tests 100% !now! ^ (v2)' }
 ]
 
