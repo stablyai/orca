@@ -5,6 +5,7 @@ import type {
 } from '../../../shared/browser/element-grab/browser-grab-types'
 import { GRAB_BUDGET } from '../../../shared/browser/element-grab/browser-grab-types'
 import { grabDocumentScope, requestGrabExecution, restoreGrabCapture } from './grab-guest-execution'
+import { readbackThroughCaptureLane } from './grab-clean-page-capture'
 
 type Snapshot = BrowserGrabRect & { viewportWidth: number }
 const capturing = new WeakSet<Electron.WebContents>()
@@ -36,19 +37,29 @@ function readSnapshot(value: unknown): Snapshot | null {
     : null
 }
 
+/** Covers both the wait for a native capture already in flight on the guest and this readback. */
+export const SELECTION_CAPTURE_DEADLINE_MS = 2_000
+
 export async function captureSelectionScreenshot(
   _rect: BrowserGrabRect,
   guest: Electron.WebContents,
-  selectionId?: string
+  selectionId: string | undefined,
+  holdPaint: () => () => void
 ): Promise<BrowserGrabScreenshot | null> {
   if (!selectionId || capturing.has(guest) || guest.isDestroyed()) {
+    return null
+  }
+  let releasePaint: () => void
+  try {
+    releasePaint = holdPaint()
+  } catch {
     return null
   }
   capturing.add(guest)
   const scope = grabDocumentScope(guest)
   const captureId = randomUUID()
-  let physical: Promise<unknown> | null = null
-  let timer: ReturnType<typeof setTimeout> | undefined
+  // Once the readback is submitted the lane helper owns the lease: held until Electron settles it.
+  let paintHandedOff = false
   try {
     const prepared = await requestGrabExecution(guest, '', {
       scope,
@@ -59,18 +70,14 @@ export async function captureSelectionScreenshot(
     if (!rect || !scope.current || guest.isDestroyed()) {
       return null
     }
-    const capture = guest.capturePage().then(
-      (image) => image,
-      () => null
+    // The shared lane keeps this readback from overlapping Draw's or the paint restore's capture.
+    paintHandedOff = true
+    const image = await readbackThroughCaptureLane(
+      guest,
+      new AbortController().signal,
+      releasePaint,
+      SELECTION_CAPTURE_DEADLINE_MS
     )
-    physical = capture
-    const image = await Promise.race([
-      capture,
-      new Promise<null>((resolve) => {
-        timer = setTimeout(() => resolve(null), 2_000)
-      })
-    ])
-    clearTimeout(timer)
     if (!image || image.isEmpty() || !scope.current || guest.isDestroyed()) {
       return null
     }
@@ -116,13 +123,11 @@ export async function captureSelectionScreenshot(
   } catch {
     return null
   } finally {
-    clearTimeout(timer)
     restoreGrabCapture(scope, captureId)
-    // A timed-out native capture still occupies its one physical slot until Electron settles it.
-    if (physical) {
-      void physical.finally(() => capturing.delete(guest))
-    } else {
-      capturing.delete(guest)
+    // A readback the deadline abandoned keeps the guest's capture lane, not this guard.
+    capturing.delete(guest)
+    if (!paintHandedOff) {
+      releasePaint()
     }
   }
 }

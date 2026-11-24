@@ -47,11 +47,42 @@ export async function captureCleanGuestPage(
   let releasePaint: () => void
   try {
     // Taking the lease first cancels a restore that has not been submitted yet.
-    releasePaint = once(holdPaint())
+    releasePaint = holdPaint()
   } catch {
     return null
   }
-  // The deadline also withdraws a pending lane wait, so repeated timed-out Draws leave no registrations.
+  const image = await readbackThroughCaptureLane(
+    guest,
+    signal,
+    releasePaint,
+    deadlineMs,
+    paintCapMs
+  )
+  try {
+    if (!image || image.isEmpty() || signal.aborted || guest.isDestroyed()) {
+      return null
+    }
+    return { dataUrl: image.toDataURL(), ...image.getSize() }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * One native readback through the guest's capture lane, for every grab capture (Draw's page and a
+ * selection's crop). The deadline covers both the wait for a capture already in flight and the
+ * readback itself; a readback it abandons keeps the lane until Electron settles it. Takes ownership
+ * of `releasePaint`: the lease is held until the readback settles, capped by `paintCapMs`.
+ */
+export async function readbackThroughCaptureLane<Image>(
+  guest: { isDestroyed: () => boolean; capturePage: () => Promise<Image> },
+  signal: AbortSignal,
+  releasePaint: () => void,
+  deadlineMs: number,
+  paintCapMs = ABANDONED_READBACK_PAINT_CAP_MS
+): Promise<Image | null> {
+  const release = once(releasePaint)
+  // The deadline also withdraws a pending lane wait, so repeated timed-out readbacks leave no registrations.
   let stopWaiting: () => void = () => {}
   let deadlineTimer: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<null>((resolve) => {
@@ -63,36 +94,34 @@ export async function captureCleanGuestPage(
   // Checking the lane, submitting and recording the readback happen in one synchronous step, so two
   // waiters woken together cannot both submit; a waiter that finds the lane taken registers again.
   // Wrapped, because resolving with the readback promise itself would wait for it to settle.
-  const submitted = await new Promise<{ physical: Promise<ReadbackImage | null> } | null>(
-    (resolve) => {
-      const attempt = (): void => {
-        if (isNativeCaptureBusy(guest)) {
-          const cancel = whenNativeCaptureLaneFree(guest, attempt)
-          stopWaiting = () => {
-            cancel()
-            resolve(null)
-          }
-          return
-        }
-        stopWaiting = () => {}
-        if (signal.aborted || guest.isDestroyed()) {
-          resolve(null)
-          return
-        }
-        try {
-          const physical = guest.capturePage().catch(() => null)
-          occupyNativeCaptureLane(guest, physical)
-          resolve({ physical })
-        } catch {
+  const submitted = await new Promise<{ physical: Promise<Image | null> } | null>((resolve) => {
+    const attempt = (): void => {
+      if (isNativeCaptureBusy(guest)) {
+        const cancel = whenNativeCaptureLaneFree(guest, attempt)
+        stopWaiting = () => {
+          cancel()
           resolve(null)
         }
+        return
       }
-      attempt()
+      stopWaiting = () => {}
+      if (signal.aborted || guest.isDestroyed()) {
+        resolve(null)
+        return
+      }
+      try {
+        const physical = guest.capturePage().catch(() => null)
+        occupyNativeCaptureLane(guest, physical)
+        resolve({ physical })
+      } catch {
+        resolve(null)
+      }
     }
-  )
+    attempt()
+  })
   if (!submitted) {
     clearTimeout(deadlineTimer)
-    releasePaint()
+    release()
     return null
   }
   const { physical } = submitted
@@ -101,19 +130,12 @@ export async function captureCleanGuestPage(
   void physical.then(() => {
     settled = true
     clearTimeout(paintCap)
-    releasePaint()
+    release()
   })
   const image = await Promise.race([physical, deadline])
   clearTimeout(deadlineTimer)
   if (!settled) {
-    paintCap = setTimeout(releasePaint, paintCapMs)
+    paintCap = setTimeout(release, paintCapMs)
   }
-  try {
-    if (!image || image.isEmpty() || signal.aborted || guest.isDestroyed()) {
-      return null
-    }
-    return { dataUrl: image.toDataURL(), ...image.getSize() }
-  } catch {
-    return null
-  }
+  return image
 }
