@@ -8,10 +8,27 @@ import { setTimeout as delay } from 'node:timers/promises'
 const slotDirectory = path.join(homedir(), '.cache', 'orca', 'preflight')
 const slotFile = path.join(slotDirectory, `${hostname()}.sqlite`)
 const WAITING = 'Waiting for another local check:changed run to finish…'
-// The place in line is recounted when the run ahead changes, and at least this often.
-const POSITION_REFRESH_MS = 60_000
+// Lanes, in turn order. A silent ticket is moved to its own lane once, so no waiter re-reads it every poll.
+const NORMAL = 0
+const YIELDING = 1
+const SILENT = 2
 const LAST_ID = Number.MAX_SAFE_INTEGER
+const SWEEP_LIMIT = 32
+const MAX_ANCESTORS = 16
 let ownStart
+// Background ticket removals and releases still in flight; tests await them before deleting files.
+const pending = new Set()
+
+function track(promise) {
+  pending.add(promise)
+  promise.finally(() => pending.delete(promise))
+  return promise
+}
+
+/** Resolves once every background ticket removal and release started by this process has settled. */
+export function settleChangedCheckSlotCleanup() {
+  return Promise.all(pending)
+}
 
 // The slot holder keeps a write transaction open on the slot file for its whole run, so waiters
 // cannot write their tickets there. The queue lives in a sibling file with short transactions.
@@ -20,128 +37,320 @@ export function queueFileFor(file) {
 }
 
 /**
- * Admits one check:changed run per host, in arrival order.
+ * Admits one check:changed run per host, in the order runs joined the queue.
  *
  * Exclusion comes only from the SQLite write lock on `file`, which the OS drops when its holder
- * dies. The ticket queue only decides which waiter may try for that lock, so a stale or wrong
- * ticket can delay a run but never admit two at once.
+ * dies. The ticket queue decides which waiter may try for that lock: each poll reads the queue,
+ * removes dead tickets, and claims the lock inside one write transaction on the queue, so the
+ * decision sees one committed state and a claim is published with it.
  *
- * Order: waiters that keep polling go by arrival; a waiter whose launcher (any process above it
- * when it queued, except init) has exited goes behind them; a waiter silent for `staleMs` goes
- * behind everyone until it polls again. Each waiter decides from its own snapshot of the queue, so
- * a silent waiter that resumes after another waiter took the slot waits for that run.
+ * Turn order: tickets in the normal lane by arrival, then tickets whose launcher has exited (any
+ * process up to 16 levels above the run when it queued, seen gone when probed), then tickets that
+ * have not checked in for `staleMs`. A run that checks in again returns to its lane and place.
  */
 export async function acquireChangedCheckSlot(file = slotFile, options = {}) {
+  const timing = timingFor(options.staleMs ?? 30_000)
   const pollMs = options.pollMs ?? 1000
-  const staleMs = options.staleMs ?? 30_000
-  const beatMs = staleMs / 3
   const log = options.log ?? console.log
   const signal = options.signal
   mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 })
-  const lock = new DatabaseSync(file)
-  const queue = new Queue(queueFileFor(file))
-  let id
+  let lock
+  let queue
+  let waiter
   try {
-    const self = describeSelf(options.ancestors)
-    let yielding = false
-    let lastAncestorCheck = 0
-    let lastBeat = 0
-    let lastStartCheck = 0
-    let lastCount = 0
-    let lastBlocker
-    let place = { position: 0, total: 0 }
-    let lastNotice = ''
+    lock = new DatabaseSync(file)
+    queue = new Queue(queueFileFor(file))
+    waiter = new Waiter(queue, describeSelf(options.ancestors), timing, log)
     for (;;) {
       signal?.throwIfAborted()
-      const now = Date.now()
-      if (!yielding && now - lastAncestorCheck >= beatMs) {
-        lastAncestorCheck = now
-        if (self.ancestors.some((pid) => !pidExists(pid))) {
-          yielding = true
-          lastBeat = 0
-          log(
-            'The process that started this check has exited; runs whose launcher is still running go first.'
-          )
-        }
+      // Polls before the first await, so an uncontended call joins the queue in call order.
+      const heldAt = waiter.poll(lock)
+      if (heldAt !== undefined) {
+        return holdSlot(lock, queue, waiter.id, timing)
       }
-      // Busy queue operations return undefined and are retried on the next poll.
-      if (id === undefined || queue.has(id) === false) {
-        // Enqueued before the first await when uncontended, so arrival order is call order.
-        id = queue.enqueue(self, yielding, now)
-        lastBeat = now
-      } else if (now - lastBeat >= beatMs && queue.beat(id, yielding, now) !== undefined) {
-        lastBeat = now
-      }
-      const scan = id === undefined ? undefined : queue.findBlocker(id, yielding, now - staleMs)
-      if (scan) {
-        queue.remove(scan.dead)
-        // Spawning ps is the only costly check: only for silent tickets met in the scan, at most once per staleMs.
-        if (scan.silent.length > 0 && now - lastStartCheck >= staleMs) {
-          lastStartCheck = now
-          const started = readStartTimes(scan.silent.map((row) => row.pid))
-          queue.remove(
-            scan.silent
-              .filter((row) => {
-                const current = started.get(row.pid)
-                return current !== undefined && current !== row.started
-              })
-              .map((row) => row.id)
-          )
-        }
-        const first = scan.blocker === undefined
-        if (first && tryLock(lock)) {
-          return holdSlot({ lock, queue, id, self, beatMs })
-        }
-        if (scan.blocker?.id !== lastBlocker || now - lastCount >= POSITION_REFRESH_MS) {
-          place = queue.place(id, yielding, now - staleMs) ?? place
-          lastBlocker = scan.blocker?.id
-          lastCount = now
-        }
-        const holder = queue.holder(now - staleMs)
-        const notice = `${place.position}/${place.total}/${holder?.id ?? (first ? 'unknown' : '')}`
-        if (notice !== lastNotice) {
-          lastNotice = notice
-          log(describeWait(place, holder, first, now))
-        }
-      }
+      waiter.sweepSilent()
       await delay(pollMs, undefined, { signal })
     }
   } catch (error) {
-    lock.close()
-    queue.close(id)
+    closeQuietly(lock)
+    queue?.removeEventually(waiter?.id)
     throw error
   }
 }
 
-function holdSlot({ lock, queue, id, self, beatMs }) {
-  const heldAt = Date.now()
-  let published = queue.hold(id, self, heldAt) !== undefined
-  // The holder heartbeats so waiters name it only while it is provably still running.
-  const timer = setInterval(() => {
-    published = (published ? queue.beatHeld(id, self) : queue.hold(id, self, heldAt)) !== undefined
-  }, beatMs)
-  timer.unref()
-  let released = false
-  return () => {
-    if (released) {
+function timingFor(staleMs) {
+  return {
+    staleMs,
+    // Waiters check in, recount their place and probe launchers at this cadence.
+    beatMs: staleMs / 3,
+    // A holder is named only while its heartbeat is this recent.
+    holderFreshMs: staleMs / 5,
+    holderBeatMs: staleMs / 15
+  }
+}
+
+class Waiter {
+  constructor(queue, self, timing, log) {
+    this.queue = queue
+    this.self = self
+    this.timing = timing
+    this.log = log
+    this.id = undefined
+    this.lane = NORMAL
+    this.lastBeat = 0
+    this.lastAncestorCheck = 0
+    this.lastCount = 0
+    this.lastBlocker = undefined
+    this.lastHolder = undefined
+    this.place = undefined
+    this.first = false
+    this.lastSweep = 0
+    this.sweepAfter = 0
+    this.lastNotice = ''
+  }
+
+  /** One coherent decision under the queue's write lock; returns the claim time once the slot is held. */
+  poll(lock) {
+    const now = Date.now()
+    if (this.lane === NORMAL && now - this.lastAncestorCheck >= this.timing.beatMs) {
+      this.lastAncestorCheck = now
+      if (this.self.ancestors.some((pid) => processGone(pid))) {
+        this.lane = YIELDING
+        this.log(
+          'A process that started this check has exited; runs whose launchers are still running go first.'
+        )
+      }
+    }
+    if (!this.queue.setup()) {
+      return undefined
+    }
+    let claimed = false
+    let decision
+    try {
+      // A busy queue skips this poll entirely: no decision is made from partial or unrefreshed state.
+      decision = attempt(() =>
+        transaction(this.queue.db, () => {
+          const result = this.decide(lock)
+          claimed = result.heldAt !== undefined
+          return result
+        })
+      )
+    } catch (error) {
+      if (claimed) {
+        endSlotTransaction(lock)
+      }
+      throw error
+    }
+    if (decision === undefined) {
+      if (claimed) {
+        endSlotTransaction(lock)
+      }
+      return undefined
+    }
+    if (decision.heldAt !== undefined) {
+      return decision.heldAt
+    }
+    this.report(decision)
+    return undefined
+  }
+
+  decide(lock) {
+    const s = this.queue.statements
+    const { staleMs, beatMs } = this.timing
+    // Sampled inside the transaction: every threshold below and the claim time use this one clock read.
+    const now = Date.now()
+    const own = this.id === undefined ? undefined : s.own.get(this.id)
+    if (own === undefined) {
+      // Never joined, or another waiter removed this ticket: join at the back.
+      this.id = Number(
+        s.insert.run(this.self.pid, this.self.started, this.self.cwd, now, now, this.lane)
+          .lastInsertRowid
+      )
+      this.lastBeat = now
+    } else if (own.lane !== this.lane || now - this.lastBeat >= beatMs) {
+      s.beat.run(now, this.lane, this.id)
+      this.lastBeat = now
+    }
+
+    // Walk to the nearest ticket whose turn comes before ours. Each dead or silent ticket met is
+    // removed or moved to the silent lane in this transaction, so later polls never revisit it.
+    let blocker
+    const lanes =
+      this.lane === NORMAL
+        ? [[NORMAL, this.id]]
+        : [
+            [NORMAL, LAST_ID],
+            [YIELDING, this.id]
+          ]
+    for (const [lane, before] of lanes) {
+      for (let row = s.ahead.get(lane, before); row; row = s.ahead.get(lane, before)) {
+        if (processGone(row.pid)) {
+          s.remove.run(row.id)
+        } else if (row.seen_at < now - staleMs) {
+          s.silence.run(SILENT, row.id)
+        } else {
+          blocker = row
+          break
+        }
+      }
+      if (blocker) {
+        break
+      }
+    }
+    this.first = blocker === undefined
+
+    if (this.first && tryLock(lock)) {
+      s.hold.run(now, now, this.id)
+      // Only one connection can hold the slot lock, so any other held ticket is left over.
+      s.removeOtherHeld.run(this.id)
+      return { heldAt: now }
+    }
+
+    const holderRow = s.holder.get()
+    const holder =
+      holderRow &&
+      holderRow.seen_at >= now - this.timing.holderFreshMs &&
+      !processGone(holderRow.pid)
+        ? holderRow
+        : undefined
+    // The line moves when someone is admitted or the ticket ahead leaves; recount then, and at
+    // least every beatMs so a departure further ahead is reflected too.
+    if (
+      this.place === undefined ||
+      blocker?.id !== this.lastBlocker ||
+      holderRow?.id !== this.lastHolder ||
+      now - this.lastCount >= beatMs
+    ) {
+      const ahead =
+        this.lane === NORMAL
+          ? s.count.get(NORMAL, this.id).n
+          : s.count.get(NORMAL, LAST_ID).n + s.count.get(YIELDING, this.id).n
+      const total = s.count.get(NORMAL, LAST_ID).n + s.count.get(YIELDING, LAST_ID).n
+      this.place = { position: ahead + 1, total }
+      this.lastBlocker = blocker?.id
+      this.lastHolder = holderRow?.id
+      this.lastCount = now
+    }
+    return { heldAt: undefined, holder, now }
+  }
+
+  report({ holder, now }) {
+    const { position, total } = this.place
+    const notice = `${position}/${total}/${holder?.id ?? (this.first ? 'unnamed' : '')}`
+    if (notice === this.lastNotice) {
       return
     }
-    released = true
-    clearInterval(timer)
-    // Unlock first, so a waiter never sees the slot free while its last holder is still listed.
-    try {
-      lock.close()
-    } finally {
-      queue.close(id)
+    this.lastNotice = notice
+    const place = `${WAITING} Position ${position} of ${total}.`
+    if (holder) {
+      this.log(
+        `${place} Running now: pid ${holder.pid} in ${holder.cwd}, started ${formatAge(now - holder.held_at)} ago.`
+      )
+    } else if (this.first) {
+      // Queue rows cannot prove who owns the lock, so a holder without a live heartbeat stays unnamed.
+      this.log(
+        `${place} Running now: a run the queue cannot name, such as one from an older checkout.`
+      )
+    } else {
+      this.log(place)
     }
+  }
+
+  /**
+   * The waiter at the front of the line clears silent tickets of exited processes and of pids now
+   * naming a different process, at most once per staleMs and SWEEP_LIMIT tickets at a time.
+   * Unknown start times never count as a mismatch.
+   */
+  sweepSilent() {
+    const now = Date.now()
+    if (!this.first || now - this.lastSweep < this.timing.staleMs) {
+      return
+    }
+    this.lastSweep = now
+    const s = this.queue.statements
+    let rows = attempt(() => s.silent.all(SILENT, this.sweepAfter, SWEEP_LIMIT)) ?? []
+    if (rows.length === 0 && this.sweepAfter > 0) {
+      this.sweepAfter = 0
+      rows = attempt(() => s.silent.all(SILENT, 0, SWEEP_LIMIT)) ?? []
+    }
+    if (rows.length === 0) {
+      return
+    }
+    this.sweepAfter = rows.at(-1).id
+    const live = rows.filter((row) => !processGone(row.pid) && row.started !== null)
+    const started = live.length > 0 ? readStartTimes(live.map((row) => row.pid)) : new Map()
+    for (const row of rows) {
+      const current = started.get(row.pid)
+      const reused = row.started !== null && current !== undefined && current !== row.started
+      if (processGone(row.pid) || reused) {
+        // Removed only if it is still the same silent ticket: a check-in in between keeps it.
+        attempt(() => s.removeSilent.run(row.id, SILENT, row.seen_at))
+      }
+    }
+  }
+}
+
+function holdSlot(lock, queue, id, timing) {
+  // Metadata only: a failing heartbeat must never end or disturb the check holding the slot.
+  const timer = setInterval(() => {
+    try {
+      if (queue.beatHeld(id) === 0) {
+        clearInterval(timer)
+      }
+    } catch {
+      clearInterval(timer)
+    }
+  }, timing.holderBeatMs)
+  timer.unref()
+  let releasing
+  // Resolves once the slot is unlocked; callers may ignore it.
+  return () => {
+    releasing ??= track(new Promise((resolve) => release(resolve)))
+    return releasing
+  }
+
+  function release(resolve) {
+    clearInterval(timer)
+    const unlock = () => {
+      if (lock.isOpen) {
+        lock.close()
+      }
+    }
+    const startedAt = Date.now()
+    const step = () => {
+      let done
+      try {
+        // Drop the ticket and unlock in one queue transaction, so no waiter sees one without the other.
+        done = queue.releaseHeld(id, unlock)
+      } catch {
+        // A broken queue only loses metadata; the slot itself is still released below.
+        queue.close()
+        done = false
+      }
+      if (done) {
+        resolve()
+        return
+      }
+      if (!queue.closed && Date.now() - startedAt < timing.holderFreshMs) {
+        // Keeps the process alive for at most holderFreshMs, so the slot is never left locked.
+        setTimeout(step, Math.min(100, timing.holderFreshMs))
+        return
+      }
+      // The queue stayed busy: by now this holder's heartbeat is too old to be named, so unlock.
+      unlock()
+      queue.removeEventually(id)
+      resolve()
+    }
+    step()
   }
 }
 
 class Queue {
   constructor(file) {
-    // Short, so a stalled peer costs one poll; busy work is retried on the next poll.
+    // Short, so a stalled peer costs one poll; busy work is retried on a later poll.
     this.db = new DatabaseSync(file, { timeout: 100 })
     this.statements = undefined
+    this.closed = false
   }
 
   setup() {
@@ -150,25 +359,23 @@ class Queue {
     }
     return (
       attempt(() => {
-        // Tickets need no durability across a power loss, so WAL with NORMAL sync keeps heartbeat
-        // commits off fsync while staying safe from corruption, and readers never wait on writers.
+        // Tickets need no durability across a power loss, so WAL with NORMAL sync keeps check-in
+        // commits off fsync while staying safe from corruption.
         this.db.exec('PRAGMA journal_mode = WAL')
         this.db.exec('PRAGMA synchronous = NORMAL')
         transaction(this.db, () =>
-          this.db.exec(`CREATE TABLE IF NOT EXISTS tickets_v1 (
+          this.db.exec(`CREATE TABLE IF NOT EXISTS tickets_v2 (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             pid INTEGER NOT NULL,
             started TEXT,
             cwd TEXT NOT NULL,
             enqueued_at INTEGER NOT NULL,
             seen_at INTEGER NOT NULL,
-            held_at INTEGER,
-            yielding INTEGER NOT NULL DEFAULT 0
+            lane INTEGER NOT NULL,
+            held_at INTEGER
           );
-          CREATE INDEX IF NOT EXISTS tickets_v1_waiting ON tickets_v1 (yielding, id)
-            WHERE held_at IS NULL;
-          CREATE INDEX IF NOT EXISTS tickets_v1_held ON tickets_v1 (id)
-            WHERE held_at IS NOT NULL;`)
+          CREATE INDEX IF NOT EXISTS tickets_v2_lane ON tickets_v2 (lane, id) WHERE held_at IS NULL;
+          CREATE INDEX IF NOT EXISTS tickets_v2_held ON tickets_v2 (id) WHERE held_at IS NOT NULL;`)
         )
         this.statements = prepareStatements(this.db)
         return true
@@ -176,159 +383,107 @@ class Queue {
     )
   }
 
-  enqueue(self, yielding, now) {
-    if (!this.setup()) {
-      return undefined
-    }
-    return attempt(() =>
-      Number(
-        this.statements.insert.run(
-          self.pid,
-          self.started,
-          self.cwd,
-          now,
-          now,
-          yielding ? 1 : 0,
-          null
-        ).lastInsertRowid
-      )
+  /** Rows changed, or undefined when busy. */
+  beatHeld(id) {
+    return attempt(() => Number(this.statements.beatHeld.run(Date.now(), id).changes))
+  }
+
+  /** Deletes the held ticket and runs `unlock` in one transaction; false when the queue is busy. */
+  releaseHeld(id, unlock) {
+    const done = attempt(() =>
+      transaction(this.db, () => {
+        this.statements.removeOwn.run(id, process.pid)
+        unlock()
+        return true
+      })
     )
-  }
-
-  /** false only when the ticket is known to be gone; undefined when the queue is busy. */
-  has(id) {
-    return attempt(() => this.statements.own.get(id) !== undefined)
-  }
-
-  beat(id, yielding, now) {
-    return attempt(() => this.statements.beat.run(now, yielding ? 1 : 0, id))
+    if (done) {
+      this.close()
+    }
+    return done === true
   }
 
   /**
-   * Walks back from this ticket through the tickets ranked ahead of it, stopping at the nearest
-   * one still polling, so a healthy queue costs one indexed row. Dead tickets are collected for
-   * removal and silent ones are passed over. Undefined when the queue is busy.
+   * Removes this process's ticket, retrying in the background until the queue frees up, then
+   * closes. The timer does not keep the process alive; if the process exits, its pid marks the
+   * ticket dead.
    */
-  findBlocker(id, yielding, freshSince) {
-    const scan = { blocker: undefined, dead: [], silent: [] }
-    // A normal ticket waits for normal tickets ahead of it; a yielding one waits for every
-    // normal ticket and for yielding tickets ahead of it.
-    const lanes = yielding
-      ? [
-          [0, LAST_ID],
-          [1, id]
-        ]
-      : [[0, id]]
-    const finished = attempt(() => {
-      for (const [lane, before] of lanes) {
-        for (let row = this.statements.previous.get(lane, before); row;) {
-          if (row.id !== id) {
-            if (!pidExists(row.pid)) {
-              scan.dead.push(row.id)
-            } else if (row.seen_at < freshSince) {
-              scan.silent.push(row)
-            } else {
-              scan.blocker = row
-              return true
-            }
+  removeEventually(id) {
+    if (this.closed) {
+      return
+    }
+    this.removal ??= track(
+      new Promise((resolve) => {
+        const step = () => {
+          let done
+          try {
+            done =
+              id === undefined || this.statements === undefined
+                ? true
+                : attempt(() => this.statements.removeOwn.run(id, process.pid))
+          } catch {
+            done = true
           }
-          row = this.statements.previous.get(lane, row.id)
+          if (done !== undefined) {
+            this.close()
+            resolve()
+            return
+          }
+          setTimeout(step, 250).unref()
         }
-      }
-      return true
-    })
-    return finished ? scan : undefined
-  }
-
-  /** Recounts the line; a full scan, so callers only run it when the run ahead changes or once a minute. */
-  place(id, yielding, freshSince) {
-    return attempt(() => {
-      const lane = yielding ? 1 : 0
-      const { total, ahead } = this.statements.place.get(lane, lane, id, freshSince, id)
-      return { position: ahead + 1, total: total + 1 }
-    })
-  }
-
-  /** The latest held ticket, only while its process is alive and still heartbeating. */
-  holder(freshSince) {
-    const row = attempt(() => this.statements.holder.get())
-    return row && row.seen_at >= freshSince && pidExists(row.pid) ? row : undefined
-  }
-
-  hold(id, self, heldAt) {
-    // Only one connection can hold the slot lock, so any other held ticket is left from a crash.
-    return attempt(() =>
-      transaction(this.db, () => {
-        const { hold, insert, removeOtherHeld } = this.statements
-        const now = Date.now()
-        if (hold.run(heldAt, now, id).changes === 0) {
-          insert.run(self.pid, self.started, self.cwd, heldAt, now, 0, heldAt)
-        }
-        removeOtherHeld.run(id)
-        return true
+        step()
       })
     )
   }
 
-  beatHeld(id, self) {
-    return attempt(() => {
-      const now = Date.now()
-      if (this.statements.beatHeld.run(now, id).changes === 0) {
-        this.statements.insert.run(self.pid, self.started, self.cwd, now, now, 0, now)
-      }
-      return true
-    })
-  }
-
-  remove(ids) {
-    for (const id of ids) {
-      attempt(() => this.statements.remove.run(id))
+  close() {
+    if (!this.closed) {
+      this.closed = true
+      closeQuietly(this.db)
     }
-  }
-
-  /** Drops this ticket and closes; a busy queue is retried in the background without holding the process open. */
-  close(id, attempts = 20) {
-    const done =
-      id === undefined || this.statements === undefined
-        ? true
-        : attempt(() => this.statements.removeOwn.run(id, process.pid))
-    if (done !== undefined || attempts <= 0) {
-      this.db.close()
-      return
-    }
-    setTimeout(() => this.close(id, attempts - 1), 250).unref()
   }
 }
 
 function prepareStatements(db) {
-  const columns = 'id, pid, started, cwd, enqueued_at, seen_at, held_at, yielding'
+  const columns = 'id, pid, started, cwd, seen_at, lane, held_at'
   return {
     insert: db.prepare(
-      'INSERT INTO tickets_v1 (pid, started, cwd, enqueued_at, seen_at, yielding, held_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO tickets_v2 (pid, started, cwd, enqueued_at, seen_at, lane) VALUES (?, ?, ?, ?, ?, ?)'
     ),
-    own: db.prepare('SELECT id FROM tickets_v1 WHERE id = ?'),
-    beat: db.prepare(
-      'UPDATE tickets_v1 SET seen_at = ?, yielding = ? WHERE id = ? AND held_at IS NULL'
+    own: db.prepare('SELECT lane FROM tickets_v2 WHERE id = ? AND held_at IS NULL'),
+    beat: db.prepare('UPDATE tickets_v2 SET seen_at = ?, lane = ? WHERE id = ?'),
+    ahead: db.prepare(
+      `SELECT ${columns} FROM tickets_v2 INDEXED BY tickets_v2_lane
+       WHERE held_at IS NULL AND lane = ? AND id < ? ORDER BY id DESC LIMIT 1`
     ),
-    previous: db.prepare(
-      `SELECT ${columns} FROM tickets_v1 INDEXED BY tickets_v1_waiting
-       WHERE held_at IS NULL AND yielding = ? AND id < ? ORDER BY id DESC LIMIT 1`
+    count: db.prepare(
+      `SELECT COUNT(*) AS n FROM tickets_v2 INDEXED BY tickets_v2_lane
+       WHERE held_at IS NULL AND lane = ? AND id < ?`
     ),
-    place: db.prepare(
-      `SELECT COUNT(*) AS total,
-         COALESCE(SUM(yielding < ? OR (yielding = ? AND id < ?)), 0) AS ahead
-       FROM tickets_v1 WHERE held_at IS NULL AND seen_at >= ? AND id <> ?`
+    silence: db.prepare('UPDATE tickets_v2 SET lane = ? WHERE id = ?'),
+    silent: db.prepare(
+      `SELECT ${columns} FROM tickets_v2 INDEXED BY tickets_v2_lane
+       WHERE held_at IS NULL AND lane = ? AND id > ? ORDER BY id LIMIT ?`
+    ),
+    removeSilent: db.prepare(
+      'DELETE FROM tickets_v2 WHERE id = ? AND held_at IS NULL AND lane = ? AND seen_at = ?'
     ),
     holder: db.prepare(
-      `SELECT ${columns} FROM tickets_v1 INDEXED BY tickets_v1_held
+      `SELECT ${columns} FROM tickets_v2 INDEXED BY tickets_v2_held
        WHERE held_at IS NOT NULL ORDER BY id DESC LIMIT 1`
     ),
-    hold: db.prepare('UPDATE tickets_v1 SET held_at = ?, seen_at = ? WHERE id = ?'),
-    beatHeld: db.prepare('UPDATE tickets_v1 SET seen_at = ? WHERE id = ? AND held_at IS NOT NULL'),
-    removeOtherHeld: db.prepare('DELETE FROM tickets_v1 WHERE held_at IS NOT NULL AND id <> ?'),
-    remove: db.prepare('DELETE FROM tickets_v1 WHERE id = ?'),
-    removeOwn: db.prepare('DELETE FROM tickets_v1 WHERE id = ? AND pid = ?')
+    hold: db.prepare('UPDATE tickets_v2 SET held_at = ?, seen_at = ? WHERE id = ?'),
+    beatHeld: db.prepare('UPDATE tickets_v2 SET seen_at = ? WHERE id = ? AND held_at IS NOT NULL'),
+    removeOtherHeld: db.prepare('DELETE FROM tickets_v2 WHERE held_at IS NOT NULL AND id <> ?'),
+    remove: db.prepare('DELETE FROM tickets_v2 WHERE id = ?'),
+    removeOwn: db.prepare('DELETE FROM tickets_v2 WHERE id = ? AND pid = ?')
   }
+}
+
+function isBusy(error) {
+  // SQLITE_BUSY (5) and SQLITE_LOCKED (6), including their extended codes.
+  const code = error?.errcode & 0xff
+  return code === 5 || code === 6
 }
 
 /** Runs `body`, returning undefined instead of throwing when SQLite reports the database busy or locked. */
@@ -336,9 +491,7 @@ function attempt(body) {
   try {
     return body()
   } catch (error) {
-    // SQLITE_BUSY (5) and SQLITE_LOCKED (6), including their extended codes.
-    const code = error.errcode & 0xff
-    if (code === 5 || code === 6) {
+    if (isBusy(error)) {
       return undefined
     }
     throw error
@@ -365,22 +518,32 @@ function tryLock(lock) {
     lock.exec('BEGIN IMMEDIATE')
     return true
   } catch (error) {
-    if (error.errcode !== 5) {
+    if ((error.errcode & 0xff) !== 5) {
       throw error
     }
     return false
   }
 }
 
-function describeWait({ position, total }, holder, first, now) {
-  const place = position > 0 ? ` Position ${position} of ${total}.` : ''
-  if (holder) {
-    return `${WAITING}${place} Running now: pid ${holder.pid} in ${holder.cwd}, started ${formatAge(now - holder.held_at)} ago.`
+/** Gives the slot back after a claim whose queue transaction did not commit. */
+function endSlotTransaction(lock) {
+  try {
+    if (lock.isTransaction) {
+      lock.exec('ROLLBACK')
+    }
+  } catch {
+    closeQuietly(lock)
   }
-  // Queue rows cannot prove who owns the lock, so a holder without a live ticket stays unnamed.
-  return first
-    ? `${WAITING}${place} Running now: a run that is not in the queue, such as one from an older checkout.`
-    : `${WAITING}${place}`
+}
+
+function closeQuietly(db) {
+  try {
+    if (db?.isOpen) {
+      db.close()
+    }
+  } catch {
+    // Closing is best effort on a path that is already failing or finished.
+  }
 }
 
 export function formatAge(ms) {
@@ -392,15 +555,16 @@ export function formatAge(ms) {
   return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`
 }
 
-function pidExists(pid) {
+/** True only when the OS says no such process; any other answer counts as still running. */
+function processGone(pid) {
   if (!Number.isInteger(pid) || pid <= 0) {
-    return false
+    return true
   }
   try {
     process.kill(pid, 0)
-    return true
+    return false
   } catch (error) {
-    return error.code === 'EPERM'
+    return error.code === 'ESRCH'
   }
 }
 
@@ -447,7 +611,7 @@ export function readStartTimes(pids) {
       try {
         started.set(pid, readLinuxStat(pid).started)
       } catch {
-        // Gone, or unreadable; pidExists decides.
+        // Gone or unreadable: unknown.
       }
     }
     return started
@@ -459,11 +623,12 @@ export function readStartTimes(pids) {
 }
 
 /**
- * This process's start time, and its launchers: every process above it now, except init. If one
- * exits later, whatever started this run is gone. At most one ps call per acquisition, none on Linux.
+ * This process's start time and its launchers: the processes above it when it queues, up to
+ * MAX_ANCESTORS levels, stopping at init or at the first link that cannot be read. At most one
+ * ps call per acquisition, none on Linux.
  */
 function describeSelf(ancestors) {
-  const self = { pid: process.pid, started: ownStart ?? null, cwd: currentDirectory(), ancestors }
+  const self = { pid: process.pid, started: null, cwd: currentDirectory(), ancestors }
   if (ancestors !== undefined) {
     ownStart ??= readStartTimes([process.pid]).get(process.pid) ?? null
     self.started = ownStart
@@ -491,14 +656,16 @@ function describeSelf(ancestors) {
     parentOf = (pid) => parents.get(pid) ?? 0
   }
   self.started = ownStart
-  if (self.ancestors === undefined) {
-    self.ancestors = []
-    for (let pid = process.ppid; pid > 1 && self.ancestors.length < 16; pid = parentOf(pid)) {
-      if (self.ancestors.includes(pid)) {
-        break
-      }
-      self.ancestors.push(pid)
+  self.ancestors = []
+  for (
+    let pid = process.ppid;
+    pid > 1 && self.ancestors.length < MAX_ANCESTORS;
+    pid = parentOf(pid)
+  ) {
+    if (self.ancestors.includes(pid)) {
+      break
     }
+    self.ancestors.push(pid)
   }
   return self
 }
