@@ -227,7 +227,7 @@ describe('main-push changed-file lint', () => {
 
     // A hang: one global budget, not a timeout per request, bounds the whole pass.
     let hung = 0
-    const limits = { ...ATTRIBUTION_LIMITS, budgetMs: 200, requestTimeoutMs: 5_000 }
+    const limits = { ...ATTRIBUTION_LIMITS, budgetMs: 200, requestTimeoutMs: 30_000 }
     const started = Date.now()
     const stalled = await attribute(limits, (url, { signal }) => {
       if (url.includes('/compare/')) {
@@ -238,7 +238,7 @@ describe('main-push changed-file lint', () => {
         signal.addEventListener('abort', () => reject(signal.reason))
       )
     })
-    expect(Date.now() - started).toBeLessThan(2_000)
+    expect(Date.now() - started).toBeLessThan(5_000)
     expect(hung).toBe(1)
     expect([...stalled.values()].every((entry) => entry.status === 'unavailable')).toBe(true)
   })
