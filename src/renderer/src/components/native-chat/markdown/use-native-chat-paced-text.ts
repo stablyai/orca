@@ -207,7 +207,9 @@ export function useNativeChatPacedText(
       pacesSaves ? Infinity : revealMs
     )
     if (drawsWhole) {
-      pace.current = { ...pace.current, savedAt: saved.current.revision, saveGapMs }
+      // Its drawing times a save from that save's arrival alone, so only the last is kept.
+      const arrivals = pacesSaves ? pace.current.arrivals.slice(-1) : pace.current.arrivals
+      pace.current = { ...pace.current, arrivals, savedAt: saved.current.revision, saveGapMs }
     }
     // While text is still to reveal, only the reveal steps it, so arrivals don't add renders.
     if (caughtUp || pace.current.shown >= source.length) {

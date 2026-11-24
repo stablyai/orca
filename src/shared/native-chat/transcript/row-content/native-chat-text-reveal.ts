@@ -116,15 +116,16 @@ export function startNativeChatTextReveal(
   now: number,
   revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
 ): NativeChatTextReveal {
-  // Text received while unmounted has no arrival timestamp: show it without adding latency.
-  if (remembered?.source === text && streaming) {
-    return advanceNativeChatText(remembered, now, revealMs)
-  }
   // A reply shown only at its saves resumes its save's reveal; newer live text waits for a save.
+  // One paced by its save gap resumes where it was, and its drawing times the rest.
   if (remembered?.drawsWhole && streaming && text.startsWith(remembered.source)) {
     return remembered.saveGapMs === undefined
       ? advanceNativeChatText(remembered, now, revealMs)
       : remembered
+  }
+  // Text received while unmounted has no arrival timestamp: show it without adding latency.
+  if (remembered?.source === text && streaming) {
+    return advanceNativeChatText(remembered, now, revealMs)
   }
   const shown = streaming && !remembered && begun ? 0 : text.length
   return arriveNativeChatText(
@@ -207,6 +208,11 @@ export function playNativeChatSaveReveal(
   gapMs: number | undefined
 ): () => void {
   const end = reveal.source.length
+  // Never back: the reveal may already show more than the screen does, or all of it.
+  const from = Math.max(onScreen, reveal.shown)
+  if (from >= end) {
+    return () => {}
+  }
   const savedAt = reveal.arrivals.at(-1)?.at ?? now
   const halfGap =
     gapMs === undefined ? NATIVE_CHAT_TEXT_REVEAL_DELAY_MS : Math.min(MAX_SAVE_GAP_MS, gapMs) / 2
@@ -215,8 +221,8 @@ export function playNativeChatSaveReveal(
     draw(end)
     return () => {}
   }
-  const middle = pacedTextEnd(reveal.source, onScreen + (end - onScreen) / 2, true)
-  if (middle > onScreen) {
+  const middle = pacedTextEnd(reveal.source, from + (end - from) / 2, true)
+  if (middle > from) {
     draw(middle)
   }
   const timer = setTimeout(() => draw(end), wait)
