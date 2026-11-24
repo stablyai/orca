@@ -4,12 +4,13 @@ import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const swap = vi.hoisted(() => ({ during: null as null | (() => void) }))
+const swap: { during: (() => void) | null } = vi.hoisted(() => ({ during: null }))
 // Enumeration is the last read before deletion; a swap there is the window under test.
 vi.mock('node:fs/promises', async (original) => {
   const actual = await original<typeof FsPromises>()
   return {
     ...actual,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards every overload's arguments to the real readdir unchanged.
     readdir: (async (...args: Parameters<typeof actual.readdir>) => {
       swap.during?.()
       swap.during = null

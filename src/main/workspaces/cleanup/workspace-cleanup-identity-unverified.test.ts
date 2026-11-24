@@ -170,6 +170,7 @@ describe('a removal route that cannot verify the checkout keeps it', () => {
     const decisions: boolean[] = []
     admit.mockClear()
     admit.mockImplementation(async (...args: unknown[]) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the removal step passes its rules authority as admission's fourth argument.
       const rules = args[3] as { stillCurrent: () => boolean } | undefined
       if (!decisions.length) {
         // Another client writes the rules while this decision is on its way to admission.

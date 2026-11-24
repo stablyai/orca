@@ -155,6 +155,7 @@ it("leaves a paired server's member to that server, even beside a same-id local 
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the listing call is under test.
   const runtime = { getWorktreePs } as unknown as OrcaRuntimeService
   const listed = [row('repo-a::/a1')]
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the strict re-list reads only the map's keys.
   const repos = new Map([['repo-b', { id: 'repo-b' } as Repo]])
   const result = await listMissingSiblingProjectsStrictly(runtime, listed, 'repo-a', repos, () => [
     'runtime:env-1|repo-b::/b1'
