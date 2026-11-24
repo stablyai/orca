@@ -31,15 +31,13 @@ it.each([100, 1_000])(
           runRows += size(value)
           return value
         }
-      vi.spyOn(db, 'runsBoundToPane').mockImplementation(
-        count(db.runsBoundToPane.bind(db), (rows) => rows.length)
-      )
-      vi.spyOn(db, 'firstRunBoundToPane').mockImplementation(
-        count(db.firstRunBoundToPane.bind(db), (row) => (row ? 1 : 0))
-      )
-      vi.spyOn(db, 'runIdsWithPointerWorkBoundToPane').mockImplementation(
-        count(db.runIdsWithPointerWorkBoundToPane.bind(db), (ids) => ids.length)
-      )
+      // Bind the real reads before spying, so each spy counts and then calls through.
+      const allBound = count(db.runsBoundToPane.bind(db), (rows) => rows.length)
+      const firstBound = count(db.firstRunBoundToPane.bind(db), (row) => (row ? 1 : 0))
+      const withMail = count(db.runIdsWithPointerWorkBoundToPane.bind(db), (ids) => ids.length)
+      vi.spyOn(db, 'runsBoundToPane').mockImplementation(allBound)
+      vi.spyOn(db, 'firstRunBoundToPane').mockImplementation(firstBound)
+      vi.spyOn(db, 'runIdsWithPointerWorkBoundToPane').mockImplementation(withMail)
       const owner = new OrchestrationMailboxOwner({
         getDb: () => db,
         getTerminal: () => null,

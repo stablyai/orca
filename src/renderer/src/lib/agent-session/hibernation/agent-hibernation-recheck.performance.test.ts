@@ -222,6 +222,7 @@ it.each([
       ) => {
         if (ownerKind === 'non-runtime') {
           // A sibling's edit lands during admission: the store replaces the tabs list and this tab's bindings.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: work.state is the fixture built above, with these two fields.
           const state = work.state as {
             tabsByWorktree: Record<string, unknown[]>
             ptyIdsByTabId: Record<string, string[]>
