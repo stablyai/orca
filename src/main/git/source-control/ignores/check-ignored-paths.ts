@@ -49,6 +49,29 @@ async function runCheckIgnoredPathChunks(
   return Array.from(ignored)
 }
 
+// Code units below U+0300 never change under NFC, so ASCII and Latin-1 paths skip normalize().
+const MAY_CHANGE_UNDER_NFC = /[\u0300-\uffff]/
+
+/** Listed paths keyed by the composed (NFC) path to ask Git about; null when no path would change. */
+function composedQueriesOnDarwin(relativePaths: string[]): Map<string, string[]> | null {
+  // Why: macOS Git precomposes argv and directory reads but not stdin, so a decomposed (NFD)
+  // listed name never matches a composed .gitignore pattern.
+  if (process.platform !== 'darwin' || !relativePaths.some((p) => MAY_CHANGE_UNDER_NFC.test(p))) {
+    return null
+  }
+  const listedByQuery = new Map<string, string[]>()
+  for (const listed of relativePaths) {
+    const query = MAY_CHANGE_UNDER_NFC.test(listed) ? listed.normalize('NFC') : listed
+    const group = listedByQuery.get(query)
+    if (group) {
+      group.push(listed)
+    } else {
+      listedByQuery.set(query, [listed])
+    }
+  }
+  return listedByQuery
+}
+
 export async function checkIgnoredPaths(
   worktreePath: string,
   relativePaths: string[],
@@ -57,6 +80,20 @@ export async function checkIgnoredPaths(
   if (relativePaths.length === 0) {
     return []
   }
+  const listedByQuery = composedQueriesOnDarwin(relativePaths)
+  if (!listedByQuery) {
+    return checkPathsAsGiven(worktreePath, relativePaths, options)
+  }
+  const ignored = await checkPathsAsGiven(worktreePath, [...listedByQuery.keys()], options)
+  // Answer with the names the caller listed, not the composed queries.
+  return ignored.flatMap((query) => listedByQuery.get(query) ?? [query])
+}
+
+async function checkPathsAsGiven(
+  worktreePath: string,
+  relativePaths: string[],
+  options: GitRuntimeOptions
+): Promise<string[]> {
   try {
     return await runCheckIgnoredPathChunks(worktreePath, relativePaths, options)
   } catch (error) {
