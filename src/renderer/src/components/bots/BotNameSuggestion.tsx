@@ -21,26 +21,34 @@ export function takeSuggestionOnTab(
 export function BotNameSuggestion({
   suggestion,
   onTake,
+  compact,
   children
 }: {
   suggestion: string | null
   onTake: (name: string) => void
+  compact?: boolean
   /** Shown instead when there is no suggestion. */
   children?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="mt-1.5 flex h-4 justify-center">
+    <div className={compact ? 'flex h-4' : 'mt-1.5 flex h-4 justify-center'}>
       {suggestion ? (
         <button
           type="button"
-          className="text-xs leading-4 text-muted-foreground hover:text-foreground"
+          className={
+            compact
+              ? 'flex min-w-0 items-center text-xs leading-4 text-muted-foreground hover:text-foreground'
+              : 'text-xs leading-4 text-muted-foreground hover:text-foreground'
+          }
           onClick={() => onTake(suggestion)}
         >
-          {t('bots.groups.useSuggestion', 'Use “{{name}}”', { name: suggestion })}
+          <span className={compact ? 'min-w-0 truncate' : undefined}>
+            {t('bots.groups.useSuggestion', 'Use “{{name}}”', { name: suggestion })}
+          </span>
           <ShortcutKeyCombo
             keys={[t('bots.groups.tabKey', 'Tab')]}
-            className="ml-1"
+            className={compact ? 'ml-1 shrink-0' : 'ml-1'}
             size="compact"
           />
         </button>

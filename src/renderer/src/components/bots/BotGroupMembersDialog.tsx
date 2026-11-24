@@ -20,15 +20,11 @@ import { openBotGroup } from '@/lib/bot-group-catalog'
 import { refreshBotGroups } from '@/lib/bot-group-list'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
 import type { Bot } from '../../../../shared/bot-types'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId
-} from '../../../../shared/execution-host/execution-host'
-import { getTranslatedExecutionHostLabel } from '@/runtime/hosts/display/execution-host-label'
-import { BotAvatar } from './BotAvatar'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { BotGroupMemberHostGroup, BotGroupMemberRow } from './BotGroupMemberRow'
 import { useBotPurposes } from './use-bot-purposes'
 import { BotNameSuggestion, takeSuggestionOnTab } from './BotNameSuggestion'
-import { BotPickFilter, BotPickRow, BotPickRows, FILTER_FROM, filterByName } from './BotPickList'
+import { BotPickFilter, BotPickRows, FILTER_FROM, filterByName } from './BotPickList'
 import { BotGroupFaceCluster } from './BotGroupFaceCluster'
 import {
   groupMemberKeys,
@@ -45,7 +41,6 @@ import {
 } from '../../../../shared/bots/bot-group-pick'
 import { useBotGroupDelete } from './use-bot-group-delete'
 import { toast } from 'sonner'
-import { useBotHostLabel } from './use-bot-host-label'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 
 export function BotGroupMembersDialog({
@@ -101,6 +96,7 @@ export function BotGroupMembersDialog({
   const unchanged =
     group !== undefined && botGroupUnchanged({ name: group.name, botIds: savedKeys }, name, order)
   const shownBots = filterByName(allBots, query, (bot) => bot.name)
+  const shownByHost = !group && manyHosts ? Map.groupBy(shownBots, (bot) => bot.hostId) : null
   // The host a pick is held to: anywhere a mixed room can reach, else the first pick's computer.
   const pickHost = group?.hostId ?? picked[0]?.hostId ?? null
   const elsewhere = (bot: Bot) =>
@@ -111,6 +107,24 @@ export function BotGroupMembersDialog({
     const on = selected.includes(key)
     setSelected(on ? selected.filter((x) => x !== key) : [...selected, key])
     setPopped(on ? null : key)
+  }
+  const renderMember = (bot: Bot) => {
+    const key = botRefKey(bot)
+    const unavailable = elsewhere(bot)
+    return (
+      <BotGroupMemberRow
+        key={key}
+        bot={bot}
+        purpose={purposes.get(key) ?? null}
+        on={!unavailable && selected.includes(key)}
+        pop={!unavailable && popped === key}
+        disabled={saving || unavailable}
+        describedBy={unavailable ? 'bot-group-same-computer' : undefined}
+        showHost={group !== undefined && manyHosts}
+        compact={!group}
+        onToggle={() => toggle(bot)}
+      />
+    )
   }
   const save = async () => {
     if (saving || missing || unchanged) {
@@ -156,44 +170,70 @@ export function BotGroupMembersDialog({
         }
       }}
     >
-      <DialogContent scrollable className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>
+      <DialogContent
+        scrollable
+        className={
+          group
+            ? 'sm:max-w-md'
+            : 'flex w-[calc(100%-2rem)] max-w-md flex-col gap-3.5 p-4 sm:max-w-md'
+        }
+        {...(!group && { 'aria-describedby': undefined })}
+      >
+        <DialogHeader className={group ? undefined : 'shrink-0 pr-6 text-left'}>
+          <DialogTitle className={group ? undefined : 'text-base'}>
             {group
               ? t('bots.groups.manageMembers', 'Manage members')
               : t('bots.groups.newGroup', 'New group')}
           </DialogTitle>
-          <DialogDescription>
-            {t('bots.groups.dialogDescription', 'Bots in a group share one room.')}
-          </DialogDescription>
+          {group ? (
+            <DialogDescription>
+              {t('bots.groups.dialogDescription', 'Bots in a group share one room.')}
+            </DialogDescription>
+          ) : null}
         </DialogHeader>
-        <div className="flex h-32 items-center justify-center">
-          <BotGroupFaceCluster members={picked} />
+        {group ? (
+          <div className="flex h-32 items-center justify-center">
+            <BotGroupFaceCluster members={picked} />
+          </div>
+        ) : null}
+        <div className={group ? undefined : '-mb-2.5 shrink-0'}>
+          <div className={group ? undefined : 'flex items-center gap-2'}>
+            {!group ? (
+              <div className="grid size-9.5 shrink-0 place-items-center rounded-md border border-input bg-input/30">
+                <BotGroupFaceCluster members={picked} compact />
+              </div>
+            ) : null}
+            <Label htmlFor="bot-group-name" className="sr-only">
+              {t('bots.groups.name', 'Name')}
+            </Label>
+            <Input
+              id="bot-group-name"
+              variant={group ? 'heading' : 'default'}
+              className={group ? undefined : 'h-9.5 font-medium not-focus:text-ellipsis'}
+              autoFocus={!group}
+              autoComplete="off"
+              spellCheck={false}
+              value={name}
+              maxLength={BOT_GROUP_NAME_MAX_LENGTH}
+              placeholder={t('bots.groups.namePlaceholder', 'Name your group')}
+              onChange={(event) => setName(event.target.value)}
+              onKeyDown={(event) => {
+                if (!takeSuggestionOnTab(event, suggestion, setName) && event.key === 'Enter') {
+                  void save()
+                }
+              }}
+            />
+          </div>
+          <BotNameSuggestion suggestion={suggestion} onTake={setName} compact={!group} />
         </div>
-        <div>
-          <Label htmlFor="bot-group-name" className="sr-only">
-            {t('bots.groups.name', 'Name')}
-          </Label>
-          <Input
-            id="bot-group-name"
-            variant="heading"
-            autoFocus={!group}
-            autoComplete="off"
-            spellCheck={false}
-            value={name}
-            maxLength={BOT_GROUP_NAME_MAX_LENGTH}
-            placeholder={t('bots.groups.namePlaceholder', 'Name your group')}
-            onChange={(event) => setName(event.target.value)}
-            onKeyDown={(event) => {
-              if (!takeSuggestionOnTab(event, suggestion, setName) && event.key === 'Enter') {
-                void save()
-              }
-            }}
-          />
-          <BotNameSuggestion suggestion={suggestion} onTake={setName} />
-        </div>
-        <div>
-          <div className="mb-2 flex items-center justify-between">
+        <div className={group ? undefined : 'flex min-h-0 flex-col gap-1.5'}>
+          <div
+            className={
+              group
+                ? 'mb-2 flex items-center justify-between'
+                : 'flex shrink-0 items-center justify-between gap-2'
+            }
+          >
             <Label id="bot-group-members">{t('bots.groups.members', 'Members')}</Label>
             <span className="text-xs text-muted-foreground tabular-nums">
               {selected.length > 0
@@ -202,22 +242,16 @@ export function BotGroupMembersDialog({
             </span>
           </div>
           {allBots.length > FILTER_FROM ? (
-            <BotPickFilter value={query} onChange={setQuery} />
+            <BotPickFilter value={query} onChange={setQuery} compact={!group} />
           ) : null}
-          <BotPickRows role="group" labelledBy="bot-group-members">
-            {shownBots.map((bot) => (
-              <MemberRow
-                key={botRefKey(bot)}
-                bot={bot}
-                purpose={purposes.get(botRefKey(bot)) ?? null}
-                on={!elsewhere(bot) && selected.includes(botRefKey(bot))}
-                pop={!elsewhere(bot) && popped === botRefKey(bot)}
-                disabled={saving || elsewhere(bot)}
-                describedBy={elsewhere(bot) ? 'bot-group-same-computer' : undefined}
-                showHost={manyHosts}
-                onToggle={() => toggle(bot)}
-              />
-            ))}
+          <BotPickRows role="group" labelledBy="bot-group-members" compact={!group}>
+            {shownByHost
+              ? [...shownByHost].map(([hostId, bots]) => (
+                  <BotGroupMemberHostGroup key={hostId} hostId={hostId}>
+                    {bots.map(renderMember)}
+                  </BotGroupMemberHostGroup>
+                ))
+              : shownBots.map(renderMember)}
           </BotPickRows>
           {someElsewhere ? (
             <p id="bot-group-same-computer" className="mt-2 text-xs text-muted-foreground">
@@ -244,7 +278,9 @@ export function BotGroupMembersDialog({
             {error}
           </p>
         ) : null}
-        <DialogFooter className="items-center">
+        <DialogFooter
+          className={group ? 'items-center' : 'shrink-0 flex-row items-center justify-end'}
+        >
           {group ? (
             <Button
               variant="ghost-destructive"
@@ -263,7 +299,7 @@ export function BotGroupMembersDialog({
             </Button>
           ) : null}
           {missing ? (
-            <span className="mr-auto text-xs text-muted-foreground">{missing}</span>
+            <span className="mr-auto min-w-0 text-xs text-muted-foreground">{missing}</span>
           ) : null}
           <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
             {t('bots.groups.cancel', 'Cancel')}
@@ -330,56 +366,4 @@ function missingText(missing: ReturnType<typeof botGroupMissing>): string | null
       : missing === 'nameIt'
         ? translate('bots.groups.nameIt', 'Name the group')
         : null
-}
-
-function MemberRow({
-  bot,
-  purpose,
-  on,
-  pop,
-  disabled,
-  showHost,
-  describedBy,
-  onToggle
-}: {
-  bot: Bot
-  purpose: string | null
-  on: boolean
-  pop: boolean
-  disabled: boolean
-  /** Bots span more than one computer: say which one this is. */
-  showHost: boolean
-  /** Why it can't be picked. */
-  describedBy?: string
-  onToggle: () => void
-}): React.JSX.Element {
-  return (
-    <BotPickRow
-      role="checkbox"
-      aria-checked={on}
-      disabled={disabled}
-      aria-describedby={describedBy}
-      // A pointer pick leaves focus in the name field, so its Tab suggestion still works.
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={onToggle}
-      picture={<BotAvatar bot={bot} className="size-7 rounded-lg text-sm" />}
-      name={bot.name}
-      detail={purpose}
-      on={on}
-      pop={pop}
-      trailing={showHost ? <MemberHost hostId={bot.hostId} /> : null}
-    />
-  )
-}
-
-/** The row's computer; only mounted when bots span more than one, so others don't subscribe. */
-function MemberHost({ hostId }: { hostId: ExecutionHostId }): React.JSX.Element {
-  const t = useTranslate()
-  const remote = useBotHostLabel(hostId)
-  // Matches the dialog's own words ("…at least one bot on this computer").
-  const host =
-    hostId === LOCAL_EXECUTION_HOST_ID
-      ? t('bots.groups.thisComputer', 'This computer')
-      : (remote ?? getTranslatedExecutionHostLabel(hostId, t))
-  return <span className="max-w-32 shrink-0 truncate text-xs text-muted-foreground">{host}</span>
 }
