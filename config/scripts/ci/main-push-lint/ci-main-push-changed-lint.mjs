@@ -185,6 +185,10 @@ export function resolveReportedPaths(diagnostics, index) {
 }
 
 // At most `max` characters, exactly, with a mark where it was cut.
+export function unreadableStatus(policy) {
+  return policy.unreadable?.length > 0 ? ` [${policy.unreadable.length} unreadable input(s)]` : ''
+}
+
 function clip(text, max) {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text
 }
@@ -301,23 +305,27 @@ async function reportAttribution({ diagnostics, plan, env, reporter, api }) {
     ),
     ...[...ambiguous].map(([file, candidates]) => ({
       file,
+      notice: pathNotice({ ambiguous: candidates }),
       ...unattributed(
         `not attributed: oxlint reported this path, which could be any of ${candidates.join(', ')}`
       )
     })),
     ...unverified.map((file) => ({
       file,
+      notice: pathNotice({ unverified: true }),
       ...unattributed(
         'not attributed: tracked files could not be read, so this printed path is unverified'
       )
     }))
   ]
   let logged = 0
-  for (const { file, logDescription, unclear, policyRow } of rows) {
+  for (const { file, logDescription, unclear, policyRow, notice } of rows) {
+    // A path notice leads; every row clips the file's name, so what follows it always reaches the log.
+    const name = `${notice ? `${notice} ` : ''}${clip(file, MAX_LOG_FILE_CHARS)}`
     const line =
       touched.has(file) && !unclear && !policyRow
-        ? `${file}: changed in ${noun} by ${logDescription}`
-        : `${policyRow ? clip(file, MAX_LOG_FILE_CHARS) : file}: ${logDescription}`
+        ? `${name}: changed in ${noun} by ${logDescription}`
+        : `${name}: ${logDescription}`
     if (reporter.log(line)) {
       logged += 1
     }
@@ -348,12 +356,19 @@ export async function main({
   }
   const range = rangeText(plan)
   const targets = [...plan.dirs, ...plan.files]
-  const walked = plan.dirs.length > 0 ? `, every file under ${plan.dirs.join(', ')}` : ''
+  // Every rendered line puts its fixed facts and qualifiers before any variable-length path, cause or name, and
+  // clips those, so cutting the line can only drop detail.
+  const walked =
+    plan.dirs.length > 0
+      ? `; walking ${plan.dirs.length} director(ies): ${plan.dirs.map((dir) => clip(dir, MAX_LOG_FILE_CHARS)).join(', ')}`
+      : ''
   reporter.log(
-    `Linting ${plan.touched.length} changed candidate file(s) (${plan.files.length} named explicitly)${walked} in ${range}: ${plan.scope}.`
+    `Linting ${range} (${plan.scope}): ${plan.touched.length} changed candidate file(s), ${plan.files.length} named explicitly${walked}.`
   )
   for (const policy of plan.policies) {
-    reporter.log(`Lint policy changed: ${policy.why}; linting everything under ${policy.dir}.`)
+    reporter.log(
+      `Lint policy changed${unreadableStatus(policy)}: linting everything under ${clip(policy.dir, MAX_LOG_FILE_CHARS)}, because ${policy.why}`
+    )
   }
   // The tracked-path index is best effort; without it no repeat is dropped, and the count says so.
   let index = new Map()
@@ -405,7 +420,7 @@ export async function main({
       diagnostic.unverified = Boolean(diagnostic.file)
     }
     reporter.log(
-      `Could not map reported paths to tracked files (${truncate(String(indexError.message), 300)}); paths are shown as oxlint printed them.`
+      `Could not map reported paths to tracked files, so paths are shown as oxlint printed them: ${truncate(String(indexError.message), 300)}`
     )
   } else {
     resolveReportedPaths(diagnostics, index)

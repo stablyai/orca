@@ -53,7 +53,8 @@ async function requireCommit(sha, label, cwd) {
     reason = (error.stderr || error.message || '').trim().split('\n')[0]
   }
   if (!(await hasCommit(sha, cwd))) {
-    throw new Error(`Cannot fetch ${label} ${sha} (${reason}); refusing to narrow the lint range.`)
+    // The decision leads, so a long Git message cut later never takes it with it.
+    throw new Error(`Refusing to narrow the lint range: cannot fetch ${label} ${sha} (${reason}).`)
   }
 }
 

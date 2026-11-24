@@ -292,7 +292,7 @@ describe('main-push lint policy', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
         )
         expect(run.log).not.toContain('::error file=')
         expect(run.log).toMatch(
-          /^a\/b\.ts: not attributed: oxlint reported this path, which could be any of a\/b\.ts, a\\\\b\.ts$/m
+          /^\[path uncertain: a\/b\.ts or a\\\\b\.ts\] a\/b\.ts: not attributed: oxlint reported this path, which could be any of a\/b\.ts, a\\\\b\.ts$/m
         )
       })
     }

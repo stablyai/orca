@@ -163,7 +163,12 @@ function coverageLine({ candidates, dirs, linted, incomplete, overlap, repeatsUn
 
 function policyLine(policies) {
   return policies.length > 0
-    ? `Lint policy changed, so the whole scope it governs is linted: ${listed(policies, (policy) => markdownText(policy.why))}.`
+    ? `Lint policy changed, so the whole scope it governs is linted: ${listed(
+        policies,
+        // The unreadable status leads each cause, which markdownText may cut.
+        (policy) =>
+          `${policy.unreadable?.length > 0 ? markdownText(`[${policy.unreadable.length} unreadable input(s)] `) : ''}${markdownText(policy.why)}`
+      )}.`
     : ''
 }
 

@@ -203,7 +203,9 @@ describe('main-push lint plan', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
     const pushed = push({ 'a.ts': CLEAN }, { 'a.ts': DEBUGGER })
     const broken = await runWorkflow({ ...pushed, before: 'f'.repeat(40) })
     expect(broken).toMatchObject({ planExit: 1, lintExit: null, output: '' })
-    expect(broken.log).toMatch(/^::error title=Main-push lint::Cannot fetch the push base f+ /m)
+    expect(broken.log).toMatch(
+      /^::error title=Main-push lint::Refusing to narrow the lint range: cannot fetch the push base f+ /m
+    )
   })
 
   it('does not guess why oxlint excluded a path it was given', async () => {

@@ -1,5 +1,6 @@
 // Pin what the main-push lint's attribution and diagnostic report keep under long inputs: policy counts, the first
 // commit's SHA, unreadable markers and path notices; and that it looks up only what it can show.
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -256,7 +257,9 @@ describe('main-push lint attribution report', { timeout: GIT_TEST_TIMEOUT_MS }, 
     })
     const notice = '[path unverified: tracked files could not be read]'
     expect(exit).toBe(1)
-    expect(text).toContain('Could not map reported paths to tracked files (')
+    expect(text).toContain(
+      'Could not map reported paths to tracked files, so paths are shown as oxlint printed them: '
+    )
     expect(text).not.toContain('::error file=')
     expect(text).toContain(
       `::error title=eslint(no-debugger)::${notice} oxlint reported ${LONG_FILE.slice(0, 299)}…: `
@@ -268,5 +271,165 @@ describe('main-push lint attribution report', { timeout: GIT_TEST_TIMEOUT_MS }, 
       ': not attributed: tracked files could not be read, so this printed path is unverified'
     )
     expect(apiCalls).toBe(0)
+  })
+
+  // C8, the qualifier class: paths and causes well over 1,500 characters, through main() and a stand-in oxlint
+  // (no file system here holds such paths; Git's index can), into the final log and summary. Every status or
+  // qualifier must survive in every line that carries one.
+  it('keeps every qualifier in every rendered line with paths and causes over 1,500 characters', async () => {
+    const long = (tag) => `${tag}/${'d'.repeat(1_600)}`
+    const touchedFile = `${long('t')}/x.ts`
+    const governedFile = `${long('o')}/y.ts`
+    const slashFile = `${long('a')}/b.ts`
+    const backslashFile = `${long('a')}\\b.ts`
+    const opaqueConfig = `${long('o')}/oxlint.config.ts`
+    const plainConfig = `${long('p')}/.oxlintrc.json`
+    const fakeRoot = join(scratch, 'fake-oxlint')
+    mkdirSync(join(fakeRoot, 'node_modules/oxlint/bin'), { recursive: true })
+    writeFileSync(
+      join(fakeRoot, 'node_modules/oxlint/package.json'),
+      JSON.stringify({ name: 'oxlint', bin: { oxlint: 'bin/oxlint.mjs' } })
+    )
+    writeFileSync(
+      join(fakeRoot, 'node_modules/oxlint/bin/oxlint.mjs'),
+      "import { readFileSync } from 'node:fs'\nprocess.stdout.write(readFileSync(process.env.FAKE_OXLINT_OUTPUT, 'utf8'))\nprocess.exitCode = 1\n"
+    )
+    const error = (file) =>
+      `::error file=${file},line=1,endLine=1,col=1,endColumn=2,title=eslint(no-debugger)::${file}:1:1: \`debugger\` statement is not allowed`
+    // oxlint prints the backslash file's name with a slash, so slashFile is printed twice.
+    const outputPath = join(scratch, 'fake-oxlint-output.txt')
+    writeFileSync(
+      outputPath,
+      `${[touchedFile, governedFile, slashFile, slashFile].map(error).join('\n')}\nFinished in 1ms on 4 files using 1 threads.\n`
+    )
+    const policies = [
+      {
+        dir: long('o'),
+        paths: [opaqueConfig],
+        unreadable: [`${opaqueConfig} is a script config whose inputs cannot be read`],
+        why: `${opaqueConfig} was added; 1 of its inputs cannot be read`
+      },
+      { dir: long('p'), paths: [plainConfig], unreadable: [], why: `${plainConfig} changed` }
+    ]
+    const planPath = join(scratch, 'long-plan.json')
+    writeFileSync(
+      planPath,
+      JSON.stringify({
+        event: 'push',
+        base: 'a'.repeat(40),
+        head: 'b'.repeat(40),
+        scope: 'the files this push changed',
+        touched: [touchedFile],
+        files: [touchedFile],
+        overlap: [],
+        dirs: [long('o'), long('p')],
+        policies,
+        unrepresentable: []
+      })
+    )
+    const api = async (path) =>
+      path.startsWith('compare/')
+        ? { total_commits: 1, commits: [{ sha: 'c'.repeat(40) }] }
+        : path.startsWith('commits?')
+          ? [{ sha: 'c'.repeat(40), author: { login: 'ann' }, commit: { message: 'x (#7)' } }]
+          : [
+              {
+                number: 7,
+                merged_at: 'x',
+                user: { login: 'ann' },
+                base: { ref: 'main', repo: { full_name: 'o/r' } }
+              }
+            ]
+    // A repository whose index alone holds the long names, so the tracked-path lookup works.
+    const repo = fixture.makeOrigin()
+    const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: repo, input: '' })
+      .toString()
+      .trim()
+    for (const file of [touchedFile, governedFile, slashFile, backslashFile]) {
+      execFileSync('git', ['update-index', '--add', '--index-info'], {
+        cwd: repo,
+        input: `100644 ${blob}\t${file}\n`
+      })
+    }
+    const notRepo = join(scratch, 'long-not-a-repo')
+    mkdirSync(notRepo)
+    const previous = process.env.FAKE_OXLINT_OUTPUT
+    process.env.FAKE_OXLINT_OUTPUT = outputPath
+    const run = async (root, tag) => {
+      const summaryPath = join(scratch, `long-summary-${tag}.md`)
+      const env = {
+        MAIN_PUSH_LINT_PLAN: planPath,
+        GITHUB_REPOSITORY: 'o/r',
+        GITHUB_STEP_SUMMARY: summaryPath
+      }
+      const log = await captureStdout(() => main({ env, root, invocationRoot: fakeRoot, api }))
+      return { lines: log.split('\n'), summary: readFileSync(summaryPath, 'utf8').split('\n') }
+    }
+    try {
+      const indexed = await run(repo, 'indexed')
+      const unindexed = await run(notRepo, 'unindexed')
+      for (const { lines } of [indexed, unindexed]) {
+        // No line runs past the log's cut, so nothing after the cut can hold a qualifier.
+        expect(lines.every((line) => line.length <= 1_100)).toBe(true)
+        expect(lines).toContainEqual(
+          expect.stringMatching(
+            /^Linting aaaaaaaaaa\.\.bbbbbbbbbb \(the files this push changed\): 1 changed candidate file\(s\), 1 named explicitly; walking 2 director\(ies\): /
+          )
+        )
+        expect(lines).toContainEqual(
+          expect.stringMatching(
+            /^Lint policy changed \[1 unreadable input\(s\)\]: linting everything under o\/d+…, because /
+          )
+        )
+        expect(lines).toContainEqual(
+          expect.stringMatching(/^Lint policy changed: linting everything under p\/d+…, because /)
+        )
+      }
+      const at = (lines, start) => lines.filter((line) => line.startsWith(start))
+      // Readable index: the backslash pair is uncertain everywhere; the rest attribute with their qualifiers.
+      const uncertain = '[path uncertain: '
+      expect(at(indexed.lines, `${uncertain}`).length).toBeGreaterThanOrEqual(3)
+      expect(indexed.lines).toContainEqual(
+        expect.stringMatching(/^\[path uncertain: .*: not attributed: oxlint reported this path/)
+      )
+      expect(indexed.lines).toContainEqual(
+        expect.stringMatching(/^t\/d+…: changed in this push by #7 by @ann/)
+      )
+      expect(indexed.lines).toContainEqual(
+        expect.stringMatching(
+          /^o\/d+…: not changed in this push; linted because 1 lint policy change\(s\) cover it, 1 with unreadable inputs; 1 shown: .*\[1 changed input\(s\), some unreadable\] \(o\/d+…: cccccccccc #7\)/
+        )
+      )
+      expect(indexed.lines).toContainEqual(
+        expect.stringMatching(/^::error title=eslint\(no-debugger\)::\[path uncertain: /)
+      )
+      // Unreadable index: every printed path is unverified, first, on every surface.
+      const unverified = '[path unverified: tracked files could not be read]'
+      expect(at(unindexed.lines, `${unverified} t/`).length).toBe(2)
+      expect(at(unindexed.lines, `${unverified} o/`).length).toBe(2)
+      expect(
+        at(unindexed.lines, `::error title=eslint(no-debugger)::${unverified} oxlint reported `)
+          .length
+      ).toBe(4)
+      // Summaries: the unreadable status and the path notices lead their cells.
+      for (const { summary, notice } of [
+        { summary: indexed.summary, notice: uncertain },
+        { summary: unindexed.summary, notice: unverified }
+      ]) {
+        expect(summary.join('\n')).toContain(markdownText('[1 unreadable input(s)] '))
+        expect(summary.some((line) => line.startsWith(`| <code>${markdownText(notice)}`))).toBe(
+          true
+        )
+      }
+      expect(indexed.summary.join('\n')).toContain(
+        markdownText('1 lint policy change(s) cover it, 1 with unreadable inputs; 1 shown: ')
+      )
+    } finally {
+      if (previous === undefined) {
+        delete process.env.FAKE_OXLINT_OUTPUT
+      } else {
+        process.env.FAKE_OXLINT_OUTPUT = previous
+      }
+    }
   })
 })

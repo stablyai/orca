@@ -45,7 +45,7 @@ describe('main-push lint range', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
 
   it('fails instead of narrowing when the push base cannot be fetched', async () => {
     await expect(lintScope('push', 'f'.repeat(40))).rejects.toThrow(
-      /refusing to narrow the lint range/
+      /^Refusing to narrow the lint range: cannot fetch the push base /
     )
   })
 
