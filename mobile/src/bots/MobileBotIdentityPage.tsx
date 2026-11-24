@@ -238,6 +238,9 @@ export function MobileBotIdentityPage(props: {
       <View
         style={[styles.grid, { gap, minHeight: tabs.length > 1 ? 3 * tile + 2 * gap : 0 }]}
         accessibilityRole="radiogroup"
+        accessibilityLabel={
+          tabs.find((entry) => entry.value === shown)?.label ?? t('bots.picture.mascot', 'Mascot')
+        }
         onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
       >
         {tile === 0

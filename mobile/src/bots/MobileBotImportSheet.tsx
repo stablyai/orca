@@ -127,7 +127,7 @@ export function MobileBotImportSheet(props: {
   const madeBefore = imported ? (props.bots.find((bot) => bot.id === imported.botId) ?? null) : null
   // The bot an earlier import made gets the new things, instead of a second bot; one this sheet
   // can't open is imported again under a new name.
-  const again = imported && madeBefore && props.onUpdate && !copying ? imported : null
+  const again = imported && madeBefore && props.onUpdate && !copying && !trimmed ? imported : null
   const existing = again ? madeBefore : null
   const update =
     existing && pick && props.onUpdate
