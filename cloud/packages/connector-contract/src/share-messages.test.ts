@@ -42,7 +42,7 @@ describe('bot shares contract', () => {
     expect(invite(' alice@stably.ai')).toBe(false)
   })
 
-  it('never reads orca as a place: no workspace rows, no rules, only share deliveries', () => {
+  it('never reads orca as a place: no workspace rows, no rules, only share deliveries on it', () => {
     const parsed = ConnectorHelloRequestSchema.parse({
       ...hello,
       bots: [{ ...bot, sharedAppWorkspaces: [{ source: 'orca', workspaceId: 'w', members: [] }] }]
@@ -67,7 +67,7 @@ describe('bot shares contract', () => {
         placeId: 'p',
         prompt: 'hi'
       }).success
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('lets a person ask through any linked account the bot is shared with', () => {

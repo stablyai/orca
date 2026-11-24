@@ -2,6 +2,7 @@ import { EpochMsSchema, OpaqueIdSchema, SequenceSchema } from '@orca-cloud/push-
 import { z } from 'zod'
 import { CONNECTOR_LIMITS } from './connector-limits.js'
 import {
+  CONNECTOR_SOURCES,
   ConnectorActsForSchema,
   ConnectorConversationSchema,
   PlaceIdSchema
@@ -32,7 +33,10 @@ const DeliveryBase = {
   deliveryId: OpaqueIdSchema,
   seq: SequenceSchema,
   expiresAt: EpochMsSchema,
-  conversation: ConnectorConversationSchema
+  // An orca conversation is a share's, and carries only its deliveries.
+  conversation: ConnectorConversationSchema.extend({
+    source: z.enum(CONNECTOR_SOURCES).exclude(['orca'])
+  })
 }
 
 // A share's deliveries: one ordered queue per share, its conversation named by the share's id.
