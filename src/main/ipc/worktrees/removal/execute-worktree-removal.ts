@@ -12,6 +12,7 @@ import {
   SSH_WORKTREE_REMOVAL_NOT_SERVED_MESSAGE
 } from '../../../providers/ssh-host-not-served-error'
 import { resolveWorktreeRemovalMetadata } from '../../../workspaces/removal/worktree-removal-repo-owner'
+import { assertWorktreeNotProviderManaged } from '../../../workspaces/removal/provider-worktree-removal-guard'
 import {
   authorizeUnregisteredWindowsRemoval,
   nativeWindowsMarkerMissing,
@@ -62,6 +63,7 @@ export async function executeWorktreeRemoval(
     ? await listGitWorktreesStrict(repo.path, localWorktreeGitOptions)
     : await listGitWorktreesStrict(repo.path)
   const removedMeta = resolveWorktreeRemovalMetadata(store, repoId, args.worktreeId, removalHostId)
+  assertWorktreeNotProviderManaged(args.worktreeId, removedMeta)
   const removedPushTarget = removedMeta?.pushTarget
   const registeredWorktree = findRegisteredDeletableWorktree(
     repo.path,

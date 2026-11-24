@@ -44,10 +44,7 @@ import { getWorkspaceAttachments } from '../../../../shared/workspace-attachment
 import { scanRuntimeWorktreesUntilNotOvertaken } from './runtime-witnessed-worktree-scan'
 import { listRuntimeFolderWorkspaces } from './runtime-worktree-filesystem'
 import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/paths/configured-worktree-base-path'
-import {
-  getRetiredNameRegistryForRepo,
-  hasRetiredNameRegistryStore
-} from '../../../workspaces/removal/retirement/worktree-name-retirement'
+import { listRuntimeRetiredWorktreeNames } from './runtime-retired-worktree-names'
 
 export class RuntimeManagedWorktreeQueries {
   constructor(private readonly deps: RuntimeManagedWorktreeQueryDependencies) {}
@@ -55,7 +52,8 @@ export class RuntimeManagedWorktreeQueries {
   async list(
     repoSelector: string | undefined,
     limit: number,
-    defaultsSupported = true
+    defaultsSupported = true,
+    providerName?: string
   ): Promise<RuntimeWorktreeListResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
@@ -72,7 +70,11 @@ export class RuntimeManagedWorktreeQueries {
     const hiddenRepos = runtimeHiddenRepos(this.deps.getStore())
     const worktrees = resolved.filter((worktree) => {
       const routing = resolveWorktreeHostRouting(repos, worktree, repoLookup)
-      if (hiddenRepos.hasWorktree(worktree) || routing.kind === 'ambiguous') {
+      if (
+        (providerName && worktree.worktreeProvider?.name !== providerName) ||
+        hiddenRepos.hasWorktree(worktree) ||
+        routing.kind === 'ambiguous'
+      ) {
         return false
       }
       if (routing.kind !== 'resolved' || !routing.repo) {
@@ -282,21 +284,8 @@ export class RuntimeManagedWorktreeQueries {
     })
   }
 
-  async listRetiredNames(repoSelector: string): Promise<{
-    retiredNamesByRepo: Record<string, readonly string[]>
-    retiredNameTiersByRepo: Record<string, number>
-  }> {
-    const store = this.deps.getStore()
-    if (!store || !hasRetiredNameRegistryStore(store)) {
-      return { retiredNamesByRepo: {}, retiredNameTiersByRepo: {} }
-    }
-    const repo = await this.deps.resolveRepo(repoSelector)
-    const settings = store.getSettings()
-    const registry = await getRetiredNameRegistryForRepo(store, repo, store.getRepos(), settings)
-    return {
-      retiredNamesByRepo: { [repo.id]: registry.names },
-      retiredNameTiersByRepo: { [repo.id]: registry.exhaustedTiers }
-    }
+  listRetiredNames(repoSelector: string) {
+    return listRuntimeRetiredWorktreeNames(this.deps, repoSelector)
   }
 
   private visibilityDefaults(

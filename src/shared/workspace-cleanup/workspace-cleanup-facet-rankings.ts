@@ -15,6 +15,7 @@ import type { WorkspaceCleanupBlocker } from './workspace-cleanup'
 // Records (not bare arrays) so tsc fails when a union gains a member.
 const BLOCKER_SEVERITY: Record<WorkspaceCleanupBlocker, number> = {
   'main-worktree': 100,
+  'provider-managed': 100,
   'folder-repo': 95,
   'active-workspace': 90,
   pinned: 85,

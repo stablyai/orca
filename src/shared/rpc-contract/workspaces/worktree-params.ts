@@ -69,6 +69,8 @@ export const CliWorkspaceProvenanceRequest = z.object({
 
 export const WorktreeListParams = z.object({
   repo: OptionalString,
+  /** Only workspaces leased from this provider. Older hosts ignore it. */
+  provider: OptionalString,
   limit: OptionalFiniteNumber
 })
 

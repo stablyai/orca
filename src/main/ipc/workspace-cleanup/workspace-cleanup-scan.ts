@@ -221,14 +221,18 @@ async function scanRepoWorkspaces(
         })
   // Full-list views filter client-side; age thresholds here would hide workspaces from every view.
   const candidateWorktrees = targetWorktreeIds
-    ? mergedWorktrees.filter((worktree) => targetWorktreeIds.has(worktree.id))
-    : mergedWorktrees.filter((worktree) =>
-        shouldScanBroadWorkspaceCleanupWorktree({
-          includeAllWorkspaces,
-          repoIsFolder,
-          worktree,
-          scannedAt
-        })
+    ? mergedWorktrees.filter(
+        (worktree) => targetWorktreeIds.has(worktree.id) && !worktree.providerManaged
+      )
+    : mergedWorktrees.filter(
+        (worktree) =>
+          !worktree.providerManaged &&
+          shouldScanBroadWorkspaceCleanupWorktree({
+            includeAllWorkspaces,
+            repoIsFolder,
+            worktree,
+            scannedAt
+          })
       )
   // Discover all targeted/full-list rows upfront so progress does not stay near 100%.
   const reportDiscoveredUpfront = targetWorktreeIds !== undefined || includeAllWorkspaces

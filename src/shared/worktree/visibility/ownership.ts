@@ -225,7 +225,8 @@ function hasStrongOrcaMetadata(meta: WorktreeMeta | undefined): boolean {
     meta?.pushTarget ||
     meta?.sparseBaseRef ||
     meta?.sparsePresetId ||
-    meta?.preserveBranchOnDelete
+    meta?.preserveBranchOnDelete ||
+    meta?.worktreeProvider
   )
 }
 

@@ -1065,6 +1065,12 @@ import {
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams
 } from './workspaces/worktree-params'
+import {
+  WorktreeAcquire,
+  WorktreeProviderList,
+  WorktreeProviderTrust,
+  WorktreeRelease
+} from './workspaces/worktree-provider-params'
 import { WorktreeAdoptProvisionedRoot } from './workspaces/worktree-provisioned-root-params'
 import { RepoIconDataUrlsParams } from '../sidebar-list/catalog/repo-icon-data-urls-contract'
 import { SidebarInputsReadParams } from '../sidebar-list/feed/sidebar-inputs-feed-contract'
@@ -2237,6 +2243,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'workspacePorts.probePage': WorkspacePortProbePageParams,
   'workspacePorts.scan': WorkspacePortScanParams,
   'workspacePorts.scanHost': WorkspacePortScanHostParams,
+  'worktree.acquire': WorktreeAcquire,
   'worktree.activate': WorktreeActivate,
   'worktree.adoptProvisionedRoot': WorktreeAdoptProvisionedRoot,
   'worktree.archive': WorktreeArchive,
@@ -2249,7 +2256,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.persistSortOrder': WorktreeSortOrder,
   'worktree.prefetchCreateBase': WorktreePrefetchCreateBase,
   'worktree.previewNestedRemoval': WorktreePreviewNestedRemoval,
+  'worktree.providers.list': WorktreeProviderList,
+  'worktree.providers.trust': WorktreeProviderTrust,
   'worktree.ps': WorktreePsParams,
+  'worktree.release': WorktreeRelease,
   'worktree.releaseBotHome': WorktreeReleaseBotHome,
   'worktree.resolveCallerParent': WorktreeResolveCallerParent,
   'worktree.resolveMrBase': WorktreeResolveMrBase,

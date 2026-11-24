@@ -17,7 +17,8 @@ const RECOGNIZED_ORCA_YAML_KEYS = new Set([
   'issueCommand',
   'defaultTabs',
   'environmentRecipes',
-  'worktree'
+  'worktree',
+  'providers'
 ])
 
 function hasUnrecognizedOrcaYamlKeys(content: string): boolean {

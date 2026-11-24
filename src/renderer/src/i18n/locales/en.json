@@ -5042,6 +5042,7 @@
             "diffNotesCount": "Diff notes: {{value0}}",
             "completedAgentsCount": "Completed agents: {{value0}}",
             "mainWorkspaceBlocker": "Main workspace",
+            "providerManagedBlocker": "Worktree provider",
             "folderProjectBlocker": "Folder project",
             "pinnedBlocker": "Pinned",
             "activeWorkspaceBlocker": "Active workspace",

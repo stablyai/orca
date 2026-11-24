@@ -19,6 +19,11 @@ export function getWorkspaceCleanupBlockerLabel(blocker: WorkspaceCleanupBlocker
         'auto.components.workspace.cleanup.candidateRow.folderProjectBlocker',
         'Folder project'
       )
+    case 'provider-managed':
+      return translate(
+        'auto.components.workspace.cleanup.candidateRow.providerManagedBlocker',
+        'Worktree provider'
+      )
     case 'pinned':
       return translate('auto.components.workspace.cleanup.candidateRow.pinnedBlocker', 'Pinned')
     case 'active-workspace':

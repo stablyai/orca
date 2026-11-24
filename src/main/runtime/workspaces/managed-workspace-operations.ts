@@ -36,9 +36,15 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
   listManagedWorktrees(
     repoSelector?: string,
     limit = DEFAULT_WORKTREE_LIST_LIMIT,
-    sourceDefaultsSupported = true
+    sourceDefaultsSupported = true,
+    providerName?: string
   ): Promise<RuntimeWorktreeListResult> {
-    return this.managedWorktreeQueries.list(repoSelector, limit, sourceDefaultsSupported)
+    return this.managedWorktreeQueries.list(
+      repoSelector,
+      limit,
+      sourceDefaultsSupported,
+      providerName
+    )
   }
 
   listRetiredWorktreeNames(repoSelector: string) {

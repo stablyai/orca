@@ -47,9 +47,12 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['worktree', 'list'],
     summary: 'List Orca-managed worktrees',
-    usage: 'orca worktree list [--repo <selector>] [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'limit'],
-    notes: [...WORKTREE_LISTING_SCOPE_NOTES]
+    usage: 'orca worktree list [--repo <selector>] [--provider <name>] [--limit <n>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'provider', 'limit'],
+    notes: [
+      ...WORKTREE_LISTING_SCOPE_NOTES,
+      'Pass --provider to list only workspaces leased from that worktree provider.'
+    ]
   },
   {
     path: ['worktree', 'show'],

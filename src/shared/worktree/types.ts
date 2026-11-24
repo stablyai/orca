@@ -9,6 +9,7 @@ import type { BuiltInWorktreeVisibilitySourceId } from '../repository/repo-types
 import type { WorktreeIdentity } from './identity'
 import type { WorktreeScanFailureKind } from './catalog/worktree-scan-failure'
 import type { SmartTier } from '../sidebar-list/sorting/sort-stamps'
+import type { WorktreeProviderWorkspace } from './provider/worktree-provider-types'
 
 export type WorkspaceAttachmentOrigin = {
   kind: 'observed'
@@ -167,6 +168,10 @@ export type Worktree = {
   mobileDiffReview?: MobileDiffReviewState
   automationProvenance?: AutomationWorkspaceProvenance
   cliProvenance?: CliWorkspaceProvenance
+  /** Lease for a checkout acquired from an external pool; Orca must release, never Git-remove it. */
+  worktreeProvider?: WorktreeProviderWorkspace
+  /** Convenience for clients: true iff this workspace is leased from a worktree provider. */
+  providerManaged?: true
 } & GitWorktreeInfo
 
 /** Only CLI-created workspaces carry this; missing means not CLI-created, including older rows. */

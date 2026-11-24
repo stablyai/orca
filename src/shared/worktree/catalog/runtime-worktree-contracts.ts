@@ -88,6 +88,9 @@ export type RuntimeWorktreePsSummary = {
   terminalPlatform?: NodeJS.Platform
   repo: string
   path: string
+  /** Leased checkout metadata; presence means release, never Git removal. Absent from older hosts. */
+  worktreeProvider?: Worktree['worktreeProvider']
+  providerManaged?: true
   priorWorktreeIds?: string[]
   branch: string
   isArchived: boolean

@@ -33,17 +33,38 @@ The `.cache` directory must already exist and be gitignored in the primary check
 
 All keys are optional. Script, title, command, and path values must be strings; Orca trims them and drops empty or oversized values. Invalid fields are skipped while valid siblings still apply. Unknown keys do not configure additional behavior.
 
-| Key                          | Accepted value                                                                                                                                                                                        | When omitted                                                                  |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `scripts.setup`              | Nonempty script string, including a YAML block scalar (`\|`). Runs in the new worktree when setup is enabled.                                                                                         | No project setup script.                                                      |
-| `scripts.archive`            | Nonempty script string. Runs in the worktree before archive/removal when hooks are enabled.                                                                                                           | No project archive script.                                                    |
-| `setupAgentStartupPolicy`    | Exactly `start-immediately` or `wait-for-setup`.                                                                                                                                                      | `start-immediately`; a local **wait** setting still takes precedence.         |
-| `issueCommand`               | Nonempty command template for linked GitHub/GitLab items in the create composer.                                                                                                                      | No project template; the composer can still supply its built-in agent prompt. |
-| `defaultTabs`                | List of mappings with optional `title`, `command`, and `color`. At least one valid field is required per entry. `color` accepts `#RGB` or `#RRGGBB`.                                                  | Normal initial terminal behavior.                                             |
-| `worktree.sharedDirectories` | List of repository-relative directory paths. Only existing, gitignored directories are shared.                                                                                                        | Only the user's Settings shared paths apply.                                  |
-| `environmentRecipes`         | List of per-workspace environment recipes. See [Cloud VMs](/docs/ways-to-run#4-cloud-vms-per-workspace-environments) and the `orca-per-workspace-env` skill for recipe fields and lifecycle commands. | No project recipes.                                                           |
+| Key                          | Accepted value                                                                                                                                                                                                        | When omitted                                                                  |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `scripts.setup`              | Nonempty script string, including a YAML block scalar (`\|`). Runs in the new worktree when setup is enabled.                                                                                                         | No project setup script.                                                      |
+| `scripts.archive`            | Nonempty script string. Runs in the worktree before archive/removal when hooks are enabled.                                                                                                                           | No project archive script.                                                    |
+| `setupAgentStartupPolicy`    | Exactly `start-immediately` or `wait-for-setup`.                                                                                                                                                                      | `start-immediately`; a local **wait** setting still takes precedence.         |
+| `issueCommand`               | Nonempty command template for linked GitHub/GitLab items in the create composer.                                                                                                                                      | No project template; the composer can still supply its built-in agent prompt. |
+| `defaultTabs`                | List of mappings with optional `title`, `command`, and `color`. At least one valid field is required per entry. `color` accepts `#RGB` or `#RRGGBB`.                                                                  | Normal initial terminal behavior.                                             |
+| `worktree.sharedDirectories` | List of repository-relative directory paths. Only existing, gitignored directories are shared.                                                                                                                        | Only the user's Settings shared paths apply.                                  |
+| `environmentRecipes`         | List of per-workspace environment recipes. See [Cloud VMs](/docs/ways-to-run#4-cloud-vms-per-workspace-environments) and the `orca-per-workspace-env` skill for recipe fields and lifecycle commands.                 | No project recipes.                                                           |
+| `providers`                  | Mapping of provider name to `{ claim, release, status?, setup?, timeoutSeconds?, workingDirectory? }`. Commands are non-empty argv arrays; repository-level providers run only after `orca worktree providers trust`. | No repository-level providers.                                                |
 
 `scripts` and `worktree` must be mappings; `defaultTabs`, `environmentRecipes`, and `sharedDirectories` must be lists. `setupRunPolicy` and `commandSourcePolicy` are **Settings values**, not accepted `orca.yaml` keys.
+
+### Worktree providers
+
+`providers` lets a repository declare a pooled-worktree tool that Orca can call instead of creating a worktree itself. The block is read from the primary checkout, never from a claimed slot. Because its commands execute code, Orca does not run them until an explicit approval records the current block:
+
+```yaml
+providers:
+  wtp:
+    claim: ['worktree-pool', 'claim', '--json']
+    release: ['worktree-pool', 'release']
+    timeoutSeconds: 300
+```
+
+```bash
+orca worktree providers list --repo path:/path/to/repo
+orca worktree providers trust --repo path:/path/to/repo
+orca worktree acquire --provider wtp --repo path:/path/to/repo --profile cone --agent claude
+```
+
+Trust is stored per host in `~/.orca/worktree-providers-trust.json` and keyed by a hash of the canonical block; changing the commands invalidates it. User-authored providers in `~/.orca/worktree-providers.yaml` need no approval. Orca never runs `git worktree remove` on a provider-managed workspace; `worktree release` calls the provider, and `worktree rm`/archive/cleanup refuse it. See [Worktree providers](https://github.com/stablyai/orca/blob/main/docs/worktree-providers.md) for the claim/release JSON contract.
 
 ### Parse failures and limits
 
