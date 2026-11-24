@@ -22,10 +22,12 @@ export async function resolveLinuxSocketOwners(inodes: Set<number>): Promise<Map
   const listing = await runPortScanCommand('/bin/sh', ['-c', SOCKET_LISTING_SCRIPT]).catch(
     () => null
   )
-  if (listing === null) {
+  const holders = listing ? parseSocketHolderListing(listing.stdout) : []
+  // Every system has some socket holder, so an empty parse means an unrecognized ls layout.
+  if (holders.length === 0) {
     return walkProcSocketOwners(pids, inodes)
   }
-  return pickLastHolders(parseSocketHolderListing(listing.stdout), pids, inodes)
+  return pickLastHolders(holders, pids, inodes)
 }
 
 /** Lines of `<pid> socket:[<inode>]` from the listing script. */
