@@ -3780,7 +3780,8 @@
         "handedOff": "Handed off to",
         "task": "Task from",
         "update": "Update from",
-        "message": "Message from"
+        "message": "Message from",
+        "notSentYet": "not sent yet"
       },
       "kind": {
         "started": "Started",
