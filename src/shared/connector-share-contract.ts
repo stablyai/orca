@@ -1,12 +1,13 @@
 // Mirror of cloud/packages/connector-contract/src/share-messages.ts for the host of a shared bot.
 // Copies, not imports: the CLI compiles src/shared with rootDir src, so it can't reach cloud files.
 import * as z from 'zod'
-import { BotShareEmailSchema } from './bots/bot-team-shares'
+import { BotShareEmailSchema, BotShareIdSchema } from './bots/bot-team-shares'
 import { CONNECTOR_PATHS } from './connectors/connector-cloud-paths'
 
 const Id = z.string().min(1).max(128)
 const Name = z.string().min(1).max(200)
-const PublicKey = z.string().regex(/^[A-Za-z0-9+/]{43}=$/)
+// Canonical padded base64 of 32 bytes (the contract's CANONICAL_KEY_B64).
+const PublicKey = z.string().regex(/^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$/)
 
 /** One person in a bot's hello sharedWith: an Orca account, or an email not yet resolved to one. */
 export type ConnectorBotShare =
@@ -17,8 +18,8 @@ export type ConnectorBotShare =
 const ShareDeliveryFields = {
   deliveryId: z.string().min(1),
   expiresAt: z.number().int().positive(),
-  conversation: z.object({ source: z.literal('orca'), externalId: Id }),
-  shareId: Id,
+  conversation: z.object({ source: z.literal('orca'), externalId: BotShareIdSchema }),
+  shareId: BotShareIdSchema,
   botId: Id
 }
 

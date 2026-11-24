@@ -11,7 +11,8 @@ export function normalizeShareEmail(email: string): string {
   return email.trim().toLowerCase()
 }
 
-const ShareIdSchema = z.string().min(1).max(128)
+// URL-safe, as the contract's ShareIdSchema: the id goes in cloud paths.
+export const BotShareIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/)
 export const BotShareEmailSchema = z
   .email()
   .max(MAX_SHARE_EMAIL_LENGTH)
@@ -22,7 +23,7 @@ export const BotShareEmailSchema = z
 export const BotShareSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('account'),
-    shareId: ShareIdSchema,
+    shareId: BotShareIdSchema,
     accountId: z.string().min(1).max(128),
     name: z.string().min(1).optional(),
     email: BotShareEmailSchema,
@@ -30,7 +31,7 @@ export const BotShareSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('invite'),
-    shareId: ShareIdSchema,
+    shareId: BotShareIdSchema,
     email: BotShareEmailSchema,
     addedAt: z.number()
   })
