@@ -1,10 +1,8 @@
 // A paired server's worker workspace, read on that server the way federationShow reaches it: the
 // pinned server for the Dispatch, so a re-paired machine is never asked about another's work.
-import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../shared/github/repositories/repository-identity'
 import type { Worktree } from '../../shared/worktree/types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { resolvePinnedFederatedServer } from '../runtime/orchestration/legacy-remote-home/pinned-federated-server'
-import type { BotGitHubRepo } from './bot-work-pr-branch'
 import type { BotWorkWorker, BotWorkWorkspace } from './bot-work-types'
 
 export type BotWorkRemoteRuntime = Pick<
@@ -62,29 +60,4 @@ export async function readRemoteWorkspace(
     // The server's row isn't read here: no PR rather than a GitHub call of its own.
     pullRequest: null
   }
-}
-
-/** The worker's repository's origin on its server, with the id this machine's GitHub gives that
- *  name (the server reads no id): a fork is matched by its id, which is all a pull request names of
- *  it. Null when the server names none. */
-export async function readRemoteGitHubRepo(
-  runtime: BotWorkRemoteRuntime,
-  worker: BotWorkWorker
-): Promise<BotGitHubRepo | null> {
-  const pinned = await pinnedServerCall(runtime, worker)
-  if (!pinned) {
-    return null
-  }
-  const { worktree } = await pinned.call<{ worktree: Pick<Worktree, 'repoId'> }>('worktree.show', {
-    worktree: `id:${pinned.worktreeId}`
-  })
-  const slug = await pinned.call<GitHubOwnerRepo | null>('github.repoSlug', {
-    repo: `id:${worktree.repoId}`
-  })
-  if (!slug) {
-    return null
-  }
-  // Loaded on first use: GitHub lookups pull the git stack into whatever imports bots.
-  const { getGitHubRepositoryId } = await import('../github/client/fetch/tracked-repository')
-  return { id: await getGitHubRepositoryId(slug), fullName: `${slug.owner}/${slug.repo}` }
 }

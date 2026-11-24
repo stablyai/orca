@@ -13,6 +13,7 @@ import {
 } from '../worker-threads/worker-thread-entry-path'
 import { JOURNAL_SQL_READER_HOST_NAME } from '../native-chat/agent-session-journal/journal-sql-reader-host-name'
 import { setJournalSqlReaderSpawner } from '../native-chat/agent-session-journal/journal-sql-reader-spawn'
+import { JOURNAL_READER_REPLY_CREDIT_BYTES } from '../native-chat/agent-session-journal/journal-sql-reader-reply-credit'
 import {
   journalReaderRequestData,
   readJournalReaderRequests
@@ -53,12 +54,28 @@ export function installElectronJournalReaderHost(): void {
   const host = new UtilityWorkerHost(
     JOURNAL_SQL_READER_HOST_NAME,
     hostEntry,
-    ({ filename, name, workerData }) =>
-      spawnWorkerThread(filename, { name, workerData, execArgv: [] }),
-    (workers) => journalReaderRequestData(readJournalReaderRequests(workers))
+    ({ filename, name, workerData, inProcessWorkerData }) =>
+      spawnWorkerThread(filename, {
+        name,
+        workerData:
+          inProcessWorkerData && typeof workerData === 'object'
+            ? { ...workerData, ...inProcessWorkerData }
+            : workerData,
+        execArgv: []
+      }),
+    (workers) => journalReaderRequestData(readJournalReaderRequests(workers)),
+    undefined,
+    // Hosted replies past this wait in the reader process; in-process readers use shared credit.
+    JOURNAL_READER_REPLY_CREDIT_BYTES
   )
-  setJournalSqlReaderSpawner((filename, workerData) =>
-    host.spawn({ filename, name: 'orca-journal-sql-reader', workerData, ...largeSendLog() })
+  setJournalSqlReaderSpawner((filename, workerData, inProcessWorkerData) =>
+    host.spawn({
+      filename,
+      name: 'orca-journal-sql-reader',
+      workerData,
+      ...(inProcessWorkerData ? { inProcessWorkerData } : {}),
+      ...largeSendLog()
+    })
   )
 }
 

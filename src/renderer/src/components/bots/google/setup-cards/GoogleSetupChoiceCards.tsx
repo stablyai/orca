@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { NativeChatCardActions } from '@/components/native-chat/NativeChatCardFrame'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { botTarget, type BotRef } from '@/lib/bot-hosts'
@@ -11,19 +12,18 @@ import {
   type GoogleSetupCard,
   type GoogleSetupRun
 } from '../../../../../../shared/google/google-setup-run'
+import type { GoogleServiceChoice } from '../../../../../../shared/google/google-scopes'
 import {
-  googleChoices,
-  GOOGLE_SERVICE_CHOICES,
-  type GoogleServiceChoice
-} from '../../../../../../shared/google/google-scopes'
+  googleSetupAnsweredServices,
+  googleSetupChoiceChangeable
+} from '../../../../../../shared/google/google-setup-card-view'
 import { importGoogleApp } from '../google-connect-client'
 import { GoogleServicePicker } from '../GoogleServicePicker'
 import { useGoogleClientFile } from '../use-google-client-file'
 import {
   GoogleSetupCardFrame,
   GoogleSetupChoiceRow,
-  GoogleSetupReceipt,
-  googleSetupChoiceChangeable
+  GoogleSetupReceipt
 } from './GoogleSetupCardParts'
 import {
   googleSetupPathNote,
@@ -82,10 +82,36 @@ export function GoogleSetupPathCard({
   }
   return (
     <div>
-      <GoogleSetupCardFrame heading={HEADING()} trailing={googleSetupOwnerStep(1)}>
-        <div className="mt-0.5 text-sm font-medium text-foreground">
-          {t('bots.googleSetup.path.title', 'How should we set it up?')}
-        </div>
+      <GoogleSetupCardFrame
+        heading={HEADING()}
+        trailing={googleSetupOwnerStep(1)}
+        title={t('bots.googleSetup.path.title', 'How should we set it up?')}
+        footer={
+          locked ? undefined : (
+            <NativeChatCardActions
+              start={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={file.busy || busy}
+                  onClick={() => void file.pick()}
+                >
+                  {t('bots.googleSetup.importSetupFile', 'Import setup file')}
+                </Button>
+              }
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() => void answer(['not-now'])}
+              >
+                {t('bots.googleSetup.notNow', 'Not now')}
+              </Button>
+            </NativeChatCardActions>
+          )
+        }
+      >
         <p className="mt-0.5 text-xs text-muted-foreground">
           {t(
             'bots.googleSetup.path.why',
@@ -104,36 +130,11 @@ export function GoogleSetupPathCard({
             />
           ))}
         </div>
-        {locked ? null : (
-          <>
-            <p className="mt-2 text-xs text-muted-foreground">
-              {t('bots.google.haveSetupFile', 'Have a setup file from your team?')}{' '}
-              <Button
-                variant="link"
-                size="inlineText"
-                disabled={file.busy || busy}
-                onClick={() => void file.pick()}
-              >
-                {t('bots.google.importSetupFile', 'Import file')}
-              </Button>
-            </p>
-            {file.error ? (
-              <p role="alert" className="mt-1 text-xs text-destructive">
-                {file.error}
-              </p>
-            ) : null}
-            <div className="mt-2">
-              <Button
-                variant="ghost"
-                size="xs"
-                disabled={busy}
-                onClick={() => void answer(['not-now'])}
-              >
-                {t('bots.googleSetup.dismiss', 'Dismiss')}
-              </Button>
-            </div>
-          </>
-        )}
+        {!locked && file.error ? (
+          <p role="alert" className="mt-2 text-xs text-destructive">
+            {file.error}
+          </p>
+        ) : null}
       </GoogleSetupCardFrame>
       {locked ? (
         <GoogleSetupReceipt
@@ -205,14 +206,6 @@ export function GoogleSetupAccountCard({
   )
 }
 
-function answeredServices(run: GoogleSetupRun): GoogleServiceChoice[] | null {
-  const values = run.answers.services?.values
-  if (!values) {
-    return null
-  }
-  return googleChoices(GOOGLE_SERVICE_CHOICES.filter((choice) => values.includes(choice)))
-}
-
 export function GoogleSetupServicesCard({
   bot,
   run
@@ -222,7 +215,7 @@ export function GoogleSetupServicesCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const { reopened, reopen, busy, answer } = useAnswer(bot, 'services')
-  const answered = answeredServices(run)
+  const answered = googleSetupAnsweredServices(run)
   const locked = answered !== null && !reopened
   const [picked, setPicked] = useState<GoogleServiceChoice[]>(answered ?? ['gmail'])
   const shown = locked && answered ? answered : picked

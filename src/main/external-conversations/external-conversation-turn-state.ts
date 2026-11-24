@@ -6,6 +6,7 @@ import type {
   ConnectorTurnFor,
   ConnectorTurnOrigin
 } from '../../shared/connectors/connector-cloud-contract'
+import type { EndedChatTurn } from './external-conversation-ended-turn'
 
 /** The lead agent's own state; background work can keep the combined row working across turns. */
 export function leadOf(row: AgentStatusIpcPayload): {
@@ -40,10 +41,38 @@ export function conversationWorking(row: AgentStatusIpcPayload | null): boolean 
 
 /** Whom an ended chat turn acts for, as its final post tells Orca Cloud: none for a delivery's turn,
  *  whose person the cloud reads from its own record; else the owner only when Orca recorded that the
- *  conversation acts for them (bot-turn-for.ts says why). */
+ *  conversation acts for them (bot-turn-for.ts says why). A delivery is remembered only until a
+ *  restart, so the journal must also prove Orca began the turn; unproven, it is someone else's, as a
+ *  failed read in bot-turn-for.ts is, never the owner's. */
 export function chatTurnFor(
   origin: ConnectorTurnOrigin,
   actsFor: ConnectorActsFor | undefined
-): { turnFor?: ConnectorTurnFor } {
-  return origin === 'delivery' ? {} : { turnFor: actsFor === 'owner' ? 'owner' : 'someone_else' }
+): (turn: Pick<EndedChatTurn, 'opener' | 'stamps'>) => { turnFor?: ConnectorTurnFor } {
+  return (turn) => {
+    const opened = origin === 'delivery' ? 'delivery' : journalTurnOpening(turn)
+    if (opened === 'delivery') {
+      return {}
+    }
+    return { turnFor: opened === 'local' && actsFor === 'owner' ? 'owner' : 'someone_else' }
+  }
+}
+
+/** What the turn's journal proves began it: a delivery (a connector's message opened it or it
+ *  answered one), Orca (any other message opened it and it answered none), or nothing it can read. */
+function journalTurnOpening({
+  opener,
+  stamps
+}: Pick<EndedChatTurn, 'opener' | 'stamps'>): 'delivery' | 'local' | 'unknown' {
+  const body = opener?.body
+  if (
+    stamps?.length ||
+    (body?.kind === 'message' &&
+      (body.origin === 'connector' ||
+        body.connectorDelivery ||
+        body.connectorConversation ||
+        body.connectorClaim))
+  ) {
+    return 'delivery'
+  }
+  return body?.kind === 'message' && stamps ? 'local' : 'unknown'
 }

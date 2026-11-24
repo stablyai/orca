@@ -27,6 +27,8 @@ export type HostedWorkerSupervisor = {
   portLost(): void
   outOfMemory(): void
   exited(worker: HostedWorker): void
+  /** Main consumed a reply the host held against its relay budget. */
+  ack(seq: number): void
 }
 
 /** Consumer-side stand-in for a worker thread that runs inside a utility process, over its port. */
@@ -44,6 +46,7 @@ export class HostedWorker extends EventEmitter {
   terminating = false
   lastReplyType: string | null = null
   receivedBytes = 0
+  unreleasedBytes = 0
 
   constructor(
     readonly id: number,
@@ -147,7 +150,10 @@ export class HostedWorker extends EventEmitter {
   }
 
   private receive(event: UtilityWorkerPortEvent): void {
+    // A whole reply that never reaches a listener frees its relay charge at once.
+    const charged = event.type === 'message' && !event.more ? event.seq : undefined
     if (this.local || this.exitCode !== undefined) {
+      this.ackNow(charged)
       return
     }
     this.draining?.timer.refresh()
@@ -186,6 +192,7 @@ export class HostedWorker extends EventEmitter {
     try {
       message = deserialize(bytes)
     } catch (error) {
+      this.ackNow(charged)
       if (!this.terminating) {
         this.emit('error', error)
       }
@@ -198,7 +205,29 @@ export class HostedWorker extends EventEmitter {
       typeof message.type === 'string'
         ? message.type
         : null
-    this.emit('message', message)
+    let acked = false
+    const size = bytes.byteLength
+    if (charged !== undefined) {
+      this.unreleasedBytes += size
+    }
+    // The consumer calls this once it has taken the reply; a hosted reply's charge returns then.
+    const release =
+      charged === undefined
+        ? undefined
+        : () => {
+            if (!acked) {
+              acked = true
+              this.unreleasedBytes -= size
+              this.supervisor.ack(charged)
+            }
+          }
+    this.emit('message', message, release)
+  }
+
+  private ackNow(seq: number | undefined): void {
+    if (seq !== undefined) {
+      this.supervisor.ack(seq)
+    }
   }
 
   finish(code: number): void {

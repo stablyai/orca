@@ -1,0 +1,79 @@
+/* The sidebar surface receives pointer hits while the header is captured for the fold. */
+[data-sidebar-content-shell]:has(
+  > [data-sidebar-content-viewport]:active-view-transition-type(sidebar-fold)
+),
+[data-sidebar-content-viewport]:active-view-transition-type(sidebar-fold) {
+  cursor: pointer;
+}
+
+[data-sidebar-content-viewport]:active-view-transition-type(sidebar-fold)
+  [data-sidebar-bots-split] {
+  view-transition-name: sidebar-fold-bots;
+}
+
+[data-sidebar-content-viewport]:active-view-transition-type(sidebar-fold)
+  :is([data-sidebar-section-header='projects'], [data-sidebar-section-header='workspaces']) {
+  view-transition-name: sidebar-fold-workspaces-header;
+}
+
+[data-sidebar-content-viewport]:active-view-transition-type(sidebar-fold)
+  [data-sidebar-projects-list] {
+  view-transition-name: sidebar-fold-workspaces-list;
+}
+
+[data-sidebar-content-viewport]::view-transition-group(*) {
+  animation-duration: 180ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-sidebar-content-viewport]::view-transition-old(root) {
+  display: none;
+}
+
+[data-sidebar-content-viewport]::view-transition-new(root) {
+  animation: none;
+}
+
+[data-sidebar-content-viewport]::view-transition-image-pair(sidebar-fold-bots),
+[data-sidebar-content-viewport]::view-transition-image-pair(sidebar-fold-workspaces-list) {
+  overflow: clip;
+}
+
+/* The list has only one snapshot when Workspaces folds. Move it with its header as it clips. */
+[data-sidebar-content-viewport]::view-transition-old(sidebar-fold-workspaces-list):only-child {
+  animation: sidebar-workspaces-fold 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+[data-sidebar-content-viewport]::view-transition-new(sidebar-fold-workspaces-list):only-child {
+  animation: sidebar-workspaces-unfold 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes sidebar-workspaces-fold {
+  from {
+    clip-path: inset(0);
+  }
+
+  to {
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(var(--sidebar-fold-workspaces-shift, 0px));
+  }
+}
+
+@keyframes sidebar-workspaces-unfold {
+  from {
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(calc(-1 * var(--sidebar-fold-workspaces-shift, 0px)));
+  }
+
+  to {
+    clip-path: inset(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-sidebar-content-viewport]::view-transition-group(*),
+  [data-sidebar-content-viewport]::view-transition-old(*),
+  [data-sidebar-content-viewport]::view-transition-new(*) {
+    animation: none;
+  }
+}

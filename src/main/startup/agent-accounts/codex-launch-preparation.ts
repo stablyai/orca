@@ -2,7 +2,7 @@ import { createCodexRuntimeHomeLaunchPreparation } from '../../codex/configurati
 import { mainProcessState as state } from '../main-process-state'
 
 export const prepareCodexRuntimeHomeForLaunch = createCodexRuntimeHomeLaunchPreparation({
-  getRuntimeHome: () => state.codexRuntimeHome,
+  getRuntimeHome: () => state.core.codexRuntimeHome,
   getSettings: () => state.store?.getSettings()
 })
 
@@ -12,7 +12,7 @@ export const codexStructuredLaunchHomeResolvers = {
     prepareCodexRuntimeHomeForLaunch(undefined, launchEnv),
   // Throw like preparation: null would silently key the catalog to the system home instead of the account.
   resolveCodexStructuredLaunchHome: ({ launchEnv }: { launchEnv: NodeJS.ProcessEnv }) => {
-    const runtimeHome = state.codexRuntimeHome
+    const runtimeHome = state.core.codexRuntimeHome
     if (!runtimeHome) {
       throw new Error('Codex runtime home service is not initialized')
     }

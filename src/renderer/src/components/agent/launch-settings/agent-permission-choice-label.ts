@@ -1,3 +1,5 @@
+// @protected-copy scope=file
+// What a permission choice does: a language pack must never misstate it.
 import type { AgentPermissionChoice } from '../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { translate } from '../../../i18n/i18n'
 import type { Translate } from '../../../i18n/use-translate'

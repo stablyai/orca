@@ -1,11 +1,14 @@
-import { memo, useRef, useState } from 'react'
+import { memo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ShieldQuestion } from 'lucide-react-native'
 import { approvalDetailPreview } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
 import { approvalBlockedPathToShow } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-blocked-path'
+import { readShellApprovalDetail } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-shell-detail'
 import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
+import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
+import { useMobilePendingControl } from '../../../../components/controls/use-mobile-pending-control'
 import { MobileNativeChatMarkdown } from '../../transcript/message-content/MobileNativeChatMarkdown'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { colors, pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -24,6 +27,9 @@ import {
 } from './MobileNativeChatUrlRequest'
 import { structuredApprovalOptionId } from './mobile-structured-agent-prompts'
 
+// Option sends are keyed by their payload; the header's cancel by a key no payload can take.
+const CANCEL = '\0cancel'
+
 function MobileNativeChatPermissionImpl({
   permission,
   onRespond,
@@ -41,8 +47,9 @@ function MobileNativeChatPermissionImpl({
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const [submitting, setSubmitting] = useState(false)
-  const submittingRef = useRef(false)
+  // An accepted answer keeps the card locked until the host retires it (the card remounts).
+  const { pending, run } = useMobilePendingControl<string>({ holdAccepted: true })
+  const submitting = pending !== null
   // Unknown newer-host subjects allow only cancellation; preserve their detail for the reader.
   const newerSubject = isNewerApprovalSubject(permission.subject)
   // A page to open: its option opens it, and the back-out stays quiet.
@@ -56,18 +63,6 @@ function MobileNativeChatPermissionImpl({
         : structuredApprovalOptionId(option.send) === URL_APPROVAL_DECLINE_OPTION_ID
           ? t('chat.urlRequest.decline', 'Decline')
           : option.label
-  const respond = async (send: string): Promise<void> => {
-    if (submittingRef.current) {
-      return
-    }
-    submittingRef.current = true
-    setSubmitting(true)
-    const accepted = await onRespond(send)
-    if (!accepted) {
-      submittingRef.current = false
-      setSubmitting(false)
-    }
-  }
   return (
     <View testID="native-chat-approval-card" style={styles.card}>
       <View style={styles.header}>
@@ -82,9 +77,10 @@ function MobileNativeChatPermissionImpl({
         </Text>
         <MobileNativeChatCardHeaderAction
           prompt={permission.prompt}
-          onCancel={onCancel}
+          onCancel={onCancel && (() => run(CANCEL, () => onCancel(permission.prompt)))}
           onCollapse={onCollapse}
           disabled={submitting}
+          cancelPending={pending === CANCEL}
         />
       </View>
       <MobileNativeChatPermissionContext permission={permission} newerSubject={newerSubject} />
@@ -95,47 +91,43 @@ function MobileNativeChatPermissionImpl({
             url !== null && structuredApprovalOptionId(option.send) === URL_APPROVAL_OPEN_OPTION_ID
           const unopenable = opensUrl && !canOpenUrlRequestPage(url)
           return (
-            <Pressable
+            <MobilePendingButton
               key={`${option.send}:${option.label}`}
-              style={({ pressed }) => [
+              label={optionLabel(option)}
+              numberOfLines={0}
+              style={[
                 styles.option,
                 isPrimary
                   ? styles.optionPrimary
                   : url === null
                     ? styles.optionSecondary
-                    : styles.optionQuiet,
-                pressed && !submitting && styles.optionPressed,
-                (newerSubject || unopenable) && styles.disabled
+                    : styles.optionQuiet
               ]}
+              labelStyle={[
+                styles.optionText,
+                isPrimary && styles.optionTextPrimary,
+                !isPrimary && url !== null && styles.optionTextQuiet
+              ]}
+              spinnerColor={isPrimary ? colors.onAccent : colors.textPrimary}
               hitSlop={6}
-              onPress={() => {
-                if (opensUrl && !submittingRef.current) {
-                  openUrlRequestPage(url)
-                }
-                void respond(option.send)
-              }}
+              pending={pending === option.send}
               disabled={submitting || newerSubject || unopenable}
-            >
-              <Text
-                style={[
-                  styles.optionText,
-                  isPrimary && styles.optionTextPrimary,
-                  !isPrimary && url !== null && styles.optionTextQuiet
-                ]}
-              >
-                {optionLabel(option)}
-              </Text>
-            </Pressable>
+              onPress={() =>
+                void run(option.send, () => {
+                  // Opened only by the press the send admits, still inside the tap.
+                  if (opensUrl) {
+                    openUrlRequestPage(url)
+                  }
+                  return onRespond(option.send)
+                })
+              }
+            />
           )
         })}
         {permission.options.length === 0 && onAnswerInTerminal ? (
           <Pressable
             accessibilityRole="button"
-            style={({ pressed }) => [
-              styles.option,
-              styles.optionPrimary,
-              pressed && styles.optionPressed
-            ]}
+            style={({ pressed }) => [styles.option, styles.optionPrimary, pressed && pressedStyle]}
             hitSlop={6}
             onPress={onAnswerInTerminal}
           >
@@ -206,7 +198,11 @@ function MobileNativeChatPermissionContext({
       ) : isUrlApprovalSubject(permission.subject) ? (
         <MobileNativeChatUrlTarget url={permission.subject.url} />
       ) : permission.detail ? (
-        <MobileNativeChatPermissionDetail detail={permission.detail} />
+        <MobileNativeChatPermissionDetail
+          detail={permission.detail}
+          toolName={permission.toolName}
+          description={permission.description}
+        />
       ) : null}
       {newerSubject ? (
         <Text testID="native-chat-approval-needs-newer-orca" style={styles.detail}>
@@ -217,13 +213,23 @@ function MobileNativeChatPermissionContext({
   )
 }
 
-function MobileNativeChatPermissionDetail({ detail }: { detail: string }): React.JSX.Element {
+function MobileNativeChatPermissionDetail({
+  detail,
+  toolName,
+  description
+}: {
+  detail: string
+  toolName: string | undefined
+  description: string | undefined
+}): React.JSX.Element {
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
-  const preview = approvalDetailPreview(detail)
+  const shell = readShellApprovalDetail(detail, toolName, description)
+  const text = shell?.command ?? detail
+  const preview = approvalDetailPreview(text)
   return (
     <View style={styles.content}>
-      {preview !== detail ? (
+      {preview !== text ? (
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded }}
@@ -235,9 +241,14 @@ function MobileNativeChatPermissionDetail({ detail }: { detail: string }): React
           </Text>
         </Pressable>
       ) : null}
-      <Text selectable style={styles.detail}>
-        {expanded ? detail : preview}
+      <Text selectable style={shell ? styles.command : styles.detail}>
+        {expanded ? text : preview}
       </Text>
+      {shell?.otherArguments ? (
+        <Text selectable style={styles.otherArguments}>
+          {shell.otherArguments}
+        </Text>
+      ) : null}
     </View>
   )
 }
@@ -271,6 +282,18 @@ const styles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     fontSize: typography.metaSize,
     lineHeight: typography.metaSize + 5
+  },
+  command: {
+    color: colors.textPrimary,
+    fontFamily: typography.monoFamily,
+    fontSize: typography.metaSize,
+    lineHeight: typography.metaSize + 5
+  },
+  otherArguments: {
+    color: colors.textMuted,
+    fontFamily: typography.monoFamily,
+    fontSize: typography.metaSize - 1,
+    lineHeight: typography.metaSize + 4
   },
   planFile: {
     marginTop: spacing.sm,
@@ -316,12 +339,6 @@ const styles = themedStyleSheet(() => ({
   },
   optionQuiet: {
     backgroundColor: 'transparent'
-  },
-  optionPressed: {
-    opacity: 0.7
-  },
-  disabled: {
-    opacity: 0.5
   },
   optionText: {
     color: colors.textPrimary,

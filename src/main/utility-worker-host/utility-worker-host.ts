@@ -10,7 +10,8 @@ import { HostedWorker } from './hosted-worker'
 import { asError, stopChild, type Host } from './utility-worker-host-process'
 import {
   recordUtilityWorkerHeapPressure,
-  utilityWorkerHeapData
+  utilityWorkerHostExitData,
+  utilityWorkerOutOfMemoryData
 } from './utility-worker-heap-report'
 import {
   UtilityWorkerHostPausedError,
@@ -52,11 +53,13 @@ export class UtilityWorkerHost {
     private readonly serviceName: string,
     private readonly entryPath: () => string,
     private readonly spawnInProcess: (spawn: UtilityWorkerSpawn) => Worker,
-    /** The owner's account of what this host's workers were doing, for the exit breadcrumb. */
+    /** The owner's account of what this host's workers were doing, for exit and OOM breadcrumbs. */
     private readonly exitContext?: (
       workers: readonly HostedWorkerThread[]
     ) => CrashReportBreadcrumbData,
-    crashCap?: UtilityWorkerHostCrashCap
+    crashCap?: UtilityWorkerHostCrashCap,
+    /** Serialized reply bytes main may hold unconsumed; past it the host holds replies itself. */
+    private readonly relayBudgetBytes?: number
   ) {
     this.crashLoop = crashCap && new UtilityWorkerHostCrashLoop(serviceName, crashCap)
     app.once('will-quit', () => {
@@ -91,19 +94,26 @@ export class UtilityWorkerHost {
           }
         }
       },
-      outOfMemory: () => this.recordCrashUnlessLost(host),
+      outOfMemory: () => this.workerOutOfMemory(host, worker),
       // A lost host keeps its workers listed for the exit breadcrumb; retiring it clears them.
       exited: (exited) => {
         if (!host.lossCounted && host.workers.get(id) === exited) {
           host.workers.delete(id)
           this.scheduleIdleExit(host)
         }
-      }
+      },
+      ack: (seq) => this.ack(host, seq)
     })
     host.workers.set(id, worker)
     clearTimeout(host.idleTimer)
     host.idleTimer = undefined
-    const request: UtilityWorkerHostRequest = { type: 'spawn', id, ...spawn }
+    // Shared memory can't cross into the host; only an in-process worker gets these.
+    const { inProcessWorkerData: _inProcess, ...hosted } = spawn
+    const request: Extract<UtilityWorkerHostRequest, { type: 'spawn' }> = {
+      type: 'spawn',
+      id,
+      ...hosted
+    }
     if (host.ready) {
       try {
         host.child.postMessage(request, [port1])
@@ -168,6 +178,10 @@ export class UtilityWorkerHost {
     clearTimeout(host.readyTimer)
     host.ready = true
     this.retryMs = 0
+    if (this.relayBudgetBytes !== undefined) {
+      // Before any spawn, so no worker's reply is ever relayed past an unset budget.
+      host.child.postMessage({ type: 'budget', bytes: this.relayBudgetBytes })
+    }
     for (const { request, port } of host.queued.splice(0)) {
       try {
         host.child.postMessage(request, [port])
@@ -176,6 +190,18 @@ export class UtilityWorkerHost {
         port.close()
         host.workers.get(request.id)?.fail(asError(error), 1)
       }
+    }
+  }
+
+  /** On the process channel, since the worker's port closes once main reads its exit. */
+  private ack(host: Host, seq: number): void {
+    if (host.retired) {
+      return
+    }
+    try {
+      host.child.postMessage({ type: 'ack', seq } satisfies UtilityWorkerHostRequest)
+    } catch {
+      // The host is exiting; its budget goes with it.
     }
   }
 
@@ -199,7 +225,7 @@ export class UtilityWorkerHost {
   ): void {
     host.workers.delete(worker.id)
     if (error?.code && RESOURCE_START_FAILURES.has(error.code)) {
-      this.recordCrashUnlessLost(host)
+      this.workerOutOfMemory(host, worker, error.code)
       worker.fail(error, 1)
     } else {
       this.neverHost.add(worker.spawn.filename)
@@ -229,8 +255,17 @@ export class UtilityWorkerHost {
     }
   }
 
-  /** A worker's own failure, heard while its host drains, is part of the host loss already counted. */
-  private recordCrashUnlessLost(host: Host): void {
+  /** The host outlives a worker's own OOM, so no exit breadcrumb would name what it was doing. */
+  private workerOutOfMemory(host: Host, worker: HostedWorker, code?: string): void {
+    // A lost host's exit breadcrumb already names its workers' reads.
+    if (!quitting && !host.lossCounted) {
+      recordDurableCrashBreadcrumb('worker_thread_failed', {
+        ...utilityWorkerOutOfMemoryData(this.serviceName, worker, host.heap, code),
+        // Before the worker fails, which ends what its owner was waiting on.
+        ...this.exitContext?.([worker])
+      })
+    }
+    // A worker's own failure, heard while its host drains, is part of the host loss already counted.
     if (!host.lossCounted) {
       this.crashLoop?.record()
     }
@@ -285,20 +320,11 @@ export class UtilityWorkerHost {
     const workers = [...host.workers.values()]
     this.retire(host)
     if (!quitting) {
-      const data: CrashReportBreadcrumbData = {
-        serviceName: this.serviceName,
-        code,
-        workers: workers.length,
-        ...utilityWorkerHeapData(host.heap, workers)
-      }
-      workers.forEach((worker, index) => {
-        data[`w${index}_role`] = worker.spawn.name
-        data[`w${index}_lastReply`] = worker.lastReplyType
-        data[`w${index}_receivedMB`] = Math.round(worker.receivedBytes / 2 ** 20)
+      recordDurableCrashBreadcrumb('utility_worker_host_exited', {
+        ...utilityWorkerHostExitData(this.serviceName, code, workers, host.heap),
+        // Before the workers fail, which ends what their owners were waiting on.
+        ...(host.exitContext ?? this.exitContext?.(workers))
       })
-      // Before the workers fail, which ends what their owners were waiting on.
-      Object.assign(data, host.exitContext ?? this.exitContext?.(workers))
-      recordDurableCrashBreadcrumb('utility_worker_host_exited', data)
     }
     // Counted before consumers hear, so none of them can start a host past the cap.
     this.countLoss(host)

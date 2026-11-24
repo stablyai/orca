@@ -16,34 +16,32 @@ export async function openLocalOrca(
   openWindowInBackground: OpenWindowInBackground,
   timeoutMs: number
 ): Promise<RuntimeRpcSuccess<CliStatusResult>> {
-  const initial = await getStatusForOpen(readStatus)
-  const windowStatus = initial?.result.app.desktopWindowStatus
-
-  // A blocked runtime cannot open a window; a second app would only hit its instance lock.
-  if (windowStatus === 'blocked') {
-    throwDesktopActivationBlocked()
-  }
-  // Relaunching a running Orca would hand it the foreground, so ask it to show its own window.
-  const asked =
-    initial?.result.runtime.reachable === true && (await askToOpenWindow(openWindowInBackground))
-  if (initial && windowStatus === 'available') {
-    return initial
-  }
-  if (!asked) {
-    launchOrcaApp()
-  }
-
   const startedAt = Date.now()
-  while (Date.now() - startedAt < timeoutMs) {
+  let requested = false
+  do {
     const status = await getStatusForOpen(readStatus)
-    if (status?.result.app.desktopWindowStatus === 'blocked') {
-      throwDesktopActivationBlocked()
-    }
-    if (status?.result.app.desktopWindowStatus === 'available') {
-      return status
+    if (status !== undefined) {
+      const windowStatus = status?.result.app.desktopWindowStatus
+      // A blocked runtime cannot open a window; a second app would only hit its instance lock.
+      if (windowStatus === 'blocked') {
+        throwDesktopActivationBlocked()
+      }
+      if (!requested) {
+        // Relaunching a running Orca would hand it the foreground, so ask it to show its own window.
+        const asked =
+          status?.result.runtime.reachable === true &&
+          (await askToOpenWindow(openWindowInBackground))
+        if (!asked && windowStatus !== 'available') {
+          launchOrcaApp()
+        }
+        requested = true
+      }
+      if (status && windowStatus === 'available') {
+        return status
+      }
     }
     await delay(250)
-  }
+  } while (Date.now() - startedAt < timeoutMs)
 
   throw new RuntimeClientError(
     'runtime_open_timeout',
@@ -53,17 +51,18 @@ export async function openLocalOrca(
 
 async function getStatusForOpen(
   readStatus: ReadStatus
-): Promise<RuntimeRpcSuccess<CliStatusResult> | null> {
+): Promise<RuntimeRpcSuccess<CliStatusResult> | null | undefined> {
   try {
     return await readStatus()
   } catch (error) {
-    // Explicit open may launch after an unavailable endpoint; a denied or rejected call cannot.
-    if (
-      error instanceof RuntimeClientError &&
-      !(error instanceof RuntimeRpcFailureError) &&
-      error.code === 'runtime_unavailable'
-    ) {
-      return null
+    if (error instanceof RuntimeClientError && !(error instanceof RuntimeRpcFailureError)) {
+      if (error.code === 'runtime_unavailable') {
+        return null
+      }
+      // The pipe can be published while startup work still holds the main thread.
+      if (error.code === 'runtime_timeout') {
+        return undefined
+      }
     }
     throw error
   }

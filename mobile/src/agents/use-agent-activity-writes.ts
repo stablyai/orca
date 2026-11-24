@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { z } from 'zod'
+import * as z from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-request-port'
 import type { AgentActivityChange, AgentListRow } from './agent-list-rows'
 
 // The host's bound on one request's pane keys.
@@ -30,20 +31,25 @@ const agentActivityClearWrite = bindDeferredRpcOperation(
 
 export type AgentActivityFailure = Readonly<{ hostId: string; needsDesktopWindow: boolean }>
 
-async function sendAgentActivity(
+export async function sendAgentActivity(
   client: RpcClient,
   paneKeys: string[],
-  change: AgentActivityChange
+  change: AgentActivityChange,
+  options?: SendRequestOptions
 ): Promise<void> {
   for (let start = 0; start < paneKeys.length; start += PANE_KEYS_PER_REQUEST) {
     const chunk = paneKeys.slice(start, start + PANE_KEYS_PER_REQUEST)
     if ('cleared' in change) {
       agentActivityClearWrite.interpret(
-        await agentActivityClearWrite.request(client, { paneKeys: chunk })
+        await agentActivityClearWrite.request(client, { paneKeys: chunk }, options)
       )
     } else {
       agentActivitySetReadWrite.interpret(
-        await agentActivitySetReadWrite.request(client, { paneKeys: chunk, read: !change.unread })
+        await agentActivitySetReadWrite.request(
+          client,
+          { paneKeys: chunk, read: !change.unread },
+          options
+        )
       )
     }
   }

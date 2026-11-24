@@ -1,7 +1,12 @@
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'
 import { shouldPersistWorkspaceSession } from '@/lib/workspace/persistence/workspace-session'
 import { canAutoSaveOpenFile } from './editor-autosave'
-import { flushPendingEditorBuffer } from '../save/flush/editor-pending-flush'
+import {
+  flushEditorViewsForSave,
+  flushPendingEditorBuffer,
+  hasPendingEditorBufferChange
+} from '../save/flush/editor-pending-flush'
 import { getDuplicateDirtySavePaths, restartSaveTargets } from './editor-autosave-state-projections'
 import type { AppStoreApi, EditorSaveQueue } from '../save/queue/editor-save-queue-contract'
 import type {
@@ -84,10 +89,28 @@ export function createEditorRestartSaveHandlers({
     try {
       detail.claim()
 
+      const initialState = store.getState()
+      const viewsByBuffer = new Map(
+        initialState.openFiles.map((file) => [editorBufferIdOfView(initialState, file.id), file.id])
+      )
+      const flushed = await Promise.all(
+        Array.from(viewsByBuffer.values(), (fileId) =>
+          flushEditorViewsForSave(store.getState, fileId)
+        )
+      )
+      if (flushed.some((result) => !result)) {
+        detail.reject('An editor still has pending changes. Finish editing before restarting.')
+        return
+      }
+
       const initiallyDirtyFiles = store.getState().openFiles.filter((file) => file.isDirty)
-      await Promise.all(initiallyDirtyFiles.map((file) => settleFileSaves(file.id)))
+      await Promise.all(initiallyDirtyFiles.map((file) => settleFileSaves(file.id, false)))
 
       const state = store.getState()
+      if (state.openFiles.some((file) => hasPendingEditorBufferChange(state, file.id))) {
+        detail.reject('An editor still has pending changes. Finish editing before restarting.')
+        return
+      }
       const dirtyFiles = state.openFiles.filter((file) => file.isDirty)
       const unsupportedDirtyFiles = dirtyFiles.filter((file) => file.mode !== 'edit')
       if (unsupportedDirtyFiles.length > 0) {

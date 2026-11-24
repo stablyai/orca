@@ -31,7 +31,18 @@ const ConnectorTokenResponse = z.object({
     .string()
     .min(1)
     .max(8 * 1024),
-  expiresAt: z.number().int().positive()
+  expiresAt: z.number().int().positive(),
+  // From an auth service that mints the wake socket's token beside it; unreadable is none.
+  wakeToken: z
+    .object({
+      token: z
+        .string()
+        .min(1)
+        .max(8 * 1024),
+      expiresAt: z.number().int().positive()
+    })
+    .optional()
+    .catch(undefined)
 })
 
 // Refusals a fresh session can't change, whatever their status, so they never refresh it.

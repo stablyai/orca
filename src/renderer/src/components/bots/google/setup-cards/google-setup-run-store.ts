@@ -4,9 +4,16 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { openBotHomeTab } from '@/lib/bot-catalog'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
+import { hasRuntimeRpcErrorCode } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import type { Bot } from '../../../../../../shared/bot-types'
-import type { GOOGLE_SETUP_STARTED_FROM } from '../../../../../../shared/rpc-contract/google-setup-params'
+import type {
+  GOOGLE_SETUP_STARTED_FROM,
+  GoogleSetupKeyCandidate
+} from '../../../../../../shared/rpc-contract/google-setup-params'
 import type {
   GoogleSetupCard,
   GoogleSetupRun
@@ -71,13 +78,18 @@ type SetupCall =
       method: 'bots.googleSetup.answer'
       params: { botId: string; card: GoogleSetupCard; values: string[] }
     }
+  | {
+      method: 'bots.googleSetup.importHostKey'
+      params: { botId: string; file?: { name: string; id: string } }
+    }
 
-async function call(bot: BotRef, { method, params }: SetupCall): Promise<void> {
+async function call<T extends Snapshot>(bot: BotRef, { method, params }: SetupCall): Promise<T> {
   const key = botRefKey(bot)
   const entry = entries.get(key)
   const ticket = entry ? ++entry.asked : 0
-  const snapshot = await callBotRpc<Snapshot>(bot, method, params)
+  const snapshot = await callBotRpc<T>(bot, method, params)
   store(key, ticket, snapshot)
+  return snapshot
 }
 
 async function read(bot: BotRef): Promise<void> {
@@ -173,19 +185,40 @@ export async function answerGoogleSetup(
   })
 }
 
+export type HostKeyImport =
+  | { found: true }
+  | { found: false; candidates: GoogleSetupKeyCandidate[] }
+
+/** Import file for a bot on another host: that host imports the key its Orca browser saved in the
+ *  bot's home, or lists the files to pick from (`file` is the pick). Null for a local bot, or a host
+ *  that predates it, so this computer picks. */
+export async function importGoogleSetupKeyOnHost(
+  bot: BotRef,
+  file?: GoogleSetupKeyCandidate
+): Promise<HostKeyImport | null> {
+  if (bot.hostId === LOCAL_EXECUTION_HOST_ID) {
+    return null
+  }
+  try {
+    const reply = await call<Snapshot & HostKeyImport>(bot, {
+      method: 'bots.googleSetup.importHostKey',
+      params: { botId: bot.id, ...(file ? { file: { name: file.name, id: file.id } } : {}) }
+    })
+    return reply.found ? { found: true } : { found: false, candidates: reply.candidates ?? [] }
+  } catch (error) {
+    if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
+      return null
+    }
+    throw error
+  }
+}
+
 /** Opens the bot's chat and starts its Google setup there, with no message in the person's name. */
 export async function startGoogleSetupInChat(
   bot: Pick<Bot, 'id'> & Parameters<typeof openBotHomeTab>[0],
-  from: (typeof GOOGLE_SETUP_STARTED_FROM)[number]
+  from: (typeof GOOGLE_SETUP_STARTED_FROM)[number],
+  options?: { newApp?: true }
 ): Promise<void> {
-  await callBotRpc(bot, 'bots.googleSetup.start', { botId: bot.id, from })
+  await callBotRpc(bot, 'bots.googleSetup.start', { botId: bot.id, from, ...options })
   await openBotHomeTab(bot)
-}
-
-/** For tests: forget every run. */
-export function resetGoogleSetupRunsForTest(): void {
-  entries.clear()
-  attached = 0
-  stopListening?.()
-  stopListening = null
 }

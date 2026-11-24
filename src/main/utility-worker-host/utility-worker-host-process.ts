@@ -10,7 +10,7 @@ import type {
 export type Host = {
   child: UtilityProcess
   ready: boolean
-  queued: { request: UtilityWorkerHostRequest; port: MessagePortMain }[]
+  queued: { request: Extract<UtilityWorkerHostRequest, { type: 'spawn' }>; port: MessagePortMain }[]
   workers: Map<number, HostedWorker>
   readyTimer: ReturnType<typeof setTimeout>
   idleTimer?: ReturnType<typeof setTimeout>

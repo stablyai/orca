@@ -4,7 +4,7 @@
 // Select there starts multi-select, where taps check rows and a floating bar moves them all at once.
 import { useMemo, useState, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { X } from 'lucide-react-native'
+import { Inbox, X } from 'lucide-react-native'
 import {
   BOT_ITEM_GROUP_IDS,
   BOT_ITEM_GROUP_ROWS,
@@ -17,7 +17,14 @@ import {
 } from '../../../../src/shared/bots/bot-item-groups'
 import { mergeBotItemsByUid } from '../../../../src/shared/bots/bot-item-merge'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
+import { botItemWalkOf, type BotItemWalk } from '../../../../src/shared/bots/bot-item-walk'
 import { botItemGroupName } from '../../../../src/shared/bots/bot-item-status-name'
+import {
+  MobileLoadErrorState,
+  MobileNoMatchState,
+  MobileOfflineState,
+  MobileStateView
+} from '../../components/feedback/MobileStateView'
 import { FilterChip } from '../../components/nav-bar/FilterChip'
 import {
   ListGroup,
@@ -30,15 +37,17 @@ import { colors, feedback, radii, spacing, typography } from '../../theme/mobile
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileBotTextButton } from '../MobileBotTextButton'
-import { sheetStyles } from '../mobile-bot-sheet-styles'
+import type { PhoneBot } from '../host-bots-operations'
+import { MobileBotItemsAllClear } from './MobileBotItemsAllClear'
 import { MobileBotItemRow } from './MobileBotItemRow'
 import { MobileBotNeedsYouGroup } from './MobileBotNeedsYouGroup'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { openPhoneAsk, type PhoneAsk, type PhoneAskOpeners } from './phone-needs-you-asks'
 import type { BotItemSheet } from './MobileBotItemSheets'
 import type { PhoneBotItems } from './use-phone-bot-items'
 
 export function MobileBotItemsTab({
-  botName,
+  bot,
   items,
   filter,
   filterLabel,
@@ -47,15 +56,18 @@ export function MobileBotItemsTab({
   seenEventId,
   now,
   online,
+  hostName,
   selected,
   onSelected,
   onOpen,
   setSheet,
   after,
   asks,
-  askOpeners
+  askOpeners,
+  client,
+  showToast
 }: {
-  botName: string
+  bot: PhoneBot
   items: PhoneBotItems
   filter: BotItemFilter
   /** The filter's chip text; null while nothing is filtered. */
@@ -66,20 +78,26 @@ export function MobileBotItemsTab({
   seenEventId: string
   now: number
   online: boolean
+  hostName: string
   /** Checked rows; empty when not selecting. */
   selected: ReadonlySet<string>
   onSelected: (next: ReadonlySet<string>) => void
-  onOpen: (item: BotItem) => void
+  /** `walk`: the list as it shows now, which the item page steps through. */
+  onOpen: (item: BotItem, walk: BotItemWalk) => void
   setSheet: (sheet: BotItemSheet) => void
   /** Automations and Up next, below the groups as on the desktop. */
   after: ReactNode
-  /** Orca's asks the phone reads, as the filter keeps them; they lead Needs you whatever the items say. */
+  /** Orca's asks the phone reads; they lead Needs you whatever the items say. */
   asks: readonly PhoneAsk[]
   askOpeners: PhoneAskOpeners
+  client: RpcClient | null
+  showToast: (message: string) => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { read } = items
+  const botName = bot.name
+  const failed = items.error !== null
   const all = useMemo(() => mergeBotItemsByUid(read?.items ?? [], items.items), [read, items.items])
   const shown = useMemo(() => filterBotItems(all, filter), [all, filter])
   const groups = useMemo(
@@ -101,11 +119,14 @@ export function MobileBotItemsTab({
   ) : null
   const asksOnly = (
     <MobileBotNeedsYouGroup
+      botName={botName}
       asks={asks}
       items={[]}
       disabled={!online}
       renderItem={() => null}
       onOpenAsk={(ask) => openPhoneAsk(ask, askOpeners)}
+      client={client}
+      onSkipFailed={showToast}
     />
   )
   if (!read) {
@@ -113,10 +134,16 @@ export function MobileBotItemsTab({
       <>
         {chip}
         {asksOnly}
-        {items.failed ? (
-          <ReadFailed stale={false} onRetry={items.retry} />
+        {!online ? (
+          <MobileOfflineState hostName={hostName} />
+        ) : failed ? (
+          <MobileLoadErrorState
+            error={items.error}
+            title={t('bots.items.readFailedTitle', 'Couldn’t load items')}
+            onRetry={items.retry}
+          />
         ) : (
-          <Text style={sheetStyles.empty}>{t('bots.items.loading', 'Loading items…')}</Text>
+          <MobileStateView loading title={t('bots.items.loading', 'Loading items…')} />
         )}
         {after}
       </>
@@ -141,44 +168,33 @@ export function MobileBotItemsTab({
       ? ''
       : t('bots.items.stale.reason', 'No activity for {{count}} days.', { count: staleDays })
   let body: ReactNode
-  if (all.length === 0 && !filtered && asks.length > 0) {
+  if (all.length === 0 && !filtered) {
     body = (
       <>
-        {asksOnly}
-        <Text style={sheetStyles.empty}>
-          {t(
-            'bots.items.empty.short',
-            'No items yet. When {{bot}} takes something on, it shows up here.',
-            { bot: botName }
-          )}
-        </Text>
-      </>
-    )
-  } else if (all.length === 0 && !filtered) {
-    body = (
-      <View style={styles.empty}>
-        <Text style={styles.emptyTitle}>{t('bots.items.empty.title', 'No items yet')}</Text>
-        <Text style={styles.emptyBody}>
-          {t(
+        {asks.length > 0 ? asksOnly : null}
+        <MobileStateView
+          icon={Inbox}
+          title={t('bots.items.empty.title', 'No items yet')}
+          message={t(
             'bots.items.empty.body',
             'When {{bot}} takes on something for you, it shows up here with what it is doing and what it needs from you.',
             { bot: botName }
           )}
-        </Text>
-      </View>
+        />
+      </>
     )
   } else if (shown.length === 0 && asks.length > 0) {
     body = asksOnly
   } else if (shown.length === 0) {
     body = (
-      <Text style={sheetStyles.empty}>
-        {filter.needsYou
-          ? t('bots.items.empty.needsYou', 'Nothing needs you.')
-          : t('bots.items.empty.filtered', 'No items match.')}
-      </Text>
+      <MobileNoMatchState
+        message={t('bots.items.empty.needsYou', 'Nothing needs you.')}
+        onClear={onClearFilter}
+        clearLabel={t('bots.items.filter.clear', 'Clear filter')}
+      />
     )
   } else {
-    const disabled = items.failed || !online
+    const disabled = failed || !online
     const row = (item: BotItem, id: BotItemGroupId) => (
       <MobileBotItemRow
         key={item.uid}
@@ -189,19 +205,31 @@ export function MobileBotItemsTab({
         checked={selecting ? selected.has(item.uid) : null}
         now={now}
         disabled={disabled}
-        onPress={() => (selecting ? toggle(item) : onOpen(item))}
+        onPress={() =>
+          selecting ? toggle(item) : onOpen(item, botItemWalkOf(groups, closedTotal))
+        }
         onLongPress={() => (selecting ? toggle(item) : setSheet({ kind: 'row', item }))}
       />
     )
-    body = BOT_ITEM_GROUP_IDS.map((id) =>
+    // Paused and offline say so elsewhere, as on the desktop.
+    const allClear =
+      !filtered &&
+      asks.length === 0 &&
+      online &&
+      !bot.paused &&
+      groups.needs_you.length + groups.working.length === 0
+    const list = BOT_ITEM_GROUP_IDS.map((id) =>
       id === 'needs_you' ? (
         <MobileBotNeedsYouGroup
           key={id}
+          botName={botName}
           asks={asks}
           items={groups.needs_you}
           disabled={disabled}
           renderItem={(item) => row(item, id)}
           onOpenAsk={(ask) => openPhoneAsk(ask, askOpeners)}
+          client={client}
+          onSkipFailed={showToast}
         />
       ) : (
         <ItemGroup
@@ -210,54 +238,63 @@ export function MobileBotItemsTab({
           items={groups[id]}
           total={id === 'closed' ? Math.max(closedTotal, groups.closed.length) : groups[id].length}
           onMoreClosed={id === 'closed' && !filter.needsYou ? items.loadMoreClosed : null}
-          seenEventId={seenEventId}
+          isUnseen={(item) => isBotItemUnseen(item, seenEventId)}
           renderItem={(item) => row(item, id)}
           onCancelAll={
-            id === 'stale' && groups.stale.length > 0 && !items.failed && online
+            id === 'stale' && groups.stale.length > 0 && !failed && online
               ? () => setSheet({ kind: 'stale', items: groups.stale, reason: staleReason })
               : null
           }
         />
       )
     )
+    body = (
+      <>
+        {allClear ? <MobileBotItemsAllClear /> : null}
+        {list}
+      </>
+    )
   }
   return (
     <>
       {chip}
-      {items.failed ? <ReadFailed stale onRetry={items.retry} /> : null}
-      <View style={items.failed ? styles.dimmed : undefined}>{body}</View>
+      {failed ? <ReadFailed onRetry={items.retry} /> : null}
+      <View style={failed ? styles.dimmed : undefined}>{body}</View>
       {after}
     </>
   )
 }
 
-function ReadFailed({ stale, onRetry }: { stale: boolean; onRetry: () => void }) {
+/** A re-read that failed, over the last good list it keeps up. */
+export function ReadFailed({ onRetry }: { onRetry: () => void }) {
   const t = useMobileTranslation()
   return (
     <ListGroup style={styles.failed}>
       <ListRow
         title={t('bots.items.readFailedShort', 'Couldn’t load items.')}
-        subtitle={stale ? t('bots.items.lastRead', 'Showing the last items read.') : undefined}
+        subtitle={t('bots.items.lastRead', 'Showing the last items read.')}
         accessory={<MobileBotTextButton label={t('bots.items.retry', 'Retry')} onPress={onRetry} />}
       />
     </ListGroup>
   )
 }
 
-function ItemGroup({
+/** One folding group under its "Name N" header, five rows then Show N more; Closed reads more pages. */
+export function ItemGroup({
   id,
   items,
   total,
   onMoreClosed,
-  seenEventId,
+  isUnseen,
   renderItem,
   onCancelAll
 }: {
   id: BotItemGroupId
   items: BotItem[]
   total: number
-  onMoreClosed: (() => Promise<void>) | null
-  seenEventId: string
+  onMoreClosed: (() => Promise<unknown>) | null
+  /** Changed since its bot's Items were last opened. */
+  isUnseen: (item: BotItem) => boolean
   renderItem: (item: BotItem) => ReactNode
   onCancelAll: (() => void) | null
 }) {
@@ -268,7 +305,7 @@ function ItemGroup({
   if (total === 0) {
     return null
   }
-  const fresh = id === 'closed' ? items.filter((item) => isBotItemUnseen(item, seenEventId)) : []
+  const fresh = id === 'closed' ? items.filter(isUnseen) : []
   const more = total - Math.min(shown, items.length)
   const showMore = async () => {
     if (shown + BOT_ITEM_GROUP_ROWS > items.length && onMoreClosed) {
@@ -333,13 +370,5 @@ const styles = themedStyleSheet(() => ({
   fresh: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   freshText: { fontSize: typography.metaSize, color: colors.textPrimary },
   dimmed: { opacity: feedback.disabledOpacity },
-  failed: { marginBottom: spacing.sm },
-  empty: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm
-  },
-  emptyTitle: { fontSize: typography.bodySize, fontWeight: '600', color: colors.textPrimary },
-  emptyBody: { fontSize: 13, color: colors.textMuted, textAlign: 'center', lineHeight: 18 }
+  failed: { marginBottom: spacing.sm }
 }))

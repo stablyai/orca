@@ -8,15 +8,22 @@ import type {
 import type { BotCreateParams } from '../rpc-contract/bots-params'
 import { isBotMascotId, mascotAvatar } from '../bot-avatar'
 import { type Bot, type BotAgent, BotNameSchema } from '../bot-types'
-import { type BotTemplate, botTemplate, isLegacyBotTemplateId } from './bot-templates'
+import {
+  BOT_CONNECTOR_NAMES,
+  type BotTemplate,
+  botTemplate,
+  isLegacyBotTemplateId
+} from './bot-templates'
 import { HANDED_WORKSPACES_MAX, HandedWorkspaceSchema } from './bot-made-for-workspaces'
 
 const line = (max: number) => z.string().trim().min(1).max(max)
 
+export const BOT_PURPOSE_MAX_LENGTH = 200
+
 /** What goes into the new bot's SOUL.md. */
 export const BotProposalSeedSchema = z.object({
   /** One sentence: what the bot is for. SOUL.md's first paragraph, so `bot list` shows it. */
-  purpose: line(200),
+  purpose: line(BOT_PURPOSE_MAX_LENGTH),
   watches: line(300).optional(),
   does: line(500).optional(),
   /** Where and how often it reports ("Here, weekday mornings"). */
@@ -79,6 +86,8 @@ export function proposalSeed({
 export type ProposalCreateTarget = {
   templatePackages: boolean
   skills?: readonly string[]
+  /** The template's name as this client shows it, when it proposed the bot's name in that language. */
+  templateNameShown?: string
   /** From a bot's card: that card. */
   fromOffer?: BotCreateParams['fromOffer']
 }
@@ -105,11 +114,38 @@ export function proposalCreateParams(
     ...(template && target.templatePackages
       ? { fromTemplate: { id: template.id, skills: [...(target.skills ?? template.skills)] } }
       : {}),
+    ...(template && target.templateNameShown
+      ? { templateNameShown: target.templateNameShown }
+      : {}),
     ...(target.fromOffer ? { fromOffer: target.fromOffer } : {})
   }
 }
 
 const oneLine = (text: string): string => text.replace(/\s+/g, ' ').trim()
+
+// Names that keep their capital mid-sentence ("Watches Linear projects", "Watches your Orca workspaces").
+const PROPER_NAMES = new Set([...Object.values(BOT_CONNECTOR_NAMES), 'Orca'])
+const midSentence = (text: string): string =>
+  PROPER_NAMES.has(text.split(' ', 1)[0] ?? '')
+    ? text
+    : text.charAt(0).toLowerCase() + text.slice(1)
+const sentence = (text: string): string => (/[.!?]$/.test(text) ? text : `${text}.`)
+
+/** What a template's bot watches, does and reports, as the plain sentences New bot's identity box shows. */
+export function proposalIdentity({
+  watches,
+  does,
+  reports
+}: Pick<BotProposal, 'watches' | 'does' | 'reports'>): string {
+  return [
+    watches ? `Watches ${midSentence(oneLine(watches))}` : null,
+    does ? oneLine(does) : null,
+    reports ? `Reports ${midSentence(oneLine(reports))}` : null
+  ]
+    .filter((entry): entry is string => entry !== null)
+    .map(sentence)
+    .join(' ')
+}
 
 const READ_ONLY_START =
   '- Change anything (comments, labels, pull requests, posts anywhere but here) until my owner says I can. I start by reading and reporting only.'

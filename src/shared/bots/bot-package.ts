@@ -5,6 +5,8 @@ import type { AutomationBotResultsTo } from '../automation-bot-target'
 import { AUTOMATION_EVENT_KINDS } from '../automation-event-triggers'
 import { GOOGLE_EVENT_SOURCES } from '../automation-google-triggers'
 import { BOT_MASCOT_IDS, BOT_AVATAR_FILE, mascotAvatar } from '../bot-avatar'
+import { BotAvatarColorSchema } from './bot-avatar-color'
+import { BotStoredOutfitSchema } from './bot-avatar-outfit'
 import { BOT_TOOL_HEADER_NAME_PATTERN, BOT_TOOL_NAME_PATTERN, BotToolUrl } from '../bot-tools'
 import { BOT_AGENTS, BotNameSchema, type BotAgent } from '../bot-types'
 import { validateSkillPackageName } from '../skills/packages/skill-package-manifest'
@@ -16,6 +18,8 @@ export const BOT_PACKAGE_SOUL_PATH = 'SOUL.md'
 export const BOT_PACKAGE_AVATAR_PATH = BOT_AVATAR_FILE
 export const BOT_PACKAGE_MAX_MANIFEST_BYTES = 256 * 1024
 export const BOT_PACKAGE_PURPOSE_MAX = 200
+/** The most skills one package carries. */
+export const BOT_PACKAGE_SKILLS_MAX = 64
 export const BOT_PACKAGE_SETUP_NOTE_MAX = 2000
 
 /** Skill and memory names: they become folder and file names, so the skill name rules apply. */
@@ -54,17 +58,22 @@ const EventSuggestionSchema = z
 export const BotPackageV1Schema = z.object({
   schemaVersion: z.literal(BOT_PACKAGE_SCHEMA_VERSION),
   name: BotNameSchema,
-  /** A mascot by id, or the archive's avatar.png; absent, the recipient's default mascot. */
+  /** A mascot by id, with its tile color and outfit, or the archive's avatar.png; absent, the recipient's
+   *  default mascot. An older importer drops the color and outfit and lists them as not included. */
   avatar: z
     .union([
-      z.object({ mascot: z.enum(BOT_MASCOT_IDS) }),
+      z.object({
+        mascot: z.enum(BOT_MASCOT_IDS),
+        color: BotAvatarColorSchema.optional().catch(undefined),
+        outfit: BotStoredOutfitSchema.optional().catch(undefined)
+      }),
       z.object({ image: z.literal(BOT_PACKAGE_AVATAR_PATH) })
     ])
     .optional(),
   purpose: z.string().max(BOT_PACKAGE_PURPOSE_MAX),
   /** The sharer's agent; the recipient picks their own. */
   agentHint: z.enum(BOT_AGENTS),
-  skills: z.array(z.object({ name: PartName })).max(64),
+  skills: z.array(z.object({ name: PartName })).max(BOT_PACKAGE_SKILLS_MAX),
   tools: z
     .array(
       z.object({
@@ -188,10 +197,15 @@ export function botPackageResults(
   return 'channel' in resultsTo ? 'slack-channel' : 'linear-issue'
 }
 
-/** Where a recipient's agent loads a bot's own skills from, in its home. */
-export function skillsFolderFor(agent: BotAgent): string {
-  return agent === 'claude' ? '.claude/skills' : '.agents/skills'
-}
+/** A bot's own skills, in its home, for every agent: Orca links each into the agents' skills folders. */
+export const BOT_OWN_SKILLS_FOLDER = 'skills'
+
+/** Where each agent loads skills from in a bot's home: Claude, then the folder every other agent reads. */
+export const BOT_AGENT_SKILLS_FOLDERS = {
+  claude: '.claude/skills',
+  agents: '.agents/skills'
+} as const
+export type BotAgentSkillsFolder = keyof typeof BOT_AGENT_SKILLS_FOLDERS
 
 export type BotPackagePlan = {
   create: { name: string; agent: BotAgent; avatar?: string }
@@ -205,6 +219,17 @@ export type BotPackagePlan = {
   eventSuggestions: BotPackageV1['eventSuggestions']
   connectors: BotPackageConnector[]
   setupNote: string | null
+}
+
+/** What a shared mascot carries of the sharer's look: its tile color and outfit. */
+export function packagedMascotLook(bot: {
+  avatarColor?: string | null
+  avatarOutfit?: string | null
+}): { color?: string; outfit?: string } {
+  return {
+    ...(bot.avatarColor ? { color: bot.avatarColor } : {}),
+    ...(bot.avatarOutfit ? { outfit: bot.avatarOutfit } : {})
+  }
 }
 
 /** The bot a package creates, and where each of its files goes. `inventory` is the archive's files;
@@ -226,7 +251,7 @@ export function planBotFromPackage(
         : part.role === 'memory'
           ? `memory/${part.topic}.md`
           : part.role === 'skill'
-            ? `${skillsFolderFor(choice.agent)}/${part.name}/${part.path}`
+            ? `${BOT_OWN_SKILLS_FOLDER}/${part.name}/${part.path}`
             : null
     return to === null ? [] : [{ from: file.path, to, executable: file.executable }]
   })
@@ -253,6 +278,8 @@ export type BotShareLeftOut = {
   kind: 'skill' | 'tool' | 'automation' | 'memory' | 'avatar'
   name: string
   why: string
+  /** Where in the home it is, when another part shares its name (a skill in two folders). */
+  from?: string
 }
 
 export type BotShareFlag = {
@@ -265,7 +292,15 @@ export type BotShareFlag = {
 /** Everything the bot could share, ticked or not, for the Share dialog's pages. */
 export type BotShareAvailable = {
   soulLines: number
-  skills: { name: string; description: string; homePath: string }[]
+  /** homePath: null for a linked project's skill, outside the bot home. optInFrom: the project's name
+   *  for a skill it links in from outside itself, listed unticked; optInKey: its folder's key. */
+  skills: {
+    name: string
+    description: string
+    homePath: string | null
+    optInFrom?: string
+    optInKey?: string
+  }[]
   schedules: { automationId: string; name: string; rrule: string; timezone?: string }[]
   eventSuggestions: { automationId: string; name: string; source: string; event: string }[]
   tools: { name: string; url: string }[]

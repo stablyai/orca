@@ -4,10 +4,16 @@ import type { CommentMarkdownExtension } from '@/components/comment-markdown/Com
 import { botGroupMentionSegments } from '../../../../shared/bots/bot-group-mentions'
 import {
   BOT_CHAT_MENTION_PREFIX,
+  botChatIdLabel,
+  botMentionLabel,
   botMentionTokens
 } from '../../../../shared/bots/bot-mention-context'
 import { BOT_ADDRESS_PREFIX } from '../../../../shared/bot-roster'
-import { SLACK_MENTION_HREF } from '../../../../shared/connectors/slack-message-markup'
+import {
+  SLACK_MENTION_HREF,
+  type SlackPeople
+} from '../../../../shared/connectors/slack-message-markup'
+import { showSlackMentionTokens } from '../../../../shared/connectors/slack-mention-tokens'
 
 /** Room member names whose `@Name` mentions render as chips in this chat's messages. */
 export const NativeChatMentionNamesContext = createContext<readonly string[] | null>(null)
@@ -34,10 +40,8 @@ export const NativeChatBotChatTitleContext = createContext<
   ((botId: string, chatId: string) => ReactNode) | null
 >(null)
 
-/** How a chat no title can be found for reads: by the start of its id, never dropped. */
-export function botChatIdLabel(chatId: string): string {
-  return `chat ${chatId.slice(0, 6)}`
-}
+/** The Slack people this chat knows; with them, Slack's `<@U…>` tokens in its text draw as names. */
+export const NativeChatSlackPeopleContext = createContext<SlackPeople | null>(null)
 
 /** Whether `@everyone` is a chip too: a group's, never a bot's own chat. */
 export const NativeChatMentionEveryoneContext = createContext(true)
@@ -92,8 +96,8 @@ function pickedBot(node: MarkdownNode, source: string): MarkdownNode | null {
     return null
   }
   return token.chatId
-    ? mentionNode(`@${token.name} › ${botChatIdLabel(token.chatId)}`, `${token.id}/${token.chatId}`)
-    : mentionNode(`@${token.name}`)
+    ? mentionNode(botMentionLabel(token), `${token.id}/${token.chatId}`)
+    : mentionNode(botMentionLabel(token))
 }
 
 function plainText(node: MarkdownNode): string {
@@ -118,7 +122,7 @@ function splitMentions(
     return
   }
   node.children = node.children.flatMap((child) => {
-    if (child.type === 'text' && child.value !== undefined) {
+    if (child.type === 'text' && child.value !== undefined && !child.data) {
       return mentionNodes(child.value, names, everyone)
     }
     const bot = (slackMentions ? slackMention(child) : null) ?? pickedBot(child, source)
@@ -173,16 +177,22 @@ function BotChatMentionChip({
   )
 }
 
-/** Chips room members' `@Name`s; with `slackMentions`, a Slack message's drawn mentions too. */
+/** Chips room members' `@Name`s; with `slackMentions`, a Slack message's drawn mentions too; with
+ *  `slackPeople`, Slack's mention tokens. */
 export function createNativeChatMentionExtension(
   names: readonly string[],
   everyone = true,
-  slackMentions = false
+  slackMentions = false,
+  slackPeople: SlackPeople | null = null
 ): Pick<CommentMarkdownExtension, 'remarkPlugins' | 'sanitizeAttributes' | 'components'> {
   return {
     remarkPlugins: [
-      () => (tree: MarkdownNode, file: { value: unknown }) =>
+      () => (tree: MarkdownNode, file: { value: unknown }) => {
+        if (slackPeople) {
+          showSlackMentionTokens(tree, slackPeople, mentionNode)
+        }
         splitMentions(tree, names, everyone, String(file.value), slackMentions)
+      }
     ],
     sanitizeAttributes: { span: [MENTION_PROPERTY, BOT_CHAT_PROPERTY] },
     components: { span: MentionSpan }

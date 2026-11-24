@@ -25,6 +25,7 @@ export function renderMobileTasksListSurface(
     setLinearConnectError,
     setLinearConnectState,
     setShowLinearConnect,
+    bindLinearAccountHost,
     showsKeptRows,
     taskUiReady,
     tasksSupported
@@ -66,6 +67,7 @@ export function renderMobileTasksListSurface(
                 setLinearApiKeyDraft('')
                 setLinearConnectState('idle')
                 setLinearConnectError('')
+                bindLinearAccountHost()
                 setShowLinearConnect(true)
               }
             }

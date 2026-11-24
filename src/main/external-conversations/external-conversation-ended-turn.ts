@@ -3,8 +3,10 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalConnectorDelivery } from '../../shared/agent-session/journal/agent-journal-bot-message-fields'
-import { connectorReplyTurnStamps } from '../../shared/agent-session/journal/journal-connector-reply-turn'
+import {
+  connectorReplyTurnStamps,
+  type ConnectorReplyStamp
+} from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import type { AgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import {
   latestStructuredAgentSessionAssistantMessage,
@@ -30,7 +32,7 @@ export type EndedChatTurn = {
   /** The turn row's journal key, the connector deliveries it answered, and the root prose written
    *  inside it (design item 125). */
   turnItemId?: string
-  stamps?: AgentJournalConnectorDelivery[]
+  stamps?: ConnectorReplyStamp[]
   turnProse?: string
 }
 
@@ -77,6 +79,31 @@ export async function endedTurn(
   }
 }
 
+/** Whom an ended turn acts for, from its own rows by index (STA-16396 moves the other ends here).
+ *  Empty, so nothing is proven, while the journal hasn't reached the turn's end or can't say. */
+export async function endedTurnAttribution(
+  chat: ConversationChat,
+  sessionId: string,
+  turnId: string,
+  cursor?: AgentJournalCursor
+): Promise<Pick<EndedChatTurn, 'opener' | 'stamps'>> {
+  const read = cursor
+    ? await chat
+        .journalReads(sessionId)
+        .then((reads) => reads.turnAttribution(turnId, cursor.sequence))
+        .catch(() => null)
+    : null
+  if (
+    !cursor ||
+    !read?.stamps ||
+    read.cursor.epoch !== cursor.epoch ||
+    read.cursor.sequence < cursor.sequence
+  ) {
+    return {}
+  }
+  return { opener: read.opener, stamps: read.stamps }
+}
+
 /** What the reply outbox reads of the turn: its row's journal key, the deliveries it answered, and
  *  the prose written inside it. */
 function outboxTurn(
@@ -93,4 +120,24 @@ function outboxTurn(
         turnProse: structuredAgentSessionTurnAssistantMessage(items, turnItemId)
       }
     : {}
+}
+
+/** The message that opened a turn, read from its own rows; undefined when they can't be read. */
+export async function turnOpenerOf(
+  chat: Pick<ConversationChat, 'journalReads'>,
+  sessionId: string,
+  turnId: string
+): Promise<AgentJournalRenderItem | null | undefined> {
+  const reads = await chat.journalReads(sessionId).catch(() => null)
+  const window = await reads
+    ?.operationWindow({
+      turnIds: [turnId],
+      itemIds: [turnId],
+      anchorsOnly: true,
+      withoutToolOutput: true
+    })
+    .catch(() => null)
+  return reads && window
+    ? readEndedChatTurnOpener(async () => reads, window.snapshot.items, turnId)
+    : undefined
 }

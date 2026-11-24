@@ -30,3 +30,8 @@ export type RemoteServerUpdateInstallResult = {
   targetVersion: string
   runtimeId: string
 }
+
+export type RemoteServerUpdateSettings = {
+  /** Whether paired servers follow app updates. Absent means on. */
+  updateRemoteServersWithApp?: boolean
+}

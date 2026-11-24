@@ -5,6 +5,7 @@ import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environm
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { withCodexTerminalServerIsolationEnv } from '../../../../shared/agent-launch/startup/codex-terminal-server-isolation'
+import { withCodexStartupImageCommand } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/status-hooks/legacy-shared-config-dir'
 import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/shell-startup/legacy-terminal-shim-dir'
@@ -29,6 +30,7 @@ import {
   stripInheritedAgentSessionEnv
 } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
 import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
+import { applyTerminalImageEnvironment } from './terminal-image-environment'
 
 type TrustInput = Parameters<typeof applyAgentWorkspaceTrustToSpawn>[0]
 
@@ -115,6 +117,7 @@ export type PtySpawnLaunchOptionsInput = {
   spawnIntent: PtySpawnOptions['spawnIntent']
   /** Host history is sampled before preparation; otherwise read it after OpenCode preparation. */
   historyIsolationEnabled?: boolean
+  headlessHost?: boolean
   getSettings?: () => GlobalSettings | undefined
   store: TrustInput['store']
   claudeAuth: TrustInput['claudeAuth']
@@ -149,8 +152,16 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
       : {})
   })
-  const env = openCodeLaunch.env
-  const pluginDir = !connectionId ? env?.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
+  const settings = input.getSettings?.()
+  const env = { ...openCodeLaunch.env }
+  const inlineImagesEnabled = applyTerminalImageEnvironment(
+    env,
+    input.envToDelete,
+    launchAgent,
+    settings?.terminalInlineImages,
+    input.headlessHost
+  )
+  const pluginDir = !connectionId ? env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
   const launchCommand =
     pluginDir && openCodeLaunch.command
       ? withClaudeAgentViewPlugin(openCodeLaunch.command, pluginDir, shell)
@@ -165,9 +176,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       : {}),
     env,
     historyIsolationEnabled:
-      input.historyIsolationEnabled ??
-      input.getSettings?.()?.terminalScopeHistoryByWorktree ??
-      true,
+      input.historyIsolationEnabled ?? settings?.terminalScopeHistoryByWorktree ?? true,
     ...(input.isNewSession ? { isNewSession: true } : {}),
     envToDelete: input.envToDelete
   }
@@ -184,7 +193,10 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   })
   const command = noDaemonLaunch ? await noDaemonLaunch : launchCommand
   if (command !== undefined) {
-    spawnOptions.command = command
+    spawnOptions.command =
+      !connectionId && inlineImagesEnabled && !input.envToDelete.includes('KITTY_WINDOW_ID')
+        ? withCodexStartupImageCommand(command, shell)
+        : command
   }
   if (args.commandDelivery !== undefined) {
     spawnOptions.commandDelivery = args.commandDelivery

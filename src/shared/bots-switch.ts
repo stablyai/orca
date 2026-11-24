@@ -9,8 +9,8 @@ export const BOTS_DISABLED_MESSAGE =
 export class BotsDisabledError extends Error {
   readonly code = BOTS_DISABLED_CODE
 
-  constructor() {
-    super(BOTS_DISABLED_MESSAGE)
+  constructor(message = BOTS_DISABLED_MESSAGE) {
+    super(message)
     this.name = 'BotsDisabledError'
   }
 }

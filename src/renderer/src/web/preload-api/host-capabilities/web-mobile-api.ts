@@ -16,6 +16,7 @@ export function createWebMobileApi(): Partial<PreloadApi> {
       revokeRuntimeAccess: () => Promise.resolve({ revoked: false }),
       getRelayStatus: () => Promise.resolve({ status: 'offline' as const }),
       onRelayStatusChanged: () => noopUnsubscribe,
+      onDevicesChanged: () => noopUnsubscribe,
       consumePendingUnpairedDeviceAuthFailure: () => Promise.resolve(false),
       onUnpairedDeviceAuthFailure: () => noopUnsubscribe
     }

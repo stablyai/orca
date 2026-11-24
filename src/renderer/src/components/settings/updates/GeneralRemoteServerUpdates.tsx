@@ -138,7 +138,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
             ? t('auto.components.settings.GeneralRemoteServerUpdates.updating', 'Updating servers…')
             : t(
                 'auto.components.settings.GeneralRemoteServerUpdates.e4e5937469',
-                'Check for server updates'
+                'Check for updates'
               )}
         </Button>
       </div>

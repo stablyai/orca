@@ -11,11 +11,11 @@ import { botTarget, type BotOnHost } from '@/lib/bot-hosts'
 import { useNow } from '@/lib/window-activity/use-now'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import {
-  usageLimitStops,
-  type NamedUsageLimitStop
-} from '../../../../shared/bots/bot-usage-limit-stop'
+  hostUsageLimitStops,
+  type HostUsageLimitStop
+} from '../../../../shared/bots/host-usage-limit-stops'
 
-export type BotUsageLimitStop = NamedUsageLimitStop & { workspaceId: string }
+export type BotUsageLimitStop = HostUsageLimitStop
 
 const NO_STOPS: readonly BotUsageLimitStop[] = []
 
@@ -26,20 +26,18 @@ export function useBotUsageLimitStops(
 ): readonly BotUsageLimitStop[] {
   const target = botTarget(bot)
   const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
+  const hostStops = useMemo(() => hostUsageLimitStops(feed), [feed])
   useEffect(() => feed.activate(), [feed])
   const ids = useMemo(() => new Set(workspaceIds), [workspaceIds])
   // A minute clock retires a stop once its reset passes; it only re-renders.
   const now = useNow(60_000)
-  // The feed updates its map in place: read it whole, and compare one string so a status event
-  // elsewhere re-renders nothing.
+  // The host's stops are derived once for every reader; compare one string so a stop elsewhere
+  // re-renders nothing.
   const read = useCallback(
-    () =>
-      JSON.stringify(
-        usageLimitStops(feed.getSnapshot(), now).filter((stop) => ids.has(stop.workspaceId))
-      ),
-    [feed, ids, now]
+    () => JSON.stringify(hostStops.stopsAt(now).filter((stop) => ids.has(stop.workspaceId))),
+    [hostStops, ids, now]
   )
-  const key = useSyncExternalStore(feed.subscribe, read)
+  const key = useSyncExternalStore(hostStops.subscribe, read)
   return useMemo(() => {
     const stops: BotUsageLimitStop[] = JSON.parse(key)
     return stops.length > 0 ? stops : NO_STOPS

@@ -11,7 +11,11 @@ import {
 import { hostReadClient } from '../../query/host-read-client'
 import { useHostSettingsChangeSignal } from '../../query/settings-change-signal'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { newTabSettingsRead } from './mobile-new-tab-settings-operations'
+import {
+  newTabSettingsRead,
+  requestServerAgentPolicy,
+  withServerAgentPolicy
+} from './mobile-new-tab-settings-operations'
 import {
   hostRefusesOtherRuntimeWorkspace,
   loadMobileDetectedAgents,
@@ -82,9 +86,14 @@ const newTabSettingsQuery = defineHostQuery({
   staleTime: 60_000,
   gcTime: 30 * 60_000,
   signal: { events: ['settingsChanged'] },
-  fetch: async (client, _target, _input: typeof NO_INPUT) => ({
-    settings: newTabSettingsRead.interpret(await newTabSettingsRead.request(client))()
-  })
+  fetch: async (client, _target, _input: typeof NO_INPUT) => {
+    const [response, readServerPolicy] = await Promise.all([
+      newTabSettingsRead.request(client),
+      requestServerAgentPolicy(client)
+    ])
+    const readSettings = newTabSettingsRead.interpret(response)
+    return { settings: withServerAgentPolicy(readSettings(), readServerPolicy()) }
+  }
 })
 
 // A host without settingsChanged gets a reread on every sheet open; the cached ones paint meanwhile.
@@ -135,7 +144,9 @@ export function useMobileAgentLaunchQueries(args: {
     enabled,
     subscribed: observed(detectedAgentsQuery.family, target, input)
   })
-  const settingsSignalled = useHostSettingsChangeSignal(hostId, client)
+  // The desktop's settings events don't cover a relayed server's agent preferences.
+  const settingsSignalled =
+    useHostSettingsChangeSignal(hostId, client) && !exec.startsWith('runtime:')
   const settings = useHostQuery(newTabSettingsQuery, { hostId, client }, settingsTarget, NO_INPUT, {
     enabled,
     subscribed: observed(newTabSettingsQuery.family, settingsTarget, NO_INPUT),

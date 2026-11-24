@@ -1,0 +1,14 @@
+id: no-bare-taskkill
+valid:
+  - "spawn(windowsSystem32Binary('taskkill.exe'), ['/pid', String(pid), '/t', '/f'])"
+  - "const program = 'tasklist'"
+invalid:
+  - "spawn('taskkill', ['/pid', String(pid), '/t', '/f'])"
+  - "execFileSync('taskkill.exe', ['/pid', String(pid)])"
+  - "const program = 'TASKKILL.EXE'"
+---
+id: no-bare-taskkill-tsx
+valid:
+  - "spawn(windowsSystem32Binary('taskkill.exe'), [])"
+invalid:
+  - 'spawn("taskkill", [])'

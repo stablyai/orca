@@ -22,8 +22,45 @@ CREATE TABLE IF NOT EXISTS journal_connector_replies (
   links_json TEXT,
   filled_at INTEGER,
   sent_at INTEGER,
+  took_ms INTEGER,
+  turn_started_at INTEGER,
+  cut_turn_id TEXT,
+  cut_kind TEXT,
+  claim_message_id TEXT,
   PRIMARY KEY(account, delivery_id)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS journal_connector_replies_open
   ON journal_connector_replies(session_id, outcome, sent_at);
 `
+
+// Columns later builds added the same way, with no user_version change: an older build never reads
+// them. turn_started_at: the answering turn's turn-started `at`, which its reply names. cut_turn_id / cut_kind: the cut that owes the row; claim_message_id: the continuation that
+// claimed it.
+const ADDED_COLUMNS = [
+  ['took_ms', 'INTEGER'],
+  ['turn_started_at', 'INTEGER'],
+  ['cut_turn_id', 'TEXT'],
+  ['cut_kind', 'TEXT'],
+  ['claim_message_id', 'TEXT']
+] as const
+
+/** Creates the table, and adds the columns a table an earlier build made lacks. */
+export function ensureJournalConnectorRepliesSchema(db: {
+  exec(sql: string): unknown
+  prepare(sql: string): { get(...params: unknown[]): unknown }
+}): void {
+  db.exec(JOURNAL_CONNECTOR_REPLIES_SCHEMA)
+  for (const [name, type] of ADDED_COLUMNS) {
+    const present = db
+      .prepare(`SELECT 1 FROM pragma_table_info('journal_connector_replies') WHERE name=?`)
+      .get(name)
+    if (!present) {
+      db.exec(`ALTER TABLE journal_connector_replies ADD COLUMN ${name} ${type}`)
+    }
+  }
+  // A Stop finds the rows of the messages it took back; an older build ignores these indexes.
+  db.exec(`CREATE INDEX IF NOT EXISTS journal_connector_replies_message
+    ON journal_connector_replies(session_id, epoch, message_id) WHERE outcome IS NULL;
+  CREATE INDEX IF NOT EXISTS journal_connector_replies_claim
+    ON journal_connector_replies(claim_message_id) WHERE claim_message_id IS NOT NULL`)
+}

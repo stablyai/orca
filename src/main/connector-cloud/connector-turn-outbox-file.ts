@@ -12,6 +12,7 @@ import {
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
 import { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
+import { CoalescingFileWriter } from '../filesystem/coalescing-file-writer'
 import { removeStaleDurableWriteTempFiles } from '../filesystem/durable-file-write'
 import {
   removeStaleOwnerOnlyStaging,
@@ -37,7 +38,8 @@ const StoredOutbox = z.object({
       failure: ConnectorFailure.optional().catch(undefined),
       links: z.array(ConnectorWorkLink).optional().catch(undefined),
       mirror: z.literal(true).optional().catch(undefined),
-      stateOnly: z.literal(true).optional().catch(undefined)
+      stateOnly: z.literal(true).optional().catch(undefined),
+      resumes: z.literal(true).optional().catch(undefined)
     })
   )
 })
@@ -45,28 +47,12 @@ const StoredOutbox = z.object({
 /** What the file holds; null when there is none. */
 type StoredState = { account: string; turnEnds: readonly TurnEnded[] } | null
 
-const RETRY_MIN_MS = 1_000
-const RETRY_MAX_MS = 30_000
-
 const files = new Map<string, TurnOutboxFile>()
 
-/** One write or delete at a time; while it runs, only the newest state waits behind it. */
+/** One file's ordered writes and deletes, shared by every owner in this process. */
 class TurnOutboxFile {
-  // The newest state not yet on disk; undefined once the file holds it.
-  private wanted: StoredState | undefined
-  // Bumped by every save, so a drain sees a newer state arrived while it wrote.
-  private generation = 0
-  private running: Promise<void> | null = null
+  private readonly writer = new CoalescingFileWriter<StoredState>((state) => this.commit(state))
   private staleTempsSwept = false
-  // Ends a retry's wait early: a new save tries at once, and quit tries once more.
-  private wake: (() => void) | null = null
-  // Settling for quit: a failure ends the drain rather than wait out a backoff, once an attempt
-  // started after quit began (numbered past `quitFrom`) has failed too.
-  private quitting = false
-  private attempts = 0
-  private quitFrom = 0
-  // The last drain stopped on a failure while quitting; only a new save starts another.
-  private gaveUp = false
 
   constructor(readonly path: string) {}
 
@@ -81,76 +67,15 @@ class TurnOutboxFile {
 
   /** What a new owner must read instead of the file while it hasn't landed. */
   get pending(): StoredState | undefined {
-    return this.wanted
+    return this.writer.pending
   }
 
   save(state: StoredState): void {
-    this.wanted = state
-    this.generation += 1
-    this.gaveUp = false
-    this.wake?.()
-    this.run()
+    this.writer.save(state)
   }
 
-  private run(): void {
-    this.running ??= this.drain().finally(() => {
-      this.running = null
-      // A save that came in as the drain finished.
-      if (this.wanted !== undefined && !this.gaveUp) {
-        this.run()
-      }
-    })
-  }
-
-  /** For quit: what is queued lands, and a failing save gets one more try instead of its backoff. */
-  async settled(): Promise<void> {
-    this.quitting = true
-    this.quitFrom = this.attempts
-    try {
-      this.wake?.()
-      if (this.wanted !== undefined) {
-        this.gaveUp = false
-        this.run()
-      }
-      while (this.running) {
-        await this.running
-      }
-    } finally {
-      this.quitting = false
-    }
-  }
-
-  private async drain(): Promise<void> {
-    let retryMs = 0
-    while (this.wanted !== undefined) {
-      const { wanted, generation } = this
-      const attempt = ++this.attempts
-      const landed = await this.commit(wanted)
-      if (generation !== this.generation) {
-        continue
-      }
-      if (landed) {
-        this.wanted = undefined
-        return
-      }
-      // Kept wanted, so no later owner in this process reads the stale file.
-      if (this.quitting) {
-        if (attempt > this.quitFrom) {
-          this.gaveUp = true
-          return
-        }
-        continue
-      }
-      retryMs = Math.min(RETRY_MAX_MS, Math.max(RETRY_MIN_MS, retryMs * 2))
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, retryMs)
-        this.wake = () => {
-          clearTimeout(timer)
-          resolve()
-        }
-      })
-      this.wake = null
-    }
+  settled(): Promise<void> {
+    return this.writer.settled()
   }
 
   private async commit(state: StoredState): Promise<boolean> {

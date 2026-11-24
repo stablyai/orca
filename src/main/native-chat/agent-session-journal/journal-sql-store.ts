@@ -56,6 +56,8 @@ export type JournalSqlStorePrepare = (
   context: JournalReceiptStage
 ) => JournalSqlStorePreparation | Promise<JournalSqlStorePreparation>
 
+type JournalHistoryAsk = Omit<JournalDomainHistoryRequest, 'sessionId'>
+
 /** A live ownership token and worker ports; no reduced chat or writable connection lives here. */
 export class SqlAgentSessionJournal extends SqlJournalAppends {
   private readonly goalAttachments: JournalGoalAttachmentInverse
@@ -138,12 +140,13 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     sequence: this.acknowledged.sequence
   })
   observationHandle = (): string => this.target.ownerToken
+  /** Count a send in flight for this chat, from admission until its dispatch settles. */
+  holdSending = (): (() => void) => this.database.sending.hold(this.identity.sessionId)
   get isClosed(): boolean {
     return this.closed
   }
-  wroteBeforeOpen(sequence: number | undefined): boolean {
-    return journalWroteBeforeOpen(this.physicalCursor(), this.openedThrough, sequence)
-  }
+  wroteBeforeOpen = (sequence: number | undefined): boolean =>
+    journalWroteBeforeOpen(this.physicalCursor(), this.openedThrough, sequence)
 
   /** Nonthrowing publication runs on the command lane, after receipts have adopted COMMIT. */
   observeCommits(listener: (commit: JournalWriterCommit) => void): () => void {
@@ -186,6 +189,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
           operation,
           facts,
           savedAt,
+          ...this.database.sending.urgency(this.identity.sessionId, preparation.forkInstall),
           ...(staged ? { effects: staged.effects } : {}),
           ...(preparation.forkInstall ? { forkInstall: preparation.forkInstall } : {})
         }
@@ -287,12 +291,9 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   }
 
   /** One reader snapshot answers the page and, when asked, current work beside it. */
-  history(
-    request: Omit<JournalDomainHistoryRequest, 'sessionId'>,
-    work?: JournalDomainHistoryWork
-  ) {
+  history(request: JournalHistoryAsk, work?: JournalDomainHistoryWork, signal?: AbortSignal) {
     const sessionId = this.identity.sessionId
-    return this.database.readers.domainHistoryFrame({ ...request, sessionId }, work)
+    return this.database.readers.domainHistoryFrame({ ...request, sessionId }, work, signal)
   }
 
   readWork<K extends JournalWorkRead['kind']>(

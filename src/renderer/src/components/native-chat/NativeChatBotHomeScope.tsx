@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { cn } from '@/lib/class-names'
 import { BotFirstScreen } from '../bots/BotFirstScreen'
+import { nativeChatFirstScreenSignIn } from '../../../../shared/bots/bot-first-screen'
 import {
   NativeChatBotKickoffContext,
   useNativeChatBotKickoffView,
@@ -15,15 +16,25 @@ type BotHomeController = Parameters<typeof useNativeChatBotKickoffView>[1] &
 
 /** A bot Chat's kickoff view, and Stop controls that know when a new bot is first speaking. */
 export function useNativeChatBotHome(
-  session: { messages: readonly NativeChatMessage[] },
+  session: { messages: readonly NativeChatMessage[]; sessionId: string | null },
   controller: BotHomeController,
   transport: NativeChatStructuredComposerTransport,
   workspaceId: string | null,
   hostExecution: { stopping: boolean }
 ) {
-  const kickoff = useNativeChatBotKickoffView(session.messages, controller, transport, workspaceId)
+  const kickoff = useNativeChatBotKickoffView(
+    session.messages,
+    controller,
+    transport,
+    workspaceId,
+    session.sessionId
+  )
   return {
     kickoff,
+    /** Its setup card stands in for the transcript, and offers what setup needs. */
+    setupFailed: kickoff.firstScreen?.phase === 'failed',
+    /** The sign-in its failed setup waits on, which its setup card offers. */
+    signInOwed: nativeChatFirstScreenSignIn(kickoff.firstScreen),
     stopControls: nativeChatStructuredStopControls(controller, hostExecution.stopping, kickoff)
   }
 }

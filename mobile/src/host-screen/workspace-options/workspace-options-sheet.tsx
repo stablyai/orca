@@ -1,6 +1,5 @@
 import { useMemo, type ReactNode } from 'react'
 import { ActivityIndicator, Text, View } from 'react-native'
-import { ChevronLeft } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useBackClaim } from '../../navigation/use-back-claim'
@@ -10,7 +9,6 @@ import {
   useOptionPager,
   type OptionPagerControls
 } from '../../components/bottom-drawer/BottomDrawer'
-import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -208,19 +206,14 @@ function WorkspaceOptionsContent({
   const page =
     pageOption && pageControl?.kind === 'page' ? (
       <>
-        <View>
-          <SheetHeader title={pageOption.label} trailing={done} />
-          <View style={styles.optionPageBack}>
-            <NavBarButton
-              icon={ChevronLeft}
-              accessibilityLabel={t(
-                'hostScreen.workspaceOptionsSheet.backToOptions',
-                'Back to Workspace options'
-              )}
-              onPress={pager.close}
-            />
-          </View>
-        </View>
+        <SheetHeader
+          title={pageOption.label}
+          onBack={{
+            label: t('hostScreen.workspaceOptionsSheet.backToOptions', 'Back to Workspace options'),
+            onPress: pager.close
+          }}
+          trailing={done}
+        />
         <pageControl.Page controller={controller} hosts={hosts} label={pageOption.label} />
       </>
     ) : null

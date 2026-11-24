@@ -17,6 +17,10 @@ import type { MobileSessionTab, SessionTabsResult } from './mobile-session-tabs'
 import type { MobileSessionMarkdownActionsModel } from '../../files/session-documents/use-mobile-session-markdown-actions'
 import { withoutSessionTabHostOwnership } from './mobile-session-tab-status-clock'
 import { useMobileSessionLastTabs } from './mobile-session-last-tabs'
+import {
+  mobileBrowserHostSupport,
+  NO_MOBILE_BROWSER_HOST_SUPPORT
+} from '../../browser/mobile-browser-host-support'
 
 export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownActionsModel) {
   const {
@@ -38,6 +42,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     pendingBrowserFocusPageIdRef,
     switchSessionTabRef,
     setBrowserScreencastSupported,
+    setBrowserHostSupport,
     setAgentSessionHistorySupported,
     setAgentSessionHostSupport,
     setQuickCommandsSupported,
@@ -175,6 +180,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
   useEffect(() => {
     if (!client || connState !== 'connected') {
       setBrowserScreencastSupported(null)
+      setBrowserHostSupport(NO_MOBILE_BROWSER_HOST_SUPPORT)
       setAgentSessionHistorySupported(null)
       setAgentSessionHostSupport(null)
       setQuickCommandsSupported(null)
@@ -186,6 +192,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     }
     // A client swap may reach an older host without disconnecting the route; clear capabilities before showing host-specific actions.
     setBrowserScreencastSupported(null)
+    setBrowserHostSupport(NO_MOBILE_BROWSER_HOST_SUPPORT)
     setAgentSessionHistorySupported(null)
     setAgentSessionHostSupport(null)
     setQuickCommandsSupported(null)
@@ -196,6 +203,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     // Retry status after cutover/timeouts even when connection state never changes or features can remain hidden forever.
     return startRuntimeCapabilityProbe(client, (capabilities) => {
       setBrowserScreencastSupported(capabilities.includes('browser.screencast.v1'))
+      setBrowserHostSupport(mobileBrowserHostSupport(capabilities))
       setAgentSessionHistorySupported(capabilities.includes(MOBILE_AI_VAULT_CAPABILITY))
       setAgentSessionHostSupport(structuredAgentSessionHostSupport(capabilities))
       setQuickCommandsSupported(supportsMobileQuickCommands(capabilities))

@@ -2,8 +2,7 @@ import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import {
   emitNativeChatMessageSent,
-  emitNativeChatPickerItemAccepted,
-  emitNativeChatSendClassified
+  emitNativeChatPickerItemAccepted
 } from '@/components/native-chat/telemetry/native-chat-telemetry'
 import {
   sendNativeChatMessage,
@@ -79,7 +78,6 @@ export function useNativeChatPickerCommandDispatch(args: {
         })
       ) {
         emitNativeChatPickerItemAccepted({ agent, itemKind: 'command' })
-        emitNativeChatSendClassified({ agent, outcome: 'command' })
         setActiveSuggestion(0)
         return
       }
@@ -89,8 +87,7 @@ export function useNativeChatPickerCommandDispatch(args: {
           : sendNativeChatMessage(target.ptyId, text)
       trackPendingSend(delivery)
       emitNativeChatPickerItemAccepted({ agent, itemKind: 'command' })
-      // Match typed-command telemetry and composer cleanup; stale attachments must not ride the next prompt.
-      emitNativeChatSendClassified({ agent, outcome: 'command' })
+      // Match typed-command composer cleanup; stale attachments must not ride the next prompt.
       onSlashCommand?.(text)
       sessionOptionsSurface?.recordOutgoingCommand(text)
       onCommandSent?.(text, delivery)

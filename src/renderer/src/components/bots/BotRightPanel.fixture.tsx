@@ -250,3 +250,44 @@ function lookStoppedFixture(auto: boolean) {
 
 export const lookStoppedWaiting = lookStoppedFixture(false)
 export const lookStoppedContinues = lookStoppedFixture(true)
+
+// Automations folded: the failed row stays listed under the bare header; healthy and paused rows hide.
+export const automationsFolded = defineFixture({
+  width: 360,
+  store: botPanelPage(true, 'blocked'),
+  setup: () => {
+    stubBotPanel(NEEDS_YOU)()
+    window.localStorage.setItem(
+      'orca.bots.panelFolds',
+      JSON.stringify({ [cos.id]: ['automations'] })
+    )
+  },
+  render: () => <BotPanelFrame />
+})
+
+/** Keyboard focus on the row whose name starts with `name` opens its hover card. */
+function focusRow(name: string) {
+  return async (frame: HTMLElement): Promise<void> => {
+    const row = [...frame.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      (button.getAttribute('aria-label') ?? button.textContent ?? '').startsWith(name)
+    )
+    row?.focus()
+    await new Promise((resolve) => setTimeout(resolve, 700))
+  }
+}
+
+export const failedRowCard = defineFixture({
+  width: 360,
+  store: botPanelPage(true, 'blocked'),
+  setup: stubBotPanel(NEEDS_YOU),
+  render: () => <BotPanelFrame />,
+  interact: focusRow('Label new Linear bugs')
+})
+
+export const askRowCard = defineFixture({
+  width: 360,
+  store: botPanelPage(true, 'blocked'),
+  setup: stubBotPanel(NEEDS_YOU),
+  render: () => <BotPanelFrame />,
+  interact: focusRow('Open: Fix flaky')
+})

@@ -4,6 +4,7 @@ import type { WorkspaceSessionState } from '../../workspace-session/workspace-se
 import type {
   CarriedSessionFields,
   DesktopLayoutView,
+  FactSessionField,
   LayoutContentFacts
 } from './workspace-layout-beside'
 import type { LayoutLoadChange } from './workspace-layout-load-report'
@@ -28,6 +29,12 @@ export type LoadedWorkspaceLayout = {
   carried: CarriedSessionFields
 }
 
+/** What partition readers use; a partly reloaded partition holds no save inputs or partition-wide facts. */
+export type LoadedWorkspaceLayoutRead = Pick<LoadedWorkspaceLayout, 'desktopView'> & {
+  layout: Pick<WorkspaceLayoutModel, 'hostId' | 'workspaces'>
+  facts: Omit<LayoutContentFacts, FactSessionField>
+}
+
 export type WorkspaceLayoutLoadResult = LoadedWorkspaceLayout & {
   /** Every on-disk value the next save writes differently from what was loaded. */
   changes: LayoutLoadChange[]
@@ -45,5 +52,5 @@ export type WorkspaceLoadArgs = {
   /** Terminal tab id → its stored pane layout (a legacy row's built one). */
   layouts: Map<string, TerminalLayoutSnapshot>
   /** A dropped row's id → the tab-bar terminal that holds its terminals. */
-  canonicalTabIdBySubsumedTabId: Map<string, string>
+  canonicalTabIdBySubsumedTabId: { set(tabId: string, canonicalTabId: string): void }
 }

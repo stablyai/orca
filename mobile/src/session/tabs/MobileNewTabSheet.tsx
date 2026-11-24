@@ -1,6 +1,5 @@
 import { useRef } from 'react'
-import { Pressable, Text, View } from 'react-native'
-import { FileText, Globe, SquareTerminal } from 'lucide-react-native'
+import { FileText, Globe, SquareTerminal, UserRound } from 'lucide-react-native'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import {
   ActionSheetContent,
@@ -13,10 +12,10 @@ import {
   ListRow,
   SectionHeader
 } from '../../components/list/ListGroup'
-import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
+import { MobileAgentTileGrid } from '../agent-launch/MobileAgentTileGrid'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
+import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { MobileNewTabAgentOption } from '../agent-launch/mobile-new-tab-agent-options'
@@ -27,7 +26,12 @@ import {
   type BuiltInWindowsTerminalShell
 } from '../../../../src/shared/shell/launch/windows-terminal-shell'
 
-const AGENT_GRID_COLUMNS = 3
+/** A bot's home: a new Home Chat, then a side chat with the bot on each agent, in place of the agents. */
+export type MobileNewTabBotActions = {
+  homeChat: ActionSheetAction
+  sideChatsTitle: string
+  sideChats: ActionSheetAction[]
+}
 
 type Props = {
   visible: boolean
@@ -37,9 +41,10 @@ type Props = {
   surfaceChoice: NewTabAgentSurfaceChoice | null
   /** Loading, none, other-server or error; shown instead of the agent grid. */
   agentStatusRow: ActionSheetAction | null
-  /** Rows that lead the agents, such as a bot's own new chat. */
-  leadingAgentActions: ActionSheetAction[]
+  bot: MobileNewTabBotActions | null
   canCreateBrowser: boolean
+  /** The profile a new browser tab opens in; null hides the row (one profile, or an older host). */
+  browserProfileLabel: string | null
   canCreateMarkdownNote: boolean
   onClose: () => void
   onCreateAgent: (agent: TuiAgent, nativeChatDefault: boolean | undefined) => void
@@ -48,6 +53,8 @@ type Props = {
   onCreateTerminal: (shell?: BuiltInWindowsTerminalShell) => void
   /** Runs after the sheet has gone, so it may open another modal. */
   onCreateBrowser: () => void
+  /** Runs after the sheet has gone, so it may open the picker. */
+  onChooseBrowserProfile: () => void
   onCreateMarkdownNote: () => void
 }
 
@@ -74,14 +81,16 @@ export function MobileNewTabSheet({
   agentOptions,
   surfaceChoice,
   agentStatusRow,
-  leadingAgentActions,
+  bot,
   canCreateBrowser,
+  browserProfileLabel,
   canCreateMarkdownNote,
   onClose,
   onCreateAgent,
   terminalShells,
   onCreateTerminal,
   onCreateBrowser,
+  onChooseBrowserProfile,
   onCreateMarkdownNote
 }: Props) {
   useMobileColorScheme()
@@ -96,17 +105,7 @@ export function MobileNewTabSheet({
     onClose()
     action()
   }
-  const showAgentGrid = agentStatusRow === null && agentOptions.length > 0
-  // Short last rows keep empty slots so every tile stays a third of the row wide.
-  const agentRows: { options: MobileNewTabAgentOption[]; emptySlots: string[] }[] = []
-  for (let start = 0; start < agentOptions.length; start += AGENT_GRID_COLUMNS) {
-    const options = agentOptions.slice(start, start + AGENT_GRID_COLUMNS)
-    const emptySlots: string[] = []
-    for (let column = options.length; column < AGENT_GRID_COLUMNS; column += 1) {
-      emptySlots.push(`empty:${column}`)
-    }
-    agentRows.push({ options, emptySlots })
-  }
+  const showAgentGrid = bot === null && agentStatusRow === null && agentOptions.length > 0
   const iconColor = colors.textSecondary
   return (
     <BottomDrawer
@@ -124,11 +123,25 @@ export function MobileNewTabSheet({
         {...(workspaceName ? { subtitle: workspaceName } : {})}
         onClose={onClose}
       />
-      {showAgentGrid || agentStatusRow || leadingAgentActions.length > 0 ? (
+      {bot ? (
+        <>
+          {/* The Home Chat's confirm opens once this sheet has gone. */}
+          <ActionSheetContent
+            actions={[{ ...bot.homeChat, onPress: () => closeThen(bot.homeChat.onPress) }]}
+          />
+          <SectionHeader title={bot.sideChatsTitle} />
+          <ActionSheetContent
+            actions={bot.sideChats.map((action) => ({
+              ...action,
+              onPress: () => closeAndRun(action.onPress)
+            }))}
+          />
+        </>
+      ) : null}
+      {bot === null && (showAgentGrid || agentStatusRow) ? (
         <SectionHeader title={t('session.sheets.agents', 'Agents')} first />
       ) : null}
-      {leadingAgentActions.length > 0 ? <ActionSheetContent actions={leadingAgentActions} /> : null}
-      {agentStatusRow ? <ActionSheetContent actions={[agentStatusRow]} /> : null}
+      {bot === null && agentStatusRow ? <ActionSheetContent actions={[agentStatusRow]} /> : null}
       {showAgentGrid && surfaceChoice ? (
         <MobileSegmentedControl
           segments={[
@@ -144,43 +157,16 @@ export function MobileNewTabSheet({
         />
       ) : null}
       {showAgentGrid ? (
-        <View style={styles.grid}>
-          {agentRows.map((row) => (
-            <View key={row.options.map((option) => option.agent).join(':')} style={styles.gridRow}>
-              {row.options.map((option) => (
-                <Pressable
-                  key={option.agent}
-                  onPress={() =>
-                    closeAndRun(() => onCreateAgent(option.agent, option.nativeChatDefault))
-                  }
-                  accessibilityRole="button"
-                  accessibilityLabel={option.label}
-                  style={styles.tile}
-                >
-                  {({ pressed }) => (
-                    <>
-                      {pressed ? <View style={styles.tilePressed} /> : null}
-                      <MobileAgentIcon agentId={option.agent} size={22} />
-                      <Text style={styles.tileLabel} numberOfLines={1}>
-                        {option.label}
-                      </Text>
-                      {surfaceChoice?.selected === 'chat' && option.cliOnly ? (
-                        <Text style={styles.tileNote} numberOfLines={1}>
-                          {t('session.sheets.cliOnly', 'CLI only')}
-                        </Text>
-                      ) : null}
-                    </>
-                  )}
-                </Pressable>
-              ))}
-              {row.emptySlots.map((slot) => (
-                <View key={slot} style={styles.tileSpacer} />
-              ))}
-            </View>
-          ))}
-        </View>
+        <MobileAgentTileGrid
+          options={agentOptions}
+          showCliOnly={surfaceChoice?.selected === 'chat'}
+          onPick={(option) =>
+            closeAndRun(() => onCreateAgent(option.agent, option.nativeChatDefault))
+          }
+        />
       ) : null}
-      <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.actions}>
+      {bot ? <SectionHeader title={t('session.sheets.more', 'More')} /> : null}
+      <ListGroup separatorInset={LIST_LEADING_INSET} style={bot ? undefined : styles.actions}>
         {terminalShells.length > 0 ? (
           terminalShells.map((shell) => (
             <ListRow
@@ -209,6 +195,16 @@ export function MobileNewTabSheet({
             onPress={() => closeThen(onCreateBrowser)}
           />
         ) : null}
+        {canCreateBrowser && browserProfileLabel !== null ? (
+          <ListRow
+            key="browserProfile"
+            title={t('session.browserProfile.title', 'Profile')}
+            leading={<UserRound size={16} color={iconColor} />}
+            value={browserProfileLabel}
+            navigates
+            onPress={() => closeThen(onChooseBrowserProfile)}
+          />
+        ) : null}
         {canCreateMarkdownNote ? (
           <ListRow
             key="markdownNote"
@@ -223,34 +219,6 @@ export function MobileNewTabSheet({
 }
 
 const styles = themedStyleSheet(() => ({
-  grid: { gap: spacing.sm },
-  gridRow: { flexDirection: 'row', gap: spacing.sm },
-  tile: {
-    flex: 1,
-    minWidth: 0,
-    height: 78,
-    borderRadius: radii.surface,
-    backgroundColor: colors.sheetGroup,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.sm
-  },
-  // Same wash as a pressed ListRow, laid over the tile so its own fill stays underneath.
-  tilePressed: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: colors.translucentFill
-  },
-  tileLabel: { fontSize: 13.5, fontWeight: '600', color: colors.textPrimary, maxWidth: '100%' },
-  // Sits in the tile's gap, so a noted tile keeps the others' height.
-  tileNote: { fontSize: 11, color: colors.textMuted, marginTop: -spacing.xs, maxWidth: '100%' },
   surfaceChoice: { marginBottom: spacing.sm },
-  // Padded like a tile: flex shares space after padding, so a bare spacer would widen its row's tiles.
-  tileSpacer: { flex: 1, paddingHorizontal: spacing.sm },
   actions: { marginTop: spacing.lg }
 }))

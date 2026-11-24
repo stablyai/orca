@@ -106,7 +106,7 @@ export function UpdateAvailableRichContent({
         className="text-xs text-muted-foreground underline hover:text-foreground self-start"
         onClick={(event) => openAppHttpLink(release.releaseNotesUrl, { event })}
       >
-        {t('auto.components.UpdateCard.aad383aecc', 'Read the full release notes')}
+        {t('auto.components.UpdateCard.aad383aecc', 'Release notes')}
       </button>
       {externallyManaged ? (
         <ExternallyManagedNote />

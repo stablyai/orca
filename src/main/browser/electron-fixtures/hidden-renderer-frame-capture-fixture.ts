@@ -41,6 +41,16 @@ export async function startHiddenRendererFrameCapture(
       maxWidth: 640,
       maxHeight: 480
     })
+    // Why: startScreencast does not mark the WebContents as captured, so a hidden renderer that is
+    // not already compositing (e.g. right after a navigation) never submits a frame to stream.
+    // captureScreenshot holds a stay-hidden capturer count, forcing a composited frame without
+    // showing the native window; its result proves the renderer has painted.
+    void cdp
+      .send('Page.captureScreenshot', { format: 'jpeg', quality: 1 })
+      .then(() => {
+        hasFrame = true
+      })
+      .catch(() => {})
     await waitForFirstFrame(() => hasFrame)
     return stop
   } catch (error) {

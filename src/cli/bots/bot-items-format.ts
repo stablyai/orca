@@ -1,5 +1,6 @@
 // `orca bot item`: one short line per write, one row per item, and an item with its activity.
 import {
+  botItemCommentImages,
   BOT_ITEM_STATUSES,
   isBotItemSnoozed,
   type BotItem,
@@ -13,6 +14,7 @@ export type BotItemWriteView = {
   eventId: string | null
   created?: boolean
   unchanged?: boolean
+  advice?: { codes: string[]; tip: string }
 }
 
 export type BotItemListView = {
@@ -28,6 +30,7 @@ export type BotItemShowView = { item: BotItem; events: BotItemEvent[]; nextCurso
 const STATUS_WORDS: Record<BotItemStatus, string> = {
   planned: 'Planned',
   working: 'In progress',
+  waiting: 'Waiting',
   needs_you: 'Needs you',
   done: 'Done',
   canceled: 'Canceled'
@@ -56,6 +59,9 @@ export function formatBotItemWrite(view: BotItemWriteView): string {
       ...(view.unchanged ? ['nothing changed'] : [])
     ].join(' · ')
   ]
+  if (view.advice) {
+    lines.push(view.advice.tip)
+  }
   return lines.join('\n')
 }
 
@@ -122,7 +128,8 @@ export function formatBotItemRow(item: BotItem, now: number): string {
   const until = snoozedUntil(item, now)
   const snoozed = until ? `\n    snoozed ${snoozedWords(until)}` : ''
   const question = item.question ? `\n    asks: ${item.question.text.split('\n')[0]}` : ''
-  return `${item.number}  ${STATUS_WORDS[item.status]}  ${what}  ${chatWords(item)}  ${age(item.updatedAt, now)}${snoozed}${question}`
+  const wait = item.wait ? `\n    waits on: ${item.wait.text}` : ''
+  return `${item.number}  ${STATUS_WORDS[item.status]}  ${what}  ${chatWords(item)}  ${age(item.updatedAt, now)}${snoozed}${question}${wait}`
 }
 
 export function formatBotItemList(view: BotItemListView, now: number): string {
@@ -151,6 +158,8 @@ function linkLine(link: BotItemLinkView): string {
     case 'url':
     case 'file':
       return `${link.kind}:${link.ref}`
+    case 'automation':
+      return `automation:${link.ref} · ${link.name ?? 'automation'} · ${link.active ? 'on' : 'gone or off'}`
   }
 }
 
@@ -165,8 +174,10 @@ function eventLine(event: BotItemEvent): string {
         return `edited ${Object.keys(typeof data.fields === 'object' && data.fields ? data.fields : {}).join(', ')}${data.note ? ` (${String(data.note)})` : ''}`
       case 'status':
         return `${statusWord(data.from)} → ${statusWord(data.to)}${data.note ? `: ${String(data.note)}` : ''}`
-      case 'commented':
-        return String(data.text ?? '')
+      case 'commented': {
+        const images = botItemCommentImages(data).map(({ path }) => path)
+        return `${String(data.text ?? '')}${images.length > 0 ? `\n    images: ${images.join(', ')}` : ''}`
+      }
       case 'linked':
         return `linked ${Array.isArray(data.links) ? data.links.join(', ') : ''}`
       case 'snoozed':
@@ -189,6 +200,7 @@ export function formatBotItemShow(view: BotItemShowView, now = Date.now()): stri
     ...(item.description ? [item.description] : []),
     ...(item.doneMeans ? [`Done means: ${item.doneMeans}`] : []),
     ...(item.question ? [`Asks your owner: ${item.question.text}`] : []),
+    ...(item.wait ? [`Waits on: ${item.wait.text}`] : []),
     ...(item.closeNote ? [`Closed: ${item.closeNote}`] : []),
     ...item.links.map((link) => `  ${linkLine(link)}`),
     '',
