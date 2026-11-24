@@ -9,7 +9,7 @@ import { closingChatActsFor } from './bots-items-close-acts-for'
 const host = {
   open: new Set<string>(),
   firsts: new Map<string, AgentJournalRenderItem>(),
-  reads: [] as string[],
+  reads: new Array<string>(),
   hasSession: (id: string) => host.open.has(id),
   journalReads: async (id: string) => {
     host.reads.push(id)
@@ -42,6 +42,7 @@ const KEPT = {
 }
 
 function closing(root: string, records: Record<string, BotRequestAsker[]> = {}) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the close reads only these two of the DB's methods.
   const db = {
     getBotConversationActsFor: (id: string) => (records[id] ? { actsFor: records[id] } : undefined),
     getBotRequest: () => undefined
