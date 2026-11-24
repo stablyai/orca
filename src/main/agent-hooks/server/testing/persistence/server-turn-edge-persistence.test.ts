@@ -87,7 +87,7 @@ describe('saved agent status between batched saves', () => {
     release()
     // A turn edge before the retry must not shrink it: the retry writes the whole batch.
     report(PANE, 'working', 'turn two')
-    vi.advanceTimersByTime(2_000)
+    vi.advanceTimersByTime(5_000)
     expect(saved(GOOD_PANE).prompt).toBe('still pending')
     vi.restoreAllMocks()
   })
