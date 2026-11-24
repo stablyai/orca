@@ -245,3 +245,24 @@ export async function saveWebClipboardImageAsTempFile(args?: {
   }
   return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
 }
+
+/** A web page's dragged `<img>`, held as a browser file a chat drop uploads; null when it is unreadable here. */
+export async function saveWebDroppedImage(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url, { credentials: 'omit' })
+    const blob = response.ok ? await response.blob() : null
+    if (!blob?.type.startsWith('image/')) {
+      return null
+    }
+    assertClipboardImageBlobWithinLimit(blob)
+    const png = await convertImageBlobToPng(blob)
+    return holdBrowserAttachmentFiles([
+      new File([png], agentSessionPastedImageName(Date.now(), createBrowserUuid()), {
+        type: 'image/png'
+      })
+    ])[0]
+  } catch {
+    // Cross-origin images without CORS cannot be read by a page.
+    return null
+  }
+}

@@ -31,9 +31,9 @@ async function discardBody(response: Response): Promise<void> {
   await response.body?.cancel().catch(() => {})
 }
 
-async function readCappedBody(response: Response): Promise<Uint8Array | null> {
+async function readCappedBody(response: Response, maxBytes: number): Promise<Uint8Array | null> {
   const declared = Number(response.headers.get('content-length'))
-  if (Number.isFinite(declared) && declared > REPO_ICON_FETCH_MAX_BYTES) {
+  if (Number.isFinite(declared) && declared > maxBytes) {
     await discardBody(response)
     return null
   }
@@ -49,7 +49,7 @@ async function readCappedBody(response: Response): Promise<Uint8Array | null> {
       break
     }
     total += value.byteLength
-    if (total > REPO_ICON_FETCH_MAX_BYTES) {
+    if (total > maxBytes) {
       await reader.cancel().catch(() => {})
       return null
     }
@@ -58,12 +58,13 @@ async function readCappedBody(response: Response): Promise<Uint8Array | null> {
   return Buffer.concat(chunks)
 }
 
-/** Fetch HTTPS without cookies, at most three HTTPS redirects and 64KiB under one deadline. Failure returns null for fallback, without retry. `allows` vets every hop. */
+/** Fetch HTTPS without cookies, at most three HTTPS redirects and `maxBytes` under one deadline. Failure returns null for fallback, without retry. `allows` vets every hop. */
 export async function fetchRemoteRepoIcon(
   rawUrl: string,
   fetch: RepoIconFetch,
   timeoutMs = REPO_ICON_FETCH_TIMEOUT_MS,
-  allows: (url: URL) => boolean = () => true
+  allows: (url: URL) => boolean = () => true,
+  maxBytes = REPO_ICON_FETCH_MAX_BYTES
 ): Promise<FetchedRepoIcon | null> {
   const signal = AbortSignal.timeout(timeoutMs)
   const allowed = (url: URL | null): URL | null => (url && allows(url) ? url : null)
@@ -77,7 +78,7 @@ export async function fetchRemoteRepoIcon(
           await discardBody(response)
           return null
         }
-        const bytes = await readCappedBody(response)
+        const bytes = await readCappedBody(response, maxBytes)
         return bytes ? { mimeType: mimeType.toLowerCase(), bytes } : null
       }
       const location = response.headers.get('location')

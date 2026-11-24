@@ -15,6 +15,10 @@ import {
   useOsFileDropOwner
 } from '@/lib/files/drop/use-os-file-drop-owner'
 import { getNativeFileDropRejectionMessage } from '@/lib/files/drop/native-file-drop-rejection-message'
+import { prepareOsFileDropPaths } from '@/lib/files/drop/os-file-drop-preparation'
+import { droppedWebImageUrl } from '@/lib/files/drop/web-image-drag'
+import { readBrowserAttachmentFile } from '@/lib/files/drop/browser-attachment-files'
+import type { PreparedDroppedPaths } from '../../../../../../shared/file-import/native-file-drop-preparation'
 import {
   makeNativeChatPaneFileDropHandlers,
   type NativeChatPaneDropClaim,
@@ -33,6 +37,33 @@ type RegisterPaneDropClaim = ((registration: NativeChatPaneDropRegistration) => 
 }
 
 const NativeChatPaneFileDropContext = createContext<RegisterPaneDropClaim | null>(null)
+
+async function deliverDroppedPaths(
+  prepared: PreparedDroppedPaths,
+  destination: CapturedNativeChatDrop | undefined
+): Promise<void> {
+  for (const failure of prepared.failures) {
+    const message = getNativeFileDropRejectionMessage(failure)
+    toast.error(message.title, { description: message.description })
+  }
+  await destination?.(prepared.paths)
+}
+
+/** Save a web page's dragged image, then attach it as a dropped file. */
+async function dropWebImage(html: string, destination: CapturedNativeChatDrop): Promise<void> {
+  const url = droppedWebImageUrl(html)
+  const path = url ? await window.api.ui.saveDroppedWebImage(url).catch(() => null) : null
+  // The web client holds the image as a browser file, which has no path to prepare.
+  const prepared: PreparedDroppedPaths = !path
+    ? {
+        paths: [],
+        failures: [{ target: 'rejected', reason: 'unresolved-paths', pathCount: 1, byteLength: 0 }]
+      }
+    : readBrowserAttachmentFile(path)
+      ? { paths: [path], failures: [] }
+      : await prepareOsFileDropPaths([path], destination.preparationConsumer ?? 'agent')
+  await deliverDroppedPaths(prepared, destination)
+}
 
 /** Publish the composer’s claim so the whole pane accepts its file drops. */
 export function useNativeChatPaneFileDropClaim(claim: NativeChatPaneDropClaim): void {
@@ -100,11 +131,7 @@ export function NativeChatPaneFileDropSurface({
     captureDestination: (event) => claimForTarget(event.target)?.captureExternalDrop(),
     onDrop: async (prepared, { destination }) => {
       setIsDragActive(false)
-      for (const failure of prepared.failures) {
-        const message = getNativeFileDropRejectionMessage(failure)
-        toast.error(message.title, { description: message.description })
-      }
-      await destination?.(prepared.paths)
+      await deliverDroppedPaths(prepared, destination)
     }
   })
   const register = useMemo<RegisterPaneDropClaim>(
@@ -125,7 +152,12 @@ export function NativeChatPaneFileDropSurface({
     () =>
       makeNativeChatPaneFileDropHandlers({
         getClaim: (event) => claimForTarget(event.target ?? null),
-        setDragActive: setIsDragActive
+        setDragActive: setIsDragActive,
+        dropWebImage: (html, claim) => {
+          dropWebImage(html, claim.captureExternalDrop()).catch((error: unknown) =>
+            console.error('Web image drop failed', error)
+          )
+        }
       }),
     [claimForTarget]
   )

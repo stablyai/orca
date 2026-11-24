@@ -37,6 +37,7 @@ import {
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
 import { uploadPasteToAgentSessionAttachments } from '../../ipc/agent-attachments/agent-session-attachment-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
+import { readDroppedWebImage } from './dropped-web-image'
 import { readClipboardImageSource } from './clipboard-image-source'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { readClipboardPlainText } from './clipboard-plain-text-read'
@@ -113,6 +114,7 @@ export function registerClipboardHandlers(
   ipcMain.removeHandler('clipboard:writeSelectionText')
   ipcMain.removeHandler('clipboard:writeImage')
   ipcMain.removeHandler('clipboard:writeFile')
+  ipcMain.removeHandler('clipboard:saveDroppedWebImage')
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
   ipcMain.removeHandler('clipboard:savePastedTextAsFile')
   ipcMain.removeHandler('clipboard:readImageThumbnail')
@@ -185,6 +187,12 @@ export function registerClipboardHandlers(
       return png ? saveClipboardImageBufferForTarget(png, args, handlerOptions) : null
     }
   )
+  // A browser drags an image out as HTML naming it, never as a file; save it so it drops like one.
+  ipcMain.handle('clipboard:saveDroppedWebImage', async (event, url: unknown) => {
+    assertTrustedClipboardSender(event)
+    const image = await readDroppedWebImage(url)
+    return image ? saveClipboardImageBufferAsTempFile(image) : null
+  })
   ipcMain.handle('clipboard:savePastedTextAsFile', (event, args: SavePastedTextAsFileArgs) => {
     assertTrustedClipboardSender(event)
     return savePastedTextAsFile(args, handlerOptions.localChatAttachmentStore)

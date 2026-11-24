@@ -14,6 +14,7 @@ import {
   clipboardHasImage,
   readClipboardImageThumbnail,
   saveWebClipboardImageAsTempFile,
+  saveWebDroppedImage,
   writeWebClipboardImage,
   writeWebSecretClipboardText,
   writeWebClipboardText
@@ -154,6 +155,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     saveClipboardImageAsTempFile: saveWebClipboardImageAsTempFile,
+    saveDroppedWebImage: saveWebDroppedImage,
     savePastedTextAsFile: savePastedTextAsWebAgentSessionAttachment,
     clipboardHasImage,
     // Browsers expose copied files only inside a paste event.

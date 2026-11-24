@@ -116,6 +116,8 @@ export const uiClipboardAndWindowControlsApi = {
     forNativeChatDraft?: boolean
     forStructuredChat?: boolean
   }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
+  saveDroppedWebImage: (url: string): Promise<string | null> =>
+    ipcRenderer.invoke('clipboard:saveDroppedWebImage', url),
   savePastedTextAsFile: (args: {
     text: string
     runtimeEnvironmentId?: string | null

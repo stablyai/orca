@@ -22,6 +22,8 @@ export type UiWindowApi = {
     /** Web client only: the paste event's picture, since insecure origins have no async clipboard. */
     eventImage?: Blob
   }) => Promise<string | null>
+  /** Saves an image dragged out of a web page (its `<img src>`) as a file a drop can attach; null when it is no image. */
+  saveDroppedWebImage: (url: string) => Promise<string | null>
   /** Saves paste text on the execution host so the agent can read it. */
   savePastedTextAsFile: (args: {
     text: string
