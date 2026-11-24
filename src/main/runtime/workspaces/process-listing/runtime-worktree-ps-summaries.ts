@@ -9,7 +9,7 @@ import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catal
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import { getWorkspaceRowKindFacts } from '../../../../shared/worktree/visibility/workspace-kinds'
-import { readWorkspaceReviewPR } from '../../../../shared/sidebar-list/feed-facts/workspace-review-facts'
+import { readWorkspacePR } from '../../../github/pull-requests/refresh/workspace-pr-read'
 import { withOwnerRepos } from '../../../../shared/sidebar-list/feed-facts/workspace-rows'
 import { UNCACHED_LINKED_PR_STATE } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
@@ -53,7 +53,6 @@ export function buildRuntimeWorktreePsSummaries(args: {
     }
     return hostMeta[worktree.id]
   }
-  const ghCache = args.store?.getGitHubCache?.()
   const crossStoreLineage = args.store?.getAllCrossStoreWorkspaceLineage?.() ?? {}
   const workspaceLineage = args.store?.getAllWorkspaceLineage?.()
   const resolvedWorktrees =
@@ -65,8 +64,10 @@ export function buildRuntimeWorktreePsSummaries(args: {
     args.store?.getRepos() ?? []
   )) {
     const meta = readMeta(worktree)
-    // Why: read the cache entry the desktop's PR lanes read; an uncached link keeps its badge as state 'unknown'.
-    const cachedPR = ghCache ? readWorkspaceReviewPR(worktree, repo, ghCache.pr) : null
+    // The PR the desktop's PR lanes read, a stale one read again in the background; an uncached
+    // link keeps its badge as state 'unknown'.
+    const cachedPR =
+      args.store?.getGitHubCache && repo ? readWorkspacePR(args.store, worktree, repo) : null
     const linkedPR: RuntimeWorktreePsSummary['linkedPR'] = cachedPR
       ? {
           number: cachedPR.number,

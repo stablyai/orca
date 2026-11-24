@@ -103,6 +103,26 @@ describe('a workspace PR read outside its row', () => {
     expect(withNewerCacheEntries({ [cacheKey]: newer }, {})).toEqual({})
   })
 
+  it('keeps a merged PR at the workspace head when a later branch read misses', () => {
+    const store = storeWith(pr('merged'), HOUR)
+    readWorkspacePR(store, worktree, repo)
+    broadcast!({
+      sequence: 3,
+      reason: 'visible',
+      aliases: [
+        {
+          cacheKey,
+          repoId: repo.id,
+          repoPath: repo.path,
+          branch: 'fix-list',
+          currentHeadOid: 'abc123'
+        }
+      ],
+      outcome: { kind: 'no-pr', fetchedAt: NOW + 1_000 }
+    })
+    expect(readWorkspacePR(store, worktree, repo)?.state).toBe('merged')
+  })
+
   it('writes nothing back for a repo no longer registered', () => {
     const store = storeWith(pr('open'), HOUR)
     readWorkspacePR(store, worktree, repo)

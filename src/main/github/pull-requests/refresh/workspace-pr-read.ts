@@ -8,8 +8,10 @@ import {
 } from '../../../../shared/execution-host/execution-host'
 import type { PRInfo } from '../../../../shared/github/pull-requests/pull-request-types'
 import type {
+  GitHubPRRefreshAlias,
   GitHubPRRefreshCandidate,
-  GitHubPRRefreshEvent
+  GitHubPRRefreshEvent,
+  PRRefreshOutcome
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { resolvePRBranchFallback } from '../../../../shared/github/pull-requests/refresh/pr-branch-fallback-rule'
 import { getGitHubPRCacheKeyCandidates } from '../../../../shared/github/cache/github-cache-key'
@@ -23,7 +25,11 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import { applyRegisteredRepoToPRRefreshCandidate } from '../../../ipc/source-control/github-repo-routing'
 import type { ProjectRuntimeResolutionStore } from '../../../workspaces/execution-host/local-project-runtime-resolution'
-import { hasStaleHead, refreshIntervalForCandidate } from './pr-refresh-candidate-policy'
+import {
+  hasStaleHead,
+  refreshIntervalForCandidate,
+  validateCandidate
+} from './pr-refresh-candidate-policy'
 import { addPRRefreshEventListener, enqueuePRRefresh } from './pr-refresh-coordinator'
 
 type PRCacheEntry = PersistedState['githubCache']['pr'][string] & {
@@ -39,7 +45,8 @@ export type WorkspacePRReadStore = ProjectRuntimeResolutionStore & {
 export type WorkspacePRReadWorktree = Pick<
   Worktree,
   'id' | 'branch' | 'head' | 'linkedPR' | 'suppressedGitHubPR' | 'linkedWorkItem' | 'linkedItems'
->
+> &
+  Partial<Pick<Worktree, 'isBare' | 'isArchived'>>
 
 // Below a shown row's reads (40), so this never promotes or outruns the sidebar's own work.
 const WORKSPACE_PR_READ_PRIORITY = 10
@@ -72,6 +79,8 @@ export function workspacePRRefreshCandidate(
     repoPath: repo.path,
     branch,
     worktreeId: worktree.id,
+    isBare: worktree.isBare,
+    isArchived: worktree.isArchived,
     currentHeadOid: worktree.head || null,
     linkedPRNumber,
     ...(linkedPRUrl ? { linkedPRUrl } : {}),
@@ -105,6 +114,24 @@ function needsRead(candidate: GitHubPRRefreshCandidate, now: number): boolean {
   return candidate.cachedFetchedAt == null || now - candidate.cachedFetchedAt >= interval
 }
 
+/** A branch read that missed after the merge deleted the branch keeps the merged PR at the
+ *  workspace's head, as the window's cache does. */
+function keepsMergedPRForFallbackMiss(
+  known: PRInfo | null | undefined,
+  outcome: Exclude<PRRefreshOutcome, { kind: 'upstream-error' }>,
+  alias: GitHubPRRefreshAlias
+): boolean {
+  const head = alias.currentHeadOid
+  return (
+    outcome.kind === 'no-pr' &&
+    alias.linkedPRNumber == null &&
+    known?.state === 'merged' &&
+    !outcome.rejectedPRUrls?.includes(known.url) &&
+    Boolean(head) &&
+    (known.headSha === head || known.confirmedContainedHeadOid === head)
+  )
+}
+
 // The store the refresh events write back to: the one this host's readers read.
 let writeBackStore: WorkspacePRReadStore | null = null
 
@@ -124,7 +151,8 @@ function writeBack(event: GitHubPRRefreshEvent): void {
     if (
       alias.repoId &&
       repoIds.has(alias.repoId) &&
-      (!known || known.fetchedAt < outcome.fetchedAt)
+      (!known || known.fetchedAt < outcome.fetchedAt) &&
+      !keepsMergedPRForFallbackMiss(known?.data, outcome, alias)
     ) {
       entries[alias.cacheKey] = {
         data: outcome.kind === 'found' ? outcome.pr : null,
@@ -159,7 +187,7 @@ export function readWorkspacePR(
     // A project runtime awaiting repair can't read; the row shows the cached PR too.
     return cached
   }
-  if (candidate && needsRead(candidate, Date.now())) {
+  if (candidate && !validateCandidate(candidate) && needsRead(candidate, Date.now())) {
     enqueuePRRefresh(candidate, 'swr', WORKSPACE_PR_READ_PRIORITY)
   }
   return cached
