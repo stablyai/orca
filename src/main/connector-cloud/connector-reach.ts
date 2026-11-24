@@ -19,6 +19,7 @@ export class ConnectorReach {
   private readonly backListeners = new Set<(why: ConnectorBack) => void>()
   // A `/poll` got no answer or a 5xx since the cloud last took one: its next taken poll ends that outage.
   private pollDown = false
+  private signInThisTurn = false
 
   constructor(private readonly onChanged: () => void) {}
 
@@ -28,6 +29,16 @@ export class ConnectorReach {
   }
 
   back(why: ConnectorBack): void {
+    // A sign-in that also switched the account says so twice in one turn: it is one step.
+    if (why === 'signedIn') {
+      if (this.signInThisTurn) {
+        return
+      }
+      this.signInThisTurn = true
+      queueMicrotask(() => {
+        this.signInThisTurn = false
+      })
+    }
     for (const listener of this.backListeners) {
       listener(why)
     }
