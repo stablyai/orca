@@ -191,13 +191,17 @@ export function restorePairedPortForwards(environmentId: string): Promise<void> 
     }
     const tunnel = tunnelFor(environmentId, hostKey)
     const moved = new Map<ForwardMapping, number>()
+    // Built once per pass; each forward may take back only its own saved port.
+    const reserved = reservedPairedPortForwardPorts()
     for (const forward of pending) {
-      const entry = await addOnFirstFreePort(tunnel, forward, true).catch((error: unknown) => {
+      reserved.delete(forward.localPort)
+      const entry = await addOnFirstFreePort(tunnel, forward, reserved).catch((error: unknown) => {
         if (!(error instanceof PortForwardTornDownError)) {
           console.warn(`[port-forwards] Could not restore forward :${forward.localPort}:`, error)
         }
         return null
       })
+      reserved.add(forward.localPort)
       // Cancelled: nothing is saved or announced, so the next restore starts from the saved ports.
       if (tunnel.isDisposed()) {
         return
@@ -224,7 +228,7 @@ export function restorePairedPortForwards(environmentId: string): Promise<void> 
 function addOnFirstFreePort(
   tunnel: PairedPortForwardTunnel,
   preferred: ForwardMapping & { label?: string },
-  restoringSaved = false
+  reserved: ReadonlySet<number> = reservedPairedPortForwardPorts()
 ): Promise<PortForwardEntry> {
   return addForwardOnFreeLocalPort({
     remotePort: preferred.remotePort,
@@ -240,9 +244,7 @@ function addOnFirstFreePort(
       ),
     remove: (id) => manager.removeForwardAndWait(id),
     holdsIpv6Loopback: holdsIpv6Loopback(process.platform),
-    reservedLocalPorts: reservedPairedPortForwardPorts(
-      restoringSaved ? preferred.localPort : undefined
-    ),
+    reservedLocalPorts: reserved,
     heldLocalPorts: () => manager.heldLocalPorts()
   })
 }
@@ -296,12 +298,10 @@ async function requireForwardableServer(environmentId: string): Promise<string> 
     throw new PortForwardTornDownError()
   }
   const hostKey = runtimeHostKeyFingerprint(connection.hostPublicKeyB64)
-  const saved = savedPairedPortForwards(environmentId)
-  if (saved && saved.hostKeyFingerprint !== hostKey) {
+  if ((savedPairedPortForwards(environmentId)?.hostKeyFingerprint ?? hostKey) !== hostKey) {
     forgetSavedPairedPortForwards(environmentId)
   }
-  const tunnel = pairedForwardTunnel(environmentId)
-  if (tunnel && tunnel.hostKeyFingerprint !== hostKey) {
+  if ((pairedForwardTunnel(environmentId)?.hostKeyFingerprint ?? hostKey) !== hostKey) {
     await stopForwards(environmentId)
   }
   return hostKey

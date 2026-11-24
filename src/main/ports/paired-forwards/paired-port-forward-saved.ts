@@ -35,18 +35,13 @@ export function savedPairedPortForwards(
   return raw === undefined ? null : readPairedServerSavedPortForwards(raw)
 }
 
-/** Every server's saved local ports, left for their own forwards even while that server is offline;
- *  `restoring` is the saved port a restore is taking back. */
-export function reservedPairedPortForwardPorts(restoring?: number): Set<number> {
-  const reserved = new Set(
+/** Every server's saved local ports, left for their own forwards even while that server is offline. */
+export function reservedPairedPortForwardPorts(): Set<number> {
+  return new Set(
     savedPairedPortForwardEnvironmentIds().flatMap(
       (id) => savedPairedPortForwards(id)?.forwards.map((forward) => forward.localPort) ?? []
     )
   )
-  if (restoring !== undefined) {
-    reserved.delete(restoring)
-  }
-  return reserved
 }
 
 export function forgetSavedPairedPortForwards(environmentId: string): void {
