@@ -22,6 +22,8 @@ export type GiteaReadOptions = {
   searchParams?: GiteaSearchParams
   timeoutMs?: number
   token?: string | null
+  // Only a single-resource read may treat 404 as "absent" when failures throw.
+  allowNotFound?: boolean
 }
 
 export type GiteaWriteResult<T> =
@@ -70,6 +72,11 @@ export async function resolveGiteaAuth(repo: GiteaRepoRef): Promise<GiteaResolve
   return { apiBaseUrl: repo.apiBaseUrl, token: null }
 }
 
+// A token never follows a redirect; anonymous reads keep following them like before.
+function redirectPolicy(token: string | null): RequestRedirect {
+  return token ? 'error' : 'follow'
+}
+
 function authHeaders(token: string | null): Record<string, string> {
   return token ? { Authorization: `token ${token}` } : {}
 }
@@ -103,12 +110,12 @@ export async function giteaGetJsonAtBase<T>(
   try {
     const response = await fetch(giteaApiUrl(baseUrl, path, options.searchParams), {
       headers: { Accept: 'application/json', ...authHeaders(options.token ?? null) },
-      redirect: 'error',
+      redirect: redirectPolicy(options.token ?? null),
       signal: controller.signal
     })
     if (!response.ok) {
       await cancelUnreadResponseBody(response)
-      if (throwOnFailure) {
+      if (throwOnFailure && !(options.allowNotFound && response.status === 404)) {
         throw new Error(`Gitea request failed: HTTP ${response.status}`)
       }
       return null
@@ -153,8 +160,8 @@ export async function giteaRepoGetText(
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
   try {
     const response = await fetch(giteaApiUrl(auth.apiBaseUrl, path, options.searchParams), {
-      headers: auth.token ? { Authorization: `token ${auth.token}` } : {},
-      redirect: 'error',
+      headers: authHeaders(auth.token),
+      redirect: redirectPolicy(auth.token),
       signal: controller.signal
     })
     if (!response.ok) {

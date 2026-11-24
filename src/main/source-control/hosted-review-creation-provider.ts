@@ -127,7 +127,10 @@ export async function isProviderAuthenticated(
     ).isAzureDevOpsReviewCreationAuthenticated()
   }
   if (provider === 'gitea') {
-    return (await import('../gitea/pull-request-creation')).isGiteaReviewCreationAuthenticated()
+    return (await import('../gitea/pull-request-creation')).isGiteaReviewCreationAuthenticated(
+      repoPath,
+      hostedReviewSshConnectionId(executionHostId)
+    )
   }
   if (provider === 'bitbucket') {
     // Bitbucket authentication must not fall through to GitHub login requirements.
