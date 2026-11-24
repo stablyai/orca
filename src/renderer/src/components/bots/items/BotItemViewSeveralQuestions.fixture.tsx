@@ -2,6 +2,7 @@
 // typed in the comment box held until Send posts them as one comment.
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
+import { stubBots } from '../../../component-fixtures/fixture-bots'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import { botRefKey } from '@/lib/bot-hosts'
 import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
@@ -9,6 +10,10 @@ import { BotItemBody } from './BotItemView'
 import { botItemHeldAnswersScope } from './bot-item-held-answers'
 
 const asker = { kind: 'bot' as const, botId: fixtureCos.id, chatId: 'chat-home' }
+
+function setupFixtureBot(): void {
+  stubBots([fixtureCos])
+}
 
 const SEVERAL = {
   context: [
@@ -83,6 +88,7 @@ const severalView = {
 // An ask of four questions, two picked: the picked lines fold, the rest stay open, and Send reads 2/4.
 export const severalQuestions = defineFixture({
   width: 900,
+  setup: setupFixtureBot,
   render: () => (
     <div className="flex h-[640px] flex-col bg-sidebar">
       <BotItemBody
@@ -179,7 +185,10 @@ async function typeAndEnter(
 // Nothing posts until Send.
 export const severalQuestionsTypedAnswer = defineFixture({
   width: 900,
-  setup: () => clearBox(typedItem.uid),
+  setup: () => {
+    setupFixtureBot()
+    clearBox(typedItem.uid)
+  },
   render: () => (
     <div className="flex h-[640px] flex-col bg-sidebar">
       <BotItemBody
@@ -200,7 +209,10 @@ const reopenedView = { ...severalView, item: reopenedItem }
 // The held typed answer reopened: its words show as the pencil chip, which puts them back in the box.
 export const severalQuestionsTypedAnswerReopened = defineFixture({
   width: 900,
-  setup: () => clearBox(reopenedItem.uid),
+  setup: () => {
+    setupFixtureBot()
+    clearBox(reopenedItem.uid)
+  },
   render: () => (
     <div className="flex h-[640px] flex-col bg-sidebar">
       <BotItemBody
@@ -234,12 +246,16 @@ const onItsWayView = { ...severalView, item: onItsWayItem }
 export const severalQuestionsTypedAnswerOnItsWay = defineFixture({
   width: 900,
   setup: () => {
+    setupFixtureBot()
     clearBox(onItsWayItem.uid, OTHERS_HELD)
-    const runtime: unknown = window.api.runtime
+    const runtime = window.api.runtime
     Reflect.set(window.api, 'runtime', {
-      ...(typeof runtime === 'object' ? runtime : {}),
+      ...runtime,
       // The host is still taking the comment.
-      call: () => new Promise(() => {})
+      call: (request: Parameters<typeof runtime.call>[0]) =>
+        request.method === 'bots.items.owner.comment'
+          ? new Promise(() => {})
+          : runtime.call(request)
     })
   },
   render: () => (
@@ -290,6 +306,7 @@ const readView = {
 // "Question → answer", and the box names the next open line.
 export const severalQuestionsTypedAnswerRead = defineFixture({
   width: 900,
+  setup: setupFixtureBot,
   render: () => (
     <div className="flex h-[640px] flex-col bg-sidebar">
       <BotItemBody

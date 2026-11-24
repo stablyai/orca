@@ -101,15 +101,14 @@ function steps(uid: string, own = asking, shown = item) {
     posted.push({ text, paths, questionId, plain, skipped, intent })
   }
   // Its own item, so answers held on this device by another case don't carry over.
+  const initialProps: {
+    pending: readonly BotItemPendingComment[]
+    events?: readonly BotItemEvent[]
+  } = { pending: NO_PENDING }
   const hook = renderHook(
-    ({
-      pending,
-      events = [own]
-    }: {
-      pending: readonly BotItemPendingComment[]
-      events?: readonly BotItemEvent[]
-    }) => useBotItemQuestionSteps(bot, { ...shown, uid }, events, send, pending),
-    { initialProps: { pending: NO_PENDING } }
+    ({ pending, events = [own] }) =>
+      useBotItemQuestionSteps(bot, { ...shown, uid }, events, send, pending),
+    { initialProps }
   )
   return { hook, posted }
 }
