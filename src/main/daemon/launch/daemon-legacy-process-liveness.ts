@@ -10,38 +10,39 @@ export function legacyDaemonProcessMayBeAlive(
   protocolVersion: number
 ): boolean {
   try {
-    return pidFileNamesExistingProcess(
+    const parsed = parseDaemonPidFile(
       readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
     )
+    if (!parsed) {
+      return false
+    }
+    process.kill(parsed.pid, 0)
+    return true
   } catch (error) {
-    return mayBeAliveAfter(error)
+    // EPERM: the process exists under another user; only a missing pid file or ESRCH proves it gone.
+    return hasErrorCode(error, 'EPERM')
   }
 }
 
-/** The same answer without blocking the thread: for callers on the main process's hot paths. */
-export async function legacyDaemonProcessMayBeAliveAsync(
+/**
+ * Exit proof's stricter, non-blocking form: it reads false as "no daemon here", so only a missing pid
+ * file (ENOENT) or a missing process (ESRCH) proves the daemon gone. An unreadable or unparsable record
+ * may still name a live daemon. (The sync form stays lenient: discovery deletes such records.)
+ */
+export async function legacyDaemonMayStillRun(
   runtimeDir: string,
   protocolVersion: number
 ): Promise<boolean> {
   try {
-    return pidFileNamesExistingProcess(
+    const parsed = parseDaemonPidFile(
       await readFile(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
     )
+    if (!parsed) {
+      return true
+    }
+    process.kill(parsed.pid, 0)
+    return true
   } catch (error) {
-    return mayBeAliveAfter(error)
+    return !(hasErrorCode(error, 'ENOENT') || hasErrorCode(error, 'ESRCH'))
   }
-}
-
-function pidFileNamesExistingProcess(content: string): boolean {
-  const parsed = parseDaemonPidFile(content)
-  if (!parsed) {
-    return false
-  }
-  process.kill(parsed.pid, 0)
-  return true
-}
-
-function mayBeAliveAfter(error: unknown): boolean {
-  // EPERM: the process exists under another user; only a missing pid file or ESRCH proves it gone.
-  return hasErrorCode(error, 'EPERM')
 }

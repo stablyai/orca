@@ -2,7 +2,7 @@ import { readdir } from 'node:fs/promises'
 import { isHoldingForNewerProtocolDaemon } from './daemon-newer-protocol-hold'
 import {
   legacyDaemonProcessMayBeAlive,
-  legacyDaemonProcessMayBeAliveAsync
+  legacyDaemonMayStillRun
 } from '../../launch/daemon-legacy-process-liveness'
 import type { DaemonClient } from '../../transport/client/daemon-client'
 import type { HistoryReader } from '../../history/restoration/history-reader'
@@ -63,7 +63,7 @@ export async function mayUnaskedDaemonRunSessions(
     .map((name) => Number(LEGACY_PID_FILE.exec(name)?.[1]))
     .filter((version) => older.has(version) && !asked.has(version))
   const alive = await Promise.all(
-    unasked.map((version) => legacyDaemonProcessMayBeAliveAsync(runtimeDir, version))
+    unasked.map((version) => legacyDaemonMayStillRun(runtimeDir, version))
   )
   return alive.some(Boolean)
 }

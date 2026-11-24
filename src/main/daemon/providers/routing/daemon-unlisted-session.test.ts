@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -11,11 +12,11 @@ describe('daemons outside the inventory', () => {
       rmSync(dir, { recursive: true, force: true })
     }
   })
-  function runtimeDir(pidFiles: Record<string, number>): string {
+  function runtimeDir(pidFiles: Record<string, number | string>): string {
     const dir = mkdtempSync(join(tmpdir(), 'orca-unasked-daemon-'))
     dirs.push(dir)
     for (const [name, pid] of Object.entries(pidFiles)) {
-      writeFileSync(join(dir, name), JSON.stringify({ pid }))
+      writeFileSync(join(dir, name), typeof pid === 'string' ? pid : JSON.stringify({ pid }))
     }
     return dir
   }
@@ -31,6 +32,23 @@ describe('daemons outside the inventory', () => {
     await expect(
       mayUnaskedDaemonRunSessions(runtimeDir({ 'daemon-vx.pid': process.pid }), new Set())
     ).resolves.toBe(false)
+  })
+
+  it('reads a pid file naming a process that has exited as no daemon', async () => {
+    const exited = spawnSync(process.execPath, ['-e', '']).pid
+    await expect(
+      mayUnaskedDaemonRunSessions(runtimeDir({ 'daemon-v5.pid': exited }), new Set())
+    ).resolves.toBe(false)
+  })
+
+  it('treats an unparsable or unreadable pid file as a daemon that may still run', async () => {
+    await expect(
+      mayUnaskedDaemonRunSessions(runtimeDir({ 'daemon-v5.pid': 'not a pid record' }), new Set())
+    ).resolves.toBe(true)
+    const dir = runtimeDir({})
+    // A directory where the pid file should be: reading it fails with EISDIR, not ENOENT.
+    mkdirSync(join(dir, 'daemon-v5.pid'))
+    await expect(mayUnaskedDaemonRunSessions(dir, new Set())).resolves.toBe(true)
   })
 
   it('treats an unreadable runtime directory as possibly owned', async () => {
