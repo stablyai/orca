@@ -74,7 +74,8 @@ export function AgentRowMenuItems({
     const current = resolveCurrent()
     const state = useAppStore.getState()
     const renameId =
-      current && getAgentRowMenuActions(current, isActiveWorkspaceForCard(state, model)).rename
+      current &&
+      getAgentRowMenuActions(state, current, isActiveWorkspaceForCard(state, model)).rename
         ? getAgentRowRenameListenerId(current)
         : null
     if (!renameId) {
@@ -90,7 +91,7 @@ export function AgentRowMenuItems({
   const beforeCopy = (): boolean => {
     const current = resolveCurrent()
     menu.markAgentSelect('restore')
-    if (!current || !getAgentRowMenuActions(current, false).copyId) {
+    if (!current || !getAgentRowMenuActions(useAppStore.getState(), current, false).copyId) {
       notifyGone()
       return false
     }
@@ -99,7 +100,7 @@ export function AgentRowMenuItems({
 
   const beforeFork = (): boolean => {
     const current = resolveCurrent()
-    if (!current || current.kind !== 'chat') {
+    if (!current || !getAgentRowMenuActions(useAppStore.getState(), current, false).fork) {
       menu.closeAgentMenu('restore')
       notifyGone()
       return false
@@ -126,6 +127,7 @@ export function AgentRowMenuItems({
           leadingSeparator={false}
           menuKind="dropdown"
           beforeRun={beforeFork}
+          requireLocalHost
           onComplete={() => menu.closeAgentMenu('agent-action', generation)}
         />
       ) : null}

@@ -78,17 +78,18 @@ function renderAgentCard(mode: 'compact' | 'full') {
 }
 
 it.each(['compact', 'full'] as const)(
-  'keeps Delete and its shortcut on the card header after opening the menu from a %s agent row',
+  'keeps Delete and its shortcut on the card header after opening the agent menu from a %s agent row',
   (mode) => {
     const { container } = renderAgentCard(mode)
     const agentRowChild = container.querySelector('.agent-disclosure-row span')
     expect(agentRowChild).not.toBeNull()
     fireEvent.contextMenu(agentRowChild!)
     const rowMenu = within(screen.getByRole('menu'))
+    expect(rowMenu.getByRole('menuitem', { name: 'Open' })).not.toBeNull()
+    expect(rowMenu.getByRole('menuitem', { name: /^Workspace/ })).not.toBeNull()
     expect(
       rowMenu.queryByRole('menuitem', { name: /^(Delet|Remove (Workspace|Project))/ })
     ).toBeNull()
-    const rowSeparators = rowMenu.getAllByRole('separator').length
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
 
     const title = container.querySelector('[data-worktree-title-inline-rename]')
@@ -99,7 +100,6 @@ it.each(['compact', 'full'] as const)(
     expect(deleteItem.querySelector('[data-slot="dropdown-menu-shortcut"]')?.textContent).toMatch(
       /^(⌘⇧⌫|Ctrl\+⇧\+Backspace)$/
     )
-    expect(headerMenu.getAllByRole('separator')).toHaveLength(rowSeparators + 1)
   }
 )
 

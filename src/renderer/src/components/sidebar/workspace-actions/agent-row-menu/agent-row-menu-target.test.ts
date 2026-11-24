@@ -15,6 +15,7 @@ it('rejects a replacement agent in the same terminal pane', () => {
     chatAgent: null,
     ptyId: 'pty-1',
     providerSessionId: 'session-1',
+    terminalHandle: null,
     singleLeaf: true
   }
 
@@ -23,4 +24,29 @@ it('rejects a replacement agent in the same terminal pane', () => {
   expect(isSameAgentRowMenuTarget(captured, { ...captured, providerSessionId: 'session-2' })).toBe(
     false
   )
+})
+
+it('rejects a status row whose paired terminal handle changed', () => {
+  const captured: AgentRowMenuTarget = {
+    worktreeId: 'sample::/fixture',
+    cardHostId: 'runtime:env-1',
+    paneKey: 'tab:11111111-1111-4111-8111-111111111111',
+    tabId: 'tab',
+    kind: 'status',
+    executionHostId: 'runtime:env-1',
+    leafId: '11111111-1111-4111-8111-111111111111',
+    unifiedTabId: null,
+    chatSessionId: null,
+    chatAgent: null,
+    ptyId: null,
+    providerSessionId: null,
+    terminalHandle: 'handle-1',
+    singleLeaf: false
+  }
+
+  expect(isSameAgentRowMenuTarget(captured, { ...captured })).toBe(true)
+  expect(isSameAgentRowMenuTarget(captured, { ...captured, terminalHandle: 'handle-2' })).toBe(
+    false
+  )
+  expect(isSameAgentRowMenuTarget({ ...captured, terminalHandle: null }, captured)).toBe(false)
 })

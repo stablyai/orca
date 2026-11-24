@@ -1,7 +1,10 @@
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
-import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
+import {
+  captureWebSessionIntentOwner,
+  isWebRuntimeSessionActive
+} from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/browser/ownership/remote-browser-tab-ownership'
 import { resolveOwnerOrLocal } from '@/lib/workspace/ownership/worktree-runtime-owner'
@@ -69,7 +72,9 @@ export function activateTerminalTabOnOwner(
     tabId,
     environmentId,
     leafId,
-    expectedPairingRevision,
+    // Bind to the pairing at the gesture: activation awaits a lazy import before its RPC.
+    expectedPairingRevision:
+      expectedPairingRevision ?? captureWebSessionIntentOwner(environmentId).pairingRevision,
     expectedCurrentLocalTabId: resolveWebSessionVisibleTabId(state, worktreeId)
   })
 }

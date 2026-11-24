@@ -10,18 +10,13 @@ import { selectAiVaultPanelWorkspace } from '../scope/ai-vault-panel-workspace'
 import type { AiVaultSessionListRequest } from './ai-vault-session-list-request'
 import { readAiVaultViewOptions } from '../scope/ai-vault-view-options-persistence'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 /** Derive the active workspace request using the same store selectors as the panel hooks. */
 export function resolveAiVaultPanelSessionListRequest(
   state: AppState,
-  workspaceId: string,
-  executionHostId?: ExecutionHostId
+  workspaceId: string
 ): AiVaultSessionListRequest {
-  const { worktree, repo } = selectAiVaultPanelWorkspace(state, {
-    worktreeId: workspaceId,
-    executionHostId
-  })
+  const { worktree, repo } = selectAiVaultPanelWorkspace(state, { worktreeId: workspaceId })
   const allWorktrees = getIndexedAllWorktrees(selectWorktreesByRepo(state))
   const projectHostSetupProjection = getProjectHostSetupProjectionFromState(state)
   const { activeProjectKey } = buildAiVaultProjectContext({
@@ -38,12 +33,10 @@ export function resolveAiVaultPanelSessionListRequest(
       activeProjectKey,
       projectHostSetupProjection
     }),
-    executionHostScope:
-      executionHostId ??
-      resolveAiVaultHostScopeDefaults(
-        getAiVaultResumeWorkspaceExecutionHostId(state, workspaceId),
-        workspaceId
-      ).defaultExecutionHostScope,
+    executionHostScope: resolveAiVaultHostScopeDefaults(
+      getAiVaultResumeWorkspaceExecutionHostId(state, workspaceId),
+      workspaceId
+    ).defaultExecutionHostScope,
     sessionLimit: readAiVaultViewOptions().sessionLimit
   }
 }

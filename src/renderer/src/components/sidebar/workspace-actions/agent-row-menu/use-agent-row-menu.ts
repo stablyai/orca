@@ -113,7 +113,11 @@ export function useAgentRowMenu(model: WorktreeContextMenuModel) {
           ? {
               generation: generationRef.current,
               target,
-              actions: getAgentRowMenuActions(target, isActiveWorkspaceForCard(state, current)),
+              actions: getAgentRowMenuActions(
+                state,
+                target,
+                isActiveWorkspaceForCard(state, current)
+              ),
               label: agent.label,
               row: agent.row,
               element: agent.element,

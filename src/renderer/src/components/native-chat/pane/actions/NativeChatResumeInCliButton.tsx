@@ -4,7 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { useTranslate } from '@/i18n/use-translate'
 import { AI_VAULT_AGENTS } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
@@ -24,21 +27,29 @@ function createExecutionHostSelector(
   sessionId: string,
   agent: NativeChatTabSession['agent']
 ) {
-  let inputs: unknown[] = []
+  let worktrees: AppState['worktreesByRepo'] | undefined
+  let folders: AppState['folderWorkspaces'] | undefined
+  let groups: AppState['projectGroups'] | undefined
+  let repos: AppState['repos'] | undefined
   let scope: NativeChatCliForkIdentity['executionHostScope'] | null = null
   return (state: AppState) => {
-    const next = [
-      state.unifiedTabsByWorktree[worktreeId],
-      state.floatingWorkspacePath,
-      ...structuredAgentSessionOwnerInputs(state)
-    ]
-    if (next.some((value, index) => !Object.is(value, inputs[index]))) {
+    const nextWorktrees = selectWorktreesByRepo(state)
+    const nextFolders = selectFolderWorkspaces(state)
+    if (
+      worktrees !== nextWorktrees ||
+      folders !== nextFolders ||
+      groups !== state.projectGroups ||
+      repos !== state.repos
+    ) {
       scope =
         resolveNativeChatCliForkIdentity(state, {
           tab: { id: tabId, worktreeId },
           nativeChat: { sessionId, agent }
         })?.executionHostScope ?? null
-      inputs = next
+      worktrees = nextWorktrees
+      folders = nextFolders
+      groups = state.projectGroups
+      repos = state.repos
     }
     return scope
   }

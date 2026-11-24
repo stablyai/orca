@@ -1,6 +1,7 @@
 import type { AppState } from '@/store/types'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import {
+  LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
@@ -18,6 +19,7 @@ import { hasTerminalTabRenameListener } from '@/components/tab-bar/terminal-tabs
 import { resolveUnmirroredAgentTerminalOwner } from '@/lib/workspace/tabs/terminal-tab-owner-activation'
 import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-worktree-selection'
 import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal/removal-visibility'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 
 export type AgentRowMenuRowRef = {
   worktreeId: string
@@ -37,6 +39,8 @@ export type AgentRowMenuTarget = AgentRowMenuRowRef & {
   chatAgent: AgentType | null
   ptyId: string | null
   providerSessionId: string | null
+  /** A paired host's handle for a not-yet-mirrored terminal; a new handle is a new agent. */
+  terminalHandle: string | null
   singleLeaf: boolean
 }
 
@@ -78,6 +82,7 @@ export function resolveAgentRowMenuTarget(
       chatAgent: chat.agentSessionAgent ?? null,
       ptyId: null,
       providerSessionId,
+      terminalHandle: null,
       singleLeaf: true
     }
   }
@@ -96,7 +101,8 @@ export function resolveAgentRowMenuTarget(
     chatSessionId: null,
     chatAgent: null,
     ptyId,
-    providerSessionId
+    providerSessionId,
+    terminalHandle: null
   }
   if (state.tabsByWorktree[ref.worktreeId]?.some((tab) => tab.id === ref.tabId)) {
     const leaves = collectLeafIds(layout?.root)
@@ -139,6 +145,7 @@ export function resolveAgentRowMenuTarget(
         ...base,
         kind: 'status',
         executionHostId: environmentId ? toRuntimeExecutionHostId(environmentId) : null,
+        terminalHandle: status.terminalHandle ?? null,
         unifiedTabId: null,
         singleLeaf: false
       }
@@ -159,7 +166,8 @@ export function isSameAgentRowMenuTarget(
     current.chatSessionId === captured.chatSessionId &&
     current.chatAgent === captured.chatAgent &&
     current.ptyId === captured.ptyId &&
-    current.providerSessionId === captured.providerSessionId
+    current.providerSessionId === captured.providerSessionId &&
+    current.terminalHandle === captured.terminalHandle
   )
 }
 
@@ -182,7 +190,19 @@ export function getAgentRowRenameListenerId(target: AgentRowMenuTarget): string 
       : null
 }
 
+/** Fork prepares and launches by workspace ID, so the row offers it only when both ends are this computer. */
+function canForkOnThisComputer(state: AppState, target: AgentRowMenuTarget): boolean {
+  return (
+    target.kind === 'chat' &&
+    target.chatAgent !== null &&
+    target.executionHostId === LOCAL_EXECUTION_HOST_ID &&
+    (!target.cardHostId || target.cardHostId === LOCAL_EXECUTION_HOST_ID) &&
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, target.worktreeId) === null
+  )
+}
+
 export function getAgentRowMenuActions(
+  state: AppState,
   target: AgentRowMenuTarget,
   activeHere: boolean
 ): AgentRowMenuActions {
@@ -193,6 +213,6 @@ export function getAgentRowMenuActions(
     // Rename events are synchronous, so only a tab already mounted in the active workspace can take one.
     rename: tabLevel && activeHere && renameId !== null && hasTerminalTabRenameListener(renameId),
     copyId: tabLevel && target.unifiedTabId !== null,
-    fork: target.kind === 'chat' && target.chatAgent !== null
+    fork: canForkOnThisComputer(state, target)
   }
 }
