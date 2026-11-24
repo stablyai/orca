@@ -1,4 +1,5 @@
 import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-protocol'
+import { ProviderRelayAnsweredRequests } from './provider-relay-answered-requests'
 import {
   leadingJsonEnvelope,
   type LeadingProperty
@@ -62,9 +63,8 @@ function mayCarryKey(line: string): boolean {
 /** A held request and the record it was when its answer was seen. */
 type AnsweredRequest = { key: string; record: ProviderRelayRecord }
 
-function controlId(value: unknown): string | null {
-  return typeof value === 'string' ? `c:${value}` : null
-}
+const controlId = (value: unknown): string | null =>
+  typeof value === 'string' ? `c:${value}` : null
 
 /**
  * Agent→client requests still unanswered (JSON-RPC server requests, Claude `control_request`s),
@@ -83,6 +83,13 @@ export class ProviderRelayPendingRequests {
   workMethods: ReadonlySet<string> = new Set()
   /** Those requests still unanswered, by id. */
   readonly working = new Set<string>()
+
+  /** Spooled requests already answered, resolved or replaced, so a replay never asks again. */
+  readonly answered: ProviderRelayAnsweredRequests
+
+  constructor(ackedSeq: () => number = () => 0) {
+    this.answered = new ProviderRelayAnsweredRequests(ackedSeq)
+  }
 
   get size(): number {
     return this.pending.size
@@ -115,6 +122,7 @@ export class ProviderRelayPendingRequests {
     if (held) {
       this.pending.delete(key)
       this.pendingChars -= held.line.length
+      this.answered.add(held.seq)
     }
   }
 

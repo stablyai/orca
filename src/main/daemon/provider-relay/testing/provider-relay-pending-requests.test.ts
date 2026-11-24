@@ -81,6 +81,46 @@ describe('provider relay pending requests', () => {
     await relay.dispose()
   })
 
+  it('never replays a request the client already answered, while an unanswered one is still asked', async () => {
+    const { managed, stdout } = fakeManaged()
+    const relay = new ProviderRelay({
+      relayId: 'r-5',
+      chatKey: 'chat',
+      managed,
+      spoolPath: join(dir, 'r-5.ndjson'),
+      onSettled: () => {},
+      onDetached: () => {}
+    })
+    await relay.attach('app-1', { socket: new PassThrough() }, 0)
+    stdout.write(
+      '{"id":0,"method":"item/commandExecution/requestApproval","params":{"n":"answered-rpc"}}\n'
+    )
+    stdout.write(
+      '{"type":"control_request","request_id":"p1","request":{"n":"answered-control"}}\n'
+    )
+    stdout.write('{"id":1,"method":"session/request_permission","params":{"n":"still-owed"}}\n')
+    stdout.write('{"method":"item/agentMessage/delta","params":{"n":"plain-line"}}\n')
+    await tick()
+    relay.write('{"id":0,"result":{"decision":"accept"}}\n')
+    relay.write('{"type":"control_response","response":{"subtype":"success","request_id":"p1"}}\n')
+    await vi.waitFor(() => expect(relay.info().pendingCount).toBe(1))
+    // Quit before any ack: the whole spool replays to the next app.
+    await relay.detach()
+
+    const socket = new PassThrough()
+    const sent: Buffer[] = []
+    socket.on('data', (chunk: Buffer) => sent.push(chunk))
+    const reattached = await relay.attach('app-2', { socket }, 0)
+    await tick()
+    const replay = Buffer.concat(sent).toString()
+    expect(reattached.pending).toEqual([3])
+    expect(replay).not.toContain('answered-rpc')
+    expect(replay).not.toContain('answered-control')
+    expect(replay).toContain('still-owed')
+    expect(replay).toContain('plain-line')
+    await relay.dispose()
+  })
+
   it('pauses an agent owed 256 answers, and still drains its tail once it exits', async () => {
     const { managed, stdout, exit } = fakeManaged()
     const relay = new ProviderRelay({

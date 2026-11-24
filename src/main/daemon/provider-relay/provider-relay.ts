@@ -36,7 +36,7 @@ export class ProviderRelay {
   readonly relayId: string
   readonly chatKey: string
   readonly spawnedAtMs = Date.now()
-  readonly pending = new ProviderRelayPendingRequests()
+  readonly pending = new ProviderRelayPendingRequests(() => this.spool.ackedSeq)
   private readonly spool: ProviderRelaySpool
   private attachment: ProviderRelayAttachment | null = null
   private readonly lines: ProviderRelayLineReader
@@ -320,7 +320,7 @@ export class ProviderRelay {
   }
 
   private deliver(record: ProviderRelayRecord): void {
-    this.attachment?.sendLine('relayData', record)
+    this.attachment?.sendLine('relayData', this.pending.answered.replayed(record))
   }
 
   private announceExitIfDone(): void {
