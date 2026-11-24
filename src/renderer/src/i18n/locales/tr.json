@@ -30709,7 +30709,7 @@
   "crashReport": {
     "freeze": {
       "includeRedacted": "Kaydedilmiş donma raporunu ve son günlükleri ekle (maskelenmiş)",
-      "uncheckAttachments": "Uncheck \"Include the saved freeze report and recent logs (redacted)\" and try again, or copy the details.",
+      "uncheckAttachments": "\"Kaydedilmiş donma raporunu ve son günlükleri ekle (maskelenmiş)\" seçeneğinin işaretini kaldırıp tekrar deneyin veya ayrıntıları kopyalayın.",
       "attachmentsOmitted": "Kaydedilen donma raporu ve tanılama günlükleri eklenmedi: {{value0}}",
       "description": "Ne olduğunu anlamamıza yardımcı olmak için kaydedilen donma raporunu gönderin.",
       "notSent": "Donma raporu gönderilmedi",

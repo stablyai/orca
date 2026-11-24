@@ -272,7 +272,7 @@
       "certificateChallengeChanged": "Sertifika isteği değişti. Sayfayı yeniden deneyin ve yeni uyarıyı inceleyin.",
       "certificateProceedFailed": "Orca bu sertifika isteğini onaylayamadı. Sayfayı yeniden deneyin ve tekrar deneyin.",
       "certificateChallengeUnavailable": "Bu sertifika isteği artık kullanılamıyor. Yeni bir istek için sayfayı yeniden deneyin.",
-      "certificateProceedNeedsHostUpdate": "Telefonunuzdan sertifika uyarılarını kabul etmek için bu cihazdaki Orca’yı güncelleyin."
+      "certificateProceedNeedsHostUpdate": "Telefonunuzdan sertifika uyarılarını kabul etmek için ana bilgisayardaki Orca’yı güncelleyin."
     },
     "stream": {
       "updateApp": "Tarayıcı sekmelerini burada görüntülemek için Orca uygulamasını güncelleyin.",
