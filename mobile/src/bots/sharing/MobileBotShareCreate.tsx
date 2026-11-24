@@ -33,16 +33,21 @@ export type ShareCreateDraft = {
   name: string | null
   /** A shuffled mascot; null keeps the shared picture. */
   avatar: string | null
+  /** Shown and sent while the link has no picture or mascot to keep, so the host never picks one unseen. */
+  blankMascot: string
   permission: SharedBotPermission
   /** Create is out; kept here too, so a picker opened meanwhile can't send a second one. */
   creating: boolean
 }
 
-export const EMPTY_SHARE_CREATE_DRAFT: ShareCreateDraft = {
-  name: null,
-  avatar: null,
-  permission: 'ask',
-  creating: false
+export function newShareCreateDraft(): ShareCreateDraft {
+  return {
+    name: null,
+    avatar: null,
+    blankMascot: randomMascotAvatar(null),
+    permission: 'ask',
+    creating: false
+  }
 }
 export function MobileBotShareCreate(props: {
   review: PhoneShareReview
@@ -77,7 +82,13 @@ export function MobileBotShareCreate(props: {
       props.bots.map((bot) => bot.name)
     )
   const sharedMascot = review.bot.avatar?.mascot
-  // The shared picture until the owner shuffles; Create writes a shared image itself.
+  const sharedMascotAvatar =
+    sharedMascot && isBotMascotId(sharedMascot) ? mascotAvatar(sharedMascot) : null
+  // The shared picture until the owner shuffles to another mascot; shuffling back to the shared one
+  // keeps the shared picture, an uploaded image included.
+  const chosen =
+    avatar ?? (review.avatarDataUrl || sharedMascotAvatar ? null : props.draft.blankMascot)
+  const keepsShared = !chosen || chosen === sharedMascotAvatar
   const { creating } = props.draft
   const setCreating = (next: boolean) => props.setDraft((draft) => ({ ...draft, creating: next }))
   const [error, setError] = useState<string | null>(null)
@@ -90,13 +101,8 @@ export function MobileBotShareCreate(props: {
     }
     setCreating(true)
     setError(null)
-    const picked =
-      avatar ??
-      (review.avatarDataUrl
-        ? null
-        : sharedMascot && isBotMascotId(sharedMascot)
-          ? mascotAvatar(sharedMascot)
-          : null)
+    // Create writes a shared image itself; the shared mascot gets its shared look from the host.
+    const picked = keepsShared ? (review.avatarDataUrl ? null : sharedMascotAvatar) : chosen
     try {
       const { bot } = botCreate.interpret(
         await botCreate.request(props.client, {
@@ -158,12 +164,9 @@ export function MobileBotShareCreate(props: {
       </>
     )
   }
-  const picture =
-    // The shared mascot, picked again by shuffling, keeps its shared look: the host gives it that.
-    avatar &&
-    !(sharedMascot && isBotMascotId(sharedMascot) && avatar === mascotAvatar(sharedMascot))
-      ? mobileBotAvatarSource({ name, avatar })
-      : reviewAvatar(review)
+  const picture = keepsShared
+    ? reviewAvatar(review)
+    : mobileBotAvatarSource({ name, avatar: chosen })
   return (
     <>
       <SheetHeader
@@ -182,7 +185,10 @@ export function MobileBotShareCreate(props: {
         }}
       />
       <View style={styles.picture}>
-        <NewBotPicture avatar={picture} onShuffle={() => setAvatar(randomMascotAvatar(avatar))} />
+        <NewBotPicture
+          avatar={picture}
+          onShuffle={() => setAvatar(randomMascotAvatar(chosen ?? sharedMascotAvatar))}
+        />
       </View>
       <ListGroup>
         <TextField
