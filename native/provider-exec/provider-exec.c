@@ -984,6 +984,8 @@ static void open_session(struct tree_scan *scan, struct launchd_tree *t, pid_t s
             scan->state[row] = same_identity(&scan->rows[row]) ? TREE_ANCESTRY : TREE_UNKNOWN;
             if (scan->state[row] == TREE_ANCESTRY) {
                 t->queue[t->queued++] = row;
+            } else {
+                scan->doubt = 1;
             }
         }
     }
@@ -1067,10 +1069,16 @@ static int resolve_members(struct watcher *w, struct tree_scan *scan) {
         if (tagged < 0) {
             scan->doubt = 1;
         }
-        if (tagged == 1 && same_identity(row)) {
-            for (size_t j = t.start[top]; j < t.start[top + 1]; j++) {
-                scan->state[t.order[j]] = TREE_TAGGED;
-            }
+        if (tagged != 1) {
+            continue;
+        }
+        if (!same_identity(row)) {
+            // It may have forked a child after the table was read and exited since.
+            scan->doubt = 1;
+            continue;
+        }
+        for (size_t j = t.start[top]; j < t.start[top + 1]; j++) {
+            scan->state[t.order[j]] = TREE_TAGGED;
         }
     }
     for (size_t i = 0; i < n; i++) {
@@ -1237,6 +1245,11 @@ static int signal_unseen_known(struct watcher *w, int signal_number, int *doubt)
             if (deliver_to_known(w, &row, signal_number)) {
                 live++;
             } else if (member_gone(&row)) {
+#if defined(__APPLE__)
+                // Gone since the table was read, so a child it forked meanwhile isn't in it. On Linux
+                // such a child is the subreaper's, which the absence proof reads.
+                *doubt = 1;
+#endif
                 continue;
             } else {
                 *doubt = 1;
