@@ -8,12 +8,7 @@ import {
 } from '../failures/native-chat-resume-failure-guidance'
 import { resumeActivityLabel } from '../tree/native-chat-resume-activity-label'
 import type { ResumeToastRow } from './native-chat-resume-toast-view'
-import {
-  botChatLabelParts,
-  botChatLabelText,
-  botNameDigitSuffix,
-  shownBotChatParts
-} from './resume-toast-row-label'
+import { botChatLabelParts, botChatLabelText, botNameDigitSuffix } from './resume-toast-row-label'
 
 function rowActions(row: ResumeToastRow, remote: boolean, t: Translate): ResumeFailureAction[] {
   if (row.state !== 'needs-you') {
@@ -98,7 +93,9 @@ function BotName({ name }: { name: string }): React.JSX.Element {
     <bdi className="flex min-w-0 max-w-[calc(100%-4rem)] shrink-0">
       <span className="min-w-0 truncate">{suffix.head}</span>
       {/* The instance number stays, so "… 01" and "… 02" differ in the row itself. */}
-      <span className="shrink-0 whitespace-pre">{suffix.digits}</span>
+      <span className="max-w-[5ch] shrink-0 overflow-hidden whitespace-pre [contain:paint]">
+        {suffix.digits}
+      </span>
     </bdi>
   ) : (
     <bdi className="max-w-[calc(100%-4rem)] shrink-0 truncate">{name}</bdi>
@@ -147,17 +144,19 @@ export function NativeChatResumeToastRow({
                 className="flex min-w-0 flex-1 rounded-sm text-xs text-foreground/90 outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset"
               >
                 {labelParts && owner ? (
-                  shownBotChatParts(labelParts).map((part) =>
+                  labelParts.map((part) =>
                     part.kind === 'bot' ? (
                       <BotName key={part.key} name={owner} />
                     ) : part.kind === 'chat' ? (
-                      <span key={part.key} className="min-w-0 truncate">
+                      // Shrinks well ahead of a translation's text, down to a floor that text can't squeeze past.
+                      <span key={part.key} className="min-w-[5ch] shrink-[100] truncate">
                         {chatName}
                       </span>
                     ) : (
+                      // Clipped, not ellipsized: a sub-pixel squeeze would turn " · " into "…".
                       <span
                         key={part.key}
-                        className="shrink-0 whitespace-pre text-muted-foreground"
+                        className="min-w-0 overflow-hidden whitespace-pre text-muted-foreground"
                       >
                         {part.text}
                       </span>

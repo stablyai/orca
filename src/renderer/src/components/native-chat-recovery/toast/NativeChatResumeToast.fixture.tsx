@@ -249,35 +249,57 @@ export const botChatsUnbrokenNamesFocused = defineFixture({
       {...actions}
       {...botChats({
         'chat-0': { bot: `${UNBROKEN}A`, chat: 'Home' },
-        'chat-1': { bot: `${UNBROKEN}B`, chat: 'Home' }
+        'chat-1': { bot: `${UNBROKEN}B`, chat: 'Home' },
+        'chat-2': { bot: `A${'0'.repeat(63)}`, chat: 'Home' }
       })}
     />
   ),
   interact: focusSecondRow
 })
 
-const LONG_SEPARATOR = ' ———————— a forty-eight character separator ——— '
+/** The app's translations, with the bot row's template replaced; a constant so the context is stable. */
+function botChatTemplateScope(template: string): { intlLocale: string; t: Translate } {
+  const t: Translate = (key, fallback, options) =>
+    key === 'auto.components.NativeChatResumeToast.botChat'
+      ? template.replace('{{bot}}', String(options?.bot)).replace('{{chat}}', String(options?.chat))
+      : translate(key, fallback, options)
+  return { intlLocale: 'en', t }
+}
+const LONG_SEPARATOR_SCOPE = botChatTemplateScope(
+  '{{bot}} ———————— a forty-eight character separator ——— {{chat}}'
+)
+const BRACKETED_SCOPE = botChatTemplateScope('「{{chat}}」 · {{bot}}。')
 
-const longSeparatorT: Translate = (key, fallback, options) =>
-  key === 'auto.components.NativeChatResumeToast.botChat'
-    ? `${String(options?.bot)}${LONG_SEPARATOR}${String(options?.chat)}`
-    : translate(key, fallback, options)
-const LONG_SEPARATOR_SCOPE = { intlLocale: 'en', t: longSeparatorT }
-
-/** A translation with too much text around the names shows in the default order, so the names stay in view. */
-export const botChatsLongSeparator = defineFixture({
-  width: NARROWEST,
-  render: () => (
-    <TranslationScopeContext.Provider value={LONG_SEPARATOR_SCOPE}>
+function TemplatedToast({
+  scope,
+  chats
+}: {
+  scope: { intlLocale: string; t: Translate }
+  chats: Record<string, { bot: string; chat: string }>
+}): React.JSX.Element {
+  return (
+    <TranslationScopeContext.Provider value={scope}>
       <NativeChatResumeToast
         view={resumeToastView(finishedRun(twelve.slice(0, 3), 'launch'), [], new Map())}
         listedAt={NOW}
         defaultExpanded
         {...actions}
-        {...botChats(BOT_CHATS)}
+        {...botChats(chats)}
       />
     </TranslationScopeContext.Provider>
   )
+}
+
+/** A long translated separator gives way before the chat's floor, so both names stay in view. */
+export const botChatsLongSeparator = defineFixture({
+  width: NARROWEST,
+  render: () => <TemplatedToast scope={LONG_SEPARATOR_SCOPE} chats={BOT_CHATS} />
+})
+
+/** A chat-first translation with text around both names keeps its order at the narrowest width. */
+export const botChatsBracketedOrder = defineFixture({
+  width: NARROWEST,
+  render: () => <TemplatedToast scope={BRACKETED_SCOPE} chats={LONG_NAME_CHATS} />
 })
 
 type FixtureLanguage =

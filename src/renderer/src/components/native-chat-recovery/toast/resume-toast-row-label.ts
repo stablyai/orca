@@ -53,27 +53,14 @@ export function botChatLabelText(parts: readonly BotChatLabelPart[], bot: string
     .join('')
 }
 
-// Hebrew, Arabic, Syriac, Thaana, N'Ko and their presentation forms.
-const RTL_CHARS = /[֐-ࣿיִ-﷿ﹰ-﻿]/
-const DIGIT_SUFFIX = /\s?[0-9]+$/
+// Only plain ASCII is split: any other script could reorder or join across the cut.
+const PRINTABLE_ASCII = /^[\x20-\x7e]+$/
+const DIGIT_SUFFIX = /\s?[0-9]{1,4}$/
 
-/** A name's trailing instance number (" 01"), kept whole while the rest ellipsizes; null when the
- *  name has none, or is right-to-left, where splitting it would reorder it. */
+/** A name's trailing instance number (" 01"), kept whole while the rest ellipsizes; null unless the
+ *  name is plain ASCII ending in at most four digits after a non-digit. */
 export function botNameDigitSuffix(name: string): { head: string; digits: string } | null {
-  const digits = RTL_CHARS.test(name) ? null : DIGIT_SUFFIX.exec(name)?.[0]
-  return digits && digits.length < name.length
-    ? { head: name.slice(0, -digits.length), digits }
-    : null
-}
-
-const SHOWN_LITERALS_MAX = 4
-
-/** The pieces as the row shows them: a translation whose text around the names runs past a few
- *  characters in all is shown in the default order, so the names always keep their room. */
-export function shownBotChatParts(parts: BotChatLabelPart[]): BotChatLabelPart[] {
-  const literalLength = parts.reduce(
-    (length, part) => length + (part.kind === 'text' ? Array.from(part.text).length : 0),
-    0
-  )
-  return literalLength > SHOWN_LITERALS_MAX ? ENGLISH_ORDER : parts
+  const digits = PRINTABLE_ASCII.test(name) ? DIGIT_SUFFIX.exec(name)?.[0] : undefined
+  const head = digits ? name.slice(0, -digits.length) : ''
+  return digits && /[^0-9]$/.test(head) ? { head, digits } : null
 }

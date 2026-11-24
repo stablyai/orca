@@ -5,8 +5,7 @@ import {
   botChatLabelParts,
   botChatLabelText,
   botNameDigitSuffix,
-  resumeRowBotName,
-  shownBotChatParts
+  resumeRowBotName
 } from './resume-toast-row-label'
 
 const bots: { name: string; hostId: ExecutionHostId; folderWorkspaceId: string }[] = [
@@ -37,26 +36,19 @@ describe('resume toast row label', () => {
     expect(botChatLabelText(lost, 'UX Designer', 'Home')).toBe('UX Designer · Home')
   })
 
-  it('shows a translation with too much text around the names in the default order', () => {
-    const shown = (template: string) =>
-      botChatLabelText(
-        shownBotChatParts(botChatLabelParts(translation(template))),
-        'UX Designer',
-        'Home'
-      )
-    expect(shown('{{chat}} de {{bot}}')).toBe('Home de UX Designer')
-    expect(shown(`{{bot}}${' ———————— a forty-eight character separator ——— '}{{chat}}`)).toBe(
-      'UX Designer · Home'
-    )
-    // No one literal is long, but together they would squeeze the chat out.
-    expect(shown('WW{{chat}} W {{bot}}WW')).toBe('UX Designer · Home')
+  it("keeps a bracketed translation's own order", () => {
+    const parts = botChatLabelParts(translation('「{{chat}}」 · {{bot}}。'))
+    expect(parts.map((part) => part.kind)).toEqual(['text', 'chat', 'text', 'bot', 'text'])
+    expect(botChatLabelText(parts, 'UX Designer', 'Home')).toBe('「Home」 · UX Designer。')
   })
 
-  it("keeps only a left-to-right name's trailing instance number whole", () => {
+  it("keeps only a plain ASCII name's short trailing instance number whole", () => {
     expect(botNameDigitSuffix('Customer Onboarding Research Assistant 02')).toEqual({
       head: 'Customer Onboarding Research Assistant',
       digits: ' 02'
     })
+    expect(botNameDigitSuffix(`A${'0'.repeat(63)}`)).toBeNull()
+    expect(botNameDigitSuffix('\u{1E900}\u{1E901} 02')).toBeNull()
     expect(botNameDigitSuffix('מעצב חוויה 02')).toBeNull()
     expect(botNameDigitSuffix('Assistant 02\u0301')).toBeNull()
     expect(botNameDigitSuffix('UX Designer')).toBeNull()
