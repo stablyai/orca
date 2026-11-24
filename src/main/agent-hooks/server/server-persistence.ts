@@ -95,7 +95,6 @@ export abstract class AgentHookServerPersistence extends AgentHookServerStatusFi
     if (turnOnly) {
       return this.runTurnEdgePersist(store, busyTimeoutMs)
     }
-    const previousFullAt = this.lastFullStatusPersistStartedAt
     this.lastFullStatusPersistStartedAt = now
     try {
       const keys = new Set([
@@ -138,8 +137,8 @@ export abstract class AgentHookServerPersistence extends AgentHookServerStatusFi
       this.persistedExitRevision = this.agentExitedAtByPaneKey.revision
       this.restoredStateEdges.turnKeys.clear()
     } catch (err) {
-      // The retry is still the batch, not a turn-edge save.
-      this.lastFullStatusPersistStartedAt = previousFullAt
+      // The batch stays owed, so its retry is a full save even right after the last good one.
+      this.lastFullStatusPersistStartedAt = Number.NEGATIVE_INFINITY
       return this.retryStatusPersist(err)
     }
     // Only a committed save can stand in for the authority it carries.
