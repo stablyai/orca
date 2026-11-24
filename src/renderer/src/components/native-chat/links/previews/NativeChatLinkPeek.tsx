@@ -112,6 +112,7 @@ function LinkPeekCard({
   const [placed, setPlaced] = useState<PeekSide>(side)
   const trigger = useRef<HTMLSpanElement>(null)
   const lookup = useRef<LinkPeekRetryState>({ status: 'idle' })
+  const retryKeyHeld = useRef(false)
   const [failed, setFailed] = useState(false)
   const retryContext = useMemo(
     () =>
@@ -207,7 +208,6 @@ function LinkPeekCard({
             const state = lookup.current
             if (
               !retryKey ||
-              state.status === 'idle' ||
               event.key.toLowerCase() !== retryKey ||
               event.altKey ||
               event.ctrlKey ||
@@ -215,13 +215,30 @@ function LinkPeekCard({
             ) {
               return
             }
+            // A press the card took stays the card's through its last repeat, even once the retry
+            // has answered; otherwise the repeats would type into the item's draft.
+            const held = retryKeyHeld.current && event.repeat
+            if (state.status === 'idle' && !held) {
+              return
+            }
             // The key is the card's while it has failed or is retrying: it must not reach the page
             // (the item pane types it into its draft). A held key retries once, not on every repeat.
             event.preventDefault()
             event.stopPropagation()
+            if (!event.repeat) {
+              retryKeyHeld.current = true
+            }
             if (state.status === 'failed' && !event.repeat) {
               state.retry()
             }
+          }}
+          onKeyUp={(event) => {
+            if (retryKey && event.key.toLowerCase() === retryKey) {
+              retryKeyHeld.current = false
+            }
+          }}
+          onBlur={() => {
+            retryKeyHeld.current = false
           }}
         >
           {children}
