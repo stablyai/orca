@@ -46,6 +46,7 @@ function ActionRow({
     <Button
       {...(inMenu ? { role: 'menuitem' } : {})}
       data-link-popover-item
+      data-link-popover-row
       className="h-8 w-full justify-start gap-1.5 px-1.5 text-[13px] font-normal has-[>svg]:px-1.5"
       variant="ghost"
       onClick={onRun}
@@ -116,7 +117,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
     }
     // Opt-in keyboard model: focus lands on the first destination row once the content mounts.
     const frame = requestAnimationFrame(() =>
-      contentRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+      contentRef.current?.querySelector<HTMLElement>('[data-link-popover-row]')?.focus()
     )
     return () => cancelAnimationFrame(frame)
   }, [keyboardHost, request])
@@ -258,6 +259,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
                 <TooltipTrigger asChild>
                   <Button
                     data-link-popover-item
+                    {...(keyboardHost ? { role: 'menuitem' } : {})}
                     aria-label={copyLabel}
                     className="text-muted-foreground"
                     size="icon-xs"
@@ -277,6 +279,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
                 <TooltipTrigger asChild>
                   <Button
                     data-link-popover-item
+                    {...(keyboardHost ? { role: 'menuitem' } : {})}
                     aria-label={settingsLabel}
                     className="text-muted-foreground"
                     size="icon-xs"
