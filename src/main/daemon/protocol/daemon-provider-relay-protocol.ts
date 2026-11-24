@@ -73,8 +73,8 @@ export type ProviderRelayAttachResult = {
   exit: ProviderRelayExit | null
   /**
    * Set only when kept lines (`keepFrom`) after the client's cursor were dropped at the spool file
-   * cap: the replay starts after this seq, inside the item the client asked to keep. Older clients
-   * ignore it.
+   * cap before this attach: its replay starts after this seq, inside the item the client asked to
+   * keep. Older clients ignore it.
    */
   truncatedThrough?: number
 }
