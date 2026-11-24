@@ -13,6 +13,7 @@ import type { NativeChatActivityJoin } from '../../../../../../src/shared/native
 export type MobileNativeChatTurnRow = {
   turnDiff?: NativeChatTurnDiff
   turnStatus: NativeChatTurnStatus | null
+  sending?: boolean
   turnStatusAbove?: boolean
   turnExpanded: boolean
   turnKey?: string

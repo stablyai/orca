@@ -20,22 +20,24 @@ export function useMobileNativeChatMessageTimeLabel(
 
 export const MobileNativeChatMessageTime = memo(function MobileNativeChatMessageTime({
   timestamp,
-  fontScale
+  fontScale,
+  deliveryStatus
 }: {
   timestamp: number | null | undefined
   fontScale: number
+  deliveryStatus?: string | undefined
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const time = useMobileNativeChatMessageTimeLabel(timestamp)
-  if (!time) {
+  if (!time && !deliveryStatus) {
     return null
   }
   return (
     <Text
       style={[styles.time, scaledType(typography.metaSize, fontScale, 5)]}
-      accessibilityLabel={time.full}
+      accessibilityLabel={deliveryStatus ? undefined : time?.full}
     >
-      {time.short}
+      {deliveryStatus ?? time?.short}
     </Text>
   )
 })

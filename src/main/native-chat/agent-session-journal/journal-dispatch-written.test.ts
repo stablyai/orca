@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agent-session/installation/structured-agent-session-journal-open'
+import { createDeferredStructuredAgentSessionEventSink } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { createStructuredAgentSessionLogger } from '../agent-session-wire/host/structured-agent-session-logger'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
 import { SqlAgentSessionJournal } from './journal-sql-store'
 import { closeTestJournalHostDatabases } from './store-lifecycle/journal-host-database-test-support'
@@ -54,7 +56,7 @@ async function openJournal(): Promise<SqlAgentSessionJournal> {
 }
 
 describe('a send the agent took', () => {
-  it('is stamped written only when handed to an idle agent and still pending', async () => {
+  it('stamps provider receipts once for the current handover, including steers', async () => {
     const journal = await openJournal()
     for (const clientMessageId of ['idle', 'steer', 'echoed']) {
       await journal.appendSubmission({
@@ -91,20 +93,31 @@ describe('a send the agent took', () => {
       providerIdentity: null
     })
 
-    for (const clientMessageId of ['idle', 'steer', 'echoed']) {
-      await journal.markDispatchWritten({ clientMessageId, fence: 2 })
-    }
+    const before = journal.cursor()
+    await journal.markDispatchWritten({ clientMessageId: 'steer', fence: 1, providerReceipt: true })
+    await journal.markDispatchWritten({ clientMessageId: 'steer', fence: 2 })
+    await journal.markDispatchWritten({
+      clientMessageId: 'echoed',
+      fence: 2,
+      providerReceipt: true
+    })
+    expect(journal.cursor()).toEqual(before)
+    await journal.markDispatchWritten({ clientMessageId: 'idle', fence: 2 })
+    await journal.markDispatchWritten({ clientMessageId: 'steer', fence: 2, providerReceipt: true })
+    expect(journal.cursor().sequence).toBe(before.sequence + 2)
+    await journal.markDispatchWritten({ clientMessageId: 'steer', fence: 2, providerReceipt: true })
+    expect(journal.cursor().sequence).toBe(before.sequence + 2)
 
     expect(await journal.reads.submission('idle')).toMatchObject({
       dispatchState: 'pending',
       writtenAt: 100
     })
-    expect((await journal.reads.submission('steer'))?.writtenAt).toBeUndefined()
+    expect((await journal.reads.submission('steer'))?.writtenAt).toBe(100)
     expect((await journal.reads.submission('echoed'))?.writtenAt).toBeUndefined()
   })
 
   // Readers without queued-image support take the image-admission route; the stamp must reach them too.
-  it('delivers the stamp alone through forward history with a queued-image policy', async () => {
+  it('pages a provider receipt before the turn start for a reader with a queued-image policy', async () => {
     const journal = await openJournal()
     await journal.appendSubmission({
       clientMessageId: 'idle',
@@ -126,43 +139,55 @@ describe('a send the agent took', () => {
       queuedImages: { ids: [['other', true] as const], imageIds: [] }
     }
     const before = (await journal.history({ direction: 'tail', reader })).result
-    if (!before.ok) {
+    if (!before.ok || !before.page.liveCursor) {
       throw new Error('tail read reset')
     }
-    await journal.markDispatchWritten({ clientMessageId: 'idle', fence: 2 })
-    const after = (
-      await journal.history({ direction: 'after', cursor: before.page.liveCursor, reader })
-    ).result
-    expect(after.ok && after.page.items).toEqual([])
-    expect(after.ok && after.page.submissions.map((send) => send.writtenAt)).toEqual([100])
-  })
-
-  // Forks copy turn records, not submissions; the turn must carry its own clock origin.
-  it('keeps the stamp on the turn its send opens', async () => {
-    const journal = await openJournal()
-    await journal.appendSubmission({
-      clientMessageId: 'idle',
-      payloadFingerprint: 'fingerprint:idle',
-      body,
-      fence: 2,
-      handoverRecorded: true,
-      origin: 'client'
+    const delivery = createDeferredStructuredAgentSessionEventSink({
+      sessionId: 'session',
+      logger: createStructuredAgentSessionLogger()
     })
-    await journal.prepareHandover({
-      clientMessageId: 'idle',
-      fence: 2,
-      turnScope: { kind: 'thread' },
-      body
-    })
-    await journal.markDispatchWritten({ clientMessageId: 'idle', fence: 2 })
-    await journal.appendItem(
+    delivery.bind({ journal, fence: 2, publish: () => {} })
+    delivery.sink.recordProviderReceipt?.({ clientMessageId: 'idle', fence: 2 })
+    delivery.sink.appendItem(
       { provider: 'orca', clientMessageId: 'turn' },
       { kind: 'turn', turnId: 'turn', state: 'running', userItemId: 'orca:idle', startedAt: 150 },
-      { fence: 2, turnScope: { kind: 'thread' } }
+      { turnScope: { kind: 'thread' } }
     )
-    expect((await journal.reads.item('orca:turn'))?.body).toMatchObject({
-      kind: 'turn',
-      writtenAt: 100
-    })
+    expect(await delivery.drained()).toEqual({ ok: true })
+    delivery.close()
+    const after = (
+      await journal.history({
+        direction: 'after',
+        cursor: before.page.liveCursor,
+        reader,
+        limit: 1
+      })
+    ).result
+    if (!after.ok) {
+      throw new Error('receipt catch-up reset')
+    }
+    expect(after.page.items).toEqual([])
+    expect(after.page.submissions.map((send) => send.writtenAt)).toEqual([100])
+    expect(after.page.window.nextCursor.sequence).toBe(before.page.liveCursor.sequence + 1)
+    const next = (
+      await journal.history({
+        direction: 'after',
+        cursor: after.page.window.nextCursor,
+        reader,
+        limit: 1
+      })
+    ).result
+    expect(next.ok && next.page.items.map((item) => item.body)).toEqual([
+      {
+        kind: 'turn',
+        turnId: 'turn',
+        state: 'running',
+        userItemId: 'orca:idle',
+        startedAt: 150
+      }
+    ])
+    expect(next.ok && next.page.window.nextCursor.sequence).toBe(
+      before.page.liveCursor.sequence + 2
+    )
   })
 })

@@ -16,7 +16,8 @@ export function waitForReplay(
   sentUuid: string,
   replayContentKey: string,
   clientMessageId: string | null,
-  requestedAt: number | null
+  requestedAt: number | null,
+  dispatchFence = session.fence
 ): { waiter: ClaudeDispatchWaiter; promise: Promise<string | null> } {
   let waiter!: ClaudeDispatchWaiter
   const promise = new Promise<string | null>((resolve) => {
@@ -26,6 +27,7 @@ export function waitForReplay(
       sentUuid,
       dispatchSequence: session.dispatchSequence,
       requestedAt,
+      dispatchFence,
       replayContentKey,
       resolve
     }

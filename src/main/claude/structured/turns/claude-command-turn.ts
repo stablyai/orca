@@ -42,7 +42,7 @@ export function claudeCommandCurrentTurn(start: ClaudeCommandStart): ClaudeCurre
   return {
     sessionId: start.providerSessionId,
     turnId: start.turnId,
-    startedAt: running.startedAt ?? Date.now(),
+    ...(running.startedAt === undefined ? {} : { startedAt: running.startedAt }),
     ...(running.requestedAt === undefined ? {} : { requestedAt: running.requestedAt }),
     userItemId: running.userItemId ?? agentJournalItemKey(start.identity),
     command: {

@@ -24,6 +24,7 @@ import type {
   AgentJournalMessageItem,
   AgentJournalTurnItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
@@ -100,7 +101,7 @@ export type AgentSessionDispatchOutcome =
       answeredInTurn?: AgentJournalAnsweredTurnIdentity
     } & AgentSessionRanOptionsEvidence)
   /** Transport admission stays pending until provider acknowledgement; elapsed time never proves unknown delivery.
-   *  `written`: the provider has taken the whole write, so an idle agent's turn has begun. */
+   *  `written`: the provider confirmed receipt of the send. */
   | ({ state: 'admitted'; written?: true } & AgentSessionRanOptionsEvidence)
   /** Generate rejection words with agentSessionFailureWords; answeredInTurn identifies an already-ended answering turn. */
   | ({
@@ -218,6 +219,7 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
     fence: number
     /** Preserve submission time as the opened turn’s requestedAt. */
     requestedAt?: number
+    turnScope?: AgentJournalTurnScope
     beforeDispatch?: () => Promise<void>
     /** Whether the host still owns this exact child after asynchronous preparation. */
     isCurrent?: () => boolean

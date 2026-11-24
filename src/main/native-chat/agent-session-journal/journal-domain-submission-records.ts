@@ -99,6 +99,7 @@ export type JournalDomainSubmissionCommit<Value = AgentJournalCursor | null | un
   cursor: AgentJournalCursor
   value: Value
   /** Empty means the legacy no-op would not invoke its row-bound receipt. */
+  handoverScope?: AgentJournalTurnScope
   coordinates: JournalDomainSubmissionCoordinate[]
   items: AgentJournalRenderItem[]
   insertedItemIds?: string[]

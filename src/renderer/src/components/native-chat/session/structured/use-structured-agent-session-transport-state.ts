@@ -57,7 +57,6 @@ export function useStructuredAgentSessionTransportState(
       items: journalItems,
       submissions,
       latestTurn,
-      working: isWorking,
       ...(enabled ? { hostClock: state.hostClock } : {})
     },
     turnId

@@ -1,3 +1,6 @@
+import { nativeChatWorkingPresentation } from '../../../../../../src/shared/agent-session/view/structured-agent-session-sending'
+import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
+import type { MobileNativeChatTurnJournal } from '../ingestion/use-mobile-structured-agent-turn-timing'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   NATIVE_CHAT_UNANCHORED_TURN_KEY,
@@ -19,7 +22,9 @@ export function useMobileNativeChatTurnStatus({
   turnKeys,
   liveTurnKey,
   enabled,
-  isWorking,
+  working,
+  journal,
+  messages,
   workingStartedAt,
   settledTurns,
   thinking = false,
@@ -28,7 +33,9 @@ export function useMobileNativeChatTurnStatus({
   turnKeys: readonly (string | undefined)[]
   liveTurnKey: string | undefined
   enabled: boolean
-  isWorking: boolean
+  working: boolean
+  journal: MobileNativeChatTurnJournal | null
+  messages: readonly NativeChatMessage[]
   workingStartedAt?: number | null
   settledTurns?: NativeChatSettledTurns | null
   thinking?: boolean
@@ -37,7 +44,19 @@ export function useMobileNativeChatTurnStatus({
   active: NativeChatTurnStatus | null
   completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
   activeTurnKey: string
+  turnWorking: boolean
 } {
+  const sendingItemIds = journal?.sendingItemIds
+  const sendPending = useMemo(
+    () => !!sendingItemIds?.size && messages.some((message) => sendingItemIds.has(message.id)),
+    [messages, sendingItemIds]
+  )
+  const { isWorking, turnWorking } = nativeChatWorkingPresentation(
+    working,
+    workingStartedAt,
+    journal !== null,
+    sendPending
+  )
   const activeTurnKey = (enabled ? liveTurnKey : undefined) ?? NATIVE_CHAT_UNANCHORED_TURN_KEY
   const [scopedTiming, setScopedTiming] = useState<ScopedTurnTiming>(() => ({
     scopeKey,
@@ -93,5 +112,10 @@ export function useMobileNativeChatTurnStatus({
       }),
     [timingByTurn, activeTurnKey, turnIsWorking, workingStartedAt, turnIsThinking, settledByTurn]
   )
-  return { ...statuses, activeTurnKey }
+  return {
+    ...statuses,
+    active: isWorking && !turnWorking ? null : statuses.active,
+    activeTurnKey,
+    turnWorking
+  }
 }

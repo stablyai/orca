@@ -119,6 +119,7 @@ export function applyJournalDomainDispatch(
           scope = derived
         }
       }
+      result.handoverScope = scope
       handover = {
         sequence,
         at: savedAt,

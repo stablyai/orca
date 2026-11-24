@@ -60,5 +60,5 @@ export function applyJournalDomainDispatchCommand(
     },
     savedAt
   )
-  return { ...result, value: carried }
+  return { ...result, value: { carried, turnScope: result.handoverScope ?? input.turnScope } }
 }

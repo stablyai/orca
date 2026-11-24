@@ -1,5 +1,8 @@
 import type { AgentSessionContextUsage } from '../../../../shared/agent-session/conversation-context/agent-session-context-usage'
-import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
@@ -23,8 +26,8 @@ import {
 } from '../../../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type { JournalTimelineItemResolution } from '../../../native-chat/agent-session-journal/writing/journal-timeline-resolution'
 import type { ClaudeUsageLimitEvidence } from '../journal/claude-usage-limits'
-import type { ClaudeStartedSend } from '../claude-structured-session-state'
-import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
+import { claudeDispatchIsSteer } from './claude-command-lifecycle'
+import type { ClaudeDispatchWaiter, ClaudeStartedSend } from '../claude-structured-session-state'
 
 /** The ending a person's Stop at the write position would record instead. */
 export type ClaudeStoppedTurnEnd = { check: ClaudeStopCheck; end: ClaudeTurnEnd }
@@ -53,6 +56,7 @@ export type ClaudeOpenTurnDeps = {
   /** Ends what the ending turn left open, at the instant it ended; no later frame will. */
   endOpenWork: (sessionId: string | null, completedAt: number, settles?: boolean) => void
   onOpen?: () => void
+  steerAwaitingEcho?: () => boolean
 }
 
 export class ClaudeOpenTurn {
@@ -78,6 +82,7 @@ export class ClaudeOpenTurn {
     this.opener = createClaudeTurnOpener({
       isTurnOpen: () => this.isOpen,
       isSuppressed: () => this.reopenSuppressed,
+      steerAwaitingEcho: deps.steerAwaitingEcho,
       startedSend: () => this.startedSend,
       open: (turn, observedAt) => {
         if (this.startedSend) {
@@ -176,17 +181,40 @@ export class ClaudeOpenTurn {
     this.deps.sink.setPromptSuggestion?.(null)
   }
 
-  /** The host already wrote the command row; only publish its eventual end. */
+  startDispatch(sessionId: string, waiter: ClaudeDispatchWaiter, observedAt: number): void {
+    if (this.current?.command?.sentUuid === waiter.sentUuid) {
+      this.current.startedAt = observedAt
+      this.publish(this.current)
+      return
+    }
+    if (this.current || claudeDispatchIsSteer(waiter) || waiter.clientMessageId === null) {
+      return
+    }
+    this.allowReopen()
+    this.open(
+      {
+        sessionId,
+        turnId: waiter.sentUuid,
+        startedAt: observedAt,
+        ...(waiter.requestedAt === null ? {} : { requestedAt: waiter.requestedAt }),
+        userItemId: agentJournalSubmissionKey(waiter.clientMessageId)
+      },
+      observedAt
+    )
+  }
+
+  /** The host already reserved the command row. */
   beginCommand(turn: ClaudeCurrentTurn): void {
     this.steerHandoffEnd = null
     this.usageLimitEvidence = null
     this.deps.onOpen?.()
     if (this.current) {
       this.deps.turnSuperseded()
-      this.deps.endOpenWork(this.current.sessionId, turn.startedAt)
+      const observedAt = turn.startedAt ?? Date.now()
+      this.deps.endOpenWork(this.current.sessionId, observedAt)
       this.publish(this.current, {
         state: 'interrupted',
-        completedAt: turn.startedAt,
+        completedAt: observedAt,
         outcome: 'superseded'
       })
     }
@@ -287,7 +315,11 @@ export class ClaudeOpenTurn {
     stopped?: ClaudeStoppedTurnEnd & { quotaEnd: boolean }
   ): void {
     const item = claudeTurnLifecycleItem(turn, end)
-    const write = { lifecycle: item.body, ...(contextUsage ? { contextUsage } : {}) }
+    const write = {
+      lifecycle: item.body,
+      ...(contextUsage ? { contextUsage } : {}),
+      ...(!end && turn.command ? { onlyWhileRunning: true as const } : {})
+    }
     if (end && stopped) {
       const ran = claudeTurnEndResolution(turn, end, contextUsage, quotaEnd)
       const other = claudeTurnEndResolution(turn, stopped.end, contextUsage, stopped.quotaEnd)
@@ -315,34 +347,5 @@ export class ClaudeOpenTurn {
     })
     // Separate keys preserve a queued start publication when the end arrives.
     this.deps.sink.publish({ coalescingKey: item.publishCoalescingKey })
-  }
-}
-
-// Claude's guesses are a short sentence; a longer one is not worth a frame to every reader.
-const CLAUDE_PROMPT_SUGGESTION_MAX_LENGTH = 1000
-
-/** Takes the CLI's guess at the next prompt off the journal path, so no turn, context or activity
- *  logic sees it. It arrives after `result`; a turn or a send started since then makes it stale. */
-export function withClaudePromptSuggestions(
-  turn: Pick<ClaudeOpenTurn, 'isOpen'>,
-  sink: Pick<StructuredAgentSessionEventSink, 'setPromptSuggestion'>,
-  handle: (event: ClaudeStructuredSessionEvent) => void
-): (event: ClaudeStructuredSessionEvent) => void {
-  return (event) => {
-    if (event.type !== 'message' || event.message.type !== 'prompt_suggestion') {
-      handle(event)
-      return
-    }
-    const { suggestion, uuid } = event.message
-    const text = typeof suggestion === 'string' ? suggestion.trim() : ''
-    if (
-      !turn.isOpen &&
-      !event.startedSend &&
-      typeof uuid === 'string' &&
-      text &&
-      text.length <= CLAUDE_PROMPT_SUGGESTION_MAX_LENGTH
-    ) {
-      sink.setPromptSuggestion?.({ id: uuid, text })
-    }
   }
 }

@@ -18,29 +18,24 @@ export function useStructuredAgentTurnTiming(
     items,
     submissions,
     latestTurn,
-    working,
     hostClock
   }: {
     items: readonly AgentJournalRenderItem[]
     submissions: readonly AgentJournalSubmission[]
     latestTurn?: AgentSessionLatestTurn | null
-    working?: boolean
     hostClock?: StructuredAgentHostClock | null
   },
   turnId: string | null
 ): { settledTurns: NativeChatSettledTurns; workingStartedAt: number | null } {
-  const { settledTurns, runningTiming, runningKey } = useMemo(
+  const { settledTurns, runningTiming } = useMemo(
     () => selectStructuredAgentTurnBars(items, submissions, turnId, latestTurn),
     [items, submissions, turnId, latestTurn]
   )
   const [latch, setLatch] = useState<StructuredAgentTurnClockLatch | null>(null)
-  const opening = runningKey !== null && runningKey !== turnId
   // Derive during render so the first paint of each turn already uses its correct start.
   const step = stepStructuredAgentTurnClock({
     timing: runningTiming,
-    // A send's early clock only while the agent works, so an idle viewer never gets a "Worked for" without a turn.
-    turnId: opening && working !== true ? null : runningKey,
-    opening,
+    turnId: runningTiming ? turnId : null,
     now: Date.now,
     hostClock,
     latch

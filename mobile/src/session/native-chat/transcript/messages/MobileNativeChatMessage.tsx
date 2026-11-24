@@ -76,6 +76,7 @@ function MobileNativeChatMessageImpl({
   reasoningExpanded,
   onToggleReasoning,
   unsentNotice,
+  sending,
   receipt,
   awaiting,
   userMessageOpen,
@@ -111,6 +112,7 @@ function MobileNativeChatMessageImpl({
   reasoningExpanded?: boolean
   onToggleReasoning?: (key: string) => void
   unsentNotice?: string
+  sending?: boolean
   receipt?: NativeChatResolvedPrompt
   awaiting?: boolean
   userMessageOpen?: boolean
@@ -401,6 +403,7 @@ function MobileNativeChatMessageImpl({
             rowKey={rowKey ?? message.id}
             fontScale={fontScale}
             rewindable={rewindable}
+            deliveryStatus={sending ? t('chat.message.sending', 'Sending…') : undefined}
           />
         ) : null}
       </View>

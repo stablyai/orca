@@ -1,5 +1,7 @@
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   observeClaudeCommandLifecycle,
+  claudeDispatchIsSteer,
   releaseClaudeDispatchesUnansweredAtIdle
 } from './claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
@@ -26,13 +28,36 @@ export type ClaudeReplayTurnOrigin = {
   clientMessageId: string | null
 }
 
+export type ClaudeDispatchLifecycle = {
+  observedAt: number
+  onReceived: (receipt: { clientMessageId: string; fence: number }) => void
+}
+
 export function resolveClaudeReplayTurn(
   session: ClaudeSession,
   message: Record<string, unknown>,
-  onSettledLate?: ClaudeLateDispatchSettlement
+  onSettledLate?: ClaudeLateDispatchSettlement,
+  lifecycle?: ClaudeDispatchLifecycle
 ): ClaudeReplayTurnOrigin | null {
   if (message.type === 'command_lifecycle') {
-    observeClaudeCommandLifecycle(session, message, onSettledLate)
+    observeClaudeCommandLifecycle(session, message, onSettledLate, (waiter, evidence) => {
+      if (!lifecycle || waiter.clientMessageId === null) {
+        return
+      }
+      if (evidence.received) {
+        lifecycle.onReceived({
+          clientMessageId: waiter.clientMessageId,
+          fence: waiter.dispatchFence
+        })
+      }
+      if (evidence.started) {
+        session.translator?.turnCycle.startDispatch(
+          session.providerSessionId,
+          waiter,
+          lifecycle.observedAt
+        )
+      }
+    })
     return null
   }
   if (claudeSessionStateEndsTurn(message)) {
@@ -66,7 +91,7 @@ export function resolveClaudeReplayTurn(
     }
     const live = session.dispatchWaiters.find((candidate) => candidate.sentUuid === member)
     if (live) {
-      settleWaiter(session, live, member, onSettledLate, joinedTurn(session))
+      settleLiveDispatch(session, live, member, false, onSettledLate, true)
       continue
     }
     const late = session.retiredDispatchWaiters.find((candidate) => candidate.sentUuid === member)
@@ -153,14 +178,7 @@ export function resolveClaudeReplayTurn(
   if (isCompletedCommand && session.replayContentFallbackBlocked) {
     return null
   }
-  const waiter = uuid ? session.dispatchWaiters.shift() : undefined
-  if (waiter && uuid) {
-    settleWaiter(session, waiter, uuid, onSettledLate)
-    return isUserReplay
-      ? { requestedAt: waiter.requestedAt, clientMessageId: waiter.clientMessageId }
-      : null
-  }
-  return null
+  return current ? settleLiveDispatch(session, current, uuid, isUserReplay, onSettledLate) : null
 }
 
 /** Safely matched echoes inherit cycle ownership independently of their delivery UUID. */
@@ -169,16 +187,27 @@ function settleLiveDispatch(
   waiter: ClaudeDispatchWaiter,
   uuid: string,
   isUserReplay: boolean,
-  onSettledLate?: ClaudeLateDispatchSettlement
+  onSettledLate?: ClaudeLateDispatchSettlement,
+  explicitlyFolded = false
 ): ClaudeReplayTurnOrigin | null {
+  const cycle = session.translator?.turnCycle
+  const ownOpener =
+    waiter.clientMessageId !== null &&
+    cycle?.userItemId === agentJournalSubmissionKey(waiter.clientMessageId)
+  const steers = claudeDispatchIsSteer(waiter)
   const joinsTurn =
-    session.translator?.turnCycle.ownsLiveProviderCycle === true ||
-    (waiter.steers === true && session.translator?.currentTurnId != null)
-  if (isUserReplay && joinsTurn) {
-    session.translator?.turnCycle.confirmProviderCycle()
+    !ownOpener &&
+    (explicitlyFolded ||
+      cycle?.ownsLiveProviderCycle === true ||
+      (steers && session.translator?.currentTurnId != null))
+  if (isUserReplay && (ownOpener || joinsTurn)) {
+    cycle?.confirmProviderCycle()
+  }
+  if (isUserReplay && steers && !joinsTurn && !ownOpener) {
+    cycle?.suppressReopen()
   }
   settleWaiter(session, waiter, uuid, onSettledLate, joinsTurn ? joinedTurn(session) : undefined)
-  return isUserReplay && !joinsTurn
+  return isUserReplay && !joinsTurn && !steers
     ? { requestedAt: waiter.requestedAt, clientMessageId: waiter.clientMessageId }
     : null
 }

@@ -1,3 +1,4 @@
+import type { StoppedHistoryDelivery } from '../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
 import type { JournalOpenRecoveryResult } from './journal-sql-open-command'
 import type { JournalItemEcho } from './projection/journal-item-echo'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
@@ -215,12 +216,17 @@ export type JournalShutdownCutInput = {
 export type JournalCommandOpenInput = Pick<
   Extract<ResolveDispatchInput, { state: 'pending' }>,
   'clientMessageId' | 'fence' | 'turnScope'
-> & { submittedAt: number }
+> & { submittedAt: number; waitsForProviderStart?: true }
 
 export type JournalHandoverInput = Pick<
   Extract<ResolveDispatchInput, { state: 'pending' }>,
   'clientMessageId' | 'fence' | 'turnScope'
 > & { body: AgentJournalMessageItem }
+
+export type JournalHandoverResult = {
+  carried: StoppedHistoryDelivery | null
+  turnScope: AgentJournalTurnScope
+}
 
 export type JournalCommandSettlementInput = {
   dispatch: Extract<ResolveDispatchInput, { state: 'rejected' | 'unknown' }>

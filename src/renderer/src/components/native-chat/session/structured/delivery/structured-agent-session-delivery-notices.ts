@@ -7,7 +7,7 @@ import { agentSessionFailureStatedByRow } from '../../../../../../../shared/agen
 import { classifyDispatchRejection } from '../../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { agentJournalSubmissionKey } from '../../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentJournalSubmissionAwaitsAgent } from '../../../../../../../shared/agent-session/requests/agent-session-queued-submission'
+import { structuredAgentSessionSendingItemIds } from '../../../../../../../shared/agent-session/view/structured-agent-session-sending'
 import { structuredAgentSessionRejectionParts } from '../../../../../../../shared/agent-session/failures/structured-agent-session-rejection-words'
 import { structuredAgentSessionRejectedShownInPlace } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { agentSessionWriteNotDoneParts } from '../../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
@@ -29,15 +29,8 @@ export function structuredAgentSessionDeliveryNotices(args: {
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
   const { agentName, submissions } = args
   const notices = new Map<string, NativeChatDeliveryNotice>()
-  // A row under the id is the host's to describe, before the sender settles from it.
-  const recorded = new Set(submissions.map((submission) => submission.clientMessageId))
-  for (const entry of args.pending) {
-    if (entry.phase !== 'unconfirmed' && !recorded.has(entry.clientMessageId)) {
-      notices.set(
-        agentJournalSubmissionKey(entry.clientMessageId),
-        STRUCTURED_AGENT_SESSION_DELIVERY_SENDING
-      )
-    }
+  for (const id of structuredAgentSessionSendingItemIds(args.pending, submissions)) {
+    notices.set(id, STRUCTURED_AGENT_SESSION_DELIVERY_SENDING)
   }
   const shown = submissions.some((submission) => submission.dispatchState === 'rejected')
     ? structuredAgentSessionRejectedShownInPlace(submissions, args.commandItemIds ?? NO_COMMANDS)
@@ -45,11 +38,7 @@ export function structuredAgentSessionDeliveryNotices(args: {
     : new Set<string>()
   for (const submission of submissions) {
     const id = agentJournalSubmissionKey(submission.clientMessageId)
-    if (submission.dispatchState === 'pending') {
-      if (agentJournalSubmissionAwaitsAgent(submission)) {
-        notices.set(id, STRUCTURED_AGENT_SESSION_DELIVERY_SENDING)
-      }
-    } else if (submission.dispatchState === 'rejected' && shown.has(id)) {
+    if (submission.dispatchState === 'rejected' && shown.has(id)) {
       // A failed start's words, unless its row carries them; other sentences quote their own.
       const fact = readWholeAgentSessionFailureFact(submission.rejection)
       const statedByRow = agentSessionFailureStatedByRow(fact, args.startFailures)

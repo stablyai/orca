@@ -28,7 +28,6 @@ import { useMobileStructuredAccountUsage } from '../usage/use-mobile-structured-
 import { useHostModelCatalogCache } from '../input/session-options/mobile-host-model-catalog-query'
 import { useMobileStructuredCommandController } from '../composer/commands/use-mobile-structured-command-controller'
 import { useMobileStructuredSessionOptionStamp } from '../input/session-options/use-mobile-structured-session-option-stamp'
-import { useMobileStructuredAgentTurnTiming } from '../transcript/ingestion/use-mobile-structured-agent-turn-timing'
 import { useMobileStructuredRequestCancel } from './mobile-structured-agent-session-cancel'
 import { useMobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 import { useMobileStructuredSendWithOutcome } from '../composer/delivery/use-mobile-structured-send-with-outcome'
@@ -130,9 +129,9 @@ export function useMobileStructuredAgentSession(
     onSendError,
     confirmRecorded: useMobileStructuredSendRecorded(client, sessionId, hostSupport)
   })
-  const transcript = useMobileStructuredTranscript(agent, state, sends.optimistic, sessionKey)
-  const { clearing, transcriptItems, messages, receipts } = transcript
-  const timing = useMobileStructuredAgentTurnTiming({ ...state, items: transcriptItems }, turnId)
+  const transcript = { agent, state, optimistic: sends.optimistic, sessionKey, turnId }
+  const { clearing, messages, receipts, timing, onClearSent } =
+    useMobileStructuredTranscript(transcript)
   const isWorking = mobileStructuredAgentSessionWorking(state)
   const queueSendsNext = structuredAgentSessionQueueSendsNext(state.nextQueuedMessageId, isWorking)
   const backgroundTasks = useMobileStructuredBackgroundTasks({
@@ -187,7 +186,7 @@ export function useMobileStructuredAgentSession(
     stopping: turnIndicator.stopping,
     ...sends,
     commandPending: commandPendingRef,
-    onClearSent: transcript.onClearSent,
+    onClearSent,
     sendsOut,
     controller: mcp.commands,
     sessionCommands: args.sessionCommands,

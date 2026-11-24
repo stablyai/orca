@@ -62,7 +62,6 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
-import { isStructuredAgentSessionThinking } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import { useNativeChatTurnDiffs } from './tools/diffs/use-native-chat-turn-diffs'
 import { useNativeChatTurnOpenedPullRequests } from './tools/pull-requests/use-native-chat-turn-opened-pull-requests'
@@ -91,6 +90,7 @@ export function NativeChatMessageList({
   workingStartedAt,
   settledTurns,
   deliveryNotices,
+  queueSendPending = false,
   timedRows,
   awaitingInput = null,
   turnActivity,
@@ -125,6 +125,7 @@ export function NativeChatMessageList({
   /** Host durations by prompt id; otherwise fall back to a duration observed locally. */
   settledTurns?: NativeChatSettledTurns
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
+  queueSendPending?: boolean
   /** Rows that are not part of the conversation but happened during it, such as workers' approvals. */
   timedRows?: readonly NativeChatTimedRow[]
   /** Set while the turn waits on the reader; the live activity line yields to it. */
@@ -186,26 +187,21 @@ export function NativeChatMessageList({
   const turns = scope.conversationTurns
   const turnDiffs = useNativeChatTurnDiffs(showTurnDiffs && !turnBot ? turns : null, rowsInOrder)
   const openedPullRequests = useNativeChatTurnOpenedPullRequests(turns, rowsInOrder)
-  // Only real tail reasoning counts as thinking; an in-flight request with no output does not.
-  const thinking = useMemo(
-    () =>
-      subagentId === null &&
-      isStructuredAgentSessionThinking({ items: journalItems ?? [], latestTurn }),
-    [journalItems, latestTurn, subagentId]
-  )
-  // The clock starts once the opening message lands, not while it still says "Sending…".
-  const turnWorking =
-    working && (liveTurnKey === undefined || deliveryNotices?.get(liveTurnKey)?.sending !== true)
-  const turnStatuses = useNativeChatTurnStatus({
+  const { turnWorking, turnStatuses } = useNativeChatTurnStatus({
     turnKeys,
     liveTurnKey,
-    isWorking: turnWorking,
+    working,
+    journalItems,
+    latestTurn,
+    subagentId,
+    notices: deliveryNotices,
+    displayedIds: loadedMessageIds,
+    queueSendPending,
     workingStartedAt,
-    settledTurns,
-    thinking
+    settledTurns
   })
   // Only unshown prompts need a waiting tail row; prompt cards explain their own wait.
-  const tailRow = transcriptTailRow(turnWorking, awaitingInput)
+  const tailRow = transcriptTailRow(turnWorking || stopping, awaitingInput)
   const lifecycleWorking = subagentId === null && session.transcriptLifecycle?.state === 'working'
   const { measureContent, typography } = useNativeChatRowTypography(contentRef)
   const forkOffer = useNativeChatSideChatForkOffer(latestTurnKey)

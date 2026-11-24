@@ -23,9 +23,10 @@ import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-chec
 import {
   claudeFrameParentRef,
   claudeStreamTurnSource,
-  isRootClaudeFrame
+  observeClaudeTurnFrame
 } from '../turns/claude-turn-opening'
-import { ClaudeOpenTurn, withClaudePromptSuggestions } from '../turns/claude-open-turn'
+import { ClaudeOpenTurn } from '../turns/claude-open-turn'
+import { withClaudePromptSuggestions } from '../turns/claude-prompt-suggestions'
 import { absorbClaudeCommandFrame, claudeCommandCurrentTurn } from '../turns/claude-command-turn'
 import { ClaudeContextFacts } from '../../context-usage/claude-context-facts'
 import { claudeSessionStateEndsTurn } from '../turns/claude-session-state-turn-over'
@@ -65,7 +66,8 @@ export function createClaudeJournalTranslator(
     // Keep existing stamps when superseding a turn ends pending attribution corrections.
     turnSuperseded: () => corrections.abandon(),
     endOpenWork: (...e) => endClaudeStreams(streamedThinking, streamedText, streamedBlocks, ...e),
-    onOpen: () => context.markActivity()
+    onOpen: () => context.markActivity(),
+    steerAwaitingEcho: () => deps.steerAwaitingEcho?.('all') ?? false
   })
   const context = new ClaudeContextFacts(turn, deps.sink)
   const fallbackId = deps.fallbackIdPrefix ?? 'acquisition'
@@ -146,7 +148,7 @@ export function createClaudeJournalTranslator(
     context,
     goalBackgroundWork: deps.goalBackgroundWork ?? (() => 'unverifiable'),
     acceptStartupFailure: deps.acceptStartupFailure,
-    steerAwaitingEcho: deps.steerAwaitingEcho ?? (() => false)
+    steerAwaitingEcho: () => deps.steerAwaitingEcho?.('priority') ?? false
   }
 
   const finish = (
@@ -172,22 +174,7 @@ export function createClaudeJournalTranslator(
     turn.observeStartedSend(event.type === 'message' ? (event.startedSend ?? null) : null)
     if (event.type === 'message') {
       context.observe(event.message, event.observedAt ?? Date.now())
-      // Root init starts a cycle; replays after root work fold into it, while task frames do not mark cycle work.
-      if (isRootClaudeFrame(event.message)) {
-        if (event.message.type === 'system' && event.message.subtype === 'init') {
-          turn.observeProviderCycleStart()
-        } else if (
-          event.startsTurn === true ||
-          event.message.type === 'assistant' ||
-          event.message.type === 'stream_event'
-        ) {
-          turn.observeProviderCycleWork()
-          turn.inputChoiceWorkObserved ||=
-            event.message.type !== 'assistant' ||
-            event.message.is_api_error_message !== true ||
-            event.startedSend != null
-        }
-        // Checked on every root frame: an approved plan settles the fallback without a new init.
+      if (observeClaudeTurnFrame(turn, event)) {
         journalClaudeFullAccessRefusal(deps, turnScope())
       }
     }
@@ -201,9 +188,10 @@ export function createClaudeJournalTranslator(
       return
     }
     // Observe announcements before flushing so buffered rows receive their resolved producer stamp.
-    const announced = event.type === 'message' && subagents.observeSystemFrame(event.message)
+    const message = event.type === 'message' ? event.message : null
+    const announced = message && subagents.observeSystemFrame(message)
     // Only ahead of a frame that can write a row: one per thinking token rewrote the whole row.
-    if (!(event.type === 'message' && isClaudeProgressFrame(event.message))) {
+    if (!message || !isClaudeProgressFrame(message)) {
       flush()
     }
     if (announced) {

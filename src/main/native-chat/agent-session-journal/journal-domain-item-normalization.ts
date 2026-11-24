@@ -1,4 +1,3 @@
-import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type Database from '../../sqlite/sync-database'
 import type {
   AgentJournalItemBody,
@@ -77,45 +76,5 @@ export function normalizeJournalDomainItemBody(
       body
     )
   }
-  body = withOpeningSendWrittenAt(db, target, body, previous?.body)
   return boundRunningToolOutput(body)
-}
-
-/** A turn keeps its opening send's writtenAt on the record itself, so forks and reloads count from it. */
-function withOpeningSendWrittenAt(
-  db: Database.Database,
-  target: { sessionId: string; epoch: string },
-  body: AgentJournalItemBody,
-  previous: AgentJournalItemBody | undefined
-): AgentJournalItemBody {
-  if (body.kind !== 'turn' || body.writtenAt !== undefined || !body.userItemId) {
-    return body
-  }
-  const kept = previous?.kind === 'turn' ? previous.writtenAt : undefined
-  const writtenAt = kept ?? openingSendWrittenAt(db, target, body.userItemId)
-  return writtenAt === undefined ? body : { ...body, writtenAt }
-}
-
-function openingSendWrittenAt(
-  db: Database.Database,
-  target: { sessionId: string; epoch: string },
-  userItemId: string
-): number | undefined {
-  const alias = db
-    .prepare(
-      `SELECT item_id FROM journal_item_aliases WHERE session_id=? AND epoch=? AND provider_item_id=?`
-    )
-    .get(target.sessionId, target.epoch, userItemId)
-  const identity = parseAgentJournalItemKey(alias ? String(alias.item_id) : userItemId)
-  if (identity?.provider !== 'orca') {
-    return undefined
-  }
-  const row = db
-    .prepare(
-      `SELECT json_extract(payload_json,'$.writtenAt') AS written_at FROM journal_submission_attempts
-      WHERE session_id=? AND epoch=? AND message_id=? AND current=1`
-    )
-    .get(target.sessionId, target.epoch, identity.clientMessageId)
-  const writtenAt = Number(row?.written_at)
-  return Number.isFinite(writtenAt) && writtenAt > 0 ? writtenAt : undefined
 }

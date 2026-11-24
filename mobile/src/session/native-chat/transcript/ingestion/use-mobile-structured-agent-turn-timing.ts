@@ -8,58 +8,60 @@ import type { AgentSessionLatestTurn } from '../../../../../../src/shared/agent-
 import type { NativeChatTurnJournal } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import type { StructuredAgentHostClock } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { selectStructuredAgentTurnBars } from '../../../../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
-import { structuredAgentSessionHostSaysWorking } from '../../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
-import { isStructuredAgentSessionMainAgentWorking } from '../../../../../../src/shared/agent-session/view/structured-agent-session-main-agent-working'
+import { structuredAgentSessionSendingItemIds } from '../../../../../../src/shared/agent-session/view/structured-agent-session-sending'
+import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import {
   stepStructuredAgentTurnClock,
   type StructuredAgentTurnClockLatch
 } from '../../../../../../src/shared/native-chat/transcript/turns/structured-agent-turn-clock-anchor'
 
+export type MobileNativeChatTurnJournal = NativeChatTurnJournal & {
+  sendingItemIds?: ReadonlySet<string>
+}
+
 // Use journal durations and latch the host-to-phone start conversion once per turn so counters remain skew-free.
 export function useMobileStructuredAgentTurnTiming(
   {
-    items,
     submissions,
     latestTurn,
     working,
-    fence,
     hostClock
   }: {
-    items: readonly AgentJournalRenderItem[]
     submissions: readonly AgentJournalSubmission[]
     latestTurn?: AgentSessionLatestTurn | null
     working?: boolean
-    fence?: number | null
     hostClock?: StructuredAgentHostClock | null
   },
-  turnId: string | null
+  turnId: string | null,
+  optimistic: readonly StructuredAgentSessionOptimisticMessage[],
+  items: readonly AgentJournalRenderItem[]
 ): {
   settledTurns: NativeChatSettledTurns
-  turnJournal: NativeChatTurnJournal
+  turnJournal: MobileNativeChatTurnJournal
   workingStartedAt: number | null
 } {
-  const { settledTurns, runningTiming, runningKey } = useMemo(
+  const { settledTurns, runningTiming } = useMemo(
     () => selectStructuredAgentTurnBars(items, submissions, turnId, latestTurn),
     [items, submissions, turnId, latestTurn]
   )
+  const sendingItemIds = useMemo(
+    () => structuredAgentSessionSendingItemIds(optimistic, submissions),
+    [optimistic, submissions]
+  )
   const turnJournal = useMemo(
-    () => ({ items, submissions, latestTurn, ...(working !== undefined ? { working } : {}) }),
-    [items, submissions, latestTurn, working]
+    () => ({
+      items,
+      submissions,
+      latestTurn,
+      sendingItemIds,
+      ...(working !== undefined ? { working } : {})
+    }),
+    [items, submissions, latestTurn, sendingItemIds, working]
   )
   const [latch, setLatch] = useState<StructuredAgentTurnClockLatch | null>(null)
-  const opening = runningKey !== null && runningKey !== turnId
-  // Working as the session derives it, so older hosts without the flag match desktop.
-  const agentWorking =
-    opening &&
-    structuredAgentSessionHostSaysWorking(working, () =>
-      isStructuredAgentSessionMainAgentWorking(turnId, submissions, fence)
-    )
-  // Derive during render so a new turn’s first paint counts from its correct start.
   const step = stepStructuredAgentTurnClock({
     timing: runningTiming,
-    // A send's early clock only while the agent works, so an idle viewer never gets a "Worked for" without a turn.
-    turnId: opening && agentWorking !== true ? null : runningKey,
-    opening,
+    turnId: runningTiming ? turnId : null,
     now: Date.now,
     hostClock,
     latch

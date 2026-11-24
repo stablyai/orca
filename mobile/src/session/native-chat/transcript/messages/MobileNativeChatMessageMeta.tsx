@@ -12,17 +12,23 @@ export function MobileNativeChatMessageMeta({
   message,
   rowKey,
   fontScale,
-  rewindable
+  rewindable,
+  deliveryStatus
 }: {
   message: NativeChatMessage
   rowKey: string
   fontScale: number
   rewindable?: true
+  deliveryStatus?: string | undefined
 }): React.JSX.Element {
   const copyText = nativeChatMessageCopyText(message)
   return (
     <View style={styles.meta}>
-      <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
+      <MobileNativeChatMessageTime
+        timestamp={message.timestamp}
+        fontScale={fontScale}
+        deliveryStatus={deliveryStatus}
+      />
       {/* An empty wrapper would still pull the time over by the icons' edge margin. */}
       {copyText.length > 0 || rewindable || mobileNativeChatRowHoldsForkSlot(message) ? (
         <View style={styles.metaActions}>

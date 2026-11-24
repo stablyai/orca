@@ -1,3 +1,8 @@
+import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionLatestTurn } from '../../../../../../shared/agent-session/agent-session-wire'
+import { isStructuredAgentSessionThinking } from '../../../../../../shared/agent-session/view/structured-agent-session-live-turn'
+import { nativeChatWorkingPresentation } from '../../../../../../shared/agent-session/view/structured-agent-session-sending'
+import type { NativeChatDeliveryNotice } from '../../messages/rows/NativeChatMessageRow'
 import { useLayoutEffect, useMemo, useState } from 'react'
 import {
   NATIVE_CHAT_UNANCHORED_TURN_KEY,
@@ -11,25 +16,61 @@ import {
 export function useNativeChatTurnStatus({
   turnKeys,
   liveTurnKey,
-  isWorking,
+  working,
+  journalItems,
+  latestTurn,
+  subagentId,
+  notices,
+  displayedIds,
+  queueSendPending,
   workingStartedAt,
-  settledTurns,
-  thinking = false
+  settledTurns
 }: {
   /** Each row's turn, as `nativeChatTurnMembership` places it. */
   turnKeys: readonly (string | undefined)[]
   /** The live turn, whose bar carries the running clock (`nativeChatTurnMembership`). */
   liveTurnKey: string | undefined
-  isWorking: boolean
+  working: boolean
+  journalItems: readonly AgentJournalRenderItem[] | undefined
+  latestTurn: AgentSessionLatestTurn | null | undefined
+  subagentId: string | null
+  notices: ReadonlyMap<string, NativeChatDeliveryNotice> | undefined
+  displayedIds: ReadonlySet<string>
+  queueSendPending: boolean
   workingStartedAt?: number | null
   /** Recorded durations (the host's journal or the transcript); they outrank what this client observed. */
   settledTurns?: NativeChatSettledTurns | null
-  /** Whether the turn is reasoning right now, derived from its journal content. */
-  thinking?: boolean
 }): {
-  active: NativeChatTurnStatus | null
-  completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
+  turnWorking: boolean
+  turnStatuses: {
+    active: NativeChatTurnStatus | null
+    completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
+  }
 } {
+  const structured = journalItems !== undefined
+  const thinking = useMemo(
+    () =>
+      subagentId === null &&
+      isStructuredAgentSessionThinking({ items: journalItems ?? [], latestTurn }),
+    [journalItems, latestTurn, subagentId]
+  )
+  const sendPending = useMemo(() => {
+    if (!structured) {
+      return liveTurnKey !== undefined && notices?.get(liveTurnKey)?.sending === true
+    }
+    for (const [id, notice] of notices ?? []) {
+      if (notice.sending && displayedIds.has(id)) {
+        return true
+      }
+    }
+    return false
+  }, [notices, displayedIds, liveTurnKey, structured])
+  const { isWorking, turnWorking } = nativeChatWorkingPresentation(
+    working,
+    workingStartedAt,
+    structured,
+    sendPending || queueSendPending
+  )
   const activeTurnKey = liveTurnKey ?? NATIVE_CHAT_UNANCHORED_TURN_KEY
   const [timingByTurn, setTimingByTurn] = useState<NativeChatTurnTimingByTurn>({})
   const validTurnKeys = useMemo(
@@ -50,15 +91,23 @@ export function useNativeChatTurnStatus({
   }, [activeTurnKey, isWorking, validTurnKeys, workingStartedAt])
 
   // Stable identity keeps status-only renders from rebuilding transcript slots.
-  return useMemo(
-    () =>
-      selectNativeChatTurnStatuses(timingByTurn, {
-        activeTurnKey,
-        isWorking,
-        workingStartedAt,
-        thinking,
-        settledByTurn: settledTurns ?? undefined
-      }),
-    [timingByTurn, activeTurnKey, isWorking, workingStartedAt, thinking, settledTurns]
-  )
+  const turnStatuses = useMemo(() => {
+    const statuses = selectNativeChatTurnStatuses(timingByTurn, {
+      activeTurnKey,
+      isWorking,
+      workingStartedAt,
+      thinking,
+      settledByTurn: settledTurns ?? undefined
+    })
+    return isWorking && !turnWorking ? { ...statuses, active: null } : statuses
+  }, [
+    timingByTurn,
+    activeTurnKey,
+    isWorking,
+    workingStartedAt,
+    thinking,
+    settledTurns,
+    turnWorking
+  ])
+  return { turnWorking, turnStatuses }
 }

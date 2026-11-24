@@ -97,7 +97,7 @@ export function applyJournalDomainCommandTurn(
         state: 'running',
         userItemId: agentJournalSubmissionKey(dispatch.clientMessageId),
         requestedAt: attempt?.submission.handedOverAt ?? operation.input.submittedAt,
-        startedAt: savedAt
+        ...(operation.input.waitsForProviderStart ? {} : { startedAt: savedAt })
       })
       const commit = applyJournalDomainItem(
         db,

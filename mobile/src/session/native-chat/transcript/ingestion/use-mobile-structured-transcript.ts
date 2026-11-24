@@ -1,3 +1,4 @@
+import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   agentSessionContextClearOutstanding,
@@ -29,12 +30,22 @@ const mobileStructuredTranscript = createStructuredQuestionProjection(
 /** The chat's transcript rows, its messages with this phone's sends in flight, and the prompts they resolved.
  * From this phone's /clear press until its divider lands, the rows drawn at the press stay hidden:
  * the host stops the old agent before it writes the divider. */
-export function useMobileStructuredTranscript(
-  agent: string | null,
-  state: Pick<StructuredAgentSessionState, 'epoch' | 'items' | 'submissions'>,
-  optimistic: readonly StructuredAgentSessionOptimisticMessage[],
+export function useMobileStructuredTranscript({
+  agent,
+  state,
+  optimistic,
+  sessionKey,
+  turnId
+}: {
+  agent: string | null
+  state: Pick<
+    StructuredAgentSessionState,
+    'epoch' | 'items' | 'submissions' | 'latestTurn' | 'working' | 'hostClock'
+  >
+  optimistic: readonly StructuredAgentSessionOptimisticMessage[]
   sessionKey: string
-) {
+  turnId: string | null
+}) {
   const [clearSent, setClearSent] = useState<{
     sessionKey: string
     epoch: string | null
@@ -85,7 +96,7 @@ export function useMobileStructuredTranscript(
   return {
     clearing,
     onClearSent,
-    transcriptItems,
+    timing: useMobileStructuredAgentTurnTiming(state, turnId, optimistic, transcriptItems),
     messages,
     receipts: questionTranscript(transcriptItems).receipts
   }

@@ -8,7 +8,7 @@ import {
 import { writeJournalDomainDispatchAttempt } from './journal-domain-dispatch-attempt'
 import type { JournalWriterOperation } from './journal-writer-command'
 
-/** Stamp `writtenAt` on a pending send the provider took while running no other turn; one stamp per handover. */
+/** Stamp provider receipt once per pending handover. */
 export function applyJournalDomainDispatchWritten(
   db: Database.Database,
   target: JournalDomainSubmissionTarget,
@@ -39,7 +39,6 @@ export function applyJournalDomainDispatchWritten(
   }
   const attempt = readJournalDomainSubmissionAttempt(db, target, operation.clientMessageId, false)
   const submission = attempt?.submission
-  // A send handed over into a running turn waits for the provider to read it; its echo settles it.
   if (
     !attempt ||
     !submission ||
@@ -48,7 +47,7 @@ export function applyJournalDomainDispatchWritten(
     !attempt.handover ||
     attempt.handover.fence !== operation.fence ||
     operation.fence < Number(head.highest_fence) ||
-    attempt.handover.scope?.kind !== 'thread'
+    (!operation.providerReceipt && attempt.handover.scope?.kind !== 'thread')
   ) {
     return result
   }

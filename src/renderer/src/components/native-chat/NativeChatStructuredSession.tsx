@@ -128,16 +128,15 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const hostSendGate = useNativeChatHostSendGate(props.target, props.agent, hostOutage)
   const hostHeld = hostSendGate.sendBlockedReason !== null
   const submits = useStructuredNativeChatSubmitReveal(controller, provisionalLaunch.retry, hostHeld)
-  const workerApprovalParty = nativeChatWorkerApprovalParty(props)
   const promptResponse = useStructuredPromptResponseHold(submits.respond)
-  const needsFailureFacts =
-    submits.queuedMessages.cards.some((card) => card.state === 'returned') ||
-    controller.submissions.some(
-      (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
-    )
+  const { cards } = submits.queuedMessages
   const startFailures = useStructuredAgentSessionStartFailureFacts(
     controller.journalItems,
-    needsFailureFacts || props.agent === 'claude'
+    props.agent === 'claude' ||
+      cards.some((card) => card.state === 'returned') ||
+      controller.submissions.some(
+        (send) => send.dispatchState === 'rejected' && !dispatchWasWithdrawn(send)
+      )
   )
   const deliveryNotices = useStructuredAgentSessionDeliveryNotices({
     pending: controller.pending,
@@ -298,7 +297,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                     >
                       <NativeChatHostSetupContext.Provider value={setup}>
                         <NativeChatWorkerApprovalTimeline
-                          party={workerApprovalParty}
+                          party={nativeChatWorkerApprovalParty(props)}
                           target={props.target}
                         >
                           {(timedRows) => (
@@ -326,6 +325,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                               structuredAttachments
                               runtimeContext={imageRuntimeContext}
                               deliveryNotices={deliveryNotices}
+                              queueSendPending={cards.some((card) => card.hold === 'sending')}
                               {...{ turnBot, botHome: bot.kickoff }}
                               timedRows={timedRows}
                             />

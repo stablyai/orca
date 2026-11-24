@@ -11,7 +11,7 @@ import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatReasoningBody } from '../message-content/MobileNativeChatReasoningRow'
 import { MobileNativeChatRowOverlaysContext } from '../message-actions/mobile-native-chat-row-overlays'
-import type { MobileNativeChatLiveLine as LiveLine } from '../turn-state/use-mobile-native-chat-turn-disclosure'
+import type { MobileNativeChatLiveLine as LiveLine } from '../turn-state/use-mobile-native-chat-live-line'
 
 // Keep the clock in the turn bar; the live line may disclose reasoning whose standalone row is hidden.
 export function MobileNativeChatLiveLine({

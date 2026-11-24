@@ -10,7 +10,8 @@ import type { ClaudeSession } from '../claude-structured-session-state'
 /** Open the command turn before sending; its result settles the waiter and closes that turn. */
 export async function dispatchClaudeCommand(
   session: ClaudeSession,
-  command: StructuredAgentSessionCommandRun
+  command: StructuredAgentSessionCommandRun,
+  fence: number
 ): Promise<AgentSessionCommandAdmission> {
   const sentUuid = randomUUID()
   session.translator?.beginCommand({
@@ -21,6 +22,7 @@ export async function dispatchClaudeCommand(
   try {
     const admission = await dispatchClaudeTurn(session, {
       clientMessageId: command.clientMessageId,
+      fence,
       body: {
         kind: 'message',
         role: 'user',

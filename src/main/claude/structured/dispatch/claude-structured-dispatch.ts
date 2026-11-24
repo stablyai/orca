@@ -1,3 +1,4 @@
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { randomUUID } from 'node:crypto'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { claudePromptUuidForSubmission } from '../lifecycle/claude-structured-session-id'
@@ -129,6 +130,8 @@ export async function dispatchClaudeTurn(
     body: AgentJournalMessageItem
     requestedAt?: number
     sentUuid?: string
+    fence?: number
+    turnScope?: AgentJournalTurnScope
     signal?: AbortSignal
     admitFreshInput?: StructuredAgentSessionAdmitFreshInput
   },
@@ -163,8 +166,12 @@ export async function dispatchClaudeTurn(
       sentUuid,
       claudeDispatchContentKey(content),
       input.clientMessageId ?? null,
-      input.requestedAt ?? null
+      input.requestedAt ?? null,
+      input.fence ?? session.fence
     )
+    if (input.turnScope?.kind === 'turn') {
+      replay.waiter.turnScoped = true
+    }
     if (renamesSession) {
       replay.waiter.renamesSession = true
     }
@@ -256,5 +263,5 @@ export async function dispatchClaudeTurn(
     return { state: 'unknown', reason: dispatchWriteOutcomeUnknownReason(error) }
   }
   // Admit on write: an echo may wait for the current turn; replay settles delivery later.
-  return { state: 'admitted', written: true }
+  return { state: 'admitted' }
 }
