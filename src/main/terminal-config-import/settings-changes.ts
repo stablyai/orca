@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 
 // Compare nested values structurally with sorted keys while preserving meaningful array order.
 function stableStringify(v: unknown): string {

@@ -1,9 +1,10 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { ChevronRight, ListFilter, X } from 'lucide-react'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { PaletteFilterModel } from './palette-filter-options'
 import {
@@ -64,14 +65,18 @@ export default function PaletteFilterMenu({
   filter,
   onFilterChange,
   onRequestInputFocus,
-  portalContainer
+  portalContainer,
+  pausedReason = null
 }: {
   model: PaletteFilterModel
   filter: PaletteFilterState
   onFilterChange: (next: PaletteFilterState) => void
   onRequestInputFocus: () => void
   portalContainer: HTMLElement | null
+  /** Set while filters don't apply (showing only bots): the trigger keeps its count but never opens. */
+  pausedReason?: string | null
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const [open, setOpen] = useState(false)
   const [activeField, setActiveField] = useState<PaletteFilterField | null>(null)
@@ -83,7 +88,7 @@ export default function PaletteFilterMenu({
     if (model.hosts.length > 1) {
       entries.push({
         field: 'host',
-        heading: translate('worktreeJumpPalette.filter.hosts', 'Hosts'),
+        heading: t('worktreeJumpPalette.filter.hosts', 'Hosts'),
         options: model.hosts,
         selected: filter.hostIds
       })
@@ -92,14 +97,14 @@ export default function PaletteFilterMenu({
       entries.push({
         field: 'repository',
         // "Projects" is the user-facing term for repository-granular choices; see filter.emptySubtitle.
-        heading: translate('worktreeJumpPalette.filter.projects', 'Projects'),
+        heading: t('worktreeJumpPalette.filter.projects', 'Projects'),
         options: model.repositories,
         selected: filter.repoIds
       })
     }
     return entries
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-  }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories, languageRevision])
+  }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories, languageRevision, t])
 
   const activeGroup =
     activeField == null ? null : (groups.find((group) => group.field === activeField) ?? null)
@@ -156,6 +161,47 @@ export default function PaletteFilterMenu({
     return null
   }
 
+  const triggerContent = (
+    <>
+      <ListFilter className="size-3.5" aria-hidden="true" />
+      <span>{t('worktreeJumpPalette.filter.label', 'Filter')}</span>
+      {active ? (
+        <span className="rounded-full bg-primary/85 px-1.5 text-[10px] font-semibold tabular-nums text-primary-foreground">
+          {selectionCount}
+        </span>
+      ) : null}
+    </>
+  )
+
+  if (pausedReason) {
+    // Focusable so keyboard users get the reason too; aria-disabled rather than disabled for that.
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {/* Dimmed as a whole: filters stay set but don't apply while showing only bots. */}
+          <span className="ml-2 inline-flex opacity-50">
+            <Button
+              type="button"
+              variant={active ? 'secondary' : 'outline'}
+              size="xs"
+              aria-label={t('worktreeJumpPalette.filter.trigger', 'Filter results')}
+              aria-disabled="true"
+              aria-description={pausedReason}
+              data-active={active ? 'true' : undefined}
+              className="cursor-default"
+              onClick={(event) => event.preventDefault()}
+            >
+              {triggerContent}
+            </Button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>
+          {pausedReason}
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
@@ -163,17 +209,11 @@ export default function PaletteFilterMenu({
           type="button"
           variant={active ? 'secondary' : 'outline'}
           size="xs"
-          aria-label={translate('worktreeJumpPalette.filter.trigger', 'Filter results')}
+          aria-label={t('worktreeJumpPalette.filter.trigger', 'Filter results')}
           data-active={active ? 'true' : undefined}
           className="ml-2"
         >
-          <ListFilter className="size-3.5" aria-hidden="true" />
-          <span>{translate('worktreeJumpPalette.filter.label', 'Filter')}</span>
-          {active ? (
-            <span className="rounded-full bg-primary/85 px-1.5 text-[10px] font-semibold tabular-nums text-primary-foreground">
-              {selectionCount}
-            </span>
-          ) : null}
+          {triggerContent}
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -210,7 +250,7 @@ export default function PaletteFilterMenu({
         {active ? (
           <div className="flex items-center justify-between border-t border-border/55 px-3 py-2">
             <span className="text-[11px] text-muted-foreground">
-              {translate('worktreeJumpPalette.filter.activeCount', '{{value0}} active', {
+              {t('worktreeJumpPalette.filter.activeCount', '{{value0}} active', {
                 value0: selectionCount
               })}
             </span>
@@ -220,7 +260,7 @@ export default function PaletteFilterMenu({
               className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
             >
               <X className="size-3" aria-hidden="true" />
-              {translate('worktreeJumpPalette.filter.clearAll', 'Clear all')}
+              {t('worktreeJumpPalette.filter.clearAll', 'Clear all')}
             </button>
           </div>
         ) : null}

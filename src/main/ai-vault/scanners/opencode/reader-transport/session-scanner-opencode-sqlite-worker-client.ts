@@ -6,19 +6,21 @@ import type {
   AiVaultSession
 } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type {
+  OpenCodeForkCoverageRequest,
   OpenCodeNativeChatReadRequest,
   OpenCodeNativeChatReadValue,
   OpenCodeSqliteCaptureValue,
   OpenCodeSqliteListValue,
   OpenCodeSqliteWorkerRequest,
-  OpenCodeSqliteWorkerResponse
+  OpenCodeSqliteWorkerResponse,
+  SqliteReaderAgent
 } from './session-scanner-opencode-sqlite-worker-protocol'
 import { parseOpenCodeSqliteCaptureValue } from './session-scanner-opencode-sqlite-worker-response'
 import type { SessionFileCandidate } from '../../../session-scanner-types'
-import { errorMessage } from '../../../session-scanner-values'
+import { errorMessage } from '../../../../../shared/errors/error-message'
 import { runOpenCodeSqliteScanRequest } from '../sqlite/session-scanner-opencode-sqlite-scan-scope'
 
-// Adapt OpenCode reads to the shared worker queue and lazy host; spawning is wired in worker-spawn.
+// Adapt OpenCode reads to the shared worker queue and lazy host; spawning is wired in sqlite-shared-client.
 
 export const LIST_TIMEOUT_MS = 30_000
 export const PARSE_TIMEOUT_MS = 15_000
@@ -75,7 +77,7 @@ export class OpenCodeSqliteWorkerClient {
     dbPaths: readonly string[]
     limit: number
     issues: AiVaultScanIssue[]
-    agent?: 'opencode2' | 'zcode'
+    agent?: SqliteReaderAgent
     scopePaths?: readonly string[]
     signal?: AbortSignal
   }): Promise<SessionFileCandidate[]> {
@@ -130,7 +132,7 @@ export class OpenCodeSqliteWorkerClient {
     dbPath: string
     sessionId: string
     platform: NodeJS.Platform
-    agent?: 'opencode2' | 'zcode'
+    agent?: SqliteReaderAgent
     signal?: AbortSignal
   }): Promise<AiVaultSession | null> {
     try {
@@ -160,7 +162,7 @@ export class OpenCodeSqliteWorkerClient {
     dbPath: string
     sessionId: string
     platform: NodeJS.Platform
-    agent?: 'opencode2' | 'zcode'
+    agent?: SqliteReaderAgent
     signal?: AbortSignal
   }): Promise<OpenCodeSqliteCaptureValue> {
     try {
@@ -197,6 +199,20 @@ export class OpenCodeSqliteWorkerClient {
     return value as OpenCodeNativeChatReadValue
   }
 
+  async readForkCoverage(
+    args: Omit<OpenCodeForkCoverageRequest, 'id' | 'kind'>,
+    signal?: AbortSignal
+  ): Promise<string[]> {
+    const value = await this.dispatch(
+      (id) => ({ ...args, id, kind: 'fork-coverage' }),
+      PARSE_TIMEOUT_MS,
+      signal,
+      'native-chat'
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This build's bundled reader constructs the private coverage result.
+    return value as string[]
+  }
+
   dispose(): void {
     this.requests.dispose()
   }
@@ -205,7 +221,7 @@ export class OpenCodeSqliteWorkerClient {
     buildRequest: (id: number) => OpenCodeSqliteWorkerRequest,
     timeoutMs: number,
     signal?: AbortSignal,
-    agent?: 'opencode2' | 'zcode' | 'native-chat'
+    agent?: SqliteReaderAgent | 'native-chat'
   ): Promise<unknown> {
     const deadline = this.requestTimeoutMs ?? timeoutMs
     const response = await runOpenCodeSqliteScanRequest(

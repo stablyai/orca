@@ -1,5 +1,5 @@
 import type { AiVaultAgent, AiVaultSessionTitleKind } from './ai-vault-types'
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 
 export const AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT = 64
 
@@ -9,6 +9,15 @@ export type AiVaultSessionTitle = {
   title: string
   /** Absent from older hosts and saved tabs: unclassified, ranked like a fallback. */
   kind?: AiVaultSessionTitleKind
+}
+
+/** A tab's provider title names only the pane running that session, not every pane in the tab. */
+export function aiVaultTitleOfSession(
+  title: AiVaultSessionTitle | null | undefined,
+  agent: string | null | undefined,
+  sessionId: string | undefined
+): AiVaultSessionTitle | null {
+  return title && title.agent === agent && title.sessionId === sessionId ? title : null
 }
 
 export type AiVaultSessionTitleRequest = {

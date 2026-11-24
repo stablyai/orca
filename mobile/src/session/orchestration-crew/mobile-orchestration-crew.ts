@@ -5,23 +5,23 @@ import {
   mayHoldAgentReferences,
   printableAgentLabel,
   type OrchestrationAgentReference
-} from '../../../../src/shared/orchestration-agent-reference'
+} from '../../../../src/shared/orchestration/mailbox/orchestration-agent-reference'
 import {
   CrewFrame,
   emptyCrew,
   type OrchestrationCrewRow,
   type OrchestrationCrewSnapshot
-} from '../../../../src/shared/orchestration-crew'
+} from '../../../../src/shared/orchestration/orchestration-crew'
 import type {
   AgentMessageSender,
   AgentMessageSource
-} from '../../../../src/shared/agent-session/agent-session-message-source'
+} from '../../../../src/shared/agent-session/journal/agent-session-message-source'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId,
   parseOrcaSessionAddress
-} from '../../../../src/shared/orca-session-address'
-import { isMobileMethodUnavailableError } from '../../transport/mobile-method-unavailable'
+} from '../../../../src/shared/agent-session/identity/orca-session-address'
+import { isMobileMethodUnavailableError } from '../../transport/rpc/mobile-method-unavailable'
 
 export type MobileCrewStatus = 'running' | 'waiting' | 'done' | 'failed'
 

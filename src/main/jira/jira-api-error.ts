@@ -1,4 +1,4 @@
-import { readFetchResponseJsonWithinLimit } from '../../shared/fetch-response-body'
+import { readFetchResponseJsonWithinLimit } from '../../shared/network/fetch-response-body'
 
 export class JiraApiError extends Error {
   constructor(

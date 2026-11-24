@@ -1,7 +1,7 @@
 import type {
   NewerDaemonHeldScreen,
   NewerDaemonReopenResult
-} from '../../../../shared/newer-daemon-hold'
+} from '../../../../shared/terminal/daemon/newer-daemon-hold'
 import { coldRestorePayloadFromInfo } from '../../history/restoration/cold-restore-payload-cache'
 import {
   classifyDaemonGeneration,

@@ -3,7 +3,7 @@ import {
   getWorkItemStateTone,
   WorkItemStateBadge as SharedWorkItemStateBadge
 } from '@/components/github/work-item-state-badge'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 
 // Closed issues stay neutral; reserve red for unmerged closed PRs.
 export function getStateTone(item: GitHubWorkItem): string {

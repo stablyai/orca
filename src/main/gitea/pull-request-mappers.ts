@@ -1,4 +1,7 @@
-import type { CheckStatus, PRMergeableState } from '../../shared/github/pull-request-types'
+import type {
+  CheckStatus,
+  PRMergeableState
+} from '../../shared/github/pull-requests/pull-request-types'
 
 export type RawGiteaPullRequest = {
   number?: number

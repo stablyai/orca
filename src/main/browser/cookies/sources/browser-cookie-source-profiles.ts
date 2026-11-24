@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type { BrowserSessionProfileSource } from '../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfileSource } from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 export type BrowserProfile = {
   name: string

@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
@@ -7,21 +8,27 @@ import type {
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   buildManagedCommandDefinition,
-  createManagedCommandMatcher,
-  getSharedManagedScriptPath,
-  readHooksJson,
-  removeManagedCommands,
-  writeHooksJson,
-  writeManagedScript,
   type HookDefinition
-} from '../agent-hooks/installer-utils'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
+} from '../agent-hooks/installation/configuration/hook-config-schema'
+import {
+  createManagedCommandMatcher,
+  hookDefinitionHasManagedCommand,
+  removeManagedCommands
+} from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
+import {
+  parseHooksJsonText,
+  readHooksJson
+} from '../agent-hooks/installation/configuration/hooks-json-read'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import {
   readHooksJsonRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote
-} from '../agent-hooks/installer-utils-remote'
-import { CURSOR_EVENTS } from './hook-events'
+  writeHooksJsonRemote
+} from '../agent-hooks/installation/configuration/hooks-json-remote'
+import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
+import { CURSOR_EVENTS, type CursorEvent } from './hook-events'
 import { getManagedCommand, getManagedScript, getPosixManagedCommand } from './hook-script'
 
 function getConfigPath(): string {
@@ -36,9 +43,49 @@ function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
+type ManagedEntryScan = { events: CursorEvent[]; outdated: boolean }
+
+// Events whose Orca entries differ from the single entry this build writes; retired events always count.
+async function scanManagedEntries(
+  configPath: string,
+  scriptPath: string
+): Promise<ManagedEntryScan> {
+  const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+  const scan: ManagedEntryScan = { events: [], outdated: false }
+  // A missing or unreadable file has no Orca entries to repair.
+  const raw = await readFile(configPath, 'utf8').catch(() => null)
+  const hooks = raw === null ? {} : (parseHooksJsonText(raw)?.hooks ?? {})
+  for (const [eventName, definitions] of Object.entries(hooks)) {
+    const managed = Array.isArray(definitions)
+      ? definitions.filter((definition) =>
+          hookDefinitionHasManagedCommand(definition, isManagedCommand)
+        )
+      : []
+    if (managed.length === 0) {
+      continue
+    }
+    const event = CURSOR_EVENTS.find((candidate) => candidate === eventName)
+    if (!event) {
+      scan.outdated = true
+      continue
+    }
+    const current = getManagedCommand(scriptPath, event)
+    if (managed.length > 1 || managed[0].command !== current) {
+      scan.events.push(event)
+      scan.outdated = true
+    }
+  }
+  return scan
+}
+
 export class CursorHookService {
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
+    // Cursor desktop runs these entries without the CLI that gates install(); update only what Orca already owns.
+    const scan = await scanManagedEntries(getConfigPath(), getManagedScriptPath())
+    if (scan.outdated) {
+      this.install(scan.events, { onlyOwnedEvents: true })
+    }
   }
 
   getStatus(): AgentHookInstallStatus {
@@ -88,7 +135,10 @@ export class CursorHookService {
     return { agent: 'cursor', state, configPath, managedHooksPresent, detail }
   }
 
-  install(): AgentHookInstallStatus {
+  install(
+    events: readonly CursorEvent[] = CURSOR_EVENTS,
+    options: { onlyOwnedEvents?: boolean } = {}
+  ): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
@@ -127,9 +177,16 @@ export class CursorHookService {
       }
     }
 
-    for (const eventName of CURSOR_EVENTS) {
+    for (const eventName of events) {
       const command = getManagedCommand(scriptPath, eventName)
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
+      // The refresh scan read the file earlier; skip events the user has since cleared of Orca entries.
+      if (
+        options.onlyOwnedEvents &&
+        !current.some((definition) => hookDefinitionHasManagedCommand(definition, isManagedCommand))
+      ) {
+        continue
+      }
       const cleaned = removeManagedCommands(current, isManagedCommand).filter(
         (definition) => !isManagedCommand(definition.command)
       )

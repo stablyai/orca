@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { emptyCrew, type OrchestrationCrewRow } from '../../../../src/shared/orchestration-crew'
-import { agentReferenceNote } from '../../../../src/shared/orchestration-agent-reference'
+import {
+  emptyCrew,
+  type OrchestrationCrewRow
+} from '../../../../src/shared/orchestration/orchestration-crew'
+import { agentReferenceNote } from '../../../../src/shared/orchestration/mailbox/orchestration-agent-reference'
 import {
   appendCrewMention,
   crewRowSubtitle,

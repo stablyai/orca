@@ -1,5 +1,5 @@
-import type { PRComment } from '../../../../../../shared/github/comment-types'
-import type { PRInfo } from '../../../../../../shared/github/pull-request-types'
+import type { PRComment } from '../../../../../../shared/github/comments/comment-types'
+import type { PRInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   getPRCommentGroupRoot as getPRCommentGroupReplyTarget,

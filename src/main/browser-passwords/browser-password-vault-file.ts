@@ -1,7 +1,7 @@
 import { readFileSync, rmSync } from 'node:fs'
-import type { BrowserPasswordEntrySummary } from '../../shared/browser-passwords-types'
-import { getSecretStore, hasSecretStore } from '../../shared/secret-store'
-import { writeSecureFile } from '../../shared/secure-file'
+import type { BrowserPasswordEntrySummary } from '../../shared/browser/passwords/browser-passwords-types'
+import { getSecretStore, hasSecretStore } from '../../shared/secure-storage/secret-store'
+import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 
 /**
  * On-disk vault: usernames and sites sit in one sealed index; each password is sealed on its own

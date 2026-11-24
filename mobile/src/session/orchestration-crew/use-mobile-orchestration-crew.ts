@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import {
   emptyCrew,
   type OrchestrationCrewSnapshot
-} from '../../../../src/shared/orchestration-crew'
-import { isPublicOrchestrationAddress } from '../../../../src/shared/orchestration-agent-reference'
-import type { RpcClient } from '../../transport/rpc-client'
+} from '../../../../src/shared/orchestration/orchestration-crew'
+import { isPublicOrchestrationAddress } from '../../../../src/shared/orchestration/mailbox/orchestration-agent-reference'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { reduceCrewSubscription } from './mobile-orchestration-crew'
 
 const HIDDEN = emptyCrew('unknown')

@@ -1,5 +1,5 @@
 import { killAllProcessesForWorktree, type WorktreeTeardownRuntime } from './worktree-teardown'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { teardownStops } from './owned-session-teardown-policy'
 
 export type FolderWorkspacePtyTeardownDeps = {

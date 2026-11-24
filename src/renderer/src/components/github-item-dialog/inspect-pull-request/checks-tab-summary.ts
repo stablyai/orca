@@ -3,7 +3,7 @@ import {
   CHECK_COLOR,
   CHECK_ICON
 } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
-import type { getCheckCounts } from '@/components/pr-check-counts'
+import type { getCheckCounts } from '@/components/github/pr-check-counts'
 
 export function getChecksTabSummaryPresentation(counts: ReturnType<typeof getCheckCounts>): {
   SummaryIcon: (typeof CHECK_ICON)[keyof typeof CHECK_ICON] | typeof CircleDashed

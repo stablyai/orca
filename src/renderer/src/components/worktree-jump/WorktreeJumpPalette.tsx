@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { createWorktreePaletteRequestGuard } from '@/lib/worktree-palette-create-action'
+import { createWorktreePaletteRequestGuard } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 import { PALETTE_CLOSE_LINGER_MS } from './worktree-jump-palette-model'
 import { WorktreeJumpPaletteSurface } from './worktree-jump-palette-surface'
 import { useWorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'

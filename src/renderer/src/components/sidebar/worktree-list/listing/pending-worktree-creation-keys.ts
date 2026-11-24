@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import { pendingWorktreeCreationIsVisible } from '@/lib/pending-worktree-creation'
+import { pendingWorktreeCreationIsVisible } from '@/lib/workspace/creation/pending-worktree-creation'
 
 // Why frozen: the sidebar row model is always mounted and this list is empty
 // almost always, so one shared identity serves every read.

@@ -1,12 +1,14 @@
-import type { ProviderCheckSummary } from '../../../../../shared/github/pull-request-types'
-import { PRCheckEmptyDetails } from '@/components/pr-check-empty-details'
+import type { ProviderCheckSummary } from '../../../../../shared/github/pull-requests/pull-request-types'
+import { PRCheckEmptyDetails } from '@/components/github/pr-check-empty-details'
 import React from 'react'
 import { LoaderCircle } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
+import { SpinnerFrame } from '@/components/ui/LoadingSpinner'
 import { CHECK_COLOR } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
-import { getCheckCountChips, type getCheckCounts } from '@/components/pr-check-counts'
+import { getCheckCountChips, type getCheckCounts } from '@/components/github/pr-check-counts'
 import { getCheckDetailsKey } from '@/components/github/pr-check-presentation'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function ChecksTabLayouts({
   owner,
@@ -39,6 +41,7 @@ export function ChecksTabLayouts({
   renderCheckRow: (check: PRCheckDetail) => React.JSX.Element
   fixChecksAgentDialog: React.JSX.Element
 }): React.JSX.Element {
+  const t = useTranslate()
   if (loading && listLength === 0) {
     return (
       <>
@@ -63,14 +66,18 @@ export function ChecksTabLayouts({
     )
   }
   if (variant === 'page') {
-    const countChips = getCheckCountChips(counts)
+    const countChips = getCheckCountChips(counts, t)
     return (
       <>
         <div className="flex flex-col gap-3 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <SummaryIcon
-              className={cn('size-4 shrink-0', summaryColor, summaryPending && 'animate-spin')}
-            />
+            {summaryPending ? (
+              <SpinnerFrame>
+                <SummaryIcon className={cn('block size-4', summaryColor)} />
+              </SpinnerFrame>
+            ) : (
+              <SummaryIcon className={cn('size-4 shrink-0', summaryColor)} />
+            )}
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <span className="truncate text-[13px] font-medium text-foreground">
                 {summaryLabel}

@@ -1,4 +1,3 @@
-import { newChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionStoreTransactions } from '../records/agent-session-store-transactions'
 
 /** Backfill once as the chat host installs; legacy chats used their agent's Arguments. */
@@ -9,24 +8,10 @@ export function backfillAgentSessionPermissionModes(
   if (store.readOnly) {
     return Promise.resolve()
   }
-  return store.transact((draft) => {
-    for (const [sessionId, record] of draft.records) {
-      if (record.permissionMode !== undefined) {
-        continue
-      }
-      // Temporary: only the dev team's hourly builds saved the mode among options; remove after 1.4.226 ships.
-      const { permissionMode: saved, ...options } = record.options ?? {}
-      if (saved !== undefined) {
-        draft.records.set(sessionId, { ...record, options, permissionMode: saved })
-        continue
-      }
-      const permissionMode = newChatPermissionMode(
-        record.provider,
-        ranWithFullAccess(record.provider) ? 'full-access' : 'ask'
-      )
-      if (permissionMode) {
-        draft.records.set(sessionId, { ...record, permissionMode })
-      }
-    }
-  })
+  const fullAccess = new Map(
+    [...new Set([...store.state.records.values()].map((record) => record.provider))].map(
+      (provider) => [provider, ranWithFullAccess(provider)]
+    )
+  )
+  return store.command({ kind: 'permission-backfill', fullAccess })
 }

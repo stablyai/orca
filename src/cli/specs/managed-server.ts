@@ -1,5 +1,5 @@
-import type { CommandSpec } from '../args'
-import { LOCAL_COMMAND_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { LOCAL_COMMAND_FLAGS } from '../arguments/args'
 
 const SELECTOR_NOTE =
   '--environment names a managed Orca server this machine deployed over SSH (see `orca environment list`); it is a selector here, not a routing flag.'
@@ -18,10 +18,11 @@ export const MANAGED_SERVER_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['environment', 'update'],
     summary: 'Update a managed Orca server to this build’s version',
-    usage: 'orca environment update --environment <selector> [--force] [--json]',
-    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'environment', 'force'],
+    usage: 'orca environment update --environment <selector> [--force [--yes]] [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'environment', 'force', 'yes'],
     notes: [
       'Without --force, an update that would restart over running terminals is deferred and reported, not applied.',
+      'When the server cannot count its terminals, --force alone still defers. --force --yes goes ahead only if no terminal daemon is running, and terminals the server runs itself end, the same as Update anyway in Settings > Orca on your SSH hosts.',
       SELECTOR_NOTE,
       DESKTOP_NOTE
     ],

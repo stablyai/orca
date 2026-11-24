@@ -1,14 +1,14 @@
 import { useContext, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Users } from 'lucide-react-native'
-import type { OrchestrationCrewRow } from '../../../../../src/shared/orchestration-crew'
+import type { OrchestrationCrewRow } from '../../../../../src/shared/orchestration/orchestration-crew'
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
-import { MobileAgentIcon } from '../../../components/MobileAgentIcon'
+import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { MobileAgentMessageOpenContext } from '../transcript/mobile-agent-message-context'
+import { MobileAgentMessageOpenContext } from '../transcript/agent-messages/mobile-agent-message-context'
 import {
   crewOpenSender,
   crewRowSubtitle,
@@ -18,7 +18,7 @@ import {
   type MobileCrewStatus
 } from '../../orchestration-crew/mobile-orchestration-crew'
 import { useMobileOrchestrationCrew } from '../../orchestration-crew/use-mobile-orchestration-crew'
-import type { RpcClient } from '../../../transport/rpc-client'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 
 export function MobileOrchestrationCrewBar({
   client,

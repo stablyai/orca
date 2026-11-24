@@ -1,9 +1,16 @@
 /** Share minted-session parsing across main/renderer hydration and memory attribution; divergent copies caused REMOTE mislabels. */
 
-import { parseWorkspaceKey } from '../../../workspace-scope'
+import { parseWorkspaceKey } from '../../../workspace/identity/workspace-scope'
 
 export const PTY_SESSION_ID_SEPARATOR = '@@'
 export const WORKTREE_ID_SEPARATOR = '::'
+
+/** Saved local bindings may be qualified by a newer build; provider/history IDs stay raw. */
+export function decodeSavedLocalPtyId(sessionId: string): string {
+  return sessionId.startsWith('local|') && sessionId.length > 'local|'.length
+    ? sessionId.slice('local|'.length)
+    : sessionId
+}
 
 /** Require @@ plus a valid Git/folder workspace identity; arbitrary UUIDs must not invent memory owners. Return null for unminted IDs. */
 export function parsePtySessionId(sessionId: string): { worktreeId: string | null } {
@@ -27,4 +34,26 @@ export function parsePtySessionId(sessionId: string): { worktreeId: string | nul
 export function isPtySessionIdOwnedByWorktree(sessionId: string, worktreeId: string): boolean {
   const separatorIdx = sessionId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
   return separatorIdx === -1 || sessionId.slice(0, separatorIdx) === worktreeId
+}
+
+/** Bare counter ids from the in-process local provider; a start never reattaches one by id alone, only through a pane main already binds it to. */
+export function isLocalCounterPtyId(sessionId: string): boolean {
+  return /^\d+$/.test(sessionId)
+}
+
+const SERVE_PTY_SESSION_TAG = 'serve-'
+
+/** Serve ids carry their workspace like daemon-minted ids so inventory never re-files them by cwd (#36716). */
+export function mintServePtySessionId(worktreeId: string, uuid: string): string {
+  return `${worktreeId}${PTY_SESSION_ID_SEPARATOR}${SERVE_PTY_SESSION_TAG}${uuid}`
+}
+
+/** Accepts the workspace-less `serve-<uuid>` ids that older hosts minted and still restore. */
+export function isServeMintedPtySessionId(sessionId: string): boolean {
+  const separatorIdx = sessionId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
+  const tag =
+    separatorIdx === -1
+      ? sessionId
+      : sessionId.slice(separatorIdx + PTY_SESSION_ID_SEPARATOR.length)
+  return tag.startsWith(SERVE_PTY_SESSION_TAG)
 }

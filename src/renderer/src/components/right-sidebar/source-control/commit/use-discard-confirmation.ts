@@ -1,10 +1,10 @@
 import { useCallback, useState } from 'react'
 import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toast } from 'sonner'
-import { getConnectionId } from '@/lib/connection-context'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { basename } from '@/lib/path'
-import { bulkUnstageRuntimeGitPaths } from '@/runtime/runtime-git-working-tree-client'
+import { bulkUnstageRuntimeGitPaths } from '@/runtime/source-control/git/runtime-git-working-tree-client'
 import { translate } from '@/i18n/i18n'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import {
@@ -13,7 +13,7 @@ import {
   type DiscardAllArea
 } from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import { discardDeletesEntryFile } from './discard-confirmation'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { readGitCommandFailureMessage } from './git-command-failure-message'
 import {
   dismissSourceControlEntryFailureToast,
   showSourceControlEntryFailureToast
@@ -44,6 +44,7 @@ export function useSourceControlDiscardConfirmation({
   discardSingle: (path: string) => Promise<void>
   refreshActiveGitStatusAfterMutation: () => Promise<void>
 }) {
+  const scope = useSourceControlScope()
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
   // Reset during render so a worktree switch cannot paint its predecessor's confirmation.
   const [pendingDiscardWorktreeId, setPendingDiscardWorktreeId] = useState(activeWorktreeId)
@@ -88,7 +89,7 @@ export function useSourceControlDiscardConfirmation({
       }
       setIsExecutingBulk(true)
       try {
-        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+        const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
         // Aggregate per-file errors into one toast rather than spamming partial failures.
         const errors: unknown[] = []
         const result = await runDiscardAllForArea(area, paths, {
@@ -116,11 +117,11 @@ export function useSourceControlDiscardConfirmation({
               'auto.components.right.sidebar.SourceControl.a5e5a11090',
               'Discard all failed — unable to unstage files before discard'
             ),
-            { description: readIpcErrorMessage(errors[0]) }
+            { description: readGitCommandFailureMessage(errors[0]) }
           )
         } else if (result.failed.length > 0) {
           // Limit bulk failures to the first error and sample paths so the toast stays readable.
-          const firstMsg = readIpcErrorMessage(errors[0])
+          const firstMsg = readGitCommandFailureMessage(errors[0])
           const sample = result.failed.slice(0, 3).join(', ')
           const hiddenCount = result.failed.length - 3
           const samplePaths =
@@ -161,6 +162,7 @@ export function useSourceControlDiscardConfirmation({
       }
     },
     [
+      scope,
       activeRepoTarget,
       worktreePath,
       activeWorktreeId,

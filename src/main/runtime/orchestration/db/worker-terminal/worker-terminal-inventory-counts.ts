@@ -1,11 +1,11 @@
-import { deriveWorkerTerminalListState } from '../../worker-terminal-ownership'
+import { deriveWorkerTerminalListState } from '../../terminal-authority/release/worker-terminal-ownership'
 import type {
   WorkerDispatchListState,
   WorkerTerminalListState,
   WorkerTerminalOwnershipState,
   WorkerTerminalReleaseState
-} from '../../worker-terminal-ownership'
-import type { OrchestrationDb } from '../orchestration-db'
+} from '../../terminal-authority/release/worker-terminal-ownership'
+import type { OrchestrationDb, OrchestrationDbConnection } from '../orchestration-db'
 import type { WorkerTerminalListingSnapshot } from './worker-terminal-listing'
 
 export type WorkerTerminalStateRow = {
@@ -51,7 +51,7 @@ export const WORKER_TERMINAL_HANDED_ON_SQL = `r.id IS NULL AND EXISTS (
 
 /** Derive all filtering/counting through the single state machine; newest-first order supports paging. */
 export function scanWorkerTerminalStates(
-  this: OrchestrationDb,
+  this: OrchestrationDbConnection,
   where: string[],
   values: (string | number)[]
 ): WorkerTerminalStateRow[] {
