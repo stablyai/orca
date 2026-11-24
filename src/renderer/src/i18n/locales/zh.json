@@ -6475,11 +6475,6 @@
           "uncountedChangesLost": "未提交的更改将丢失",
           "moreLoadedPaths": "以及另外 {{value0}} 个已加载的路径"
         },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "子工作区将被删除",
-          "alsoDeletesChildren_other": "删除此工作区也会删除 {{count}} 个子工作区",
-          "moreChildren_other": "另有 {{count}} 个"
-        },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "显示工作树",
           "ad99f4eea9": "保持隐藏",
@@ -24886,8 +24881,6 @@
     "setupTerminalTitle": "初始设置",
     "delete": {
       "detachingChildren": "正在分离子工作区…",
-      "childrenPreservedTitle": "子工作区将被保留",
-      "childrenCannotBeKeptTitle": "无法保留子工作区",
       "childrenPreservedDescription": "直接子工作区将成为顶级工作区，其文件、终端和嵌套的子工作区都将保留",
       "detachChildren": "分离并保留子工作区",
       "nestedChildrenCannotBeKept": "此工作区内的子工作区文件夹需先移到此工作区之外，才能保留",

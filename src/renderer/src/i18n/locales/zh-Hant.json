@@ -6069,11 +6069,6 @@
           "changesLost_other": "{{count}} 項未提交的變更將遺失",
           "uncountedChangesLost": "未提交的變更將遺失"
         },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "子工作區將被刪除",
-          "alsoDeletesChildren_other": "刪除此工作區也會刪除 {{count}} 個子工作區。",
-          "moreChildren_other": "另有 {{count}} 個"
-        },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "顯示工作目錄樹",
           "ad99f4eea9": "保持隱藏",

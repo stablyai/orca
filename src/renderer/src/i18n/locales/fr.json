@@ -6032,15 +6032,6 @@
           "uncountedChangesLost": "Les modifications non commitées seront perdues",
           "moreLoadedPaths": "et {{value0}} autres chemins chargés"
         },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Les espaces de travail enfants seront supprimés",
-          "alsoDeletesChildren_one": "Supprimer cet espace de travail supprime également {{count}} espace de travail enfant.",
-          "alsoDeletesChildren_other": "Supprimer cet espace de travail supprime également {{count}} espaces de travail enfants.",
-          "alsoDeletesChildren_many": "Supprimer cet espace de travail supprime également {{count}} espaces de travail enfants.",
-          "moreChildren_one": "+{{count}} de plus",
-          "moreChildren_other": "+{{count}} de plus",
-          "moreChildren_many": "+{{count}} de plus"
-        },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Afficher le worktree",
           "ad99f4eea9": "Garder masqué",

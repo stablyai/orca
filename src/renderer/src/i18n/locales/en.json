@@ -7355,13 +7355,6 @@
           "uncountedChangesLost": "Uncommitted changes will be lost",
           "moreLoadedPaths": "and {{value0}} more loaded paths"
         },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Child workspaces will be deleted",
-          "alsoDeletesChildren_one": "Deleting this workspace also deletes {{count}} child workspace.",
-          "alsoDeletesChildren_other": "Deleting this workspace also deletes {{count}} child workspaces.",
-          "moreChildren_one": "+{{count}} more",
-          "moreChildren_other": "+{{count}} more"
-        },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Show worktree",
           "ad99f4eea9": "Keep hidden",
@@ -25510,8 +25503,6 @@
     "setupTerminalTitle": "Setup",
     "delete": {
       "detachingChildren": "Detaching children...",
-      "childrenPreservedTitle": "Child workspaces will be kept",
-      "childrenCannotBeKeptTitle": "Child workspaces cannot be kept",
       "childrenPreservedDescription": "Direct children will become top-level workspaces. Their files, terminals, and nested children will be kept.",
       "detachChildren": "Detach and keep child workspaces",
       "nestedChildrenCannotBeKept": "Child workspace folders inside this workspace must be moved outside it before they can be kept.",
@@ -25543,7 +25534,11 @@
       "singleTitle": "Delete {{name}}?",
       "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
       "errorDetails": "Details",
-      "changesIncomplete": "Some changes couldn’t be fully checked."
+      "changesIncomplete": "Some changes couldn’t be fully checked.",
+      "parentWorkspace": "Parent workspace",
+      "workspacesToReview": "Workspaces to review",
+      "workspaceDetails": "Selected workspace details",
+      "workspaceKept": "Will be kept"
     }
   },
   "projectBoard": {

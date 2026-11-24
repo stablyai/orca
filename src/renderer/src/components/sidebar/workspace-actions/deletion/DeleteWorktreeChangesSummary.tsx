@@ -364,7 +364,7 @@ export function DeleteWorktreeChangesSummary({
 const MemoLocalFilesList = memo(DeleteWorktreeLocalFilesList)
 
 /** Memoized so status, scan and focus updates of the line never rebuild a long list. */
-const DeleteWorktreeChangesFileList = memo(function DeleteWorktreeChangesFileList({
+export const DeleteWorktreeChangesFileList = memo(function DeleteWorktreeChangesFileList({
   preview,
   unsavedFiles
 }: {

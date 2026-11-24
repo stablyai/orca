@@ -6468,17 +6468,6 @@
           "changesLost_other": "{{count}} незакоммиченного изменения будет потеряно",
           "uncountedChangesLost": "Незакоммиченные изменения будут потеряны"
         },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Дочерние рабочие пространства будут удалены",
-          "alsoDeletesChildren_one": "При удалении этого рабочего пространства также будет удалено {{count}} дочернее рабочее пространство.",
-          "alsoDeletesChildren_few": "При удалении этого рабочего пространства также будут удалены {{count}} дочерних рабочих пространства.",
-          "alsoDeletesChildren_many": "При удалении этого рабочего пространства также будет удалено {{count}} дочерних рабочих пространств.",
-          "alsoDeletesChildren_other": "При удалении этого рабочего пространства также будет удалено {{count}} дочернего рабочего пространства.",
-          "moreChildren_one": "+{{count}} ещё",
-          "moreChildren_few": "+{{count}} ещё",
-          "moreChildren_many": "+{{count}} ещё",
-          "moreChildren_other": "+{{count}} ещё"
-        },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Показать рабочее дерево",
           "ad99f4eea9": "Оставить скрытыми",

@@ -6297,13 +6297,6 @@
           "changesLost_other": "{{count}} commit'lenmemiş değişiklik kaybolacak",
           "uncountedChangesLost": "Commit'lenmemiş değişiklikler kaybolacak"
         },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Alt çalışma alanları silinecek",
-          "alsoDeletesChildren_other": "Bu çalışma alanı silindiğinde {{count}} alt çalışma alanı da silinir.",
-          "alsoDeletesChildren_one": "Bu çalışma alanı silindiğinde {{count}} alt çalışma alanı da silinir.",
-          "moreChildren_other": "+{{count}} tane daha",
-          "moreChildren_one": "+{{count}} tane daha"
-        },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Çalışma ağacını göster",
           "ad99f4eea9": "Gizli tut",

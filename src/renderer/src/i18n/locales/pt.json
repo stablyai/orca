@@ -13062,15 +13062,6 @@
           "7726a16374": "Cancelar",
           "046751dbfb": "Adicione esta pasta como um projeto separado do Orca."
         },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Os espaços de trabalho filhos serão excluídos",
-          "alsoDeletesChildren_one": "Excluir este espaço de trabalho também exclui {{count}} espaço de trabalho filho.",
-          "alsoDeletesChildren_other": "Excluir este espaço de trabalho também exclui {{count}} espaços de trabalho filhos.",
-          "alsoDeletesChildren_many": "Excluir este espaço de trabalho também exclui {{count}} espaços de trabalho filhos.",
-          "moreChildren_one": "+{{count}} a mais",
-          "moreChildren_other": "+{{count}} a mais",
-          "moreChildren_many": "+{{count}} a mais"
-        },
         "WorkspaceKanbanDrawerHeader": {
           "f369f5c5a3": "Fechar",
           "e1a34450fc": "Organize os espaços de trabalho por status e abra os cartões de espaço de trabalho.",
