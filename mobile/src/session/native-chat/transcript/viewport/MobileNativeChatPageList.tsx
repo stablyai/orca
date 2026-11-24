@@ -26,7 +26,6 @@ import {
   DRAW_AHEAD_SCREENS,
   mobileNativeChatRowAbove,
   mobileNativeChatRowBoxProps,
-  mobileNativeChatRowOffset,
   type MobileNativeChatScrollNode
 } from './mobile-native-chat-reading-place'
 import type { MobileNativeChatListHandle } from './use-mobile-native-chat-tail-follow'
@@ -287,19 +286,9 @@ export function MobileNativeChatPageList({
         if (s) {
           write(s, offset - (s.scrollHeight - s.clientHeight))
         }
-      },
-      scrollRowToTop: (key) => {
-        const s = scroller()
-        const by = s ? mobileNativeChatRowOffset(s, key) : undefined
-        if (s && by !== undefined) {
-          // The tap ended any scroll; growth right after must correct to this row, not re-read a displaced one.
-          readerScrolledAt.current = 0
-          write(s, s.scrollTop + by)
-          notePlace(s)
-        }
       }
     }),
-    [scroller, write, notePlace]
+    [scroller, write]
   )
 
   useMobileNativeChatPageItemJump({
