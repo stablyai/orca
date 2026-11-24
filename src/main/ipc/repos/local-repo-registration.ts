@@ -14,6 +14,7 @@ import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autode
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { describeWslUncAccessDenied } from '../../wsl/filesystem/wsl-unc-access-denied'
 import { createLocalProjectRecord } from '../../workspaces/catalog/local-project-record'
+import { restoreOrphanedChats } from '../../runtime/repositories/orphaned-chat-restore'
 
 export async function addLocalRepoFromPath(
   store: Store,
@@ -96,5 +97,7 @@ export async function addLocalRepoFromPath(
 
   store.addRepo(repo)
   await prepareLocalWorktreeRootForRepo(store, repo)
+  // The new id is never an old one; saved chats of a removed copy of this project move to it (#40409).
+  void restoreOrphanedChats(repo, { isLive: (repoId) => store.getRepo(repoId) != null })
   return { repo, alreadyExisted: false }
 }
