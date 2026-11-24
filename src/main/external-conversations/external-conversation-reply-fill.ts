@@ -12,7 +12,10 @@ import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-c
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
 import { capAnswer } from '../connector-cloud/connector-snapshot'
+import type { AgentSessionJournalReads } from '../native-chat/agent-session-journal/journal-reads'
+import { isQuietBotResult } from '../../shared/bot-quiet-result'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isSlackDirectMessage } from '../../shared/connectors/slack-direct-message'
 
 export type EndedTurnReplies = {
   sessionId: string
@@ -40,6 +43,24 @@ export type FilledTurn = {
   resumesAt?: number
 }
 
+/** Whether the bot's owner sent the message that admitted a row (its journal body's asker): the
+ *  owner proof of a row a continuation claimed, whose own stamps carry none, across a pause or a
+ *  restart alike. */
+export type AskedByOwner = (sessionId: string, messageId: string) => Promise<boolean>
+
+/** AskedByOwner over a chat's journal: the asker of the send that admitted the row, or, for a
+ *  queued card's row (whose id is the card's), of the send the card was handed over as. */
+export function journalAskedByOwner(
+  reads: (
+    sessionId: string
+  ) => Promise<Pick<AgentSessionJournalReads, 'submissionBody'> | undefined>
+): AskedByOwner {
+  return async (sessionId, messageId) => {
+    const body = await (await reads(sessionId))?.submissionBody(messageId, { family: true })
+    return body?.asker?.role === 'owner'
+  }
+}
+
 /** Fills an ended turn's outbox rows (design item 125 §3), the first fill winning. */
 export type ConversationReplyFill = (turn: EndedTurnReplies) => Promise<FilledTurn>
 
@@ -59,7 +80,8 @@ const keyOf = (account: string, deliveryId: string): string => `${account}\0${de
 export function conversationReplyFill(
   journal: () => ConnectorReplyJournal | null,
   filled: () => void,
-  pause?: UsageLimitPause
+  pause?: UsageLimitPause,
+  askedByOwner?: AskedByOwner
 ): ConversationReplyFill {
   return async (turn) => {
     const store = journal()
@@ -67,11 +89,15 @@ export function conversationReplyFill(
       return { covered: new Set(), paused: false }
     }
     const order = new Map<string, number>()
+    const ownerAsked = new Set<string>()
     for (const stamp of turn.stamps) {
       for (const deliveryId of [stamp.deliveryId, ...(stamp.carried ?? [])]) {
         const key = keyOf(stamp.account, deliveryId)
         if (!order.has(key)) {
           order.set(key, order.size)
+        }
+        if (stamp.ownerAsked) {
+          ownerAsked.add(key)
         }
       }
     }
@@ -107,9 +133,31 @@ export function conversationReplyFill(
     if (paused) {
       return { covered, paused: true, ...paused }
     }
+    // The owner's DM rows the stamps don't mark (a continuation's claim names no asker): their
+    // admitting message says who sent them. Read only when the marker could silence them.
+    const markerMayQuiet = turn.bot && turn.outcome === 'success' && isQuietBotResult(turn.prose)
+    for (const row of markerMayQuiet ? own : []) {
+      const key = keyOf(row.account, row.deliveryId)
+      if (
+        isSlackDirectMessage(row.conversation) &&
+        !ownerAsked.has(key) &&
+        (await askedByOwner?.(turn.sessionId, row.messageId).catch(() => false))
+      ) {
+        ownerAsked.add(key)
+      }
+    }
     const fills: JournalConnectorReplyFill[] = []
     for (const row of own) {
-      const { outcome, prose } = connectorReplyTurnOutcome(turn)
+      // Decided per request: the marker can't silence an answer to its owner's own DM (recovery
+      // fills here too); a member's DM, or a thread, keeps today's silence.
+      const { outcome, prose } = connectorReplyTurnOutcome({
+        outcome: turn.outcome,
+        prose: turn.prose,
+        bot: turn.bot,
+        addressed:
+          isSlackDirectMessage(row.conversation) &&
+          ownerAsked.has(keyOf(row.account, row.deliveryId))
+      })
       const conversation = JSON.stringify([row.account, row.conversation])
       const answerDeliveryId = answers.get(conversation) ?? row.deliveryId
       fills.push({
