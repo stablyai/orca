@@ -13,7 +13,7 @@ import { forwardKey, type ForwardMapping } from '../../ssh/port-forwarding/saved
 import {
   forgetSavedPairedPortForwards,
   recordRestoredPortForwardMove,
-  reservedPairedPortForwardPorts,
+  savedForwardLocalPorts,
   savedPairedPortForwardEnvironmentIds,
   savedPairedPortForwards,
   savePairedPortForwards,
@@ -192,7 +192,7 @@ export function restorePairedPortForwards(environmentId: string): Promise<void> 
     const tunnel = tunnelFor(environmentId, hostKey)
     const moved = new Map<ForwardMapping, number>()
     // Built once per pass; each forward may take back only its own saved port.
-    const reserved = reservedPairedPortForwardPorts()
+    const reserved = savedForwardLocalPorts()
     for (const forward of pending) {
       reserved.delete(forward.localPort)
       const entry = await addOnFirstFreePort(tunnel, forward, reserved).catch((error: unknown) => {
@@ -228,7 +228,7 @@ export function restorePairedPortForwards(environmentId: string): Promise<void> 
 function addOnFirstFreePort(
   tunnel: PairedPortForwardTunnel,
   preferred: ForwardMapping & { label?: string },
-  reserved: ReadonlySet<number> = reservedPairedPortForwardPorts()
+  reserved: ReadonlySet<number> = savedForwardLocalPorts()
 ): Promise<PortForwardEntry> {
   return addForwardOnFreeLocalPort({
     remotePort: preferred.remotePort,
