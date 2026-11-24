@@ -16,8 +16,8 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useHostClient } from '../transport/host-client-hooks'
-import { startRuntimeStatusProbe } from '../transport/runtime-status-probe'
+import { useHostClient } from '../transport/connection/host-client-hooks'
+import { startRuntimeStatusProbe } from '../transport/connection/runtime-status-probe'
 import {
   appendCpuSampleHistory,
   hostResourcesPollDelayMs,

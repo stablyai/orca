@@ -67,14 +67,14 @@ vi.mock('../navigation/route-handoff', () => ({
   useRouteHandoff: () => ({ back: vi.fn() })
 }))
 
-vi.mock('../transport/host-client-hooks', () => ({
+vi.mock('../transport/connection/host-client-hooks', () => ({
   useHostClient: () => ({
     client: transport.state === 'connected' ? transport.client : null,
     state: transport.state
   })
 }))
 
-vi.mock('../transport/runtime-status-probe', () => ({
+vi.mock('../transport/connection/runtime-status-probe', () => ({
   startRuntimeStatusProbe: (
     _client: unknown,
     onStatus: (status: { capabilities: readonly string[] | undefined } | null) => void

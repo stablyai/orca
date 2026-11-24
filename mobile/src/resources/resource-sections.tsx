@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native'
-import { formatBytes } from '../../../src/shared/format-bytes'
+import { formatBytes } from '../../../src/shared/text/format-bytes'
 import type { HostResourcesSnapshot, HostResourcesVolume } from '../../../src/shared/host-resources'
 import { ListGroup } from '../components/list/ListGroup'
 import { SectionHeader } from '../components/list/SectionHeader'

@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
-import { usageBandColor } from '../components/AccountUsage'
+import { usageBandColor } from '../accounts/usage/UsageBar'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
