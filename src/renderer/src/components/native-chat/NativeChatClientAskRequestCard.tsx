@@ -74,7 +74,8 @@ export function NativeChatClientAskRequestCard({
   const here = useOwnInstallation() === client.installationId
   const computer = here
     ? t('bots.groups.thisComputer', 'This computer')
-    : client.computer || t('components.native-chat.clientAsk.pairedComputer', 'Paired computer')
+    : client.computer.trim() ||
+      t('components.native-chat.clientAsk.pairedComputer', 'Paired computer')
   const sent = Boolean(card.messageId)
   const held = useHeldPairedServerAsk(card.messageId, here && reading.outcome === null)
   const heading = !sent
@@ -97,9 +98,8 @@ export function NativeChatClientAskRequestCard({
           : t(
               'components.native-chat.clientAsk.waitingOn',
               'Waiting for approval on {{computer}}',
-              {
-                computer: client.computer
-              }
+              // The name with its fallback, so a nameless computer never reads "on ".
+              { computer }
             )
         : null
   return (
