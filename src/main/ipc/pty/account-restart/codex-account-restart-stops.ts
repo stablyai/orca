@@ -24,8 +24,8 @@ export type CodexRestartOccupant = {
   provenance: CodexRestartProvenance
 }
 
-/** `ended` is the only writer proof; `refused` is a proven pre-signal refusal. */
-export type CodexRestartStopOutcome = 'ended' | 'refused' | 'unknown'
+/** `ended` is the only writer proof; `refused` and `unsupported` are proven pre-signal refusals. */
+export type CodexRestartStopOutcome = 'ended' | 'refused' | 'unsupported' | 'unknown'
 
 export type CodexAccountRestartStopDeps = {
   /** Re-derives the pane's eligible occupant from host facts, or the reason it has none. */
@@ -278,9 +278,10 @@ export class CodexAccountRestartStops {
       outcome = 'unknown'
     }
     const opIds = [...mark.opIds]
-    if (outcome === 'refused' && !mark.delivered) {
+    if ((outcome === 'refused' || outcome === 'unsupported') && !mark.delivered) {
       this.retireMark(mark)
-      return { outcome: 'not-started', reason: 'refused', opIds }
+      // `unsupported` lets the renderer fall back to the replacement restart.
+      return { outcome: 'not-started', reason: outcome, opIds }
     }
     if (outcome === 'ended') {
       mark.writerProof = true

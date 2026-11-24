@@ -60,7 +60,9 @@ export function resolveCodexRestartOccupant(
   if (isRemoteRuntimePtyId(ptyId) || resolvePtyExecutionHost(ptyId) !== LOCAL_EXECUTION_HOST_ID) {
     return 'unsupported'
   }
-  if (!tryGetProviderForPty(ptyId)?.killFenced) {
+  const provider = tryGetProviderForPty(ptyId)
+  // Older daemons and in-process routes cannot fence a stop; they keep the replacement restart.
+  if (!provider?.killFenced || provider.supportsFencedTermination?.(ptyId) !== true) {
     return 'unsupported'
   }
   const incarnationId = ptyIncarnationById.get(ptyId)
@@ -105,7 +107,7 @@ async function stopCodexRestartOccupant(
   await deps.getLocalPtyProviderStartupPromise(LOCAL_EXECUTION_HOST_ID)
   const provider = tryGetProviderForPty(occupant.ptyId)
   if (!provider?.killFenced) {
-    return 'refused'
+    return 'unsupported'
   }
   let outcome: Awaited<ReturnType<NonNullable<typeof provider.killFenced>>>
   try {
@@ -121,6 +123,9 @@ async function stopCodexRestartOccupant(
   if (outcome.outcome === 'ended') {
     deliverRestartReceiptExit(deps, occupant)
     return 'ended'
+  }
+  if (outcome.outcome === 'refused' && outcome.reason === 'unsupported') {
+    return 'unsupported'
   }
   if (outcome.outcome === 'refused' && outcome.reason !== 'unverifiable') {
     return 'refused'

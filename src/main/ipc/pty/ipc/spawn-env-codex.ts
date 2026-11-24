@@ -48,6 +48,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     restartResume.unspend?.()
     throw error
   })
+  ctx.unspendCodexAccountRestart = restartResume.unspend ?? null
   ctx.codexResumeLaunch = hostEnv.codexResumeLaunch
   if (hostEnv.codexResumeLaunch.droppedResumeArgv && ctx.effectiveLaunchConfig) {
     ctx.effectiveLaunchConfig = {

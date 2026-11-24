@@ -97,6 +97,8 @@ export type PtyIpcSpawnState = {
   provisionalPtySize: PtySpawnSizeSeed | undefined
   initiallyHidden: boolean
   preSpawnHiddenMarkId: string | null
+  /** Restores a spent account-restart intent when this spawn fails or retires before its process starts. */
+  unspendCodexAccountRestart: (() => void) | null
 }
 
 export function createPtyIpcSpawnState(
@@ -173,6 +175,7 @@ export function createPtyIpcSpawnState(
     codexResumeHomeSelected: false,
     provisionalPtySize: undefined,
     initiallyHidden: false,
-    preSpawnHiddenMarkId: null
+    preSpawnHiddenMarkId: null,
+    unspendCodexAccountRestart: null
   }
 }

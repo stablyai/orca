@@ -91,6 +91,9 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
       ),
     onError: (error) => endPaneAgentLaunch(ctx, { error }),
     releasePreparation: () => {
+      // Any failure or retirement before the process starts keeps the selected-account resume for next time.
+      ctx.unspendCodexAccountRestart?.()
+      ctx.unspendCodexAccountRestart = null
       if (ctx.agentTeamsLeaderHandle) {
         deps.runtime?.releaseClaudeAgentTeamsLeaderForHandle?.(ctx.agentTeamsLeaderHandle)
         ctx.agentTeamsLeaderHandle = null

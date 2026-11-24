@@ -13,12 +13,14 @@ type HoistedState = {
   handlers: Map<string, (event: unknown, args: unknown) => unknown>
   exitListener: ((payload: ExitPayload) => void) | null
   killFenced: Mock<(...args: unknown[]) => Promise<PtyFencedTerminationOutcome>>
+  fencedTerminationSupported: boolean
 }
 
 const h = vi.hoisted((): HoistedState => ({
   handlers: new Map(),
   exitListener: null,
-  killFenced: vi.fn<(...args: unknown[]) => Promise<PtyFencedTerminationOutcome>>()
+  killFenced: vi.fn<(...args: unknown[]) => Promise<PtyFencedTerminationOutcome>>(),
+  fencedTerminationSupported: true
 }))
 
 vi.mock('../pty-host-bindings', () => ({
@@ -36,7 +38,10 @@ vi.mock('../provider/registry', () => ({
     onData: () => () => {}
   },
   resolvePtyExecutionHost: () => 'local',
-  tryGetProviderForPty: () => ({ killFenced: (...args: unknown[]) => h.killFenced(...args) })
+  tryGetProviderForPty: () => ({
+    killFenced: (...args: unknown[]) => h.killFenced(...args),
+    supportsFencedTermination: () => h.fencedTerminationSupported
+  })
 }))
 vi.mock('../provider/state-cleanup', async () => {
   const { ptyIncarnationById } = await import('../provider/ownership-state')
@@ -180,6 +185,7 @@ function setup() {
 describe('account restart exits arriving out of order', () => {
   beforeEach(() => {
     h.handlers.clear()
+    h.fencedTerminationSupported = true
   })
 
   it('delivers one restart exit when the stream exit beats the stop receipt', async () => {
@@ -255,5 +261,25 @@ describe('account restart exits arriving out of order', () => {
     t.emitExit({ incarnationId: 'inc-successor' })
     expect(t.sendPtyExitToRenderer).toHaveBeenCalledTimes(2)
     expect(t.runtime.onPtyExit.mock.calls[1][3]).not.toHaveProperty('paneRespawning')
+  })
+
+  it('hands a daemon without fenced termination back to the replacement restart before any stop', async () => {
+    const t = setup()
+    h.fencedTerminationSupported = false
+    await expect(t.request()).resolves.toMatchObject({
+      outcome: 'not-started',
+      reason: 'unsupported'
+    })
+    expect(h.killFenced).not.toHaveBeenCalled()
+  })
+
+  it('maps an unsupported fenced refusal to the replacement fallback and classifies no exit', async () => {
+    const t = setup()
+    const result = t.request()
+    await t.stopDispatched()
+    t.release({ outcome: 'refused', reason: 'unsupported' })
+    await expect(result).resolves.toMatchObject({ outcome: 'not-started', reason: 'unsupported' })
+    t.emitExit()
+    expect(t.runtime.onPtyExit.mock.calls[0][3]).not.toHaveProperty('paneRespawning')
   })
 })
