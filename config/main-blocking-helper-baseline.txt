@@ -68,7 +68,7 @@
 4 src/main/amp/hook-service.ts
 8 src/main/antigravity/hook-service.ts
 1 src/main/antigravity/native-account-host.ts
-3 src/main/antigravity/native-account-launch.ts
+2 src/main/antigravity/native-account-launch.ts
 4 src/main/antigravity/native-credential-backend.ts
 1 src/main/antigravity/native-file-credentials.ts
 12 src/main/antigravity/native-windows-credentials.ts
@@ -1043,7 +1043,6 @@
 1 src/main/provider-process/provider-ownership-journal.ts
 1 src/main/provider-process/provider-process-spawn.ts
 1 src/main/provider-process/supervised-provider-child-location.ts
-2 src/main/providers/accounts/provider-account-services.ts
 1 src/main/providers/execution-host-provider-dispatch.ts
 2 src/main/providers/foreground/agent-process.ts
 1 src/main/providers/foreground/windows/process-rows.ts
@@ -1218,7 +1217,6 @@
 2 src/main/runtime/repositories/runtime-repository-registration-controller.ts
 1 src/main/runtime/repositories/runtime-repository-settings-controller.ts
 2 src/main/runtime/rpc/dispatcher.ts
-4 src/main/runtime/rpc/methods/accounts/antigravity-accounts.ts
 3 src/main/runtime/rpc/methods/accounts/usage-credentials.ts
 2 src/main/runtime/rpc/methods/bots-tools-owned-sign-in.ts
 11 src/main/runtime/rpc/methods/bots-tools.ts
