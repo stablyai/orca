@@ -33,6 +33,8 @@ export function conversationPane(
 /** Where a chat's agent replies: its conversation and turn, the workspace it runs in, and the bot it speaks for. */
 export type ReplyTarget = {
   key: ConversationKey
+  /** The linked chat's session, whose running turn says whether a reply goes there now. */
+  sessionId: string
   turnId: number | null
   worktreeId: string
   bot?: ExternalConversationBot
@@ -60,6 +62,7 @@ export function replyTargetOf(
   return {
     ...(stamp ? { answerDeliveryId: stamp.deliveryId } : {}),
     key: { source: link.source, externalId: link.externalId },
+    sessionId: link.sessionId,
     turnId,
     worktreeId: workspace.worktreeId,
     ...(link.bot ? { bot: link.bot } : {}),

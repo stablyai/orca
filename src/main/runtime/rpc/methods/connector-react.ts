@@ -1,7 +1,8 @@
 // `orca bot reply --react`: the calling bot's emoji on the message that woke its run, as the bot.
 import { ConnectorReact } from '../../../../shared/rpc-contract/connectors/connector-params'
 import { defineMethod } from '../core'
-import { CONNECTOR_ACT_METHOD, ConnectorActError } from './connector-act'
+import { CONNECTOR_ACT_METHOD, ConnectorActError, refuseReplyOutsideTurn } from './connector-act'
+import { chatPaneKey } from '../../../external-conversations/external-conversation-chat'
 import { readBotTurn } from './orchestration/messaging/bot-recipient'
 import type { BotRequestConversation, BotWakingPlace } from '../../../bots/bot-request-asker'
 
@@ -37,6 +38,7 @@ export const CONNECTOR_REACT_METHOD = defineMethod({
   params: ConnectorReact,
   handler: async ({ sessionId, emoji }, context) => {
     const { runtime } = context
+    refuseReplyOutsideTurn(runtime, chatPaneKey(sessionId))
     const { turn, conversation } = runtime.bots.enabled()
       ? await readBotTurn(runtime, runtime.getOrchestrationDb(), sessionId)
       : { turn: null, conversation: null }

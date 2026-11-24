@@ -15,7 +15,11 @@ import {
 import { postConnectorAction } from '../../../connector-cloud/connector-actions'
 import { actionGoesToSlack, slackActionArgs } from '../../../connector-cloud/connector-slack-text'
 import { cloudConversation } from '../../../../shared/connectors/connector-cloud-contract'
-import { chatPaneKey } from '../../../external-conversations/external-conversation-chat'
+import {
+  chatPaneKey,
+  runtimeChatHost
+} from '../../../external-conversations/external-conversation-chat'
+import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod } from '../core'
 import { botTurnFor } from '../../../bots/bot-turn-for'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
@@ -107,6 +111,31 @@ export function actFailure(
         `Orca Cloud refused the request (${reason}).`
       )
     : new ConnectorActError('connector_refused', `Orca Cloud refused it (${reason}).`)
+}
+
+/** The one gate for every agent reply (text, files, buttons, reactions): it posts to the chat's
+ *  conversation only on a turn that conversation owns (one of its deliveries opened it, or
+ *  conversationTurn holds), never on one other mail woke, whose note told the agent it stays in Orca. */
+export function refuseReplyOutsideTurn(
+  runtime: Pick<
+    OrcaRuntimeService,
+    'getExternalConversationSeam' | 'ensureStructuredAgentSessionHost'
+  >,
+  paneKey: string
+): void {
+  const seam = runtime.getExternalConversationSeam()
+  const target = seam?.replyTarget(paneKey)
+  if (
+    seam &&
+    target &&
+    !target.answerDeliveryId &&
+    !seam.conversationTurn(runtimeChatHost(runtime), target.sessionId)
+  ) {
+    throw new ConnectorActError(
+      'turn_stays_in_orca',
+      `Nothing was posted: ${target.place} didn't wake this turn, so it stays in Orca. Put what your owner needs in your final message, and a file on an item with \`orca bot item comment <n> --file <path>\`.`
+    )
+  }
 }
 
 // `orca slack ...`, `orca bot connectors` and `orca bot reply --react`: the calling chat names its bot; the cloud acts as it.
@@ -216,6 +245,9 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
     }
     const signal = context.signal ?? new AbortController().signal
     const target = runtime.getExternalConversationSeam()?.replyTarget(chatPaneKey(sessionId))
+    if (verb === 'reply') {
+      refuseReplyOutsideTurn(runtime, chatPaneKey(sessionId))
+    }
     const conversation = target ? cloudConversation(target.key) : null
     const place = verb === 'find' && args.search && !ref ? searchedWorkspace(target?.key) : ref
     // Only a post (its words, or a file and its comment) shows another Orca bot whom its turn acts for.

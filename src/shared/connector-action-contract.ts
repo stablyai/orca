@@ -168,6 +168,8 @@ export const CONNECTOR_ACT_ERROR_CODES = [
   // A look-around run asked for something other than a read.
   'look_around_reads_only',
   // `bot reply --react` in a run no message woke, or where reactions aren't available.
-  'no_waking_message'
+  'no_waking_message',
+  // A reply on a turn its conversation didn't wake (item or worker mail): that turn stays in Orca.
+  'turn_stays_in_orca'
 ] as const
 export type ConnectorActErrorCode = (typeof CONNECTOR_ACT_ERROR_CODES)[number]
