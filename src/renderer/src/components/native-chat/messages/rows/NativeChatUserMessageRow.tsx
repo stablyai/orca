@@ -160,6 +160,7 @@ export function NativeChatUserMessageRow({
                       rowKey={message.id}
                       content={text}
                       variant="document"
+                      quoteChips
                       slackMentions={drawn !== undefined}
                       className="text-sm"
                       renderCodeBlock={NativeChatCodeBlock}

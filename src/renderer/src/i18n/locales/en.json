@@ -21423,6 +21423,7 @@
         "skillPillLabel": "Skill: {{name}}",
         "filePillLabel": "File: {{name}}",
         "agentPillLabel": "Agent: {{name}}",
+        "quotePillLabel": "Quote: {{text}}",
         "backToBots": "Back to bots",
         "botChats": "Chats",
         "botChatsCount": "{{name}}'s chats, {{chatCount}}",

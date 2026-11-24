@@ -19815,7 +19815,8 @@
         "moreControls": "Diğer sohbet kontrolleri",
         "permissionAppliesNextMessage": "{{saved}} sonraki mesajınızda geçerli olur; şu anda {{active}} kullanılıyor",
         "botFor": "Amaç: {{detail}}",
-        "bots": "Botlar"
+        "bots": "Botlar",
+        "quotePillLabel": "Alıntı: {{text}}"
       },
       "tool": {
         "exitCode": "çıkış {{value0}}",

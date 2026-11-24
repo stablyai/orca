@@ -40,6 +40,8 @@ export type NativeChatComposerInput = Pick<
   insertFileReferences?: (paths: string[]) => void
   /** One user paste transaction; ordinary history retains the replaced rich selection. */
   stagePastedText?: (token: string) => void
+  /** False until the user types or moves the caret in this box. */
+  caretPlaced?: () => boolean
   /** True only for collapsed carets at the first/last visual line, including wraps. */
   isCaretOnVisualEdge?: (edge: 'start' | 'end') => boolean
 }

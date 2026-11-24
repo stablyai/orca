@@ -20337,6 +20337,7 @@
         "skillPillLabel": "스킬: {{name}}",
         "filePillLabel": "파일: {{name}}",
         "agentPillLabel": "에이전트: {{name}}",
+        "quotePillLabel": "인용: {{text}}",
         "backToBots": "봇으로 돌아가기",
         "botChats": "채팅",
         "botChatsCount": "{{name}}의 채팅 {{chatCount}}개",

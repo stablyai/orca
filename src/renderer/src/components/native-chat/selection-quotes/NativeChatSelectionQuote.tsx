@@ -20,7 +20,7 @@ function copyTranscriptSelectionOnSelect(root: HTMLElement): void {
 }
 
 /** A box a selection is quoted into: chat's composer, or an item's comment box. */
-export type NativeChatQuoteTarget = Pick<NativeChatComposerHandle, 'acceptsText' | 'appendText'>
+export type NativeChatQuoteTarget = Pick<NativeChatComposerHandle, 'acceptsText' | 'insertQuote'>
 
 /** The quote target of a box built on chat's composer. */
 export function composerQuoteTarget(
@@ -28,7 +28,7 @@ export function composerQuoteTarget(
 ): NativeChatQuoteTarget {
   return {
     acceptsText: () => composer.current?.acceptsText() === true,
-    appendText: (text, options) => composer.current?.appendText(text, options)
+    insertQuote: (quote) => composer.current?.insertQuote(quote)
   }
 }
 
@@ -49,7 +49,7 @@ export function NativeChatSelectionQuote({
         composerRef.current?.acceptsText() ? readNativeChatQuotableSelection(root) : null
       }
       onSelectionSettled={copyTranscriptSelectionOnSelect}
-      onAdd={(text) => composerRef.current?.appendText(formatNativeChatQuote(text))}
+      onAdd={(text) => composerRef.current?.insertQuote(formatNativeChatQuote(text))}
     />
   )
 }
