@@ -20,7 +20,9 @@ export async function carryKeptAcpBackgroundWork(
   child: AcpStructuredChild,
   agent: AgentType
 ): Promise<void> {
-  const taskIds = child.connection.kept?.openWork('task') ?? []
+  const { kept } = child.connection
+  // One that ended while Orca was closed is restated too: its replayed end then settles the row.
+  const taskIds = kept ? [...kept.openWork('task'), ...kept.openWork('task', true)] : []
   const translator = child.lane?.translator
   const history = child.events?.journalHistory?.()
   if (taskIds.length === 0 || !translator || !history) {
