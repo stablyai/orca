@@ -1,6 +1,8 @@
 // The setup's last two cards: the owner's own sign-in with the new app (a bot can't sign in for
-// them), then what the bot can use. Turning Google on for the bot asks first when others can ask it.
+// them), which ends on the accounts the bot may use, then what the bot can use.
 import React, { useState } from 'react'
+import { toast } from 'sonner'
+import { botErrorMessage } from '../../bot-presentation'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -12,7 +14,8 @@ import {
   googleSetupBlockerIsConnect,
   googleSetupConnectOpen
 } from '../../../../../../shared/google/google-setup-card-view'
-import { useTurnOnBotGoogle } from '../use-turn-on-bot-google'
+import { GoogleAccountPicker } from '../GoogleAccountPicker'
+import { type GoogleAccountChoiceBot, useGoogleAccountChoice } from '../GoogleAccountsChoice'
 import { googleAccountChoices, googleReadinessFixer } from '../google-account-readiness'
 import { googleChoiceLogos, GoogleLogoStack } from '../GoogleServicePicker'
 import { GoogleAddServiceDialog } from '../GoogleAddServiceDialog'
@@ -33,7 +36,7 @@ export function GoogleSetupConnectCard({
   run,
   newest
 }: {
-  bot: Parameters<ReturnType<typeof useTurnOnBotGoogle>>[0]
+  bot: GoogleAccountChoiceBot
   run: GoogleSetupRun
   /** Orca writes this card again at the bottom when sign-in waits; an older copy only points there. */
   newest: boolean
@@ -41,7 +44,8 @@ export function GoogleSetupConnectCard({
   const t = useTranslate()
   const signIn = useGoogleSignIn(botTarget(bot), bot)
   const host = useBotHostLabel(bot.hostId)
-  const turnOn = useTurnOnBotGoogle()
+  // The account just signed in: the card then lists the accounts the bot may use, that one ticked.
+  const [signedIn, setSignedIn] = useState<string | null>(null)
   const done = run.steps.connect?.status === 'done'
   const open = googleSetupConnectOpen(run)
   const blocker = useGoogleSetupBlocker(bot)
@@ -51,12 +55,9 @@ export function GoogleSetupConnectCard({
     const account = await signIn.connect(run.services ?? ['gmail'], run.account, {
       currentApp: true
     })
-    if (!account) {
-      return
+    if (account) {
+      setSignedIn(account.email)
     }
-    // Declining the confirm still leaves the account connected; the bot hears either way.
-    const on = await turnOn(bot)
-    await answerGoogleSetup(bot, 'step', ['done', 'connect', ...(on ? [] : ['google-off'])])
   }
   return (
     <div>
@@ -109,6 +110,8 @@ export function GoogleSetupConnectCard({
               personal={run.kind === 'personal'}
             />
           </div>
+        ) : signedIn && open ? (
+          <GoogleSetupAccountsStep bot={bot} added={signedIn} />
         ) : stuck ? (
           <GoogleSetupBlockerPanel bot={bot} run={run} blocker={stuck} signIn={signIn} />
         ) : open ? (
@@ -130,6 +133,43 @@ export function GoogleSetupConnectCard({
           }
         />
       ) : null}
+    </div>
+  )
+}
+
+/** The sign-in's last step: which accounts the bot may use, then Add tells the bot it's done. */
+function GoogleSetupAccountsStep({
+  bot,
+  added
+}: {
+  bot: GoogleAccountChoiceBot
+  added: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  const choice = useGoogleAccountChoice(bot, added)
+  const add = async (): Promise<void> => {
+    if (await choice.save()) {
+      await answerGoogleSetup(bot, 'step', ['done', 'connect']).catch((error: unknown) =>
+        toast.error(botErrorMessage(error))
+      )
+    }
+  }
+  return (
+    <div className="mt-2">
+      <p className="text-sm font-medium text-foreground">
+        {t('bots.google.picker.caption', 'Accounts {{bot}} can use', { bot: bot.name })}
+      </p>
+      <div className="-mx-2 mt-1">
+        <GoogleAccountPicker bot={bot} chosen={choice.chosen} onChosenChange={choice.setChosen} />
+      </div>
+      <Button
+        size="xs"
+        className="mt-2"
+        disabled={choice.chosen.length === 0 || choice.saving}
+        onClick={() => void add()}
+      >
+        {t('bots.apps.add', 'Add')}
+      </Button>
     </div>
   )
 }

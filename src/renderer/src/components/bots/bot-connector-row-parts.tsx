@@ -7,10 +7,12 @@ import {
   LoaderCircle,
   Plus,
   RefreshCw,
-  Unplug
+  Unplug,
+  UserRoundCheck
 } from 'lucide-react'
 import type { IntegrationCardStatusTone } from '@/components/integrations/presentation/integration-card-shell'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverAnchor } from '@/components/ui/popover'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +56,8 @@ export function ConnectorStatus(props: {
 
 /** A row's ⋯ menu: adding access first, then the connector's own page, Remove (or Disconnect) last. */
 export type BotConnectorActions = {
+  /** Which of the owner's accounts the bot uses, e.g. Google's; opens the row's menu popover. */
+  accounts?: { label: string; onClick: () => void } | null
   /** More access on the connected account: GitHub repositories or organizations, or another workspace. */
   add?: { label: string; onClick: () => void } | null
   /** Another account of the owner's on the service, e.g. a second GitHub login. */
@@ -66,39 +70,61 @@ export type BotConnectorActions = {
   remove?: { label: string; onSelect: () => void; disabled?: boolean } | null
 }
 
+/** A popover a menu item opens, anchored to the ⋯ button; `content` is its PopoverContent. */
+export type BotConnectorMenuPopover = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  content: React.ReactNode
+}
+
 export function BotConnectorMenu({
   name,
   actions,
-  alwaysShown = false
+  alwaysShown = false,
+  popover
 }: {
   name: string
   actions: BotConnectorActions
   /** On a connector's page; a row shows it on hover, focus or open. */
   alwaysShown?: boolean
+  popover?: BotConnectorMenuPopover
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const { add, addAccount, link, update, stop, remove } = actions
-  if (!add && !addAccount && !link && !update && !stop && !remove) {
+  const { accounts, add, addAccount, link, update, stop, remove } = actions
+  if (!accounts && !add && !addAccount && !link && !update && !stop && !remove) {
     return null
   }
-  return (
+  const trigger = (
+    // Over the stretched name button, so it opens the menu rather than the row; shown on hover, focus or open.
+    <span
+      data-shown={alwaysShown || popover?.open === true}
+      className="relative shrink-0 opacity-0 group-hover:opacity-100 group-data-[state=open]:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100 data-[shown=true]:opacity-100"
+    >
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={t('bots.connector.actions', '{{name}} actions', { name })}
+        >
+          <Ellipsis />
+        </Button>
+      </DropdownMenuTrigger>
+    </span>
+  )
+  const menu = (
     <DropdownMenu modal={false}>
-      {/* Over the stretched name button, so it opens the menu rather than the row; shown on hover, focus or open. */}
-      <span
-        data-shown={alwaysShown}
-        className="relative shrink-0 opacity-0 group-hover:opacity-100 group-data-[state=open]:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100 data-[shown=true]:opacity-100"
+      {popover ? <PopoverAnchor asChild>{trigger}</PopoverAnchor> : trigger}
+      <DropdownMenuContent
+        align="end"
+        // The popover an item opens takes focus; the menu handing it back to ⋯ would close it.
+        onCloseAutoFocus={popover ? (event) => event.preventDefault() : undefined}
       >
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label={t('bots.connector.actions', '{{name}} actions', { name })}
-          >
-            <Ellipsis />
-          </Button>
-        </DropdownMenuTrigger>
-      </span>
-      <DropdownMenuContent align="end">
+        {accounts ? (
+          <DropdownMenuItem onSelect={accounts.onClick}>
+            <UserRoundCheck />
+            {accounts.label}
+          </DropdownMenuItem>
+        ) : null}
         {add ? (
           <DropdownMenuItem onSelect={add.onClick}>
             <Plus />
@@ -129,7 +155,9 @@ export function BotConnectorMenu({
             {stop.label}
           </DropdownMenuItem>
         ) : null}
-        {(add || addAccount || link || update || stop) && remove ? <DropdownMenuSeparator /> : null}
+        {(accounts || add || addAccount || link || update || stop) && remove ? (
+          <DropdownMenuSeparator />
+        ) : null}
         {remove ? (
           <DropdownMenuItem
             variant="destructive"
@@ -142,6 +170,14 @@ export function BotConnectorMenu({
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+  return popover ? (
+    <Popover open={popover.open} onOpenChange={popover.onOpenChange}>
+      {menu}
+      {popover.content}
+    </Popover>
+  ) : (
+    menu
   )
 }
 
@@ -160,6 +196,8 @@ export type BotConnectorRowFrameProps = {
   /** Between the status and the chevron. */
   trailing?: React.ReactNode
   actions?: BotConnectorActions
+  /** A popover a menu item opens, anchored to ⋯. */
+  menuPopover?: BotConnectorMenuPopover
   /** Open on first mount, and again whenever it turns true (e.g. once a row needs the owner); closing is the owner's. */
   defaultOpen?: boolean
   /** The panel spans the row from the icon, for a list of its own. */

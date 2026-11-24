@@ -28709,11 +28709,10 @@
         "removeNoteOnHost": "{{name}} can no longer use your Gmail, Calendar and Drive. Google stays connected on {{host}}.",
         "signedOutOnHost": "Not connected on {{host}}",
         "account": "Account",
-        "hostDefault": "{{host}}’s default",
-        "computerDefault": "This computer’s default",
-        "changeInSettings": "Change in Settings",
-        "alsoConnected": "Also connected",
-        "settingUp": "Setting up"
+        "settingUp": "Setting up",
+        "reconnectAccount": "Reconnect {{email}}",
+        "chooseAccounts": "Choose accounts…",
+        "accounts": "Accounts"
       },
       "copied": "Copied. Send it to your Google admin.",
       "share": {
@@ -28849,7 +28848,6 @@
         }
       },
       "pasteHint": "After you click Allow, the page won’t load. Paste its address here.",
-      "addAccount": "Add another Google account",
       "defaultBadge": "Default",
       "row": {
         "signedOut": "Signed out by Google",
@@ -28876,7 +28874,13 @@
       "useAnotherSignIn": "Sign in with Google",
       "useAnotherSignInDetail": "Uses your current Google app",
       "setUpNewAppDetail": "If your current app doesn’t work for this account or organization",
-      "updateToSetUpNewApp": "Update Orca on {{host}} to set up a new Google app."
+      "updateToSetUpNewApp": "Update Orca on {{host}} to set up a new Google app.",
+      "picker": {
+        "label": "Google accounts",
+        "addAccount": "Add another account",
+        "caption": "Accounts {{bot}} can use",
+        "save": "Save"
+      }
     },
     "googleSetup": {
       "receipt": {
