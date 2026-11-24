@@ -2701,7 +2701,13 @@
           "tab": {
             "open": {
               "urlFailed": "Unable to open URL.",
-              "searchFailed": "Unable to search with {{value0}}."
+              "searchFailed": "Unable to search with {{value0}}.",
+              "failure": {
+                "stageError": "Error · {{value0}} · {{value1}}",
+                "hostNotFound": "Workspace's computer wasn't found.",
+                "linkBlocked": "Link open was blocked.",
+                "notWebLink": "Not a web link."
+              }
             }
           }
         }
@@ -5235,6 +5241,7 @@
             "downloadAlreadyLocal": "'{{value0}}' is already on this computer.",
             "downloadFolderUnsupported": "Folder '{{value0}}' can't be downloaded from this host.",
             "downloadOpenFailed": "Failed to download '{{value0}}'.",
+            "openLinkInThisGroupRefused": "Couldn't open the link in this group",
             "openInThisGroupRefused": "Couldn't open {{value0}} in this group",
             "openInNewTab": "Open in new tab"
           },
