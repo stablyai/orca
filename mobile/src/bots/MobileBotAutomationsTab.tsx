@@ -26,7 +26,6 @@ import type { BotAutomationRow } from '../../../src/shared/bots/bot-automation-r
 import type { BotAutomationView } from '../../../src/shared/bots/bot-activity-schema'
 import type { SheetBot } from './bot-sheet-operations'
 import { automationWhenText, automationWontFireNote } from './mobile-bot-sheet-copy'
-import { sheetStyles } from './mobile-bot-sheet-styles'
 import { useBotAutomations } from './use-bot-automations'
 import { optionStyles } from './mobile-bot-option-styles'
 import { colors } from '../theme/mobile-theme'
@@ -121,20 +120,19 @@ function AutomationRow(props: {
       <ListRow
         title={automation.name}
         subtitle={automationWhenText(automation, automation.enabled)}
+        subtitleNote={
+          props.row.needsSignIn
+            ? { text: t('bots.upcoming.needsSignIn', 'Needs sign-in'), color: colors.agentQuestion }
+            : failing
+              ? {
+                  text: t('bots.automations.couldNotFinish', 'Couldn’t finish'),
+                  color: colors.statusRed
+                }
+              : undefined
+        }
         leading={<Kind {...KIND_GLYPH} color={colors.textSecondary} />}
         onPress={() => setMenuOpen(true)}
-        detail={
-          <>
-            {wontFire ? <Text style={optionStyles.optionRowDetail}>{wontFire}</Text> : null}
-            {props.row.needsSignIn || failing ? (
-              <Text style={sheetStyles.alert}>
-                {props.row.needsSignIn
-                  ? t('bots.upcoming.needsSignIn', 'Needs sign-in')
-                  : t('bots.automations.couldNotFinish', 'Couldn’t finish')}
-              </Text>
-            ) : null}
-          </>
-        }
+        detail={wontFire ? <Text style={optionStyles.optionRowDetail}>{wontFire}</Text> : undefined}
         accessory={
           <MobileSwitch
             value={automation.enabled}
