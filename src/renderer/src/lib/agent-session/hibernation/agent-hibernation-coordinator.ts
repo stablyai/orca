@@ -94,6 +94,7 @@ function snapshotFromState(
 ): AgentHibernationPlannerSnapshot {
   const worktreeTabs = targetWorktreeId ? (state.tabsByWorktree[targetWorktreeId] ?? []) : []
   const paneTab = pane ? terminalTabById(worktreeTabs).get(pane.tabId) : undefined
+  const ptyIdsByTabId = pane ? paneTabBindings(state, pane) : state.ptyIdsByTabId
   return {
     settings: state.settings,
     activeWorktreeId: state.activeWorktreeId,
@@ -104,7 +105,8 @@ function snapshotFromState(
         }
       : state.tabsByWorktree,
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
-    ptyIdsByTabId: state.ptyIdsByTabId,
+    // A one-pane plan sees its tab's live processes as just its own, so no tab-wide set is built.
+    ptyIdsByTabId,
     runtimeLivePtyIdsByWorktreeId: hostEvidence.runtimeLivePtyIdsByWorktreeId,
     // Union fresh owners with pre-await targets so newly resolved workspaces fail closed without host evidence; never narrow that set.
     runtimeLivenessRequiredWorktreeIds: [
@@ -135,6 +137,26 @@ function snapshotFromState(
     boundaryResolvedAtByPaneKey: getHibernationBoundaryResolvedAtByPaneKey(pane?.paneKey),
     now
   }
+}
+
+const bindingSets = new WeakMap<readonly string[], ReadonlySet<string>>()
+const NO_BINDINGS: readonly string[] = []
+
+/** A tab's bound processes as a set, built once per binding list, so each one-pane check is a lookup. */
+function tabBindingSet(state: AppState, tabId: string): ReadonlySet<string> {
+  const bound = state.ptyIdsByTabId[tabId] ?? NO_BINDINGS
+  let set = bindingSets.get(bound)
+  if (!set) {
+    set = new Set(bound)
+    bindingSets.set(bound, set)
+  }
+  return set
+}
+
+/** The pane's tab bound to just the pane's own live processes; a read-only plan input, not a layout write. */
+function paneTabBindings(state: AppState, pane: TargetPane): Record<string, string[]> {
+  const bound = tabBindingSet(state, pane.tabId)
+  return Object.fromEntries([[pane.tabId, panePtyIds(state, pane).filter((id) => bound.has(id))]])
 }
 
 /** The target pane's own process, under its window and runtime ids: siblings in its split are not read. */

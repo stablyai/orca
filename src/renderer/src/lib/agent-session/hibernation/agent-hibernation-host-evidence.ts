@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
@@ -120,14 +121,16 @@ export async function collectHostPtyEvidence(
   }
   const localPtyIds =
     onlyPaneKey !== undefined && targetWorktreeId !== undefined
-      ? collectPaneLocalPtyIds(state, targets, completedTabIds, targetWorktreeId)
+      ? collectPaneLocalPtyIds(state, targets, onlyPaneKey, targetWorktreeId)
       : collectLocalCompletedPtyIds(state, targets, completedTabIds, targetWorktreeId)
   await Promise.all([
     collectLocalTerminalAttention(localPtyIds, attentionByWorktreeId),
     ...[...targets].map(async ([worktreeId, runtimeEnvironmentId]) => {
+      // A one-pane check's completed tab is its own, in this workspace: no walk of the workspace's tabs.
       if (
         !runtimeEnvironmentId ||
-        !state.tabsByWorktree[worktreeId]?.some((tab) => completedTabIds.has(tab.id))
+        (onlyPaneKey === undefined &&
+          !state.tabsByWorktree[worktreeId]?.some((tab) => completedTabIds.has(tab.id)))
       ) {
         // Skipped owners still require host evidence if an agent completes during this pass.
         return
@@ -197,17 +200,18 @@ function collectLocalCompletedPtyIds(
   return ptyIdsByWorktreeId
 }
 
-/** A one-pane re-check's own tab: its PTYs, without walking the workspace's other tabs. */
+/** A one-pane re-check's own process: not its tab's other panes, nor the workspace's other tabs. */
 function collectPaneLocalPtyIds(
   state: AppState,
   runtimeTargets: Map<string, string | null>,
-  completedTabIds: Set<string>,
+  paneKey: string,
   worktreeId: string
 ): Map<string, string[]> {
-  const ptyIds = runtimeTargets.has(worktreeId)
-    ? []
-    : [...completedTabIds].flatMap((tabId) => state.ptyIdsByTabId[tabId] ?? [])
-  return ptyIds.length > 0 ? new Map([[worktreeId, ptyIds]]) : new Map()
+  const pane = parsePaneKey(paneKey)
+  const ptyId = pane
+    ? state.terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId]
+    : null
+  return ptyId && !runtimeTargets.has(worktreeId) ? new Map([[worktreeId, [ptyId]]]) : new Map()
 }
 
 /** This window's own PTYs can also be shown or typed into by paired clients and phones. */

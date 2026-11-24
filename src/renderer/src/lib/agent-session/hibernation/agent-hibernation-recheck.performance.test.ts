@@ -12,6 +12,8 @@ const work = vi.hoisted(() => {
     driverCopies: number
     inputCopies: number
     driverReads: number
+    attentionIds: number
+    bindingCopies: number
     planned: number
     ownerKind: 'non-runtime' | 'ambiguous'
     state: unknown
@@ -25,6 +27,8 @@ const work = vi.hoisted(() => {
     driverCopies: 0,
     inputCopies: 0,
     driverReads: 0,
+    attentionIds: 0,
+    bindingCopies: 0,
     planned: 0,
     state: {}
   }
@@ -82,7 +86,11 @@ vi.mock('./agent-hibernation-planner', () => ({
     foregroundTerminalLastSeenAtByTabId: Record<string, number>
     inUsePtyIds: string[]
     lastTerminalInputAtByPaneKey: Record<string, number | undefined>
+    ptyIdsByTabId: Record<string, string[]>
   }) => {
+    for (const bound of Object.values(snapshot.ptyIdsByTabId)) {
+      work.bindingCopies += bound.length
+    }
     work.driverCopies += snapshot.inUsePtyIds.length
     work.inputCopies += Object.keys(snapshot.lastTerminalInputAtByPaneKey).length
     work.historyCopies += Object.keys(snapshot.foregroundTerminalLastSeenAtByTabId).length
@@ -162,7 +170,16 @@ it.each([
   'each pane about to sleep re-checks only its own status, ages and tab (%s owner, %i idle panes in one workspace)',
   async (ownerKind, count) => {
     work.ownerKind = ownerKind
-    vi.stubGlobal('window', { api: { pty: { getTerminalAttention: async () => ({}) } } })
+    vi.stubGlobal('window', {
+      api: {
+        pty: {
+          getTerminalAttention: async (ptyIds: string[]) => {
+            work.attentionIds += ptyIds.length
+            return {}
+          }
+        }
+      }
+    })
     // Every walk over the workspace's tabs reads each tab's id.
     const tabs = Array.from({ length: count }, (_, index) => {
       const id = `${String(index).padStart(8, '0')}-2222-4222-8222-222222222222`
@@ -225,6 +242,8 @@ it.each([
     work.driverCopies = 0
     work.inputCopies = 0
     work.driverReads = 0
+    work.attentionIds = 0
+    work.bindingCopies = 0
     work.statusReads = 0
     work.tabReads = 0
     work.ownerPtyReads = 0
@@ -249,6 +268,10 @@ it.each([
     expect(work.inputCopies).toBeLessThanOrEqual(count + rechecks)
     // A re-check reads its own process's driver (under its window and runtime ids), not its split's.
     expect(work.driverReads).toBeLessThanOrEqual(2 * rechecks)
+    // The tick asks attention for, and plans over, every bound process once; a re-check only its own.
+    const bound = count * (1 + count / 10)
+    expect(work.attentionIds).toBeLessThanOrEqual(bound + rechecks)
+    expect(work.bindingCopies).toBeLessThanOrEqual(bound + 2 * rechecks)
     forgetForegroundTerminalTabs(viewedTabIds)
     flushTerminalInputActivity()
     for (let index = 0; index < count; index++) {
