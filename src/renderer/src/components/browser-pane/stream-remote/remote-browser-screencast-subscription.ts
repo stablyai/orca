@@ -114,7 +114,7 @@ export async function openRemoteBrowserScreencastStream(
         pagePrompts: 1,
         contextMenus: 1,
         // A web client's picked files have no paths to stage on the host, and it can't save a printed PDF or a download.
-        ...(isWebClientLocation() ? {} : { fileChoosers: 1, prints: 1, downloadCopyStreams: 1 }),
+        ...(isWebClientLocation() ? {} : { fileChoosers: 1, prints: 1, downloadCopies: 1 }),
         agentCursor: 1,
         driverEvents: 1,
         downloads: 1,
