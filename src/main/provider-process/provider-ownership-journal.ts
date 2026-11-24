@@ -13,7 +13,6 @@ import {
   sweepOrphanedProviderGroup,
   providerGroupAbsent,
   providerOwnershipAbsent,
-  retireProviderWatcher,
   type ProviderGroupIdentity
 } from './provider-group-orphan-guard'
 import { PROVIDER_GROUP_REAP_TIMEOUT_MS } from './provider-process-supervisor'
