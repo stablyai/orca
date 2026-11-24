@@ -52,6 +52,8 @@ function chat(
   recoveredBelow = 0,
   /** Tool calls the last turn ran, as a long agent turn does. */
   lastTurnTools = 0,
+  /** Messages the last turn wrote, as a long agent turn does. */
+  lastTurnMessages = 0,
   /** Every send in one family: a chain (each shares a provider id with one neighbour and a card with
    *  the other), one queued card they all carry, or one answering turn they all name (the newest).
    *  Or `unsettled`: every send before the newest ten handed over, and never known answered. */
@@ -167,6 +169,19 @@ function chat(
         },
         now++
       )
+    )
+  }
+  for (let message = 0; message < lastTurnMessages; message += 1) {
+    applyJournalDomainItem(
+      db,
+      target,
+      {
+        kind: 'item',
+        identity: { provider: 'orca', clientMessageId: `note-${message}` },
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'note' }] },
+        options: { turnScope: { kind: 'thread' }, fence: 1 }
+      },
+      now++
     )
   }
   for (let call = 0; call < lastTurnTools; call += 1) {
@@ -367,7 +382,7 @@ it('stops reading a long send family at its first member older than the newest t
     unanswered: boolean,
     family: 'chain' | 'card' | 'answered' | 'unsettled' = 'chain'
   ) => {
-    const db = chat(turns, () => true, unanswered ? turns - 1 : undefined, 0, 0, family)
+    const db = chat(turns, () => true, unanswered ? turns - 1 : undefined, 0, 0, 0, family)
     const pinned = new JournalSqlScope(db, 'chat', 'epoch')
     const read = readJournalDomainOperationWindow(pinned, { latestTurns: 8, turnShape: true })
     const whole = new JournalSqlScope(db, 'chat', 'epoch')
@@ -389,7 +404,34 @@ it('stops reading a long send family at its first member older than the newest t
   expect([extra(200, true, 'card'), extra(500, true, 'card')]).toEqual([67, 67])
   expect([extra(200, false, 'card'), extra(500, false, 'card')]).toEqual([110, 110])
   // One answering turn, in the window, that every send names: the window's own lookup stops at the cap.
-  expect([extra(200, false, 'answered'), extra(500, false, 'answered')]).toEqual([83, 83])
+  expect([extra(200, false, 'answered'), extra(500, false, 'answered')]).toEqual([74, 74])
   // Unsettled sends piled up before the newest turns: their lookup stops at the cap too.
   expect([extra(200, false, 'unsettled'), extra(500, false, 'unsettled')]).toEqual([65, 65])
+})
+
+it('takes the whole read for a window crowded with rows rather than listing them to place its sends', () => {
+  const lookups = (messages: number) => {
+    const db = chat(50, () => true, undefined, 0, 0, messages)
+    const prepare = db.prepare.bind(db)
+    let placing = 0
+    db.prepare = (sql: string) => {
+      placing +=
+        sql.includes('journal_items_send_place') && sql.includes('journal_submission') ? 1 : 0
+      return prepare(sql)
+    }
+    const { snapshot } = readJournalDomainOperationWindow(
+      new JournalSqlScope(db, 'chat', 'epoch'),
+      {
+        latestTurns: 8,
+        turnShape: true
+      }
+    )
+    db.close()
+    return { placing, sends: snapshot.submissions.map((send) => send.clientMessageId) }
+  }
+  const newest = Array.from({ length: 9 }, (_, index) => `m${41 + index}`)
+  expect([lookups(0), lookups(2000)]).toEqual([
+    { placing: 3, sends: newest },
+    { placing: 0, sends: newest }
+  ])
 })

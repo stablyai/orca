@@ -13,7 +13,7 @@ export function recentSends(
   anchorsOnly: boolean
 ): Send[] | null {
   const older = (send: Send) => !anchorsOnly && reachesBefore([send], null, newest)
-  if ((earliest ?? Infinity) < newest || seed.length > RECENT_FAMILY_CAP || seed.some(older)) {
+  if ((earliest ?? Infinity) < newest || seed.some(older)) {
     return null
   }
   const sends = boundedSends(scope, [], seed, { cap: RECENT_FAMILY_CAP, older })

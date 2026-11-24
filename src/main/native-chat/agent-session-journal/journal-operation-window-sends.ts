@@ -77,47 +77,71 @@ export function placedSends(
   end: number,
   limit?: number
 ): Send[] | null {
+  if (limit !== undefined && crowded(scope, start, end)) {
+    return null
+  }
   const range = [...scope.prefix, start, end]
   return capped(limit, [
-    sendHeads(
-      scope,
-      `AND item_id IN ${windowPlaceRows('item_id')}`,
-      range,
-      'journal_submission_item',
-      limit
-    ),
-    sendHeads(
-      scope,
-      `AND provider_item_id IN ${windowPlaceRows('item_id')}`,
-      range,
-      'journal_submission_provider_item',
-      limit
-    ),
-    sendHeads(
-      scope,
-      // `+item_id` drops the column's TEXT affinity, so the comparison keys on the indexed expression.
-      `AND ${SEND_ANSWERED_TURN_SQL} IN ${windowPlaceRows('+item_id')}`,
-      range,
-      'journal_submission_answered_turn',
-      limit
-    ),
-    sendHeads(
-      scope,
-      'AND submitted_sequence>=? AND submitted_sequence<?',
-      [start, end],
-      'journal_submission_submitted',
-      limit
-    )
+    () =>
+      sendHeads(
+        scope,
+        `AND item_id IN ${windowPlaceRows('item_id')}`,
+        range,
+        'journal_submission_item',
+        limit
+      ),
+    () =>
+      sendHeads(
+        scope,
+        `AND provider_item_id IN ${windowPlaceRows('item_id')}`,
+        range,
+        'journal_submission_provider_item',
+        limit
+      ),
+    () =>
+      sendHeads(
+        scope,
+        // `+item_id` drops the column's TEXT affinity, so the comparison keys on the indexed expression.
+        `AND ${SEND_ANSWERED_TURN_SQL} IN ${windowPlaceRows('+item_id')}`,
+        range,
+        'journal_submission_answered_turn',
+        limit
+      ),
+    () =>
+      sendHeads(
+        scope,
+        'AND submitted_sequence>=? AND submitted_sequence<?',
+        [start, end],
+        'journal_submission_submitted',
+        limit
+      )
   ])
 }
 
 /** The lookups' sends once each, or null when one listed `limit` (so it may have stopped short). */
-function capped(limit: number | undefined, lookups: Send[][]): Send[] | null {
-  if (limit !== undefined && lookups.some((sends) => sends.length >= limit)) {
-    return null
+function capped(limit: number | undefined, lookups: (() => Send[])[]): Send[] | null {
+  const byId = new Map<string, Send>()
+  for (const lookup of lookups) {
+    const sends = lookup()
+    if (limit !== undefined && sends.length >= limit) {
+      return null
+    }
+    sends.forEach((send) => byId.set(send.messageId, send))
   }
-  const byId = new Map(lookups.flat().map((send) => [send.messageId, send]))
   return [...byId.values()]
+}
+
+/** Most visible non-tool rows a newest-turns window lists to place its sends; past it, the whole read. */
+const RECENT_ROW_CAP = 1024
+
+/** Whether `[start, end)` holds more rows a send can sit on than `RECENT_ROW_CAP`, counted by index
+ *  and stopping one past the cap. */
+function crowded(scope: JournalSqlScope, start: number, end: number): boolean {
+  const counted = scope.db
+    .prepare(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM journal_items INDEXED BY journal_items_send_place
+      WHERE session_id=? AND epoch=? AND ${SEND_PLACE_ROW_SQL} AND sequence>=? AND sequence<? LIMIT ?)`)
+    .get(...scope.prefix, start, end, RECENT_ROW_CAP + 1)
+  return Number(counted?.n) > RECENT_ROW_CAP
 }
 
 /** Most sends a newest-turns window reads by index for one walk of families; past it, the whole read. */
@@ -159,24 +183,26 @@ export function boundedSends(
     const providers = [...new Set(added.flatMap((send) => send.providerItemId ?? []))]
     const cards = [...new Set(added.flatMap((send) => send.queuedMessageId ?? []))]
     const related = capped(limit, [
-      providers.length > 0
-        ? sendHeads(
-            scope,
-            'AND provider_item_id IN (SELECT value FROM json_each(?))',
-            [JSON.stringify(providers)],
-            'journal_submission_provider_item',
-            limit
-          )
-        : [],
-      cards.length > 0
-        ? sendHeads(
-            scope,
-            `AND ${SEND_QUEUED_CARD_SQL} IN (SELECT value FROM json_each(?))`,
-            [JSON.stringify(cards)],
-            'journal_submission_queued_card',
-            limit
-          )
-        : []
+      () =>
+        providers.length > 0
+          ? sendHeads(
+              scope,
+              'AND provider_item_id IN (SELECT value FROM json_each(?))',
+              [JSON.stringify(providers)],
+              'journal_submission_provider_item',
+              limit
+            )
+          : [],
+      () =>
+        cards.length > 0
+          ? sendHeads(
+              scope,
+              `AND ${SEND_QUEUED_CARD_SQL} IN (SELECT value FROM json_each(?))`,
+              [JSON.stringify(cards)],
+              'journal_submission_queued_card',
+              limit
+            )
+          : []
     ])
     // Every send a lookup lists is in a walked family, so a full lookup means the walk is past the cap.
     if (related === null) {
@@ -268,7 +294,9 @@ export function seedSends(
 function unsettledSends(scope: JournalSqlScope): Send[] | null {
   const unsettled = "AND (dispatch_state='pending' OR (dispatch_state='unknown' AND recovered=0))"
   const limit = RECENT_FAMILY_CAP + 1
-  return capped(limit, [sendHeads(scope, unsettled, [], 'journal_submission_recovery', limit)])
+  return capped(limit, [
+    () => sendHeads(scope, unsettled, [], 'journal_submission_recovery', limit)
+  ])
 }
 
 export function readSend(scope: JournalSqlScope, messageId: string): AgentJournalSubmission {
