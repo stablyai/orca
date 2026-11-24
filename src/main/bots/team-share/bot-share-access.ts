@@ -13,12 +13,50 @@ export type BotShareDevices = {
   revokeBotShareDevices: (botId: string, accountId?: string) => Promise<boolean>
 }
 
-/** The bots a teammate's share connection lists: the shared bot alone, without its share list. */
+/** Whether the bot is still shared with the account: every teammate device stands on this alone. */
+export function botSharedWithAccount(
+  bots: readonly Pick<Bot, 'id' | 'shares'>[],
+  grant: { botId: string; accountId: string }
+): boolean {
+  const bot = bots.find((entry) => entry.id === grant.botId)
+  return (
+    bot?.shares?.some((share) => share.kind === 'account' && share.accountId === grant.accountId) ??
+    false
+  )
+}
+
+/** The bots a teammate's share connection lists: the shared bot alone, with only what its row, avatar
+ *  and chats show. Its people, connectors, settings and the owner's chats stay on this host; the
+ *  fields a Bot requires read empty, as for a shared agent whose host hasn't answered yet. */
 export function botShareListedBots(
   bots: readonly Bot[],
   scope: Pick<BotShareCallerScope, 'botId'>
-): Omit<Bot, 'shares'>[] {
-  return bots.filter((bot) => bot.id === scope.botId).map(({ shares: _others, ...bot }) => bot)
+): Bot[] {
+  return bots
+    .filter((bot) => bot.id === scope.botId)
+    .map((bot) => ({
+      id: bot.id,
+      name: bot.name,
+      hostId: bot.hostId,
+      folder: bot.folder,
+      folderWorkspaceId: bot.folderWorkspaceId,
+      agent: bot.agent,
+      avatar: bot.avatar,
+      avatarColor: bot.avatarColor,
+      avatarOutfit: bot.avatarOutfit,
+      generatedOverMascot: bot.generatedOverMascot,
+      avatarRevision: bot.avatarRevision,
+      avatarRevisionEpoch: bot.avatarRevisionEpoch,
+      paused: bot.paused,
+      createdAt: bot.createdAt,
+      updatedAt: bot.updatedAt,
+      notifications: { needsPermission: false, taskComplete: false, couldNotFinish: false },
+      members: [],
+      slack: null,
+      linear: null,
+      github: null,
+      chatSessionId: null
+    }))
 }
 
 /** Takes the share off the list, then ends that account's devices on the bot at once. */

@@ -2,6 +2,7 @@ import type { WebSocket } from 'ws'
 import type { TerminalStreamFrame } from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { DeviceRegistry } from './pairing/device-registry'
 import { BotShareDeviceStore } from './pairing/bot-share-device-store'
+import { botSharedWithAccount } from '../../../bots/team-share/bot-share-access'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './pairing/e2ee-keypair'
 import { ensureHostInstanceIdentity, type HostIdentityOutcome } from '../../host-instance-identity'
 import { RuntimeRpcState } from './runtime-rpc-state'
@@ -141,7 +142,9 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
     return {
       ok: true,
       deviceRegistry,
-      botShareDevices: new BotShareDeviceStore(this.userDataPath),
+      botShareDevices: new BotShareDeviceStore(this.userDataPath, (grant) =>
+        botSharedWithAccount(this.runtime.bots.list(), grant)
+      ),
       e2eeKeypair
     }
   }

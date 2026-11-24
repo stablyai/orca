@@ -23,6 +23,30 @@ describe('teammate access from the share list', () => {
     expect(JSON.stringify(listed)).not.toMatch(/example\.com|share-alice|share-bob/)
   })
 
+  it('lists a teammate the bot’s row and avatar, never its people, connectors or the owner’s chats', () => {
+    const shared = makeTestBot({
+      id: 'bot-1',
+      avatarColor: '#3366ff',
+      members: [{ id: 'U-SECRET', name: 'Secret Person', source: 'slack', workspaceId: 'T1' }],
+      handedPairedWorkspaces: [{ environmentId: 'env-secret', worktreeId: 'wt-secret' }],
+      slack: { appId: 'A-SECRET', teamId: 'T-SECRET', ownerUserId: 'U-OWNER' },
+      chatSessionId: 'home-chat-secret',
+      shares: [alice]
+    })
+    const [listed] = botShareListedBots([shared], { botId: 'bot-1' })
+    expect(listed).toMatchObject({
+      id: 'bot-1',
+      name: shared.name,
+      folderWorkspaceId: shared.folderWorkspaceId,
+      agent: shared.agent,
+      avatarColor: '#3366ff',
+      members: [],
+      slack: null,
+      chatSessionId: null
+    })
+    expect(JSON.stringify(listed)).not.toMatch(/SECRET|secret|U-OWNER|permissionMode/)
+  })
+
   it('ends a removed account’s devices on that bot, and no one’s for a removed invite', async () => {
     let saved: Bot = makeTestBot({ id: 'bot-1', shares: [alice, bob] })
     const revokeBotShareDevices = vi.fn<BotShareDevices['revokeBotShareDevices']>(async () => true)

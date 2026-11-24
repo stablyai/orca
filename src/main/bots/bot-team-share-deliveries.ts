@@ -16,6 +16,7 @@ import {
 } from '../../shared/bots/bot-team-share-seal'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
 import type { BotHostUpdates } from '../../shared/rpc-contract/bots-params'
+import { botSharedWithAccount } from './team-share/bot-share-access'
 
 type ShareResolved = Extract<ConnectorDelivery, { kind: 'share_resolved' }>
 type ShareAccept = Extract<ConnectorDelivery, { kind: 'share_accept' }>
@@ -68,6 +69,8 @@ export type BotShareOfferMint = (input: {
 export type BotShareAcceptDeps = {
   bots: { list: () => readonly Pick<Bot, 'id' | 'shares'>[] }
   mintOffer: BotShareOfferMint
+  /** Ends the account's devices on the bot, as removing its share does. */
+  revokeDevices: (botId: string, accountId: string) => Promise<boolean>
   /** putBotShareOffer, as the signed-in account. */
   putOffer: (
     botId: string,
@@ -94,8 +97,13 @@ export async function acceptBotShare(
   deps: BotShareAcceptDeps,
   delivery: ShareAccept
 ): Promise<boolean> {
-  const bot = deps.bots.list().find((entry) => entry.id === delivery.botId)
-  const share = botAccountShare(bot?.shares, delivery.shareId, delivery.accountId)
+  const currentShare = () =>
+    botAccountShare(
+      deps.bots.list().find((entry) => entry.id === delivery.botId)?.shares,
+      delivery.shareId,
+      delivery.accountId
+    )
+  const share = currentShare()
   if (!share) {
     return false
   }
@@ -105,6 +113,13 @@ export async function acceptBotShare(
     name: share.name ?? share.email,
     devicePublicKey: delivery.devicePublicKey
   })
+  // A remove that landed during the mint found no row to end; end the one just minted.
+  if (!currentShare()) {
+    if (!botSharedWithAccount(deps.bots.list(), delivery)) {
+      await deps.revokeDevices(delivery.botId, delivery.accountId)
+    }
+    return false
+  }
   const request: ConnectorShareOfferRequest = {
     v: 1,
     devicePublicKey: delivery.devicePublicKey,

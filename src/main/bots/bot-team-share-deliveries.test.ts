@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { BotShare } from '../../shared/bots/bot-team-shares'
 import {
@@ -10,6 +13,8 @@ import {
   resolveBotShareInvite,
   type BotShareAcceptDeps
 } from './bot-team-share-deliveries'
+import { botSharedWithAccount } from './team-share/bot-share-access'
+import { BotShareDeviceStore } from '../runtime/rpc/server/pairing/bot-share-device-store'
 
 const primitives = NODE_PAIRED_E2EE_PRIMITIVES
 const device = primitives.generateKeyPair()
@@ -65,6 +70,7 @@ function deps(sent: { ok: true } | { ok: false; error: string }) {
   const value: BotShareAcceptDeps = {
     bots: { list: () => [{ id: 'bot-1', shares }] },
     mintOffer,
+    revokeDevices: vi.fn(async () => true),
     putOffer
   }
   return { value, putOffer, mintOffer }
@@ -98,6 +104,40 @@ describe('share accept on the host', () => {
       })
     expect(open(sealKeys.secretKey)).toEqual(offer)
     expect(open(device.secretKey)).toBeNull()
+  })
+
+  it('ends the device it minted when the share was removed meanwhile, even if that revoke fails', async () => {
+    let listed = shares
+    const bots = { list: () => [{ id: 'bot-1', shares: listed }] }
+    const store = new BotShareDeviceStore(
+      mkdtempSync(join(tmpdir(), 'orca-share-race-')),
+      (grant) => botSharedWithAccount(bots.list(), grant)
+    )
+    let deviceId = ''
+    const { value, putOffer } = deps({ ok: true })
+    const revokeDevices = vi.fn<BotShareAcceptDeps['revokeDevices']>(async () => false)
+    const accepted = acceptBotShare(
+      {
+        ...value,
+        bots,
+        revokeDevices,
+        mintOffer: async (ask) => {
+          // The owner removes Alice after the accept was checked, before its row is written.
+          listed = []
+          deviceId = (
+            await store.add({ ...ask, scope: 'runtime', devicePublicKeyB64: ask.devicePublicKey })
+          ).deviceId
+          return offer
+        }
+      },
+      accept('share-alice', 'acct-alice')
+    )
+    await expect(accepted).resolves.toBe(false)
+    expect(revokeDevices).toHaveBeenCalledExactlyOnceWith('bot-1', 'acct-alice')
+    expect(putOffer).not.toHaveBeenCalled()
+    // The revoke failed and the row is left, yet it signs in as nothing.
+    expect(store.get(deviceId)).not.toBeNull()
+    expect(store.lookupDeviceKey(deviceId)).toEqual({ kind: 'refused' })
   })
 
   it('fails the accept when the cloud does not take the offer', async () => {

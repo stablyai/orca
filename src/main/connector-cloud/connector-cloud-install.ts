@@ -166,6 +166,8 @@ export function createConnectorCloud({
               }
               return await runtime.botShareDevices.mintBotShareOffer(ask)
             },
+            revokeDevices: async (botId, accountId) =>
+              (await runtime.botShareDevices?.revokeBotShareDevices(botId, accountId)) ?? false,
             putOffer: (...offer) => putBotShareOffer(runtime.getConnectorCloud(), ...offer)
           },
           delivery
