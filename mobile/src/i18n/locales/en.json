@@ -7623,23 +7623,18 @@
       "addFailed": "Couldn’t add {{names}}.",
       "fullBot": "Nobody was added: {{names}} would go past the {{count}} people a bot can have.",
       "fullWorkspace": "Nobody was added: {{names}} would go past the {{count}} people this workspace can have.",
-      "canAsk": "Can ask",
       "retry": "Try again",
       "searching": "Searching…",
       "cancel": "Cancel",
       "selectedHeading": "Selected",
-      "you": "You",
-      "owner": "Owner",
-      "addedCount": "{{count}} of {{max}} added",
       "incomplete": "Not everyone is listed. Search by name to find someone.",
-      "selected": "{{count}} selected",
-      "addOne": "Add 1 person",
-      "addMany": "Add {{count}} people",
       "searchIn": "Search people in {{workspace}}",
       "peopleIn": "People in {{workspace}}",
       "noOneNamed": "No one named “{{query}}” in {{workspace}}",
       "needsSlack": "Add {{name}} to Slack first to pick people from your workspace.",
-      "noMatchDetail": "Members, guests and people from other organizations in {{workspace}}’s Slack can be added. Anyone else gets a private note to ask you."
+      "noMatchDetail": "Members, guests and people from other organizations in {{workspace}}’s Slack can be added. Anyone else gets a private note to ask you.",
+      "add": "Add",
+      "allAdded": "They can already ask"
     },
     "linear": {
       "whoCanAsk": {
@@ -7936,8 +7931,8 @@
       "heading": "Paired servers",
       "remove": "Remove",
       "removeServer": "Remove {{server}}",
-      "tooltip": "Bots and agents on these servers can ask {{name}} without asking you each time.",
-      "unnamed": "Paired server"
+      "unnamed": "Paired server",
+      "footer": "Their agents can ask without your approval."
     },
     "usageLimit": {
       "continuesAt": "Continues at {{time}}",

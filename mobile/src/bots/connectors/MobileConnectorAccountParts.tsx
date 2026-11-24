@@ -4,7 +4,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ActivityIndicator, AppState, Text, View } from 'react-native'
 import { ArrowUpRight, Laptop } from 'lucide-react-native'
 import type { BotMember } from '../../../../src/shared/bot-types'
-import { accessRequestPerson } from '../../../../src/shared/bots/bot-access-request'
 import type { ConnectorAccessRequest } from '../../../../src/shared/connector-bot-access-contract'
 import { MobileStateButton, MobileStateView } from '../../components/feedback/MobileStateView'
 import { ListRow } from '../../components/list/ListGroup'
@@ -16,12 +15,17 @@ import { useBackClaim } from '../../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
-import { accessRequestGrant, accessRequestLine } from '../bot-access-request-copy'
 import { mobileBotAccessCopy } from '../mobile-bot-access-copy'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotAccessDecisionContent } from '../MobileBotAccessDecision'
-import { optionStyles } from '../mobile-bot-option-styles'
-import { MobileBotTextButton } from '../MobileBotTextButton'
+import {
+  MobileWhoCanAskOwnerFace,
+  MobileWhoCanAskPersonRow,
+  MobileWhoCanAskRequestRow,
+  MobileWhoCanAskReview,
+  WHO_FACE_INSET,
+  whoCanAskName
+} from '../MobileWhoCanAskRows'
 import type { BotAccessRequests } from '../use-bot-access-requests'
 
 /**
@@ -49,19 +53,22 @@ export function useConnectorPeople(props: {
   }
   const overlay =
     granting && access ? (
-      <MobileBotAccessDecisionContent
-        grant={accessRequestGrant(granting)}
+      <MobileWhoCanAskReview
+        request={granting}
         bot={props.accessBot}
-        onGrant={() => void access.decide(granting, 'granted')}
+        busy={access.deciding || !props.online}
+        onDecide={(decision) => void access.decide(granting, decision)}
         onClose={() => setGranting(null)}
       />
     ) : removing ? (
       <ConfirmContent
-        title={t('bots.settings.removeConfirmTitle', 'Remove {{name}}?', { name: removing.name })}
+        title={t('bots.settings.removeConfirmTitle', 'Remove {{name}}?', {
+          name: whoCanAskName(removing)
+        })}
         message={t(
           'bots.settings.removeConfirmMessage',
           '{{name}} can no longer ask {{botName}}.',
-          { name: removing.name, botName: bot.name }
+          { name: whoCanAskName(removing), botName: bot.name }
         )}
         confirmLabel={t('bots.settings.remove', 'Remove')}
         destructive
@@ -76,57 +83,33 @@ export function useConnectorPeople(props: {
   const section = (
     <>
       {props.requests.length > 0 && access ? (
-        <SettingsSection title={mobileBotAccessCopy(t, 'heading')}>
-          {props.requests.map((request) => {
-            const person = accessRequestPerson(request)
-            return (
-              <ListRow
-                key={request.requestId}
-                title={person}
-                subtitle={accessRequestLine(request, t)}
-                accessory={
-                  <View style={optionStyles.rowActions}>
-                    <MobileBotTextButton
-                      label={mobileBotAccessCopy(t, 'decline')}
-                      accessibilityLabel={t('bots.settings.declineName', 'Decline {{name}}', {
-                        name: person
-                      })}
-                      disabled={deciding}
-                      onPress={() => void access.decide(request, 'declined')}
-                    />
-                    <MobileBotTextButton
-                      label={mobileBotAccessCopy(t, 'review')}
-                      accessibilityLabel={t('bots.settings.reviewName', 'Review {{name}}', {
-                        name: person
-                      })}
-                      disabled={deciding}
-                      onPress={() => setGranting(request)}
-                    />
-                  </View>
-                }
-              />
-            )
-          })}
+        <SettingsSection title={mobileBotAccessCopy(t, 'heading')} separatorInset={WHO_FACE_INSET}>
+          {props.requests.map((request) => (
+            <MobileWhoCanAskRequestRow
+              key={request.requestId}
+              request={request}
+              busy={deciding}
+              onReview={() => setGranting(request)}
+              onDecline={() => void access.decide(request, 'declined')}
+            />
+          ))}
         </SettingsSection>
       ) : null}
       <SettingsSection
         title={t('bots.settings.whoCanAskName', 'Who can ask {{name}}', { name: bot.name })}
+        separatorInset={WHO_FACE_INSET}
       >
-        <ListRow title={t('bots.settings.you', 'You')} value={t('bots.settings.owner', 'Owner')} />
+        <ListRow
+          leading={<MobileWhoCanAskOwnerFace />}
+          title={t('bots.settings.you', 'You')}
+          value={t('bots.settings.owner', 'Owner')}
+        />
         {props.people.map((member) => (
-          <ListRow
+          <MobileWhoCanAskPersonRow
             key={`${member.id}:${member.workspaceId ?? ''}`}
-            title={member.name}
-            accessory={
-              <MobileBotTextButton
-                label={t('bots.settings.remove', 'Remove')}
-                accessibilityLabel={t('bots.settings.removeName', 'Remove {{name}}', {
-                  name: member.name
-                })}
-                disabled={!props.online}
-                onPress={() => setRemoving(member)}
-              />
-            }
+            member={member}
+            busy={!props.online}
+            onRemove={() => setRemoving(member)}
           />
         ))}
       </SettingsSection>
