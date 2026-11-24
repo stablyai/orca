@@ -108,7 +108,7 @@ export function acpKeptAgent(child: RelayedProviderChild): AcpKeptAgent {
   const updates: { seq: number; update: AcpKeptUpdate }[] = []
   let model: { seq: number; id: string } | null = null
   for (const { seq, name } of attach?.kept ?? []) {
-    const line = child.keptLines.get(seq)
+    const line = child.kept.keptLines.get(seq)
     if (line === undefined) {
       continue
     }
