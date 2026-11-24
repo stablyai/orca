@@ -55,24 +55,34 @@ function answerLines(
 ): string {
   return shape.decisions
     .flatMap((decision, index) => {
+      const head = `${botItemQuestionLine(decision.question)} →`
       const words = answers[index]?.replace(/\s+/g, ' ').trim()
       if (!words) {
-        return keepsPlace(index) ? [`${botItemQuestionLine(decision.question)} →`] : []
+        return keepsPlace(index) ? [head] : []
       }
-      const reply = decision.replies.find((option) => option.label === words)
-      return [
-        reply
-          ? botItemQuickReplyText(shape, decision, reply)
-          : `${botItemQuestionLine(decision.question)} → ${words}`
-      ]
+      const reply =
+        shape.decisions.length === 1
+          ? decision.replies.find((option) => option.label === words)
+          : undefined
+      if (reply) {
+        return [botItemQuickReplyText(shape, decision, reply)]
+      }
+      // Extra separator space defeats a longer heading without changing the parsed answer.
+      let separator = ' '
+      while (
+        botItemLineHeads(shape, `${head}${separator}${words}`).some(
+          (candidate) => (candidate?.length ?? 0) > head.length
+        )
+      ) {
+        separator += ' '
+      }
+      return [`${head}${separator}${words}`]
     })
     .join('\n')
 }
 
-/** One comment for a set of answers: a line per answered question, in the ask's order; a picked quick
- *  reply writes exactly what its chip posts on its own. An unanswered line whose first line a later
- *  answered one shares keeps a bare "Question →", so that answer reads back on its own line, not on
- *  the first line with its lead. */
+/** One comment for a set of answers, in the ask's order. A bare "Question →" reserves an unanswered
+ *  question's position when its heading matches a later answered question's. */
 export function botItemAnswersText(
   shape: BotItemQuestionShape,
   answers: readonly (string | null)[]

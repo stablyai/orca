@@ -57,6 +57,21 @@ it('shows each posted option on its own question when their headings and options
   ])
 })
 
+it('round-trips a typed answer that would otherwise make a longer question heading', () => {
+  const shape = botItemQuestionShape({
+    ask: {
+      questions: ['Keep', 'Keep → x?', 'Keep →  x?'].map((prompt) => ({ prompt, options: [] }))
+    }
+  })
+  const answers = ['x? → No', null, null]
+  const held = botItemHeldAnswersText(shape, answers)
+  const posted = botItemAnswersText(shape, answers)
+  expect(held).toBe('Keep →   x? → No')
+  expect(posted).toBe(held)
+  expect(botItemNamedAnswers(shape, posted)).toEqual(answers)
+  expect(botItemNamedAnswers(shape, 'Keep → x? → No')).toEqual([null, 'No', null])
+})
+
 it('reads answers and drafts written with the question line older builds wrote', () => {
   const ask = {
     questions: [
