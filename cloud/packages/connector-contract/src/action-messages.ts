@@ -337,7 +337,8 @@ export const ConnectorIssueFactsSchema = z.looseObject({
 })
 export type ConnectorIssueFacts = z.infer<typeof ConnectorIssueFactsSchema>
 
-// Each verb's answer; the machine passes it on as it is, so a newer cloud's fields reach the CLI.
+// Each verb's answer; the machine passes it on as it is, so a newer cloud's fields reach the CLI,
+// except a read's: the machine keeps only the fields named here (src/shared/connector-message-parts.ts).
 export const ConnectorActionResultSchema = z.looseObject({
   // The place or message acted on, or made (post).
   target: ConnectorRefViewSchema.optional(),
