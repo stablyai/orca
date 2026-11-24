@@ -128,7 +128,7 @@ export function handleThreadMute(
     return null
   }
   // No link yet (a start in the same poll is still writing it), or not muted: it goes on at once.
-  const applied = thread?.muted && mutes(deps) ? applyStep(deps, delivery, record) : null
+  const applied = thread?.muted && mutes(deps, delivery) ? applyStep(deps, delivery, record) : null
   return applied && { decided: hold(deps, id, applied.decided) }
 }
 
@@ -171,12 +171,15 @@ async function decideNow(
     linked &&
     linked !== 'not_bot' &&
     linked.muted &&
-    mutes(deps) &&
+    mutes(deps, delivery) &&
     applyStep(deps, delivery, record, 'in_place')
   return applied ? await applied.decided : 'send'
 }
 
-const mutes = (deps: ThreadMuteDeps): boolean => deps.mentionsKnown?.() !== false
+// A cloud known not to mark mentions lets every reply through; a bare @mention it still names
+// brings the bot back for good, so the mute isn't restored once the cloud marks mentions again.
+const mutes = (deps: ThreadMuteDeps, delivery: SendDelivery): boolean =>
+  deps.mentionsKnown?.() !== false || threadMuteStep(true, delivery) === 'unmute_and_send'
 
 /** Keeps the thread's newest deciding reply until it settles, for the replies behind it. */
 function hold<Decided>(

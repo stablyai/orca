@@ -399,7 +399,7 @@ describe('a bot that leaves its thread', () => {
   it('keeps a line that couldn\u2019t post owed until it posts, and drops one refused for good', async () => {
     const store = await botHome({})
     const { leave, posted, lines, link, answers, timers } = leaver(store)
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     await leave()
     const own = lines()
     // A turn end deciding its line holds it from a reconnect's resume.
@@ -417,7 +417,11 @@ describe('a bot that leaves its thread', () => {
       await expect.poll(() => timers.length).toBe(1)
       timers.shift()!()
     }
-    await expect.poll(() => own.owed(link(), TURN_ID) && timers.length === 0).toBe(true)
+    // The last wait ran out: it says so, and is still owed.
+    await expect
+      .poll(() => warn.mock.calls.some(([said]) => String(said).includes('could not post')))
+      .toBe(true)
+    expect(own.owed(link(), TURN_ID) && timers.length === 0).toBe(true)
     expect(posted).toEqual([])
     own.resume(() => null)
     await expect.poll(() => posted.length).toBe(1)
@@ -460,19 +464,24 @@ describe('a bot that leaves its thread', () => {
 
   it('keeps a leave whose save may have reached disk, and says it is unconfirmed', async () => {
     const store = await botHome({})
-    const { leave } = leaver(store)
+    const { leave, lines, link, posted, timers } = leaver(store)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const flush = vi
-      .spyOn(store, 'flushPendingOrThrowAsync')
-      .mockRejectedValueOnce(
-        new ProfileStateIndeterminateWriteError(new Error('commit unacknowledged'), undefined)
-      )
+    const unknown = () =>
+      new ProfileStateIndeterminateWriteError(new Error('commit unacknowledged'), undefined)
+    const flush = vi.spyOn(store, 'flushPendingOrThrowAsync').mockRejectedValueOnce(unknown())
     await expect(leave()).rejects.toMatchObject({ code: 'leave_unconfirmed' })
     // As disk may hold it: a restart can't bring back a mute memory had dropped.
     expect(readThreadMute(store, FIRST)).toMatchObject({ muted: true })
     // Asked again: saved again before it says so.
     await expect(leave()).resolves.toEqual({ ok: true, already: true })
     expect(flush).toHaveBeenCalledTimes(2)
+    // Its line posts only after a save known to be on disk.
+    flush.mockRejectedValueOnce(unknown())
+    lines().post(link(), TURN_ID)
+    await expect.poll(() => timers.length).toBe(1)
+    expect(posted).toEqual([])
+    timers.shift()!()
+    await expect.poll(() => posted.length).toBe(1)
   })
 
   it('drops a line the cloud refuses for good', async () => {
@@ -564,8 +573,12 @@ describe('a bot that leaves its thread', () => {
   it('lets every reply through on a cloud that no longer marks mentions', async () => {
     const store = await botHome({ first: true })
     const { deliver, turns } = connector(store, undefined, false)
-    await deliver(send(FIRST, '@Ranger please check this'))
-    expect(turns).toEqual(['@Ranger please check this'])
+    await deliver(send(FIRST, 'please check this'))
+    expect(turns).toEqual(['please check this'])
+    expect(readThreadMute(store, FIRST)).toMatchObject({ muted: true })
+    // A bare @mention it still names brings the bot back for good, before mentions are marked again.
+    await deliver(send(FIRST, '@Ranger', { bareMention: true }))
+    expect(readThreadMute(store, FIRST)).toMatchObject({ muted: false })
   })
 
   it('after a quit, posts the line once its answer has left the reply outbox', async () => {

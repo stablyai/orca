@@ -168,9 +168,18 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
         posting.set(id, next)
         timer(next, wait)
       }
-      const cloud = deps.cloud()
-      // The leave's save is on disk first: one that fails puts the thread back, owing nothing.
+      // The leave's save is on disk first: one that fails puts the thread back, owing nothing, and
+      // one whose outcome was unknown is written again before the line says so.
       await threadMuteSaving(link)?.catch(() => undefined)
+      if (owed(link, turnId) && deps.flush) {
+        try {
+          await deps.flush()
+        } catch {
+          later()
+          return
+        }
+      }
+      const cloud = deps.cloud()
       // Its answer goes first: the end or reply that carries it (or the end an owner's failed post
       // holds). Its acceptance wakes this; the waits cover a route that doesn't (Orca's /replies).
       const pending =
