@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { lookAroundToolDecision } from './bot-look-around-policy'
 
 const ALLOW = 'allow'
@@ -152,7 +152,14 @@ const POWERSHELL: readonly (readonly [string, string])[] = [
   ['gh pr view x;Remove-Item y', '"x;Remove-Item"']
 ]
 
+const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+const onPlatform = (value: NodeJS.Platform) => Object.defineProperty(process, 'platform', { value })
+
 describe('lookAroundToolDecision', () => {
+  // The table is the POSIX host's answer; Windows adds the cmd.exe rule, tested on its own.
+  beforeEach(() => onPlatform('linux'))
+  afterEach(() => hostPlatform && Object.defineProperty(process, 'platform', hostPlatform))
+
   it.each([
     ...BASH.map(([command, named]) => ['Bash', command, named] as const),
     ...POWERSHELL.map(([command, named]) => ['PowerShell', command, named] as const)
@@ -169,16 +176,9 @@ describe('lookAroundToolDecision', () => {
   it("refuses cmd.exe operators in Bash's quoted words only on Windows", () => {
     const command = "orca bot list 'x&echo.pwned>file'"
     expect(lookAroundToolDecision('Bash', { command })).toEqual({ decision: 'allow' })
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    try {
-      const answer = lookAroundToolDecision('Bash', { command })
-      expect(answer.decision === 'deny' && answer.reason).toContain('cmd.exe reads & | < > ^')
-    } finally {
-      if (platform) {
-        Object.defineProperty(process, 'platform', platform)
-      }
-    }
+    onPlatform('win32')
+    const answer = lookAroundToolDecision('Bash', { command })
+    expect(answer.decision === 'deny' && answer.reason).toContain('cmd.exe reads & | < > ^')
   })
 
   it('names a refused tool', () => {
