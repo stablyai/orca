@@ -52,14 +52,10 @@ export async function captureCleanGuestPage(
   } catch {
     return null
   }
-  const image = await readbackThroughCaptureLane(
-    guest,
-    signal,
-    releasePaint,
-    deadlineMs,
+  const image = await readbackThroughCaptureLane(guest, signal, releasePaint, deadlineMs, {
     paintCapMs,
     canSubmit
-  )
+  })
   try {
     if (!image || image.isEmpty() || signal.aborted || guest.isDestroyed()) {
       return null
@@ -93,15 +89,23 @@ export function captureCleanDocumentPage(
  * readback itself; a readback it abandons keeps the lane until Electron settles it. Takes ownership
  * of `releasePaint`: the lease is held until the readback settles, capped by `paintCapMs`.
  * `canSubmit` is checked right before submitting, so a wait the page navigated away during never
- * reads back the next document.
+ * reads back the next document. `confirmAfterWait` runs when the readback had to wait for the lane:
+ * what the caller prepared before waiting may be stale, so it is confirmed again before submitting.
  */
 export async function readbackThroughCaptureLane<Image>(
   guest: { isDestroyed: () => boolean; capturePage: () => Promise<Image> },
   signal: AbortSignal,
   releasePaint: () => void,
   deadlineMs: number,
-  paintCapMs = ABANDONED_READBACK_PAINT_CAP_MS,
-  canSubmit: () => boolean = () => true
+  {
+    paintCapMs = ABANDONED_READBACK_PAINT_CAP_MS,
+    canSubmit = () => true,
+    confirmAfterWait
+  }: {
+    paintCapMs?: number
+    canSubmit?: () => boolean
+    confirmAfterWait?: () => Promise<boolean>
+  } = {}
 ): Promise<Image | null> {
   const release = once(releasePaint)
   // The deadline also withdraws a pending lane wait, so repeated timed-out readbacks leave no registrations.
@@ -117,8 +121,10 @@ export async function readbackThroughCaptureLane<Image>(
   // waiters woken together cannot both submit; a waiter that finds the lane taken registers again.
   // Wrapped, because resolving with the readback promise itself would wait for it to settle.
   const submitted = await new Promise<{ physical: Promise<Image | null> } | null>((resolve) => {
+    let waited = false
     const attempt = (): void => {
       if (isNativeCaptureBusy(guest)) {
+        waited = true
         const cancel = whenNativeCaptureLaneFree(guest, attempt)
         stopWaiting = () => {
           cancel()
@@ -129,6 +135,29 @@ export async function readbackThroughCaptureLane<Image>(
       stopWaiting = () => {}
       if (signal.aborted || guest.isDestroyed() || !canSubmit()) {
         resolve(null)
+        return
+      }
+      if (waited && confirmAfterWait) {
+        // Confirm, then retry the synchronous step; a lane taken meanwhile means waiting again.
+        waited = false
+        let withdrawn = false
+        stopWaiting = () => {
+          withdrawn = true
+          resolve(null)
+        }
+        void confirmAfterWait().then(
+          (confirmed) => {
+            if (withdrawn) {
+              return
+            }
+            if (confirmed) {
+              attempt()
+            } else {
+              resolve(null)
+            }
+          },
+          () => resolve(null)
+        )
         return
       }
       try {

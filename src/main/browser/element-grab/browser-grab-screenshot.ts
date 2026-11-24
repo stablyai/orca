@@ -5,13 +5,20 @@ import type {
 } from '../../../shared/browser/element-grab/browser-grab-types'
 import { GRAB_BUDGET } from '../../../shared/browser/element-grab/browser-grab-types'
 import { grabDocumentScope, requestGrabExecution, restoreGrabCapture } from './grab-guest-execution'
-import {
-  ABANDONED_READBACK_PAINT_CAP_MS,
-  readbackThroughCaptureLane
-} from './grab-clean-page-capture'
+import { readbackThroughCaptureLane } from './grab-clean-page-capture'
 
 type Snapshot = BrowserGrabRect & { viewportWidth: number }
 const capturing = new WeakSet<Electron.WebContents>()
+
+function sameSnapshot(a: Snapshot, b: Snapshot): boolean {
+  return (
+    a.x === b.x &&
+    a.y === b.y &&
+    a.width === b.width &&
+    a.height === b.height &&
+    a.viewportWidth === b.viewportWidth
+  )
+}
 
 function readSnapshot(value: unknown): Snapshot | null {
   if (!value || typeof value !== 'object') {
@@ -73,34 +80,31 @@ export async function captureSelectionScreenshot(
     if (!rect || !scope.current || guest.isDestroyed()) {
       return null
     }
+    // The pick is still live, in this document, where it was when the capture was prepared.
+    const pickUnchanged = async (): Promise<boolean> => {
+      const checked = await requestGrabExecution(guest, '', {
+        scope,
+        loadedOnly: true,
+        pick: { selectionId, operation: 'snapshot' }
+      })
+      const current = checked.ok ? readSnapshot(checked.value) : null
+      return current !== null && scope.current && sameSnapshot(current, rect)
+    }
     // The shared lane keeps this readback from overlapping Draw's or the paint restore's capture.
+    // A readback that waited for the lane confirms the pick again first: a pick cancelled, replaced
+    // or detached meanwhile must not cost a native readback another capture is waiting behind.
     paintHandedOff = true
     const image = await readbackThroughCaptureLane(
       guest,
       new AbortController().signal,
       releasePaint,
       SELECTION_CAPTURE_DEADLINE_MS,
-      ABANDONED_READBACK_PAINT_CAP_MS,
-      () => scope.current
+      { canSubmit: () => scope.current, confirmAfterWait: pickUnchanged }
     )
     if (!image || image.isEmpty() || !scope.current || guest.isDestroyed()) {
       return null
     }
-    const checked = await requestGrabExecution(guest, '', {
-      scope,
-      loadedOnly: true,
-      pick: { selectionId, operation: 'snapshot' }
-    })
-    const current = checked.ok ? readSnapshot(checked.value) : null
-    if (
-      !current ||
-      !scope.current ||
-      current.x !== rect.x ||
-      current.y !== rect.y ||
-      current.width !== rect.width ||
-      current.height !== rect.height ||
-      current.viewportWidth !== rect.viewportWidth
-    ) {
+    if (!(await pickUnchanged())) {
       return null
     }
     const bitmap = image.getSize()
