@@ -33,7 +33,7 @@ describe('Claude relay ack floor', () => {
     expect(acks).toEqual([1, 5])
     // An agent that ended mid-stream still gets everything acked, so the daemon can drop it.
     output.line('relayData', 6, stream('message_start'))
-    await output.settle(true)
+    await output.finish()
     expect(acks).toEqual([1, 5, 6])
   })
 })
