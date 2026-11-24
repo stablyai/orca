@@ -6,12 +6,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /** Every path looked up, and a test's hook for the next lookup of one path: it may fail the lookup,
  *  or move a link after it resolved. */
-const lookups = vi.hoisted(() => ({
-  paths: [] as string[],
-  next: new Map<string, (resolve: () => Promise<string>) => Promise<string>>(),
-  /** Runs once, before the next opening of its folder (the shape checks open each skill folder). */
-  opening: new Map<string, () => Promise<void>>()
-}))
+const lookups = vi.hoisted(() => {
+  const paths: string[] = []
+  return {
+    paths,
+    next: new Map<string, (resolve: () => Promise<string>) => Promise<string>>(),
+    /** Runs once, before the next opening of its folder (the shape checks open each skill folder). */
+    opening: new Map<string, () => Promise<void>>()
+  }
+})
 vi.mock('node:fs/promises', async (original) => {
   const fs = await original<typeof FsPromises>()
   return {

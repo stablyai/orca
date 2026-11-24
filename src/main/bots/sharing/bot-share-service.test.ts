@@ -6,7 +6,7 @@ import { BOT_SHARE_ERRORS } from '../../../shared/bots/bot-share-errors'
 import { makeTestBot } from '../bot.test-fixture'
 import { useBotToolCredentialsRoot } from '../bot-tool-credentials'
 import { BotShareCandidates } from './bot-package-export'
-import type { BotShareClient } from './bot-share-client'
+import { BotShareClient } from './bot-share-client'
 import { BotShareService } from './bot-share-service'
 import { readBotShareable } from './bot-share-sources'
 
@@ -36,7 +36,12 @@ it("never lets an older build's preview replace the newer one's", async () => {
   let reads = 0
   const candidates = new BotShareCandidates(join(root, 'candidates'))
   const service = new BotShareService({
-    client: {} as BotShareClient,
+    // Local-only builds never ask the cloud for the package id.
+    client: new BotShareClient({
+      auth: async () => {
+        throw new Error('not signed in')
+      }
+    }),
     candidates,
     readShareable: async () => {
       reads += 1
