@@ -1,4 +1,4 @@
-// One item, in the list's place: a frozen header (title, status, links, Reply), then the description
+// One item, in the list's place: a frozen header (title, status, links), then the description
 // (clamped), chat, done means and activity scrolling under it, and a comment box that wakes its chat.
 // BotItemPane holds it under the back row and sends typing from anywhere in it to the comment box.
 // The comment box always stays at the bottom: a reply to the agent's question is a comment, typed there
@@ -38,10 +38,9 @@ import { BotItemCommentBox, type BotItemCommentBoxHandle } from './BotItemCommen
 import { NativeChatSelectionQuote } from '../../native-chat/selection-quotes/NativeChatSelectionQuote'
 import { revealBotItemComment } from './bot-item-comment-reveal'
 import { BotItemHeader } from './BotItemHeader'
-import { useBotItemNeedsYouJump } from './BotItemReplyJump'
 import { setBotItemsStatus } from './use-bot-items'
 import { useBotItemSnoozing } from './BotItemSnooze'
-import { useBotItemView, useWaitingQuestionPage, type BotItemViewRead } from './use-bot-item-view'
+import { useBotItemView, type BotItemViewRead } from './use-bot-item-view'
 import { useBotItemPendingComments } from './use-bot-item-pending-comments'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 import { BotItemNavRow } from './BotItemStepper'
@@ -203,13 +202,11 @@ export function BotItemBody({
   const pending = useBotItemPendingComments(bot, item.uid, view.events)
   // The header and comment box paint first; the Activity, the costly part, renders right after.
   const activityMounted = useDeferredValue(true, false)
-  const activityShown = view.eventsRead && activityMounted
-  const { scrollRef, contentRef, scrollerProps, showJump, jumpToLatest, revealRow } =
-    useBotTranscriptFollow({
-      itemCount: view.events.length + pending.shown.length,
-      isWorking: false,
-      isVisible: true
-    })
+  const { scrollRef, contentRef, scrollerProps, showJump, jumpToLatest } = useBotTranscriptFollow({
+    itemCount: view.events.length + pending.shown.length,
+    isWorking: false,
+    isVisible: true
+  })
   // From the comment box or a quick reply: shown at once, then sent to the host.
   const sendComment: Parameters<typeof useBotItemQuestionSteps>[3] = (
     text,
@@ -267,18 +264,24 @@ export function BotItemBody({
           },
     [deleted, comment, quick, steps, sent]
   )
-  const loadingTarget = useWaitingQuestionPage(item.waitingAsk ?? item.question?.eventId, view)
-  const answering = pending.shown.some(({ failed }) => !failed)
+  // The waiting question's comment, with its words and quick replies, is read even when it is older
+  // than the loaded page (later comments can push it back): earlier pages load until it shows.
+  const questionId = item.waitingAsk ?? item.question?.eventId
+  const questionUnread =
+    view.eventsRead &&
+    questionId !== undefined &&
+    !view.events.some((event) => event.id === questionId)
+  const { hasEarlier, loadEarlier } = view
+  const earliest = view.events[0]?.id
+  useEffect(() => {
+    if (questionUnread && hasEarlier) {
+      loadEarlier()
+    }
+  }, [questionUnread, hasEarlier, earliest, loadEarlier])
   const waitingOn =
-    waitingLine && !answering ? { ...waitingLine, asker: item.owner.name ?? bot.name } : null
-  const needsYou = useBotItemNeedsYouJump({
-    eligible: item.status === 'needs_you' && !deleted && !answering,
-    activityShown,
-    loadingTarget,
-    scrollRef,
-    revealRow,
-    comment
-  })
+    waitingLine && !pending.shown.some(({ failed }) => !failed)
+      ? { ...waitingLine, asker: item.owner.name ?? bot.name }
+      : null
   const links = useNativeChatLinkActions(fileContext?.fileLinkContext ?? null, pane, {
     sessionId: null,
     isVisible: true
@@ -314,8 +317,6 @@ export function BotItemBody({
                       onStatus={(to) => notes.move([item], to)}
                       snoozing={snoozing}
                       scrollRef={scrollRef}
-                      reply={needsYou.reply}
-                      onHeight={needsYou.setHeaderHeight}
                     />
                     <div ref={contentRef} className="flex flex-col gap-4 px-3.5 pt-2">
                       {item.description ? (
@@ -358,14 +359,13 @@ export function BotItemBody({
                           </Button>
                         ) : null}
                         {/* From the list's row, the Activity shows once read: never a false "No comments". */}
-                        {activityShown ? (
+                        {view.eventsRead && activityMounted ? (
                           <BotItemActivityList
                             bot={bot}
                             item={item}
                             events={view.events}
                             pending={pending}
                             quickReplies={quickReplies}
-                            needsYou={needsYou.mark}
                           />
                         ) : null}
                       </section>
@@ -376,10 +376,7 @@ export function BotItemBody({
                     aria-hidden
                     className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-linear-to-b from-transparent to-sidebar"
                   />
-                  <NativeChatJumpToLatest
-                    visible={showJump && !needsYou.pointsDown}
-                    onJump={jumpToLatest}
-                  />
+                  <NativeChatJumpToLatest visible={showJump} onJump={jumpToLatest} />
                 </div>
               </NativeChatLinkClickContext>
             </NativeChatFileLinkExistenceContext>
@@ -395,7 +392,6 @@ export function BotItemBody({
                 attachTo={attachTo}
                 nav={nav}
                 question={waitingOn}
-                describedBy={needsYou.describedBy}
                 onShowQuestion={(eventId) =>
                   revealBotItemComment(scrollRef.current, eventId, 'flash')
                 }

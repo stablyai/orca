@@ -25010,10 +25010,7 @@
         "lastItem": "Последний элемент",
         "previous": "Предыдущий элемент",
         "next": "Следующий элемент",
-        "linkCount": "Ссылки: {{count}}",
-        "reply": "Ответить",
-        "replyAbove": "Ответить на вопрос выше",
-        "replyBelow": "Ответить на вопрос ниже"
+        "subWhere": "Элемент {{number}} · {{chat}}"
       },
       "activity": {
         "linked": "связал {{links}}",

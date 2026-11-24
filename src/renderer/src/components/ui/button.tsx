@@ -72,11 +72,7 @@ const buttonVariants = cva(
           'text-chat-foreground-faint hover:bg-accent hover:text-chat-foreground aria-expanded:bg-accent aria-expanded:text-chat-foreground aria-pressed:bg-foreground/10 aria-pressed:text-primary aria-pressed:hover:text-primary dark:aria-pressed:bg-accent',
         // The worktree card's "rename failed" chip, for a failure the user can open.
         'destructive-chip':
-          'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive',
-        // An item's way to what is waiting on the owner: the open ask's amber, which means only that. The
-        // faint fill keeps its amber text at 4.5:1 in the light theme.
-        'needs-you':
-          'border border-agent-question/45 bg-agent-question/6 text-agent-question-text hover:bg-agent-question/20 hover:text-foreground'
+          'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive'
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',

@@ -23,26 +23,6 @@ export type BotItemViewRead = {
   retry: () => void
 }
 
-/** Reads preceding pages until the waiting question and its quick replies can be rendered. */
-export function useWaitingQuestionPage(
-  questionId: string | undefined,
-  { events, eventsRead, hasEarlier, failed, loadEarlier }: BotItemViewRead
-): boolean {
-  const needsPage =
-    !failed &&
-    eventsRead &&
-    hasEarlier &&
-    questionId !== undefined &&
-    !events.some(({ id }) => id === questionId)
-  const earliest = events[0]?.id
-  useEffect(() => {
-    if (needsPage) {
-      loadEarlier()
-    }
-  }, [needsPage, earliest, loadEarlier])
-  return needsPage
-}
-
 type Loaded = {
   item: BotItem
   events: BotItemEvent[]

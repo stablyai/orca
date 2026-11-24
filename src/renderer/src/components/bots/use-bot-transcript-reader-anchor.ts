@@ -30,11 +30,8 @@ export function useBotTranscriptReaderAnchor({
   contentRef: RefObject<HTMLElement | null>
   readerAtEnd: () => boolean
   scrollTo: (offset: number) => void
-}): { record: () => void; clear: () => void } {
+}): () => void {
   const anchor = useRef<Anchor | null>(null)
-  const clear = useCallback(() => {
-    anchor.current = null
-  }, [])
   const record = useCallback(() => {
     const scroller = scrollRef.current
     const content = contentRef.current
@@ -64,5 +61,5 @@ export function useBotTranscriptReaderAnchor({
     observer.observe(content)
     return () => observer.disconnect()
   }, [contentRef, readerAtEnd, record, scrollRef, scrollTo])
-  return { record, clear }
+  return record
 }

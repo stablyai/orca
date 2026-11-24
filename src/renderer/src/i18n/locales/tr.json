@@ -24358,10 +24358,7 @@
         "lastItem": "Son öğe",
         "previous": "Önceki öğe",
         "next": "Sonraki öğe",
-        "linkCount": "{{count}} bağlantı",
-        "reply": "Yanıtla",
-        "replyAbove": "Yukarıdaki soruyu yanıtla",
-        "replyBelow": "Aşağıdaki soruyu yanıtla"
+        "subWhere": "Öğe {{number}} · {{chat}}"
       },
       "activity": {
         "linked": "{{links}} bağlantılarını bağladı",
