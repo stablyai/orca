@@ -1,6 +1,8 @@
 // A bot chat row's menu, the same from its ⋯ and a right-click, in the Chats tab and the sidebar:
-// Open, then Delete chat (stopping it when it runs), off with the reason while it can't go. The live
-// Home, where the agent's mail and connectors land, has no Delete.
+// Open, End chat for a side chat whose host can end it, then Delete chat (stopping it when it runs),
+// off with the reason while it can't go. The live Home, where the agent's mail and connectors land,
+// has no Delete.
+import { useRef } from 'react'
 import type React from 'react'
 import { ArrowUpRight, Ellipsis, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -27,6 +29,7 @@ import {
 } from '@/lib/agent-session/chat-deletion/orca-chat-delete'
 import type { Bot } from '../../../../shared/bot-types'
 import { botChatOffersDelete, type BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
+import { BotChatEndItem, useBotChatOffersEnd, type BotChatMenuOpener } from './BotChatEndMenu'
 
 type MenuKind = 'dropdown' | 'context'
 
@@ -34,14 +37,20 @@ function BotChatMenuItems({
   bot,
   chat,
   kind,
-  onOpen
+  onOpen,
+  openedFrom,
+  onEnding
 }: {
   bot: Bot
   chat: BotChatTreeChat
   kind: MenuKind
   onOpen: () => void
+  /** Where the menu opened from, so focus can move on once the chat ends. */
+  openedFrom: () => Element | null
+  onEnding: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const offersEnd = useBotChatOffersEnd(bot, chat)
   const deleteChat = useDeleteOrcaChat()
   const hostReason = useOrcaChatDeleteHostReason(bot.hostId)
   const Item = kind === 'context' ? ContextMenuItem : DropdownMenuItem
@@ -53,6 +62,15 @@ function BotChatMenuItems({
         <ArrowUpRight className="size-3.5" />
         {t('bots.chats.open', 'Open')}
       </Item>
+      {offersEnd ? (
+        <BotChatEndItem
+          bot={bot}
+          chatId={chat.chatId}
+          kind={kind}
+          openedFrom={openedFrom}
+          onEnding={onEnding}
+        />
+      ) : null}
       {botChatOffersDelete(chat) ? (
         <>
           <Separator />
@@ -95,6 +113,14 @@ function DeleteItem({
   )
 }
 
+/** After End chat, focus goes to the next row (its own row leaves), not back to the menu's trigger. */
+function keepEndFocus(event: Event, opener: React.RefObject<BotChatMenuOpener>): void {
+  if (opener.current.ending) {
+    opener.current.ending = false
+    event.preventDefault()
+  }
+}
+
 /** Whether the row offers the menu: a terminal-only run has no chat to delete. */
 export function botChatHasMenu(chat: BotChatTreeChat): boolean {
   return !chat.run
@@ -112,14 +138,34 @@ export function BotChatContextMenu({
   onOpen: () => void
   children: React.ReactElement
 }): React.JSX.Element {
+  const opener = useRef<BotChatMenuOpener>({ element: null, ending: false })
   if (!botChatHasMenu(chat)) {
     return children
   }
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="w-44">
-        <BotChatMenuItems bot={bot} chat={chat} kind="context" onOpen={onOpen} />
+      <ContextMenuTrigger
+        asChild
+        onContextMenu={(event) => {
+          opener.current.element = event.currentTarget
+        }}
+      >
+        {children}
+      </ContextMenuTrigger>
+      <ContextMenuContent
+        className="w-44"
+        onCloseAutoFocus={(event) => keepEndFocus(event, opener)}
+      >
+        <BotChatMenuItems
+          bot={bot}
+          chat={chat}
+          kind="context"
+          onOpen={onOpen}
+          openedFrom={() => opener.current.element}
+          onEnding={() => {
+            opener.current.ending = true
+          }}
+        />
       </ContextMenuContent>
     </ContextMenu>
   )
@@ -138,6 +184,7 @@ export function BotChatMoreButton({
   className?: string
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const opener = useRef<BotChatMenuOpener>({ element: null, ending: false })
   if (!botChatHasMenu(chat)) {
     return null
   }
@@ -158,8 +205,14 @@ export function BotChatMoreButton({
             aria-label={t('bots.chats.actions', 'Chat actions')}
             // Positioned, so it sits over a row's own full-size button.
             className="relative"
+            onPointerDown={(event) => {
+              opener.current.element = event.currentTarget
+            }}
             onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              opener.current.element = event.currentTarget
+              event.stopPropagation()
+            }}
           >
             <Ellipsis />
           </Button>
@@ -167,12 +220,22 @@ export function BotChatMoreButton({
       </span>
       {/* React bubbles portal events to the row, which would open the chat on a menu pick. */}
       <DropdownMenuContent
+        onCloseAutoFocus={(event) => keepEndFocus(event, opener)}
         align="end"
         className="w-44"
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
       >
-        <BotChatMenuItems bot={bot} chat={chat} kind="dropdown" onOpen={onOpen} />
+        <BotChatMenuItems
+          bot={bot}
+          chat={chat}
+          kind="dropdown"
+          onOpen={onOpen}
+          openedFrom={() => opener.current.element}
+          onEnding={() => {
+            opener.current.ending = true
+          }}
+        />
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -1,3 +1,4 @@
+import { guardChatCustody } from '../chat-custody-guard'
 import type {
   MessageType,
   MessagePriority,
@@ -38,6 +39,7 @@ export type MessageInsert = {
 }
 
 export function insertMessage(this: OrchestrationDb, msg: MessageInsert): MessageRow {
+  guardChatCustody(this, msg.to, 'mail')
   // Unbound senders get a lazily created unbound Run; the legacy Run denotes pre-Runs data to skew probes.
   const runId = msg.runId ?? UNBOUND_RUN_ID
   if (msg.runId == null) {

@@ -108,6 +108,7 @@ export type RuntimeStore = {
   automationChangeSelector?: Store['automationChangeSelector']
   listAutomationRuns?: Store['listAutomationRuns']
   listAutomationRunsByAutomation?: Store['listAutomationRunsByAutomation']
+  listActiveAutomationRunsInto?: Store['listActiveAutomationRunsInto']
   listAutomationRunsPage?: Store['listAutomationRunsPage']
   createAutomation?: Store['createAutomation']
   updateAutomation?: Store['updateAutomation']

@@ -183,8 +183,11 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
         body: params.body,
         threadId: original.thread_id ?? original.id,
         runId: recipient.runId,
-        // Refuses a second answer to a bot request, before the original is marked read.
-        payload: botAnswerPayload(db, original, answerTurn !== null)
+        // Refuses a second answer to a bot request, before the original is marked read. A reply to a
+        // plain question names it, since its thread may hold several: ending a chat reads this.
+        payload:
+          botAnswerPayload(db, original, answerTurn !== null) ??
+          (original.type === 'question' ? JSON.stringify({ replyTo: original.id }) : undefined)
       })
       db.markAsRead([original.id], { kind: 'reply' })
       return stored

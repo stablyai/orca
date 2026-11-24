@@ -1644,6 +1644,18 @@
       "needYou_one": "{{count}} needs you",
       "needYou_other": "{{count}} need you"
     },
+    "endChat": {
+      "reason": {
+        "dispatch_one": "{{count}} unfinished worker task",
+        "dispatch_other": "{{count}} unfinished worker tasks",
+        "questions_one": "{{count}} question waiting for a reply",
+        "questions_other": "{{count}} questions waiting for a reply",
+        "requests_one": "{{count}} request waiting for an answer",
+        "requests_other": "{{count}} requests waiting for an answer",
+        "unread_one": "{{count}} unread message",
+        "unread_other": "{{count}} unread messages"
+      }
+    },
     "failures": {
       "attachmentExpired": "{{names}}: this attachment expired. Attach it again.",
       "attachmentTooLarge": "{{name}} is over {{maxMb}} MB.",

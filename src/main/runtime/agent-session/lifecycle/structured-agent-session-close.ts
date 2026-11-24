@@ -199,13 +199,16 @@ export function structuredSessionSurfaceIsCurrent(
 }
 
 /** Bookkeeping cannot invalidate native proof or reach a surface created after admission.
- *  `background`: the chat keeps working with no tab, so it stays open. */
+ *  `background`: the chat keeps working with no tab, so it stays open. `guard.end`: a bot chat a
+ *  person ended. `guard.admit` runs in the write's check: a refused check commits nothing and returns
+ *  no error; an error means the write's outcome is unknown. */
 export async function retireCapturedStructuredSessionSurface(
   host: StructuredAgentSessionHost,
   sessionId: string,
   surface: StructuredSessionSurface | null,
   runtime?: StructuredSessionSurfaceRuntime,
-  background = false
+  background = false,
+  guard?: { admit: () => boolean; end?: true }
 ): Promise<{ committed: boolean; error?: unknown }> {
   const current = (hidden = false) =>
     structuredSessionSurfaceIsCurrent(host, sessionId, surface, runtime, hidden)
@@ -219,15 +222,18 @@ export async function retireCapturedStructuredSessionSurface(
     await host.setSessionTabVisibility(sessionId, false, undefined, {
       deferHiddenNotice: true,
       ...(background ? { background } : {}),
+      ...(guard?.end ? { end: true } : {}),
       check: () => {
-        if (!current()) {
+        if (!current() || (guard && !guard.admit())) {
           throw obsolete
         }
       }
     })
     committed = true
   } catch (error) {
-    if (error === obsolete || !current()) {
+    // Only the check's own refusal proves nothing was written. Any other error may follow a durable
+    // commit (a lost ack), which itself changes the presentation, so it stays unknown either way.
+    if (error === obsolete) {
       return { committed: false }
     }
     failure = error
@@ -237,8 +243,9 @@ export async function retireCapturedStructuredSessionSurface(
       error
     })
   }
+  const unknown = failure === undefined ? {} : { error: failure }
   if (!current(committed)) {
-    return { committed: false }
+    return { committed: false, ...unknown }
   }
   const presentation = surface?.presentation
   try {
@@ -262,7 +269,7 @@ export async function retireCapturedStructuredSessionSurface(
       error
     })
   }
-  return { committed, ...(failure === undefined ? {} : { error: failure }) }
+  return { committed, ...unknown }
 }
 
 /** Phone closes and cancelled creates admit the captured surface before stopping its provider. */
