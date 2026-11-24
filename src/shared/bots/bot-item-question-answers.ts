@@ -32,6 +32,15 @@ export type BotItemQuestionAnswers = {
 
 export type BotItemAskEnd = 'replaced' | 'skipped'
 
+/** The end an ask's card names: while a line no comment or send answered stays open to nothing, even
+ *  one showing an answer held on this device, which only goes back to the box. */
+export function botItemShownAskEnd(
+  ended: BotItemAskEnd | null,
+  answered: readonly (string | null)[]
+): BotItemAskEnd | null {
+  return ended && answered.some((words) => !words) ? ended : null
+}
+
 export type BotItemQuestionPairing = {
   /** By the ask's event id. */
   questions: Map<string, BotItemQuestionAnswers>

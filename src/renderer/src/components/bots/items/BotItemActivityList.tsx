@@ -276,9 +276,9 @@ export function BotItemActivityList({
   const t = useTranslate()
   const entries = botItemActivity(item, events)
   const waitKey = botItemWaitEntryKey(item, entries)
+  const liveAskId = botItemNeedsYouEntryKey(item, entries)
   // Keep the ask mounted when its marker clears during Send.
-  const needsYouKey =
-    quickReplies?.steps?.askId ?? (needsYou ? botItemNeedsYouEntryKey(item, entries) : null)
+  const needsYouKey = quickReplies?.steps?.askId ?? (needsYou ? liveAskId : null)
   const list = useRef<HTMLDivElement | null>(null)
   // A reply's quote leads to its question, focused so Tab goes on from there.
   const jump = useCallback(
@@ -302,6 +302,7 @@ export function BotItemActivityList({
               : entry
           }
           onJump={jump}
+          liveAskId={liveAskId}
           quickReplies={quickReplies}
         />
       )

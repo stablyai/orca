@@ -14,7 +14,10 @@ import {
   botItemAnswerWords,
   botItemUnsentAnswers
 } from '../../../../src/shared/bots/bot-item-answer-lines'
-import type { BotItemAskEnd } from '../../../../src/shared/bots/bot-item-question-answers'
+import {
+  botItemShownAskEnd,
+  type BotItemAskEnd
+} from '../../../../src/shared/bots/bot-item-question-answers'
 import type { BotItemEvent } from '../../../../src/shared/bots/bot-items'
 import type { BotItemQuickReplyActions } from '../../../../src/shared/bots/use-bot-item-question-steps'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
@@ -95,6 +98,7 @@ export function MobileBotItemQuestionLines({
   // A line answered meanwhile shows its answer; its held one is not put back in the box.
   const unsentHeld = botItemUnsentAnswers(stored.held, answered)
   const unsent = !waiting && heldScope && unsentHeld.some(Boolean) ? unsentHeld : null
+  const shownEnd = botItemShownAskEnd(ended, answered)
   return (
     <View style={[several ? styles.several : styles.one, spacing_]}>
       {shape.decisions.map((decision, index) => {
@@ -150,9 +154,9 @@ export function MobileBotItemQuestionLines({
           </View>
         )
       })}
-      {ended && answered.some((words, index) => !words && !unsent?.[index]) ? (
+      {shownEnd ? (
         <Text style={styles.ended}>
-          {ended === 'skipped'
+          {shownEnd === 'skipped'
             ? t('bots.items.ask.skipped', 'Skipped')
             : t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
         </Text>
