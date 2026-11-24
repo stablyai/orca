@@ -256,6 +256,7 @@ struct watcher {
     long long leader_start;
     char tree_tag[64];
     long long next_sweep_ns;
+    int swept_group_gone;
     // Exact identities already sent TERM, so each gets it once and none is skipped.
     struct termed {
         pid_t pid;
@@ -856,9 +857,11 @@ static int tree_absent(struct watcher *w, int signal_number) {
         return 0;
     }
     long long now_ns = (long long)now.tv_sec * 1000000000LL + now.tv_nsec;
-    if (now_ns < w->next_sweep_ns) {
+    // The first sweep after the group is gone runs at once; completion waits on it.
+    if (now_ns < w->next_sweep_ns && (!group_gone || w->swept_group_gone)) {
         return 0;
     }
+    w->swept_group_gone = group_gone;
     w->next_sweep_ns = now_ns + (long long)TREE_SWEEP_INTERVAL_MS * 1000000LL;
     return sweep_tree(w, signal_number) == 0 && group_gone;
 }
