@@ -7,35 +7,36 @@ type MainWindowVisibilityState = {
   isMinimized?: () => boolean
 }
 
-const listeners = new Set<MainWindowBecameVisibleListener>()
-
-export function notifyMainWindowBecameVisible(): void {
-  for (const listener of Array.from(listeners)) {
-    listener()
+function createMainWindowSignal(): {
+  notify: () => void
+  subscribe: (listener: MainWindowBecameVisibleListener) => () => void
+} {
+  const listeners = new Set<MainWindowBecameVisibleListener>()
+  return {
+    notify: () => {
+      for (const listener of Array.from(listeners)) {
+        listener()
+      }
+    },
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    }
   }
 }
 
-export function onMainWindowBecameVisible(listener: MainWindowBecameVisibleListener): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
+const becameVisible = createMainWindowSignal()
+const focused = createMainWindowSignal()
+const hidden = createMainWindowSignal()
 
-const focusListeners = new Set<MainWindowBecameVisibleListener>()
-
-export function notifyMainWindowFocused(): void {
-  for (const listener of Array.from(focusListeners)) {
-    listener()
-  }
-}
-
-export function onMainWindowFocused(listener: MainWindowBecameVisibleListener): () => void {
-  focusListeners.add(listener)
-  return () => {
-    focusListeners.delete(listener)
-  }
-}
+export const notifyMainWindowBecameVisible = becameVisible.notify
+export const onMainWindowBecameVisible = becameVisible.subscribe
+export const notifyMainWindowFocused = focused.notify
+export const onMainWindowFocused = focused.subscribe
+export const notifyMainWindowHidden = hidden.notify
+export const onMainWindowHidden = hidden.subscribe
 
 export function isMainWindowVisible(window: MainWindowVisibilityState | null): boolean {
   if (window === null || window.isDestroyed()) {

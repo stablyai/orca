@@ -75,6 +75,11 @@ function removeWorktreeEntry(entry: string): void {
 
 let focus: (() => void) | null = null
 let reveal: (() => void) | null = null
+let onHidden: (() => void) | null = null
+function hide(): void {
+  visible = false
+  onHidden?.()
+}
 let visible = true
 let events: WorktreeBasePollEvent[] = []
 
@@ -87,6 +92,12 @@ async function startReconciliation(): Promise<
     visibility: {
       isWindowVisible: () => visible,
       onWindowBecameVisible: () => () => {},
+      onWindowHidden: (listener) => {
+        onHidden = listener
+        return () => {
+          onHidden = null
+        }
+      },
       onWindowFocused: (listener) => {
         focus = listener
         return () => {
@@ -190,9 +201,9 @@ it('never scans more than the old 30 s cadence when focus changes every 30 s', a
   await stop()
 })
 
-it('forces a full sweep when the window is revealed after a short hide', async () => {
+it('forces a full sweep when the window is revealed after a hide of 30 s or more', async () => {
   const { unsubscribe: stop } = await startReconciliation()
-  visible = false
+  hide()
   // `git worktree lock` without an entry-directory timestamp change and with the watcher event lost.
   const locked = join(WORKTREES, 'w5', 'locked')
   fs.nodes.set(locked, { dir: false, mtimeMs: fs.clock++, ino: fs.ino++ })
@@ -200,5 +211,44 @@ it('forces a full sweep when the window is revealed after a short hide', async (
   reveal?.()
   await vi.advanceTimersByTimeAsync(0)
   expect(events.some((event) => event.path.startsWith(join(WORKTREES, 'w5')))).toBe(true)
+  await stop()
+})
+
+it('never scans more than the old 30 s cadence under hide/reveal churn', async () => {
+  // [visible ms, hidden ms, stats the old cadence spent over ten minutes of that pattern]
+  const patterns = [
+    [30_000, 1_000, 129_220],
+    [29_500, 1_000, 252_720],
+    [45_000, 5_000, 131_120],
+    [60_000, 10_000, 144_421],
+    [1_000, 30_000, 252_720],
+    [30_000, 30_000, 176_720]
+  ]
+  for (const [visibleMs, hiddenMs, oldCadenceStats] of patterns) {
+    const { unsubscribe: stop } = await startReconciliation()
+    fs.stats = 0
+    for (let elapsed = 0; elapsed < 10 * 60_000; elapsed += visibleMs + hiddenMs) {
+      await vi.advanceTimersByTimeAsync(visibleMs)
+      hide()
+      await vi.advanceTimersByTimeAsync(hiddenMs)
+      reveal?.()
+      focus?.()
+    }
+    expect(fs.stats).toBeLessThanOrEqual(oldCadenceStats)
+    await stop()
+  }
+})
+
+it('runs only the reveal sweep when focus lands before show/restore', async () => {
+  const { unsubscribe: stop } = await startReconciliation()
+  hide()
+  // Long enough that the timed sweep parks while hidden.
+  await vi.advanceTimersByTimeAsync(301_000)
+  fs.stats = 0
+  visible = true
+  focus?.()
+  reveal?.()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(fs.stats).toBeLessThanOrEqual(FLEET * 7 + 1)
   await stop()
 })

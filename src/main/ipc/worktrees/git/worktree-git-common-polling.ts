@@ -121,7 +121,7 @@ export type GitCommonPollingOptions = {
   reconciliationFullScanEveryTicks?: number
   /** Missing snapshots can outlive the native owner they originally retired. */
   onRootMissing?: (initial: boolean) => void
-  /** Pokes and reveal sweeps skip when any scan started this recently, so they never add work beyond the old cadence. */
+  /** Pokes skip when any scan started this recently; a reveal forces a sweep after a hide at least this long. */
   minOnDemandScanIntervalMs?: number
 }
 
@@ -151,6 +151,18 @@ export async function startGitCommonPolling(
   const scannedRecently = (): boolean =>
     minOnDemandScanIntervalMs !== undefined &&
     performance.now() - lastScanStartedAt < minOnDemandScanIntervalMs
+  let hiddenAt: number | null = null
+  // The old 30 s tick always parked inside such a hide and forced a sweep on reveal; shorter hides get the focus check.
+  const hiddenLongEnough = (): boolean =>
+    minOnDemandScanIntervalMs !== undefined &&
+    hiddenAt !== null &&
+    performance.now() - hiddenAt >= minOnDemandScanIntervalMs
+  const unsubscribeHidden =
+    minOnDemandScanIntervalMs === undefined
+      ? undefined
+      : visibility.onWindowHidden?.(() => {
+          hiddenAt ??= performance.now()
+        })
   let snapshot = await snapshotGitCommon(
     commonDirPath,
     undefined,
@@ -189,6 +201,7 @@ export async function startGitCommonPolling(
       return
     }
     ticking = true
+    hiddenAt = null
     // Measure start-to-start cadence so scan duration does not add a full interval of lag.
     const startedAt = Date.now()
     lastScanStartedAt = performance.now()
@@ -259,11 +272,9 @@ export async function startGitCommonPolling(
   }
 
   const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
-    if (disposed) {
-      return
-    }
-    // A hide shorter than the interval never parks a tick, so reconciliation forces its reveal sweep directly.
-    if (!parkedWhileHidden && (minOnDemandScanIntervalMs === undefined || scannedRecently())) {
+    const longHide = hiddenLongEnough()
+    hiddenAt = null
+    if (disposed || (!parkedWhileHidden && !longHide)) {
       return
     }
     parkedWhileHidden = false
@@ -276,7 +287,15 @@ export async function startGitCommonPolling(
 
   return {
     poke: () => {
-      if (disposed || ticking || !visibility.isWindowVisible() || scannedRecently()) {
+      // A pending reveal sweep supersedes the gated check (focus can arrive before show/restore).
+      const revealPending = parkedWhileHidden || hiddenLongEnough()
+      if (
+        disposed ||
+        ticking ||
+        revealPending ||
+        !visibility.isWindowVisible() ||
+        scannedRecently()
+      ) {
         return false
       }
       void tick(false, true)
@@ -288,6 +307,7 @@ export async function startGitCommonPolling(
         clearTimeout(timer)
       }
       unsubscribeVisibility()
+      unsubscribeHidden?.()
     }
   }
 }

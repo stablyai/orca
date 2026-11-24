@@ -52,6 +52,7 @@ export function createGitCommonWatchReconciliation({
   const visibilityListeners = new Set<() => void>()
   const pollVisibility: WorktreePollerWindowVisibility = {
     isWindowVisible: visibility.isWindowVisible,
+    onWindowHidden: visibility.onWindowHidden,
     onWindowBecameVisible: (listener) => {
       visibilityListeners.add(listener)
       return () => {

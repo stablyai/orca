@@ -1,7 +1,8 @@
 import {
   isMainWindowVisible,
   onMainWindowBecameVisible,
-  onMainWindowFocused
+  onMainWindowFocused,
+  onMainWindowHidden
 } from '../../../window/visibility/main-window-visibility'
 import type {
   WorktreeBaseRepoWatchConfig,
@@ -19,6 +20,8 @@ export type WorktreePollerWindowVisibility = {
   onWindowBecameVisible: (listener: () => void) => () => void
   /** Main window focus; pollers that back up a watcher re-check when the user comes back. */
   onWindowFocused?: (listener: () => void) => () => void
+  /** Main window hide/minimize; lets a slow poller tell how long the window was hidden. */
+  onWindowHidden?: (listener: () => void) => () => void
 }
 
 type WorktreePollerWindow = {
@@ -50,7 +53,8 @@ export function createWorktreePollerWindowVisibility(
       return !hasBeenVisible
     },
     onWindowBecameVisible: onMainWindowBecameVisible,
-    onWindowFocused: onMainWindowFocused
+    onWindowFocused: onMainWindowFocused,
+    onWindowHidden: onMainWindowHidden
   }
 }
 

@@ -17,7 +17,8 @@ import {
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
 import {
   notifyMainWindowBecameVisible,
-  notifyMainWindowFocused
+  notifyMainWindowFocused,
+  notifyMainWindowHidden
 } from '../../window/visibility/main-window-visibility'
 import { setTrayAttention } from '../../tray/system-tray'
 import { createSystemTrayDeferred, showRendererRecoveryPrompt } from './main-window-actions'
@@ -245,6 +246,8 @@ export async function openMainWindow(options: MainWindowOpenOptions = {}): Promi
   window.on('show', notifyMainWindowBecameVisible)
   window.on('restore', notifyMainWindowBecameVisible)
   window.on('focus', notifyMainWindowFocused)
+  window.on('hide', notifyMainWindowHidden)
+  window.on('minimize', notifyMainWindowHidden)
   window.on('show', () => setTrayAttention(false))
   window.on('restore', () => setTrayAttention(false))
   installMainWindowAgentStatusListeners({
