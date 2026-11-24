@@ -15,7 +15,7 @@ function seeded(state: Partial<AppState>) {
     },
     visibleWorkspaceHostIds: ['runtime:other-host'],
     ...state
-  } as Partial<AppState>)
+  })
   return store.getState()
 }
 
