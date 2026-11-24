@@ -111,6 +111,16 @@ const NON_UNIT_TEST_RUNNERS = [
       'dev/scripts/run-relay-tests.test.mjs',
       '../.github/actions/cloud-sql-rollout-lease/*.test.mjs'
     ]
+  },
+  {
+    name: 'tauri-poc scripts node:test (pnpm test:tauri-scripts)',
+    manual: true,
+    include: ['tauri-poc/scripts/*.test.mjs'],
+    sources: ['package.json'],
+    mirrors: [
+      'tauri-poc/scripts/dev-app-supervisor.test.mjs',
+      'tauri-poc/scripts/runtime-supervisor.test.mjs'
+    ]
   }
 ]
 

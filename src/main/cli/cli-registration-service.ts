@@ -1,5 +1,5 @@
 import type { CliInstallStatus } from '../../shared/cli/cli-install-types'
-import { resolveAppImageCacheKey } from '../../shared/desktop-distribution/appimage/appimage-cache-identity'
+import { resolveAppImageCacheKeyAsync } from '../../shared/desktop-distribution/appimage/appimage-cache-identity'
 import { CliInstaller } from './cli-installer'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import {
@@ -15,7 +15,7 @@ import {
   mergePathSegments
 } from '../startup/shell-environment/hydrate-shell-path'
 import { getDefaultWslDistro } from '../wsl/discovery/distro-catalog'
-import { resolveAppImageRuntimeIdentity } from '../updater/linux-package/appimage-runtime-identity'
+import { resolveAppImageRuntimeIdentityAsync } from '../updater/linux-package/appimage-runtime-identity'
 
 const APPIMAGE_REPAIR_RETRY_MS = 30_000
 const localCliRegistrationQueues = new Map<string, Promise<void>>()
@@ -33,15 +33,15 @@ function runLocalCliRegistrationOperation<T>(operation: () => Promise<T>): Promi
   return runKeyedSerializedOperation(localCliRegistrationQueues, 'local', operation)
 }
 
-function resolveStaleAppImageRepairKey(status: CliInstallStatus): string | null {
+async function resolveStaleAppImageRepairKey(status: CliInstallStatus): Promise<string | null> {
   if (status.state !== 'stale') {
     return null
   }
-  const runtimeIdentity = resolveAppImageRuntimeIdentity()
+  const runtimeIdentity = await resolveAppImageRuntimeIdentityAsync()
   if (!runtimeIdentity) {
     return null
   }
-  const cacheKey = resolveAppImageCacheKey(runtimeIdentity.appImagePath)
+  const cacheKey = await resolveAppImageCacheKeyAsync(runtimeIdentity.appImagePath)
   if (!cacheKey) {
     return null
   }
@@ -104,7 +104,7 @@ export function createCliRegistrationService(): CliRegistrationService {
     const installer = new CliInstaller()
     const status = await installer.getStatus()
     // Why: an AppImage update replaces the outer file while the managed symlink still targets the prior extracted payload.
-    const repairKey = resolveStaleAppImageRepairKey(status)
+    const repairKey = await resolveStaleAppImageRepairKey(status)
     if (!repairKey || installer.isAppImageRegistrationOwnedBySibling(status)) {
       return status
     }
@@ -113,7 +113,7 @@ export function createCliRegistrationService(): CliRegistrationService {
       const promise = runLocalCliRegistrationOperation(async () => {
         const currentInstaller = new CliInstaller()
         const currentStatus = await currentInstaller.getStatus()
-        return resolveStaleAppImageRepairKey(currentStatus) === repairKey &&
+        return (await resolveStaleAppImageRepairKey(currentStatus)) === repairKey &&
           !currentInstaller.isAppImageRegistrationOwnedBySibling(currentStatus)
           ? currentInstaller.install()
           : currentStatus

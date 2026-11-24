@@ -111,7 +111,7 @@
 4 src/main/cli/appimage/appimage-generation-residency.ts
 16 src/main/cli/appimage/appimage-stable-launcher.ts
 1 src/main/cli/installation/cli-command-inspection.ts
-3 src/main/cli/installation/cli-install-location.ts
+1 src/main/cli/installation/cli-install-location.ts
 1 src/main/cli/launchers/cli-dev-launcher.ts
 2 src/main/cli/launchers/linux-bare-orca-dispatcher.ts
 6 src/main/cli/launchers/linux-terminal-orca-cli-shim.ts
@@ -604,8 +604,8 @@
 3 src/shared/remote-runtime/serve-supervisor/serve-abort-park.ts
 7 src/shared/remote-runtime/serve-supervisor/serve-bundle-park.ts
 1 src/shared/remote-runtime/serve-supervisor/serve-user-data-path.ts
-14 src/shared/secure-storage/secure-file.ts
 1 src/shared/secure-storage/secure-file-async-write.ts # one renameSync per publish, in the same turn as the shouldPublish fence so a sign-out clear cannot land between; staging and fsync are async
+14 src/shared/secure-storage/secure-file.ts
 1 src/shared/secure-storage/secure-path-metadata-snapshot.ts
 2 src/shared/secure-storage/secure-path-windows-acl.ts
 2 src/shared/secure-storage/windows-security-addon.ts

@@ -6,7 +6,6 @@ import {
   type DaemonProvider
 } from './providers/lifecycle/daemon-provider-routing'
 import { getDaemonProvider } from './providers/lifecycle/daemon-provider-state'
-import { restartDaemon } from './providers/lifecycle/daemon-provider-restart'
 import type { DaemonEndpointIdentity } from './protocol/daemon-hello-protocol'
 import type { DaemonSessionInfo } from './protocol/daemon-session-info'
 import type { DaemonAsyncIoStatus } from '../../shared/terminal/daemon/daemon-async-io-health'
@@ -123,16 +122,6 @@ export async function killDaemonSession(
     await owner.shutdown(sessionId, { immediate: true })
     return { success: true }
   } catch {
-    return { success: false }
-  }
-}
-
-export async function restartManagedDaemon(): Promise<{ success: boolean }> {
-  try {
-    await restartDaemon()
-    return { success: true }
-  } catch (error) {
-    console.error('[daemon-management] restart failed', error)
     return { success: false }
   }
 }

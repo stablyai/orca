@@ -258,8 +258,6 @@
 14 src/main/cli/launchers/linux-terminal-orca-cli-shim.ts
 1 src/main/cli/launchers/orca-cli-child-path.ts
 1 src/main/cli/wsl/wsl-cli-installer.ts
-1 src/main/cli/wsl/wsl-cli-registration-reconciliation.ts
-6 src/main/cli/wsl/wsl-cli-registration-registry.ts
 1 src/main/cli/wsl/wsl-managed-cli.ts
 2 src/main/codex-accounts/account-management/codex-account-registration.ts
 1 src/main/codex-accounts/credentials/codex-credential-absence-grace.ts
@@ -606,7 +604,7 @@
 1 src/main/ipc/browser/browser-passwords-ipc.ts
 8 src/main/ipc/browser/browser-session-profile-ipc.ts
 1 src/main/ipc/browser/browser.ts
-7 src/main/ipc/cli.ts
+4 src/main/ipc/cli.ts
 1 src/main/ipc/command-path/command-path-directory-worker-client.ts
 2 src/main/ipc/computer-use-permissions.ts
 2 src/main/ipc/custom-app-icon.ts

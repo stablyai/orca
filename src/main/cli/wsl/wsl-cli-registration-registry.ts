@@ -1,6 +1,6 @@
 import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
+import { durableWriteTempPath, writeFileDurable } from '../../filesystem/durable-file-write'
 import {
   getKeyedSerializedQueueTail,
   runKeyedSerializedOperation
@@ -157,8 +157,12 @@ async function writeState(
   state: WslCliRegistrationRegistryState
 ): Promise<void> {
   await mkdir(userDataPath, { recursive: true })
-  // writeFileAtomically retries Chromium Protected-DACL EPERM with ACL repair on Windows.
-  writeFileAtomically(getRegistryPath(userDataPath), `${JSON.stringify(state, null, 2)}\n`)
+  const registryPath = getRegistryPath(userDataPath)
+  await writeFileDurable(
+    durableWriteTempPath(registryPath),
+    registryPath,
+    `${JSON.stringify(state, null, 2)}\n`
+  )
 }
 
 function capInspectionEntries(

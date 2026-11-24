@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
@@ -34,6 +35,15 @@ import {
   readWindowsUserPathRegistry,
   type WindowsUserPathReadResult
 } from '../command-paths/windows-user-path-registry'
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath)
+    return true
+  } catch {
+    return false
+  }
+}
 
 export abstract class CliInstallLocation {
   protected abstract inspectSymlink(
@@ -260,11 +270,11 @@ export abstract class CliInstallLocation {
     }
 
     if (this.launcherPathOverride) {
-      return existsSync(this.launcherPathOverride) ? this.launcherPathOverride : null
+      return (await pathExists(this.launcherPathOverride)) ? this.launcherPathOverride : null
     }
 
     if (this.isLinuxAppImage()) {
-      if (!this.appImagePath || !existsSync(this.appImagePath)) {
+      if (!this.appImagePath || !(await pathExists(this.appImagePath))) {
         return null
       }
       const extractionOptions = this.appImageExtractionOptions()
@@ -280,7 +290,7 @@ export abstract class CliInstallLocation {
         return stableLauncher
       }
       const bundledPath = getBundledLauncherPath(this.platform, this.resourcesPath)
-      return bundledPath && existsSync(bundledPath) ? bundledPath : null
+      return bundledPath && (await pathExists(bundledPath)) ? bundledPath : null
     }
 
     return ensureDevLauncher({
