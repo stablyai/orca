@@ -177,6 +177,30 @@ export const getTerminalRenderingSearchEntries = createLocalizedCatalog(() => [
         'colors'
       )
     ]
+  },
+  ...getTerminalBoldBrightSearchEntry()
+])
+
+export const getTerminalBoldBrightSearchEntry = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'components.settings.TerminalRendering.boldBrightTitle',
+      'Bold text in bright colors'
+    ),
+    description: translate(
+      'components.settings.TerminalRendering.boldBrightDescription',
+      'Draw bold text in the bright variant of the eight base ANSI colors. Turn off to keep them in their normal colors.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword('components.settings.terminal.search.bold', 'bold'),
+      ...translateSearchKeyword('components.settings.terminal.search.bright', 'bright'),
+      ...translateSearchKeyword('components.settings.terminal.search.ansi', 'ansi'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.colors',
+        'colors'
+      )
+    ]
   }
 ])
 

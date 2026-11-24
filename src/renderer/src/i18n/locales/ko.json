@@ -22620,7 +22620,10 @@
           "bottom": "맨 아래",
           "scrollback": "스크롤백",
           "snap": "스냅",
-          "position": "위치"
+          "position": "위치",
+          "bold": "굵게",
+          "bright": "밝은",
+          "ansi": "ansi"
         },
         "claudeCodeThemeSync": {
           "description": "이 컴퓨터의 Claude Code는 Orca 밖에서 실행할 때도 터미널 색상을 사용하고 테마 변경을 실시간으로 따라갑니다. 끄면 이전 Claude Code 테마로 복원됩니다. Claude Code에서 테마를 직접 고르면 동기화가 중단됩니다.",
@@ -23183,6 +23186,10 @@
       },
       "git": {
         "branchPrefixHostGitUsername": "{{host}}의 Git 사용자 이름"
+      },
+      "TerminalRendering": {
+        "boldBrightTitle": "굵은 텍스트를 밝은 색으로 표시",
+        "boldBrightDescription": "굵은 텍스트를 기본 ANSI 색상 8가지의 밝은 변형으로 그립니다. 끄면 일반 색상을 유지합니다."
       }
     },
     "agentChildRow": {

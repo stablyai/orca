@@ -22607,7 +22607,10 @@
           "bottom": "底部",
           "scrollback": "回滚",
           "snap": "吸附",
-          "position": "位置"
+          "position": "位置",
+          "bold": "粗体",
+          "bright": "亮色",
+          "ansi": "ansi"
         },
         "claudeCodeThemeSync": {
           "description": "此计算机上的 Claude Code 会使用你的终端配色，并实时跟随主题变化（包括在 Orca 之外），关闭后将恢复你之前的 Claude Code 主题，在 Claude Code 中选择主题会停止同步",
@@ -23159,6 +23162,10 @@
       },
       "git": {
         "branchPrefixHostGitUsername": "{{host}} 上的 Git 用户名"
+      },
+      "TerminalRendering": {
+        "boldBrightTitle": "以亮色绘制粗体文本",
+        "boldBrightDescription": "使用八种基础 ANSI 颜色的明亮变体绘制粗体文本。关闭后保持其常规颜色。"
       }
     },
     "agentChildRow": {

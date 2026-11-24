@@ -22264,7 +22264,10 @@
           "bottom": "一番下",
           "scrollback": "スクロールバック",
           "snap": "スナップ",
-          "position": "位置"
+          "position": "位置",
+          "bold": "太字",
+          "bright": "明るい",
+          "ansi": "ansi"
         },
         "claudeCodeThemeSync": {
           "description": "このコンピュータの Claude Code がターミナルの配色を使用し、Orca の外でもテーマの変更にリアルタイムで追従します。オフにすると、以前の Claude Code のテーマに戻ります。Claude Code でテーマを選ぶと同期は停止します。",
@@ -22816,6 +22819,10 @@
           "keywordDelete": "削除",
           "keywordMerged": "マージ済み"
         }
+      },
+      "TerminalRendering": {
+        "boldBrightTitle": "太字を明るい色で描画",
+        "boldBrightDescription": "太字のテキストを、8 つの基本 ANSI カラーの明るいバリエーションで描画します。オフにすると通常の色のままになります。"
       }
     },
     "agentChildRow": {
