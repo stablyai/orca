@@ -10,7 +10,7 @@ export function getRuntimeFeatureInteractionId(
   if (method === 'browser.profileImportFromBrowser') {
     return hasBooleanResult(result, 'ok') ? 'cookie-import' : null
   }
-  if (method === 'browser.profileClearDefaultCookies') {
+  if (method === 'browser.profileClearDefaultCookies' || method === 'browser.profileClearCookies') {
     return hasBooleanResult(result, 'cleared') ? 'cookie-import' : null
   }
   // Stream control (unsubscribe, frame acks) is not a browser-use interaction.
@@ -35,6 +35,10 @@ export function getRuntimeFeatureInteractionId(
     method !== 'computer.permissionsStatus'
   ) {
     return 'computer-use'
+  }
+  // A read-only location lookup (opening a chat, resolving a chat's workspace) is not orchestration use.
+  if (method === 'orchestration.partyLocation') {
+    return null
   }
   return method.startsWith('orchestration.') ? 'agent-orchestration' : null
 }

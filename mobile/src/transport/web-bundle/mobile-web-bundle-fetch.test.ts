@@ -1,8 +1,12 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { describe, expect, it, vi } from 'vitest'
 import { computeMobileWebBundleId } from '../../../../src/shared/mobile-web-bundle/manifest-contract'
-import { createFakeGenerationFileSystem } from '../../mobile-web-shell/generations/generation-file-system-fake'
+import {
+  createFakeGenerationFileSystem,
+  FAKE_GENERATION_ROOT
+} from '../../mobile-web-shell/generations/generation-file-system-fake'
 import { createGenerationStore } from '../../mobile-web-shell/generations/generation-store'
+import { fetchDeferredAssetsFromDesktop } from '../../mobile-web-shell/generations/generation-deferred-assets'
 import { deriveHostCacheKey } from '../../mobile-web-shell/generations/host-cache-key'
 import { fetchMobileWebBundle } from './mobile-web-bundle-fetch'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
@@ -33,12 +37,15 @@ function bytesOf(text: string): Uint8Array {
 
 type HostCall = { method: string; params: unknown }
 
+const FAKE_ROOT_PREFIX_LENGTH = FAKE_GENERATION_ROOT.length + 1
+
 type HostOptions = {
   chunkBytes?: number
   buildId?: string
   intercept?: (call: HostCall) => unknown
   onInFlight?: (inFlight: number) => void
   catalogs?: readonly string[]
+  deferred?: readonly string[]
 }
 
 /** Box first, so params that are not an object read as absent instead of throwing. */
@@ -56,7 +63,8 @@ function bundleHost(files: Record<string, string>, options: HostOptions = {}) {
       sha256: toHex(sha256(content)),
       byteLength: content.byteLength,
       contentType: 'text/plain',
-      ...(options.catalogs?.includes(path) ? { kind: 'catalog' } : {})
+      ...(options.catalogs?.includes(path) ? { kind: 'catalog' } : {}),
+      ...(options.deferred?.includes(path) ? { deferred: true } : {})
     }))
     .sort((left, right) => (left.path < right.path ? -1 : 1))
   // Derive fixture ids from final asset lists unless the test explicitly selects a mismatch.
@@ -189,5 +197,52 @@ describe('fetchMobileWebBundle', () => {
       'mobileWeb.bundle.manifest',
       'b.txt'
     ])
+  })
+
+  it('downloads deferred code only when a page asks, once, and keeps it for the next build', async () => {
+    const fs = createFakeGenerationFileSystem()
+    const store = createGenerationStore({ fileSystem: fs })
+    const hostKey = deriveHostCacheKey('host-a')
+    const install = async (page: string) => {
+      const host = bundleHost(
+        { 'index.html': page, 'x-engine.js': 'diagram engine' },
+        { deferred: ['x-engine.js'] }
+      )
+      const reusable = await store.openReusableAssets(hostKey, host.manifest)
+      const fetched = await fetchMobileWebBundle({ client: host.client, reusable })
+      const staged = await store.stageGeneration(hostKey, fetched, undefined, reusable)
+      return { host, active: await store.commitGeneration(staged) }
+    }
+    const pathsRead = (host: { calls: HostCall[] }) => [
+      ...new Set(host.calls.map((call) => paramField(call.params, 'path')).filter(Boolean))
+    ]
+    const engineOnDisk = (directory: string) =>
+      fs.text(`${directory.slice(FAKE_ROOT_PREFIX_LENGTH)}/x-engine.js`)
+
+    const first = await install('page 1')
+    expect(pathsRead(first.host)).toEqual(['index.html'])
+    expect(engineOnDisk(first.active.directory)).toBeNull()
+
+    // Bytes the desktop swears by but this phone's entry doesn't hash to never land.
+    const forged = store.fillDeferredAssets(
+      hostKey,
+      first.active.buildId,
+      async (missing) => new Map(missing.map((asset) => [asset.sha256, bytesOf('forged engine!')]))
+    )
+    await expect(forged).rejects.toThrow(/no matching copy/)
+    expect(engineOnDisk(first.active.directory)).toBeNull()
+
+    const ask = () =>
+      store.fillDeferredAssets(hostKey, first.active.buildId, (missing) =>
+        fetchDeferredAssetsFromDesktop(first.host.client, missing)
+      )
+    await ask()
+    await ask()
+    expect(pathsRead(first.host)).toEqual(['index.html', 'x-engine.js'])
+    expect(engineOnDisk(first.active.directory)).toBe('diagram engine')
+
+    const second = await install('page 2')
+    expect(pathsRead(second.host)).toEqual(['index.html'])
+    expect(engineOnDisk(second.active.directory)).toBe('diagram engine')
   })
 })

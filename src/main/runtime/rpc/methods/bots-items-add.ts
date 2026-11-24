@@ -1,7 +1,7 @@
 // `bots.items.add`: an item in the caller's chat, or (`--for`, `--chat`) for another bot or another of
 // its own chats. The second goes as ordinary bot request mail from the calling chat; the item is made
-// in the chat the request landed in (a teammate's request opens its own conversation), right after it
-// is stored and before that chat is woken. A crash between the two leaves mail naming an item never made.
+// in the chat the request landed in, right after it is stored and before that chat is woken. A crash
+// between the two leaves mail naming an item never made.
 import { randomUUID } from 'node:crypto'
 import type { BotItemsAddParams } from '../../../../shared/rpc-contract/bots-items-params'
 import { BotItemError } from '../../../bots/bot-item-error'
@@ -42,7 +42,7 @@ export async function addItem(
       { ...fields, ownerBotId: writer.bot.id, chatId: writer.actor.chatId, source: writer.source },
       writer.actor
     )
-    return writeResult(runtime, outcome, writer)
+    return writeResult(context, outcome, writer)
   }
   assertBotItemAddable(fields)
   const uid = randomUUID()
@@ -73,7 +73,7 @@ export async function addItem(
       },
       writer.actor
     )
-    return await writeResult(runtime, outcome, writer)
+    return await writeResult(context, outcome, writer)
   } finally {
     sent.nudge()
   }
@@ -90,7 +90,6 @@ export async function sendItemRequest(
     messageId: string
     subject: string
     body: string
-    keepChat?: boolean
   }
 ): Promise<{ landed: string; nudge: () => void }> {
   const { runtime } = context
@@ -108,8 +107,7 @@ export async function sendItemRequest(
       sender: caller,
       routing: { run: undefined },
       messageId: mail.messageId,
-      holdNudge: true,
-      ...(mail.keepChat ? { keepChat: true } : {})
+      holdNudge: true
     }
   )
   const message = sent ? db.getMessageById(mail.messageId) : undefined

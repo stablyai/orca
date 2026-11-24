@@ -1,4 +1,4 @@
-import { useAppStore } from '@/store'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
@@ -17,9 +17,7 @@ function ptyHostStampsTurnEnds(ptyId: string | null | undefined): boolean {
     return true
   }
   const environmentId = parseRemoteRuntimePtyId(ptyId)?.environmentId
-  const entry = environmentId
-    ? useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
-    : undefined
+  const entry = environmentId ? readRuntimeStatuses().get(environmentId) : undefined
   return (
     lastVerifiedRuntimeStatus(entry)?.capabilities?.includes(
       AGENT_STATUS_TURN_END_RUNTIME_CAPABILITY

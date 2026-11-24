@@ -1,5 +1,6 @@
 // `orca bot item`: one short line per write, one row per item, and an item with its activity.
 import {
+  botItemCommentImages,
   BOT_ITEM_STATUSES,
   isBotItemSnoozed,
   type BotItem,
@@ -13,6 +14,7 @@ export type BotItemWriteView = {
   eventId: string | null
   created?: boolean
   unchanged?: boolean
+  advice?: { codes: string[]; tip: string }
 }
 
 export type BotItemListView = {
@@ -28,6 +30,7 @@ export type BotItemShowView = { item: BotItem; events: BotItemEvent[]; nextCurso
 const STATUS_WORDS: Record<BotItemStatus, string> = {
   planned: 'Planned',
   working: 'In progress',
+  waiting: 'Waiting',
   needs_you: 'Needs you',
   done: 'Done',
   canceled: 'Canceled'
@@ -37,6 +40,11 @@ const STATUS_WORDS: Record<BotItemStatus, string> = {
 function statusWord(value: unknown): string {
   const status = BOT_ITEM_STATUSES.find((entry) => entry === value)
   return status ? STATUS_WORDS[status] : String(value ?? '')
+}
+
+/** A title on the header's one line, however it was written. */
+function titleLine(item: BotItem): string {
+  return item.title.replace(/\s+/g, ' ').trim()
 }
 
 function chatWords(item: BotItem): string {
@@ -52,10 +60,14 @@ export function formatBotItemWrite(view: BotItemWriteView): string {
       ...(item.madeBy && item.owner.botId !== item.madeBy.botId
         ? [`for ${item.owner.name ?? item.owner.botId}`]
         : []),
+      titleLine(item),
       chatWords(item),
       ...(view.unchanged ? ['nothing changed'] : [])
     ].join(' · ')
   ]
+  if (view.advice) {
+    lines.push(view.advice.tip)
+  }
   return lines.join('\n')
 }
 
@@ -66,24 +78,12 @@ function linkSummary(links: readonly BotItemLinkView[]): string[] {
   for (const link of links) {
     const pr = link.kind === 'pr' || link.kind === 'dispatch' ? link.pr : null
     if (pr?.shown) {
-      parts.push(
-        `#${pr.number} ${pr.state === 'merged' || pr.state === 'closed' ? pr.state : checksWords(pr.checks)}`
-      )
+      parts.push(`#${pr.number}`)
     } else if (pr && !pr.shown) {
       parts.push('PR not shown for server work yet')
     }
   }
   return [...new Set(parts)]
-}
-
-const CHECK_WORDS: Record<string, string> = {
-  failure: 'CI failing',
-  success: 'CI green',
-  pending: 'CI running'
-}
-
-function checksWords(checks: string | null): string {
-  return (checks !== null ? CHECK_WORDS[checks] : undefined) ?? 'open'
 }
 
 function age(at: number, now: number): string {
@@ -122,7 +122,8 @@ export function formatBotItemRow(item: BotItem, now: number): string {
   const until = snoozedUntil(item, now)
   const snoozed = until ? `\n    snoozed ${snoozedWords(until)}` : ''
   const question = item.question ? `\n    asks: ${item.question.text.split('\n')[0]}` : ''
-  return `${item.number}  ${STATUS_WORDS[item.status]}  ${what}  ${chatWords(item)}  ${age(item.updatedAt, now)}${snoozed}${question}`
+  const wait = item.wait ? `\n    waits on: ${item.wait.text}` : ''
+  return `${item.number}  ${STATUS_WORDS[item.status]}  ${what}  ${chatWords(item)}  ${age(item.updatedAt, now)}${snoozed}${question}${wait}`
 }
 
 export function formatBotItemList(view: BotItemListView, now: number): string {
@@ -137,7 +138,7 @@ function linkLine(link: BotItemLinkView): string {
   switch (link.kind) {
     case 'dispatch': {
       const pr = link.pr?.shown
-        ? ` · #${link.pr.number} ${link.pr.state === 'merged' || link.pr.state === 'closed' ? link.pr.state : checksWords(link.pr.checks)}`
+        ? ` · PR #${link.pr.number} ${link.pr.url}`
         : link.pr
           ? ' · PR not shown for server work yet'
           : ''
@@ -145,12 +146,12 @@ function linkLine(link: BotItemLinkView): string {
       return `dispatch:${link.ref}${link.latest ? ` (now ${link.latest})` : ''} · ${link.title ?? 'worker'} · ${link.state}${link.host ? ` on ${link.host}` : ''}${pr}${report}`
     }
     case 'pr':
-      return link.pr?.shown
-        ? `pr:${link.ref} · ${link.pr.state === 'merged' || link.pr.state === 'closed' ? link.pr.state : checksWords(link.pr.checks)}`
-        : `pr:${link.ref}`
+      return link.pr?.shown ? `pr:${link.ref} · ${link.pr.url}` : `pr:${link.ref}`
     case 'url':
     case 'file':
       return `${link.kind}:${link.ref}`
+    case 'automation':
+      return `automation:${link.ref} · ${link.name ?? 'automation'} · ${link.active ? 'on' : 'gone or off'}`
   }
 }
 
@@ -165,8 +166,10 @@ function eventLine(event: BotItemEvent): string {
         return `edited ${Object.keys(typeof data.fields === 'object' && data.fields ? data.fields : {}).join(', ')}${data.note ? ` (${String(data.note)})` : ''}`
       case 'status':
         return `${statusWord(data.from)} → ${statusWord(data.to)}${data.note ? `: ${String(data.note)}` : ''}`
-      case 'commented':
-        return String(data.text ?? '')
+      case 'commented': {
+        const images = botItemCommentImages(data).map(({ path }) => path)
+        return `${String(data.text ?? '')}${images.length > 0 ? `\n    images: ${images.join(', ')}` : ''}`
+      }
       case 'linked':
         return `linked ${Array.isArray(data.links) ? data.links.join(', ') : ''}`
       case 'snoozed':
@@ -184,11 +187,12 @@ export function formatBotItemShow(view: BotItemShowView, now = Date.now()): stri
   const { item } = view
   const until = snoozedUntil(item, now)
   const lines = [
-    `item ${item.number} · ${STATUS_WORDS[item.status]} · ${item.title} · ${chatWords(item)} · owner ${item.owner.name ?? item.owner.botId}`,
+    `item ${item.number} · ${STATUS_WORDS[item.status]} · ${titleLine(item)} · ${chatWords(item)} · owner ${item.owner.name ?? item.owner.botId}`,
     ...(until ? [`Snoozed ${snoozedWords(until)}.`] : []),
     ...(item.description ? [item.description] : []),
     ...(item.doneMeans ? [`Done means: ${item.doneMeans}`] : []),
     ...(item.question ? [`Asks your owner: ${item.question.text}`] : []),
+    ...(item.wait ? [`Waits on: ${item.wait.text}`] : []),
     ...(item.closeNote ? [`Closed: ${item.closeNote}`] : []),
     ...item.links.map((link) => `  ${linkLine(link)}`),
     '',

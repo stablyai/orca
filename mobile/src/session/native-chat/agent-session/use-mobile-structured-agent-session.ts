@@ -24,6 +24,7 @@ import { useMobileStructuredStopPress } from '../composer/delivery/use-mobile-st
 import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-execution'
 import { useMobileStructuredPromptResponses } from '../input/prompts/use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from '../input/session-options/use-mobile-structured-agent-options'
+import { useMobileStructuredAccountUsage } from '../usage/use-mobile-structured-account-usage'
 import { useHostModelCatalogCache } from '../input/session-options/mobile-host-model-catalog-query'
 import { useMobileStructuredCommandController } from '../composer/commands/use-mobile-structured-command-controller'
 import { useMobileStructuredSessionOptionStamp } from '../input/session-options/use-mobile-structured-session-option-stamp'
@@ -104,7 +105,7 @@ export function useMobileStructuredAgentSession(
     unloadedTurnRevisions: state.unloadedTurnRevisions,
     hostSupport
   })
-  const { contextUsageSupport, ...optionFields } = options
+  const { contextUsageSupport, accountUsageReported, ...optionFields } = options
 
   const { status, epoch } = state
   const linked = useMemo(
@@ -131,10 +132,7 @@ export function useMobileStructuredAgentSession(
   })
   const transcript = useMobileStructuredTranscript(agent, state, sends.optimistic, sessionKey)
   const { clearing, transcriptItems, messages, receipts } = transcript
-  const turnTiming = useMobileStructuredAgentTurnTiming(
-    { ...state, items: transcriptItems },
-    turnId
-  )
+  const timing = useMobileStructuredAgentTurnTiming({ ...state, items: transcriptItems }, turnId)
   const isWorking = mobileStructuredAgentSessionWorking(state)
   const queueSendsNext = structuredAgentSessionQueueSendsNext(state.nextQueuedMessageId, isWorking)
   const backgroundTasks = useMobileStructuredBackgroundTasks({
@@ -171,7 +169,7 @@ export function useMobileStructuredAgentSession(
     sessionKey,
     report: options.threadGoalSupport,
     turnId,
-    workingStartedAt: turnTiming.workingStartedAt,
+    workingStartedAt: timing.workingStartedAt,
     working: isWorking || queueSendsNext,
     mutate,
     commands: useMobileStructuredCommandController(options)
@@ -229,6 +227,9 @@ export function useMobileStructuredAgentSession(
     sessionKey,
     agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined,
     journalItems: state.items,
+    transcriptShown: messages.length > 0,
+    // A saved or reloading copy is not this chat's current queue yet.
+    queueCurrent: status !== 'loading' && savedAt === null,
     queuedMessages,
     queuePause,
     submissions: state.submissions,
@@ -280,7 +281,7 @@ export function useMobileStructuredAgentSession(
     sendFollowUp: turnIndicator.sendFollowUp ?? null,
     turnId,
     turnIndicator,
-    ...turnTiming,
+    ...timing,
     sendWithOutcome,
     holdUnconfirmed: sends.holdUnconfirmed,
     cancel: () => void stopPress.track(() => requestCancel()),
@@ -301,6 +302,7 @@ export function useMobileStructuredAgentSession(
     ),
     threadGoal: goal.threadGoal,
     mcpPanel: mcp.mcpPanel,
+    accountUsage: useMobileStructuredAccountUsage(args, accountUsageReported),
     rewind,
     usageLimit,
     unresolvedFailureRows

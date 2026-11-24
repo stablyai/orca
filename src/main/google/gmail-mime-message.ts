@@ -2,6 +2,7 @@
 // threading headers that keep a reply in its conversation. Gmail fills in From and Date.
 import { randomBytes } from 'node:crypto'
 import { filePreviewForPath } from '../../shared/file-preview/file-preview-kind'
+import { mailboxAddress } from '../../shared/google/email-address-list'
 import { GoogleToolError } from './google-api-client'
 
 export type MimeAttachment = { name: string; type?: string; data: Buffer }
@@ -66,7 +67,7 @@ export function formatAddress(entry: string): string {
 
 /** The bare address of a header entry, lowercased, for comparing who is who. */
 export function addressOf(entry: string): string {
-  return (/<([^<>]+)>/.exec(entry)?.[1] ?? entry).trim().toLowerCase()
+  return mailboxAddress(entry) ?? entry.trim().toLowerCase()
 }
 
 function base64Lines(data: Buffer): string {

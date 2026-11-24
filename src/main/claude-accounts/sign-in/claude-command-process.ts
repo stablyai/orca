@@ -19,6 +19,10 @@ import { resolveWslExecutablePath } from '../../wsl/execution/wsl-executable-pat
 import { buildWindowsCommandInvocation } from './windows-command-invocation'
 import { terminateClaudeProcess } from './claude-login-process-termination'
 import { stripInheritedAgentSessionEnv } from '../../../shared/agent-launch/startup/parent-agent-session-env'
+import {
+  buildConfiguredProxyEnv,
+  type NetworkProxySettings
+} from '../../../shared/network/network-proxy'
 
 const MAX_COMMAND_OUTPUT_CHARS = 4_000
 const CLAUDE_AUTH_DENIED_PATTERN =
@@ -38,6 +42,7 @@ export type ClaudeCommandOptions = {
   onStdout?: (text: string) => void
   /** Requires `keepStdinOpen`. */
   onStdin?: (send: (text: string) => void) => void
+  networkProxySettings?: NetworkProxySettings
 }
 
 export function runClaudeCommandProcess(
@@ -75,7 +80,8 @@ export function runClaudeCommandProcess(
       configDir,
       interactiveLogin,
       hostClaudeCommand,
-      options?.browser
+      options?.browser,
+      options?.networkProxySettings
     )
     const child = spawnProcess({
       program: spawnConfig.command,
@@ -121,7 +127,7 @@ export function runClaudeCommandProcess(
       child.off('error', onError)
       child.off(completionEvent, onDone)
       options?.signal?.removeEventListener('abort', onAbort)
-      interactiveLogin?.cleanup?.()
+      void interactiveLogin?.cleanup()
       if (options?.keepStdinOpen) {
         child.stdin?.destroy()
       }
@@ -168,10 +174,11 @@ export function runClaudeCommandProcess(
         settle(() => rejectPromise(windowsOnly ? new Error(windowsOnly) : error))
       }
     }
-    const onDone = (code: number | null): void => {
+    const onDone = async (exitEventCode: number | null): Promise<void> => {
       if (terminationPending) {
         return
       }
+      const code = (await interactiveLogin?.readExitCode()) ?? exitEventCode
       settle(() => {
         if (code === 0) {
           resolvePromise(output)
@@ -227,11 +234,17 @@ type ClaudeSpawnConfig = {
   windowsVerbatimArguments: boolean
 }
 
-// Match account terminals by using CLAUDE_CONFIG_DIR for login identity.
-function claudeConfigDirEnv(configDir: string, browser: string | undefined): NodeJS.ProcessEnv {
-  return browser
-    ? { CLAUDE_CONFIG_DIR: configDir, BROWSER: browser }
-    : { CLAUDE_CONFIG_DIR: configDir }
+// Match account terminals; the token exchange after the browser callback needs the configured proxy.
+function claudeLoginEnv(
+  configDir: string,
+  browser: string | undefined,
+  networkProxySettings: NetworkProxySettings | undefined
+): NodeJS.ProcessEnv {
+  return {
+    ...buildConfiguredProxyEnv(networkProxySettings),
+    CLAUDE_CONFIG_DIR: configDir,
+    ...(browser ? { BROWSER: browser } : {})
+  }
 }
 
 function wslClaudeCommand(linuxPath: string, args: string[], browser: string | undefined): string {
@@ -250,7 +263,8 @@ function resolveClaudeInvocation(
   configDir: ClaudeCommandConfig,
   interactiveLogin: WindowsHostInteractiveLoginSpawn | null,
   hostClaudeCommand: () => string,
-  browser: string | undefined
+  browser: string | undefined,
+  networkProxySettings: NetworkProxySettings | undefined
 ): ClaudeSpawnConfig {
   const inheritedEnv = { ...process.env }
   stripInheritedAgentSessionEnv(inheritedEnv)
@@ -260,7 +274,7 @@ function resolveClaudeInvocation(
         args: interactiveLogin.args,
         env: withCliRuntimeOnPath(hostClaudeCommand(), {
           ...inheritedEnv,
-          ...claudeConfigDirEnv(configDir.windowsPath, browser)
+          ...claudeLoginEnv(configDir.windowsPath, browser, networkProxySettings)
         }),
         windowsVerbatimArguments: false
       }
@@ -281,7 +295,7 @@ function resolveClaudeInvocation(
             ...buildWindowsCommandInvocation(hostClaudeCommand(), args),
             env: withCliRuntimeOnPath(hostClaudeCommand(), {
               ...inheritedEnv,
-              ...claudeConfigDirEnv(configDir.windowsPath, browser)
+              ...claudeLoginEnv(configDir.windowsPath, browser, networkProxySettings)
             })
           }
         : {
@@ -289,7 +303,7 @@ function resolveClaudeInvocation(
             args,
             env: withCliRuntimeOnPath(hostClaudeCommand(), {
               ...inheritedEnv,
-              ...claudeConfigDirEnv(configDir.windowsPath, browser)
+              ...claudeLoginEnv(configDir.windowsPath, browser, networkProxySettings)
             }),
             windowsVerbatimArguments: false
           }

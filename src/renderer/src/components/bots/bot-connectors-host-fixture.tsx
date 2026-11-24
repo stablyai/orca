@@ -77,6 +77,8 @@ const neverReturns = (): Promise<never> => new Promise(() => {})
 export type StubOptions = {
   linearLinked: boolean
   composio: boolean
+  /** The host's bots, listed and answered on every re-read; the shared five by default. */
+  bots?: readonly Bot[]
   /** The key's state on each read of the status, the last one repeating. */
   keys?: ('ok' | 'rejected')[]
   /** The sign-ins can't be read. */
@@ -101,7 +103,8 @@ export type StubOptions = {
 const HOST_PAGE = 'https://mcp.acme-notes.example/authorize?client_id=orca&state=fixture'
 
 export function stub(options: StubOptions): void {
-  publishBots([base, empty, slackOnly, switchedToCodex, twoOfEach])
+  const bots = options.bots ?? [base, empty, slackOnly, switchedToCodex, twoOfEach]
+  publishBots(bots)
   retryBotToolCheck()
   // The page stays warm between fixtures; each starts from no Composio read.
   resetComposioClientForTest()
@@ -180,7 +183,16 @@ export function stub(options: StubOptions): void {
             : []),
           { installationId: '1', accountLogin: 'stablyai', repositories: null }
         ],
-        defaultBotId: null
+        defaultBotId: null,
+        accounts: [
+          {
+            userId: '42',
+            login: 'cos-orca',
+            installations: [...(options.sameService ? ['2'] : []), '1'],
+            defaultBotId: null,
+            linkedAccounts: []
+          }
+        ]
       }
     }),
     users: notAnswered,
@@ -200,11 +212,22 @@ export function stub(options: StubOptions): void {
             { service: 'drive', state: 'ready' }
           ],
           connectedAt: 1
+        },
+        {
+          email: 'carol.lee@gmail.com',
+          status: 'connected',
+          services: [
+            { service: 'gmail', state: 'ready' },
+            { service: 'calendar', state: 'ready' },
+            { service: 'drive', state: 'ready' }
+          ],
+          connectedAt: 2
         }
       ],
+      defaultAccount: 'carol@example.com',
       bots: []
     }),
-    'bots.list': () => ({ bots: [base, empty, slackOnly, switchedToCodex, twoOfEach] }),
+    'bots.list': () => ({ bots }),
     'webhooks.list': () => ({ hooks: [] }),
     'bots.tools.list': () => ({
       agent: 'claude',

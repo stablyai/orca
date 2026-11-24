@@ -116,7 +116,9 @@ export function createStructuredAgentSessionLaunchIntent(
     sessionId,
     resumeFrom,
     hostSeedOptions,
-    forkFrom
+    forkFrom,
+    // New chats keep the legacy id until pane keys address the tab by its own id.
+    undefined
   )
 }
 
@@ -127,7 +129,8 @@ function buildStructuredAgentSessionLaunchIntent(
   sessionId: string,
   resumeFrom: StructuredAgentSessionResumeSource | undefined,
   hostSeedOptions: LaunchSeed,
-  forkFrom: StructuredAgentSessionForkSource | undefined
+  forkFrom: StructuredAgentSessionForkSource | undefined,
+  tabId: string | undefined
 ): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
   return {
@@ -142,6 +145,7 @@ function buildStructuredAgentSessionLaunchIntent(
       agent,
       ...(resumeFrom ? { resumeFrom } : {}),
       ...(forkFrom ? { forkFrom } : {}),
+      ...(tabId ? { tabId } : {}),
       randomUuid: createNonSecureContextUuid
     }),
     ...(forkFrom ? {} : launchSeedOptions(state, owner, agent, hostSeedOptions, resumeFrom))
@@ -176,7 +180,8 @@ export function retryStructuredAgentSessionLaunchIntent(
       intent.sessionId,
       fresh ? undefined : intent.params.resumeFrom,
       intent.seedOptions,
-      intent.params.forkFrom
+      intent.params.forkFrom,
+      intent.params.tabId
     ),
     forkRequiresInheritedOriginal: intent.forkRequiresInheritedOriginal,
     explicitLaunchOptions: intent.explicitLaunchOptions
@@ -193,6 +198,8 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
   forkFrom?: StructuredAgentSessionForkSource
+  /** The chat tab's id the recorded create carries, when it names one. */
+  tabId?: string
   /** A paired server's seed, kept with the launch so a reload shows what create runs. */
   explicitLaunchOptions?: Readonly<Record<string, string>>
   seedOptions?: Readonly<Record<string, string>>
@@ -221,6 +228,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       agent: args.agent,
       ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
       ...(args.forkFrom ? { forkFrom: args.forkFrom } : {}),
+      ...(args.tabId ? { tabId: args.tabId } : {}),
       ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
       ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
       ...(args.options ? { options: args.options } : {})

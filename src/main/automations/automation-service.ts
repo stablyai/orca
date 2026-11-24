@@ -76,7 +76,7 @@ export class AutomationService {
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
   /** Desktop automation traffic holds this lease to defer queued external probes. */
   externalProbePriority: (<T>(run: () => T) => T) | null = null
-  readonly wakeGate = new AutomationWakeGate(() => this.store)
+  readonly wakeGate = new AutomationWakeGate()
 
   constructor(
     store: Store,
@@ -90,6 +90,7 @@ export class AutomationService {
       onRunRefused?: (automation: Automation, error: string) => void
       chatDispatcher?: Launch.AutomationLauncher
       terminalObserver?: AutomationRunTerminalObserver
+      isHostQuitting?: () => boolean
       onAutomationsChanged?: PublishAutomationsChanged
       runTerminalRetention?: (service: AutomationService) => RunTerminalRetention
     } = {}
@@ -110,7 +111,8 @@ export class AutomationService {
           observer: opts.terminalObserver,
           readRun: (automationId, runId) =>
             this.store.listAutomationRuns(automationId).find((entry) => entry.id === runId) ?? null,
-          markDispatchResult: (result) => this.markDispatchResult(result)
+          markDispatchResult: (result) => this.markDispatchResult(result),
+          isHostQuitting: opts.isHostQuitting
         })
       : null
     this.runTerminalRetention = opts.runTerminalRetention?.(this) ?? null
@@ -239,7 +241,7 @@ export class AutomationService {
 
   private async evaluateDueRuns(): Promise<void> {
     // A run started in a dark wake is cut off by the next sleep.
-    if (this.evaluating || this.stopped || !this.wakeGate.admits(this.store, this.tickMs)) {
+    if (this.evaluating || this.stopped || !this.wakeGate.admits(this.store)) {
       return
     }
     this.evaluating = true
@@ -247,28 +249,27 @@ export class AutomationService {
     if (this.availableLauncher()) {
       this.completionWatcher?.markTerminalSurfaceReady()
     }
+    const now = Date.now()
     try {
       await runDueAutomations({
-        ctx: this.triggerRunContext(),
-        now: Date.now(),
+        ctx: this.triggerRunContext(this.wakeGate.takeDelayMs(now, this.tickMs)),
+        now,
         isActive: () => !this.stopped && generation === this.dispatchGeneration,
         captureTarget: (listed) =>
           captureLegacyRunTarget(this.store, listed, this.allowRemoteHostScheduling)
       })
     } finally {
       this.evaluating = false
-      this.wakeGate.clear()
     }
   }
 
   /** Captures the dispatch generation, so a stop() while it waits cancels the launch. */
-  private triggerRunContext(): AutomationTriggerRunContext {
+  private triggerRunContext(wakeGateDelayMs = 0): AutomationTriggerRunContext {
     const generation = this.dispatchGeneration
     return {
       store: this.store,
       runs: this.runs,
-      tickMs: this.tickMs,
-      wakeGate: this.wakeGate,
+      wakeGateDelayMs,
       inLane: (automationId, operation) => this.runInAutomationLane(automationId, operation),
       describeRefusal: (target) => {
         const canDispatch = canDispatchTo(

@@ -17,8 +17,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { SettingsInsetGroup } from '../settings-view/BotSettingsRows'
 import { botShareCheckSummary } from './bot-share-flags'
+import { allMemory, pickedOf } from '../../../../../shared/bots/bot-share-pick-lists'
+import { unpackableSkills } from '../../../../../shared/bots/bot-share-skill-picks'
 import {
-  pickedOf,
+  pickedSkills,
   type BotShareContext,
   type BotShareList,
   type BotSharePage
@@ -37,7 +39,7 @@ export function pageTitle(page: BotSharePage, t: ReturnType<typeof useTranslate>
     skills: t('bots.share.skills', 'Skills'),
     automations: t('bots.share.automations', 'Automations'),
     tools: t('bots.share.tools', 'Tools'),
-    memory: t('bots.share.includeMemory', 'Include memory'),
+    memory: t('bots.share.memory', 'Memory'),
     note: t('bots.share.setupNote', 'Setup note'),
     check: t('bots.share.safetyCheck', 'Safety check'),
     notIncluded: t('bots.share.notIncluded', 'Not included')
@@ -142,10 +144,7 @@ export function BotShareOverview({ ctx }: { ctx: BotShareContext }): React.JSX.E
   const { candidate, selection } = ctx
   const { available, leftOut } = candidate
   const list = (name: BotShareList) => () => ctx.open({ kind: 'list', list: name })
-  const skills = pickedOf(
-    selection.skills,
-    available.skills.map((s) => s.name)
-  )
+  const skills = pickedSkills(selection, available.skills)
   const events = available.eventSuggestions.filter(
     (entry, index, all) => all.findIndex((e) => e.automationId === entry.automationId) === index
   )
@@ -157,6 +156,7 @@ export function BotShareOverview({ ctx }: { ctx: BotShareContext }): React.JSX.E
       .filter((e) => pickedOf(selection.eventSuggestions, [e.automationId]).length > 0)
       .map((e) => e.name)
   ]
+  const skillsLeftOut = unpackableSkills(leftOut).length
   const webhooks = leftOut.filter((entry) => entry.kind === 'automation').length
   const automations = available.schedules.length + events.length
   const tools = pickedOf(
@@ -194,8 +194,13 @@ export function BotShareOverview({ ctx }: { ctx: BotShareContext }): React.JSX.E
         <PartRow
           icon={<BookOpen />}
           title={t('bots.share.skills', 'Skills')}
-          empty={available.skills.length === 0}
-          value={partValue(skills, available.skills.length, t)}
+          // Opens to show skills that can't be shared, but only shareable ones count.
+          empty={available.skills.length + skillsLeftOut === 0}
+          value={
+            available.skills.length === 0
+              ? t('bots.share.none', 'None')
+              : partValue(skills, available.skills.length, t)
+          }
           onOpen={list('skills')}
         />
         <PartRow
@@ -230,7 +235,8 @@ export function BotShareOverview({ ctx }: { ctx: BotShareContext }): React.JSX.E
               disabled={available.memory.length === 0}
               aria-label={t('bots.share.includeMemory', 'Include memory')}
               onCheckedChange={(on) => {
-                ctx.select({ memory: on ? [] : undefined })
+                // On sends every file; the list that opens is for leaving some out.
+                ctx.select({ memory: on ? allMemory(available.memory) : undefined })
                 if (on) {
                   ctx.open({ kind: 'list', list: 'memory' })
                 }

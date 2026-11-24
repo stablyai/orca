@@ -15,7 +15,8 @@ export const BROWSER_PAGE_INITIALIZATION_ACTION_METHODS = [
           includeAgentSenders: clientKind !== 'mobile'
         }),
         clientKind,
-        clientCapabilities
+        clientCapabilities,
+        runtime
       )
       runtime.observeClientHostedPageSnapshots?.([snapshot], pairedDeviceId)
       return snapshot

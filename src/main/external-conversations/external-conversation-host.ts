@@ -8,6 +8,7 @@ import type { ConversationPlaceNamer } from './external-conversation-place'
 import type { SlackMirror } from './slack-mirror'
 // What the conversation seam reaches on the host it runs for, and the host's clock.
 import type { ConversationBots } from './external-conversation-bots'
+import type { AskerImages } from './connector-asker-images'
 import type { ConversationChatHost } from './external-conversation-chat'
 import type { ConversationEventsDeps } from './external-conversation-events'
 import type { ConversationWorkersHost } from './external-conversation-workers'
@@ -44,6 +45,8 @@ export type ExternalConversationSeamDeps = {
   onLinked?: () => void
   /** A Slack channel's name through Orca Cloud, for a bot conversation's place. */
   nameChannel?: ConversationPlaceNamer
+  /** The images a bot's request carries, fetched so its turn sees them; absent, the turn gets words. */
+  askerImages?: AskerImages
   /** Whom a bot chat acts for, as its cloud thread keeps it; undefined while Orca hasn't recorded it. */
   actsForOf?: (sessionId: string) => ConnectorActsFor | undefined
   freesGoneChats?: () => boolean
@@ -55,4 +58,7 @@ export type ExternalConversationSeamDeps = {
   /** A delivery was admitted to this chat through the reply outbox. */
   replyAdmitted?: (sessionId: string) => void
   slackMirror?: () => SlackMirror | null
+  /** A watch began, after its snapshot: turn ends held while none watched (the Slack mirror's
+   *  among them) are told now. */
+  watched?: () => void
 }

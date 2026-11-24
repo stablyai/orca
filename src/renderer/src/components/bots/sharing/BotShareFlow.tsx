@@ -7,7 +7,11 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 import { BOT_SHARE_ERRORS } from '../../../../../shared/bots/bot-share-errors'
 import { useOrcaCloudSignedOut } from '../orca-cloud-signed-out'
-import { botShareFlagPage, botShareFlagSpot, type BotShareFlagSpot } from './bot-share-flags'
+import { botShareFlagPage } from './bot-share-flags'
+import {
+  botShareFlagSpot,
+  type BotShareFlagSpot
+} from '../../../../../shared/bots/bot-share-flag-spots'
 import { openBotHomeFileAtLine } from './bot-share-go-to-line'
 import type { BotShareContext, BotSharePage } from './bot-share-pages'
 import { publishBotShare, settleBotShare, stopBotShare, updateBotShare } from './bot-share-rpc'
@@ -19,29 +23,36 @@ import {
   BotShareSecretNotice,
   BotShareUpdatedLine
 } from './BotShareDialog'
-import { BODY, Contents, Footer, SignInBody, type Phase } from './BotShareFooter'
+import { BODY, Contents, Footer, type Phase } from './BotShareFooter'
 import { pageTitle } from './BotShareOverview'
 import { useBotShareCandidate } from './use-bot-share-candidate'
 import type { BotShareCandidateSummary } from '../../../../../shared/bots/bot-package'
 import { useBotShareLink, type BotShareLink, type BotShareStart } from './use-bot-share-link'
 
-export function BotShareFlow({
-  bot,
-  start = 'open',
-  link: knownLink,
-  onClose,
-  onChanged
-}: {
+type BotShareFlowProps = {
   bot: Bot
   start?: BotShareStart
-  /** The bot's link when the caller already read it; otherwise it is read live. */
-  link?: BotShareLink | null
   onClose: () => void
   onChanged?: () => void
-}): React.JSX.Element {
-  const signedOut = useOrcaCloudSignedOut(bot.hostId)
-  const linkState = useBotShareLink(bot.id, knownLink, signedOut)
-  const needsSignIn = signedOut || linkState.read.kind === 'signIn'
+}
+
+export function BotShareFlow({
+  link,
+  shareId,
+  ...props
+}: BotShareFlowProps & { link?: BotShareLink | null; shareId?: string }): React.JSX.Element {
+  const signedOut = useOrcaCloudSignedOut()
+  const linkState = useBotShareLink(props.bot.id, link, signedOut, shareId)
+  return <BotSharePreview {...props} linkState={linkState} />
+}
+
+export function BotSharePreview({
+  bot,
+  start = 'open',
+  linkState,
+  onClose,
+  onChanged
+}: BotShareFlowProps & { linkState: ReturnType<typeof useBotShareLink> }): React.JSX.Element {
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
@@ -49,17 +60,13 @@ export function BotShareFlow({
         showCloseButton={false}
         className="grid max-h-[calc(100vh-3rem)] grid-rows-[minmax(0,1fr)_auto] overflow-hidden sm:max-w-[520px]"
       >
-        {needsSignIn ? (
-          <SignInBody bot={bot} onCancel={onClose} onSignedIn={linkState.reread} />
-        ) : (
-          <ShareBody
-            bot={bot}
-            start={start}
-            linkState={linkState}
-            onClose={onClose}
-            onChanged={onChanged}
-          />
-        )}
+        <ShareBody
+          bot={bot}
+          start={start}
+          linkState={linkState}
+          onClose={onClose}
+          onChanged={onChanged}
+        />
       </DialogContent>
     </Dialog>
   )
@@ -89,21 +96,15 @@ function ShareBody({
   onChanged?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const { read, setLink, reread } = linkState
+  const link = read.kind === 'read' ? read.link : null
   // A bot with a live link starts from what it was last published with; one without starts from the
   // defaults (memory off), whatever an older link left behind.
   const state = useBotShareCandidate(
     bot,
-    linkState.read.kind === 'read'
-      ? linkState.read.link
-        ? 'last'
-        : 'defaults'
-      : linkState.read.kind === 'offline'
-        ? 'defaults'
-        : null
+    read.kind === 'read' ? (link ? 'last' : 'defaults') : 'local'
   )
   const { candidate } = state
-  const { read, setLink, reread } = linkState
-  const link = read.kind === 'read' ? read.link : null
   const [phase, setPhase] = useState<Phase>(
     start === 'stop' ? { kind: 'confirmStop' } : { kind: 'idle' }
   )
@@ -161,8 +162,19 @@ function ShareBody({
         !retried &&
         (result.code === BOT_SHARE_ERRORS.expired || result.code === BOT_SHARE_ERRORS.prepareAgain)
       ) {
-        const rebuilt = await state.select({})
+        const rebuilt = await state.select({}, { setupNote: shown.bot.setupNote ?? '' })
         if (rebuilt) {
+          if (rebuilt.botDigest !== shown.botDigest) {
+            setPhase({ kind: 'idle' })
+            setError({
+              message: t(
+                'bots.share.previewChanged',
+                'The preview changed. Review it before publishing.'
+              ),
+              moved: false
+            })
+            return
+          }
           return publish(true, rebuilt)
         }
       }
@@ -236,6 +248,8 @@ function ShareBody({
       <>
         <div className={BODY}>
           <BotShareDrillIn
+            // Each page mounts fresh, so it takes focus as it opens.
+            key={nav.length}
             page={page}
             ctx={ctx}
             backLabel={nav.length > 1 ? pageTitle(nav.at(-2)!, t) : bot.name}
@@ -269,7 +283,7 @@ function ShareBody({
         {read.kind === 'loading' ? (
           <BotShareLinkBlock url={null} copied={false} meta={null} onCopy={() => {}} />
         ) : read.kind === 'offline' ? (
-          <BotShareOfflineRow onRetry={reread} />
+          <BotShareOfflineRow error={read.error} onRetry={reread} />
         ) : link ? (
           <BotShareLinkBlock
             url={link.url}

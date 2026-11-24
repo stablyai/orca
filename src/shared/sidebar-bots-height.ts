@@ -1,5 +1,5 @@
-/** Header plus about one bot row, so a dragged-up Bots section stays usable. */
-export const SIDEBAR_BOTS_MIN_HEIGHT = 80
+/** Header plus about one bot row and the gap above the divider, so a dragged-up Bots section stays usable. */
+export const SIDEBAR_BOTS_MIN_HEIGHT = 88
 /** About three project rows below the Projects header stay visible. */
 export const SIDEBAR_PROJECTS_MIN_LIST_HEIGHT = 120
 const SIDEBAR_BOTS_MAX_STORED_HEIGHT = 4000

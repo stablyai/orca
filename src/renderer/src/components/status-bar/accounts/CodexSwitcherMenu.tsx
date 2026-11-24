@@ -18,22 +18,45 @@ import { AccountSwitchSection } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
 import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
+import { isCodexUsageSignInRequired } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
+import { getCodexStatusRuntimeKey } from './status-bar-runtime-targets'
+import { scopeCodexAuthFailure } from './status-bar-codex-accounts'
+import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
+import { getAccountOwnerKey } from './owner-account-rows'
 
-export function CodexSwitcherMenu({
-  codex,
-  ownerUsage,
-  compact,
-  iconOnly,
-  asSubmenu = false,
-  triggerContent
-}: {
+type CodexSwitcherProps = {
   codex: ProviderRateLimits
   ownerUsage: OwnerUsageRateLimits
-  compact: boolean
-  iconOnly: boolean
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
-}): React.JSX.Element {
+}
+
+export function CodexSwitcherMenu(props: CodexSwitcherProps): React.JSX.Element {
+  const t = useTranslate()
+  const owner = props.ownerUsage.owner
+  if (!owner) {
+    return (
+      <ProviderDetailsMenu
+        provider={props.codex}
+        asSubmenu={props.asSubmenu}
+        triggerContent={props.triggerContent}
+        ariaLabel={t(
+          'auto.components.status.bar.StatusBar.ba55303942',
+          'Open Codex details and account switcher'
+        )}
+      />
+    )
+  }
+  return <CodexSwitcherForOwner {...props} owner={owner} key={getAccountOwnerKey(owner)} />
+}
+
+function CodexSwitcherForOwner({
+  codex,
+  ownerUsage,
+  asSubmenu = false,
+  triggerContent,
+  owner
+}: CodexSwitcherProps & { owner: AccountOwner }): React.JSX.Element {
   const t = useTranslate()
   const {
     activeTarget,
@@ -55,6 +78,7 @@ export function CodexSwitcherMenu({
     providerAccountHostLabel,
     reauthenticatingAccountId,
     resetConfirmOpen,
+    rosterKnown,
     resetCreditCount,
     resetCreditExpiry,
     selectedGroup,
@@ -63,22 +87,42 @@ export function CodexSwitcherMenu({
     setSkipFutureResetConfirm,
     skipFutureResetConfirm,
     switchGroups
-  } = useCodexSwitcherController(codex, ownerUsage)
+  } = useCodexSwitcherController(codex, ownerUsage, owner)
 
   const isBusy = isSwitching || reauthenticatingAccountId !== null
+  const signInRequired = codex.status === 'error' && isCodexUsageSignInRequired(codex)
+  const authFailureAccount = codex.usageMetadata?.authFailureAccount
+  const authFailureMatchesActive =
+    authFailureAccount !== undefined &&
+    activeTarget !== undefined &&
+    authFailureAccount.accountId === activeTarget.id &&
+    getCodexStatusRuntimeKey(authFailureAccount) ===
+      getCodexStatusRuntimeKey(activeTarget.runtimeTarget)
+  const displayedCodex = scopeCodexAuthFailure(
+    codex,
+    authFailureMatchesActive ? authFailureAccount.accountId : null
+  )
+  const activeSignInRequired = signInRequired && displayedCodex === codex
+  const canSignInLocally = !hasActiveRuntimeEnvironment && authFailureMatchesActive
   const rows = (selectedGroup?.targets ?? []).map((target) => {
     const inactiveUsage = target.id
       ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
       : null
+    const limits = inactiveUsage?.rateLimits
     // Why: sign-in spawns a local `codex login`, so a remote-owned account can't be re-authed from this desktop.
     const showSignInAction =
       !hasActiveRuntimeEnvironment &&
-      !target.active &&
       target.id !== null &&
-      isUnavailableInactiveUsage(inactiveUsage?.rateLimits)
+      (target.active
+        ? activeSignInRequired && canSignInLocally
+        : isUnavailableInactiveUsage(limits) ||
+          (limits?.status === 'error' && isCodexUsageSignInRequired(limits)))
     return { target, inactiveUsage, showSignInAction }
   })
-  const unavailableUsageRows = rows.filter((row) => row.showSignInAction)
+  // The active row stays in place; only inactive rows move under "Usage unavailable".
+  const isUnavailableUsageRow = (row: (typeof rows)[number]): boolean =>
+    row.showSignInAction && !row.target.active
+  const unavailableUsageRows = rows.filter(isUnavailableUsageRow)
   const renderRow = ({
     target,
     inactiveUsage,
@@ -120,7 +164,12 @@ export function CodexSwitcherMenu({
     inactiveUsage: (typeof rows)[number]['inactiveUsage']
   ): React.ReactNode {
     if (active) {
-      return <AccountUsageGauge limits={codex} isFetching={codex.status === 'fetching'} />
+      return (
+        <AccountUsageGauge
+          limits={displayedCodex}
+          isFetching={displayedCodex.status === 'fetching'}
+        />
+      )
     }
     if (inactiveUsage?.isFetching && !inactiveUsage.rateLimits) {
       return <InlineUsageSkeleton />
@@ -132,9 +181,7 @@ export function CodexSwitcherMenu({
 
   return (
     <ProviderDetailsMenu
-      provider={codex}
-      compact={compact}
-      iconOnly={iconOnly}
+      provider={displayedCodex}
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}
       ariaLabel={t(
@@ -142,13 +189,27 @@ export function CodexSwitcherMenu({
         'Open Codex details and account switcher'
       )}
       variant="account"
+      usageSignInHint={
+        activeSignInRequired
+          ? canSignInLocally
+            ? t('accounts.codex.usageSignInMessage', 'Sign in to see usage.')
+            : t('accounts.codex.usageSignInSettingsMessage', 'Open Settings → Accounts to sign in.')
+          : undefined
+      }
       accountLabel={
-        activeTarget?.label ??
-        t('auto.components.status.bar.StatusBar.c676918adc', 'System default')
+        rosterKnown
+          ? (activeTarget?.label ??
+            t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
+          : undefined
       }
       panelFooter={
-        resetCreditCount !== null ? (
+        !signInRequired && resetCreditCount !== null ? (
           <CodexResetCredits
+            unsupportedRuntime={
+              owner.wslHostDistro !== null || selectedGroup?.runtimeTarget.runtime === 'wsl'
+                ? 'wsl'
+                : undefined
+            }
             resetCreditCount={resetCreditCount}
             resetCreditExpiry={resetCreditExpiry}
             canRedeemReset={canRedeemReset}
@@ -169,10 +230,10 @@ export function CodexSwitcherMenu({
         ) : undefined
       }
       topContent={
-        !hasActiveRuntimeEnvironment ? (
+        !hasActiveRuntimeEnvironment && owner.wslHostDistro === null ? (
           <AccountRuntimeToggle
             groups={switchGroups}
-            value={selectedGroup?.key ?? selectedRuntimeKey}
+            value={selectedRuntimeKey}
             onChange={(group) => void handleSelectRuntime(group)}
             ariaLabel={t('auto.components.status.bar.StatusBar.38b5647724', 'Codex usage runtime')}
           />
@@ -197,31 +258,37 @@ export function CodexSwitcherMenu({
             }
           : {})}
       />
-      {open ? <CodexRestartStatusPrompt /> : null}
-      <AccountSwitchSection
-        heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
-        targets={selectedGroup?.targets ?? []}
-        panelShowsActiveAccount
-        onOpenSettings={() => {
-          openSettingsTarget({
-            pane: 'accounts',
-            repoId: null,
-            sectionId: 'accounts-codex',
-            hostScope: ownerUsage.owner.target
-          })
-          openSettingsPage()
-        }}
-      >
-        {rows.filter((row) => !row.showSignInAction).map(renderRow)}
-        {unavailableUsageRows.length > 0 ? (
-          <>
-            <DropdownMenuLabel className="mt-1">
-              {t('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')}
-            </DropdownMenuLabel>
-            {unavailableUsageRows.map(renderRow)}
-          </>
-        ) : null}
-      </AccountSwitchSection>
+      {/* Why: restarting sessions onto a login that needs signing in again would break them. */}
+      {open && !signInRequired && displayedCodex.status !== 'fetching' ? (
+        <CodexRestartStatusPrompt />
+      ) : null}
+      {/* Why: until the host lists its accounts, the empty roster's only row would claim "System default". */}
+      {rosterKnown ? (
+        <AccountSwitchSection
+          heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
+          targets={selectedGroup?.targets ?? []}
+          panelShowsActiveAccount={!(activeSignInRequired && canSignInLocally)}
+          onOpenSettings={() => {
+            openSettingsTarget({
+              pane: 'accounts',
+              repoId: null,
+              sectionId: 'accounts-codex',
+              hostScope: owner.target
+            })
+            openSettingsPage()
+          }}
+        >
+          {rows.filter((row) => !isUnavailableUsageRow(row)).map(renderRow)}
+          {unavailableUsageRows.length > 0 ? (
+            <>
+              <DropdownMenuLabel className="mt-1">
+                {t('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')}
+              </DropdownMenuLabel>
+              {unavailableUsageRows.map(renderRow)}
+            </>
+          ) : null}
+        </AccountSwitchSection>
+      ) : null}
     </ProviderDetailsMenu>
   )
 }

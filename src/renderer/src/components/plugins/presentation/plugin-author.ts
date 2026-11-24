@@ -1,5 +1,9 @@
-import type { PluginListEntry } from '../list/plugin-list-entries'
+// @protected-copy
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import { pluginEntryManagingTeams, type PluginListEntry } from '../list/plugin-list-entries'
 import { LOCAL_PLUGIN_PUBLISHER } from '../../../../../shared/plugins/installation/plugin-publisher-derivation'
+import { sanitizePluginDisplayText } from '../../../../../shared/plugins/manifest/plugin-display-text'
 
 export type PluginAuthor = {
   publisher: string
@@ -7,9 +11,31 @@ export type PluginAuthor = {
   provenance: 'catalog' | 'git' | 'manifest' | 'unknown'
 }
 
-/** Publisher labels describe their source, never a verified account identity. */
-export function pluginAuthor(entry: PluginListEntry): PluginAuthor | null {
-  const publisher = entry.publisher
+function managingTeamNames(teams: string[]): string {
+  return [
+    ...new Set(teams.map((name) => sanitizePluginDisplayText(name).trim()).filter(Boolean))
+  ].join(', ')
+}
+
+export function managedCatalogLabel(teams: string[], t: Translate): string {
+  const names = managingTeamNames(teams)
+  return names
+    ? t('plugins.catalog.managedByNamedTeams', 'Managed by {{teams}}', { teams: names })
+    : t('plugins.catalog.managedByTeam', 'Managed by your team')
+}
+
+export function pluginDisplayPublisher(entry: PluginListEntry, t: Translate): string | null {
+  const teams = pluginEntryManagingTeams(entry)
+  return teams
+    ? managingTeamNames(teams) || t('plugins.catalog.teamPublisher', 'Your team')
+    : entry.publisher
+}
+
+export function pluginAuthor(
+  entry: PluginListEntry,
+  t: Translate = translate
+): PluginAuthor | null {
+  const publisher = pluginDisplayPublisher(entry, t)
   if (!publisher || publisher === LOCAL_PLUGIN_PUBLISHER) {
     return null
   }
@@ -59,12 +85,13 @@ export function pluginsBySamePublisher(
   if (!author || !catalogId) {
     return []
   }
+  const managed = Boolean(pluginEntryManagingTeams(entry))
   const seen = new Set([entry.pluginKey])
   return [...entries.installed, ...entries.available].filter((other) => {
     if (
       seen.has(other.pluginKey) ||
       pluginAuthorCatalogId(other) !== catalogId ||
-      other.publisher !== author.publisher
+      (managed ? !pluginEntryManagingTeams(other) : other.publisher !== entry.publisher)
     ) {
       return false
     }

@@ -10,9 +10,11 @@ import { BotLaunchSchema } from './bots/bot-launch'
 import { BotTidyUpSchema } from './bots/bot-tidy-up'
 import { BotOfferAnswerSchema } from './bots/bot-offer-answers'
 import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
+import { BotAvatarColorSchema } from './bots/bot-avatar-color'
+import { BotStoredOutfitSchema } from './bots/bot-avatar-outfit'
 
 /** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
-export const BOT_HELD_BACK_AGENTS = ['opencode2', 'copilot', 'cursor', 'kimi', 'hermes'] as const
+export const BOT_HELD_BACK_AGENTS = [] as const
 
 /** Bots run in a native chat; every native-chat agent but the held-back ones. */
 export const BOT_AGENTS = [
@@ -22,8 +24,49 @@ export const BOT_AGENTS = [
   'opencode',
   'omp',
   'pi',
-  'antigravity'
+  'antigravity',
+  'cursor',
+  'hermes',
+  'copilot',
+  'opencode2',
+  'kimi',
+  'kiro',
+  'aug',
+  'goose',
+  'kilo',
+  'mimo-code',
+  'gemini',
+  'droid',
+  'qwen-code',
+  'cline',
+  'devin',
+  'codebuddy'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
+
+/** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
+const BOT_AGENTS_OLDER_BUILDS_READ: ReadonlySet<string> = new Set([
+  'claude',
+  'codex',
+  'grok',
+  'opencode',
+  'omp',
+  'pi',
+  'antigravity'
+])
+
+/** Bots saved where an older build, after a rollback, cannot drop them: it ignores keys it does not know. */
+export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
+  readable: Bot[]
+  newer: Bot[]
+} {
+  const readable: Bot[] = []
+  const newer: Bot[] = []
+  for (const bot of bots) {
+    const side = BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent) ? readable : newer
+    side.push(bot)
+  }
+  return { readable, newer }
+}
 
 export function isBotAgent(agent: string): agent is BotAgent {
   return BOT_AGENTS.some((entry) => entry === agent)
@@ -69,7 +112,9 @@ export const BotMemberSchema = z.object({
   /** The service's workspace the id belongs to: a Linear workspace, or a Slack team. A Slack entry without one is in the bot's first Slack workspace. */
   workspaceId: z.string().min(1).optional(),
   /** The service's picture of them, as it gave it when they were added; Slack's only. */
-  avatarUrl: optionalConnectorAvatarUrl
+  avatarUrl: optionalConnectorAvatarUrl,
+  /** `app`: another Slack app's bot user, not a person. Absent for a person; an unknown kind reads as absent, so a newer one never voids the bot. */
+  kind: z.literal('app').optional().catch(undefined)
 })
 
 export const BotNotificationsSchema = z.object({
@@ -111,6 +156,10 @@ export const BotItemsStaleSchema = z.union([
   z.literal('never')
 ])
 export type BotItemsStale = z.infer<typeof BotItemsStaleSchema>
+/** Its choices in order, as Settings offers them. */
+export const BOT_ITEMS_STALE_CHOICES: readonly BotItemsStale[] = BotItemsStaleSchema.options.map(
+  (option) => option.value
+)
 
 export const BotSchema = z.object({
   id: z.string().min(1),
@@ -123,6 +172,18 @@ export const BotSchema = z.object({
   folderWorkspaceId: z.string().min(1),
   agent: z.enum(BOT_AGENTS),
   avatar: z.string().nullable(),
+  /** The mascot's tile color; absent or null, its own sky blue. Older hosts drop it. */
+  avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
+  /** What the mascot wears; absent or null, nothing. Kept as stored: one this version doesn't know draws
+   *  as none (wornBotOutfit) but survives a save, for the version that added it. */
+  avatarOutfit: BotStoredOutfitSchema.nullable().optional().catch(undefined),
+  /** Mascot replaced by an automatic upload at the current revision. */
+  generatedOverMascot: z.string().optional().catch(undefined),
+  /** Bumped by every picture, color or outfit write, so a write can require that none landed since it was
+   *  asked for (bots.avatar.upload `expectedAvatarRevision`). Absent is 0; older hosts drop it. */
+  avatarRevision: z.number().int().nonnegative().optional().catch(undefined),
+  /** Rotated when an explicit picture choice repairs a lost revision history. */
+  avatarRevisionEpoch: z.uuid().optional().catch(undefined),
   paused: z.boolean(),
   /** An owner's override; absent, the bot's chats start like any native chat. */
   permissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),
@@ -342,7 +403,8 @@ export function botFolderName(botName: string): string {
   const slug = botName
     .normalize('NFKD')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
+    // Why: NFKD leaves an accent as a combining mark; drop it so it doesn't split the word.
+    .replace(/(\p{M}+)|[^a-z0-9]+/gu, (_run, marks) => (marks ? '' : '-'))
     .replace(/^-+|-+$/g, '')
     .slice(0, 40)
     .replace(/-+$/, '')

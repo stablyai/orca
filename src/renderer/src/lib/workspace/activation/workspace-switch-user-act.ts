@@ -61,9 +61,3 @@ export function takeRecentWorkspaceSwitchWake(workspaceKey: string, consumer: st
     withinMs: WORKSPACE_SWITCH_MOUNT_WINDOW_MS
   })
 }
-
-export function resetWorkspaceSwitchUserActsForTests(): void {
-  lastSwitchAt.clear()
-  switchCounts.clear()
-  takenCounts.clear()
-}

@@ -21,8 +21,17 @@ import {
   hasPairedPageHost,
   openBrowserUrlOnClient
 } from '../../runtime/browser/client-pages/browser-client-page-opening'
-import { opensOnPairedDesktop } from '../../runtime/browser/client-pages/server-agent-tab-placement'
+import {
+  opensOnPairedDesktop,
+  pairedDesktopTabMismatch
+} from '../../runtime/browser/client-pages/server-agent-tab-placement'
+import { hiddenEngineTabRefusal } from './orcad-hidden-engine-refusal'
 import { cloneBrowserClientPage } from '../../runtime/browser/client-pages/browser-client-page-clone'
+import {
+  orcadBrowserProfileId,
+  orcadProfileLabel,
+  resolveTargetClientPage
+} from './orcad-client-page-profiles'
 import {
   BrowserClientPageQueries,
   yieldClientPageSelection,
@@ -121,29 +130,30 @@ export function orcadClientPageCommand(
   if (name === 'browserTabProfileClone') {
     return async (...args: Parameters<RuntimeBrowserCommands['browserTabProfileClone']>) => {
       const params = args[0]
-      const pages = host.getRuntimeBrowserPageRegistry()
-      const workspaceId = params.worktree
-        ? (await host.resolveBrowserWorkspace(params.worktree)).id
-        : undefined
-      const source = params.page
-        ? pages.getPage(params.page)
-        : workspaceId !== undefined
-          ? pages.listPages(workspaceId).find((page) => page.active)
-          : undefined
+      const source = await resolveTargetClientPage(host, params)
       if (!source) {
         return forward(args)
-      }
-      if (workspaceId !== undefined && source.workspaceId !== workspaceId) {
-        throw new BrowserError(
-          'browser_tab_not_found',
-          `Browser page ${source.browserPageId} was not found in this worktree`
-        )
       }
       const profile = orcadProfileLabel(orcadBrowserProfileId(params.profileId))
       const created = await cloneBrowserClientPage(host, source, profile.id)
       return {
         browserPageId: created.browserPageId,
         sourceBrowserPageId: source.browserPageId,
+        profileId: profile.id,
+        profileLabel: profile.label
+      }
+    }
+  }
+  if (name === 'browserTabSetProfile') {
+    return async (...args: Parameters<RuntimeBrowserCommands['browserTabSetProfile']>) => {
+      const page = await resolveTargetClientPage(host, args[0])
+      if (!page) {
+        return forward(args)
+      }
+      // Desktop pages here are always on the default profile, so the only valid switch is a no-op.
+      const profile = orcadProfileLabel(orcadBrowserProfileId(args[0].profileId))
+      return {
+        browserPageId: page.browserPageId,
         profileId: profile.id,
         profileLabel: profile.label
       }
@@ -193,20 +203,29 @@ function createTab(
     }
     return created
   }
-  // Engine tabs reach no client, so this host's own agents open on a paired desktop when one can host.
+  // Engine tabs reach no client: this host's own agents get one only by asking (--headless).
+  const refuseEngine =
+    hasEngine && !(params?.placement || caller?.pairedDeviceId || caller?.opensPageLink)
+  const engineOr = (mismatch: string | null): (() => Promise<unknown>) =>
+    refuseEngine ? () => Promise.reject(hiddenEngineTabRefusal(mismatch)) : createOnEngine
   // The engine keeps profiles orcad cannot describe to a desktop.
-  const engineOnlyProfile =
-    hasEngine && params?.profileId !== undefined && params.profileId !== DEFAULT_BROWSER_PROFILE_ID
-  if (!engineOnlyProfile && opensOnPairedDesktop(host, params, caller, hasEngine)) {
+  if (hasEngine && params?.profileId && params.profileId !== DEFAULT_BROWSER_PROFILE_ID) {
+    return engineOr(`Browser profile ${params.profileId} exists only in this host's own browser.`)()
+  }
+  const mismatch = pairedDesktopTabMismatch(params)
+  // An older desktop can't be asked, but one already hosting here can still take the tab.
+  const asked = opensOnPairedDesktop(host, params, caller, hasEngine)
+  if (asked || (refuseEngine && mismatch === null && hasPairedPageHost(host))) {
+    const fallback = engineOr(null)
     return createBrowserPageOnPairedHost(
       host,
       params ?? {},
       orcadBrowserProfileId(params?.profileId),
-      hasEngine ? async () => requireCreatedPage(await createOnEngine()) : undefined,
+      hasEngine && asked ? async () => requireCreatedPage(await fallback()) : undefined,
       caller?.signal
     )
   }
-  return createOnEngine()
+  return engineOr(mismatch)()
 }
 
 function requireCreatedPage(value: unknown): { browserPageId: string } {
@@ -275,21 +294,6 @@ function callTabQuery(
         index: typeof params.index === 'number' ? params.index : undefined,
         focus: typeof params.focus === 'boolean' ? params.focus : undefined
       })
-  }
-}
-
-// orcad lacks a registry to describe non-default profiles to the desktop.
-function orcadBrowserProfileId(profileId: string | undefined): string {
-  if (profileId !== undefined && profileId !== DEFAULT_BROWSER_PROFILE_ID) {
-    throw new BrowserError('invalid_argument', `Browser profile ${profileId} was not found`)
-  }
-  return DEFAULT_BROWSER_PROFILE_ID
-}
-
-function orcadProfileLabel(browserProfileId: string): { id: string; label: string } {
-  return {
-    id: browserProfileId,
-    label: browserProfileId === DEFAULT_BROWSER_PROFILE_ID ? 'Default' : browserProfileId
   }
 }
 

@@ -1,7 +1,6 @@
 // Resolve readVisual scratch roots from host records; clients supply only session id/bare name.
 // Older hosts lack the method (mobile may see forbidden); clients show unavailable.
 
-import { assertBotGroupSessionAccess } from '../../../../../bots/bot-group-session-access'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import {
   ReadVisualParams,
@@ -19,7 +18,6 @@ export const STRUCTURED_AGENT_SESSION_VISUAL_METHODS = [
     permission: 'workspace',
     params: ReadVisualParams,
     handler: async (params, ctx): Promise<AgentSessionReadVisualResult> => {
-      assertBotGroupSessionAccess(ctx.runtime, params.sessionId, ctx.caller, true)
       const host = await requireInstalledStructuredHost(ctx)
       const record = host.deps.store.getConversation(params.sessionId)
       if (!record) {

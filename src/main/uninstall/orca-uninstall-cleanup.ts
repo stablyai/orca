@@ -1,6 +1,9 @@
 import { access, readdir, rm, rmdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
+import {
+  getAgentHookConfigPaths,
+  type AgentHookInstallStatus
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { isManagedAgentHookTarget } from '../../shared/agent-hook-listener/configuration/managed-agent-hook-targets'
 import type { CliInstallStatus } from '../../shared/cli/cli-install-types'
 import type { ServeServiceRun } from '../../shared/remote-runtime/serve-supervisor/serve-service-unit-removal'
@@ -64,7 +67,7 @@ export async function buildOrcaUninstallPlan(host: OrcaUninstallHost): Promise<O
     .filter((status) => status.managedHooksPresent)
     .map((status) => ({
       agent: status.agent,
-      paths: status.configPath ? [describeOrcaUninstallPath(status.configPath, host)] : [],
+      paths: getAgentHookConfigPaths(status).map((path) => describeOrcaUninstallPath(path, host)),
       state: 'present',
       detail: null
     }))

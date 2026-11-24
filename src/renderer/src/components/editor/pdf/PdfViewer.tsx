@@ -16,6 +16,8 @@ import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { useTranslate } from '@/i18n/use-translate'
 import { createPdfDocumentLoader, type PdfDocumentLoader } from './pdf-document-loader'
 import { createPdfViewerSession } from './pdf-viewer-session'
+import { useViewerPendingFocus, type ViewerFocusPane } from '../commands/use-viewer-pending-focus'
+import { usePdfFormEditing } from './use-pdf-form-editing'
 import {
   applyPdfScalePreference,
   stepPdfScalePreference,
@@ -44,13 +46,18 @@ type PdfViewerProps = {
   preferenceKey?: string | null
   // Omit scroll memory for diff/conflict surfaces that can mount several viewers on the same path.
   scrollCacheKey?: string | null
+  /** The writable tab whose form fields this viewer fills in; without it forms are read-only. */
+  editFileId?: string | null
+  /** The editor pane this viewer fills; it takes the focus an open hands to that pane. */
+  focusPane?: ViewerFocusPane | null
 }
 
 export default function PdfViewer(props: PdfViewerProps): JSX.Element {
   const identity = JSON.stringify([
     props.filePath,
     props.preferenceKey ?? null,
-    props.scrollCacheKey ?? null
+    props.scrollCacheKey ?? null,
+    props.editFileId ?? null
   ])
   return <PdfDocumentViewer key={identity} {...props} />
 }
@@ -61,13 +68,21 @@ function PdfDocumentViewer({
   byteSize,
   filePath,
   preferenceKey = null,
-  scrollCacheKey = null
+  scrollCacheKey = null,
+  editFileId = null,
+  focusPane = null
 }: PdfViewerProps): JSX.Element {
   const t = useTranslate()
   const rootRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerDivRef = useRef<HTMLDivElement>(null)
+  useViewerPendingFocus(focusPane, containerRef)
   const loaderRef = useRef<PdfDocumentLoader | null>(null)
+  const {
+    attach: attachFormEditing,
+    load: loadFormDocument,
+    reset: resetFormEditing
+  } = usePdfFormEditing(editFileId, rootRef, loaderRef)
   const [pdfError, setPdfError] = useState<string | null>(null)
   const [findOpen, setFindOpen] = useState(false)
   const [scale, setScale] = useState(1)
@@ -108,11 +123,13 @@ function PdfDocumentViewer({
     const loader = createPdfDocumentLoader({
       onError: setPdfError,
       display: (doc) => {
+        const formDraft = attachFormEditing(doc)
         const session = createPdfViewerSession({
           container,
           viewerDiv,
           doc,
           scrollCacheKey,
+          formsEditable: formDraft !== null,
           getScalePreference: () => scalePreferenceRef.current,
           scaleBounds: SCALE_BOUNDS,
           onScaleChanging: setScale,
@@ -130,20 +147,29 @@ function PdfDocumentViewer({
             pdfViewerRef.current = null
             setFindOpen(false)
           }
+          return formDraft?.detach()
         }
       }
     })
     loaderRef.current = loader
     return () => {
       loaderRef.current = null
+      resetFormEditing()
       loader.dispose()
     }
-  }, [filePath, preferenceKey, recordScalePreference, scrollCacheKey])
+  }, [
+    attachFormEditing,
+    filePath,
+    preferenceKey,
+    recordScalePreference,
+    resetFormEditing,
+    scrollCacheKey
+  ])
 
   useEffect(() => {
-    loaderRef.current?.load(src ? { url: src, length: byteSize } : { base64: cleanedContent })
+    loadFormDocument(src ? { url: src, length: byteSize } : { base64: cleanedContent })
     // Identical bytes still require reload when ownership changes.
-  }, [byteSize, cleanedContent, filePath, preferenceKey, scrollCacheKey, src])
+  }, [byteSize, cleanedContent, filePath, loadFormDocument, preferenceKey, scrollCacheKey, src])
 
   const closeFindBar = useCallback(() => {
     const eventBus = eventBusRef.current
@@ -201,13 +227,15 @@ function PdfDocumentViewer({
         <div style={{ all: 'revert' }}>
           <div
             ref={containerRef}
+            // Why: explicit so an open can focus it for PageUp/PageDown; 0 keeps Chromium's scroller Tab stop.
+            tabIndex={0}
             style={{
               position: 'absolute',
               inset: '0',
               overflow: 'auto',
               background: 'var(--pdf-viewer-bg, #e4e4e7)'
             }}
-            className="scrollbar-editor dark:[--pdf-viewer-bg:#18181b]"
+            className="scrollbar-editor outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid dark:[--pdf-viewer-bg:#18181b]"
           >
             <div ref={viewerDivRef} className="pdfViewer" />
           </div>
