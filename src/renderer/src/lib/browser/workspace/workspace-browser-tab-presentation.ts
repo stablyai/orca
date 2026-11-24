@@ -110,8 +110,8 @@ export function openFailureDetail(error: unknown): string | null {
   switch (display?.kind) {
     case 'host-error':
       return translate(
-        'auto.lib.workspace.browser.tab.open.failure.hostError',
-        'Host error · {{value0}} · {{value1}}',
+        'auto.lib.workspace.browser.tab.open.failure.stageError',
+        'Error · {{value0}} · {{value1}}',
         {
           value0: display.stage,
           // Logs keep other_code; a user can't act on it, so the toast says unknown.
@@ -120,8 +120,8 @@ export function openFailureDetail(error: unknown): string | null {
       )
     case 'host-unavailable':
       return translate(
-        'auto.lib.workspace.browser.tab.open.failure.hostUnavailable',
-        "Workspace's computer isn't connected."
+        'auto.lib.workspace.browser.tab.open.failure.hostNotFound',
+        "Workspace's computer wasn't found."
       )
     case 'link-blocked':
       return translate(
@@ -130,7 +130,7 @@ export function openFailureDetail(error: unknown): string | null {
       )
     case 'not-web-link':
       return translate('auto.lib.workspace.browser.tab.open.failure.notWebLink', 'Not a web link.')
-    default:
+    case undefined:
       return null
   }
 }

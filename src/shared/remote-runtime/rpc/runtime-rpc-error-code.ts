@@ -58,24 +58,27 @@ export function hasRuntimeRpcErrorCode(error: unknown, expectedCode: string): bo
 
 const GENERIC_RUNTIME_ERROR_CODE = 'runtime_error'
 
+function codeOf(value: unknown): unknown {
+  return typeof value === 'object' && value !== null && 'code' in value ? value.code : undefined
+}
+
+function errorOf(value: unknown): unknown {
+  return typeof value === 'object' && value !== null && 'error' in value ? value.error : undefined
+}
+
 function structuredErrorCodes(error: unknown): string[] {
   const codes: string[] = []
   const seen = new Set<unknown>()
   let current = error
-  while (current && typeof current === 'object' && !seen.has(current)) {
+  while (typeof current === 'object' && current !== null && !seen.has(current)) {
     seen.add(current)
-    const nested: unknown = Reflect.get(current, 'error')
-    const response: unknown = Reflect.get(current, 'response')
-    const responseError: unknown =
-      response && typeof response === 'object' ? Reflect.get(response, 'error') : undefined
-    for (const holder of [current, nested, responseError]) {
-      const code: unknown =
-        holder && typeof holder === 'object' ? Reflect.get(holder, 'code') : undefined
+    const response = 'response' in current ? current.response : undefined
+    for (const code of [codeOf(current), codeOf(errorOf(current)), codeOf(errorOf(response))]) {
       if (typeof code === 'string') {
         codes.push(code)
       }
     }
-    current = Reflect.get(current, 'cause')
+    current = 'cause' in current ? current.cause : undefined
   }
   return codes
 }

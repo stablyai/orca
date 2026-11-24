@@ -2671,8 +2671,8 @@
               "urlFailed": "Unable to open URL.",
               "searchFailed": "Unable to search with {{value0}}.",
               "failure": {
-                "hostError": "Host error · {{value0}} · {{value1}}",
-                "hostUnavailable": "Workspace's computer isn't connected.",
+                "stageError": "Error · {{value0}} · {{value1}}",
+                "hostNotFound": "Workspace's computer wasn't found.",
                 "linkBlocked": "Link open was blocked.",
                 "notWebLink": "Not a web link."
               }
