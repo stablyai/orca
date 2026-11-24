@@ -27,6 +27,7 @@ import {
   resolveCodexConfigMirrorSourceDirectory
 } from './codex-config-mirror-source'
 import { mergeSystemCodexConfigIntoRuntime } from './codex-config-mirror-merge'
+import { applyGuestCarryForward } from './codex-config-guest-carry-forward'
 
 // Mirrored MCP environment tokens require owner-only writes.
 const RUNTIME_CONFIG_WRITE = { mode: 0o600 } as const
@@ -97,7 +98,8 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
     // Missing marketplace/plugin tables in later source configs now count as removals.
     mirroredRegistrations: true,
     mirroredMcpServers: mirrorResult.mirroredMcpServerNames,
-    mirroredMcpServerRoot: mirrorResult.mirroredMcpServerRoot
+    mirroredMcpServerRoot: mirrorResult.mirroredMcpServerRoot,
+    guestCarryForward: promotionPlan.guestCarryForward
   })
   return { ran: true, complete }
 }
@@ -254,10 +256,11 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
         }
   }
 
+  const guestConfig = applyGuestCarryForward(rawSystemConfig, promotionPlan.guestCarryForward)
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath, systemConfigDir)
   if (!runtimeConfigExists) {
     const freshRuntimeConfig = applyRuntimeOwnedConfig(
-      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir, runtimeHomePath),
+      prepareSystemConfigForFreshRuntimeMirror(guestConfig, sourceConfigDir, runtimeHomePath),
       runtimeHomePath,
       null
     )
@@ -282,7 +285,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
 
   const daemonGuarded = codexDaemonSocketPathExceedsLimit(runtimeHomePath)
   const systemConfig = guardSystemConfigForRuntimeMerge(
-    prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir, runtimeHomePath),
+    prepareSystemConfigForRuntimeMirror(guestConfig, sourceConfigDir, runtimeHomePath),
     runtimeHomePath,
     daemonGuarded
   )

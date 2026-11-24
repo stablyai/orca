@@ -157,6 +157,39 @@ describe('managed Codex config for a WSL distro config', () => {
     expect(readRuntimeConfig()).toMatch(/^daemon_auto_start = false # orca:/m)
   })
 
+  it('keeps edits pending in a managed copy from before the update as Orca lines', () => {
+    const original =
+      'model = "gpt-5"\n\n[plugins."docs@market"]\nenabled = true\n\n[mcp_servers.docs]\nurl = "https://docs.example"\n'
+    writeSystemConfig(original)
+    // The previous version mirrored this home and left later tab edits for its next pass.
+    syncSystemConfigIntoManagedCodexHome()
+    simulateCodexSettingWrite('model', '"o4"')
+    writeFileSync(
+      runtimeConfigPath(),
+      readRuntimeConfig()
+        .replace('enabled = true', 'enabled = false')
+        .concat('\n[plugins."ponytail@ponytail"]\nenabled = true\n'),
+      'utf-8'
+    )
+    wslTestState.wslPath = systemConfigPath()
+
+    syncSystemConfigIntoManagedCodexHome()
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toBe(original)
+    expect(readRuntimeConfig()).toMatch(/^model = "o4" # orca: /m)
+    expect(readRuntimeConfig()).toMatch(/^enabled = false # orca: /m)
+    expect(readRuntimeConfig().match(/\[plugins\."ponytail@ponytail"\]/g)).toHaveLength(1)
+    // A later tab change is still replaced; an edit to the distro file wins over the kept line.
+    simulateCodexSettingWrite('model', '"o3"')
+    syncSystemConfigIntoManagedCodexHome()
+    expect(readRuntimeConfig()).toMatch(/^model = "o4" # orca: /m)
+    writeSystemConfig(original.replace('"gpt-5"', '"gpt-6"'))
+    syncSystemConfigIntoManagedCodexHome()
+    expect(readRuntimeConfig()).toMatch(/^model = "gpt-6"$/m)
+    expect(readRuntimeConfig()).toMatch(/^enabled = false # orca: /m)
+  })
+
   it('leaves an unchanged managed copy untouched on regeneration', () => {
     writeSystemConfig(
       'model = "gpt-5"\n\n[hooks.state."/home/u/.codex/hooks.json:stop:0:0"]\ntrusted_hash = "sha256:abc"\n\n[projects."/home/u/repo"]\ntrust_level = "trusted"\n'

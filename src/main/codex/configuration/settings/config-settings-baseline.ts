@@ -6,6 +6,11 @@ import { join } from 'node:path'
 import { readAgentStateFileSync, readAgentStateJsonFileSync } from '../agent-state-file-reader'
 import { observeFilePublication } from '../../../filesystem/file-content-observation'
 import { assertGuardedFileCurrent } from '../../../filesystem/concurrent-file-edit-guard'
+import {
+  EMPTY_GUEST_CARRY_FORWARD,
+  type CodexGuestCarryForward
+} from './codex-config-guest-carry-forward'
+import type { CodexRegistrationPromotion } from './config-plugin-registration-promotion'
 
 const SETTINGS_BASELINE_FILE = '.orca-config-settings-baseline.json'
 
@@ -22,6 +27,13 @@ export type CodexSettingsBaseline = {
   /** MCP server names the last mirror copied from the canonical source. */
   mcpServers: ReadonlySet<string>
   mcpServerRoot: boolean
+  /** Set once a WSL distro config regenerated this home; absent on homes an older Orca mirrored. */
+  guestCarryForward?: CodexGuestCarryForward
+}
+
+type StoredGuestCarryForward = {
+  settings?: Record<string, { raw: string; system: string | null }>
+  registrations?: { promotion: CodexRegistrationPromotion; system: string | null }[]
 }
 
 type StoredSettingsBaseline = {
@@ -31,6 +43,7 @@ type StoredSettingsBaseline = {
   registrations?: Record<string, Record<string, string>>
   mcpServers?: string[]
   mcpServerRoot?: boolean
+  guestCarryForward?: StoredGuestCarryForward
 }
 
 /** Unreadable baselines stall the mirror; absent or invalid baselines can be rebuilt. */
@@ -85,11 +98,53 @@ function readParsedCodexSettingsBaseline(
       registrations: readStoredRegistrations(parsed.registrations),
       mcpServers: readStoredMcpServers(parsed.mcpServers),
       // Older mirrors owned the whole MCP root; retain that removal policy for one pass.
-      mcpServerRoot: parsed.mcpServers === undefined || parsed.mcpServerRoot === true
+      mcpServerRoot: parsed.mcpServers === undefined || parsed.mcpServerRoot === true,
+      ...(parsed.guestCarryForward !== undefined && {
+        guestCarryForward: readStoredGuestCarryForward(parsed.guestCarryForward)
+      })
     }
   } catch (error) {
     return isDefinitiveAbsence(error) || isRebuildableBaselineError(error) ? null : 'unreadable'
   }
+}
+
+// A malformed record still marks the home as regenerated, so nothing is carried twice.
+function readStoredGuestCarryForward(stored: unknown): CodexGuestCarryForward {
+  if (!isRecord(stored)) {
+    return EMPTY_GUEST_CARRY_FORWARD
+  }
+  const { settings, registrations } = stored
+  return {
+    settings: new Map(
+      Object.entries(isRecord(settings) ? settings : {}).filter(
+        (entry): entry is [string, { raw: string; system: string | null }] =>
+          isRecord(entry[1]) &&
+          typeof entry[1].raw === 'string' &&
+          (typeof entry[1].system === 'string' || entry[1].system === null)
+      )
+    ),
+    registrations: (Array.isArray(registrations) ? registrations : []).filter(
+      (entry) =>
+        isRecord(entry) &&
+        (typeof entry.system === 'string' || entry.system === null) &&
+        isStoredRegistrationPromotion(entry.promotion)
+    )
+  }
+}
+
+function isStoredRegistrationPromotion(value: unknown): value is CodexRegistrationPromotion {
+  if (!isRecord(value) || typeof value.key !== 'string') {
+    return false
+  }
+  return value.kind === 'append'
+    ? typeof value.block === 'string'
+    : value.kind === 'field' &&
+        typeof value.field === 'string' &&
+        (typeof value.raw === 'string' || value.raw === null)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
 function readStoredMcpServers(stored: string[] | undefined): ReadonlySet<string> {
@@ -144,6 +199,12 @@ export function writeCodexSettingsBaseline(
   }
   if (baseline.mcpServerRoot) {
     file.mcpServerRoot = true
+  }
+  if (baseline.guestCarryForward) {
+    file.guestCarryForward = {
+      settings: Object.fromEntries(baseline.guestCarryForward.settings),
+      registrations: [...baseline.guestCarryForward.registrations]
+    }
   }
   const baselinePath = getCodexSettingsBaselinePath(runtimeHomePath)
   const serialized = `${JSON.stringify(file, null, 2)}\n`
