@@ -3342,7 +3342,7 @@
         "c72a5fb234": "Restart",
         "d3e8a1f4b2": "Account switched",
         "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
-        "b6f0d2a913": "Orca's terminal service is out of date. Restart Orca, then retry.",
+        "e41c7a9d05": "Orca's terminal service is out of date. Restart it from Settings > Terminal, then retry.",
         "6133594b12": "Keep old account"
       },
       "FirstLaunchBanner": {
