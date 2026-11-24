@@ -81,4 +81,43 @@ describe('revoking a teammate’s share devices', () => {
       rmSync(userDataPath, { recursive: true, force: true })
     }
   })
+
+  it('closes their sockets even when the Relay cleanup cannot be queued', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-share-revoke-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    await server.start()
+    try {
+      const shares = server.getBotShareDevices()!
+      const terminate = vi.spyOn(server.getMobileSocketWiring()!, 'terminateDeviceConnections')
+      const desktop = await shares.add({
+        botId: 'bot-1',
+        accountId: 'acct-alice',
+        name: 'Alice',
+        scope: 'runtime',
+        devicePublicKeyB64: key()
+      })
+      await shares.setRelayBinding(desktop.deviceId, {
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        relayDeviceId: desktop.deviceId,
+        ownerIdentityKey: 'owner'
+      })
+      vi.spyOn(server.getRelayRevokeOutbox(), 'enqueue').mockImplementation(() => {
+        throw new Error('disk full')
+      })
+
+      expect(await server.revokeBotShareDevices('bot-1', 'acct-alice')).toBe(false)
+
+      // The row stays for a retry; the live socket does not.
+      expect(shares.get(desktop.deviceId)).not.toBeNull()
+      expect(terminate).toHaveBeenCalledWith(desktop.deviceId)
+    } finally {
+      await server.stop()
+      rmSync(userDataPath, { recursive: true, force: true })
+    }
+  })
 })
