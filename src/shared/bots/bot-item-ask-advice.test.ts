@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { botItemAskAdvice } from './bot-item-ask-advice'
+import { botItemAskAdvice, botItemAskAdviceWithout } from './bot-item-ask-advice'
 
 const options = [{ label: 'Merge now' }, { label: 'Wait for Monday' }]
 
@@ -18,13 +18,23 @@ describe('botItemAskAdvice', () => {
     const bare = { context, questions: [{ prompt: 'Merge without the review?', options: [] }] }
     expect(botItemAskAdvice({ ask: bare })?.codes).toContain('prose_choices')
   })
+})
 
-  it('takes long context as written: it may come from --comment-file', () => {
-    const context = Array.from({ length: 20 }, (_, i) => `Line ${i + 1} of the background.`).join(
-      '\n'
-    )
-    expect(
-      botItemAskAdvice({ ask: { context, questions: [{ prompt: 'Merge it?', options }] } })
-    ).toBeNull()
+describe('botItemAskAdviceWithout', () => {
+  const context = Array.from({ length: 8 }, (_, i) => `Line ${i + 1} of the background.`).join('\n')
+
+  it('drops the long-context tip and shows the next one in its place', () => {
+    const long = botItemAskAdvice({
+      ask: { context, questions: [{ prompt: 'Merge it?', options }] }
+    })
+    expect(long?.codes).toEqual(['long_context'])
+    expect(botItemAskAdviceWithout(long!, 'long_context')).toBeNull()
+
+    const withJargon = botItemAskAdvice({
+      ask: { context, questions: [{ prompt: 'Merge 3f9a2c7d1e4b5a6c?', options }] }
+    })!
+    const kept = botItemAskAdviceWithout(withJargon, 'long_context')
+    expect(kept?.codes).toEqual(['jargon'])
+    expect(kept?.tip).toContain('hash or ID')
   })
 })

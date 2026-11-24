@@ -3,7 +3,12 @@
 // fixed-width patterns; code, links and paths are skipped, since the bot marked or linked them.
 import type { BotItemAsk } from './bot-item-ask'
 
-export type BotItemAskAdviceCode = 'prose_choices' | 'no_question' | 'long_question' | 'jargon'
+export type BotItemAskAdviceCode =
+  | 'prose_choices'
+  | 'no_question'
+  | 'long_question'
+  | 'long_context'
+  | 'jargon'
 
 export type BotItemAskAdvice = {
   /** Every code that fired, in priority order. */
@@ -15,12 +20,16 @@ export type BotItemAskAdvice = {
 const SCAN_LIMIT = 8_000
 const QUESTION_LIMIT = 140
 const LEAD_LIMIT = 300
+const CONTEXT_LIMIT = 300
+const CONTEXT_LINES = 5
 const PIECE_LIMIT = 200
 
 const TIPS: Record<BotItemAskAdviceCode, string> = {
   prose_choices: 'Give the choices as --option values after --ask, so they show as quick replies.',
   no_question: 'Lead with the question itself, ending in a question mark.',
   long_question: 'Keep the question to one line under 140 characters; put the why in --comment.',
+  long_context:
+    'Keep --comment short or link to details; longer context fits in the same call with --comment-file instead.',
   jargon: 'Say in plain words what each hash or ID is, or link it instead.'
 }
 
@@ -29,6 +38,7 @@ const ORDER: readonly BotItemAskAdviceCode[] = [
   'prose_choices',
   'no_question',
   'long_question',
+  'long_context',
   'jargon'
 ]
 
@@ -247,6 +257,10 @@ export function botItemAskAdvice({
     if (prompts.some((prompt) => prompt.length > QUESTION_LIMIT)) {
       found.add('long_question')
     }
+    const lines = context.split('\n').filter((line) => line.trim()).length
+    if (context.length > CONTEXT_LIMIT || lines > CONTEXT_LINES) {
+      found.add('long_context')
+    }
     const options = ask.questions.flatMap((question) =>
       question.options.flatMap((option) => [option.label, option.detail ?? ''])
     )
@@ -278,7 +292,10 @@ export function botItemAskAdvice({
   if (hasJargon(words)) {
     found.add('jargon')
   }
-  const codes = ORDER.filter((code) => found.has(code))
+  return adviceOf(ORDER.filter((code) => found.has(code)))
+}
+
+function adviceOf(codes: BotItemAskAdviceCode[]): BotItemAskAdvice | null {
   if (codes.length === 0) {
     return null
   }
@@ -286,4 +303,18 @@ export function botItemAskAdvice({
     codes,
     tip: `Posted. Tip: ${TIPS[codes[0]!]} Set Needs you again if you rewrite it.`
   }
+}
+
+/** A host's advice without one code, the next code's tip showing if it led; e.g. `long_context` when
+ *  the CLI read the context from --comment-file, which the host cannot tell from --comment. */
+export function botItemAskAdviceWithout<T extends { codes: string[]; tip: string }>(
+  advice: T,
+  code: BotItemAskAdviceCode
+): T | BotItemAskAdvice | null {
+  if (advice.codes[0] !== code) {
+    return advice.codes.includes(code)
+      ? { ...advice, codes: advice.codes.filter((entry) => entry !== code) }
+      : advice
+  }
+  return adviceOf(ORDER.filter((entry) => entry !== code && advice.codes.includes(entry)))
 }
