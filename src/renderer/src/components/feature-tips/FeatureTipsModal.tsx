@@ -1,18 +1,25 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
 import { toast } from 'sonner'
-import { getDefaultVoiceSettings } from '../../../../shared/constants'
+import { getDefaultVoiceSettings } from '../../../../shared/orca-profiles/constants'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
-} from '@/lib/orchestration-setup-state'
-import { useAppStore } from '@/store'
+} from '@/components/orchestration/setup/orchestration-setup-state'
+import { useAppStore } from '@/store/index'
 import { ChatUiHereTipDialog } from './ChatUiHereTipDialog'
-import { AGENT_DEFAULT_SURFACE_SECTION_ID } from '../settings/agents-search'
+import { BotsTeammateTipDialog } from './BotsTeammateTipDialog'
+import { NewBotDialog } from '../bots/NewBotDialog'
+import { useBotsEnabled, useHasBot } from '@/lib/bot-catalog'
+import {
+  setAgentDefaultSurfaceFromFeatureTip,
+  openChatUiFeatureTipSettings
+} from './chat-ui-here-actions'
 import { CliSetupTipDialog } from './CliSetupTipDialog'
 import { CmdJPaletteTipDialog } from './CmdJPaletteTipDialog'
 import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
+import { localizeFeatureTip } from './feature-tip-copy'
 import {
   getOrcaCliFeatureTipTelemetrySource,
   trackChatUiFeatureTipAction,
@@ -21,20 +28,21 @@ import {
   trackOrcaCliFeatureTipSetupResult
 } from './feature-tip-telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { isWebClientLocation } from '@/lib/web-client-location'
-import { translate } from '@/i18n/i18n'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { useTranslate } from '@/i18n/use-translate'
+import { formatCliUserFacingDetail } from '@/lib/cli/cli-user-facing-detail'
 import { SessionSearchTipDialog } from './SessionSearchTipDialog'
 import { useSessionSearchTipSetup } from './use-session-search-tip-setup'
 import { VoiceDictationTipDialog } from './VoiceDictationTipDialog'
 
 export default function FeatureTipsModal(): JSX.Element | null {
+  const t = useTranslate()
   const activeModal = useAppStore((s) => s.activeModal)
   const closeModal = useAppStore((s) => s.closeModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const seenTipIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const chatUiLaunchTipVariant = useAppStore((s) => s.chatUiLaunchTipVariant) ?? 'none'
@@ -46,9 +54,13 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const setupRequestIdRef = useRef(0)
   const [primaryBusy, setPrimaryBusy] = useState(false)
   const [skillTerminalOpen, setSkillTerminalOpen] = useState(false)
+  // Outlives the tip, which closes as the New bot dialog opens.
+  const [newBotOpen, setNewBotOpen] = useState(false)
   const isOpen = activeModal === 'feature-tips'
-  const currentTip = getFeatureTipForModal({
+  const hasBot = useHasBot(useBotsEnabled() && !isWebClientLocation())
+  const rawTip = getFeatureTipForModal({
     cliInstalled: true,
+    hasBot,
     modalData,
     seenTipIds,
     featureInteractions,
@@ -56,6 +68,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
     settings,
     webClient: isWebClientLocation()
   })
+  const currentTip = rawTip ? localizeFeatureTip(rawTip) : null
   const sessionSearchSetup = useSessionSearchTipSetup({
     dialogOpen: isOpen && currentTip?.id === 'agent-session-search'
   })
@@ -118,7 +131,12 @@ export default function FeatureTipsModal(): JSX.Element | null {
     openSettingsPage()
   }
 
-  const stayInTerminal = (): void => {
+  const handleTerminalChoice = async (): Promise<void> => {
+    if (chatUiLaunchTipVariant === 'chat-ui-on') {
+      handleSkip()
+      await setAgentDefaultSurfaceFromFeatureTip('terminal')
+      return
+    }
     trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'stay_in_terminal')
     handleSkip()
   }
@@ -127,13 +145,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
     trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'open_settings')
     markCurrentTipSeen()
     closeModal()
-    openSettingsTarget({
-      pane: 'agents',
-      repoId: null,
-      hostScope: { kind: 'local' },
-      sectionId: AGENT_DEFAULT_SURFACE_SECTION_ID
-    })
-    openSettingsPage()
+    openChatUiFeatureTipSettings()
   }
 
   const enableOrchestrationSkillSetup = (): void => {
@@ -155,18 +167,12 @@ export default function FeatureTipsModal(): JSX.Element | null {
           trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'dismissed')
           break
         }
-        try {
-          // Only the default moves; an agent the user set for itself keeps its own choice.
-          await updateSettingsOrThrow({ agentDefaultSurface: 'chat' })
-          trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'use_chat_ui')
-        } catch {
-          toast.error(
-            translate(
-              'featureTips.chatUiHere.saveFailed',
-              'Could not turn on Chat UI. Choose Chat in Settings → Agents.'
-            )
-          )
-        }
+        await setAgentDefaultSurfaceFromFeatureTip('chat')
+        break
+      }
+      case 'create-bot': {
+        closeModal()
+        setNewBotOpen(true)
         break
       }
       case 'learn-cmd-j-palette': {
@@ -223,7 +229,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
             }
             enableOrchestrationSkillSetup()
             toast.success(
-              translate(
+              t(
                 'auto.components.feature.tips.FeatureTipsModal.ce13a742d0',
                 'Registered `orca` in PATH.'
               )
@@ -237,14 +243,14 @@ export default function FeatureTipsModal(): JSX.Element | null {
             return
           }
           toast.warning(
-            translate(
+            t(
               'auto.components.feature.tips.FeatureTipsModal.1da82af45b',
               'Orca CLI needs attention'
             ),
             {
               description:
-                result.status.detail ??
-                translate(
+                formatCliUserFacingDetail(result.status.detail) ||
+                t(
                   'auto.components.feature.tips.FeatureTipsModal.d1a86c7eb5',
                   'Open Settings to finish CLI setup.'
                 )
@@ -256,7 +262,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
           const message =
             error instanceof Error
               ? error.message
-              : translate(
+              : t(
                   'auto.components.feature.tips.FeatureTipsModal.cliInstallFailed',
                   'Failed to install Orca CLI.'
                 )
@@ -270,7 +276,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
             }
             enableOrchestrationSkillSetup()
             toast.info(
-              translate(
+              t(
                 'auto.components.feature.tips.FeatureTipsModal.53905bd076',
                 'Development preview: opening skills setup terminal.'
               )
@@ -281,7 +287,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
           trackOrcaCliFeatureTipSetupResult(telemetrySource, 'failed')
           if (canApplySetupResult()) {
-            toast.error(message)
+            toast.error(formatCliUserFacingDetail(message) || message)
           }
         } finally {
           if (canApplySetupResult()) {
@@ -290,6 +296,10 @@ export default function FeatureTipsModal(): JSX.Element | null {
         }
       }
     }
+  }
+
+  if (newBotOpen) {
+    return <NewBotDialog open onOpenChange={setNewBotOpen} />
   }
 
   if (!isOpen || !currentTip) {
@@ -319,10 +329,25 @@ export default function FeatureTipsModal(): JSX.Element | null {
         open={isOpen}
         tip={currentTip}
         variant={chatUiLaunchTipVariant}
+        swapButtons={
+          settings?.telemetry?.chatUiLaunchTipButtonEmphasis === 'swapped' ||
+          settings?.telemetry?.chatUiLaunchTipCohort === 'treatment-swapped-buttons'
+        }
         onOpenChange={handleOpenChange}
         onPrimaryAction={() => void handlePrimaryAction()}
-        onSkip={stayInTerminal}
+        onSkip={() => void handleTerminalChoice()}
         onSettingsClick={openAgentSettings}
+      />
+    )
+  }
+
+  if (currentTip.action === 'create-bot') {
+    return (
+      <BotsTeammateTipDialog
+        open={isOpen}
+        tip={currentTip}
+        onOpenChange={handleOpenChange}
+        onPrimaryAction={() => void handlePrimaryAction()}
       />
     )
   }

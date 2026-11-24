@@ -1,37 +1,32 @@
-import { readOpenCodeNativeChatTranscriptTail } from './transcript-opencode'
-import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import { readOpenCodeNativeChatTranscriptTail } from './transcript-history/opencode/transcript-opencode'
+import { isENOENT } from '../filesystem/local-file-io/filesystem-path-containment'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
-  AgentType,
   NativeChatMessage,
   NativeChatTurnLifecycle
-} from '../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
+} from '../../shared/native-chat/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import {
-  decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
-  decodeGrokTranscriptLine,
-  decodeOmpTranscriptLine
-} from './transcript-line-decoders'
-import { transcriptFallbackId } from './transcript-fallback-id'
-import { inTranscriptFileOrder } from './transcript-file-order'
-import { extendTranscriptBoundary } from './transcript-file-version'
-import {
-  nativeChatTurnLifecycleDecoderForAgent,
-  type NativeChatTurnLifecycleDecoder
-} from './transcript-turn-lifecycle'
+import { decodeClaudeChatTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
+import { decodeCodexTranscriptLine } from './transcript-decoding/transcript-line-decoders-codex'
+import { decodeGrokTranscriptLine } from './transcript-decoding/transcript-line-decoders-grok'
+import { decodeOmpTranscriptLine } from './transcript-decoding/transcript-line-decoders-omp'
+import { transcriptFallbackId } from './transcript-streaming/transcript-fallback-id'
+import { inTranscriptFileOrder } from './transcript-streaming/transcript-file-order'
+import { extendTranscriptBoundary } from './transcript-watching/transcript-file-version'
+import { nativeChatTurnLifecycleDecoderForAgent } from './transcript-decoding/transcript-turn-lifecycle'
 import {
   findLastCompleteLineEnd,
   readTranscriptByteAt,
   TAIL_CHUNK_BYTES
-} from './transcript-tail-boundary'
+} from './transcript-watching/transcript-tail-boundary'
 import {
   closeTranscriptHandle,
   openTranscriptFile,
   readTranscriptFile,
   transcriptFileStat
-} from './wsl-transcript-fs-access'
-import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
+} from './transcript-filesystem/wsl-transcript-fs-access'
+import { wslTranscriptFsRefusal } from './transcript-filesystem/wsl-transcript-fs-error'
 
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 
@@ -40,7 +35,7 @@ export type NativeChatLineDecoder = (line: string, fallbackId: string) => Native
 export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineDecoder | null {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
   if (transcriptAgent === 'claude') {
-    return decodeClaudeTranscriptLine
+    return decodeClaudeChatTranscriptLine
   }
   if (transcriptAgent === 'codex') {
     return decodeCodexTranscriptLine
@@ -54,19 +49,26 @@ export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineD
   return null
 }
 
-export async function readNativeChatTranscriptTailFile(
+export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecycle>(
   filePath: string,
   limit: number,
   decode: NativeChatLineDecoder,
   includeTrailingLine = false,
   endOffset?: number,
-  decodeLifecycle?: NativeChatTurnLifecycleDecoder | null,
+  decodeLifecycle?: ((line: string, fallbackId: string) => L | null) | null,
   signal?: AbortSignal,
   onConsumedBoundary?: (boundary: Buffer) => void,
-  sourceOrder = false
+  sourceOrder = false,
+  onDecodedLine?: (
+    line: string,
+    fallbackId: string,
+    offset: number,
+    message: NativeChatMessage | null
+  ) => void
 ): Promise<{
   messages: NativeChatMessage[]
-  lifecycle?: NativeChatTurnLifecycle
+  lifecycle?: L
+  messageOffsets?: number[]
   consumedTo: number
   hasMore: boolean
   beforeOffset: number
@@ -87,7 +89,7 @@ export async function readNativeChatTranscriptTailFile(
   const lineParts: Buffer[] = []
   let lineBytes = 0
   let lineOversized = false
-  let lifecycle: NativeChatTurnLifecycle | undefined
+  let lifecycle: L | undefined
   let malformedRecordCount = 0
   let oversizedRecordCount = 0
   let ignoreNextMalformedRecord = false
@@ -168,6 +170,7 @@ export async function readNativeChatTranscriptTailFile(
     const selected = limit > 0 ? chronological.slice(Math.max(0, chronological.length - limit)) : []
     return {
       messages: selected.map((entry) => entry.message),
+      ...(onDecodedLine ? { messageOffsets: selected.map((entry) => entry.offset) } : {}),
       ...(lifecycle ? { lifecycle } : {}),
       consumedTo,
       hasMore: limit > 0 && chronological.length > limit,
@@ -228,6 +231,7 @@ export async function readNativeChatTranscriptTailFile(
     // Use provider lifecycle records from the same window; visible assistant text cannot prove completion.
     lifecycle ??= decodeLifecycle?.(line, fallbackId) ?? undefined
     const message = decode(line, fallbackId)
+    onDecodedLine?.(line, fallbackId, lineOffset, message)
     if (message) {
       messages.push({ message, offset: lineOffset })
     }

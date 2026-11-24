@@ -65,15 +65,25 @@ export async function readPluginInstallProvenance(
   }
 }
 
-/** Repairs a pointer-new/lock-old interrupted publication from immutable provenance. */
+/** Repairs interrupted publications from provenance and drops entries whose install directory is gone. */
 export async function recoverPluginLockfile(
   pluginsDir: string,
   lock: PluginLockfile
 ): Promise<{ lock: PluginLockfile; changed: boolean }> {
   const plugins = { ...lock.plugins }
   let changed = false
-  const directories = await readdir(pluginsDir, { withFileTypes: true }).catch(() => [])
-  for (const directory of directories) {
+  const directories = await readdir(pluginsDir, { withFileTypes: true }).catch(() => null)
+  if (directories) {
+    // Why: a removal interrupted after deleting files must not leave a phantom lock entry.
+    const present = new Set(directories.map((entry) => entry.name))
+    for (const pluginKey of Object.keys(plugins)) {
+      if (!present.has(pluginKey)) {
+        delete plugins[pluginKey]
+        changed = true
+      }
+    }
+  }
+  for (const directory of directories ?? []) {
     if (!directory.isDirectory() || !isQualifiedPluginKey(directory.name)) {
       continue
     }

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { resolveChromiumCookiesPath } from '../../chromium-cookie-path'
+import { resolveChromiumCookiesPath } from '../chromium/chromium-cookie-path'
 import {
   CHROMIUM_BROWSERS,
   browserRootPath,
@@ -9,7 +9,7 @@ import {
   firefoxProfilesRoot,
   isSafeBrowserProfileDirectory,
   type DetectedBrowser
-} from './browser-cookie-detection-types'
+} from './browser-cookie-source-profiles'
 
 export function detectSafari(): DetectedBrowser | null {
   if (process.platform !== 'darwin') {

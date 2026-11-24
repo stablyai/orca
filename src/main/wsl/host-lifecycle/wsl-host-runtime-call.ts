@@ -1,0 +1,137 @@
+/** E9 for runtime calls: a poll or fetch reaches a WSL host only without booting its distro. */
+import { assertWslHostRunAllowed, wslHostRuntimeCallGuard } from './wsl-host-gate'
+import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
+import { deferUntilWslDistroRunning } from '../discovery/wsl-background-distro-gate'
+import { rethrowRetryable, settlingConnectFailure } from './wsl-host-connect-failure'
+import type { WslHostConnector, WslHostServiceDependencies } from './wsl-host-connector-contract'
+import { wslHostNotConnectedMessage } from './wsl-host-add-admission'
+import { wslHostStoppedMessage } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-stopped-message'
+import { admitConnectToPendingHost } from './wsl-host-removal'
+import type { WslOrcadConnection } from '../orcad/wsl-orcad-connection-types'
+import {
+  isWslHostIdleStopped,
+  pendingWslHostWake,
+  wakeWslHostAfterIdleStop
+} from './wsl-host-idle-stop'
+import { RUNTIME_IDLE_STOPPED_MESSAGE } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-stop-signal'
+
+export type WslHostRuntimeCallPort = {
+  record: WslHostDeploymentRecord | null
+  connector: WslHostConnector | null
+  deps: WslHostServiceDependencies
+  removing: ReadonlySet<string>
+  /** Hosts a confirmed stop parked: no runtime call reconnects them until the distro runs again. */
+  parked: Set<string>
+  isVisible: () => boolean
+  /** Bumped when Ready arrives, so an older probe cannot overtake its pending registry read. */
+  readyGeneration: () => number
+  retireConnectionChange: (distro: string) => void
+  /** Shown as liveness shows a stop, so the host's panes offer Start. */
+  publishStopped: (record: WslHostDeploymentRecord) => void
+  publishReady: (record: WslHostDeploymentRecord, connection: WslOrcadConnection) => void
+  /** The same call again, once the distro is confirmed running. */
+  retry: () => Promise<void>
+  /** The user asked for this call (a gesture, a focus, Start): only it wakes an idle-stopped host. */
+  wake?: boolean
+  /** A poll: refused while idle-stopped, never waiting on a wake. */
+  background?: boolean
+}
+
+/**
+ * It reconnects only to a distro confirmed running and only for visible work; a confirmed stop
+ * parks the host until the distro runs again (started by the user or elsewhere), never booting it.
+ */
+export async function ensureWslHostForRuntimeCall(
+  environmentId: string,
+  port: WslHostRuntimeCallPort
+): Promise<void> {
+  const { record, connector, deps, parked } = port
+  if (!record || !connector) {
+    return
+  }
+  if (isWslHostIdleStopped(environmentId)) {
+    return wakeIdleStoppedHost(record, port)
+  }
+  const generation = port.readyGeneration()
+  const reachability = await connector.reachability(record.distro, environmentId)
+  if (reachability === 'available') {
+    return
+  }
+  assertWslHostRunAllowed(deps, port.removing, environmentId)
+  // A pending host never reconnects for a runtime call.
+  await admitConnectToPendingHost(deps.userDataPath(), record, false)
+  // A Start or New Terminal connected during preparation: its 'stopped' would mark live terminals exited.
+  if (port.readyGeneration() !== generation) {
+    return ensureWslHostForRuntimeCall(environmentId, port)
+  }
+  if (reachability === 'stopped') {
+    parkStopped(record, port)
+  }
+  if (parked.has(environmentId)) {
+    throw wslHostRuntimeCallGuard(wslHostStoppedMessage(record.distro), 'parked')
+  }
+  // Unconfirmed (running list unreadable, or possibly stale right after an exit) or not
+  // visible: refuse rather than risk a boot; liveness publishes the verdict.
+  if (reachability !== 'unreachable' || !port.isVisible()) {
+    throw wslHostRuntimeCallGuard(wslHostNotConnectedMessage(record.distro), 'unavailable')
+  }
+  if (connector.isSettling(record.distro)) {
+    throw settlingConnectFailure(record.distro)
+  }
+  await connector.connect(record.distro, { noBoot: true }).catch(rethrowRetryable(record.distro))
+}
+
+/** Orca stopped this host idle (#46567): only a user's call wakes it, booting the distro if needed. */
+async function wakeIdleStoppedHost(
+  record: WslHostDeploymentRecord,
+  port: WslHostRuntimeCallPort
+): Promise<void> {
+  const { environmentId, distro } = record
+  if (!port.wake) {
+    const pending = port.background ? null : pendingWslHostWake(environmentId)
+    if (!pending) {
+      throw wslHostRuntimeCallGuard(RUNTIME_IDLE_STOPPED_MESSAGE, 'idle')
+    }
+    return pending
+  }
+  assertWslHostRunAllowed(port.deps, port.removing, environmentId)
+  await admitConnectToPendingHost(port.deps.userDataPath(), record, false)
+  port.parked.delete(environmentId)
+  await wakeWslHostAfterIdleStop(environmentId, async () => {
+    await port.connector?.connect(distro).catch(rethrowRetryable(distro))
+  })
+}
+
+// verify-7: a keystroke met the stop before liveness did; parked silently, the pane died unexplained.
+function parkStopped(record: WslHostDeploymentRecord, port: WslHostRuntimeCallPort): void {
+  const { environmentId, distro } = record
+  port.retireConnectionChange(distro)
+  if (!port.parked.has(environmentId)) {
+    port.parked.add(environmentId)
+    port.publishStopped(record)
+  }
+  const deferUntilRunning = port.deps.deferUntilRunning ?? deferUntilWslDistroRunning
+  deferUntilRunning(distro, `wsl-host-parked:${environmentId}`, () => {
+    if (port.parked.delete(environmentId)) {
+      void resumeAfterStop(record, port).catch(() => {})
+    }
+  })
+}
+
+async function resumeAfterStop(
+  record: WslHostDeploymentRecord,
+  port: WslHostRuntimeCallPort
+): Promise<void> {
+  // A stop published after liveness had already reconnected would leave Start on a working host.
+  const connection = port.connector?.get(record.distro) ?? null
+  if (
+    connection &&
+    (await port.connector?.reachability(record.distro, record.environmentId)) === 'available'
+  ) {
+    port.publishReady(record, connection)
+    return
+  }
+  if (port.isVisible()) {
+    await port.retry()
+  }
+}

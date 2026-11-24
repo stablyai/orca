@@ -1,25 +1,25 @@
-import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import {
   canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus,
   type AiVaultResumeTargetStatus
-} from '../../../src/shared/ai-vault-resume-target'
+} from '../../../src/shared/ai-vault/resume/ai-vault-resume-target'
 import type {
   FolderHostCatalog,
   FolderHostRepo
-} from '../../../src/shared/folder-workspace-execution-host'
-import { parseWslUncPath } from '../../../src/shared/wsl-paths'
-import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
-import { getFolderWorkspaceWorktreeHostId } from '../../../src/shared/folder-workspace-worktree'
-import { parseWorkspaceKey } from '../../../src/shared/workspace-scope'
-import type { Worktree } from '../worktree/workspace-list-types'
+} from '../../../src/shared/folder-workspaces/folder-workspace-execution-host'
+import { parseWslUncPath } from '../../../src/shared/file-access/wsl-paths'
+import { normalizeExecutionHostId } from '../../../src/shared/execution-host/execution-host'
+import { getFolderWorkspaceWorktreeHostId } from '../../../src/shared/folder-workspaces/folder-workspace-worktree'
+import { parseWorkspaceKey } from '../../../src/shared/workspace/identity/workspace-scope'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { translate } from '../i18n/mobile-i18n'
 import {
   canJumpToAiVaultSessionWorktree,
   resolveAiVaultSessionWorktreeInfo,
   type AiVaultSessionOwnerWorkspace
-} from '../../../src/shared/ai-vault-session-worktree'
+} from '../../../src/shared/ai-vault/session-display/ai-vault-session-worktree'
 
 /** The host catalog a resume target is resolved against: the same lists desktop reads from its store. */
 export type MobileAiVaultResumeCatalog = FolderHostCatalog<FolderHostRepo & { id: string }>

@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
-import { useWindowStreamVisible } from '@/hooks/use-window-stream-visibility'
+import { useWindowStreamVisible } from '@/lib/window-activity/use-window-stream-visibility'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 
 type RemoteBrowserStreamActivationOptions = {
   activeRuntimeEnvironmentId: string
   browserPageId: string
-  clearPendingRemoteWheel: () => void
+  clearPendingRemoteInput: () => void
   isActive: boolean
   lifecycle: Pick<RemoteBrowserStreamLifecycle, 'open'>
   reopenNonce: number
@@ -17,7 +17,7 @@ type RemoteBrowserStreamActivationOptions = {
 export function useRemoteBrowserStreamActivation({
   activeRuntimeEnvironmentId,
   browserPageId,
-  clearPendingRemoteWheel,
+  clearPendingRemoteInput,
   isActive,
   lifecycle,
   reopenNonce,
@@ -34,13 +34,13 @@ export function useRemoteBrowserStreamActivation({
     const closeStream = lifecycle.open()
     return () => {
       closeStream()
-      clearPendingRemoteWheel()
+      clearPendingRemoteInput()
     }
   }, [
     // The stable lifecycle reads identity through refs; these values trigger the required reopen.
     activeRuntimeEnvironmentId,
     browserPageId,
-    clearPendingRemoteWheel,
+    clearPendingRemoteInput,
     isActive,
     lifecycle,
     reopenNonce,

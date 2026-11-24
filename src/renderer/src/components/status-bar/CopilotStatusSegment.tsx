@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
 import { toast } from 'sonner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { patchCopilotStatus, useCopilotStatus } from '@/lib/monaco-copilot/copilot-status'
-import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
+import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './composition/status-bar-context-menu-policy'
 
 function showSignInFailed(): void {
   toast.error(
@@ -17,11 +17,7 @@ function showSignInFailed(): void {
 
 /** Copilot ghost-text indicator, shown only when copilot-language-server is
  *  installed; click signs in while no authenticated user is reported. */
-export function CopilotStatusSegment({
-  iconOnly
-}: {
-  iconOnly: boolean
-}): React.JSX.Element | null {
+export function CopilotStatusSegment(): React.JSX.Element | null {
   const status = useCopilotStatus()
   const [signingIn, setSigningIn] = useState(false)
   if (!status) {
@@ -76,7 +72,7 @@ export function CopilotStatusSegment({
         aria-hidden
         className={cn('size-1.5 rounded-full', dotClass, status.busy && 'animate-pulse')}
       />
-      {iconOnly ? null : <span className="text-[11px] font-medium">{badge}</span>}
+      <span className="text-[11px] font-medium">{badge}</span>
     </>
   )
 

@@ -1,9 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Animated } from 'react-native'
+import { Animated, Easing, Platform } from 'react-native'
 import { translate } from '../i18n/mobile-i18n'
-import { reconcileMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
-import type { MobileSessionTerminalRuntimeModel } from './use-mobile-session-terminal-runtime'
-import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
+import { reconcileMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
+import type { MobileSessionTerminalRuntimeModel } from '../terminal/session/use-mobile-session-terminal-runtime'
+import { NO_MOBILE_BROWSER_HOST_SUPPORT } from '../browser/mobile-browser-host-support'
+import type { StructuredAgentSessionHostSupport } from './native-chat/agent-session/mobile-structured-agent-session-host-support'
+
+// A strong ease-out both ways; the presentation turns this fade into a short rise.
+const TOAST_EASING = Easing.bezier(0.23, 1, 0.32, 1)
 
 export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTerminalRuntimeModel) {
   const {
@@ -30,6 +34,7 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     onLiveInputSendFailureRef
   } = scope
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
+  const [browserHostSupport, setBrowserHostSupport] = useState(NO_MOBILE_BROWSER_HOST_SUPPORT)
   // Hide history entry when the host cannot serve it rather than opening a dead end.
   const [agentSessionHistorySupported, setAgentSessionHistorySupported] = useState<boolean | null>(
     null
@@ -105,8 +110,9 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
       setToastMessage(message)
       Animated.timing(toastOpacityRef.current, {
         toValue: 1,
-        duration: 150,
-        useNativeDriver: true
+        duration: 200,
+        easing: TOAST_EASING,
+        useNativeDriver: Platform.OS !== 'web'
       }).start(({ finished }) => {
         if (!finished || toastSeqRef.current !== seq) {
           return
@@ -115,8 +121,9 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
           toastHideTimerRef.current = null
           Animated.timing(toastOpacityRef.current, {
             toValue: 0,
-            duration: 200,
-            useNativeDriver: true
+            duration: 150,
+            easing: TOAST_EASING,
+            useNativeDriver: Platform.OS !== 'web'
           }).start((result) => {
             if (result.finished && toastSeqRef.current === seq) {
               setToastMessage(null)
@@ -149,6 +156,8 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
   return {
     browserScreencastSupported,
     setBrowserScreencastSupported,
+    browserHostSupport,
+    setBrowserHostSupport,
     agentSessionHistorySupported,
     setAgentSessionHistorySupported,
     quickCommandsSupported,

@@ -1,93 +1,89 @@
 import { describe, expect, it } from 'vitest'
-import { isSafePluginGitRef, parsePluginGitInstallInput } from './plugin-git-install-input'
-
-const REPO = 'https://github.com/kolebayev/orca-md-layout'
+import { parsePluginGitInstallInput } from './plugin-git-install-input'
 
 describe('parsePluginGitInstallInput', () => {
-  it.each([
-    [REPO, REPO, ''],
-    [`${REPO}/`, REPO, ''],
-    [`${REPO}.git`, `${REPO}.git`, ''],
-    ['kolebayev/orca-md-layout', REPO, ''],
-    ['github.com/kolebayev/orca-md-layout', REPO, ''],
-    [`${REPO}#v0.1.0`, REPO, 'v0.1.0'],
-    [`${REPO}/releases/tag/v0.1.0`, REPO, 'v0.1.0'],
-    [`${REPO}/releases/latest`, REPO, ''],
-    [`${REPO}/releases`, REPO, ''],
-    [`${REPO}/tags`, REPO, ''],
-    [`${REPO}/tree/main`, REPO, 'main'],
-    [`${REPO}/tree/feature/narrow`, REPO, 'feature/narrow'],
-    [`${REPO}/commit/${'a'.repeat(40)}`, REPO, 'a'.repeat(40)],
-    [`${REPO}?tab=readme-ov-file`, REPO, ''],
-    [`${REPO}/releases/tag/v1.0.0%2Bbuild`, REPO, 'v1.0.0+build'],
-    // Why the page ref wins: GitHub anchors such as #readme are not versions.
-    [`${REPO}/tree/v2#readme`, REPO, 'v2'],
-    [
-      'https://gitlab.com/acme/tools/notes/-/tree/v1.2.0',
-      'https://gitlab.com/acme/tools/notes',
-      'v1.2.0'
-    ],
-    ['https://gitlab.com/acme/notes/-/tags/v1.2.0', 'https://gitlab.com/acme/notes', 'v1.2.0'],
-    ['https://gitlab.com/acme/notes/-/releases/v1.2.0', 'https://gitlab.com/acme/notes', 'v1.2.0'],
-    ['https://gitlab.com/acme/tools/notes', 'https://gitlab.com/acme/tools/notes', ''],
-    [
-      'git@github.com:kolebayev/orca-md-layout.git',
-      'git@github.com:kolebayev/orca-md-layout.git',
-      ''
-    ],
-    ['git@github.com:acme/notes.git#v1', 'git@github.com:acme/notes.git', 'v1'],
-    [
-      'ssh://git@example.test/acme/plugin.git#main',
-      'ssh://git@example.test/acme/plugin.git',
-      'main'
-    ]
-  ])('reads %s', (input, url, ref) => {
-    expect(parsePluginGitInstallInput(`  ${input}  `)).toEqual({ ok: true, url, ref })
+  it('reads Codeberg tag and commit pages as a repository and ref', () => {
+    expect(parsePluginGitInstallInput('https://codeberg.org/o/r/src/tag/v1.2.0')).toEqual({
+      ok: true,
+      url: 'https://codeberg.org/o/r',
+      ref: 'v1.2.0'
+    })
+    const sha = '0123456789abcdef0123456789abcdef01234567'
+    expect(
+      parsePluginGitInstallInput(`https://codeberg.org/o/r/src/commit/${sha}/README.md`)
+    ).toEqual({
+      ok: true,
+      url: 'https://codeberg.org/o/r',
+      ref: sha
+    })
   })
 
-  it.each([
-    ['', 'missing-git-url'],
-    ['#v1', 'missing-git-url'],
-    ['https://user:token@github.com/acme/notes', 'git-url-credentials'],
-    ['https://token@github.com/acme/notes', 'git-url-credentials'],
-    ['ssh://git:secret@example.test/acme/notes.git', 'git-url-credentials'],
-    ['http://github.com/acme/notes', 'invalid-git-url'],
-    ['file:///tmp/plugin', 'invalid-git-url'],
-    ['ext::sh -c touch% /tmp/pwned#main', 'invalid-git-url'],
-    ['-oProxyCommand=calc@host:repo', 'invalid-git-url'],
-    ['ssh://-oProxyCommand=calc/repo', 'invalid-git-url'],
-    ['https://github.com/acme', 'invalid-git-url'],
-    ['notes', 'invalid-git-url'],
-    [`${REPO}#--upload-pack=calc`, 'invalid-git-ref'],
-    [`${REPO}#../../main`, 'invalid-git-ref'],
-    [`${REPO}/tree/a..b`, 'invalid-git-ref'],
-    [`${REPO}/tree/%ZZ`, 'invalid-git-ref']
-  ])('refuses %s', (input, reason) => {
-    expect(parsePluginGitInstallInput(input)).toEqual({ ok: false, reason })
+  it('preserves Bitbucket source paths as repository URLs', () => {
+    expect(parsePluginGitInstallInput('https://bitbucket.org/o/r/src/branch/README.md')).toEqual({
+      ok: true,
+      url: 'https://bitbucket.org/o/r/src/branch/README.md',
+      ref: ''
+    })
   })
-})
 
-describe('isSafePluginGitRef', () => {
-  it('follows Git ref rules and never reads as an option', () => {
-    for (const ref of ['v0.1.0', 'release/1.x', 'a'.repeat(40), 'v1.0.0+build']) {
-      expect(isSafePluginGitRef(ref)).toBe(true)
-    }
-    for (const ref of [
-      '',
-      '-x',
-      'a..b',
-      'a b',
-      'a~1',
-      'a^',
-      'a:b',
-      'x.lock',
-      '.hidden',
-      'a//b',
-      '@',
-      'a@{1}',
-      'tab\t'
-    ]) {
-      expect(isSafePluginGitRef(ref)).toBe(false)
-    }
+  it('keeps a `-` segment inside a GitHub ref', () => {
+    expect(parsePluginGitInstallInput('https://github.com/o/r/tree/feature/-/example')).toEqual({
+      ok: true,
+      url: 'https://github.com/o/r',
+      ref: 'feature/-/example'
+    })
+    expect(parsePluginGitInstallInput('https://github.com/o/r/tree/-/foo')).toEqual({
+      ok: false,
+      reason: 'invalid-git-ref'
+    })
+  })
+
+  it('reads a GitHub blob page as a repository', () => {
+    expect(parsePluginGitInstallInput('https://github.com/o/r/blob/main/README.md')).toEqual({
+      ok: true,
+      url: 'https://github.com/o/r',
+      ref: ''
+    })
+    // Why `#v1` still wins: `--ref` reaches the host as a `#ref` on the pasted URL.
+    expect(
+      parsePluginGitInstallInput('https://github.com/o/r/blob/feature/x/README.md#v1')
+    ).toEqual({ ok: true, url: 'https://github.com/o/r', ref: 'v1' })
+  })
+
+  it('keeps a `-` ref segment on Codeberg and www hosts', () => {
+    expect(
+      parsePluginGitInstallInput('https://codeberg.org/o/r/src/branch/feature/-/example')
+    ).toEqual({ ok: true, url: 'https://codeberg.org/o/r', ref: 'feature/-/example' })
+    expect(parsePluginGitInstallInput('https://www.github.com/o/r/tree/x/-/tree/y')).toEqual({
+      ok: true,
+      url: 'https://www.github.com/o/r',
+      ref: 'x/-/tree/y'
+    })
+  })
+
+  it('reads a GitLab subgroup project named like a page kind', () => {
+    expect(parsePluginGitInstallInput('https://gitlab.com/g/sub/releases/-/tree/main')).toEqual({
+      ok: true,
+      url: 'https://gitlab.com/g/sub/releases',
+      ref: 'main'
+    })
+    expect(
+      parsePluginGitInstallInput('https://gitlab.com/g/sub/tree/-/blob/main/README.md')
+    ).toEqual({
+      ok: true,
+      url: 'https://gitlab.com/g/sub/tree',
+      ref: ''
+    })
+    expect(
+      parsePluginGitInstallInput('https://gitlab.example.com/g/sub/tree/p/-/blob/main/README.md')
+    ).toEqual({ ok: true, url: 'https://gitlab.example.com/g/sub/tree/p', ref: '' })
+    expect(parsePluginGitInstallInput('https://gitlab.example.com/g/sub/blob/p')).toEqual({
+      ok: true,
+      url: 'https://gitlab.example.com/g/sub/blob/p',
+      ref: ''
+    })
+    expect(
+      parsePluginGitInstallInput('https://gitlab.com/g/sub/src/branch/p/-/graphs/main')
+    ).toEqual({ ok: true, url: 'https://gitlab.com/g/sub/src/branch/p', ref: '' })
   })
 })

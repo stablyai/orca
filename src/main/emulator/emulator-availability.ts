@@ -3,7 +3,10 @@ import type { EmulatorBridge } from './emulator-bridge'
 import type { SimulatorDevice } from './simctl-simulator-devices'
 import type { BackendAvailability, EmulatorDevice } from './backends/emulator-backend'
 import { emulatorErrorCodedMessage } from './emulator-errors'
-import { emulatorCodedMessage, type EmulatorCodedMessage } from '../../shared/emulator-failure-copy'
+import {
+  emulatorCodedMessage,
+  type EmulatorCodedMessage
+} from '../../shared/emulator/emulator-failure-copy'
 
 type ToolchainCheck = { ok: boolean } & Partial<EmulatorCodedMessage>
 
@@ -14,20 +17,6 @@ export type EmulatorAvailability = EmulatorCodedMessage & {
   simctl: ToolchainCheck
   serveSim: ToolchainCheck
   android: EmulatorCodedMessage & { sdkFound: boolean; sdkPath?: string }
-}
-
-export function pickDefaultSimulatorDevice(devices: SimulatorDevice[]): SimulatorDevice | null {
-  const available = devices.filter((device) => device.isAvailable !== false)
-  const booted = available.filter((device) => device.state === 'Booted')
-  const bootedIphone = booted.find((device) => /iPhone/i.test(device.name || ''))
-  return (
-    bootedIphone ||
-    booted[0] ||
-    available.find((device) => /iPhone/i.test(device.name || '')) ||
-    available[0] ||
-    devices[0] ||
-    null
-  )
 }
 
 type IosAvailability = {
@@ -63,7 +52,7 @@ async function inspectIosAvailability(bridge: EmulatorBridge): Promise<IosAvaila
 function toSimulatorRow(device: EmulatorDevice): SimulatorDevice {
   return {
     name: device.name,
-    udid: device.id,
+    udid: device.detail === 'avd' || device.detail === 'emulator' ? device.name : device.id,
     state: device.state === 'booted' ? 'Booted' : 'Shutdown',
     runtime: 'Android',
     isAvailable: device.isAvailable

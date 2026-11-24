@@ -1,5 +1,5 @@
 import type { IDisposable, editor } from 'monaco-editor'
-import { monaco } from '@/lib/monaco-setup'
+import { monaco } from '@/lib/editor/monaco/monaco-setup'
 import {
   closeCopilotDocumentForModel,
   isWithinCopilotSizeLimit,

@@ -33,7 +33,8 @@ import {
   isSameGitRepository,
   splitQualifiedPluginKey
 } from '../../../shared/plugins/catalog/plugin-marketplace'
-import { readPluginManifestText } from '../plugin-manifest-file'
+import { readPluginManifestText } from '../artifacts/plugin-manifest-file'
+import { pluginCatalogTakeoverError } from './plugin-catalog-install-guard'
 
 export type { PluginInstallResult } from './plugin-install-staging'
 
@@ -82,8 +83,13 @@ export async function installBundledPlugin(input: {
   expectedPluginKey: string
   blockedPluginReason?: (pluginKey: string) => string | null
 }): Promise<PluginInstallResult> {
-  return serializePluginMutation(input.pluginsDir, () =>
-    installStagedPluginTree({
+  return serializePluginMutation(input.pluginsDir, async () => {
+    const locked = (await readPluginLockfile(input.pluginsDir)).plugins[input.expectedPluginKey]
+    // Why inside the queue: a catalog install that just finished must not be downgraded.
+    if (locked && locked.source.kind !== 'bundled') {
+      return { ok: false, error: 'a catalog install of this plugin is kept' }
+    }
+    return installStagedPluginTree({
       pluginsDir: input.pluginsDir,
       stagingDir: input.sourcePath,
       hostVersion: input.hostVersion,
@@ -93,7 +99,7 @@ export async function installBundledPlugin(input: {
       repairCorruptedVersion: true,
       blockedPluginReason: input.blockedPluginReason
     })
-  )
+  })
 }
 
 export async function installPluginFromGit(input: {
@@ -165,6 +171,8 @@ export async function installPluginFromMarketplace(input: {
   manifestError?: (manifest: PluginManifest) => string | null
   /** Only replace an install from this marketplace; set by auto-update so Remove wins a race. */
   requireInstalled?: boolean
+  requireMissing?: boolean
+  expectedInstalledContentHash?: string
 }): Promise<PluginInstallResult> {
   const source = pluginInstallSourceSchema.parse({
     kind: 'marketplace',
@@ -179,19 +187,27 @@ export async function installPluginFromMarketplace(input: {
   }
   return serializePluginMutation(input.pluginsDir, async () => {
     const entry = (await readPluginLockfile(input.pluginsDir)).plugins[input.expectedPluginKey]
+    if (input.requireMissing && entry) {
+      return { ok: false, error: 'plugin is already installed' }
+    }
+    if (
+      input.expectedInstalledContentHash &&
+      input.expectedInstalledContentHash !== entry?.contentHash
+    ) {
+      return { ok: false, error: 'plugin changed before its required release installed' }
+    }
     const installedFrom = entry?.source.kind === 'marketplace' ? entry.source.marketplace : null
     if (input.requireInstalled && installedFrom?.url !== input.marketplace.url) {
       return { ok: false, error: 'plugin was removed before its update installed' }
     }
     // Why: a second catalog listing the same id must never take over an install silently.
-    if (
-      installedFrom &&
-      (installedFrom.url !== input.marketplace.url || installedFrom.ref !== input.marketplace.ref)
-    ) {
-      return {
-        ok: false,
-        error: `${input.expectedPluginKey} is installed from ${installedFrom.url}; remove it first to install it from another catalog`
-      }
+    const takeoverError = pluginCatalogTakeoverError(
+      input.expectedPluginKey,
+      entry?.source,
+      input.marketplace
+    )
+    if (takeoverError) {
+      return { ok: false, error: takeoverError }
     }
     const stagingDir = await mkdtemp(join(tmpdir(), 'orca-plugin-marketplace-install-'))
     try {
@@ -281,7 +297,7 @@ export async function rollbackInstalledPlugin(input: {
 }
 
 /** Publisher of an existing install from the same source, so reinstalling keeps its key. */
-async function installedPublisherFor(
+export async function installedPublisherFor(
   pluginsDir: string,
   sameSource: (source: PluginLockEntry['source']) => boolean
 ): Promise<string | null> {
@@ -290,7 +306,7 @@ async function installedPublisherFor(
   return entry ? (splitQualifiedPluginKey(entry.pluginKey)?.publisher ?? null) : null
 }
 
-async function declaredPublisher(rootDir: string): Promise<string | undefined> {
+export async function declaredPublisher(rootDir: string): Promise<string | undefined> {
   try {
     const raw: unknown = JSON.parse(await readPluginManifestText(rootDir))
     const publisher =

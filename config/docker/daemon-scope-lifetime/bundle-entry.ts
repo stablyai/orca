@@ -1,9 +1,9 @@
-import { ownFreshDaemonScope } from '../../../src/main/daemon/daemon-cgroup-scope'
-import { startDaemonScopeDeathWatch } from '../../../src/main/daemon/daemon-scope-death-watch'
-import { initializeTerminalScopes } from '../../../src/main/daemon/terminal-scopes-runtime'
+import { ownFreshDaemonScope } from '../../../src/main/daemon/process-scopes/daemon-cgroup-scope'
+import { startDaemonScopeDeathWatch } from '../../../src/main/daemon/process-scopes/daemon-scope-death-watch'
+import { initializeTerminalScopes } from '../../../src/main/daemon/process-scopes/terminal-scopes-runtime'
 
-export { buildDurableDaemonScopeCommand } from '../../../src/main/daemon/daemon-cgroup-scope'
-export { wrapPtySpawnInTerminalScope } from '../../../src/main/daemon/terminal-scopes-runtime'
+export { buildDurableDaemonScopeCommand } from '../../../src/main/daemon/process-scopes/daemon-cgroup-scope'
+export { wrapPtySpawnInTerminalScope } from '../../../src/main/daemon/process-scopes/terminal-scopes-runtime'
 
 export function startScopeReaper(launchNonce: string, freshScope: boolean) {
   return startDaemonScopeDeathWatch({

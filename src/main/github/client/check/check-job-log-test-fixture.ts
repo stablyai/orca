@@ -1,5 +1,5 @@
-import type { PRCheckJob } from '../../../../shared/github/check-types'
-import type { GitHubApiRepository } from '../../github-api-repository'
+import type { PRCheckJob } from '../../../../shared/github/checks/check-types'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import type { GhExecOptions } from '../github-exec-scope'
 import { snapshotCheckJobLogExecution } from './check-job-log-execution'
 import { attachFailedJobLogTails } from './check-job-log-tails'

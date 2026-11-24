@@ -5,12 +5,12 @@ import {
   getRepoSshConnectionId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import type { Repo } from '../../../../shared/repo-types'
-import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
-import { deleteRemovedOwnerBrowserProfile } from '../../browser-host/managed-browser-profile-removal'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
+import { deleteRemovedOwnerBrowserProfile } from '../../browser-host/profiles/managed-browser-profile-removal'
 import { listFailedAgentLaunchWorktreeIds } from '../../../agent-launch/agent-launch-pane-attachment'
 import {
   TerminalUpdateAdmission,
@@ -22,7 +22,7 @@ import {
   listStructuredSessionsForProject,
   retireStructuredSessionTabsForWorktree,
   unclosedStructuredSessions
-} from '../../structured-session-worktree-teardown'
+} from '../../workspaces/removal/structured-session-worktree-teardown'
 
 const PROJECT_INVENTORY_REFRESH_BUDGET_MS = 3_000
 // Inside repo.rm's 15 s client timeout after the 10 s terminal budget.

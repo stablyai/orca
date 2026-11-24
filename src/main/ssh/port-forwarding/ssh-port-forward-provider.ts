@@ -1,4 +1,4 @@
-import type { PortForwardEntry } from '../../../shared/ssh-types'
+import type { PortForwardEntry } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshConnection } from '../connection/ssh-connection'
 
 export type PortForwardCloseReason =

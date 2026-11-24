@@ -1,7 +1,7 @@
 // Shared tool activity/copy for direct English mobile rows and desktop i18n fallbacks.
 
 import { createToolInputDisplay } from './native-chat-tool-summary'
-import { isToolCallBlock, type NativeChatBlock } from '../../native-chat-types'
+import { isToolCallBlock, type NativeChatBlock } from '../native-chat-types'
 
 type NativeChatToolCallBlock = Extract<NativeChatBlock, { type: 'tool-call' }>
 
@@ -32,6 +32,7 @@ export const COMMAND_TOOL_NAMES: ReadonlySet<string> = new Set([
   'terminal',
   'execute',
   'run_command',
+  'run_commands',
   'run_shell_command',
   'shell_command',
   'exec_command',

@@ -1,77 +1,54 @@
-import { OrcaRuntimeWithCreateManagedWorktree } from './workspace-creation'
-import type { LocalGitExecOptions } from '../../git/repo-default-base-ref'
-import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
-import type { RemoteFetchResult, RemoteTrackingBase } from '../runtime-remote-fetch-controller'
-import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-ref-drift-types'
-import { probeRuntimeWorktreeDrift } from '../runtime-worktree-drift-probe'
+import type {
+  RemoteFetchResult,
+  RemoteTrackingBase
+} from '../repositories/runtime-remote-fetch-controller'
+import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-refs/base-ref-drift-types'
+import { probeRuntimeWorktreeDrift } from './metadata/runtime-worktree-drift-probe'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import type { GitHubPrStartPoint, GitPushTarget } from '../../../shared/worktree/types'
+import type { GitPushTarget } from '../../../shared/worktree/types'
 import {
   persistRuntimeManagedWorktreeSortOrder,
   updateRuntimeManagedWorktreeMetadata
-} from '../runtime-managed-worktree-metadata'
+} from './metadata/runtime-managed-worktree-metadata'
+import type { CrossStoreParentRef } from '../../../shared/worktree/lineage-types'
+import { RuntimeWorktreeReviewBase } from './metadata/runtime-worktree-review-base'
+import type { WorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
-  resolveRuntimeGitHubWorktreeBase,
-  type RuntimeGitHubWorktreeBaseArgs
-} from '../runtime-github-worktree-base'
-import {
-  resolveRuntimeGitLabWorktreeBase,
-  type RuntimeGitLabWorktreeBaseArgs
-} from '../runtime-gitlab-worktree-base'
-import { listWorktreesStrict } from '../../git/worktree-listing'
-import {
-  adoptRuntimeProvisionedRoot,
-  readLocalSparseCheckoutEnabled,
-  type RuntimeProvisionedRootRequest
-} from '../runtime-provisioned-root-adoption'
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import { WORKSPACE_RECORD_DOMAINS } from '../../persistence/profile-save-domains'
+import { countUnreadWorkspaces } from './metadata/unread-workspace-count'
 
-export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithCreateManagedWorktree {
-  async getCanonicalFetchKey(
-    repoPath: string,
-    remote: string,
-    gitOptions: LocalGitExecOptions = {}
-  ): Promise<string> {
-    return await this.remoteFetches.getCanonicalFetchKey(repoPath, remote, gitOptions)
+function writesWorkspaceRecords(domains: readonly string[] | undefined): boolean {
+  return domains === undefined || WORKSPACE_RECORD_DOMAINS.some((d) => domains.includes(d))
+}
+
+export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase {
+  countUnreadWorkspaces(): number {
+    return countUnreadWorkspaces(this.store)
   }
 
-  async getOrStartRemoteFetch(
-    repoPath: string,
-    remote: string,
-    gitOptions: LocalGitExecOptions = {}
-  ): Promise<RemoteFetchResult> {
-    return await this.remoteFetches.getOrStartRemoteFetch(repoPath, remote, gitOptions)
+  onWorkspaceRecordsWritten(listener: () => void): () => void {
+    return (
+      this.store?.onStateWritten?.((domains) => {
+        if (writesWorkspaceRecords(domains)) {
+          listener()
+        }
+      }) ?? (() => {})
+    )
   }
 
-  async getOrStartRemoteTrackingBaseRefresh(
-    repoPath: string,
-    base: RemoteTrackingBase,
-    gitOptions: LocalGitExecOptions = {}
-  ): Promise<RemoteFetchResult> {
-    return await this.remoteFetches.getOrStartRemoteTrackingBaseRefresh(repoPath, base, gitOptions)
-  }
-
-  async fetchRemoteWithCache(
-    repoPath: string,
-    remote: string,
-    gitOptions: LocalGitExecOptions = {}
-  ): Promise<void> {
-    await this.remoteFetches.fetchRemoteWithCache(repoPath, remote, gitOptions)
-  }
-
-  async resolveRemoteTrackingBase(
-    repoPath: string,
-    baseBranch: string,
-    gitOptions: LocalGitExecOptions = {}
-  ): Promise<RemoteTrackingBase | null> {
-    return await this.remoteFetches.resolveRemoteTrackingBase(repoPath, baseBranch, gitOptions)
-  }
-
-  async hasRemoteTrackingRef(
-    repoPath: string,
-    base: RemoteTrackingBase,
-    gitOptions: LocalGitExecOptions = {}
-  ): Promise<boolean> {
-    return await this.remoteFetches.hasRemoteTrackingRef(repoPath, base, gitOptions)
+  /** Every unread write (window, phone, CLI, activation) lands in a workspace record; activity stamps that keep the flags are skipped. */
+  onUnreadStateWritten(listener: () => void): () => void {
+    return (
+      this.store?.onStateWritten?.((domains, options) => {
+        if (!options?.preservesUnreadState && writesWorkspaceRecords(domains)) {
+          listener()
+        }
+      }) ?? (() => {})
+    )
   }
 
   recordOptimisticReconcileToken(worktreeId: string): string {
@@ -122,6 +99,9 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
       pushTarget?: GitPushTarget | null
       lineage?: {
         parentWorktree?: string
+        matchFolderWorkspaces?: boolean
+        crossStoreParent?: CrossStoreParentRef
+        crossStoreParentIsBotHome?: true
         noParent?: boolean
       }
     }
@@ -129,13 +109,28 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+    // A folder workspace's only lineage is its workspace link; other fields stay git-only as before.
+    const { lineage, ...rest } = updates
+    const folder =
+      lineage?.noParent === true && Object.values(rest).every((value) => value === undefined)
+        ? this.resolveFolderWorkspaceSelector(worktreeSelector)
+        : null
+    if (folder) {
+      const folderKey = folderWorkspaceKey(folder.id)
+      this.store.removeWorkspaceLineage?.((link) => link.childWorkspaceKey === folderKey)
+      this.invalidateResolvedWorktreeCache()
+      this.notifyFolderWorkspaceChanged()
+      return this.showManagedWorktree(worktreeSelector)
+    }
     return updateRuntimeManagedWorktreeMetadata({
       selector: worktreeSelector,
       updates,
       store: this.store,
       ports: {
         resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
+        resolveParent: (selector, options) => this.worktreeLineage.resolveParent(selector, options),
         validateParent: (worktree, parent) => this.worktreeLineage.validateParent(worktree, parent),
+        readStoreInstallationId: () => this.worktreeLineage.readStoreInstallationId(),
         invalidateResolved: () => this.invalidateResolvedWorktreeCache(),
         invalidateScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
         notifyChanged: (repoId) => this.notifyWorktreesChanged(repoId),
@@ -144,25 +139,35 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
     })
   }
 
-  adoptManagedProvisionedRoot(
-    repoSelector: string,
-    request: RuntimeProvisionedRootRequest
-  ): Promise<CreateWorktreeResult> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
+  /** Drops every link under a deleted bot's home on this host: same-store ones, and ones to a home on
+   *  the computer `homeInstallationId` names. */
+  releaseBotHome(botHomeKey: WorkspaceKey, homeInstallationId?: string): { released: number } {
+    const store = this.requireStore()
+    const released = [
+      ...(store.removeWorkspaceLineage?.((lineage) => lineage.parentWorkspaceKey === botHomeKey) ??
+        []),
+      ...(homeInstallationId
+        ? (store.removeCrossStoreWorkspaceLineage?.(
+            ({ parent }) =>
+              parent.workspaceKey === botHomeKey && parent.installationId === homeInstallationId
+          ) ?? [])
+        : [])
+    ]
+    if (released.length === 0) {
+      return { released: 0 }
     }
-    return adoptRuntimeProvisionedRoot(repoSelector, request, {
-      store: this.store,
-      resolveRepo: (selector) => this.resolveRepoSelector(selector),
-      listWorktrees: (repoPath) => listWorktreesStrict(repoPath),
-      isSparseCheckoutEnabled: readLocalSparseCheckoutEnabled,
-      invalidateScan: (repoId) => {
-        this.invalidateResolvedWorktreeCache()
-        this.invalidateWorktreeScanCacheForRepo(repoId)
-      },
-      notifyChanged: (repoId) => this.notifyWorktreesChanged(repoId),
-      showWorktree: (selector) => this.showManagedWorktree(selector)
-    })
+    this.invalidateResolvedWorktreeCache()
+    this.notifyFolderWorkspaceChanged()
+    const repoIds = new Set(
+      released.flatMap((key) => {
+        const parsed = parseWorkspaceKey(key)
+        return parsed?.type === 'worktree' ? [getRepoIdFromWorktreeId(parsed.worktreeId)] : []
+      })
+    )
+    for (const repoId of repoIds) {
+      this.notifyWorktreesChanged(repoId)
+    }
+    return { released: released.length }
   }
 
   persistManagedWorktreeSortOrder(
@@ -184,26 +189,6 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
             ? { invalidateGitScans: false, sortOrderOnly: true, sortOrders }
             : { invalidateGitScans: false }
         )
-    })
-  }
-
-  async resolveManagedPrBase(
-    args: RuntimeGitHubWorktreeBaseArgs
-  ): Promise<GitHubPrStartPoint | { error: string }> {
-    return resolveRuntimeGitHubWorktreeBase(args, {
-      store: this.store ? this.requireStore() : null,
-      resolveRepo: (selector) => this.resolveRepoSelector(selector)
-    })
-  }
-
-  async resolveManagedMrBase(
-    args: RuntimeGitLabWorktreeBaseArgs
-  ): Promise<
-    { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget } | { error: string }
-  > {
-    return resolveRuntimeGitLabWorktreeBase(args, {
-      store: this.store ? this.requireStore() : null,
-      resolveRepo: (selector) => this.resolveRepoSelector(selector)
     })
   }
 }

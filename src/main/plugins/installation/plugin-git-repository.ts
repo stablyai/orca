@@ -10,15 +10,26 @@ import {
   pluginGitConfigArgs,
   pluginGitFetchCommitArgs
 } from '../../../shared/plugins/installation/plugin-git-arguments'
-import { gitExecFileAsync } from '../../git/runner'
-import { MAX_PLUGIN_TOTAL_BYTES } from '../plugin-content-hash'
-import { materializePluginGitTree } from './plugin-git-tree'
+import { gitExecFileAsync, gitExecFileAsyncBuffer } from '../../git/command-runner/git-exec-file'
+import { MAX_PLUGIN_TOTAL_BYTES } from '../artifacts/plugin-content-hash'
+import { materializePluginGitTree, type PluginGitBytesRunner } from './plugin-git-tree'
+import { PLUGIN_GIT_CLONE_TEMP_PREFIX } from './plugin-git-temp-sweep'
 
 const PLUGIN_GIT_TIMEOUT_MS = 120_000
 // Why headroom over the tree cap: a depth-1 pack of incompressible files carries per-object overhead.
 export const PLUGIN_GIT_DOWNLOAD_MAX_BYTES = MAX_PLUGIN_TOTAL_BYTES + 16 * 1024 * 1024
 const DOWNLOAD_POLL_MS = 200
 const SHA1_COMMIT_PATTERN = /^[0-9a-f]{40}$/
+
+const mainProcessGitBytes: PluginGitBytesRunner = async (args, options) =>
+  (
+    await gitExecFileAsyncBuffer(args, {
+      cwd: options.cwd,
+      timeout: options.timeoutMs,
+      maxBuffer: options.maxBytes,
+      ...(options.stdin !== undefined ? { stdin: options.stdin } : {})
+    })
+  ).stdout
 
 /** Overrides any user `protocol.<helper>.allow`, so an insteadOf rewrite cannot reach a custom
  *  git-remote-* helper; a stricter inherited allowlist still narrows it. */
@@ -32,6 +43,13 @@ export function pluginGitAllowedProtocols(inherited = process.env.GIT_ALLOW_PROT
   return allowed.filter((name) => narrowed.has(name)).join(':')
 }
 
+const pluginGitShutdown = new AbortController()
+
+/** Stops every running and later plugin Git call so no clone outlives the app. */
+export function abortPluginGitForShutdown(): void {
+  pluginGitShutdown.abort()
+}
+
 /** Runs system Git with argv-only invocation so credential helpers and SSH
  * remotes work without exposing an executable remote-helper surface. */
 export async function runPluginGit(
@@ -43,8 +61,9 @@ export async function runPluginGit(
     cwd,
     env: { ...process.env, GIT_ALLOW_PROTOCOL: pluginGitAllowedProtocols() },
     timeout: PLUGIN_GIT_TIMEOUT_MS,
+    signal: signal ? AbortSignal.any([signal, pluginGitShutdown.signal]) : pluginGitShutdown.signal,
     // Why: abort must stop remote-https and index-pack too, and settle only once they exit.
-    ...(signal ? { signal, terminationBarrier: true } : {})
+    terminationBarrier: true
   })
   return stdout.trim()
 }
@@ -118,7 +137,7 @@ export async function readPluginGitCommit<T>(
   if (exactCommit && !SHA1_COMMIT_PATTERN.test(ref)) {
     throw new Error('SHA-256 plugin repositories are not supported')
   }
-  const temporaryRoot = await mkdtemp(join(tmpdir(), 'orca-plugin-git-'))
+  const temporaryRoot = await mkdtemp(join(tmpdir(), PLUGIN_GIT_CLONE_TEMP_PREFIX))
   const repository = join(temporaryRoot, 'repository')
   const hooks = join(temporaryRoot, 'no-hooks')
   const config = pluginGitConfigArgs(hooks)
@@ -179,7 +198,8 @@ export async function checkoutPluginGitSource(input: {
         repository,
         commit: resolved,
         destination: input.destination,
-        ...(input.path ? { path: input.path } : {})
+        ...(input.path ? { path: input.path } : {}),
+        git: mainProcessGitBytes
       })
   )
   return commit

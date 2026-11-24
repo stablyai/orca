@@ -1,21 +1,23 @@
 // Isolate native watcher teardown crashes so they cannot kill the app and its agent sessions (#7547).
+import { realpathSync } from 'node:fs'
 import type * as ParcelWatcher from '@parcel/watcher'
-import { loadParcelWatcher } from './parcel-watcher-module-loader'
-import { startShallowWatcher } from './parcel-watcher-shallow-subscription'
-import { detectShallowWatchDelivery } from '../../shallow-watch-delivery-probe'
-import { startWatcherDeliveryCanary } from '../../parcel-watcher-delivery-canary'
+import { withMacosProtectedWatchExclusions } from './root-paths/macos-protected-watch-exclusions'
+import { loadParcelWatcher } from './native-subscriptions/parcel-watcher-module-loader'
+import { startShallowWatcher } from './native-subscriptions/parcel-watcher-shallow-subscription'
+import { detectShallowWatchDelivery } from './native-subscriptions/shallow-watch-delivery-probe'
+import { startWatcherDeliveryCanary } from './event-delivery/parcel-watcher-delivery-canary'
 import {
   createWatcherProcessEventDeliveryQueue,
   isParcelWatcherRescanRequiredError,
   type WatcherProcessEventDeliveryQueue
-} from './parcel-watcher-event-delivery'
+} from './event-delivery/parcel-watcher-event-delivery'
 import type {
   HostToWatcherMessage,
   WatcherProcessDeliveryOptions,
   WatcherProcessSubscribeOptions,
   WatcherToHostMessage
 } from './parcel-watcher-process-protocol'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 
 type WatcherSubscription = {
   unsubscribe: () => Promise<void>
@@ -217,7 +219,15 @@ function main(): void {
     if (message.op === 'subscribe') {
       subscriptions.set(
         message.id,
-        handleSubscribe(message.id, message.dir, message.opts, message.delivery)
+        handleSubscribe(
+          message.id,
+          message.dir,
+          // The host sends the canonical root; decide exclusions here, off Electron main.
+          withMacosProtectedWatchExclusions(message.dir, message.opts, {
+            realpath: realpathSync.native
+          }),
+          message.delivery
+        )
       )
       return
     }

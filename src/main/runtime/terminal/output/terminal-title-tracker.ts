@@ -1,17 +1,15 @@
-import type { TerminalTitleFactMeta } from '../../../../shared/terminal-output-side-effects'
 import { OrcaRuntimeWithEmitDaemonPtyTransientFact } from './terminal-transient-facts'
-import { getDecorativeTitleGateKey } from '../../../../shared/agent-decorative-title-signature'
-import { shouldEmitTitleFactForFrame } from '../../decorative-title-fact-emission'
-import type { RuntimePtyTitleTrackerEntry } from '../../runtime-terminal-state-records'
-import { createTerminalTitleTracker } from '../../../../shared/terminal-output-side-effects'
-import type { AgentStatus } from '../../../../shared/agent-detection'
-import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
+import { getDecorativeTitleGateKey } from '../../../../shared/agent-status/title/agent-decorative-title-signature'
+import { shouldEmitTitleFactForFrame } from './decorative-title-fact-emission'
+import type { RuntimePtyTitleTrackerEntry } from '../records/runtime-terminal-state-records'
+import {
+  type TerminalTitleFactMeta,
+  createTerminalTitleTracker
+} from '../../../../shared/terminal/output/terminal-output-side-effects'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
+import type { TerminalGitHubPRLink } from '../../../../shared/terminal/links/terminal-github-pr-link-detector'
 
 export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntimeWithEmitDaemonPtyTransientFact {
-  protected abstract recheckHookAgentPresenceForPty(
-    ptyId: string,
-    exitedSince?: number
-  ): Promise<'live' | 'unverifiable' | 'exited' | null>
   protected abstract applyTrackedPtyTitle(
     ptyId: string,
     rawTitle: string,
@@ -160,13 +158,11 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
           this.applyPtyProgramActivity(ptyId, activity)
         },
         onCommandStarted: () => {
+          this.noteCommandStarted(ptyId)
           this.openCodeRunLifetime.onCommandStarted(ptyId)
         },
         onCommandFinished: (exitCode: number | null) => {
-          void this.recheckHookAgentPresenceForPty(ptyId)
-          this.retirePtyAgentLaunchAuthority(ptyId)
-          this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
-          this.openCodeRunLifetime.onCommandFinished(ptyId, exitCode)
+          this.noteCommandFinished(ptyId, exitCode)
         },
         onBell: () => {
           this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
@@ -193,10 +189,7 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
       chunkTouchedSessionTabs: false,
       pendingFacts: [],
       afterFacts: [],
-      // Headless serve has no side-effect consumer, so skip Command Code scraping; otherwise arm from launch command or banner.
-      commandCodeDetector: this.terminalSideEffectConsumerAvailable
-        ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null,
+      commandCodeDetector: this.createTerminalSideEffectCommandCodeDetector(ptyId),
       programActivity: null,
       // The persisted title is already normalized, so it stands for both forms.
       lastTitle: initialTitle !== null ? { raw: initialTitle, normalized: initialTitle } : null

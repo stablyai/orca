@@ -1,45 +1,55 @@
-import { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../../session-graph/session-graph-authority'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { OrcaRuntimeWithBrowserWorkspaceRouting } from '../../browser/client-pages/runtime-browser-workspace-routing'
+
 import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceSelector
-} from '../../../../shared/floating-workspace-worktree'
-import { resolveFloatingTerminalCwd } from '../../../ipc/floating-workspace-directory'
-import type { BrowserNetworkExecutionHost } from '../../../../shared/browser-network-execution-host'
+} from '../../../../shared/workspace/identity/floating-workspace-worktree'
+import { resolveFloatingTerminalCwd } from '../../../ipc/worktrees/floating-workspace-directory'
+import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import {
+  type ExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   getConnectionExecutionHostId,
   getWorktreeExecutionHostId,
   parseExecutionHostId
-} from '../../../../shared/execution-host'
-import { resolveRuntimeBrowserNetworkExecutionHost } from '../../runtime-browser-network-execution-host'
-import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
+} from '../../../../shared/execution-host/execution-host'
+import { resolveRuntimeBrowserNetworkExecutionHost } from '../../browser/network/runtime-browser-network-execution-host'
+import { resolveLocalProjectRuntimeForWorktreeId } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 import {
   resolveWorktreeHostRouting,
   resolveWorktreeLaunchHost
-} from '../../worktree-launch-host-repo'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import type { Worktree } from '../../../../shared/worktree/types'
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
-import { resolveTerminalStartupCwd } from '../../../../shared/terminal-startup-cwd'
-import type { ResolvedTerminalWorkspaceLaunchTarget } from '../../orca-runtime-core'
-import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../../orca-runtime-core'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { homedir } from 'node:os'
-import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
+} from '../../workspaces/catalog/worktree-launch-host-repo'
 import {
-  WORKTREE_ID_SEPARATOR,
-  getRepoIdFromWorktreeId,
-  worktreeIdsEqual
-} from '../../../../shared/worktree/id'
-import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
-import { WorktreeIdRequiresFullPathError } from '../../runtime-worktree-lineage-resolution'
-import { triggerTerminalSpawnPushTargetMaterialization } from '../../runtime-terminal-spawn-push-target-materialization'
-import { resolveCreatedWorktreeTerminalTarget } from '../../runtime-created-worktree-terminal-target'
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import { launchTargetGitSelector } from '../../workspaces/catalog/launch-target-git-selector'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import { resolveTerminalStartupCwd } from '../../../../shared/shell/launch/terminal-startup-cwd'
+
+import type { ResolvedTerminalWorkspaceLaunchTarget } from './terminal-workspace-launch-target'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
+import { homedir } from 'node:os'
+import { getExplicitWorktreeIdSelector } from '../../workspaces/catalog/runtime-worktree-selection'
+import { getRepoIdFromWorktreeId, worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { WORKTREE_ID_SEPARATOR } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
+import { WorktreeIdRequiresFullPathError } from '../../workspaces/lineage/worktree-id-requires-full-path-error'
+import { triggerTerminalSpawnPushTargetMaterialization } from './runtime-terminal-spawn-push-target-materialization'
+import { resolveCreatedWorktreeTerminalTarget } from './runtime-created-worktree-terminal-target'
+const AGENT_HOOK_RUNTIME_ENV_KEYS = [
+  'ORCA_AGENT_HOOK_PORT',
+  'ORCA_AGENT_HOOK_TOKEN',
+  'ORCA_AGENT_HOOK_ENV',
+  'ORCA_AGENT_HOOK_VERSION',
+  'ORCA_AGENT_HOOK_TRANSPORT',
+  'ORCA_AGENT_HOOK_ENDPOINT'
+] as const
 
 export type TerminalWorkspaceCreationEvidence = [
   createdWorktree?: Worktree,
@@ -64,7 +74,7 @@ function withoutWorktreeLineage(worktree: Worktree): ResolvedWorktree {
   }
 }
 
-export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extends OrcaRuntimeWithTransitionGraphReloadToTerminalState {
+export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extends OrcaRuntimeWithBrowserWorkspaceRouting {
   protected resolveBrowserNetworkExecutionHostForWorktree(worktree?: {
     id: string
     repoId?: string
@@ -127,7 +137,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
   async resolveTerminalWorkspaceLaunchScope(
     selector: string,
     createdWorktree?: Worktree,
-    options: { wslUserAct?: boolean } = {},
+    options: { wslUserAct?: boolean; readOnly?: boolean } = {},
     resolvedWorktree?: ResolvedWorktree,
     resolvedFolder?: FolderWorkspace
   ): Promise<TerminalWorkspaceLaunchScope> {
@@ -145,7 +155,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
   protected async resolveTerminalWorkspaceLaunchTarget(
     selector: string,
     createdWorktree?: Worktree,
-    options: { wslUserAct?: boolean } = {},
+    options: { wslUserAct?: boolean; readOnly?: boolean } = {},
     resolvedWorktree?: ResolvedWorktree,
     resolvedFolder?: FolderWorkspace,
     checkPath = true
@@ -168,7 +178,8 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
       selector,
       options,
       resolvedFolder,
-      checkPath
+      // A read must not touch the disk: a WSL UNC path would start its distro.
+      checkPath && !options.readOnly
     )
     if (folderScope) {
       return {
@@ -177,9 +188,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
       }
     }
 
-    const workspaceSelector = selector.startsWith('id:') ? selector.slice(3) : selector
-    const parsed = parseWorkspaceKey(workspaceSelector)
-    const worktreeSelector = parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
+    const worktreeSelector = launchTargetGitSelector(selector) ?? selector
     const worktree =
       resolvedWorktree ??
       resolveCreatedWorktreeTerminalTarget(this.store, selector, createdWorktree) ??
@@ -193,7 +202,8 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
     const repo = resolution.repo ?? this.store?.getRepo(worktree.repoId) ?? null
     triggerTerminalSpawnPushTargetMaterialization(
       worktree.path,
-      worktree.pushTarget,
+      // A read must not add remotes or fetch; only a spawn prepares the push target.
+      options.readOnly ? undefined : worktree.pushTarget,
       repo,
       this.store,
       worktree.repoId,

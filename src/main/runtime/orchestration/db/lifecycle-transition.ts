@@ -1,6 +1,9 @@
+import { noteQuestionEdge } from './messages/question-edges'
 import type Database from '../../../sqlite/sync-database'
+import { workerDockSourcesFor } from './worker-dock-source-presence'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrchestrationDb } from './orchestration-db'
+import { notifyPeerMailQueued } from '../federation/peer-mail/peer-mail-waiters'
 
 /** Callers own transactions so lifecycle projections and mailbox effects commit atomically together. */
 export type LifecycleEntity = 'task' | 'dispatch' | 'worker'
@@ -11,13 +14,14 @@ type LifecycleWriteTransaction = {
 
 export function beginLifecycleWriteTransaction(
   db: Database.Database,
-  savepoint: string
+  savepoint: string,
+  mode: 'read' | 'write' = 'write'
 ): LifecycleWriteTransaction {
   if (!/^[a-z][a-z0-9_]*$/.test(savepoint)) {
     throw new Error(`Invalid lifecycle savepoint: ${savepoint}`)
   }
   const nested = db.isTransaction
-  db.exec(nested ? `SAVEPOINT ${savepoint}` : 'BEGIN IMMEDIATE')
+  db.exec(nested ? `SAVEPOINT ${savepoint}` : mode === 'read' ? 'BEGIN' : 'BEGIN IMMEDIATE')
   return { savepoint: nested ? savepoint : null }
 }
 
@@ -32,6 +36,10 @@ export function rollbackLifecycleWriteTransaction(
   db: Database.Database,
   transaction: LifecycleWriteTransaction
 ): void {
+  // SQLite ends the whole transaction itself on I/O and disk-full errors; rolling back again would replace that error.
+  if (!db.isTransaction) {
+    return
+  }
   if (transaction.savepoint) {
     db.exec(`ROLLBACK TO ${transaction.savepoint}`)
     db.exec(`RELEASE ${transaction.savepoint}`)
@@ -185,7 +193,14 @@ export function transitionLifecycleWithDb(
       `${params.entity} ${params.id} changed while transitioning.`
     )
   }
-
+  if (params.entity === 'worker' && current.state !== params.to) {
+    workerDockSourcesFor(db)?.changedDispatch(params.id)
+  }
+  // A peer Run's change is queued home by trigger in this statement.
+  notifyPeerMailQueued(db)
+  if (params.entity !== 'task') {
+    noteQuestionEdge({ kind: 'dispatch', id: params.id })
+  }
   return { changed: true }
 }
 

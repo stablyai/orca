@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { resolveMuseSessionsDir } from '../../shared/muse-session-log'
+import { resolveMuseSessionsDir } from '../../shared/agent-hook-listener/providers/muse/muse-session-log'
 
 const YEAR_DIR = /^\d{4}$/
 const MONTH_OR_DAY_DIR = /^\d{2}$/

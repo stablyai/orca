@@ -1,5 +1,7 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { authorityKey } from '../../../../shared/execution-host/host-authority'
 import type { AppState } from '@/store/types'
-import { isFileOnLocalHostFromState } from '@/lib/connection-owner-resolution'
+import { isFileOnLocalHostFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 
 type CopilotAttachOwnerState = Pick<
   AppState,
@@ -16,7 +18,16 @@ export function isCopilotAttachOwnerLocal(
   file: { fileId: string; filePath: string; worktreeId: string | null }
 ): boolean {
   const openFile = state.openFiles?.find((candidate) => candidate.id === file.fileId)
-  if (openFile?.runtimeEnvironmentId?.trim() || openFile?.externalSshTargetId?.trim()) {
+  if (!openFile || openFile.runtimeEnvironmentId?.trim() || openFile.externalSshTargetId?.trim()) {
+    return false
+  }
+  const generation = openFile.operationProvenance?.generation
+  if (
+    generation &&
+    (generation.route.runtimeEnvironmentId ||
+      generation.route.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
+      (generation.authority && authorityKey(generation.authority) !== LOCAL_EXECUTION_HOST_ID))
+  ) {
     return false
   }
   return isFileOnLocalHostFromState(state, file.worktreeId, file.filePath)

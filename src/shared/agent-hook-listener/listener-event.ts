@@ -1,7 +1,10 @@
-import type { AgentProcessPresence } from '../agent-process-presence'
-import type { ParsedAgentStatusPayload, TurnEndDisposition } from '../agent-status-types'
-import type { AgentHookSource } from '../agent-hook-relay'
-import type { AgentProviderSessionMetadata } from '../agent-session-resume'
+import type { AgentProcessPresence } from '../agent-status/process/agent-process-presence'
+import type {
+  ParsedAgentStatusPayload,
+  TurnEndDisposition
+} from '../agent-status/contracts/agent-status-types'
+import type { AgentHookSource } from './transport/agent-hook-relay'
+import type { AgentProviderSessionMetadata } from '../agent-session/lifecycle/agent-session-resume'
 import type { ClaudeSettledRequest } from './claude-settled-permission-requests'
 
 /** Execution-host turn record, saved with rows but private; turnEndedAt is the public fact. */
@@ -17,6 +20,9 @@ export type AgentHookEventPayload = {
   agentPresence?: AgentProcessPresence
   /** Authenticated hook route that produced this event. */
   source?: AgentHookSource
+  /** Who runs the conversation: a server that outlives the pane (tmux, an OpenCode attach) is
+   *  shared; it follows the conversation's binding, and only shared survives a restart. */
+  executionHost?: 'pane-owned' | 'shared' | 'unverifiable'
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
   launchToken?: string
   /** Host-minted live turn revision for guarded interrupt commands; never persisted. */
@@ -65,6 +71,8 @@ export type AgentHookEventPayload = {
   stopHookActive?: true
   /** Provider turn identity folded into hostTurn; never stored or sent directly. */
   nativeTurnKey?: string
+  /** A live main-agent event that opens a provider turn by its new native id, ahead of the turn's prompt event. */
+  opensTurn?: true
   /** Saved host-private turn record; snapshot/IPC/relay allow-lists exclude it. */
   hostTurn?: HostTurnRecord
   /** Claude live work the child list does not show (a shell, a cron, an owed task notification); rejects false input-based interrupts. */
@@ -73,6 +81,8 @@ export type AgentHookEventPayload = {
   structuredHost?: StructuredHostStatus
   /** Rejoin moved pane rows by runtime terminal handle; never persist beyond its issuing runtime. */
   terminalHandle?: string
+  /** Full reply text this hook carried; main's ingest consumes it and never stores, relays or persists it. */
+  replyCandidate?: string
   /** Execution-host clock retained for age-preserving projection replay; never sent verbatim. */
   hostEvidenceObservedAt?: number
   payload: ParsedAgentStatusPayload
@@ -90,4 +100,14 @@ export type ToolSnapshot = {
   /** Tool output remains visible in status cards but must not render as assistant prose in chat. */
   lastAssistantMessageIsToolOutput?: boolean
   clearLastAssistantMessage?: boolean
+}
+
+/** Work agy runs beside the parent turn; see HookListenerState.antigravityChildWorkByPaneKey. */
+export type AntigravityChildWork = {
+  subagentParent?: string
+  commands?: Set<string>
+  /** Subagent conversations whose latest hook was not a fully idle Stop. */
+  openSubagents?: Set<string>
+  /** When a subagent last sent a fully idle Stop after the parent's latest event; agy may then end with no parent Stop. */
+  helpersIdleAt?: number
 }

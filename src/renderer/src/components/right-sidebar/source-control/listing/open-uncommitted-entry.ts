@@ -1,6 +1,6 @@
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { AppState } from '@/store/types'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { joinPath } from '@/lib/path'
 
 export function openUncommittedEntry(
@@ -25,7 +25,14 @@ export function openUncommittedEntry(
     (entry.status === 'added' || entry.status === 'untracked')
   ) {
     state.openFile(
-      { filePath, relativePath: entry.path, worktreeId, language, mode: 'edit' },
+      {
+        filePath,
+        relativePath: entry.path,
+        worktreeId,
+        language,
+        mode: 'edit',
+        runtimeEnvironmentId: options.runtimeEnvironmentId
+      },
       options
     )
     return

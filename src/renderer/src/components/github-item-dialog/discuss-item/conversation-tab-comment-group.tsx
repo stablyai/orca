@@ -11,8 +11,8 @@ import {
   getPRCommentGroupRoot,
   isResolvedPRCommentGroup,
   type PRCommentGroup
-} from '../../../../../shared/pr-comment-groups'
-import { translate } from '@/i18n/i18n'
+} from '../../../../../shared/source-control/review-comments/pr-comment-groups'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   ConversationTabCommentCard,
   type ConversationTabCommentCardProps
@@ -25,6 +25,7 @@ export function ConversationTabCommentGroup({
   ConversationTabCommentCardProps,
   'comment' | 'isReply'
 >): React.JSX.Element {
+  const t = useTranslate()
   const cards =
     group.kind === 'thread'
       ? [
@@ -65,14 +66,14 @@ export function ConversationTabCommentGroup({
         <AccordionTrigger className="px-3 py-2 text-[13px] text-muted-foreground hover:bg-accent/30">
           <span className="min-w-0 truncate">
             {group.kind === 'thread'
-              ? translate(
+              ? t(
                   'auto.components.GitHubItemDialog.resolvedThreadBy',
                   'Resolved thread by {{author}}',
                   {
                     author: root.author
                   }
                 )
-              : translate(
+              : t(
                   'auto.components.GitHubItemDialog.resolvedCommentBy',
                   'Resolved comment by {{author}}',
                   {

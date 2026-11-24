@@ -17,8 +17,6 @@ export const PLUGIN_CATALOG_SCHEMA_FILE = 'orca-catalog.v2.schema.json'
 /** Git ref for published schemas; switch to the first v2 release tag when it ships. */
 export const PLUGIN_SCHEMA_GIT_REF = 'main'
 export const PLUGIN_SCHEMA_BASE_URL = `https://raw.githubusercontent.com/stablyai/orca/${PLUGIN_SCHEMA_GIT_REF}/${PLUGIN_SCHEMA_DIRECTORY}/`
-/** The starter plugin authors copy; it carries the schema so completion works offline. */
-const PLUGIN_TEMPLATE_DIRECTORY = 'examples/plugins/orca-gleam-syntax'
 
 export type PluginJsonSchema = z.core.JSONSchema.BaseSchema
 
@@ -63,7 +61,6 @@ export function pluginSchemaGeneratedFiles(): Record<string, string> {
   const manifestJson = `${JSON.stringify(manifest, null, 2)}\n`
   return {
     [`${PLUGIN_SCHEMA_DIRECTORY}/${PLUGIN_MANIFEST_SCHEMA_FILE}`]: manifestJson,
-    [`${PLUGIN_TEMPLATE_DIRECTORY}/${PLUGIN_MANIFEST_SCHEMA_FILE}`]: manifestJson,
     [`${PLUGIN_SCHEMA_DIRECTORY}/${PLUGIN_CATALOG_SCHEMA_FILE}`]: `${JSON.stringify(catalog, null, 2)}\n`,
     'docs/reference/plugin-manifest.md': renderPluginSchemaReference(manifest, {
       file: 'orca-plugin.json',

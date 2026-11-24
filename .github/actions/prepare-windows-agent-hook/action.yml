@@ -8,7 +8,7 @@ runs:
       id: rust-scope
       if: runner.os == 'Windows'
       shell: bash
-      run: node config/scripts/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
+      run: node config/scripts/native-build/windows/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
 
     # Source globs, not crate/**: target/ and .build/ can already exist when this key is computed.
     # Real inputs only: older restores are safe because the build re-checks the exe's fingerprint.
@@ -20,7 +20,7 @@ runs:
           native/windows-agent-hook/.build
           native/windows-agent-hook/target
           ~/.cargo/registry
-        key: windows-agent-hook-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-agent-hook/src/**', 'native/windows-agent-hook/build.rs', 'native/windows-agent-hook/Cargo.toml', 'native/windows-agent-hook/Cargo.lock', 'native/windows-agent-hook/app.manifest', 'native/windows-agent-hook/.cargo/**', 'config/scripts/build-windows-agent-hook.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'config/scripts/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
+        key: windows-agent-hook-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-agent-hook/src/**', 'native/windows-agent-hook/build.rs', 'native/windows-agent-hook/Cargo.toml', 'native/windows-agent-hook/Cargo.lock', 'native/windows-agent-hook/app.manifest', 'native/windows-agent-hook/.cargo/**', 'config/scripts/native-build/windows/build-windows-agent-hook.mjs', 'config/scripts/native-build/windows/windows-rust-executable-build.mjs', 'config/scripts/native-build/windows/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
         restore-keys: |
           windows-agent-hook-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-
 
@@ -28,5 +28,5 @@ runs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        node config/scripts/build-windows-agent-hook.mjs
+        node config/scripts/native-build/windows/build-windows-agent-hook.mjs
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

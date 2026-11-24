@@ -100,6 +100,7 @@ export function useSourceControlFileListing({
     activeRepoTarget,
     activeWorktreeId,
     worktreePath,
+    branchName,
     compareBaseRef,
     isFolder,
     isBranchVisible,

@@ -3,7 +3,7 @@ import { COPILOT_MAX_DOCUMENT_CHARS } from '../../../../shared/copilot-inline-co
 import { createFakeCopilotModel } from './fake-copilot-text-model-fixture'
 import { attachMonacoCopilotDocument } from './monaco-copilot-attach'
 
-vi.mock('@/lib/monaco-setup', () => ({
+vi.mock('@/lib/editor/monaco/monaco-setup', () => ({
   monaco: {
     languages: {
       registerInlineCompletionsProvider: () => ({ dispose: () => {} }),

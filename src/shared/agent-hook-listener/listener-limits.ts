@@ -1,5 +1,5 @@
-import { ORCA_HOOK_PROTOCOL_VERSION } from '../agent-hook-types'
-import { REMOTE_AGENT_HOOK_ENV } from '../agent-hook-relay'
+import { ORCA_HOOK_PROTOCOL_VERSION } from './configuration/agent-hook-types'
+import { REMOTE_AGENT_HOOK_ENV } from './transport/agent-hook-relay'
 import type { HookListenerState } from './listener-state'
 
 /** Bound the warn-once Sets so a client varying `version`/`env` per request can't grow them unbounded. */

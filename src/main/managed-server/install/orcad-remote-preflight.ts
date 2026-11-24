@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import { ORCAD_NODE_RUNTIME_IDENTITY } from '../../../shared/orcad-node-runtime-identity'
-import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../../shared/orcad-artifacts'
+import { ORCAD_NODE_RUNTIME_IDENTITY } from '../../../shared/remote-runtime/orcad-distribution/orcad-node-runtime-identity'
+import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
   parseOrcadProfilePreflight,
   type OrcadProfilePreflightResponse
-} from '../../../shared/orcad-profile-preflight'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-profile-preflight'
 import { assertPosixOrcadHost } from './orcad-remote-host-support'
 import {
   orcadWindowsNodeCommandLine,
@@ -16,14 +16,24 @@ import {
 import { readWindowsOrcadSlotEntry } from './orcad-remote-launch-windows'
 import { ORCAD_WINDOWS_RUNTIME_MARKER } from '../host-state/orcad-windows-host-script'
 import { orcadNodeSlotRuntimeCommand, selectOrcadSlotEntryCommand } from './orcad-remote-runtime'
-import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { execCommand, isSshCommandExitError } from '../../ssh/remote-exec/remote-exec-command'
+import { SYSTEM_SSH_TRANSPORT_EXIT_CODE } from '../../ssh/system-transport/system-ssh-operation-lifecycle'
+import { errorMessage } from '../../../shared/errors/error-message'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+} from '../../ssh/remote-host/ssh-remote-platform'
+import type { OrcadHostTransport } from './orcad-host-transport'
+
+/** The preflight timed out or lost its channel before the host answered, so it proves nothing about the host. */
+export class OrcadPreflightUnansweredError extends Error {
+  constructor(cause: unknown) {
+    super(errorMessage(cause), { cause })
+    this.name = 'OrcadPreflightUnansweredError'
+  }
+}
 
 export function orcadProfilePreflightCommand(
   host: RemoteHostPlatform,
@@ -65,12 +75,32 @@ export async function preflightInstalledOrcad(options: {
         nonce,
         options.probeDaemonsUnder
       )
-  const output = await execCommand(options.conn, command, {
+  const output = await execPreflightCommand(options.conn, command, {
     signal: options.signal,
     timeoutMs: ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
     wrapCommand: !isWindowsRemoteHost(options.host)
   })
   return parseOrcadProfilePreflight(output, nonce, ORCAD_NODE_RUNTIME_IDENTITY, options.fullVersion)
+}
+
+async function execPreflightCommand(
+  conn: OrcadHostTransport,
+  command: string,
+  options: NonNullable<Parameters<typeof execCommand>[2]>
+): Promise<string> {
+  const systemSsh = conn.usesSystemSshTransport?.() === true
+  try {
+    return await execCommand(conn, command, options)
+  } catch (error) {
+    // Only the remote command's own exit is the host's answer; OpenSSH exits 255 for itself.
+    const hostExited =
+      isSshCommandExitError(error) &&
+      !(systemSsh && error.exitCode === SYSTEM_SSH_TRANSPORT_EXIT_CODE)
+    if (hostExited || options.signal?.aborted) {
+      throw error
+    }
+    throw new OrcadPreflightUnansweredError(error)
+  }
 }
 
 // Windows uses plain argv; orcad opens no window and needs no background-launch environment.
@@ -85,7 +115,7 @@ async function windowsOrcadProfilePreflightCommand(
   nonce: string
 ): Promise<string> {
   const { host, remoteInstallDir } = options
-  const slotAnswer = await execCommand(
+  const slotAnswer = await execPreflightCommand(
     options.conn,
     orcadWindowsSlotOpCommand(host, remoteInstallDir, 'slot-runtime', [remoteInstallDir]),
     { signal: options.signal, wrapCommand: false }

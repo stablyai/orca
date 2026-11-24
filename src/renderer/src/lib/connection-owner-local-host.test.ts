@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import type { Repo } from '../../../shared/repo-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
+import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { isFileOnLocalHostFromState } from './connection-owner-resolution'
+import { isFileOnLocalHostFromState } from './workspace/ownership/connection-owner-resolution'
 
 type State = Parameters<typeof isFileOnLocalHostFromState>[0]
 

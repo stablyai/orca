@@ -1,26 +1,27 @@
-import type { StructuredAgentSessionStatusPublisher } from '../../native-chat/agent-session-wire/structured-agent-session-status-ownership'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+import type { StructuredAgentSessionStatusPublisher } from '../../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   parseAgentStatusSubject,
   serializeAgentStatusSubject,
   type AgentStatusStructuredSessionSubject
-} from '../../../shared/agent-status-subject'
+} from '../../../shared/agent-status/contracts/agent-status-subject'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../shared/structured-agent-session-projection'
+} from '../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   continueMainAgentStatus,
   isAgentStatusHeldOpenByChildWork,
   mainAgentTurnInterrupted
-} from '../../../shared/agent-lead-status-fold'
-import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
+} from '../../../shared/agent-status/lifecycle/agent-lead-status-fold'
+import { structuredAgentSessionAgentStatus } from '../../../shared/agent-session/view/structured-agent-session-agent-status'
 import {
   structuredAgentSessionDatedMainAgent,
   structuredAgentSessionRowStateStartedAt
-} from '../../../shared/structured-agent-session-status-started-at'
+} from '../../../shared/agent-session/view/structured-agent-session-status-started-at'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
+import { childWorkBackgroundCommands } from '../../../shared/agent-status/lifecycle/agent-background-wait'
 import { AgentHookServerIngestTerminal } from './server-ingest-terminal'
 
 export abstract class AgentHookServerIngestStructured extends AgentHookServerIngestTerminal {
@@ -77,18 +78,30 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     ) {
       throw new Error('Structured status does not match its trusted owner subject')
     }
+    const previous = this.canonicalStatusStore.getParent(parsed)
     if (!summary.status) {
-      this.dropStructuredStatus(parsed, notify)
+      if (!previous || previous.status) {
+        this.canonicalStatusStore.applyMutation({
+          parent: { subject: parsed, firstObservedAt: previous?.firstObservedAt ?? Date.now() }
+        })
+        if (previous?.status) {
+          this.dropStructuredStatusRow(parsed, previous.status, notify)
+        }
+      }
       return
     }
-    const previous = this.canonicalStatusStore.getParent(parsed)
     const priorStatus = previous?.status
     // Read canonical children; the summary's task list loses information.
+    const childWork = this.canonicalStatusStore.getChildren(parsed)
     const agentStatus = structuredAgentSessionAgentStatus({
       status: summary.status,
-      childWork: this.canonicalStatusStore.getChildren(parsed),
+      childWork,
       turnOutcome: summary.turnOutcome,
-      ...(summary.stopping ? { stopping: summary.stopping } : {})
+      ...(summary.stopping ? { stopping: summary.stopping } : {}),
+      ...(summary.awaitsAnswer ? { awaitsAnswer: summary.awaitsAnswer } : {}),
+      ...(summary.attentionAsksOnlyQuestions
+        ? { attentionAsksOnlyQuestions: summary.attentionAsksOnlyQuestions }
+        : {})
     })
     const { state, workingMode } = agentStatus
     // Journal dates preserve main-agent continuity across republishing after restart.
@@ -113,6 +126,9 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
       ...(summary.providerSession ? { providerSession: summary.providerSession } : {}),
       state,
       ...(workingMode ? { workingMode } : {}),
+      ...(workingMode === 'monitoring'
+        ? { backgroundCommands: childWorkBackgroundCommands(childWork) }
+        : {}),
       mainAgent,
       // Older readers use interrupted instead of mainAgent.
       interrupted: mainAgentTurnInterrupted(mainAgent),
@@ -188,17 +204,25 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     if (!publication) {
       return
     }
-    const key = serializeAgentStatusSubject(parsed)
-    this.canonicalListingOrder.delete(key)
     if (previous.status) {
-      const subjects = this.canonicalSubjectsByPane.get(previous.status.paneKey)
-      subjects?.delete(key)
-      if (subjects?.size === 0) {
-        this.canonicalSubjectsByPane.delete(previous.status.paneKey)
-      }
-      this.commitStatusRowMutation(structuredStatusLegacyEvent(previous.status), undefined)
-      notify()
-      this.emitStatusDropped(previous.status.paneKey)
+      this.dropStructuredStatusRow(parsed, previous.status, notify)
     }
+  }
+
+  private dropStructuredStatusRow(
+    subject: AgentStatusStructuredSessionSubject,
+    previous: AgentStatusIpcPayload,
+    notify: () => void
+  ): void {
+    const key = serializeAgentStatusSubject(subject)
+    this.canonicalListingOrder.delete(key)
+    const subjects = this.canonicalSubjectsByPane.get(previous.paneKey)
+    subjects?.delete(key)
+    if (subjects?.size === 0) {
+      this.canonicalSubjectsByPane.delete(previous.paneKey)
+    }
+    this.commitStatusRowMutation(structuredStatusLegacyEvent(previous), undefined)
+    notify()
+    this.emitStatusDropped(previous.paneKey)
   }
 }

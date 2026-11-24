@@ -1,66 +1,22 @@
-import { OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity } from '../persisted-surfaces/has-exact-persisted-terminal-surface-identity'
-import type {
-  OrchestrationEnvironmentCallOptions,
-  OrchestrationWorkerServer
-} from '../../orchestration/environment-transport'
-import type { RuntimeOrchestrationEnvelope } from '../../../../shared/runtime-rpc-envelope'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { crewWorkspaceNames } from '../../orchestration/crew/crew-workspace-names'
+import { isDeepStrictEqual } from 'node:util'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  getRepoExecutionHostId,
-  parseExecutionHostId,
-  toSshExecutionHostId
-} from '../../../../shared/execution-host'
-import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { TerminalListHostScope } from '../../terminal/query/terminal-list-host-scope'
+import type { RuntimeWorkspaceSelectors } from '../workspace-selectors'
 
-export abstract class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity {
+export abstract class OrcaRuntimeWithGetRuntimeId extends TerminalListHostScope {
+  protected abstract buildResolvedWorktreeForHost(
+    ...args: Parameters<RuntimeWorkspaceSelectors['buildResolvedWorktreeForHost']>
+  ): ReturnType<RuntimeWorkspaceSelectors['buildResolvedWorktreeForHost']>
+
   getRuntimeId(): string {
     return this.runtimeId
-  }
-
-  resolveOrchestrationWorkerServer(selector: string): OrchestrationWorkerServer {
-    return this.orchestrationFederation.resolveWorkerServer(selector)
-  }
-
-  callOrchestrationWorkerServer(
-    selector: string,
-    method: string,
-    params: unknown,
-    timeoutMs?: number,
-    envelope?: RuntimeOrchestrationEnvelope,
-    internal?: OrchestrationEnvironmentCallOptions
-  ): Promise<unknown> {
-    return this.orchestrationFederation.callWorkerServer(
-      selector,
-      method,
-      params,
-      timeoutMs,
-      envelope,
-      internal
-    )
-  }
-
-  syncOrchestrationFederation(runId?: string): Promise<void> {
-    return this.orchestrationFederation.sync(runId)
-  }
-
-  syncOrchestrationFederatedDispatch(dispatchId: string): Promise<void> {
-    return this.orchestrationFederation.syncDispatch(dispatchId)
-  }
-
-  syncOrchestrationFederatedDispatchAfterCurrent(dispatchId: string): Promise<void> {
-    return this.orchestrationFederation.syncDispatchAfterCurrent(dispatchId)
-  }
-
-  ensureOrchestrationFederationRelay(runId?: string): void {
-    this.orchestrationFederation.ensureRelay(runId)
-  }
-
-  stopOrchestrationFederationRelay(): void {
-    this.orchestrationFederation.stopRelay()
   }
 
   getStartedAt(): number {
@@ -69,106 +25,6 @@ export abstract class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExac
 
   protected tryGetWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId | null {
     return this.workspaceSessions.tryGetHostId(worktreeId)
-  }
-
-  protected listKnownExecutionHostIds(
-    additionalHostIds: Iterable<ExecutionHostId> = [],
-    includeConfiguredHosts = true
-  ): Set<ExecutionHostId> {
-    const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
-    for (const hostId of this.store?.getWorkspaceSessionHostIds?.() ?? []) {
-      hostIds.add(hostId)
-    }
-    for (const hostId of additionalHostIds) {
-      if (!/%|\s/.test(hostId)) {
-        hostIds.add(hostId)
-      }
-    }
-    if (includeConfiguredHosts) {
-      for (const repo of this.store?.getRepos?.() ?? []) {
-        hostIds.add(getRepoExecutionHostId(repo))
-      }
-      for (const folder of this.store?.getFolderWorkspaces?.() ?? []) {
-        if (folder.executionHostId) {
-          hostIds.add(folder.executionHostId)
-        } else if (folder.connectionId) {
-          hostIds.add(toSshExecutionHostId(folder.connectionId))
-        }
-      }
-    }
-    return hostIds
-  }
-
-  protected buildTerminalListHostScope(
-    targetWorktreeId: string | null,
-    terminals: readonly RuntimeTerminalSummary[],
-    worktrees: Iterable<ResolvedWorktree>,
-    queriedHostIds: ReadonlySet<ExecutionHostId>
-  ): { hostIds: ExecutionHostId[]; omittedHostIds: ExecutionHostId[] } {
-    const known = this.listKnownExecutionHostIds(
-      queriedHostIds,
-      targetWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID
-    )
-    let targetHost: ExecutionHostId | null = null
-    for (const worktree of worktrees) {
-      if (worktree.id === targetWorktreeId && worktree.hostId) {
-        targetHost = worktree.hostId
-      }
-    }
-    for (const worktree of worktrees) {
-      if (
-        worktree.hostId &&
-        (parseExecutionHostId(targetHost ?? '')?.kind !== 'runtime' ||
-          worktree.id === targetWorktreeId)
-      ) {
-        known.add(worktree.hostId)
-      }
-    }
-    for (const terminal of terminals) {
-      if (terminal.executionHostId) {
-        known.add(terminal.executionHostId)
-      }
-    }
-    const scoped = targetWorktreeId
-      ? (targetHost ?? this.tryGetWorkspaceSessionHostIdForWorktree(targetWorktreeId))
-      : null
-    if (scoped) {
-      known.add(scoped)
-      if (parseExecutionHostId(scoped)?.kind === 'runtime') {
-        for (const folder of this.store?.getFolderWorkspaces?.() ?? []) {
-          if (
-            folder.executionHostId &&
-            parseExecutionHostId(folder.executionHostId)?.kind === 'runtime' &&
-            folder.connectionId
-          ) {
-            known.delete(toSshExecutionHostId(folder.connectionId))
-          }
-        }
-      }
-    }
-    if (targetWorktreeId?.startsWith('folder:')) {
-      const folderId = targetWorktreeId.slice('folder:'.length)
-      const folder = this.store
-        ?.getFolderWorkspaces?.()
-        .find((candidate) => candidate.id === folderId)
-      if (
-        folder?.executionHostId &&
-        parseExecutionHostId(folder.executionHostId)?.kind === 'runtime' &&
-        folder.connectionId
-      ) {
-        known.delete(toSshExecutionHostId(folder.connectionId))
-      }
-    }
-    const candidates = targetWorktreeId ? (scoped ? [scoped] : []) : [...known]
-    const covered = new Set(
-      candidates.filter(
-        (id) => queriedHostIds.has(id) && parseExecutionHostId(id)?.kind !== 'runtime'
-      )
-    )
-    return {
-      hostIds: [...covered].sort(),
-      omittedHostIds: [...known].filter((id) => !covered.has(id)).sort()
-    }
   }
 
   protected getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId {
@@ -196,7 +52,56 @@ export abstract class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExac
   }
 
   setWorkspaceSessionForWorktree(worktreeId: string, session: WorkspaceSessionState): void {
+    // Only a mounted crew reads names, and a write changes only this worktree's partition.
+    const watched = this.crewChanges.hasListeners()
+    // A crew kept with nobody reading refreshes names on its next read instead of comparing every write.
+    const compared = watched && this.crewChanges.hasActiveListeners()
+    const scope = { worktreeId }
+    const before = compared
+      ? crewWorkspaceNames(this.workspaceSessions.get(worktreeId), scope)
+      : null
     this.workspaceSessions.setForWorktree(worktreeId, session)
+    if (
+      watched &&
+      (!compared ||
+        !isDeepStrictEqual(
+          before,
+          crewWorkspaceNames(this.workspaceSessions.get(worktreeId), scope)
+        ))
+    ) {
+      this.crewChanges.notify(new Set(['names']))
+    }
+  }
+
+  /** This host's own saved sleeping-agent records, folder workspaces included: terminal agent
+   *  ids name conversations on this host only, so no other partition or workspace is visited. */
+  readLocalSleepingAgentSessions(): Readonly<Record<string, SleepingAgentSessionRecord>> {
+    return (
+      this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)?.sleepingAgentSessionsByPaneKey ??
+      {}
+    )
+  }
+
+  /** One place's labels as `agent list` shows them, from that host's records by key: its row in
+   *  the published catalog, else its own repo and metadata. Never another host's same-id
+   *  workspace, and never a scan of every workspace or repo. */
+  getWorkspaceLabel(
+    worktreeId: string,
+    hostId: ExecutionHostId
+  ): { workspace: string; repo?: string } | null {
+    const folder = parseWorkspaceKey(worktreeId)
+    if (folder?.type === 'folder') {
+      const name = this.store?.getFolderWorkspace?.(folder.folderWorkspaceId)?.name
+      return name ? { workspace: name } : null
+    }
+    const worktree =
+      this.resolvedWorktrees.lookup(hostId, worktreeId) ??
+      this.buildResolvedWorktreeForHost(worktreeId, hostId)
+    if (!worktree?.displayName) {
+      return null
+    }
+    const repo = this.store?.getRepoForHost?.(worktree.repoId, hostId)
+    return { workspace: worktree.displayName, repo: repo?.displayName ?? worktree.repoId }
   }
 
   protected getKnownWorkspaceSessionWorktreeIds(): Set<string> {

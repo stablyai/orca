@@ -1,12 +1,14 @@
 import { useEffect } from 'react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { findIndexedWorktreeOwnerForHost } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { isCopilotAttachOwnerLocal } from '@/lib/monaco-copilot/copilot-attach-owner'
 import { attachMonacoCopilotDocument } from '@/lib/monaco-copilot/monaco-copilot-attach'
 import { useCopilotStatus } from '@/lib/monaco-copilot/copilot-status'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { selectFolderWorkspaceOnHost } from '@/store/folder-workspaces/folder-workspace-record-index'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 
 /** Attach an editable local file to GitHub Copilot for ghost text. Inert unless
  *  copilot-language-server is installed and signed in; SSH and remote-runtime
@@ -28,10 +30,14 @@ export function useMonacoCopilot(params: {
     const scope = parseWorkspaceKey(worktreeId)
     if (scope?.type === 'folder') {
       return (
-        selectFolderWorkspaces(s).find((w) => w.id === scope.folderWorkspaceId)?.folderPath ?? null
+        selectFolderWorkspaceOnHost(s, scope.folderWorkspaceId, LOCAL_EXECUTION_HOST_ID)
+          ?.folderPath ?? null
       )
     }
-    return findWorktreeById(selectWorktreesByRepo(s), worktreeId)?.path ?? null
+    return (
+      findIndexedWorktreeOwnerForHost(selectWorktreesByRepo(s), worktreeId, LOCAL_EXECUTION_HOST_ID)
+        ?.path ?? null
+    )
   })
   const ownerLocal = useAppStore((s) =>
     isCopilotAttachOwnerLocal(s, { fileId, filePath, worktreeId: worktreeId ?? null })

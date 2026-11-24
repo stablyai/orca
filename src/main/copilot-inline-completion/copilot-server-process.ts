@@ -1,10 +1,9 @@
 import { tmpdir } from 'node:os'
 import { spawnProcess } from '@orca/process-host'
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { signalProcessTree } from '@orca/process-host/process-tree-termination'
-import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
+import { resolveCommandOnLocalPath } from '../ipc/command-path/command-path-resolver'
 
-export type CopilotServerProcess = PipedChildProcess
+export type CopilotServerProcess = ReturnType<typeof spawnCopilotServer>
 
 export const COPILOT_SERVER_COMMAND = 'copilot-language-server'
 
@@ -29,7 +28,7 @@ export function createCopilotServerLocator(
   }
 }
 
-export function spawnCopilotServer(program: string): CopilotServerProcess {
+export function spawnCopilotServer(program: string) {
   // Why: spawnProcess resolves npm .cmd shims and Windows quoting; it wants the
   // absolute program path, which the PATH probe already produced.
   const child = spawnProcess({

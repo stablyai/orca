@@ -1,9 +1,12 @@
 import { stat } from 'node:fs/promises'
-import { isWslPath } from '../../../wsl'
+import { isWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { WATCHER_IGNORE_DIRS } from './filesystem-watcher-ignore'
 import { createWslWatcher, type WatchedRoot } from './filesystem-watcher-wsl'
-import { WatcherChildCapacityError } from '../watcher-process/parcel-watcher-child-registry'
-import { isWatcherProcessFailure } from '../watcher-process/parcel-watcher-process-failure'
+import { WatcherChildCapacityError } from '../watcher-process/child-lifecycle/parcel-watcher-child-registry'
+import {
+  isWatcherCrashFuseFailure,
+  isWatcherProcessFailure
+} from '../watcher-process/parcel-watcher-process-failure'
 import type {
   LocalWatcherInstallResult,
   LocalWatcherInstallToken
@@ -17,23 +20,19 @@ import {
   trackDetachedLocalUnsubscribe
 } from './filesystem-watcher-listener-lifecycle'
 import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
-import type { WaitForLocalWatcherRetry } from './filesystem-watcher-local-capacity'
+import {
+  waitForWatcherCrashFuseCooldown,
+  type WaitForLocalWatcherRetry
+} from './filesystem-watcher-local-capacity'
 import {
   noteWslDistroMayHaveStopped,
-  blockedWslDistroForPath
-} from '../../../wsl/wsl-unc-access-gate'
-import { deferUntilWslDistroRunning } from '../../../wsl-background-distro-gate'
+  deferUntilWslDistroRunning
+} from '../../../wsl/discovery/wsl-background-distro-gate'
+import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import {
   clearWslRootStatRetry,
   nextWslRootStatRetry
 } from './filesystem-watcher-wsl-root-stat-retry'
-
-function isCrashFuseFailure(error: unknown): boolean {
-  return (
-    isWatcherProcessFailure(error) &&
-    (error.code === 'supervisor_crash_fuse' || error.code === 'process_unavailable')
-  )
-}
 
 export async function installLocalWatcher(
   rootKey: string,
@@ -94,7 +93,17 @@ export async function installLocalWatcher(
             },
             cancelToken.abortController.signal
           )
-        : await createLocalWatcher(rootKey, rootPath, cancelToken.abortController.signal)
+        : await createLocalWatcher(
+            rootKey,
+            rootPath,
+            cancelToken.abortController.signal,
+            (listeners) => {
+              // A fuse error during shutdown must not schedule a retry that outlives it.
+              if (!watcherLifecycleState.localWatchersClosed) {
+                scheduleRetry(listeners, waitForWatcherCrashFuseCooldown)
+              }
+            }
+          )
     } catch (error) {
       // Retain physical ownership if setup failed before the child proved exit.
       retainLocalWatcherPhysicalFailure(rootKey, error)
@@ -109,10 +118,15 @@ export async function installLocalWatcher(
         scheduleRetry(cancelToken.listeners)
         return 'capacity'
       }
-      // Crash fuses can half-open after cooldown; do not permanently cache them.
-      if (!isCrashFuseFailure(error)) {
-        rememberUnwatchableRoot(rootKey)
+      if (isWatcherCrashFuseFailure(error)) {
+        // WSL has no crash fuse to wait on.
+        if (isWslPath(worktreePath)) {
+          return 'unavailable'
+        }
+        scheduleRetry(cancelToken.listeners, waitForWatcherCrashFuseCooldown)
+        return 'capacity'
       }
+      rememberUnwatchableRoot(rootKey)
       return 'unavailable'
     }
   } finally {

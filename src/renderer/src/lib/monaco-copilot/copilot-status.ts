@@ -3,7 +3,7 @@ import type { CopilotCompletionApi } from '../../../../preload/api/copilot-compl
 import type { CopilotStatus } from '../../../../shared/copilot-inline-completion-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 
 /** Copilot server status for the status bar and editor attachment. */
 let status: CopilotStatus | null = null

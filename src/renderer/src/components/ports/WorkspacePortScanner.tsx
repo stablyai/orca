@@ -1,22 +1,26 @@
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { translate } from '@/i18n/i18n'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { useAppStore } from '@/store'
-import { getHasAnyWorktreesFromState } from '@/store/selectors'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { useAppStore } from '@/store/index'
+import { getCachedHasAnyWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   mergeWorkspacePortScans,
   WORKSPACE_PORT_ALL_HOSTS_SCAN_KEY,
   scanWorkspacePortsForTarget,
   workspacePortScanKeyForTarget
-} from '@/lib/workspace-port-actions'
-import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
-import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
+} from '@/lib/workspace-ports/workspace-port-actions'
+import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
+import {
+  installWindowVisibilityInterval,
+  isWindowVisible
+} from '@/lib/window-activity/window-visibility-interval'
 import {
   reconcileTransientPortScanFailures,
   type PortScanDebounceState
-} from '@/lib/workspace-port-scan-debounce'
-import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
-import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
+} from '@/lib/workspace-ports/workspace-port-scan-debounce'
+import type { WorkspacePortScanResult } from '../../../../shared/workspace/ports/workspace-ports'
+import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
 
 const WORKSPACE_PORT_SCAN_INTERVAL_MS = 30_000
 const WORKSPACE_PORT_ADVERTISED_URL_SETTLE_MS = 1_000
@@ -41,11 +45,12 @@ function makeUnavailableScan(reason: string): WorkspacePortScanResult {
 export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }): null {
   const settings = useAppStore((s) => s.settings)
   const repos = useAppStore((s) => s.repos)
-  const hasWorktrees = useAppStore(getHasAnyWorktreesFromState)
+  const hasWorktrees = useAppStore((state) =>
+    getCachedHasAnyWorktrees(selectWorktreesByRepo(state))
+  )
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
   const setWorkspacePortScanProjection = useAppStore((s) => s.setWorkspacePortScanProjection)
   const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
-  const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const inFlightRef = useRef<Promise<void> | null>(null)
   const generationRef = useRef(0)
   const wasEnabledRef = useRef(false)
@@ -77,7 +82,6 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
         portScanDebounceRef.current.clear()
         lastRefreshStartedAtByKeyRef.current.clear()
         setWorkspacePortScan(null)
-        setWorkspacePortScanRefreshing(false)
         return Promise.resolve()
       }
       const requestedTargets = options.targets ?? allTargets
@@ -106,12 +110,15 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
       }
 
       const generation = generationRef.current
-      setWorkspacePortScanRefreshing(true)
+      const publishedAtStart = useAppStore.getState().workspacePortScansByKey
       const promise = Promise.all(
         targets.map(async (target) => {
           const key = workspacePortScanKeyForTarget(target)
           try {
-            const result = await scanWorkspacePortsForTarget(target)
+            // The always-on scan is a poll: it must neither hold an idle WSL host up nor wake it.
+            const result = await scanWorkspacePortsForTarget(target, undefined, {
+              background: true
+            })
             return { key, result }
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
@@ -148,7 +155,13 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
             let sourceChanged =
               Object.keys(scansByKey).length !== Object.keys(publishedScans).length
             for (const { key, result } of reconciled) {
-              sourceChanged ||= scansByKey[key] !== result
+              // A refresh the user started while this batch ran is newer; keep it.
+              if (key in scansByKey && scansByKey[key] !== publishedAtStart[key]) {
+                continue
+              }
+              if (!sourceChanged) {
+                sourceChanged = scansByKey[key] !== result
+              }
               scansByKey[key] = result
             }
             const merged = mergeWorkspacePortScans(scansByKey)
@@ -169,14 +182,11 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
           if (inFlightRef.current === promise) {
             inFlightRef.current = null
           }
-          if (generation === generationRef.current) {
-            setWorkspacePortScanRefreshing(false)
-          }
         })
       inFlightRef.current = promise
       return promise
     },
-    [hasWorktrees, setWorkspacePortScan, replaceWorkspacePortScans, setWorkspacePortScanRefreshing]
+    [hasWorktrees, setWorkspacePortScan, replaceWorkspacePortScans]
   )
 
   useEffect(() => {
@@ -189,7 +199,6 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
       portScanDebounceRef.current.clear()
       lastRefreshStartedAtByKeyRef.current.clear()
       setWorkspacePortScan(null)
-      setWorkspacePortScanRefreshing(false)
       return
     }
     const wasDisabled = !wasEnabledRef.current
@@ -244,13 +253,13 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
         }
         void refresh({ force: true })
       },
+      slowWhileUnfocused: true,
       intervalMs: WORKSPACE_PORT_SCAN_INTERVAL_MS
     })
 
     return () => {
       generationRef.current += 1
       inFlightRef.current = null
-      setWorkspacePortScanRefreshing(false)
       stopVisibleInterval()
     }
   }, [
@@ -260,7 +269,6 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
     scanTargetsSignature,
     setWorkspacePortScan,
     setWorkspacePortScanProjection,
-    setWorkspacePortScanRefreshing,
     replaceWorkspacePortScans
   ])
 
@@ -290,7 +298,9 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
         return
       }
       // Keep the leading scan through the quiet window so sequential events share it too.
-      burstRefresh ??= refresh({ force: true, targets: [LOCAL_TARGET] })
+      if (burstRefresh == null) {
+        burstRefresh = refresh({ force: true, targets: [LOCAL_TARGET] })
+      }
       void burstRefresh.finally(() => {
         if (disposed || sequence !== eventSequence) {
           return

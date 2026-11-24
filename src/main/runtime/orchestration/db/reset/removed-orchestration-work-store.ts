@@ -3,7 +3,7 @@ import {
   REMOVED_WORK_INT_FIELD,
   REMOVED_WORK_LINEAGE_FIELDS,
   type RemovedWorkKind
-} from '../../../../../shared/orchestration-removed-work'
+} from '../../../../../shared/orchestration/orchestration-removed-work'
 
 /**
  * One row per removed Task, Dispatch, worker or terminal, so deleting live rows never erases who

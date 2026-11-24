@@ -1,4 +1,4 @@
-import { parseSetupScriptShebang } from '../setup-script-shebang'
+import { parseSetupScriptShebang } from '../workspace-setup/setup-script-shebang'
 import { detectMonacoFilenameLanguage } from './monaco-filename-language'
 
 function extname(filePath: string): string {

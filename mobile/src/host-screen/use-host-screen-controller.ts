@@ -1,36 +1,41 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useReducer, useState } from 'react'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useLocalSearchParams, usePathname } from 'expo-router'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useHostProtocolGates } from '../components/host-protocol-gates-context'
+import { useHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 import { visibleHostRouteNotice } from '../host-route-notice'
 import { useActiveWorktreeScroll } from '../hooks/use-active-worktree-scroll'
-import { useNow } from '../hooks/use-now'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import {
   useForgetHostClient,
   useForceReconnect,
   useHostClient
-} from '../transport/host-client-hooks'
+} from '../transport/connection/host-client-hooks'
 import {
   useLastConnectedAt,
   useReconnectAttempt,
   useRelayRecoveryStatus
-} from '../transport/client-context-connection-metrics'
-import { useHostDisplayWorktrees, useResolvedHostPlatform } from './use-host-display-worktrees'
-import { useHostListSections } from './use-host-list-sections'
-import { useSwitchedHostSidebarFeed } from './use-host-sidebar-feed'
-import { useHostProjectSections } from './use-host-project-sections'
-import { useHostRepoMetadata, type FetchHostRepoMetadata } from './use-host-repo-metadata'
-import { useHostScreenIdentity } from './use-host-screen-identity'
+} from '../transport/connection/client-context-connection-metrics'
+import {
+  useHostDisplayWorktrees,
+  useResolvedHostPlatform
+} from './workspace-list/use-host-display-worktrees'
+import { useHostListSections } from './workspace-list/use-host-list-sections'
+import { useSwitchedHostSidebarFeed } from './sidebar-feed/use-host-sidebar-feed'
+import { useHostProjectSections } from './catalog/use-host-project-sections'
+import { useHostRepoMetadata } from './catalog/use-host-repo-metadata'
+import { peekStoredHost, useHostScreenIdentity } from './identity/use-host-screen-identity'
 import { useHostScreenState } from './use-host-screen-state'
-import { useHostViewSettings } from './use-host-view-settings'
+import { useHostViewSettings } from './view-settings/use-host-view-settings'
 import { countActiveWorkspaceFilters } from '../../../src/shared/workspace-view/workspace-row-filters'
-import { useHostWorktreeActions } from './use-host-worktree-actions'
-import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
-import { useHostDisplay } from '../transport/use-host-display'
-import { classifyConnection } from '../transport/connection-health'
+import { useHostWorktreeActions } from './workspace-actions/use-host-worktree-actions'
+import { useHostWorktreeCatalog } from './catalog/use-host-worktree-catalog'
+import { useHostDisplay } from '../host-descriptors/use-host-display'
+import { classifyConnection } from '../transport/connection/connection-health'
+import { useHostBots } from '../bots/use-host-bots'
+import type { BotsChangeScope } from '../worktree/execution-hosts/host-worktree-refresh'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 
 export type HostScreenProps = {
   embedded?: boolean
@@ -61,9 +66,9 @@ export function useHostScreenController({
   const relayRecovery = useRelayRecoveryStatus(hostId)
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
-  const now = useNow(30_000)
-  const { hostCapabilities, floatingWorkspaceEnabled } = useHostProtocolGates()
-  const state = useHostScreenState(hostId)
+  const { hostCapabilities, statusReadable, floatingWorkspaceEnabled, hostInstallationId } =
+    useHostProtocolGates()
+  const state = useHostScreenState(hostId, peekStoredHost(hostId))
   const settings = useHostViewSettings({ client, connState, state })
   const connectionVerdict = classifyConnection({
     state: connState,
@@ -79,41 +84,37 @@ export function useHostScreenController({
   )
 
   useHostScreenIdentity({ client, hostId, state })
-  const fetchRepoMetadataOnly = useHostRepoMetadata({ client, connState, hostId, state })
   const sidebarFeed = useSwitchedHostSidebarFeed(client, hostId)
-  // Read through a ref so the metadata refresh keeps its identity across installs.
-  const feedRef = useRef(sidebarFeed?.feed)
-  useEffect(() => {
-    feedRef.current = sidebarFeed?.feed
-  }, [sidebarFeed?.feed])
-  const feedCarriesCatalog = useCallback(
-    () => feedRef.current?.kind === 'ready' && feedRef.current.domains.projectCatalog !== null,
-    []
+  // The host's botsChanged re-reads its own bots; a reconnect or the foreground, every host's.
+  const [botsChangeKeys, noteBotsChanged] = useReducer(
+    (keys: Record<BotsChangeScope, number>, scope: BotsChangeScope) => ({
+      ...keys,
+      [scope]: keys[scope] + 1
+    }),
+    { host: 0, 'host-threads': 0, 'every-host': 0 }
   )
-  const fetchProjectSections = useHostProjectSections({
-    client,
-    connState,
-    hostId,
-    state,
-    feedCarriesCatalog
-  })
-  const fetchRepoMetadata = useCallback<FetchHostRepoMetadata>(
-    (options) => {
-      void fetchProjectSections(options)
-      return fetchRepoMetadataOnly(options)
-    },
-    [fetchProjectSections, fetchRepoMetadataOnly]
-  )
+  // The computer New bot starts on, while it is open.
+  const [newBotHostId, setNewBotHostId] = useState<ExecutionHostId | null>(null)
   const catalog = useHostWorktreeCatalog({
     client,
     connState,
     embedded,
-    fetchRepoMetadata,
     hostCapabilities,
+    hostStatusReadable: statusReadable,
     hostId,
     sidebarFeed: sidebarFeed?.triggers ?? null,
     state,
-    syncViewSettingsFromDesktop: settings.syncViewSettingsFromDesktop
+    syncViewSettingsFromDesktop: settings.syncViewSettingsFromDesktop,
+    onBotsChanged: noteBotsChanged
+  })
+  useHostRepoMetadata({ client, hostId, state, subscribed: catalog.subscribed })
+  const feed = sidebarFeed?.feed ?? null
+  useHostProjectSections({
+    client,
+    hostId,
+    state,
+    subscribed: catalog.subscribed,
+    feedCarriesCatalog: feed?.kind === 'ready' && feed.domains.projectCatalog !== null
   })
   const actions = useHostWorktreeActions({
     client,
@@ -129,15 +130,40 @@ export function useHostScreenController({
   })
 
   const hostPlatform = useResolvedHostPlatform(state, hostId)
-  const displayWorktrees = useHostDisplayWorktrees(connState, state, hostPlatform)
-  const feed = sidebarFeed?.feed ?? null
+  const { worktrees: displayWorktrees, hostContextOf } = useHostDisplayWorktrees(
+    connState,
+    state,
+    hostPlatform
+  )
+  // Row identities, so a workspace swapped for another of the same count still rereads the bots.
+  const botRowsKey = useMemo(
+    () => displayWorktrees.map((row) => `${row.hostId ?? ''}|${row.worktreeId}`).join('\n'),
+    [displayWorktrees]
+  )
+  const bots = useHostBots({
+    client,
+    pairedHostId: hostId,
+    connState,
+    hostCapabilities,
+    hostLabel: state.hostName,
+    serverHosts: state.serverWorkspaces.hosts,
+    rowsKey: botRowsKey,
+    changeKey: botsChangeKeys['every-host'],
+    pairedChangeKey: botsChangeKeys.host + botsChangeKeys['host-threads'],
+    pairedThreadsKey: botsChangeKeys['host-threads']
+  })
   const sectionsResult = useHostListSections({
     client,
+    connected: connState === 'connected',
     hostId,
     feed,
     displayWorktrees,
+    hostContextOf,
     hostPlatform,
-    state
+    hostInstallationId,
+    hostCapabilities,
+    state,
+    bots
   })
   const { collapsedGroups, projectOrderBy } = sectionsResult
   const { uniqueRepos } = sectionsResult
@@ -156,6 +182,7 @@ export function useHostScreenController({
     actions,
     activeFilterCount,
     activeWorktreeScroll,
+    bots,
     catalog,
     collapsedGroups,
     feed,
@@ -177,7 +204,6 @@ export function useHostScreenController({
     isWideLayout,
     lastConnectedAt,
     noticeParam,
-    now,
     onHideSidebar,
     reconnectAttempts,
     relayRecovery,
@@ -186,7 +212,16 @@ export function useHostScreenController({
     sectionsResult,
     setDismissedNotice,
     settings,
-    state
+    state,
+    newBot: {
+      hostId: newBotHostId,
+      open: setNewBotHostId,
+      // Its Home is a new row too; hosts that don't push rows would leave it to the backstop poll.
+      created: () => {
+        noteBotsChanged('every-host')
+        void catalog.fetchWorktrees()
+      }
+    }
   }
 }
 

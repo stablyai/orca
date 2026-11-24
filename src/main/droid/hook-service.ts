@@ -1,59 +1,45 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
-import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type {
+  AgentHookInstallState,
+  AgentHookInstallStatus
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
+import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
+import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
 import {
-  buildManagedCommandHook,
-  createManagedCommandMatcher,
-  buildWindowsAgentHookPostCommand,
-  getSharedManagedScriptPath,
-  readHooksJson,
-  removeManagedCommands,
-  wrapPosixHookCommand,
-  writeHooksJson,
-  writeManagedScript,
-  type HookDefinition,
-  type HooksConfig
-} from '../agent-hooks/installer-utils'
-import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
+  isPlainObject,
+  readHooksJson
+} from '../agent-hooks/installation/configuration/hooks-json-read'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import {
   readHooksJsonRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote
-} from '../agent-hooks/installer-utils-remote'
+  writeHooksJsonRemote
+} from '../agent-hooks/installation/configuration/hooks-json-remote'
+import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines
-} from '../agent-hooks/hook-stdin-contract'
-import { posixCurlCommand } from '../agent-hooks/hook-post-command'
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
+import { posixCurlCommand } from '../agent-hooks/installation/scripts/hook-post-command'
+import { readManagedHookEventsFromJson } from '../agent-hooks/installation/configuration/managed-hooks-json-events'
+import {
+  DROID_EVENTS,
+  hasManagedDroidHooks,
+  readDroidHooksFile,
+  readDroidHooksFileRemote,
+  nextDroidHookEvents,
+  type DroidHookEvents,
+  type DroidHooksFile
+} from './droid-hook-config-files'
 
-// SessionStart clears prompt/tool caches on resume before the next user prompt.
-const DROID_EVENTS = [
-  { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
-  // SubagentStop reports mission progress; the listener must not treat it as parent completion.
-  { eventName: 'SubagentStop', definition: { hooks: [{ type: 'command', command: '' }] } },
-  {
-    eventName: 'PreToolUse',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'PostToolUse',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
-  // PermissionRequest covers Edit approvals that have no PreToolUse riskLevel.
-  {
-    eventName: 'PermissionRequest',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
-  { eventName: 'Notification', definition: { hooks: [{ type: 'command', command: '' }] } }
-] as const
-
-function getConfigPath(): string {
-  return join(homedir(), '.factory', 'settings.json')
+function getFactoryDir(): string {
+  return join(homedir(), '.factory')
 }
 
 function getManagedScriptFileName(): string {
@@ -112,39 +98,127 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   ].join('\n')
 }
 
-// Keep local and SSH installs on the same hook-tree mutation path.
-function buildInstalledDroidConfig(
-  config: HooksConfig,
+function droidHookError(configPath: string, detail: string): AgentHookInstallStatus {
+  return { agent: 'droid', state: 'error', configPath, managedHooksPresent: false, detail }
+}
+
+type DroidConfigFiles = {
+  hooksFile: DroidHooksFile
+  settingsPath: string
+  settings: Record<string, unknown>
+}
+
+function readDroidConfigFiles(): DroidConfigFiles | AgentHookInstallStatus {
+  const settingsPath = join(getFactoryDir(), 'settings.json')
+  const settings = readHooksJson(settingsPath)
+  if (!settings) {
+    return droidHookError(settingsPath, 'Could not parse Factory settings.json')
+  }
+  return { hooksFile: readDroidHooksFile(getFactoryDir()), settingsPath, settings }
+}
+
+type DroidConfigUpdate = {
+  /** Null maps mean the file must be left untouched on disk. */
+  hooks: DroidHookEvents | null
+  settingsHooks: DroidHookEvents | null
+  /** The config as it reads after the update is written. */
+  next: DroidConfigFiles
+}
+
+function nextDroidConfigFiles(
+  files: DroidConfigFiles,
+  scriptFileName: string,
+  command: string | null
+): DroidConfigUpdate {
+  const { hooksFile, settings } = files
+  const hooks = hooksFile.editable
+    ? nextDroidHookEvents(hooksFile.events, scriptFileName, command, 'hooks')
+    : null
+  const settingsHooks = nextDroidHookEvents(settings.hooks, scriptFileName, command, 'settings')
+  return {
+    hooks,
+    settingsHooks,
+    next: {
+      ...files,
+      hooksFile: { ...hooksFile, events: hooks ?? hooksFile.events },
+      settings: { ...settings, hooks: settingsHooks ?? settings.hooks }
+    }
+  }
+}
+
+function writeDroidConfigFiles(files: DroidConfigFiles, command: string | null): DroidConfigFiles {
+  const { hooks, settingsHooks, next } = nextDroidConfigFiles(
+    files,
+    getManagedScriptFileName(),
+    command
+  )
+  if (hooks) {
+    writeHooksJson(files.hooksFile.path, hooks)
+  }
+  if (settingsHooks) {
+    writeHooksJson(files.settingsPath, next.settings)
+  }
+  return next
+}
+
+// Names the hooks file when it hides an event Orca cannot add itself to.
+function describeUneditableHooksFile(hooksFile: DroidHooksFile, missing: string[]): string | null {
+  return !hooksFile.editable &&
+    missing.some((eventName) => Object.hasOwn(hooksFile.events, eventName))
+    ? `${hooksFile.path} has comments; Orca cannot edit it`
+    : null
+}
+
+function buildStatus(
+  { hooksFile, settingsPath, settings }: DroidConfigFiles,
   command: string,
   scriptFileName: string
-): void {
-  const nextHooks = { ...config.hooks }
-  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
-  const managedEvents = new Set<string>(DROID_EVENTS.map((event) => event.eventName))
-
-  for (const [eventName, definitions] of Object.entries(nextHooks)) {
-    if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
-      continue
-    }
-    const cleaned = removeManagedCommands(definitions, isManagedCommand)
-    if (cleaned.length === 0) {
-      delete nextHooks[eventName]
-    } else {
-      nextHooks[eventName] = cleaned
-    }
+): AgentHookInstallStatus {
+  // Droid's merge: each hooks-file key replaces the same settings.json key.
+  const effective: DroidHookEvents = {
+    ...(isPlainObject(settings.hooks) ? settings.hooks : {}),
+    ...hooksFile.events
   }
-
-  for (const event of DROID_EVENTS) {
-    const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
-    const cleaned = removeManagedCommands(current, isManagedCommand)
-    const definition: HookDefinition = {
-      ...event.definition,
-      hooks: [buildManagedCommandHook(command)]
-    }
-    nextHooks[event.eventName] = [...cleaned, definition]
+  const eventNames = DROID_EVENTS.map((event) => event.eventName)
+  const present = readManagedHookEventsFromJson(
+    { hooks: effective },
+    eventNames,
+    (hookCommand) => hookCommand === command
+  )
+  const missing = eventNames.filter((eventName) => !present.has(eventName))
+  const presentCount = DROID_EVENTS.length - missing.length
+  const hooksFileHasManagedHooks = hasManagedDroidHooks(hooksFile.events, scriptFileName)
+  const settingsHasManagedHooks = hasManagedDroidHooks(settings.hooks, scriptFileName)
+  // Droid reads hooks.hooksDisabled; the top-level key is a fallback for older Factory settings.
+  const hooksDisabled = (effective.hooksDisabled ?? settings.hooksDisabled) === true
+  let state: AgentHookInstallState
+  let detail: string | null
+  // Report hooksDisabled even for partial installs so reinstalling cannot appear to fix it.
+  if (missing.length === 0 || presentCount === 0) {
+    state = hooksDisabled ? 'partial' : missing.length === 0 ? 'installed' : 'not_installed'
+    detail = hooksDisabled ? 'Droid hooks are disabled in Factory settings' : null
+  } else {
+    state = 'partial'
+    detail = hooksDisabled
+      ? `Droid hooks are disabled in Factory settings; managed hook missing for events: ${missing.join(', ')}`
+      : `Managed hook missing for events: ${missing.join(', ')}`
   }
+  const hooksFileProblem = describeUneditableHooksFile(hooksFile, missing)
+  if (hooksFileProblem) {
+    detail = detail ? `${detail}; ${hooksFileProblem}` : hooksFileProblem
+  }
+  return {
+    agent: 'droid',
+    state,
+    configPath: settingsPath,
+    ...(hooksFileHasManagedHooks ? { additionalConfigPaths: [hooksFile.path] } : {}),
+    managedHooksPresent: settingsHasManagedHooks || hooksFileHasManagedHooks,
+    detail
+  }
+}
 
-  config.hooks = nextHooks
+function buildLocalStatus(files: DroidConfigFiles): AgentHookInstallStatus {
+  return buildStatus(files, getManagedCommand(getManagedScriptPath()), getManagedScriptFileName())
 }
 
 export class DroidHookService {
@@ -153,155 +227,59 @@ export class DroidHookService {
   }
 
   getStatus(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
-    const scriptPath = getManagedScriptPath()
-    const config = readHooksJson(configPath)
-    if (!config) {
-      return {
-        agent: 'droid',
-        state: 'error',
-        configPath,
-        managedHooksPresent: false,
-        detail: 'Could not parse Factory settings.json'
-      }
-    }
-
-    const command = getManagedCommand(scriptPath)
-    const missing: string[] = []
-    let presentCount = 0
-    for (const event of DROID_EVENTS) {
-      const definitions = Array.isArray(config.hooks?.[event.eventName])
-        ? config.hooks![event.eventName]!
-        : []
-      const hasCommand = definitions.some((definition) =>
-        (definition.hooks ?? []).some((hook) => hook.command === command)
-      )
-      if (hasCommand) {
-        presentCount += 1
-      } else {
-        missing.push(event.eventName)
-      }
-    }
-    const managedHooksPresent = presentCount > 0
-    let state: AgentHookInstallState
-    let detail: string | null
-    // Report hooksDisabled even for partial installs so reinstalling cannot appear to fix it.
-    if (missing.length === 0) {
-      if (config.hooksDisabled === true) {
-        state = 'partial'
-        detail = 'Droid hooks are disabled in Factory settings'
-      } else {
-        state = 'installed'
-        detail = null
-      }
-    } else if (presentCount === 0) {
-      if (config.hooksDisabled === true) {
-        state = 'partial'
-        detail = 'Droid hooks are disabled in Factory settings'
-      } else {
-        state = 'not_installed'
-        detail = null
-      }
-    } else {
-      state = 'partial'
-      detail =
-        config.hooksDisabled === true
-          ? `Droid hooks are disabled in Factory settings; managed hook missing for events: ${missing.join(', ')}`
-          : `Managed hook missing for events: ${missing.join(', ')}`
-    }
-    return { agent: 'droid', state, configPath, managedHooksPresent, detail }
+    const files = readDroidConfigFiles()
+    return 'agent' in files ? files : buildLocalStatus(files)
   }
 
   install(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
-    const scriptPath = getManagedScriptPath()
-    const config = readHooksJson(configPath)
-    if (!config) {
-      return {
-        agent: 'droid',
-        state: 'error',
-        configPath,
-        managedHooksPresent: false,
-        detail: 'Could not parse Factory settings.json'
-      }
+    const files = readDroidConfigFiles()
+    if ('agent' in files) {
+      return files
     }
-
-    buildInstalledDroidConfig(config, getManagedCommand(scriptPath), getManagedScriptFileName())
+    const scriptPath = getManagedScriptPath()
     writeManagedScript(scriptPath, getManagedScript())
-    writeHooksJson(configPath, config)
-    return this.getStatus()
+    return buildLocalStatus(writeDroidConfigFiles(files, getManagedCommand(scriptPath)))
   }
 
   // Remote installs always use POSIX scripts and paths, including from Windows clients.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const home = remoteHome.replace(/\/$/, '')
-    const remoteConfigPath = `${home}/.factory/settings.json`
+    const remoteSettingsPath = `${home}/.factory/settings.json`
     const remoteScriptPath = `${home}/.orca/agent-hooks/droid-hook.sh`
     try {
-      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
-      if (!config) {
-        return {
-          agent: 'droid',
-          state: 'error',
-          configPath: remoteConfigPath,
-          managedHooksPresent: false,
-          detail: 'Could not parse remote Factory settings.json'
-        }
+      const hooksFile = await readDroidHooksFileRemote(sftp, `${home}/.factory`)
+      const settings = await readHooksJsonRemote(sftp, remoteSettingsPath)
+      if (!settings) {
+        return droidHookError(remoteSettingsPath, 'Could not parse remote Factory settings.json')
       }
 
-      buildInstalledDroidConfig(config, wrapPosixHookCommand(remoteScriptPath), 'droid-hook.sh')
+      const command = wrapPosixHookCommand(remoteScriptPath)
+      const { hooks, settingsHooks, next } = nextDroidConfigFiles(
+        { hooksFile, settingsPath: remoteSettingsPath, settings },
+        'droid-hook.sh',
+        command
+      )
       // Publish the script before config so interrupted installs cannot reference a missing file.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
-      await writeHooksJsonRemote(sftp, remoteConfigPath, config)
+      if (hooks) {
+        await writeHooksJsonRemote(sftp, hooksFile.path, hooks)
+      }
+      if (settingsHooks) {
+        await writeHooksJsonRemote(sftp, remoteSettingsPath, next.settings)
+      }
 
-      return {
-        agent: 'droid',
-        state: 'installed',
-        configPath: remoteConfigPath,
-        managedHooksPresent: true,
-        detail: null
-      }
+      return buildStatus(next, command, 'droid-hook.sh')
     } catch (err) {
-      return {
-        agent: 'droid',
-        state: 'error',
-        configPath: remoteConfigPath,
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
+      return droidHookError(remoteSettingsPath, err instanceof Error ? err.message : String(err))
     }
   }
 
   remove(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
-    const config = readHooksJson(configPath)
-    if (!config) {
-      return {
-        agent: 'droid',
-        state: 'error',
-        configPath,
-        managedHooksPresent: false,
-        detail: 'Could not parse Factory settings.json'
-      }
+    const files = readDroidConfigFiles()
+    if ('agent' in files) {
+      return files
     }
-
-    const nextHooks = { ...config.hooks }
-    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
-    for (const [eventName, definitions] of Object.entries(nextHooks)) {
-      if (!Array.isArray(definitions)) {
-        continue
-      }
-      const cleaned = removeManagedCommands(definitions, isManagedCommand)
-      if (cleaned.length === 0) {
-        delete nextHooks[eventName]
-      } else {
-        nextHooks[eventName] = cleaned
-      }
-    }
-
-    config.hooks = nextHooks
-    writeHooksJson(configPath, config)
-    return this.getStatus()
+    return buildLocalStatus(writeDroidConfigFiles(files, null))
   }
 }
 

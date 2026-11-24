@@ -1,5 +1,5 @@
 import { app, clipboard, ipcMain, shell, webContents } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   COPILOT_MAX_DOCUMENT_CHARS,
   type CopilotChangeDocumentArgs,
@@ -16,8 +16,8 @@ import {
   createCopilotServerLocator,
   spawnCopilotServer
 } from '../copilot-inline-completion/copilot-server-process'
-import { resolveAuthorizedPath } from './filesystem/filesystem-auth'
-import { isDescendantOrEqual } from './filesystem/filesystem-path-containment'
+import { resolveAuthorizedPath } from './filesystem/access/filesystem-auth'
+import { isDescendantOrEqual } from '../filesystem/local-file-io/filesystem-path-containment'
 
 const STATUS_CHANNEL = 'copilotCompletion:status'
 

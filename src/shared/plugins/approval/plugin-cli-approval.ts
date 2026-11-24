@@ -13,6 +13,12 @@ import {
   type PluginExecutionProfile
 } from '../contributions/plugin-execution-profile'
 import type { PluginManifest } from '../manifest/plugin-manifest'
+import {
+  pluginInstallSourceLines,
+  type PluginInstallSourceInfo
+} from '../installation/plugin-install-source-info'
+import { GIT_AUTH_FAILED_CODE } from '../installation/plugin-git-access-failure'
+import type { PluginUpdateAccessGrowth } from './plugin-update-access-growth'
 
 /** CLI approvals: an explicit `--approve <fingerprint>` bound to the exact bytes and access shown. */
 
@@ -21,13 +27,21 @@ export const PLUGIN_APPROVAL_STALE_CODE = 'approval_stale'
 export const PLUGIN_NOT_FOUND_CODE = 'plugin_not_found'
 export const PLUGIN_INVALID_CODE = 'plugin_invalid'
 export const PLUGIN_SYSTEM_DISABLED_CODE = 'plugin_system_disabled'
+/** `orca plugin dev request`: the worker's own error code rides in `data.requestCode`. */
+export const PLUGIN_REQUEST_FAILED_CODE = 'plugin_request_failed'
+export const PLUGIN_INSTALL_FAILED_CODE = 'plugin_install_failed'
+export const PLUGIN_BLOCKED_CODE = 'plugin_blocked'
 /** Codes the runtime passes through to CLI callers with their `data`. */
 export const PLUGIN_CLI_ERROR_CODES = [
   PLUGIN_APPROVAL_REQUIRED_CODE,
   PLUGIN_APPROVAL_STALE_CODE,
   PLUGIN_NOT_FOUND_CODE,
   PLUGIN_INVALID_CODE,
-  PLUGIN_SYSTEM_DISABLED_CODE
+  PLUGIN_SYSTEM_DISABLED_CODE,
+  PLUGIN_REQUEST_FAILED_CODE,
+  PLUGIN_INSTALL_FAILED_CODE,
+  PLUGIN_BLOCKED_CODE,
+  GIT_AUTH_FAILED_CODE
 ] as const
 
 /** A plugin CLI refusal whose `data` carries `nextSteps` for the caller. */
@@ -55,6 +69,8 @@ export type PluginApprovalGrants = {
   executionDescription: string
   capabilities: { kind: string; description: string }[]
   contributions: PluginContributionSummaryItem[]
+  /** Commands that run in place of Orca's own actions; absent when there are none. */
+  replacements?: { command: string; action: string }[]
 }
 
 export type PluginApprovalRequest = {
@@ -71,6 +87,17 @@ export type PluginApprovalRequest = {
   /** The flag to add when re-running the same command. */
   approveFlag: string
   nextSteps: string[]
+  /** Install and update: where the files come from and who must be trusted. */
+  source?: PluginInstallSourceInfo
+  /** Update: what it asks for beyond the running version. */
+  update?: PluginApprovalUpdateInfo
+}
+
+export type PluginApprovalUpdateInfo = {
+  fromVersion: string
+  /** Null when the running version was not approved, so everything is new. */
+  growth: PluginUpdateAccessGrowth | null
+  repositoryMoved: { from: string; to: string } | null
 }
 
 type ApprovalSubject = {
@@ -105,8 +132,17 @@ export function pluginApprovalGrants(manifest: PluginManifest): PluginApprovalGr
       kind: capability.kind,
       description: PLUGIN_CAPABILITY_DESCRIPTIONS[capability.kind]
     })),
-    contributions: pluginContributionSummary(manifest)
+    contributions: pluginContributionSummary(manifest),
+    ...withReplacements(manifest)
   }
+}
+
+// Why only when present: grants feed the approval fingerprint, which must not move for others.
+function withReplacements(manifest: PluginManifest): Pick<PluginApprovalGrants, 'replacements'> {
+  const replacements = manifest.contributes.commands.flatMap((command) =>
+    command.replaces ? [{ command: command.title, action: command.replaces }] : []
+  )
+  return replacements.length > 0 ? { replacements } : {}
 }
 
 function uniqueCapabilities(capabilities: readonly PluginCapability[]): PluginCapability[] {
@@ -139,7 +175,8 @@ export function pluginApprovalFingerprint(subject: ApprovalSubject): string {
 
 export function buildPluginApprovalRequest(
   subject: ApprovalSubject,
-  action: PluginApprovalAction
+  action: PluginApprovalAction,
+  context: Pick<PluginApprovalRequest, 'source' | 'update'> = {}
 ): PluginApprovalRequest {
   const grants = pluginApprovalGrants(subject.manifest)
   const approvalFingerprint = pluginApprovalFingerprint(subject)
@@ -156,14 +193,40 @@ export function buildPluginApprovalRequest(
     contentIdentity: subject.contentIdentity,
     isDev: subject.isDev,
     grants,
-    why: `It can run code or act in Orca, so Orca does not enable it without an explicit approval bound to exactly these files and this access.${devNote}`,
+    why: pluginNeedsCliApproval(subject.manifest)
+      ? `It can run code or act in Orca, so Orca does not enable it without an explicit approval bound to exactly these files and this access.${devNote}`
+      : 'It now comes from a different repository or folder, so Orca does not keep it on without an explicit approval bound to exactly these files.',
     approveFlag,
     nextSteps: [
       'Approving grants the access listed above. Confirm with your user first unless they already asked for exactly this plugin and access.',
       `To approve, run the same command again with ${approveFlag}`,
       'A different plugin, version, set of files, or more access gets a new fingerprint and needs a new approval.'
-    ]
+    ],
+    ...context
   }
+}
+
+function updateLines(update: PluginApprovalUpdateInfo, version: string): string[] {
+  const lines: string[] = []
+  const growth = update.growth
+  if (growth) {
+    const asks = [
+      ...growth.capabilities.map((kind) => `capability ${kind}`),
+      ...(growth.execution ? [`execution level ${growth.execution}`] : []),
+      ...growth.contributions.map((point) => `new ${point}`)
+    ]
+    if (asks.length > 0) {
+      lines.push(
+        `Updating ${update.fromVersion} → ${version} asks for more access: ${asks.join(', ')}.`
+      )
+    }
+  }
+  if (update.repositoryMoved) {
+    lines.push(
+      `It now comes from a different repository: ${update.repositoryMoved.from} → ${update.repositoryMoved.to}.`
+    )
+  }
+  return lines
 }
 
 /** One message for humans; agents read `data` instead. */
@@ -175,12 +238,22 @@ export function formatPluginApprovalMessage(request: PluginApprovalRequest, stal
     lead,
     `Approving ${request.name} (${request.pluginKey} ${request.version}${request.isDev ? ', development folder' : ''}) grants:`,
     `- ${request.grants.executionDescription}`,
-    ...request.grants.capabilities.map((capability) => `- ${capability.description}`)
+    ...request.grants.capabilities.map((capability) => `- ${capability.description}`),
+    ...(request.grants.replacements ?? []).map(
+      (replacement) =>
+        `- Runs "${replacement.command}" instead of Orca's own ${replacement.action} (switch it back on the plugin's page)`
+    )
   ]
   if (request.grants.contributions.length > 0) {
     lines.push(
       `Adds: ${request.grants.contributions.map((item) => `${item.kind} "${item.name}"`).join(', ')}`
     )
+  }
+  if (request.update) {
+    lines.push(...updateLines(request.update, request.version))
+  }
+  if (request.source) {
+    lines.push(...pluginInstallSourceLines(request.source))
   }
   lines.push(
     `Why approval is needed: ${request.why}`,

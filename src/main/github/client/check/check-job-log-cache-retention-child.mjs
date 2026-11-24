@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { performance, monitorEventLoopDelay } from 'node:perf_hooks'
-import { workload } from '../../../../../config/scripts/check-job-log-performance-cases.mjs'
+import { workload } from '../../../../../config/scripts/performance/check-job-log/check-job-log-performance-cases.mjs'
 
 assert(
   !process.versions.bun && typeof globalThis.gc === 'function',
@@ -96,6 +96,7 @@ async function retained(count, bytes, offset) {
 for (let id = 0; id < 3; id++) {
   await cold(id + 1, 128 * 1024)
 }
+assert.equal(host.downloadCount(), 3, 'Cold downloads bypassed the generated gh fixture')
 host.prCheckLogTailCache.clear()
 const pinnedBefore = memory()
 let pinned = Array.from({ length: 8 }, (_, index) => parent(8 * mib, index).slice(-limit))

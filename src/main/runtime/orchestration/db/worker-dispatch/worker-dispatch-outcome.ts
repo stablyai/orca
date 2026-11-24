@@ -1,21 +1,48 @@
-import type { WorkerDispatchRow } from '../../types'
+import type { WorkerDispatchRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { recordFailedStartDispatchIdentity } from '../worker-terminal/failed-start-dispatch-identity'
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from '../dispatch-context/dispatch-circuit-breaker'
+import { mergeWorkerLaunchObservation } from '../../workers/launch/worker-launch-observation'
+import { WORKER_DISPATCH_COLUMN_LIST } from '../row-column-lists'
+import { resumeTaskBlockedByUnknownStart } from '../dispatch-context/task-dispatch-reconciliation'
 
+export function retainWorkerLaunchObservation(
+  this: OrchestrationDb,
+  dispatchId: string,
+  observation: unknown
+): void {
+  this.db.exec('BEGIN IMMEDIATE')
+  try {
+    const worker = this.getWorkerDispatch(dispatchId)
+    const options = worker && mergeWorkerLaunchObservation(worker.start_options, observation)
+    if (worker && options !== undefined && options !== worker.start_options) {
+      this.db
+        .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
+        .run(options, dispatchId)
+      this.workerDockSources?.changedDispatch(dispatchId)
+    }
+    this.db.exec('COMMIT')
+  } catch (error) {
+    this.db.exec('ROLLBACK')
+    throw error
+  }
+}
+
+/** `from: 'start_unknown'` is a start whose turn was seen only later: it lifts the block that put on its Task. */
 export function markWorkerDispatchReady(
   this: OrchestrationDb,
   dispatchId: string,
-  effects?: unknown[]
+  effects?: unknown[],
+  from: 'starting' | 'start_unknown' = 'starting'
 ): WorkerDispatchRow {
   this.db.exec('BEGIN IMMEDIATE')
   try {
     const dispatch = this.getDispatchContextById(dispatchId)
     const worker = this.getWorkerDispatch(dispatchId)
-    if (!dispatch || dispatch.status !== 'pending' || worker?.state !== 'starting') {
-      throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not starting.`)
+    if (!dispatch || dispatch.status !== 'pending' || worker?.state !== from) {
+      throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not ${from}.`)
     }
     transitionLifecycleWithDb(this.db, {
       entity: 'dispatch',
@@ -26,13 +53,17 @@ export function markWorkerDispatchReady(
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: dispatchId,
-      from: 'starting',
+      from,
       to: 'ready',
       projection: {
         stage: 'input_accepted',
+        ...(from === 'start_unknown' ? { last_error: null } : {}),
         effects: effects ? JSON.stringify(effects) : worker.effects
       }
     })
+    if (from === 'start_unknown') {
+      resumeTaskBlockedByUnknownStart(this, dispatch.task_id)
+    }
     this.db.exec('COMMIT')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
@@ -155,12 +186,16 @@ export function getWorkerDispatch(
   this: OrchestrationDb,
   dispatchId: string
 ): WorkerDispatchRow | undefined {
-  return this.db
-    .prepare('SELECT * FROM worker_dispatches WHERE dispatch_id = ?')
-    .get(dispatchId) as WorkerDispatchRow | undefined
+  // An explicit projection, so SyncDatabase keeps this hot statement compiled; `SELECT *` is never cached.
+  const row = this.db
+    .prepare(`SELECT ${WORKER_DISPATCH_COLUMN_LIST} FROM worker_dispatches WHERE dispatch_id = ?`)
+    .get(dispatchId)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list is checked against WorkerDispatchRow, and projected-row-getters.test.ts verifies the returned row.
+  return row as WorkerDispatchRow | undefined
 }
 
 export type WorkerDispatchOutcomeMethods = {
+  retainWorkerLaunchObservation: typeof retainWorkerLaunchObservation
   markWorkerDispatchReady: typeof markWorkerDispatchReady
   failWorkerStart: typeof failWorkerStart
   markWorkerStartUnknown: typeof markWorkerStartUnknown
@@ -169,6 +204,7 @@ export type WorkerDispatchOutcomeMethods = {
 
 export function attachWorkerDispatchOutcome(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
+    retainWorkerLaunchObservation,
     markWorkerDispatchReady,
     failWorkerStart,
     markWorkerStartUnknown,

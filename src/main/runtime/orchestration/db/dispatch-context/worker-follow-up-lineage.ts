@@ -1,72 +1,105 @@
+import { sleepingAgentLaunchConfigSchema } from '../../../../../shared/workspace-session/workspace-session-sleeping-agents'
+import { resolveWorkerLineageFacts, FOLLOW_UP_MESSAGE_TYPES } from './worker-follow-up-plan'
+
 import {
   normalizeAgentProviderSession,
-  type AgentProviderSessionMetadata
-} from '../../../../../shared/agent-session-resume'
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   getConnectionExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
-import type { ExactWorkerProviderSession } from '../../../../../shared/orchestration-worker-output'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
-import { isTuiAgent } from '../../../../../shared/tui-agent-config'
-import { isLocalHookConnectionId } from '../../../../../shared/wsl-hook-relay-contract'
-import type { DispatchContextRow } from '../../types'
-import type { WorkerTerminalResourceRow } from '../../worker-terminal-ownership'
+} from '../../../../../shared/execution-host/execution-host'
+import type { ExactWorkerProviderSession } from '../../../../../shared/orchestration/workers/orchestration-worker-output'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
+import { isLocalHookConnectionId } from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
+import type { DispatchContextRow } from '../orchestration-records'
+import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
 import type { OrchestrationDb } from '../orchestration-db'
+import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
+import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
 
 /** The conversation a closed terminal worker reopens in, as the resume path takes it. */
 export type WorkerResumeSession = {
   agent: TuiAgent
   providerSession: AgentProviderSessionMetadata
   captureHostId: ExecutionHostId
+  /** The recipe the worker launched with; its pane's own record is gone once it closes (#37693). */
+  launchConfig?: SleepingAgentLaunchConfig
 }
 
 export function getFollowUpDispatch(
-  db: OrchestrationDb,
+  db: Pick<OrchestrationDb, 'db'>,
   dispatchId: string
 ): DispatchContextRow | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
+  // Explicit projection so SyncDatabase caches this per-lineage-step statement; `SELECT *` never is.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   return db.db
-    .prepare('SELECT * FROM dispatch_contexts WHERE follow_up_of_dispatch_id = ?')
+    .prepare(
+      `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE follow_up_of_dispatch_id = ?`
+    )
     .get(dispatchId) as DispatchContextRow | undefined
+}
+
+/** Whether a report's task id names a Task from earlier in its Dispatch's follow-up chain, which a
+ *  worker that ran them all may still quote. Its own Task, or any other, is not. */
+export function isEarlierTaskOfDispatch(
+  db: { getDispatchContextById(dispatchId: string): DispatchContextRow | undefined },
+  dispatch: Pick<DispatchContextRow, 'id' | 'task_id' | 'follow_up_of_dispatch_id'>,
+  taskId: string
+): boolean {
+  const seen = new Set([dispatch.id])
+  for (
+    let earlier = dispatch.follow_up_of_dispatch_id
+      ? db.getDispatchContextById(dispatch.follow_up_of_dispatch_id)
+      : undefined;
+    earlier && !seen.has(earlier.id);
+    earlier = earlier.follow_up_of_dispatch_id
+      ? db.getDispatchContextById(earlier.follow_up_of_dispatch_id)
+      : undefined
+  ) {
+    if (earlier.task_id === taskId) {
+      return taskId !== dispatch.task_id
+    }
+    seen.add(earlier.id)
+  }
+  return false
+}
+
+export type WorkerLineage = {
+  latest: DispatchContextRow
+  resource: WorkerTerminalResourceRow | undefined
+}
+
+/** The reads a lineage walk needs; the database itself, or a reader that memoizes them. */
+export type WorkerLineageReader = Pick<OrchestrationDb, 'db'> & {
+  getDispatchContextById(dispatchId: string): DispatchContextRow | undefined
+  getWorkerTerminalResourceByOwner(dispatchId: string): WorkerTerminalResourceRow | undefined
+  getWorkerTerminalResourceFormerlyOwnedBy(
+    dispatchId: string
+  ): WorkerTerminalResourceRow | undefined
 }
 
 /** A worker's newest Dispatch and resource, from any Dispatch it ran; follow-ups and `worker-start --terminal` both continue it. */
 export function resolveWorkerLineage(
-  db: OrchestrationDb,
-  dispatchId: string
-): { latest: DispatchContextRow; resource: WorkerTerminalResourceRow | undefined } | undefined {
-  const addressed = db.getDispatchContextById(dispatchId)
-  if (!addressed) {
-    return undefined
-  }
-  let latest = addressed
-  const resourceOf = (id: string) =>
-    db.getWorkerTerminalResourceByOwner(id) ?? db.getWorkerTerminalResourceFormerlyOwnedBy(id)
-  const seen = new Set([latest.id])
-  // A follow-up that never got a worker continues the nearest one before it that did.
-  let resource = resourceOf(latest.id)
-  for (let back = addressed; !resource && back.follow_up_of_dispatch_id;) {
-    const prior = db.getDispatchContextById(back.follow_up_of_dispatch_id)
-    if (!prior || seen.has(prior.id)) {
-      break
-    }
-    seen.add(prior.id)
-    back = prior
-    resource = resourceOf(prior.id)
-  }
-  for (;;) {
-    const transferred = resource && resource.owner_dispatch_id !== latest.id ? resource : undefined
-    const next =
-      getFollowUpDispatch(db, latest.id) ??
-      (transferred ? db.getDispatchContextById(transferred.owner_dispatch_id) : undefined)
-    if (!next || seen.has(next.id)) {
-      return { latest, resource }
-    }
-    seen.add(next.id)
-    latest = next
-    resource = resourceOf(next.id) ?? resource
-  }
+  db: WorkerLineageReader,
+  dispatchId: string,
+  followUp: (id: string) => DispatchContextRow | undefined = (id) => getFollowUpDispatch(db, id),
+  cache?: Map<string, WorkerLineage>
+): WorkerLineage | undefined {
+  return resolveWorkerLineageFacts(
+    {
+      dispatch: (id) => db.getDispatchContextById(id),
+      ownedResource: (id) => db.getWorkerTerminalResourceByOwner(id),
+      formerResource: (id) => db.getWorkerTerminalResourceFormerlyOwnedBy(id),
+      followUp
+    },
+    dispatchId,
+    cache
+  )
 }
 
 export function readWorkerResumeSession(
@@ -85,10 +118,18 @@ export function readWorkerResumeSession(
     const providerSession = normalizeAgentProviderSession(
       'providerSession' in parsed ? parsed.providerSession : undefined
     )
+    const launchConfig = sleepingAgentLaunchConfigSchema.parse(
+      'launchConfig' in parsed ? parsed.launchConfig : undefined
+    )
     return isTuiAgent(agent) &&
       providerSession &&
       (connectionId === null || typeof connectionId === 'string')
-      ? { agent, providerSession, captureHostId: getConnectionExecutionHostId(connectionId) }
+      ? {
+          agent,
+          providerSession,
+          captureHostId: getConnectionExecutionHostId(connectionId),
+          ...(launchConfig ? { launchConfig } : {})
+        }
       : null
   } catch {
     return null
@@ -108,10 +149,13 @@ export function recordWorkerResumeSession(
   const connectionId = isLocalHookConnectionId(session.connectionId)
     ? null
     : (session.connectionId ?? null)
+  const launchConfig =
+    session.launchConfig ?? recordedLaunchConfigOf(db, resourceId, session, connectionId)
   const value = JSON.stringify({
     agent: session.agent,
     providerSession: session.providerSession,
-    connectionId
+    connectionId,
+    ...(launchConfig ? { launchConfig } : {})
   })
   // A repeat of the stored conversation writes nothing.
   db.db
@@ -119,6 +163,23 @@ export function recordWorkerResumeSession(
       'UPDATE worker_terminal_resources SET resume_session = ? WHERE id = ? AND resume_session IS NOT ?'
     )
     .run(value, resourceId, value)
+}
+
+/** The recipe this row already holds for the same conversation: a capture after the agent exited no
+ *  longer reads its launch, but the conversation it reports is still the one that launch started. */
+function recordedLaunchConfigOf(
+  db: OrchestrationDb,
+  resourceId: string,
+  session: ExactWorkerProviderSession,
+  connectionId: string | null
+): SleepingAgentLaunchConfig | undefined {
+  const stored = readWorkerResumeSession(db.getWorkerTerminalResource(resourceId))
+  return stored &&
+    stored.agent === session.agent &&
+    stored.captureHostId === getConnectionExecutionHostId(connectionId) &&
+    agentProviderSessionsEqual(session.agent, stored.providerSession, session.providerSession)
+    ? stored.launchConfig
+    : undefined
 }
 
 /** A reopened worker keeps its conversation until its own pane reports one. */
@@ -136,7 +197,6 @@ export function carryWorkerResumeSession(
 }
 
 /** Mail a coordinator sends a working worker, and so what continues one once it has reported. */
-export const FOLLOW_UP_MESSAGE_TYPES = ['status', 'dispatch', 'handoff'] as const
 
 const UNREAD_FOLLOW_UP_MAIL_SQL = `SELECT 1 FROM messages
   WHERE to_handle = 'dispatch:' || dispatch_contexts.id AND read = 0
@@ -153,15 +213,49 @@ export function markUnreadFollowUpMail(db: OrchestrationDb, dispatchId: string):
     .run(dispatchId)
 }
 
-/** A follow-up that did not start gives back the mail it took, unread where it was sent. */
-export function restoreFollowUpMail(db: OrchestrationDb, messageIds: readonly string[]): void {
-  if (messageIds.length > 0) {
+/** In the follow-up's claim, so its first `check` finds the mail. A terminal's start prompt is that mail's
+ *  wake; a pointer whose Enter is in flight keeps its stamps to settle. A chat is handed each message whole
+ *  after its Task, so the mail stays undelivered for that. */
+export function takeFollowUpMail(
+  db: OrchestrationDb,
+  fromDispatchId: string,
+  toDispatchId: string
+): void {
+  const chat = receivesMailWhole(db.getDispatchContextById(fromDispatchId)?.assignee_handle)
+  db.db
+    .prepare(
+      `UPDATE messages
+          SET to_handle = ?,
+              delivered_at = CASE WHEN ? THEN NULL
+                WHEN pointer_enter_pending = 0 THEN datetime('now') ELSE delivered_at END,
+              pointer_pty_id = CASE WHEN pointer_enter_pending = 0 THEN NULL ELSE pointer_pty_id END,
+              pointer_process_incarnation =
+                CASE WHEN pointer_enter_pending = 0 THEN NULL ELSE pointer_process_incarnation END
+        WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'`
+    )
+    .run(`dispatch:${toDispatchId}`, chat ? 1 : 0, `dispatch:${fromDispatchId}`)
+  // Until the follow-up is ready, a restart must find this mail on it.
+  markUnreadFollowUpMail(db, toDispatchId)
+}
+
+/** A chat worker, assigned by session or started by Orca, gets mail whole rather than a pointer at `check`. */
+export function receivesMailWhole(assigneeHandle: string | null | undefined): boolean {
+  return (
+    parseOrcaSessionAddress(assigneeHandle) !== null || isStructuredWorkerHandle(assigneeHandle)
+  )
+}
+
+/** Mail a follow-up held from before it started is what its Task pointed at; only newer mail starts another. */
+export function hasNewUnreadFollowUpMail(db: OrchestrationDb, dispatchId: string): boolean {
+  return Boolean(
     db.db
       .prepare(
-        `UPDATE messages SET read = 0, delivered_at = NULL WHERE id IN (${messageIds.map(() => '?').join(',')})`
+        `SELECT 1 FROM dispatch_contexts WHERE id = ? AND EXISTS (${UNREAD_FOLLOW_UP_MAIL_SQL}
+           AND (dispatch_contexts.follow_up_of_dispatch_id IS NULL
+             OR messages.created_at >= dispatch_contexts.created_at))`
       )
-      .run(...messageIds)
-  }
+      .get(dispatchId)
+  )
 }
 
 export function clearFollowUpMail(db: OrchestrationDb, dispatchId: string): void {

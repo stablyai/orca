@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronDown } from 'lucide-react-native'
-import { colors, radii } from '../../theme/mobile-theme'
+import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
@@ -69,31 +69,31 @@ const styles = themedStyleSheet(() => ({
     justifyContent: 'center'
   },
   disabled: {
-    opacity: 0.4
+    opacity: feedback.disabledOpacity
   },
   chip: {
     height: 32,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
-    paddingHorizontal: 13,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: 'transparent',
     backgroundColor: colors.bgRaised
   },
   withIcon: {
-    paddingLeft: 9
+    paddingLeft: spacing.sm
   },
   withMenu: {
-    paddingRight: 9
+    paddingRight: spacing.sm
   },
   active: {
     borderColor: colors.textSecondary
   },
   pressed: {
-    opacity: 0.75
+    opacity: feedback.pressedOpacity
   },
   label: {
     fontSize: 14,
