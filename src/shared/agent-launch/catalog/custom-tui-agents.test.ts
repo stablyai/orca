@@ -21,6 +21,16 @@ describe('normalizeCustomTuiAgents', () => {
     ])
     expect(normalizeCustomTuiAgents(undefined)).toEqual([])
   })
+
+  it('trims after truncation so save and reload deduplicate identically', () => {
+    const padded = `x${' '.repeat(79)}a`
+    const saved = normalizeCustomTuiAgents([
+      { id: padded, name: 'first', agent: 'claude', command: 'claude-first' },
+      { id: 'x', name: 'second', agent: 'claude', command: 'claude-second' }
+    ])
+    expect(saved).toEqual([{ id: 'x', name: 'first', agent: 'claude', command: 'claude-first' }])
+    expect(normalizeCustomTuiAgents(saved)).toEqual(saved)
+  })
 })
 
 describe('custom agent launch command override', () => {

@@ -25,7 +25,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function readText(value: unknown, maxLength: number): string {
-  return typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
+  return typeof value === 'string' ? value.trim().slice(0, maxLength).trim() : ''
 }
 
 /** Drops incomplete or duplicate entries; a command stays one shell line. */
