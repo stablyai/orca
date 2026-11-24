@@ -52,3 +52,23 @@ export function botChatLabelText(parts: readonly BotChatLabelPart[], bot: string
     .map((part) => (part.kind === 'bot' ? bot : part.kind === 'chat' ? chat : part.text))
     .join('')
 }
+
+// Hebrew, Arabic, Syriac, Thaana, N'Ko and their presentation forms.
+const RTL_CHARS = /[֐-ࣿיִ-﷿ﹰ-﻿]/
+const DIGIT_SUFFIX = /\s?[0-9]+$/
+
+/** A name's trailing instance number (" 01"), kept whole while the rest ellipsizes; null when the
+ *  name has none, or is right-to-left, where splitting it would reorder it. */
+export function botNameDigitSuffix(name: string): { head: string; digits: string } | null {
+  const digits = RTL_CHARS.test(name) ? null : DIGIT_SUFFIX.exec(name)?.[0]
+  return digits && digits.length < name.length
+    ? { head: name.slice(0, -digits.length), digits }
+    : null
+}
+
+const SHOWN_SEPARATOR_MAX = 4
+
+/** A translation's text between the names, or " · " when it is too long to show whole. */
+export function shownSeparator(text: string): string {
+  return Array.from(text).length > SHOWN_SEPARATOR_MAX ? ' · ' : text
+}

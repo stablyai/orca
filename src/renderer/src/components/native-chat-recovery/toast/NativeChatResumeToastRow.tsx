@@ -8,7 +8,12 @@ import {
 } from '../failures/native-chat-resume-failure-guidance'
 import { resumeActivityLabel } from '../tree/native-chat-resume-activity-label'
 import type { ResumeToastRow } from './native-chat-resume-toast-view'
-import { botChatLabelParts, botChatLabelText } from './resume-toast-row-label'
+import {
+  botChatLabelParts,
+  botChatLabelText,
+  botNameDigitSuffix,
+  shownSeparator
+} from './resume-toast-row-label'
 
 function rowActions(row: ResumeToastRow, remote: boolean, t: Translate): ResumeFailureAction[] {
   if (row.state !== 'needs-you') {
@@ -85,6 +90,21 @@ function StateMark({ row }: { row: ResumeToastRow }): React.JSX.Element {
   )
 }
 
+/** Never shrinks, so a sub-pixel squeeze can't clip a name that fits; past its cap the chat keeps a
+ *  word. Isolated so its direction never mixes with the row's. */
+function BotName({ name }: { name: string }): React.JSX.Element {
+  const suffix = botNameDigitSuffix(name)
+  return suffix ? (
+    <bdi className="flex min-w-0 max-w-[calc(100%-4rem)] shrink-0">
+      <span className="min-w-0 truncate">{suffix.head}</span>
+      {/* The instance number stays, so "… 01" and "… 02" differ in the row itself. */}
+      <span className="shrink-0 whitespace-pre">{suffix.digits}</span>
+    </bdi>
+  ) : (
+    <bdi className="max-w-[calc(100%-4rem)] shrink-0 truncate">{name}</bdi>
+  )
+}
+
 export function NativeChatResumeToastRow({
   row,
   name: chatName,
@@ -129,21 +149,17 @@ export function NativeChatResumeToastRow({
                 {labelParts && owner ? (
                   labelParts.map((part) =>
                     part.kind === 'bot' ? (
-                      // Never shrinks, so a sub-pixel squeeze can't clip a name that fits; past its cap the chat keeps a word.
-                      <span key={part.key} className="max-w-[calc(100%-4rem)] shrink-0 truncate">
-                        {owner}
-                      </span>
+                      <BotName key={part.key} name={owner} />
                     ) : part.kind === 'chat' ? (
                       <span key={part.key} className="min-w-0 truncate">
                         {chatName}
                       </span>
                     ) : (
-                      // A language pack's separator is capped, so it can't push the names out of view.
                       <span
                         key={part.key}
-                        className="max-w-[4ch] shrink-0 truncate whitespace-pre text-muted-foreground"
+                        className="shrink-0 whitespace-pre text-muted-foreground"
                       >
-                        {part.text}
+                        {shownSeparator(part.text)}
                       </span>
                     )
                   )

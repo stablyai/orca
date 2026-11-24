@@ -241,7 +241,7 @@ const longSeparatorT: Translate = (key, fallback, options) =>
     : translate(key, fallback, options)
 const LONG_SEPARATOR_SCOPE = { intlLocale: 'en', t: longSeparatorT }
 
-/** A language pack's separator is capped, so the bot and chat names stay in view. */
+/** A language pack's separator too long to show whole falls back to " · ", so the names stay in view. */
 export const botChatsLongSeparator = defineFixture({
   width: NARROWEST,
   render: () => (

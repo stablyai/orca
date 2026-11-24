@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { Translate } from '@/i18n/use-translate'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { botChatLabelParts, botChatLabelText, resumeRowBotName } from './resume-toast-row-label'
+import {
+  botChatLabelParts,
+  botChatLabelText,
+  botNameDigitSuffix,
+  resumeRowBotName,
+  shownSeparator
+} from './resume-toast-row-label'
 
 const bots: { name: string; hostId: ExecutionHostId; folderWorkspaceId: string }[] = [
   { name: 'UX Designer', hostId: 'local', folderWorkspaceId: 'home-1' },
@@ -31,13 +37,23 @@ describe('resume toast row label', () => {
     expect(botChatLabelText(lost, 'UX Designer', 'Home')).toBe('UX Designer · Home')
   })
 
-  it('keeps a long separator as one piece between the names', () => {
+  it('shows a separator too long to fit as the default one', () => {
     const separator = ' ———————— a forty-eight character separator ——— '
     const parts = botChatLabelParts(translation(`{{bot}}${separator}{{chat}}`))
-    expect(parts).toEqual([
-      { key: 'bot', kind: 'bot' },
-      { key: 'text-1', kind: 'text', text: separator },
-      { key: 'chat', kind: 'chat' }
-    ])
+    expect(
+      parts.map((part) => (part.kind === 'text' ? shownSeparator(part.text) : part.kind))
+    ).toEqual(['bot', ' · ', 'chat'])
+    expect(shownSeparator(' de ')).toBe(' de ')
+  })
+
+  it("keeps only a left-to-right name's trailing instance number whole", () => {
+    expect(botNameDigitSuffix('Customer Onboarding Research Assistant 02')).toEqual({
+      head: 'Customer Onboarding Research Assistant',
+      digits: ' 02'
+    })
+    expect(botNameDigitSuffix('מעצב חוויה 02')).toBeNull()
+    expect(botNameDigitSuffix('Assistant 02\u0301')).toBeNull()
+    expect(botNameDigitSuffix('UX Designer')).toBeNull()
+    expect(botNameDigitSuffix('42')).toBeNull()
   })
 })
