@@ -51,9 +51,11 @@ function chat(
   recoveredBelow = 0,
   /** Tool calls the last turn ran, as a long agent turn does. */
   lastTurnTools = 0,
-  /** Every send in one family: each shares a provider id with one neighbour and a card with the other. */
-  chained = false
+  /** Every send in one family: a chain (each shares a provider id with one neighbour and a card with
+   *  the other), or one queued card they all carry. */
+  family?: 'chain' | 'card'
 ): Database {
+  const chained = family === 'chain'
   const directory = mkdtempSync(join(tmpdir(), 'orca-operation-window-'))
   directories.push(directory)
   const db = new Database(join(directory, 'journal.sqlite'))
@@ -90,7 +92,12 @@ function chat(
             source: { kind: 'user' },
             handoverRecorded: true,
             // Each send carried a queued card, as agent mail to a member chat does.
-            queuedMessageId: chained ? `card-${Math.floor(index / 2)}` : `card-${index}`
+            queuedMessageId:
+              family === 'card'
+                ? 'card'
+                : chained
+                  ? `card-${Math.floor(index / 2)}`
+                  : `card-${index}`
           }
         },
         facts,
@@ -338,8 +345,8 @@ it('walks a family of sends linked by provider id and queued card once, however 
 it('stops reading a long send family at its first member older than the newest turns', () => {
   // Every send is in one family running back through the chat, from the newest send (unanswered or
   // not): the first older member settles the whole read, so the rest is never walked by index.
-  const extra = (turns: number, unanswered: boolean) => {
-    const db = chat(turns, () => true, unanswered ? turns - 1 : undefined, 0, 0, true)
+  const extra = (turns: number, unanswered: boolean, family: 'chain' | 'card' = 'chain') => {
+    const db = chat(turns, () => true, unanswered ? turns - 1 : undefined, 0, 0, family)
     const pinned = new JournalSqlScope(db, 'chat', 'epoch')
     const read = readJournalDomainOperationWindow(pinned, { latestTurns: 8, turnShape: true })
     const whole = new JournalSqlScope(db, 'chat', 'epoch')
@@ -357,4 +364,7 @@ it('stops reading a long send family at its first member older than the newest t
   expect([extra(50, true), extra(500, true), extra(50, false), extra(500, false)]).toEqual([
     31, 31, 46, 46
   ])
+  // One card every send carries: each lookup lists at most the cap, however wide the family.
+  expect([extra(200, true, 'card'), extra(500, true, 'card')]).toEqual([67, 67])
+  expect([extra(200, false, 'card'), extra(500, false, 'card')]).toEqual([128, 128])
 })

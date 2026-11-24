@@ -96,22 +96,40 @@ export function windowSends(scope: JournalSqlScope, start: number, end: number):
   ]
 }
 
+/** Most sends a newest-turns window reads by index for one walk of families; past it, the whole read. */
+export const RECENT_FAMILY_CAP = 64
+
+/** A walk of families that settles on the whole read: past `cap` sends, or at one `older` send. */
+export type FamilyBound = { cap: number; older: (send: Send) => boolean }
+
 /** `sends` with `more`, once each by message id, and every send sharing a provider id or queued card
  *  with one of them (attribution reads the first or last of those), each found by index. */
 export function withSends(
   scope: JournalSqlScope,
   sends: readonly Send[],
-  more: readonly Send[],
-  /** Stops the walk once a send it reaches settles what the caller needs. */
-  until?: (send: Send) => boolean
+  more: readonly Send[]
 ): Send[] {
+  return boundedSends(scope, sends, more) ?? [...sends]
+}
+
+/** As `withSends`, or null as soon as `bound` settles on the whole read: at an `older` send, or once
+ *  the walk adds more than `cap` sends past `sends` and `more`. Each lookup lists a bounded number of
+ *  sends, so the walk's work is bounded however large a family grows. */
+export function boundedSends(
+  scope: JournalSqlScope,
+  sends: readonly Send[],
+  more: readonly Send[],
+  bound?: FamilyBound
+): Send[] | null {
   const byId = new Map(sends.map((send) => [send.messageId, send]))
   let added = more.filter((send) => !byId.has(send.messageId))
+  const most = bound ? byId.size + added.length + bound.cap : Infinity
   while (added.length > 0) {
     added.forEach((send) => byId.set(send.messageId, send))
-    if (until && added.some(until)) {
-      break
+    if (bound && (byId.size > most || added.some(bound.older))) {
+      return null
     }
+    const limit = bound ? most + 1 : undefined
     const providers = [...new Set(added.flatMap((send) => send.providerItemId ?? []))]
     const cards = [...new Set(added.flatMap((send) => send.queuedMessageId ?? []))]
     const related = [
@@ -120,7 +138,8 @@ export function withSends(
             scope,
             'AND provider_item_id IN (SELECT value FROM json_each(?))',
             [JSON.stringify(providers)],
-            'journal_submission_provider_item'
+            'journal_submission_provider_item',
+            limit
           )
         : []),
       ...(cards.length > 0
@@ -128,10 +147,15 @@ export function withSends(
             scope,
             `AND ${SEND_QUEUED_CARD_SQL} IN (SELECT value FROM json_each(?))`,
             [JSON.stringify(cards)],
-            'journal_submission_queued_card'
+            'journal_submission_queued_card',
+            limit
           )
         : [])
     ]
+    // Every send a lookup lists is in a walked family, so a full lookup means the walk is past the cap.
+    if (limit !== undefined && related.length >= limit) {
+      return null
+    }
     const seen = new Set<string>()
     added = related.filter((send) => {
       const fresh = !byId.has(send.messageId) && !seen.has(send.messageId)
@@ -148,7 +172,9 @@ export function sendHeads(
   scope: JournalSqlScope,
   where = '',
   params: readonly (string | number)[] = [],
-  index?: string
+  index?: string,
+  /** At most this many, in index order rather than by ordinal, so the lookup stops early. */
+  limit?: number
 ): Send[] {
   const at = (column: string) => `(SELECT sequence FROM journal_items item
     WHERE item.session_id=send.session_id AND item.epoch=send.epoch AND item.item_id=${column}
@@ -159,7 +185,7 @@ export function sendHeads(
     ${at('send.item_id')} AS opener_sequence,${at('send.provider_item_id')} AS provider_sequence,
     ${at("(CASE WHEN json_valid(send.payload_json) THEN json_extract(send.payload_json,'$.answeredInTurn.turnItemId') END)")} AS answered_sequence
     FROM journal_submission_attempts send ${index ? `INDEXED BY ${index}` : ''} WHERE session_id=? AND epoch=? AND current=1 ${where}
-    ORDER BY ordinal`)
+    ${limit === undefined ? 'ORDER BY ordinal' : `LIMIT ${limit}`}`)
     .all(...scope.prefix, ...params)
     .map((row) => {
       const read = scope.examined(row)
@@ -196,12 +222,15 @@ export function recentSends(
   anchorsOnly: boolean
 ): Send[] | null {
   const older = (send: Send) => !anchorsOnly && reachesBefore([send], null, newest)
-  if ((earliest ?? Infinity) < newest || seed.some(older)) {
+  if ((earliest ?? Infinity) < newest || seed.length > RECENT_FAMILY_CAP || seed.some(older)) {
     return null
   }
-  const sends = withSends(scope, [], seed, older)
+  const sends = boundedSends(scope, [], seed, { cap: RECENT_FAMILY_CAP, older })
+  if (sends === null) {
+    return null
+  }
   const held = keptSends(sends, operations, newest, null, anchorsOnly)
-  return sends.some(older) || reachesBefore(held, earliest, newest) ? null : sends
+  return reachesBefore(held, earliest, newest) ? null : sends
 }
 
 /** Whether a send the window must hold sits before `first` (by its rows, or the head it was sent at). */

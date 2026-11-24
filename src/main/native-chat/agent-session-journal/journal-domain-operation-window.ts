@@ -12,6 +12,8 @@ import { marginAfter } from './journal-operation-window-end'
 import {
   type Send,
   newestTurnsOnly,
+  RECENT_FAMILY_CAP,
+  boundedSends,
   keptSends,
   reachesBefore,
   recentSends,
@@ -129,16 +131,14 @@ export function readJournalDomainOperationWindow(
     earliest === null ? null : anchors.withoutTurnAhead ? earliest : marginBefore(scope, earliest)
   const end = earliest !== null && bounded ? windowEnd(scope, reaches) : null
   if (indexed && start !== null) {
-    // A newest-turns window stops reading a family at its first member older than the window, and
-    // takes the whole read instead: the window widens to it, or past what the stopped walk left out.
-    const older = (send: Send) => recent && reachesBefore([send], null, start ?? Infinity)
-    const known = new Set(sends.map((send) => send.messageId))
+    // A newest-turns window takes the whole read once a family runs older than it, or past the cap.
     const placed = windowSends(scope, start, end ?? Number.MAX_SAFE_INTEGER)
-    sends = withSends(scope, sends, placed, older)
-    if (sends.some((send) => !known.has(send.messageId) && older(send))) {
-      indexed = false
-      sends = sendHeads(scope)
-    }
+    const older = (send: Send) => reachesBefore([send], null, start ?? Infinity)
+    const walked = recent
+      ? boundedSends(scope, sends, placed, { cap: RECENT_FAMILY_CAP, older })
+      : withSends(scope, sends, placed)
+    indexed = walked !== null
+    sends = walked ?? sendHeads(scope)
   }
   let kept: Send[] = []
   // A held send's own rows, and the head it was sent at, are held too: a turn may claim a send by
