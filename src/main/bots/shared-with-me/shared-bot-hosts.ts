@@ -9,7 +9,7 @@ import type { RelayClientPlatform } from '../../../shared/remote-runtime/relay/c
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
 import { relayStreamError } from '../../../shared/remote-runtime/relay/client/relay-rpc-streams'
-import { SharedBotHostLink } from './shared-bot-host-link'
+import { sharedBotHostLink, type SharedBotHostLink } from './shared-bot-host-link'
 import {
   newSharedBotHostEntry,
   sharedBotHostKey,
@@ -331,7 +331,7 @@ export class SharedBotHosts {
   private linkFor(entry: SharedBotHostEntry): SharedBotHostLink {
     let link = this.links.get(entry.shareId)
     if (!link) {
-      link = new SharedBotHostLink({
+      link = sharedBotHostLink({
         platform: this.deps.platform,
         entry: () => this.store.get(entry.shareId),
         save: (next) => this.store.put(next),

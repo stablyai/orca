@@ -5,6 +5,7 @@ import { openBotTeamShareOffer } from '../../../shared/bots/bot-team-share-seal'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
 import { SHARED_HOSTS_HOLD_WHILE_AWAY } from '../../../shared/bots/shared-bot-hosts'
 import type { SharedHostRelayCredential } from '../../../shared/remote-runtime/relay/client/shared-host-relay-connection'
+import type { SharedHostLink } from '../../../shared/remote-runtime/relay/client/shared-host-relay-link'
 import {
   sharedBotHostKey,
   type SharedBotHeldMessage,
@@ -36,8 +37,8 @@ export function pinnedSharedBotOffer(
   )
 }
 
-/** How this device reaches the host now. `unpaired`: no usable offer or resume credential yet. */
-export type SharedBotLink = 'live' | 'connecting' | 'offline' | 'unpaired'
+/** How this device reaches the host now: see `SharedHostLink`. */
+export type SharedBotLink = SharedHostLink
 
 // An accept waits up to a day for the host, so it is asked again only this often while unanswered.
 export const ACCEPT_RETRY_MS = 5 * 60 * 1000
@@ -79,22 +80,6 @@ export function nextPairingStep(
   }
   const askedRecently = now - entry.acceptedAt < ACCEPT_RETRY_MS
   return share.hostOnline && !askedRecently ? { kind: 'accept' } : { kind: 'wait' }
-}
-
-/**
- * The relay refused the credential (an expired or spent invite, a revoked resume): drop it, so the
- * next step accepts again with the same keys rather than dialing it forever. The offer stays: its
- * host key and device id still name this device's row on the host.
- */
-export function withoutRefusedCredential(
-  entry: SharedBotHostEntry,
-  credential: SharedHostRelayCredential
-): SharedBotHostEntry {
-  if (credential.kind === 'resume') {
-    const { resume: _resume, ...rest } = entry
-    return rest
-  }
-  return { ...entry, refusedInvite: credential.inviteToken }
 }
 
 type HeldChat = SharedBotHeldMessage['chat']

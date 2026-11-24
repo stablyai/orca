@@ -1,7 +1,8 @@
 // The agents other people shared with this Orca account, as main publishes them to the window: each is
 // a host the app reaches over Orca Relay by its own environment id.
+import type { SharedHostLink } from '../remote-runtime/relay/client/shared-host-relay-link'
 
-export type SharedBotHostLink = 'live' | 'connecting' | 'offline' | 'unpaired'
+export type SharedBotHostLink = SharedHostLink
 
 /** Off for now: a shared host that is away reads as a paired server that is away (no send, nothing
  *  held). Every held path reads this; the held code stays for when it comes back. */

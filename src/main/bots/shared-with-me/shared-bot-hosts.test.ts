@@ -24,13 +24,8 @@ import {
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { SharedBotHostEntry } from './shared-bot-host-store'
-import {
-  ACCEPT_RETRY_MS,
-  nextPairingStep,
-  sendsHeld,
-  withoutRefusedCredential,
-  type MineShare
-} from './shared-bot-pairing'
+import { ACCEPT_RETRY_MS, nextPairingStep, sendsHeld, type MineShare } from './shared-bot-pairing'
+import { withoutRefusedCredential } from '../../../shared/remote-runtime/relay/client/shared-host-relay-link'
 import type { SharedBotsCloud } from './shared-bots-cloud'
 import { memorySharedBotHomes } from './shared-bot-home.test-fixture'
 import type {
