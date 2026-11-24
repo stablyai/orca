@@ -243,7 +243,7 @@ export function MobileNativeChatToolLine({
           {target ? (
             <Text
               style={[styles.lineTarget, type.row, filePath && onOpenFile && styles.lineLink]}
-              numberOfLines={1}
+              numberOfLines={expanded ? undefined : 1}
               onPress={filePath && onOpenFile ? () => onOpenFile(filePath) : undefined}
               suppressHighlighting={!(filePath && onOpenFile)}
               accessibilityRole={filePath && onOpenFile ? 'link' : undefined}
