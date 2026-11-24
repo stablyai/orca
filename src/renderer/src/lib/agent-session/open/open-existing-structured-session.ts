@@ -135,7 +135,12 @@ type DesktopInteractionOptions = {
   onError?: () => void
 }
 
-const activationsInFlight = new Map<string, Promise<StructuredSessionOpenResult>>()
+type InFlightActivation = {
+  result: Promise<StructuredSessionOpenResult>
+  current?: () => boolean
+}
+
+const activationsInFlight = new Map<string, InFlightActivation>()
 
 /** Admission precedes every owner effect; joiners only observe the rich settlement. */
 export async function openDesktopStructuredSessionInteraction(
@@ -164,14 +169,15 @@ export async function openDesktopStructuredSessionInteraction(
       ? `${executionHostIdForStructuredTarget(owner)}\0${source.structuredSession.workspaceId}\0${source.structuredSession.sessionId}`
       : undefined
   const pending = key === undefined ? undefined : activationsInFlight.get(key)
-  if (pending) {
-    return pending
+  if (pending && pending.current?.() !== false) {
+    return pending.result
   }
+  const deps = options.deps ?? defaultDeps
   let initialized = true
   const execute = async (): Promise<StructuredSessionOpenResult> => {
     initialized = options.initialize?.() !== false
     return initialized
-      ? executeDesktopStructuredSession(source, owner, options.deps ?? defaultDeps, options.locate)
+      ? executeDesktopStructuredSession(source, owner, deps, options.locate)
       : {
           kind: 'failed' as const,
           failure: { reason: 'unreachable' as const, beforeEffects: true }
@@ -191,12 +197,12 @@ export async function openDesktopStructuredSessionInteraction(
       }
     )
     .finally(() => {
-      if (key !== undefined) {
+      if (key !== undefined && activationsInFlight.get(key)?.result === activation) {
         activationsInFlight.delete(key)
       }
     })
   if (key !== undefined) {
-    activationsInFlight.set(key, activation)
+    activationsInFlight.set(key, { result: activation, current: deps.current })
   }
   return activation
 }

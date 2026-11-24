@@ -37,6 +37,7 @@ import type { BotDeepLink } from '../../../shared/bot-deep-link'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { lastUserWorkspaceSwitchAt } from './workspace/activation/workspace-switch-user-act'
 
 type LinkConversation = NonNullable<BotDeepLink['conversation']>
 
@@ -123,13 +124,15 @@ export async function openBotLinkHome(
         return
       }
       const workspaceId = folderWorkspaceKey(bot.folderWorkspaceId)
+      const openedAfterUserSwitchAt = lastUserWorkspaceSwitchAt(workspaceId)
       const stillShowingHome = (): boolean => {
         const { activeWorktreeId, activeWorkspaceExecutionHostId, activeView } =
           useAppStore.getState()
         return (
           activeWorktreeId === workspaceId &&
           activeWorkspaceExecutionHostId === hostId &&
-          activeView === 'terminal'
+          activeView === 'terminal' &&
+          lastUserWorkspaceSwitchAt(workspaceId) === openedAfterUserSwitchAt
         )
       }
       await activateAiVaultStructuredSession(
