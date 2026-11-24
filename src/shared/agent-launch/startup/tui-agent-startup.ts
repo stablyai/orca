@@ -112,7 +112,12 @@ export function buildAgentStartupPlan(args: {
   const quotedPrompt = quoteStartupArg(trimmedPrompt, shell)
 
   if (config.promptInjectionMode === 'argv') {
-    const promptSeparator = argvPromptSeparator(agent, baseCommand.command, args.agentArgs, shell)
+    const promptSeparator = argvPromptSeparator(
+      agent,
+      baseCommand.argvPromptCommand ?? baseCommand.command,
+      args.agentArgs,
+      shell
+    )
     return {
       agent,
       launchCommand:

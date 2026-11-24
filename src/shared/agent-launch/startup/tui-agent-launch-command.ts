@@ -83,6 +83,7 @@ export type ResolvedAgentLaunchCommand =
   | {
       ok: true
       command: string
+      argvPromptCommand?: string
       resumeLaunch: { agentCommand: string; agentArgs?: string }
       appliedSessionOptions: Record<string, SessionOptionValue>
       startupEnv?: Readonly<Record<string, string>>
@@ -193,9 +194,14 @@ export function resolveAgentLaunchCommand(args: {
       ? [...antigravityModelArgs(resolvedOptions.args), ...(resolvedOptions.permissionArgs ?? [])]
       : (resolvedOptions.permissionArgs ?? [])
   const resumeArgs = render(insertBeforeTerminator(args.agent, keptTokens, resumeOptionArgs))
+  const launchArgs = render(launchTokens)
   return {
     ok: true,
-    command: withArgs(render(launchTokens), launchHead),
+    command: withArgs(launchArgs, launchHead),
+    // The generated path can contain shell quoting that the custom-command tokenizer misreads.
+    ...(args.agent === 'claude' && program !== command
+      ? { argvPromptCommand: withArgs(launchArgs) }
+      : {}),
     resumeLaunch: {
       agentCommand: withArgs(resumeArgs),
       ...(keptTokens.length !== rawTokens.length ||

@@ -66,7 +66,7 @@ function tokenizeWindowsStartupCommand(
       // cmd strips carets outside quotes, allowing the child parser to split/reopen tokens, and keeps them inside quotes.
       // PowerShell treats continuations, single quotes, recognized escapes and leading escaped whitespace differently; mark these unmodelable.
       // Treat bare CR conservatively too: pwsh 7 retains it and Windows PowerShell 5.1 is unverified.
-      const divergenceBeforeEscape = divergesFromShell
+      const divergenceBeforeEscape: boolean = divergesFromShell
       divergesFromShell ||=
         (shell === 'cmd' ? /[\s"]/.test(value[index + 1]) : /[\n\r]/.test(value[index + 1])) ||
         (shell === 'cmd' && quote === '"') ||
