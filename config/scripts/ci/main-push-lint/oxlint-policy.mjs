@@ -106,26 +106,45 @@ function resolveFrom(from, target) {
   return resolved === '..' || resolved.startsWith('../') ? null : resolved
 }
 
+// Where a link points, from the link's stored bytes, or why that cannot be known here. A `name/..` in the
+// target is resolved by the file system after following `name`, which may itself be a link, so collapsing it
+// as text could name the wrong file: such a target counts as unreadable.
+async function linkTarget(link, sha, cwd) {
+  const raw = await git(['cat-file', 'blob', sha], cwd)
+  const segments = raw.split('/')
+  if (
+    segments.some(
+      (segment, index) =>
+        segment === '..' && index > 0 && !['', '.', '..'].includes(segments[index - 1])
+    )
+  ) {
+    return { unreadable: `${link} points through a directory name and then '..'` }
+  }
+  const target = resolveFrom(link, raw)
+  return target ? { target } : { unreadable: `${link} links outside the repository` }
+}
+
 // `file` with each symlinked directory on its way replaced by the link's target, recording each link as an input.
-// Null when a link leaves the repository or there are too many.
 async function resolveDirectories(file, tree, cwd, hops) {
   let parts = file.split('/')
   for (let index = 0; index < parts.length - 1; index += 1) {
     const prefix = parts.slice(0, index + 1).join('/')
     const entry = tree.get(prefix)
     if (entry?.mode === SYMLINK_MODE) {
-      const target = resolveFrom(prefix, await git(['cat-file', 'blob', entry.sha], cwd))
-      const rest = parts.slice(index + 1).join('/')
-      const next = target && path.posix.normalize(`${target}/${rest}`)
-      if (!next || next.startsWith('../') || hops.length >= MAX_LINK_HOPS) {
-        return null
+      if (hops.length >= MAX_LINK_HOPS) {
+        return { unreadable: `${file} goes through more than ${MAX_LINK_HOPS} links` }
+      }
+      const { target, unreadable } = await linkTarget(prefix, entry.sha, cwd)
+      const next = target && path.posix.normalize(`${target}/${parts.slice(index + 1).join('/')}`)
+      if (!next || next.startsWith('../')) {
+        return { unreadable: unreadable ?? `${prefix} links outside the repository` }
       }
       hops.push(prefix)
       parts = next.split('/')
       index = -1
     }
   }
-  return parts.join('/')
+  return { path: parts.join('/') }
 }
 
 // Where a path's content is stored, following symlinks by their exact bytes, in the file itself and in any
@@ -135,12 +154,12 @@ async function followLinks(file, tree, cwd) {
   let current = file
   for (let hop = 0; hop <= MAX_LINK_HOPS; hop += 1) {
     const resolved = await resolveDirectories(current, tree, cwd, hops)
-    if (!resolved) {
-      return { hops, unreadable: `${file} links outside the repository or through too many links` }
+    if (resolved.unreadable) {
+      return { hops, unreadable: resolved.unreadable }
     }
-    if (resolved !== current) {
-      hops.push(resolved)
-      current = resolved
+    if (resolved.path !== current) {
+      hops.push(resolved.path)
+      current = resolved.path
     }
     const entry = tree.get(current)
     if (!entry) {
@@ -149,12 +168,12 @@ async function followLinks(file, tree, cwd) {
     if (entry.mode !== SYMLINK_MODE) {
       return { hops, entry }
     }
-    const next = resolveFrom(current, await git(['cat-file', 'blob', entry.sha], cwd))
-    if (!next) {
-      return { hops, unreadable: `${file} links outside the repository` }
+    const { target, unreadable } = await linkTarget(current, entry.sha, cwd)
+    if (!target) {
+      return { hops, unreadable }
     }
-    hops.push(next)
-    current = next
+    hops.push(target)
+    current = target
   }
   return { hops, unreadable: `${file} goes through more than ${MAX_LINK_HOPS} links` }
 }
