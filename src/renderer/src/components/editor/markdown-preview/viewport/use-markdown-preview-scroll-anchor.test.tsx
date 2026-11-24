@@ -37,7 +37,6 @@ function useScrollAnchorHarness({
   element: HTMLDivElement
 }): void {
   const rootRef = useRef<HTMLDivElement | null>(element)
-  rootRef.current = element
   const [scrollMarks] = useState(createProgrammaticScrollMarks)
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: blocks.length,
