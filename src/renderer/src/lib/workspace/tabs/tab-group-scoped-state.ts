@@ -1,4 +1,4 @@
-import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
 import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 
 /** Per-tab-group state that outlives a mounted view and is disposed when its group or workspace is removed. */
@@ -14,23 +14,33 @@ type Registry = {
   retire(worktreeId: string, openGroupIds: ReadonlySet<string> | null): void
 }
 
-const registries = new Set<Registry>()
-let subscribed = false
-
-function isGroupOpen(worktreeId: string, groupId: string): boolean {
-  return useAppStore.getState().groupsByWorktree[worktreeId]?.some((g) => g.id === groupId) ?? false
+type GroupsStore = {
+  getState: () => Pick<AppState, 'groupsByWorktree'>
+  subscribe: (
+    listener: (
+      state: Pick<AppState, 'groupsByWorktree'>,
+      previous: Pick<AppState, 'groupsByWorktree'>
+    ) => void
+  ) => () => void
 }
 
-// One subscription for every registry; a write that leaves groupsByWorktree unchanged costs one reference compare.
-function ensureRemovalSubscription(): void {
-  if (subscribed) {
-    return
-  }
-  subscribed = true
-  useAppStore.subscribe((state, previous) => {
+const registries = new Set<Registry>()
+// Installed by the store at creation (store-observer-installers.ts); importing the store here would be a cycle.
+let groupsStore: GroupsStore | null = null
+
+function isGroupOpen(worktreeId: string, groupId: string): boolean {
+  return (
+    groupsStore?.getState().groupsByWorktree[worktreeId]?.some((g) => g.id === groupId) ?? false
+  )
+}
+
+/** One subscription for every registry; a write that leaves groupsByWorktree unchanged costs one reference compare. */
+export function installTabGroupScopedStateRetirement(store: GroupsStore): void {
+  groupsStore = store
+  store.subscribe((state, previous) => {
     const next = state.groupsByWorktree
     const before = previous.groupsByWorktree
-    if (next === before) {
+    if (next === before || registries.size === 0) {
       return
     }
     const changes = readRecordChanges(next, before)
@@ -90,7 +100,6 @@ export function createTabGroupScopedState<T>(
       if (!isGroupOpen(worktreeId, groupId)) {
         return
       }
-      ensureRemovalSubscription()
       const previous = take(worktreeId, groupId)
       if (previous !== undefined && previous !== value) {
         onDispose?.(previous)
