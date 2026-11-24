@@ -5,8 +5,7 @@ import { Fragment, memo, useCallback, useState } from 'react'
 import { Alert, Pressable, Text, View } from 'react-native'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
 import type { WorktreeStatus } from '../../../src/shared/worktree/row-display/worktree-status-rollup'
-import { AgentSpinner, agentStatusColors } from './presentation/AgentSpinner'
-import { AgentStateDot } from './presentation/AgentStateDot'
+import { AgentSpinner } from './presentation/AgentSpinner'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { MobileBotAvatar } from '../bots/MobileBotAvatar'
 import { mobileBotAvatarSource } from '../bots/host-bot-row-facts'
@@ -34,9 +33,10 @@ import { agentStatusGroup, type AgentListRow } from './agent-list-rows'
 import { agentListPreview } from './agent-list-row-text'
 
 // The Home rollup glyph is the list's size; this maps a per-agent state onto its palette.
-const GLYPH_STATUS: Record<Exclude<AgentDotState, 'blocked'>, WorktreeStatus> = {
+const GLYPH_STATUS: Record<AgentDotState, WorktreeStatus> = {
   working: 'working',
   monitoring: 'monitoring',
+  blocked: 'permission',
   waiting: 'permission',
   permission: 'permission',
   failed: 'failed',
@@ -273,11 +273,7 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
           delayLongPress={400}
         >
           <View style={[homeListStyles.status, row.stale && homeListStyles.rowDisabled]}>
-            {row.dotState === 'blocked' ? (
-              <AgentStateDot state={row.dotState} />
-            ) : (
-              <AgentSpinner status={GLYPH_STATUS[row.dotState]} />
-            )}
+            <AgentSpinner status={GLYPH_STATUS[row.dotState]} />
           </View>
           <View style={[styles.text, row.stale && homeListStyles.rowDisabled]}>
             <View style={styles.titleLine}>
@@ -288,11 +284,7 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
             </View>
             {stateWord || preview ? (
               <Text style={styles.preview} numberOfLines={2}>
-                {stateWord ? (
-                  <Text style={[styles.stateWord, { color: agentStatusColors().permission }]}>
-                    {stateWord}
-                  </Text>
-                ) : null}
+                {stateWord ? <Text style={styles.stateWord}>{stateWord}</Text> : null}
                 {stateWord && preview ? ' · ' : ''}
                 {preview}
               </Text>
@@ -347,7 +339,7 @@ const styles = themedStyleSheet(() => ({
   titleUnread: { fontWeight: '600' },
   time: { fontSize: 12, color: colors.textMuted, fontVariant: ['tabular-nums'] },
   preview: { fontSize: 14, lineHeight: 19, color: colors.textSecondary },
-  stateWord: { fontWeight: '600' },
+  stateWord: { color: colors.agentQuestionText, fontWeight: '600' },
   footer: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
   place: { flexShrink: 1, fontSize: 12, color: colors.textMuted },
   trailing: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 'auto' },

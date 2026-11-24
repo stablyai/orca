@@ -8,24 +8,29 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useWorkingRingRotation } from '../../components/motion/use-working-motion'
 
-/** A waiting, permission or failure dot. */
-export const AGENT_ATTENTION_COLOR = '#ef4444'
+export const AGENT_FAILURE_COLOR = '#ef4444'
 
 const dotColors = (): Record<
-  Exclude<AgentDotState, 'working' | 'monitoring' | 'blocked' | 'unverifiable'>,
+  Exclude<
+    AgentDotState,
+    'working' | 'monitoring' | 'blocked' | 'waiting' | 'permission' | 'unverifiable'
+  >,
   string
 > => ({
   done: '#10b981',
-  waiting: AGENT_ATTENTION_COLOR,
-  permission: AGENT_ATTENTION_COLOR,
   interrupted: colors.textMuted,
-  failed: AGENT_ATTENTION_COLOR,
+  failed: AGENT_FAILURE_COLOR,
   unconfirmed: colors.statusAmber,
   idle: 'rgba(115,115,115,0.4)'
 })
 export const AGENT_WORKING_COLOR = '#eab308'
 /** The dot's box, so rows can line text up past it. */
 export const AGENT_STATE_DOT_SIZE = 10
+
+export function AgentQuestionIcon({ size }: { size: number }) {
+  useMobileColorScheme()
+  return <MessageCircleQuestion size={size} color={colors.agentQuestion} accessible={false} />
+}
 
 /** Spins only while mounted, so idle rows hold no loop; Reduce Motion closes the gap, as desktop does. */
 export function WorkingRing({ color, style }: { color: string; style: ViewStyle }) {
@@ -62,6 +67,7 @@ export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable'
   if (state === 'monitoring') {
     return (
       <View
+        accessible
         style={styles.wrapper}
         accessibilityLabel={t('components.agentStateDot.monitoring', 'Monitoring background tasks')}
       >
@@ -81,10 +87,10 @@ export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable'
     )
   }
 
-  if (state === 'blocked') {
+  if (state === 'blocked' || state === 'waiting' || state === 'permission') {
     return (
-      <View style={styles.wrapper} accessibilityLabel={agentStateLabel(state)}>
-        <MessageCircleQuestion size={AGENT_STATE_DOT_SIZE} color={colors.agentQuestion} />
+      <View accessible style={styles.wrapper} accessibilityLabel={agentStateLabel(state)}>
+        <AgentQuestionIcon size={AGENT_STATE_DOT_SIZE} />
       </View>
     )
   }

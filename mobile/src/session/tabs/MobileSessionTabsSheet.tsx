@@ -9,7 +9,7 @@ import { TailClippedText } from '../../components/list/TailClippedText'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { SwipeRowActions } from '../../components/list/SwipeRowActions'
-import { AGENT_ATTENTION_COLOR, AgentStateDot } from '../../agents/presentation/AgentStateDot'
+import { AgentStateDot } from '../../agents/presentation/AgentStateDot'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useNow } from '../../hooks/use-now'
 import { formatTimeAgo, type AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
@@ -414,6 +414,6 @@ const styles = themedStyleSheet(() => ({
   title: { fontSize: 15, fontWeight: '500', color: colors.textPrimary },
   paneTitle: { fontSize: 14, color: colors.textPrimary },
   detail: { fontSize: 13, color: colors.textSecondary },
-  stateNeedsYou: { color: AGENT_ATTENTION_COLOR },
+  stateNeedsYou: { color: colors.agentQuestionText },
   time: { fontSize: 12, color: colors.textMuted, fontVariant: ['tabular-nums'] }
 }))
