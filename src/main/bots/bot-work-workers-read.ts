@@ -22,6 +22,8 @@ export type WorkerReadTrace = {
   walked: Map<string, Set<string>>
   /** Each read Dispatch's newest Dispatch row. */
   latest: Map<string, DispatchContextRow>
+  /** Each read Dispatch's worker terminal resource, when it has one. */
+  resources: Map<string, WorkerLineage['resource']>
   /** Orchestration's read of each worker, by its newest Dispatch. */
   sessions: Map<string, OrchestrationSessionWorker>
   /** The agent status rows the caller took for this read, so the read and its evidence agree. */
@@ -44,15 +46,17 @@ export async function readWorkers(
     dispatchIds.flatMap((id) => {
       try {
         const walked = walks?.walk()
-        const latest = walks
-          ? resolveWorkerLineage(walks.reader, id, walks.followUp, lineages)?.latest
-          : resolveWorkerLineage(db, id, undefined, lineages)?.latest
+        const lineage = walks
+          ? resolveWorkerLineage(walks.reader, id, walks.followUp, lineages)
+          : resolveWorkerLineage(db, id, undefined, lineages)
+        const latest = lineage?.latest
         if (trace && walked && latest) {
           // A walk that reused another's suffix ends at the same newest Dispatch, whose group holds the rest.
           const group = trace.walked.get(latest.id) ?? new Set()
           walked.forEach((walkedId) => group.add(walkedId))
           trace.walked.set(latest.id, group)
           trace.latest.set(id, latest)
+          trace.resources.set(id, lineage.resource)
         }
         return [[id, latest && (db.getTask(latest.task_id) ? latest : null)] as const]
       } catch {

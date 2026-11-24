@@ -42,6 +42,8 @@ export class LinkedWorkerStates {
   /** Kept workers' reports by Task, oldest first; a Task write drops every read that shows it. */
   private readonly reports = new Map<string, LinkedWorkerState['report']>()
   private reportChars = 0
+  /** The cache's reset count the reports were kept under. */
+  private reportsAt = 0
   /** The database's count of commits by other connections, which no row notice reports. */
   private dataVersion: number | null = null
 
@@ -65,17 +67,7 @@ export class LinkedWorkerStates {
     recheck = true
   ): Promise<Map<string, LinkedWorkerState | null>> {
     const db = this.workRuntime.getOrchestrationDb()
-    // A new follow-up continues its predecessor's worker: reads that walked it are read again.
-    const inserts = this.kept.takeInserted()
-    try {
-      for (const before of followedUp(db, inserts)) {
-        this.kept.drop(before)
-      }
-    } catch (error) {
-      // An unread insert may continue any kept read.
-      this.kept.drop(null)
-      throw error
-    }
+    this.dropFollowedUp(db)
     // Another connection's write (a WSL move rewrites worktrees on its own) fires no notice here.
     const version = dataVersion(db)
     if (version === null || version !== this.dataVersion) {
@@ -83,6 +75,12 @@ export class LinkedWorkerStates {
       this.dataVersion = version
     }
     const started = this.kept.begin(db)
+    if (this.kept.resets !== this.reportsAt) {
+      // Every kept read went (a reset, another database): their reports go too.
+      this.reports.clear()
+      this.reportChars = 0
+      this.reportsAt = this.kept.resets
+    }
     const candidates = unique.map((ref) => [ref, this.kept.get(KEPT_SCOPE, ref)] as const)
     // One status snapshot for the whole read, taken before it so a kept read's evidence is what it saw;
     // none when nothing is read and no kept worker has a pane to check.
@@ -104,6 +102,7 @@ export class LinkedWorkerStates {
     const trace: WorkerReadTrace = {
       walked: new Map(),
       latest: new Map(),
+      resources: new Map(),
       sessions: new Map(),
       statusRows
     }
@@ -154,6 +153,7 @@ export class LinkedWorkerStates {
       const session = trace.sessions.get(worker.dispatchId)
       const latest = trace.latest.get(ref)
       const walked = latest && trace.walked.get(latest.id)
+      const resource = trace.resources.get(ref)
       if (
         read !== undefined &&
         session &&
@@ -162,7 +162,9 @@ export class LinkedWorkerStates {
         worker.host === 'local' &&
         latest.status !== 'pending' &&
         latest.status !== 'dispatched' &&
-        SETTLED_WORKER_STATES.has(worker.state)
+        SETTLED_WORKER_STATES.has(worker.state) &&
+        // A pane still bound reads as the fleet sees every Dispatch on it together, so it stays live.
+        (!resource || resource.ownership_state === 'released' || !resource.pane_key)
       ) {
         this.keepReport(worker.taskId, report)
         const value: KeptWorker = {
@@ -175,6 +177,10 @@ export class LinkedWorkerStates {
         // A copy: a kept substring would otherwise pin the whole Task spec or result it was cut from.
         this.kept.set(KEPT_SCOPE, ref, structuredClone(value), latest.id, walked, started)
       }
+    }
+    if (recheck) {
+      // A follow-up inserted while this read ran drops its predecessor's kept read before the check.
+      this.dropFollowedUp(db)
     }
     const dropped = recheck
       ? [...hits].flatMap(([ref, kept]) => (this.kept.holds(KEPT_SCOPE, ref, kept) ? [] : [ref]))
@@ -192,7 +198,21 @@ export class LinkedWorkerStates {
     return states
   }
 
-  /** Keeps one copy of a Task's report within the budget, dropping the oldest kept ones first. */
+  /** A new follow-up continues its predecessor's worker: reads that walked it are read again. */
+  private dropFollowedUp(db: OrchestrationDb): void {
+    const inserts = this.kept.takeInserted()
+    try {
+      for (const before of followedUp(db, inserts)) {
+        this.kept.drop(before)
+      }
+    } catch (error) {
+      // An unread insert may continue any kept read.
+      this.kept.drop(null)
+      throw error
+    }
+  }
+
+  /** Keeps one copy of a Task's report within the budgets, dropping the oldest kept ones first. */
   private keepReport(taskId: string, report: LinkedWorkerState['report']): void {
     this.forgetReport(taskId)
     const size = reportLength(report)
@@ -200,7 +220,10 @@ export class LinkedWorkerStates {
       return
     }
     for (const oldest of this.reports.keys()) {
-      if (this.reportChars + size <= KEPT_REPORTS_MAX_CHARS) {
+      if (
+        this.reportChars + size <= KEPT_REPORTS_MAX_CHARS &&
+        this.reports.size < KEPT_WORKERS_MAX
+      ) {
         break
       }
       this.forgetReport(oldest)

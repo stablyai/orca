@@ -31,6 +31,10 @@ export class SettledDispatchReadCache<T> {
     { stamp: string; unchanged: boolean }
   >()
   private source: unknown = null
+  /** The scopes still on the host, from the newest `keepScopes`; a read of any other stores nothing. */
+  private liveScopes: ReadonlySet<string> | null = null
+  /** Counts every full reset, for a reader keeping things beside these reads. */
+  resets = 0
 
   /** `followsInserts`: a new Dispatch can extend a kept read's walk (a follow-up), so inserts are kept
    *  for `takeInserted` and no read that started before one stores. */
@@ -78,7 +82,7 @@ export class SettledDispatchReadCache<T> {
     if (
       this.clearedAt > started ||
       this.insertedAt > started ||
-      (this.droppedAt.get(scopeKey(scope)) ?? 0) > started ||
+      (this.liveScopes !== null && !this.liveScopes.has(scope)) ||
       !this.unchanged(walked, started)
     ) {
       return
@@ -118,15 +122,13 @@ export class SettledDispatchReadCache<T> {
   /** Forgets the reads of scopes no longer on the host. */
   keepScopes(scopes: readonly string[]): void {
     const live = new Set(scopes)
+    this.liveScopes = live
     for (const [scope, entries] of this.scopes) {
       if (!live.has(scope)) {
         for (const key of entries.keys()) {
           this.remove(scope, key)
         }
         this.scopes.delete(scope)
-        // A read begun before cannot bring the scope back.
-        this.epoch += 1
-        this.noteDropped(scopeKey(scope))
       }
     }
   }
@@ -167,6 +169,7 @@ export class SettledDispatchReadCache<T> {
     }
     this.epoch += 1
     if (dispatchId === null) {
+      this.resets += 1
       this.scopes.clear()
       this.groups.clear()
       this.groupsOf.clear()
@@ -230,11 +233,6 @@ export class SettledDispatchReadCache<T> {
       }
     }
   }
-}
-
-/** A scope's own drop, kept beside Dispatch ids, which never start with a NUL. */
-function scopeKey(scope: string): string {
-  return `\0${scope}`
 }
 
 function readId(scope: string, key: string): string {
