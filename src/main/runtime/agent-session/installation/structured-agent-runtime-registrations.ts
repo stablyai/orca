@@ -220,7 +220,8 @@ function createAcpAdapter(
         context.host()?.publishChildWorkEvidence(sessionId, evidence, producer),
       keptWork: async (sessionId) => {
         const work = await context.host()?.currentWork(sessionId)
-        const send = work?.restatedSubmissions().at(-1)?.clientMessageId
+        // The oldest unanswered send is the prompt the agent owes; later ones are queued behind it.
+        const send = work?.restatedSubmissions()[0]?.clientMessageId
         return { turnId: work?.activeTurnId() ?? null, unansweredSendId: send ?? null }
       },
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),

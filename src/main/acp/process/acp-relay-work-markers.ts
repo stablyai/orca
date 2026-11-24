@@ -4,7 +4,7 @@ import {
   registerReattachableProviderRelayAgent,
   type ProviderRelayWorkMarkers
 } from '../../provider-relay/app-provider-relays'
-import { ACP_SESSION_UPDATE_METHODS, createAcpRelayAckFloor } from './acp-relay-ack-floor'
+import { ACP_SESSION_UPDATE_METHODS } from './acp-relay-ack-floor'
 
 /**
  * These launch as today: a private temp folder is the launch's own and goes at its exit; a sign-in
@@ -137,7 +137,6 @@ export function acpRelayWorkMarkers(agent: string): ProviderRelayWorkMarkers {
   return {
     agent: acpRelayAgent(agent),
     markers: [...CALL_END_MARKERS, ...(DIALECT_MARKERS.get(agent) ?? [])],
-    ackFloor: createAcpRelayAckFloor,
     requests: PROMPT_REQUESTS
   }
 }
