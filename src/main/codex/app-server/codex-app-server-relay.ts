@@ -6,10 +6,6 @@ import { createCodexRelayAckFloor } from './codex-relay-ack-floor'
 import { CODEX_RELAY_ITEM_CONTINUATION } from './codex-relay-item-continuation'
 import type { CodexAppServerConnection } from './codex-app-server-connection-types'
 import type { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
-import { leadingJsonEnvelope } from '../../../shared/json-stream/json-rpc-record-prefix'
-
-const ENVELOPE_SCAN_CHARS = 4096
-const ENVELOPE_MAX_FIELDS = 32
 
 /** Recorded with each Codex relay; this build reattaches it. */
 export const CODEX_RELAY_AGENT = 'codex-app-server'
@@ -65,38 +61,6 @@ export const CODEX_RELAY_WORK_MARKERS: ProviderRelayWorkMarkers = {
     // Codex stops a closed thread's processes first, so none of them reports its own end.
     { group: 'command', name: 'thread/closed', effect: 'end', key: [THREAD] }
   ]
-}
-
-/** True for an answer to a request this app sent (ids above the last app's), read from its envelope. */
-export function isCodexAnswerAbove(line: string, floor: number): boolean {
-  if (!line.includes('"id"') || (!line.includes('"result"') && !line.includes('"error"'))) {
-    return false
-  }
-  const { properties, complete } = leadingJsonEnvelope(line.slice(0, ENVELOPE_SCAN_CHARS), {
-    stopAtContainer: true,
-    maxFields: ENVELOPE_MAX_FIELDS
-  })
-  const keys = new Set(properties.map((property) => property.key))
-  if (complete && keys.size === properties.length) {
-    const id = properties.find((property) => property.key === 'id')?.value
-    return (
-      !keys.has('method') &&
-      (keys.has('result') || keys.has('error')) &&
-      typeof id === 'number' &&
-      id > floor
-    )
-  }
-  // Cut off or with a repeated key: only a full parse reads it as the connection will.
-  try {
-    const message: unknown = JSON.parse(line)
-    if (typeof message !== 'object' || message === null || 'method' in message) {
-      return false
-    }
-    const id = 'id' in message ? message.id : undefined
-    return typeof id === 'number' && id > floor
-  } catch {
-    return false
-  }
 }
 
 /** The kept agent's answer to the first app's `initialize`; callers only need it to resolve. */
