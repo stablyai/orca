@@ -1,4 +1,4 @@
-import type { WorkerDispatchState } from '../../types'
+import type { WorkerDispatchState } from '../orchestration-records'
 
 export const POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES = [
   'starting',

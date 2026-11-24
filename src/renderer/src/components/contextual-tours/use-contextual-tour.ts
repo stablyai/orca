@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react'
-import type { ContextualTourId } from '../../../../shared/contextual-tours'
+import type { ContextualTourId } from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 import {
   hasFeatureInteraction,
   type FeatureInteractionState
-} from '../../../../shared/feature-interactions'
+} from '../../../../shared/feature-education/interactions/feature-interactions'
 import { useAppStore } from '@/store'
 import {
   isContextualTourSessionConsumed,
@@ -14,6 +14,7 @@ const TOUR_SOURCES = {
   'workspace-board': 'workspace_board_visible',
   'workspace-agent-sessions': 'workspace_agent_sessions_visible',
   browser: 'browser_visible',
+  'browser-extensions': 'browser_extensions_visible',
   'client-hosted-browser': 'client_hosted_browser_visible',
   tasks: 'tasks_open',
   automations: 'automations_open',

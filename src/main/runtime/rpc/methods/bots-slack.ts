@@ -1,0 +1,171 @@
+// `bots.slack.*`: a bot's Slack app and the account's Slack config grants, as this host's own Orca
+// account, for whichever of its clients asks (its own window, a paired desktop or the web client).
+import {
+  BOT_SLACK_DESKTOP_ERRORS,
+  type BotSlackResult
+} from '../../../../shared/connector-bot-slack-contract'
+import {
+  BotSlackBot,
+  BotSlackGrant,
+  BotSlackMembers,
+  BotSlackPostAs,
+  BotSlackSetUp,
+  BotSlackTeam
+} from '../../../../shared/rpc-contract/bots-connector-setup-params'
+import {
+  withBotsCloudClient,
+  type BotsCloudClient
+} from '../../../connector-cloud/bots-cloud-client'
+import { botSlackApps, type Bot, type BotSlackApp } from '../../../../shared/bot-types'
+import { CONNECT_ACCOUNT_CHANGED } from '../../../connector-cloud/connector-connect'
+import type { OrcaRuntimeService } from '../../orca-runtime'
+import { defineMethod, type RpcContext } from '../core'
+
+/** The bot's Slack workspaces after one is set up (added, or its app replaced) or removed. */
+export function nextSlackApps(
+  bot: Pick<Bot, 'slack' | 'slackApps'>,
+  change: { set: BotSlackApp } | { remove: string | undefined }
+): BotSlackApp[] {
+  const apps = botSlackApps(bot)
+  if ('remove' in change) {
+    return change.remove === undefined ? [] : apps.filter((app) => app.teamId !== change.remove)
+  }
+  const { set } = change
+  return apps.some((app) => app.teamId === set.teamId)
+    ? apps.map((app) => (app.teamId === set.teamId ? { ...app, ...set } : app))
+    : [...apps, set]
+}
+
+/** Runs `run` with this host's cloud client, as the host's own Orca account. */
+export function withHostCloudClient<T>(
+  context: RpcContext,
+  run: (client: BotsCloudClient) => Promise<BotSlackResult<T>>
+): Promise<BotSlackResult<T>> {
+  return withBotsCloudClient(context.runtime.getConnectorCloud(), run)
+}
+
+// The cloud's answer stands even if the local record cannot follow it (e.g. the bot was just deleted).
+async function recordSlack(
+  runtime: Pick<OrcaRuntimeService, 'bots'>,
+  botId: string,
+  change: Parameters<typeof nextSlackApps>[1]
+): Promise<void> {
+  try {
+    await runtime.bots.update(botId, (bot) => ({ slackApps: nextSlackApps(bot, change) }))
+  } catch (error) {
+    console.error('Failed to record the bot’s Slack app:', error)
+  }
+}
+
+// `accounts-admin`: these hold the host's integration credentials (rpc-method-permission.ts).
+export const BOT_SLACK_METHODS = [
+  defineMethod({
+    name: 'bots.slack.saveGrant',
+    permission: 'accounts-admin',
+    params: BotSlackGrant,
+    handler: async ({ refreshToken }, context) =>
+      withHostCloudClient(context, (client) => client.saveSlackGrant(refreshToken))
+  }),
+  defineMethod({
+    name: 'bots.slack.forgetGrant',
+    permission: 'accounts-admin',
+    params: BotSlackTeam,
+    handler: async ({ teamId }, context) =>
+      withHostCloudClient(context, (client) => client.forgetSlackGrant(teamId))
+  }),
+  defineMethod({
+    name: 'bots.slack.state',
+    permission: 'accounts-admin',
+    params: BotSlackBot,
+    handler: async ({ botId, teamId }, context) =>
+      withHostCloudClient(context, (client) => client.slackState(botId, teamId))
+  }),
+  defineMethod({
+    name: 'bots.slack.setUpApp',
+    permission: 'accounts-admin',
+    params: BotSlackSetUp,
+    handler: async ({ botId, teamId }, context) => {
+      const { runtime } = context
+      const cloud = runtime.getConnectorCloud()
+      const setUp = async () => {
+        // A set-up answered after the host's account changed belongs to the old account: not recorded.
+        const account = cloud?.signedInAccount() ?? null
+        const result = await withHostCloudClient(context, (client) =>
+          client.setUpSlackApp(botId, teamId)
+        )
+        if (result.ok && (cloud?.signedInAccount() ?? null) !== account) {
+          return { ok: false as const, error: CONNECT_ACCOUNT_CHANGED }
+        }
+        if (result.ok) {
+          await recordSlack(runtime, botId, { set: { appId: result.value.appId, teamId } })
+        }
+        return result
+      }
+      // A bot with no connector yet is known to the cloud only once this host says hello.
+      return cloud ? cloud.withConnection(setUp) : setUp()
+    }
+  }),
+  // Another signed-in Orca account (a paired desktop's own) creates the app with its grant; the code
+  // is spent only by that desktop's own cloud session, never through any runtime's RPC.
+  defineMethod({
+    name: 'bots.slack.handOff',
+    permission: 'accounts-admin',
+    params: BotSlackSetUp,
+    handler: async ({ botId, teamId }, context) => {
+      const cloud = context.runtime.getConnectorCloud()
+      const handOff = () =>
+        withHostCloudClient(context, (client) => client.handOffSlackApp(botId, teamId))
+      return cloud ? cloud.withConnection(handOff) : handOff()
+    }
+  }),
+  // After a hand-off: the app is recorded as the cloud reads it for this host, not as the client says.
+  defineMethod({
+    name: 'bots.slack.adoptApp',
+    permission: 'accounts-admin',
+    params: BotSlackSetUp,
+    handler: async ({ botId, teamId }, context) => {
+      const state = await withHostCloudClient(context, (client) => client.slackState(botId, teamId))
+      if (!state.ok) {
+        return state
+      }
+      if (
+        (state.value.state !== 'created' && state.value.state !== 'installed') ||
+        state.value.teamId !== teamId
+      ) {
+        return { ok: false as const, error: BOT_SLACK_DESKTOP_ERRORS.failed }
+      }
+      await recordSlack(context.runtime, botId, { set: { appId: state.value.appId, teamId } })
+      return { ok: true as const, value: undefined }
+    }
+  }),
+  defineMethod({
+    name: 'bots.slack.remove',
+    permission: 'accounts-admin',
+    params: BotSlackBot,
+    handler: async ({ botId, teamId }, context) => {
+      const removed = await withHostCloudClient(context, (client) =>
+        client.removeSlackApp(botId, teamId)
+      )
+      if (removed.ok) {
+        await recordSlack(context.runtime, botId, { remove: teamId })
+      }
+      return removed
+    }
+  }),
+  // What messages typed at the bot's computer post as in Slack: at once for the after-install pick,
+  // else an install link whoever set the bot up approves.
+  defineMethod({
+    name: 'bots.slack.setPostAs',
+    permission: 'accounts-admin',
+    params: BotSlackPostAs,
+    handler: async ({ botId, ...request }, context) =>
+      withHostCloudClient(context, (client) => client.setSlackPostAs(botId, { v: 1, ...request }))
+  }),
+  defineMethod({
+    name: 'bots.slack.members',
+    permission: 'accounts-admin',
+    params: BotSlackMembers,
+    handler: async ({ botId, query, teamId }, context) =>
+      withHostCloudClient(context, (client) => client.slackMembers(botId, query, teamId))
+  })
+]

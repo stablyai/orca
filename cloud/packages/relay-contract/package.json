@@ -81,6 +81,10 @@
     "./control-messages": {
       "types": "./dist/control-messages.d.ts",
       "default": "./dist/control-messages.js"
+    },
+    "./ingress-header": {
+      "types": "./dist/ingress-header.d.ts",
+      "default": "./dist/ingress-header.js"
     }
   }
 }

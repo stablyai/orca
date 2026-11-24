@@ -1,12 +1,15 @@
+import { cancelSettingsListReveal } from '../section-layout/settings-list-scroll'
+import { resolveGeneralSubPage } from '../general/general-sub-pages'
 import { useEffect } from 'react'
+import { ORCA_AUTOMATIC_UPDATE_PREPARE_EVENT } from '../../../../../shared/updater/updater-renderer-events'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import { resolveAppearanceAccordionDeepLink } from '../appearance/appearance-usage-percentage-search'
-import { registerWindowCloseGuard } from '../../window-close-request-coordinator'
-import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { registerWindowCloseGuard } from '../../../app-shell/shutdown/window-close-request-coordinator'
+import { isIntentionalAppRestartInProgress } from '@/app-shell/updates/updater-beforeunload'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { translate } from '@/i18n/i18n'
 import {
   getSettingsTargetHostSelection,
@@ -19,6 +22,10 @@ import {
   SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID,
   SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS
 } from '../navigation/settings-navigation-foundations'
+import {
+  cancelPendingSettingsTargetFocus,
+  holdSettingsTargetFocusRequest
+} from '../navigation/settings-target-focus'
 
 export function useSettingsPageEffects(
   model: SettingsStoreModel,
@@ -26,6 +33,7 @@ export function useSettingsPageEffects(
 ): void {
   const {
     activeSectionId,
+    setGeneralSubPage,
     clearSettingsTarget,
     fetchKeybindings,
     fetchSettings,
@@ -33,7 +41,7 @@ export function useSettingsPageEffects(
     refreshModelStates,
     repoIdToHostSelection,
     repoIdToRepresentative,
-    setHighlightedSettingsTargetId,
+    setHighlightedSettingsTarget,
     setMountedSectionIds,
     setQuickCommandAddIntentSignal,
     setRemoteServerAddIntentSignal,
@@ -52,10 +60,18 @@ export function useSettingsPageEffects(
     hasUnsavedSourceControlAiPromptChangesRef,
     pendingNavSectionRef,
     pendingScrollTargetRef,
+    pendingFocusTargetRef,
+    pendingFocusWatchRef,
     promptDiscardSourceControlAiPromptChanges,
     searchInputRef,
     shortcutsEscapeConfirmUntilRef
   } = interactions
+
+  useEffect(() => {
+    if (activeSectionId !== 'general') {
+      setGeneralSubPage(null)
+    }
+  }, [activeSectionId, setGeneralSubPage])
 
   useEffect(() => {
     fetchSettings()
@@ -125,7 +141,13 @@ export function useSettingsPageEffects(
 
   // Use the discard dialog for close/quit; a bare unload veto offers no way to resolve dirty state.
   useEffect(() => {
-    return registerWindowCloseGuard(() => {
+    const protectDraft = (event: Event): void => {
+      if (hasUnsavedSourceControlAiPromptChangesRef.current) {
+        event.preventDefault()
+      }
+    }
+    window.addEventListener(ORCA_AUTOMATIC_UPDATE_PREPARE_EVENT, protectDraft)
+    const unregisterCloseGuard = registerWindowCloseGuard(() => {
       if (isIntentionalAppRestartInProgress()) {
         return true
       }
@@ -134,6 +156,10 @@ export function useSettingsPageEffects(
       }
       return promptDiscardSourceControlAiPromptChanges()
     })
+    return () => {
+      unregisterCloseGuard()
+      window.removeEventListener(ORCA_AUTOMATIC_UPDATE_PREPARE_EVENT, protectDraft)
+    }
   }, [hasUnsavedSourceControlAiPromptChangesRef, promptDiscardSourceControlAiPromptChanges])
 
   useEffect(() => {
@@ -165,7 +191,8 @@ export function useSettingsPageEffects(
     const paneSectionId = getSettingsSectionId(
       settingsNavigationTarget.pane,
       settingsNavigationTarget.repoId,
-      repoIdToRepresentative
+      repoIdToRepresentative,
+      settingsNavigationTarget.sectionId
     )
     if (settingsNavigationTarget.intent === 'toggle' && activeSectionId === paneSectionId) {
       clearSettingsTarget()
@@ -193,15 +220,31 @@ export function useSettingsPageEffects(
         )
       }
     }
+    if (settingsNavigationTarget.pane === 'general') {
+      setGeneralSubPage(resolveGeneralSubPage(settingsNavigationTarget.sectionId))
+    }
+    cancelSettingsListReveal()
     consumeSettingsNavigation(settingsNavigationTarget)
+    // A newer navigation supersedes any focus an earlier deep link is still waiting to give.
+    cancelPendingSettingsTargetFocus({ pendingFocusTargetRef, pendingFocusWatchRef })
     pendingNavSectionRef.current = paneSectionId
-    pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
-    setHighlightedSettingsTargetId(
-      settingsNavigationTarget.pane === 'developer-permissions'
-        ? (settingsNavigationTarget.sectionId ?? null)
+    pendingScrollTargetRef.current =
+      settingsNavigationTarget.pane === 'bots'
+        ? paneSectionId
+        : (settingsNavigationTarget.sectionId ?? paneSectionId)
+    if (settingsNavigationTarget.focusFirstControl && settingsNavigationTarget.sectionId) {
+      holdSettingsTargetFocusRequest(
+        { pendingFocusTargetRef, pendingFocusWatchRef },
+        settingsNavigationTarget.sectionId
+      )
+    }
+    setHighlightedSettingsTarget(
+      settingsNavigationTarget.pane === 'developer-permissions' &&
+        settingsNavigationTarget.sectionId
+        ? { id: settingsNavigationTarget.sectionId }
         : null
     )
-    // Open Appearance’s nested status-bar section before scrolling to its rows.
+
     if (settingsNavigationTarget.pane === 'appearance') {
       const accordion = resolveAppearanceAccordionDeepLink(settingsNavigationTarget.sectionId)
       if (accordion) {
@@ -230,14 +273,17 @@ export function useSettingsPageEffects(
     closeSettingsPageWithPromptGuard,
     pendingNavSectionRef,
     pendingScrollTargetRef,
+    pendingFocusTargetRef,
+    pendingFocusWatchRef,
     repoIdToHostSelection,
     repoIdToRepresentative,
-    setHighlightedSettingsTargetId,
+    setHighlightedSettingsTarget,
     setMountedSectionIds,
     setPendingNavRequestTick,
     setQuickCommandAddIntentSignal,
     setRemoteServerAddIntentSignal,
     consumeSettingsNavigation,
+    setGeneralSubPage,
     setSettingsProjectHostSelection,
     setSshHostAddIntentSignal,
     settings,

@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import {
   Dialog,
@@ -19,6 +19,7 @@ type RuntimeAddServerDialogProps = {
   onNameChange: (value: string) => void
   onAccessLinkChange: (value: string) => void
   onClose: () => void
+  onCloseAutoFocus: (event: Event) => void
   onSubmit: (allowLoopback: boolean) => void
 }
 
@@ -31,8 +32,10 @@ export function RuntimeAddServerDialog({
   onNameChange,
   onAccessLinkChange,
   onClose,
+  onCloseAutoFocus,
   onSubmit
 }: RuntimeAddServerDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const takenNames = useAppStore((state) => state.runtimeEnvironments)
   return (
     <Dialog
@@ -43,13 +46,13 @@ export function RuntimeAddServerDialog({
         }
       }}
     >
-      <DialogContent scrollable>
+      <DialogContent scrollable onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.settings.serverList.addTitle', 'Add server')}
+            {t('auto.components.settings.serverList.addTitle', 'Add server')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.settings.serverList.addDescriptionShort',
               'Paste the access link from Share this computer on the other machine.'
             )}

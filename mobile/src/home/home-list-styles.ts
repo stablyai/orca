@@ -5,6 +5,8 @@ import { themedStyleSheet } from '../theme/themed-styles'
 // Text starts after the status column, so separators inset to it.
 const STATUS_COLUMN_WIDTH = 24
 const ROW_LEADING_PADDING = spacing.lg
+/** Where a row's text starts: separators and nested rows line up with it. */
+export const HOME_ROW_TEXT_INSET = ROW_LEADING_PADDING + STATUS_COLUMN_WIDTH
 const TILE_SIZE = 30
 const TILE_GAP = 11
 const TILE_DOT_SIZE = 10
@@ -21,8 +23,12 @@ export const homeListStyles = themedStyleSheet(() => ({
     marginTop: 20,
     marginBottom: 7
   },
-  sectionHeading: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  sectionHeading: { flexShrink: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  sectionCount: { fontWeight: '500', color: colors.textMuted, fontVariant: ['tabular-nums'] },
   sectionAside: { fontSize: 14, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  sectionAsideRow: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  sectionLink: { color: colors.accentBlue, fontWeight: '500' },
+  linkPressed: { opacity: 0.5 },
   firstSectionHeading: { marginTop: spacing.xs },
   // Matches a heading's top gap for a group that has none.
   headinglessGroup: { marginTop: 20 },
@@ -33,7 +39,7 @@ export const homeListStyles = themedStyleSheet(() => ({
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
-    marginLeft: ROW_LEADING_PADDING + STATUS_COLUMN_WIDTH
+    marginLeft: HOME_ROW_TEXT_INSET
   },
   fullSeparator: { marginLeft: ROW_LEADING_PADDING },
   tileSeparator: { marginLeft: ROW_LEADING_PADDING + TILE_SIZE + TILE_GAP },

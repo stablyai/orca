@@ -17,8 +17,8 @@ import type {
   SourceControlAiSettings,
   WritableRepoSourceControlAiOverrides
 } from './source-control-ai-settings-types'
-import type { GlobalSettings } from '../../../global-settings-types'
-import type { Repo } from '../../../repo-types'
+import type { GlobalSettings } from '../../../settings/global-settings-types'
+import type { Repo } from '../../../repository/repo-types'
 
 export type SourceControlAiWriteTarget = { type: 'repo'; repoId: string } | { type: 'global' }
 

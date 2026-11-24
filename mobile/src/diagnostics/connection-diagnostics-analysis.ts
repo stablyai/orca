@@ -2,12 +2,12 @@ import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-r
 import {
   relayHostReachabilityForCloseCode,
   type RelayHostReachabilityFromCloseCode
-} from '../transport/relay-host-reachability'
+} from '../transport/relay/relay-host-reachability'
 import type {
   ConnectionLogEntry,
-  ConnectionState,
   MobileConnectionDiagnosticPath
-} from '../transport/types'
+} from './connection/connection-log-types'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 export type ConnectionDiagnosis = {
   likelyCause: string
@@ -183,8 +183,7 @@ const RELAY_DIAL_ADVICE: Record<
     nextStep: 'Check this phone’s network connection; Relay recovery retries automatically.'
   },
   connecting: {
-    likelyCause: (code) =>
-      `Relay closed the dial with code ${code}; recovery re-resolves and retries.`,
+    likelyCause: (code) => `Relay closed the dial with code ${code}; recovery will retry.`,
     nextStep: 'Keep Orca open while Relay recovery retries.'
   }
 }
@@ -202,7 +201,11 @@ function relayDialFailure(failure: ConnectionLogEntry | undefined): ConnectionDi
       reportability: 'none'
     }
   }
-  const advice = RELAY_DIAL_ADVICE[relayHostReachabilityForCloseCode(code)]
+  const reachability = relayHostReachabilityForCloseCode(
+    code,
+    failure.relayCredentialRejected === true
+  )
+  const advice = RELAY_DIAL_ADVICE[reachability]
   return { likelyCause: advice.likelyCause(code), nextStep: advice.nextStep, reportability: 'none' }
 }
 

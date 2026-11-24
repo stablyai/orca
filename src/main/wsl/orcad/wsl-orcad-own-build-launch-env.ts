@@ -1,5 +1,5 @@
 import { hostMallocTunablesLaunchEnv } from '../../memory/host-malloc-tunables'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 
 /** An older slot would leak GLIBC_TUNABLES to user shells, so only this build's own slot gets it. */
 export function withOwnBuildLaunchEnv<T extends OrcadHostTransport>(

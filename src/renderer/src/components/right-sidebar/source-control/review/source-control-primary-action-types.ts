@@ -1,6 +1,6 @@
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { GitUpstreamStatus } from '../../../../../../shared/git/status/git-status-types'
-import type { PRState } from '../../../../../../shared/github/pull-request-types'
+import type { PRState } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type {
   SourceControlPrimaryActionKind,
   SourceControlRemoteOpKind
@@ -45,4 +45,6 @@ export type PrimaryActionInputs = {
   isPrIntentInFlight?: boolean
   // Retain the header anchor while async eligibility loads to avoid flashing it in later.
   isHostedReviewCreationLoading?: boolean
+  // Orca rebased this branch: no Pull/Sync face; never promotes a force path.
+  suppressPullAfterRebase?: boolean
 }

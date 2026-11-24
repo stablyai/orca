@@ -1,5 +1,5 @@
 import { ClaudeHookService } from '../claude/hook-service'
-import type { ClaudeManagedHookPlan } from '../claude/claude-managed-hook-events'
+import type { ClaudeManagedHookPlan } from '../claude/hooks/claude-managed-hook-events'
 
 // Qwen's hook enum is authoritative; Claude's version table and statusline do not apply.
 export const QWEN_CODE_HOOK_EVENTS = [

@@ -9,15 +9,22 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session/wo
 
 import {
   type ExecutionHostId,
+  getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId
-} from '../../../shared/execution-host'
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
+} from '../../../shared/execution-host/execution-host'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import { killAllProcessesForWorktree } from '../workspaces/removal/worktree-teardown'
-import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
+import type { MemorySnapshot, StatsSummary } from '../../../shared/diagnostics/process-stats-types'
 import { collectMemorySnapshot } from '../../memory/collector'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import type { FeatureInteractionId } from '../../../shared/feature-interactions'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
+import type {
+  AgentListPublication,
+  AgentListVerdictUpdate,
+  AgentPaneActivityChange
+} from '../../../shared/agent-status/presentation/agent-list-status'
+import { AgentListVerdictMirror, type AgentListChangeListener } from './agent-list-verdict-mirror'
+import type { FeatureInteractionId } from '../../../shared/feature-education/interactions/feature-interaction-catalog'
 import type { RuntimeClientSettingsUpdate } from './settings/runtime-client-settings-shape'
 import type { AgentLaunchSettingsMutation } from '../../../shared/agent-launch/choices/agent-launch-settings'
 import type { TerminalQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'
@@ -25,7 +32,7 @@ import type { TerminalQuickCommandMutation } from '../../../shared/terminal/quic
 import type { NativeChatSessionOptionSettingsMutation } from '../../../shared/native-chat/input/native-chat-session-options'
 import type { WorktreeTerminalStopOptions } from '../terminal/stop/worktree-terminal-stop-options'
 import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
-import type { Automation } from '../../../shared/automations-types'
+import type { Automation } from '../../../shared/automations/automation-definition'
 
 export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithStateFields {
   abstract retireStructuredAgentSessionTabFromSnapshot(sessionId: string): boolean
@@ -190,6 +197,45 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
     return this.store.getUI()
   }
 
+  /** The live desktop window's Agents-list verdicts; null with no window, so worktree.ps claims none. */
+  private readonly agentList = new AgentListVerdictMirror(() =>
+    this.emitClientEvent({ type: 'agentListChanged' })
+  )
+
+  readAgentListPublication(): AgentListPublication | null {
+    return this.agentList.read()
+  }
+
+  setAgentListPublication(next: AgentListPublication | null): void {
+    this.agentList.set(next)
+  }
+
+  applyAgentListUpdate(update: AgentListVerdictUpdate | null): void {
+    this.agentList.apply(update)
+  }
+
+  /** Hides the list while the window reloads; a cancelled reload restores it. */
+  withholdAgentList(): void {
+    this.agentList.withhold()
+  }
+
+  restoreAgentList(): void {
+    this.agentList.restore()
+  }
+
+  /** In-process readers that re-project only the panes whose verdicts changed. */
+  onAgentListChanged(listener: AgentListChangeListener): () => void {
+    return this.agentList.subscribe(listener)
+  }
+
+  /** Applies through the window's own Activity actions and keeps the verdicts it answers with, so the next worktree.ps already shows them. */
+  async applyAgentPaneActivity(change: AgentPaneActivityChange): Promise<void> {
+    if (!this.notifier?.applyAgentPaneActivity) {
+      throw new Error('agent_activity_needs_desktop_window')
+    }
+    this.setAgentListPublication(await this.notifier.applyAgentPaneActivity(change))
+  }
+
   recordFeatureInteraction(id: FeatureInteractionId): PersistedUIState {
     if (!this.store?.recordFeatureInteraction) {
       throw new Error('runtime_unavailable')
@@ -207,6 +253,11 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
 
   getClientTerminalQuickCommands(): TerminalQuickCommand[] {
     return this.clientSettings.getTerminalQuickCommands()
+  }
+
+  /** The "New projects open on" host, which desktop's Linear and Jira pages read from. */
+  getClientDefaultScopeHost(): ExecutionHostId {
+    return getSettingsFocusedExecutionHostId(this.store?.getSettings?.())
   }
 
   getClientAgentLaunchSettings() {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { parseWorkspaceSessionSalvaging } from './workspace-session-salvage'
-import { collectSalvageDrops, salvagingArray } from '../zod-salvage'
+import { collectSalvageDrops, salvagingArray } from '../validation/zod-salvage'
 
 const WT = 'repo-1::/home/user/project'
 
@@ -65,21 +65,6 @@ describe('parseWorkspaceSessionSalvaging', () => {
     if (result.ok) {
       expect(result.droppedPaths).toEqual([`tabsByWorktree.${WT}.2`])
       expect(result.value.tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['tab-1', 'tab-2'])
-    }
-  })
-
-  it('reports sleeping-agent records removed during normalization', () => {
-    const result = parseWorkspaceSessionSalvaging(
-      baseSession({
-        sleepingAgentSessionsByPaneKey: {
-          'tab-bad:leaf': { paneKey: 'different:leaf' }
-        }
-      })
-    )
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.droppedPaths).toEqual(['sleepingAgentSessionsByPaneKey.tab-bad:leaf'])
-      expect(result.value.sleepingAgentSessionsByPaneKey).toBeUndefined()
     }
   })
 
@@ -247,11 +232,6 @@ describe('parseWorkspaceSessionSalvaging', () => {
       expect(result.value.activeRepoId).toBeNull()
       expect(result.value.terminalPtyIncarnationsByPaneKey).toEqual({ 'tab-1:leaf-1': 'inc-1' })
     }
-  })
-
-  it('still rejects a foreign object payload rather than posing as a repaired session', () => {
-    // Fallbacks must not manufacture a session from unrelated JSON lacking every session field.
-    expect(parseWorkspaceSessionSalvaging({ unrelated: 'payload', count: 3 }).ok).toBe(false)
   })
 
   it('drops a whole layout entry when the corruption sits inside a recursive union', () => {

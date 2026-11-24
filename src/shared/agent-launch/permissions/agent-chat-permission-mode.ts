@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../global-settings-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 import { resolvedTuiAgentArgsBypassPermissions } from '../choices/tui-agent-launch-defaults'
 import { YOLO_TUI_AGENT_ARGS } from './tui-agent-permissions'
 import {
@@ -37,35 +37,13 @@ export const AGENT_CHAT_PERMISSION_MODE_ICON_NAMES = {
 export type AgentChatPermissionModeIconName =
   (typeof AGENT_CHAT_PERMISSION_MODE_ICON_NAMES)[AgentChatPermissionMode]
 
-export const AGENT_CHAT_PERMISSION_MODE_OPTION_ID = 'permissionMode'
+export { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode-option-id'
 
 export function isAgentChatPermissionMode(value: unknown): value is AgentChatPermissionMode {
   return AGENT_CHAT_PERMISSION_MODES.some((mode) => mode === value)
 }
 
-import {
-  agentChatPermissionModes,
-  type AgentChatPermissionModeSupport
-} from './agent-chat-permission-support'
-
-/** The saved choice if this agent offers it; anything else asks, never grants more access. */
-export function savedChatPermissionMode(
-  support: AgentChatPermissionModeSupport,
-  intent: AgentChatPermissionMode
-): AgentChatPermissionMode
-export function savedChatPermissionMode(
-  support: AgentChatPermissionModeSupport,
-  intent: unknown
-): AgentChatPermissionChoice
-export function savedChatPermissionMode(
-  support: AgentChatPermissionModeSupport,
-  intent: unknown
-): AgentChatPermissionChoice {
-  if (intent === 'own') {
-    return 'own'
-  }
-  return support.modes.find((mode) => mode === intent) ?? 'ask'
-}
+import { agentChatPermissionModes, savedChatPermissionMode } from './agent-chat-permission-support'
 
 export function newChatPermissionMode(
   agent: string,

@@ -5,6 +5,10 @@ export type PairedMobileDevice = {
   name: string
   pairedAt: number
   lastSeenAt: number
+  // The device's last sign-in used the older E2EE framing.
+  usesLegacyEncryption?: boolean
+  // Paired by an app from before single-use pairing codes.
+  olderPairingMethod?: true
 }
 
 type PairedMobileDevicesSnapshot = {
@@ -125,6 +129,22 @@ export function refreshPairedMobileDevices({
   return promise
 }
 
+// A revoke removes descendants one save at a time; one trailing refresh reads the settled list.
+const DEVICES_CHANGED_REFRESH_DELAY_MS = 150
+let devicesChangedTimer: number | null = null
+let unsubscribeDevicesChanged: (() => void) | null = null
+
+function refreshAfterDevicesChanged(): void {
+  if (devicesChangedTimer !== null) {
+    window.clearTimeout(devicesChangedTimer)
+  }
+  devicesChangedTimer = window.setTimeout(() => {
+    devicesChangedTimer = null
+    // Force: an in-flight read may predate the change and would be reused otherwise.
+    void refreshPairedMobileDevices({ force: true }).catch(() => {})
+  }, DEVICES_CHANGED_REFRESH_DELAY_MS)
+}
+
 // Share one focus/online recovery listener so failed loads retry without polling or per-consumer IPC fan-out.
 let enabledConsumerCount = 0
 
@@ -138,14 +158,26 @@ function addRecoveryConsumer(): () => void {
   if (enabledConsumerCount === 0) {
     window.addEventListener('focus', recoverPairedMobileDevicesOnReconnect)
     window.addEventListener('online', recoverPairedMobileDevicesOnReconnect)
+    // Pairings finish in main while the window may be hidden or unfocused, so focus-gated polling misses them.
+    unsubscribeDevicesChanged = window.api.mobile.onDevicesChanged(refreshAfterDevicesChanged)
   }
   enabledConsumerCount += 1
   return () => {
     enabledConsumerCount -= 1
     if (enabledConsumerCount === 0) {
-      window.removeEventListener('focus', recoverPairedMobileDevicesOnReconnect)
-      window.removeEventListener('online', recoverPairedMobileDevicesOnReconnect)
+      removeRecoveryListeners()
     }
+  }
+}
+
+function removeRecoveryListeners(): void {
+  window.removeEventListener('focus', recoverPairedMobileDevicesOnReconnect)
+  window.removeEventListener('online', recoverPairedMobileDevicesOnReconnect)
+  unsubscribeDevicesChanged?.()
+  unsubscribeDevicesChanged = null
+  if (devicesChangedTimer !== null) {
+    window.clearTimeout(devicesChangedTimer)
+    devicesChangedTimer = null
   }
 }
 
@@ -191,15 +223,4 @@ export function usePairedMobileDevices({
     hasPairedDevice: currentSnapshot.devices.length > 0,
     refresh
   }
-}
-
-export function _resetPairedMobileDevicesCacheForTests(): void {
-  latestRequestId += 1
-  activeRequest = null
-  if (enabledConsumerCount > 0) {
-    window.removeEventListener('focus', recoverPairedMobileDevicesOnReconnect)
-    window.removeEventListener('online', recoverPairedMobileDevicesOnReconnect)
-  }
-  enabledConsumerCount = 0
-  publish(EMPTY_SNAPSHOT)
 }

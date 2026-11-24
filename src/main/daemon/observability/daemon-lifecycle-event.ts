@@ -2,7 +2,7 @@ import {
   bucketDaemonLiveSessionCount,
   type DaemonReplaceReason,
   type DaemonRetireReason
-} from '../../../shared/daemon-lifecycle-telemetry'
+} from '../../../shared/telemetry/daemon-lifecycle-telemetry'
 import { track } from '../../telemetry/client'
 
 function trackQuietly(props: Parameters<typeof track<'daemon_lifecycle'>>[1]): void {

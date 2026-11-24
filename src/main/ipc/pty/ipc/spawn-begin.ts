@@ -1,4 +1,4 @@
-import { resolveEarlyPaneKey as resolvePaneCoordinates } from '../spawn-pane-coordinates'
+import { resolveEarlyPaneKey as resolvePaneCoordinates } from '../pane/spawn-pane-coordinates'
 import { resolveAgentLaunchPaneVerdict } from '../../../agent-launch/agent-launch-pane-attachment'
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { agentLaunchPaneLiveness } from '../pane/agent-launch-pane-evidence'

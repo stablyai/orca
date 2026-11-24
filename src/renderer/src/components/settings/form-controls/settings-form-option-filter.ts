@@ -1,4 +1,4 @@
-import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
 
 export const SETTINGS_FORM_OPTION_QUERY_MAX_BYTES = 2 * 1024
 

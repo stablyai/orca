@@ -1,7 +1,7 @@
 import { quotePosixShell } from '../../../../../../shared/shell/launch/shell-argument-quoting'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { venvInterpreterSegments } from '../../../../../../shared/notebook-venv-location'
-import { quotePowerShellLiteral } from '../../../../../../shared/powershell-native-argument'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
+import { venvInterpreterSegments } from '../../../../../../shared/editor/notebooks/notebook-venv-location'
+import { quotePowerShellLiteral } from '../../../../../../shared/shell/launch/powershell-native-argument'
 
 function shellQuote(path: string, windows: boolean): string {
   return windows ? quotePowerShellLiteral(path) : quotePosixShell(path)

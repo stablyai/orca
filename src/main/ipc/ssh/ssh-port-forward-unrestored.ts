@@ -1,9 +1,9 @@
 /** Saved forwards that aren't open, why the last start failed, and when to try each again. */
-import type { SavedPortForward, UnrestoredPortForward } from '../../../shared/ssh-types'
+import type { UnrestoredPortForward } from '../../../shared/remote-runtime/ssh/ssh-types'
+import { forwardKey, type ForwardMapping } from '../../ssh/port-forwarding/saved-port-forward-list'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { portForwardManager } from './ssh-ipc-context'
 
-type ForwardMapping = Pick<SavedPortForward, 'localPort' | 'remoteHost' | 'remotePort'>
 type ForwardFailure = {
   message: string
   /** 'exit': it ran, then its process died; 'start': it never came up. */
@@ -18,10 +18,6 @@ const FORWARD_RETRY_MAX_MS = 10 * 60_000
 // A forward that stays up this long has recovered, so a later exit starts a fresh backoff.
 const FORWARD_HEALTHY_MS = 5 * 60_000
 const failuresByTarget = new Map<string, Map<string, ForwardFailure>>()
-
-export function forwardKey(forward: ForwardMapping): string {
-  return `${forward.localPort}:${forward.remoteHost}:${forward.remotePort}`
-}
 
 /** A forward that keeps failing (port held, excluded range) backs off instead of retrying on every call. */
 export function isForwardBackingOff(targetId: string, forward: ForwardMapping): boolean {

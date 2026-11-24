@@ -8,18 +8,13 @@ on:
       - 'config/electron-builder.config.cjs'
       - 'config/scripts/native-build/macos/build-computer-macos.mjs'
       - 'config/scripts/native-build/composition/build-native-for-platform.mjs'
-      - 'config/scripts/native-build/composition/build-native-for-platform.test.mjs'
       - 'config/scripts/tool-invocation/pnpm-cli-invocation.mjs'
       - 'config/scripts/native-build/windows/build-windows-cli-launcher.mjs'
       - 'config/scripts/native-build/windows/windows-rust-executable-build.mjs'
-      - 'config/scripts/native-build/windows/build-windows-cli-launcher.test.mjs'
       - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-benchmark.mjs'
-      - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-group-recovery.test.mjs'
       - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-metrics.mjs'
       - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.mjs'
-      - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.test.mjs'
       - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-trial-cleanup.mjs'
-      - 'config/scripts/runtime-verification/desktop-transport/computer-use-smoke.mjs'
       - 'config/scripts/runtime-verification/daemon-lifecycle/daemon-boot-smoke.mjs'
       - 'config/scripts/runtime-verification/daemon-lifecycle/daemon-endpoint-handover-smoke.mjs'
       - 'config/scripts/diagnostics/runtime-lifecycle/windows-daemon-workspace-close-repro.mjs'
@@ -38,8 +33,7 @@ on:
       - '!src/main/daemon/executable-host/windows/testing/daemon-host-relocation.test-fixture.ts'
       - '!src/main/daemon/endpoint/publication/testing/daemon-endpoint-reachability-test-harness.ts'
       - 'src/main/providers/local-pty/local-pty-provider.ts'
-      - 'src/main/providers/windows-shell-args.ts'
-      - 'src/main/providers/windows-shell-preflight-runtime.windows.test.ts'
+      - 'src/main/providers/shell-launch/windows/shell-args.ts'
       - 'native/computer-use-macos/**'
       - 'native/computer-use-linux/**'
       - 'native/computer-use-windows/**'
@@ -48,14 +42,15 @@ on:
       - 'src/cli/**'
       - 'src/main/computer/**'
       - 'src/main/runtime/rpc/dispatcher.ts'
-      - 'src/main/runtime/rpc/errors.ts'
-      - 'src/main/runtime/rpc/methods/computer*.ts'
-      - 'src/shared/computer-use-*.ts'
-      - 'tests/e2e/computer-linux.e2e.ts'
-      - 'tests/e2e/computer-windows.e2e.ts'
-      - 'tests/e2e/computer-windows-store.e2e.ts'
-      - 'tests/e2e/helpers/computer-cli-driver.ts'
-      - 'tests/e2e/helpers/computer-driver.ts'
+      - 'src/main/runtime/rpc/responses/rpc-response.ts'
+      - 'src/main/runtime/rpc/methods/computer/computer*.ts'
+      - 'src/shared/computer/computer-use-*.ts'
+      - 'tests/e2e/desktop/computer-use/computer-linux.e2e.ts'
+      - 'tests/e2e/desktop/computer-use/computer-windows.e2e.ts'
+      - 'tests/e2e/desktop/computer-use/computer-windows-background.e2e.ts'
+      - 'tests/e2e/desktop/computer-use/windows-semantic-controls-fixture.*'
+      - 'tests/e2e/desktop/computer-use/computer-cli-driver.ts'
+      - 'tests/e2e/desktop/computer-use/computer-driver.ts'
       - 'tests/e2e/vitest.config.ts'
   workflow_dispatch:
   schedule:
@@ -78,6 +73,7 @@ jobs:
       matrix:
         os: [ubuntu-22.04, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
         with:
@@ -87,34 +83,6 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
-      # Use shared Vitest config: bare invocation misses config/ and its timeout/Windows worker cap, breaking real csc.exe tests.
-      - run: >-
-          pnpm vitest run --config config/vitest.config.ts
-          config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-group-recovery.test.mjs
-          config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.test.mjs
-          src/main/computer/sidecar-client.test.ts
-          src/main/computer/macos-native-provider-client.test.ts
-          src/main/computer/macos-native-provider-socket.test.ts
-          src/main/computer/macos-computer-use-permissions.test.ts
-          src/main/computer/macos-computer-use-permission-status.test.ts
-          src/main/providers/windows-shell-preflight-runtime.windows.test.ts
-          src/main/computer/desktop-script-provider-actions.test.ts
-          src/main/computer/desktop-script-provider-cache-lifecycle.test.ts
-          src/main/computer/desktop-script-provider-errors.test.ts
-          src/main/computer/desktop-script-provider-action-errors.test.ts
-          src/shared/computer-use-error-recovery.test.ts
-          src/shared/computer-use-key-spec.test.ts
-          src/cli/format.test.ts
-          src/cli/handlers/computer.test.ts
-          src/cli/handlers/computer-action-validation.test.ts
-          src/cli/handlers/computer-state-formatting.test.ts
-          src/cli/index.test.ts
-          src/main/runtime/rpc/dispatcher-computer-errors.test.ts
-          src/main/runtime/rpc/errors.test.ts
-          src/main/runtime/rpc/methods/computer.test.ts
-          src/main/runtime/rpc/methods/computer-actions.test.ts
-          src/cli/runtime/envelope-schema.test.ts
-          src/shared/remote-runtime/remote-runtime-client.test.ts
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm run build:electron-vite:parallel
@@ -131,6 +99,7 @@ jobs:
   linux:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     env:
       ORCA_COMPUTER_E2E: '1'
       ACCESSIBILITY_ENABLED: '1'
@@ -145,11 +114,12 @@ jobs:
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm run build:electron-vite:parallel
-      - run: xvfb-run --auto-servernum dbus-run-session -- pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-linux.e2e.ts
+      - run: xvfb-run --auto-servernum dbus-run-session -- pnpm test:e2e:computer --reporter=verbose tests/e2e/desktop/computer-use/computer-linux.e2e.ts
 
   windows:
     if: github.event_name != 'pull_request'
     runs-on: windows-latest
+    timeout-minutes: 180
     env:
       ORCA_COMPUTER_E2E: '1'
     steps:
@@ -162,4 +132,4 @@ jobs:
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm run build:electron-vite:parallel
-      - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts tests/e2e/computer-windows-store.e2e.ts
+      - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/desktop/computer-use/computer-windows.e2e.ts tests/e2e/desktop/computer-use/computer-windows-background.e2e.ts

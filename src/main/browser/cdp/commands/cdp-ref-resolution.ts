@@ -1,9 +1,10 @@
 import type { WebContents } from 'electron'
 import { BrowserError } from '../../browser-error'
-import type { CdpTabState } from './cdp-auxiliary-commands'
-import type { CdpCommandSender, RefEntry } from '../snapshots/snapshot-engine'
+
+import type { CdpCommandSender } from '../debugger/cdp-command-sender'
+import type { RefEntry } from '../snapshots/snapshot-engine'
 import type { CdpBridgeState } from './cdp-bridge-state'
-import type { CdpDebuggerLifecycle } from './cdp-debugger-lifecycle'
+import type { CdpDebuggerLifecycle } from '../debugger/cdp-debugger-lifecycle'
 import type { CdpNavigationOperations } from './cdp-navigation-operations'
 
 export class CdpRefResolution {
@@ -14,12 +15,14 @@ export class CdpRefResolution {
   ) {}
 
   senderForRef(guest: WebContents, ref: RefEntry): CdpCommandSender {
-    return ref.sessionId ? this.makeCdpSender(guest, ref.sessionId) : this.makeCdpSender(guest)
+    return ref.sessionId
+      ? this.debuggerLifecycle.makeCdpSender(guest, ref.sessionId)
+      : this.debuggerLifecycle.makeCdpSender(guest)
   }
 
   async resolveRef(guest: WebContents, sender: CdpCommandSender, ref: string): Promise<RefEntry> {
-    const tabId = this.resolveTabId(guest.id)
-    const state = this.getOrCreateTabState(tabId)
+    const tabId = this.bridgeState.resolveTabId(guest.id)
+    const state = this.bridgeState.getOrCreateTabState(tabId)
 
     if (!state.snapshotResult) {
       throw new BrowserError(
@@ -38,7 +41,7 @@ export class CdpRefResolution {
 
     // Child sessions have independent history; parent navigation IDs cannot validate their refs.
     if (!entry.sessionId) {
-      const currentNavId = await this.getNavigationId(sender)
+      const currentNavId = await this.navigation.getNavigationId(sender)
       if (state.navigationId && currentNavId !== state.navigationId) {
         state.snapshotResult = null
         state.navigationId = null
@@ -49,7 +52,9 @@ export class CdpRefResolution {
       }
     }
 
-    const refSender = entry.sessionId ? this.makeCdpSender(guest, entry.sessionId) : sender
+    const refSender = entry.sessionId
+      ? this.debuggerLifecycle.makeCdpSender(guest, entry.sessionId)
+      : sender
     try {
       await refSender('DOM.describeNode', { backendNodeId: entry.backendDOMNodeId })
       return entry
@@ -94,9 +99,9 @@ export class CdpRefResolution {
     guest: WebContents,
     sessionId: string
   ): Promise<{ offsetX: number; offsetY: number }> {
-    const tabId = this.resolveTabId(guest.id)
-    const state = this.getOrCreateTabState(tabId)
-    const parentSender = this.makeCdpSender(guest)
+    const tabId = this.bridgeState.resolveTabId(guest.id)
+    const state = this.bridgeState.getOrCreateTabState(tabId)
+    const parentSender = this.debuggerLifecycle.makeCdpSender(guest)
 
     for (const [targetId, sid] of state.iframeSessions) {
       if (sid === sessionId) {
@@ -200,21 +205,5 @@ export class CdpRefResolution {
       // The accessibility tree may be unavailable during recovery.
     }
     return null
-  }
-
-  private resolveTabId(webContentsId: number): string {
-    return this.bridgeState.resolveTabId(webContentsId)
-  }
-
-  private getOrCreateTabState(tabId: string): CdpTabState {
-    return this.bridgeState.getOrCreateTabState(tabId)
-  }
-
-  private makeCdpSender(guest: WebContents, sessionId?: string): CdpCommandSender {
-    return this.debuggerLifecycle.makeCdpSender(guest, sessionId)
-  }
-
-  private getNavigationId(sender: CdpCommandSender): Promise<string> {
-    return this.navigation.getNavigationId(sender)
   }
 }

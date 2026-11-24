@@ -4,13 +4,13 @@ import type * as pty from 'node-pty'
 import {
   nodePtyNativeBuildEntryDir,
   usesNodePtySpawnHelper
-} from '../../../shared/node-pty-spawn-helper'
+} from '../../orcad/native-runtime/node-pty-spawn-helper'
 import { TERMINAL_SPAWN_ISSUE_REQUEST } from '../../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
 import {
   hostReportsChildExitStatus,
   wrapShellSpawnForMacosTccAttribution
-} from '../macos-tcc-login-shell'
-import { formatLocalPtyEnvironmentDiag } from '../working-directory-validation'
+} from '../shell-launch/macos/tcc-login-shell'
+import { formatLocalPtyEnvironmentDiag } from '../working-directory/validation'
 
 let didEnsureSpawnHelperExecutable = false
 

@@ -10,12 +10,16 @@ export type CodexAppServerConnectionHandlers = {
   onUnhandledFrame?: (kind: string, payload: unknown) => void
   /** Root exit, reported once; expected if close began, including after an unproven close. */
   onExit?: (error: Error, exit?: { expected: boolean }) => void
+  /** No later request can run; process exit proof may still be pending. */
+  onClose?: (error: Error) => void
   /** Awaited once the child has a pid and before the handshake; a rejection reaps the child. */
   onSpawned?: (pid: number) => Promise<void>
 }
 
 export type CodexAppServerConnection = {
   readonly pid: number | undefined
+  /** The launcher's watcher process, when the launch reported one. */
+  readonly watcherPid?: number
   readonly closed: boolean
   request: (
     method: string,

@@ -4,6 +4,7 @@ import { isQualifiedPluginKey } from '../../../shared/plugins/manifest/plugin-ma
 import { removePluginLock } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import { readPluginLockfile, writePluginLockfile } from './plugin-install-lockfile-store'
 import { serializePluginMutation } from './plugin-mutation-queue'
+import { assertPluginIsNotRequired } from './plugin-team-install-policy'
 
 type PluginRemovalInput = {
   pluginsDir: string
@@ -19,9 +20,11 @@ export async function removeInstalledPlugin(input: PluginRemovalInput): Promise<
       throw new Error(`invalid qualified plugin key: ${input.pluginKey}`)
     }
     const lock = await readPluginLockfile(input.pluginsDir)
-    if (lock.plugins[input.pluginKey]?.source.kind === 'bundled') {
+    const entry = lock.plugins[input.pluginKey]
+    if (entry?.source.kind === 'bundled') {
       throw new Error(`cannot remove protected plugin ${input.pluginKey}`)
     }
+    assertPluginIsNotRequired(entry)
     await input.beforeRemove?.()
     await removePluginFiles(input)
   })

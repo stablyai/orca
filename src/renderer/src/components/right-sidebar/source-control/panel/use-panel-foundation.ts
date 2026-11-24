@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { useSourceControlAi } from '../ai/use-ai'
 import { useSourceControlFileListing } from '../listing/use-file-listing'
@@ -8,7 +8,11 @@ import { useSourceControlPanelState } from './use-panel-state'
 /** Keep data foundation separate from action hooks so flows cannot become dependencies of the state they mutate. */
 export function useSourceControlPanelFoundation() {
   const panelState = useSourceControlPanelState()
-  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
+  const updateSettingsOrThrow = useCallback(
+    (...args: Parameters<ReturnType<typeof useAppStore.getState>['updateSettingsOrThrow']>) =>
+      useAppStore.getState().updateSettingsOrThrow(...args),
+    []
+  )
   const reviewContext = useSourceControlReviewContext(panelState)
   const {
     activeConnectionId,
@@ -18,19 +22,23 @@ export function useSourceControlPanelFoundation() {
     activeRepoTarget,
     activeSourceControlLaunchPlatform,
     activeWorktreeId,
+    activeGitStatusHead,
     branchEntries,
     branchName,
     branchSummary,
+    changeScope,
+    changeScopeMenuOpen,
     collapsedSections,
+    commitScopeFiles,
     collapsedTreeDirs,
     commitError,
     commitMessage,
     conflictOperation,
     entries,
     filterQuery,
+    gitStatusLoaded,
     isBranchVisible,
     isFolder,
-    isGitHistoryExpanded,
     isMac,
     openSettingsPage,
     openSettingsTarget,
@@ -54,14 +62,18 @@ export function useSourceControlPanelFoundation() {
     branchEntries,
     branchName,
     branchSummary,
+    changeScope,
     collapsedSections,
     collapsedTreeDirs,
+    commitScopeFiles,
     compareBaseRef: reviewContext.compareBaseRef,
     entries,
     filterQuery,
+    headOid: gitStatusLoaded ? (activeGitStatusHead ?? null) : undefined,
     isBranchVisible,
     isFolder,
-    isGitHistoryExpanded,
+    // History feeds only the scope menu and a picked commit's existence check.
+    isGitHistoryNeeded: changeScopeMenuOpen || changeScope.kind === 'commit',
     isMac,
     refreshActiveGitStatusAfterMutation,
     remoteActionError,

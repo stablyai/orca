@@ -4,8 +4,8 @@ import { z } from 'zod'
 import { parse } from 'smol-toml'
 import SyncDatabase from '../sqlite/sync-database'
 import { tableExists } from '../opencode-usage/schema-helpers'
-import { writeSecureFile } from '../../shared/secure-file'
-import type { ManagedDataAccountProvider } from '../../shared/managed-account-types'
+import { writeSecureFile } from '../../shared/secure-storage/secure-file'
+import type { ManagedDataAccountProvider } from '../../shared/agent-accounts/managed-account-types'
 
 const credential = z.discriminatedUnion('type', [
   z.object({ type: z.literal('key'), key: z.string().min(1) }),

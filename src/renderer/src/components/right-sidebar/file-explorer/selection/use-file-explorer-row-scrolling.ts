@@ -2,7 +2,7 @@ import type { RefObject } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store/index'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { DirCache } from '../tree/file-explorer-types'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
 import { useFileExplorerAutoReveal } from '../navigation/useFileExplorerAutoReveal'
@@ -23,9 +23,11 @@ type UseFileExplorerRowScrollingParams = {
   rootCache: DirCache | undefined
   loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<boolean>
   loadMoreDir?: (dirPath: string) => Promise<void>
+  selectedPath: string | null
   setSelectedPath: (path: string | null) => void
   activeFileId: string | null
   openFiles: OpenFile[]
+  hasNameFilterQuery: boolean
 }
 
 type UseFileExplorerRowScrollingResult = {
@@ -52,9 +54,11 @@ export function useFileExplorerRowScrolling({
   rootCache,
   loadDir,
   loadMoreDir,
+  selectedPath,
   setSelectedPath,
   activeFileId,
-  openFiles
+  openFiles,
+  hasNameFilterQuery
 }: UseFileExplorerRowScrollingParams): UseFileExplorerRowScrollingResult {
   const pendingExplorerReveal = useAppStore((s) => s.pendingExplorerReveal)
   const clearPendingExplorerReveal = useAppStore((s) => s.clearPendingExplorerReveal)
@@ -120,7 +124,9 @@ export function useFileExplorerRowScrolling({
     displayRootPath,
     pendingExplorerReveal,
     openFiles,
+    hasNameFilterQuery,
     rowProjection,
+    selectedPath,
     setSelectedPath,
     virtualizer
   })
