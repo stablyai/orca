@@ -25471,7 +25471,6 @@
       "paste": {
         "remoteSignIn": "Login remoto"
       },
-      "allApps": "Todos os apps",
       "composio": {
         "withComposio": "Com Composio"
       },
@@ -25499,7 +25498,6 @@
           "usWest": "Oeste dos EUA"
         }
       },
-      "onBot": "Em {{bot}}",
       "line": {
         "vercel": "Verifique implantações e leia os logs delas",
         "sentry": "Investigue erros e os eventos por trás deles",

@@ -24963,8 +24963,6 @@
       "composio": {
         "withComposio": "Avec Composio"
       },
-      "allApps": "Toutes les apps",
-      "onBot": "Sur {{bot}}",
       "mcp": {
         "addTitle": "Ajouter {{app}}",
         "advanced": "Avancé",
