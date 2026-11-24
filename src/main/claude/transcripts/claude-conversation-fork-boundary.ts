@@ -109,14 +109,25 @@ export function claudeConversationForkBoundary(
     }
     return next > 0 ? String(chain[next - 1]!.uuid) : unavailable()
   }
-  const selected = chain.findIndex((row) => {
+  const selected = chain.findIndex((row, index) => {
     const message = claudeRecord(row.message)
-    return (
-      row.uuid === checkpoint.throughMessage?.uuid ||
-      (typeof message?.id === 'string' &&
-        typeof row.apiBlockIndex === 'number' &&
-        claudeSourceBlockId(message.id, row.apiBlockIndex) === checkpoint.throughMessage?.uuid)
-    )
+    if (row.uuid === checkpoint.throughMessage?.uuid) {
+      return true
+    }
+    if (typeof message?.id !== 'string') {
+      return false
+    }
+    // Claude Code 2.1.x writes apiBlockIndex on each transcript row. Older
+    // builds (2.0.42) write one row per content block in order with no
+    // apiBlockIndex, so recover the block index from the row's position
+    // among the rows sharing the same message.id in the parent chain.
+    const blockIndex =
+      typeof row.apiBlockIndex === 'number'
+        ? row.apiBlockIndex
+        : chain
+            .slice(0, index)
+            .filter((earlier) => claudeRecord(earlier.message)?.id === message.id).length
+    return claudeSourceBlockId(message.id, blockIndex) === checkpoint.throughMessage?.uuid
   })
   const opener = checkpoint.rootMessage
     ? chain.findIndex(
