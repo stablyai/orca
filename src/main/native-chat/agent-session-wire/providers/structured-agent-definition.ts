@@ -5,6 +5,11 @@ import type { AgentSessionStoredAgent } from '../../../../shared/agent-session/l
 import type { AgentSessionModelOption } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 
+export type StructuredAgentListedSelection = (
+  saved: Readonly<Record<string, string>>,
+  listed: readonly Pick<AgentSessionModelOption, 'id' | 'efforts'>[]
+) => Record<string, string> | null
+
 export type StructuredAgentDefinition = AgentSessionStoredAgent & {
   capabilities: AgentSessionCapabilities
   /** Absent means Orca never supplies this agent’s managed runtime. */
@@ -17,6 +22,8 @@ export type StructuredAgentDefinition = AgentSessionStoredAgent & {
     fallbackModels: () => AgentSessionModelOption[] | null
     /** Unpicked effort follows the model default, matching running-child reports. */
     effortDefaultsToModel: boolean
+    /** Saved options as the chat's listing names them; null when it names them as saved. */
+    listedSelection?: StructuredAgentListedSelection
   }
 }
 

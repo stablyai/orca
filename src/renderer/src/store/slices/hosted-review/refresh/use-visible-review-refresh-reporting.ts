@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '../../../index'
 import type { AppState } from '../../../types'
-import { rightSidebarShowsPullRequestData } from '../../../../components/right-sidebar/visibility/right-sidebar-visibility'
+import {
+  canShowRightSidebarForView,
+  rightSidebarShowsPullRequestData
+} from '../../../../components/right-sidebar/visibility/right-sidebar-visibility'
 import { findWorktreeById, buildPRRefreshCandidate } from '../../../github/refresh/worktree-refresh'
 import { getHostedReviewCacheKey } from '../hosted-review-cache-identity'
 import { getVisibleHostedReviewWorkspaces } from './visible-hosted-review-refresh-targets'
@@ -15,6 +18,12 @@ import {
 
 function visibleReviewWorkspacesForState(state: AppState) {
   const ids = new Set(state.visibleReviewCardWorktreeIds ?? [])
+  // The item page is in the right sidebar, which these views hide.
+  if (canShowRightSidebarForView(state.activeView)) {
+    for (const id of state.visibleItemPageReviewWorktreeIds ?? []) {
+      ids.add(id)
+    }
+  }
   if (state.activeWorktreeId && rightSidebarShowsPullRequestData(state)) {
     ids.add(state.activeWorktreeId)
   }
@@ -71,6 +80,7 @@ const REPORT_INPUT_KEYS = [
   'rightSidebarOpen',
   'rightSidebarTab',
   'visibleReviewCardWorktreeIds',
+  'visibleItemPageReviewWorktreeIds',
   'visibleWorkspaceHostIds',
   'workspaceHostScope',
   'repos',
@@ -103,6 +113,7 @@ export function createVisibleReviewReportIdentitySelector(): (state: AppState) =
       rightSidebarOpen: state.rightSidebarOpen,
       rightSidebarTab: state.rightSidebarTab,
       visibleReviewCardWorktreeIds: state.visibleReviewCardWorktreeIds,
+      visibleItemPageReviewWorktreeIds: state.visibleItemPageReviewWorktreeIds,
       visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
       workspaceHostScope: state.workspaceHostScope,
       repos: state.repos,

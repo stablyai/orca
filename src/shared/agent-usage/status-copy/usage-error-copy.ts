@@ -210,10 +210,7 @@ export function getProviderUsageErrorMessage(
           'Claude sign-in credentials could not be read.'
         )
       case 'missing-credentials':
-        return t(
-          'accounts.claude.usageSignInMessage',
-          'The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default.'
-        )
+        return t('accounts.claude.usageSignInMessage', 'This account needs you to sign in again.')
       case 'server':
       case 'parse':
       case 'usage-unavailable':

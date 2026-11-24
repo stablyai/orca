@@ -1,7 +1,8 @@
 // Prints MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP: the shipped build of each sorted route prefix.
 import { fileURLToPath } from 'node:url'
 import { collectMobileWebAppRoutes } from '../../mobile-web-app/mobile-web-app-route-manifest.mjs'
-import { buildMobileWebAppScripts, pageScriptCount } from './build-mobile-web-app-bundle.mjs'
+import { buildMobileWebAppScripts } from './build-mobile-web-app-bundle.mjs'
+import { pageScriptCount } from './mobile-web-app-asset-kinds.mjs'
 
 const routes = await collectMobileWebAppRoutes(
   fileURLToPath(new URL('../../../../mobile/app', import.meta.url))

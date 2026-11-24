@@ -9,6 +9,7 @@ import {
   legacyAgentSessionQuestionAnswers
 } from '../../../agent-session/requests/prompts/agent-session-question-answer'
 import type { NativeChatAskRowSubject } from './native-chat-ask-row'
+import { nativeChatQuestionOptionLabel } from './native-chat-question-option-label'
 
 /** Desktop's fallbacks for its translations; the phone's words. */
 export const NATIVE_CHAT_RECEIPT_COPY = {
@@ -66,9 +67,11 @@ export function nativeChatReceiptAnswers(
       if (answer && !isAgentSessionQuestionAnswered(question, answer)) {
         return []
       }
-      const labels = answer?.optionIds.map(
-        (id) => question.options.find((option) => option.id === id)?.label
-      )
+      const labels = answer?.optionIds.map((id) => {
+        const label = question.options.find((option) => option.id === id)?.label
+        // The card showed "(Recommended)" as a tag; the receipt says only what was picked.
+        return label === undefined ? undefined : nativeChatQuestionOptionLabel(label).shown
+      })
       const valid = labels?.every((label) => label !== undefined)
       const parts = [...(labels ?? []), ...(answer?.other?.trim() ? [answer.other] : [])]
       return {

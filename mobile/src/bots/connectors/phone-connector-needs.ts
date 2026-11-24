@@ -4,7 +4,6 @@
 import { useMemo } from 'react'
 import { botLinearWorkspaces, botSlackApps } from '../../../../src/shared/bot-types'
 import { botConnectorTitleLine } from '../../../../src/shared/bots/bot-connector-titles'
-import { botToolSignInFace } from '../../../../src/shared/bots/bot-tool-sign-in-face'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useMobileComposio } from '../../session/native-chat/transcript/bot-cards/mobile-composio-store'
@@ -16,9 +15,8 @@ import {
   type PhoneConnectorSources
 } from './connector-entry-rows'
 import type { ConnectorPage } from './connector-pages'
-import { usePhoneGoogleStatus } from './MobileBotGooglePage'
+import { usePhoneGoogleStatus } from './phone-google-accounts'
 import { useReadsAtMostEveryMinute } from './phone-connector-reads'
-import { botToolSignInNeed } from '../tools/bot-tool-words'
 import { useSharedBotTools } from '../tools/use-bot-tools-page'
 import { usePhoneBotSlack } from './use-phone-bot-slack'
 import { usePhoneGitHubAccount, usePhoneLinearAccount } from './use-phone-connector-account'
@@ -27,7 +25,9 @@ export type PhoneConnectorNeed = {
   key: string
   /** The connector's row title, e.g. "Slack · Stably". */
   title: string
-  /** What it needs, in the desktop's words. */
+  /** The service alone, e.g. "Slack", for a list of them. */
+  service: string
+  /** What it needs, in a few words, under its title. */
   need: string
   page: ConnectorPage
 }
@@ -66,23 +66,19 @@ export function phoneConnectorNeeds(
     if (!entry.needsOwner || !page || (entry.kind === 'google' && !googleRead)) {
       return []
     }
-    const title = botConnectorTitleLine(entry.title, separator)
-    const signIn =
-      entry.kind === 'app'
-        ? botToolSignInNeed(
-            botToolSignInFace(entry.tool, entry.problem, false, undefined),
-            t,
-            title
-          )
-        : null
     const need =
       entry.kind === 'slack' && entry.updateNeeded
         ? t('settings.bots.slackStatus.updateNeeded', 'Update needed')
-        : (signIn ??
-          t('bots.needs.connector', '{{name}} needs you to sign in again or fix it.', {
-            name: title
-          }))
-    return [{ key: entry.key, title, need, page }]
+        : t('bots.needs.connectorFix', 'Sign in or fix it')
+    return [
+      {
+        key: entry.key,
+        title: botConnectorTitleLine(entry.title, separator),
+        service: entry.title.service,
+        need,
+        page
+      }
+    ]
   })
 }
 

@@ -17,6 +17,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   claude: {
     detectCmd: 'claude',
     promptInjectionMode: 'argv',
+    // Why: a trailing `--disallowedTools Agent` or `--debug` default arg would take the prompt as its value (#48072).
+    argvPromptSeparator: '--',
     pasteNeedsTypedRequest: true,
     // Native --prefill avoids paste-after-ready races (https://github.com/stablyai/orca/pull/926).
     draftPromptFlag: '--prefill',
