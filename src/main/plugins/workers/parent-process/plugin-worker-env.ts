@@ -47,6 +47,17 @@ function isProxyUrlKey(key: string): boolean {
   return PROXY_ENV_KEYS.some((proxyKey) => proxyKey.toLowerCase() === lowered)
 }
 
+/** Whether a proxy value carries a user name or password. A URL that will not parse gets the
+ * cautious answer, since a malformed value may still embed credentials in its authority. */
+function hasProxyUserinfo(value: string): boolean {
+  try {
+    const url = new URL(value.includes('://') ? value : `http://${value}`)
+    return Boolean(url.username || url.password)
+  } catch {
+    return true
+  }
+}
+
 export function buildPluginWorkerEnv(
   baseEnv: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
@@ -74,9 +85,10 @@ export function buildPluginWorkerEnv(
     }
   }
   // Keep every proxy spelling the platform inherited, so the worker takes the route Orca was
-  // started with rather than reaching the internet directly.
+  // started with rather than reaching the internet directly. Credentials stay out: a proxy login is
+  // as much a secret as a token, and the worker is third-party code.
   for (const [key, value] of Object.entries(baseEnv)) {
-    if (typeof value === 'string' && isProxyKey(key)) {
+    if (typeof value === 'string' && isProxyKey(key) && !hasProxyUserinfo(value)) {
       env[key] = value
     }
   }
@@ -87,11 +99,14 @@ export function buildPluginWorkerEnv(
     ([key, value]) => isProxyUrlKey(key) && value.trim() !== ''
   )
   if (!inheritedProxyUrl) {
-    for (const [key, value] of Object.entries(
-      buildConfiguredProxyEnv(readNetworkProxySettings())
-    )) {
-      if (env[key] === undefined) {
-        env[key] = value
+    const settingsProxyEnv = buildConfiguredProxyEnv(readNetworkProxySettings())
+    const distributableProxyUrl =
+      !settingsProxyEnv.HTTPS_PROXY || !hasProxyUserinfo(settingsProxyEnv.HTTPS_PROXY)
+    if (distributableProxyUrl) {
+      for (const [key, value] of Object.entries(settingsProxyEnv)) {
+        if (env[key] === undefined) {
+          env[key] = value
+        }
       }
     }
   }

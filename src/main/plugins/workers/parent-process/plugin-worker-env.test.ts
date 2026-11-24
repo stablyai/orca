@@ -136,4 +136,35 @@ describe('buildPluginWorkerEnv', () => {
     expect(env).not.toHaveProperty('HTTPS_PROXY')
     expect(env).not.toHaveProperty('NO_PROXY')
   })
+
+  it('keeps a proxy login out of the worker while passing the route', () => {
+    const env = buildPluginWorkerEnv(
+      {
+        ...sessionEnv,
+        HTTPS_PROXY: 'http://user:secret@proxy.example:3128',
+        ALL_PROXY: 'socks5://user:secret@proxy.example:1080',
+        NO_PROXY: 'localhost'
+      },
+      'linux'
+    )
+    expect(env).not.toHaveProperty('HTTPS_PROXY')
+    expect(env).not.toHaveProperty('ALL_PROXY')
+    expect(env.NO_PROXY).toBe('localhost')
+    for (const value of Object.values(env)) {
+      expect(value).not.toContain('secret')
+    }
+  })
+
+  it('keeps a proxy login out of the worker when the proxy comes from Settings', () => {
+    setNetworkProxySettingsSource(() => ({
+      httpProxyUrl: 'http://user:secret@settings-proxy.example:8080',
+      httpProxyBypassRules: ''
+    }))
+    const env = buildPluginWorkerEnv(sessionEnv, 'linux')
+    expect(env).not.toHaveProperty('HTTPS_PROXY')
+    expect(env).not.toHaveProperty('NO_PROXY')
+    for (const value of Object.values(env)) {
+      expect(value).not.toContain('secret')
+    }
+  })
 })
