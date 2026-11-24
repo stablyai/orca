@@ -34,6 +34,5 @@
 1 src/renderer/src/components/stats/ShareUsageButton.tsx
 1 src/renderer/src/components/tab-bar/browser-tabs/BrowserTab.tsx
 1 src/renderer/src/lib/browser/navigation/http-link-admission.ts
-1 src/renderer/src/lib/workspace-ports/workspace-port-actions.ts
 1 src/renderer/src/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status.ts
 3 src/renderer/src/web/preload-api/browser/web-shell-api.ts

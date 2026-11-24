@@ -1,5 +1,6 @@
-// An ask of several questions, one line at a time, on the desktop and the phone: a quick reply or the
-// box's send answers the line it is on, and the step moves to the first open line. Answers, picked or
+// An ask of several questions, one line at a time, on the phone (the desktop shows them all on one
+// card, in its own use-bot-item-question-steps): a quick reply or the box's send answers the line it is
+// on, and the step moves to the first open line. Answers, picked or
 // typed, are held on this device (the app's draft store, keyed by `heldScope`) and post as one comment
 // when the last line is answered, so the agent wakes once, or with "send anyway", which skips the
 // lines still unanswered: they close, and the agent's mail names them. An

@@ -33,7 +33,8 @@ import type { BrowserOpenOutcome } from './browser-link-destination'
 import {
   admissionForBrowserOutcome,
   onceAdmission,
-  openSystemHttpLink,
+  openSystemHttpLink as openSystemHttpLinkForAdmission,
+  openOwnedSystemHttpLinkAdmitted,
   settleHttpLinkBrowserOpen
 } from './http-link-admission'
 
@@ -129,6 +130,8 @@ export function canHttpLinkOpenInSourceGroup(
   return state ? canOpenLinkInSourceGroup(state, workspaceId, sourceTabId) : false
 }
 
+export { openSystemHttpLinkResolved as openSystemHttpLink } from './http-link-admission'
+
 export type HttpLinkDestination = 'orca-browser' | 'system-browser' | 'none'
 
 // Route only external http(s); file/markdown targets stay with resolveMarkdownLinkTarget. Modifier-held resolves the user’s Shift choice; forceSystemBrowser is unconditional.
@@ -173,7 +176,8 @@ function executeHttpLink(
   const prefersOrca =
     openLinksInApp ||
     opts.preferInApp === true ||
-    (!opts.allowClientBrowserFallback && isRemoteLoopbackHttpLink(url, effectiveSourceOwner))
+    (!opts.allowClientBrowserFallback &&
+      isRemoteLoopbackHttpLink(url, effectiveSourceOwner, worktreeId))
   const modifier = resolveModifierRouting(
     Boolean(opts.modifierHeld),
     prefersOrca,
@@ -286,7 +290,7 @@ function executeHttpLink(
 
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
   if (!localhostRoute) {
-    void openSystemHttpLink(url).then(settle)
+    openOwnedSystemHttpLinkAdmitted(url, effectiveSourceOwner, worktreeId, settle)
     return 'system-browser'
   }
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
@@ -294,7 +298,7 @@ function executeHttpLink(
       settle('superseded')
       return
     }
-    void openSystemHttpLink(labeledUrl).then(settle)
+    void openSystemHttpLinkForAdmission(labeledUrl).then(settle)
   })
   return 'system-browser'
 }

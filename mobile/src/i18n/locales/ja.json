@@ -4651,26 +4651,12 @@
       "peerTold": "{{from}} が {{to}} に伝えました",
       "startAConversationWithThisGroupMentionBots": "このグループで会話を始めましょう。@名前 または @everyone でボットをメンションできます。",
       "items": {
-        "thisGroup": "このグループ",
-        "thread": "スレッド",
-        "all": "すべての作業",
-        "orNames": "{{names}} または {{last}}",
-        "outsideRoom_one": "このルーム外にあと {{count}} 件",
-        "outsideRoom_other": "このルーム外にあと {{count}} 件",
-        "outsideThread_one": "このスレッド外にあと {{count}} 件",
-        "outsideThread_other": "このスレッド外にあと {{count}} 件",
-        "outside_one": "このグループ外にあと {{count}} 件",
-        "outside_other": "このグループ外にあと {{count}} 件",
         "emptyTitle": "このグループの項目はまだありません",
-        "emptyBody": "{{names}} がこのグループで何かを引き受けると、ここに表示されます。",
         "needsYouCount_one": "{{count}} 件が対応待ち",
         "needsYouCount_other": "{{count}} 件が対応待ち",
         "workingCount_one": "実行中 {{count}} 件",
         "workingCount_other": "実行中 {{count}} 件",
         "filterBot": "ボット",
-        "outsideRoom": "このルーム外にあと {{count}} 件",
-        "outsideThread": "このスレッド外にあと {{count}} 件",
-        "outside": "このグループ外にあと {{count}} 件",
         "needsYouCount": "{{count}} 件が対応待ち",
         "workingCount": "実行中 {{count}} 件"
       },
@@ -4708,8 +4694,7 @@
     },
     "items": {
       "filter": {
-        "clearAll": "フィルターをクリア",
-        "chat": "チャット"
+        "clearAll": "フィルターをクリア"
       },
       "tab": "アイテム",
       "activity": {

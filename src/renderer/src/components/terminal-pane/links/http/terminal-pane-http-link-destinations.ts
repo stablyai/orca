@@ -16,13 +16,15 @@ export function terminalPaneHttpLinkDestinations(
   settings: { openLinksInApp?: boolean } | null | undefined,
   transport: PaneTransport | null | undefined,
   canOpenOwnedBrowser: boolean,
-  url?: string
+  url?: string,
+  worktreeId?: string | null
 ): HttpLinkActionDestinations {
   return httpLinkActionDestinationsFor(
     settings,
     resolveTerminalHttpLinkSourceOwner(transport),
     canOpenOwnedBrowser,
     url,
+    worktreeId,
     isConfirmedLocalTerminalSource(transport)
   )
 }

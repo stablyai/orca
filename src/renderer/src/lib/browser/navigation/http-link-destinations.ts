@@ -105,6 +105,7 @@ export function httpLinkActionDestinationsFor(
   sourceOwner: HttpLinkSourceOwner,
   canOpenOwnedBrowser: boolean,
   url?: string,
+  worktreeId?: string | null,
   /** False when `local` is only a fallback (a restored pane with no live process): no localhost shortcut. */
   localOwnerConfirmed = true
 ): HttpLinkActionDestinations {
@@ -112,7 +113,7 @@ export function httpLinkActionDestinationsFor(
     return { primary: 'system' }
   }
   const destinations: HttpLinkActionDestinations =
-    settings?.openLinksInApp === true || isRemoteLoopbackHttpLink(url, sourceOwner)
+    settings?.openLinksInApp === true || isRemoteLoopbackHttpLink(url, sourceOwner, worktreeId)
       ? { primary: 'orca', alternate: 'system' }
       : { primary: 'system', alternate: 'orca' }
   return localOwnerConfirmed && isDesktopLocalhostLink(url, sourceOwner)

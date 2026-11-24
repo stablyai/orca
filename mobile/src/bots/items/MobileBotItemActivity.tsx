@@ -17,6 +17,7 @@ import {
 } from 'lucide-react-native'
 import {
   botItemActivity,
+  botItemLiveAskKey,
   botItemWaitEntryKey,
   botItemWorkerStopReason,
   type BotItemActivityEntry
@@ -282,6 +283,7 @@ export function MobileBotItemActivity({
   const entries = botItemActivity(item, events)
   // Its move shows last, as its card, while the item waits.
   const waitKey = botItemWaitEntryKey(item, entries)
+  const liveAsk = botItemLiveAskKey(entries)
   const comments = new Set(
     entries.flatMap((entry) => (entry.kind === 'comment' ? [entry.key] : []))
   )
@@ -317,6 +319,11 @@ export function MobileBotItemActivity({
                 }
               }}
               onShowQuestion={showQuestion(entry.replyTo?.eventId)}
+              onShowLive={
+                entry.ended === 'replaced' && liveAsk !== entry.key
+                  ? showQuestion(liveAsk ?? undefined)
+                  : null
+              }
               itemScope={itemScope}
               quickReplies={quickReplies}
               repliesDisabled={repliesDisabled}

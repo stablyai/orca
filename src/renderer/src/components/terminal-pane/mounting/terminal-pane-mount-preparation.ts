@@ -124,7 +124,8 @@ export function prepareTerminalPaneMount(
       deps.settingsRef.current,
       paneTransports.get(paneId),
       canOpenOwnedBrowserForPane(paneId),
-      url
+      url,
+      deps.worktreeId
     )
   const getLinkActionContext = (paneId: number): TerminalLinkActionContext | null => {
     const plainClickBehavior = terminalLinkClickBehaviorFor(deps.settingsRef.current)

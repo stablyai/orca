@@ -104,7 +104,9 @@ export function dashboardPreviewHttpActions(
   )
   // The preview has no middle-click route, so its one order is the plain-click order.
   const destinations = canOpen
-    ? plainClickDestinationsFor(httpLinkActionDestinationsFor(state.settings, owner, true, url))
+    ? plainClickDestinationsFor(
+        httpLinkActionDestinationsFor(state.settings, owner, true, url, source.worktreeId)
+      )
     : { primary: 'system' as const }
   // Captured when the chooser is built at click; desktop only.
   const actionContext = usesHttpLinkMode()

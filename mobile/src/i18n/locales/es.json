@@ -4677,31 +4677,14 @@
       "peerTold": "{{from}} avisó a {{to}}",
       "startAConversationWithThisGroupMentionBots": "Empieza una conversación con este grupo. Menciona bots con @Nombre o @everyone.",
       "items": {
-        "thisGroup": "Este grupo",
-        "thread": "Hilo",
-        "all": "Todo su trabajo",
-        "orNames": "{{names}} o {{last}}",
-        "outsideRoom_one": "{{count}} más fuera de esta sala",
-        "outsideRoom_other": "{{count}} más fuera de esta sala",
-        "outsideThread_one": "{{count}} más fuera de este hilo",
-        "outsideThread_other": "{{count}} más fuera de este hilo",
-        "outside_one": "{{count}} más fuera de este grupo",
-        "outside_other": "{{count}} más fuera de este grupo",
         "emptyTitle": "Aún no hay elementos de este grupo",
-        "emptyBody": "Cuando {{names}} asuman algo en este grupo, aparecerá aquí.",
         "needsYouCount_one": "{{count}} te necesita",
         "needsYouCount_other": "{{count}} te necesitan",
         "workingCount_one": "{{count}} trabajando",
         "workingCount_other": "{{count}} trabajando",
         "filterBot": "Bot",
-        "outsideRoom": "{{count}} más fuera de esta sala",
-        "outsideThread": "{{count}} más fuera de este hilo",
-        "outside": "{{count}} más fuera de este grupo",
         "needsYouCount": "{{count}} te necesita",
         "workingCount": "{{count}} trabajando",
-        "outsideRoom_many": "{{count}} más fuera de esta sala",
-        "outsideThread_many": "{{count}} más fuera de este hilo",
-        "outside_many": "{{count}} más fuera de este grupo",
         "needsYouCount_many": "{{count}} te necesitan",
         "workingCount_many": "{{count}} trabajando"
       },
@@ -4739,8 +4722,7 @@
     },
     "items": {
       "filter": {
-        "clearAll": "Borrar filtros",
-        "chat": "Chat"
+        "clearAll": "Borrar filtros"
       },
       "tab": "Elementos",
       "activity": {

@@ -4566,26 +4566,12 @@
       "peerTold": "{{from}}이(가) {{to}}에게 알림",
       "startAConversationWithThisGroupMentionBots": "이 그룹과 대화를 시작하세요. @이름 또는 @everyone으로 봇을 멘션하세요.",
       "items": {
-        "thisGroup": "이 그룹",
-        "thread": "스레드",
-        "all": "모든 작업",
-        "orNames": "{{names}} 또는 {{last}}",
-        "outsideRoom_one": "이 방 밖에 {{count}}개 더",
-        "outsideRoom_other": "이 방 밖에 {{count}}개 더",
-        "outsideThread_one": "이 스레드 밖에 {{count}}개 더",
-        "outsideThread_other": "이 스레드 밖에 {{count}}개 더",
-        "outside_one": "이 그룹 밖에 {{count}}개 더",
-        "outside_other": "이 그룹 밖에 {{count}}개 더",
         "emptyTitle": "이 그룹의 항목이 아직 없음",
-        "emptyBody": "{{names}}이(가) 이 그룹에서 무언가를 맡으면 여기에 표시됩니다.",
         "needsYouCount_one": "확인 필요 {{count}}개",
         "needsYouCount_other": "확인 필요 {{count}}개",
         "workingCount_one": "{{count}}개 작업 중",
         "workingCount_other": "{{count}}개 작업 중",
         "filterBot": "봇",
-        "outsideRoom": "이 방 밖에 {{count}}개 더",
-        "outsideThread": "이 스레드 밖에 {{count}}개 더",
-        "outside": "이 그룹 밖에 {{count}}개 더",
         "needsYouCount": "확인 필요 {{count}}개",
         "workingCount": "{{count}}개 작업 중"
       },
@@ -5014,8 +5000,7 @@
     },
     "items": {
       "filter": {
-        "clearAll": "필터 지우기",
-        "chat": "채팅"
+        "clearAll": "필터 지우기"
       },
       "tab": "항목",
       "activity": {

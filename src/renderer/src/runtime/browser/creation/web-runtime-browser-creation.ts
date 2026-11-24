@@ -88,6 +88,10 @@ export async function createWebRuntimeSessionBrowserTabOnHost(
         )
       }
     }
+    // An explicit move here must not quietly become another streamed page.
+    if (placementPreference === 'client' && placement.kind !== 'client') {
+      throw new Error('browser_client_host_unavailable')
+    }
     // Preparation can outlive the click's owner or request; recheck before the create is sent.
     if (args.admitDispatch && !args.admitDispatch()) {
       throw new Error('browser link dispatch no longer admitted')
@@ -223,6 +227,9 @@ export async function createWebRuntimeSessionBrowserTabOnHost(
       throw new StagedWebRuntimeBrowserTabCancelledError()
     }
     // Materialized rows belong to the snapshot; later failures must not unwind them as staging.
+    if (placement.kind === 'client') {
+      markDesktopPlacedClientPage(environmentId, created.browserPageId)
+    }
     completeWebRuntimeBrowserCreation(context)
     materializedPageId = created.browserPageId
   } catch (error) {
@@ -286,3 +293,17 @@ export async function createWebRuntimeSessionBrowserTabOnHost(
 }
 
 registerPairedBrowserTabCreator(createWebRuntimeSessionBrowserTab)
+
+/** Local proof that this desktop asked for the page here; snapshot rebuilds keep it, a server never sets it. */
+function markDesktopPlacedClientPage(environmentId: string, remotePageId: string): void {
+  const state = useAppStore.getState()
+  for (const [pageId, handle] of Object.entries(state.remoteBrowserPageHandlesByPageId)) {
+    if (handle.environmentId === environmentId && handle.remotePageId === remotePageId) {
+      // Only on the server's own word that it landed here.
+      if (!handle.placedHere && handle.placement?.kind === 'client') {
+        state.setRemoteBrowserPageHandle(pageId, { ...handle, placedHere: true })
+      }
+      return
+    }
+  }
+}

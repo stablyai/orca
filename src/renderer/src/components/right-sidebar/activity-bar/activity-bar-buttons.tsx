@@ -32,8 +32,8 @@ export type ActivityBarItem = {
   gitOnly?: boolean
   /** When true, shown only for folder workspaces. */
   folderOnly?: boolean
-  /** When true, shown only for workspaces on an SSH host. */
-  sshOnly?: boolean
+  /** When true, shown only for workspaces on an SSH host or a paired server. */
+  remoteHostOnly?: boolean
   /** When true, shown on a bot's page, and for a chat whose workers it lists. */
   botOnly?: boolean
   /** When true, shown only on a bot's page. */

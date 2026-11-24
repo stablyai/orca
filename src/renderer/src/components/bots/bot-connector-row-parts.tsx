@@ -1,6 +1,14 @@
 // The pieces a connector row's header is made of, shared by the row in a list and its own page.
 import React from 'react'
-import { Ellipsis, ExternalLink, LoaderCircle, Plus, RefreshCw, Unplug } from 'lucide-react'
+import {
+  CircleStop,
+  Ellipsis,
+  ExternalLink,
+  LoaderCircle,
+  Plus,
+  RefreshCw,
+  Unplug
+} from 'lucide-react'
 import type { IntegrationCardStatusTone } from '@/components/integrations/presentation/integration-card-shell'
 import { Button } from '@/components/ui/button'
 import {
@@ -53,6 +61,8 @@ export type BotConnectorActions = {
   link?: { label: string; onClick: () => void } | null
   /** Something the connector offers but doesn't need, e.g. newer permissions, or reading it again. */
   update?: { label: string; onClick: () => void } | null
+  /** Ends something under way, e.g. a setup run. */
+  stop?: { label: string; onClick: () => void } | null
   remove?: { label: string; onSelect: () => void; disabled?: boolean } | null
 }
 
@@ -67,8 +77,8 @@ export function BotConnectorMenu({
   alwaysShown?: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const { add, addAccount, link, update, remove } = actions
-  if (!add && !addAccount && !link && !update && !remove) {
+  const { add, addAccount, link, update, stop, remove } = actions
+  if (!add && !addAccount && !link && !update && !stop && !remove) {
     return null
   }
   return (
@@ -113,7 +123,13 @@ export function BotConnectorMenu({
             {update.label}
           </DropdownMenuItem>
         ) : null}
-        {(add || addAccount || link || update) && remove ? <DropdownMenuSeparator /> : null}
+        {stop ? (
+          <DropdownMenuItem onSelect={stop.onClick}>
+            <CircleStop />
+            {stop.label}
+          </DropdownMenuItem>
+        ) : null}
+        {(add || addAccount || link || update || stop) && remove ? <DropdownMenuSeparator /> : null}
         {remove ? (
           <DropdownMenuItem
             variant="destructive"
