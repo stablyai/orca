@@ -20,7 +20,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     permission: 'workspace',
     params: InboxParams,
     access: { kind: 'reads', targets: { terminal: 'party', run: 'run' }, collection: true },
-    handler: (params, { runtime }) => {
+    handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       // Why: an empty list for a mistyped Run (or a `run:` mailbox address) reads as "no mail".
       if (params.run && !db.getRun(params.run)) {
@@ -30,17 +30,29 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
         throw new OrchestrationError('run_not_found', `Run ${params.run} was not found.${hint}`)
       }
       // Return empty for stale/unknown handles because historical mail outlives handle deletion (design doc §3.3).
-      const messages = params.terminal
-        ? db.getAllMessagesForHandle(
-            resolveOrchestrationParty(params.terminal, db).address,
-            params.limit,
-            undefined,
-            params.run
-          )
-        : db.getInbox(params.limit, params.run)
+      const terminal = params.terminal
+        ? resolveOrchestrationParty(params.terminal, db).address
+        : undefined
+      const worktree = params.worktree ? await runtime.showManagedWorktree(params.worktree) : null
+      const messages = worktree
+        ? db.getWorktreeInbox({
+            worktreeId: worktree.id,
+            terminalHandles: (
+              await runtime.listTerminals(`id:${worktree.id}`, Number.MAX_SAFE_INTEGER)
+            ).terminals
+              .filter((entry) => entry.worktreeId === worktree.id)
+              .map((entry) => entry.handle),
+            terminal,
+            runId: params.run,
+            limit: params.limit
+          })
+        : terminal
+          ? db.getAllMessagesForHandle(terminal, params.limit, undefined, params.run)
+          : db.getInbox(params.limit, params.run)
       return {
         messages: messages.map(({ answer_sender_snapshot: _answer, ...message }) => message),
-        count: messages.length
+        count: messages.length,
+        ...(worktree ? { worktreeId: worktree.id } : {})
       }
     }
   }),

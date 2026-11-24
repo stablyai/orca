@@ -127,12 +127,14 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'inbox'],
     summary: 'Show messages across (or for) recipients',
     usage:
-      'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--run <run_id>] [--full] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'run', 'full'],
+      'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--run <run_id>] [--worktree <selector>] [--full] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'run', 'worktree', 'full'],
     identityFlagRoles: { terminal: 'target' },
     notes: [
       'Rows preview each body in 200 characters and keep only payload ids; --full prints them whole.',
-      'Without --terminal or --run it lists every mailbox on this Orca. --run <run_id> keeps all mail in that Run, including mail to its workers; --terminal run:<run_id> keeps only the coordinator mailbox.'
+      'Without a filter it lists every mailbox on this Orca. --run <run_id> keeps all mail in that Run, including mail to its workers; --terminal run:<run_id> keeps only the coordinator mailbox.',
+      '--worktree <selector> keeps mail sent or received by listed terminals and recorded worker Dispatches in that worktree. Combine it with --run or --terminal to narrow the result further.',
+      'In --json, preview rows name the parties from and to; --full preserves the stored from_handle and to_handle fields.'
     ]
   },
   {
