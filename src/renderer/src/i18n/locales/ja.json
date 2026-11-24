@@ -1901,7 +1901,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "プロジェクトの場所が設定されていません",
         "hostLocalGitProject": "このプロジェクトには一致する Git リモートがありません",
-        "hostLocalFolderProject": "フォルダープロジェクトは他のホストにリンクできません"
+        "hostLocalFolderProject": "フォルダープロジェクトは他のホストにリンクできません",
+        "pendingNotSetUp": "このホストで追跡中のプロジェクトですが、セットアップされていません",
+        "pendingSettingUp": "プロジェクトをセットアップしています",
+        "pendingError": "プロジェクトのセットアップに対応が必要です",
+        "pendingUnsupported": "このホストではプロジェクトがサポートされていません"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+クリックで最新のリリース候補版（RC）を、{{perfKey}}+クリックで最新のパフォーマンステスト用ビルドを確認します。",

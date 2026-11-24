@@ -3290,7 +3290,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "Local do projeto não definido",
         "hostLocalGitProject": "Este projeto não tem um remoto Git correspondente",
-        "hostLocalFolderProject": "Projetos de pasta não podem ser vinculados a outros hosts"
+        "hostLocalFolderProject": "Projetos de pasta não podem ser vinculados a outros hosts",
+        "pendingNotSetUp": "Projeto rastreado neste host, mas não configurado",
+        "pendingSettingUp": "Configuração do projeto em andamento",
+        "pendingError": "A configuração do projeto precisa de atenção",
+        "pendingUnsupported": "Projeto não suportado neste host"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Atualize o servidor para ver as portas nos hosts SSH dele.",

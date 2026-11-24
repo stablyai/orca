@@ -2192,7 +2192,11 @@
       },
       "projectHostSetupOptions": {
         "hostLocalGitProject": "Bu projenin eşleşen bir Git uzak deposu yok",
-        "hostLocalFolderProject": "Klasör projeleri diğer sunuculara bağlanamaz"
+        "hostLocalFolderProject": "Klasör projeleri diğer sunuculara bağlanamaz",
+        "pendingNotSetUp": "Proje bu sunucuda izleniyor ancak kurulmadı",
+        "pendingSettingUp": "Proje kurulumu sürüyor",
+        "pendingError": "Proje kurulumu dikkat gerektiriyor",
+        "pendingUnsupported": "Proje bu sunucuda desteklenmiyor"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+tıklama en son sürüm adayını (RC), {{perfKey}}+tıklama ise en son performans testi derlemesini denetler.",
