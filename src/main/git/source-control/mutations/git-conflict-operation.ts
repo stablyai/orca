@@ -8,6 +8,7 @@ import {
 } from '../../command-runner/git-runtime-options'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from '../git-read-cache-invalidation'
+import { runWithGitWorktreeOperationLock } from '../../../../shared/git/worktrees/git-worktree-operation-lock'
 import { resolveGitDir } from '../resolve-git-dir'
 
 // HEAD detection races may yield unknown for one poll; rebase directories persist more reliably than REBASE_HEAD.
@@ -67,8 +68,14 @@ export async function abortRebase(
   worktreePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  await runWithGitReadCacheInvalidation(() =>
-    gitExecFileAsync(['rebase', '--abort'], gitOptionsForWorktree(worktreePath, options))
+  // Queued Abort runs once in this worktree after any Orca operation already holding the lane.
+  await runWithGitWorktreeOperationLock(worktreePath, options.signal, () =>
+    runWithGitReadCacheInvalidation(() =>
+      gitExecFileAsync(['rebase', '--abort'], {
+        ...gitOptionsForWorktree(worktreePath, options),
+        terminationBarrier: true
+      })
+    )
   )
 }
 

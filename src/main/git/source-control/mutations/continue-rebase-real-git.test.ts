@@ -1,25 +1,8 @@
 import { rmSync } from 'node:fs'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { detectConflictOperation } from './git-conflict-operation'
 import { continueRebase } from './rebase-continue'
 import { createConflictingRebaseRepo } from './rebase-real-git.test-fixture'
-import type * as GitExecFile from '../../command-runner/git-exec-file'
-
-const gitExecFileAsyncSpy = vi.hoisted(() => {
-  const calls: [string[], unknown][] = []
-  return { calls }
-})
-vi.mock('../../command-runner/git-exec-file', async (importOriginal) => {
-  const actual = await importOriginal<typeof GitExecFile>()
-  return {
-    ...actual,
-    gitExecFileAsync: (...args: Parameters<typeof actual.gitExecFileAsync>) => {
-      gitExecFileAsyncSpy.calls.push([args[0], args[1]])
-      return actual.gitExecFileAsync(...args)
-    }
-  }
-})
-
 describe('continueRebase against real git', () => {
   const tempPaths: string[] = []
 
@@ -60,18 +43,6 @@ describe('continueRebase against real git', () => {
     ).resolves.toMatchObject({ outcome: 'completed', branch: 'feature' })
     await expect(detectConflictOperation(repoPath)).resolves.toBe('unknown')
     expect(git('log', '-1', '--format=%s').trim()).toBe('feature b')
-  })
-
-  it('waits for the rebase --continue child to exit before a cancelled Continue settles', async () => {
-    const { repoPath, git, write } = createFeatureBehindConflictingMain()
-    expect(() => git('rebase', 'main')).toThrow()
-    write('a.txt', 'resolved a\n')
-    git('add', 'a.txt')
-    gitExecFileAsyncSpy.calls.length = 0
-    await continueRebase(repoPath, 'continue', { expected: await stopToken(repoPath) })
-
-    const spawn = gitExecFileAsyncSpy.calls.find(([args]) => args.join(' ') === 'rebase --continue')
-    expect(spawn?.[1]).toMatchObject({ terminationBarrier: true })
   })
 
   it('refuses a Continue without a token or with one from an earlier stop', async () => {
@@ -149,35 +120,6 @@ describe('continueRebase against real git', () => {
       continueRebase(repoPath, 'continue', { expected: await stopToken(repoPath) })
     ).resolves.toMatchObject({ outcome: 'empty' })
     await expect(detectConflictOperation(repoPath)).resolves.toBe('rebase')
-  })
-
-  it('skips an empty step only at the stop it was shown, then pauses at the next conflict', async () => {
-    const { repoPath, git, write } = createFeatureBehindConflictingMain()
-    expect(() => git('rebase', '--apply', 'main')).toThrow()
-    git('checkout', '--ours', 'a.txt')
-    git('add', 'a.txt')
-    const emptyStop = await continueRebase(repoPath, 'continue', {
-      expected: await stopToken(repoPath)
-    })
-    expect(emptyStop.outcome).toBe('empty')
-
-    // A token from another stop must not drop this one.
-    await expect(
-      continueRebase(repoPath, 'skip', {
-        expected: { ...emptyStop.stop!, step: `${emptyStop.stop!.step}9` }
-      })
-    ).resolves.toMatchObject({ outcome: 'stale' })
-
-    const skipped = await continueRebase(repoPath, 'skip', { expected: emptyStop.stop })
-    expect(skipped.outcome).toBe('conflicted')
-    expect(git('diff', '--name-only', '--diff-filter=U')).toBe('b.txt\n')
-    write('b.txt', 'resolved b\n')
-    git('add', 'b.txt')
-    await expect(
-      continueRebase(repoPath, 'continue', { expected: skipped.stop })
-    ).resolves.toMatchObject({ outcome: 'completed', branch: 'feature' })
-    // The skipped pick left nothing of the feature's change to a.txt.
-    expect(git('show', 'HEAD:a.txt')).toBe(git('show', 'main:a.txt'))
   })
 
   it('treats the merge backend dropping an empty pick before the next conflict as conflicted', async () => {

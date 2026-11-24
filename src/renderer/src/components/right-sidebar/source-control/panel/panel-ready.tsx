@@ -108,10 +108,10 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
                     model.isRemoteOperationActive && model.inFlightRemoteOpKind === 'rebase',
                   isAbortingRebase: model.isAbortingOperation,
                   isContinuingRebase: model.isContinuingRebase,
+                  hasGitOwner: !!model.activeRepoTarget,
                   onRebase: () => model.handleActionInvoke('rebase_base'),
                   onAbortRebase: () => void model.handleAbortRebase(),
                   onContinueRebase: () => void model.handleContinueRebase(),
-                  onSkipRebaseStep: () => void model.handleSkipRebaseStep(),
                   onRetryRebaseInspect: model.handleRetryRebaseInspect
                 }
           }

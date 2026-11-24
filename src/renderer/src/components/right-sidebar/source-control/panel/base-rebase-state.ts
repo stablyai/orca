@@ -23,7 +23,7 @@ export type BaseRebaseState =
       inspectFailureMessage: string | null
     }
 
-// empty: Git found nothing to commit at this step, which can be skipped instead of continued.
+// An empty stop cannot be continued until its index changes.
 export type RebaseContinueState = 'ready' | 'empty' | 'blocked' | 'unknown' | 'unreadable'
 
 export type BaseRebaseInputs = {
@@ -101,6 +101,9 @@ export function resolveRebaseContinueState(
 ): RebaseContinueState {
   if (!rebaseStop || (statusHead !== null && rebaseStop.token.head !== statusHead)) {
     return inspectFailure && inspectFailure.head === statusHead ? 'unreadable' : 'unknown'
+  }
+  if (!rebaseStop.token.head || !rebaseStop.token.step || !rebaseStop.token.incarnation) {
+    return 'unreadable'
   }
   return rebaseStop.blocked === 'empty' ? 'empty' : rebaseStop.blocked ? 'blocked' : 'ready'
 }

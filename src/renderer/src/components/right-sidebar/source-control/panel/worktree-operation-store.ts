@@ -45,7 +45,7 @@ export type OrcaRebaseMarker = {
 export type RebaseStopReading = {
   token: RebaseStopToken
   branch: string | null
-  // Git cannot continue this stop. empty: nothing to commit, so Skip or Abort; stopped: Git paused
+  // Git cannot continue this stop. empty: nothing to commit, so Abort or finish in a terminal; stopped: Git paused
   // for its own reason (edit, break, exec), so Abort or finish in a terminal.
   blocked: 'empty' | 'stopped' | null
 }

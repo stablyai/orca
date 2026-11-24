@@ -135,6 +135,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     refreshBranchCompareRef,
     refreshGitHistoryRef,
     statusHead: foundation.activeGitStatusHead,
+    stagedSignature: JSON.stringify(grouped.staged),
     worktreePath
   })
 

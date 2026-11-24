@@ -10,10 +10,10 @@ export type BaseRebaseActions = {
   isRebasing: boolean
   isAbortingRebase: boolean
   isContinuingRebase: boolean
+  hasGitOwner: boolean
   onRebase: () => void
   onAbortRebase: () => void
   onContinueRebase: () => void
-  onSkipRebaseStep: () => void
   onRetryRebaseInspect: () => void
 }
 
@@ -150,7 +150,7 @@ function useRebaseStepButton(
   inspectFailureMessage: string | null
 ): StepButton {
   const t = useTranslate()
-  const busy = actions.isAbortingRebase || actions.isContinuingRebase
+  const busy = actions.isAbortingRebase || actions.isContinuingRebase || !actions.hasGitOwner
   const continueLabel = t('auto.components.right.sidebar.SourceControl.rebaseContinue', 'Continue')
   if (continueState === 'unreadable') {
     const failed = t(
@@ -169,29 +169,13 @@ function useRebaseStepButton(
       onPress: actions.onRetryRebaseInspect
     }
   }
-  if (continueState === 'empty') {
-    return {
-      label: t('auto.components.right.sidebar.SourceControl.rebaseSkipStep', 'Skip'),
-      ariaLabel: t(
-        'auto.components.right.sidebar.SourceControl.rebaseSkipStepLabel',
-        'Skip this rebase step'
-      ),
-      reason: t(
-        'auto.components.right.sidebar.SourceControl.rebaseSkipStepReason',
-        'Nothing to commit in this step. Skip drops it and moves on.'
-      ),
-      unavailable: busy,
-      primary: true,
-      onPress: actions.onSkipRebaseStep
-    }
-  }
   const reason =
     unresolvedCount > 0
       ? t(
           'auto.components.right.sidebar.SourceControl.rebaseResolveConflictsFirst',
           'Resolve conflicts first'
         )
-      : continueState === 'blocked'
+      : continueState === 'blocked' || continueState === 'empty'
         ? t(
             'auto.components.right.sidebar.SourceControl.rebaseStoppedFinishInTerminal',
             'Git paused this step. Finish it in a terminal or abort.'
