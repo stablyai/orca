@@ -130,12 +130,14 @@ export function createBrowserCookieImportActions(
       )
       try {
         // Settings on an SSH host fills that host's jar for the profile, on this computer.
-        const result = (await window.api.browser.sessionImportFromBrowser({
-          profileId,
-          browserFamily,
-          browserProfile,
-          ...(parsedHostId?.kind === 'ssh' ? { sshTargetId: parsedHostId.targetId } : {})
-        })) as BrowserCookieImportResult
+        const result: BrowserCookieImportResult = await window.api.browser.sessionImportFromBrowser(
+          {
+            profileId,
+            browserFamily,
+            browserProfile,
+            ...(parsedHostId?.kind === 'ssh' ? { sshTargetId: parsedHostId.targetId } : {})
+          }
+        )
         if (result.ok) {
           get().recordFeatureInteraction?.('cookie-import')
           set((state) =>

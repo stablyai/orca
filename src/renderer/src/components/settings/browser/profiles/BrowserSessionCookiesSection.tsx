@@ -9,7 +9,10 @@ import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { BrowserProfileRow, type BrowserProfileRowProps } from './BrowserProfileRow'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 
@@ -50,6 +53,11 @@ export function BrowserSessionCookiesSection({
     activeProfile?.label
   )
   const selectedHost = hostOptions.find((host) => host.id === selectedHostId) ?? hostOptions[0]
+  const parsedSelectedHost = parseExecutionHostId(selectedHost?.id)
+  const sshRoute =
+    parsedSelectedHost?.kind === 'ssh' && selectedHost
+      ? { sshTargetId: parsedSelectedHost.targetId, hostLabel: selectedHost.label }
+      : null
   const profileCookieClear = useProfileCookieClear(
     selectedHost ?? { id: selectedHostId, kind: 'local', label: '' },
     activeProfileId,
@@ -163,6 +171,7 @@ export function BrowserSessionCookiesSection({
           importState={importState}
           isActive={activeProfileId === 'default'}
           onSelect={onSelectDefaultProfile}
+          sshRoute={sshRoute}
         />
         {nonDefaultProfiles.map((profile) => (
           <BrowserProfileRow
@@ -172,6 +181,7 @@ export function BrowserSessionCookiesSection({
             importState={importState}
             isActive={activeProfileId === profile.id}
             onSelect={() => onSelectProfile(profile.id)}
+            sshRoute={sshRoute}
           />
         ))}
       </div>

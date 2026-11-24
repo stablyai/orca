@@ -19,6 +19,7 @@ import {
 } from '../../../ui/dropdown-menu'
 import { BrowserCookieImportDisclosure } from './BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from './BrowserCookieImportMachineNotice'
+import type { BrowserSshPageCookieImportRoute } from '@/store/slices/browser/browser-slice-contract'
 import { useAppStore } from '../../../../store/index'
 import '../../../../../../shared/orca-profiles/constants'
 import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
@@ -44,6 +45,8 @@ export type BrowserProfileRowProps = {
   } | null
   isActive: boolean
   onSelect: () => void
+  /** Settings' selected host when it is an SSH host: imports fill that host's jar. */
+  sshRoute?: BrowserSshPageCookieImportRoute | null
 }
 
 export function BrowserProfileRow({
@@ -51,7 +54,8 @@ export function BrowserProfileRow({
   detectedBrowsers,
   importState,
   isActive,
-  onSelect
+  onSelect,
+  sshRoute = null
 }: BrowserProfileRowProps): React.JSX.Element {
   const t = useTranslate()
   const isImporting = importState?.profileId === profile.id && importState.status === 'importing'
@@ -175,7 +179,7 @@ export function BrowserProfileRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <BrowserCookieImportMachineNotice />
+            <BrowserCookieImportMachineNotice settingsSshRoute={sshRoute} />
             {detectedBrowsers.map((browser) =>
               browser.profiles.length > 1 ? (
                 <DropdownMenuSub key={browser.family}>

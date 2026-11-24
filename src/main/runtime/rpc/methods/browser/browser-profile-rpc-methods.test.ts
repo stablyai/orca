@@ -22,6 +22,7 @@ it("clears a profile's cookies for the person's Orca, never for an agent's CLI",
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these handlers only reach the two clear commands.
       const context = { runtime, caller } as unknown as RpcContext
       const params = { profileId: 'work', executorRuntimeId: 'server' }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both clear methods take these params.
       const handler = method.handler as (params: unknown, context: RpcContext) => Promise<unknown>
       if (allowed) {
         await expect(handler(params, context)).resolves.toEqual({ cleared: true })
