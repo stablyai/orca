@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { requireGitOwnerTarget } from './worktree-git-owner-target'
 import {
+  commitCompareKey,
   commitDiffErrorMessage,
   runLatestCommitDiffOpen,
   trackCommitCompare,
@@ -90,12 +91,13 @@ export function useGitHistoryCommitActions({
         return null
       }
       const generation = generationRef.current
-      const cached = generation.cache.get(item.id)
+      const compareKey = commitCompareKey(item)
+      const cached = generation.cache.get(compareKey)
       if (cached) {
         return cached
       }
       const connectionId = sourceControlConnectionId(scope, activeWorktreeId, ownerConnectionId)
-      return trackCommitCompare(generation, item.id, () =>
+      return trackCommitCompare(generation, compareKey, () =>
         getRuntimeGitCommitCompare(
           {
             // Compare on the repo owner, which may differ from the focused host.
@@ -165,7 +167,7 @@ export function useGitHistoryCommitActions({
       if (!activeWorktreeId || !worktreePath) {
         return
       }
-      const cached = generationRef.current.cache.get(item.id)
+      const cached = generationRef.current.cache.get(commitCompareKey(item))
       if (!cached) {
         return
       }
