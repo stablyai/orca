@@ -74,19 +74,11 @@ export const CONNECTOR_LEAVE_THREAD_METHOD = defineMethod({
     if (turnId === null) {
       throw new ConnectorActError('leave_refused_stale', STALE)
     }
-    // Left in this turn and no @mention since: nothing to save, and its line is already owed. A
-    // leave still saving answers only once it is on disk, as what it saved.
+    // Left in this turn and no @mention since: nothing new to save, and its line is already owed.
+    // Answered only once it is on disk: a leave still saving, or one whose save's outcome was
+    // unknown, is saved again first.
     if (thread.muted && thread.leaveLine === turnId) {
-      await threadMuteSaving(key)?.catch(() => undefined)
-      const saved = readThreadMute(store, key)
-      if (
-        typeof saved !== 'object' ||
-        saved === null ||
-        !saved.muted ||
-        saved.leaveLine !== turnId
-      ) {
-        throw new ConnectorActError('thread_mute_not_saved', NOT_SAVED)
-      }
+      await alreadyLeft(store, key, turnId)
       return { ok: true as const, already: true as const }
     }
     // Replies arriving from now on wait for this leave to save or be refused, so none slips past it
@@ -101,6 +93,24 @@ export const CONNECTOR_LEAVE_THREAD_METHOD = defineMethod({
     return { ok: true as const }
   }
 })
+
+async function alreadyLeft(
+  store: Parameters<typeof threadMuteSaves>[0],
+  key: ConnectorConversation,
+  turnId: number
+): Promise<void> {
+  await threadMuteSaving(key)?.catch(() => undefined)
+  const saved = readThreadMute(store, key)
+  if (typeof saved !== 'object' || saved === null || !saved.muted || saved.leaveLine !== turnId) {
+    throw new ConnectorActError('thread_mute_not_saved', NOT_SAVED)
+  }
+  try {
+    await store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
+  } catch (error) {
+    console.warn('[connectors] could not save that a bot left its thread', error)
+    throw new ConnectorActError('leave_unconfirmed', LEAVE_THREAD_UNCONFIRMED)
+  }
+}
 
 function leaveFrom(
   runtime: Parameters<typeof CONNECTOR_LEAVE_THREAD_METHOD.handler>[1]['runtime'],

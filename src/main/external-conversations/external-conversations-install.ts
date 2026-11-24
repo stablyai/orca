@@ -2,7 +2,6 @@ import type { RuntimeStore } from '../runtime/construction/runtime-store-contrac
 import {
   installLeaveLines,
   leaveLines,
-  THREAD_LEFT_LINE,
   type LeaveLinesCloud
 } from './external-conversation-leave-lines'
 import { setConnectorClaimSource } from '../native-chat/agent-session-wire/recovery/structured-agent-session-connector-claims'
@@ -118,18 +117,19 @@ export function installExternalConversations(
       ...(store.flushPendingOrThrowAsync
         ? { flush: () => store.flushPendingOrThrowAsync!({ drainToStableGeneration: false }) }
         : {}),
-      carriedIn: async (link, turnId) => {
+      answerPending: async (link, turnId) => {
         // At startup the chat host may not be in yet: read the outbox only once it is.
         await runtime.ensureStructuredAgentSessionHost?.()
-        const rows =
-          (await getStructuredAgentSessionHost()
-            ?.deps.store.connectorReplies()
-            ?.read(link.sessionId)) ?? []
-        return rows.some(
+        const rows = await getStructuredAgentSessionHost()
+          ?.deps.store.connectorReplies()
+          ?.read(link.sessionId)
+          // An unreadable outbox never holds the line back for good.
+          .catch(() => [])
+        return (rows ?? []).some(
           (row) =>
+            row.conversation.source === link.source &&
             row.conversation.externalId === link.externalId &&
-            row.fill?.turnStartedAt === turnId &&
-            row.fill.prose?.includes(THREAD_LEFT_LINE) === true
+            row.fill?.turnStartedAt === turnId
         )
       }
     })

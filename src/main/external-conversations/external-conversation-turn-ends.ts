@@ -142,14 +142,13 @@ export async function endRepliedTurn(
   const failure = turnFailure(end, turn)
   let threw = false
   const workLinks = link.bot ? await links() : []
-  const { covered, resumesAt, answered } = await fill({
+  const { covered, resumesAt } = await fill({
     sessionId: end.news.sessionId,
     turnItemId: turn.turnItemId,
     stamps: turn.stamps,
     ...(turn.opener ? { openerItemId: turn.opener.itemId } : {}),
     outcome: end.news.outcome,
     prose: turn.turnProse ?? '',
-    proseNow: () => end.leave.prose(turn.turnProse) ?? '',
     bot: Boolean(link.bot),
     links: workLinks,
     ...turnTimesOf(end.ended),
@@ -162,7 +161,6 @@ export async function endRepliedTurn(
   // A turn whose stamps name this conversation answers it through the outbox only, even when its
   // rows were already sent and gone or the fill failed (recovery drains what is left): never also as
   // a full end.
-  end.leave.filled(answered === true)
   const outboxed =
     covered.has(link.externalId) || (answersThroughOutbox(link.source) && stampsName(turn, link))
   if (!end.current()) {

@@ -28,10 +28,7 @@ import type { ConnectorConversation } from '../../shared/connectors/connector-cl
 import { DeliveryReceipts } from '../external-conversations/external-conversation-delivery-receipts'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import { findLink, writeLink } from '../external-conversations/external-conversation-links'
-import {
-  readThreadMute,
-  writeLinkFact
-} from '../external-conversations/external-conversation-link-writes'
+import { readThreadMute } from '../external-conversations/external-conversation-link-writes'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
@@ -441,7 +438,7 @@ describe('a bot that leaves its thread', () => {
     timers.length = 0
     // A cloud that stopped marking mentions: saying so would be false, so it waits, still owed.
     features.length = 0
-    own.turnEndsTaken([{ conversation: FIRST, turnId: TURN_ID }])
+    own.turnEndsTaken([{ kind: 'turn-ended', conversation: FIRST, turnId: TURN_ID }])
     await expect.poll(() => own.owed(link(), TURN_ID)).toBe(true)
     expect(posted).toEqual([])
     features.push('sends.mentioned')
@@ -454,12 +451,17 @@ describe('a bot that leaves its thread', () => {
     const store = await botHome({})
     const { leave } = leaver(store)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.spyOn(store, 'flushPendingOrThrowAsync').mockRejectedValueOnce(
-      new ProfileStateIndeterminateWriteError(new Error('commit unacknowledged'), undefined)
-    )
+    const flush = vi
+      .spyOn(store, 'flushPendingOrThrowAsync')
+      .mockRejectedValueOnce(
+        new ProfileStateIndeterminateWriteError(new Error('commit unacknowledged'), undefined)
+      )
     await expect(leave()).rejects.toMatchObject({ code: 'leave_unconfirmed' })
     // As disk may hold it: a restart can't bring back a mute memory had dropped.
     expect(readThreadMute(store, FIRST)).toMatchObject({ muted: true })
+    // Asked again: saved again before it says so.
+    await expect(leave()).resolves.toEqual({ ok: true, already: true })
+    expect(flush).toHaveBeenCalledTimes(2)
   })
 
   it('drops a line the cloud refuses for good', async () => {
@@ -554,36 +556,40 @@ describe('a bot that leaves its thread', () => {
     expect(turns).toEqual(['@Ranger please check this'])
   })
 
-  it('after a quit, posts a line no saved answer carried, and never one an answer did', async () => {
+  it('after a quit, posts the line once its answer has left the reply outbox', async () => {
     const store = await botHome({})
     const { leave, posted, timers } = leaver(store)
     await leave()
     await closeTestStores()
     const reopened = createStore()
     const linked = () => findLink(reopened, FIRST)!.link
-    const restarted = (carried: boolean) =>
-      leaveLines({
-        store: reopened,
-        cloud: () => ({
-          cloudFeatures: () => new Set(['sends.mentioned']),
-          reply: async (reply: unknown) => {
-            posted.push(reply)
-            return { ok: true as const }
-          }
-        }),
-        setTimer: (run) => timers.push(run),
-        carriedIn: async () => carried
-      })
-    // The answer that carried it was saved before the quit: owed no more, nothing posts.
-    restarted(true).resume(() => null)
-    await expect.poll(() => readThreadMute(reopened, FIRST)).toEqual({ botId: 'bot1', muted: true })
+    // The turn's answer is still in the reply outbox, waiting for the cloud.
+    const outbox = { holdsAnswer: true }
+    const restarted = leaveLines({
+      store: reopened,
+      cloud: () => ({
+        cloudFeatures: () => new Set(['sends.mentioned']),
+        reply: async (reply: unknown) => {
+          posted.push(reply)
+          return { ok: true as const }
+        }
+      }),
+      setTimer: (run) => timers.push(run),
+      answerPending: async () => outbox.holdsAnswer
+    })
+    restarted.resume(() => null)
+    await expect.poll(() => readThreadMute(reopened, FIRST)).toMatchObject({ muted: true })
+    await Promise.resolve()
     expect(posted).toEqual([])
-    // No saved answer carried it: it posts on its own once.
-    await leave().catch(() => undefined)
-    writeLinkFact(reopened, FIRST, { leaveLine: TURN_ID })
-    restarted(false).resume(() => null)
+    expect(restarted.owed(linked(), TURN_ID)).toBe(true)
+    // The cloud took the answer: the line follows it, once.
+    outbox.holdsAnswer = false
+    restarted.turnEndsTaken([{ kind: 'turn-ended', conversation: FIRST, turnId: TURN_ID }])
     await expect.poll(() => posted.length).toBe(1)
-    expect(restarted(false).owed(linked(), TURN_ID)).toBe(false)
+    expect(restarted.owed(linked(), TURN_ID)).toBe(false)
+    restarted.resume(() => null)
+    await Promise.resolve()
+    expect(posted).toHaveLength(1)
   })
 
   it('changes nothing when no request of the thread is running', async () => {

@@ -1,41 +1,21 @@
 // A bot that left its Slack thread during a turn: Orca's own confirmation, posted once that turn
 // ends, right after its answer, and only while the thread is still left.
-import { isQuietBotResult } from '../../shared/bot-quiet-result'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
-import {
-  installedLeaveLines,
-  THREAD_LEFT_LINE,
-  type LeaveLines
-} from './external-conversation-leave-lines'
+import { installedLeaveLines, type LeaveLines } from './external-conversation-leave-lines'
 
-/** The turn's answer with the confirmation after it, or the line alone when it said nothing. */
-export function withThreadLeftLine(words: string | undefined): string {
-  const said = words?.trim()
-  return said ? `${said}\n\n${THREAD_LEFT_LINE}` : THREAD_LEFT_LINE
-}
-
-/** How a turn's end confirms a leave made in it: the line rides on a successful turn's outbox
- *  answer, and `settle` posts it on its own otherwise (a failed turn, a long answer, an end that
- *  reaches its thread another way), kept owed until it posts. */
+/** How a turn's end confirms a leave made in it: the line posts on its own once the turn's answer
+ *  is in (design: right after the turn's final message), kept owed until it posts. */
 export type TurnLeave = {
-  /** The outbox prose, as the fill is about to write it, with the line after it while still owed. */
-  prose: (prose: string | undefined) => string | undefined
-  /** The fill wrote the turn's prose, and so the line, into an answer. */
-  filled: (answered: boolean) => void
-  /** The end is over: a line no answer took posts on its own, kept owed until it does. `after`:
-   *  once the cloud took the end just emitted ('end'), or one an owner's failed post holds ('held'). */
+  /** The end is over. `after`: once the cloud took the end just emitted ('end'), or one an owner's
+   *  failed post holds ('held'); without it, at once (an end that reaches the thread another way). */
   settle: (after?: 'end' | 'held') => void
 }
 
-type Lines = Pick<LeaveLines, 'owed' | 'carried' | 'post' | 'ending' | 'afterTurnEnd'>
-
-// The line rides only on an answer every cloud keeps whole (the smallest takes 8 KB).
-const RIDE_MAX_BYTES = 7 * 1024
+type Lines = Pick<LeaveLines, 'owed' | 'post' | 'ending' | 'afterTurnEnd'>
 
 export function turnLeave(
   link: Pick<ExternalConversationLink, 'source' | 'externalId' | 'sessionId'>,
   turnId: number | null,
-  outcome: string,
   given: Lines | undefined,
   live: () => boolean
 ): TurnLeave {
@@ -45,31 +25,9 @@ export function turnLeave(
     // Held from a watch's resume while this end decides, so the line never posts twice.
     left.lines.ending(link, left.turnId)
   }
-  // Whether the outbox prose was given the line; only then can its answer carry it.
-  const appended = { prose: false }
-  let rode = false
-  const said = (words: string | undefined, part: keyof typeof appended) => {
-    const spoken = words && !isQuietBotResult(words) ? words : undefined
-    if (spoken && Buffer.byteLength(spoken) > RIDE_MAX_BYTES) {
-      return words
-    }
-    appended[part] = true
-    return withThreadLeftLine(spoken)
-  }
-  // Added as each goes out, never earlier: an @mention since then means it is no longer left.
-  const still = () => left !== null && outcome === 'success' && left.lines.owed(link, left.turnId)
   return {
-    prose: (prose) => (still() ? said(prose, 'prose') : prose),
-    // The outbox has the line now: it owes nothing more.
-    filled: (answered) => {
-      rode ||= answered && appended.prose
-      if (rode && left) {
-        left.lines.carried(link, left.turnId)
-      }
-    },
     settle: (after) => {
-      // An answer the fill wrote already took it over.
-      if (!left || rode || !live()) {
+      if (!left || !live()) {
         return
       }
       if (after) {

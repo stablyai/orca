@@ -157,12 +157,16 @@ export class ConnectorTurnEvents {
       onStamped: (batch, stamp) => this.trace.stamped(batch, stamp),
       onAccepted: (batch, stamp) => {
         this.trace.accepted(batch, stamp)
-        void this.replies.accepted(batch)
-        installedLeaveLines()?.turnEndsTaken(batch.filter(isTurnEnded))
+        // A leave's line follows its turn's answer, once the cloud took it and its rows are sent.
+        void this.replies.accepted(batch).then(() => installedLeaveLines()?.turnEndsTaken(batch))
       },
       onSplit: (batch) => this.trace.split(batch),
       onDropped: (item, stamp, failure) => {
         this.trace.dropped(item, stamp)
+        // A turn end the cloud won't take lets its leave's line go.
+        if (isTurnEnded(item)) {
+          installedLeaveLines()?.turnEndsTaken([item])
+        }
         // A reply refused as invalid can't succeed as sent under this hello: it stays in flight
         // until the next one (its row stays unsent). Any other refusal (a 413, or a 503 outcome
         // that doesn't stand yet) goes again later.

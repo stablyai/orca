@@ -5,7 +5,6 @@ import { ChatTurns } from './external-conversation-chat-turns'
 import type { EndedChatTurn } from './external-conversation-ended-turn'
 import type { ConversationEvent } from './external-conversation-events'
 import type { EndedTurnReplies } from './external-conversation-reply-fill'
-import { THREAD_LEFT_LINE } from './external-conversation-leave-lines'
 
 const thread = { source: 'slack' as const, externalId: 'T0TEAM:C0CHANNEL:1.0:U0BOT' }
 const link: ExternalConversationLink = {
@@ -31,7 +30,6 @@ async function endLeftTurn(
   } = {}
 ) {
   let posted = 0
-  let carried = 0
   let reads = 0
   // The thread owes TURN's line while it is still left.
   const leaveLines = {
@@ -39,9 +37,6 @@ async function endLeftTurn(
       const owes = turnId === TURN && !options.undone && !(options.undoneWhileReading && reads > 0)
       reads += 1
       return owes
-    },
-    carried: () => {
-      carried += 1
     },
     // As the real one: nothing posts once the thread no longer owes it.
     post: () => {
@@ -56,8 +51,8 @@ async function endLeftTurn(
   const events: ConversationEvent[] = []
   const prose: string[] = []
   const fill = async (replies: EndedTurnReplies) => {
-    prose.push(replies.proseNow?.() ?? replies.prose)
-    return { covered: new Set([thread.externalId]), paused: false, answered: true as const }
+    prose.push(replies.prose)
+    return { covered: new Set([thread.externalId]), paused: false }
   }
   const chats = new ChatTurns({
     setTimer: () => ({ cancel: () => {} }),
@@ -91,78 +86,38 @@ async function endLeftTurn(
   await expect.poll(() => events.length).toBe(1)
   await Promise.resolve()
   const ended = events.find((event) => event.kind === 'turn-ended')
-  return { said: ended?.lastAssistantMessage, prose, posted, carried }
+  return { said: ended?.lastAssistantMessage, prose, posted }
 }
 
-it('confirms a leave once, after the answer, and only while the thread is still left', async () => {
-  // An end outside the reply outbox: the line posts on its own once the cloud took that end.
+it('confirms a leave once, on its own after the answer, and only while the thread is still left', async () => {
+  const outbox = {
+    lastAssistantMessage: 'Summary: canary is green.',
+    turnProse: 'Summary: canary is green.',
+    turnItemId: 'turn-1',
+    stamps: [{ account: 'acct', conversation: thread, deliveryId: 'd1' }]
+  }
+  // The answer is the agent's words alone, through either path; the line posts once after it.
   expect(await endLeftTurn({ lastAssistantMessage: 'Noted #123.' })).toEqual({
     said: 'Noted #123.',
     prose: [],
-    posted: 1,
-    carried: 0
+    posted: 1
   })
-  // Through the reply outbox: the answer's prose carries it.
-  const outboxed = await endLeftTurn(
-    {
-      lastAssistantMessage: 'Summary: canary is green.',
-      turnProse: 'Summary: canary is green.',
-      turnItemId: 'turn-1',
-      stamps: [{ account: 'acct', conversation: thread, deliveryId: 'd1' }]
-    },
-    { outbox: true }
-  )
-  expect(outboxed).toEqual({
+  expect(await endLeftTurn(outbox, { outbox: true })).toEqual({
     said: undefined,
-    prose: [`Summary: canary is green.\n\n${THREAD_LEFT_LINE}`],
-    posted: 0,
-    carried: 1
+    prose: ['Summary: canary is green.'],
+    posted: 1
   })
-  // A quiet answer through the outbox: the line is the answer.
-  const quiet = await endLeftTurn(
-    {
-      lastAssistantMessage: 'NO_REPLY',
-      turnProse: 'NO_REPLY',
-      turnItemId: 'turn-1',
-      stamps: [{ account: 'acct', conversation: thread, deliveryId: 'd1' }]
-    },
-    { outbox: true }
-  )
-  expect(quiet.prose).toEqual([THREAD_LEFT_LINE])
-  // Too long to keep the line whole: it posts on its own.
-  const long = 'a'.repeat(8_000)
-  expect(
-    await endLeftTurn(
-      {
-        lastAssistantMessage: long,
-        turnProse: long,
-        turnItemId: 'turn-1',
-        stamps: [{ account: 'acct', conversation: thread, deliveryId: 'd1' }]
-      },
-      { outbox: true }
-    )
-  ).toMatchObject({ prose: [long], posted: 1, carried: 0 })
-  // A failed turn: its end says only what it said, and the line posts on its own once.
+  // A failed turn: its end says only what it said, and the line still posts once.
   expect(
     await endLeftTurn({ lastAssistantMessage: 'Partial.' }, { outcome: 'failure' })
-  ).toMatchObject({ said: 'Partial.', posted: 1, carried: 0 })
-  // An @mention while the turn was being read: no line at all.
-  expect(
-    await endLeftTurn(
-      {
-        lastAssistantMessage: 'Ok.',
-        turnProse: 'Ok.',
-        turnItemId: 'turn-1',
-        stamps: [{ account: 'acct', conversation: thread, deliveryId: 'd1' }]
-      },
-      { outbox: true, undoneWhileReading: true }
-    )
-  ).toMatchObject({ prose: ['Ok.'], posted: 0 })
-  // An @mention brought it back first: no line at all.
+  ).toMatchObject({ said: 'Partial.', posted: 1 })
+  // An @mention while the turn was being read, or before it ended: no line at all.
+  expect(await endLeftTurn(outbox, { outbox: true, undoneWhileReading: true })).toMatchObject({
+    posted: 0
+  })
   expect(await endLeftTurn({ lastAssistantMessage: 'Ok.' }, { undone: true })).toEqual({
     said: 'Ok.',
     prose: [],
-    posted: 0,
-    carried: 0
+    posted: 0
   })
 })

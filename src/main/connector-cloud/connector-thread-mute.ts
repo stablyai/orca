@@ -7,6 +7,7 @@ import type {
   ConnectorDeliveryResult
 } from '../../shared/connectors/connector-cloud-contract'
 import type { SendDelivery } from './connector-deliveries'
+import { ThreadMuteUnconfirmedError } from './connector-thread-mute-saves'
 import { refused, type Delivery } from '../external-conversations/external-conversation-types'
 
 /** What a send to a bot's thread does: a muted thread silences any send that doesn't mention the
@@ -216,7 +217,8 @@ function applyStep(
     () => true,
     (error: unknown) => {
       console.warn('[connectors] could not save a thread unmute', error)
-      return false
+      // Kept unmuted, as disk may be: the mention is answered, as every reply now is.
+      return error instanceof ThreadMuteUnconfirmedError
     }
   )
   const sent = (ok: boolean) => (ok ? ('send' as const) : NOT_SAVED)

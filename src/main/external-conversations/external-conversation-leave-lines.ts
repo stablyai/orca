@@ -26,6 +26,8 @@ const NEVER_STATUS = new Set([400, 403, 404, 413, 422])
 const NEVER_ERRORS = new Set(['reply_not_accepted', 'not_this_hosts_thread'])
 
 type Thread = Pick<ExternalConversationLink, 'source' | 'externalId'>
+// An event the cloud took or dropped: a turn end or a reply names its thread and turn.
+type TakenEvent = { kind: string; conversation?: Thread; turnId?: number | null }
 
 export type LeaveLinesCloud = {
   /** What the cloud takes; null until its hello was answered. */
@@ -45,9 +47,9 @@ type LeaveLinesDeps = {
   setTimer?: (run: () => void, ms: number) => void
   /** Saves pending store writes to disk. */
   flush?: () => Promise<void>
-  /** Whether the reply outbox already holds an answer of `turnId` that carries the line (a quit
-   *  after it was written, before the debt was cleared). */
-  carriedIn?: (
+  /** Whether the reply outbox still holds `turnId`'s answer in the thread, not yet taken by the
+   *  cloud: the line waits for it, after a restart too. */
+  answerPending?: (
     link: Pick<ExternalConversationLink, 'source' | 'externalId' | 'sessionId'>,
     turnId: number
   ) => Promise<boolean>
@@ -56,8 +58,6 @@ type LeaveLinesDeps = {
 export type LeaveLines = {
   /** Whether the link still owes `turnId`'s line: still left, and no @mention since. */
   owed: (link: Pick<ExternalConversationLink, 'source' | 'externalId'>, turnId: number) => boolean
-  /** The line went with the turn's answer: nothing more is owed. */
-  carried: (link: Pick<ExternalConversationLink, 'source' | 'externalId'>, turnId: number) => void
   /** Posts the line on its own, retrying until it posts or is no longer owed. */
   post: (
     link: Pick<ExternalConversationLink, 'source' | 'externalId' | 'sessionId'>,
@@ -72,8 +72,8 @@ export type LeaveLines = {
     turnId: number,
     fallback: boolean
   ) => void
-  /** The cloud took these turn ends: the lines waiting on them post now. */
-  turnEndsTaken: (ends: readonly { conversation: Thread; turnId: number }[]) => void
+  /** The cloud took these events: lines waiting on a turn end or answer among them post now. */
+  turnEndsTaken: (events: readonly TakenEvent[]) => void
   /** Posts every line still owed for a turn that isn't running (cut short by a quit or a reset). */
   resume: (running: (link: ExternalConversationLink) => number | null) => void
 }
@@ -125,7 +125,7 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
     ending.delete(idOf(link, turnId))
     if (owed(link, turnId)) {
       writeLinkFact(deps.store, link, { leaveLine: undefined })
-      // Saved now, so a quit can't leave it owed beside the answer that carried it.
+      // Saved now, so a quit can't post it again.
       void deps.flush?.().catch(() => undefined)
     }
   }
@@ -150,9 +150,13 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
         return
       }
       const cloud = deps.cloud()
-      // Its answer goes first: the end that carries it (or holds it, behind an owner's failed post)
-      // posts the line once the cloud took it.
-      if (cloud?.turnEndPending?.(link, turnId) || heldByMirror(deps.store, link, turnId)) {
+      // Its answer goes first: the end or reply that carries it (or the end an owner's failed post
+      // holds) posts the line once the cloud took it.
+      const pending =
+        cloud?.turnEndPending?.(link, turnId) ||
+        heldByMirror(deps.store, link, turnId) ||
+        (await (deps.answerPending?.(link, turnId) ?? false))
+      if (pending) {
         posting.delete(id)
         return
       }
@@ -220,7 +224,6 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
   }
   return {
     owed,
-    carried: settle,
     post,
     ending: (link, turnId) => {
       ending.set(idOf(link, turnId), Date.now())
@@ -232,11 +235,15 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
         timer(() => post(link, turnId), ENDING_MS)
       }
     },
-    turnEndsTaken: (ends) => {
-      for (const end of ends) {
-        const link = findLink(deps.store, end.conversation)?.link
-        if (link && owed(link, end.turnId)) {
-          post(link, end.turnId)
+    turnEndsTaken: (events) => {
+      for (const event of events) {
+        if (event.kind !== 'turn-ended' && event.kind !== 'reply') {
+          continue
+        }
+        const { conversation, turnId } = event
+        const link = conversation && findLink(deps.store, conversation)?.link
+        if (link && typeof turnId === 'number' && owed(link, turnId)) {
+          post(link, turnId)
         }
       }
     },
@@ -254,10 +261,7 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
         }
         const began = ending.get(idOf(link, turnId))
         if (began === undefined) {
-          // A quit after the answer that carried it was saved: settled, never posted again.
-          void (deps.carriedIn?.(link, turnId) ?? Promise.resolve(false))
-            .catch(() => false)
-            .then((carried) => (carried ? settle(link, turnId) : post(link, turnId)))
+          post(link, turnId)
         } else {
           // Its turn end is deciding it; one that never finishes (a reset meanwhile) lets go here.
           timer(() => post(link, turnId), began + ENDING_MS - now)
