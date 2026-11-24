@@ -15,6 +15,22 @@ export function captureTabStripMenuFocus(
 }
 
 /**
+ * Focus that the "+N" chip's own teardown may hand back: the chip itself or a row of its exact menu.
+ * A strip sibling (another tab, "+", Pane Actions) was focused independently and stays where it is.
+ */
+export function captureTabStripChipFocus(chip: Element | null, menuId: string): Element | null {
+  const active = document.activeElement
+  if (!active || !chip) {
+    return null
+  }
+  if (chip.contains(active)) {
+    return active
+  }
+  const menu = active.closest('[data-tab-strip-menu]')
+  return menu?.getAttribute('data-tab-strip-menu') === menuId ? active : null
+}
+
+/**
  * Deferred focus after a strip menu closes: the slot's tab root, else this strip's "+N" chip (the
  * chip-only state has no slot). Rechecked at execution so it never steals focus: the strip must
  * still be connected and owned, the target shown inside it, and focus not moved meanwhile.

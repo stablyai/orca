@@ -223,7 +223,16 @@ export function TabStripOverflowChip({
   useLayoutEffect(() => {
     surfaceRef.current = surface
   })
-  useTabStripUnmountFocusRestore({ open, surface, activeId, worktreeId, groupId, menuId })
+  const chipRef = useRef<HTMLButtonElement>(null)
+  useTabStripUnmountFocusRestore({
+    open,
+    surface,
+    chip: chipRef,
+    activeId,
+    worktreeId,
+    groupId,
+    menuId
+  })
 
   const count = chipOnly ? entries.length : hiddenIds.size
   const countLabel = count > 99 ? '99+' : String(count)
@@ -252,6 +261,7 @@ export function TabStripOverflowChip({
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <button
+              ref={chipRef}
               type="button"
               data-tab-strip-overflow-chip=""
               aria-label={name}

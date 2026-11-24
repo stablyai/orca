@@ -18,7 +18,12 @@ beforeEach(() => {
     }
   })
   document.body.innerHTML = `
-    <div id="strip"><div data-tab-strip-slot="t1"><div tabindex="0" id="t1-root"></div></div></div>
+    <div id="strip">
+      <div data-tab-strip-slot="t1"><div tabindex="0" id="t1-root"></div></div>
+      <div data-tab-strip-slot="t2"><div tabindex="0" id="t2-root"></div></div>
+      <button data-tab-strip-overflow-chip id="chip"></button>
+      <button id="new-tab"></button>
+    </div>
     <div data-tab-strip-menu="menu"><button id="menu-row"></button></div>
     <textarea id="other-group-terminal"></textarea>`
   strip = document.getElementById('strip')!
@@ -35,6 +40,7 @@ function Chip({ open }: { open: boolean }): null {
   useTabStripUnmountFocusRestore({
     open,
     surface: strip,
+    chip: { current: document.getElementById('chip') },
     activeId: 't1',
     worktreeId: 'wt',
     groupId: 'g1',
@@ -95,5 +101,39 @@ describe('useTabStripUnmountFocusRestore', () => {
       expect(document.activeElement).toBe(input)
       unmount()
     }
+  })
+
+  it('hands focus on the chip itself back to the active tab', async () => {
+    const { rerender } = render(<Harness chip />)
+    document.getElementById('chip')!.focus()
+    rerender(<Harness chip={false} />)
+    await nextFrame()
+    expect(document.activeElement?.id).toBe('t1-root')
+  })
+
+  it('never takes focus from a strip sibling focused independently of the chip', async () => {
+    for (const siblingId of ['new-tab', 't2-root']) {
+      const sibling = document.getElementById(siblingId)!
+      const { rerender, unmount } = render(<Harness chip />)
+      // One focus action, before teardown; nothing re-focuses it afterwards.
+      sibling.focus()
+      rerender(<Harness chip={false} />)
+      expect(document.activeElement).toBe(sibling)
+      await nextFrame()
+      expect(document.activeElement).toBe(sibling)
+      await nextFrame()
+      expect(document.activeElement).toBe(sibling)
+      unmount()
+    }
+  })
+
+  it('does nothing once the list closed before the chip unmounts', async () => {
+    const chip = document.getElementById('chip')!
+    const { rerender, unmount } = render(<Chip open />)
+    chip.focus()
+    rerender(<Chip open={false} />)
+    unmount()
+    await nextFrame()
+    expect(document.activeElement).toBe(chip)
   })
 })

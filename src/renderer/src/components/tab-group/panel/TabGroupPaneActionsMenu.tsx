@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type RefObject } from 'react'
+import { useId, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { ArrowLeft, ArrowRight, Ellipsis, Plus, X } from 'lucide-react'
 import {
   DropdownMenu,
@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { useNativeChatQuickCommandsMenu } from '../../native-chat/pane/actions/use-native-chat-quick-commands-menu'
 import { useAppStore } from '../../../store'
 import {
   canGoBackWorktreeHistory,
@@ -35,6 +34,8 @@ type TabGroupPaneActionsMenuProps = {
   groupId: string
   /** The strip's quick-command slot; when a narrow strip hides it, this menu offers quick commands instead. */
   quickCommandsSlotRef: RefObject<HTMLElement | null>
+  /** Quick-command rows from the strip, which owns their editor so Add and a draft outlive this menu. */
+  quickCommandsMenu: ReactNode
   /** Titlebar fold level of the owner strip: >= 1 moves Back/Forward here, 2 also "+". */
   foldLevel: TitlebarChromeFoldLevel
   /** Opens a terminal, like the new-tab shortcut; offered once "+" folds in. */
@@ -55,6 +56,7 @@ export function TabGroupPaneActionsMenu({
   worktreeId,
   groupId,
   quickCommandsSlotRef,
+  quickCommandsMenu,
   foldLevel,
   onNewTab
 }: TabGroupPaneActionsMenuProps): React.JSX.Element {
@@ -70,10 +72,7 @@ export function TabGroupPaneActionsMenu({
   const pendingNavigationRef = useRef<{ focusBefore: Element | null } | null>(null)
   const showHistory = menuFoldLevel > 0
   const [offerQuickCommands, setOfferQuickCommands] = useState(false)
-  const quickCommands = useNativeChatQuickCommandsMenu(
-    offerQuickCommands ? { worktreeId, groupId } : undefined,
-    () => onOpenChange(false)
-  )
+  const quickCommands = offerQuickCommands ? quickCommandsMenu : null
   const handleOpenChange = (next: boolean): void => {
     // Why: the menu renders in a portal, so check the strip's container-query result when it opens.
     if (next) {
@@ -189,12 +188,12 @@ export function TabGroupPaneActionsMenu({
                     <DropdownMenuShortcut>{newTabShortcut}</DropdownMenuShortcut>
                   </DropdownMenuItem>
                 ) : null}
-                {quickCommands.menu || onCloseGroup ? <DropdownMenuSeparator /> : null}
+                {quickCommands || onCloseGroup ? <DropdownMenuSeparator /> : null}
               </>
             ) : null}
-            {quickCommands.menu ? (
+            {quickCommands ? (
               <>
-                {quickCommands.menu}
+                {quickCommands}
                 {onCloseGroup ? <DropdownMenuSeparator /> : null}
               </>
             ) : null}
@@ -210,7 +209,6 @@ export function TabGroupPaneActionsMenu({
           {t('auto.components.tab.group.TabGroupPanel.9acaf92093', 'Pane Actions')}
         </TooltipContent>
       </Tooltip>
-      {quickCommands.dialog}
     </div>
   )
 }

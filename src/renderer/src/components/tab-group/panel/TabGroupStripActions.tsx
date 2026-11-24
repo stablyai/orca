@@ -3,6 +3,7 @@ import { cn } from '@/lib/class-names'
 import type { TitlebarChromeFoldLevel } from '@/app-shell/chrome/titlebar-chrome-fold'
 import { TabBarQuickCommandsButton } from '../../tab-bar/quick-commands/TabBarQuickCommandsButton'
 import { TabGroupPaneActionsMenu } from './TabGroupPaneActionsMenu'
+import { useNativeChatQuickCommandsMenu } from '../../native-chat/pane/actions/use-native-chat-quick-commands-menu'
 
 /** Quick commands and the pane ⋯ at the strip's right end. */
 export function TabGroupStripActions({
@@ -26,6 +27,10 @@ export function TabGroupStripActions({
   if (!isFocused && paneActionsOpen) {
     setPaneActionsOpen(false)
   }
+  // Why: an unsplit ⋯ unmounts once the pane unfolds to level 0; the editor its Add opens, and any draft, must outlive it.
+  const quickCommands = useNativeChatQuickCommandsMenu({ worktreeId, groupId }, () =>
+    setPaneActionsOpen(false)
+  )
   return (
     // Why: actions hide before the tab bar's floor is reached; min-w-0 + clipping is only a backstop so reserved spacers stay clear.
     <div
@@ -63,10 +68,12 @@ export function TabGroupStripActions({
           worktreeId={worktreeId}
           groupId={groupId}
           quickCommandsSlotRef={quickCommandsSlotRef}
+          quickCommandsMenu={quickCommands.menu}
           foldLevel={foldLevel}
           onNewTab={onNewTab}
         />
       ) : null}
+      {quickCommands.dialog}
     </div>
   )
 }
