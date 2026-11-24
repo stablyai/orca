@@ -72,9 +72,10 @@ describe('pluginEngineFloor for real panel icons', () => {
   const floor = (value: unknown) =>
     pluginEngineFloor(pluginPanelContributionSchema, { icon: value })
 
-  it('sets the path icon floor past the published v1.4.273, which reads only named icons', () => {
-    // Why pinned: v1.4.273 is the latest published release and would accept a path icon it draws
-    // as `puzzle`. Re-check this value when the release that carries path icons ships.
+  it('sets the path icon floor past the published v1.4.273, which rejects path icon manifests', () => {
+    // Why pinned: v1.4.273 is the latest published release and rejects a format-2 path-icon
+    // manifest outright. An older client can also show the `puzzle` fallback for a panel that a
+    // newer host accepts. Re-check this value when the release that carries path icons ships.
     expect(PLUGIN_PANEL_PATH_ICON_SINCE).toBe('1.4.274')
   })
 

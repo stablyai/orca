@@ -7,8 +7,8 @@ import {
 import type { ActivePluginPanel } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import type { ActivityBarItem } from '../activity-bar/activity-bar-buttons'
 import {
+  activityItemAriaLabel,
   activityItemSpokenName,
-  activityItemStatusSuffix,
   activityItemTooltip,
   type ActivityItemStatus
 } from '../activity-bar/activity-bar-item-names'
@@ -88,10 +88,13 @@ function nameKey(name: string): string {
   return name.replace(/\s+/g, ' ').trim().toLowerCase()
 }
 
-/** The normalized tooltip of each built-in tab, shortcut hint included: the text a tab shows and
- *  announces, which no plugin tab may read as exactly. */
-export function builtInTabNames(items: readonly ActivityBarItem[]): ReadonlySet<string> {
-  return new Set(items.map((item) => nameKey(activityItemTooltip(item))))
+/** The normalized final strings of each built-in tab: its accessible name (count and status word
+ *  included) and its tooltip. No plugin tab may read as exactly one of them. */
+export function builtInTabNames(
+  items: readonly ActivityBarItem[],
+  t: Translate = translate
+): ReadonlySet<string> {
+  return new Set(items.flatMap((item) => finalNameKeys(item, (built) => built.statusIndicator, t)))
 }
 
 /** The panel's tooltip and accessible name: its title, prefixed with the plugin name unless the
@@ -117,12 +120,11 @@ export function pluginPanelAccessibleTitle(
 /** The status a tab is announced with. */
 export type PanelNameStatus = (item: ActivityBarItem) => ActivityItemStatus | null | undefined
 
-/** Normalized strings a tab is announced and shown by: its accessible name, status word included,
- *  and its tooltip. Both are compared, since a tooltip can match another tab's name while the
- *  accessible names differ by the status word. */
+/** Normalized strings a tab is announced and shown by: its accessible name, which carries the count
+ *  ("Home, 1 needs you") and the status word, and its tooltip. Both are compared, since a tooltip
+ *  can match another tab's name while the accessible names differ by the count or status word. */
 function finalNameKeys(item: ActivityBarItem, statusOf: PanelNameStatus, t: Translate): string[] {
-  const tooltip = activityItemTooltip(item)
-  return [`${tooltip}${activityItemStatusSuffix(statusOf(item), t)}`, tooltip].map(nameKey)
+  return [activityItemAriaLabel(item, statusOf(item), t), activityItemTooltip(item)].map(nameKey)
 }
 
 function nameCounts(

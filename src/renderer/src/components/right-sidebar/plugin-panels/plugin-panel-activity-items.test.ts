@@ -7,6 +7,7 @@ import { afterEach, expect, it } from 'vitest'
 import type { ActivePluginPanel } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import type { ActivityBarItem } from '../activity-bar/activity-bar-buttons'
 import { activityBarDragName } from '../activity-bar/activity-bar-drag-announcements'
+import { activityItemAriaLabel } from '../activity-bar/activity-bar-item-names'
 import {
   builtInTabNames,
   getPluginPanelActivityItems,
@@ -307,6 +308,42 @@ it('never lets a plugin tab read as exactly a built-in tab name', () => {
     'Explorer',
     'Explorer (⌘⇧E) (explorer-app)'
   ])
+})
+
+it('judges a plugin tab against the count a built-in tab announces', () => {
+  // Home announces its count, so its accessible name is "Home, 1 needs you", not its tooltip.
+  const home: ActivityBarItem = {
+    id: 'bot-activity',
+    icon: () => null,
+    title: 'Home',
+    shortcut: '',
+    count: 1,
+    countLabel: '1 needs you'
+  }
+  expect(activityItemAriaLabel(home)).toBe('Home, 1 needs you')
+  const plugin = () =>
+    getPluginPanelActivityItems([
+      panel('acme/home', 'Home, 1 needs you', 'main', 'Home, 1 needs you')
+    ])
+
+  // Visible together: the plugin tab gives way, and the built-in tab keeps its name.
+  const items = withDistinctPluginPanelNames([home, ...plugin()])
+  expect(items[0]).toBe(home)
+  expect(items.map((item) => activityItemAriaLabel(item))).toEqual([
+    'Home, 1 needs you',
+    'Home, 1 needs you (acme/home)'
+  ])
+
+  // Checked against every built-in label, even when the built-in tab is not shown.
+  const builtInNames = builtInTabNames([home])
+  expect(builtInNames.has('home, 1 needs you')).toBe(true)
+  expect(
+    getPluginPanelActivityItems(
+      [panel('acme/home', 'Home, 1 needs you', 'main', 'Home, 1 needs you')],
+      {},
+      builtInNames
+    )[0]?.accessibleTitle
+  ).toBe('Home, 1 needs you: Home, 1 needs you')
 })
 
 it('judges collisions on the final announced names, status words included', () => {

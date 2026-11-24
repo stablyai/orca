@@ -133,7 +133,7 @@ export function useRightSidebarActivityItems({
       ...getPluginPanelActivityItems(
         visiblePluginPanels,
         pluginPanelErrors,
-        builtInTabNames(builtInItems)
+        builtInTabNames(builtInItems, t)
       ).map((item) => ({
         ...item,
         labeledTab: isBot
