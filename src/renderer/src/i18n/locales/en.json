@@ -29430,6 +29430,36 @@
       "itemsNeedYou_other": "{{count}} items it flagged for you",
       "review": "Review",
       "openHome": "Open {{name}}’s Home"
+    },
+    "endChat": {
+      "menuItem": "End chat",
+      "reason": {
+        "replying": "A reply in progress",
+        "unread_one": "{{count}} unread message",
+        "unread_other": "{{count}} unread messages",
+        "requests_one": "{{count}} request waiting for an answer",
+        "requests_other": "{{count}} requests waiting for an answer",
+        "questions_one": "{{count}} question waiting for a reply",
+        "questions_other": "{{count}} questions waiting for a reply",
+        "ranWorkers": "Ran workers",
+        "dispatch_one": "{{count}} unfinished worker task",
+        "dispatch_other": "{{count}} unfinished worker tasks",
+        "automation": "Automation “{{name}}” posts here",
+        "automationRun": "Automation run still going",
+        "usageContinue": "Auto-continue after usage limit",
+        "restartOffer": "Waiting to continue after a restart",
+        "stopping": "Agent still stopping",
+        "reopened": "Reopened while ending",
+        "unreadable": "Couldn't check its work"
+      },
+      "ended": "Chat ended",
+      "reopen": "Reopen",
+      "cantEnd": "Can't end this chat",
+      "cantEndYet": "Can't end yet",
+      "details": "Details",
+      "unconfirmed": "Couldn't confirm the chat ended",
+      "keptLinked": "Kept in background (linked to a thread)",
+      "kept": "Kept in background"
     }
   },
   "plugins": {

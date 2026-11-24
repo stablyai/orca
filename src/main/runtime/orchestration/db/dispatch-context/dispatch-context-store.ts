@@ -1,4 +1,5 @@
 import type { DispatchContextRow } from '../orchestration-records'
+import { guardChatCustody } from '../chat-custody-guard'
 import { OrchestrationError } from '../../orchestration-error'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { ORCHESTRATION_CONTRACT_VERSION as CURRENT_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
@@ -62,6 +63,7 @@ export function createDispatchContext(
   const creatorDispatchId = this.resolveCreatorDispatchId(params.creator)
   this.db.exec('SAVEPOINT create_dispatch_context')
   try {
+    guardChatCustody(this, assigneeHandle, 'custody')
     const inserted = claimDispatchContextRow(this.db, {
       id,
       contractVersion: CURRENT_CONTRACT_VERSION,

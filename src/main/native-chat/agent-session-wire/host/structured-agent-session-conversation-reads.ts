@@ -1,4 +1,5 @@
 import { agentSessionLeaseOwnerVerdict } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
+import { structuredAgentSessionOwesUnloadedWork } from '../termination/structured-agent-session-close-work'
 import { holdStructuredMailSources } from '../observations/structured-agent-session-mail-sources'
 import {
   createStructuredAgentSessionCatalogReads,
@@ -34,6 +35,7 @@ type ReadContext = {
   readCommands: StructuredAgentSessionClientDelivery['readCommandsSettled']
   conversation: (id: string) => Promise<StructuredAgentSessionHostSession>
   publishStatus: (id: string) => void
+  runtimeState: Parameters<typeof structuredAgentSessionOwesUnloadedWork>[0]
 }
 
 /** Readers share the conversation owner; inventory never founds a journal or prepares a provider. */
@@ -69,6 +71,9 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
   }))
   const journalOf = async (id: string) => (await context().conversation(id)).journal
   return {
+    /** Work owed with no agent loaded; the automatic close's resting read. */
+    owesUnloadedWork: (sessionId: string) =>
+      structuredAgentSessionOwesUnloadedWork(context().runtimeState, sessionId),
     currentWorkAtRest: async (sessionId: string) => {
       await context().conversation(sessionId)
       const { deps, sessions } = context()

@@ -21,6 +21,7 @@ import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-
 import type { AgentSessionMutationSessionPreparation } from './structured-agent-session-mutation-admission'
 import { agentSessionOperationOutcomeUnknown } from './structured-agent-session-replay-outcome'
 import { rewindRefusal } from '../rewind/structured-rewind-refusal'
+import { structuredAgentSessionTurnRefusal } from './structured-agent-session-turn-gate'
 import { recoverStructuredRewind } from '../rewind/structured-rewind-recovery'
 import {
   sameProviderChild,
@@ -41,7 +42,7 @@ export function structuredAgentSessionSendBlock(
   if (rewindInDoubt(record)) {
     return rewindRefusal('outcome-unknown')
   }
-  return null
+  return record ? structuredAgentSessionTurnRefusal(record.sessionId) : null
 }
 
 export async function openConversationForWrite(
