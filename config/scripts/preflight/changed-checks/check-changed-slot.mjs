@@ -17,8 +17,10 @@ const SILENT = 2
 const LAST_ID = Number.MAX_SAFE_INTEGER
 // Most tickets one decision may move or remove; the rest wait for the next poll.
 const MAX_STEPS = 16
-// Most long-silent tickets one decision may expire.
+// Most expired tickets one decision may remove.
 const EXPIRE_BATCH = 8
+// Most queue entries one count reads; longer lines are reported as "100+".
+const COUNT_CAP = 100
 const MAX_ANCESTORS = 16
 // Releases and ticket removals still in flight; tests await them before deleting files.
 const pending = new Set()
@@ -52,9 +54,14 @@ export function queueFileFor(file) {
  * results of a decision only after that transaction commits.
  *
  * Turn order: the normal lane by arrival, then runs whose launcher has exited (a process up to
- * MAX_ANCESTORS levels above the run when it joined, found gone when probed every beatMs), then
- * tickets that have not checked in for `staleMs`. A silent ticket returns to its lane and place
- * when it checks in again; a run whose launcher has exited stays behind.
+ * MAX_ANCESTORS levels above the run when it joined, found gone when probed every beatMs; this is
+ * permanent for the request), then tickets that have not checked in for `staleMs`. A silent ticket
+ * that checks in again within `expireMs` returns to its lane and place; after that it rejoins at
+ * the back, whether or not its old row has been pruned yet. Order holds among runs using this
+ * queue; older checkouts share the lock but not the order.
+ *
+ * The wait line reports what the waiter's last check of the queue showed. It never claims who
+ * holds the lock now.
  */
 export async function acquireChangedCheckSlot(file = slotFile, options = {}) {
   const timing = timingFor(options.staleMs ?? 30_000)
@@ -69,8 +76,11 @@ export async function acquireChangedCheckSlot(file = slotFile, options = {}) {
     lock = new DatabaseSync(file)
     queue = new Queue(queueFileFor(file), timing)
     waiter = new Waiter(queue, describeSelf(options.ancestors), timing, log)
-    // Test-only: runs inside the decision transaction, after the queue is read and before the claim.
+    // Test-only hooks: inside the decision transaction after the queue is read and before the
+    // claim; after a committed decision and before its line is printed; on each recount.
     waiter.beforeClaim = options.beforeClaim
+    waiter.beforeReport = options.beforeReport
+    waiter.onRecount = options.onRecount
     for (;;) {
       signal?.throwIfAborted()
       // Polls before the first await, so an uncontended call joins the queue in call order.
@@ -94,7 +104,8 @@ function timingFor(staleMs) {
     // A holder is named only while its last heartbeat, read when the line is printed, is this recent.
     holderFreshMs: staleMs / 5,
     holderBeatMs: staleMs / 15,
-    // Silent tickets are removed once they have not checked in for this long.
+    // A ticket that has not checked in for this long has lost its place: it is removed, and if
+    // its owner returns first it rejoins at the back.
     expireMs: staleMs * 10
   }
 }
@@ -150,6 +161,7 @@ class Waiter {
     if (outcome.held) {
       return true
     }
+    this.beforeReport?.()
     this.report(outcome)
     return false
   }
@@ -161,7 +173,12 @@ class Waiter {
     const now = Date.now()
     let id = this.id
     let lastBeat = this.lastBeat
-    const own = id === undefined ? undefined : s.own.get(id, this.token)
+    let own = id === undefined ? undefined : s.own.get(id, this.token)
+    if (own !== undefined && own.seen_at < now - expireMs) {
+      // Past the expiry horizon this ticket has lost its place, even if no one has pruned it yet.
+      s.removeOwn.run(id, this.token)
+      own = undefined
+    }
     if (own === undefined) {
       // Never joined, or this ticket was removed: join at the back.
       id = Number(
@@ -172,11 +189,16 @@ class Waiter {
       s.beat.run(now, this.lane, id, this.token)
       lastBeat = now
     }
-    s.expire.run(now - expireMs, EXPIRE_BATCH)
+    // Oldest first. A ticket that cannot be deleted is skipped: it no longer blocks anyone, since
+    // it has not checked in for staleMs, so only cleanup waits on it.
+    for (const row of s.expired.all(now - expireMs, id, EXPIRE_BATCH)) {
+      maintain(this.queue.db, () => s.remove.run(row.id))
+    }
 
     // Walk to the nearest ticket whose turn comes before ours. Each dead ticket met is removed and
     // each silent one moved aside, at most MAX_STEPS per decision, so later walks never revisit them.
     let blocker
+    let capped = false
     let steps = 0
     const lanes =
       this.lane === NORMAL
@@ -185,22 +207,29 @@ class Waiter {
             [NORMAL, LAST_ID],
             [YIELDING, id]
           ]
-    walk: for (const [lane, before] of lanes) {
+    walk: for (const [lane, start] of lanes) {
+      let before = start
       for (let row = s.ahead.get(lane, before); row; row = s.ahead.get(lane, before)) {
         if (steps === MAX_STEPS) {
           // More to clear than one decision may do: not first yet; the next poll continues.
           blocker = row
+          capped = true
           break walk
         }
+        steps += 1
+        let cleared
         if (processGone(row.pid)) {
-          s.remove.run(row.id)
+          cleared = maintain(this.queue.db, () => s.remove.run(row.id))
         } else if (row.seen_at < now - staleMs) {
-          s.silence.run(SILENT, row.id)
+          cleared = maintain(this.queue.db, () => s.silence.run(SILENT, row.id))
         } else {
           blocker = row
           break walk
         }
-        steps += 1
+        if (!cleared) {
+          // It could not be cleared, but a dead or silent ticket does not block: walk past it.
+          before = row.id
+        }
       }
     }
 
@@ -209,29 +238,40 @@ class Waiter {
       if (tryLock(lock)) {
         claim.locked = true
         s.hold.run(now, now, id, this.token)
-        // Only one connection can hold the slot lock, so any other held ticket is left over.
-        s.removeOtherHeld.run(id)
+        // Only one connection can hold the slot lock, so any other held ticket is left over. One
+        // that cannot be deleted stays, unnamed once its heartbeat is old, and blocks nothing.
+        for (const row of s.otherHeld.all(id)) {
+          maintain(this.queue.db, () => s.remove.run(row.id))
+        }
         return { id, lastBeat, view: this.view, held: true }
       }
     }
 
     const holder = s.holder.get()
     const previous = this.view
+    // A blocker met only because the walk hit MAX_STEPS is provisional: it changes with every
+    // batch of a backlog, so it must not trigger a recount.
+    const blockerId = capped ? previous.blocker : blocker?.id
     let place = previous.place
     let at = previous.at
     if (
       place === undefined ||
-      blocker?.id !== previous.blocker ||
+      blockerId !== previous.blocker ||
       holder?.id !== previous.holder ||
       this.lane !== previous.lane ||
       now - previous.at >= beatMs
     ) {
-      const ahead =
-        this.lane === NORMAL
-          ? s.count.get(NORMAL, id).n
-          : s.count.get(NORMAL, LAST_ID).n + s.count.get(YIELDING, id).n
-      const total = s.count.get(NORMAL, LAST_ID).n + s.count.get(YIELDING, LAST_ID).n
-      place = { position: ahead + 1, total }
+      const count = (lane, before) => s.count.get(lane, before, COUNT_CAP).n
+      const parts =
+        this.lane === NORMAL ? [count(NORMAL, id)] : [count(NORMAL, LAST_ID), count(YIELDING, id)]
+      const totals = [count(NORMAL, LAST_ID), count(YIELDING, LAST_ID)]
+      this.onRecount?.()
+      place = {
+        position: parts.reduce((sum, n) => sum + n, 0) + 1,
+        total: totals.reduce((sum, n) => sum + n, 0),
+        positionCapped: parts.includes(COUNT_CAP),
+        totalCapped: totals.includes(COUNT_CAP)
+      }
       at = now
     }
     return {
@@ -240,33 +280,35 @@ class Waiter {
       held: false,
       first: blocker === undefined,
       holder,
-      view: { place, blocker: blocker?.id, holder: holder?.id, lane: this.lane, at }
+      view: { place, blocker: blockerId, holder: holder?.id, lane: this.lane, at }
     }
   }
 
   report({ first, holder }) {
-    const { position, total } = this.view.place
-    // Judged at print time, so a decision that paused after reading the row cannot name a holder
-    // that has since released: a released holder stops heartbeating before it unlocks.
+    const { position, total, positionCapped, totalCapped } = this.view.place
+    // The line reports what this waiter's last check of the queue showed; the queue cannot prove
+    // who holds the lock now. A holder is shown only if its pid is alive and, by the clock at
+    // print time, its last heartbeat is recent and not in the future (which a clock step would
+    // make unprovable). A holder that released has stopped heartbeating.
     const now = Date.now()
-    const named =
-      holder !== undefined &&
-      now - holder.seen_at < this.timing.holderFreshMs &&
-      !processGone(holder.pid)
-    const notice = `${position}/${total}/${named ? holder.id : first ? 'unnamed' : ''}`
+    const age = holder === undefined ? undefined : now - holder.seen_at
+    const shown =
+      age !== undefined && age >= 0 && age < this.timing.holderFreshMs && !processGone(holder.pid)
+    const notice = `${position}/${total}/${shown ? holder.id : first ? 'unnamed' : ''}`
     if (notice === this.lastNotice) {
       return
     }
     this.lastNotice = notice
-    const place = `${WAITING} Position ${position} of ${total}.`
-    if (named) {
+    const over = `over ${COUNT_CAP}`
+    const place = `${WAITING} Position ${positionCapped ? over : position} of ${totalCapped ? over : total}.`
+    if (shown) {
       const where = holder.cwd ? ` in ${holder.cwd}` : ''
       this.log(
-        `${place} Running now: pid ${holder.pid}${where}, started ${formatAge(now - holder.held_at)} ago.`
+        `${place} The queue last showed pid ${holder.pid}${where} holding the slot, claimed ${formatAge(now - holder.held_at)} ago.`
       )
     } else if (first) {
       this.log(
-        `${place} Running now: a run the queue cannot name, such as one from an older checkout.`
+        `${place} The slot was held by a run the queue cannot name, such as one from an older checkout.`
       )
     } else {
       this.log(place)
@@ -367,8 +409,8 @@ class Queue {
           );
           CREATE INDEX IF NOT EXISTS tickets_v3_lane ON tickets_v3 (lane, id) WHERE held_at IS NULL;
           CREATE INDEX IF NOT EXISTS tickets_v3_held ON tickets_v3 (id) WHERE held_at IS NOT NULL;
-          CREATE INDEX IF NOT EXISTS tickets_v3_silent ON tickets_v3 (seen_at)
-            WHERE held_at IS NULL AND lane = ${SILENT};`)
+          CREATE INDEX IF NOT EXISTS tickets_v3_seen ON tickets_v3 (seen_at)
+            WHERE held_at IS NULL;`)
         )
         this.statements = prepareStatements(this.db)
         return true
@@ -448,31 +490,34 @@ function prepareStatements(db) {
     insert: db.prepare(
       'INSERT INTO tickets_v3 (token, pid, cwd, enqueued_at, seen_at, lane) VALUES (?, ?, ?, ?, ?, ?)'
     ),
-    own: db.prepare('SELECT lane FROM tickets_v3 WHERE id = ? AND token = ? AND held_at IS NULL'),
+    own: db.prepare(
+      'SELECT lane, seen_at FROM tickets_v3 WHERE id = ? AND token = ? AND held_at IS NULL'
+    ),
     beat: db.prepare('UPDATE tickets_v3 SET seen_at = ?, lane = ? WHERE id = ? AND token = ?'),
-    expire: db.prepare(
-      `DELETE FROM tickets_v3 WHERE id IN (
-         SELECT id FROM tickets_v3 INDEXED BY tickets_v3_silent
-         WHERE held_at IS NULL AND lane = ${SILENT} AND seen_at < ? LIMIT ?)`
+    expired: db.prepare(
+      `SELECT id FROM tickets_v3 INDEXED BY tickets_v3_seen
+       WHERE held_at IS NULL AND seen_at < ? AND id <> ? ORDER BY seen_at LIMIT ?`
     ),
     ahead: db.prepare(
       `SELECT ${columns} FROM tickets_v3 INDEXED BY tickets_v3_lane
        WHERE held_at IS NULL AND lane = ? AND id < ? ORDER BY id DESC LIMIT 1`
     ),
     count: db.prepare(
-      `SELECT COUNT(*) AS n FROM tickets_v3 INDEXED BY tickets_v3_lane
-       WHERE held_at IS NULL AND lane = ? AND id < ?`
+      `SELECT COUNT(*) AS n FROM (SELECT 1 FROM tickets_v3 INDEXED BY tickets_v3_lane
+       WHERE held_at IS NULL AND lane = ? AND id < ? LIMIT ?)`
     ),
     silence: db.prepare('UPDATE tickets_v3 SET lane = ? WHERE id = ?'),
     holder: db.prepare(
       `SELECT ${columns} FROM tickets_v3 INDEXED BY tickets_v3_held
-       WHERE held_at IS NOT NULL ORDER BY id DESC LIMIT 1`
+       WHERE held_at IS NOT NULL ORDER BY held_at DESC, id DESC LIMIT 1`
+    ),
+    otherHeld: db.prepare(
+      'SELECT id FROM tickets_v3 INDEXED BY tickets_v3_held WHERE held_at IS NOT NULL AND id <> ?'
     ),
     hold: db.prepare('UPDATE tickets_v3 SET held_at = ?, seen_at = ? WHERE id = ? AND token = ?'),
     beatHeld: db.prepare(
       'UPDATE tickets_v3 SET seen_at = ? WHERE id = ? AND token = ? AND held_at IS NOT NULL'
     ),
-    removeOtherHeld: db.prepare('DELETE FROM tickets_v3 WHERE held_at IS NOT NULL AND id <> ?'),
     remove: db.prepare('DELETE FROM tickets_v3 WHERE id = ?'),
     removeOwn: db.prepare('DELETE FROM tickets_v3 WHERE id = ? AND token = ?')
   }
@@ -508,6 +553,27 @@ function transaction(db, body) {
       db.exec('ROLLBACK')
     }
     throw error
+  }
+}
+
+/**
+ * Runs one change to another request's ticket inside the decision transaction. If that row cannot
+ * be changed (a write error specific to it), only this change is undone and false is returned, so
+ * one bad row never stops the queue. If the error ended the whole transaction, it is rethrown.
+ */
+function maintain(db, change) {
+  db.exec('SAVEPOINT maintain')
+  try {
+    change()
+    db.exec('RELEASE maintain')
+    return true
+  } catch (error) {
+    if (!db.isTransaction || isBusy(error)) {
+      throw error
+    }
+    db.exec('ROLLBACK TO maintain')
+    db.exec('RELEASE maintain')
+    return false
   }
 }
 

@@ -20,6 +20,7 @@ import {
   queueWriter,
   root,
   run,
+  shownHolder,
   spawnOwned,
   UNNAMED,
   until,
@@ -46,7 +47,7 @@ await next()`)
     expect(messages).toHaveLength(1)
     expect(messages[0]).toMatch(
       new RegExp(
-        `^${WAITING} Position 1 of 1\\. Running now: pid ${holder.pid} in ${root.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')}, started \\d+s ago\\.$`
+        `^${WAITING} Position 1 of 1\\. The queue last showed pid ${holder.pid} in ${root.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')} holding the slot, claimed \\d+s ago\\.$`
       )
     )
     await holder.kill()
@@ -63,7 +64,7 @@ await next()`)
     const waiter = observe(run({ log: (message) => messages.push(message) }))
     await until(() => messages.length > 0, 'wait message')
     expect(messages).toEqual([
-      `${WAITING} Position 1 of 1. Running now: pid ${process.pid} in /elsewhere, started 5m ago.`
+      `${WAITING} Position 1 of 1. The queue last showed pid ${process.pid} in /elsewhere holding the slot, claimed 5m ago.`
     ])
     other.close()
     await within(waiter.promise, 'waiter')
@@ -75,7 +76,7 @@ await next()`)
     const messages = []
     const waiter = observe(run({ staleMs, log: (message) => messages.push(message) }))
     await until(() => messages.length > 0, 'wait message naming the holder')
-    expect(messages[0]).toContain(`Running now: pid ${process.pid} in `)
+    expect(messages[0]).toContain(`${shownHolder(process.pid)} in `)
     const writer = await queueWriter()
     const releasedAt = Date.now()
     const released = release()
@@ -225,7 +226,7 @@ await next()`)
     const waiter = observe(run({ staleMs, log: (message) => messages.push(message) }))
     await until(() => messages.length > 0, 'first wait message')
     expect(messages[0]).toMatch(
-      new RegExp(`^${WAITING} Position 3 of 3\\. Running now: pid ${process.pid} in `)
+      new RegExp(`^${WAITING} Position 3 of 3\\. The queue last showed pid ${process.pid} in `)
     )
     // Our waiter only reads the middle waiter. When the owner dies, the middle waiter removes its
     // ticket; our count must follow without any change in the run ahead of us or the holder.
@@ -235,7 +236,7 @@ await next()`)
       () =>
         messages
           .at(-1)
-          .startsWith(`${WAITING} Position 2 of 2. Running now: pid ${process.pid} in `),
+          .startsWith(`${WAITING} Position 2 of 2. The queue last showed pid ${process.pid} in `),
       'corrected position',
       staleMs
     )

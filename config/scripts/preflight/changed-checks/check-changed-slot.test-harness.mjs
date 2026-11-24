@@ -16,10 +16,17 @@ import {
 // Shared by the check:changed slot tests: owned temp files, acquisitions, connections and children.
 export const WAITING = 'Waiting for another local check:changed run to finish…'
 export const UNNAMED =
-  'Running now: a run the queue cannot name, such as one from an older checkout.'
+  'The slot was held by a run the queue cannot name, such as one from an older checkout.'
+/** How a line shows a holder: what the queue last recorded, never a claim about now. */
+export const shownHolder = (pid) => `The queue last showed pid ${pid}`
 const moduleUrl = pathToFileURL(join(import.meta.dirname, 'check-changed-slot.mjs')).href
-// Longest teardown waits for admitted work or background cleanup before keeping custody.
+// Longest wait for one piece of admitted work, a child or background cleanup to stop.
 const DRAIN_MS = 30_000
+// The whole teardown, every drain included, finishes inside this, well within the hook timeout.
+const TEARDOWN_MS = 45_000
+let teardownDeadline
+// Set once teardown has drained everything; registering after that is reported, not missed.
+let teardownClosed = false
 
 export let root
 export let file
@@ -28,6 +35,9 @@ let rawRoot
 const owned = []
 
 function own(cleanup) {
+  if (teardownClosed) {
+    throw new Error('a resource was created after teardown finished draining')
+  }
   owned.push(cleanup)
 }
 
@@ -41,24 +51,36 @@ class CustodyKept extends Error {}
  */
 export function registerSlotHarness() {
   beforeEach(async () => {
+    teardownClosed = false
+    teardownDeadline = undefined
     rawRoot = await mkdtemp(join(tmpdir(), 'orca-changed-slot-'))
     root = await realpath(rawRoot)
     file = join(root, 'host.sqlite')
   })
 
   afterEach(async () => {
+    teardownDeadline = Date.now() + TEARDOWN_MS
     const errors = []
-    while (owned.length > 0) {
-      const cleanup = owned.pop()
-      try {
-        await cleanup()
-      } catch (error) {
-        errors.push(error)
+    // Owned cleanups and background slot cleanup can each start more of the other, so drain both
+    // until a pass finds nothing new; every wait shares the one teardown deadline.
+    for (;;) {
+      while (owned.length > 0) {
+        const cleanup = owned.pop()
+        try {
+          await cleanup()
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+      if (!(await settles(settleChangedCheckSlotCleanup(), DRAIN_MS))) {
+        errors.push(new CustodyKept('background slot cleanup still running'))
+        break
+      }
+      if (owned.length === 0) {
+        break
       }
     }
-    if (!(await settles(settleChangedCheckSlotCleanup(), DRAIN_MS))) {
-      errors.push(new CustodyKept('background slot cleanup still running'))
-    }
+    teardownClosed = true
     if (errors.some((error) => error instanceof CustodyKept)) {
       errors.push(new CustodyKept(`kept ${rawRoot} because something may still be using it`))
     } else {
@@ -71,6 +93,9 @@ export function registerSlotHarness() {
 }
 
 async function settles(promise, timeoutMs) {
+  if (teardownDeadline !== undefined) {
+    timeoutMs = Math.max(0, Math.min(timeoutMs, teardownDeadline - Date.now()))
+  }
   const controller = new AbortController()
   const settled = await Promise.race([
     Promise.resolve(promise).then(
@@ -147,9 +172,10 @@ export function within(promise, label, timeoutMs = 60_000) {
   ]).finally(() => clearTimeout(timer))
 }
 
-export function spawnOwned(body) {
+/** `program` exists so a test can exercise a spawn that fails. */
+export function spawnOwned(body, { program = process.execPath } = {}) {
   const child = spawn(
-    process.execPath,
+    program,
     [
       '--input-type=module',
       '-e',
@@ -176,19 +202,32 @@ ${body}`
   })
   child.on('error', (error) => errors.includes(error) || errors.push(error))
   child.stdin.on('error', (error) => errors.push(error))
+  child.stdout.on('error', (error) => errors.push(error))
   // 'close' comes after exit once stdout and stderr have closed.
   const closed = new Promise((resolve) => {
     child.once('close', (code, signal) => resolve({ code, signal }))
   })
+  let killedHere = false
   own(async () => {
     if (!(await started)) {
-      return
+      // A failed spawn has no process; its pipes may still report 'close', but need not.
+      await settles(closed, 1000)
+      throw new AggregateError(errors, `child failed to start`)
     }
     if (child.exitCode === null && child.signalCode === null) {
-      child.kill('SIGKILL')
+      try {
+        killedHere = child.kill('SIGKILL')
+      } catch (error) {
+        throw new CustodyKept(`child ${child.pid} could not be killed: ${error.message}`)
+      }
     }
     if (!(await settles(closed, DRAIN_MS))) {
       throw new CustodyKept(`child ${child.pid} did not close`)
+    }
+    // A pipe broken by our own kill is expected; anything else the child's pipes reported is not.
+    const unexpected = errors.filter((error) => !(killedHere && error.code === 'EPIPE'))
+    if (unexpected.length > 0) {
+      throw new AggregateError(unexpected, `child ${child.pid} reported errors`)
     }
   })
   let output = ''
@@ -216,7 +255,7 @@ ${body}`
       }, `child output ${text}`)
     },
     async kill() {
-      child.kill('SIGKILL')
+      killedHere = child.kill('SIGKILL')
       await closed
     }
   }

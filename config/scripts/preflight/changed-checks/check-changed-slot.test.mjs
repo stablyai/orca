@@ -18,6 +18,7 @@ import {
   queueWriter,
   until,
   registerSlotHarness,
+  WAITING,
   within
 } from './check-changed-slot.test-harness.mjs'
 
@@ -189,6 +190,80 @@ process.exit(0)`)
     await holder()
     await within(waiter.promise, 'waiter')
   }, 180_000)
+
+  it('does not recount for each batch while it clears a long backlog', async () => {
+    // Timed recounts every staleMs / 3 = 20 s, so during the drain only a recount triggered by a
+    // batch would show up.
+    const staleMs = 60_000
+    const holder = await run({ staleMs })
+    const dead = await exitedPid()
+    for (let index = 0; index < 160; index++) {
+      insertTicket({ pid: dead })
+    }
+    let recounts = 0
+    const waiter = observe(run({ staleMs, onRecount: () => (recounts += 1) }))
+    await until(() => !queueRows().some((row) => row.pid === dead), 'backlog cleared')
+    // Ten batches of 16: one recount when the waiter first counts, and none per batch.
+    expect(recounts).toBe(1)
+    await holder()
+    await within(waiter.promise, 'waiter')
+  }, 180_000)
+
+  it('stops counting a long line at its cap and says so', async () => {
+    const holder = await run({ staleMs: 60_000 })
+    for (let index = 0; index < 120; index++) {
+      insertTicket({ pid: process.pid })
+    }
+    const messages = []
+    observe(run({ staleMs: 60_000, log: (message) => messages.push(message) }))
+    await until(() => messages.length > 0, 'wait message')
+    expect(messages[0]).toMatch(new RegExp(`^${WAITING} Position over 100 of over 100\\. `))
+    await holder()
+  }, 180_000)
+
+  for (const lane of [0, 2]) {
+    for (const { side, age, first } of [
+      { side: 'inside', age: 8000, first: 'returned' },
+      { side: 'outside', age: 12_000, first: 'later' }
+    ]) {
+      it(`keeps or gives up its place on return from ${side} the expiry horizon (lane ${lane})`, async () => {
+        // expireMs = 10 * staleMs = 10 s.
+        const staleMs = 1000
+        const holder = await run({ staleMs })
+        const order = []
+        // The returning waiter polls far more often than the later one, so it finds its own row
+        // still present before anyone else could expire it.
+        const returned = run({ staleMs, pollMs: 5 }, (release) => {
+          order.push('returned')
+          return release()
+        })
+        await until(() => queueRows().some((row) => row.held_at === null), 'returning ticket')
+        const ticket = queueRows().find((row) => row.held_at === null)
+        const later = run({ staleMs, pollMs: 500 }, (release) => {
+          order.push('later')
+          return release()
+        })
+        await until(
+          () => queueRows().filter((row) => row.held_at === null).length === 2,
+          'later ticket'
+        )
+        // As if the returning waiter had stopped for `age`, with its row still present.
+        openQueue()
+          .prepare('UPDATE tickets_v3 SET seen_at = ?, lane = ? WHERE id = ?')
+          .run(Date.now() - age, lane, ticket.id)
+        await until(() => {
+          const rows = queueRows()
+          const kept = rows.find((row) => row.id === ticket.id)
+          return side === 'inside'
+            ? kept?.lane === 0 && kept.seen_at > Date.now() - staleMs
+            : !kept && rows.filter((row) => row.held_at === null).length === 2
+        }, 'returning waiter checked in')
+        await holder()
+        await within(Promise.all([returned, later]), 'both waiters')
+        expect(order[0]).toBe(first)
+      }, 180_000)
+    }
+  }
 
   it('recounts its place as soon as it starts yielding, with the same run ahead and holder', async () => {
     // Timed recounts and launcher probes both run every staleMs / 3 = 20 s.

@@ -4,6 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { describe, expect, it } from 'vitest'
 import { settleChangedCheckSlotCleanup } from './check-changed-slot.mjs'
 import {
+  exitedPid,
   insertTicket,
   root,
   keepCheckingIn,
@@ -13,6 +14,7 @@ import {
   queueRows,
   registerSlotHarness,
   run,
+  shownHolder,
   spawnOwned,
   UNNAMED,
   until,
@@ -100,7 +102,7 @@ await next()`)
       })
     )
     await until(() => messages.length > 0, 'message naming the holder')
-    expect(messages[0].message).toContain(`Running now: pid ${holder.pid} in `)
+    expect(messages[0].message).toContain(`${shownHolder(holder.pid)} in `)
     // The holder releases once the pause begins and cannot remove its ticket while the paused
     // decision holds the queue; it unlocks once it can no longer be named, and the older
     // checkout takes the slot. The paused decision then resumes and reports.
@@ -137,7 +139,7 @@ await next()`)
       run({ staleMs, log: (message) => messages.push({ message, at: Date.now() }) })
     )
     await until(() => messages.length > 0, 'message naming the holder')
-    expect(messages[0].message).toContain(`Running now: pid ${process.pid} in `)
+    expect(messages[0].message).toContain(`${shownHolder(process.pid)} in `)
     const legacy = outsider()
     const releasedAt = Date.now()
     const released = release()
@@ -152,7 +154,7 @@ await next()`)
     expect(messages.at(-1).message).toBe(`${WAITING} Position 2 of 2.`)
     // Named while it held the slot, never once the older checkout could have taken it.
     for (const { message } of messages.filter(({ at }) => at >= releasedAt + staleMs / 5)) {
-      expect(message).not.toContain('Running now')
+      expect(message).not.toContain('The queue last showed')
     }
     recover()
     db.prepare('DELETE FROM tickets_v3 WHERE id = ?').run(ahead)
@@ -160,6 +162,129 @@ await next()`)
     await within(waiter.promise, 'waiter')
     await settleChangedCheckSlotCleanup()
     expect(queueRows().some((row) => row.id === held.id)).toBe(false)
+  }, 180_000)
+
+  for (const { label, ticket } of [
+    {
+      label: 'an expired ticket',
+      ticket: async () => ({ pid: process.pid, seenAt: Date.now() - 60 * 60_000, lane: 2 })
+    },
+    { label: 'a dead ticket ahead', ticket: async () => ({ pid: await exitedPid() }) },
+    {
+      label: 'a left-over held ticket',
+      ticket: async () => ({
+        pid: process.pid,
+        heldAt: Date.now() - 60_000,
+        seenAt: Date.now() - 60_000
+      })
+    }
+  ]) {
+    it(`admits a waiter although ${label} cannot be deleted, and clears it once it can`, async () => {
+      await (
+        await run()
+      )()
+      const stuck = insertTicket(await ticket())
+      const db = openQueue()
+      const recover = failDeletes(db, stuck, 'keep_stuck')
+      // One bad row must not stop the queue: the claim goes through and the row stays.
+      const release = await within(run({ staleMs: 1000 }), 'waiter despite the stuck ticket')
+      expect(queueRows().some((row) => row.id === stuck)).toBe(true)
+      await release()
+      recover()
+      // Once the row can be deleted, the next decision clears it.
+      await (
+        await within(run({ staleMs: 1000 }), 'next waiter')
+      )()
+      expect(queueRows().some((row) => row.id === stuck)).toBe(false)
+    }, 180_000)
+  }
+
+  it('reports a holder only as what the queue last showed, even when it hands over before the line prints', async () => {
+    // A 6 s naming window, so the handover inside the pause still leaves the holder's last
+    // heartbeat recent enough to show.
+    const staleMs = 30_000
+    const signalFile = join(root, 'decided')
+    const tookFile = join(root, 'took')
+    const holder = spawnOwned(`const release = await acquireChangedCheckSlot(file, {
+  staleMs: ${staleMs},
+  pollMs: 5,
+  ancestors: [],
+  log: () => {}
+})
+process.stdout.write('held\\n')
+const { existsSync } = await import('node:fs')
+while (!existsSync(${JSON.stringify(signalFile)})) {
+  await new Promise((resolve) => setTimeout(resolve, 5))
+}
+await release()
+process.stdout.write('released\\n')
+await next()`)
+    await holder.waitFor('held')
+    const legacy = spawnOwned(`const db = new DatabaseSync(file)
+for (;;) {
+  try {
+    db.exec('BEGIN IMMEDIATE')
+    break
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 5))
+  }
+}
+const { writeFileSync } = await import('node:fs')
+writeFileSync(${JSON.stringify(tookFile)}, '')
+await next()`)
+    const messages = []
+    let resumed = false
+    let tookBeforeLine
+    observe(
+      run({
+        staleMs,
+        log: (message) => messages.push({ message, resumed }),
+        // After the first decision commits and before its line prints: the holder releases
+        // cleanly (the queue is free), and the older checkout takes the slot.
+        beforeReport: () => {
+          if (messages.length > 0 || tookBeforeLine !== undefined) {
+            return
+          }
+          writeFileSync(signalFile, '')
+          const deadline = Date.now() + 60_000
+          while (!existsSync(tookFile) && Date.now() < deadline) {
+            // Busy wait: the whole event loop pauses.
+          }
+          tookBeforeLine = existsSync(tookFile)
+          resumed = true
+          queueMicrotask(() => {
+            resumed = false
+          })
+        }
+      })
+    )
+    await until(() => messages.length > 0, 'first line')
+    expect(tookBeforeLine).toBe(true)
+    // The first line describes the past check, which did show this holder, and claims nothing
+    // about who holds the slot now.
+    expect(messages[0].resumed).toBe(true)
+    expect(messages[0].message).toMatch(
+      new RegExp(
+        `^${WAITING} Position 1 of 1\\. The queue last showed pid ${holder.pid} in .+ holding the slot, claimed \\d+s ago\\.$`
+      )
+    )
+    expect(legacy.errors).toEqual([])
+  }, 180_000)
+
+  it('never shows a holder whose heartbeat is in the future, as after the clock steps back', async () => {
+    await (
+      await run()
+    )()
+    const other = outsider()
+    expect(other.tryLock()).toBe(true)
+    // A live pid whose last heartbeat reads 5 s ahead of this clock.
+    insertTicket({ pid: process.pid, heldAt: Date.now() - 60_000, seenAt: Date.now() + 5000 })
+    const messages = []
+    const waiter = observe(run({ log: (message) => messages.push(message) }))
+    await until(() => messages.length > 0, 'wait message')
+    expect(messages).toEqual([`${WAITING} Position 1 of 1. ${UNNAMED}`])
+    other.close()
+    await within(waiter.promise, 'waiter')
   }, 180_000)
 
   it('keeps retrying removal of an abandoned ticket through a write failure, so the next call goes once storage recovers', async () => {
