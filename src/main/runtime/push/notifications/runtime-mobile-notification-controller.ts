@@ -283,12 +283,18 @@ export class RuntimeMobileNotificationController {
     pluginId: string
     title: string
     body?: string
+    /** Runs on a click of the desktop banner; phones get the text only. */
+    onClick?: () => void
   }): Promise<{ delivered: boolean }> {
     const title = `${input.pluginId}: ${input.title}`
     const body = input.body ?? ''
     let delivered = false
     try {
-      delivered = getRuntimeDesktopSurface().showNotification({ title, body })
+      delivered = getRuntimeDesktopSurface().showNotification({
+        title,
+        body,
+        onClick: input.onClick
+      })
     } catch {
       // Headless runtimes still relay the notification to mobile clients.
     }

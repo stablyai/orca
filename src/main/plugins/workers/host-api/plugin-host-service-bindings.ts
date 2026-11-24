@@ -46,6 +46,7 @@ export type PluginRuntimeDelegate = {
     pluginId: string
     title: string
     body?: string
+    onClick?: () => void
   }): Promise<{ delivered: boolean }>
   /** The hook server's agent rows; absent where no hook server runs. */
   listAgentStatuses?(): readonly PluginAgentStatusRow[]
@@ -69,6 +70,9 @@ export function bindPluginHostServices(input: {
   /** Ids of the calling plugin's `contributes.statusBarItems`, and its install's revision. */
   declaredStatusBarItemIds?: readonly string[]
   statusBarRevision?: string
+  /** Ids of the calling plugin's worker commands, and how to run one. */
+  declaredCommandIds?: readonly string[]
+  invokeCommand?: (pluginKey: string, commandId: string) => Promise<unknown>
 }): PluginHostServices {
   const declared = new Map((input.declaredSettings ?? []).map((setting) => [setting.key, setting]))
   const { delegate, pluginsDataDir } = input
@@ -80,6 +84,9 @@ export function bindPluginHostServices(input: {
     panels: input.panels ?? null,
     statusBar: input.statusBar
       ? statusBarServices(input.statusBar, input.declaredStatusBarItemIds, input.statusBarRevision)
+      : null,
+    commands: input.invokeCommand
+      ? commandServices(input.declaredCommandIds, input.invokeCommand)
       : null,
     runtimeRpc: delegate.callRuntime ?? null,
     renderer: input.renderer ?? null,
@@ -170,4 +177,12 @@ function statusBarServices(
       return true
     }
   }
+}
+
+function commandServices(
+  declaredIds: readonly string[] = [],
+  invoke: (pluginKey: string, commandId: string) => Promise<unknown>
+): NonNullable<PluginHostServices['commands']> {
+  const declared = new Set(declaredIds)
+  return { owns: (commandId) => declared.has(commandId), run: invoke }
 }

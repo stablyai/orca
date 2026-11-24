@@ -21,6 +21,7 @@ import { PLUGIN_HOST_API_1_7_SINCE } from '../workers/plugin-host-api-workspace-
 import { PLUGIN_HOST_API_1_8_SINCE } from '../workers/plugin-host-api-1-8'
 import { PLUGIN_HOST_API_1_9_SINCE } from '../workers/plugin-host-api-1-9'
 import { PLUGIN_HOST_API_1_10_SINCE } from '../workers/plugin-host-api-1-10'
+import { PLUGIN_HOST_API_1_11_SINCE } from '../workers/plugin-host-api-1-11'
 
 /** The newest "since" this build's schemas cite: everything up to it is readable here. */
 export const PLUGIN_SCHEMA_NEWEST_SINCE = [
@@ -44,7 +45,8 @@ export const PLUGIN_SCHEMA_NEWEST_SINCE = [
   PLUGIN_HOST_API_1_7_SINCE,
   PLUGIN_HOST_API_1_8_SINCE,
   PLUGIN_HOST_API_1_9_SINCE,
-  PLUGIN_HOST_API_1_10_SINCE
+  PLUGIN_HOST_API_1_10_SINCE,
+  PLUGIN_HOST_API_1_11_SINCE
 ].reduce((newest, version) => (satisfiesOrcaEngineRange(version, `>=${newest}`) ? version : newest))
 
 /**

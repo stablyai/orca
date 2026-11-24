@@ -2,6 +2,7 @@ import { BrowserWindow, Notification, powerMonitor, webContents } from 'electron
 import { isResourceWindowVisible } from '../window/visibility/resource-view-admission'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import { showDesktopNotification } from '../notifications/desktop-notification'
+import { retainNotificationUntilRelease } from '../ipc/notifications/native-notification-lifecycle'
 import type { RuntimeDesktopSurface } from '../runtime/construction/runtime-desktop-surface'
 import { electronRendererWindows } from './electron-renderer-windows'
 import { translateMain } from '../i18n/main-i18n'
@@ -13,11 +14,20 @@ import { holdPowerSaveBlocker } from '../power/power-save-blocker-hold'
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   translateNotification: translateMain,
   isAwayForMobileNotifications: () => readDesktopAwayState(powerMonitor),
-  showNotification: ({ title, body }) => {
+  showNotification: ({ title, body, onClick }) => {
     if (!Notification.isSupported()) {
       return false
     }
-    showDesktopNotification(new Notification({ title, body }))
+    const notification = new Notification({ title, body })
+    if (onClick) {
+      // Retained so the click still reaches the handler after garbage collection would run.
+      const release = retainNotificationUntilRelease(notification)
+      notification.once('click', () => {
+        release()
+        onClick()
+      })
+    }
+    showDesktopNotification(notification)
     return true
   },
   sendToRenderers: (channel, payload) => {
