@@ -2,11 +2,12 @@ import type { StructuredAgentSessionState } from './structured-agent-session-red
 import {
   MAX_RETAINED_ITEMS,
   MAX_RETAINED_OWN_ITEMS,
-  mergeSubmissions,
   trimRetainedItems
 } from '../structured-agent-session-item-retention'
 import { readAgentJournalTurn } from '../../lifecycle/records/agent-session-turn-record'
 import { agentSessionHasOlderTranscript } from '../../conversation-context/agent-session-context-clear'
+
+import { mergeStructuredAgentSubmissions } from './structured-agent-session-submission-retention'
 
 export function trimStructuredAgentSessionHistory(
   state: StructuredAgentSessionState
@@ -27,7 +28,7 @@ export function trimStructuredAgentSessionHistory(
     items,
     retainedOwnItemLimit: MAX_RETAINED_OWN_ITEMS,
     retainedItemCap: MAX_RETAINED_ITEMS,
-    submissions: mergeSubmissions(state.submissions, [], items),
+    ...mergeStructuredAgentSubmissions(state, [], items),
     hasOlder: agentSessionHasOlderTranscript(items, state.hasOlder || items !== state.items),
     ...(lostTurnRow ? { unloadedTurnRevisions: (state.unloadedTurnRevisions ?? 0) + 1 } : {})
   }

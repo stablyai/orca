@@ -18,6 +18,10 @@ import {
   type StoredChatTranscript,
   type StoredStructuredChatTranscript
 } from './mobile-native-chat-transcript-store'
+import {
+  materializeStructuredAgentSubmissions,
+  splitStructuredAgentSubmissions
+} from '../../../../../../src/shared/agent-session/view/structured-agent-session-submissions'
 import { encodeStoredChatTranscript } from './mobile-native-chat-transcript-encode'
 
 // Writes and restores chat copies; kept apart from the store's reads so the boot read stays small.
@@ -197,6 +201,7 @@ export function storedStructuredAgentSessionState(
   const state: StructuredAgentSessionState = {
     ...EMPTY_STRUCTURED_AGENT_SESSION,
     ...stored.journal,
+    ...splitStructuredAgentSubmissions(stored.journal.submissions),
     retainedOwnItemLimit: MAX_RETAINED_OWN_ITEMS,
     retainedItemCap: MAX_RETAINED_ITEMS,
     // The live read restates these; a stored running turn or pending send must not look like work.
@@ -259,7 +264,8 @@ export function storedStructuredCopy(
   state: StructuredAgentSessionState,
   savedAt: number
 ): StoredStructuredChatTranscript {
-  const { epoch, cursor, fence, items, submissions, hasOlder } = state
+  const { epoch, cursor, fence, items, hasOlder } = state
+  const submissions = materializeStructuredAgentSubmissions(state)
   return {
     kind: 'structured',
     savedAt,

@@ -1,4 +1,3 @@
-import { agentJournalSubmissionsDifferOnlyInStamp } from '../journal/agent-session-journal-written-stamp'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -183,13 +182,6 @@ export function createStructuredAgentSessionMessageProjection(
     optimistic: readonly StructuredAgentSessionOptimisticMessage[],
     submissions: readonly AgentJournalSubmission[]
   ): NativeChatMessage[] => {
-    if (
-      previous &&
-      previous.submissions !== submissions &&
-      agentJournalSubmissionsDifferOnlyInStamp(previous.submissions, submissions)
-    ) {
-      previous = { ...previous, submissions }
-    }
     const reused =
       previous?.optimistic === optimistic && previous.submissions === submissions
         ? previous.items === items

@@ -33,7 +33,7 @@ import {
 } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import { noteStructuredAgentSessionFence } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-attempt'
 import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner'
-import { structuredAgentSessionDeliveryNotices } from '@/components/native-chat/session/structured/delivery/structured-agent-session-delivery-notices'
+import { structuredAgentSessionSendingItemIds } from '../../../../../../../shared/agent-session/view/structured-agent-session-sending'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 
 describe('structured agent session message sender', () => {
@@ -255,14 +255,7 @@ describe('a send whose fate is unknown never freezes the chat', () => {
         type: 'text',
         text: 'complete original $review'
       })
-      expect(
-        structuredAgentSessionDeliveryNotices({
-          pending,
-          submissions: [],
-          agentName: 'Codex',
-          startFailures: []
-        }).size
-      ).toBe(0)
+      expect(structuredAgentSessionSendingItemIds(pending, [], new Map()).size).toBe(0)
       await getStructuredAgentSessionReadOwner(SESSION, target).admit(
         'close-or-rewind',
         () => true,

@@ -3,13 +3,10 @@ import { useMobileUnresolvedFailureRows } from '../status/use-mobile-unresolved-
 import { structuredChatTranscriptIdentity } from '../transcript/persistence/mobile-native-chat-transcript-store'
 import { useMemo, useRef } from 'react'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
-import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
+import { useMobileStructuredSessionWork } from './mobile-structured-agent-session-working'
 import { isFinalAgentSessionReadRefusal } from '../../../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
-import {
-  runningStructuredAgentSessionTurnId,
-  structuredAgentSessionQueueSendsNext
-} from '../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
-import { mobileStructuredLinkedPrompts } from '../input/prompts/mobile-structured-linked-prompts'
+import { structuredAgentSessionQueueSendsNext } from '../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
+import { useMobileStructuredLinkedPrompts } from '../input/prompts/mobile-structured-linked-prompts'
 import {
   projectStructuredPermission,
   projectStructuredQuestion
@@ -84,7 +81,7 @@ export function useMobileStructuredAgentSession(
     ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {})
   })
 
-  const turnId = runningStructuredAgentSessionTurnId(state)
+  const { turnId, isWorking } = useMobileStructuredSessionWork(state)
   const options = useMobileStructuredAgentOptions({
     agent,
     modelCatalogCache: useHostModelCatalogCache({ hostId, client, agent, enabled }),
@@ -106,10 +103,8 @@ export function useMobileStructuredAgentSession(
   })
   const { contextUsageSupport, accountUsageReported, ...optionFields } = options
 
-  const { approvalPrompt, questionPrompt, navigation, promptIdentity } = useMemo(
-    () => mobileStructuredLinkedPrompts(state, args.itemLink, sessionId),
-    [state, args.itemLink, sessionId]
-  )
+  const { approvalPrompt, questionPrompt, navigation, promptIdentity } =
+    useMobileStructuredLinkedPrompts(state, args.itemLink, sessionId)
   const { respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
     approvalItemId: approvalPrompt?.itemId,
     questionItemId: questionPrompt?.itemId,
@@ -127,7 +122,6 @@ export function useMobileStructuredAgentSession(
     onSendError,
     confirmRecorded: useMobileStructuredSendRecorded(client, sessionId, hostSupport)
   })
-  const isWorking = mobileStructuredAgentSessionWorking(state)
   const queueSendsNext = structuredAgentSessionQueueSendsNext(state.nextQueuedMessageId, isWorking)
   const { clearing, messages, receipts, timing, onClearSent, sendingCards } =
     useMobileStructuredTranscript(
@@ -208,6 +202,7 @@ export function useMobileStructuredAgentSession(
     stateRef,
     options,
     turnId,
+    hasPrompt: promptIdentity !== undefined,
     backgroundTasks,
     sendsOut,
     commandPendingRef,

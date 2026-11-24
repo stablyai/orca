@@ -16,19 +16,44 @@ export function structuredAgentSessionReadCoversSend(
   )
 }
 
+type SettledSends = {
+  cards: ReadonlySet<string>
+  recorded: ReadonlyMap<string, AgentJournalSubmission>
+}
+
+const settlementBySubmissions = new WeakMap<
+  readonly AgentJournalSubmission[],
+  {
+    recorded: SettledSends['recorded']
+    handoffs: ReadonlySet<string>
+    byQueue: WeakMap<readonly string[], SettledSends>
+  }
+>()
+
 /** Settle by host-published ID as queued card/handoff or submission, whichever arrives before the send response; cards win. */
 export function structuredAgentSessionSettledSends(
   submissions: readonly AgentJournalSubmission[],
   queuedMessageIds: readonly string[]
-): {
-  cards: ReadonlySet<string>
-  recorded: ReadonlyMap<string, AgentJournalSubmission>
-} {
-  const rows = submissions.filter(
-    (row) => row.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
-  )
-  return {
-    cards: new Set([...queuedMessageIds, ...handedOffQueuedMessageIds(rows)]),
-    recorded: new Map(rows.map((submission) => [submission.clientMessageId, submission]))
+): SettledSends {
+  let facts = settlementBySubmissions.get(submissions)
+  if (!facts) {
+    const rows = submissions.filter(
+      (row) => row.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
+    )
+    facts = {
+      recorded: new Map(rows.map((submission) => [submission.clientMessageId, submission])),
+      handoffs: handedOffQueuedMessageIds(rows),
+      byQueue: new WeakMap()
+    }
+    settlementBySubmissions.set(submissions, facts)
   }
+  let settled = facts.byQueue.get(queuedMessageIds)
+  if (!settled) {
+    settled = {
+      cards: new Set([...queuedMessageIds, ...facts.handoffs]),
+      recorded: facts.recorded
+    }
+    facts.byQueue.set(queuedMessageIds, settled)
+  }
+  return settled
 }

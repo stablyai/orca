@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { MobileSessionItemLink } from '../../../mobile-session-item-target'
 import {
@@ -7,7 +8,7 @@ import {
 } from './mobile-structured-actionable-prompt'
 
 export function mobileStructuredLinkedPrompts(
-  state: StructuredAgentSessionState,
+  state: Pick<StructuredAgentSessionState, 'items' | 'currentRequests' | 'actionablePromptIds'>,
   link: MobileSessionItemLink | undefined,
   sessionId: string | null
 ) {
@@ -30,4 +31,24 @@ export function mobileStructuredLinkedPrompts(
           }
         : null
   }
+}
+
+export function useMobileStructuredLinkedPrompts(
+  {
+    items,
+    currentRequests,
+    actionablePromptIds
+  }: Parameters<typeof mobileStructuredLinkedPrompts>[0],
+  link: MobileSessionItemLink | undefined,
+  sessionId: string | null
+) {
+  return useMemo(
+    () =>
+      mobileStructuredLinkedPrompts(
+        { items, currentRequests, actionablePromptIds },
+        link,
+        sessionId
+      ),
+    [items, currentRequests, actionablePromptIds, link, sessionId]
+  )
 }

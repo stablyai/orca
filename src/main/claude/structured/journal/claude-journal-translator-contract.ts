@@ -62,6 +62,7 @@ export type ClaudeJournalTranslator = {
     | 'identity'
     | 'userItemId'
     | 'startDispatch'
+    | 'echoedDispatchStart'
     | 'suppressReopen'
   >
   readonly openTurnHasInputWork: boolean

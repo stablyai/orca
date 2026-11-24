@@ -101,6 +101,7 @@ export function deliverClaudeReplayFrame(input: {
         ...(startsTurn ? { startsTurn: true } : {}),
         ...(requestedAt == null ? {} : { requestedAt }),
         ...(origin?.clientMessageId ? { clientMessageId: origin.clientMessageId } : {}),
+        ...(origin?.queuedDispatch ? { queuedDispatch: origin.queuedDispatch } : {}),
         ...sendFacts,
         ...(observedAt === undefined ? {} : { observedAt })
       })

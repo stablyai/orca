@@ -70,6 +70,9 @@ export function stubSessionPrompts(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Needs you row only reads and subscribes.
     const owner = {
       getSnapshot: () => current,
+      getReadCursor: () => current.state.cursor,
+      getSubmissionReceipts: () => current.state.writtenAtById,
+      subscribeDelivery: none,
       subscribe: (listener: () => void) => {
         listeners.add(listener)
         return () => listeners.delete(listener)

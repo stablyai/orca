@@ -119,6 +119,9 @@ export function observeClaudeTurnFrame(
     turn.observeProviderCycleStart()
   } else if (event.startsTurn || message.type === 'assistant' || message.type === 'stream_event') {
     turn.observeProviderCycleWork()
+    if (message.type === 'assistant' || message.type === 'stream_event') {
+      turn.echoedDispatchStart.observeOutput(event.observedAt)
+    }
     turn.inputChoiceWorkObserved ||=
       message.type !== 'assistant' ||
       message.is_api_error_message !== true ||

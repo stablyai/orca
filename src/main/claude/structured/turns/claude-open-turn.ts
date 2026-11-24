@@ -13,6 +13,7 @@ import {
   type ClaudeCurrentTurn,
   type ClaudeTurnEnd
 } from './claude-turn-lifecycle-item'
+import { ClaudeEchoedDispatchStart } from './claude-echoed-dispatch-start'
 import type { ClaudeCommandTurn } from './claude-command-turn'
 import { createClaudeTurnOpener, type ClaudeTurnSource } from './claude-turn-opening'
 import {
@@ -60,6 +61,12 @@ export type ClaudeOpenTurnDeps = {
 
 export class ClaudeOpenTurn {
   private current: ClaudeCurrentTurn | null = null
+  readonly echoedDispatchStart = new ClaudeEchoedDispatchStart((startedAt) => {
+    if (this.current) {
+      this.current.startedAt = startedAt
+      this.publish(this.current)
+    }
+  })
   usageLimitEvidence: ClaudeUsageLimitEvidence | null = null
   /** Block late output from reopening ended or failed turns until an accepted send arrives. */
   private reopenSuppressed = false
@@ -160,6 +167,7 @@ export class ClaudeOpenTurn {
 
   /** Supersede the previous turn before opening another; a missing result must not leave old work live. */
   open(turn: ClaudeCurrentTurn, observedAt: number, reserved = false): void {
+    this.echoedDispatchStart.clear()
     this.steerHandoffEnd = null
     this.usageLimitEvidence = null
     this.deps.onOpen?.()
@@ -247,6 +255,7 @@ export class ClaudeOpenTurn {
     contextUsage?: AgentSessionContextUsage,
     stopped?: ClaudeStoppedTurnEnd
   ): void {
+    this.echoedDispatchStart.clear()
     // Only a verdictless end (idle) takes the held verdict, at idle's time; a real result keeps its own.
     const held = this.steerHandoffEnd
     const end =

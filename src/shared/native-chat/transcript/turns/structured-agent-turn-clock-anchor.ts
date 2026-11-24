@@ -1,6 +1,6 @@
 // Latch one host-to-client conversion per turn on desktop/mobile. receivedAt - hostNow includes sample delivery latency;
 // recomputing on later frames imports jitter and can move the anchor later, making elapsed go backwards.
-// Keep the offset fixed so improved origins only move the anchor earlier.
+// Keep the offset fixed when the provider corrects the turn start.
 
 import type { StructuredAgentHostClock } from '../../../agent-session/view/live-read/structured-agent-session-reducer'
 import {
@@ -14,6 +14,7 @@ export type StructuredAgentTurnClockLatch = {
   firstSeenAt: number
   /** Absent until a host sample has arrived; the row's append time applies instead. */
   hostNow?: number
+  startedAt?: number
 }
 
 export function latchStructuredAgentTurnClock(
@@ -46,11 +47,19 @@ export function stepStructuredAgentTurnClock(input: {
   const next =
     latch?.turnId === turnId
       ? latch
-      : latchStructuredAgentTurnClock(turnId, input.now(), input.hostClock)
+      : {
+          ...latchStructuredAgentTurnClock(turnId, input.now(), input.hostClock),
+          startedAt: timing?.startedAt
+        }
   return {
     latch: next,
     workingStartedAt: timing
-      ? structuredAgentTurnLocalStartedAt(timing, next.firstSeenAt, next.hostNow)
+      ? structuredAgentTurnLocalStartedAt(
+          timing,
+          next.firstSeenAt,
+          next.hostNow,
+          next.startedAt !== undefined && timing.startedAt > next.startedAt
+        )
       : null
   }
 }

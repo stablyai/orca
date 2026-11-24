@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useMemo,
+  useSyncExternalStore
+} from 'react'
 import { isRootAgentJournalItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import type {
   AgentSessionQueuedMessage,
@@ -45,7 +53,6 @@ import {
 } from '../transcript/ingestion/use-mobile-older-page-loader'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
 import {
-  reduceStructuredChatState,
   noteChatTranscript,
   storedStructuredSessionState,
   storedStructuredCopy,
@@ -53,7 +60,7 @@ import {
 } from '../transcript/persistence/mobile-native-chat-transcript-writer'
 import { useStoredChatTranscript } from '../transcript/persistence/use-stored-chat-transcript'
 
-const MAX_RETAINED_SESSION_STATES = 32
+import { createMobileStructuredChatStateCache } from './mobile-structured-chat-state-cache'
 
 /** The host already batches streamed text, so phones merge only within about a frame; desktop keeps the shared window. */
 const STREAMED_TEXT_COALESCE_MS = 16
@@ -110,11 +117,13 @@ export function useMobileStructuredAgentState(args: {
   useLayoutEffect(() => {
     commandsChanged.current = args.onCommandsChanged
   }, [args.onCommandsChanged])
-  // Bound synchronous per-session retention so offline tab switches cannot grow memory indefinitely.
-  const [sessionStates, setSessionStates] = useState<Map<string, StructuredAgentSessionState>>(
-    () => new Map()
+  const [cache] = useState(createMobileStructuredChatStateCache)
+  const readKey = enabled ? sessionKey : null
+  const subscribe = useCallback(
+    (listener: () => void) => (readKey ? cache.subscribe(readKey, listener) : () => {}),
+    [cache, readKey]
   )
-  const retained = enabled && sessionKey ? sessionStates.get(sessionKey) : undefined
+  const retained = useSyncExternalStore(subscribe, () => (readKey ? cache.get(readKey) : undefined))
   const stored =
     enabled && sessionKey && !retained ? storedStructuredSessionState(sessionKey) : null
   const state = retained ?? stored ?? EMPTY_STRUCTURED_AGENT_SESSION
@@ -126,10 +135,17 @@ export function useMobileStructuredAgentState(args: {
       noteChatTranscript(sessionKey, state, isLive, (at) => storedStructuredCopy(state, at))
     }
   }, [client, liveRead, sessionKey, state])
+  const { working, latestTurn, items, submissions, fence } = state
+  const turnSettled = useMemo(
+    () =>
+      liveRead &&
+      !mobileStructuredAgentSessionWorking({ working, latestTurn, items, submissions, fence }),
+    [liveRead, working, latestTurn, items, submissions, fence]
+  )
   const readingStore = useStoredChatTranscript({
     identity: enabled && sessionId ? sessionKey : null,
     read: !retained,
-    turnSettled: liveRead && !mobileStructuredAgentSessionWorking(state)
+    turnSettled
   })
   const { phase: olderPages, load: loadOlderPages, supersede } = useMobileOlderPageLoader()
   const stateRef = useRef(state)
@@ -142,29 +158,9 @@ export function useMobileStructuredAgentState(args: {
       if (!sessionKey) {
         return
       }
-      setSessionStates((current) => {
-        const previous =
-          current.get(sessionKey) ??
-          storedStructuredSessionState(sessionKey) ??
-          EMPTY_STRUCTURED_AGENT_SESSION
-        const next = reduceStructuredChatState(previous, action, Date.now())
-        if (next === previous) {
-          return current
-        }
-        const updated = new Map(current)
-        updated.delete(sessionKey)
-        updated.set(sessionKey, next)
-        while (updated.size > MAX_RETAINED_SESSION_STATES) {
-          const oldest = updated.keys().next().value
-          if (oldest === undefined) {
-            break
-          }
-          updated.delete(oldest)
-        }
-        return updated
-      })
+      cache.apply(sessionKey, () => storedStructuredSessionState(sessionKey), action, Date.now())
     },
-    [sessionKey]
+    [cache, sessionKey]
   )
   useEffect(() => {
     supersede()
@@ -199,7 +195,8 @@ export function useMobileStructuredAgentState(args: {
             : { type: 'error', message }
         )
       },
-      getCursor: () => stateRef.current.cursor,
+      getCursor: () =>
+        (sessionKey ? cache.get(sessionKey)?.cursor : undefined) ?? stateRef.current.cursor,
       onContactLost: () => {},
       onHistoryReadInvalidated: supersede,
       readCurrentRequests: (request) =>
@@ -228,7 +225,7 @@ export function useMobileStructuredAgentState(args: {
         )
         .catch(() => undefined)
     }
-  }, [apply, client, connected, enabled, readingStore, sessionId, sessionKey, supersede])
+  }, [apply, cache, client, connected, enabled, readingStore, sessionId, sessionKey, supersede])
 
   const loadEarlier = useCallback(() => {
     const start = oldestStructuredAgentSessionCursor(stateRef.current)
@@ -287,8 +284,9 @@ export function useMobileStructuredAgentState(args: {
   }, [apply, client, loadOlderPages, sessionId, sessionKey])
 
   // Auto-page once per invisible head: subagent-only windows cannot scroll to request earlier history, including byte-capped first pages.
+  const hasOwnItems = useMemo(() => items.some(isRootAgentJournalItem), [items])
   const drawsNothingFrom =
-    state.status === 'ready' && state.hasOlder && !state.items.some(isRootAgentJournalItem)
+    state.status === 'ready' && state.hasOlder && !hasOwnItems
       ? `${sessionKey}:${state.epoch}:${state.items[0]?.sequence}`
       : null
   const readBackFromRef = useRef<string | null>(null)

@@ -1,3 +1,4 @@
+import { isStructuredAgentSessionReceiptUpdate } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-receipt-state'
 import { createStructuredAgentSessionReadHydrate } from './structured-agent-session-read-hydrate'
 import type { AgentProviderSessionMetadata } from '../../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
@@ -36,6 +37,8 @@ export function createReadOwner(
     initialHistoryAutoLoad: true,
     current: false
   }
+  let published = snapshot
+  const deliveryListeners = new Set<() => void>()
   let stopActiveRun: (() => void) | null = null
   const retiredHistoryRead = (): boolean => true
   let captureActiveHistoryReadGuard = (): (() => boolean) => retiredHistoryRead
@@ -61,8 +64,14 @@ export function createReadOwner(
     if (next === snapshot) {
       return
     }
-    snapshot = next
+    const deliveryChanged =
+      snapshot.state.cursor !== next.state.cursor ||
+      snapshot.state.writtenAtById !== next.state.writtenAtById
+    snapshot = published = next
     emit()
+    if (deliveryChanged) {
+      deliveryListeners.forEach((listener) => listener())
+    }
   }
   const apply = (action: StructuredAgentSessionAction): void => {
     const state = reduceStructuredAgentSession(snapshot.state, action, Date.now())
@@ -78,9 +87,18 @@ export function createReadOwner(
       (action.type === 'event' &&
         action.event.type !== 'end' &&
         !(action.event.type === 'batch' && action.event.hasNewer))
-    if (state !== snapshot.state || current !== snapshot.current) {
-      setSnapshot({ ...snapshot, state, current })
+    if (state === snapshot.state && current === snapshot.current) {
+      return
     }
+    if (
+      current === snapshot.current &&
+      isStructuredAgentSessionReceiptUpdate(snapshot.state, state, action)
+    ) {
+      snapshot = { ...snapshot, state }
+      deliveryListeners.forEach((listener) => listener())
+      return
+    }
+    setSnapshot({ ...snapshot, state, current })
   }
   const markStale = (): void => {
     if (snapshot.current) {
@@ -183,7 +201,8 @@ export function createReadOwner(
   let owner: StructuredAgentSessionReadOwner
   let retained = 0
   const deleteIfUnused = (): void => {
-    const subscriptions = activations.size + listeners.size + commandListeners.size
+    const subscriptions =
+      activations.size + listeners.size + commandListeners.size + deliveryListeners.size
     if (subscriptions === 0 && retained === 0 && !activity.retained()) {
       forgetStructuredReadOwner(key, owner)
     }
@@ -253,9 +272,13 @@ export function createReadOwner(
       activations.clear()
       listeners.clear()
       commandListeners.clear()
+      deliveryListeners.clear()
       stopActiveRun?.()
     },
-    getSnapshot: () => snapshot,
+    getSnapshot: () => published,
+    getReadCursor: () => snapshot.state.cursor,
+    getSubmissionReceipts: () => snapshot.state.writtenAtById,
+    subscribeDelivery: (listener) => subscribeTo(deliveryListeners, listener),
     trimHistory,
     retainHistory: () => {
       const reader = Symbol('history-reader')

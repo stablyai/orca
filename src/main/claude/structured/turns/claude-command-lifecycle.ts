@@ -15,6 +15,7 @@ import {
 import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
 import { claudeText } from '../journal/claude-structured-item-translation'
 import { isRootClaudeFrame } from './claude-turn-opening'
+import type { StructuredAgentSessionTransitionSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
 import type {
   ClaudeDispatchWaiter,
@@ -32,7 +33,50 @@ function isTerminalState(state: unknown): state is keyof typeof UNSTARTED_VERDIC
   return state === 'cancelled' || state === 'discarded' || state === 'refused'
 }
 
-export function observeClaudeCommandLifecycle(
+export type ClaudeDispatchFrameEvidence = {
+  observedAt: number
+  onReceived: NonNullable<StructuredAgentSessionTransitionSink['recordProviderReceipt']>
+}
+
+export function resolveClaudeDispatchLifecycle(
+  session: ClaudeSession,
+  message: Record<string, unknown>,
+  onSettledLate: ClaudeLateDispatchSettlement | undefined,
+  frame: ClaudeDispatchFrameEvidence | undefined
+): void {
+  if (
+    frame &&
+    message.state === 'started' &&
+    readClaudeFrameString(message, 'session_id') === session.providerSessionId
+  ) {
+    session.translator?.turnCycle.echoedDispatchStart.confirm(
+      readClaudeFrameString(message, 'command_uuid'),
+      session.fence,
+      frame.observedAt
+    )
+  }
+  observeClaudeCommandLifecycle(session, message, onSettledLate, (waiter, evidence) => {
+    if (!frame || waiter.clientMessageId === null) {
+      return
+    }
+    if (evidence.received) {
+      frame.onReceived({
+        clientMessageId: waiter.clientMessageId,
+        fence: waiter.dispatchFence,
+        observedAt: frame.observedAt
+      })
+    }
+    if (evidence.started) {
+      session.translator?.turnCycle.startDispatch(
+        session.providerSessionId,
+        waiter,
+        frame.observedAt
+      )
+    }
+  })
+}
+
+function observeClaudeCommandLifecycle(
   session: ClaudeSession,
   message: Record<string, unknown>,
   onSettledLate?: ClaudeLateDispatchSettlement,

@@ -1,6 +1,7 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import type { AgentJournalSubmission } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { useStructuredAgentSendingItemIds } from '../../session/structured/delivery/use-structured-agent-sending-item-ids'
 import { MessageRow } from './NativeChatMessageRow'
 import { useStructuredAgentSessionDeliveryNotices } from '../../session/structured/delivery/use-structured-agent-session-delivery-notices'
 import { NativeChatHostSetupContext } from '../../host-access/native-chat-host-setup'
@@ -8,25 +9,26 @@ import { NativeChatHostSetupContext } from '../../host-access/native-chat-host-s
 const signInView = { signIn: { signingIn: false, signIn: () => {} }, install: null }
 
 function RecordedSteer({ state }: { state: AgentJournalSubmission['dispatchState'] }) {
+  const submissions: AgentJournalSubmission[] = [
+    {
+      clientMessageId: 'steer',
+      fence: 1,
+      payloadFingerprint: 'steer',
+      dispatchState: state,
+      providerItemId: null,
+      reason: state === 'rejected' ? 'Codex refused the message.' : null,
+      submittedAt: 1,
+      resolvedAt: state === 'pending' ? null : 2,
+      handoverRecorded: true
+    }
+  ]
   const notices = useStructuredAgentSessionDeliveryNotices({
-    pending: [],
-    submissions: [
-      {
-        clientMessageId: 'steer',
-        fence: 1,
-        payloadFingerprint: 'steer',
-        dispatchState: state,
-        providerItemId: null,
-        reason: state === 'rejected' ? 'Codex refused the message.' : null,
-        submittedAt: 1,
-        resolvedAt: state === 'pending' ? null : 2,
-        handoverRecorded: true
-      }
-    ],
+    submissions,
     journalItems: [],
     agentName: 'Codex',
     startFailures: []
   })
+  const sending = useStructuredAgentSendingItemIds(undefined, [], submissions)
   const id = agentJournalSubmissionKey('steer')
   return (
     <MessageRow
@@ -39,7 +41,7 @@ function RecordedSteer({ state }: { state: AgentJournalSubmission['dispatchState
       }}
       expandSignal={false}
       onScrollMessageToTop={() => {}}
-      deliveryNotice={notices.get(id)}
+      deliveryNotice={notices.get(id) ?? (sending.has(id) ? { sending: true } : undefined)}
     />
   )
 }

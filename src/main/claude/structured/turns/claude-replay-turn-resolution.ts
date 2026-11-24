@@ -1,6 +1,7 @@
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
-  observeClaudeCommandLifecycle,
+  resolveClaudeDispatchLifecycle,
+  type ClaudeDispatchFrameEvidence,
   claudeDispatchIsSteer,
   releaseClaudeDispatchesUnansweredAtIdle
 } from './claude-command-lifecycle'
@@ -19,7 +20,7 @@ import type {
 import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
 import { claudeDispatchContentKey } from '../dispatch/claude-structured-dispatch-content'
 import type { AgentJournalAnsweredTurnIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionTransitionSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
+import type { ClaudeEchoedDispatch } from './claude-echoed-dispatch-start'
 
 /** Settle provider-proven delivery independently of replay-row acceptance reconciliation. */
 export type ClaudeLateDispatchSettlement = (input: ClaudeLateDispatchOutcome) => void
@@ -27,11 +28,7 @@ export type ClaudeLateDispatchSettlement = (input: ClaudeLateDispatchOutcome) =>
 export type ClaudeReplayTurnOrigin = {
   requestedAt: number | null
   clientMessageId: string | null
-}
-
-type ClaudeDispatchFrameEvidence = {
-  observedAt: number
-  onReceived: NonNullable<StructuredAgentSessionTransitionSink['recordProviderReceipt']>
+  queuedDispatch?: ClaudeEchoedDispatch
 }
 
 export function resolveClaudeReplayTurn(
@@ -41,25 +38,7 @@ export function resolveClaudeReplayTurn(
   frame?: ClaudeDispatchFrameEvidence
 ): ClaudeReplayTurnOrigin | null {
   if (message.type === 'command_lifecycle') {
-    observeClaudeCommandLifecycle(session, message, onSettledLate, (waiter, evidence) => {
-      if (!frame || waiter.clientMessageId === null) {
-        return
-      }
-      if (evidence.received) {
-        frame.onReceived({
-          clientMessageId: waiter.clientMessageId,
-          fence: waiter.dispatchFence,
-          observedAt: frame.observedAt
-        })
-      }
-      if (evidence.started) {
-        session.translator?.turnCycle.startDispatch(
-          session.providerSessionId,
-          waiter,
-          frame.observedAt
-        )
-      }
-    })
+    resolveClaudeDispatchLifecycle(session, message, onSettledLate, frame)
     return null
   }
   if (claudeSessionStateEndsTurn(message)) {
@@ -95,7 +74,17 @@ export function resolveClaudeReplayTurn(
         frame.observedAt
       )
     }
-    return settleLiveDispatch(session, waiter, uuid, isUserReplay, onSettledLate)
+    const origin = settleLiveDispatch(session, waiter, uuid, isUserReplay, onSettledLate)
+    if (
+      origin &&
+      frame &&
+      origin.clientMessageId !== null &&
+      waiter.dispatchFence === session.fence &&
+      waiter.commandLifecycle === 'queued'
+    ) {
+      origin.queuedDispatch = { sentUuid: waiter.sentUuid, fence: waiter.dispatchFence }
+    }
+    return origin
   }
 
   // Explicit correlation outranks content and queue order across identical prompts and timeout boundaries.

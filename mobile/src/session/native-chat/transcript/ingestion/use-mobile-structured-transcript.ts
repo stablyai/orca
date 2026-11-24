@@ -43,7 +43,14 @@ export function useMobileStructuredTranscript(
     agent: string | null
     state: Pick<
       StructuredAgentSessionState,
-      'epoch' | 'items' | 'submissions' | 'latestTurn' | 'working' | 'hostClock' | 'queuedMessages'
+      | 'epoch'
+      | 'items'
+      | 'submissions'
+      | 'latestTurn'
+      | 'working'
+      | 'hostClock'
+      | 'queuedMessages'
+      | 'writtenAtById'
     >
     optimistic: readonly StructuredAgentSessionOptimisticMessage[]
     sessionKey: string
@@ -74,12 +81,15 @@ export function useMobileStructuredTranscript(
     () => latestAgentSessionContextClearSequence(state.items),
     [state.items]
   )
-  const clearing = agentSessionContextClearOutstanding(state.items, latestClear, clearSentTail)
+  const clearing = useMemo(
+    () => agentSessionContextClearOutstanding(state.items, latestClear, clearSentTail),
+    [clearSentTail, latestClear, state.items]
+  )
   // Retire a press that hides nothing (its divider landed, or its rows left), so a later trim cannot re-arm it.
   if (clearSent?.sessionKey === sessionKey && !clearing) {
     setClearSent(null)
   }
-  const floor = clearing ? clearSentTail + 1 : latestClear
+  const floor = clearing && clearSentTail !== null ? clearSentTail + 1 : latestClear
   const transcriptItems = useMemo(
     () =>
       withNativeChatCutTurnNotices(agentSessionTranscriptRows(state.items, floor), {

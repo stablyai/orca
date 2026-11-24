@@ -1,3 +1,7 @@
+import {
+  liveSubmissions,
+  olderPageSubmissions
+} from './structured-agent-session-submission-retention'
 import { trimStructuredAgentSessionHistory } from './structured-agent-session-history-retention'
 import type { AgentSessionCurrentRequestsMarker } from '../../requests/agent-session-current-requests-wire'
 import {
@@ -13,10 +17,11 @@ import {
   type AgentSessionCurrentRequestsState
 } from '../../requests/agent-session-current-requests'
 import type { AgentJournalCursor } from '../../journal/agent-session-journal-identity'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../journal/agent-session-journal-types'
+import {
+  splitStructuredAgentSubmissions,
+  type StructuredAgentSubmissions
+} from '../structured-agent-session-submissions'
 import type {
   AgentSessionSlashCommand,
   AgentSessionHistoryPage,
@@ -37,7 +42,6 @@ import {
   LIVE_TRIM_SLACK_OWN_ITEMS,
   MAX_RETAINED_ITEMS,
   MAX_RETAINED_OWN_ITEMS,
-  mergeSubmissions,
   ownItemCount,
   trimRetainedItems
 } from '../structured-agent-session-item-retention'
@@ -45,10 +49,8 @@ import { readAgentJournalTurn } from '../../lifecycle/records/agent-session-turn
 import { agentSessionHasOlderTranscript } from '../../conversation-context/agent-session-context-clear'
 import { queuePublicationField } from '../../requests/structured-agent-session-queue-publication-field'
 import {
-  actionablePromptIdsAfterStructuredAgentSessionBatch,
-  hostWorkingAfterStructuredAgentSessionBatch,
-  latestTurnAfterStructuredAgentSessionBatch,
-  restatesStructuredAgentSessionHostWork
+  restatesStructuredAgentSessionHostWork,
+  structuredAgentSessionBatchHostWork
 } from '../structured-agent-session-live-turn'
 import {
   foldStructuredAgentSubagentRoster,
@@ -63,46 +65,46 @@ export type StructuredAgentHostClock = {
   receivedAt: number
 }
 
-export type StructuredAgentSessionState = AgentSessionCurrentRequestsState & {
-  epoch: string | null
-  cursor: AgentJournalCursor | null
-  fence: number | null
-  items: AgentJournalRenderItem[]
-  submissions: AgentJournalSubmission[]
-  /** Own-row trim floor grows with paging so live batches cannot undo loaded history. */
-  retainedOwnItemLimit: number
-  /** All-agent memory ceiling grows with paging too. */
-  retainedItemCap: number
-  hasOlder: boolean
-  status: 'idle' | 'loading' | 'ready' | 'error'
-  /** The failed read's own text, for logs; a surface words `readRefusal` instead. */
-  error?: string
-  /** The refusal the failed read met, when the host sent one; cleared with `error`. */
-  readRefusal?: AgentSessionRefusalReference
-  backgroundTasks?: AgentSessionBackgroundTaskState | null
-  /** Host-held drafts. Absent = no claim yet (older host); `[]`/null = empty. */
-  queuedMessages?: AgentSessionQueuedMessage[] | null
-  /** The queue's pause, published with the list; null when it sends on its own. */
-  queuePause?: AgentSessionQueuePause | null
-  /** Published with the list: the card the queue sends next once nothing runs, else null. */
-  nextQueuedMessageId?: string | null
-  commands?: AgentSessionSlashCommand[] | null
-  activity?: AgentSessionTurnActivity | null
-  /** Off the journal, so history pages and snapshots keep it; only a batch sets it. */
-  promptSuggestion?: AgentSessionPromptSuggestion | null
-  /** Absent until a frame from a host that stamps `hostNow` has been applied. */
-  hostClock?: StructuredAgentHostClock
-  /** Retain received roster entries by agent ID beyond the item window; absent until a page arrives. */
-  subagentRoster?: StructuredAgentSubagentRoster
-  /** Whole-journal turn state; older hosts omit it and require loaded-item fallback. */
-  latestTurn?: AgentSessionLatestTurn | null
-  /** Host-actionable prompts; older hosts treat every pending item as waiting. */
-  actionablePromptIds?: string[]
-  /** Host main-agent work state; older hosts derive from items/submissions. */
-  working?: boolean
-  /** Bump when a live turn revision falls outside the window so whole-journal turn readers refresh. */
-  unloadedTurnRevisions?: number
-}
+export type StructuredAgentSessionState = AgentSessionCurrentRequestsState &
+  StructuredAgentSubmissions & {
+    epoch: string | null
+    cursor: AgentJournalCursor | null
+    fence: number | null
+    items: AgentJournalRenderItem[]
+    /** Own-row trim floor grows with paging so live batches cannot undo loaded history. */
+    retainedOwnItemLimit: number
+    /** All-agent memory ceiling grows with paging too. */
+    retainedItemCap: number
+    hasOlder: boolean
+    status: 'idle' | 'loading' | 'ready' | 'error'
+    /** The failed read's own text, for logs; a surface words `readRefusal` instead. */
+    error?: string
+    /** The refusal the failed read met, when the host sent one; cleared with `error`. */
+    readRefusal?: AgentSessionRefusalReference
+    backgroundTasks?: AgentSessionBackgroundTaskState | null
+    /** Host-held drafts. Absent = no claim yet (older host); `[]`/null = empty. */
+    queuedMessages?: AgentSessionQueuedMessage[] | null
+    /** The queue's pause, published with the list; null when it sends on its own. */
+    queuePause?: AgentSessionQueuePause | null
+    /** Published with the list: the card the queue sends next once nothing runs, else null. */
+    nextQueuedMessageId?: string | null
+    commands?: AgentSessionSlashCommand[] | null
+    activity?: AgentSessionTurnActivity | null
+    /** Off the journal, so history pages and snapshots keep it; only a batch sets it. */
+    promptSuggestion?: AgentSessionPromptSuggestion | null
+    /** Absent until a frame from a host that stamps `hostNow` has been applied. */
+    hostClock?: StructuredAgentHostClock
+    /** Retain received roster entries by agent ID beyond the item window; absent until a page arrives. */
+    subagentRoster?: StructuredAgentSubagentRoster
+    /** Whole-journal turn state; older hosts omit it and require loaded-item fallback. */
+    latestTurn?: AgentSessionLatestTurn | null
+    /** Host-actionable prompts; older hosts treat every pending item as waiting. */
+    actionablePromptIds?: string[]
+    /** Host main-agent work state; older hosts derive from items/submissions. */
+    working?: boolean
+    /** Bump when a live turn revision falls outside the window so whole-journal turn readers refresh. */
+    unloadedTurnRevisions?: number
+  }
 
 export type StructuredAgentSessionAction =
   | { type: 'loading' }
@@ -132,7 +134,7 @@ export const EMPTY_STRUCTURED_AGENT_SESSION: StructuredAgentSessionState = {
   cursor: null,
   fence: null,
   items: [],
-  submissions: [],
+  ...splitStructuredAgentSubmissions([]),
   retainedOwnItemLimit: MAX_RETAINED_OWN_ITEMS,
   retainedItemCap: MAX_RETAINED_ITEMS,
   hasOlder: false,
@@ -187,11 +189,11 @@ export function reduceStructuredAgentSession(
     const items = mergeItems(state.items, action.page.items, action.page.removedItemIds)
     return {
       ...state,
+      ...olderPageSubmissions(state, action.page, items),
       items,
       retainedOwnItemLimit: Math.max(state.retainedOwnItemLimit, ownItemCount(items)),
       retainedItemCap: Math.max(state.retainedItemCap, items.length),
       subagentRoster: foldStructuredAgentSubagentRosterPage(state.subagentRoster, action.page),
-      submissions: mergeSubmissions(state.submissions, action.page.submissions, items),
       hasOlder: agentSessionHasOlderTranscript(items, action.page.hasOlder),
       ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
     }
@@ -284,6 +286,12 @@ export function reduceStructuredAgentSession(
     ...merged.slice(0, merged.length - items.length)
   ]
   const lostTurnRow = outsideWindow.some((item) => readAgentJournalTurn(item.body) !== null)
+  const delivery = liveSubmissions(state, event.batch, items, itemsUnchanged)
+  const receiptRestatement =
+    itemsUnchanged &&
+    submissions.length > 0 &&
+    delivery.submissions === state.submissions &&
+    !action.opensSubscription
   return {
     ...state,
     ...requests,
@@ -295,20 +303,12 @@ export function reduceStructuredAgentSession(
     hasOlder: itemsUnchanged
       ? state.hasOlder
       : agentSessionHasOlderTranscript(items, items.length < merged.length || state.hasOlder),
-    submissions:
-      submissions.length === 0 && removedItemIds.length === 0
-        ? state.submissions
-        : mergeSubmissions(state.submissions, submissions, items, itemsUnchanged),
+    ...delivery,
     status: 'ready',
     error: undefined,
     readRefusal: undefined,
     commands: event.commands !== undefined ? event.commands : state.commands,
-    latestTurn: latestTurnAfterStructuredAgentSessionBatch(state.latestTurn, event),
-    actionablePromptIds: actionablePromptIdsAfterStructuredAgentSessionBatch(
-      state.actionablePromptIds,
-      event
-    ),
-    working: hostWorkingAfterStructuredAgentSessionBatch(state.working, event),
+    ...structuredAgentSessionBatchHostWork(state, event, receiptRestatement),
     ...queuePublicationField(event, state),
     backgroundTasks,
     ...(activity !== undefined ? { activity } : {}),

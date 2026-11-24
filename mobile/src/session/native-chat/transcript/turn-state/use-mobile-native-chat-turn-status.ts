@@ -1,5 +1,5 @@
 import { nativeChatWorkingPresentation } from '../../../../../../src/shared/agent-session/view/structured-agent-session-sending'
-import type { MobileNativeChatTurnJournal } from '../ingestion/use-mobile-structured-agent-turn-timing'
+import type { NativeChatTurnJournal } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   NATIVE_CHAT_UNANCHORED_TURN_KEY,
@@ -23,6 +23,7 @@ export function useMobileNativeChatTurnStatus({
   enabled,
   working,
   journal,
+  sendingItemIds,
   hasDisplayedMessage,
   workingStartedAt,
   settledTurns,
@@ -33,7 +34,8 @@ export function useMobileNativeChatTurnStatus({
   liveTurnKey: string | undefined
   enabled: boolean
   working: boolean
-  journal: MobileNativeChatTurnJournal | null
+  journal: NativeChatTurnJournal | null
+  sendingItemIds?: ReadonlySet<string>
   hasDisplayedMessage: (id: string) => boolean
   workingStartedAt?: number | null
   settledTurns?: NativeChatSettledTurns | null
@@ -43,10 +45,12 @@ export function useMobileNativeChatTurnStatus({
   active: NativeChatTurnStatus | null
   completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
   activeTurnKey: string
+  isWorking: boolean
   turnWorking: boolean
 } {
+  const structured = journal !== null
   let sendPending = false
-  for (const id of journal?.sendingItemIds ?? []) {
+  for (const id of sendingItemIds ?? []) {
     if (hasDisplayedMessage(id)) {
       sendPending = true
       break
@@ -55,7 +59,7 @@ export function useMobileNativeChatTurnStatus({
   const { isWorking, turnWorking } = nativeChatWorkingPresentation(
     working,
     workingStartedAt,
-    journal !== null,
+    structured,
     sendPending
   )
   const activeTurnKey = (enabled ? liveTurnKey : undefined) ?? NATIVE_CHAT_UNANCHORED_TURN_KEY
@@ -90,13 +94,14 @@ export function useMobileNativeChatTurnStatus({
         validTurnKeys,
         isWorking,
         workingStartedAt,
+        authoritativeStart: structured,
         now: Date.now()
       })
       return current.scopeKey === scopeKey && nextTiming === currentTiming
         ? current
         : { scopeKey, timingByTurn: nextTiming }
     })
-  }, [activeTurnKey, enabled, isWorking, scopeKey, turnKeys, workingStartedAt])
+  }, [activeTurnKey, enabled, isWorking, scopeKey, structured, turnKeys, workingStartedAt])
 
   // Reuse equivalent status objects so each streaming tick cannot invalidate every settled row’s memo.
   const turnIsWorking = enabled && isWorking
@@ -108,15 +113,24 @@ export function useMobileNativeChatTurnStatus({
         activeTurnKey,
         isWorking: turnIsWorking,
         workingStartedAt,
+        authoritativeStart: structured,
         thinking: turnIsThinking,
         settledByTurn
       }),
-    [timingByTurn, activeTurnKey, turnIsWorking, workingStartedAt, turnIsThinking, settledByTurn]
+    [
+      timingByTurn,
+      activeTurnKey,
+      turnIsWorking,
+      workingStartedAt,
+      turnIsThinking,
+      settledByTurn,
+      structured
+    ]
   )
   return {
     ...statuses,
-    active: isWorking && !turnWorking ? null : statuses.active,
     activeTurnKey,
+    isWorking,
     turnWorking
   }
 }

@@ -109,6 +109,8 @@ const transforms = {
     ...createRequire(import.meta.url)('./dark-build-switches.cjs').turnedOnDarkBuildDefines()
   },
   resolve: {
+    // Phone hooks in cross-client contracts must use the renderer's React instance.
+    dedupe: ['react', 'react-dom'],
     alias: [
       ...(process.env.ORCA_UNIT_ZOD_BUNDLE
         ? [{ find: /^zod$/, replacement: process.env.ORCA_UNIT_ZOD_BUNDLE }]

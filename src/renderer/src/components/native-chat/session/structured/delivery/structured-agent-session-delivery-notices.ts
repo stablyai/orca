@@ -7,21 +7,16 @@ import { agentSessionFailureStatedByRow } from '../../../../../../../shared/agen
 import { classifyDispatchRejection } from '../../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { agentJournalSubmissionKey } from '../../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { structuredAgentSessionSendingItemIds } from '../../../../../../../shared/agent-session/view/structured-agent-session-sending'
 import { structuredAgentSessionRejectionParts } from '../../../../../../../shared/agent-session/failures/structured-agent-session-rejection-words'
 import { structuredAgentSessionRejectedShownInPlace } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { agentSessionWriteNotDoneParts } from '../../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import { agentSessionWriteNoticeText } from '../../../messages/notices/agent-session-write-notice-text'
 import type { NativeChatDeliveryNotice } from '../../../messages/rows/NativeChatMessageRow'
-import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
-/** One shared value, so a rebuilt map re-renders no row still sending. */
-const STRUCTURED_AGENT_SESSION_DELIVERY_SENDING: NativeChatDeliveryNotice = { sending: true }
 const NO_COMMANDS: ReadonlySet<string> = new Set()
 
-/** Show sending until host rows arrive and host-worded rejections afterward; settled uncertain input remains ordinary transcript content. */
+/** Host-worded rejections that draw on their own message row. */
 export function structuredAgentSessionDeliveryNotices(args: {
-  pending: readonly StructuredAgentSessionPendingSend[]
   submissions: readonly AgentJournalSubmission[]
   agentName: string
   startFailures: readonly AgentSessionFailureFact[]
@@ -29,9 +24,6 @@ export function structuredAgentSessionDeliveryNotices(args: {
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
   const { agentName, submissions } = args
   const notices = new Map<string, NativeChatDeliveryNotice>()
-  for (const id of structuredAgentSessionSendingItemIds(args.pending, submissions)) {
-    notices.set(id, STRUCTURED_AGENT_SESSION_DELIVERY_SENDING)
-  }
   const shown = submissions.some((submission) => submission.dispatchState === 'rejected')
     ? structuredAgentSessionRejectedShownInPlace(submissions, args.commandItemIds ?? NO_COMMANDS)
         .shown

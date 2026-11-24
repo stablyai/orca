@@ -21,6 +21,7 @@ export function useNativeChatTurnStatus({
   latestTurn,
   subagentId,
   notices,
+  sendingItemIds,
   displayedIds,
   workingStartedAt,
   settledTurns
@@ -34,11 +35,13 @@ export function useNativeChatTurnStatus({
   latestTurn: AgentSessionLatestTurn | null | undefined
   subagentId: string | null
   notices: ReadonlyMap<string, NativeChatDeliveryNotice> | undefined
+  sendingItemIds?: ReadonlySet<string>
   displayedIds: ReadonlySet<string>
   workingStartedAt?: number | null
   /** Recorded durations (the host's journal or the transcript); they outrank what this client observed. */
   settledTurns?: NativeChatSettledTurns | null
 }): {
+  isWorking: boolean
   turnWorking: boolean
   turnStatuses: {
     active: NativeChatTurnStatus | null
@@ -57,15 +60,18 @@ export function useNativeChatTurnStatus({
       return false
     }
     if (!structured) {
-      return liveTurnKey !== undefined && notices?.get(liveTurnKey)?.sending === true
+      return (
+        liveTurnKey !== undefined &&
+        (sendingItemIds?.has(liveTurnKey) === true || notices?.get(liveTurnKey)?.sending === true)
+      )
     }
-    for (const [id, notice] of notices ?? []) {
-      if (notice.sending && displayedIds.has(id)) {
+    for (const id of sendingItemIds ?? []) {
+      if (displayedIds.has(id)) {
         return true
       }
     }
     return false
-  }, [notices, displayedIds, liveTurnKey, structured, subagentId])
+  }, [notices, displayedIds, liveTurnKey, sendingItemIds, structured, subagentId])
   const { isWorking, turnWorking } = nativeChatWorkingPresentation(
     working,
     workingStartedAt,
@@ -86,29 +92,23 @@ export function useNativeChatTurnStatus({
         validTurnKeys,
         isWorking,
         workingStartedAt,
+        authoritativeStart: structured,
         now: Date.now()
       })
     )
-  }, [activeTurnKey, isWorking, validTurnKeys, workingStartedAt])
+  }, [activeTurnKey, isWorking, structured, validTurnKeys, workingStartedAt])
 
-  // Stable identity keeps status-only renders from rebuilding transcript slots.
-  const turnStatuses = useMemo(() => {
-    const statuses = selectNativeChatTurnStatuses(timingByTurn, {
-      activeTurnKey,
-      isWorking,
-      workingStartedAt,
-      thinking,
-      settledByTurn: settledTurns ?? undefined
-    })
-    return isWorking && !turnWorking ? { ...statuses, active: null } : statuses
-  }, [
-    timingByTurn,
-    activeTurnKey,
-    isWorking,
-    workingStartedAt,
-    thinking,
-    settledTurns,
-    turnWorking
-  ])
-  return { turnWorking, turnStatuses }
+  const turnStatuses = useMemo(
+    () =>
+      selectNativeChatTurnStatuses(timingByTurn, {
+        activeTurnKey,
+        isWorking,
+        workingStartedAt,
+        authoritativeStart: structured,
+        thinking,
+        settledByTurn: settledTurns ?? undefined
+      }),
+    [timingByTurn, activeTurnKey, isWorking, workingStartedAt, thinking, settledTurns, structured]
+  )
+  return { isWorking, turnWorking, turnStatuses }
 }

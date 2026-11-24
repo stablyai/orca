@@ -158,6 +158,7 @@ export function reduceNativeChatTurnTiming(
     validTurnKeys,
     isWorking,
     workingStartedAt,
+    authoritativeStart,
     now
   }: {
     activeTurnKey: string
@@ -166,6 +167,7 @@ export function reduceNativeChatTurnTiming(
     validTurnKeys: ReadonlySet<string>
     isWorking: boolean
     workingStartedAt?: number | null
+    authoritativeStart?: boolean
     now: number
   }
 ): NativeChatTurnTimingByTurn {
@@ -189,13 +191,13 @@ export function reduceNativeChatTurnTiming(
 
   const timing = retained[activeTurnKey]
   if (isWorking) {
-    // Lifecycle may precede request-origin revision; retain the earlier anchor so publication order cannot reverse the clock.
+    const runningStart = timing && timing.workedSeconds == null ? timing.startedAt : undefined
     const startedAt =
-      timing && timing.workedSeconds == null
-        ? workingStartedAt === null || workingStartedAt === undefined
-          ? timing.startedAt
-          : Math.min(timing.startedAt, workingStartedAt)
-        : (workingStartedAt ?? now)
+      workingStartedAt == null
+        ? (runningStart ?? now)
+        : authoritativeStart
+          ? workingStartedAt
+          : Math.min(runningStart ?? workingStartedAt, workingStartedAt)
     if (timing?.startedAt === startedAt && timing.workedSeconds == null) {
       return retained
     }
@@ -236,12 +238,14 @@ export function selectNativeChatTurnStatuses(
     activeTurnKey,
     isWorking,
     workingStartedAt,
+    authoritativeStart,
     thinking,
     settledByTurn
   }: {
     activeTurnKey: string
     isWorking: boolean
     workingStartedAt?: number | null
+    authoritativeStart?: boolean
     /** Whether the active turn is reasoning right now, from its journal content. */
     thinking: boolean
     settledByTurn?: NativeChatSettledTurns
@@ -271,7 +275,11 @@ export function selectNativeChatTurnStatuses(
   return {
     active: isWorking
       ? {
-          startedAt: activeTiming?.startedAt ?? workingStartedAt ?? null,
+          startedAt:
+            (authoritativeStart ? workingStartedAt : undefined) ??
+            activeTiming?.startedAt ??
+            workingStartedAt ??
+            null,
           thinking,
           workedSeconds: null
         }

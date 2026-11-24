@@ -24,7 +24,7 @@ import { claudeTurnResumePointWriter } from '../turns/claude-structured-resume-p
 import { withAgentSessionCreatePhase } from '../../../observability/agent-session-instrumentation'
 import { resolveClaudeAcquisitionLaunch } from '../launch/claude-structured-acquisition-launch'
 import * as journal from '../journal/claude-structured-session-journal-control'
-import { isRootClaudeFrame } from '../turns/claude-turn-opening'
+import { claudeStreamTurnStartSource, isRootClaudeFrame } from '../turns/claude-turn-opening'
 import * as outcome from '../startup/claude-structured-startup-outcome'
 import { claudeStartupResultError } from '../../sdk-transport/claude-stream-json-exit-error'
 import * as ui from './claude-structured-plugin-ui-recovery'
@@ -82,6 +82,11 @@ export async function acquireClaudeSession({
       message.type === 'command_lifecycle' ||
       message.type === 'user' ||
       message.type === 'result' ||
+      (message.type === 'assistant' && isRootClaudeFrame(message)) ||
+      (message.type === 'stream_event' &&
+        isRootClaudeFrame(message) &&
+        (claudeStreamTurnStartSource(message) !== null ||
+          translator?.turnCycle.echoedDispatchStart.awaitsFirstOutput === true)) ||
       liveSession?.translator?.commandTurnId != null
         ? (deps.now?.() ?? Date.now())
         : undefined

@@ -29,9 +29,10 @@ export function agentJournalSubmissionProvenUnwritten(
 
 /** Still "Sending…" while the provider has yet to confirm receipt or settle delivery. */
 export function agentJournalSubmissionAwaitsAgent(
-  submission: Pick<AgentJournalSubmission, 'dispatchState' | 'writtenAt'>
+  submission: Pick<AgentJournalSubmission, 'dispatchState'>,
+  writtenAt: number | undefined
 ): boolean {
-  return submission.dispatchState === 'pending' && submission.writtenAt === undefined
+  return submission.dispatchState === 'pending' && writtenAt === undefined
 }
 
 export type AgentJournalCardSubmission = Pick<

@@ -1,16 +1,114 @@
-import { expect, it } from 'vitest'
-import type { AgentSessionHistoryPage, AgentSessionLatestTurn } from '../../agent-session-wire'
+// @vitest-environment happy-dom
+
+import { renderHook } from '@testing-library/react'
+import { expect, it, vi } from 'vitest'
+import type {
+  AgentSessionHistoryPage,
+  AgentSessionLatestTurn,
+  AgentSessionSubscribeEvent
+} from '../../agent-session-wire'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../journal/agent-session-journal-types'
-import { structuredAgentSessionSendingItemIds } from '../structured-agent-session-sending'
 import { createStructuredAgentTurnBarsSelector } from '../structured-agent-session-turn-timing'
-import {
-  EMPTY_STRUCTURED_AGENT_SESSION,
-  reduceStructuredAgentSession,
-  type StructuredAgentSessionState
+import type {
+  StructuredAgentSessionAction,
+  StructuredAgentSessionState
 } from './structured-agent-session-reducer'
+import type {
+  SubmissionReceipts,
+  StructuredAgentSubmission
+} from '../structured-agent-session-submissions'
+import type { NativeChatTurnJournal } from '../../../native-chat/transcript/turns/native-chat-turn-membership'
+
+type DeliveryOwner = {
+  subscribeDelivery: (listener: () => void) => () => void
+  getSubmissionReceipts: () => SubmissionReceipts
+}
+
+const { useMobileStructuredAgentTurnTiming } = await vi.importActual<{
+  useMobileStructuredAgentTurnTiming: (
+    state: StructuredAgentSessionState,
+    turnId: string | null,
+    pending: readonly [],
+    items: readonly AgentJournalRenderItem[]
+  ) => { sendingItemIds: ReadonlySet<string>; turnJournal: NativeChatTurnJournal }
+}>(
+  '../../../../../mobile/src/session/native-chat/transcript/ingestion/use-mobile-structured-agent-turn-timing'
+)
+const { createMobileStructuredChatStateCache } = await vi.importActual<{
+  createMobileStructuredChatStateCache: () => {
+    get: (key: string) => StructuredAgentSessionState | undefined
+    subscribe: (key: string, listener: () => void) => () => void
+    apply: (
+      key: string,
+      stored: () => null,
+      action: StructuredAgentSessionAction,
+      receivedAt: number
+    ) => void
+  }
+}>('../../../../../mobile/src/session/native-chat/agent-session/mobile-structured-chat-state-cache')
+const { useNativeChatTurnStatus } = await vi.importActual<{
+  useNativeChatTurnStatus: (args: {
+    turnKeys: readonly string[]
+    liveTurnKey: string | undefined
+    working: boolean
+    journalItems: readonly AgentJournalRenderItem[]
+    latestTurn: AgentSessionLatestTurn | null | undefined
+    subagentId: null
+    notices: undefined
+    sendingItemIds: ReadonlySet<string>
+    displayedIds: ReadonlySet<string>
+    workingStartedAt: number | null
+  }) => { turnWorking: boolean; turnStatuses: object }
+}>('../../../../renderer/src/components/native-chat/conversation/turns/use-native-chat-turn-status')
+const { useStructuredAgentSendingItemIds } = await vi.importActual<{
+  useStructuredAgentSendingItemIds: (
+    owner: DeliveryOwner,
+    pending: readonly [],
+    submissions: readonly StructuredAgentSubmission[]
+  ) => ReadonlySet<string>
+}>(
+  '../../../../renderer/src/components/native-chat/session/structured/delivery/use-structured-agent-sending-item-ids'
+)
+
+vi.mock(
+  '../../../../renderer/src/components/native-chat/session/structured/read/structured-agent-session-read-transport',
+  () => ({
+    startStructuredAgentSessionReadTransport: vi.fn()
+  })
+)
+
+const { createReadOwner } = await vi.importActual<{
+  createReadOwner: (
+    key: string,
+    sessionId: string,
+    target: { kind: 'local' }
+  ) => DeliveryOwner & {
+    getSnapshot: () => object
+    getReadCursor: () => { epoch: string; sequence: number } | null
+    subscribe: DeliveryOwner['subscribeDelivery']
+    publishCreated: (page: AgentSessionHistoryPage) => void
+    activate: (effects: {
+      getState: () => { settings: null }
+      subscribeRetryNow: () => () => void
+    }) => () => void
+    dispose: () => void
+  }
+}>(
+  '../../../../renderer/src/components/native-chat/session/structured/read/structured-agent-session-read-owner-create'
+)
+const { startStructuredAgentSessionReadTransport } = await vi.importMock<{
+  startStructuredAgentSessionReadTransport: (args: {
+    applyEvent: (event: AgentSessionSubscribeEvent) => void
+  }) => {
+    dispose: () => void
+    captureHistoryReadGuard: () => () => boolean
+  }
+}>(
+  '../../../../renderer/src/components/native-chat/session/structured/read/structured-agent-session-read-transport'
+)
 
 const EPOCH = 'receipt-epoch'
 const SEND: AgentJournalSubmission = {
@@ -44,135 +142,254 @@ function page(items: AgentJournalRenderItem[], submissions: AgentJournalSubmissi
 }
 
 function batch(
-  state: StructuredAgentSessionState,
   sequence: number,
   submissions: AgentJournalSubmission[],
   items: AgentJournalRenderItem[] = [],
-  latestTurn?: AgentSessionLatestTurn
-) {
-  return reduceStructuredAgentSession(
-    state,
-    {
-      type: 'event',
-      event: {
-        type: 'batch',
-        sessionId: 'chat',
-        latestTurn,
-        batch: { cursor: { epoch: EPOCH, sequence }, items, removedItemIds: [], submissions }
-      }
-    },
-    5000
-  )
+  latestTurn?: AgentSessionLatestTurn | null
+): StructuredAgentSessionAction {
+  return {
+    type: 'event',
+    event: {
+      type: 'batch',
+      sessionId: 'chat',
+      latestTurn,
+      actionablePromptIds: [],
+      working: latestTurn != null,
+      batch: { cursor: { epoch: EPOCH, sequence }, items, removedItemIds: [], submissions }
+    }
+  }
 }
 
-// PR #45057: a receipt used to reread every loaded item in retention and again in turn timing.
-it.each([4096, 40960])('keeps receipt work off all %i loaded rows', (count) => {
-  let reads = 0
-  const items = Array.from({ length: count }, (_, index): AgentJournalRenderItem => {
-    const role = index === count - 1 ? 'user' : 'assistant'
-    return {
-      itemId: role === 'user' ? 'orca:opener' : `history:${index}`,
+const NO_PENDING = [] as const
+const NO_TURN_KEYS: string[] = []
+const DISPLAYED = new Set(['orca:opener', 'orca:steer'])
+const noSubscription = () => () => {}
+
+// PR #45057: receipt publication used to rebuild turn membership and projection on both clients.
+it.each([
+  [4096, 4096, 3, false],
+  [40960, 4096, 3, false],
+  [4096, 40960, 3, false],
+  [4096, 4096, 30, false],
+  [4096, 4096, 3, true],
+  [40960, 40960, 30, true]
+])(
+  'keeps receipt work bounded with %i rows, %i submissions, %i cached chats (running=%s)',
+  (rowCount, submissionCount, cacheCount, running) => {
+    let rowReads = 0
+    let settledReads = 0
+    const items = Array.from({ length: rowCount }, (_, index): AgentJournalRenderItem => ({
+      itemId: `history:${index}`,
       revision: 0,
       sequence: index + 2,
       observedAt: 1000,
       get body(): AgentJournalRenderItem['body'] {
-        reads += 1
-        return { kind: 'message', role, blocks: [] }
+        rowReads += 1
+        return { kind: 'message', role: 'assistant', blocks: [] }
       }
+    }))
+    const sequence = rowCount + 2
+    const turnId = running ? 'run' : null
+    const latestTurn = running
+      ? ({
+          itemId: 'turn-lifecycle:run',
+          observedAt: 3000,
+          turn: { turnId: 'run', state: 'running', startedAt: 3000, userItemId: 'orca:opener' }
+        } satisfies AgentSessionLatestTurn)
+      : null
+    const steer = { ...SEND, clientMessageId: 'steer', submittedAt: 3200 }
+    const held = {
+      ...steer,
+      clientMessageId: 'held',
+      handedOverAt: undefined,
+      handoverRecorded: true as const,
+      queuedMessageId: 'held-card'
     }
-  })
-  const initial = reduceStructuredAgentSession(
-    EMPTY_STRUCTURED_AGENT_SESSION,
-    { type: 'history-page', page: page(items, [SEND]) },
-    1500
-  )
-  const selectTurnBars = createStructuredAgentTurnBarsSelector()
-  const timingOf = (state: StructuredAgentSessionState, turnId: string | null = null) =>
-    selectTurnBars(state.items, state.submissions, turnId, state.latestTurn)
-  const before = timingOf(initial)
-  expect(structuredAgentSessionSendingItemIds([], initial.submissions)).toEqual(
-    new Set(['orca:opener'])
-  )
-
-  reads = 0
-  const stampedSend = { ...SEND, writtenAt: 2000 }
-  const stamped = batch(initial, count + 2, [stampedSend])
-  const retentionReads = reads
-  reads = 0
-  const stampedTiming = timingOf(stamped)
-  const timingReads = reads
-  expect({ retentionReads, timingReads }).toEqual({ retentionReads: 0, timingReads: 0 })
-  expect(stamped.items).toBe(initial.items)
-  expect(stamped.submissions).toEqual([stampedSend])
-  expect(stampedTiming).toBe(before)
-  expect(stamped.hasOlder).toBe(true)
-  expect(structuredAgentSessionSendingItemIds([], stamped.submissions)).toEqual(new Set())
-
-  const turn = {
-    itemId: 'turn-lifecycle:run',
-    revision: 0,
-    sequence: count + 3,
-    observedAt: 3000,
-    body: {
-      kind: 'turn',
-      turnId: 'run',
-      state: 'running',
-      startedAt: 3000,
-      userItemId: 'orca:opener'
+    const history = Array.from({ length: submissionCount - 3 }, (_, index) => ({
+      ...SEND,
+      clientMessageId: `settled:${index}`,
+      dispatchState: 'accepted' as const
+    }))
+    const cache = createMobileStructuredChatStateCache()
+    const noStored = () => null
+    const update = (key: string, action: StructuredAgentSessionAction) =>
+      cache.apply(key, noStored, action, 5000)
+    const inactive = vi.fn()
+    for (let index = 1; index < cacheCount; index++) {
+      const key = `chat-${index}`
+      update(key, { type: 'history-page', page: page([], []) })
+      cache.subscribe(key, inactive)
     }
-  } satisfies AgentJournalRenderItem
-  const { kind: _kind, ...turnSummary } = turn.body
-  const latestTurn = { itemId: turn.itemId, observedAt: turn.observedAt, turn: turnSummary }
-  const steer = { ...SEND, clientMessageId: 'steer', submittedAt: 3200, handedOverAt: 3300 }
-  const started = batch(stamped, count + 3, [steer], [turn], latestTurn)
-  const running = timingOf(started, 'run')
-  expect(running.runningTiming?.startedAt).toBe(3000)
-
-  reads = 0
-  const restamped = batch(started, count + 4, [{ ...steer, writtenAt: 3500 }], [], {
-    ...latestTurn,
-    turn: { ...latestTurn.turn }
-  })
-  expect(timingOf(restamped, 'run')).toBe(running)
-  expect(reads).toBe(0)
-
-  const completed = batch(
-    restamped,
-    count + 5,
-    [],
-    [
-      {
-        ...turn,
-        revision: 1,
-        body: { ...turn.body, state: 'completed', completedAt: 5000 }
+    update('chat', {
+      type: 'history-page',
+      page: {
+        ...page(items, [SEND, steer, held, ...history]),
+        latestTurn,
+        actionablePromptIds: [],
+        working: running
       }
-    ]
-  )
-  const settled = timingOf(completed)
-  expect(settled.runningTiming).toBeNull()
-  expect(settled.settledTurns.get('orca:opener')?.workedSeconds).toBe(2)
+    })
+    const active = vi.fn()
+    cache.subscribe('chat', active)
+    const initial = cache.get('chat')!
+    const selectTurnBars = createStructuredAgentTurnBarsSelector()
+    const timingOf = (state: StructuredAgentSessionState) =>
+      selectTurnBars(state.items, state.submissions, turnId, state.latestTurn)
+    const before = timingOf(initial)
+    const { result, rerender, unmount } = renderHook(
+      ({ state }) => {
+        const owner = {
+          subscribeDelivery: noSubscription,
+          getSubmissionReceipts: () => state.writtenAtById
+        } satisfies DeliveryOwner
+        const desktopSending = useStructuredAgentSendingItemIds(
+          owner,
+          NO_PENDING,
+          state.submissions
+        )
+        const desktop = useNativeChatTurnStatus({
+          turnKeys: NO_TURN_KEYS,
+          liveTurnKey: turnId ?? undefined,
+          working: running,
+          journalItems: state.items,
+          latestTurn: state.latestTurn,
+          subagentId: null,
+          notices: undefined,
+          sendingItemIds: desktopSending,
+          displayedIds: DISPLAYED,
+          workingStartedAt: running ? 3000 : null
+        })
+        const mobile = useMobileStructuredAgentTurnTiming(state, turnId, NO_PENDING, state.items)
+        return { desktop, desktopSending, mobile }
+      },
+      { initialProps: { state: initial } }
+    )
+    try {
+      const first = result.current
+      expect(first.desktopSending).toEqual(DISPLAYED)
+      expect(first.mobile.sendingItemIds).toEqual(DISPLAYED)
+      expect(first.desktop.turnWorking).toBe(false)
+      // Detect scans of settled candidates even when they never access a row body.
+      for (const record of initial.submissions.slice(3)) {
+        Object.defineProperty(record, 'dispatchState', {
+          get: () => {
+            settledReads += 1
+            return 'accepted'
+          }
+        })
+      }
 
-  const rejected = batch(completed, count + 6, [
-    { ...stampedSend, dispatchState: 'rejected', resolvedAt: 5000 }
-  ])
-  expect(timingOf(rejected).settledTurns.get('orca:opener')).toBeNull()
+      rowReads = 0
+      const receipt = { ...SEND, writtenAt: 2000 }
+      const mapIterations = vi.spyOn(Map.prototype, Symbol.iterator)
+      try {
+        update('chat', batch(sequence, [receipt], [], latestTurn))
+        expect(mapIterations).not.toHaveBeenCalled()
+      } finally {
+        mapIterations.mockRestore()
+      }
+      const stamped = cache.get('chat')!
+      expect(stamped.submissions).toBe(initial.submissions)
+      expect(stamped.items).toBe(initial.items)
+      expect(stamped.latestTurn).toBe(initial.latestTurn)
+      expect(timingOf(stamped)).toBe(before)
+      const receiptReads = vi.spyOn(stamped.writtenAtById, 'get')
+      rerender({ state: stamped })
+      expect(active).toHaveBeenCalledTimes(1)
+      expect(inactive).not.toHaveBeenCalled()
+      expect(receiptReads).toHaveBeenCalledTimes(4)
+      expect({ rowReads, settledReads }).toEqual({ rowReads: 0, settledReads: 0 })
+      expect(result.current.mobile.turnJournal).toBe(first.mobile.turnJournal)
+      expect(result.current.desktop.turnStatuses).toBe(first.desktop.turnStatuses)
+      expect(result.current.desktopSending).toEqual(new Set(['orca:steer']))
+      expect(result.current.mobile.sendingItemIds).toEqual(new Set(['orca:steer']))
+      expect(result.current.desktop.turnWorking).toBe(false)
 
-  const older: AgentJournalRenderItem = {
-    itemId: 'turn-lifecycle:older',
-    revision: 0,
-    sequence: 1,
-    observedAt: 100,
-    body: { kind: 'turn', turnId: 'older', state: 'completed', startedAt: 100, completedAt: 1100 }
+      update('chat', batch(sequence + 1, [{ ...steer, writtenAt: 3500 }], [], latestTurn))
+      rerender({ state: cache.get('chat')! })
+      expect(result.current.desktopSending.size).toBe(0)
+      expect(result.current.mobile.sendingItemIds.size).toBe(0)
+      expect(result.current.desktop.turnWorking).toBe(running)
+      expect(result.current.desktop.turnStatuses).toBe(first.desktop.turnStatuses)
+      expect(result.current.mobile.turnJournal).toBe(first.mobile.turnJournal)
+      expect({ rowReads, settledReads }).toEqual({ rowReads: 0, settledReads: 0 })
+
+      update(
+        'chat',
+        batch(
+          sequence + 2,
+          [{ ...steer, fence: 3 }],
+          [
+            {
+              itemId: 'orca:steer',
+              revision: 0,
+              sequence: sequence + 2,
+              observedAt: 5000,
+              body: { kind: 'message', role: 'user', blocks: [] }
+            }
+          ],
+          latestTurn
+        )
+      )
+      rerender({ state: cache.get('chat')! })
+      expect(result.current.mobile.turnJournal).not.toBe(first.mobile.turnJournal)
+      expect(cache.get('chat')!.submissions).not.toBe(initial.submissions)
+      expect(result.current.desktopSending).toEqual(new Set(['orca:steer']))
+      expect(result.current.desktop.turnWorking).toBe(false)
+      expect(rowReads).toBeGreaterThan(0)
+    } finally {
+      unmount()
+    }
   }
-  const paged = reduceStructuredAgentSession(
-    rejected,
-    {
-      type: 'older-page',
-      requestedCursor: { epoch: EPOCH, sequence: 2 },
-      page: page([older], [])
-    },
-    5000
-  )
-  expect(timingOf(paged).settledTurns.get(older.itemId)?.workedSeconds).toBe(1)
-  expect(timingOf(EMPTY_STRUCTURED_AGENT_SESSION).settledTurns.size).toBe(0)
+)
+
+// PR #45057: desktop transcript subscribers stay asleep as the delivery cursor advances.
+it('publishes only delivery updates to desktop subscribers for receipts', () => {
+  const transport = vi.mocked(startStructuredAgentSessionReadTransport)
+  transport.mockReturnValue({
+    dispose: () => {},
+    captureHistoryReadGuard: () => () => false
+  })
+  const owner = createReadOwner('chat', 'chat', { kind: 'local' })
+  owner.publishCreated({
+    ...page([], [SEND]),
+    latestTurn: null,
+    actionablePromptIds: [],
+    working: false
+  })
+  const release = owner.activate({
+    getState: vi.fn().mockReturnValue({ settings: null }),
+    subscribeRetryNow: noSubscription
+  })
+  const deliver = (action: StructuredAgentSessionAction) => {
+    if (action.type !== 'event') {
+      throw new Error('Expected a subscription event')
+    }
+    transport.mock.calls.at(-1)![0].applyEvent(action.event)
+  }
+  deliver(batch(1, [], [], null))
+  const previous = owner.getSnapshot()
+  const bulk = vi.fn()
+  const delivery = vi.fn()
+  const unsubscribeBulk = owner.subscribe(bulk)
+  const unsubscribeDelivery = owner.subscribeDelivery(delivery)
+  try {
+    deliver(batch(2, [{ ...SEND, writtenAt: 2000 }], [], null))
+    expect(owner.getSnapshot()).toBe(previous)
+    expect(owner.getReadCursor()).toEqual({ epoch: EPOCH, sequence: 2 })
+    expect(owner.getSubmissionReceipts().get('opener')).toBe(2000)
+    expect(delivery).toHaveBeenCalledTimes(1)
+    expect(bulk).not.toHaveBeenCalled()
+
+    deliver(batch(3, [{ ...SEND, fence: 3 }], [], null))
+    expect(owner.getSnapshot()).not.toBe(previous)
+    expect(owner.getSubmissionReceipts().get('opener')).toBeUndefined()
+    expect(delivery).toHaveBeenCalledTimes(2)
+    expect(bulk).toHaveBeenCalledTimes(1)
+  } finally {
+    unsubscribeBulk()
+    unsubscribeDelivery()
+    release()
+    owner.dispose()
+  }
 })

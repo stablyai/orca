@@ -75,6 +75,9 @@ function completionFixture(isBot: boolean) {
       const noSubscription = () => () => {}
       const owner: StructuredAgentSessionReadOwner = {
         getSnapshot: () => snapshot,
+        getReadCursor: () => snapshot.state.cursor,
+        getSubmissionReceipts: () => snapshot.state.writtenAtById,
+        subscribeDelivery: noSubscription,
         subscribe: (listener) => {
           listeners.add(listener)
           return () => listeners.delete(listener)

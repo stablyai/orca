@@ -69,6 +69,7 @@ export type MobileNativeChatController = {
   nativeChatWorkingStartedAt: number | null
   nativeChatSettledTurns: NativeChatSettledTurns | null
   nativeChatTurnJournal: NativeChatTurnJournal | null
+  nativeChatSendingItemIds?: ReadonlySet<string>
   nativeChatReceipts: ReadonlyMap<string, NativeChatResolvedPrompt> | null
   nativeChatActionablePromptIds: readonly string[] | undefined
   nativeChatCommandRefusalCauses: MobileNativeChatCommandRefusalCauses

@@ -42,6 +42,8 @@ export type NativeChatTranscriptRowContext = {
   latestTurnKey?: string
   /** Keyed by message id: the user messages that did not go through, each with its own words. */
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
+  sendingItemIds?: ReadonlySet<string>
+  hideWorking?: boolean
   /** Keyed by message id: rows from outside the conversation that came right after that message. */
   timedRows?: ReadonlyMap<string, readonly NativeChatTimedRow[]>
   structuredAttachments?: boolean
@@ -107,6 +109,8 @@ function NativeChatRowNewRowsMarker({
   )
 }
 
+const SENDING_NOTICE: NativeChatDeliveryNotice = { sending: true }
+
 /** Wrap message, status and rollup for one virtualized measurement; internal spacing is the row’s, inter-row gaps the window’s. */
 export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   slot,
@@ -138,7 +142,9 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   }
   const { message, turnKey, status, receipt, turnDiff, openedPullRequests, workRun, itemNotes } =
     slot
-  const deliveryNotice = context.deliveryNotices?.get(message.id)
+  const deliveryNotice =
+    context.deliveryNotices?.get(message.id) ??
+    (context.sendingItemIds?.has(message.id) ? SENDING_NOTICE : undefined)
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
   const marker = newRowsMarker ? (
@@ -152,18 +158,19 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   ) : null
   // A settling quiet turn's bar fades alone, or with its whole row when nothing else draws in it.
   const leavesWhole = nativeChatSlotLeavesWhole(slot)
-  const bar = status ? (
-    <NativeChatWorkingStatus
-      bot={context.turnBot}
-      startedAt={status.startedAt}
-      workedSeconds={status.workedSeconds}
-      verdict={status.verdict}
-      expanded={expanded === true}
-      onToggleExpanded={
-        slot.turnFolds && turnKey ? () => context.onToggleExpandedTurn(turnKey) : undefined
-      }
-    />
-  ) : null
+  const bar =
+    status && !(context.hideWorking && status.workedSeconds == null) ? (
+      <NativeChatWorkingStatus
+        bot={context.turnBot}
+        startedAt={status.startedAt}
+        workedSeconds={status.workedSeconds}
+        verdict={status.verdict}
+        expanded={expanded === true}
+        onToggleExpanded={
+          slot.turnFolds && turnKey ? () => context.onToggleExpandedTurn(turnKey) : undefined
+        }
+      />
+    ) : null
   const statusRow =
     bar && slot.leaving === 'bar' && !leavesWhole ? (
       <NativeChatQuietTurnLeave gap={slot.statusAbove ? 'below' : 'above'}>

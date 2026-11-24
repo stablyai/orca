@@ -6,7 +6,7 @@ import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-c
 import { AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY } from '../../../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 import { useCallback, useEffect, useEffectEvent, useSyncExternalStore } from 'react'
-import type { AgentJournalCursor } from '../../../../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { StructuredAgentSessionReadOwner } from '../read/structured-agent-session-read-owner-contract'
 import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
@@ -34,7 +34,7 @@ export function useStructuredAgentSessionSends(args: {
   sessionId: string
   target: RuntimeClientTarget
   fence: number | null
-  cursor?: AgentJournalCursor | null
+  readOwner: StructuredAgentSessionReadOwner
   submissions: readonly AgentJournalSubmission[]
   queuedMessageIds: readonly string[]
   queue: StructuredAgentSessionQueueDelivery
@@ -49,7 +49,7 @@ export function useStructuredAgentSessionSends(args: {
   sendOptions?: () => Readonly<Record<string, string>> | undefined
 }) {
   const {
-    cursor,
+    readOwner,
     fence,
     historyLoaded,
     isWorking = false,
@@ -87,8 +87,21 @@ export function useStructuredAgentSessionSends(args: {
   }, [fence, sessionId])
 
   useEffect(() => {
-    settleStructuredAgentSessionSendsFromJournal(sessionId, submissions, queuedMessageIds, cursor)
-  }, [cursor, pending, queuedMessageIds, sessionId, submissions])
+    const settle = () =>
+      settleStructuredAgentSessionSendsFromJournal(
+        sessionId,
+        submissions,
+        queuedMessageIds,
+        readOwner.getReadCursor()
+      )
+    settle()
+    return readOwner.subscribeDelivery(() => {
+      const { state } = readOwner.getSnapshot()
+      if (state.submissions === submissions) {
+        settle()
+      }
+    })
+  }, [pending, queuedMessageIds, readOwner, sessionId, submissions])
 
   const recoverLegacy = historyLoaded && fence !== null
   // Why an event: once per open, from the first loaded history; later batches add nothing it needs.

@@ -1,5 +1,9 @@
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
-import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
+import {
+  structuredAgentSubmissionIndex,
+  type StructuredAgentSubmission,
+  type SubmissionReceipts
+} from './structured-agent-session-submissions'
 import {
   agentJournalSubmissionAwaitsAgent,
   isQueuedAgentJournalSubmission
@@ -29,24 +33,37 @@ export function pendingSendsOutsideQueuedCards<
   return next.length === pending.length ? pending : next
 }
 
+const sendingCandidates = new WeakMap<
+  readonly StructuredAgentSubmission[],
+  readonly StructuredAgentSubmission[]
+>()
+
 export function structuredAgentSessionSendingItemIds(
   pending: readonly { clientMessageId: string; phase?: string }[],
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly StructuredAgentSubmission[],
+  writtenAtById: SubmissionReceipts
 ): ReadonlySet<string> {
+  let candidates = sendingCandidates.get(submissions)
+  if (!candidates) {
+    candidates = submissions.filter(
+      (submission) =>
+        submission.dispatchState === 'pending' &&
+        !(submission.queuedMessageId !== undefined && isQueuedAgentJournalSubmission(submission))
+    )
+    sendingCandidates.set(submissions, candidates)
+  }
+  const recorded = structuredAgentSubmissionIndex(submissions)
   const sending = new Set<string>()
   for (const entry of pending) {
-    if (entry.phase !== 'unconfirmed') {
+    if (entry.phase !== 'unconfirmed' && !recorded.has(entry.clientMessageId)) {
       sending.add(agentJournalSubmissionKey(entry.clientMessageId))
     }
   }
-  for (const submission of submissions) {
-    const id = agentJournalSubmissionKey(submission.clientMessageId)
-    const heldCard =
-      submission.queuedMessageId !== undefined && isQueuedAgentJournalSubmission(submission)
-    if (!heldCard && agentJournalSubmissionAwaitsAgent(submission)) {
-      sending.add(id)
-    } else {
-      sending.delete(id)
+  for (const submission of candidates) {
+    if (
+      agentJournalSubmissionAwaitsAgent(submission, writtenAtById.get(submission.clientMessageId))
+    ) {
+      sending.add(agentJournalSubmissionKey(submission.clientMessageId))
     }
   }
   return sending

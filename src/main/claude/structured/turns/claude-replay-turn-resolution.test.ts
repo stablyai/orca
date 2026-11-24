@@ -206,6 +206,39 @@ it('opens a priority steer at its matched start after the parent ends', () => {
   })
 })
 
+it.each([false, true])(
+  'revises an echoed follow-up to its matched start (output first: %s)',
+  (outputFirst) => {
+    const f = fixture()
+    waitForReplay(f.session, false, SENT, 'key', 'opener', 1000)
+    f.frame(lifecycle('started'), 2000)
+    f.frame(echo(SENT), 2500)
+    const { waiter } = waitForReplay(f.session, false, FOLLOW_UP, 'key', 'steer', 4500)
+    waiter.steers = true
+    f.frame(lifecycle('queued', FOLLOW_UP), 4750)
+    f.frame({ type: 'result', subtype: 'success', uuid: RESULT, session_id: SESSION }, 5000)
+    f.frame(echo(FOLLOW_UP), 5200)
+    f.frame(lifecycle('started', FOLLOW_UP), 5300, false)
+    f.frame(lifecycle('started', SENT), 5400)
+    if (outputFirst) {
+      f.frame(output, 5500)
+    }
+    f.frame(lifecycle('started', FOLLOW_UP), 6000)
+    f.frame(lifecycle('started', FOLLOW_UP), 6500)
+
+    expect(f.turns().map(({ body }) => body)).toMatchObject([
+      { turnId: SENT, state: 'running', startedAt: 2000 },
+      { turnId: SENT, state: 'completed', startedAt: 2000 },
+      { turnId: FOLLOW_UP, state: 'running', startedAt: 5200 },
+      { turnId: FOLLOW_UP, state: 'running', startedAt: outputFirst ? 5500 : 6000 }
+    ])
+    expect(f.receipts).toEqual([
+      { clientMessageId: 'opener', fence: 3, observedAt: 2000 },
+      { clientMessageId: 'steer', fence: 3, observedAt: 4750 }
+    ])
+  }
+)
+
 it('opens and can stop a late steer from its echo on CLIs without lifecycle frames', async () => {
   let interrupts = 0
   const f = fixture({

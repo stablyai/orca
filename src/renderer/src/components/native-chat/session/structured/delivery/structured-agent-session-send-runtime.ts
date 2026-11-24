@@ -171,7 +171,7 @@ export function beginSend(
   const { clientMessageId, sessionId } = entry
   const owner = getStructuredAgentSessionReadOwner(sessionId, target)
   updateStructuredAgentSessionPendingSend(sessionId, clientMessageId, {
-    afterSequence: owner.getSnapshot().state.cursor?.sequence
+    afterSequence: owner.getReadCursor()?.sequence
   })
   const outcome = new Promise<StructuredAgentSessionSendOutcome>((resolve) => {
     runtimes.set(clientMessageId, {

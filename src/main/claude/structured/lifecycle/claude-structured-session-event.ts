@@ -1,3 +1,4 @@
+import type { ClaudeEchoedDispatch } from '../turns/claude-echoed-dispatch-start'
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type * as SessionAdapter from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { ClaudePendingPrompt } from '../permissions/claude-prompt-registry'
@@ -22,6 +23,8 @@ export type ClaudeStructuredSessionEvent =
       requestedAt?: number
       /** The submission this replay acknowledged, which opens the turn. */
       clientMessageId?: string
+      /** A lifecycle-tracked opener whose echo arrived before its start. */
+      queuedDispatch?: ClaudeEchoedDispatch
       /** On any other frame: the send the CLI started and has not echoed, whose turn output opens. */
       startedSend?: ClaudeStartedSend
       /** The user's new title from Claude's rename command, read when the frame arrived. */

@@ -1,7 +1,6 @@
 // Durable host-clock lifecycle endpoints/provider durations keep settled timing identical on desktop/mobile without client clocks.
 
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
-import { agentJournalSubmissionsDifferOnlyInStamp } from '../journal/agent-session-journal-written-stamp'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
@@ -142,14 +141,17 @@ export function completedStructuredAgentTurnSeconds(
 export function structuredAgentTurnLocalStartedAt(
   timing: StructuredAgentTurnTiming,
   firstSeenAt: number,
-  hostNow?: number
+  hostNow?: number,
+  correctedStart = false
 ): number {
   const hostElapsed =
     hostNow !== undefined && Number.isFinite(hostNow)
       ? hostNow - timing.startedAt
       : timing.observedAt - timing.startedAt
   // Clamp NTP-induced negative host elapsed so the counter cannot run backwards.
-  return firstSeenAt - Math.max(0, hostElapsed)
+  return (
+    firstSeenAt - (correctedStart && hostNow !== undefined ? hostElapsed : Math.max(0, hostElapsed))
+  )
 }
 
 /** Host null durations outrank local guesses, keeping live/reloaded surfaces consistent for unobserved ends.
@@ -229,10 +231,8 @@ export function createStructuredAgentTurnBarsSelector(): typeof selectStructured
       previous?.items === items &&
       previous.turnId === turnId &&
       previous.latestTurn === latestTurn &&
-      (previous.submissions === submissions ||
-        agentJournalSubmissionsDifferOnlyInStamp(previous.submissions, submissions))
+      previous.submissions === submissions
     ) {
-      previous.submissions = submissions
       return previous.bars
     }
     const bars = selectStructuredAgentTurnBars(items, submissions, turnId, latestTurn)

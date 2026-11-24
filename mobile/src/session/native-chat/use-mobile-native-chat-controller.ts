@@ -284,6 +284,7 @@ export function useMobileNativeChatController(args: {
     nativeChatWorkingStartedAt: activeTurn.workingStartedAt,
     nativeChatSettledTurns: activeTurn.settledTurns,
     nativeChatTurnJournal: activeChatStructured ? structuredNativeChat.turnJournal : null,
+    nativeChatSendingItemIds: structuredNativeChat.sendingItemIds,
     nativeChatReceipts: activeChatStructured ? structuredNativeChat.receipts : null,
     nativeChatActionablePromptIds: structuredNativeChat.actionablePromptIds,
     nativeChatCommandRefusalCauses: structuredNativeChat.commandRefusalCauses,
