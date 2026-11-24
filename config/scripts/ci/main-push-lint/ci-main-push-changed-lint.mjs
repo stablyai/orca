@@ -192,7 +192,7 @@ export async function main({
   const range = rangeText(plan)
   const targets = [...plan.dirs, ...plan.files]
   reporter.log(
-    `Linting ${plan.files.length} changed candidate file(s)${plan.dirs.length > 0 ? ` and every file under ${plan.dirs.join(', ')}` : ''} in ${range}: ${plan.scope}.`
+    `Linting ${plan.touched.length} changed candidate file(s)${plan.dirs.length > 0 ? ` and every file under ${plan.dirs.join(', ')}` : ''} in ${range}: ${plan.scope}.`
   )
   for (const policy of plan.policies) {
     reporter.log(`Lint policy changed: ${policy.why}; linting everything under ${policy.dir}.`)
