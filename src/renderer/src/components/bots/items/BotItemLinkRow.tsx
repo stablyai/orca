@@ -8,12 +8,15 @@ export const botItemLinkRowClassName =
 export function BotItemLinkRowButton({
   name,
   status,
+  statusTitle,
   tip,
   disabled,
   onClick
 }: {
   name: ReactNode
   status?: ReactNode
+  /** The state's full words on hover, for a row with no tooltip to hold them. */
+  statusTitle?: string
   tip?: string
   disabled?: boolean
   onClick?: MouseEventHandler<HTMLButtonElement>
@@ -21,7 +24,7 @@ export function BotItemLinkRowButton({
   const button = (
     <button type="button" disabled={disabled} onClick={onClick} className={botItemLinkRowClassName}>
       <BotItemLinkRowName>{name}</BotItemLinkRowName>
-      <BotItemLinkRowStatus>{status}</BotItemLinkRowStatus>
+      <BotItemLinkRowStatus title={statusTitle}>{status}</BotItemLinkRowStatus>
     </button>
   )
   return tip ? (

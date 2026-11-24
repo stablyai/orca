@@ -282,14 +282,7 @@ function LinkPeekCard({
         sideOffset={CARD_OFFSET}
         collisionPadding={WINDOW_MARGIN}
         collisionBoundary={bounds?.boundary}
-        style={
-          bounds
-            ? {
-                maxWidth: bounds.maxWidth,
-                maxHeight: `min(var(--radix-hover-card-content-available-height), ${bounds.maxHeight}px)`
-              }
-            : undefined
-        }
+        style={bounds ? { maxWidth: bounds.maxWidth } : undefined}
         className={cn(
           'flex max-h-(--radix-hover-card-content-available-height) w-96 max-w-[calc(100vw-1rem)] flex-col',
           // Over the popover the link is listed in (popovers sit at 60).

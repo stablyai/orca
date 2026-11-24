@@ -1,12 +1,12 @@
 // A card kept inside a region narrower than the window (an item pane): the region is its collision
-// boundary, and its width and height are capped to the region's room, re-read whenever the region
-// or the window changes size (a pane resized, zoom) while the card is open. Nothing is read on scroll.
+// boundary, and its width is capped to the region's, re-read whenever the region or the window changes
+// size (a pane resized, zoom) while the card is open. Its height is the caller's: the placement's live
+// available height (`--radix-hover-card-content-available-height`), which follows the link as it scrolls.
 import { useLayoutEffect, useState, type RefObject } from 'react'
-import { CARD_OFFSET, WINDOW_MARGIN } from './link-peek-side'
+import { WINDOW_MARGIN } from './link-peek-side'
 
-/** Where a card stays and how big it may be there: `maxHeight` is the room on the larger side of the
- *  link, which is the side the card flips to when it doesn't fit the other. */
-export type PeekBounds = { boundary: Element; maxWidth: number; maxHeight: number }
+/** Where a card stays and how wide it may be there. */
+export type PeekBounds = { boundary: Element; maxWidth: number }
 
 /** Finds the region a card opened from `link` must stay inside; null leaves it to the window. */
 export type PeekBoundary = (link: Element) => Element | null
@@ -25,17 +25,14 @@ export function usePeekBounds(
       return
     }
     const measure = (): void => {
-      const region = boundary.getBoundingClientRect()
-      const at = anchor.getBoundingClientRect()
-      const room = Math.max(region.bottom - at.bottom, at.top - region.top)
-      const maxWidth = Math.max(0, Math.floor(region.width - 2 * WINDOW_MARGIN))
-      const maxHeight = Math.max(0, Math.floor(room - CARD_OFFSET - WINDOW_MARGIN))
+      const maxWidth = Math.max(
+        0,
+        Math.floor(boundary.getBoundingClientRect().width - 2 * WINDOW_MARGIN)
+      )
       setBounds((current) =>
-        current?.boundary === boundary &&
-        current.maxWidth === maxWidth &&
-        current.maxHeight === maxHeight
+        current?.boundary === boundary && current.maxWidth === maxWidth
           ? current
-          : { boundary, maxWidth, maxHeight }
+          : { boundary, maxWidth }
       )
     }
     measure()

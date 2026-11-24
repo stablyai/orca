@@ -296,3 +296,42 @@ export const calmNarrowLongStatus = calmAt(260, {
     { kind: 'url', ref: 'https://linear.app/acme/issue/OPS-1650/cloud-read-only-access' }
   ]
 })
+
+/** A short 260px pane whose worker has a long title, for its card held open while the details scroll. */
+export const calmShortWorkerCard = defineFixture({
+  width: 260,
+  store: calmStore,
+  render: () => (
+    <Calm
+      shown={{
+        ...calmItem,
+        links: [
+          workerLink(
+            'ctx_long',
+            'Stop runbook review on every paired host before the launch-day dry run, then report back on the undo card and the backup operator rota',
+            true
+          ),
+          ...calmSeven.slice(1)
+        ]
+      }}
+      height={380}
+    />
+  )
+})
+
+/** A description whose lines mix prose, inline code and links, cut by a short window. */
+export const calmMixedLineCut = defineFixture({
+  width: 340,
+  store: calmStore,
+  render: () => (
+    <Calm
+      shown={{
+        ...calmItem,
+        description:
+          'Run `orca-stop --all --dry-run` on each host, then `orca-undo --card` and check [the runbook](https://example.com/runbook) before **launch**. Keep `--dry-run` until the owner signs off, then run `orca-stop --all` once from the [launch checklist](https://example.com/checklist).',
+        links: calmSeven
+      }}
+      height={330}
+    />
+  )
+})

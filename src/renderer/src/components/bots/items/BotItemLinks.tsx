@@ -78,6 +78,17 @@ function useOpenWeb(): (url: string, event: MouseEvent<HTMLElement>) => void {
   }
 }
 
+/** The full words for what `gitHubStatus` shows. */
+function gitHubStatusWords(t: Translate, row: BotItemGitHubRow): string | null {
+  const live = row.type === 'pr' && (row.state === 'open' || row.state === 'draft')
+  if (live && (row.checks === 'success' || row.checks === 'failure')) {
+    return checksLabel(t, row.checks)
+  }
+  return row.state
+    ? getTaskPageGitHubWorkItemStateLabel({ type: row.type, state: row.state }, t)
+    : null
+}
+
 /** CI where it can still change (open and draft PRs, once it has an outcome), else the PR's or issue's state. */
 function gitHubStatus(t: Translate, row: BotItemGitHubRow): ReactNode {
   const live = row.type === 'pr' && (row.state === 'open' || row.state === 'draft')
@@ -124,6 +135,9 @@ function GitHubRow({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Eleme
     <BotItemLinkRowButton
       name={<span className="min-w-0 truncate">{name}</span>}
       status={gitHubStatus(t, row)}
+      // With a card in place of the tooltip, the row's own state (as the row read it, not the card's
+      // lookup) stays whole on hover of the state.
+      statusTitle={card ? (gitHubStatusWords(t, row) ?? undefined) : undefined}
       tip={card ? undefined : tip}
       onClick={(event) => openWeb(row.url, event)}
     />
@@ -258,11 +272,11 @@ function WorkerRow({
         variant="workspace-details"
         collisionPadding={BOT_ITEM_PANE_CARD_MARGIN}
         collisionBoundary={bounds?.boundary}
-        style={
-          bounds
-            ? { maxWidth: bounds.maxWidth, maxHeight: `min(28rem, ${bounds.maxHeight}px)` }
-            : undefined
-        }
+        // The placement's live room, as the link scrolls with the details; what's taller scrolls inside.
+        style={{
+          maxWidth: bounds?.maxWidth,
+          maxHeight: 'min(28rem, var(--radix-hover-card-content-available-height))'
+        }}
       >
         <WorkerActivityDetails
           title={worker.title}
