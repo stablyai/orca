@@ -27801,12 +27801,7 @@
       },
       "cancel": {
         "confirmMany": "取消 {{count}} 项",
-        "confirmOne": "取消事项",
-        "keep": "保留",
-        "placeholder": "原因",
-        "titleMany": "要取消 {{count}} 个事项吗？",
-        "titleOne": "要取消“{{title}}”吗？",
-        "why": "bot 会看到原因。不会删除任何内容"
+        "keep": "保留"
       },
       "chat": {
         "added": "添加了 {{items}}",
@@ -27902,8 +27897,7 @@
         "serverPr": "服务器上的工作暂不显示 PR"
       },
       "menu": {
-        "cancel": "取消事项…",
-        "canceled": "已取消…",
+        "cancel": "取消事项",
         "done": "完成"
       },
       "pill": {

@@ -6521,13 +6521,7 @@
       },
       "cancel": {
         "keep": "Keep",
-        "confirmMany": "Cancel {{count}}",
-        "titleMany": "Cancel {{count}} items?",
-        "titleOne": "Cancel {{title}}?",
-        "why": "The bot sees the reason. Nothing is deleted.",
-        "placeholder": "Reason",
-        "confirmOne": "Cancel item",
-        "offline": "{{host}} is offline. Your reason is kept; {{action}} works again when it’s back."
+        "confirmMany": "Cancel {{count}}"
       },
       "wait": {
         "titleOne": "What is {{title}} waiting on?",
