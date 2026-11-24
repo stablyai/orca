@@ -1,3 +1,4 @@
+import { persistWorkspaceCleanupPolicy } from '../../workspaces/cleanup/workspace-cleanup-policy-write'
 import type { WorkspaceCleanupPolicyGuard } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { isRepoHidden } from '../../../shared/project/catalog/hidden-projects'
@@ -168,6 +169,9 @@ export class RuntimeRepositorySettingsController {
         : write({})
     if (!updated) {
       throw new Error('repo_not_found')
+    }
+    if (updates.workspaceCleanupGuard) {
+      await persistWorkspaceCleanupPolicy(store)
     }
     if ('worktreeBasePath' in updates) {
       await prepareLocalWorktreeRootForRepo(store, updated)

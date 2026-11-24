@@ -11,6 +11,7 @@ import {
 } from '../../../../../shared/rpc-contract/workspace-cleanup/workspace-cleanup-change-params'
 import {
   settleWorkspaceCleanupPolicyWrite,
+  persistWorkspaceCleanupPolicy,
   reserveWorkspaceCleanupPolicyWrite,
   recoverWorkspaceCleanupPolicyWrites
 } from '../../../../workspaces/cleanup/workspace-cleanup-policy-write'
@@ -80,8 +81,11 @@ export const WORKSPACE_CLEANUP_RUNNER_METHODS = [
     name: 'workspaceCleanup.policyState',
     permission: 'workspace',
     params: WorkspaceCleanupPolicyReadParams,
-    handler: (params, { runtime }) =>
-      requireWorkspaceCleanupRunner(runtime).readPolicy(params.repoId)
+    handler: async (params, { runtime }) => {
+      // A readback is the proof a lost write reply leans on; it answers from what is on disk.
+      await persistWorkspaceCleanupPolicy(runtime.requireStore())
+      return requireWorkspaceCleanupRunner(runtime).readPolicy(params.repoId)
+    }
   }),
   defineMethod({
     name: 'workspaceCleanup.reservePolicyWrite',
@@ -116,9 +120,13 @@ export const WORKSPACE_CLEANUP_RUNNER_METHODS = [
     name: 'workspaceCleanup.settlePolicyWrite',
     permission: 'workspace',
     params: WorkspaceCleanupSettleParams,
-    handler: (params) => ({
-      outcome: settleWorkspaceCleanupPolicyWrite(params.id, params.expiresAt)
-    })
+    handler: async (params, { runtime }) => {
+      const outcome = settleWorkspaceCleanupPolicyWrite(params.id, params.expiresAt)
+      if (outcome === 'applied') {
+        await persistWorkspaceCleanupPolicy(runtime.requireStore())
+      }
+      return { outcome }
+    }
   }),
   defineMethod({
     name: 'workspaceCleanup.inspectKept',

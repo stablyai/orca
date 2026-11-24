@@ -103,6 +103,21 @@ export function beginWorkspaceCleanupPolicyWrite(
   receipts.set(guard.id, { ...receipt, expiresAt: guard.expiresAt, outcome: 'applied' })
 }
 
+type DurablePolicyStore = {
+  runDurableMutation?: <T>(mutate: () => { value: T; persist?: boolean | 'if-dirty' }) => Promise<T>
+}
+/**
+ * Settings and project rows save on a deferred schedule. A guarded cleanup policy is acknowledged,
+ * and read back as proof, only once that save is on disk: a restart before it would otherwise
+ * bring back rules the user was told had changed.
+ */
+export async function persistWorkspaceCleanupPolicy(store: DurablePolicyStore): Promise<void> {
+  if (!store.runDurableMutation) {
+    throw new Error('workspace_cleanup_policy_unavailable')
+  }
+  await store.runDurableMutation(() => ({ value: undefined, persist: 'if-dirty' }))
+}
+
 export function reserveWorkspaceCleanupPolicyWrite(
   owner: CleanupWriteOwner,
   input: WorkspaceCleanupPolicyGuard

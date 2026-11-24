@@ -1,3 +1,4 @@
+import { persistWorkspaceCleanupPolicy } from '../../workspaces/cleanup/workspace-cleanup-policy-write'
 import type { WorkspaceCleanupPolicyGuard } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
@@ -283,6 +284,9 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           row && isFolderRepo(row) ? await commitProvenRepoKindChange(store, row, write) : write({})
       } else {
         updated = write({})
+      }
+      if (updated && args.updates.workspaceCleanupGuard) {
+        await persistWorkspaceCleanupPolicy(store)
       }
       if (updated) {
         if ('worktreeBasePath' in updates) {

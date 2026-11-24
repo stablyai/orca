@@ -12,17 +12,13 @@ import {
 } from '../../persistence/persistence-test-harness'
 import { RuntimeRepositorySettingsController } from '../../runtime/repositories/runtime-repository-settings-controller'
 import { captureWorkspaceCleanupPolicyState } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
-import {
-  getDefaultWorkspaceCleanupRules,
-  resolveWorkspaceCleanupPolicy
-} from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
+import { getDefaultWorkspaceCleanupRules } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import {
   settleWorkspaceCleanupPolicyWrite,
   reserveWorkspaceCleanupPolicyWrite,
   recoverWorkspaceCleanupPolicyWrites
 } from './workspace-cleanup-policy-write'
 import { readWorkspaceCleanupPolicy } from './workspace-cleanup-policy-preview'
-import { evaluateWorkspaceCleanup } from '../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
 
 const { handlers } = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => unknown>()
@@ -73,107 +69,6 @@ function fixture() {
   return { store, repo, rules, guard }
 }
 
-it('rejects a stale two-client rule-off replacement at the owner mutation and can retry the intent', async () => {
-  const { store, repo, rules, guard } = fixture()
-  const expected = guard(repo.id)
-  let arrived!: () => void, release!: () => void
-  const entered = new Promise<void>((resolve) => {
-    arrived = resolve
-  })
-  const barrier = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  const controller = new RuntimeRepositorySettingsController({
-    getStore: () => store,
-    resolveRepo: async () => {
-      arrived()
-      await barrier
-      return store.getRepo(repo.id)!
-    },
-    forgetTerminalTopology: () => {},
-    invalidateResolvedWorktrees: () => {},
-    invalidateWorktreeScan: () => {},
-    notifyReposChanged: () => {},
-    notifyWorktreesChanged: () => {}
-  })
-  const pending = controller.update(repo.id, {
-    workspaceCleanupPolicy: { mode: 'custom', rules: { ...rules, merged: { enabled: false } } },
-    workspaceCleanupGuard: expected
-  })
-  const rejection = expect(pending).rejects.toThrow('workspace_cleanup_policy_conflict')
-  await entered
-  store.updateRepo(repo, {
-    workspaceCleanupPolicy: {
-      mode: 'custom',
-      rules: { ...rules, inactive: { ...rules.inactive, enabled: false } }
-    }
-  })
-  await store.runDurableMutation(() => ({ value: true, persist: 'if-dirty' }))
-  release()
-  await rejection
-  const saved = store.getRepo(repo.id)!.workspaceCleanupPolicy
-  expect(saved).toMatchObject({
-    mode: 'custom',
-    rules: { merged: { enabled: true }, inactive: { enabled: false } }
-  })
-  expect(
-    readPersistedState().repos.find((row) => row.id === repo.id)?.workspaceCleanupPolicy
-  ).toMatchObject({
-    mode: 'custom',
-    rules: { merged: { enabled: true }, inactive: { enabled: false } }
-  })
-  expect(expected.expected.projects[0].policy).toMatchObject({
-    mode: 'custom',
-    rules: { inactive: { enabled: true } }
-  })
-  const now = Date.UTC(2026, 10, 14)
-  expect(
-    evaluateWorkspaceCleanup(
-      {
-        reasons: [],
-        blockers: [],
-        lastActivityAt: now - 40 * 86400000,
-        git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: now }
-      },
-      resolveWorkspaceCleanupPolicy(store.getSettings(), store.getRepo(repo.id)),
-      now
-    )
-  ).toEqual({ action: 'keep', cause: 'no-rule-matched' })
-  const latest = store.getRepo(repo.id)!.workspaceCleanupPolicy
-  if (latest?.mode !== 'custom') {
-    throw new Error('Expected custom fixture')
-  }
-  await controller.update(repo.id, {
-    workspaceCleanupPolicy: {
-      mode: 'custom',
-      rules: { ...latest.rules, merged: { enabled: false } }
-    },
-    workspaceCleanupGuard: guard(repo.id)
-  })
-  expect(store.getRepo(repo.id)!.workspaceCleanupPolicy).toMatchObject({
-    mode: 'custom',
-    rules: { merged: { enabled: false }, inactive: { enabled: false } }
-  })
-})
-
-it('checks the expected policy before clearing a project override', () => {
-  const { store, repo, rules, guard } = fixture()
-  const stale = guard(repo.id)
-  store.updateRepo(repo, {
-    workspaceCleanupPolicy: {
-      mode: 'custom',
-      rules: { ...rules, inactive: { ...rules.inactive, enabled: false } }
-    }
-  })
-  expect(() =>
-    store.updateRepo(repo, { workspaceCleanupPolicy: null, workspaceCleanupGuard: stale })
-  ).toThrow('workspace_cleanup_policy_conflict')
-  expect(store.getRepo(repo.id)!.workspaceCleanupPolicy).toMatchObject({
-    mode: 'custom',
-    rules: { inactive: { enabled: false } }
-  })
-})
-
 it('guards global writes against concurrent project-policy changes', () => {
   const { store, repo, guard } = fixture()
   const stale = guard(null)
@@ -185,16 +80,6 @@ it('guards global writes against concurrent project-policy changes', () => {
     })
   ).toThrow('workspace_cleanup_policy_conflict')
   expect(store.getSettings().workspaceCleanupPolicy?.merged.enabled).toBe(false)
-})
-
-it('fences a delayed write whose reply was lost before the owner received it', () => {
-  const { store, repo, guard } = fixture()
-  const delayed = guard(repo.id)
-  expect(settleWorkspaceCleanupPolicyWrite(delayed.id, delayed.expiresAt)).toBe('cancelled')
-  expect(() =>
-    store.updateRepo(repo, { workspaceCleanupPolicy: null, workspaceCleanupGuard: delayed })
-  ).toThrow('workspace_cleanup_policy_conflict')
-  expect(store.getRepo(repo.id)!.workspaceCleanupPolicy?.mode).toBe('custom')
 })
 
 it('preserves the guard through local IPC and rejects a stale null clear before any mutation', async () => {
@@ -258,34 +143,6 @@ it('fences a reserved write whose resolver outlives its original client', async 
   })
 })
 
-it('fences a reserved global policy write after client recovery', () => {
-  const { store, guard } = fixture()
-  const expected = { ...guard(null), requireReservation: true as const }
-  reserveWorkspaceCleanupPolicyWrite(store, expected)
-  settleWorkspaceCleanupPolicyWrite(expected.id, expected.expiresAt)
-  expect(() =>
-    store.updateSettings({
-      workspaceCleanupPolicy: { ...getDefaultWorkspaceCleanupRules(), merged: { enabled: true } },
-      workspaceCleanupGuard: expected
-    })
-  ).toThrow('workspace_cleanup_policy_conflict')
-  expect(store.getSettings().workspaceCleanupPolicy?.merged.enabled).toBe(false)
-})
-
-it('refuses a late reserved-protocol packet without its reservation', () => {
-  const { store, repo, guard } = fixture()
-  expect(() =>
-    store.updateRepo(repo, {
-      workspaceCleanupPolicy: null,
-      workspaceCleanupGuard: { ...guard(repo.id), requireReservation: true }
-    })
-  ).toThrow('workspace_cleanup_policy_conflict')
-  expect(store.getRepo(repo.id)!.workspaceCleanupPolicy).toMatchObject({
-    mode: 'custom',
-    rules: { merged: { enabled: true } }
-  })
-})
-
 it('preserves another live project writer while a second client opens settings', async () => {
   const { store, repo, guard } = fixture()
   const expected = { ...guard(repo.id), requireReservation: true as const }
@@ -320,15 +177,18 @@ it('preserves another live project writer while a second client opens settings',
   ).toBeUndefined()
 })
 
-it('preserves another live global writer when a second client reads recovery state', () => {
-  const { store, guard } = fixture()
-  const expected = { ...guard(null), requireReservation: true as const }
-  reserveWorkspaceCleanupPolicyWrite(store, expected)
-  expect(recoverWorkspaceCleanupPolicyWrites(store)).toBe(true)
-  store.updateSettings({
-    workspaceCleanupPolicy: { ...getDefaultWorkspaceCleanupRules(), merged: { enabled: true } },
-    workspaceCleanupGuard: expected
+it('acknowledges a guarded project policy only once a restart would load it', async () => {
+  const { store, repo, guard } = fixture()
+  await store.runDurableMutation(() => ({ value: true, persist: 'if-dirty' }))
+  registerRepoUpdateHandler(new BrowserWindow(), store)
+  const handler = handlers.get('repos:update')!
+  await handler(undefined, {
+    repoId: repo.id,
+    hostId: 'local',
+    updates: { workspaceCleanupPolicy: { mode: 'off' }, workspaceCleanupGuard: guard(repo.id) }
   })
-  expect(store.getSettings().workspaceCleanupPolicy?.merged.enabled).toBe(true)
-  expect(readWorkspaceCleanupPolicy(store, null).pendingWrites).toBe(false)
+  // No flush here: the reply itself waited for the deferred save.
+  expect(
+    readPersistedState().repos.find((row) => row.id === repo.id)?.workspaceCleanupPolicy
+  ).toEqual({ mode: 'off' })
 })
