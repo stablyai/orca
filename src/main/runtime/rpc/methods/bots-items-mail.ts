@@ -8,11 +8,9 @@ import {
   BOT_ITEM_MAIL_SENDER
 } from '../../../../shared/bots/bot-item-note-runs'
 import { botMailSession, botMailSessionStillCurrent } from '../../../bots/bot-mail-chat'
-import {
-  botItemCommentAttachmentBody,
-  claimBotItemCommentAttachments
-} from '../../../bots/bot-item-comment-attachments'
-import { hasAttachmentStoreReference } from '../../../bots/bot-attachment-images'
+import { ownerCommentAttachmentBody } from '../../../bots/bot-item-comment-attachments'
+import { agentSessionAttachmentUploadIdOfPath } from '../../../../shared/agent-session/agent-session-attachments'
+import { isAgentSessionAttachmentExpiredError } from '../../../native-chat/agent-session-attachments/agent-session-attachment-claims'
 import {
   getAgentSessionAttachmentClaimer,
   getAgentSessionAttachmentStore
@@ -83,47 +81,29 @@ export async function sendBotItemMail(
     return true
   }
   let sessionId = await botMailSession(runtime, bot, owed.chatId)
-  const images = botItemMailImages(owed.changes)
-  const ownerText = owed.changes
-    .flatMap(({ event }) =>
-      event.kind === 'commented' &&
-      event.actor.kind === 'owner' &&
-      typeof event.data.text === 'string'
-        ? [event.data.text]
-        : []
-    )
-    .join('\n')
-  const asker = answerAskedIn(owed)
-  const payload = JSON.stringify({
-    botItems: owed.changes.map(({ event, item }) => ({
-      uid: item.uid,
-      number: item.number,
-      eventId: botItemEventId(event.id),
-      kind: event.kind
-    })),
-    // Delivered as the chat's image blocks, as chat sends a pasted image.
-    ...(images.length > 0 ? { images } : {}),
-    // The owner's answer to a question the item's chat asked while its thread's turn ran; the reader
-    // checks it is that chat (conversation-ask-answer.ts).
-    ...(asker ? { askedInConversation: asker } : {})
-  })
-  if (
-    owed.changes[0]?.event.actor.kind === 'owner' &&
-    (images.length > 0 || hasAttachmentStoreReference(ownerText))
-  ) {
+  const expired = new Set<string>()
+  const comment = owed.changes.find(({ event }) => event.kind === 'commented')?.event
+  const attachment = comment ? ownerCommentAttachmentBody(comment) : null
+  if (attachment) {
     const store = getAgentSessionAttachmentStore()
-    if (!store) {
+    const claim = getAgentSessionAttachmentClaimer()
+    if (!store || !claim) {
       return false
     }
-    const body = botItemCommentAttachmentBody(
-      ownerText,
-      images.map((path) => ({ path }))
-    )
-    if (agentSessionAttachmentReferences(store.rootDir, body).size > 0) {
-      // The comment's first claim protects its uploads. If the chat changed, the same outbox entry
-      // now claims them for the actual recipient before the mailbox can see them.
+    if (agentSessionAttachmentReferences(store.rootDir, attachment).size > 0) {
+      // The outbox keeps the uploads until the actual recipient claims them.
       for (let attempt = 0; ; attempt++) {
-        await claimBotItemCommentAttachments(getAgentSessionAttachmentClaimer(), sessionId, body)
+        try {
+          await claim(sessionId, attachment)
+        } catch (error) {
+          if (!isAgentSessionAttachmentExpiredError(error)) {
+            throw error
+          }
+          // An older outbox entry can already be missing files. Its text still reaches the bot.
+          for (const { uploadId } of error.expired) {
+            expired.add(uploadId)
+          }
+        }
         if (botMailSessionStillCurrent(runtime, bot.id, owed.chatId, sessionId)) {
           break
         }
@@ -138,13 +118,33 @@ export async function sendBotItemMail(
       }
     }
   }
+  const images = botItemMailImages(owed.changes).filter(
+    (path) => !expired.has(agentSessionAttachmentUploadIdOfPath(path) ?? '')
+  )
+  const asker = answerAskedIn(owed)
+  const payload = JSON.stringify({
+    botItems: owed.changes.map(({ event, item }) => ({
+      uid: item.uid,
+      number: item.number,
+      eventId: botItemEventId(event.id),
+      kind: event.kind
+    })),
+    // Delivered as the chat's image blocks, as chat sends a pasted image.
+    ...(images.length > 0 ? { images } : {}),
+    // The owner's answer to a question the item's chat asked while its thread's turn ran; the reader
+    // checks it is that chat (conversation-ask-answer.ts).
+    ...(asker ? { askedInConversation: asker } : {})
+  })
   const to = `orca_session_id:${sessionId}`
   db.insertMessage({
     id,
     from: BOT_ITEM_MAIL_SENDER,
     to,
     type: 'status',
-    ...mail,
+    subject: mail.subject,
+    body: expired.size
+      ? `${mail.body}\n\n[Orca: Some of the owner's attachments expired before delivery.]`
+      : mail.body,
     payload,
     orcaAuthored: 'item-mail'
   })

@@ -9,6 +9,7 @@ import { isAgentInlineImagePath } from '../../shared/native-chat/input/composer/
 import { formatNativeChatFileReference } from '../../shared/native-chat/input/composer/agent-image-paste'
 import {
   BOT_ITEM_COMMENT_FILE_MAX_COUNT,
+  botItemCommentImages,
   type BotItemCommentImage
 } from '../../shared/bots/bot-items'
 import { agentSessionAttachmentReferences } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
@@ -22,6 +23,7 @@ import {
   type BotAttachmentStore
 } from './bot-attachment-images'
 import { BotItemError } from './bot-item-error'
+import type { BotItemEventRecord } from './bot-items-schema'
 
 const COMMENT_IMAGE_LABELS = {
   tooMany: 'commentImagesTooMany',
@@ -95,7 +97,7 @@ export async function admitBotItemCommentAttachments(
   return { text, images }
 }
 
-export function botItemCommentAttachmentBody(
+function botItemCommentAttachmentBody(
   text: string,
   images: readonly Pick<BotItemCommentImage, 'path'>[]
 ): AgentJournalMessageItem {
@@ -109,7 +111,20 @@ export function botItemCommentAttachmentBody(
   }
 }
 
-export async function claimBotItemCommentAttachments(
+export function ownerCommentAttachmentBody(
+  event: BotItemEventRecord
+): AgentJournalMessageItem | null {
+  if (event.kind !== 'commented' || event.actor.kind !== 'owner') {
+    return null
+  }
+  const text = typeof event.data.text === 'string' ? event.data.text : ''
+  const images = botItemCommentImages(event.data)
+  return images.length > 0 || hasAttachmentStoreReference(text)
+    ? botItemCommentAttachmentBody(text, images)
+    : null
+}
+
+async function claimBotItemCommentAttachments(
   claim: AgentSessionAttachmentClaimer | null,
   sessionId: string,
   body: AgentJournalMessageItem

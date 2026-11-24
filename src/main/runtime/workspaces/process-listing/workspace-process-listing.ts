@@ -266,6 +266,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
         logger,
         ...this.structuredAgentCatalogDependencies(),
         ...this.botStructuredSessionHostDeps(() => this.requireStore()),
+        owedItemAttachmentUploads: (stateDirectory, root) =>
+          this.botItems.owedCommentAttachmentUploads(stateDirectory, root),
         claudeCliFlags: claudeCliFlagSupport,
         usageLimitAutoContinue: this.usageLimitAutoContinueHostDeps(),
         idleSweep: { idleMs: () => nativeChatIdleStopMs(this.requireStore().getSettings()) },

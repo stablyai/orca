@@ -106,6 +106,14 @@ export class BotItemsHost {
     return this.stores.get(botItemsStoreFile(getProfileUserDataPath())) ?? null
   }
 
+  async owedCommentAttachmentUploads(
+    stateDirectory: string,
+    root: string
+  ): Promise<ReadonlySet<string>> {
+    const tracked = this.stores.get(botItemsStoreFile(stateDirectory))
+    return new Set(await tracked?.remote.owedCommentAttachmentUploads(root))
+  }
+
   /** Once the runtime has its bot hooks: an existing items file sends what a crash left owed and
    *  catches up worker and PR evidence, scheduler or not. */
   startRecovery(): void {

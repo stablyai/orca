@@ -25,6 +25,7 @@ export function installAgentSessionAttachments(deps: {
   stateDirectory: string
   store: Pick<AgentSessionRecordStore, 'getRecord' | 'isSessionUnreadable'>
   journalDatabase: JournalSqlDatabase
+  retainedUploadIds?: (root: string) => Promise<ReadonlySet<string>>
   logger: StructuredAgentSessionLogger
 }): void {
   stopAgentSessionAttachments()
@@ -53,6 +54,7 @@ export function installAgentSessionAttachments(deps: {
     attachments,
     {
       ...structuredAgentSessionAttachmentSweepFacts(deps.journalDatabase),
+      ...(deps.retainedUploadIds ? { retainedUploadIds: () => deps.retainedUploadIds!(root) } : {}),
       onUploadRemoved: publishAgentSessionUploadRemoval
     },
     {

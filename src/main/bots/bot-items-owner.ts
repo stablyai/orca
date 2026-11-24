@@ -19,6 +19,8 @@ import {
   type BotItemWriteOutcome
 } from './bot-items-input'
 import { eventRecordOf } from './bot-items-rows'
+import { ownerCommentAttachmentBody } from './bot-item-comment-attachments'
+import { agentSessionAttachmentReferences } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
 import { skippedQuestionsOf } from './bot-item-waiting-ask-keep'
 import type { BotItemEventRecord, BotItemMail, BotItemRecord } from './bot-items-schema'
 
@@ -327,5 +329,24 @@ export class BotItemsOwner extends BotItemsWrites {
         )
         .run(JSON.stringify(eventIds))
     })
+  }
+
+  /** Accepted uploads stay with the outbox until mail has custody, even when the first chat is deleted. */
+  owedCommentAttachmentUploads(root: string): string[] {
+    const uploads = new Set<string>()
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM item_events WHERE mail = 'owed' AND kind = 'commented' ORDER BY action`
+      )
+      .iterate()
+    for (const row of rows) {
+      const body = ownerCommentAttachmentBody(eventRecordOf(row))
+      if (body) {
+        for (const id of agentSessionAttachmentReferences(root, body)) {
+          uploads.add(id)
+        }
+      }
+    }
+    return [...uploads]
   }
 }

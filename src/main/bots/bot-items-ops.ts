@@ -28,6 +28,7 @@ export const BOT_ITEMS_OPS = [
   'ownerSnooze',
   'latestEventId',
   'owedMail',
+  'owedCommentAttachmentUploads',
   'markMailSent'
 ] as const satisfies readonly (keyof BotItemsStore)[]
 

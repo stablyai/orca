@@ -1,6 +1,6 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { expect, it } from 'vitest'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { botItemEventId } from '../../../../shared/bots/bot-items'
@@ -10,7 +10,14 @@ import { runtimeBotChats } from '../../../bots/bot-chat-session'
 import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { setAgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { agentSessionAttachmentStoreRoot } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
-import { claimAgentSessionAttachmentsInTransaction } from '../../../native-chat/agent-session-attachments/agent-session-attachment-claims'
+import {
+  claimAgentSessionAttachmentsInTransaction,
+  finishUploadSweep,
+  listUploadsBeingSwept,
+  markUnclaimedUploadForSweep,
+  pruneAgentSessionAttachmentClaims
+} from '../../../native-chat/agent-session-attachments/agent-session-attachment-claims'
+import { sweepAgentSessionAttachments } from '../../../native-chat/agent-session-attachments/agent-session-attachment-sweep'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
@@ -28,6 +35,7 @@ const ORIGINAL = 'eae99fff-0cb1-49a9-877d-b90ceb29375a'
 const HOME = '54889ba4-947c-4531-8221-8ab6aea262a9'
 const ANOTHER_BOT_HOME = '9745ea23-ea63-43d8-9a38-7ac457e021b7'
 const AGENT = { kind: 'bot', botId: 'repair-bot', chatId: ORIGINAL } as const
+const NOW = 1_800_000_000_000
 
 it('claims an item answer for the chat it actually mails and replays the same answer after restart', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'orca-item-answer-'))
@@ -94,7 +102,7 @@ it('claims an item answer for the chat it actually mails and replays the same an
         sessionId,
         body,
         required: true,
-        now: 1_800_000_000_000
+        now: NOW
       })
     )
     if (replaceDuringClaim && sessionId === ORIGINAL) {
@@ -105,7 +113,6 @@ it('claims an item answer for the chat it actually mails and replays the same an
         bot.chatSessionId = HOME
       })
       await retired.promise
-      setImmediate(successorReady.resolve)
     }
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the read-side host seam and note destination are used.
@@ -180,10 +187,45 @@ it('claims an item answer for the chat it actually mails and replays the same an
     items.dispose()
     items = BotItemsStore.open(itemDb)
 
+    const sweep = () =>
+      sweepAgentSessionAttachments(
+        attachments,
+        {
+          listBeingSwept: () => listUploadsBeingSwept(journal.db),
+          markForSweep: (id, now) =>
+            journal.writeAutocommit((db) => markUnclaimedUploadForSweep(db, id, now)),
+          finishSweep: (id) => journal.writeAutocommit((db) => finishUploadSweep(db, id)),
+          pruneClaims: () => {
+            journal.writeAutocommit((db) =>
+              pruneAgentSessionAttachmentClaims(db, {
+                root: attachments.rootDir,
+                recordedSessionIds: chats
+              })
+            )
+          },
+          retainedUploadIds: async () =>
+            new Set(items.owedCommentAttachmentUploads(attachments.rootDir))
+        },
+        NOW
+      )
+    await utimes(dirname(path), new Date(0), new Date(0))
     replaceDuringClaim = true
     const [owed] = items.owedMail(0).mails
     expect(owed).toBeDefined()
-    expect(await sendBotItemMail(context.runtime, owed!)).toBe(true)
+    const sending = sendBotItemMail(context.runtime, owed!)
+    await Promise.race([
+      retired.promise,
+      sending.then(() => {
+        throw new Error('Mail finished before the Home replacement')
+      })
+    ])
+    try {
+      await sweep()
+      await sweep()
+    } finally {
+      successorReady.resolve()
+    }
+    expect(await sending).toBe(true)
     await reset
     expect(await sendBotItemMail(context.runtime, owed!)).toBe(true)
     const sent = mail.getMessageById(botItemMailId(owed!.id))!
@@ -194,7 +236,9 @@ it('claims an item answer for the chat it actually mails and replays the same an
       journal.db
         .prepare('SELECT session_id FROM agent_session_attachment_claims ORDER BY session_id')
         .all()
-    ).toEqual([{ session_id: HOME }, { session_id: ORIGINAL }])
+    ).toEqual([{ session_id: HOME }])
+    items.markMailSent(owed!.changes.map(({ event }) => event.id))
+    expect(items.owedCommentAttachmentUploads(attachments.rootDir)).toEqual([])
 
     await rm(path)
     await expect(comment.handler(answer, context)).resolves.toEqual(accepted)
@@ -203,6 +247,46 @@ it('claims an item answer for the chat it actually mails and replays the same an
         .events(uid, 0, 30)
         .filter((event) => event.actor.kind === 'owner' && event.kind === 'commented')
     ).toHaveLength(1)
+
+    items.set(
+      uid,
+      {
+        status: 'needs_you',
+        ask: {
+          questions: [
+            { prompt: 'Is the label visible?', options: [{ label: 'Yes' }, { label: 'No' }] }
+          ]
+        }
+      },
+      AGENT
+    )
+    const staged = await upload.handler(file, context)
+    await attachments.appendChunk({
+      callerKey: 'owner-phone',
+      uploadId: staged.uploadId,
+      offset: 0,
+      contentBase64: 'dGVzdA=='
+    })
+    const next = await attachments.commitUpload({
+      callerKey: 'owner-phone',
+      uploadId: staged.uploadId
+    })
+    await comment.handler(
+      {
+        ...answer,
+        requestId: 'another-answer',
+        questionId: botItemEventId(items.get(uid)!.questionEvent!),
+        images: [next.path]
+      },
+      context
+    )
+    expect(items.get(uid)).toMatchObject({ status: 'working', questionEvent: null })
+    const [nextMail] = items.owedMail(0).mails
+    expect(await sendBotItemMail(context.runtime, nextMail!)).toBe(true)
+    expect(mail.getMessageById(botItemMailId(nextMail!.id))?.to_handle).toBe(
+      `orca_session_id:${HOME}`
+    )
+    expect(await readFile(next.path, 'utf8')).toBe('test')
   } finally {
     setAgentSessionAttachmentStore(null)
     setStructuredAgentSessionHost(null)
