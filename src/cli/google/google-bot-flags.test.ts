@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { HandlerContext } from '../dispatch/dispatch'
-import { formatGoogleStatus, GOOGLE_HANDLERS } from './google'
+import { GOOGLE_HANDLERS } from './google'
+import { formatGoogleStatus } from './google-status-format'
 
 function run(flags: Record<string, string | boolean>) {
   const call = vi.fn(async (method: string, params?: Record<string, unknown>) =>
@@ -58,5 +59,15 @@ describe('orca google bot', () => {
       ]
     })
     expect(status).toContain('Scout (no Google accounts chosen), CoS (every account)')
+  })
+
+  it('marks the default in orca google status whatever the email case', () => {
+    const status = formatGoogleStatus({
+      client: null,
+      accounts: [{ email: 'Me@Gmail.com', status: 'connected', services: [], connectedAt: 0 }],
+      defaultAccount: 'me@gmail.com',
+      bots: []
+    })
+    expect(status).toContain('Me@Gmail.com (default): connected')
   })
 })

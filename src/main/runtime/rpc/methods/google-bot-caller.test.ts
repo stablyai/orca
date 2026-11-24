@@ -6,6 +6,7 @@ import { GOOGLE_METHODS } from './google'
 const BOT_TOKEN = 'scout-token'
 const setDefaultAccount = vi.fn(async (email: string) => email)
 const disconnect = vi.fn()
+const computerDefaultAccount = vi.fn(async () => 'me@work.com')
 const checkAccounts = vi.fn(async (_only?: (email: string) => boolean) => [
   hostAccount('Me@Gmail.com')
 ])
@@ -38,7 +39,7 @@ vi.mock('../../../google/google-connect', () => ({
     clientCheck: async () => null,
     checkClient: async () => null,
     checkAccounts,
-    defaultAccount: async () => 'me@work.com'
+    defaultAccount: computerDefaultAccount
   })
 }))
 
@@ -198,5 +199,22 @@ describe('Google as a bot limited to some accounts sees it', () => {
     expect(only?.('me@work.com')).toBe(false)
     await call('google.status', { check: true }, { google: true })
     expect(checkAccounts.mock.calls.at(-1)?.[0]).toBeUndefined()
+  })
+
+  it('shows and checks nothing, and reads the default once, for a bot without Google', async () => {
+    computerDefaultAccount.mockClear()
+    await expect(
+      call('google.status', { botToken: BOT_TOKEN, check: true }, { google: false })
+    ).resolves.toMatchObject({ accounts: [], defaultAccount: null })
+    const only = checkAccounts.mock.calls.at(-1)?.[0]
+    expect(only?.('me@work.com')).toBe(false)
+    expect(only?.('Me@Gmail.com')).toBe(false)
+    await call(
+      'google.status',
+      { botToken: BOT_TOKEN },
+      { google: true, googleAccounts: ['me@gmail.com'] }
+    )
+    // A bot's default comes from its own rule alone; the computer's isn't read a second time.
+    expect(computerDefaultAccount).not.toHaveBeenCalled()
   })
 })

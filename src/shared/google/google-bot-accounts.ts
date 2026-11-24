@@ -28,6 +28,14 @@ export function botMayUseGoogleAccount(access: BotGoogleAccess, email: string): 
   )
 }
 
+/** Which host accounts a bot sees and checks: undefined (every one) for a bot with every account,
+ *  else only its own (none while Google is off for it). */
+export function botGoogleAccountFilter(
+  access: BotGoogleAccess
+): ((email: string) => boolean) | undefined {
+  return access.kind === 'all' ? undefined : (email) => botMayUseGoogleAccount(access, email)
+}
+
 /** This computer's default as its host reads it: an account, none, or a saved pick it can't read. */
 export type GoogleDefaultRead = { email: string | null } | { unreadable: string }
 

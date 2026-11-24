@@ -29,8 +29,9 @@ import { googleCallerAccount } from '../google-caller-api'
 import { readGoogleDefaultAccount } from '../../../google/google-credential-store'
 import {
   botGoogleAccess,
+  botGoogleAccountFilter,
   botGoogleDefault,
-  botMayUseGoogleAccount
+  type BotGoogleAccess
 } from '../../../../shared/google/google-bot-accounts'
 import { runtimeBotChats } from '../../../bots/bot-chat-session'
 import { botOfSession } from '../../../bots/bot-session-tabs'
@@ -74,6 +75,12 @@ async function statusView(
           }))
       : []
   }
+}
+
+/** The account a bot's calls without --account use, read once from this computer's default. */
+async function botDefaultAccount(access: BotGoogleAccess): Promise<string | null> {
+  const read = botGoogleDefault(access, await readGoogleDefaultAccount())
+  return 'email' in read ? read.email : null
 }
 
 async function pickAccount(connect: GoogleConnect, wanted: string | undefined): Promise<string> {
@@ -124,31 +131,21 @@ export const GOOGLE_METHODS = [
       { runtime, pairedDeviceId }
     ): Promise<GoogleStatusView> => {
       const connect = google()
-      // A bot limited to some accounts sees only those (and the default its own calls use), so a
-      // check reads only its accounts' tokens.
+      // A bot without every account sees (and a check reads tokens of) only its own accounts, none
+      // while Google is off for it, and the default its own calls use; the owner sees them all.
       const caller = botOfToken(runtime, botToken, pairedDeviceId)
       const access = caller.kind === 'bot' ? botGoogleAccess(caller.bot) : null
-      const only =
-        access?.kind === 'some'
-          ? (email: string) => botMayUseGoogleAccount(access, email)
-          : undefined
+      const only = access ? botGoogleAccountFilter(access) : undefined
       const [accounts, clientKey] = check
         ? await Promise.all([connect.checkAccounts(only), connect.checkClient()])
         : [await connect.accounts(), await connect.clientCheck()]
-      const view = {
-        ...(await statusView(runtime, connect)),
-        accounts,
-        defaultAccount: await connect.defaultAccount(),
-        ...(clientKey ? { clientKey } : {})
-      }
-      if (access?.kind !== 'some' || !only) {
-        return view
-      }
-      const fallback = botGoogleDefault(access, await readGoogleDefaultAccount())
+      const defaultAccount =
+        access && only ? await botDefaultAccount(access) : await connect.defaultAccount()
       return {
-        ...view,
-        accounts: accounts.filter((account) => only(account.email)),
-        defaultAccount: 'email' in fallback ? fallback.email : null
+        ...(await statusView(runtime, connect)),
+        accounts: only ? accounts.filter((account) => only(account.email)) : accounts,
+        defaultAccount,
+        ...(clientKey ? { clientKey } : {})
       }
     }
   }),
