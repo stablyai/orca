@@ -124,6 +124,8 @@ if (paths.includes('big.ts')) { process.stdout.write('x'.repeat(100_000)) } else
       files: ['big.ts'],
       reason: 'its output exceeded 4096 bytes'
     })
+    // Limits not given fall back to the defaults, so the flood keeps a real, bounded excerpt.
+    expect(result.incomplete[0].output.length).toBeGreaterThan(0)
     expect(result.incomplete[0].output.length).toBeLessThan(150)
   })
 
@@ -369,6 +371,12 @@ if (paths.includes('big.ts')) { process.stdout.write('x'.repeat(100_000)) } else
     )
     expect(exact).toMatchObject({ errorCount: 4, repeatsUncertain: false })
     expect(exact.diagnostics).toHaveLength(1)
+    // A repeat on a printed path that two tracked files can produce may be the second file: kept and flagged.
+    const printedTwice = collectBatchResults([run([6]), run([6])], limits, {
+      overlap: ['f.ts'],
+      uncertain: new Set(['f.ts'])
+    })
+    expect(printedTwice).toMatchObject({ errorCount: 2, repeatsUncertain: true })
     // Two identical errors in one run can be two files whose printed paths only differ by a backslash: both count.
     expect(collectBatchResults([run([5, 5])], limits, overlap).errorCount).toBe(2)
     const saturated = collectBatchResults(

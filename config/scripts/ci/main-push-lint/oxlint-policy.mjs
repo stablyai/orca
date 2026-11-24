@@ -106,12 +106,42 @@ function resolveFrom(from, target) {
   return resolved === '..' || resolved.startsWith('../') ? null : resolved
 }
 
-// Where a path's content is stored, following symlinks by their exact bytes. Every link target on the way is an
-// input too, since changing one changes what the path reads.
+// `file` with each symlinked directory on its way replaced by the link's target, recording each link as an input.
+// Null when a link leaves the repository or there are too many.
+async function resolveDirectories(file, tree, cwd, hops) {
+  let parts = file.split('/')
+  for (let index = 0; index < parts.length - 1; index += 1) {
+    const prefix = parts.slice(0, index + 1).join('/')
+    const entry = tree.get(prefix)
+    if (entry?.mode === SYMLINK_MODE) {
+      const target = resolveFrom(prefix, await git(['cat-file', 'blob', entry.sha], cwd))
+      const rest = parts.slice(index + 1).join('/')
+      const next = target && path.posix.normalize(`${target}/${rest}`)
+      if (!next || next.startsWith('../') || hops.length >= MAX_LINK_HOPS) {
+        return null
+      }
+      hops.push(prefix)
+      parts = next.split('/')
+      index = -1
+    }
+  }
+  return parts.join('/')
+}
+
+// Where a path's content is stored, following symlinks by their exact bytes, in the file itself and in any
+// directory on its way. Every link on the way is an input too, since changing one changes what the path reads.
 async function followLinks(file, tree, cwd) {
   const hops = []
   let current = file
   for (let hop = 0; hop <= MAX_LINK_HOPS; hop += 1) {
+    const resolved = await resolveDirectories(current, tree, cwd, hops)
+    if (!resolved) {
+      return { hops, unreadable: `${file} links outside the repository or through too many links` }
+    }
+    if (resolved !== current) {
+      hops.push(resolved)
+      current = resolved
+    }
     const entry = tree.get(current)
     if (!entry) {
       return { hops }
@@ -161,7 +191,11 @@ async function policyGraph(head, cwd) {
         if (targets.includes(null)) {
           unknown.set(file, `${file} extends a path outside the repository or not a path`)
         }
-        if (Array.isArray(config.jsPlugins) && config.jsPlugins.length > 0) {
+        const pluginLists = [
+          config,
+          ...(Array.isArray(config.overrides) ? config.overrides : [])
+        ].map((section) => section?.jsPlugins)
+        if (pluginLists.some((plugins) => Array.isArray(plugins) && plugins.length > 0)) {
           unknown.set(file, `${file} loads JS plugins, whose imports cannot be followed`)
         }
       } catch {

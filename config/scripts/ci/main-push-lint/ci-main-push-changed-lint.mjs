@@ -19,7 +19,7 @@ import {
   renderAttributionSummary,
   renderLintSummary
 } from './main-push-report.mjs'
-import { createBatchCollector, RETAIN_LIMITS, runOxlint } from './oxlint-batches.mjs'
+import { createBatchCollector, runOxlint } from './oxlint-batches.mjs'
 import { computePlan, rangeText, reportPlanFailure } from './plan-main-push-lint.mjs'
 import { attributeFiles, createGithubApi, describeAttribution } from './push-attribution.mjs'
 
@@ -138,40 +138,39 @@ export function reportIncomplete(incomplete, reporter) {
   return logged
 }
 
-// oxlint 1.94 prints a literal backslash in a reported path as a slash. Map each reported name back to the one
-// tracked file it can stand for; when it could be several, keep it but drop its location and attribution.
-export async function resolveReportedPaths(diagnostics, root) {
-  if (!diagnostics.some((diagnostic) => diagnostic.file)) {
-    return
-  }
+// oxlint 1.94 prints a literal backslash in a reported path as a slash. For each printed name that a tracked
+// file with a backslash can produce, every tracked file it may stand for (the slash form first, if tracked).
+export async function backslashIndex(root) {
   const tracked = (await git(['ls-files', '-z'], root)).split('\0').filter(Boolean)
-  const withBackslash = new Map()
+  const byPrinted = new Map()
   for (const file of tracked.filter((name) => name.includes('\\'))) {
-    const reported = file.replaceAll('\\', '/')
-    withBackslash.set(reported, [...(withBackslash.get(reported) ?? []), file])
+    const printed = file.replaceAll('\\', '/')
+    byPrinted.set(printed, [...(byPrinted.get(printed) ?? []), file])
   }
-  if (withBackslash.size === 0) {
-    return
-  }
-  const trackedSet = new Set(tracked)
-  for (const diagnostic of diagnostics) {
-    const variants = withBackslash.get(diagnostic.file)
-    if (variants) {
-      const candidates = [
-        ...(trackedSet.has(diagnostic.file) ? [diagnostic.file] : []),
-        ...variants
-      ]
-      if (candidates.length === 1) {
-        diagnostic.file = candidates[0]
-      } else {
-        diagnostic.ambiguous = candidates
+  if (byPrinted.size > 0) {
+    const trackedSet = new Set(tracked)
+    for (const [printed, files] of byPrinted) {
+      if (trackedSet.has(printed)) {
+        files.unshift(printed)
       }
+    }
+  }
+  return byPrinted
+}
+
+// Map each printed name back to the one tracked file it stands for; when it could be several, keep it, mark it
+// ambiguous, and leave the location and attribution out.
+export function resolveReportedPaths(diagnostics, index) {
+  for (const diagnostic of diagnostics) {
+    const candidates = index.get(diagnostic.file)
+    if (candidates?.length === 1) {
+      diagnostic.file = candidates[0]
+    } else if (candidates) {
+      diagnostic.ambiguous = candidates
     }
   }
 }
 
-// A failing file the push touched is attributed to the commits that changed it. One it did not touch was
-// linted only because a lint policy changed, so the commits that changed that policy are named instead.
 // Why an untouched file was linted: how many policy changes cover it first, so a cut never hides the count, then
 // up to a few of them, each with the commits behind up to a few of its changed inputs, or that it has none.
 export function explainPolicies(policies, describe, noun) {
@@ -294,7 +293,24 @@ export async function main({
   for (const policy of plan.policies) {
     reporter.log(`Lint policy changed: ${policy.why}; linting everything under ${policy.dir}.`)
   }
-  const collector = createBatchCollector(RETAIN_LIMITS, { overlap: plan.overlap ?? [] })
+  // The tracked-path index is best effort; without it no repeat is dropped, and the count says so.
+  let index = new Map()
+  let indexError = null
+  try {
+    index = await backslashIndex(root)
+  } catch (error) {
+    indexError = error
+  }
+  const collector = createBatchCollector(
+    {},
+    {
+      overlap: plan.overlap ?? [],
+      uncertain: new Set(
+        [...index].filter(([, files]) => files.length > 1).map(([printed]) => printed)
+      ),
+      uncertainAll: Boolean(indexError)
+    }
+  )
   let results = collector.result()
   if (targets.length > 0) {
     try {
@@ -322,12 +338,12 @@ export async function main({
   }
   const { diagnostics, errorCount, incomplete, linted } = results
   // Mapping printed paths back to tracked files is best effort; a failure must not cost the verdict.
-  try {
-    await resolveReportedPaths(diagnostics, root)
-  } catch (error) {
+  if (indexError) {
     reporter.log(
-      `Could not map reported paths to tracked files (${truncate(String(error.message), 300)}); paths are shown as oxlint printed them.`
+      `Could not map reported paths to tracked files (${truncate(String(indexError.message), 300)}); paths are shown as oxlint printed them.`
     )
+  } else {
+    resolveReportedPaths(diagnostics, index)
   }
   // The verdict, locations and summary are published before any optional PR lookup.
   const loggedDiagnostics = reportDiagnostics(diagnostics, errorCount, reporter)

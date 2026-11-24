@@ -28,6 +28,13 @@ const {
 } = createWorkflowFixture()
 afterAll(cleanup, GIT_TEST_TIMEOUT_MS)
 
+// The run must fail on the rule itself, on the intended file: a config that fails to load also exits 1.
+async function expectDebuggerError(pushed, file) {
+  const run = await runWorkflow(pushed)
+  expect(run.lintExit).toBe(1)
+  expect(run.log).toContain(`::error file=${file},line=1,col=1,title=eslint(no-debugger)::`)
+}
+
 const lock = (version) =>
   `importers:\n\n  .:\n    devDependencies:\n      oxlint:\n        specifier: ^${version}\n        version: ${version}(oxlint-tsgolint@7.0.2007)\n`
 
@@ -120,7 +127,7 @@ describe('main-push lint plan', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
         { dir: 'm', paths: ['base.json'], why: 'm/.oxlintrc.json extends base.json, which changed' }
       ]
     })
-    expect((await runWorkflow(pushed)).lintExit).toBe(1)
+    await expectDebuggerError(pushed, 'm/x.ts')
   })
 
   it('follows extends through files of any name, and stops on a cycle', async () => {
@@ -148,7 +155,7 @@ describe('main-push lint plan', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
         }
       ]
     })
-    expect((await runWorkflow(chain)).lintExit).toBe(1)
+    await expectDebuggerError(chain, 'm/x.ts')
     const cycle = push(
       {
         '.oxlintrc.json': extend('./a.json'),
@@ -164,7 +171,7 @@ describe('main-push lint plan', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
     const bom = '\uFEFFa.ts'
     const pushed = push({ '.oxlintrc.json': CONFIG, 'a.ts': CLEAN }, { [bom]: DEBUGGER })
     expect(await planFor(pushed)).toMatchObject({ files: [bom] })
-    expect((await runWorkflow(pushed)).lintExit).toBe(1)
+    await expectDebuggerError(pushed, bom)
   })
 
   it('treats a new locked oxlint version as a root policy change, and other lockfile edits as none', async () => {

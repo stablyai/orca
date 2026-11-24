@@ -175,7 +175,13 @@ function cut(text, maxChars) {
 // A file named explicitly inside a walked directory (`overlap`) can be reported by two runs; an error already
 // seen in an earlier run is dropped. Identical errors within one run are kept: they can be two files whose
 // reported paths only differ by a backslash.
-export function createBatchCollector(limits = RETAIN_LIMITS, { overlap = [] } = {}) {
+// Limits not given fall back to RETAIN_LIMITS. `uncertain` lists printed paths that more than one tracked file can
+// produce (or, with `uncertainAll`, any path): a repeat on one may be a second file, so it is kept and flagged.
+export function createBatchCollector(
+  partialLimits = {},
+  { overlap = [], uncertain = new Set(), uncertainAll = false } = {}
+) {
+  const limits = { ...RETAIN_LIMITS, ...partialLimits }
   const repeatable = new Set(overlap.flatMap((file) => [file, file.replaceAll('\\', '/')]))
   const diagnostics = []
   const firstRun = new Map()
@@ -197,7 +203,10 @@ export function createBatchCollector(limits = RETAIN_LIMITS, { overlap = [] } = 
             .digest('base64')
           const seenIn = firstRun.get(key)
           if (seenIn !== undefined && seenIn !== runs) {
-            continue
+            if (!uncertainAll && !uncertain.has(error.file)) {
+              continue
+            }
+            repeatsUncertain = true
           }
           if (seenIn === undefined) {
             if (firstRun.size < limits.maxRepeatKeys) {

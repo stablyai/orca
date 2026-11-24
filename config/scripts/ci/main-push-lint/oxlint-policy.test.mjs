@@ -17,6 +17,13 @@ const { commit, makeOrigin, scratchFile, cleanup, push, planFor, runWorkflow } =
   createWorkflowFixture()
 afterAll(cleanup, GIT_TEST_TIMEOUT_MS)
 
+// The run must fail on the rule itself, on the intended file: a config that fails to load also exits 1.
+async function expectDebuggerError(pushed, file) {
+  const run = await runWorkflow(pushed)
+  expect(run.lintExit).toBe(1)
+  expect(run.log).toContain(`::error file=${file},line=1,col=1,title=eslint(no-debugger)::`)
+}
+
 describe('main-push lint policy', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
   describe('matches the pinned oxlint discovery', () => {
     it('lints a subtree when a commented .oxlintrc.jsonc tightens it', async () => {
@@ -53,7 +60,7 @@ describe('main-push lint policy', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
           }
         ]
       })
-      expect((await runWorkflow(pushed)).lintExit).toBe(1)
+      await expectDebuggerError(pushed, 'm/x.ts')
     })
 
     it('treats a script config as changed on every push, and oxlint runs it', async () => {
@@ -104,7 +111,7 @@ describe('main-push lint policy', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
             { paths: ['shared.json'], why: 'd/.oxlintrc.json extends shared.json, which changed' }
           ]
         })
-        expect((await runWorkflow({ origin, before: linked, after })).lintExit).toBe(1)
+        await expectDebuggerError({ origin, before: linked, after }, 'd/x.ts')
         expect(before).not.toBe(linked)
       }
     )
@@ -305,7 +312,25 @@ describe('main-push lint policy', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
         dirs: ['d'],
         policies: [{ paths: ['shared.json '] }]
       })
-      expect((await runWorkflow({ origin, before, after })).lintExit).toBe(1)
+      await expectDebuggerError({ origin, before, after }, 'd/x.ts')
+    })
+
+    it('follows a link through a symlinked directory to the file it reads', async () => {
+      const origin = makeOrigin()
+      commit(
+        origin,
+        { '.oxlintrc.json': LENIENT, 'store/rules.json': LENIENT, 'm/x.ts': DEBUGGER },
+        'setup'
+      )
+      symlinkSync('store', join(origin, 'alias'))
+      symlinkSync('../alias/rules.json', join(origin, 'm/.oxlintrc.json'))
+      const before = commit(origin, {}, 'links')
+      const after = commit(origin, { 'store/rules.json': CONFIG }, 'tighten the stored rules')
+      expect(await planFor({ origin, before, after })).toMatchObject({
+        dirs: ['m'],
+        policies: [{ paths: ['store/rules.json'] }]
+      })
+      await expectDebuggerError({ origin, before, after }, 'm/x.ts')
     })
 
     it('resolves a linked config’s extends from the link, and ignores the stored copy’s neighbour', async () => {
@@ -322,7 +347,7 @@ describe('main-push lint policy', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
         dirs: ['m'],
         policies: [{ paths: ['m/leaf.json'] }]
       })
-      expect((await runWorkflow({ ...logical, after })).lintExit).toBe(1)
+      await expectDebuggerError({ ...logical, after }, 'm/x.ts')
       // oxlint never reads store/leaf.json for m/, so tightening it changes nothing to lint there.
       const storage = linkedOrigin(files, 'm/.oxlintrc.json', '../store/cfg.json')
       const storageAfter = commit(
@@ -365,6 +390,19 @@ describe('main-push lint policy', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
         }
       ]
     })
+    // JS plugins declared only in an override count too; an empty list does not.
+    const overridePlugins = (plugins) =>
+      JSON.stringify({ overrides: [{ files: ['*.ts'], jsPlugins: plugins }] })
+    const inOverride = push(
+      { '.oxlintrc.json': LENIENT, 'o/.oxlintrc.json': overridePlugins(['./rule.mjs']) },
+      { 'README.md': '#\n' }
+    )
+    expect(await planFor(inOverride)).toMatchObject({ dirs: ['o'] })
+    const emptyOverride = push(
+      { '.oxlintrc.json': LENIENT, 'o/.oxlintrc.json': overridePlugins([]) },
+      { 'README.md': '#\n' }
+    )
+    expect(await planFor(emptyOverride)).toMatchObject({ dirs: [], files: [] })
     // A known change and an unreadable input on the same config: both are named.
     const mixed = push(
       {
