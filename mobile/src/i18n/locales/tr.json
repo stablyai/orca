@@ -4542,7 +4542,6 @@
     "lookAround": {
       "looking": "Bakılıyor…",
       "save": "Kaydet",
-      "detail": "Sonraki adımları önermek için bağlı uygulamaları ve projeleri okur. Salt okunur. Her göz atma ajan planınızı kullanır ve Orca ana makinede çalışıyor olmalı.",
       "lookNow": "Şimdi göz at",
       "notYet": "Henüz göz atılmadı",
       "backToLookAround": "Göz at bölümüne dön"
@@ -4595,8 +4594,6 @@
     "tidyUp": {
       "title": "Bellek bakımı",
       "never": "Henüz toparlanmadı",
-      "footer": "Yalnızca bellek dosyalarını değiştirir. Kısa bir sohbet gibi ajan planınızı kullanır. Orca bilgisayarınızda çalışıyor olmalı.",
-      "undoNote": "Geri al, MEMORY.md dosyasını tek seferde bu toparlamadan önceki haline döndürür. Geçmişin tamamına ve bellek düzenlemeye bilgisayarınızda, Ayarlar → Bellek bölümünden erişebilirsiniz.",
       "backToTidyUp": "Bellek bakımına dön"
     },
     "items": {
@@ -4666,7 +4663,6 @@
       },
       "rotate": {
         "open": "Anahtarı yenile…",
-        "title": "“{{automation}}” için anahtar yenilensin mi?",
         "confirm": "Anahtarı yenile",
         "note": "URL yeni bir anahtar alır. Her göndericiyi bununla güncelleyin.",
         "overlap": "Eski anahtar 24 saat çalışmaya devam etsin",
@@ -4681,19 +4677,15 @@
         "add": "İmzalama sırrı ekle…",
         "generatedTitle": "İmzalama sırrı hazır",
         "done": "Tamamlandı",
-        "generatedNote": "Bunu {{sender}} webhook ayarlarına kopyalayın. Bundan sonra çağrılar onun imzasını taşımalı.",
         "copy": "Sırrı kopyala",
         "copied": "Sır kopyalandı",
         "changeTitle": "İmzalama sırrını değiştir",
         "addTitle": "İmzalama sırrı ekle",
-        "note": "Orca bundan sonra yalnızca bu sırla imzalanmış çağrıları kabul eder; böylece sızdırılmış bir URL tek başına “{{automation}}” otomasyonunu başlatamaz.",
         "sender": "Gönderici",
         "modeGenerate": "Orca bir tane oluşturur",
         "modePaste": "Göndericininkini yapıştır",
         "generateNote": "Bu sırrı Orca oluşturur. Ardından onu {{sender}} içine kopyalarsınız.",
         "paste": "{{sender}} sırrı",
-        "pasteNote": "Gönderici size kendi sırrını verdiğinde bunu kullanın.",
-        "generate": "Sır oluştur",
         "save": "Kaydet",
         "saved": "İmzalama sırrı kaydedildi",
         "changeOpen": "İmzalama sırrını değiştir…",

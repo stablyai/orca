@@ -4542,7 +4542,6 @@
     "lookAround": {
       "looking": "Sucht…",
       "save": "Speichern",
-      "detail": "Liest verbundene Apps und Projekte, um nächste Schritte vorzuschlagen. Nur Lesen. Jedes Umsehen nutzt deinen Agenten-Plan, und Orca muss auf dem Host laufen.",
       "lookNow": "Jetzt umsehen",
       "notYet": "Noch nicht",
       "backToLookAround": "Zurück zum Umsehen"
@@ -4595,8 +4594,6 @@
     "tidyUp": {
       "title": "Gedächtnispflege",
       "never": "Noch nicht",
-      "footer": "Ändert nur Gedächtnisdateien. Nutzt deinen Agenten-Tarif wie ein kurzer Chat. Orca muss auf deinem Computer laufen.",
-      "undoNote": "Beim Rückgängigmachen wird MEMORY.md in einem Schritt auf den Stand vor diesem Aufräumen zurückgesetzt. Den vollständigen Verlauf und die Gedächtnisbearbeitung findest du auf deinem Computer unter Einstellungen → Gedächtnis.",
       "backToTidyUp": "Zurück zur Gedächtnispflege"
     },
     "items": {
@@ -4666,7 +4663,6 @@
       },
       "rotate": {
         "open": "Schlüssel rotieren…",
-        "title": "Schlüssel für „{{automation}}“ rotieren?",
         "confirm": "Schlüssel rotieren",
         "note": "Die URL bekommt einen neuen Schlüssel. Aktualisiere damit jeden Absender.",
         "overlap": "Alten Schlüssel 24 Stunden weiter gültig lassen",
@@ -4681,19 +4677,15 @@
         "add": "Signatur-Secret hinzufügen…",
         "generatedTitle": "Signatur-Secret bereit",
         "done": "Erledigt",
-        "generatedNote": "Kopiere es in die Webhook-Einstellungen von {{sender}}. Ab jetzt müssen Aufrufe seine Signatur tragen.",
         "copy": "Secret kopieren",
         "copied": "Secret kopiert",
         "changeTitle": "Signatur-Secret ändern",
         "addTitle": "Signatur-Secret hinzufügen",
-        "note": "Orca akzeptiert dann nur Aufrufe, die mit diesem Secret signiert sind, sodass eine geleakte URL allein „{{automation}}“ nicht starten kann.",
         "sender": "Absender",
         "modeGenerate": "Orca erzeugt eins",
         "modePaste": "Das des Absenders einfügen",
         "generateNote": "Orca erzeugt dieses Secret. Als Nächstes kopierst du es in {{sender}}.",
         "paste": "{{sender}}-Secret",
-        "pasteNote": "Verwende dies, wenn der Absender dir sein eigenes Secret gibt.",
-        "generate": "Secret erzeugen",
         "save": "Speichern",
         "saved": "Signatur-Secret gespeichert",
         "changeOpen": "Signatur-Secret ändern…",

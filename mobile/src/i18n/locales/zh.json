@@ -5598,7 +5598,6 @@
       "agent": "智能体",
       "agentSameAsBot": "与 {{name}} 相同",
       "agentInChat": "此聊天的智能体",
-      "agentInChatHelp": "在聊天中的运行会沿用该聊天的智能体",
       "resultsTo": "结果发送到",
       "resultsToThread": "事件所在的话题",
       "resultsToChannel": "频道",
@@ -5612,12 +5611,9 @@
       "linearIssueInvalid": "请输入接收结果的 Linear 议题，例如 ENG-123",
       "letBotReact": "让 {{name}} 做出回应",
       "letBotReactHelp": "每个结果都会开启一个新回合，让 {{name}} 据此采取行动",
-      "threadNeedsEvents": "仅限事件触发、每次新建对话",
-      "threadUnsupported": "Orca Cloud 暂不支持此功能",
-      "channelNeedsSlack": "请先连接 Slack",
-      "linearNeedsLinear": "请先连接 Linear",
       "time": "时间",
-      "minute": "分钟"
+      "minute": "分钟",
+      "runs": "运行"
     },
     "botEvents": {
       "label": "事件",
@@ -5993,7 +5989,6 @@
       "save": "保存",
       "back": "返回设置",
       "title": "巡视",
-      "detail": "读取已连接的应用和项目，建议下一步。只读。每次巡视都会消耗你的智能体套餐额度，且主机上必须正在运行 Orca",
       "on": "建议下一步",
       "every": "频率",
       "weekdaysOnly": "仅限工作日",
@@ -6003,7 +5998,8 @@
       "notYet": "尚未巡视",
       "focusPlaceholder": "等我处理的 PR、#eng 中的问题、本周到期的议题",
       "focusDetail": "可选。留空则会查找任何等待你处理的事",
-      "backToLookAround": "返回巡视"
+      "backToLookAround": "返回巡视",
+      "footer": "只读。每次巡视都会消耗你的智能体套餐额度"
     },
     "new": {
       "failed": "无法创建 bot",
@@ -6558,7 +6554,6 @@
       "never": "尚未整理",
       "tidying": "正在整理…",
       "now": "立即整理",
-      "footer": "只会更改记忆文件。会消耗你的智能体套餐额度，和一次简短聊天差不多。电脑上必须正在运行 Orca",
       "merged": "合并了 {{count}} 行重复内容",
       "replaced": "标记为已替换：{{fact}}",
       "filed": "将 {{count}} 行归入 memory/{{topic}}.md",
@@ -6569,11 +6564,11 @@
       "tidied": "已整理",
       "undone": "已撤销",
       "undoAll": "撤销这次整理",
-      "undo": "撤销",
-      "undoNote": "撤销会一次性将 MEMORY.md 恢复到这次整理之前的状态。完整历史和记忆编辑请在电脑上的“设置 → 记忆”中进行",
       "summaryTitle": "上次整理",
       "undoStale": "此后又运行了一次更新的整理。请先查看再撤销",
-      "backToTidyUp": "返回记忆维护"
+      "backToTidyUp": "返回记忆维护",
+      "footerShort": "只会更改记忆文件。会消耗你的智能体套餐额度",
+      "undoNoteShort": "将 MEMORY.md 恢复到这次整理之前的状态"
     },
     "list": {
       "updateOrcaOn": "更新 {{host}} 上的 Orca",
@@ -6993,7 +6988,6 @@
       },
       "rotate": {
         "open": "轮换密钥…",
-        "title": "要轮换“{{automation}}”的密钥吗？",
         "confirm": "轮换密钥",
         "note": "URL 将获得新的密钥。请用它更新所有发送方",
         "overlap": "旧密钥继续有效 24 小时",
@@ -7002,29 +6996,29 @@
         "stopCancels_one": "适用于密钥泄露的情况。经旧密钥接收、仍在等待的 {{count}} 个调用将被取消",
         "stopCancels_other": "适用于密钥泄露的情况。经旧密钥接收、仍在等待的 {{count}} 个调用将被取消",
         "stopNote": "适用于密钥泄露的情况",
-        "done": "密钥已轮换。请复制新的 URL"
+        "done": "密钥已轮换。请复制新的 URL",
+        "action": "轮换"
       },
       "secret": {
         "add": "添加签名密钥…",
         "generatedTitle": "签名密钥已就绪",
         "done": "完成",
-        "generatedNote": "请将其复制到 {{sender}} 的 Webhook 设置中。此后，调用必须带有用它生成的签名",
         "copy": "复制密钥",
         "copied": "已复制密钥",
         "changeTitle": "更改签名密钥",
         "addTitle": "添加签名密钥",
-        "note": "之后 Orca 只接受用此密钥签名的调用，因此仅凭泄露的 URL 无法启动“{{automation}}”",
         "sender": "发送方",
         "modeGenerate": "由 Orca 生成",
         "modePaste": "粘贴发送方的密钥",
         "generateNote": "此密钥由 Orca 生成。接下来请将其复制到 {{sender}} 中",
         "paste": "{{sender}} 密钥",
-        "pasteNote": "当发送方提供了自己的密钥时使用此项",
-        "generate": "生成密钥",
         "save": "保存",
         "saved": "签名密钥已保存",
         "changeOpen": "更改签名密钥…",
-        "back": "返回签名密钥"
+        "back": "返回签名密钥",
+        "copyInto": "请将其复制到 {{sender}} 的 Webhook 设置中",
+        "title": "签名密钥",
+        "create": "创建"
       },
       "delete": {
         "open": "删除 Webhook…",
@@ -7772,7 +7766,6 @@
         "none": "无",
         "byline": "{{who}} · {{date}} · 未经审核",
         "someone": "某人",
-        "oneFlag": "{{summary}}：{{flag}}，位于 {{where}}",
         "oneNote": "1 条笔记",
         "notes": "{{count}} 条笔记",
         "updated": "{{who}} 更新了此 bot。请重新检查",
@@ -7783,7 +7776,8 @@
         "flagLine": "{{flag}}，第 {{line}} 行",
         "off": "关闭",
         "suggested": "建议 · {{when}}",
-        "memoryIndex": "它的记忆索引，包含分享的笔记"
+        "memoryIndex": "它的记忆索引，包含分享的笔记",
+        "flagIn": "{{where}} 中：{{flag}}"
       },
       "lines": "{{count}} 行",
       "backToSharing": "返回分享",
@@ -7838,7 +7832,8 @@
         "sharedBy": "由 {{who}} 分享",
         "viewOriginal": "查看原始版本",
         "originalGone": "已不可用"
-      }
+      },
+      "sameLinkShort": "已制作的副本保持不变"
     },
     "settingsView": {
       "sharing": "分享",
@@ -7885,9 +7880,6 @@
     "skills": {
       "count_one": "{{count}} 个技能",
       "count_other": "{{count}} 个技能",
-      "showMore": "再显示 {{count}} 个",
-      "remote": "位于另一台主机。{{bot}} 运行在 {{host}} 上，因此暂时无法加载这些技能",
-      "missing": "此项目已不在 Orca 中",
       "none": "此项目中还没有技能",
       "own": "{{bot}} 自己的技能",
       "title": "技能",
@@ -7901,7 +7893,11 @@
       "noneShort": "没有技能",
       "back": "返回技能",
       "search": "搜索项目",
-      "noMatch": "没有匹配搜索的项目"
+      "noMatch": "没有匹配搜索的项目",
+      "remoteShort": "位于另一台主机",
+      "missingShort": "已不在 Orca 中",
+      "remove": "移除",
+      "removeProject": "移除 {{project}}"
     },
     "whoCanAsk": {
       "cap": "此处最多 {{count}} 人",
@@ -8228,6 +8224,12 @@
     "usageLimit": {
       "continuesAt": "将于 {{time}} 继续",
       "hitLimit": "已达上限 · {{time}} 重置"
+    },
+    "page": {
+      "serverDownTitle": "无法连接 {{host}}"
+    },
+    "memoryHistory": {
+      "tidyUp": "整理"
     }
   },
   "hostMutation": {

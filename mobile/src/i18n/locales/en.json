@@ -5676,7 +5676,6 @@
     },
     "lookAround": {
       "title": "Look around",
-      "detail": "Reads connected apps and projects to suggest next steps. Read-only. Each look uses your agent plan, and Orca must be running on the host.",
       "on": "Suggest next steps",
       "every": "How often",
       "weekdaysOnly": "Weekdays only",
@@ -5690,7 +5689,8 @@
       "focusDetail": "Optional. Leave it empty and it looks for anything waiting on you.",
       "save": "Save",
       "back": "Back to Settings",
-      "backToLookAround": "Back to Look around"
+      "backToLookAround": "Back to Look around",
+      "footer": "Read-only. Each look uses your agent plan."
     },
     "new": {
       "failed": "Couldn’t create the bot",
@@ -6260,7 +6260,6 @@
       "never": "Not yet",
       "tidying": "Tidying…",
       "now": "Tidy now",
-      "footer": "Changes memory files only. Uses your agent plan, like a short chat. Orca must be running on your computer.",
       "merged": "Merged {{count}} repeated lines",
       "replaced": "Marked replaced: {{fact}}",
       "filed": "Filed {{count}} lines into memory/{{topic}}.md",
@@ -6271,11 +6270,11 @@
       "tidied": "Tidied",
       "undone": "Undone",
       "undoAll": "Undo this tidy-up",
-      "undo": "Undo",
-      "undoNote": "Undo puts MEMORY.md back as it was before this tidy-up, all at once. Full history and memory editing are on your computer, in Settings → Memory.",
       "summaryTitle": "Last tidy-up",
       "undoStale": "A newer tidy-up ran since. Review it before undoing.",
-      "backToTidyUp": "Back to Memory upkeep"
+      "backToTidyUp": "Back to Memory upkeep",
+      "footerShort": "Changes memory files only. Uses your agent plan.",
+      "undoNoteShort": "Puts MEMORY.md back as it was before this tidy-up."
     },
     "search": {
       "pausedMatches_one": "{{count}} paused match",
@@ -6791,7 +6790,6 @@
       },
       "rotate": {
         "open": "Rotate key…",
-        "title": "Rotate the key for “{{automation}}”?",
         "confirm": "Rotate key",
         "note": "The URL gets a new key. Update every sender with it.",
         "overlap": "Keep the old key working for 24 hours",
@@ -6800,29 +6798,29 @@
         "stopCancels_one": "For a leaked key. {{count}} waiting call it let in is cancelled.",
         "stopCancels_other": "For a leaked key. {{count}} waiting calls it let in are cancelled.",
         "stopNote": "For a leaked key.",
-        "done": "Key rotated. Copy the new URL."
+        "done": "Key rotated. Copy the new URL.",
+        "action": "Rotate"
       },
       "secret": {
         "changeOpen": "Change signing secret…",
         "add": "Add signing secret…",
         "generatedTitle": "Signing secret ready",
         "done": "Done",
-        "generatedNote": "Copy it into {{sender}}’s webhook settings. From now on, calls must carry its signature.",
         "copy": "Copy secret",
         "copied": "Secret copied",
         "changeTitle": "Change signing secret",
         "addTitle": "Add signing secret",
-        "note": "Orca then accepts only calls signed with this secret, so a leaked URL alone can’t start “{{automation}}”.",
         "sender": "Sender",
         "modeGenerate": "Orca makes one",
         "modePaste": "Paste the sender’s",
         "generateNote": "Orca makes this secret. You copy it into {{sender}} next.",
         "paste": "{{sender}} secret",
-        "pasteNote": "Use this when the sender gives you its own secret.",
-        "generate": "Generate secret",
         "save": "Save",
         "back": "Back to signing secret",
-        "saved": "Signing secret saved"
+        "saved": "Signing secret saved",
+        "copyInto": "Copy it into {{sender}}’s webhook settings.",
+        "title": "Signing secret",
+        "create": "Create"
       },
       "delete": {
         "open": "Delete hook…",
@@ -7490,7 +7488,6 @@
         "none": "None",
         "byline": "{{who}} · {{date}} · Not reviewed",
         "someone": "Someone",
-        "oneFlag": "{{summary}}: {{flag}} in {{where}}",
         "oneNote": "1 note",
         "notes": "{{count}} notes",
         "updated": "{{who}} updated this bot. Review it again.",
@@ -7501,7 +7498,8 @@
         "flagLine": "{{flag}}, line {{line}}",
         "off": "Off",
         "suggested": "Suggested · {{when}}",
-        "memoryIndex": "Its memory index, with the shared notes"
+        "memoryIndex": "Its memory index, with the shared notes",
+        "flagIn": "{{flag}} in {{where}}"
       },
       "lines": "{{count}} lines",
       "backToSharing": "Back to Sharing",
@@ -7556,7 +7554,8 @@
         "sharedBy": "Shared by {{who}}",
         "viewOriginal": "View original",
         "originalGone": "No longer available"
-      }
+      },
+      "sameLinkShort": "Copies already made stay as they are."
     },
     "settingsView": {
       "sharing": "Sharing",
@@ -7603,9 +7602,6 @@
     "skills": {
       "count_one": "{{count}} skill",
       "count_other": "{{count}} skills",
-      "showMore": "Show {{count}} more",
-      "remote": "On another host. {{bot}} runs on {{host}}, so it can’t load these yet.",
-      "missing": "This project is no longer in Orca.",
       "none": "No skills in this project yet",
       "own": "{{bot}}’s own skills",
       "title": "Skills",
@@ -7619,7 +7615,11 @@
       "noneShort": "No skills",
       "back": "Back to Skills",
       "search": "Search projects",
-      "noMatch": "No projects match your search."
+      "noMatch": "No projects match your search.",
+      "remoteShort": "On another host",
+      "missingShort": "No longer in Orca",
+      "remove": "Remove",
+      "removeProject": "Remove {{project}}"
     },
     "whoCanAsk": {
       "cap": "{{count}} people is the most here.",
@@ -7942,6 +7942,12 @@
     },
     "upcoming": {
       "needsSignIn": "Needs sign-in"
+    },
+    "page": {
+      "serverDownTitle": "Can’t reach {{host}}"
+    },
+    "memoryHistory": {
+      "tidyUp": "Tidy-up"
     }
   },
   "mobileWebShell": {
@@ -8171,14 +8177,13 @@
       "onEvents": "When something happens…",
       "runsIn": "Runs in",
       "runsInNew": "A new conversation each time",
-      "chat": "{{name}}'s Chat",
+      "chat": "{{name}}’s Chat",
       "runsInUntitledChat": "An untitled chat",
       "agent": "Agent",
       "agentSameAsBot": "Same as {{name}}",
-      "agentInChat": "This chat's agent",
-      "agentInChatHelp": "A run in a chat continues on that chat's agent.",
+      "agentInChat": "This chat’s agent",
       "resultsTo": "Send results to",
-      "resultsToThread": "The event's thread",
+      "resultsToThread": "The event’s thread",
       "resultsToChannel": "A channel",
       "resultsToLinear": "A Linear issue",
       "resultsToNone": "Nowhere",
@@ -8190,12 +8195,9 @@
       "linearIssueInvalid": "Enter the Linear issue to send results to, like ENG-123.",
       "letBotReact": "Let {{name}} react",
       "letBotReactHelp": "Each result starts a turn so {{name}} can act on it.",
-      "threadNeedsEvents": "Only events, new conversation",
-      "threadUnsupported": "Orca Cloud doesn't support this yet",
-      "channelNeedsSlack": "Connect Slack first",
-      "linearNeedsLinear": "Connect Linear first",
       "time": "Time",
-      "minute": "Minute"
+      "minute": "Minute",
+      "runs": "Runs"
     },
     "botEvents": {
       "label": "Events",

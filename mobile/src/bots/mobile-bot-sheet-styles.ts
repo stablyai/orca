@@ -12,5 +12,6 @@ export const sheetStyles = themedStyleSheet(() => ({
   textButtonLabel: {
     fontSize: 13,
     color: colors.textSecondary
-  }
+  },
+  textButtonAccent: { fontWeight: '500', color: colors.accentBlue }
 }))

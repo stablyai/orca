@@ -4649,7 +4649,6 @@
     "lookAround": {
       "looking": "Revisando…",
       "save": "Guardar",
-      "detail": "Lee las apps y proyectos conectados para sugerir próximos pasos. Solo lectura. Cada revisión usa tu plan de agente y Orca debe estar ejecutándose en el host.",
       "lookNow": "Revisar ahora",
       "notYet": "Aún no",
       "backToLookAround": "Volver a Revisar"
@@ -4704,8 +4703,6 @@
     "tidyUp": {
       "title": "Mantenimiento de la memoria",
       "never": "Aún no",
-      "footer": "Solo cambia archivos de memoria. Usa tu plan de agente, como un chat corto. Orca debe estar ejecutándose en tu ordenador.",
-      "undoNote": "Deshacer devuelve MEMORY.md al estado anterior a esta ordenación, de una sola vez. El historial completo y la edición de la memoria están en tu ordenador, en Ajustes → Memoria.",
       "backToTidyUp": "Volver a Mantenimiento de la memoria"
     },
     "items": {
@@ -4775,7 +4772,6 @@
       },
       "rotate": {
         "open": "Rotar clave…",
-        "title": "¿Rotar la clave de “{{automation}}”?",
         "confirm": "Rotar clave",
         "note": "La URL recibe una clave nueva. Actualiza con ella a todos los remitentes.",
         "overlap": "Mantener la clave antigua activa durante 24 horas",
@@ -4791,19 +4787,15 @@
         "add": "Añadir secreto de firma…",
         "generatedTitle": "Secreto de firma listo",
         "done": "Hecho",
-        "generatedNote": "Cópialo en los ajustes de webhook de {{sender}}. A partir de ahora, las llamadas deben llevar su firma.",
         "copy": "Copiar secreto",
         "copied": "Secreto copiado",
         "changeTitle": "Cambiar secreto de firma",
         "addTitle": "Añadir secreto de firma",
-        "note": "Orca solo aceptará llamadas firmadas con este secreto, así que una URL filtrada por sí sola no puede iniciar “{{automation}}”.",
         "sender": "Remitente",
         "modeGenerate": "Orca crea uno",
         "modePaste": "Pegar el del remitente",
         "generateNote": "Orca crea este secreto. Después lo copias en {{sender}}.",
         "paste": "Secreto de {{sender}}",
-        "pasteNote": "Usa esto cuando el remitente te dé su propio secreto.",
-        "generate": "Generar secreto",
         "save": "Guardar",
         "saved": "Secreto de firma guardado",
         "changeOpen": "Cambiar secreto de firma…",

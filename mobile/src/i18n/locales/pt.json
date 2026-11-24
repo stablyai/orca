@@ -5223,7 +5223,6 @@
     "lookAround": {
       "looking": "Procurando…",
       "save": "Salvar",
-      "detail": "Lê apps e projetos conectados para sugerir próximos passos. Somente leitura. Cada olhada usa seu plano de agente, e o Orca precisa estar em execução no host.",
       "lookNow": "Dar uma olhada agora",
       "notYet": "Ainda não",
       "backToLookAround": "Voltar para Dar uma olhada"
@@ -5278,8 +5277,6 @@
     "tidyUp": {
       "title": "Manutenção da memória",
       "never": "Ainda não",
-      "footer": "Altera só arquivos de memória. Usa seu plano de agente, como um chat curto. O Orca precisa estar em execução no seu computador.",
-      "undoNote": "Desfazer restaura MEMORY.md ao estado anterior a esta arrumação, de uma vez. O histórico completo e a edição da memória ficam no seu computador, em Configurações → Memória.",
       "backToTidyUp": "Voltar para Manutenção da memória"
     },
     "items": {
@@ -5349,7 +5346,6 @@
       },
       "rotate": {
         "open": "Rotacionar chave…",
-        "title": "Rotacionar a chave de “{{automation}}”?",
         "confirm": "Rotacionar chave",
         "note": "A URL recebe uma nova chave. Atualize todos os remetentes com ela.",
         "overlap": "Manter a chave antiga funcionando por 24 horas",
@@ -5365,19 +5361,15 @@
         "add": "Adicionar segredo de assinatura…",
         "generatedTitle": "Segredo de assinatura pronto",
         "done": "Concluído",
-        "generatedNote": "Copie-o nas configurações de webhook do {{sender}}. De agora em diante, as chamadas precisam ter a assinatura dele.",
         "copy": "Copiar segredo",
         "copied": "Segredo copiado",
         "changeTitle": "Alterar segredo de assinatura",
         "addTitle": "Adicionar segredo de assinatura",
-        "note": "O Orca então aceita só chamadas assinadas com este segredo, então uma URL vazada sozinha não consegue iniciar “{{automation}}”.",
         "sender": "Remetente",
         "modeGenerate": "O Orca cria um",
         "modePaste": "Colar o do remetente",
         "generateNote": "O Orca cria este segredo. Depois você o copia no {{sender}}.",
         "paste": "Segredo do {{sender}}",
-        "pasteNote": "Use isto quando o remetente fornecer o próprio segredo.",
-        "generate": "Gerar segredo",
         "save": "Salvar",
         "saved": "Segredo de assinatura salvo",
         "changeOpen": "Alterar segredo de assinatura…",
