@@ -21,6 +21,8 @@ export const SharedBotHeldMessage = z.object({
   chat: z.union([z.object({ sessionId: Text }), z.object({ newChatId: Text })]),
   // Kept on this device only, to draw it in its chat and send it again if the host refuses it.
   text: z.string(),
+  // Sealed with it, and kept to send it again.
+  attachments: z.array(z.object({ name: Text, contentBase64: z.string() })).optional(),
   sentAt: z.number().int().nonnegative()
 })
 export type SharedBotHeldMessage = z.infer<typeof SharedBotHeldMessage>

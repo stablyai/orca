@@ -1,8 +1,10 @@
 // A teammate's messages held in Orca Cloud for a shared agent's host: where a send goes, the held
 // states the cloud reports, and Send again for one the host refused.
 import { randomUUID } from 'node:crypto'
+import { z } from 'zod'
 import {
   isSharedBotNewChatId,
+  newSharedBotChatId,
   SHARED_BOT_HOST_ERRORS,
   type SharedBotHeldState,
   type SharedBotHeldView
@@ -17,6 +19,11 @@ import {
   type SharedBotHostStore
 } from './shared-bot-host-store'
 import { sendsHeld, type MineShare, type SharedBotLink } from './shared-bot-pairing'
+import {
+  SharedBotHeldUploads,
+  SHARED_BOT_UPLOAD_METHODS,
+  type SharedBotHeldAttachment
+} from './shared-bot-held-uploads'
 import type { SharedBotsCloud } from './shared-bots-cloud'
 
 export const sharedBotFailure = (
@@ -25,6 +32,19 @@ export const sharedBotFailure = (
   message: string
 ): RuntimeRpcResponse<unknown> => ({ id, ok: false, error: { code, message } })
 
+const SessionParams = z.looseObject({ sessionId: z.string() })
+const EnvelopeParams = z.looseObject({ envelope: SessionParams })
+
+/** The chat a call names, as `sessionId` or in its mutation envelope. */
+const sessionIdOf = (params: unknown): string | undefined =>
+  SessionParams.safeParse(params).data?.sessionId ??
+  EnvelopeParams.safeParse(params).data?.envelope.sessionId
+
+/** Whether a call names a new chat's placeholder, which the host doesn't know yet. */
+export function namesSharedBotNewChat(params: unknown): boolean {
+  return isSharedBotNewChatId(sessionIdOf(params))
+}
+
 /** The chat a session id names: a placeholder id is a new chat the host hasn't started yet. */
 export function sharedBotHeldChat(sessionId: string): SharedBotHeldMessage['chat'] {
   return isSharedBotNewChatId(sessionId) ? { newChatId: sessionId } : { sessionId }
@@ -32,6 +52,7 @@ export function sharedBotHeldChat(sessionId: string): SharedBotHeldMessage['chat
 
 export class SharedBotHeldSends {
   private states = new Map<string, SharedBotHeldState>()
+  private readonly uploads = new SharedBotHeldUploads()
   // Cloud reads begun this run, and how many had begun when each message held this run was taken.
   private reads = 0
   private readonly heldAtRead = new Map<string, number>()
@@ -102,10 +123,19 @@ export class SharedBotHeldSends {
       return null
     }
     const chat = sharedBotHeldChat(sessionId)
-    if (!sendsHeld(entry, link, chat, this.states)) {
+    // Attachments kept here for it can only reach the host sealed in a held message.
+    const keptAttachments = send.body.blocks.some(
+      (block) =>
+        block.type === 'image-ref' && block.path !== undefined && this.uploads.isKept(block.path)
+    )
+    if (!keptAttachments && !sendsHeld(entry, link, chat, this.states)) {
       return link === 'live' ? null : sharedBotOffline(entry)
     }
-    const result = await this.hold(entry, { chat, clientMessageId, blocks: send.body.blocks })
+    const content = this.heldContent(send.body.blocks)
+    const result = content && (await this.hold(entry, { chat, clientMessageId, ...content }))
+    if (result?.kind === 'held' && content) {
+      this.uploads.release(content.paths)
+    }
     if (result?.kind === 'held') {
       return sharedBotFailure(
         'agentSession.send',
@@ -124,6 +154,36 @@ export class SharedBotHeldSends {
     return sharedBotOffline(entry)
   }
 
+  /**
+   * A call this device answers for a host that isn't reached live: an attachment upload for a chat
+   * whose next message will be held (kept here to be sealed into it), or a new chat started while
+   * the host is away (a placeholder until its first held message starts it there). Null otherwise.
+   */
+  answerHere(
+    entry: SharedBotHostEntry,
+    link: SharedBotLink,
+    method: string,
+    params: unknown
+  ): RuntimeRpcResponse<unknown> | null {
+    if (method === 'bots.session.start') {
+      return link !== 'live' && entry.hostKey
+        ? {
+            id: method,
+            ok: true,
+            result: { sessionId: newSharedBotChatId(randomUUID()) },
+            _meta: { runtimeId: entry.environmentId }
+          }
+        : null
+    }
+    const sessionId = sessionIdOf(params)
+    const keeps =
+      SHARED_BOT_UPLOAD_METHODS.has(method) &&
+      (this.uploads.owns(params) ||
+        (sessionId !== undefined &&
+          sendsHeld(entry, link, sharedBotHeldChat(sessionId), this.states)))
+    return keeps ? this.uploads.call(method, params, entry.ownerName) : null
+  }
+
   /** Holds a refused message again under a new id, in place of the refused one. */
   async sendAgain(entry: SharedBotHostEntry, clientMessageId: string): Promise<boolean> {
     const refused = entry.held.find(
@@ -132,10 +192,14 @@ export class SharedBotHeldSends {
     if (!refused) {
       return false
     }
-    const blocks = [{ type: 'text', text: refused.text }]
     const result = await this.hold(
       entry,
-      { chat: refused.chat, clientMessageId: randomUUID(), blocks },
+      {
+        chat: refused.chat,
+        clientMessageId: randomUUID(),
+        text: refused.text,
+        attachments: refused.attachments ?? []
+      },
       clientMessageId
     )
     return result?.kind === 'held'
@@ -146,7 +210,8 @@ export class SharedBotHeldSends {
     message: {
       chat: SharedBotHeldMessage['chat']
       clientMessageId: string
-      blocks: readonly { type: string }[]
+      text: string
+      attachments: readonly SharedBotHeldAttachment[]
     },
     replaces?: string
   ): Promise<HandOffResult | null> {
@@ -170,6 +235,31 @@ export class SharedBotHeldSends {
       this.deps.changed()
     }
     return result
+  }
+
+  /** The words and attachments a held message carries; null when a block can't be held (an
+   *  attachment already in the host's store, or anything but text and attachments). */
+  private heldContent(blocks: readonly { type: string; text?: string; path?: string }[]): {
+    text: string
+    attachments: SharedBotHeldAttachment[]
+    paths: string[]
+  } | null {
+    const texts: string[] = []
+    const attachments: SharedBotHeldAttachment[] = []
+    const paths: string[] = []
+    for (const block of blocks) {
+      const attachment =
+        block.type === 'image-ref' && block.path ? this.uploads.read(block.path) : null
+      if (block.type === 'text' && block.text !== undefined) {
+        texts.push(block.text)
+      } else if (attachment && block.path) {
+        attachments.push(attachment)
+        paths.push(block.path)
+      } else {
+        return null
+      }
+    }
+    return { text: texts.join('\n\n'), attachments, paths }
   }
 
   private state(held: SharedBotHeldMessage): SharedBotHeldState {
