@@ -196,7 +196,7 @@ describe('account restart exits arriving out of order', () => {
     expect(t.runtime.onPtyExit).toHaveBeenCalledTimes(1)
     expect(t.runtime.onPtyExit.mock.calls[0][3]).toMatchObject({ paneRespawning: true })
     expect(t.sendPtyExitToRenderer).toHaveBeenCalledTimes(1)
-    t.release({ outcome: 'ended' })
+    t.release({ outcome: 'ended', writersExited: true })
     await expect(result).resolves.toMatchObject({ outcome: 'stopped' })
     // A late duplicate is dropped without any time window.
     t.emitExit()
@@ -208,7 +208,7 @@ describe('account restart exits arriving out of order', () => {
     const t = setup()
     const result = t.request()
     await t.stopDispatched()
-    t.release({ outcome: 'ended' })
+    t.release({ outcome: 'ended', writersExited: true })
     await expect(result).resolves.toMatchObject({ outcome: 'stopped' })
     expect(t.runtime.onPtyExit).toHaveBeenCalledTimes(1)
     expect(t.runtime.onPtyExit.mock.calls[0][3]).toMatchObject({ paneRespawning: true })
@@ -228,7 +228,7 @@ describe('account restart exits arriving out of order', () => {
     )
     t.emitExit()
     expect(claimed).toEqual([['replaced']])
-    t.release({ outcome: 'ended' })
+    t.release({ outcome: 'ended', writersExited: true })
     await result
   })
 
@@ -251,7 +251,7 @@ describe('account restart exits arriving out of order', () => {
     const t = setup()
     const result = t.request()
     await t.stopDispatched()
-    t.release({ outcome: 'ended' })
+    t.release({ outcome: 'ended', writersExited: true })
     await result
     codexAccountRestartStops.forgetPane(`wt\0tab\0${t.pane.leafId}`)
     // The stopped incarnation's late exit stays dropped after its intent is gone.
@@ -284,5 +284,20 @@ describe('account restart exits arriving out of order', () => {
     })
     t.emitExit()
     expect(t.runtime.onPtyExit.mock.calls[0][3]).not.toHaveProperty('paneRespawning')
+  })
+
+  it('keeps the pane but resumes on the old account when descendants were not verified gone', async () => {
+    const t = setup()
+    const result = t.request()
+    await t.stopDispatched()
+    t.release({ outcome: 'ended' })
+    await expect(result).resolves.toMatchObject({ outcome: 'unknown' })
+    expect(t.runtime.onPtyExit).toHaveBeenCalledTimes(1)
+    expect(t.runtime.onPtyExit.mock.calls[0][3]).toMatchObject({ paneRespawning: true })
+    const decision = await codexAccountRestartStops.resolveResume({
+      paneKey: `wt\0tab\0${t.pane.leafId}`,
+      providerSession: { key: 'session_id', id: 'thread-1' }
+    })
+    expect(decision.kind).toBe('pinned')
   })
 })

@@ -122,7 +122,8 @@ async function stopCodexRestartOccupant(
   }
   if (outcome.outcome === 'ended') {
     deliverRestartReceiptExit(deps, occupant)
-    return 'ended'
+    // The root ended either way; only positive descendant evidence lets another account read the transcript.
+    return outcome.writersExited === true ? 'ended' : 'ended-unproven'
   }
   if (outcome.outcome === 'refused' && outcome.reason === 'unsupported') {
     return 'service-outdated'
@@ -141,7 +142,7 @@ function deliverRestartReceiptExit(
   const classification = codexAccountRestartStops.classifyExit(
     occupant.ptyId,
     occupant.incarnationId,
-    'fenced-ended'
+    'fenced-receipt'
   )
   if (
     classification !== 'restart' ||

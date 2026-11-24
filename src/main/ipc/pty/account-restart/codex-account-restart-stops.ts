@@ -24,8 +24,16 @@ export type CodexRestartOccupant = {
   provenance: CodexRestartProvenance
 }
 
-/** `ended` is the only writer proof; `refused` and `service-outdated` are proven pre-signal refusals. */
-export type CodexRestartStopOutcome = 'ended' | 'refused' | 'service-outdated' | 'unknown'
+/**
+ * `ended` (root and every captured writer gone) is the only writer proof; `ended-unproven` stopped
+ * the root but could not verify its descendants. `refused` and `service-outdated` sent no signal.
+ */
+export type CodexRestartStopOutcome =
+  | 'ended'
+  | 'ended-unproven'
+  | 'refused'
+  | 'service-outdated'
+  | 'unknown'
 
 export type CodexAccountRestartStopDeps = {
   /** Re-derives the pane's eligible occupant from host facts, or the reason it has none. */
@@ -36,7 +44,7 @@ export type CodexAccountRestartStopDeps = {
   stop: (occupant: CodexRestartOccupant) => Promise<CodexRestartStopOutcome>
 }
 
-export type CodexRestartExitObservation = 'stream' | 'host-loss' | 'fenced-ended'
+export type CodexRestartExitObservation = 'stream' | 'host-loss' | 'fenced-receipt' | 'attach-miss'
 /** `restart`: the first logical exit of a restart-stopped incarnation; `duplicate`: drop it. */
 export type CodexRestartExitClassification = 'ordinary' | 'restart' | 'duplicate'
 
@@ -185,7 +193,7 @@ export class CodexAccountRestartStops {
   classifyExit(
     ptyId: string,
     incarnationId: string | null | undefined,
-    observation: CodexRestartExitObservation
+    _observation: CodexRestartExitObservation
   ): CodexRestartExitClassification {
     if (!incarnationId) {
       // Unstamped exits keep baseline semantics and carry no account-switch authority.
@@ -194,10 +202,6 @@ export class CodexAccountRestartStops {
     const mark = this.markByIncarnation.get(incarnationId)
     if (!mark || mark.ptyId !== ptyId) {
       return this.retiredIncarnations.has(incarnationId) ? 'duplicate' : 'ordinary'
-    }
-    if (observation === 'fenced-ended') {
-      // A receipt may advance proof after the stream exit was already delivered.
-      mark.writerProof = true
     }
     if (mark.delivered) {
       return 'duplicate'

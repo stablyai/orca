@@ -12,7 +12,9 @@ export type PtyFencedTerminationRequest = {
 }
 
 export type PtyFencedTerminationOutcome =
-  | { outcome: 'ended' | 'already_exited' }
+  /** `writersExited`: the teardown also proved every captured descendant gone (or ended the owned job tree). */
+  | { outcome: 'ended'; writersExited?: true }
+  | { outcome: 'already_exited' }
   | {
       outcome: 'refused'
       reason: 'replaced' | 'claimed' | 'attached' | 'unsupported' | 'unverifiable'

@@ -12,6 +12,8 @@ type TeardownOperation = {
   session: Session
   descendantVerification: Promise<unknown> | null
   immediatePromise: Promise<void> | null
+  /** Positive evidence only: every captured descendant verified gone, or the owned job tree ended. */
+  writersExited: boolean
 }
 
 /** Retain teardown ownership across descendant capture, root exit, and Session reaping. */
@@ -47,6 +49,15 @@ export class TerminalSessionTeardown {
     await operation.promise.catch(() => {})
     await operation.descendantVerification?.catch(() => {})
     await operation.rootCompletion.catch(() => {})
+  }
+
+  /** After this teardown settles, whether it proved the session's writers gone; false when none runs. */
+  writersExited(sessionId: string): Promise<boolean> {
+    const operation = this.operations.get(sessionId)
+    if (!operation) {
+      return Promise.resolve(false)
+    }
+    return this.waitForOperation(operation).then(() => operation.writersExited)
   }
 
   requestImmediate(sessionId: string): Promise<void> | undefined {
@@ -120,7 +131,8 @@ export class TerminalSessionTeardown {
       rootCompletion: Promise.resolve(),
       session,
       descendantVerification: null,
-      immediatePromise: null
+      immediatePromise: null,
+      writersExited: false
     }
     const operation = run(entry)
     entry.promise = operation
@@ -192,14 +204,22 @@ export class TerminalSessionTeardown {
           {
             // Captured descendants are authoritative only while this exact Session owns the live root.
             ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
-            terminateOwnedTree: () => session.terminateOwnedTree(),
+            terminateOwnedTree: () => {
+              const verdict = session.terminateOwnedTree()
+              entry.writersExited ||= verdict === 'terminated'
+              return verdict
+            },
             terminateDescendants: (snapshot) => {
               entry.descendantVerification = terminateShutdownDescendants(
                 session.launchAgent || entry.immediate
                   ? snapshot
                   : excludeShellBackgroundJobs(snapshot, session.shellIsRootChild),
                 session.shellIsRootChild
-              )
+              ).then((verdict) => {
+                // A live or unverifiable descendant could still be writing the transcript.
+                entry.writersExited ||= verdict === 'exited'
+                return verdict
+              })
               return entry.descendantVerification
             },
             awaitEscalation: () => entry.immediate
