@@ -46,6 +46,9 @@ describe('bot shares contract', () => {
     expect(invite('alice@stably.ai')).toBe(true)
     expect(invite('Alice@stably.ai')).toBe(false)
     expect(invite(' alice@stably.ai')).toBe(false)
+    for (const malformed of ['a@@b.co', '@ab.co', 'ab@']) {
+      expect(invite(malformed)).toBe(false)
+    }
   })
 
   it('never reads orca as a place: no workspace rows, no rules, only share deliveries on it', () => {
@@ -61,6 +64,11 @@ describe('bot shares contract', () => {
     const resolved = { ...base, kind: 'share_resolved', email: 'alice@stably.ai', accountId: 'acct-1' }
     const onShare = { source: 'orca', externalId: 's1' }
     expect(ConnectorDeliverySchema.safeParse({ ...resolved, conversation: onShare }).success).toBe(true)
+    // Another share's queue would let it pass that share's accept.
+    expect(
+      ConnectorDeliverySchema.safeParse({ ...resolved, conversation: { ...onShare, externalId: 's2' } })
+        .success
+    ).toBe(false)
     expect(
       ConnectorDeliverySchema.safeParse({ ...resolved, conversation: { source: 'slack', externalId: 's1' } }).success
     ).toBe(false)

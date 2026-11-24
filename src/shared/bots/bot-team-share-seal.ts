@@ -123,6 +123,10 @@ export function openBotTeamShareOffer(
   }
 }
 
+// The signature names the host it was sealed to, so one host can't re-seal a message to another.
+const heldTranscript = (primitives: SealPrimitives, hostKey: string, body: Uint8Array) =>
+  sha256(concat(primitives.publicKeyFromBase64(hostKey), body))
+
 /** `ephemeral public key ‖ box(signature ‖ message JSON)`, base64: what the cloud holds. */
 export async function sealBotTeamShareHeldMessage(
   primitives: SealPrimitives,
@@ -133,7 +137,9 @@ export async function sealBotTeamShareHeldMessage(
   }
 ): Promise<string> {
   const body = json(args.message)
-  const signature = await args.sign(encodeDeviceProofMessage('share-send', sha256(body)))
+  const signature = await args.sign(
+    encodeDeviceProofMessage('share-send', heldTranscript(primitives, args.hostKey, body))
+  )
   if (signature.length !== SIGNATURE_BYTES) {
     throw new Error('held message needs a 64-byte signature')
   }
@@ -141,14 +147,16 @@ export async function sealBotTeamShareHeldMessage(
 }
 
 /**
- * The message, or null unless this host's key opens it, its device key signed it for share-send, and
- * it names the delivery's share, bot and clientMessageId. The caller still checks that key against its
- * share device rows and stamps the sender from that row.
+ * The message, or null unless this host's key opens it, its device key signed it for share-send to this
+ * host, and it names the delivery's share, bot and clientMessageId. The caller still checks that key
+ * against its share device rows and stamps the sender from that row.
  */
 export function openBotTeamShareHeldMessage(
   primitives: SealPrimitives,
   args: {
     hostSecretKey: Uint8Array
+    // This host's own public key, which the signature must name.
+    hostKey: string
     sealed: string
     expect: { shareId: string; botId: string; clientMessageId: string }
   }
@@ -172,7 +180,7 @@ export function openBotTeamShareHeldMessage(
       devicePublicKeyB64: message.data.devicePublicKey,
       deviceProofB64: primitives.encodeBase64(plaintext.subarray(0, SIGNATURE_BYTES)),
       purpose: 'share-send',
-      transcriptHashB64: primitives.encodeBase64(sha256(body))
+      transcriptHashB64: primitives.encodeBase64(heldTranscript(primitives, args.hostKey, body))
     })
     return signed ? message.data : null
   } catch {

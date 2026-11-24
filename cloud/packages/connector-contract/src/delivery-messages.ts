@@ -42,6 +42,9 @@ const ShareDelivery = {
   ...DeliveryBase,
   conversation: ConnectorShareConversationSchema
 }
+// A share delivery's queue is its own share's, so its order holds.
+const isOnItsShare = (delivery: { shareId: string; conversation: { externalId: string } }) =>
+  delivery.conversation.externalId === delivery.shareId
 
 // Where a bot was asked: a Slack conversation by channel id; a GitHub issue or pull request as
 // owner/repo#number; a Linear issue by its key. A kind this cloud can't tell apart is 'channel'.
@@ -244,9 +247,15 @@ export const ConnectorDeliverySchema = z.discriminatedUnion('kind', [
     event: PrEventSchema
   }),
   // Sent only to a machine that lists bots.shares, on the share's conversation (share-messages.ts).
-  z.object({ ...ShareDelivery, kind: z.literal('share_resolved'), ...ShareResolvedFields }),
-  z.object({ ...ShareDelivery, kind: z.literal('share_accept'), ...ShareAcceptFields }),
-  z.object({ ...ShareDelivery, kind: z.literal('share_send'), ...ShareSendFields })
+  z
+    .object({ ...ShareDelivery, kind: z.literal('share_resolved'), ...ShareResolvedFields })
+    .refine(isOnItsShare),
+  z
+    .object({ ...ShareDelivery, kind: z.literal('share_accept'), ...ShareAcceptFields })
+    .refine(isOnItsShare),
+  z
+    .object({ ...ShareDelivery, kind: z.literal('share_send'), ...ShareSendFields })
+    .refine(isOnItsShare)
 ])
 
 const absent = z.never().optional()

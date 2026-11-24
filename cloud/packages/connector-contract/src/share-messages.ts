@@ -19,10 +19,9 @@ export function normalizeShareEmail(email: string): string {
 }
 
 export const ShareEmailSchema = z
-  .string()
-  .min(3)
+  .email()
   .max(CONNECTOR_LIMITS.maxShareEmailLength)
-  .refine((email) => email === normalizeShareEmail(email) && email.includes('@'))
+  .refine((email) => email === normalizeShareEmail(email))
 
 // A 32-byte public key, standard padded base64 as pairing writes it: a device's Ed25519 key (its
 // relay auth and held-message signatures) or a Curve25519 key things are sealed to.

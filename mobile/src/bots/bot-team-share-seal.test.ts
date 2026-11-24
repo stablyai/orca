@@ -35,6 +35,7 @@ const open = (
 ) =>
   openBotTeamShareHeldMessage(NODE_PAIRED_E2EE_PRIMITIVES, {
     hostSecretKey: host.secretKey,
+    hostKey: b64(host.publicKey),
     sealed,
     expect: expect1,
     ...overrides
@@ -85,6 +86,38 @@ describe('held message seal', () => {
       }
     })
     expect(open(asAuth)).toBeNull()
+  })
+
+  it('refuses a message one host opened and re-sealed to another', async () => {
+    const sealed = await sealBotTeamShareHeldMessage(MOBILE_PAIRED_E2EE_PRIMITIVES, {
+      hostKey: b64(host.publicKey),
+      message,
+      sign
+    })
+    const bytes = Buffer.from(sealed, 'base64')
+    const plaintext = nacl.box.open(
+      bytes.subarray(56),
+      bytes.subarray(32, 56),
+      bytes.subarray(0, 32),
+      host.secretKey
+    )
+    const resealTo = (recipient: Uint8Array) => {
+      const ephemeral = nacl.box.keyPair()
+      const nonce = nacl.randomBytes(24)
+      return Buffer.concat([
+        ephemeral.publicKey,
+        nonce,
+        nacl.box(plaintext!, nonce, recipient, ephemeral.secretKey)
+      ]).toString('base64')
+    }
+    expect(open(resealTo(host.publicKey))).toEqual(message)
+    const other = nacl.box.keyPair()
+    expect(
+      open(resealTo(other.publicKey), {
+        hostSecretKey: other.secretKey,
+        hostKey: b64(other.publicKey)
+      })
+    ).toBeNull()
   })
 })
 
