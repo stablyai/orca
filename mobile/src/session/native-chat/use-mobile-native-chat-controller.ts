@@ -167,21 +167,20 @@ export function useMobileNativeChatController(args: {
     stop: handleNativeChatStop
   })
   const activeTurn = activeChatStructured ? structuredNativeChat : terminalTurn
-  const workingEpoch = terminalTurn.workingEpoch
   const placedChatPending = useMemo(
     () =>
       chatPending.map((entry) => ({
         ...entry,
-        pendingSend: nativeChatPendingSendPlacement(entry, workingEpoch)
+        pendingSend: nativeChatPendingSendPlacement(entry, terminalTurn.workingEpoch)
       })),
-    [chatPending, workingEpoch]
+    [chatPending, terminalTurn.workingEpoch]
   )
   const captureTerminalSendOrigin = useCallback(
     (text: string, sentAt?: number) => {
       const origin = captureSendOrigin(text, sentAt)
-      return origin ? { ...origin, queuedDuringWorkingEpoch: workingEpoch } : null
+      return origin ? { ...origin, queuedDuringWorkingEpoch: terminalTurn.workingEpoch } : null
     },
-    [captureSendOrigin, workingEpoch]
+    [captureSendOrigin, terminalTurn.workingEpoch]
   )
 
   const workspaceCatalog = useMobileNativeChatWorkspaceCatalog(args, activeChatAgent)
@@ -243,7 +242,8 @@ export function useMobileNativeChatController(args: {
         invokeAction: structuredNativeChat.invokeStructuredOption
       },
       toggleTabChatView,
-      worktreeId
+      worktreeId,
+      onOptionError: onSendError
     })
   useLayoutEffect(() => {
     recordSessionOptionCommandRef.current = recordNativeChatSessionOptionCommand

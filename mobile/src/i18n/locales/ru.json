@@ -464,15 +464,14 @@
       "xhighShort": "Очень выс."
     },
     "sessionOptionPickers": {
-      "agentWorking": "Агент работает",
+      "appliesAfterTurn": "Применится после завершения текущего ответа",
       "backToModels": "Назад к моделям",
       "dispatchUnconfirmed": "Отправлено агенту — получение не подтверждено",
+      "heldPickFailed": "Настройка, выбранная во время ответа, не применена.",
       "modelFullAccessLabel": "Модель: {{value}}, полный доступ",
       "modelLabel": "Модель: {{value}}",
       "permissions": "Разрешения",
-      "permissionsLabel": "Разрешения: {{value}}",
-      "settingsLocked": "Настройки модели станут доступны после завершения текущего ответа.",
-      "workingAnnouncement": "Агент работает. Настройки модели станут доступны после завершения текущего ответа."
+      "permissionsLabel": "Разрешения: {{value}}"
     },
     "sessionOptionRows": {
       "defaultMarker": "По умолчанию",

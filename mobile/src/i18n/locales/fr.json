@@ -458,15 +458,14 @@
       "xhighShort": "Extra"
     },
     "sessionOptionPickers": {
-      "agentWorking": "L'agent travaille",
+      "appliesAfterTurn": "S'applique à la fin de ce tour",
       "backToModels": "Retour aux modèles",
       "dispatchUnconfirmed": "Envoyé à l'agent — non confirmé",
+      "heldPickFailed": "Un réglage choisi pendant le tour n'a pas été appliqué.",
       "modelFullAccessLabel": "Modèle, {{value}}, accès complet",
       "modelLabel": "Modèle, {{value}}",
       "permissions": "Autorisations",
-      "permissionsLabel": "Autorisations, {{value}}",
-      "settingsLocked": "Les paramètres du modèle seront déverrouillés à la fin de ce tour.",
-      "workingAnnouncement": "L'agent travaille. Les paramètres du modèle seront déverrouillés à la fin de ce tour."
+      "permissionsLabel": "Autorisations, {{value}}"
     },
     "sessionOptionRows": {
       "defaultMarker": "Par défaut",

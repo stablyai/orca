@@ -20869,6 +20869,7 @@
         "toggleOption": "Alternar {{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "sentNotConfirmed": "Enviado ao agente — não confirmado",
+        "appliesAfterTurn": "Aplica-se quando este turno terminar",
         "setWhenSessionStarts": "Definido quando a sessão começa.",
         "availableAfterSessionStarts": "Disponível após a sessão começar.",
         "optionUpdateFailed": "Não foi possível atualizar a opção",

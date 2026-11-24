@@ -452,15 +452,14 @@
       "xhighShort": "Çok yüksek"
     },
     "sessionOptionPickers": {
-      "agentWorking": "Ajan çalışıyor",
+      "appliesAfterTurn": "Bu tur tamamlandığında uygulanır",
       "backToModels": "Modellere dön",
       "dispatchUnconfirmed": "Ajana gönderildi, onaylanmadı",
+      "heldPickFailed": "Tur sırasında seçilen bir ayar uygulanmadı.",
       "modelFullAccessLabel": "Model, {{value}}, tam erişim",
       "modelLabel": "Model, {{value}}",
       "permissions": "İzinler",
-      "permissionsLabel": "İzinler, {{value}}",
-      "settingsLocked": "Bu tur tamamlandığında model ayarlarının kilidi açılır.",
-      "workingAnnouncement": "Ajan çalışıyor. Bu tur tamamlandığında model ayarlarının kilidi açılır."
+      "permissionsLabel": "İzinler, {{value}}"
     },
     "sessionOptionRows": {
       "defaultMarker": "Varsayılan",

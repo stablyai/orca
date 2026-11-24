@@ -20,10 +20,12 @@ import type {
   SessionOptionValue
 } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
 import type { MobileNativeChatSendOutcome } from '../../composer/delivery/mobile-native-chat-send'
+import { createNativeChatPtySessionOptions } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-pty-session-options'
 import {
-  createNativeChatPtySessionOptions,
-  type NativeChatPtySessionOptionsSurface
-} from '../../../../../../src/shared/native-chat/input/session-options/native-chat-pty-session-options'
+  holdNativeChatOptionPicksDuringTurns,
+  type NativeChatTurnHeldOptionSurface
+} from '../../../../../../src/shared/native-chat/input/session-options/native-chat-turn-held-option-surface'
+import { useMobileTurnHeldOptionPicks } from './use-mobile-turn-held-option-picks'
 import {
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
@@ -36,6 +38,7 @@ import {
 import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
 import { nativeChatCommandOpensTerminal } from '../../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
 import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
+import { translate } from '../../../../i18n/mobile-i18n'
 
 export type MobileNativeChatSessionOptionsController = {
   optionSurface?: SessionOptionsSurface
@@ -57,7 +60,7 @@ type PendingOperation = { identity: string; id: string }
 type SurfaceEntry = {
   agent: string
   canSwitchOmpModel: boolean
-  surface: NativeChatPtySessionOptionsSurface
+  surface: NativeChatTurnHeldOptionSurface
   /** The discovered list last handed to the surface. */
   models: readonly CatalogModel[] | null
   /** Set once the tab runs another agent: its late writes must not overwrite the new agent's cache. */
@@ -69,6 +72,8 @@ type HookArgs = {
   reportedModel: string | null
   reportedEffort?: string
   reportingSessionId?: string
+  /** Picks made while the agent works are held and typed when the turn ends. */
+  isWorking?: boolean
   discoveredModels?: CatalogModel[] | null
   modelSwitchCommand?: string
   dispatchCommand: (
@@ -78,6 +83,7 @@ type HookArgs = {
   onAgentPicker?: () => void
   /** Saves picks as the host's launch defaults, as desktop does. */
   writeSettings?: (mutation: NativeChatSessionOptionSettingsMutation) => void
+  onOptionError?: (message: string) => void
 }
 
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
@@ -109,7 +115,7 @@ function createMobileSurfaceEntry(args: {
   // Phone-only: desktop confirms a Claude model switch on its terminal screen; the phone cannot, so it never saves one as a launch default.
   const modelSwitchUnconfirmable =
     midSession?.kind === 'command' && midSession.detectAgentInteraction !== undefined
-  const surface = createNativeChatPtySessionOptions({
+  const ptySurface = createNativeChatPtySessionOptions({
     agent,
     scopeKey: args.scopeKey,
     mode: 'live',
@@ -151,7 +157,7 @@ function createMobileSurfaceEntry(args: {
       })
     }
   })
-  if (!surface) {
+  if (!ptySurface) {
     return null
   }
   const entry: SurfaceEntry = {
@@ -159,7 +165,20 @@ function createMobileSurfaceEntry(args: {
     canSwitchOmpModel: args.canSwitchOmpModel,
     models: null,
     retired: false,
-    surface
+    surface: holdNativeChatOptionPicksDuringTurns({
+      surface: ptySurface,
+      scopeKey: identity,
+      onHeldPickFailed: () => {
+        if (activeIdentity.current === identity) {
+          latest.current.onOptionError?.(
+            translate(
+              'chat.sessionOptionPickers.heldPickFailed',
+              "A setting picked during the turn wasn't applied."
+            )
+          )
+        }
+      }
+    })
   }
   return entry
 }
@@ -216,6 +235,7 @@ export function useMobileNativeChatSessionOptions(
     return created
   }, [agent, canSwitchOmpModel, identity, scopeKey, surfaces])
   const surface = entry?.surface ?? null
+  useMobileTurnHeldOptionPicks(surface, identity, args.isWorking === true)
 
   useEffect(() => {
     if (entry && discoveredModels && entry.models !== discoveredModels) {
@@ -258,7 +278,7 @@ export function useMobileNativeChatSessionOptions(
   )
 
   const track = useCallback(
-    (id: string, run: (target: NativeChatPtySessionOptionsSurface) => Promise<unknown>) => {
+    (id: string, run: (target: NativeChatTurnHeldOptionSurface) => Promise<unknown>) => {
       if (!surface || !identity) {
         return Promise.resolve(false)
       }
@@ -298,7 +318,8 @@ export function useMobileNativeChatSessionOptions(
     },
     [agent, scopeKey, surface]
   )
-  const pendingId = pending && pending.identity === identity ? pending.id : null
+  const pendingId =
+    pending && pending.identity === identity ? pending.id : (surface?.sendingHeldPick() ?? null)
 
   return useMemo(
     () => ({ snapshot, pendingId, setOption, invokeAction, recordCommand }),

@@ -19624,6 +19624,7 @@
         "toggleOption": "{{value0}} umschalten",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "sentNotConfirmed": "An den Agenten gesendet — nicht bestätigt",
+        "appliesAfterTurn": "Wird nach diesem Durchgang angewendet",
         "setWhenSessionStarts": "Wird beim Sitzungsstart festgelegt.",
         "availableAfterSessionStarts": "Nach dem Sitzungsstart verfügbar.",
         "optionUpdateFailed": "Option konnte nicht aktualisiert werden",

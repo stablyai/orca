@@ -20197,6 +20197,7 @@
         "toggleOption": "切换{{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "sentNotConfirmed": "已发送给代理 — 尚未确认",
+        "appliesAfterTurn": "本轮结束后生效",
         "setWhenSessionStarts": "请在会话开始时设置",
         "availableAfterSessionStarts": "会话开始后可用",
         "optionUpdateFailed": "无法更新选项",

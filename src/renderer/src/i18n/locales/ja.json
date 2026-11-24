@@ -19743,6 +19743,7 @@
         "toggleOption": "{{value0}}を切り替える",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "sentNotConfirmed": "Agent に送信済み — 未確認",
+        "appliesAfterTurn": "このターンが完了すると適用されます",
         "setWhenSessionStarts": "セッション開始時に設定してください。",
         "availableAfterSessionStarts": "セッション開始後に利用できます。",
         "optionUpdateFailed": "オプションを更新できませんでした",

@@ -452,15 +452,14 @@
       "xhighShort": "Sehr hoch"
     },
     "sessionOptionPickers": {
-      "agentWorking": "Agent arbeitet",
+      "appliesAfterTurn": "Wird nach diesem Durchgang angewendet",
       "backToModels": "Zurück zu den Modellen",
       "dispatchUnconfirmed": "An den Agenten gesendet — nicht bestätigt",
+      "heldPickFailed": "Eine während des Durchgangs gewählte Einstellung wurde nicht angewendet.",
       "modelFullAccessLabel": "Modell, {{value}}, Vollzugriff",
       "modelLabel": "Modell, {{value}}",
       "permissions": "Berechtigungen",
-      "permissionsLabel": "Berechtigungen, {{value}}",
-      "settingsLocked": "Die Modelleinstellungen werden nach diesem Durchgang freigegeben.",
-      "workingAnnouncement": "Der Agent arbeitet. Die Modelleinstellungen werden nach diesem Durchgang freigegeben."
+      "permissionsLabel": "Berechtigungen, {{value}}"
     },
     "sessionOptionRows": {
       "defaultMarker": "Standard",

@@ -452,15 +452,14 @@
       "xhighShort": "極高"
     },
     "sessionOptionPickers": {
-      "agentWorking": "代理程式正在執行",
+      "appliesAfterTurn": "本回合結束後生效",
       "backToModels": "返回模型清單",
       "dispatchUnconfirmed": "已傳送給代理程式 — 尚未確認",
+      "heldPickFailed": "本回合中選擇的設定未能套用。",
       "modelFullAccessLabel": "模型，{{value}}，完整存取權",
       "modelLabel": "模型，{{value}}",
       "permissions": "權限",
-      "permissionsLabel": "權限，{{value}}",
-      "settingsLocked": "本回合結束後即可變更模型設定。",
-      "workingAnnouncement": "代理程式正在執行。本回合結束後即可變更模型設定。"
+      "permissionsLabel": "權限，{{value}}"
     },
     "sessionOptionRows": {
       "defaultMarker": "預設",

@@ -19361,6 +19361,7 @@
         "toggleOption": "切換{{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "sentNotConfirmed": "已傳送給代理程式 — 尚未確認",
+        "appliesAfterTurn": "本回合結束後生效",
         "setWhenSessionStarts": "將於工作階段開始時設定。",
         "availableAfterSessionStarts": "工作階段開始後可用。",
         "optionUpdateFailed": "無法更新選項",

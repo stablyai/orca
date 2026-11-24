@@ -67,7 +67,6 @@ export function mobileBotGroupSessionOptions(
 ): MobileNativeChatSessionOptionPickersProps | undefined {
   return chosen
     ? {
-        isWorking: chosen.isWorking,
         controller: {
           snapshot: chosen.optionSnapshot,
           optionSurface: chosen.optionSurface,

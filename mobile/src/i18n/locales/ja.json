@@ -452,15 +452,14 @@
       "xhighShort": "最高"
     },
     "sessionOptionPickers": {
-      "agentWorking": "Agent が作業中",
+      "appliesAfterTurn": "このターンが完了すると適用されます",
       "backToModels": "モデル一覧に戻る",
       "dispatchUnconfirmed": "Agent に送信済み — 未確認",
+      "heldPickFailed": "ターン中に選んだ設定は適用されませんでした。",
       "modelFullAccessLabel": "モデル、{{value}}、フルアクセス",
       "modelLabel": "モデル、{{value}}",
       "permissions": "権限",
-      "permissionsLabel": "権限、{{value}}",
-      "settingsLocked": "このターンが完了すると、モデル設定を変更できます。",
-      "workingAnnouncement": "Agent が作業中です。このターンが完了すると、モデル設定を変更できます。"
+      "permissionsLabel": "権限、{{value}}"
     },
     "sessionOptionRows": {
       "defaultMarker": "既定",

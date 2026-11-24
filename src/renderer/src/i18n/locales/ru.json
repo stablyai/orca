@@ -20211,6 +20211,7 @@
         "toggleOption": "Переключить {{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "sentNotConfirmed": "Отправлено агенту — получение не подтверждено",
+        "appliesAfterTurn": "Применится после завершения текущего ответа",
         "setWhenSessionStarts": "Применится при запуске сессии.",
         "availableAfterSessionStarts": "Доступно после запуска сессии.",
         "optionUpdateFailed": "Не удалось изменить параметр",

@@ -3399,13 +3399,12 @@
       "closed": "Not sent before Orca closed"
     },
     "sessionOptionPickers": {
-      "workingAnnouncement": "Agent is working. Model settings unlock when this turn finishes.",
       "modelFullAccessLabel": "Model, {{value}}, full access",
       "modelLabel": "Model, {{value}}",
       "permissionsLabel": "Permissions, {{value}}",
       "backToModels": "Back to models",
-      "agentWorking": "Agent is working",
-      "settingsLocked": "Model settings unlock when this turn finishes.",
+      "appliesAfterTurn": "Applies when this turn finishes",
+      "heldPickFailed": "A setting picked during the turn wasn't applied.",
       "dispatchUnconfirmed": "Sent to the agent — not confirmed",
       "permissions": "Permissions",
       "applying": "Applying…",

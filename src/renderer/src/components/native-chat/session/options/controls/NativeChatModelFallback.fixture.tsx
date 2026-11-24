@@ -34,7 +34,6 @@ function ModelPicker({ fallbackModel }: { fallbackModel?: string }) {
         setOption: async () => ({ snapshot: [] }),
         invokeAction: async () => ({ snapshot: [] })
       }}
-      isWorking={true}
       snapshot={[
         {
           id: 'model',

@@ -19751,6 +19751,7 @@
         "toggleOption": "{{value0}} aç/kapat",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "sentNotConfirmed": "Ajana gönderildi, onaylanmadı",
+        "appliesAfterTurn": "Bu tur tamamlandığında uygulanır",
         "setWhenSessionStarts": "Oturum başladığında ayarlanır.",
         "availableAfterSessionStarts": "Oturum başladıktan sonra kullanılabilir.",
         "optionUpdateFailed": "Seçenek güncellenemedi",

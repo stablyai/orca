@@ -458,15 +458,14 @@
       "xhighShort": "Muy alto"
     },
     "sessionOptionPickers": {
-      "agentWorking": "El agente está trabajando",
+      "appliesAfterTurn": "Se aplica cuando termine este turno",
       "backToModels": "Volver a los modelos",
       "dispatchUnconfirmed": "Enviado al agente — sin confirmar",
+      "heldPickFailed": "No se aplicó un ajuste elegido durante el turno.",
       "modelFullAccessLabel": "Modelo, {{value}}, acceso total",
       "modelLabel": "Modelo, {{value}}",
       "permissions": "Permisos",
-      "permissionsLabel": "Permisos, {{value}}",
-      "settingsLocked": "La configuración del modelo se desbloqueará cuando termine este turno.",
-      "workingAnnouncement": "El agente está trabajando. La configuración del modelo se desbloqueará cuando termine este turno."
+      "permissionsLabel": "Permisos, {{value}}"
     },
     "sessionOptionRows": {
       "defaultMarker": "Predeterminado",

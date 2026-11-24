@@ -8,10 +8,13 @@ import {
 } from '../../../../../../../shared/native-chat/input/session-options/native-chat-status-session-options'
 import type { SessionOptionDescriptor } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { sayNativeChatSessionOptionTranslated } from '../controls/native-chat-session-option-labels-text'
+import { createNativeChatPtySessionOptions } from '../../../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
 import {
-  createNativeChatPtySessionOptions,
-  type NativeChatPtySessionOptionsSurface
-} from '../../../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
+  dropNativeChatTurnHeldOptionPicks,
+  holdNativeChatOptionPicksDuringTurns,
+  type NativeChatTurnHeldOptionSurface
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-turn-held-option-surface'
+import { toastSessionOptionUpdateFailure } from '../controls/native-chat-session-option-surface-call'
 import type { NativeChatSessionOptionDispatchCommand } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-dispatch'
 import {
   ensureNativeChatModelEnrichment,
@@ -31,6 +34,8 @@ const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
 const CLIENT_SETTINGS_TARGET = { kind: 'local' } as const
 
+const heldPickScope = (agent: AgentType, ptyId: string): string => `${ptyId}\0${agent}`
+
 // Kept across chat remounts, as on the phone: the same agent session repeating its model is not
 // fresh evidence, and reapplying it would revert a newer pick.
 const appliedReportByPty: NativeChatStatusReportMemory = new Map()
@@ -43,11 +48,13 @@ export function useNativeChatSessionOptions(args: {
   onAgentPicker?: () => void
   /** The pane whose agent status reports the session's model and effort, as it does on the phone. */
   paneKey?: string
+  isWorking: boolean
 }): {
-  surface: NativeChatPtySessionOptionsSurface | null
+  surface: NativeChatTurnHeldOptionSurface | null
   snapshot: SessionOptionDescriptor[]
 } {
-  const { agent, terminalTabId, targetPtyId, dispatchCommand, onAgentPicker, paneKey } = args
+  const { agent, terminalTabId, targetPtyId, dispatchCommand, onAgentPicker, paneKey, isWorking } =
+    args
   const status = useAgentStatus(paneKey)
   const reportedModel = status?.model
   const reportingSessionId = status?.providerSession?.id
@@ -65,10 +72,11 @@ export function useNativeChatSessionOptions(args: {
       return null
     }
     const scopeKey = targetPtyId ?? terminalTabId
+    let held: NativeChatTurnHeldOptionSurface | null = null
     const discoveredModels = discoveryContext
       ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
       : null
-    return createNativeChatPtySessionOptions({
+    const surface = createNativeChatPtySessionOptions({
       agent,
       scopeKey,
       ...(targetPtyId ? { fallbackScopeKey: terminalTabId } : {}),
@@ -76,7 +84,9 @@ export function useNativeChatSessionOptions(args: {
       ...(discoveryContext ? { initialModels: discoveredModels ?? undefined } : {}),
       mode: targetPtyId ? 'live' : 'draft',
       modelLabel: sayNativeChatSessionOptionTranslated('model'),
-      dispatchCommand,
+      // A pick replayed at turn end waits for messages queued during the turn rather than cancelling them.
+      dispatchCommand: (command, options) =>
+        dispatchCommand(command, { ...options, afterQueuedSends: held?.sendingHeldPick() != null }),
       canSwitchOmpModel,
       onAgentPicker,
       persistSelection: ({ modelId, optionId, value, adoptModelAsLaunchDefault }) =>
@@ -87,6 +97,14 @@ export function useNativeChatSessionOptions(args: {
           picks: [{ modelId, optionId, value, adoptModelAsLaunchDefault }]
         })
     })
+    held = surface
+      ? holdNativeChatOptionPicksDuringTurns({
+          surface,
+          scopeKey: heldPickScope(agent, scopeKey),
+          onHeldPickFailed: toastSessionOptionUpdateFailure
+        })
+      : null
+    return held
   }, [
     agent,
     canSwitchOmpModel,
@@ -96,6 +114,19 @@ export function useNativeChatSessionOptions(args: {
     targetPtyId,
     terminalTabId
   ])
+
+  useEffect(() => {
+    surface?.setWorking(isWorking)
+  }, [isWorking, surface])
+  const heldScope = targetPtyId ? heldPickScope(agent, targetPtyId) : null
+  useEffect(
+    () => () => {
+      if (heldScope) {
+        dropNativeChatTurnHeldOptionPicks(heldScope)
+      }
+    },
+    [heldScope]
+  )
 
   useEffect(() => {
     if (!surface || !reportedModel || !targetPtyId) {

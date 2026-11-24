@@ -21322,6 +21322,7 @@
         "toggleOption": "Toggle {{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "sentNotConfirmed": "Sent to the agent — not confirmed",
+        "appliesAfterTurn": "Applies when this turn finishes",
         "setWhenSessionStarts": "Set when the session starts.",
         "availableAfterSessionStarts": "Available after the session starts.",
         "optionUpdateFailed": "Could not update option",

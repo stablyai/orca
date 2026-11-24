@@ -85,11 +85,10 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setCaret
     })
     const [activeSuggestion, setActiveSuggestion] = useState(0)
-    const holdNotice = useNativeChatMobileHoldNotice(
-      structuredTransport ? null : targetPtyId,
-      canSend
+    const { notices, setNotice } = useNativeChatComposerNotice(
+      chatNotices,
+      useNativeChatMobileHoldNotice(structuredTransport ? null : targetPtyId, canSend)
     )
-    const { notices, setNotice } = useNativeChatComposerNotice(chatNotices, holdNotice)
     const { textareaRef } = useNativeChatComposerAppMenuSelection(imeEnterGesture.isComposing)
     const recall = useNativeChatComposerRecall({
       draft,
@@ -221,7 +220,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       targetPtyId,
       onSwitchToTerminal,
       paneKey,
-      structuredTransport
+      structuredTransport,
+      isWorking
     })
     const contextUsageSummary = useNativeChatContextUsageSummary(structuredTransport)
 

@@ -63,6 +63,8 @@ export type SessionOptionDescriptor = {
   fallbackModel?: string
   /** Picker-only/flip-only PTY commands need action rows rather than invented absolute control states. */
   action?: { type: 'agent-picker' | 'toggle-command' }
+  /** Picked while the agent works; it takes effect when the turn finishes. */
+  appliesAfterTurn?: true
 }
 
 /** Sent-but-unread PTY value. Both lanes emit dispatched, so transport must restrict the caption to terminal screen-read confirmation. */
@@ -99,6 +101,8 @@ export function isDefaultServiceTier(
 
 export type SessionOptionSetResult = {
   snapshot: SessionOptionDescriptor[]
+  /** The host refused the write, so the previous value stays in force. */
+  refused?: true
 }
 
 export type PersistedNativeChatSessionOptions = Partial<

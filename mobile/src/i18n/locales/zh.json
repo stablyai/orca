@@ -554,9 +554,10 @@
       "xhighShort": "XHigh"
     },
     "sessionOptionPickers": {
-      "agentWorking": "智能体正在工作",
+      "appliesAfterTurn": "本轮结束后生效",
       "backToModels": "返回模型列表",
       "dispatchUnconfirmed": "已发送给智能体 — 尚未确认",
+      "heldPickFailed": "本轮中选择的设置未能应用。",
       "modelFullAccessLabel": "模型，{{value}}，完全访问权限",
       "modelLabel": "模型，{{value}}",
       "permissions": "权限",
@@ -564,9 +565,7 @@
       "onAttach": "聊天连接后生效",
       "heldPickRefused": "{{picked}} 在此聊天中不可用，已保留 {{kept}}",
       "optionsSection": "选项",
-      "permissionsLabel": "权限，{{value}}",
-      "settingsLocked": "本轮结束后将解锁模型设置",
-      "workingAnnouncement": "智能体正在工作。本轮结束后将解锁模型设置"
+      "permissionsLabel": "权限，{{value}}"
     },
     "sessionOptionRows": {
       "defaultMarker": "默认",

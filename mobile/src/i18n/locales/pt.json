@@ -475,15 +475,14 @@
       "ultracode": "Ultracode"
     },
     "sessionOptionPickers": {
-      "agentWorking": "O agente está trabalhando",
       "backToModels": "Voltar aos modelos",
       "dispatchUnconfirmed": "Enviado ao agente — não confirmado",
       "modelFullAccessLabel": "Modelo, {{value}}, acesso total",
       "modelLabel": "Modelo, {{value}}",
       "permissions": "Permissões",
       "permissionsLabel": "Permissões, {{value}}",
-      "settingsLocked": "As configurações do modelo serão desbloqueadas quando este turno terminar.",
-      "workingAnnouncement": "O agente está trabalhando. As configurações do modelo serão desbloqueadas quando este turno terminar.",
+      "appliesAfterTurn": "Aplica-se quando este turno terminar",
+      "heldPickFailed": "Uma configuração escolhida durante o turno não foi aplicada.",
       "applying": "Aplicando…",
       "optionsSection": "Opções"
     },
