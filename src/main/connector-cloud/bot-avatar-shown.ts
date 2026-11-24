@@ -1,0 +1,47 @@
+import { createHash } from 'node:crypto'
+import type { BotSlackIconShown, BotSlackIcons } from '../bots/bot-slack-icon-store'
+
+// Per bot, the drawing the cloud last took for its Slack icon (its account's hash and mascot), as the icon
+// store keeps it across restarts: read once per run, written only when it changes.
+export class BotAvatarShown {
+  private readonly byBot = new Map<string, BotSlackIconShown | null>()
+
+  constructor(
+    private readonly store: Pick<BotSlackIcons, 'shown' | 'markShown'>,
+    private readonly exists: (botId: string) => boolean
+  ) {}
+
+  /** The signed-in account as kept with a drawing: a hash, so the file names no account. */
+  static accountKey(account: string | null | undefined): string | null {
+    return account ? createHash('sha256').update(account).digest('hex').slice(0, 16) : null
+  }
+
+  async get(botId: string): Promise<BotSlackIconShown | null> {
+    const known = this.byBot.get(botId)
+    if (known !== undefined) {
+      return known
+    }
+    const shown = await this.store.shown(botId)
+    // A bot deleted while it was read keeps nothing here.
+    if (this.exists(botId)) {
+      this.byBot.set(botId, shown)
+    }
+    return shown
+  }
+
+  async mark(botId: string, shown: BotSlackIconShown | null): Promise<void> {
+    const before = await this.get(botId)
+    if (before?.account !== shown?.account || before?.mascot !== shown?.mascot) {
+      this.byBot.set(botId, shown)
+      await this.store.markShown(botId, shown)
+    }
+  }
+
+  keys(): IterableIterator<string> {
+    return this.byBot.keys()
+  }
+
+  delete(botId: string): void {
+    this.byBot.delete(botId)
+  }
+}

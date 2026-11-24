@@ -11,6 +11,7 @@ import type { Bot } from '../../shared/bot-types'
 import type { ConnectorBotAvatarRequest } from '../../shared/connector-bot-slack-contract'
 import type { BotController } from '../bots/bot-controller'
 import type { BotSlackIcons } from '../bots/bot-slack-icon-store'
+import { BotAvatarShown } from './bot-avatar-shown'
 import { botsCloudClient } from './bots-cloud-client'
 import type { ConnectorCloud } from './connector-cloud'
 
@@ -62,9 +63,9 @@ export class BotAvatarSync {
   private readonly icons = new Map<string, number>()
   // Bots whose drawn icon the cloud failed to take: sent again on a real step, never by the retry timer.
   private readonly owed = new Set<string>()
-  // Owed bots already resent once on the cloud answering again: until a real step, a sign-in or a success,
-  // they wait, so a picture route that keeps failing while the poll answers is never retried at its pace.
+  // Owed bots resent once on the poll answering a missed call: they wait for a real step, never its pace.
   private readonly answeredRetried = new Set<string>()
+  private readonly shown: BotAvatarShown
   // Per bot, its drawn icon while a send of it is out (or none, until one is kept), by look and icon count.
   private readonly prepared = new Map<
     string,
@@ -85,6 +86,10 @@ export class BotAvatarSync {
     }
   ) {
     this.lookup = createBotLookupIndex(() => this.deps.bots.list())
+    this.shown = new BotAvatarShown(
+      deps.bots.slackIcons,
+      (botId) => this.lookup.byId(botId) !== undefined
+    )
   }
 
   /** After any bot write, and once at start for changes made while signed out or offline. */
@@ -99,15 +104,12 @@ export class BotAvatarSync {
   }
 
   /** Orca Cloud answers again, or an account signed in: only the drawn icons it failed to take go again. */
-  retryOwed(signedIn = false): void {
+  retryOwed(fresh = false): void {
     for (const botId of this.owed) {
-      if (signedIn) {
-        this.answeredRetried.delete(botId)
-      } else if (this.answeredRetried.has(botId)) {
+      if (!fresh && this.answeredRetried.has(botId)) {
         continue
-      } else {
-        this.answeredRetried.add(botId)
       }
+      this.answeredRetried[fresh ? 'delete' : 'add'](botId)
       this.owed.delete(botId)
       this.sent.delete(botId)
       if (!this.sending.has(botId)) {
@@ -194,6 +196,7 @@ export class BotAvatarSync {
       for (const kept of [
         this.owed,
         this.answeredRetried,
+        this.shown,
         this.icons,
         this.prepared,
         this.sent,
@@ -263,13 +266,9 @@ export class BotAvatarSync {
           ? { v: 1, kind: 'mascot', id: parsed.id }
           : png && { v: 1, kind: 'upload', version: parsed.version, png: png.toString('base64') }
       carried = icon !== null
-      const signedIn = cloud.signedInAccount?.()
-      const account = signedIn
-        ? createHash('sha256').update(signedIn).digest('hex').slice(0, 16)
-        : null
+      const account = BotAvatarShown.accountKey(cloud.signedInAccount?.())
       // The drawing the cloud last took for this bot, kept across restarts by the icon store.
-      const shown =
-        parsed.kind === 'mascot' && !icon ? await this.deps.bots.slackIcons.shown(bot.id) : null
+      const shown = parsed.kind === 'mascot' && !icon ? await this.shown.get(bot.id) : null
       // The window draws a new look right after the write: until it does, Slack keeps the last drawing.
       left =
         parsed.kind === 'mascot' &&
@@ -281,7 +280,7 @@ export class BotAvatarSync {
         : body && (await botsCloudClient(cloud).setAvatar(bot.id, body))
       sent = result?.ok === true
       if (sent && !left) {
-        await this.deps.bots.slackIcons.markShown(
+        await this.shown.mark(
           bot.id,
           carried && parsed.kind === 'mascot' ? { account, mascot: parsed.id } : null
         )

@@ -22,6 +22,7 @@ it('treats the poll answering after a missed outside call as the cloud back', ()
   reach.missedOutsidePoll({ ...noAnswer, status: 503 })
   reach.reached(noAnswer)
   expect(backs).toEqual(['answered'])
+  // Its own outage recovering is a fresh step, told apart from the answer to a missed call.
   reach.reached(answered)
-  expect(backs).toEqual(['answered', 'answered'])
+  expect(backs).toEqual(['answered', 'recovered'])
 })

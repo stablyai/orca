@@ -276,7 +276,8 @@ it('leaves a drawn icon the cloud failed to take for the next real step, not the
   sync.retryOwed()
   await vi.advanceTimersByTimeAsync(60_000)
   expect(sent).toHaveLength(5)
-  // A real step that fails gets its one resend on the cloud answering again, and a sign-in always resends.
+  // A real step that fails gets its one resend on the cloud answering again; a sign-in or the poll's own
+  // outage recovering always resends.
   sync.changed()
   await vi.waitFor(() => expect(sent).toHaveLength(6))
   await vi.advanceTimersByTimeAsync(60_000)

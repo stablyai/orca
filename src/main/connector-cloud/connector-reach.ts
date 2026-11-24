@@ -1,8 +1,9 @@
 import type { ConnectorResult } from './connector-cloud-request'
 import type { ConnectorTransport } from './connector-machine'
 
-/** Orca Cloud answering again (the poll, after it or a call outside it didn't), or an account signing in. */
-export type ConnectorBack = 'answered' | 'signedIn'
+/** Orca Cloud answering again: the poll after its own outage ('recovered'), the poll after a call outside it
+ *  got no answer ('answered'), or an account signing in. */
+export type ConnectorBack = 'recovered' | 'answered' | 'signedIn'
 
 /** Whether the running poll's calls reach Orca Cloud, and what the cloud says when it refuses them. */
 export class ConnectorReach {
@@ -68,7 +69,8 @@ export class ConnectorReach {
     const unreachable = !result.ok && (result.status === null || result.status >= 500)
     const refusal = result.ok ? null : (result.message ?? null)
     const unauthorized = !result.ok && result.sessionRefused === true
-    const cameBack = (this.unreachable || this.missed) && !unreachable
+    const cameBack =
+      !unreachable && (this.unreachable ? 'recovered' : this.missed ? 'answered' : null)
     if (!unreachable) {
       this.missed = false
     }
@@ -83,7 +85,7 @@ export class ConnectorReach {
       this.onChanged()
     }
     if (cameBack) {
-      this.back('answered')
+      this.back(cameBack)
     }
   }
 }
