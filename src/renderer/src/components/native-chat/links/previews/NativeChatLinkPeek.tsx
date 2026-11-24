@@ -263,12 +263,14 @@ function LinkPeekCard({
         sideOffset={CARD_OFFSET}
         collisionPadding={WINDOW_MARGIN}
         className={cn(
-          'scrollbar-sleek max-h-(--radix-hover-card-content-available-height) w-96 max-w-[calc(100vw-1rem)] overflow-y-auto',
+          'flex max-h-(--radix-hover-card-content-available-height) w-96 max-w-[calc(100vw-1rem)] flex-col',
           // Over the popover the link is listed in (popovers sit at 60).
           overPopover && 'z-[70]'
         )}
       >
-        <LinkPeekRetryContext value={retryContext}>{body}</LinkPeekRetryContext>
+        <div className="scrollbar-sleek min-h-0 overflow-y-auto">
+          <LinkPeekRetryContext value={retryContext}>{body}</LinkPeekRetryContext>
+        </div>
       </HoverCardContent>
     </HoverCard>
   )

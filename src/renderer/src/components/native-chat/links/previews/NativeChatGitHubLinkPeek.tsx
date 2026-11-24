@@ -9,7 +9,6 @@ import {
 } from 'react'
 import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/class-names'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import { WorkItemStateBadge } from '@/components/github/work-item-state-badge'
@@ -211,11 +210,10 @@ function GitHubPeekContent({
       <span>{t('components.native-chat.githubPeek.unavailable', 'Preview unavailable.')}</span>
       {/* Still focusable while the retry runs, so focus stays put; a second press does nothing. */}
       <Button
-        variant="link"
+        variant={pendingRetry ? 'link-muted' : 'link'}
         size="xs"
         aria-disabled={pendingRetry || undefined}
         aria-busy={pendingRetry || undefined}
-        className={cn(pendingRetry && 'cursor-default opacity-50 hover:no-underline')}
         onClick={pendingRetry ? undefined : startRetry}
       >
         {t('components.native-chat.githubPeek.retry', 'Retry')}

@@ -19,7 +19,7 @@ import {
   PaneProbe,
   wait,
   escape
-} from './bot-item-link-chips-fixture-data'
+} from './bot-item-link-chips-fixtures'
 
 /** Hovering an open PR chip whose checks fail: the GitHub card, not the text tooltip. */
 export const hoverOpenPr = defineFixture({

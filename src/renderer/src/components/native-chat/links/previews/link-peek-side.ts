@@ -9,7 +9,7 @@ export const WINDOW_MARGIN = 8
  *  the link when neither does: a card pushed past the window's edge would put its actions out of reach. */
 export function sideWithRoom(
   side: PeekSide,
-  link: Pick<HTMLElement, 'getBoundingClientRect'> | null,
+  link: { getBoundingClientRect: () => { left: number; right: number } } | null,
   windowWidth: number = window.innerWidth
 ): PeekSide {
   if (side !== 'left' || !link) {

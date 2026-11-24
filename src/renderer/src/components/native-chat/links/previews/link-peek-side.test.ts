@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { sideWithRoom } from './link-peek-side'
 
 const at = (left: number, right: number) => ({
-  getBoundingClientRect: () => ({ left, right }) as DOMRect
+  getBoundingClientRect: () => ({ left, right })
 })
 
 // A card asked for beside a link must never open past the window's edge, where its Retry is unreachable.
