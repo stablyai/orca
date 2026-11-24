@@ -21,7 +21,7 @@ import { SettingsNote, SettingsSection } from '../../settings/settings-screen-fr
 import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
-import { MobileConnectorSourceIcon } from '../MobileConnectorSourceIcon'
+import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
 import { ConnectorHandoff, useFollowHost } from './MobileConnectorAccountParts'
 import { connectorAccountErrorMessage } from './mobile-connector-account-copy'
 import { MobileConnectorTryIt } from './MobileConnectorTryIt'
@@ -131,7 +131,7 @@ export function MobileBotGitHubSetup(props: {
       />
     )
   }
-  const mark = <MobileConnectorSourceIcon source="github" size={28} />
+  const mark = <MobileConnectorLogo source="github" size={28} />
   const error = (code: string) => connectorAccountErrorMessage('github', code, hostName, t)
   const openInstall = () => {
     if (state) {
@@ -177,7 +177,7 @@ export function MobileBotGitHubSetup(props: {
               }
             >
               <ListRow
-                leading={<MobileConnectorSourceIcon source="github" size={20} />}
+                leading={<MobileConnectorLogo source="github" size={20} />}
                 title={BOT_CONNECTOR_NAMES.github}
                 subtitle={t(
                   'bots.github.connect.pickSubtitle',
@@ -258,7 +258,7 @@ export function MobileBotGitHubSetup(props: {
             {(state?.installations ?? []).map((installation) => (
               <ListRow
                 key={installation.installationId}
-                leading={<MobileConnectorSourceIcon source="github" size={20} />}
+                leading={<MobileConnectorLogo source="github" size={20} />}
                 title={installation.accountLogin}
                 subtitle={gitHubRepositoriesLine(installation, (account) =>
                   t('bots.github.allRepositories', 'All repositories of {{account}}', {

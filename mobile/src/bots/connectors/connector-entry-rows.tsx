@@ -19,7 +19,7 @@ import type { MobileComposio } from '../../session/native-chat/transcript/bot-ca
 import { colors } from '../../theme/mobile-theme'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotTextButton } from '../MobileBotTextButton'
-import { MobileConnectorSourceIcon, MobileGoogleMark } from '../MobileConnectorSourceIcon'
+import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
 import { ToolRow } from '../tools/MobileBotToolsPage'
 import type { ConnectorPage } from './connector-pages'
 import { slackRowFace } from './mobile-slack-copy'
@@ -160,7 +160,7 @@ export function connectorRows(input: ConnectorRowsInput): ReactNode[] {
   const githubOrgs = githubOrgsOf(bot, input.githubState)
   const separator = t('bots.connector.titleSeparator', ' · ')
   const mark = (source: 'slack' | 'linear' | 'github') => (
-    <MobileConnectorSourceIcon source={source} size={ICON} />
+    <MobileConnectorLogo source={source} size={ICON} />
   )
   const composioFix = (problem: 'key' | 'unread') => {
     const fix =
@@ -246,7 +246,7 @@ export function connectorRows(input: ConnectorRowsInput): ReactNode[] {
         rows.push(
           <ListRow
             key={entry.key}
-            leading={<MobileGoogleMark size={ICON} />}
+            leading={<MobileConnectorLogo source="google" size={ICON} />}
             title={title}
             subtitle={input.googleEmails.length > 0 ? input.googleEmails.join(', ') : undefined}
             subtitleLines={1}
@@ -347,7 +347,7 @@ function removedGitHubRows(input: ConnectorRowsInput): ReactNode[] {
     .map((org) => (
       <ListRow
         key={`github-removed:${org.installationId}`}
-        leading={<MobileConnectorSourceIcon source="github" size={ICON} />}
+        leading={<MobileConnectorLogo source="github" size={ICON} />}
         title={`${BOT_CONNECTOR_NAMES.github}${t('bots.connector.titleSeparator', ' · ')}${org.accountLogin}`}
         accessory={
           <MobileBotTextButton
