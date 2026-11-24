@@ -87,7 +87,7 @@ export function getStoredSettings(): GlobalSettings {
       }
     } catch {
       // Why: startup reads settings while building window.api, so a full or denied
-      // localStorage must not stop the web client. The migration reruns next load.
+      // localStorage must not stop the web client. The next settings read retries it.
     }
   }
   const settings = mergeSettings(
