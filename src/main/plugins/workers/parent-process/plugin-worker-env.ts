@@ -87,26 +87,43 @@ export function buildPluginWorkerEnv(
   // Keep every proxy spelling the platform inherited, so the worker takes the route Orca was
   // started with rather than reaching the internet directly. Credentials stay out: a proxy login is
   // as much a secret as a token, and the worker is third-party code.
+  let inheritedProxyUrl = false
+  let inheritedBypassRules = false
   for (const [key, value] of Object.entries(baseEnv)) {
-    if (typeof value === 'string' && isProxyKey(key) && !hasProxyUserinfo(value)) {
+    if (typeof value !== 'string' || !isProxyKey(key)) {
+      continue
+    }
+    // An inherited proxy, even one held back for its login, still owns the route: the worker must
+    // not end up on the Settings proxy instead, which is a different host the user did not pick here.
+    if (isProxyUrlKey(key)) {
+      inheritedProxyUrl = true
+    } else {
+      inheritedBypassRules = true
+    }
+    if (!hasProxyUserinfo(value)) {
       env[key] = value
     }
   }
   // A proxy configured in Settings never reaches this process's environment. Add it only when the
   // worker inherited no proxy route at all: a Settings value landing beside an inherited one under
   // a different spelling would leave the worker on two routes, and the bypass rules would not match.
-  const inheritedProxyUrl = Object.entries(env).some(
-    ([key, value]) => isProxyUrlKey(key) && value.trim() !== ''
-  )
   if (!inheritedProxyUrl) {
     const settingsProxyEnv = buildConfiguredProxyEnv(readNetworkProxySettings())
     const distributableProxyUrl =
       !settingsProxyEnv.HTTPS_PROXY || !hasProxyUserinfo(settingsProxyEnv.HTTPS_PROXY)
     if (distributableProxyUrl) {
       for (const [key, value] of Object.entries(settingsProxyEnv)) {
-        if (env[key] === undefined) {
-          env[key] = value
+        // An inherited bypass list describes hosts that skip Orca's route, so it outranks the
+        // Settings one even when no inherited proxy URL survived.
+        if (env[key] !== undefined || (inheritedBypassRules && !isProxyUrlKey(key))) {
+          continue
         }
+        env[key] = value
+      }
+      if (Object.keys(settingsProxyEnv).length > 0 && env.NODE_USE_ENV_PROXY === undefined) {
+        // Node's fetch and http only read the proxy variables when this is on, and a proxy that
+        // exists only in Settings has no way to have set it.
+        env.NODE_USE_ENV_PROXY = '1'
       }
     }
   }

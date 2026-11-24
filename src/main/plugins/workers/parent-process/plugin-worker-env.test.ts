@@ -167,4 +167,38 @@ describe('buildPluginWorkerEnv', () => {
       expect(value).not.toContain('secret')
     }
   })
+
+  it('does not swap in the Settings proxy for an inherited one held back for its login', () => {
+    setNetworkProxySettingsSource(() => ({
+      httpProxyUrl: 'http://settings-proxy.example:8080',
+      httpProxyBypassRules: 'corp.example'
+    }))
+    const env = buildPluginWorkerEnv(
+      { ...sessionEnv, HTTPS_PROXY: 'http://user:secret@inherited.example:3128' },
+      'linux'
+    )
+    expect(env).not.toHaveProperty('HTTPS_PROXY')
+    expect(env).not.toHaveProperty('https_proxy')
+    expect(env).not.toHaveProperty('NO_PROXY')
+  })
+
+  it('keeps an inherited bypass list when the bypass list came from Settings', () => {
+    setNetworkProxySettingsSource(() => ({
+      httpProxyUrl: 'http://settings-proxy.example:8080',
+      httpProxyBypassRules: 'corp.example'
+    }))
+    const env = buildPluginWorkerEnv({ ...sessionEnv, NO_PROXY: 'localhost,.internal' }, 'linux')
+    expect(env.NO_PROXY).toBe('localhost,.internal')
+    expect(env.HTTPS_PROXY).toBe('http://settings-proxy.example:8080')
+    expect(env).not.toHaveProperty('no_proxy')
+  })
+
+  it('turns on environment-proxy support for a proxy that only Settings knows about', () => {
+    setNetworkProxySettingsSource(() => ({
+      httpProxyUrl: 'http://settings-proxy.example:8080',
+      httpProxyBypassRules: ''
+    }))
+    const env = buildPluginWorkerEnv({ ...sessionEnv, NODE_USE_ENV_PROXY: undefined }, 'linux')
+    expect(env.NODE_USE_ENV_PROXY).toBe('1')
+  })
 })
