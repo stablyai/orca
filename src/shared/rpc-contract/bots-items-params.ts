@@ -160,7 +160,10 @@ export const BotItemsOwnerComment = z
     plain: z.literal(true).optional(),
     /** Skills picked in the comment, each by its file on the bot's host. Only to a host advertising
      *  BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY. */
-    skills: z.array(SendSkillRef).min(1).max(MAX_SKILL_REFS).optional()
+    skills: z.array(SendSkillRef).min(1).max(MAX_SKILL_REFS).optional(),
+    /** With `questionId`, the ask's lines (by index) this answer skips: they close unanswered. Only to a
+     *  host advertising BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY. */
+    skipped: z.array(z.number().int().min(0).max(99)).min(1).max(100).optional()
   })
   .refine((value) => value.text.trim() || value.images?.length, 'Missing text')
 

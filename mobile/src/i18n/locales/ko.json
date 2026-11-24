@@ -5043,7 +5043,8 @@
       "ask": {
         "notSentYet": "아직 보내지 않음",
         "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요.",
-        "replacedByNewer": "새 질문으로 대체됨"
+        "replacedByNewer": "새 질문으로 대체됨",
+        "skipped": "건너뜀"
       }
     },
     "needs": {

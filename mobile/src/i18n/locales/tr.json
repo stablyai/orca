@@ -4656,7 +4656,8 @@
       "ask": {
         "notSentYet": "henüz gönderilmedi",
         "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın.",
-        "replacedByNewer": "Daha yeni bir soruyla değiştirildi"
+        "replacedByNewer": "Daha yeni bir soruyla değiştirildi",
+        "skipped": "Atlandı"
       }
     },
     "needs": {

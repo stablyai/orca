@@ -4768,7 +4768,8 @@
       "ask": {
         "notSentYet": "aún no enviado",
         "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde.",
-        "replacedByNewer": "Sustituida por una pregunta más reciente"
+        "replacedByNewer": "Sustituida por una pregunta más reciente",
+        "skipped": "Omitidas"
       }
     },
     "needs": {
