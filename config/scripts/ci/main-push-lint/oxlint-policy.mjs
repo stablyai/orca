@@ -17,6 +17,19 @@ const LOCKFILE = 'pnpm-lock.yaml'
 const ROOT = '.'
 const SYMLINK_MODE = '120000'
 const VERB = { A: 'was added', D: 'was deleted' }
+const MAX_LINK_HOPS = 8
+const MAX_NAMED = 3
+const MAX_WHY_CHARS = 300
+
+// The first few items, then a count of the rest.
+function someOf(items) {
+  const named = items.slice(0, MAX_NAMED).join(', ')
+  return items.length > MAX_NAMED ? `${named} and ${items.length - MAX_NAMED} more` : named
+}
+
+function bounded(text) {
+  return text.length > MAX_WHY_CHARS ? `${text.slice(0, MAX_WHY_CHARS)}…` : text
+}
 
 export function isConfig(file) {
   return CONFIG_NAMES.includes(path.posix.basename(file))
@@ -51,10 +64,10 @@ function outsideStrings(text, keep) {
   return out
 }
 
-// JSON with // and /* */ comments and trailing commas, as oxlint reads a JSON config.
+// JSON with //, # and /* */ comments and trailing commas, as oxlint reads a JSON config.
 export function parseJsonc(text) {
   const withoutComments = outsideStrings(text, (char, index) => {
-    if (char === '/' && text[index + 1] === '/') {
+    if ((char === '/' && text[index + 1] === '/') || char === '#') {
       const end = text.indexOf('\n', index)
       return { text: '\n', skip: (end === -1 ? text.length : end) - index }
     }
@@ -93,8 +106,32 @@ function resolveFrom(from, target) {
   return resolved === '..' || resolved.startsWith('../') ? null : resolved
 }
 
-// Every config at head, what each file in the policy graph points at (extends targets and link targets), and
-// the files whose inputs cannot be read. Each file is read once, so a cycle ends.
+// Where a path's content is stored, following symlinks by their exact bytes. Every link target on the way is an
+// input too, since changing one changes what the path reads.
+async function followLinks(file, tree, cwd) {
+  const hops = []
+  let current = file
+  for (let hop = 0; hop <= MAX_LINK_HOPS; hop += 1) {
+    const entry = tree.get(current)
+    if (!entry) {
+      return { hops }
+    }
+    if (entry.mode !== SYMLINK_MODE) {
+      return { hops, entry }
+    }
+    const next = resolveFrom(current, await git(['cat-file', 'blob', entry.sha], cwd))
+    if (!next) {
+      return { hops, unreadable: `${file} links outside the repository` }
+    }
+    hops.push(next)
+    current = next
+  }
+  return { hops, unreadable: `${file} goes through more than ${MAX_LINK_HOPS} links` }
+}
+
+// Every config at head, what each file in the policy graph depends on (link targets and extends targets), and
+// the files whose inputs cannot be read. Like oxlint, a file's `extends` resolve from where it is opened, not
+// from where a link stores it. Each file is read once, so a cycle ends.
 async function policyGraph(head, cwd) {
   const tree = await listTree(head, cwd)
   const configs = [...tree.keys()].filter(isConfig)
@@ -106,28 +143,32 @@ async function policyGraph(head, cwd) {
     if (edges.has(file)) {
       continue
     }
-    const entry = tree.get(file)
+    const { hops, entry, unreadable } = await followLinks(file, tree, cwd)
     let targets = []
-    if (!entry) {
+    if (unreadable) {
+      unknown.set(file, unreadable)
+    } else if (!entry) {
       // Missing at head: nothing to follow, though a push that changed it is still a change.
-    } else if (entry.mode === SYMLINK_MODE) {
-      targets = [resolveFrom(file, (await git(['cat-file', 'blob', entry.sha], cwd)).trim())]
     } else if (SCRIPT_CONFIG.test(file)) {
       unknown.set(file, `${file} is a script config whose inputs cannot be read`)
     } else {
       try {
-        const entries = parseJsonc(await git(['cat-file', 'blob', entry.sha], cwd)).extends ?? []
+        const config = parseJsonc(await git(['cat-file', 'blob', entry.sha], cwd))
+        const entries = config.extends ?? []
         targets = (Array.isArray(entries) ? entries : [null]).map((target) =>
           typeof target === 'string' ? resolveFrom(file, target) : null
         )
+        if (targets.includes(null)) {
+          unknown.set(file, `${file} extends a path outside the repository or not a path`)
+        }
+        if (Array.isArray(config.jsPlugins) && config.jsPlugins.length > 0) {
+          unknown.set(file, `${file} loads JS plugins, whose imports cannot be followed`)
+        }
       } catch {
         unknown.set(file, `${file} does not parse as JSON with comments`)
       }
     }
-    if (targets.includes(null)) {
-      unknown.set(file, `${file} points outside the repository or at an unreadable extends entry`)
-    }
-    edges.set(file, targets.filter(Boolean))
+    edges.set(file, [...hops, ...targets.filter(Boolean)])
     queue.push(...targets.filter(Boolean))
   }
   return { configs, edges, unknown }
@@ -181,26 +222,34 @@ export async function policyChanges(changes, { base, head, cwd }) {
       policies.push({
         dir: configDir(file),
         paths: [file],
-        why: `${file} ${VERB[status] ?? 'changed'}`
+        why: bounded(`${file} ${VERB[status] ?? 'changed'}`)
       })
     }
   }
   const graph = await policyGraph(head, cwd)
   for (const config of graph.configs) {
     const { roots, opaque } = reachable(config, graph, changed)
+    // Unreadable inputs stay visible next to known changes, so a known cause never hides an unknown one.
+    const unreadable = opaque.map((file) => graph.unknown.get(file))
+    const alsoUnreadable =
+      unreadable.length > 0 ? `; ${unreadable.length} of its inputs cannot be read` : ''
     if (roots.length > 0) {
       const extended = graph.edges.get(config) ?? []
       const how = roots.every((root) => extended.includes(root)) ? 'extends' : 'depends on'
       policies.push({
         dir: configDir(config),
         paths: roots,
-        why: `${config} ${how} ${roots.join(', ')}, which changed`
+        unreadable,
+        why: bounded(`${config} ${how} ${someOf(roots)}, which changed${alsoUnreadable}`)
       })
-    } else if (opaque.length > 0 && !direct.has(config)) {
+    } else if (unreadable.length > 0 && !direct.has(config)) {
       policies.push({
         dir: configDir(config),
         paths: [],
-        why: `${opaque.map((file) => graph.unknown.get(file)).join('; ')}, so its scope is linted on every push`
+        unreadable,
+        why: bounded(
+          `${unreadable[0]}${unreadable.length > 1 ? ` (and ${unreadable.length - 1} more unreadable inputs)` : ''}, so its scope is linted on every push`
+        )
       })
     }
   }

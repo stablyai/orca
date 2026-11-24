@@ -11,6 +11,7 @@ import {
   escapeAnnotationData,
   escapeAnnotationProperty,
   logLine,
+  countCaveat,
   incompleteHeading,
   logText,
   truncate,
@@ -18,7 +19,7 @@ import {
   renderAttributionSummary,
   renderLintSummary
 } from './main-push-report.mjs'
-import { createBatchCollector, runOxlint } from './oxlint-batches.mjs'
+import { createBatchCollector, RETAIN_LIMITS, runOxlint } from './oxlint-batches.mjs'
 import { computePlan, rangeText, reportPlanFailure } from './plan-main-push-lint.mjs'
 import { attributeFiles, createGithubApi, describeAttribution } from './push-attribution.mjs'
 
@@ -33,6 +34,8 @@ const MAX_LOGGED_PATHS = 50
 const MAX_ANNOTATION_CHARS = 2_000
 const MAX_ANNOTATION_PATH_CHARS = 500
 const MAX_POLICIES_NAMED = 5
+const MAX_INPUTS_NAMED = 3
+const MAX_CAUSE_CHARS = 200
 
 export function createReporter(env) {
   let logBytes = 0
@@ -121,7 +124,9 @@ export function reportIncomplete(incomplete, reporter) {
       batch.files.length > MAX_LOGGED_PATHS
         ? ` and ${batch.files.length - MAX_LOGGED_PATHS} more`
         : ''
-    if (reporter.log(`Not linted: ${batch.files.slice(0, MAX_LOGGED_PATHS).join(' ')}${more}`)) {
+    // A run that reported some errors before stopping linted part of its paths.
+    const label = batch.ran !== false && batch.partial ? 'Not fully linted' : 'Not linted'
+    if (reporter.log(`${label}: ${batch.files.slice(0, MAX_LOGGED_PATHS).join(' ')}${more}`)) {
       logged += 1
     }
   }
@@ -167,6 +172,30 @@ export async function resolveReportedPaths(diagnostics, root) {
 
 // A failing file the push touched is attributed to the commits that changed it. One it did not touch was
 // linted only because a lint policy changed, so the commits that changed that policy are named instead.
+// Why an untouched file was linted: how many policy changes cover it first, so a cut never hides the count, then
+// up to a few of them, each with the commits behind up to a few of its changed inputs, or that it has none.
+export function explainPolicies(policies, describe, noun) {
+  const shown = policies.slice(0, MAX_POLICIES_NAMED).map((policy) => {
+    const inputs = policy.paths
+      .slice(0, MAX_INPUTS_NAMED)
+      .map((input) => `${input} changed by ${truncate(describe(input), MAX_CAUSE_CHARS)}`)
+    const moreInputs =
+      policy.paths.length > MAX_INPUTS_NAMED
+        ? `; and ${policy.paths.length - MAX_INPUTS_NAMED} more changed input(s)`
+        : ''
+    const source =
+      policy.paths.length > 0
+        ? `${inputs.join('; ')}${moreInputs}`
+        : `no changed input in ${noun} can be named: its inputs cannot be read`
+    return `${truncate(policy.why, MAX_CAUSE_CHARS)} (${source})`
+  })
+  const count =
+    policies.length > shown.length
+      ? `${policies.length} lint policy changes cover it, the first ${shown.length} shown`
+      : `${policies.length} lint policy change(s) cover it`
+  return `${count}: ${shown.join('; ')}`
+}
+
 async function reportAttribution({ diagnostics, plan, env, reporter, api }) {
   const failing = [
     ...new Set(
@@ -208,18 +237,7 @@ async function reportAttribution({ diagnostics, plan, env, reporter, api }) {
       })
     : new Map()
   const describe = (file) => describeAttribution(attributions.get(file), ref)
-  // Every policy change whose scope holds the file, up to a few, each with the commits behind its inputs.
-  const becauseOf = (policies) => {
-    const named = policies
-      .slice(0, MAX_POLICIES_NAMED)
-      .map((policy) =>
-        policy.paths.length > 0
-          ? `${policy.why} (${policy.paths.map((input) => `${input} changed by ${describe(input)}`).join('; ')})`
-          : `${policy.why} (no input changed in ${noun})`
-      )
-    const more = policies.length - named.length
-    return `${named.join('; ')}${more > 0 ? `; and ${more} more policy change(s)` : ''}`
-  }
+  const becauseOf = (policies) => explainPolicies(policies, describe, noun)
   const rows = [
     ...failing.map((file) => ({
       file,
@@ -276,7 +294,7 @@ export async function main({
   for (const policy of plan.policies) {
     reporter.log(`Lint policy changed: ${policy.why}; linting everything under ${policy.dir}.`)
   }
-  const collector = createBatchCollector()
+  const collector = createBatchCollector(RETAIN_LIMITS, { overlap: plan.overlap ?? [] })
   let results = collector.result()
   if (targets.length > 0) {
     try {
@@ -303,7 +321,14 @@ export async function main({
     })
   }
   const { diagnostics, errorCount, incomplete, linted } = results
-  await resolveReportedPaths(diagnostics, root)
+  // Mapping printed paths back to tracked files is best effort; a failure must not cost the verdict.
+  try {
+    await resolveReportedPaths(diagnostics, root)
+  } catch (error) {
+    reporter.log(
+      `Could not map reported paths to tracked files (${truncate(String(error.message), 300)}); paths are shown as oxlint printed them.`
+    )
+  }
   // The verdict, locations and summary are published before any optional PR lookup.
   const loggedDiagnostics = reportDiagnostics(diagnostics, errorCount, reporter)
   const loggedIncomplete = reportIncomplete(incomplete, reporter)
@@ -319,11 +344,13 @@ export async function main({
       errorCount,
       incomplete,
       loggedDiagnostics,
-      loggedIncomplete
+      loggedIncomplete,
+      overlap: plan.overlap ?? [],
+      repeatsUncertain: results.repeatsUncertain
     })
   )
   reporter.log(
-    `oxlint reported linting ${linted} file(s); ${plan.touched.length} changed candidate file(s).`
+    `oxlint reported linting ${linted} file(s); ${plan.touched.length} changed candidate file(s)${countCaveat({ overlap: plan.overlap ?? [], repeatsUncertain: results.repeatsUncertain })}.`
   )
   await reportAttribution({ diagnostics, plan, env, reporter, api })
   reporter.finish()

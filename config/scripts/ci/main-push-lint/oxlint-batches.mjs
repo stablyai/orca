@@ -1,4 +1,5 @@
 // Run oxlint over explicit paths in bounded batches and tell lint errors apart from runs that did not finish.
+import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 
 const MAX_BUFFER_BYTES = 64 * 1024 * 1024
@@ -56,7 +57,12 @@ function describeFailure(error, timedOut, maxBuffer) {
   if (typeof error.code === 'number') {
     return { failed: true, exitCode: error.code, reason: `exit code ${error.code}` }
   }
-  return { failed: true, reason: `could not run oxlint (${error.code ?? error.message})` }
+  // A spawn error means oxlint never started on these paths.
+  return {
+    failed: true,
+    notRun: true,
+    reason: `could not run oxlint (${error.code ?? error.message})`
+  }
 }
 
 // Each batch keeps its own output and outcome, so one batch's lint errors never hide another batch's failure.
@@ -147,12 +153,15 @@ export function parseGithubDiagnostics(output) {
   return diagnostics
 }
 
-// What the run keeps: each child's raw output is digested as it ends, then only an excerpt of an unfinished run,
-// and at most `maxDiagnostics` errors (counting the rest), each message cut to `maxMessageChars`.
+// What the run keeps: each child's raw output is digested as it ends. Then at most `maxDiagnostics` errors (the
+// rest counted), each message cut to `maxMessageChars`; an excerpt for only the first `maxIncompleteDetails`
+// unfinished runs; and, for repeats across runs, fixed-size hashes of at most `maxRepeatKeys` errors.
 export const RETAIN_LIMITS = {
   maxDiagnostics: 5_000,
   maxMessageChars: 2_000,
-  maxExcerptChars: 4_000
+  maxExcerptChars: 4_000,
+  maxIncompleteDetails: 20,
+  maxRepeatKeys: 100_000
 }
 
 function cut(text, maxChars) {
@@ -162,27 +171,44 @@ function cut(text, maxChars) {
 }
 
 // A batch counts only if oxlint finished it and exited cleanly, or exited 1 with a parsed lint error.
-// Errors parsed from an unfinished batch are still reported, next to why it did not finish. An error reported
-// twice (a Git-ignored file named next to the directory that holds it) is kept once.
-export function createBatchCollector(limits = RETAIN_LIMITS) {
+// Errors parsed from an unfinished batch are still reported, next to why it did not finish.
+// A file named explicitly inside a walked directory (`overlap`) can be reported by two runs; an error already
+// seen in an earlier run is dropped. Identical errors within one run are kept: they can be two files whose
+// reported paths only differ by a backslash.
+export function createBatchCollector(limits = RETAIN_LIMITS, { overlap = [] } = {}) {
+  const repeatable = new Set(overlap.flatMap((file) => [file, file.replaceAll('\\', '/')]))
   const diagnostics = []
-  const seen = new Set()
+  const firstRun = new Map()
   const incomplete = []
+  let runs = 0
   let errorCount = 0
+  let repeatsUncertain = false
   let linted = 0
   return {
     add(batch) {
+      runs += 1
       const errors = parseGithubDiagnostics(batch.output).filter(
         (diagnostic) => diagnostic.severity === 'error'
       )
       for (const error of errors) {
-        const key = JSON.stringify([error.file, error.line, error.col, error.rule, error.message])
-        if (seen.has(key)) {
-          continue
+        if (repeatable.has(error.file)) {
+          const key = createHash('sha256')
+            .update(JSON.stringify([error.file, error.line, error.col, error.rule, error.message]))
+            .digest('base64')
+          const seenIn = firstRun.get(key)
+          if (seenIn !== undefined && seenIn !== runs) {
+            continue
+          }
+          if (seenIn === undefined) {
+            if (firstRun.size < limits.maxRepeatKeys) {
+              firstRun.set(key, runs)
+            } else {
+              repeatsUncertain = true
+            }
+          }
         }
         errorCount += 1
         if (diagnostics.length < limits.maxDiagnostics) {
-          seen.add(key)
           diagnostics.push({ ...error, message: cut(error.message, limits.maxMessageChars) })
         }
       }
@@ -205,20 +231,25 @@ export function createBatchCollector(limits = RETAIN_LIMITS) {
       }
       incomplete.push({
         files: batch.files,
-        // A batch the deadline kept from starting never reached oxlint.
+        // A batch the deadline kept from starting, or one oxlint could not be started for, never reached it.
         ran: !batch.notRun,
+        // Errors it did report before stopping, so the paths are not described as wholly unlinted.
+        partial: errors.length > 0,
         reason: reasons.join('; '),
-        output: cut(batch.output, limits.maxExcerptChars)
+        output:
+          incomplete.length < limits.maxIncompleteDetails
+            ? cut(batch.output, limits.maxExcerptChars)
+            : ''
       })
     },
     result() {
-      return { diagnostics, errorCount, incomplete, linted }
+      return { diagnostics, errorCount, repeatsUncertain, incomplete, linted }
     }
   }
 }
 
-export function collectBatchResults(batches, limits) {
-  const collector = createBatchCollector(limits)
+export function collectBatchResults(batches, limits, options) {
+  const collector = createBatchCollector(limits, options)
   for (const batch of batches) {
     collector.add(batch)
   }

@@ -145,7 +145,13 @@ describe('main-push lint range', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
         invocation: resolveOxlintInvocation(REPO_ROOT)
       })
     )
-    expect(results).toEqual({ diagnostics: [], errorCount: 0, incomplete: [], linted: 2 })
+    expect(results).toEqual({
+      diagnostics: [],
+      errorCount: 0,
+      repeatsUncertain: false,
+      incomplete: [],
+      linted: 2
+    })
   })
 
   it('publishes the failure before any PR lookup, and exits 1', async () => {

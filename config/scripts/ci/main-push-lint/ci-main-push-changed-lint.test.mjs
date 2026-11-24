@@ -84,10 +84,14 @@ describe('main-push changed-file lint', () => {
     // A Git-ignored touched file named in a later batch than the walk of its directory can repeat an error.
     const lintExit = { failed: true, exitCode: 1, reason: 'exit code 1' }
     const output = `${maxLines(PANE)}\n${FINISHED}`
-    const result = collectBatchResults([
-      { files: ['.'], ...lintExit, output },
-      { files: [PANE], ...lintExit, output }
-    ])
+    const result = collectBatchResults(
+      [
+        { files: ['.'], ...lintExit, output },
+        { files: [PANE], ...lintExit, output }
+      ],
+      undefined,
+      { overlap: [PANE] }
+    )
     expect(result.diagnostics.map((diagnostic) => diagnostic.file)).toEqual([PANE])
     expect(result.errorCount).toBe(1)
   })
@@ -269,7 +273,7 @@ describe('main-push changed-file lint', () => {
       )
     }
     expect(describeAttribution(outage.get('f20.ts'), 'main')).toBe(
-      'unknown (only the first 20 failing files are attributed)'
+      'unknown (only the first 20 looked-up paths are attributed)'
     )
 
     // A hang: one global budget, not a timeout per request, bounds the whole pass.

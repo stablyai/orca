@@ -6,6 +6,7 @@ import { dirname, join, resolve } from 'node:path'
 
 export const REPO_ROOT = resolve(import.meta.dirname, '../../../..')
 export const DEBUGGER = 'debugger\n'
+export const CLEAN = 'export {}\n'
 export const CONFIG = JSON.stringify({ rules: { 'no-debugger': 'error' } })
 // Each test runs dozens of short Git and oxlint processes; on a loaded runner that outlasts the default timeout.
 export const GIT_TEST_TIMEOUT_MS = 120_000

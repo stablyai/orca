@@ -42,7 +42,14 @@ function preformatted(value) {
 }
 
 export function describeLocation(diagnostic) {
-  return diagnostic.file ? `${diagnostic.file}:${diagnostic.line}:${diagnostic.col}` : '(no file)'
+  if (!diagnostic.file) {
+    return '(no file)'
+  }
+  const where = `${diagnostic.file}:${diagnostic.line}:${diagnostic.col}`
+  // oxlint printed a name that more than one tracked file could have produced.
+  return diagnostic.ambiguous
+    ? `${where} (path uncertain: ${diagnostic.ambiguous.join(' or ')})`
+    : where
 }
 
 // The runner reads a line that starts with `::` or contains `##[` as a workflow command, so a path
@@ -102,12 +109,27 @@ function listed(items, render) {
 
 // A run oxlint started but did not finish, or paths it never received (not run, or not passable as UTF-8).
 export function incompleteHeading(batch) {
-  return batch.ran === false
-    ? `${batch.files.length} path(s) were not linted`
+  if (batch.ran === false) {
+    return `${batch.files.length} path(s) were not linted`
+  }
+  return batch.partial
+    ? `oxlint did not finish ${batch.files.length} path(s), after reporting some errors`
     : `oxlint did not finish ${batch.files.length} path(s)`
 }
 
-function coverageLine({ candidates, dirs, linted, incomplete }) {
+// oxlint counts a file once per way it reached it, so a touched file named inside a walked directory can count
+// twice; and past the repeat-key limit, an error two runs both reported can count twice.
+export function countCaveat({ overlap = [], repeatsUncertain = false }) {
+  const notes = [
+    overlap.length > 0
+      ? `up to ${overlap.length} touched file(s) named inside a walked directory may be counted twice`
+      : '',
+    repeatsUncertain ? 'the error count may include errors two runs both reported' : ''
+  ].filter(Boolean)
+  return notes.length > 0 ? ` (${notes.join('; ')})` : ''
+}
+
+function coverageLine({ candidates, dirs, linted, incomplete, overlap, repeatsUncertain }) {
   const walked =
     dirs.length > 0 ? `, plus every lintable file under ${listed(dirs, markdownCode)}` : ''
   const count = (ran) =>
@@ -126,7 +148,8 @@ function coverageLine({ candidates, dirs, linted, incomplete }) {
     dirs.length === 0 && unfinished + unsent === 0 && linted < candidates
       ? ` oxlint excluded the other ${candidates - linted} itself.`
       : ''
-  return `Planned: ${candidates} changed candidate file(s)${walked}. oxlint reported linting ${linted} file(s)${partial}.${excluded}`
+  const caveat = countCaveat({ overlap, repeatsUncertain })
+  return `Planned: ${candidates} changed candidate file(s)${walked}. oxlint reported linting ${linted} file(s)${caveat}${partial}.${excluded}`
 }
 
 function policyLine(policies) {
@@ -147,10 +170,12 @@ export function renderLintSummary({
   // All errors oxlint reported; `diagnostics` holds the ones kept, which can be fewer.
   errorCount = diagnostics.length,
   loggedDiagnostics = diagnostics.length,
-  loggedIncomplete = incomplete.length
+  loggedIncomplete = incomplete.length,
+  overlap = [],
+  repeatsUncertain = false
 }) {
   const header = [
-    `Range ${markdownCode(range)}: ${scope}. ${coverageLine({ candidates, dirs, linted, incomplete })}`,
+    `Range ${markdownCode(range)}: ${scope}. ${coverageLine({ candidates, dirs, linted, incomplete, overlap, repeatsUncertain })}`,
     policyLine(policies)
   ]
     .filter(Boolean)

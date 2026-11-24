@@ -82,6 +82,10 @@ export async function attributeFiles(
   { base, head, repo, ref, api, maxFiles = ATTRIBUTION_LIMITS.maxFiles }
 ) {
   const results = new Map()
+  // Nothing to look up costs no request.
+  if (files.length === 0) {
+    return results
+  }
   const markAll = (reason) => {
     for (const file of files) {
       results.set(file, { status: 'unavailable', reason })
@@ -112,7 +116,7 @@ export async function attributeFiles(
     if (index >= maxFiles) {
       results.set(file, {
         status: 'unavailable',
-        reason: `only the first ${maxFiles} failing files are attributed`
+        reason: `only the first ${maxFiles} looked-up paths are attributed`
       })
       continue
     }

@@ -1,21 +1,41 @@
 // Pin the main-push lint's operational bounds: a stalled oxlint run, the log budget, omission notes and
 // attribution that can only see one page of GitHub results.
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import {
   createReporter,
+  explainPolicies,
+  main,
   reportDiagnostics,
   reportIncomplete
 } from './ci-main-push-changed-lint.mjs'
-import { renderAttributionSummary, renderLintSummary } from './main-push-report.mjs'
+import { CONFIG, DEBUGGER, REPO_ROOT } from './main-push-git-test-fixture.mjs'
+import {
+  incompleteHeading,
+  renderAttributionSummary,
+  renderLintSummary
+} from './main-push-report.mjs'
 import { collectBatchResults, createBatchCollector, runOxlint } from './oxlint-batches.mjs'
 import { attributeFiles, describeAttribution } from './push-attribution.mjs'
 
 const scratch = mkdtempSync(join(tmpdir(), 'orca-main-push-bounds-'))
 afterAll(() => rmSync(scratch, { recursive: true, force: true }))
+
+async function captureStdoutAsync(run) {
+  const out = []
+  const write = vi
+    .spyOn(process.stdout, 'write')
+    .mockImplementation((chunk) => out.push(String(chunk)))
+  try {
+    await run()
+  } finally {
+    write.mockRestore()
+  }
+  return out.join('')
+}
 
 function captureStdout(run) {
   const out = []
@@ -270,5 +290,169 @@ if (paths.includes('big.ts')) { process.stdout.write('x'.repeat(100_000)) } else
       api: short
     })
     expect(describeAttribution(complete.get('a.ts'), 'main')).toMatch(/^2 commits: /)
+  })
+
+  // MP-C4-04: the count of policy changes comes first, causes are cut, and unreadable inputs stay visible.
+  it('explains policy causes within bounds, keeping counts and unreadable inputs visible', () => {
+    const policies = [
+      { dir: '.', paths: ['a.json'], unreadable: [], why: `${'w'.repeat(1_000)} root` },
+      {
+        dir: 'm',
+        paths: ['b.json', 'c.json', 'd.json', 'e.json'],
+        unreadable: ['x'],
+        why: 'm/.oxlintrc.json depends on b.json, c.json, d.json and 1 more, which changed; 1 of its inputs cannot be read'
+      },
+      {
+        dir: 't',
+        paths: [],
+        unreadable: ['t/oxlint.config.ts is a script config'],
+        why: 't/oxlint.config.ts is a script config whose inputs cannot be read, so its scope is linted on every push'
+      },
+      ...Array.from({ length: 4 }, (_, index) => ({
+        dir: `s${index}`,
+        paths: [`s${index}.json`],
+        unreadable: [],
+        why: `s${index} changed`
+      }))
+    ]
+    for (const describe of [
+      () => '#7 by @a (aaaaaaaaaa)',
+      () => 'unknown (GitHub API request failed (HTTP 503))'
+    ]) {
+      const text = explainPolicies(policies, describe, 'this push')
+      expect(text).toMatch(/^7 lint policy changes cover it, the first 5 shown: /)
+      expect(text).toContain(`${'w'.repeat(200)}… (`)
+      expect(text).toContain('; and 1 more changed input(s)')
+      expect(text).toContain('1 of its inputs cannot be read')
+      expect(text).toContain(
+        '(no changed input in this push can be named: its inputs cannot be read)'
+      )
+      expect(text).toContain(describe())
+      expect(text).not.toContain('s4 changed')
+    }
+  })
+
+  it('makes no GitHub request when there is nothing to look up', async () => {
+    let calls = 0
+    const api = async () => {
+      calls += 1
+      return {}
+    }
+    const result = await attributeFiles([], { base: 'b', head: 'h', repo: 'o/r', ref: 'main', api })
+    expect(calls).toBe(0)
+    expect(result.size).toBe(0)
+  })
+
+  // MP-C4-05: repeat detection keeps fixed-size keys and stays exact past the kept-error cap.
+  it('counts each error once across runs past the kept-error cap, and keeps few excerpts', () => {
+    const errorLine = (index) =>
+      `::error file=f.ts,line=${index},col=1,title=r::f.ts:${index}:1: ${'界'.repeat(300)} ${index}`
+    const run = (indexes, exitCode = 1) => ({
+      files: ['f.ts'],
+      failed: true,
+      exitCode,
+      reason: `exit code ${exitCode}`,
+      output: `${indexes.map(errorLine).join('\n')}\nFinished in 1ms on 1 file using 1 threads.\n`
+    })
+    const limits = {
+      maxDiagnostics: 1,
+      maxMessageChars: 20,
+      maxExcerptChars: 50,
+      maxIncompleteDetails: 2,
+      maxRepeatKeys: 100
+    }
+    const overlap = { overlap: ['f.ts'] }
+    const exact = collectBatchResults(
+      [run([1, 2, 3]), run([1, 2, 3]), run([3, 4])],
+      limits,
+      overlap
+    )
+    expect(exact).toMatchObject({ errorCount: 4, repeatsUncertain: false })
+    expect(exact.diagnostics).toHaveLength(1)
+    // Two identical errors in one run can be two files whose printed paths only differ by a backslash: both count.
+    expect(collectBatchResults([run([5, 5])], limits, overlap).errorCount).toBe(2)
+    const saturated = collectBatchResults(
+      [run([1, 2]), run([1, 2])],
+      { ...limits, maxRepeatKeys: 1 },
+      overlap
+    )
+    expect(saturated).toMatchObject({ errorCount: 3, repeatsUncertain: true })
+    const many = collectBatchResults(
+      Array.from({ length: 30 }, () => run([1], 2)),
+      limits
+    )
+    expect(many.incomplete).toHaveLength(30)
+    expect(many.incomplete.filter((batch) => batch.output !== '')).toHaveLength(2)
+  })
+
+  // MP-C4-06: a spawn failure never ran, a crash after some errors linted part, a deadline skip never ran.
+  it('labels a spawn failure, a partial crash and a skipped batch by what oxlint actually did', async () => {
+    const enoent = await runOxlint(['a.ts'], {
+      cwd: scratch,
+      invocation: { command: join(scratch, 'no-such-oxlint'), prefixArgs: [] }
+    })
+    const partialCrash = {
+      files: ['p.ts', 'q.ts'],
+      failed: true,
+      exitCode: 101,
+      reason: 'exit code 101',
+      output: '::error file=p.ts,line=1,col=1,title=r::p.ts:1:1: m\nthread panicked\n'
+    }
+    const skipped = {
+      files: ['s.ts'],
+      failed: true,
+      notRun: true,
+      reason: 'not run: the lint time budget ran out',
+      output: ''
+    }
+    const { incomplete } = collectBatchResults([...enoent, partialCrash, skipped])
+    expect(incomplete.map((batch) => [incompleteHeading(batch), batch.reason])).toEqual([
+      ['1 path(s) were not linted', 'could not run oxlint (ENOENT)'],
+      ['oxlint did not finish 2 path(s), after reporting some errors', 'exit code 101'],
+      ['1 path(s) were not linted', 'not run: the lint time budget ran out']
+    ])
+    let logged
+    const out = captureStdout(() => {
+      logged = reportIncomplete(incomplete, createReporter({}))
+    })
+    expect(logged).toBe(3)
+    expect(out).toContain('Not linted: a.ts')
+    expect(out).toContain('Not fully linted: p.ts q.ts')
+    expect(out).toContain('Not linted: s.ts')
+  })
+
+  // MP-C4-07: a failed lookup of tracked paths after a red lint still prints the verdict.
+  it('keeps the verdict when mapping reported paths to tracked files fails', async () => {
+    const dir = join(scratch, 'not-a-repo')
+    mkdirSync(dir)
+    writeFileSync(join(dir, '.oxlintrc.json'), CONFIG)
+    writeFileSync(join(dir, 'x.ts'), DEBUGGER)
+    const planPath = join(scratch, 'plan.json')
+    writeFileSync(
+      planPath,
+      JSON.stringify({
+        event: 'push',
+        base: 'a'.repeat(40),
+        head: 'b'.repeat(40),
+        scope: 'the files this push changed',
+        touched: ['x.ts'],
+        files: ['x.ts'],
+        overlap: [],
+        dirs: [],
+        policies: [],
+        unrepresentable: []
+      })
+    )
+    let exit
+    const text = await captureStdoutAsync(async () => {
+      exit = await main({
+        env: { MAIN_PUSH_LINT_PLAN: planPath },
+        root: dir,
+        invocationRoot: REPO_ROOT
+      })
+    })
+    expect(exit).toBe(1)
+    expect(text).toContain('::error file=x.ts,line=1,col=1,title=eslint(no-debugger)::')
+    expect(text).toContain('Could not map reported paths to tracked files (')
   })
 })
