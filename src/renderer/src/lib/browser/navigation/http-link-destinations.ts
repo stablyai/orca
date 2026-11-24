@@ -78,12 +78,13 @@ export function httpLinkActionDestinationsFor(
   settings: { openLinksInApp?: boolean } | null | undefined,
   sourceOwner: HttpLinkSourceOwner,
   canOpenOwnedBrowser: boolean,
-  url?: string
+  url?: string,
+  worktreeId?: string | null
 ): HttpLinkActionDestinations {
   if (!canSourceOwnerOpenInOrca(sourceOwner, canOpenOwnedBrowser)) {
     return { primary: 'system' }
   }
-  return settings?.openLinksInApp === true || isRemoteLoopbackHttpLink(url, sourceOwner)
+  return settings?.openLinksInApp === true || isRemoteLoopbackHttpLink(url, sourceOwner, worktreeId)
     ? { primary: 'orca', alternate: 'system' }
     : { primary: 'system', alternate: 'orca' }
 }
