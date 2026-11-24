@@ -14,6 +14,7 @@ type HoistedState = {
   exitListener: ((payload: ExitPayload) => void) | null
   killFenced: Mock<(...args: unknown[]) => Promise<PtyFencedTerminationOutcome>>
   fencedTerminationSupported: boolean
+  rendererLive: boolean
   selectedAccount: string
   providerStartup: Promise<void> | undefined
 }
@@ -23,6 +24,7 @@ const h = vi.hoisted((): HoistedState => ({
   exitListener: null,
   killFenced: vi.fn<(...args: unknown[]) => Promise<PtyFencedTerminationOutcome>>(),
   fencedTerminationSupported: true,
+  rendererLive: true,
   selectedAccount: 'new',
   providerStartup: undefined
 }))
@@ -110,6 +112,7 @@ import { TerminalIntentionalStops } from '../../../runtime/terminal/stop/termina
 import { installCodexAccountRestartIpcHandlers } from './codex-account-restart-ipc'
 import { codexAccountRestartStops } from './codex-account-restart-stops'
 import { releaseAbsentPaneOwner } from '../pane/absent-pane-owner'
+import { redeliverOwedCodexRestartExits } from './codex-account-restart-redelivery'
 import type { PtyIpcSession } from '../session'
 
 let paneCounter = 0
@@ -134,7 +137,11 @@ function setup() {
     runtime,
     consumeSyntheticKillExit: () => false,
     sendPtyExitToRenderer,
-    acceptPtyDataForRenderer: () => {}
+    acceptPtyDataForRenderer: () => {},
+    mainWindow: { isDestroyed: () => false },
+    get rendererPtyDispatcherReady() {
+      return h.rendererLive
+    }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listener reads only these fields.
   const session = sessionFields as unknown as PtyIpcSession
@@ -148,7 +155,8 @@ function setup() {
     rememberSyntheticKillExit: vi.fn(),
     sendPtyExitToRenderer,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: staleness is mocked.
-    getSettings: () => ({}) as never
+    getSettings: () => ({}) as never,
+    isRendererLive: () => h.rendererLive
   })
   const pane = nextPane()
   currentOwnerByPaneKey.set(`tab:${pane.leafId}`, {
@@ -191,6 +199,7 @@ describe('account restart exits arriving out of order', () => {
   beforeEach(() => {
     h.handlers.clear()
     h.fencedTerminationSupported = true
+    h.rendererLive = true
     h.selectedAccount = 'new'
     h.providerStartup = undefined
   })
@@ -439,5 +448,40 @@ describe('account restart exits arriving out of order', () => {
     releaseConnection()
     await expect(result).resolves.toMatchObject({ outcome: 'not-started', reason: 'not-stale' })
     expect(killsWritten).toBe(0)
+  })
+
+  it('owes a restart exit sent while no window listened to the next ready window', async () => {
+    const t = setup()
+    const result = t.request()
+    await t.stopDispatched()
+    // Window replacement: the old renderer is gone and the new one has not signalled ready.
+    h.rendererLive = false
+    t.emitExit()
+    t.release({ outcome: 'ended', writersExited: true })
+    await result
+    expect(t.sendPtyExitToRenderer).toHaveBeenCalledTimes(1)
+    h.rendererLive = true
+    const claimed: string[][] = []
+    t.sendPtyExitToRenderer.mockImplementation(({ id, incarnationId }) =>
+      claimed.push([...t.runtime.intentionalPtyStops.claimExit(id, incarnationId)])
+    )
+    redeliverOwedCodexRestartExits({
+      intentionalPtyStops: t.runtime.intentionalPtyStops,
+      sendPtyExitToRenderer: t.sendPtyExitToRenderer
+    })
+    expect(t.sendPtyExitToRenderer).toHaveBeenCalledTimes(2)
+    expect(t.sendPtyExitToRenderer.mock.calls[1][0]).toMatchObject({
+      id: t.pane.ptyId,
+      incarnationId: t.pane.incarnationId
+    })
+    // Still a pane-keeping restart exit, and runtime is not told again.
+    expect(claimed).toEqual([['replaced']])
+    expect(t.runtime.onPtyExit).toHaveBeenCalledTimes(1)
+    // Owed once: a second ready signal sends nothing.
+    redeliverOwedCodexRestartExits({
+      intentionalPtyStops: t.runtime.intentionalPtyStops,
+      sendPtyExitToRenderer: t.sendPtyExitToRenderer
+    })
+    expect(t.sendPtyExitToRenderer).toHaveBeenCalledTimes(2)
   })
 })

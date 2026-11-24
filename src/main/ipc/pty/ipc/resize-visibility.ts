@@ -1,3 +1,4 @@
+import { redeliverOwedCodexRestartExits } from '../account-restart/codex-account-restart-redelivery'
 import { getPtyIpc } from '../pty-host-bindings'
 import type {
   PtyDeliveryWriteOff,
@@ -211,6 +212,11 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
     session.rendererPtyDispatcherReady = true
     session.pendingData.reactivateBlocked()
     session.schedulePendingDataFlush(0)
+    // Restart exits sent while no window listened still keep their panes for the resume.
+    redeliverOwedCodexRestartExits({
+      intentionalPtyStops: session.runtime?.intentionalPtyStops,
+      sendPtyExitToRenderer: session.sendPtyExitToRenderer
+    })
   })
 
   ipcMain.removeAllListeners('pty:setActiveRendererPty')

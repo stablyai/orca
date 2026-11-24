@@ -1,4 +1,5 @@
 import { installCodexAccountRestartIpcHandlers } from './account-restart/codex-account-restart-ipc'
+import { isRestartExitRendererLive } from './account-restart/codex-account-restart-redelivery'
 import { createLocalPtyStartupPromises } from './provider/local-startup-promises'
 
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
@@ -305,5 +306,9 @@ export function registerPtyHandlers(
   installPtyClaudeDiffPanelNoticeIpcHandler({ getLocalPtyProviderStartupPromise })
   installPtyNewerDaemonHoldIpcHandlers()
   installPtyKillIpcHandler(killDeps)
-  installCodexAccountRestartIpcHandlers({ ...killDeps, getSettings })
+  installCodexAccountRestartIpcHandlers({
+    ...killDeps,
+    getSettings,
+    isRendererLive: () => isRestartExitRendererLive(session)
+  })
 }

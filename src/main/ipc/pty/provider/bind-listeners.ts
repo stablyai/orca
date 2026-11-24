@@ -19,6 +19,7 @@ import { discardPendingPtyDataAcrossGap } from '../delivery/accept'
 import type { PtyIpcSession } from '../session'
 import { publishPtyEndpointLoss } from '../../../runtime/terminal/pty-endpoint-loss-signal'
 import { codexAccountRestartStops } from '../account-restart/codex-account-restart-stops'
+import { isRestartExitRendererLive } from '../account-restart/codex-account-restart-redelivery'
 
 export function bindProviderListeners(session: PtyIpcSession): void {
   localDataUnsub?.()
@@ -146,6 +147,9 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           code: payload.code,
           ...(payload.incarnationId ? { incarnationId: payload.incarnationId } : {})
         })
+        if (isAccountRestartExit && !isRestartExitRendererLive(session)) {
+          codexAccountRestartStops.noteRendererUndelivered(payload.id, payload.incarnationId)
+        }
       } finally {
         settleRestartStop?.(true)
       }

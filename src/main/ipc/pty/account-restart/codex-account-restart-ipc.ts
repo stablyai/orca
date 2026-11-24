@@ -23,6 +23,8 @@ import {
 
 export type CodexAccountRestartIpcDeps = PtyKillIpcDeps & {
   getSettings?: () => GlobalSettings | undefined
+  /** Whether a ready window would receive an exit sent now; absent means yes. */
+  isRendererLive?: () => boolean
 }
 
 // A stop can outlive the window that asked for it; every step reads the deps current at that moment.
@@ -176,6 +178,11 @@ function deliverRestartReceiptExit(
   if (classification === 'ordinary' || classification === 'duplicate') {
     return
   }
+  if (classification === 'restart-renderer-only' && deps.isRendererLive?.() === false) {
+    // Still no window to tell; keep it owed to the next one that signals ready.
+    codexAccountRestartStops.noteRendererUndelivered(occupant.ptyId, occupant.incarnationId)
+    return
+  }
   const settleStop = deps.runtime?.intentionalPtyStops?.mark(
     occupant.ptyId,
     'replaced',
@@ -202,6 +209,9 @@ function deliverRestartReceiptExit(
       code: -1,
       incarnationId: occupant.incarnationId
     })
+    if (deps.isRendererLive?.() === false) {
+      codexAccountRestartStops.noteRendererUndelivered(occupant.ptyId, occupant.incarnationId)
+    }
   } finally {
     settleStop?.(true)
   }
