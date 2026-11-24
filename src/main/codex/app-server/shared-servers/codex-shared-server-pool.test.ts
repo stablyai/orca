@@ -7,29 +7,6 @@ import {
 import { spawnCodexAppServerConnection } from '../codex-app-server-connection'
 import { chat, fakeCodex, launch, startThread } from './codex-shared-server-pool-fixture'
 import { field } from './codex-shared-server-frames'
-import {
-  CodexSharedServerUncontainedError,
-  CodexSharedServerWindowsJob
-} from './codex-shared-server-windows-job'
-
-/** A Windows job over the fake server's tree: cmd.exe (the fake's pid) -> node -> codex.exe. */
-function fakeWindowsJob(holdsCodex = true) {
-  const terminated: unknown[] = []
-  const job = CodexSharedServerWindowsJob.create(
-    {
-      createKillOnCloseJob: () => ({ id: 'job' }),
-      assignProcessToJob: () => true,
-      isProcessInJob: (_job, pid) => holdsCodex || pid !== 7000,
-      terminateJob: (handle) => terminated.push(handle) > 0
-    },
-    async () => [
-      { pid: 5000, ppid: 1, name: 'cmd.exe' },
-      { pid: 6000, ppid: 5000, name: 'node.exe' },
-      { pid: 7000, ppid: 6000, name: 'codex.exe' }
-    ]
-  )!
-  return { job, terminated }
-}
 import { CODEX_SHARED_SERVER_HUNG_MS } from './codex-shared-server-hang-watch'
 
 afterEach(() => {
@@ -524,34 +501,26 @@ describe('shared Codex app-servers', () => {
     expect(connB.closed).toBe(false)
   })
 
-  it('never shares a server with the switch off, for a custom Codex command, or on Windows without the job exports', () => {
+  it('never shares a server with the switch off, for a custom Codex command, or on Windows', () => {
     const opener = codexConnectionOpener({ sharedServers: () => true }, 's', {
       customCommand: true
     })
     expect(opener).toBe(spawnCodexAppServerConnection)
-    expect(
-      codexConnectionOpener({ sharedServers: () => true }, 's', {}, {}, 'win32', () => false)
-    ).toBe(spawnCodexAppServerConnection)
-    expect(codexConnectionOpener({ sharedServers: () => false }, 's', {}, {}, 'linux')).toBe(
+    expect(codexConnectionOpener({ sharedServers: () => true }, 's', {}, 'win32')).toBe(
       spawnCodexAppServerConnection
     )
-    // Off on Windows never even loads the job addon.
-    const windowsSharing = vi.fn(() => true)
-    expect(
-      codexConnectionOpener({ sharedServers: () => false }, 's', {}, {}, 'win32', windowsSharing)
-    ).toBe(spawnCodexAppServerConnection)
-    expect(windowsSharing).not.toHaveBeenCalled()
+    expect(codexConnectionOpener({ sharedServers: () => false }, 's', {}, 'linux')).toBe(
+      spawnCodexAppServerConnection
+    )
   })
 
   it("marks a shared opener, so a chat's recovery never signals the server it shares", () => {
     expect(
-      opensSharedCodexServer(
-        codexConnectionOpener({ sharedServers: () => true }, 's', {}, {}, 'linux')
-      )
+      opensSharedCodexServer(codexConnectionOpener({ sharedServers: () => true }, 's', {}, 'linux'))
     ).toBe(true)
     expect(
       opensSharedCodexServer(
-        codexConnectionOpener({ sharedServers: () => false }, 's', {}, {}, 'linux')
+        codexConnectionOpener({ sharedServers: () => false }, 's', {}, 'linux')
       )
     ).toBe(false)
   })
@@ -787,72 +756,5 @@ describe('shared Codex app-servers', () => {
     })
     expect(servers[0]!.refused).toEqual([11])
     expect(requests).toEqual([])
-  })
-
-  describe('on Windows', () => {
-    it("ignores a process that only looks like the launcher's child because its pid was reused", async () => {
-      const job = CodexSharedServerWindowsJob.create(
-        {
-          createKillOnCloseJob: () => ({ id: 'job' }),
-          assignProcessToJob: () => true,
-          isProcessInJob: (_job, pid) => pid !== 4000,
-          terminateJob: () => true
-        },
-        async () => [
-          // Its real parent exited long ago, and the launcher got that parent's pid.
-          { pid: 4000, ppid: 5000, name: 'explorer.exe', creationTimeMs: 1_000 },
-          { pid: 5000, ppid: 1, name: 'cmd.exe', creationTimeMs: 9_000 },
-          { pid: 6000, ppid: 5000, name: 'node.exe', creationTimeMs: 9_001 },
-          { pid: 7000, ppid: 6000, name: 'codex.exe', creationTimeMs: 9_002 }
-        ]
-      )!
-      const { pool } = fakeCodex('ends', 'exited', true, { windowsJob: () => job })
-      const conn = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
-      expect(conn.closed).toBe(false)
-    })
-
-    it('starts no fallback server for a chat stopped while its shared server failed containment', async () => {
-      const pool = {
-        open: () => Promise.reject(new CodexSharedServerUncontainedError())
-      }
-      const open = codexConnectionOpener(
-        { sharedServers: () => true },
-        's',
-        {},
-        { signal: AbortSignal.abort() },
-        'win32',
-        () => true,
-        () => pool
-      )
-      // A fallback would try to spawn this missing command and fail differently.
-      await expect(
-        open({ command: 'orca-test-no-such-codex', args: [], cwd: process.cwd() }, {})
-      ).rejects.toBeInstanceOf(CodexSharedServerUncontainedError)
-      expect(opensSharedCodexServer(open)).toBe(true)
-    })
-
-    it('ends everything in the job when the server closes', async () => {
-      vi.useFakeTimers()
-      const { job, terminated } = fakeWindowsJob()
-      const { pool } = fakeCodex('ends', 'exited', true, { windowsJob: () => job })
-      const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
-      await connA.close()
-      expect(terminated).toEqual([])
-      await vi.advanceTimersByTimeAsync(60_000)
-      expect(terminated).toEqual([{ id: 'job' }])
-    })
-
-    it("closes a server whose job doesn't hold native Codex, so its chat takes its own", async () => {
-      const { job, terminated } = fakeWindowsJob(false)
-      const { servers, pool } = fakeCodex('ends', 'exited', true, { windowsJob: () => job })
-      const a = chat()
-      await expect(
-        pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
-      ).rejects.toBeInstanceOf(CodexSharedServerUncontainedError)
-      await vi.waitFor(() => expect(terminated).toEqual([{ id: 'job' }]))
-      expect(servers[0]!.requests.map((r) => r.method)).toEqual(['initialize'])
-      // The fallback server reuses these handlers, so the failed one must not have ended them.
-      expect(a.exits).toEqual([])
-    })
   })
 })

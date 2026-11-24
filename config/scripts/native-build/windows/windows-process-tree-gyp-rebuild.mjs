@@ -110,9 +110,6 @@ export function windowsProcessTreeAddonHasBreakawayLauncher(addonPath) {
   return readFileSync(addonPath).includes(RELAY_LAUNCHER_EXPORT)
 }
 
-/** Only an addon built with the job patch registers this export (shared Codex servers need it). */
-export const KILL_ON_CLOSE_JOB_EXPORT = 'createKillOnCloseJob'
-
 /**
  * Why this binary cannot ship as the `arch` relay addon, or null when it can.
  *
@@ -137,9 +134,6 @@ export function windowsProcessTreeAddonDefect(addonPath, arch) {
   }
   if (!windowsProcessTreeAddonHasBreakawayLauncher(addonPath)) {
     return `it does not export ${RELAY_LAUNCHER_EXPORT}, so it predates the relay launcher patch`
-  }
-  if (!readFileSync(addonPath).includes(KILL_ON_CLOSE_JOB_EXPORT)) {
-    return `it does not export ${KILL_ON_CLOSE_JOB_EXPORT}, so it predates the job patch`
   }
   return null
 }

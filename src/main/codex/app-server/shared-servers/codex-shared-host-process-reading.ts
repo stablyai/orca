@@ -35,26 +35,13 @@ export function childrenByParent(
 }
 
 /** Every process below one, by parent links. */
-export function descendants(
-  children: ReadonlyMap<number, number[]>,
-  root: number,
-  /** Whether a listed child really is that parent's; checked only inside the tree. */
-  keep: (child: number, parent: number) => boolean = () => true
-): number[] {
+export function descendants(children: ReadonlyMap<number, number[]>, root: number): number[] {
   const found: number[] = []
-  // Windows keeps a dead parent's pid, so a reused pid can close a cycle.
-  const seen = new Set([root])
-  const queue = [root]
+  const queue = [...(children.get(root) ?? [])]
   for (let index = 0; index < queue.length; index += 1) {
-    const parent = queue[index]!
-    for (const pid of children.get(parent) ?? []) {
-      if (seen.has(pid) || !keep(pid, parent)) {
-        continue
-      }
-      seen.add(pid)
-      found.push(pid)
-      queue.push(pid)
-    }
+    const pid = queue[index]!
+    found.push(pid)
+    queue.push(...(children.get(pid) ?? []))
   }
   return found
 }

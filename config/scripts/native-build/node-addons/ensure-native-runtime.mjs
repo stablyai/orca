@@ -313,12 +313,7 @@ function collectNativeModuleFailures() {
 function loadNativeModule(moduleName) {
   if (moduleName === '@vscode/windows-process-tree') {
     // Loadable node-addon-api prebuild can still read foreign command lines/ignore CreationTime; verify patched binary on both counts.
-    const windowsProcessTree = require(moduleName)
-    assertWindowsProcessTreeCreationTime({ module: windowsProcessTree })
-    // A stale build that still loads lacks the job exports shared Codex servers use.
-    if (typeof windowsProcessTree.createKillOnCloseJob !== 'function') {
-      throw new Error('stale build without the kill-on-close job exports; rebuild it')
-    }
+    assertWindowsProcessTreeCreationTime({ module: require(moduleName) })
     if (inspectWindowsProcessTreeAddon(windowsProcessTreeAddonPath()) === 'unpatched') {
       throw new Error(
         'the loaded addon still calls ReadProcessMemory, so it was not built from the patched ' +

@@ -26,7 +26,6 @@ import {
   nodeGypRebuildInvocation,
   stageWindowsProcessTreeNodeAddonApiHeaders,
   windowsProcessTreeAddonHasBreakawayLauncher,
-  KILL_ON_CLOSE_JOB_EXPORT,
   WINDOWS_PROCESS_TREE_PACKAGE_DIR as INSTALLED_PACKAGE_DIR
 } from './windows-process-tree-gyp-rebuild.mjs'
 
@@ -135,11 +134,7 @@ function assertPatchApplied() {
   const requiredLauncherSources = [
     ['binding.gyp', '"src/process_launch.cc"'],
     ['src/addon.cc', 'exports.Set("spawnOutsideJob"'],
-    ['src/process_launch.cc', 'CREATE_BREAKAWAY_FROM_JOB'],
-    // Shared Codex servers on Windows hold each server's tree in one of these jobs.
-    ['binding.gyp', '"src/process_job.cc"'],
-    ['src/addon.cc', `exports.Set("${KILL_ON_CLOSE_JOB_EXPORT}"`],
-    ['src/process_job.cc', 'JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE']
+    ['src/process_launch.cc', 'CREATE_BREAKAWAY_FROM_JOB']
   ]
   for (const [relativePath, expected] of requiredLauncherSources) {
     const filePath = join(PACKAGE_DIR, relativePath)
@@ -479,11 +474,6 @@ function main() {
     throw new Error(
       'The built addon does not export spawnOutsideJob. A relay would fall back to WMI, ' +
         'which refuses to launch it for a standard user.'
-    )
-  }
-  if (!readFileSync(built).includes(KILL_ON_CLOSE_JOB_EXPORT)) {
-    throw new Error(
-      `The built addon does not export ${KILL_ON_CLOSE_JOB_EXPORT}, so it was built without the job patch.`
     )
   }
 
