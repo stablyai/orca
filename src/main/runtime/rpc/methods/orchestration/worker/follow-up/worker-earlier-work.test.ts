@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import { WorkerStartParams } from '../../../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import { exposeWorker } from '../observation/worker-observation'
+import {
+  assertWorkerAdditionalDirectoriesMode,
+  assertWorkerLaunchPreferencesCreateTerminal
+} from '../start/launch/worker-launch-preferences'
 import { parseStartOptions } from './worker-earlier-work'
 
 describe('worker start_options additionalDirectories round-trip', () => {
@@ -76,5 +80,17 @@ describe('worker start_options additionalDirectories round-trip', () => {
         additionalDirectories: Array.from({ length: 65 }, (_, index) => `/dir/${index}`)
       }).success
     ).toBe(false)
+  })
+
+  it('refuses --add-dir when launching or reusing a terminal worker', () => {
+    expect(() => assertWorkerAdditionalDirectoriesMode(['/materials'], 'terminal')).toThrowError(
+      /terminal/
+    )
+    expect(() =>
+      assertWorkerLaunchPreferencesCreateTerminal({
+        terminal: 'term_1',
+        additionalDirectories: ['/materials']
+      })
+    ).toThrowError(/--add-dir/)
   })
 })

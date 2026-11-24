@@ -7,9 +7,15 @@ import {
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import { resolveDispatchCreator } from '../../runs/dispatch-creator'
+import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { OrcaSessionId } from '../../../../../../../shared/agent-session/identity/orca-session-address'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
+import { chatWorkerMode } from '../../chat-assignee-admission'
+import { assertWorkerAdditionalDirectoriesMode } from './launch/worker-launch-preferences'
 import {
   decideWorkerStartMode,
-  readWorkerStartModeSettings
+  readWorkerStartModeSettings,
+  resolveWorkerStartModeOnHost
 } from '../../structured-workers/orchestration-worker-start-mode'
 
 /** Workers started from a persistent agent's home, and every worker under them at any depth, start
@@ -73,6 +79,32 @@ export function lineageModeForResolvedAgent(
     settings: readWorkerStartModeSettings(runtime),
     chatLineage: true
   })
+}
+
+export async function resolveLocalWorkerStartMode(start: {
+  runtime: OrcaRuntimeService
+  mode: WorkerStartModeReceipt
+  chatLineage?: boolean
+  params: Parameters<typeof decideWorkerStartMode>[0]['params'] & {
+    additionalDirectories?: readonly string[]
+  }
+  agent: TuiAgent | undefined
+  worktreeId: string | undefined
+  chat: OrcaSessionId | null
+  createsWorktree: boolean
+}): Promise<WorkerStartModeReceipt> {
+  const decided = lineageModeForResolvedAgent(start.runtime, start.mode, start)
+  const hostMode = await resolveWorkerStartModeOnHost(
+    start.runtime,
+    decided,
+    start.worktreeId,
+    start.agent
+  )
+  const mode = chatWorkerMode(hostMode, start.chat)
+  if (!start.createsWorktree) {
+    assertWorkerAdditionalDirectoriesMode(start.params.additionalDirectories, mode.mode)
+  }
+  return mode
 }
 
 /** A lineage start that had to take a terminal says why on its item too, where its owner looks.

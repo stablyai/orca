@@ -105,11 +105,30 @@ export function assertWorkerLaunchPreferencesCreateTerminal(args: {
   terminal?: string
   model?: string
   effort?: string
+  additionalDirectories?: readonly string[]
 }): void {
   if (args.terminal && (args.model || args.effort)) {
     throw new OrchestrationError(
       'invalid_argument',
       '--model and --effort cannot be applied when reusing an existing terminal.'
+    )
+  }
+  if (args.terminal && args.additionalDirectories?.length) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      '--add-dir cannot be applied when reusing an existing terminal.'
+    )
+  }
+}
+
+export function assertWorkerAdditionalDirectoriesMode(
+  additionalDirectories: readonly string[] | undefined,
+  effectiveMode: string
+): void {
+  if (additionalDirectories?.length && effectiveMode !== 'chat') {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `--add-dir (${additionalDirectories.join(', ')}) cannot be used in ${effectiveMode} mode because terminal launches do not receive additionalDirectories.`
     )
   }
 }

@@ -96,6 +96,9 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     accountHome: params.accountHome,
     runtimeKind: params.runtimeKind,
     providerHandle: params.providerHandle,
+    additionalDirectories: params.additionalDirectories?.length
+      ? params.additionalDirectories
+      : undefined,
     // Adoption changes identity; transcript location is transient and excluded.
     adoptedProviderHandle: params.adopt?.providerHandle,
     expectedRuntimeFence: params.envelope.expectedRuntimeFence

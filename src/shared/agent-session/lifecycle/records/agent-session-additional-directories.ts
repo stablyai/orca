@@ -64,16 +64,72 @@ export function extractAdditionalDirectoriesFromArgs(
   return normalizeAdditionalDirectories(directories) ?? []
 }
 
-/** Merges persisted session directories with `--add-dir` entries from default agent args. */
+function isAbsoluteDirectoryPath(directory: string): boolean {
+  return (
+    directory.startsWith('/') || /^[A-Za-z]:[/\\]/.test(directory) || directory.startsWith('\\\\')
+  )
+}
+
+function normalizePosixSegments(raw: string): string {
+  const stack: string[] = []
+  for (const part of raw.split('/')) {
+    if (!part || part === '.') {
+      continue
+    }
+    if (part === '..') {
+      if (stack.length > 0) {
+        stack.pop()
+      }
+      continue
+    }
+    stack.push(part)
+  }
+  return `/${stack.join('/')}`
+}
+
+function resolveDirectoryAgainstCwd(directory: string, cwd: string): string {
+  if (isAbsoluteDirectoryPath(directory)) {
+    return directory
+  }
+  const driveMatch = /^([A-Za-z]:)([/\\].*)$/.exec(cwd)
+  if (driveMatch) {
+    const joined = `${driveMatch[2].replaceAll('\\', '/')}/${directory.replaceAll('\\', '/')}`
+    return `${driveMatch[1]}${normalizePosixSegments(joined).replaceAll('/', '\\')}`
+  }
+  if (cwd.startsWith('\\\\')) {
+    const parts = cwd.slice(2).split('\\').filter(Boolean)
+    const root = parts.length >= 2 ? `\\\\${parts[0]}\\${parts[1]}` : '\\\\'
+    const tail = `/${parts.slice(2).join('/')}/${directory.replaceAll('\\', '/')}`
+    const normalizedTail = normalizePosixSegments(tail).slice(1).replaceAll('/', '\\')
+    return normalizedTail ? `${root}\\${normalizedTail}` : root
+  }
+  return normalizePosixSegments(`${cwd}/${directory}`)
+}
+
+/** Merges persisted session directories with `--add-dir` entries, resolves relative defaults against `cwd`, and enforces the 64-entry bound. */
 export function resolveAdditionalDirectoriesFromLaunch(
   recordDirectories: readonly string[] | undefined,
   defaultArgs: string | undefined,
+  cwd?: string,
   shell?: AgentStartupShell
 ): string[] | undefined {
-  return normalizeAdditionalDirectories([
+  const combined = [
     ...(recordDirectories ?? []),
     ...extractAdditionalDirectoriesFromArgs(defaultArgs, shell)
-  ])
+  ]
+  const resolved = cwd
+    ? combined.map((directory) => {
+        const trimmed = directory.trim()
+        return trimmed ? resolveDirectoryAgainstCwd(trimmed, cwd) : trimmed
+      })
+    : combined
+  const normalized = normalizeAdditionalDirectories(resolved)
+  if (normalized && normalized.length > MAX_ADDITIONAL_DIRECTORIES) {
+    throw new Error(
+      `Too many additional directories (${normalized.length}); maximum allowed is ${MAX_ADDITIONAL_DIRECTORIES}.`
+    )
+  }
+  return normalized
 }
 
 export function isAgentSessionAdditionalDirectories(value: unknown): value is string[] {

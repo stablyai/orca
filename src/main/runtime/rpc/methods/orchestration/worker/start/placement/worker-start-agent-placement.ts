@@ -22,6 +22,7 @@ import {
 import { createWorkerWorktree, type WorkerWorktreeCreationTarget } from './worker-worktree-creation'
 import type { ReopenedWorker, WorkerFollowUp } from '../../follow-up/worker-follow-up-placement'
 import {
+  assertWorkerAdditionalDirectoriesMode,
   structuredWorkerLaunchReceipt,
   type OrchestrationWorkerLaunchReceipt
 } from '../launch/worker-launch-preferences'
@@ -168,6 +169,9 @@ async function launchWorkerAgent(
           })
         },
         createWorktree: async ({ startupAgent, promisedAgentChat, onWorkspaceCreated }) => {
+          if (startupAgent !== undefined) {
+            assertWorkerAdditionalDirectoriesMode(args.params.additionalDirectories, 'terminal')
+          }
           created = await createWorkerWorktree({
             runtime: args.runtime,
             db: args.db,
@@ -276,6 +280,7 @@ function workerSurfaceFactory(
       }
     },
     createTerminalAgent: async ({ worktreeId }) => {
+      assertWorkerAdditionalDirectoriesMode(args.params.additionalDirectories, 'terminal')
       recordSurfaceStage(worktreeId)
       const terminal = await createExistingWorktreeWorkerTerminal({
         runtime: args.runtime,

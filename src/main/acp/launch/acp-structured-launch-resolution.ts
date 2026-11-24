@@ -275,6 +275,7 @@ export function acpStructuredLaunchPart(
       spec.agent === 'antigravity'
         ? basis.commandSettings().agentDefaultArgs?.antigravity
         : undefined,
+      cwd,
       record.location.wslDistro ? 'posix' : undefined
     )
     const args = [
