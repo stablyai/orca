@@ -20,6 +20,7 @@ import slackLogo from '@/assets/connector-brands/slack.svg'
 import stripeLogo from '@/assets/connector-brands/stripe.svg'
 import supabaseLogo from '@/assets/connector-brands/supabase.svg'
 import vercelLogo from '@/assets/connector-brands/vercel.svg'
+import { FeishuIcon } from '../../icons/FeishuIcon'
 import { GitHubIcon } from '../../icons/GitHubIcon'
 import { GoogleIcon } from '../../icons/GoogleIcon'
 import { SlackIcon } from '../../icons/SlackIcon'
@@ -41,6 +42,7 @@ type BotAppBrand = {
 
 /** By connector id or BOT_MCP_APPS id; a new MCP app adds its logo here, and its tile to LOGO_TILES.brand. */
 const BRANDS: Readonly<Record<string, BotAppBrand>> = {
+  'feishu-local': { Icon: FeishuIcon },
   slack: { logo: slackLogo, Icon: SlackIcon },
   google: { logo: googleLogo, Icon: GoogleIcon },
   linear: { Icon: LinearIcon },

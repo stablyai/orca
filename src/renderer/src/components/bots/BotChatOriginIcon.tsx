@@ -5,6 +5,7 @@ import { StateIndicatorTooltip } from '@/components/agent/status/StateIndicatorT
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { BotChatOrigin, BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
+import { FeishuIcon } from '../icons/FeishuIcon'
 import { GitHubIcon } from '../icons/GitHubIcon'
 import { LinearIcon } from '../icons/LinearIcon'
 import { usageLimitStopTip } from './BotUsageLimitMark'
@@ -13,7 +14,7 @@ import { SlackIcon } from '../icons/SlackIcon'
 
 const ORIGIN_ICONS = {
   home: House,
-  'feishu-local': MessageSquare,
+  'feishu-local': FeishuIcon,
   slack: SlackIcon,
   linear: LinearIcon,
   github: GitHubIcon,
