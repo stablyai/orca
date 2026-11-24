@@ -10,6 +10,7 @@ import {
   tellUnpairedPeerQuestions
 } from '../../federation/peer-mail/peer-questions-out'
 import { OrchestrationDb } from '../orchestration-db'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { sessionAwaitsMail, sessionAwaitsMailSql } from './bot-request-sender-pending'
 
 // A finished run chat closes only once nothing it asked is owed back: an open local bot request
@@ -125,6 +126,56 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(reply.id)
   expect(sessionAwaitsMail(db, ['asking'])).toBe(false)
 
+  // A handoff to one chat and a question to another in the same thread: each is owed by its own
+  // recipient, so one reply settles only its own.
+  const delivered = (id: string) =>
+    db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(id)
+  for (const [to, type] of [
+    ['orca_session_id:a', 'handoff'],
+    ['orca_session_id:b', 'question']
+  ] as const) {
+    delivered(
+      db.insertMessage({ from: 'orca_session_id:two', to, subject: 'Job', type, threadId: 'job' })
+        .id
+    )
+  }
+  delivered(
+    db.insertMessage({
+      from: 'orca_session_id:a',
+      to: 'orca_session_id:two',
+      subject: 'Done',
+      threadId: 'job'
+    }).id
+  )
+  expect(sessionAwaitsMail(db, ['two'])).toBe(true)
+  delivered(
+    db.insertMessage({
+      from: 'orca_session_id:b',
+      to: 'orca_session_id:two',
+      subject: 'Yes',
+      threadId: 'job'
+    }).id
+  )
+  expect(sessionAwaitsMail(db, ['two'])).toBe(false)
+
+  // A report waiting in the Run the chat coordinates.
+  const coordinator = testOrcaSessionId('00000000-0000-4000-8000-0000000c0de0')
+  const run = db.createRun({
+    objective: 'run chat',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null,
+    coordinatorOrcaSessionId: coordinator
+  }).id
+  const report = db.insertMessage({
+    from: 'worker',
+    to: `run:${run}`,
+    subject: 'Report',
+    runId: run
+  })
+  expect(sessionAwaitsMail(db, [coordinator])).toBe(true)
+  delivered(report.id)
+  expect(sessionAwaitsMail(db, [coordinator])).toBe(false)
+
   // A worker the chat started reports back to it.
   const task = db.createTask({ runId: 'run_legacy_local', spec: 'Check the build' })
   const { dispatch } = db.createStartingWorkerDispatch({
@@ -143,7 +194,7 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   // Looked up by sender and recipient, never by scanning the mail.
   const plan = db.db
     .prepare(`EXPLAIN QUERY PLAN ${sessionAwaitsMailSql(2)}`)
-    .all('x', 'y', 'x', 'y', 'x', 'y', 'x', 'y', 'x', 'y')
+    .all('x', 'y', 'x', 'y', 'x', 'y', 'x', 'y', 'x', 'y', 'x', 'y')
     .map((row) => String(row.detail))
   expect(plan.filter((detail) => detail.startsWith('SCAN'))).toEqual([])
 })

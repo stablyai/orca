@@ -88,6 +88,13 @@ export class BotRunChatCloser {
     })
   }
 
+  /** A host-wide hold ended (usage-limit auto-continue turned off): every parked chat counts down. */
+  wakeAll(): void {
+    void this.serial(async () => {
+      await this.unpark([...(await this.list.load()).values()])
+    })
+  }
+
   /** These bots' items changed, so an item holding one of their parked chats may have closed. */
   itemsChanged(botIds: readonly string[]): void {
     void this.serial(async () => {

@@ -117,7 +117,16 @@ export function startBotRunChatCloser(runtime: OrcaRuntimeService, store: Store)
       ).stopped
   })
   onAgentSessionViewerLeft((sessionId) => wakeRunChat(runtime, sessionId))
-  store.onSettingsChanged(() => closer.settingsChanged())
+  let autoContinue = store.getSettings().nativeChatAutoContinueAfterUsageLimit
+  store.onSettingsChanged(() => {
+    closer.settingsChanged()
+    // A chat waiting on a usage-limit continuation stops waiting when continuing is turned off.
+    const next = store.getSettings().nativeChatAutoContinueAfterUsageLimit
+    if (next !== autoContinue) {
+      autoContinue = next
+      closer.wakeAll()
+    }
+  })
   runtime.onBotsWritten(() => closer.settingsChanged())
   closer.rearm()
   return closer
