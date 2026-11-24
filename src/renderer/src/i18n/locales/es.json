@@ -1560,7 +1560,11 @@
       },
       "projectHostSetupOptions": {
         "hostLocalGitProject": "Este proyecto no tiene remoto de Git coincidente",
-        "hostLocalFolderProject": "Los proyectos de carpeta no pueden vincularse a otros hosts"
+        "hostLocalFolderProject": "Los proyectos de carpeta no pueden vincularse a otros hosts",
+        "pendingNotSetUp": "Proyecto registrado en este host, pero sin configurar",
+        "pendingSettingUp": "La configuración del proyecto está en curso",
+        "pendingError": "La configuración del proyecto requiere atención",
+        "pendingUnsupported": "El proyecto no es compatible con este host"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+clic busca la versión candidata (RC) más reciente. {{perfKey}}+clic busca la compilación más reciente para pruebas de rendimiento.",
@@ -21247,6 +21251,12 @@
       "caveat": "Esto abre una nueva página en el host remoto en la última dirección de esta página. El estado de sesión iniciada y otros estados transitorios pueden diferir, y una página que provenga del envío de un formulario se abrirá en blanco.",
       "failed": "No se pudo abrir esta página en el host remoto. Comprueba la conexión y vuelve a intentarlo."
     },
+    "deviceMove": {
+      "toThisComputer": "Abrir en este ordenador",
+      "toHost": "Abrir en {{host}}",
+      "tooltip": "Abre esta dirección en una pestaña nueva en el otro lado y cierra esta. Puede que tengas que volver a iniciar sesión.",
+      "failedToThisComputer": "No se pudo abrir esta página en este ordenador."
+    },
     "sshRoute": {
       "preparingTitle": "Conectando a través del host SSH",
       "errorTitle": "Enrutamiento del navegador por SSH no disponible",
@@ -23899,6 +23909,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "Actualizar modelos",
     "catalogUnsupportedLaunch": "Los modelos de {{agent}} no están disponibles en este equipo. Tus opciones actuales se siguen aplicando.",
     "catalogEmpty": "{{agent}} no tiene modelos disponibles.",
     "search": "Buscar, p. ej., Opus 5.5…",

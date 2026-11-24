@@ -2429,7 +2429,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "尚未设置项目位置",
         "hostLocalGitProject": "此项目没有匹配的 Git 远程仓库",
-        "hostLocalFolderProject": "文件夹项目无法关联到其他主机"
+        "hostLocalFolderProject": "文件夹项目无法关联到其他主机",
+        "pendingNotSetUp": "已在此主机跟踪项目，但尚未设置",
+        "pendingSettingUp": "项目设置进行中",
+        "pendingError": "项目设置需要处理",
+        "pendingUnsupported": "此主机不支持该项目"
       },
       "updateCheckClickOptions": {
         "releaseHint": "按住 {{rcKey}} 点击可检查最新候选版本（RC），按住 {{perfKey}} 点击可检查最新性能测试版",
@@ -23409,6 +23413,12 @@
       "caveat": "这会在远程主机上按此页面最后的地址打开新页面，登录状态及其他临时页面状态可能不同，如果页面来自表单提交，新页面将为空白",
       "failed": "无法在远程主机上打开此页面，请检查连接后重试"
     },
+    "deviceMove": {
+      "toThisComputer": "在这台电脑上打开",
+      "toHost": "在 {{host}} 上打开",
+      "tooltip": "在另一端的新标签页中打开此地址，并关闭此标签页。你可能需要重新登录。",
+      "failedToThisComputer": "无法在这台电脑上打开此页面。"
+    },
     "sshRoute": {
       "preparingTitle": "正在通过 SSH 主机连接",
       "errorTitle": "SSH 浏览器路由不可用",
@@ -26238,6 +26248,7 @@
     "waitForImageUploads": "请等待图片上传完成，然后重试创建 PR"
   },
   "agentPicker": {
+    "refreshModels": "刷新模型",
     "catalogUnsupportedLaunch": "此主机上无法使用 {{agent}} 模型。当前选择仍会生效",
     "catalogLoadFailed": "无法加载 {{agent}} 模型",
     "catalogLoading": "正在加载模型…",
@@ -28136,7 +28147,6 @@
         "title": "标题"
       },
       "filter": {
-        "chat": "聊天",
         "clearAll": "清除筛选",
         "label": "筛选事项",
         "needsYou": "仅显示需要你处理的",
@@ -28997,23 +29007,12 @@
       "newThreadHint": "全新开始",
       "newThreadTab": "新话题",
       "items": {
-        "thisGroup": "此群组",
-        "thread": "话题",
-        "all": "成员的全部工作",
         "orNames": "{{names}} 或 {{last}}",
         "emptyBotsNeedsYou": "{{names}} 没有需要你处理的事项",
         "emptyBots": "没有来自 {{names}} 的事项",
         "emptyTitle": "此群组还没有事项",
-        "emptyBody": "当 {{names}} 在此群组中接手任务时，会显示在这里",
-        "showAll": "显示成员的全部工作",
         "filterNamed": "筛选事项，当前筛选：{{filter}}",
-        "filterBot": "Bot",
-        "outside_one": "此群组外还有 {{count}} 项",
-        "outside_other": "此群组外还有 {{count}} 项",
-        "outsideRoom_one": "此聊天室外还有 {{count}} 项",
-        "outsideRoom_other": "此聊天室外还有 {{count}} 项",
-        "outsideThread_one": "此话题外还有 {{count}} 项",
-        "outsideThread_other": "此话题外还有 {{count}} 项"
+        "filterBot": "Bot"
       },
       "panel": {
         "membersMore": "成员：{{names}} 及另外 {{count}} 个",

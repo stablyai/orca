@@ -4570,26 +4570,12 @@
       "peerTold": "{{from}} hat {{to}} Bescheid gegeben",
       "startAConversationWithThisGroupMentionBots": "Starte eine Unterhaltung mit dieser Gruppe. Erwähne Bots mit @Name oder @everyone.",
       "items": {
-        "thisGroup": "Diese Gruppe",
-        "thread": "Thread",
-        "all": "Ihre gesamte Arbeit",
-        "orNames": "{{names}} oder {{last}}",
-        "outsideRoom_one": "{{count}} weiteres außerhalb dieses Raums",
-        "outsideRoom_other": "{{count}} weitere außerhalb dieses Raums",
-        "outsideThread_one": "{{count}} weiteres außerhalb dieses Threads",
-        "outsideThread_other": "{{count}} weitere außerhalb dieses Threads",
-        "outside_one": "{{count}} weiteres außerhalb dieser Gruppe",
-        "outside_other": "{{count}} weitere außerhalb dieser Gruppe",
         "emptyTitle": "Noch keine Elemente aus dieser Gruppe",
-        "emptyBody": "Wenn {{names}} in dieser Gruppe etwas übernehmen, erscheint es hier.",
         "needsYouCount_one": "{{count}} braucht dich",
         "needsYouCount_other": "{{count}} brauchen dich",
         "workingCount_one": "{{count}} arbeitet",
         "workingCount_other": "{{count}} arbeiten",
         "filterBot": "Bot",
-        "outsideRoom": "{{count}} weiteres außerhalb dieses Raums",
-        "outsideThread": "{{count}} weiteres außerhalb dieses Threads",
-        "outside": "{{count}} weiteres außerhalb dieser Gruppe",
         "needsYouCount": "{{count}} braucht dich",
         "workingCount": "{{count}} arbeitet"
       },
@@ -4627,8 +4613,7 @@
     },
     "items": {
       "filter": {
-        "clearAll": "Filter zurücksetzen",
-        "chat": "Chat"
+        "clearAll": "Filter zurücksetzen"
       },
       "tab": "Einträge",
       "activity": {

@@ -393,6 +393,12 @@
       "caveat": "Bu işlem, uzak sunucuda bu sayfanın son adresinde yeni bir sayfa açar. Oturum açma durumu ve diğer geçici sayfa verileri farklı olabilir, form gönderiminden gelen bir sayfa boş açılır.",
       "failed": "Bu sayfa uzak sunucuda açılamadı. Bağlantıyı kontrol edip tekrar deneyin."
     },
+    "deviceMove": {
+      "toThisComputer": "Bu bilgisayarda aç",
+      "toHost": "{{host}} üzerinde aç",
+      "tooltip": "Bu adresi diğer tarafta yeni bir sekmede açar ve bunu kapatır. Yeniden oturum açmanız gerekebilir.",
+      "failedToThisComputer": "Bu sayfa bu bilgisayarda açılamadı."
+    },
     "sshRoute": {
       "preparingTitle": "SSH sunucusu üzerinden bağlanılıyor",
       "errorTitle": "SSH tarayıcı yönlendirmesi kullanılamıyor",
@@ -2199,7 +2205,11 @@
       },
       "projectHostSetupOptions": {
         "hostLocalGitProject": "Bu projenin eşleşen bir Git uzak deposu yok",
-        "hostLocalFolderProject": "Klasör projeleri diğer sunuculara bağlanamaz"
+        "hostLocalFolderProject": "Klasör projeleri diğer sunuculara bağlanamaz",
+        "pendingNotSetUp": "Proje bu sunucuda izleniyor ancak kurulmadı",
+        "pendingSettingUp": "Proje kurulumu sürüyor",
+        "pendingError": "Proje kurulumu dikkat gerektiriyor",
+        "pendingUnsupported": "Proje bu sunucuda desteklenmiyor"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+tıklama en son sürüm adayını (RC), {{perfKey}}+tıklama ise en son performans testi derlemesini denetler.",
@@ -24702,6 +24712,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "Modelleri yenile",
     "catalogUnsupportedLaunch": "{{agent}} modelleri bu sunucuda kullanılamıyor. Geçerli seçimleriniz uygulanmaya devam eder.",
     "catalogEmpty": "{{agent}} için kullanılabilir model yok.",
     "setByArguments": "Argümanlarınızla ayarlandı",

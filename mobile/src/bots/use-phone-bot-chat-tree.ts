@@ -37,18 +37,24 @@ export const botChatTreeRead = bindDeferredRpcOperation(
   })
 )
 
-export type PhoneBotChatTree =
+export type PhoneBotChatTree = {
+  currentReads: number | null
+  refreshFailed: boolean
+  retry: () => void
+} &
   /** Not answered yet: Activity shows a spinner. */
-  | { kind: 'loading' }
-  /** The first read failed: Activity says so, with Retry. */
-  | { kind: 'failed'; retry: () => void }
-  | {
-      kind: 'tree'
-      chats: BotChatTreeChat[]
-      loadMore: (chatId: string) => void
-      /** Asks the host to search every chat and worker. */
-      search: BotChatSearchAsk
-    }
+  (
+    | { kind: 'loading' }
+    /** The first read failed: Activity says so, with Retry. */
+    | { kind: 'failed' }
+    | {
+        kind: 'tree'
+        chats: BotChatTreeChat[]
+        loadMore: (chatId: string) => void
+        /** Asks the host to search every chat and worker. */
+        search: BotChatSearchAsk
+      }
+  )
 
 /** The bot's chats with their workers from the host the route reaches (a paired server's too);
  *  re-read with the route's other reads while `showing`. */
@@ -65,9 +71,20 @@ export function usePhoneBotChatTree({
   reads: number
 }): PhoneBotChatTree {
   // `tree: undefined` until the host answers; null when its first read failed.
-  const [read, setRead] = useState<{ botId: string; tree: BotChatTreeRead | null | undefined }>({
+  const [read, setRead] = useState<{
+    botId: string
+    tree: BotChatTreeRead | null | undefined
+    client: RpcClient | null
+    reads: number
+    attempt: number
+    failed: boolean
+  }>({
     botId,
-    tree: undefined
+    tree: undefined,
+    client: null,
+    reads: -1,
+    attempt: -1,
+    failed: false
   })
   // Finished workers shown past the host's newest, by chat.
   const [pages, setPages] = useState<{
@@ -78,7 +95,7 @@ export function usePhoneBotChatTree({
   const [attempt, setAttempt] = useState(0)
   // Retry shows the spinner again until the host answers.
   const retry = useCallback(() => {
-    setRead((shown) => (shown.tree === null ? { botId: shown.botId, tree: undefined } : shown))
+    setRead((shown) => (shown.tree === null ? { ...shown, tree: undefined } : shown))
     setAttempt((count) => count + 1)
   }, [])
 
@@ -90,7 +107,9 @@ export function usePhoneBotChatTree({
     // A failed read keeps what shows; a first one that fails says so.
     const settleFailed = () =>
       setRead((shown) =>
-        shown.botId === botId && shown.tree !== undefined ? shown : { botId, tree: null }
+        shown.botId === botId && shown.tree
+          ? { ...shown, failed: true }
+          : { botId, tree: null, client, reads, attempt, failed: true }
       )
     void botChatTreeRead
       .request(client, { botId })
@@ -100,7 +119,7 @@ export function usePhoneBotChatTree({
           return
         }
         if (answer.kind === 'answered') {
-          setRead({ botId, tree: answer.value })
+          setRead({ botId, tree: answer.value, client, reads, attempt, failed: false })
         } else {
           settleFailed()
         }
@@ -181,8 +200,17 @@ export function usePhoneBotChatTree({
     [client, botId]
   )
 
+  const currentReads =
+    read.botId === botId &&
+    read.client === client &&
+    !read.failed &&
+    read.attempt === attempt &&
+    tree
+      ? read.reads
+      : null
+  const status = { currentReads, refreshFailed: read.botId === botId && read.failed, retry }
   if (chats) {
-    return { kind: 'tree', chats, loadMore, search }
+    return { kind: 'tree', chats, loadMore, search, ...status }
   }
-  return tree === undefined ? { kind: 'loading' } : { kind: 'failed', retry }
+  return tree === undefined ? { kind: 'loading', ...status } : { kind: 'failed', ...status }
 }

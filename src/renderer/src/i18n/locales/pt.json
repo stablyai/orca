@@ -1315,6 +1315,12 @@
       "caveat": "Isso abre uma nova página no host remoto no último endereço desta página. O login e outros estados temporários da página podem ser diferentes, e uma página originada de um envio de formulário abre em branco.",
       "failed": "Não foi possível abrir esta página no host remoto. Verifique a conexão e tente novamente."
     },
+    "deviceMove": {
+      "toThisComputer": "Abrir neste computador",
+      "toHost": "Abrir em {{host}}",
+      "tooltip": "Abre este endereço em uma nova aba do outro lado e fecha esta. Talvez seja necessário entrar novamente.",
+      "failedToThisComputer": "Não foi possível abrir esta página neste computador."
+    },
     "sshRoute": {
       "preparingTitle": "Conectando através do host SSH",
       "errorTitle": "Roteamento de navegador via SSH indisponível",
@@ -3297,7 +3303,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "Local do projeto não definido",
         "hostLocalGitProject": "Este projeto não tem um remoto Git correspondente",
-        "hostLocalFolderProject": "Projetos de pasta não podem ser vinculados a outros hosts"
+        "hostLocalFolderProject": "Projetos de pasta não podem ser vinculados a outros hosts",
+        "pendingNotSetUp": "Projeto rastreado neste host, mas não configurado",
+        "pendingSettingUp": "Configuração do projeto em andamento",
+        "pendingError": "A configuração do projeto precisa de atenção",
+        "pendingUnsupported": "Projeto não suportado neste host"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Atualize o servidor para ver as portas nos hosts SSH dele.",
@@ -24438,6 +24448,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "Atualizar modelos",
     "catalogUnsupportedLaunch": "Os modelos de {{agent}} não estão disponíveis neste host. Suas escolhas atuais continuam valendo.",
     "catalogEmpty": "{{agent}} não tem modelos disponíveis.",
     "search": "Pesquisar, por exemplo, Opus 5.5…",

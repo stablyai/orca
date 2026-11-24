@@ -393,6 +393,12 @@
       "caveat": "Dies öffnet auf dem Remote-Host eine neue Seite mit der zuletzt verwendeten Adresse dieser Seite. Der Anmeldestatus und andere vorübergehende Seitenzustände können abweichen. Eine durch Formularübermittlung entstandene Seite wird leer geöffnet.",
       "failed": "Diese Seite konnte auf dem Remote-Host nicht geöffnet werden. Die Verbindung prüfen und erneut versuchen."
     },
+    "deviceMove": {
+      "toThisComputer": "Auf diesem Computer öffnen",
+      "toHost": "Auf {{host}} öffnen",
+      "tooltip": "Öffnet diese Adresse in einem neuen Tab auf der anderen Seite und schließt diesen. Eventuell musst du dich erneut anmelden.",
+      "failedToThisComputer": "Diese Seite konnte auf diesem Computer nicht geöffnet werden."
+    },
     "sshRoute": {
       "preparingTitle": "Verbindung über den SSH-Host wird hergestellt",
       "errorTitle": "SSH-Routing für den Browser nicht verfügbar",
@@ -2106,7 +2112,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "Projektverzeichnis nicht festgelegt",
         "hostLocalGitProject": "Kein passendes Git-Remote für dieses Projekt",
-        "hostLocalFolderProject": "Ordnerprojekte lassen sich nicht mit anderen Hosts verknüpfen"
+        "hostLocalFolderProject": "Ordnerprojekte lassen sich nicht mit anderen Hosts verknüpfen",
+        "pendingNotSetUp": "Projekt auf diesem Host erfasst, aber nicht eingerichtet",
+        "pendingSettingUp": "Projekteinrichtung läuft",
+        "pendingError": "Projekteinrichtung erfordert Aufmerksamkeit",
+        "pendingUnsupported": "Projekt wird auf diesem Host nicht unterstützt"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Aktualisieren Sie den Server, um Ports auf seinen SSH-Hosts anzuzeigen.",
@@ -24583,6 +24593,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "Modelle aktualisieren",
     "catalogUnsupportedLaunch": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Deine aktuelle Auswahl gilt weiterhin.",
     "catalogEmpty": "Für {{agent}} sind keine Modelle verfügbar.",
     "setByArguments": "Durch Argumente festgelegt",

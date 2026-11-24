@@ -197,6 +197,17 @@ it('never skips a line an earlier comment or the answer itself answered', () => 
   expect(lastComment().data.skipped).toBeUndefined()
 })
 
+// Send anyway reads only the events from its ask on, plus earlier asks: their lines still decide it.
+it('skips the same lines when a comment answers an earlier set after a later one was asked', () => {
+  const { ask, comment, lastComment } = item()
+  ask([HOSTS])
+  const second = ask([GO, MERGE])
+  // Answers the earlier set's line, so it takes none of the later set's lines by order.
+  comment(`${HOSTS} → Yes`)
+  comment(`${MERGE} → Yes`, second, [0, 1])
+  expect(lastComment().data.skipped).toEqual([GO])
+})
+
 it('holds the latest set until every question in it is answered', () => {
   const { store, uid, ask, comment, view } = item()
   ask([MERGE])
