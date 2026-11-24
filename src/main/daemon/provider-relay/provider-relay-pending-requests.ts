@@ -137,11 +137,13 @@ export class ProviderRelayPendingRequests {
       return
     }
     // A Claude answer keeps its request id inside `response`; only that line is parsed.
+    // Codex writes `error` before `id`; with no id ahead of the payload, this one line is parsed.
+    const answerId = field('id')?.value
     const answerKey =
-      type === 'control_response'
+      type === 'control_response' || ((field('result') || field('error')) && answerId === undefined)
         ? this.responseKeyOf(line)
         : field('result') || field('error')
-          ? rpcId(field('id')?.value)
+          ? rpcId(answerId)
           : null
     if (answerKey === this.initializeKey) {
       this.initializeResult = line

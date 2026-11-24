@@ -5,6 +5,7 @@ import {
   encodeBinaryRelayLineFrame,
   type DaemonStreamFraming
 } from '../transport/framing/daemon-stream-binary-framing'
+import { isHighSurrogate } from './provider-relay-surrogate-tail'
 
 /** Keeps each event frame well under the stream's line cap even after JSON escaping. */
 const EVENT_PIECE_CHARS = 1024 * 1024
@@ -12,8 +13,7 @@ const EVENT_PIECE_CHARS = 1024 * 1024
 /** A piece never ends between the halves of a surrogate pair, so each piece encodes as UTF-8. */
 function pieceEnd(line: string, offset: number): number {
   const end = Math.min(offset + EVENT_PIECE_CHARS, line.length)
-  const last = line.charCodeAt(end - 1)
-  return end < line.length && last >= 0xd800 && last <= 0xdbff ? end - 1 : end
+  return end < line.length && isHighSurrogate(line.charCodeAt(end - 1)) ? end - 1 : end
 }
 
 /** The client's event stream; its close detaches the relay, as a closing stream detaches a PTY. */

@@ -20,7 +20,8 @@ export type ProviderRelayRequest =
   /**
    * Must be a request, never a notification: a full agent input refuses it, and only a reply can say
    * so. Data over `RELAY_WRITE_CHUNK_CHARS` (a large image prompt) is sent as consecutive writes of
-   * at most that many chars; the agent's stdin is a byte stream, so a line may span writes.
+   * at most that many chars; the agent's stdin is a byte stream, so a line may span writes, and a
+   * surrogate pair split between two writes is joined before it is encoded.
    */
   | { id: string; type: 'relayWrite'; payload: { relayId: string; data: string } }
   | { id: string; type: 'relayAck'; payload: { relayId: string; seq: number } }

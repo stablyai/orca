@@ -125,6 +125,8 @@ type MemoryTailReplay = {
   current: () => boolean
   deliver: (record: ProviderRelayRecord) => void
   drained?: () => Promise<void>
+  /** Runs synchronously with the check that found nothing left, before the promise settles. */
+  caughtUp: () => void
 }
 
 /** Sends memory records after `after`, waiting for the socket after each; null once superseded. */
@@ -140,6 +142,7 @@ export async function replayMemoryTail(replay: MemoryTailReplay): Promise<number
       index = at === -1 ? memory.length : at
     }
     if (index >= memory.length) {
+      replay.caughtUp()
       return after
     }
     const record = memory[index++]

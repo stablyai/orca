@@ -156,8 +156,10 @@ export function leadingJsonProperties(
       cursor += 1
       continue
     }
-    const match = /^-?(?:0|[1-9]\d*)/.exec(prefix.slice(cursor))
-    if (!match) {
+    // The whole JSON number, so `1e3` or `1.5` is never read as a different id than it is.
+    const match = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(prefix.slice(cursor))
+    // A number running to the end of the prefix may be cut short, so it is not read.
+    if (!match || cursor + match[0].length >= prefix.length) {
       break
     }
     properties.push({ key: String(key), value: Number(match[0]) })

@@ -172,15 +172,14 @@ export class ProviderRelaySpool {
       after,
       current,
       deliver: this.options.deliver,
-      drained: this.options.drained
+      drained: this.options.drained,
+      // Switched in the same step as the final check, so no append can land between them.
+      caughtUp: () => {
+        this.mode = 'attached'
+        this.updatePressure()
+      }
     })
-    if (tail === null) {
-      return this.nextSeqValue - 1
-    }
-    after = tail
-    this.mode = 'attached'
-    this.updatePressure()
-    return Math.min(after, this.nextSeqValue - 1)
+    return tail === null ? this.nextSeqValue - 1 : Math.min(tail, this.nextSeqValue - 1)
   }
 
   /** A takeover holds live records back until its own replay, so none reaches the new client twice. */
@@ -248,7 +247,8 @@ export class ProviderRelaySpool {
         : [this.memoryBytes, this.memoryCap]
     const paused = !this.disposed && (this.paused ? held >= cap / 2 : held >= cap)
     // Asked once per crossing, so a client can ack rarely and still never stall the agent.
-    const ackWanted = this.mode !== 'detached' && held >= cap / 2
+    // Only while streaming live: during a replay the client has nothing new to ack yet.
+    const ackWanted = this.mode === 'attached' && held >= cap / 2
     if (ackWanted && !this.ackAsked) {
       this.options.onAckWanted?.(this.nextSeqValue - 1)
     }
