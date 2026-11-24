@@ -12,7 +12,7 @@ import { deferredCodeParamsSchema } from '../bridge/native-capabilities/bridge-n
 export function useDeferredCodeServer(
   hostId: string,
   buildId: string | null,
-  store: GenerationStore
+  store: Pick<GenerationStore, 'fillDeferredAssets'>
 ): (params: unknown) => Promise<Record<string, never>> {
   const { client, clientId } = useHostClient(hostId)
   const clientRef = useRef(client)

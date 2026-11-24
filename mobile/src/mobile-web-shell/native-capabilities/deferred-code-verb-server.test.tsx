@@ -6,13 +6,11 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { createFakeGenerationFileSystem } from '../generations/generation-file-system-fake'
 import { deferredAssetsFiller } from '../generations/generation-deferred-assets'
-import type { GenerationStore } from '../generations/generation-store'
+import type { MobileWebBundleManifestRead } from '../../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import { useDeferredCodeServer } from './deferred-code-verb-server'
 
-const live = vi.hoisted(() => ({
-  host: { client: null as unknown, clientId: null as string | null },
-  fetchedWith: [] as string[]
-}))
+type Live = { host: { client: unknown; clientId: string | null }; fetchedWith: string[] }
+const live = vi.hoisted((): Live => ({ host: { client: null, clientId: null }, fetchedWith: [] }))
 
 vi.mock('expo-crypto', async (original) => {
   const { createHash: hash } = await import('node:crypto')
@@ -45,8 +43,18 @@ const asset = {
   path: 'assets/engine.js',
   sha256: createHash('sha256').update(engine).digest('hex'),
   byteLength: engine.byteLength,
+  contentType: 'text/javascript',
   kind: 'script',
   deferred: true
+}
+const manifest: MobileWebBundleManifestRead = {
+  schemaVersion: 1,
+  buildId: BUILD,
+  minCompatibleRuntimeProtocolVersion: 0,
+  runtimeProtocolVersion: 0,
+  entrypoint: 'index.html',
+  totalBytes: engine.byteLength,
+  assets: [asset]
 }
 let renderer: ReactTestRenderer | undefined
 
@@ -79,7 +87,7 @@ function client(tag: string, initial: ConnectionState) {
 function setup() {
   const fs = createFakeGenerationFileSystem()
   const directory = `${fs.rootUri}/generation`
-  let held: PromiseWithResolvers<void> | null = null
+  let held: { promise: Promise<void>; resolve: () => void } | null = null
   const scanEntered = Promise.withResolvers<void>()
   let queue: Promise<unknown> = Promise.resolve()
   const fill = deferredAssetsFiller(
@@ -96,10 +104,10 @@ function setup() {
         scanEntered.resolve()
         await release.promise
       }
-      return { buildId: BUILD, directory, manifest: { assets: [asset] } as never }
+      return { buildId: BUILD, directory, manifest }
     }
   )
-  const store = { fillDeferredAssets: fill } as unknown as GenerationStore
+  const store = { fillDeferredAssets: fill }
   let serve: (params: unknown) => Promise<unknown> = async () => undefined
   function Document() {
     serve = useDeferredCodeServer('host-a', BUILD, store)
@@ -132,15 +140,6 @@ function setup() {
   }
 }
 
-const settled = (request: Promise<unknown>) =>
-  Promise.race([
-    request.then(
-      () => 'settled',
-      () => 'rejected'
-    ),
-    new Promise((resolve) => setTimeout(() => resolve('stranded'), 500))
-  ])
-
 it('a replacement credential never joins the retired document fill and gets a working engine', async () => {
   const doc = setup()
   const a = client('A', 'connected')
@@ -153,8 +152,8 @@ it('a replacement credential never joins the retired document fill and gets a wo
   live.host = { client: client('B', 'connected'), clientId: 'token-b' }
   await doc.mount()
   hold.release.resolve()
-  expect(await settled(doc.request())).toBe('settled')
-  expect(await settled(original)).toBe('rejected')
+  await expect(doc.request()).resolves.toEqual({})
+  await expect(original).rejects.toThrow('has closed')
   expect(await doc.engineOnDisk()).toBe(true)
   expect(live.fetchedWith).toEqual(['B'])
 })
@@ -168,8 +167,8 @@ it('a retired document stops waiting on its closed client', async () => {
   a.set('disconnected')
   live.host = { client: client('B', 'connected'), clientId: 'token-b' }
   await doc.mount()
-  expect(await settled(original)).toBe('rejected')
-  expect(await settled(doc.request())).toBe('settled')
+  await expect(original).rejects.toThrow('has closed')
+  await expect(doc.request()).resolves.toEqual({})
   expect(live.fetchedWith).toEqual(['B'])
 })
 
@@ -186,8 +185,8 @@ it('keeps sharing the fill across a same-credential reopen', async () => {
   await doc.mount()
   const later = doc.request()
   hold.release.resolve()
-  expect(await settled(original)).toBe('settled')
-  expect(await settled(later)).toBe('settled')
+  await expect(original).resolves.toEqual({})
+  await expect(later).resolves.toEqual({})
   expect(await doc.engineOnDisk()).toBe(true)
   expect(live.fetchedWith).toEqual(['A2'])
 })
