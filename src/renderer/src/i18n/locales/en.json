@@ -22177,7 +22177,8 @@
         "oneComment": "1 comment",
         "comments": "{{count}} comments",
         "unavailable": "Preview unavailable.",
-        "retry": "Retry"
+        "retry": "Retry",
+        "retryKeyHint": "Preview unavailable. Press {{key}} to retry."
       },
       "webPeek": {
         "unavailable": "No preview for this page."

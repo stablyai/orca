@@ -443,8 +443,8 @@ export const retryRecovers = defineFixture({
   )
 })
 
-/** The PR changed after the chip read its checks: the card shows the new title and no checks, rather
- *  than the older reading beside it as if current. */
+/** The PR changed after the chip read its checks: the loaded card shows the new title and never the
+ *  chip's older reading as if current (the lookup itself carries no CI). */
 export const staleChecksOmitted = defineFixture({
   width: 720,
   store,

@@ -1,19 +1,22 @@
 import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { NativeChatGitHubPeekBody, resolveGitHubPeekLink } from './NativeChatGitHubLinkPeek'
 import { NativeChatWebPeekBody } from './NativeChatWebLinkPeek'
 import { NativeChatLinkPeekContext } from './native-chat-link-peek-context'
 import { previewableWebUrl } from './native-chat-web-link-preview'
 import { CARD_OFFSET, sideWithRoom, WINDOW_MARGIN, type PeekSide } from './link-peek-side'
+import { LinkPeekRetryContext } from './link-peek-retry-context'
 import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
-import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 
 /** Hover or focus a link to preview it: PRs and issues on its repo's GitHub host, or what a web page says about itself. */
 export function NativeChatLinkPeek({
   href,
   githubFallback,
   githubFailedFallback,
-  githubChecks,
+  retryKey,
+  overPopover = false,
   side = 'top',
   children
 }: {
@@ -27,9 +30,12 @@ export function NativeChatLinkPeek({
   /** What a GitHub card shows above its failure line if the lookup fails, instead of `githubFallback`:
    *  only what stays true, so a failed card never passes off a known state as current. */
   githubFailedFallback?: ReactNode
-  /** A PR's CI result for the item the lookup returned, beside the GitHub card's state badge: only
-   *  what the caller can confirm for it, never an older reading passed off as current. */
-  githubChecks?: (item: GitHubWorkItem) => ReactNode
+  /** A key that retries a failed GitHub lookup while the link has focus and its card is open: a
+   *  card's Retry is out of Tab's reach, as everything in a hover card is. Shown beside Retry and
+   *  announced with the failure. Lowercase. */
+  retryKey?: string
+  /** The link sits in a popover: its card opens above it rather than under it. */
+  overPopover?: boolean
   children: ReactNode
 }): ReactNode {
   const { githubRepo, githubRoutingAuthorityKey, webPreviews } =
@@ -52,7 +58,6 @@ export function NativeChatLinkPeek({
           link={github.link}
           otherRepoFallback={githubFallback ?? (github.ownRepo ? undefined : webBody)}
           failedFallback={githubFailedFallback}
-          checks={githubChecks}
         />
       )
     }
@@ -67,13 +72,11 @@ export function NativeChatLinkPeek({
           link={routed}
           otherRepoFallback={githubFallback ?? webBody}
           failedFallback={githubFailedFallback}
-          checks={githubChecks}
         />
       )
     }
     return webBody
   }, [
-    githubChecks,
     githubFailedFallback,
     githubFallback,
     githubRepo,
@@ -85,7 +88,7 @@ export function NativeChatLinkPeek({
     return children
   }
   return (
-    <LinkPeekCard body={body} side={side}>
+    <LinkPeekCard body={body} side={side} retryKey={retryKey} overPopover={overPopover}>
       {children}
     </LinkPeekCard>
   )
@@ -94,15 +97,52 @@ export function NativeChatLinkPeek({
 function LinkPeekCard({
   body,
   side,
+  retryKey,
+  overPopover,
   children
 }: {
   body: ReactNode
   side: 'top' | 'bottom' | 'left'
+  retryKey: string | undefined
+  overPopover: boolean
   children: ReactNode
 }): ReactNode {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [placed, setPlaced] = useState<PeekSide>(side)
   const trigger = useRef<HTMLSpanElement>(null)
+  const retry = useRef<(() => void) | null>(null)
+  const [failed, setFailed] = useState(false)
+  const retryContext = useMemo(
+    () =>
+      retryKey
+        ? {
+            key: retryKey,
+            report: (next: (() => void) | null) => {
+              retry.current = next
+              setFailed(next !== null)
+            }
+          }
+        : null,
+    [retryKey]
+  )
+  // A window resized under an open card can leave the side it opened on without room.
+  useEffect(() => {
+    if (!open || side !== 'left') {
+      return
+    }
+    let frame = 0
+    const place = () => {
+      cancelAnimationFrame(frame)
+      // After the popover holding the link has moved with the window.
+      frame = requestAnimationFrame(() => setPlaced(sideWithRoom(side, trigger.current)))
+    }
+    window.addEventListener('resize', place)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('resize', place)
+    }
+  }, [open, side])
   const pendingOpen = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const cancelPendingOpen = () => clearTimeout(pendingOpen.current)
   useEffect(() => () => clearTimeout(pendingOpen.current), [])
@@ -163,20 +203,50 @@ function LinkPeekCard({
               dismiss()
             }
           }}
+          onKeyDown={(event) => {
+            const run = retry.current
+            if (
+              run &&
+              retryKey &&
+              event.key.toLowerCase() === retryKey &&
+              !event.altKey &&
+              !event.ctrlKey &&
+              !event.metaKey
+            ) {
+              event.preventDefault()
+              event.stopPropagation()
+              run()
+            }
+          }}
         >
           {children}
+          {retryKey ? (
+            <span className="sr-only" aria-live="polite">
+              {failed
+                ? t(
+                    'components.native-chat.githubPeek.retryKeyHint',
+                    'Preview unavailable. Press {{key}} to retry.',
+                    { key: retryKey.toUpperCase() }
+                  )
+                : ''}
+            </span>
+          ) : null}
         </span>
       </HoverCardTrigger>
       {/* Never wider or taller than the window, with a margin, even at the largest zoom: what does not
-          fit scrolls. Above popovers, so a link listed in one shows its card over it. */}
+          fit scrolls. */}
       <HoverCardContent
         side={placed}
         align="start"
         sideOffset={CARD_OFFSET}
         collisionPadding={WINDOW_MARGIN}
-        className="scrollbar-sleek z-[70] max-h-(--radix-hover-card-content-available-height) w-96 max-w-[calc(100vw-1rem)] overflow-y-auto"
+        className={cn(
+          'scrollbar-sleek max-h-(--radix-hover-card-content-available-height) w-96 max-w-[calc(100vw-1rem)] overflow-y-auto',
+          // Over the popover the link is listed in (popovers sit at 60).
+          overPopover && 'z-[70]'
+        )}
       >
-        {body}
+        <LinkPeekRetryContext value={retryContext}>{body}</LinkPeekRetryContext>
       </HoverCardContent>
     </HoverCard>
   )

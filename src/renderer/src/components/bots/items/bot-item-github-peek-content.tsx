@@ -1,8 +1,5 @@
-import { Check, CircleDot, X } from 'lucide-react'
-import { useCallback, useMemo, type ReactNode } from 'react'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { cn } from '@/lib/class-names'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import { useMemo, type ReactNode } from 'react'
+import type { Translate } from '@/i18n/use-translate'
 
 export function checksLabel(t: Translate, checks: string | null): string | null {
   if (checks === 'success') {
@@ -15,55 +12,6 @@ export function checksLabel(t: Translate, checks: string | null): string | null 
     return t('browser.newTab.checks.pending', 'Checks pending')
   }
   return null
-}
-
-/** A PR's checks in words, for its GitHub card: a hover must not read a failing PR as healthy. */
-function GitHubChecksMeta({ checks }: { checks: string }): ReactNode {
-  const t = useTranslate()
-  const label = checksLabel(t, checks)
-  if (!label) {
-    return null
-  }
-  const Icon = checks === 'success' ? Check : checks === 'failure' ? X : CircleDot
-  const tone =
-    checks === 'success'
-      ? 'text-status-success'
-      : checks === 'failure'
-        ? 'text-destructive'
-        : 'text-status-warning'
-  return (
-    <span className={cn('flex shrink-0 items-center gap-0.5', tone)}>
-      <Icon aria-hidden strokeWidth={2.5} className="size-3" />
-      {label}
-    </span>
-  )
-}
-
-/** The checks a PR's GitHub card shows for the PR its lookup returned: the lookup's own summary when it
- *  carries one, else the chip's reading only if taken since the PR last changed. An older reading may
- *  belong to an earlier push, so the card shows none rather than pass it off as current. */
-export function useGitHubCardChecks(
-  checks: string | null,
-  checkedAt: number | null
-): (item: GitHubWorkItem) => ReactNode {
-  return useCallback(
-    (item: GitHubWorkItem) => {
-      const confirmed = confirmedGitHubChecks(checks, checkedAt, item)
-      return confirmed ? <GitHubChecksMeta checks={confirmed} /> : null
-    },
-    [checks, checkedAt]
-  )
-}
-
-export function confirmedGitHubChecks(
-  checks: string | null,
-  checkedAt: number | null,
-  item: Pick<GitHubWorkItem, 'checksSummary' | 'updatedAt'>
-): string | null {
-  if (item.checksSummary) {
-    return item.checksSummary.state
-  }
-  return checkedAt !== null && checkedAt >= Date.parse(item.updatedAt) ? checks : null
 }
 
 /** A GitHub link's card before, or without, its lookup: what its chip or row already knows, never a
@@ -90,3 +38,6 @@ export function useGitHubLinkPeekFallback(
     }
   }, [title, tip])
 }
+
+/** Retries a failed GitHub card's lookup from its focused link or row. */
+export const GITHUB_RETRY_KEY = 'r'

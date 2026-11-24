@@ -1,4 +1,11 @@
-import { useMemo, useSyncExternalStore, type ReactNode } from 'react'
+import {
+  useContext,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useSyncExternalStore,
+  type ReactNode
+} from 'react'
 import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
@@ -29,6 +36,7 @@ import {
 } from './native-chat-github-repo'
 import type { NativeChatLinkPeek as NativeChatLinkPeekValue } from './native-chat-link-peek-context'
 import { useNativeChatHoverPreview } from './use-native-chat-hover-preview'
+import { LinkPeekRetryContext } from './link-peek-retry-context'
 import {
   createGitHubPreviewRouteStore,
   type GitHubPreviewRouteStore
@@ -111,14 +119,10 @@ export function NativeChatGitHubPeekBody({
   source,
   link,
   otherRepoFallback,
-  failedFallback,
-  checks
+  failedFallback
 }: {
   source: GitHubPeekSource
   link: GitHubIssueOrPRLink
-  /** The PR's CI result for the item the lookup returned, as far as the caller can confirm it;
-   *  shown while the PR is open or draft. */
-  checks?: (item: GitHubWorkItem) => ReactNode
   /** Shown above the failure line when the lookup fails, in place of `otherRepoFallback`: what the
    *  caller still knows for sure (its title), never a state the failure leaves unconfirmed. */
   failedFallback?: ReactNode
@@ -154,7 +158,6 @@ export function NativeChatGitHubPeekBody({
       link={link}
       otherRepoFallback={otherRepoFallback}
       failedFallback={failedFallback}
-      checks={checks}
     />
   )
 }
@@ -163,17 +166,23 @@ function GitHubPeekContent({
   lookup,
   link,
   otherRepoFallback,
-  failedFallback,
-  checks
+  failedFallback
 }: {
   lookup: ReturnType<typeof peekLookup>
   link: GitHubIssueOrPRLink
   otherRepoFallback?: ReactNode
   failedFallback?: ReactNode
-  checks?: (item: GitHubWorkItem) => ReactNode
 }): ReactNode {
   const t = useTranslate()
   const { state, retry } = useNativeChatHoverPreview(lookup.key, lookup.read, lookup.load)
+  const retryKey = useContext(LinkPeekRetryContext)
+  const reportRetry = useEffectEvent((failedLookup: boolean) =>
+    retryKey?.report(failedLookup ? retry : null)
+  )
+  useEffect(() => {
+    reportRetry(state.status === 'failed')
+  }, [state.status])
+  useEffect(() => () => reportRetry(false), [])
   const failed = state.status === 'failed' && failedFallback !== undefined
   if (otherRepoFallback && state.status !== 'ready' && !failed) {
     return otherRepoFallback
@@ -184,6 +193,15 @@ function GitHubPeekContent({
       <Button variant="link" size="xs" onClick={retry}>
         {t('components.native-chat.githubPeek.retry', 'Retry')}
       </Button>
+      {/* The link announces the key with the failure; this shows it. */}
+      {retryKey ? (
+        <kbd
+          aria-hidden
+          className="rounded border border-border px-1 font-mono text-3xs text-muted-foreground"
+        >
+          {retryKey.key.toUpperCase()}
+        </kbd>
+      ) : null}
     </div>
   )
   return (
@@ -192,24 +210,17 @@ function GitHubPeekContent({
           than clip in a window too narrow for the card's usual width. */}
       <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
         <GitHubIcon className="size-3.5 shrink-0" aria-hidden />
-        <span className="min-w-0 truncate">
+        {/* Cut to fit, whole on hover. */}
+        <span className="min-w-0 truncate" title={`${link.slug.owner}/${link.slug.repo}`}>
           {link.slug.owner}/{link.slug.repo}
         </span>
         <span className="shrink-0 font-mono">#{link.number}</span>
         {state.status === 'ready' ? (
-          <span className="ml-auto flex shrink-0 items-center gap-2">
-            {/* CI matters only while the PR can still change. */}
-            {checks &&
-            state.value.type === 'pr' &&
-            (state.value.state === 'open' || state.value.state === 'draft')
-              ? checks(state.value)
-              : null}
-            <WorkItemStateBadge
-              item={state.value}
-              closedIssue="neutral"
-              className="h-4.5 px-1.5 text-2xs"
-            />
-          </span>
+          <WorkItemStateBadge
+            item={state.value}
+            closedIssue="neutral"
+            className="ml-auto h-4.5 px-1.5 text-2xs"
+          />
         ) : null}
       </div>
       {state.status === 'ready' ? (
@@ -222,6 +233,7 @@ function GitHubPeekContent({
               {state.value.labels.slice(0, 4).map((label) => (
                 <span
                   key={label}
+                  title={label}
                   className="max-w-full truncate rounded-full border border-border px-1.5 text-3xs text-muted-foreground"
                 >
                   {label}
