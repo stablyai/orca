@@ -170,7 +170,9 @@ describe('what a bot gets from a read', () => {
                 author: 'A'.repeat(300),
                 ref: `slack:T1:C1:1.1:${'1'.repeat(120)}`,
                 url: `https://acme.slack.com/archives/C1/p1?${'x'.repeat(600)}`,
-                text: 'w'.repeat(100_000)
+                text: 'w'.repeat(100_000),
+                // Past the 10 files the message's own already use.
+                files: [{ id: 'S1', name: 's.txt' }]
               }
             ],
             links: Array.from({ length: 30 }, (_, index) => ({
@@ -203,7 +205,7 @@ describe('what a bot gets from a read', () => {
           ],
           shared: [{ author: 'A'.repeat(200), text: 'w'.repeat(2_000), cut: true }],
           links: Array.from({ length: 3 }, (_, index) => ({ url: `https://example.com/${index}` })),
-          partsLeftOut: 20 + 27
+          partsLeftOut: 20 + 1 + 27
         }
       ]
     })
@@ -234,5 +236,21 @@ describe('what a bot gets from a read', () => {
         false
       )
     ).toEqual({ messages: [{ ref: 'slack:T1:C1::1.2', author: '', at: 1, text: 'ok' }] })
+    expect(
+      botReadResult(
+        {
+          download: {
+            id: 'F1',
+            name: 'a.txt',
+            url: 'https://files.example/1',
+            ticket: 't',
+            forwarded
+          }
+        },
+        false
+      )
+    ).toEqual({
+      download: { id: 'F1', name: 'a.txt', url: 'https://files.example/1', ticket: 't' }
+    })
   })
 })
