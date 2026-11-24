@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import {
+  DegradedRestoreUnavailableError,
   FinalCheckpointNotCommittedError,
   FinalCheckpointWaitExpiredError
 } from '../daemon-pty-lifecycle-errors'
@@ -280,6 +281,67 @@ describe('Sleep final checkpoint gate (#46691 rev2)', () => {
     expect(harness.killRequests()).toBe(1)
   })
 
+  it('T10: a degraded Sleep refuses to kill when no recovery is detectable', async () => {
+    const harness = createHarness()
+    harness.setOutcome('permanently-unavailable')
+    harness.setDetector({ status: 'none' })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(invokeSleep(harness, SESSION_ID)).rejects.toBeInstanceOf(
+      DegradedRestoreUnavailableError
+    )
+
+    expect(harness.killRequests()).toBe(0)
+    expect(harness.detectCalls()).toBe(1)
+  })
+
+  it('T11: a degraded Sleep refuses to kill when history is unreadable', async () => {
+    const harness = createHarness()
+    harness.setOutcome('no-snapshot')
+    harness.setDetector({ status: 'unreadable' })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(invokeSleep(harness, SESSION_ID)).rejects.toBeInstanceOf(
+      DegradedRestoreUnavailableError
+    )
+
+    expect(harness.killRequests()).toBe(0)
+  })
+
+  it('T12: a degraded Sleep with restored history still kills', async () => {
+    const harness = createHarness()
+    harness.setOutcome('permanently-unavailable')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await invokeSleep(harness, SESSION_ID)
+
+    expect(harness.killRequests()).toBe(1)
+    expect(harness.seams.coldRestoreCache.has(SESSION_ID)).toBe(true)
+  })
+
+  it('T13: a degraded Sleep without a history reader refuses to kill', async () => {
+    const harness = createHarness()
+    harness.setOutcome('permanently-unavailable')
+    harness.seams.historyReader = null
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(invokeSleep(harness, SESSION_ID)).rejects.toBeInstanceOf(
+      DegradedRestoreUnavailableError
+    )
+
+    expect(harness.killRequests()).toBe(0)
+  })
+
+  it('committed Sleep is unaffected by an undetectable recovery', async () => {
+    const harness = createHarness()
+    harness.setOutcome('committed')
+    harness.setDetector({ status: 'none' })
+
+    await invokeSleep(harness, SESSION_ID)
+
+    expect(harness.killRequests()).toBe(1)
+  })
+
   it('reads the newest recovery, then kills, when the final checkpoint committed', async () => {
     const harness = createHarness()
     harness.setOutcome('committed')
@@ -514,5 +576,97 @@ describe('permanently-unavailable sessions stop polling (#46691 rev2 issue ③)'
 
     await harness.seams.checkpointDirtySessions()
     expect(checkpointSession).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('legacy (protocol 4-12) full-checkpoint throttling (#46691 rev2 B1)', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  function makeLegacyHarness(): {
+    harness: Harness
+    snapshotCalls: ReturnType<typeof vi.fn>
+    setResult: (result: 'retryable' | 'committed') => void
+  } {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-24T00:00:00Z'))
+    const harness = createHarness()
+    harness.seams.supportsIncrementalCheckpoints = false
+    let result: 'retryable' | 'committed' = 'retryable'
+    const checkpoint = vi.fn(async () =>
+      result === 'committed' ? ('committed' as const) : ('retryable' as const)
+    )
+    harness.seams.historyManager = {
+      checkpoint,
+      suspendSession: () => {},
+      appendIncrements: async () => 'ok'
+    }
+    const snapshotCalls = vi.fn(async () => ({ snapshot: { marker: 'live' } }))
+    harness.seams.client = {
+      request: async (method) => (method === 'getSnapshot' ? await snapshotCalls() : undefined)
+    }
+    return {
+      harness,
+      snapshotCalls,
+      setResult: (next) => {
+        result = next
+      }
+    }
+  }
+
+  async function runPass(harness: Harness, final = false): Promise<CheckpointWriteResult> {
+    return await harness.seams.writeSessionCheckpoint(SESSION_ID, {
+      final,
+      teardown: final
+    })
+  }
+
+  it('T7: legacy retryable failures back off instead of running every 5s', async () => {
+    const { harness, snapshotCalls } = makeLegacyHarness()
+    const t0 = Date.now()
+
+    expect(await runPass(harness)).toBe('deferred')
+    expect(snapshotCalls).toHaveBeenCalledTimes(1)
+
+    vi.setSystemTime(t0 + 4_999)
+    expect(await runPass(harness)).toBe('deferred')
+    expect(snapshotCalls).toHaveBeenCalledTimes(1)
+
+    vi.setSystemTime(t0 + 5_000)
+    expect(await runPass(harness)).toBe('deferred')
+    expect(snapshotCalls).toHaveBeenCalledTimes(2)
+
+    vi.setSystemTime(t0 + 15_000)
+    expect(await runPass(harness)).toBe('deferred')
+    expect(snapshotCalls).toHaveBeenCalledTimes(3)
+  })
+
+  it('T8: legacy success advances lastFullCheckpointAt and enables the 45s cooldown', async () => {
+    const { harness, snapshotCalls, setResult } = makeLegacyHarness()
+    const t0 = Date.now()
+
+    expect(await runPass(harness)).toBe('deferred')
+    setResult('committed')
+    vi.setSystemTime(t0 + 5_000)
+    expect(await runPass(harness)).toBe('committed')
+    expect(harness.seams.lastFullCheckpointAt.has(SESSION_ID)).toBe(true)
+    expect(harness.seams.fullCheckpointBackoff.has(SESSION_ID)).toBe(false)
+
+    const calls = snapshotCalls.mock.calls.length
+    expect(await runPass(harness)).toBe('deferred')
+    expect(snapshotCalls.mock.calls.length).toBe(calls)
+  })
+
+  it('T9: legacy final (Sleep) is never throttled', async () => {
+    const { harness, snapshotCalls, setResult } = makeLegacyHarness()
+
+    expect(await runPass(harness)).toBe('deferred')
+    const calls = snapshotCalls.mock.calls.length
+
+    setResult('committed')
+    expect(await runPass(harness, true)).toBe('committed')
+    expect(snapshotCalls.mock.calls.length).toBe(calls + 1)
   })
 })

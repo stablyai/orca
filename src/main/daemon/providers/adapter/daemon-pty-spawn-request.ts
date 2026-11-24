@@ -13,7 +13,10 @@ import type {
   SettledCheckpointOutcome
 } from '../checkpointing/daemon-pty-checkpoint-result'
 import { HISTORY_SEED_TRANSFER_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
-import type { ColdRestoreInfo } from '../../history/restoration/terminal-history-cold-restore-info'
+import type {
+  ColdRestoreDetection,
+  ColdRestoreInfo
+} from '../../history/restoration/terminal-history-cold-restore-info'
 import { NdjsonLineTooLongError } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import {
   iterateTerminalHistorySeedChunks,
@@ -99,6 +102,11 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
     outcome: SettledCheckpointOutcome | undefined,
     error: unknown
   ): { degraded: boolean; outcome: SettledCheckpointOutcome | undefined }
+  protected abstract sleepRecoveryEvidence(
+    sessionId: string,
+    outcome: SettledCheckpointOutcome | undefined,
+    error: unknown
+  ): Promise<{ wslDistro: string | undefined; detection: ColdRestoreDetection | undefined }>
   protected abstract publishAuditObservation(observation: DaemonAuditObservation): void
   protected abstract isRetiredEndpointTokenMissing(): boolean
   protected abstract withDaemonRetry<T>(fn: () => Promise<T>): Promise<T>

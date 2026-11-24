@@ -1,7 +1,11 @@
 import { awaitDaemonWorkWithinCallerDeadline } from '../../launch/daemon-request-deadline'
 import { NdjsonLineTooLongError } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import { DaemonPtyConnectionLifecycle } from '../adapter/daemon-pty-connection-lifecycle'
-import { FinalCheckpointNotCommittedError } from '../adapter/daemon-pty-lifecycle-errors'
+import {
+  FinalCheckpointNotCommittedError,
+  assertDegradedRestoreAvailable
+} from '../adapter/daemon-pty-lifecycle-errors'
+import type { ColdRestoreDetection } from '../../history/restoration/terminal-history-cold-restore-info'
 import type {
   CheckpointWriteResult,
   SettledCheckpointOutcome
@@ -275,6 +279,24 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
       degraded: true
     })
     return { degraded: true, outcome }
+  }
+
+  /**
+   * Sleep's recovery evidence: evaluate the final pass, then require a woken-from
+   * checkpoint before a degraded kill. Returns what the caller also needs for the
+   * cold-restore cache (wsl distro + detection).
+   */
+  protected async sleepRecoveryEvidence(
+    sessionId: string,
+    outcome: SettledCheckpointOutcome | undefined,
+    error: unknown
+  ): Promise<{ wslDistro: string | undefined; detection: ColdRestoreDetection | undefined }> {
+    const preservation = this.evaluateFinalCheckpointPreservation(sessionId, outcome, error)
+    const wslDistro = this.wslDistrosBySessionId.get(sessionId)
+    const detection = await this.historyReader?.detectColdRestoreState(sessionId, { wslDistro })
+    const detected = detection?.status === 'restored' ? detection.restoreInfo : null
+    assertDegradedRestoreAvailable(sessionId, preservation, detected)
+    return { wslDistro, detection }
   }
 
   protected async checkpointSession(

@@ -186,9 +186,11 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
         throw new FinalCheckpointWaitExpiredError(id)
       }
       // Retryable failures keep the live terminal; permanent loss proceeds degraded (#46691 rev2).
-      this.evaluateFinalCheckpointPreservation(id, finalOutcome, finalError)
-      const wslDistro = this.wslDistrosBySessionId.get(id)
-      const detection = await this.historyReader?.detectColdRestoreState(id, { wslDistro })
+      const { wslDistro, detection } = await this.sleepRecoveryEvidence(
+        id,
+        finalOutcome,
+        finalError
+      )
       const detected = detection?.status === 'restored' ? detection.restoreInfo : null
       const restoreInfo = detected
         ? {

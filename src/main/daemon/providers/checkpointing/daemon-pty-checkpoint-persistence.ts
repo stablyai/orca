@@ -28,10 +28,25 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
     opts: { final: boolean; teardown: boolean }
   ): Promise<CheckpointWriteResult> {
     if (!this.supportsIncrementalCheckpoints) {
+      // Protocol 4-12 daemons take the full getSnapshot path; apply the same
+      // throttling contract so a retryable failure cannot storm every 5s.
+      // Final requests (Sleep/quit) are never throttled: the last snapshot must run.
+      if (!opts.final) {
+        if (this.isFullCheckpointBackingOff(sessionId)) {
+          return 'deferred'
+        }
+        if (this.isFullCheckpointCoolingDown(sessionId)) {
+          return 'deferred'
+        }
+      }
       const result = await this.client.request<GetSnapshotResult>('getSnapshot', { sessionId })
       if (result.snapshot && this.historyManager) {
         const checkpoint = await this.historyManager.checkpoint(sessionId, result.snapshot)
         this.noteCheckpointResult(sessionId, checkpoint)
+        if (checkpoint === 'committed') {
+          // Keep the 45s success cooldown parity with the incremental path.
+          this.lastFullCheckpointAt.set(sessionId, Date.now())
+        }
         return mapHistoryCheckpointResult(checkpoint)
       }
       return this.historyManager ? 'no-snapshot' : 'permanently-unavailable'
