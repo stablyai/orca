@@ -1814,9 +1814,9 @@
       }
     },
     "hostOfflineBanner": {
-      "offline": "{{host}} 已离线",
+      "offline": "无法连接 {{host}}",
       "reconnecting": "正在重新连接 {{host}}…",
-      "asOf": "显示截至 {{time}} 的内容"
+      "asOf": "截至 {{time}}"
     },
     "offlineAsOfTime": {
       "yesterday": "昨天 {{time}}"
@@ -8221,9 +8221,6 @@
       "continuesAt": "将于 {{time}} 继续",
       "continues": "将于 {{time}} 继续",
       "hitLimit": "已达上限 · {{time}} 重置"
-    },
-    "page": {
-      "serverDownTitle": "无法连接 {{host}}"
     },
     "memoryHistory": {
       "tidyUp": "整理"
