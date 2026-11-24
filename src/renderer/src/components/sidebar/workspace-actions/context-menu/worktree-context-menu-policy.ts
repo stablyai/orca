@@ -7,7 +7,10 @@ import {
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import '@/lib/workspace/creation/new-workspace-composer-repo'
 import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace/new-workspace-dialog-repo'
@@ -62,13 +65,14 @@ export function selectMenuScopedMap<T>(menuOpen: boolean, live: T, empty: T): T 
 /** Twin hosts share one worktree id bucket, so a row's copy menu offers only that row's host, keeping unstamped legacy tabs. */
 export function agentSessionTabsOfRow(
   tabs: readonly Tab[],
-  rowHostId: ExecutionHostId
+  rowHostId: ExecutionHostId | null | undefined
 ): readonly Tab[] {
+  const hostId = rowHostId ?? LOCAL_EXECUTION_HOST_ID
   return tabs.filter(
     (tab) =>
       tab.contentType === 'agent-session' &&
       tab.entityId.trim() !== '' &&
-      (!tab.executionHostId || tab.executionHostId === rowHostId)
+      (!tab.executionHostId || tab.executionHostId === hostId)
   )
 }
 

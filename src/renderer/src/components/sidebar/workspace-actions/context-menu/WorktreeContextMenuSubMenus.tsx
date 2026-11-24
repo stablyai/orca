@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { WorktreeRemoveParentMenuItem } from './WorktreeRemoveParentMenuItem'
 import {
   CircleX,
@@ -20,16 +21,23 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import {
+  agentSessionTabsOfRow,
   getWorktreeParentPickerLabel,
   isWorktreeParentPickerDisabled
 } from './worktree-context-menu-policy'
 
 export function WorktreeCopySubMenu({ model }: { model: WorktreeContextMenuModel }) {
   const t = useTranslate()
-  const { agentSessionTabs, isDeleting } = model
+  const { isDeleting } = model
+  const tabs = useAppStore((s) => s.unifiedTabsByWorktree[model.worktree.id])
+  const agentSessionTabs = useMemo(
+    () => (model.isMultiContext ? [] : agentSessionTabsOfRow(tabs ?? [], model.worktree.hostId)),
+    [model.isMultiContext, model.worktree.hostId, tabs]
+  )
   const [singleAgentTab] = agentSessionTabs
   return (
     <DropdownMenuSub>

@@ -10,7 +10,6 @@ import {
   useWorkspaceLineageMenuActions
 } from './workspace-lineage-menu-actions'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { getDeleteStateForWorktreeHost } from '../deletion/worktree-delete-state-host-match'
 import {
   EMPTY_AGENT_STATUS_BY_PANE_KEY,
@@ -22,7 +21,6 @@ import {
   EMPTY_UNIFIED_TABS_BY_WORKTREE,
   EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY,
   EMPTY_WORKTREE_LINEAGE_BY_ID,
-  agentSessionTabsOfRow,
   getSharedWorkspaceStatus,
   isContextWorktreeDeletable,
   selectMenuScopedMap,
@@ -141,17 +139,6 @@ export function useWorktreeContextMenuModel({
   const { workspaceStatuses, statusesForWorktree } =
     useContextWorkspaceStatuses(activeContextWorktrees)
   const isMultiContext = activeContextWorktrees.length > 1
-  // Hand-offs copy ids without opening or focusing the workspace's tabs, so multi-select gets none.
-  const agentSessionTabs = useMemo(
-    () =>
-      isMultiContext
-        ? []
-        : agentSessionTabsOfRow(
-            unifiedTabsByWorktree[worktree.id] ?? [],
-            worktree.hostId ?? LOCAL_EXECUTION_HOST_ID
-          ),
-    [isMultiContext, unifiedTabsByWorktree, worktree.hostId, worktree.id]
-  )
   const workspaceScope = parseWorkspaceKey(worktree.id)
   const folderWorkspaceId =
     workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
@@ -377,7 +364,6 @@ export function useWorktreeContextMenuModel({
     ...commands,
     showsUnread,
     activeContextWorktrees,
-    agentSessionTabs,
     batchDeleteWorktrees,
     browserTabsByWorktree,
     children,
