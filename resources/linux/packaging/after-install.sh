@@ -4,13 +4,12 @@
 # because electron-builder sanitizes productName.
 set -e
 
-link="/usr/bin/orca-ide"
-
 is_owned_link() {
+  local link="$1" name="$2"
   [ -L "$link" ] || return 1
   local link_target candidate candidate_target
   link_target="$(readlink -f -- "$link" 2>/dev/null || true)"
-  for candidate in /opt/Orca/resources/bin/orca-ide /opt/orca-ide/resources/bin/orca-ide /opt/orca/resources/bin/orca-ide; do
+  for candidate in "/opt/Orca/resources/bin/$name" "/opt/orca-ide/resources/bin/$name" "/opt/orca/resources/bin/$name"; do
     candidate_target="$(readlink -f -- "$candidate" 2>/dev/null || true)"
     if [ -n "$candidate_target" ] && [ "$link_target" = "$candidate_target" ]; then
       return 0
@@ -27,12 +26,16 @@ for dir in /opt/Orca /opt/orca-ide /opt/orca; do
     chmod 4755 "$sandbox" || true
   fi
 
-  shim="$dir/resources/bin/orca-ide"
-  if [ -x "$shim" ]; then
-    # Only manage our own symlink; never clobber an unrelated /usr/bin/orca-ide.
-    if { [ ! -e "$link" ] && [ ! -L "$link" ]; } || is_owned_link; then
+  if [ -x "$dir/resources/bin/orca-ide" ]; then
+    for name in orca-ide orca-commander-handoff; do
+      shim="$dir/resources/bin/$name"
+      link="/usr/bin/$name"
+      [ -x "$shim" ] || continue
+      if [ -e "$link" ] || [ -L "$link" ]; then
+        is_owned_link "$link" "$name" || continue
+      fi
       ln -sfn -- "$shim" "$link"
-    fi
+    done
     break
   fi
 done

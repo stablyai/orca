@@ -5,6 +5,8 @@ export function ignoresRemoteSelection(commandPath: readonly string[]): boolean 
     commandPath[0] === 'auth' ||
     commandPath[0] === 'artifacts' ||
     commandPath[0] === 'environment' ||
+    // Project grants name their own memory service; Commander Home's launch credential stays on its desktop.
+    commandPath.join(' ') === 'orchestration preference-ask' ||
     // Paired servers come from the local store; routing SSH lookup would mix two machines in one list.
     commandPath.join(' ') === 'host list' ||
     // Removes ids that `host list` printed from this runtime; an ambient selection must not retarget it.

@@ -1,7 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { readRouteSnapshot } from '../../mobile-web-app/mobile-web-app-route-snapshot.mjs'
 import { MOBILE_WEB_APP_DEPENDENCY_PATH } from '../../mobile-web-app/mobile-web-app-bundle-dependencies.mjs'
-import { existsSync, realpathSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -30,11 +30,18 @@ import { packageBuildPlugin } from './one-package-build-plugin.mjs'
 import { PAGE_GLOBALS_BANNER, bannerOnlyWhereScriptsRunFirst } from './page-globals-banner.mjs'
 import {
   ROUTE_ENTRY_NAMESPACE,
+  LAZY_ENTRY_NAMESPACE,
+  commanderChunkOnDemand,
+  localeCatalogOutputs,
+  pageScriptCount,
+  routeChunkNames,
   entryStaticClosure,
   isScriptOutput,
   lazyModulesToAnchor,
   sharedModulesToMerge
 } from './mobile-web-app-chunk-grouping.mjs'
+
+export { pageScriptCount, routeChunkNames } from './mobile-web-app-chunk-grouping.mjs'
 
 const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
 const mobileDir = join(projectDir, 'mobile')
@@ -147,7 +154,6 @@ const HAIRLINE_PLUGIN_NAME = 'orca-hairline-device-pixel'
 const ENTRY_CHUNK_NAME = 'entry'
 
 const ROUTE_MANIFEST_MODULE = /web-entry[\\/]route-manifest(\.ts)?$/
-const LAZY_ENTRY_NAMESPACE = 'orca-lazy-entry'
 
 // The entry's static imports as written, minus the manifest: a route importing it would be an output cycle.
 async function entryImportAnchors() {
@@ -408,26 +414,6 @@ export function renameOutputsByContent(metafile, outputFiles) {
   return renamed
 }
 
-// Resolve route imports through metafile inputs before content hashes erase source paths.
-export function routeChunkNames(metafile, routes, renamed) {
-  const owner = new Map()
-  for (const [output, { inputs }] of Object.entries(metafile.outputs)) {
-    for (const input of Object.keys(inputs ?? {})) {
-      // realpath lookup matches esbuild’s symlink-resolved input keys (including macOS /var scratch paths).
-      owner.set(resolve(mobileDir, input), basename(output))
-    }
-  }
-  return Object.fromEntries(
-    routes.map(({ key, module }) => {
-      const emittedName = owner.get(realpathSync(module))
-      if (!emittedName) {
-        throw new Error(`[build-mobile-web-app-bundle] ${key} reached no output`)
-      }
-      return [key, renamed.get(emittedName).name]
-    })
-  )
-}
-
 // appDir is a seam for the tests, which bundle a scratch route tree; production always uses mobile/app.
 // Page closure includes ancestor layouts as entry modules, not just route imports.
 export async function mobileWebAppRouteClosure(routeModule) {
@@ -466,8 +452,6 @@ export async function mobileWebAppModuleClosure(entryModules, { absWorkingDir } 
   }
 }
 
-// One lazily imported chunk per UI language; the page fetches only the active one after init.
-const LOCALE_CATALOG_INPUT = /(^|\/)src\/i18n\/locales\/[^/]+\.json$/
 const localeCatalogDir = join(mobileDir, 'src', 'i18n', 'locales')
 
 // The same catalogs as JSON for the host to serve one at a time, to shells that skip the chunks;
@@ -493,25 +477,6 @@ export async function readLocaleCatalogs(directory = localeCatalogDir) {
       }
     })
   )
-}
-
-function localeCatalogOutputs(metafile) {
-  return new Set(
-    Object.entries(metafile.outputs)
-      .filter(([, output]) => {
-        const inputs = Object.keys(output.inputs ?? {})
-        return inputs.length > 0 && inputs.every((input) => LOCALE_CATALOG_INPUT.test(input))
-      })
-      .map(([output]) => basename(output))
-  )
-}
-
-// The entry and its chunks, without locale catalogs: what the chunk fence and its sweep table count.
-export function pageScriptCount(metafile) {
-  const catalogs = localeCatalogOutputs(metafile)
-  return Object.keys(metafile.outputs).filter(
-    (output) => isScriptOutput(output) && !catalogs.has(basename(output))
-  ).length
 }
 
 // esbuild keeps a whole namespace used as a value: `import { z }` or `z.core` ships ~200 KB of zod locale tables.
@@ -577,6 +542,7 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
     script: entry.bytes,
     chunks,
     images,
+    commanderChunk: commanderChunkOnDemand(result.metafile, renamed),
     catalogChunks: chunks.filter(({ emittedName }) => catalogOutputs.has(emittedName)),
     // Count final renamed bytes; metafile sizes predate longer hashes but still identify static imports.
     entryStaticBytes: [...closure].reduce(
@@ -623,7 +589,17 @@ export async function buildMobileWebAppBundle({
   const [
     desktopVersion,
     protocolWindow,
-    { script, chunks, images, catalogChunks, entryStaticBytes, chunkCount, routeChunks, routeKeys },
+    {
+      script,
+      chunks,
+      images,
+      catalogChunks,
+      commanderChunk,
+      entryStaticBytes,
+      chunkCount,
+      routeChunks,
+      routeKeys
+    },
     catalogs,
     scrollbarStyle
   ] = await Promise.all([
@@ -677,6 +653,7 @@ export async function buildMobileWebAppBundle({
   })
   return {
     manifest,
+    commanderChunk,
     outDir,
     routeChunks,
     routeKeys,

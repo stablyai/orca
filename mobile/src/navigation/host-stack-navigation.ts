@@ -189,7 +189,11 @@ export function navigateToHostStackRoute(
       payload: {
         params:
           isSessionRoute(target) && target.params.paneKey
-            ? { botItem: '', ...target.params }
+            ? {
+                botItem: '',
+                ...(focused.params && 'goalHandoff' in focused.params ? { goalHandoff: '' } : {}),
+                ...target.params
+              }
             : target.params
       }
     })

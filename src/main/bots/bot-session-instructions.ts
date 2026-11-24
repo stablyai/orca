@@ -53,7 +53,7 @@ type BotSessionLaunch = Pick<
 export async function botSessionInstructions(
   context: Pick<BotTurnContext, 'launched' | 'linkedSkillsLaunched'>,
   bots: readonly (Pick<Bot, 'id' | 'name' | 'agent' | 'folderWorkspaceId'> &
-    Partial<Pick<Bot, 'skillProjects'>>)[],
+    Partial<Pick<Bot, 'skillProjects' | 'systemRole'>>)[],
   record: BotSessionLaunch,
   launchDirectory: string,
   /** How to use its linked projects' skills; a resumed agent gets it on its next turn. */
@@ -74,7 +74,7 @@ export async function botSessionInstructions(
       // Unlinking leaves an empty list, so a bot without one never had linked skills to replace.
       neverLinked = bot.skillProjects === undefined
       context.launched(record.sessionId, bot.id, launchDirectory, files, startsFresh(record), {
-        block: botRulesBlock(agent),
+        block: botRulesBlock(agent, bot.systemRole),
         name: bot.name,
         delivered: rulesDelivered(record),
         recorded: record.instructionsKey ?? null,

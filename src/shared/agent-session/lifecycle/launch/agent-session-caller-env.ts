@@ -30,12 +30,14 @@ export const SHARED_TOOL_PROCESS_BOT_FIELD = 'orcaBot'
 
 /** A bot run's key to Orca's bot tool relay; the host names the calling bot by it, never by the session id. */
 export const BOT_TOOLS_TOKEN_ENV = 'ORCA_BOT_TOOLS_TOKEN'
+export const COMMANDER_HOME_CAPABILITY_ENV = 'ORCA_COMMANDER_HOME_CAPABILITY'
 
 /** What names the calling chat or bot: a process other chats share must never carry one chat's. */
 export const CALLER_IDENTITY_ENV: readonly string[] = [
   ORCA_AGENT_SESSION_ID_ENV,
   'ORCA_TERMINAL_HANDLE',
-  BOT_TOOLS_TOKEN_ENV
+  BOT_TOOLS_TOKEN_ENV,
+  COMMANDER_HOME_CAPABILITY_ENV
 ]
 
 export function readInjectedBotToken(

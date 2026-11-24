@@ -793,6 +793,14 @@ module.exports = {
         to: 'bin/orca-ide'
       },
       {
+        from: 'resources/linux/bin/orca-commander-handoff',
+        to: 'bin/orca-commander-handoff'
+      },
+      {
+        from: 'scripts/commander-handoff.mjs',
+        to: 'bin/commander-handoff.mjs'
+      },
+      {
         from: 'node_modules/@agent-browser/cli-linux-${arch}-gnu/bin/agent-browser',
         to: 'agent-browser-linux-${arch}'
       },
@@ -876,7 +884,7 @@ function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
   if (electronPlatformName === 'win32') {
     return
   }
-  for (const launcherName of ['orca', 'orca-ide']) {
+  for (const launcherName of ['orca', 'orca-ide', 'orca-commander-handoff']) {
     const launcherPath = join(resourcesDir, 'bin', launcherName)
     if (!existsSync(launcherPath)) {
       continue

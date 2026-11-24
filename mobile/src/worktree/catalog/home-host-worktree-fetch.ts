@@ -31,6 +31,7 @@ const HOME_WORKTREE_REFRESH_FLOOR_MS = 3000
 
 /** What a desktop card and the Agents list draw from one worktree.ps read. */
 export type HomeWorktreeCounts = {
+  projects?: readonly Pick<HomeWorktreeSummary, 'worktreeId' | 'repo' | 'hostId'>[]
   totalWorktrees: number
   activeCount: number
   agents: readonly HomeAgentEntry[]
@@ -65,6 +66,7 @@ export const homeWorktreeCountsQuery = defineHostQuery<
     const unarchived = worktrees.filter((w) => w.isArchived !== true)
     const listed = unarchived.filter((w) => !botByHomeId.has(w.worktreeId))
     return {
+      projects: listed.map(({ worktreeId, repo, hostId }) => ({ worktreeId, repo, hostId })),
       totalWorktrees: listed.length,
       activeCount: listed.filter(isWorktreeActive).length,
       // A bot's chats stay agents: one waiting on the user reaches Active and the badge.

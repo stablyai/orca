@@ -1,3 +1,4 @@
+import { commanderHomeLaunchCapability } from '../commander/commander-home-session'
 // A host's structured-session wiring for bots: preambles, own tools, the turn context, and look-around turns.
 import type { Bot } from '../../shared/bot-types'
 import type { KnownPairedBotRoster } from './paired-bot-rosters'
@@ -194,7 +195,8 @@ export function botStructuredSessionWiring(deps: {
       } else {
         launchedTools.delete(record.sessionId)
       }
-      return tools
+      const capability = await commanderHomeLaunchCapability(record)
+      return capability ? tools.withCommanderCapability(record.provider, capability) : tools
     },
     launchTools: {
       changed: async (sessionId) => {

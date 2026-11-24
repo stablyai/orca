@@ -41,7 +41,7 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 // manifest-contract.ts); routes are split and the entry is capped below, so no one asset nears 10 MiB.
 // Split by startup cost vs assets loaded on use: the eager budget holds everything the page may load
 // to open (all code, fonts outside the terminal allowance, images the document names); the on-demand
-// budget holds only files outfitSheetsOnDemand proves are fetched when used, and any that the document
+// budget holds the verified lazy Commander script and outfit sheets, and any that the document
 // names count as eager. The phone shell still downloads each on-demand file to disk once per bundle
 // update (shellDownloadedAssets), so this budget also bounds that download.
 // Eager: main's own fence. 10.9375 MiB since main reached 11,435,308 bytes with the phone's connector
@@ -272,7 +272,14 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
         `${String(MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES)} one reply carries`
     )
   }
-  const onDemandBytes = assertOnDemandFits(await outfitSheetsOnDemand(manifest, bundleDir))
+  const onDemand = await outfitSheetsOnDemand(manifest, bundleDir)
+  if (first.commanderChunk) {
+    const html = await readFile(join(bundleDir, MOBILE_WEB_BUNDLE_ENTRYPOINT), 'utf8')
+    if (!html.includes(first.commanderChunk.name)) {
+      onDemand.push(first.commanderChunk)
+    }
+  }
+  const onDemandBytes = assertOnDemandFits(onDemand)
   const eagerBytes = mobileWebAppBundleBudgetBytes(manifest) - first.catalogBytes - onDemandBytes
   if (eagerBytes > MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES) {
     fail(

@@ -16,6 +16,7 @@ export const BRIDGE_CLEARABLE_ROUTE_PARAMS = [
   'paneKey',
   'botItem',
   'homeDraft',
+  'goalHandoff',
   BRIDGE_OPEN_ROUTE_PARAM
 ] as const
 

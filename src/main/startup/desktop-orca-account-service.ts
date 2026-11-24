@@ -1,3 +1,4 @@
+import { broadcastOrcaProfileAuthStatusChanged } from '../ipc/profiles/orca-profile-auth-status-broadcast'
 import { OrcaAccountService } from '../orca-profiles/orca-account-service'
 import { botAccountSwitchBlocker } from '../bots/bot-account-switch-blocker'
 import { mainProcessConnectorCloud } from './cloud-startup/main-process-connector-startup'
@@ -20,6 +21,7 @@ export function createDesktopOrcaAccountService(
         state.core.relayHost?.accountChanged()
         mainProcessConnectorCloud()?.accountChanged()
         redeclarePairedDesktopAccounts()
+        broadcastOrcaProfileAuthStatusChanged()
       },
       // Only sign-out fences paired phones; reasonless quit/relaunch must not look like logout.
       onBeforeSignOut: () => {
@@ -29,6 +31,7 @@ export function createDesktopOrcaAccountService(
       onAfterSignOut: () => {
         mainProcessConnectorCloud()?.signOutFinished()
         redeclarePairedDesktopAccounts()
+        broadcastOrcaProfileAuthStatusChanged()
       }
     }
   })

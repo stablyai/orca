@@ -13,6 +13,7 @@ export const FederationAttachStartParams = z.object({
   depth: z.number().int().min(1).optional(),
   protocolVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   worktree: requiredString('Missing remote worktree selector'),
+  commanderProjectId: z.string().min(1).max(256).optional(),
   name: OptionalString,
   repo: OptionalString,
   baseBranch: OptionalString,

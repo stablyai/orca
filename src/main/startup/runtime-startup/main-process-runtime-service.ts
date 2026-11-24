@@ -1,3 +1,4 @@
+import { startCommanderRecovery } from '../../commander/commander-recovery-service'
 import {
   desktopWorkspaceSleepPlatform,
   installDesktopWorkspaceVmWaker,
@@ -166,6 +167,7 @@ export function initializeMainProcessRuntime(
   setBeforeRuntimeEnvironmentRemoval((environmentId) =>
     settlePairedServerAsksOnRemoval(runtime, environmentId)
   )
+  deps.registerCleanup(startCommanderRecovery(runtime))
   return runtime
 }
 

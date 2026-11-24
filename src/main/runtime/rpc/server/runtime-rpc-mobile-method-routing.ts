@@ -33,6 +33,8 @@ export const EXECUTION_HOST_METHODS = [
   'agentActivity.setRead',
   'agentTeams.prepareLaunch',
   'agentTeams.tmuxCompat',
+  'commanderChat.open',
+  'commanderChat.recent',
   ...MOBILE_BOT_RPC_METHODS,
   // A bot chat's Slack thread switch and its posts' Retry, Dismiss and Delete, on the bot's host.
   'connector.slackMirror.set',

@@ -1,3 +1,4 @@
+import { useCommanderHandoffArrival } from '../commander/use-commander-handoff-arrival'
 import { MobileSessionSurface } from './MobileSessionSurface'
 import { useMobileSessionController } from './use-mobile-session-controller'
 import { ActivityIndicator, Text, View } from 'react-native'
@@ -11,6 +12,7 @@ export function MobileSessionRouteScreen() {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const controller = useMobileSessionController()
+  useCommanderHandoffArrival(controller)
   // Readiness stays true on refocus so returning from Settings preserves mounted panes.
   if (
     !controller.terminalPreferencesReady ||

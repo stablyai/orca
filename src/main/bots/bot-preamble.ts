@@ -135,10 +135,11 @@ export function buildBotPreamble(input: {
   name: string
   /** The bot's own agent, which its workers start on. */
   agent: BotAgent
+  systemRole?: Bot['systemRole']
   soul: string | null
   memory: string | null
 }): string {
-  const { tools, rules } = botRulesSections(input.agent)
+  const { tools, rules } = botRulesSections(input.agent, input.systemRole)
   return [
     `You are ${input.name}, a bot that runs in Orca. Your home is the current folder.`,
     tools,
@@ -151,16 +152,25 @@ export function buildBotPreamble(input: {
 
 /** The build-owned sections, as launch renders them for this agent; a running chat is sent both
  *  again when they change. */
-export function botRulesSections(agent: BotAgent): { tools: string; rules: string } {
+export function botRulesSections(
+  agent: BotAgent,
+  systemRole?: Bot['systemRole']
+): { tools: string; rules: string } {
+  const tools = [...BOT_TOOLS]
+  if (systemRole === 'commander') {
+    tools.push(
+      `- For a worker's recurring project choice, use ${BOT_ORCA_CLI} orchestration preference-ask --commander-project <project-id> --question "<exact question>" --request <worker-question-id> --json from your Commander Home chat or with that project's Commander Memory grant. Reuse the request ID on retry. Reply to the worker with the matched answer. If automatic answers are off, the lookup is unavailable, or no single rule matches, ask the owner. Tool and script authorizations use the host's permission flow.`
+    )
+  }
   return {
-    tools: `## Tools\n\n${BOT_TOOLS.join('\n')}`,
+    tools: `## Tools\n\n${tools.join('\n')}`,
     rules: `## Rules\n\n${botRules(agent).join('\n')}`
   }
 }
 
 /** The Tools and Rules a running chat holds, as one block: what the update sends and its key hashes. */
-export function botRulesBlock(agent: BotAgent): string {
-  const { tools, rules } = botRulesSections(agent)
+export function botRulesBlock(agent: BotAgent, systemRole?: Bot['systemRole']): string {
+  const { tools, rules } = botRulesSections(agent, systemRole)
   return `${tools}\n\n${rules}`
 }
 
@@ -180,18 +190,18 @@ export async function readBotHomeFiles(
 /** Read when a conversation's agent starts; a running chat hears of later edits from its turn context. */
 export async function readBotPreamble(
   fs: Pick<BotHomeFilesystem, 'readText'>,
-  bot: Pick<Bot, 'name' | 'agent'>,
+  bot: Pick<Bot, 'name' | 'agent' | 'systemRole'>,
   folder: string,
   onRead?: (files: BotHomeFiles) => void
 ): Promise<string> {
   const files = await readBotHomeFiles(fs, folder)
   onRead?.(files)
-  return buildBotPreamble({ name: bot.name, agent: bot.agent, ...files })
+  return buildBotPreamble({ ...bot, ...files })
 }
 
 /** The preamble for a session in a bot's home workspace, read from the folder it runs in; null elsewhere. */
 export async function botSessionPreamble<
-  B extends Pick<Bot, 'name' | 'agent' | 'folderWorkspaceId'>
+  B extends Pick<Bot, 'name' | 'agent' | 'folderWorkspaceId' | 'systemRole'>
 >(
   bots: readonly B[],
   session: {
@@ -213,7 +223,10 @@ export async function botSessionPreamble<
   }
   // An automation on its own agent, or a chat started on another, runs on its record's agent.
   const agent = session.provider && isBotAgent(session.provider) ? session.provider : bot.agent
-  return readBotPreamble(fs, { name: bot.name, agent }, session.launchDirectory, (files) =>
-    onRead?.(bot, files, agent)
+  return readBotPreamble(
+    fs,
+    { name: bot.name, agent, systemRole: bot.systemRole },
+    session.launchDirectory,
+    (files) => onRead?.(bot, files, agent)
   )
 }

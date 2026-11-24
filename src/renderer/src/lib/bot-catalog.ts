@@ -19,14 +19,6 @@ import {
   isOrcaCloudTeamFeatureBlocked,
   ORCA_CLOUD_TEAM_POLICY_FLAGS
 } from '../../../shared/orca-profiles/orca-cloud-team-policy'
-import { activateAndRevealFolderWorkspace } from './workspace/activation/worktree-activation'
-import {
-  activateStructuredAgentSessionById,
-  activateStructuredAgentSessionTabOnOwner
-} from './agent-session/structured-agent-session-tab-activation'
-import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
-import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
-import { appendNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
 import {
   publishBots as publish,
   readBots,
@@ -52,16 +44,11 @@ import {
   refreshBotHost,
   refreshBots
 } from './bot-host-refresh'
-import { botHostTarget, botTarget, callBotRpc, ownBotHost, type BotRef } from './bot-hosts'
+import { botHostTarget, callBotRpc, ownBotHost, type BotRef } from './bot-hosts'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
-import {
-  getRuntimeTargetHostId,
-  runtimeTargetEnvironmentId
-} from '@/runtime/rpc/targets/runtime-client-target'
+import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { NativeChatVisualOwnerContext } from '@/components/native-chat/media/visuals/native-chat-visual-owner'
 import { isHome, type BotHomeOwner } from '../../../shared/bots/bot-homes'
-import { requestNativeChatComposerFocus } from '../components/native-chat/composer/focus/native-chat-composer-focus-intent'
-import { structuredAgentSessionDraftScopeKey } from '../components/native-chat/drafts/native-chat-draft-scope'
 
 export { isHome, readBots, readHostBots, refreshBotHost, refreshBots, subscribeToBotChanges }
 
@@ -260,15 +247,6 @@ export async function undoBotMemoryChange(bot: BotRef, id: string): Promise<bool
   return undone
 }
 
-/** Keeps the bot's Chat, its Home tab, or creates one if it has none that still fits. */
-export async function openBotChat(bot: BotRef): Promise<string> {
-  const { sessionId } = await callBotRpc<{ sessionId: string }>(bot, 'bots.chat.open', {
-    botId: bot.id
-  })
-  await refreshBotHost(bot.hostId)
-  return sessionId
-}
-
 /** A new Home Chat; the old one stops, leaves the tab bar and stays in history. */
 export async function newBotHomeChat(bot: BotRef): Promise<string> {
   const { sessionId } = await callBotRpc<{ sessionId: string }>(bot, 'bots.chat.reset', {
@@ -328,57 +306,4 @@ export async function deleteBot(
   await refreshBotHost(bot.hostId)
 }
 
-/** False when the home is not in the catalog (or not reachable) yet. */
-export function openBotHome(bot: Bot): boolean {
-  const opened = activateAndRevealFolderWorkspace(bot.folderWorkspaceId, {
-    executionHostId: bot.hostId,
-    // Bots are not rows of the workspace list, so there is nothing there to reveal.
-    revealInSidebar: false
-  })
-  return opened !== false
-}
-
-/**
- * The bot's page on its Home tab, whatever tab was last open there. False when its home can't open yet.
- * `draft` is added to Home's unsent message, never sent, and its composer takes focus.
- */
-export async function openBotHomeTab(bot: Bot, options?: { draft?: string }): Promise<boolean> {
-  // Home exists before the page opens, so the page lands on it rather than on a new terminal.
-  const chatSessionId = await openBotChat(bot).catch((error: unknown) => {
-    console.error('Failed to open the bot chat:', error)
-    return null
-  })
-  // The home must be in the catalog before it can open.
-  await useAppStore
-    .getState()
-    .fetchFolderWorkspaces({ runtimeEnvironmentId: runtimeTargetEnvironmentId(botTarget(bot)) })
-  if (!openBotHome(bot)) {
-    return false
-  }
-  if (chatSessionId) {
-    const worktreeId = folderWorkspaceKey(bot.folderWorkspaceId)
-    // An open Home switches here; one not in this window yet opens when the host's activation arrives.
-    if (!activateStructuredAgentSessionById({ worktreeId, sessionId: chatSessionId })) {
-      activateStructuredAgentSessionTabOnOwner(worktreeId, chatSessionId)
-    }
-    if (options?.draft) {
-      appendNativeChatDraftCache(structuredAgentSessionDraftScopeKey(chatSessionId), options.draft)
-      // The draft lands once, here: the cache reaches a mounted composer and seeds one that mounts
-      // later. The focus request after the activation only puts the caret after it, adding nothing.
-      requestNativeChatComposerFocus(structuredAgentSessionTabId(chatSessionId), {
-        revealDraft: true
-      })
-    }
-  }
-  return true
-}
-
-/** Reads the host's list first when nothing has loaded it yet. False for no such bot. */
-export async function openBotHomeTabById(ref: BotRef): Promise<boolean> {
-  const find = (): Bot | undefined => readHostBots(ref.hostId).find((bot) => bot.id === ref.id)
-  if (!find()) {
-    await refreshBotHost(ref.hostId)
-  }
-  const bot = find()
-  return bot ? openBotHomeTab(bot) : false
-}
+export { openBotChat, openBotHome, openBotHomeTab, openBotHomeTabById } from './bot-home-navigation'

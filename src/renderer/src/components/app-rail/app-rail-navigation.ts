@@ -6,6 +6,7 @@ import { isLiveEntry, isViewEntry } from '@/store/slices/ui/workspace-navigation
 
 type PageCloseActions = Pick<
   UISlice,
+  | 'closeCommanderPage'
   | 'closeTaskPage'
   | 'closeAutomationsPage'
   | 'closeArtifactsPage'
@@ -23,6 +24,7 @@ export type RailNavigationStore = {
 }
 
 const CLOSE_PAGE: Record<Exclude<UISlice['activeView'], 'terminal'>, keyof PageCloseActions> = {
+  commander: 'closeCommanderPage',
   tasks: 'closeTaskPage',
   automations: 'closeAutomationsPage',
   artifacts: 'closeArtifactsPage',

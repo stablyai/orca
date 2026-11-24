@@ -1,3 +1,4 @@
+import { prepareCommanderDispatch } from '../commander/prepare-dispatch'
 import type { CommandHandler } from '../../dispatch/dispatch'
 import { printResult } from '../../output/command-result-output'
 import { withReceiptNext } from '../receipt-next-text'
@@ -5,7 +6,10 @@ import { getOptionalStringFlag, getPresentStringFlag } from '../../arguments/fla
 import { RuntimeClientError } from '../../runtime/connection/types'
 import type { RuntimeClient } from '../../runtime/client'
 import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
+import {
+  ORCHESTRATION_COMMANDER_DISPATCH_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
+} from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { getOptionalPositiveIntegerValueFlag } from '../numeric-flags'
 import { isDevCliInvocation } from '../recovery/runtime-compatibility'
@@ -32,29 +36,34 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     const { flags, client, cwd, json } = ctx
     await refuseAgentServerRoute('worker-start', ctx)
     const terminal = getPresentStringFlag(flags, 'terminal')
-    const model = getOptionalStringFlag(flags, 'model')
-    const effort = getOptionalStringFlag(flags, 'effort')
-    if (model || effort) {
-      const status = await client.call<RuntimeStatus>('status.get')
-      if (
-        !status.result.capabilities?.includes(
-          ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
-        )
-      ) {
+    const task = getOptionalStringFlag(flags, 'task')
+    const spec = await readTextOrFileFlag(flags, cwd, 'spec', false)
+    const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const modelFlag = getOptionalStringFlag(flags, 'model')
+    const effortFlag = getOptionalStringFlag(flags, 'effort')
+    let routingHost: string | undefined
+    if (modelFlag || effortFlag || flags.has('commander-project')) {
+      const { result } = await client.call<RuntimeStatus>('status.get')
+      routingHost = JSON.stringify([
+        result.hostDescriptor?.installationId ?? result.runtimeId,
+        result.pairedDeviceId ?? null
+      ])
+      const required = flags.has('commander-project')
+        ? ORCHESTRATION_COMMANDER_DISPATCH_RUNTIME_CAPABILITY
+        : ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
+      if (!result.capabilities?.includes(required)) {
         throw new RuntimeClientError(
           'incompatible_runtime',
-          'The connected Orca runtime does not support worker model or effort overrides. Update or restart Orca and try again.'
+          'The connected Orca runtime does not support these worker launch preferences. Update or restart Orca and try again.'
         )
       }
     }
-    const task = getOptionalStringFlag(flags, 'task')
-    const spec = await readTextOrFileFlag(flags, cwd, 'spec', false)
     const taskTitle = getOptionalStringFlag(flags, 'task-title')
     const deps = getOptionalStringFlag(flags, 'deps')
     const parent = getOptionalStringFlag(flags, 'parent')
     const item = getOptionalStringFlag(flags, 'item')
     const forQuestion = getOptionalStringFlag(flags, 'for')
-    const params = {
+    const launchParams = {
       task,
       ...(spec ? { spec } : {}),
       ...(taskTitle ? { taskTitle } : {}),
@@ -72,20 +81,35 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       comment: getOptionalStringFlag(flags, 'comment'),
       setup: getOptionalStringFlag(flags, 'setup'),
       agent: getOptionalStringFlag(flags, 'agent'),
-      model,
-      effort,
+      model: modelFlag,
+      effort: effortFlag,
       terminal,
       retryOf: getOptionalStringFlag(flags, 'retry-of'),
       timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),
       run: getOptionalStringFlag(flags, 'run'),
-      from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
+      from,
       devMode: isDevCliInvocation()
     }
+    const routing = await prepareCommanderDispatch(ctx, launchParams, routingHost)
     const result = await callOrchestrationMutation<WorkerStartAgentReceipt>(
       client,
-      flags,
+      routing ? new Map(flags).set('retry-request', routing.requestId) : flags,
       'orchestration.workerStart',
-      params
+      {
+        ...launchParams,
+        model: routing?.model ?? modelFlag,
+        effort: routing?.effort ?? effortFlag,
+        ...(routing
+          ? {
+              commander: {
+                projectId: routing.projectId,
+                decisionPageId: routing.pageId,
+                reason: routing.reason,
+                guidelines: routing.guidelines
+              }
+            }
+          : {})
+      }
     ).catch(async (error: unknown) => {
       if (!flags.has('retry-request')) {
         const recovered = await reconcileWorkerStartTimeout(client, error)
@@ -108,6 +132,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       ...result,
       result: {
         ...withResolvedNextCommands(result.result),
+        ...(routing ? { routingDecision: routing.pageId, routingReason: routing.reason } : {}),
         ...(keepOpenState === 'retained' ? { keptOpen: true as const } : {})
       }
     }

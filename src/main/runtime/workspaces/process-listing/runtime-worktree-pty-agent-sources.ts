@@ -1,3 +1,4 @@
+import { interactivePromptLabel } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { paneAgentIdentity } from '../../../agent-hooks/server/pane-agent-identity'
 import {
   pickParsedAgentStatusPayload,
@@ -101,6 +102,10 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       ...(entry.providerSession?.id ? { providerSessionId: entry.providerSession.id } : {}),
       ...(orcaSessionId ? { orcaSessionId } : {}),
       prompt: entry.prompt,
+      askSummary:
+        entry.state === 'blocked' || entry.state === 'waiting'
+          ? interactivePromptLabel(entry.interactivePrompt, entry.toolName, entry.agentType)
+          : undefined,
       lastAssistantMessage: entry.lastAssistantMessage ?? null,
       toolName: entry.toolName ?? null,
       toolInput: entry.toolInput ?? null,

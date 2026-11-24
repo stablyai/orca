@@ -1,3 +1,4 @@
+import { commanderTaskSpec } from '../../../../../../../shared/orchestration/workers/commander-task-spec'
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
 import { refuseClaimedWorkerTerminal } from '../../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { probeWorkerOpenCodeModelLaunchSupport } from './launch/worker-opencode-model-preflight'
@@ -120,7 +121,7 @@ export async function startLocalWorker(args: {
     : undefined
   let resolvedWorktree: Awaited<ReturnType<typeof placeWorkerAgent>>['worktree'] | undefined =
     await refuseUnmatchedWorkerSelector(targetLabel, () =>
-      resolveExistingWorkerWorkspace(runtime, creationTarget, existingWorktree)
+      resolveExistingWorkerWorkspace(runtime, creationTarget, existingWorktree, params.commander)
     )
   if (terminal) {
     await assertExplicitWorkerUsable({
@@ -263,13 +264,12 @@ export async function startLocalWorker(args: {
       if (workerChat) {
         rebindReusedStructuredWorker(handle, db)
       }
+      const spec = commanderTaskSpec(task.spec, params.commander)
       return deliverAndSettleWorkerStartReadiness({
         runtime,
         db,
         run,
-        task: placement.extraSpec
-          ? { ...task, spec: `${task.spec}\n\n${placement.extraSpec}` }
-          : task,
+        task: { ...task, spec: placement.extraSpec ? `${spec}\n\n${placement.extraSpec}` : spec },
         dispatchId: started.dispatch.id,
         dispatchDepth: started.dispatch.depth,
         structuredSession,

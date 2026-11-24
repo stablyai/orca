@@ -5,6 +5,7 @@ import { z } from 'zod'
 import type { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import {
   ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY,
+  ORCHESTRATION_COMMANDER_DISPATCH_RUNTIME_CAPABILITY,
   ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY
 } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { startsInChatLineage } from '../../../rpc/methods/orchestration/worker/start/worker-chat-lineage'
@@ -142,6 +143,15 @@ export async function startRemoteOwnedWorker(
     await prepareWorkerStart(params, ctx)
   const db = runtime.getOrchestrationDb()
   const server = await runtime.resolveOrchestrationWorkerServer(params.on!)
+  if (
+    params.commander &&
+    !(await serverSupports(runtime, server, ORCHESTRATION_COMMANDER_DISPATCH_RUNTIME_CAPABILITY))
+  ) {
+    throw new OrchestrationError(
+      'capability_unsupported',
+      'The remote Orca host does not support Commander project validation.'
+    )
+  }
   // This caller's workspace is here, so a server's new-child nests under it across machines.
   const crossStoreParent =
     params.worktree === 'new-child'

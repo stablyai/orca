@@ -10,7 +10,7 @@ import {
   formatMessageReadOnlyTag,
   type OrchestrationMessageSummary as MessageSummary
 } from '../../../shared/orchestration/mailbox/orchestration-check-output'
-import { readTextOrFileFlag } from '../../arguments/command-body-input'
+import { readOrchestrationReplyBody } from './question-preference'
 import { RuntimeClientError } from '../../runtime/connection/types'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { requirePeerMailCarrier } from '../identity/agent-server-route'
@@ -24,13 +24,14 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
     const { flags, client, cwd, json } = ctx
     await requirePeerMailCarrier(ctx)
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const id = getRequiredStringFlag(flags, 'id')
     const result = await callOrchestrationMutation<{
       message: { id: string }
       warnings?: { message: string }[]
       next?: string
     }>(client, flags, 'orchestration.reply', {
-      id: getRequiredStringFlag(flags, 'id'),
-      body: await readTextOrFileFlag(flags, cwd, 'body', true),
+      id,
+      body: await readOrchestrationReplyBody(ctx, id),
       run: getOptionalStringFlag(flags, 'run'),
       on: getOptionalStringFlag(flags, 'on'),
       from

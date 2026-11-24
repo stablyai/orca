@@ -62,11 +62,8 @@ export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
   const readable: Bot[] = []
   const newer: Bot[] = []
   for (const bot of bots) {
-    if (BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent)) {
-      readable.push(bot)
-    } else {
-      newer.push(bot)
-    }
+    const group = BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent) ? readable : newer
+    group.push(bot)
   }
   return { readable, newer }
 }
@@ -248,6 +245,8 @@ export const BotSchema = z.object({
   importedFrom: BotImportedFromSchema.optional().catch(undefined),
   /** The shared link it was made from. */
   sharedFrom: BotSharedFromSchema.optional().catch(undefined),
+  /** A host-owned role that survives renaming. Only the host assigns it at creation. */
+  systemRole: z.literal('commander').optional().catch(undefined),
   /** The built-in template it was made from. */
   templateId: z.string().max(64).optional().catch(undefined),
   createdAt: z.number(),

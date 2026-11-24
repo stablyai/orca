@@ -30,6 +30,14 @@ export const WorkerStartParams = z
     agent: OptionalString,
     model: OptionalWorkerLaunchPreference,
     effort: OptionalWorkerLaunchPreference,
+    commander: z
+      .object({
+        projectId: z.string().min(1).max(256),
+        decisionPageId: z.string().regex(/^dispatch-[a-f0-9-]{36}$/iu),
+        reason: z.string().min(1).max(4096),
+        guidelines: z.string().max(65536)
+      })
+      .optional(),
     retryOf: OptionalString,
     timeoutMs: OptionalFiniteNumber,
     devMode: z.boolean().optional(),

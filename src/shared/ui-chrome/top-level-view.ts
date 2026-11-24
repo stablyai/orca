@@ -2,6 +2,7 @@ import type { TopLevelView } from './ui-chrome-types'
 
 // Exhaustive keys make new views update every persistence/IPC validator.
 const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
+  commander: true,
   terminal: true,
   settings: true,
   tasks: true,

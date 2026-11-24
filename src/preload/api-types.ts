@@ -1,3 +1,4 @@
+import type { CommanderMemoryApi } from '../shared/commander/memory-contract'
 import type {
   ClaudeAccountsApi,
   CodexAccountsApi,
@@ -98,6 +99,7 @@ type Merged<T> = { [K in keyof T]: T[K] }
 
 export type PreloadApi = {
   app: AppApi
+  commanderMemory: CommanderMemoryApi
   orcaProfiles: OrcaProfileApi
   platform: PlatformApi
   e2e: E2EApi

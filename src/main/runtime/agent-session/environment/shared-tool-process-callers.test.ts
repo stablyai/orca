@@ -6,6 +6,7 @@ const SEALED = {
   ORCA_AGENT_SESSION_ID: 'chat-a',
   ORCA_TERMINAL_HANDLE: 'structworker_a',
   ORCA_BOT_TOOLS_TOKEN: 'bot-a-secret',
+  ORCA_COMMANDER_HOME_CAPABILITY: 'home-a-secret',
   ORCA_STRUCTURED_SESSION: '1',
   ORCA_USER_DATA_PATH: '/orca-data',
   ORCA_CLI_COMMAND: '/orca-data/cli/bin/orca',
@@ -41,18 +42,21 @@ describe('SharedToolProcessSession', () => {
       ORCA_AGENT_SESSION_ID: null,
       ORCA_TERMINAL_HANDLE: null,
       ORCA_BOT_TOOLS_TOKEN: null,
+      ORCA_COMMANDER_HOME_CAPABILITY: null,
       ORCA_STRUCTURED_SESSION: '1',
       ORCA_USER_DATA_PATH: '/orca-data',
       ORCA_CLI_COMMAND: '/orca-data/cli/bin/orca',
       ORCA_ENVIRONMENT: ''
     })
     expect(Object.values(tools)).not.toContain('bot-a-secret')
+    expect(Object.values(tools)).not.toContain('home-a-secret')
     expect(tools.PATH).toBeUndefined()
     const token = tools.ORCA_AGENT_SESSION_TOOL_TOKEN!
     expect(sharedToolProcessCaller(token)).toEqual({
       ORCA_AGENT_SESSION_ID: 'chat-a',
       ORCA_TERMINAL_HANDLE: 'structworker_a',
-      ORCA_BOT_TOOLS_TOKEN: 'bot-a-secret'
+      ORCA_BOT_TOOLS_TOKEN: 'bot-a-secret',
+      ORCA_COMMANDER_HOME_CAPABILITY: 'home-a-secret'
     })
     expect(sharedToolProcessCaller(`${token}x`)).toBeNull()
 

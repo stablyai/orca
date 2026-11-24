@@ -1,3 +1,4 @@
+import { assertCommanderProject } from '../../rpc/methods/orchestration/worker/start/placement/commander-project'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { waitForWorkerAgentReady } from '../../terminal/wait/launched-agent-composer-readiness'
 import { agentStartupBlockedMessage } from '../../terminal/wait/agent-startup-blocked-message'
@@ -84,6 +85,18 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         )
       }
 
+      if (params.commanderProjectId) {
+        const repo = createsWorktree
+          ? params.repo
+          : `id:${(await runtime.showManagedTerminalWorkspace(params.worktree)).repoId}`
+        if (!repo) {
+          throw new OrchestrationError(
+            'invalid_argument',
+            'Commander placement requires a repository.'
+          )
+        }
+        await assertCommanderProject(runtime, params.commanderProjectId, repo)
+      }
       const db = runtime.getOrchestrationDb()
       // Synchronous through the insert, so a racing start on the same terminal is refused before any wait.
       const releaseTerminalClaim = claimTerminalForRemoteAttach(db, params.terminal, runtime, {

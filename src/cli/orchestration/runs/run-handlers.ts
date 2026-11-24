@@ -1,4 +1,5 @@
 import { abbreviateOrchestrationText } from '../../../shared/orchestration/orchestration-task-summary'
+import { commanderBriefing } from './commander-briefing'
 import type { CommandHandler } from '../../dispatch/dispatch'
 import { printResult } from '../../output/command-result-output'
 import { printOrchestrationResult } from '../agent-view'
@@ -21,6 +22,7 @@ import {
 const RUN_LIST_DEFAULT_LIMIT = 10
 
 export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
+  'orchestration briefing': commanderBriefing,
   'orchestration run-create': async ({ flags, client, cwd, json }) => {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const unboundRunId = await findRunOlderRuntimeWillUnbind(client, from).catch(() => null)

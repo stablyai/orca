@@ -32,6 +32,7 @@ export function activateStructuredAgentSessionTab(args: {
   worktreeId: string
   tabId: string
   target?: RuntimeClientTarget
+  callerOnly?: boolean
 }): boolean {
   const state = useAppStore.getState()
   const tab = (state.unifiedTabsByWorktree[args.worktreeId] ?? []).find(
@@ -49,7 +50,9 @@ export function activateStructuredAgentSessionTab(args: {
   state.activateTab(tab.id, { worktreeId: args.worktreeId })
   state.setActiveTabType('agent-session', args.worktreeId)
   requestNativeChatComposerFocus(tab.id)
-  activateStructuredAgentSessionTabOnOwner(args.worktreeId, tab.entityId, args.target)
+  activateStructuredAgentSessionTabOnOwner(args.worktreeId, tab.entityId, args.target, {
+    callerOnly: args.callerOnly
+  })
   return true
 }
 
@@ -60,23 +63,24 @@ export function activateStructuredAgentSessionTabOnOwner(
   target?: RuntimeClientTarget,
   options?: { callerOnly?: boolean }
 ): void {
-  const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), worktreeId)
-  void callRuntimeRpc(
-    target ?? runtimeTargetForOwnerEnvironment(environmentId),
-    'session.tabs.activate',
-    {
-      worktree: toRuntimeWorktreeSelector(worktreeId),
-      tabId: `agent-session:${sessionId}`,
-      // Why both: navigation scopes new hosts to this client; notifyClients:false protects old hosts.
-      ...(options?.callerOnly ? { notifyClients: false, navigation: 'caller' as const } : {})
-    }
-  )
+  const owner =
+    target ??
+    runtimeTargetForOwnerEnvironment(
+      runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), worktreeId)
+    )
+  void callRuntimeRpc(owner, 'session.tabs.activate', {
+    worktree: toRuntimeWorktreeSelector(worktreeId),
+    tabId: `agent-session:${sessionId}`,
+    // Why both: navigation scopes new hosts to this client; notifyClients:false protects old hosts.
+    ...(options?.callerOnly ? { notifyClients: false, navigation: 'caller' as const } : {})
+  })
 }
 
 export function activateStructuredAgentSessionById(args: {
   worktreeId: string
   sessionId: string
   target?: RuntimeClientTarget
+  callerOnly?: boolean
 }): boolean {
   const tab = findStructuredAgentSessionTab(useAppStore.getState().unifiedTabsByWorktree, {
     workspaceId: args.worktreeId,
@@ -87,7 +91,8 @@ export function activateStructuredAgentSessionById(args: {
     ? activateStructuredAgentSessionTab({
         worktreeId: args.worktreeId,
         tabId: tab.id,
-        target: args.target
+        target: args.target,
+        callerOnly: args.callerOnly
       })
     : false
 }

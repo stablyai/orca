@@ -52,6 +52,8 @@ export type RuntimeWorktreeAgentRow = {
   conversationName?: string
   /** `conversationName` names a forked native chat, drawn after the fork mark. Old hosts omit it. */
   conversationForked?: true
+  /** One-line prompt title for live decisions. Older hosts omit it. */
+  askSummary?: string
   lastAssistantMessage: string | null
   toolName: string | null
   toolInput: string | null

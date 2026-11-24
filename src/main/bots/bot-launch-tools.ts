@@ -5,7 +5,10 @@ import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import type { BotToolProblem, BotToolServer } from '../../shared/bot-tools'
 import type { BotToolsCli } from './bot-tools-host'
 import { botToolRelay, type BotToolRelay } from './tool-relay/bot-tool-relay'
-import { BOT_TOOLS_TOKEN_ENV } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import {
+  BOT_TOOLS_TOKEN_ENV,
+  COMMANDER_HOME_CAPABILITY_ENV
+} from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '::1']
 
 /** A bot's servers ready for its CLI; only `BotLaunchTools.for` makes one, so no saved value slips through. */
@@ -23,6 +26,16 @@ export class BotLaunchTools {
     /** Some tool goes through the relay, so the CLI must reach loopback directly. */
     readonly relayed: boolean
   ) {}
+
+  withCommanderCapability(provider: string, capability: string): BotLaunchTools {
+    const extra = { [COMMANDER_HOME_CAPABILITY_ENV]: capability }
+    return new BotLaunchTools(
+      this.servers,
+      provider === 'codex' ? this.env : { ...this.env, ...extra },
+      provider === 'codex' ? { ...this.commandEnv, ...extra } : this.commandEnv,
+      this.relayed
+    )
+  }
 
   /**
    * Every bot launch gets the bot's token, whichever agent runs it: tools present it to the relay,

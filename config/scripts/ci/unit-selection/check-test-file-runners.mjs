@@ -15,7 +15,23 @@ const VITEST_DEFAULT_INCLUDE = '**/*.{test,spec}.?(c|m)[jt]s?(x)'
 const TEST_FILE_NAME = /\.(?:test|spec|e2e|bench)\.[cm]?[jt]sx?$/
 
 // Mirror literals must appear in runner sources; list manual rows each run so their lack of CI remains visible.
+const COMMANDER_TEST_FILES = [
+  'scripts/commander-briefing.test.mjs',
+  'scripts/commander-handoff.test.mjs',
+  'scripts/commander-code-graph.test.mjs',
+  'scripts/commander-memory-tools.test.mjs',
+  'cloud/apps/commander-memory/memory.test.mjs',
+  'cloud/apps/commander-memory/dispatch-plans.test.mjs'
+]
+
 const NON_UNIT_TEST_RUNNERS = [
+  {
+    name: 'Commander (pnpm test:commander)',
+    manual: true,
+    include: COMMANDER_TEST_FILES,
+    sources: ['package.json'],
+    mirrors: COMMANDER_TEST_FILES
+  },
   {
     name: 'Playwright e2e',
     include: ['tests/e2e/**/*.spec.ts'],

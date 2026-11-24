@@ -1,3 +1,4 @@
+import { commanderMemoryApi } from './api/profiles/commander-memory-bridge'
 import { contextBridge, ipcRenderer } from 'electron'
 import { HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL } from '../shared/app-lifecycle/windows/hidden-window-frame-pump'
 import { installHiddenWindowFramePump } from './renderer/hidden-window-frame-pump'
@@ -114,6 +115,7 @@ const telemetryGetConsentStateApi: PreloadApi['telemetryGetConsentState'] = () =
 
 const api = {
   app: appApi,
+  commanderMemory: commanderMemoryApi,
   orcaProfiles: orcaProfilesApi,
   platform: platformApi,
   wsl: wslApi,

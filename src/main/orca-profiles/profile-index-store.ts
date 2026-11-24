@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
@@ -161,6 +162,26 @@ function getActiveProfile(index: OrcaProfileIndex): OrcaProfileSummary {
     index.profiles[0] ??
     createDefaultLocalOrcaProfile(Date.now())
   )
+}
+
+/** Read the profile initialized by startup without repairing, migrating or creating state. */
+export async function readInitializedActiveOrcaProfile(
+  userDataPath: string
+): Promise<ActiveOrcaProfileState> {
+  const index = normalizeProfileIndex(
+    JSON.parse(await readFile(getOrcaProfileIndexPath(userDataPath), 'utf8'))
+  )
+  if (!index) {
+    throw new Error('Could not read the active Orca profile.')
+  }
+  const profile = getActiveProfile(index)
+  return {
+    index,
+    profile,
+    dataFile: getOrcaProfileDataFile(profile.id, userDataPath),
+    stateDatabaseFile: getOrcaProfileStateDatabaseFile(profile.id, userDataPath),
+    profileDirectory: getOrcaProfileDirectory(profile.id, userDataPath)
+  }
 }
 
 export function ensureActiveOrcaProfile(

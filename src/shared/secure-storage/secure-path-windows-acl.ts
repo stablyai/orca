@@ -1,6 +1,10 @@
 import { writeFileSync } from 'node:fs'
 import { reportSecurePathHardening as report } from './secure-path-hardening-report'
-import { loadWindowsSecurity, type WindowsSecurity } from './windows-security-addon'
+import {
+  loadWindowsSecurity,
+  loadWindowsSecurityAsync,
+  type WindowsSecurity
+} from './windows-security-addon'
 import {
   findPrivateDaclViolation,
   findSecureDaclViolation,
@@ -11,6 +15,15 @@ import {
 export function restrictWindowsDirectory(dirPath: string): Promise<boolean> {
   const security = securityFor(dirPath)
   return security ? restrictAsync(security, dirPath, true) : Promise.resolve(false)
+}
+
+/** Verify each staged credential path using the asynchronously resolved native addon. */
+export async function restrictStagedWindowsPath(
+  path: string,
+  directory: boolean
+): Promise<boolean> {
+  const security = await loadWindowsSecurityAsync()
+  return 'error' in security ? false : restrictAsync(security, path, directory)
 }
 
 async function restrictAsync(

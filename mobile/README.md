@@ -80,6 +80,22 @@ For the Android emulator, use `ws://10.0.2.2:6768`. For a physical phone, use th
 
 If the phone has a stale host entry, remove it from the app and pair again.
 
+## Commander on Android and iOS
+
+Pair your Android phone or iPhone in **Settings → Mobile** on the desktop. In a companion app built from this branch, open **Command** on the home tab bar for an overview of all paired desktops. **Needs you** filters to projects with agents waiting for attention. Tap a project, then a live agent, to open its session. Last-known rows retain their status as historical observations while a desktop is disconnected.
+
+On a phone that uses Orca's desktop-served host pages, open the updated desktop from Feed, tap its **…** menu, then **Commander Center**. This view covers the selected desktop. The global home tab ships with the native app.
+
+Tap **Talk to Commander**, choose the paired desktop that runs your Commander, and type your goal in its Home Chat. Reopening that desktop’s Commander on a phone or computer returns you to the same host-side conversation. The host needs Bots enabled and a configured chat provider. Opening the conversation does not submit a prompt.
+
+To use **Memory**, sign in on the desktop, open **Commander → Memory**, then enable **Share Memory with paired phones**. The phone uses the paired desktop's current account and organization. It can browse Markdown and revision history and write notes, decisions, and guidelines. Keep the desktop reachable while using Memory. The account service must have the [Commander Memory backend](../cloud/apps/commander-memory/README.md) deployed. To turn off phone access, disable the same sharing switch on the desktop.
+
+Use an updated desktop and a mobile client built from this release to resume a goal on Android or iOS. **Commander → Handoffs** shows goals saved in that account and organization. Pick a handoff on the destination desktop through its paired connection, then resume it in Commander. Review the goal, progress, and next step in the chat composer and tap Send when ready. The source desktop can go offline after saving. Unsaved work, running processes, and provider transcripts stay on the source host.
+
+A desktop owner can turn on **Commander → Memory → Save agent handoffs automatically** for local Codex and Claude project chats. The phone can open those saved records in **Handoffs** through a desktop with Memory sharing enabled. **Decisions** groups pending agent requests and opens the selected agent’s own conversation for review.
+
+For the global tab on a simulator, install dependencies in the root and in `mobile/`, then use the native dev-client instructions above on a Mac with Xcode. Physical-device distribution requires an Apple-signed build.
+
 ## Development Paths
 
 ### Android Phone

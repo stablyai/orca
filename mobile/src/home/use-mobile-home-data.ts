@@ -301,6 +301,7 @@ export function useMobileHomeData() {
 
   return {
     ...connections,
+    homeFocused,
     accountsByHost,
     applyAgentActivity: agentActivity.apply,
     activeAgents,

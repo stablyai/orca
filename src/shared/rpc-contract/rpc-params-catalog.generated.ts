@@ -351,6 +351,13 @@ import {
   SaveImageAsTempFile,
   StartImageUpload
 } from './clipboard/clipboard-params'
+import { CommanderChatAskPreferenceParams } from './commander-chat'
+import {
+  CommanderPhoneListParams,
+  CommanderPhoneReadParams,
+  CommanderPhoneRecurringAnswersParams,
+  CommanderPhoneSaveParams
+} from './commander-phone-params'
 import {
   ComputerCapabilitiesParams,
   ComputerPermissionsStatusParams
@@ -1501,6 +1508,14 @@ export const RPC_PARAMS_BY_METHOD = {
   'clipboard.commitImageUpload': CommitImageUpload,
   'clipboard.saveImageAsTempFile': SaveImageAsTempFile,
   'clipboard.startImageUpload': StartImageUpload,
+  'commanderChat.askPreference': CommanderChatAskPreferenceParams,
+  'commanderChat.open': null,
+  'commanderChat.recent': null,
+  'commanderPhone.list': CommanderPhoneListParams,
+  'commanderPhone.read': CommanderPhoneReadParams,
+  'commanderPhone.recurringAnswers': CommanderPhoneRecurringAnswersParams,
+  'commanderPhone.save': CommanderPhoneSaveParams,
+  'commanderPhone.status': null,
   'computer.capabilities': ComputerCapabilitiesParams,
   'computer.click': Click,
   'computer.drag': DragOfComputerSchemasParams,

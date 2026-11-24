@@ -27,6 +27,7 @@ import { assertBotOwnsHome, type BotHomeFilesystem, botHomeFolder, writeBotHome 
 import { type BotMemoryRecord, hostBotMemoryRecord } from './bot-memory-record'
 import { stampBotLinkOwners } from '../../shared/bot-link-owners'
 import { makeBotsHome } from './bot-home-workspace'
+import { commanderBotDefaults, commanderSoul, findOrCreateCommander } from './commander-bot'
 import { newBotRecord } from './bot-new-record'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 
@@ -141,14 +142,33 @@ export class BotController {
   /** `origin`: made from a link (with its sharer's SOUL.md) or a built-in template; its first turn runs
    *  first-run rules like any new bot's. */
   create(input: BotCreateParams, origin?: BotOrigin): Promise<Bot> {
-    return this.serialize(async () => {
-      const store = this.requireStore()
-      const bot = await this.makeBot(store, input, origin)
-      store.saveBot(bot)
-      await persistNow(store)
-      this.deps.notifyBotsWritten(true)
-      return bot
-    })
+    return this.serialize(() => this.createAndSave(this.requireStore(), input, origin))
+  }
+
+  ensureCommander(chooseAgent: () => Promise<Bot['agent']>): Promise<Bot> {
+    return this.serialize(() =>
+      findOrCreateCommander(
+        () => {
+          this.assertEnabled()
+          return this.requireStore()
+        },
+        chooseAgent,
+        persistNow,
+        (store, input) => this.createAndSave(store, input, commanderBotDefaults)
+      )
+    )
+  }
+
+  private async createAndSave(
+    store: BotStore,
+    input: BotCreateParams,
+    origin?: BotOrigin | typeof commanderBotDefaults
+  ): Promise<Bot> {
+    const bot = await this.makeBot(store, input, origin)
+    store.saveBot(bot)
+    await persistNow(store)
+    this.deps.notifyBotsWritten(true)
+    return bot
   }
 
   /** One bot per offer card, with any `install` (a template's package) in the same step; see bot-offer-creation. */
@@ -165,7 +185,7 @@ export class BotController {
   private async makeBot(
     store: BotStore,
     input: BotCreateParams,
-    origin: BotOrigin = {}
+    origin: BotOrigin | typeof commanderBotDefaults = {}
   ): Promise<Bot> {
     const name = freeBotName(store.getBots(), input.name)
     const draft = { ...newBotRecord({ ...input, name }, Date.now()), ...origin }
@@ -174,7 +194,7 @@ export class BotController {
       ...(await makeBotsHome(
         this.deps,
         store,
-        templateBotFolderName(name, botTemplate(origin.templateId), input.templateNameShown),
+        templateBotFolderName(name, botTemplate(draft.templateId), input.templateNameShown),
         name,
         draft.agent,
         (path, folder) =>
@@ -182,7 +202,11 @@ export class BotController {
             this.deps.filesystem,
             path,
             { ...draft, folder, folderWorkspaceId: '' },
-            input.seed ? proposalSoul(name, input.seed) : undefined
+            draft.systemRole === 'commander'
+              ? commanderSoul
+              : input.seed
+                ? proposalSoul(name, input.seed)
+                : undefined
           )
       ))
     }

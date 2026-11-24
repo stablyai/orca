@@ -24,6 +24,21 @@ Use it when you need ownership, completion tracking, or a DAG. To send another a
 
 Every orchestration command prints a short view by default: the IDs and state the next command needs, with the next step last. `--json` prints the same fields as one line of JSON (`{"ok":true,"result":{...}}`). `--full --json` prints the complete record Orca returned as pretty JSON; `--full` alone prints the longer text receipt. A failed or unconfirmed outcome exits non-zero and writes `error: <code>: <message>` to stderr.
 
+## Commander briefing
+
+Use `orca orchestration briefing --json` for a compact status check on the current runtime. Use `--environment <id>` to read a paired runtime. Each page reads eight Runs and reports task counts, the total number of pending decisions and up to three questions per goal. A failed task or decision read appears as an unknown count with an error. Pass `--cursor <nextCursor>` for more Runs, or use `orca orchestration gate-list --run <id> --status pending` for all the decisions for one goal. The briefing reads runtime state without calling a model.
+
+From the source checkout, run the briefing with Node.js 24.2 or later and a running Orca instance:
+
+```bash
+node scripts/commander-briefing.mjs
+node scripts/commander-briefing.mjs --environment local --json
+```
+
+The first command queries the local runtime and each paired Orca Server. For each runtime it lists registered project setups, current-format Runs, task counts by status and pending decision gates. A Run can span several repositories, so goals are grouped under the coordinator's runtime. The report reads existing state and leaves every inbox and approval untouched.
+
+Pass `--cli <path>` or set `ORCA_CLI` to select your Orca executable. Use `--environment <id-or-name>` to limit the report to one runtime. In JSON output, `issues` identifies unavailable reads, including sleeping servers. Exit code 2 indicates a partial report. Exit code 1 means the command could not produce a report.
+
 ## Core model
 
 - **Run** — durable namespace and home inbox. Never schedules or places workers.
@@ -219,3 +234,72 @@ Command flags evolve with the app. After install, agents should run:
 ```bash
 orca skills get orchestration --full
 ```
+
+## Reuse an owner's planning decision
+
+A coordinator can answer a repeated worker question on wake using a preference file supplied by the owner. Keep this file with the coordinator, outside the worker checkout. For example, the following preference answers one task's test-order question.
+
+```json
+{
+  "version": 1,
+  "preferences": [
+    {
+      "runId": "run_example",
+      "taskId": "task_example",
+      "question": "Which suite should I run first?",
+      "options": ["unit", "integration"],
+      "answer": "unit"
+    }
+  ]
+}
+```
+
+Replace the example IDs with the Run and Task IDs from the worker's question. When an ordinary question arrives, the coordinator can invoke:
+
+```sh
+orca orchestration reply --run <runId> --id <messageId> --preference-file /path/to/owner-preferences.json
+```
+
+The CLI checks the latest 1,000 messages in the Run's mailbox. Exactly one preference must match the task, question text, and ordered choices. Orca sends the answer as a regular audited reply and wakes the worker. A changed question, conflicting preferences, or an older message needs an explicit decision. Remove an entry to revoke it for future replies. Human decision gates and agent-provider tool approvals use their existing approval flows.
+
+## Route workers using Commander memory
+
+In Commander Memory, create a **Guideline** titled **Worker model routing** for your account or a specific project. Its body holds the model IDs enabled for your agent and provider. For example:
+
+```json
+{
+  "version": 1,
+  "routes": [
+    {
+      "agent": "codex",
+      "taskKind": "documentation",
+      "containsAny": ["update the readme", "fix a typo"],
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "reason": "Use the smaller model for routine documentation changes."
+    },
+    {
+      "agent": "codex",
+      "taskKind": "architecture",
+      "containsAny": ["design a migration"],
+      "model": "gpt-5.4",
+      "effort": "high",
+      "reason": "Check migration ordering and cross-service compatibility."
+    }
+  ]
+}
+```
+
+Export a **Commander** grant from Commander Memory for the target project's ID. Keep the exported file on the coordinator's machine, outside the checkout. To use it for a dispatch:
+
+```sh
+export ORCA_COMMANDER_MEMORY_GRANT_FILE=/path/to/commander-grant.json
+orca orchestration worker-start --commander-project github:acme/sdk \
+  --spec "Update the README with the new API examples" --worktree current --agent codex
+```
+
+The coordinator can name a classification with `--commander-task-kind architecture`. Otherwise, routing matches owner-defined literal phrases in the task text, ignoring case. The class `default` supplies a fallback. A specific match wins over a default. Within a class, a project rule wins over an account rule. An unresolved tie requires a more specific instruction. Without a match, the agent uses its configured model. An explicit `--model` selects its own default effort unless `--effort` is supplied. The execution host validates the requested model options and the worker project's identity.
+
+Current, human-authored guidelines for the account and project accompany the worker's task. When a project has recorded progress, the coordinator also includes a dated excerpt from its latest visible checkpoint (up to 2 KiB). Guidelines take priority within the 8 KiB combined budget. The decision page links to the full checkpoint even when only the instructions fit. Move background material into linked notes to keep the task brief. The Commander saves a decision page with its requested model, effort, rationale, and links to source revisions before it requests the launch. The dispatch receipt links that plan to the actual launch. Calls without `--commander-project` use the standard Orca worker flow.
+
+If a launch times out, repeat the same command with `--retry-request <originalRequestId>`. The same Commander on the same execution host reuses the model, effort and context saved with the original request, even if the wiki has changed. For a request created before frozen plans were available, use `orca orchestration request-show` to inspect its outcome.

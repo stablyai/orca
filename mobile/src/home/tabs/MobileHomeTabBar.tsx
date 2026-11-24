@@ -3,6 +3,7 @@ import {
   CalendarClock,
   Gauge,
   LayoutList,
+  Workflow,
   SquareTerminal,
   type LucideIcon
 } from 'lucide-react-native'
@@ -23,6 +24,7 @@ import { HOME_EASE_OUT, type HomeTabId } from './home-tabs'
 
 const TAB_ICONS: Record<HomeTabId, LucideIcon> = {
   feed: LayoutList,
+  commander: Workflow,
   bots: Bot,
   agents: SquareTerminal,
   usage: Gauge,
@@ -44,6 +46,7 @@ export function MobileHomeTabBar(props: {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const labels: Record<HomeTabId, string> = {
+    commander: t('commander.tab', 'Command'),
     feed: t('home.tabs.feed', 'Feed'),
     bots: t('home.tabs.bots', 'Bots'),
     agents: t('home.tabs.agents', 'Agents'),
@@ -66,6 +69,9 @@ export function MobileHomeTabBar(props: {
           key={tab}
           icon={TAB_ICONS[tab]}
           label={labels[tab]}
+          accessibilityLabel={
+            tab === 'commander' ? t('commander.title', 'Commander Center') : labels[tab]
+          }
           selected={tab === props.active}
           badge={badges[tab] ?? 0}
           onPress={() => props.onSelect(tab)}
@@ -78,6 +84,7 @@ export function MobileHomeTabBar(props: {
 function TabButton(props: {
   icon: LucideIcon
   label: string
+  accessibilityLabel: string
   selected: boolean
   badge: number
   onPress: () => void
@@ -90,7 +97,9 @@ function TabButton(props: {
     <Pressable
       style={styles.tab}
       accessibilityRole="tab"
-      accessibilityLabel={props.badge > 0 ? `${props.label}, ${props.badge}` : props.label}
+      accessibilityLabel={
+        props.badge > 0 ? `${props.accessibilityLabel}, ${props.badge}` : props.accessibilityLabel
+      }
       accessibilityState={{ selected: props.selected }}
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
