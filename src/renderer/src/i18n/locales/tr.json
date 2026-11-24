@@ -646,7 +646,7 @@
       "rowLocal": "Bu bilgisayarda {{profile}} içindeki tüm sitelerdeki oturumunuzu kapatır.",
       "rowServer": "{{host}} üzerinde {{profile}} içindeki tüm sitelerdeki oturumunuzu kapatır; hem bu bilgisayardaki sayfalarda hem de akışla gelen sayfalarda geçerlidir.",
       "rowSsh": "{{host}} için {{profile}} içindeki tüm sitelerdeki oturumunuzu kapatır.",
-      "unavailable": "Seçili ana bilgisayarda bu profil kullanılamıyor.",
+      "unavailable": "Seçili sunucuda bu profil için kullanılamıyor.",
       "confirmTitle": "{{host}} üzerinde {{profile}} içindeki çerezler temizlensin mi?",
       "confirmTitleLocal": "Bu bilgisayarda {{profile}} içindeki çerezler temizlensin mi?",
       "confirmDescriptionServer": "Bu işlem, bu profildeki tüm sitelerdeki oturumunuzu kapatır; hem bu bilgisayardaki sayfalarda hem de akışla gelen sayfalarda geçerlidir. Diğer profiller ve sunucular çerezlerini korur.",
@@ -14709,7 +14709,7 @@
           "shownOf": "{{value0}} / {{value1}}"
         },
         "PluginManagerRows": {
-          "requiredByTeam": "Ekibiniz için gerekli",
+          "requiredByTeam": "Ekibiniz tarafından zorunlu tutuluyor",
           "reinstall": "Yeniden yükle",
           "crashedCount": "Art arda {{value0}} kez çöktü",
           "crashed": "Başlatılırken çöktü",
@@ -23747,7 +23747,7 @@
           "matchesCount": "Şu anda {{count}} çalışma alanı eşleşiyor",
           "hideMatches": "Gizle",
           "showMatches": "Göster",
-          "merged": "Birleştirilmiş çalışma alanlarını sil",
+          "merged": "Merge edilmiş çalışma alanlarını sil",
           "mergedDescription": "Pull request merge edilmiş ve çalışma alanındaki tüm değişiklikleri içeriyor.",
           "unchanged": "Değişiklik yapılmamış çalışma alanlarını sil",
           "unchangedDescription": "Varsayılan branch'e göre ek commit veya dosya değişikliği yok.",
@@ -23807,7 +23807,7 @@
           "turnOn": "Aç"
         },
         "reason": {
-          "merged": "Birleştirildi",
+          "merged": "Merge edildi",
           "unchanged": "Değişmedi",
           "inactive": "Etkin değil",
           "automationRun": "Otomasyon çalıştırması",
@@ -25538,7 +25538,7 @@
       "personalOrganization": "Kişisel"
     },
     "codex": {
-      "usageSignInLabel": "Oturum açılmadı",
+      "usageSignInLabel": "Oturum kapalı",
       "usageSignInMessage": "Kullanımı görmek için oturum açın.",
       "usageSignInSettingsMessage": "Oturum açmak için Ayarlar → Hesaplar bölümünü açın."
     },
@@ -26259,7 +26259,7 @@
       "privateBytes": "Orca, ajanlar ve terminaller için ayrılmış bellek"
     },
     "chatRow": {
-      "tooltip": "{{agent}} sohbeti ve altında çalışan işlemler dahil"
+      "tooltip": "{{agent}} sohbeti (altında çalışan işlemler dahil)"
     },
     "sharedAgentProcesses": "Paylaşılan ajan işlemleri"
   },
@@ -26991,7 +26991,7 @@
       },
       "botProviderErrorNotSaved": "Botun turu başarısız oldu ancak bu çalıştırmada sağlayıcının hatası kaydedilmedi. Asıl sohbette daha fazla ayrıntı olabilir.",
       "botsOff": "Botlar Ayarlar’da kapalı olduğu için Orca bu çalıştırmayı atladı.",
-      "botsOffByTeam": "Bots ekibiniz tarafından kapatıldığı için Orca bu çalıştırmayı atladı.",
+      "botsOffByTeam": "Botlar ekibiniz tarafından kapatıldığı için Orca bu çalıştırmayı atladı.",
       "botMissing": "Bu otomasyonun adına çalıştığı bot artık yok.",
       "botFolderMissing": "Botun klasörü artık kullanılamıyor.",
       "botPaused": "{{bot}} duraklatıldığı için Orca bu çalıştırmayı atladı.",
@@ -28591,8 +28591,8 @@
       "stoppedCount": "{{count}} durduruldu"
     },
     "access": {
-      "confirmApproveMany": "İstemlerini onaylayabilirler",
-      "confirmApproveOne": "{{person}} istemlerini onaylayabilir",
+      "confirmApproveMany": "Botun onay isteklerini onaylayabilirler",
+      "confirmApproveOne": "{{person}} botun onay isteklerini onaylayabilir",
       "confirmComputer": "Komut çalıştırma ve dosyaları değiştirme",
       "confirmGitHub": "GitHub'da sizin adınıza yorum yapma ve push etme",
       "confirmGoogle": "Google hesabınızı kullanma",
@@ -29600,13 +29600,13 @@
       "appAdded": "Ekibinizin Google uygulaması eklendi",
       "disconnect": {
         "title": "{{email}} hesabının bağlantısı kesilsin mi?",
-        "revokeNote": "Botlar bu bilgisayarda bu hesabı kullanmayı bırakır. Google, Orca’ya daha önce izin verdiğiniz her yerde bu erişimi iptal eder.",
-        "removeNote": "Botlar bu bilgisayarda bu hesabı kullanmayı bırakır. Bot ayarları korunur; “Google’ı bağla” seçeneğiyle erişimi yeniden açabilirsiniz.",
+        "revokeNote": "Botlar bu hesabı burada kullanmayı bırakır. Google, Orca’ya daha önce izin verdiğiniz her yerde bu erişimi iptal eder.",
+        "removeNote": "Botlar bu hesabı burada kullanmayı bırakır. Bot ayarları korunur; “Google’a bağlan” ile erişimi yeniden açabilirsiniz.",
         "confirm": "Bağlantıyı kes",
         "remove": "Bu bilgisayardan kaldır",
         "revoke": "Kaldır ve Google’daki erişim iznini iptal et",
         "promotes": "{{email}} varsayılan hesap olacak.",
-        "removeOneNote": "Botlar bu bilgisayarda bu hesabı kullanmayı bırakacak."
+        "removeOneNote": "Botlar bu hesabı burada kullanmayı bırakır."
       },
       "reconnect": "Yeniden bağlan",
       "thisComputer": "bu bilgisayar",
@@ -30646,7 +30646,7 @@
     "requiredFailures": {
       "toast": "Gerekli bir eklenti yüklenemedi",
       "open": "Eklentileri aç",
-      "label": "Ekibiniz için gerekli",
+      "label": "Ekibiniz tarafından zorunlu tutuluyor",
       "body": "Orca {{plugin}} eklentisini yükleyemedi."
     },
     "frameSaveAs": {
@@ -31006,7 +31006,7 @@
     "dragStart": "{{name}} alındı",
     "dragOver": "{{name}}, {{target}} üzerinde",
     "dragEnd": "{{name}} bırakıldı",
-    "dragCancel": "{{name}} taşıma iptal edildi",
+    "dragCancel": "{{name}} öğesini taşıma iptal edildi",
     "moveLeft": "Sola taşı",
     "moveRight": "Sağa taşı",
     "reset": "Sekme sırasını sıfırla"
