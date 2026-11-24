@@ -1,5 +1,10 @@
 // What the Share dialog draws: everyone who can ask the agent, and what the Add field found.
 // Orca accounts and invites come from the agent's shares; Slack and GitHub people from its members.
+import {
+  BotShareEmailSchema,
+  normalizeShareEmail,
+  type BotShare
+} from '../../../../../shared/bots/bot-team-shares'
 
 export type TeamShareLinkSource = 'slack' | 'github' | 'linear'
 
@@ -57,4 +62,41 @@ export function teamSharePersonName(person: TeamSharePerson): string {
     case 'slack':
       return person.name
   }
+}
+
+/** The bot's share list as rows, keyed by shareId: Has access for an account, Invited for an email. */
+export function teamSharePeople(shares: readonly BotShare[] | undefined): TeamSharePerson[] {
+  return (shares ?? []).map((share) =>
+    share.kind === 'account'
+      ? {
+          kind: 'account',
+          key: share.shareId,
+          name: share.name ?? share.email,
+          email: share.email,
+          links: []
+        }
+      : {
+          kind: 'invite',
+          key: share.shareId,
+          email: share.email,
+          emailSent: share.emailedAt !== undefined
+        }
+  )
+}
+
+/** What the Add field offers: an invite for a typed email not on the list yet, else no match. */
+export function teamShareSuggestions(
+  query: string,
+  shares: readonly BotShare[] | undefined
+): TeamShareSuggestion[] | null {
+  const email = normalizeShareEmail(query)
+  if (email === '') {
+    return null
+  }
+  if (!BotShareEmailSchema.safeParse(email).success) {
+    return []
+  }
+  return (shares ?? []).some((share) => share.email === email)
+    ? []
+    : [{ kind: 'invite', key: email, email }]
 }

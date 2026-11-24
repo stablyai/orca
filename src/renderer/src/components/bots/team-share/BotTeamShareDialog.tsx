@@ -34,7 +34,8 @@ export function BotTeamShareDialog({
   bot: Bot
   /** The computer the agent runs on, named in the footer warning. */
   hostName: string
-  owner: TeamShareOwner
+  /** The account the agent's host is signed in as; null while it isn't. */
+  owner: TeamShareOwner | null
   people: readonly TeamSharePerson[]
   query: string
   onQueryChange: (query: string) => void
@@ -164,7 +165,7 @@ export function BotTeamShareDialog({
             {t('bots.teamShare.peopleWithAccess', 'People with access')}
           </h3>
           <ul>
-            <TeamShareOwnerRow owner={owner} />
+            {owner ? <TeamShareOwnerRow owner={owner} /> : null}
             {people.map((person) => (
               <TeamSharePersonRow
                 key={person.key}

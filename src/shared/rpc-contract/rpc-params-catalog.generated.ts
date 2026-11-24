@@ -1353,6 +1353,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.takeOver': BotTakeOverParams,
   'bots.teamShares.add': BotTeamSharesAdd,
   'bots.teamShares.remove': BotTeamSharesRemove,
+  'bots.teamShares.resend': BotTeamSharesRemove,
   'bots.templates.suggest': null,
   'bots.tidyUp.get': BotTidyUpAct,
   'bots.tidyUp.now': BotTidyUpAct,

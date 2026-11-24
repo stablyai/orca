@@ -33,7 +33,9 @@ export const BotShareSchema = z.discriminatedUnion('kind', [
     kind: z.literal('invite'),
     shareId: BotShareIdSchema,
     email: BotShareEmailSchema,
-    addedAt: z.number()
+    addedAt: z.number(),
+    /** When its invite email last went out; absent while none has (its hourly limit, signed out). */
+    emailedAt: z.number().optional()
   })
 ])
 export type BotShare = z.infer<typeof BotShareSchema>
@@ -65,6 +67,17 @@ export function withBotShareInvites(
     next.push({ kind: 'invite', email, ...mint() })
   }
   return next
+}
+
+/** The list with those invites marked emailed at `at`; an entry no longer an invite is left as is. */
+export function withBotSharesEmailed(
+  shares: readonly BotShare[],
+  shareIds: ReadonlySet<string>,
+  at: number
+): BotShare[] {
+  return shares.map((share) =>
+    share.kind === 'invite' && shareIds.has(share.shareId) ? { ...share, emailedAt: at } : share
+  )
 }
 
 /**

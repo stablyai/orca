@@ -103,7 +103,8 @@ export function botShareCloudRefusal(error: unknown): unknown {
 
 export class BotShareClient {
   constructor(
-    private readonly options: { auth: BotCloudAuth; apiUrl?: string; fetcher?: typeof fetch }
+    // auth is read by the share list's invite email too, on the same signed-in session.
+    readonly options: { auth: BotCloudAuth; apiUrl?: string; fetcher?: typeof fetch }
   ) {}
 
   /** Signed in through the active Orca profile, as skill sharing is. */
