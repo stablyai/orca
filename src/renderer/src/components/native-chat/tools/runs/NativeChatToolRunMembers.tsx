@@ -1,5 +1,7 @@
-import { Fragment, memo, useContext, useMemo, useRef } from 'react'
+import { Fragment, memo, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { VIRTUALIZED_LIST_MIN_ROWS } from '@/components/ui/virtualized-list'
+import { setWithLRU } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
+import { NativeChatDisclosureContext } from '../../messages/disclosure/native-chat-disclosure-store'
 import { NativeChatTranscriptScrollContext } from '../../viewport/scroll/native-chat-transcript-scroll-context'
 import { NativeChatToolRunWindowContext } from './native-chat-tool-run-window-context'
 import { observeNativeChatToolRunOffset } from './observe-native-chat-tool-run-offset'
@@ -56,16 +58,22 @@ const WindowRows = memo(function WindowRows({
 export function NativeChatToolRunMembers({
   rows,
   renderRow,
+  measurementKey,
   revealRowKey
 }: {
   rows: readonly NativeChatToolRunRow[]
   renderRow: (row: NativeChatToolRunRow) => React.ReactNode
+  measurementKey?: string
   revealRowKey?: string
 }): React.JSX.Element {
   const membersRef = useRef<HTMLDivElement | null>(null)
-  const inTranscript = useContext(NativeChatTranscriptScrollContext)
+  const transcriptScroll = useContext(NativeChatTranscriptScrollContext)
+  const measurements = useContext(NativeChatDisclosureContext)?.toolRunMeasurements
+  const [initialMeasurementsCache] = useState(() =>
+    measurementKey === undefined ? undefined : measurements?.get(measurementKey)
+  )
   const { isVisible, findActive } = useContext(NativeChatToolRunWindowContext)
-  const canWindow = inTranscript && rows.length >= VIRTUALIZED_LIST_MIN_ROWS
+  const canWindow = transcriptScroll !== null && rows.length >= VIRTUALIZED_LIST_MIN_ROWS
   const drawsEveryRow = !canWindow || findActive
   const rowIndexByKey = useMemo(() => new Map(rows.map((row, index) => [row.key, index])), [rows])
   const { rangeExtractor, retainInteractedRow, onFocusCapture, onBlurCapture } =
@@ -74,10 +82,11 @@ export function NativeChatToolRunMembers({
       rowIndexByKey,
       revealRowKey,
       drawsEveryRow,
-      tracksSelection: isVisible && inTranscript,
+      tracksSelection: isVisible && transcriptScroll !== null,
       membersRef
     })
   const {
+    virtualizer,
     measureRow,
     totalSize,
     drawn,
@@ -87,13 +96,30 @@ export function NativeChatToolRunMembers({
     // The transcript DOM is already available when a run opens on the same commit.
     getScrollElement: () =>
       membersRef.current?.closest<HTMLDivElement>('[data-native-chat-scroll]') ?? null,
-    observeOffset: (instance, onOffset) =>
-      observeNativeChatToolRunOffset(membersRef.current, instance, onOffset),
+    transcript: transcriptScroll
+      ? {
+          ...transcriptScroll,
+          observeOffset: (instance, onOffset) =>
+            observeNativeChatToolRunOffset(membersRef.current, instance, onOffset)
+        }
+      : undefined,
+    initialMeasurementsCache,
     isVisible,
     drawsEveryRow,
     rangeExtractor,
     enabled: canWindow
   })
+  useLayoutEffect(
+    () => () => {
+      if (measurements && measurementKey !== undefined) {
+        const snapshot = virtualizer.takeSnapshot()
+        if (snapshot.length > 0) {
+          setWithLRU(measurements, measurementKey, snapshot)
+        }
+      }
+    },
+    [measurements, measurementKey, virtualizer]
+  )
   const trailing = drawsAll ? 0 : totalSize - (drawn.at(-1)?.end ?? 0)
 
   return (

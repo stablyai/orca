@@ -97,6 +97,7 @@ export function NativeChatToolRunMemberList({
     <NativeChatToolRunMembers
       rows={rows}
       renderRow={renderRow}
+      measurementKey={disclosureId}
       revealRowKey={revealedDiff ? `edit:${revealedDiff.editKey}` : undefined}
     />
   )

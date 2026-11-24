@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useContext, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NativeChatExpandable } from '../../messages/disclosure/NativeChatExpandable'
 import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
+import { NativeChatTranscriptScrollContext } from '../../viewport/scroll/native-chat-transcript-scroll-context'
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -91,6 +92,7 @@ export function NativeChatToolRun({
       ? undefined
       : `run:${disclosureId}:${expandSignal}:${revealedDiff?.requestId ?? '-'}`
   const { open, setOpen } = useNativeChatDisclosure(runKey, revealedDiff ? true : expandSignal)
+  const transcriptScroll = useContext(NativeChatTranscriptScrollContext)
 
   // Share the renderability predicate with slot selection so childless groups cannot create empty margin wrappers.
   const subagentRows = subagentGroups
@@ -160,7 +162,12 @@ export function NativeChatToolRun({
           {/* Keep one header across live/settled states; summary line-height aligns marks and wrapped text. */}
           <button
             type="button"
-            onClick={() => setOpen(!open)}
+            onClick={() => {
+              if (!open && !live) {
+                transcriptScroll?.readerLeavesEnd()
+              }
+              setOpen(!open)
+            }}
             className="group/tool-run flex min-h-6 min-w-0 flex-1 items-start gap-1.5 rounded-md py-0.5 text-left text-sm leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             aria-expanded={open}
             aria-live="polite"

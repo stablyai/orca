@@ -30,5 +30,6 @@ export type NativeChatTranscriptScroll = {
   scrollMessageToTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
   /** A reader gesture left the end: the only thing besides a row jump that stops following. */
   readerLeavesEnd: () => void
+  isFollowingEnd: () => boolean
   forwardedGesture: (gesture: ReaderGesture) => void
 }

@@ -24,6 +24,10 @@ export function observeNativeChatToolRunOffset(
     }
   }
   const stopScroll = observeElementOffset(instance, (_, isScrolling) => readOffset(isScrolling))
+  readOffset(false)
+  if (typeof ResizeObserver === 'undefined') {
+    return stopScroll
+  }
   // Streaming or expanding earlier rows can move the run without a transcript scroll event.
   const observer = new ResizeObserver(() => readOffset(instance.isScrolling))
   for (let element: HTMLElement | null = members; element; element = element.parentElement) {
@@ -32,7 +36,6 @@ export function observeNativeChatToolRunOffset(
       break
     }
   }
-  readOffset(false)
   return () => {
     stopScroll?.()
     observer.disconnect()

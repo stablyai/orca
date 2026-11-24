@@ -1,11 +1,13 @@
 // Keep disclosures outside windowed rows so scrolling cannot erase reader choices; standalone rows fall back to local state.
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import type { VirtualItem } from '@tanstack/react-virtual'
 
 export type NativeChatDisclosureStore = {
   read: (key: string) => boolean | undefined
   /** Opening with `group` (a key prefix) closes that group's other open keys: one open at a time. */
   write: (key: string, open: boolean, group?: string) => void
+  toolRunMeasurements: Map<string, VirtualItem[]>
 }
 
 export const NativeChatDisclosureContext = createContext<NativeChatDisclosureStore | null>(null)
@@ -15,6 +17,7 @@ export const MAX_NATIVE_CHAT_DISCLOSURES = 512
 
 export function useNativeChatDisclosures(): NativeChatDisclosureStore {
   const [open, setOpen] = useState<ReadonlyMap<string, boolean>>(() => new Map())
+  const [toolRunMeasurements] = useState(() => new Map<string, VirtualItem[]>())
   const write = useCallback((key: string, next: boolean, group?: string) => {
     setOpen((current) => {
       const others =
@@ -38,7 +41,10 @@ export function useNativeChatDisclosures(): NativeChatDisclosureStore {
       return updated
     })
   }, [])
-  return useMemo(() => ({ read: (key: string) => open.get(key), write }), [open, write])
+  return useMemo(
+    () => ({ read: (key: string) => open.get(key), write, toolRunMeasurements }),
+    [open, write, toolRunMeasurements]
+  )
 }
 
 export type NativeChatDisclosure = {

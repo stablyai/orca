@@ -8,12 +8,16 @@ import {
 } from './messages/disclosure/native-chat-disclosure-store'
 import type { ReaderGesture } from './viewport/scroll/native-chat-autoscroll'
 import { NativeChatForwardedGestureContext } from './viewport/scroll/native-chat-reader-scroll-input'
-import { NativeChatTranscriptScrollContext } from './viewport/scroll/native-chat-transcript-scroll-context'
+import {
+  NativeChatTranscriptScrollContext,
+  type NativeChatToolRunScroll
+} from './viewport/scroll/native-chat-transcript-scroll-context'
 
 /** Every transcript's scroller: disclosures, forwarded visual gestures, math copy, and Jump to latest. */
 export function NativeChatTranscriptViewport({
   scrollRef,
   scrollerProps,
+  toolRunScroll,
   forwardedGesture,
   showJump,
   onJump,
@@ -23,6 +27,7 @@ export function NativeChatTranscriptViewport({
 }: {
   scrollRef: Ref<HTMLDivElement>
   scrollerProps: HTMLAttributes<HTMLDivElement>
+  toolRunScroll: NativeChatToolRunScroll
   /** A reader gesture a row's visual frame took before the transcript could see it. */
   forwardedGesture: (gesture: ReaderGesture) => void
   showJump: boolean
@@ -49,7 +54,7 @@ export function NativeChatTranscriptViewport({
             // Browser anchoring would add unattributed movement beside the follow policy's anchor.
             className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none"
           >
-            <NativeChatTranscriptScrollContext.Provider value>
+            <NativeChatTranscriptScrollContext.Provider value={toolRunScroll}>
               {children}
             </NativeChatTranscriptScrollContext.Provider>
           </div>

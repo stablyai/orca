@@ -1,13 +1,12 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { elementScroll, useVirtualizer, type VirtualizerOptions } from '@tanstack/react-virtual'
 import { VIRTUALIZED_LIST_OVERSCAN } from '@/components/ui/virtualized-list'
+import type { NativeChatToolRunScroll } from '../../viewport/scroll/native-chat-transcript-scroll-context'
 import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
 
 /** A tool line's `min-h-6.5`; measured rows replace it. */
 const ROW_ESTIMATE_PX = 26
 const estimateRowSize = (): number => ROW_ESTIMATE_PX
-const ignoreScroll = (): void => {}
-const neverAdjustScroll = (): boolean => false
 
 export type NativeChatToolRunDrawnRow = { index: number; start: number; end: number }
 
@@ -16,7 +15,8 @@ export type NativeChatToolRunDrawnRow = { index: number; start: number; end: num
 export function useNativeChatToolRunWindow({
   rows,
   getScrollElement,
-  observeOffset,
+  transcript,
+  initialMeasurementsCache,
   isVisible,
   drawsEveryRow,
   rangeExtractor,
@@ -26,7 +26,13 @@ export function useNativeChatToolRunWindow({
   rows: readonly Pick<NativeChatToolRunRow, 'key'>[]
   getScrollElement: () => HTMLDivElement | null
   /** For windows that read member-relative offsets from the transcript, which owns scroll writes. */
-  observeOffset?: VirtualizerOptions<HTMLDivElement, HTMLDivElement>['observeElementOffset']
+  transcript?: Pick<NativeChatToolRunScroll, 'canAdjustToolRunScroll' | 'adjustToolRunScroll'> & {
+    observeOffset: VirtualizerOptions<HTMLDivElement, HTMLDivElement>['observeElementOffset']
+  }
+  initialMeasurementsCache?: VirtualizerOptions<
+    HTMLDivElement,
+    HTMLDivElement
+  >['initialMeasurementsCache']
   isVisible: boolean
   drawsEveryRow: boolean
   rangeExtractor: (range: {
@@ -43,9 +49,17 @@ export function useNativeChatToolRunWindow({
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: rows.length,
     getScrollElement,
-    ...(observeOffset
-      ? { observeElementOffset: observeOffset, scrollToFn: ignoreScroll }
+    ...(transcript
+      ? {
+          observeElementOffset: transcript.observeOffset,
+          scrollToFn: (_offset, { adjustments }) => {
+            if (adjustments) {
+              transcript.adjustToolRunScroll(adjustments)
+            }
+          }
+        }
       : { scrollToFn: elementScroll }),
+    initialMeasurementsCache: initialMeasurementsCache ?? [],
     estimateSize,
     enabled,
     getItemKey,
@@ -54,8 +68,17 @@ export function useNativeChatToolRunWindow({
     // A hidden pane has no boxes to measure; keep the last visible sizes.
     useCachedMeasurements: !isVisible
   })
-  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = observeOffset
-    ? neverAdjustScroll
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = transcript
+    ? (item, _delta, instance) => {
+        const offset = instance.scrollOffset ?? 0
+        // Use inner anchoring only while the reader is inside the run.
+        return (
+          offset > 0 &&
+          item.end <= offset &&
+          offset < instance.getTotalSize() &&
+          transcript.canAdjustToolRunScroll()
+        )
+      }
     : undefined
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
