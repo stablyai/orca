@@ -41,6 +41,9 @@ export type AgentRowMenuTarget = AgentRowMenuRowRef & {
   providerSessionId: string | null
   /** A paired host's handle for a not-yet-mirrored terminal; a new handle is a new agent. */
   terminalHandle: string | null
+  /** The PTY the host check used (the leaf's, else the tab's first). Identity only: unlike
+   *  `ptyId`, it never counts as incarnation evidence, since on a split tab it can be another leaf's. */
+  hostPtyId: string | null
   singleLeaf: boolean
 }
 
@@ -83,6 +86,7 @@ export function resolveAgentRowMenuTarget(
       ptyId: null,
       providerSessionId,
       terminalHandle: null,
+      hostPtyId: null,
       singleLeaf: true
     }
   }
@@ -92,7 +96,8 @@ export function resolveAgentRowMenuTarget(
   }
   const layout = state.terminalLayoutsByTabId[ref.tabId]
   const ptyId = layout?.ptyIdsByLeafId?.[parsed.leafId] ?? null
-  if (!hostMatches(state, ref, getPtyExecutionHost(ptyId ?? state.ptyIdsByTabId[ref.tabId]?.[0]))) {
+  const hostPtyId = ptyId ?? state.ptyIdsByTabId[ref.tabId]?.[0] ?? null
+  if (!hostMatches(state, ref, getPtyExecutionHost(hostPtyId))) {
     return null
   }
   const base = {
@@ -102,7 +107,8 @@ export function resolveAgentRowMenuTarget(
     chatAgent: null,
     ptyId,
     providerSessionId,
-    terminalHandle: null
+    terminalHandle: null,
+    hostPtyId
   }
   if (state.tabsByWorktree[ref.worktreeId]?.some((tab) => tab.id === ref.tabId)) {
     const leaves = collectLeafIds(layout?.root)
@@ -166,8 +172,18 @@ export function isSameAgentRowMenuTarget(
     current.chatSessionId === captured.chatSessionId &&
     current.chatAgent === captured.chatAgent &&
     current.ptyId === captured.ptyId &&
-    current.providerSessionId === captured.providerSessionId &&
+    current.hostPtyId === captured.hostPtyId &&
+    sameProviderSession(captured, current) &&
     current.terminalHandle === captured.terminalHandle
+  )
+}
+
+/** A chat is identified by its tab and session, so its first provider session arriving is the same
+ *  agent; terminal and status rows have no such anchor and stay strict. */
+function sameProviderSession(captured: AgentRowMenuTarget, current: AgentRowMenuTarget): boolean {
+  return (
+    current.providerSessionId === captured.providerSessionId ||
+    (captured.kind === 'chat' && captured.providerSessionId === null)
   )
 }
 
