@@ -1,5 +1,5 @@
 import { migrateProfileStateToSqlite } from '../../persistence/profile-state/startup/profile-state-migration'
-import { seedNewProfileLinkMode } from '../../persistence/loading-store/profile-loading/loaded-cohort-migrations'
+import { seedNewProfileLinkMode } from '../../persistence/loading-store/profile-loading/new-profile-link-seed'
 import { getOrcaProfileDataFile, getOrcaProfileStateDatabaseFile } from '../profile-storage-paths'
 import type { ReadProfileStateResult } from './profile-project-state-file'
 import {

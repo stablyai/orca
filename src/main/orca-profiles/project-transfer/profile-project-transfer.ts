@@ -1,4 +1,4 @@
-import { seedNewProfileLinkMode } from '../../persistence/loading-store/profile-loading/loaded-cohort-migrations'
+import { seedNewProfileLinkMode } from '../../persistence/loading-store/profile-loading/new-profile-link-seed'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type {
   TransferOrcaProfileProjectArgs,

@@ -19,7 +19,7 @@ import { assertProfileStateCanInitialize } from '../recovery/profile-state-recov
 import { classifyProfileStateStorage } from '../database/profile-state-storage-classification'
 import { migrateProfileStateToSqlite } from '../startup/profile-state-migration'
 import { ensureProfileStateAuthorityMarker } from '../database/profile-state-authority-marker'
-import { seedNewProfileLinkMode } from '../../loading-store/profile-loading/loaded-cohort-migrations'
+import { seedNewProfileLinkMode } from '../../loading-store/profile-loading/new-profile-link-seed'
 
 export type ProfileStateOfflineLocation = {
   dataFile: string

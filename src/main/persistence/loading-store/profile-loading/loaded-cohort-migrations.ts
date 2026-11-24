@@ -8,6 +8,7 @@ import { carriedChatUiLaunchSettings } from '../../../../shared/native-chat/sett
 import { savedChatUiWithTerminalDefaultView } from '../../applying-settings/terminal-settings-migrations'
 
 import type { StoreRuntimeState } from '../store-runtime-state'
+import { NEW_PROFILE_LINK_SEED, isTelemetryOnlyProfile } from './new-profile-link-seed'
 
 type LoadedCohortMigrationOperationsRuntime = Pick<StoreRuntimeState, 'loadNeedsSave'>
 
@@ -208,12 +209,6 @@ export class LoadedCohortMigrationOperations {
   }
 }
 
-/** New profiles open links directly in the system browser and never see the retired first-use prompt. */
-const NEW_PROFILE_LINK_SEED = {
-  httpLinkClickBehavior: 'open',
-  openLinksInAppPreferencePrompted: true
-} as const
-
 function isLinkClickMode(value: unknown): value is 'ask' | 'open' {
   return value === 'ask' || value === 'open'
 }
@@ -241,29 +236,6 @@ function mapLinkOpenMode(
     ...state,
     settings: { ...state.settings, httpLinkClickBehavior: asks ? 'ask' : 'open' }
   }
-}
-
-/** Seeds a raw profile root that is absent or exactly telemetry-only; returns undefined for anything else. */
-export function seedNewProfileLinkMode(
-  root: Record<string, unknown> | undefined
-): (Record<string, unknown> & { settings: Record<string, unknown> }) | undefined {
-  if (root !== undefined && !isTelemetryOnlyProfile(root)) {
-    return undefined
-  }
-  const settings = root && isRecord(root.settings) ? root.settings : {}
-  return { ...root, settings: { ...settings, ...NEW_PROFILE_LINK_SEED } }
-}
-
-/** Secondary profiles start with only the install's telemetry consent, before their first load. */
-export function isTelemetryOnlyProfile(profile: unknown): boolean {
-  const settings = isRecord(profile) ? profile.settings : undefined
-  return (
-    isRecord(profile) &&
-    Object.keys(profile).length === 1 &&
-    isRecord(settings) &&
-    Object.keys(settings).length === 1 &&
-    isRecord(settings.telemetry)
-  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
