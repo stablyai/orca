@@ -113,7 +113,9 @@ export function AgentLaunchChoiceEditor({
           liveCatalog={liveCatalog}
           usesSeedModels={usesSeedModels}
           onOpenChange={onOpenChange}
-          optionIds={['effort']}
+          optionIds={
+            agent === 'antigravity' ? ['effort', 'remoteAgent', 'remoteControl'] : ['effort']
+          }
           onSelect={(patch) => commit(patch)}
         />
         {permission ? (

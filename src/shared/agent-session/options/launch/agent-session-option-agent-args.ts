@@ -83,6 +83,24 @@ const AGENT_REQUIRED_VALUE_OPTIONS: Partial<Record<AgentType, readonly string[]>
     '--add-dir',
     '--plugin-dir',
     '--worktree-base'
+  ],
+  antigravity: [
+    '--add-dir',
+    '--agent',
+    '--conversation',
+    '--effort',
+    '--input-format',
+    '--json-schema',
+    '--log-file',
+    '--mode',
+    '--model',
+    '--output-format',
+    '--print-timeout',
+    '--project',
+    '-i',
+    '--prompt-interactive',
+    '--prompt',
+    '--settings'
   ]
 }
 

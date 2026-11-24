@@ -20023,7 +20023,7 @@
         "forkOriginalUnavailableNamed": "{{agent}} 无法在“{{detail}}”中从此回复创建分支，请打开该聊天并从那里创建分支",
         "forkOriginalLatestOnly": "{{agent}} 只能从原始聊天中的最新回复创建分支，请打开该聊天，待最新回复完成后再从它创建分支",
         "forkOriginalLatestOnlyNamed": "{{agent}} 只能从“{{detail}}”中的最新回复创建分支，请打开该聊天，待最新回复完成后再从它创建分支",
-        "antigravitySystemNotSignedIn": "Antigravity 尚未登录，请在运行此聊天的计算机上运行 `agy` 进行登录，然后重新发送消息",
+        "antigravitySystemNotSignedIn": "Antigravity 尚未登录，请在运行此聊天的计算机上运行 `{{loginCommand}}` 进行登录，然后重新发送消息",
         "claudeEffortInvalid": "Claude 推理强度无效，请选择 low、medium、high、xhigh 或 max，然后重新发送",
         "unconfirmed": "无法确认是否已发送，也没有重新发送"
       },

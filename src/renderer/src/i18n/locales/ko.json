@@ -20085,7 +20085,7 @@
         "codexSystemNotSignedIn": "Codex에 로그인하지 않았습니다. `{{loginCommand}}`을 실행하세요.",
         "codexManagedNotSignedIn": "이 Codex 계정에 로그인하지 않았습니다. Codex 계정 설정에서 다시 로그인하세요.",
         "antigravityNotSignedIn": "Antigravity에 로그인되어 있지 않습니다. 설정 → 계정 → Antigravity에서 로그인한 후 메시지를 다시 보내세요.",
-        "antigravitySystemNotSignedIn": "Antigravity에 로그인되어 있지 않습니다. 이 채팅을 실행 중인 컴퓨터에서 `agy`를 실행해 로그인한 뒤 메시지를 다시 보내세요.",
+        "antigravitySystemNotSignedIn": "Antigravity에 로그인되어 있지 않습니다. 이 채팅을 실행 중인 컴퓨터에서 `{{loginCommand}}`를 실행해 로그인한 뒤 메시지를 다시 보내세요.",
         "cliMissing": "이 채팅을 실행하는 컴퓨터에서 {{agent}}를 찾을 수 없습니다. 설치하거나 설정 → 에이전트에서 명령을 확인하세요.",
         "cliMissingInWslDistro": "WSL 배포판 {{distro}}에 {{agent}}가 설치되어 있지 않습니다. {{distro}} 안에 설치하거나 설정 → 에이전트에서 명령을 확인하세요.",
         "signInFirst": "먼저 로그인하세요.",

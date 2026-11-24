@@ -108,14 +108,16 @@ export function hasIndependentAgentLaunchOptions(
       values
     ).options.some((option) => {
       const value = values[option.id]
+      const decoded = decodeCatalogOptionValue(
+        option.kind,
+        typeof value === 'string' || typeof value === 'boolean' ? value : undefined
+      )
       return (
         option.id !== 'effort' &&
         !option.apply.composedIntoModel &&
         !!option.apply.launchArgs &&
-        decodeCatalogOptionValue(
-          option.kind,
-          typeof value === 'string' || typeof value === 'boolean' ? value : undefined
-        ) !== undefined
+        decoded !== undefined &&
+        (!option.apply.cli?.some((form) => form.kind === 'flag') || decoded === true)
       )
     })
   )
@@ -259,7 +261,7 @@ function launchModelValues(
         return [[option.id, explicitValue]]
       }
       const launchDefault =
-        !option.apply.cli?.some((form) => form.kind === 'settings') &&
+        !option.apply.cli?.some((form) => form.kind === 'settings' || form.kind === 'flag') &&
         !(option.kind.type === 'select' && option.kind.choices.length === 0)
       return model && includeCatalogDefaults && launchDefault
         ? [[option.id, option.kind.defaultValue]]

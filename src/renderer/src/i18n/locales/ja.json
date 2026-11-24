@@ -19491,7 +19491,7 @@
         "codexSystemNotSignedIn": "Codex にサインインしていません。`{{loginCommand}}` を実行してください。",
         "codexManagedNotSignedIn": "この Codex アカウントにサインインしていません。設定の Codex アカウントで再度サインインしてください。",
         "antigravityNotSignedIn": "Antigravity にサインインしていません。設定 → アカウント → Antigravityでサインインしてから、メッセージをもう一度送信してください。",
-        "antigravitySystemNotSignedIn": "Antigravity にサインインしていません。このチャットを実行しているコンピュータで `agy` を実行してサインインしてから、もう一度メッセージを送信してください。",
+        "antigravitySystemNotSignedIn": "Antigravity にサインインしていません。このチャットを実行しているコンピュータで `{{loginCommand}}` を実行してサインインしてから、もう一度メッセージを送信してください。",
         "cliMissing": "このチャットを実行しているコンピューターで {{agent}} が見つかりませんでした。インストールするか、[設定] → [Agent] の [コマンド] を確認してください。",
         "cliMissingInWslDistro": "WSL ディストリビューション {{distro}} に {{agent}} がインストールされていません。{{distro}} 内にインストールするか、[設定] → [Agent] の [コマンド] を確認してください。",
         "signInFirst": "先にサインインしてください。",

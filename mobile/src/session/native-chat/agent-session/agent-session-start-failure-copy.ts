@@ -130,7 +130,7 @@ export const START_FAILURE_COPY = {
   antigravitySystemNotSignedIn: (values) =>
     translate(
       'session.failure.antigravitySystemNotSignedIn',
-      "Antigravity isn't signed in. Sign in by running `agy` on the computer running this chat, then send your message again.",
+      "Antigravity isn't signed in. Sign in by running `{{loginCommand}}` on the computer running this chat, then send your message again.",
       values
     ),
   agentCommandNotSignedIn: (values) =>

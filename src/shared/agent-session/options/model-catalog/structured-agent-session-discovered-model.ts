@@ -6,6 +6,7 @@ import type {
 import type { AgentSessionOptionChoice } from '../../agent-session-wire'
 import type { AgentSessionOptionsResult } from '../protocol/agent-session-options-result'
 import type { AgentType } from '../../../agent-status/contracts/agent-status-types'
+import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from '../../../native-chat/input/session-options/native-chat-session-option-defaults'
 import { usesModelSpecificAcpEfforts } from './agent-model-catalog-ownership'
 import { unlistedModelLabel } from './model-id-label'
 
@@ -114,7 +115,9 @@ export function structuredAgentSessionOptionCatalog(
       id: result.current.model,
       label: unlistedModelLabel(agent, result.current.model),
       description: result.current.model,
-      options: seed.unknownModelOptions ?? []
+      options: (seed.unknownModelOptions ?? []).filter((option) =>
+        STRUCTURED_LAUNCH_SEED_OPTION_IDS.some((id) => id === option.id)
+      )
     })
   }
   return { ...seed, models, defaultModelIsCliDefault: true }

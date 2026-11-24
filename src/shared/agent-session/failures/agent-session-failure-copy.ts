@@ -65,7 +65,7 @@ export const AGENT_SESSION_FAILURE_COPY = {
   antigravityNotSignedIn:
     "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity. Then send your message again.",
   antigravitySystemNotSignedIn:
-    "Antigravity isn't signed in. Sign in by running `agy` on the computer running this chat, then send your message again.",
+    "Antigravity isn't signed in. Sign in by running `{{loginCommand}}` on the computer running this chat, then send your message again.",
   agentCommandNotSignedIn:
     'Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.',
   interactiveAgentNotSignedIn:

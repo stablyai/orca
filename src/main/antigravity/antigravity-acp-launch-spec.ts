@@ -96,7 +96,7 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   scrubEnvironment: scrubAntigravityAcpEnvironment,
   dialect: ANTIGRAVITY_ACP_DIALECT,
   clientInfo: managedServerClientInfo,
-  loginCommand: agentSessionSetupFor('antigravity')?.loginCommand ?? [],
+  loginCommand: [],
   authMethod: ({ antigravityChatAuth }) =>
     resolveAntigravityChatAuthConfig(antigravityChatAuth).method,
   authMethodUnavailableMessage:
@@ -166,6 +166,7 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   // and can replace agy mid-probe.
   env: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },
   scrubEnvironment: scrubAgyHostApiKeys,
+  loginCommand: agentSessionSetupFor('antigravity')?.loginCommand ?? [],
   authMethod: undefined,
   authMethodUnavailableMessage: undefined,
   signIn: undefined,
