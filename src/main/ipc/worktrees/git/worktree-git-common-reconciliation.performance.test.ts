@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { WorktreeBasePollEvent } from '../creation/worktree-base-directory-poller'
 import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-reconciliation'
 
-// Perf contract (#47965): the watcher backstop stat'ed every worktree's git metadata every 30 s while the window was
+// Perf contract (#48030): the watcher backstop stat'ed every worktree's git metadata every 30 s while the window was
 // visible (~200 stats/s at 1,900 worktrees) even though the native watcher already reports changes.
 
 type Node = { dir: boolean; mtimeMs: number; ino: number }
