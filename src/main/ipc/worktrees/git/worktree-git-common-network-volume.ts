@@ -1,4 +1,4 @@
-import { stat, statfs } from 'node:fs/promises'
+import { realpath, stat, statfs } from 'node:fs/promises'
 
 // Linux statfs f_type magics for network/FUSE filesystems, where inotify misses changes made by other hosts.
 const LINUX_NETWORK_FS_TYPES = new Set([
@@ -17,6 +17,8 @@ const LINUX_NETWORK_FS_TYPES = new Set([
   0x564c // NCP
 ])
 
+const isUncPath = (path: string): boolean => /^[\\/]{2}/.test(path)
+
 /** True when native watching cannot be trusted to see every change (network shares, FUSE mounts). */
 export async function isOnNetworkVolume(
   path: string,
@@ -24,7 +26,15 @@ export async function isOnNetworkVolume(
   bootVolumePath = '/'
 ): Promise<boolean> {
   if (platform === 'win32') {
-    return /^[\\/]{2}/.test(path)
+    if (isUncPath(path)) {
+      return true
+    }
+    // Mapped and subst drives resolve to their UNC or underlying path.
+    try {
+      return isUncPath(await realpath.native(path))
+    } catch {
+      return false
+    }
   }
   if (platform === 'darwin') {
     // darwin statfs types are per-boot indexes; any volume but the boot one (shares, network homes, external disks) keeps the old cadence.
