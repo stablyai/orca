@@ -170,8 +170,11 @@ export async function saveClipboardImageAsTempFileInRuntime(
 
   const { uploadId } = startResponse.result
   try {
-    await appendClipboardImageUploadChunks(startResponse.result, contentBase64, (chunk) =>
-      callRuntimeResult('clipboard.appendImageUploadChunk', chunk, CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS)
+    await appendClipboardImageUploadChunks(
+      startResponse.result,
+      contentBase64,
+      (chunk, timeoutMs) => callRuntimeResult('clipboard.appendImageUploadChunk', chunk, timeoutMs),
+      CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
     )
     return await callRuntimeResult<string>(
       'clipboard.commitImageUpload',

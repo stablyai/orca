@@ -54,7 +54,7 @@ describe('clipboard image upload', () => {
     expect(host.claim(uploadId)).toEqual(bytes)
   })
 
-  it('completes a many-chunk upload while the first chunk is slow', async () => {
+  it('keeps early chunks under the host cap while the second chunk is slow', async () => {
     const host = createHost()
     const bytes = Buffer.alloc((CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS / 4) * 3 * 20)
     for (let index = 0; index < bytes.length; index += 1) {
@@ -67,14 +67,15 @@ describe('clipboard image upload', () => {
       { uploadId, acceptsOutOfOrderChunks: true },
       contentBase64,
       async (chunk) => {
-        if (chunk.offset === 0) {
+        if (chunk.offset === CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS) {
           await new Promise((resolve) => setTimeout(resolve, 0))
         }
         const response = await host.call('clipboard.appendImageUploadChunk', chunk)
         if (!response.ok) {
           throw new Error(response.error.message)
         }
-      }
+      },
+      30_000
     )
 
     expect(host.claim(uploadId).equals(bytes)).toBe(true)

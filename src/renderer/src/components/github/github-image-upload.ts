@@ -16,6 +16,8 @@ import { readStoredWebRuntimeEnvironment } from '@/web/pairing/web-runtime-envir
 import { callAbortableGitHubImageUpload } from './github-image-upload-local-call'
 import { blobToBase64 } from '@/lib/clipboard/images/image-blob-png'
 
+const GITHUB_IMAGE_UPLOAD_TIMEOUT_MS = 120_000
+
 export type GitHubImageUploadAddress = {
   runtime: RuntimeClientTarget
   target: GitHubAttachmentTarget
@@ -41,10 +43,15 @@ export function captureGitHubImageUpload(
         ? getRuntimeEnvironmentRevision(runtime.environmentId)
         : undefined
   }
-  const call = <T>(method: string, params?: unknown, signal?: AbortSignal) =>
+  const call = <T>(
+    method: string,
+    params?: unknown,
+    signal?: AbortSignal,
+    timeoutMs = GITHUB_IMAGE_UPLOAD_TIMEOUT_MS
+  ) =>
     runtime.kind === 'local' && signal
       ? callAbortableGitHubImageUpload<T>(method, params, signal)
-      : callRuntimeRpc<T>(runtime, method, params, { ...options, timeoutMs: 120_000, signal })
+      : callRuntimeRpc<T>(runtime, method, params, { ...options, timeoutMs, signal })
   let supported: Promise<void> | undefined
   return async (file, signal) => {
     signal?.throwIfAborted()
@@ -67,8 +74,11 @@ export function captureGitHubImageUpload(
     const { uploadId } = slot
     try {
       signal?.throwIfAborted()
-      await appendClipboardImageUploadChunks(slot, contentBase64, (chunk) =>
-        call('clipboard.appendImageUploadChunk', chunk, signal)
+      await appendClipboardImageUploadChunks(
+        slot,
+        contentBase64,
+        (chunk, timeoutMs) => call('clipboard.appendImageUploadChunk', chunk, signal, timeoutMs),
+        GITHUB_IMAGE_UPLOAD_TIMEOUT_MS
       )
       const result = await call<{ url: string }>(
         'github.uploadAttachment',

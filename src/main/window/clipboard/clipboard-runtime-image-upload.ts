@@ -12,14 +12,15 @@ async function callRuntimeClipboardMethod<TResult>(
   userDataPath: string,
   runtimeEnvironmentId: string,
   method: string,
-  params: unknown
+  params: unknown,
+  timeoutMs = CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
 ): Promise<TResult> {
   const response = await callRuntimeEnvironment(
     userDataPath,
     runtimeEnvironmentId,
     method,
     params,
-    CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+    timeoutMs
   )
   if (!response.ok) {
     throw new Error(response.error.message)
@@ -70,13 +71,18 @@ async function saveClipboardImageBase64InRuntime(
   }
   const { uploadId } = slot
   try {
-    await appendClipboardImageUploadChunks(slot, contentBase64, (chunk) =>
-      callRuntimeClipboardMethod(
-        userDataPath,
-        runtimeEnvironmentId,
-        'clipboard.appendImageUploadChunk',
-        chunk
-      )
+    await appendClipboardImageUploadChunks(
+      slot,
+      contentBase64,
+      (chunk, timeoutMs) =>
+        callRuntimeClipboardMethod(
+          userDataPath,
+          runtimeEnvironmentId,
+          'clipboard.appendImageUploadChunk',
+          chunk,
+          timeoutMs
+        ),
+      CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
     )
     const remotePath = await callRuntimeClipboardMethod<string>(
       userDataPath,
