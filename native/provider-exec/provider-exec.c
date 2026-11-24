@@ -256,8 +256,13 @@ struct watcher {
     long long leader_start;
     char tree_tag[64];
     long long next_sweep_ns;
-    // Members started at or after this mark have not been sent TERM yet.
-    long long term_floor;
+    // Exact identities already sent TERM, so each gets it once and none is skipped.
+    struct termed {
+        pid_t pid;
+        long long start;
+    } *termed;
+    size_t termed_count;
+    size_t termed_capacity;
     unsigned stdin_end_grace_ms;
     unsigned sigterm_grace_ms;
     int session;
@@ -703,6 +708,31 @@ static int signal_member(struct proc_row *row, int signal_number) {
 #endif
 }
 
+static int already_termed(const struct watcher *w, const struct proc_row *row) {
+    for (size_t i = 0; i < w->termed_count; i++) {
+        if (w->termed[i].pid == row->pid && w->termed[i].start == row->start) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int record_termed(struct watcher *w, const struct proc_row *row) {
+    if (w->termed_count == w->termed_capacity) {
+        size_t capacity = w->termed_capacity > 0 ? w->termed_capacity * 2 : 16;
+        void *grown = realloc(w->termed, capacity * sizeof *w->termed);
+        if (grown == NULL) {
+            return 0;
+        }
+        w->termed = grown;
+        w->termed_capacity = capacity;
+    }
+    w->termed[w->termed_count].pid = row->pid;
+    w->termed[w->termed_count].start = row->start;
+    w->termed_count++;
+    return 1;
+}
+
 // Signals each live descendant once through its kernel handle. Returns how many were alive, or -1
 // when the tree could not be read, its anchor is unproven, or a member vanished mid-sweep.
 static int sweep_once(struct watcher *w, int signal_number) {
@@ -717,19 +747,11 @@ static int sweep_once(struct watcher *w, int signal_number) {
     }
     long long scan_tick = (long long)boot.tv_sec * ticks_per_second +
                           (long long)boot.tv_nsec * ticks_per_second / 1000000000LL;
-    long long scan_mark = scan_tick;
     struct pollfd anchor = {.fd = w->reaper_fd, .events = POLLIN};
     if (w->reaper_fd < 0 || poll(&anchor, 1, 0) != 0) {
         // The subreaper exited (or its pidfd is unusable), so its PID anchors nothing.
         return -1;
     }
-#else
-    // Start times are wall-clock microseconds.
-    struct timespec wall;
-    if (clock_gettime(CLOCK_REALTIME, &wall) != 0) {
-        return -1;
-    }
-    long long scan_mark = (long long)wall.tv_sec * 1000000LL + wall.tv_nsec / 1000;
 #endif
     scan.rows = read_table(&scan.n);
     if (scan.rows == NULL) {
@@ -778,8 +800,11 @@ static int sweep_once(struct watcher *w, int signal_number) {
             continue;
         }
 #endif
-        // A member already sent TERM by an earlier sweep is only probed.
-        int send = signal_number == SIGTERM && row->start < w->term_floor ? 0 : signal_number;
+        // A member already sent TERM is only probed; one that can't be recorded is not sent it.
+        int send = signal_number;
+        if (signal_number == SIGTERM && (already_termed(w, row) || !record_termed(w, row))) {
+            send = 0;
+        }
         if (signal_member(row, send)) {
             live++;
         } else {
@@ -791,9 +816,6 @@ static int sweep_once(struct watcher *w, int signal_number) {
     // so this sweep cannot prove the tree empty.
     if (dropped && live == 0) {
         live = -1;
-    }
-    if (signal_number == SIGTERM) {
-        w->term_floor = scan_mark;
     }
 done:
     free(scan.rows);
@@ -821,9 +843,12 @@ static int sweep_tree(struct watcher *w, int signal_number) {
 }
 #endif
 
-// Rate-limited: the table is read only after the CLI group is gone, at most every sweep interval.
+// Rate-limited to one table read per sweep interval.
+// During TERM grace it also sweeps while the CLI group lives, so a tool that was deferred or born
+// late still gets TERM before KILL. Absence needs the group gone before the sweep began.
 static int tree_absent(struct watcher *w, int signal_number) {
-    if (!group_absent(w)) {
+    int group_gone = group_absent(w);
+    if (!group_gone && signal_number != SIGTERM) {
         return 0;
     }
     struct timespec now;
@@ -835,7 +860,7 @@ static int tree_absent(struct watcher *w, int signal_number) {
         return 0;
     }
     w->next_sweep_ns = now_ns + (long long)TREE_SWEEP_INTERVAL_MS * 1000000LL;
-    return sweep_tree(w, signal_number) == 0;
+    return sweep_tree(w, signal_number) == 0 && group_gone;
 }
 
 static long long monotonic_ns(struct watcher *w) {
@@ -1354,7 +1379,6 @@ int main(int argc, char *argv[]) {
         .close_stdin_end = strcmp(argv[5], "stdin-end") == 0,
         .phase = WATCH_IDLE,
         .reaper_fd = -1,
-        .term_floor = LLONG_MIN,
     };
     sigset_t fork_set;
     sigemptyset(&stop_set);

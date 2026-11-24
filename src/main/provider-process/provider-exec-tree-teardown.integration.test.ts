@@ -65,7 +65,7 @@ describe.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
         binary
       ])
       // The tool shell takes its own session and exits, orphaning a tagged tool and an untagged one.
-      const tool = `'${process.execPath}' -e 'setTimeout(() => {}, 30000)' & echo $! > ${dir}/a; env -u ORCA_PROVIDER_TREE sleep 30 & echo $! > ${dir}/b`
+      const tool = `echo $$ > ${dir}/s; '${process.execPath}' -e 'setTimeout(() => {}, 30000)' & echo $! > ${dir}/a; env -u ORCA_PROVIDER_TREE sleep 30 & echo $! > ${dir}/b`
       const cli = `require('child_process').spawn('/bin/sh', ['-c', ${JSON.stringify(tool)}], { detached: true, stdio: 'ignore' }).unref(); setTimeout(() => {}, 30000)`
       exec = spawn(
         binary,
@@ -95,6 +95,9 @@ describe.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
       })
       const tools = ['a', 'b'].map((name) => Number(readFileSync(join(dir, name), 'utf8')))
       expect(tools.every(alive)).toBe(true)
+      // Only once the tool shell is gone are its tools orphans with no live ancestry.
+      const shell = Number(readFileSync(join(dir, 's'), 'utf8'))
+      await vi.waitFor(() => expect(alive(shell)).toBe(false), { timeout: 5000 })
 
       const completion = readLine(owner)
       owner.write('term\n')
