@@ -1,10 +1,10 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import type { Readable, Writable } from 'node:stream'
-import { afterEach, describe, expect, it } from 'vitest'
+import { Duplex, type Readable } from 'node:stream'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const SOURCE = resolve(__dirname, '../../../native/provider-exec/provider-exec.c')
 
@@ -17,12 +17,11 @@ function alive(pid: number): boolean {
   }
 }
 
-async function gone(pid: number): Promise<boolean> {
-  // A killed orphan stays a zombie until init reaps it.
-  for (let i = 0; i < 100 && alive(pid); i++) {
-    await new Promise((done) => setTimeout(done, 20))
+function socket(stream: unknown): Duplex {
+  if (!(stream instanceof Duplex)) {
+    throw new Error('provider exec fd is not a socket')
   }
-  return !alive(pid)
+  return stream
 }
 
 function readLine(stream: Readable): Promise<string> {
@@ -89,18 +88,15 @@ describe.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
           stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe']
         }
       )
-      const [owner, gate, status] = exec.stdio.slice(3) as [Writable & Readable, Writable, Readable]
-      const { leaderPid } = JSON.parse(await readLine(status)) as { leaderPid: number }
-      started.push(leaderPid)
+      const [owner, gate, status] = exec.stdio.slice(3, 6).map(socket)
+      started.push(Number(/"leaderPid":(\d+)/.exec(await readLine(status))?.[1]))
       gate.write('g\n')
 
       const outsider = spawn('sleep', ['1000'], { detached: true, stdio: 'ignore' })
       started.push(outsider.pid!)
-      const written = (): boolean =>
-        existsSync(join(dir, 'b')) && readFileSync(join(dir, 'b'), 'utf8').trim() !== ''
-      for (let i = 0; i < 250 && !written(); i++) {
-        await new Promise((done) => setTimeout(done, 20))
-      }
+      await vi.waitFor(() => expect(readFileSync(join(dir, 'b'), 'utf8').trim()).not.toBe(''), {
+        timeout: 5000
+      })
       const tools = ['a', 'b'].map((name) => Number(readFileSync(join(dir, name), 'utf8')))
       started.push(...tools)
       expect(tools.every(alive)).toBe(true)
@@ -108,8 +104,8 @@ describe.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
       const completion = readLine(owner)
       owner.write('term\n')
       expect(await completion).toBe('group-absent')
-      expect(await gone(tools[0])).toBe(true)
-      expect(await gone(tools[1])).toBe(true)
+      // A killed orphan stays a zombie until init reaps it.
+      await expect.poll(() => tools.some(alive), { timeout: 2000 }).toBe(false)
       expect(alive(outsider.pid!)).toBe(true)
     })
   }
