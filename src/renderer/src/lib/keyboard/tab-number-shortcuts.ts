@@ -6,6 +6,7 @@ import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-groups/t
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
+import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 
 type TabNumberShortcutState = Pick<
   AppState,
@@ -57,6 +58,7 @@ export function activateTabNumberShortcut(index: number): boolean {
     return false
   }
 
+  cancelPendingBotThreadOpen()
   const worktreeId = target.worktreeId
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   store.focusGroup(worktreeId, target.groupId)

@@ -1,4 +1,5 @@
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
+import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { targetBotChatLatest } from '@/lib/agent-session/open/bot-link-item-target'
 import { callBotRpc } from '@/lib/bot-hosts'
 import { selectFocusedChatTab } from '@/lib/focused-chat-workers'
@@ -37,6 +38,7 @@ function shownChatTab(bot: Bot, sessionId: string): { id: string } | null {
 export function openBotSession(bot: Bot, sessionId: string): void {
   const shown = shownChatTab(bot, sessionId)
   if (shown) {
+    cancelPendingBotThreadOpen()
     targetBotChatLatest(sessionId)
     requestNativeChatComposerFocus(shown.id, { revealDraft: true })
     return

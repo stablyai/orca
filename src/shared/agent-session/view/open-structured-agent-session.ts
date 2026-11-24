@@ -167,11 +167,17 @@ export async function openStructuredAgentSession(
       /* Inventory reads are advisory. */
     }
   }
+  if (!current()) {
+    return { kind: 'superseded' }
+  }
   if (seed) {
     try {
       const direct = await known(seed)
       if (direct) {
         return direct
+      }
+      if (!current()) {
+        return { kind: 'superseded' }
       }
       await refreshKnown(seed)
       const refreshed = await known(seed)
@@ -181,6 +187,9 @@ export async function openStructuredAgentSession(
     } catch (error) {
       return { kind: 'failed', failure: structuredSessionOpenFailure(error) }
     }
+  }
+  if (!current()) {
+    return { kind: 'superseded' }
   }
   const resolved = await resolveStructuredSessionOpenSource(
     source,

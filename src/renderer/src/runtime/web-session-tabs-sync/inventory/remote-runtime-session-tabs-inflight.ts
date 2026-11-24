@@ -17,15 +17,11 @@ const inFlightBySession = new Map<string, Promise<RemoteRuntimeSessionTabsAnswer
 type RemoteRuntimeSessionTabsLoad = {
   environmentId: string
   worktreeId: string
-  listTimeoutMs?: number
   load: () => Promise<{ snapshot: RuntimeMobileSessionTabsResult; runtimeId?: string }>
 }
 
-function remoteRuntimeSessionTabsKey(
-  args: Pick<RemoteRuntimeSessionTabsLoad, 'environmentId' | 'worktreeId' | 'listTimeoutMs'>
-): string {
-  // Short foreground reads must not shorten the transport timeout of a normal refresh.
-  return `${args.environmentId}\u0000${args.worktreeId}\u0000${args.listTimeoutMs ?? ''}`
+function remoteRuntimeSessionTabsKey(args: { environmentId: string; worktreeId: string }): string {
+  return `${args.environmentId}\u0000${args.worktreeId}`
 }
 
 export function listRemoteRuntimeSessionTabsDeduped(
