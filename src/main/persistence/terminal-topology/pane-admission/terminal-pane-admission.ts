@@ -192,7 +192,7 @@ function applyToSession(
         workspaces: replacedWorkspaces(loaded.layout, applied.model),
         ...(keepsViews ? { views: editorViewsOfModel(applied.model) } : {})
       }
-    : { value: { ok: false, code: applied.code }, session: null }
+    : { value: applied, session: null }
 }
 
 /** Commands share untouched workspaces with the loaded model, so a replaced object is a written workspace. */

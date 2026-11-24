@@ -131,6 +131,13 @@ export async function stopSingleWorker(
   }
 
   const awaitingAgent = isWorkerAwaitingAgent(db.getWorkerDispatch(dispatchId))
+  if (!db.getDispatchContextById(dispatchId) && db.getRemoteDispatchAttachment(dispatchId)) {
+    throw new OrchestrationError(
+      'worker_stop_remote_origin',
+      "Can't stop this worker here: stop it on the computer that started it."
+    )
+  }
+
   const begun = db.beginWorkerStop(dispatchId, runtime.getRuntimeId())
   cancelWorkerStartWait(dispatchId)
   if (begun.disposition === 'already_settled') {

@@ -1,3 +1,5 @@
+import { canMoveLeafIntoTab } from '../tab-groups/worker-tab-visibility'
+import { isWorkerLeaf } from '../../orchestration/workers/worker-tab-stamp'
 // Pane IDs and their keyed data/scrollback survive moves.
 
 import { getNextTerminalOrdinal } from '../terminal-topology/terminal-tab-ordinal'
@@ -87,6 +89,23 @@ export function movePane(model: WorkspaceLayoutModel, command: CommandOf<'movePa
   const tab = paneTab(model, command)
   if (!tab) {
     return refuse('tab_not_found')
+  }
+  const destination = model.workspaces[command.workspace]!.tabs.find(
+    (candidate) =>
+      candidate.kind === 'terminal' &&
+      layoutContainsLeafId(candidate.panes.root, command.targetLeafId)
+  )
+  if (!canMoveLeafIntoTab(tab, command.leafId, destination)) {
+    const taskTitle =
+      destination?.workerTab?.current?.taskTitle ??
+      destination?.workerTab?.origin.taskTitle ??
+      destination?.customTitle ??
+      destination?.id ??
+      ''
+    return refuse(
+      'worker_tab_conflict',
+      `Can't move pane ${command.leafId} into tab ${destination?.id}: it belongs to another worker (${taskTitle}). Move it to a new tab instead.`
+    )
   }
   const { root } = tab.panes
   if (
@@ -236,6 +255,7 @@ export function movePaneToNewTab(
     color: null,
     ...(tab.panes.chatLeafId === leafId ? { viewMode: 'chat' as const } : {}),
     kind: 'terminal',
+    ...(isWorkerLeaf(tab.workerTab, leafId) ? { workerTab: tab.workerTab } : {}),
     terminal: {
       defaultTitle: `Terminal ${ordinal}`,
       ...(startupCwd ? { startupCwd } : {}),
@@ -249,6 +269,9 @@ export function movePaneToNewTab(
   const source: LayoutTerminalTab = {
     ...tab,
     panes: { ...tab.panes, root: removeLayoutLeaf(tab.panes.root, leafId) }
+  }
+  if (isWorkerLeaf(tab.workerTab, leafId)) {
+    delete source.workerTab
   }
   if (source.panes.chatLeafId === leafId) {
     delete source.panes.chatLeafId

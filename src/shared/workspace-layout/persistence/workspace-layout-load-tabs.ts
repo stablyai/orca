@@ -29,7 +29,9 @@ function contentFields(entry: Tab) {
       'isPinned',
       'viewMode',
       'isPreview',
-      'agentSessionAgent'
+      'agentSessionAgent',
+      'workerTab',
+      'agentSessionLineageRootId'
     ]),
     ...(entry.generatedLabel !== undefined ? { generatedTitle: entry.generatedLabel } : {})
   }
@@ -56,7 +58,8 @@ export function loadTerminalTab(
       'quickCommandLabel',
       'isPinned',
       'viewMode',
-      'generatedTitle'
+      'generatedTitle',
+      'workerTab'
     ]),
     createdAt: row.createdAt,
     customTitle: row.customTitle,

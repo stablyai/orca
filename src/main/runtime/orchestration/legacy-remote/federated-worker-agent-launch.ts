@@ -1,3 +1,4 @@
+import { workerTabStampForFederatedStart } from './federated-worker-tab-stamp'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 /** Execute terminalOnly on the receiving host with federation's agent-first worktree/background-terminal factories. The dispatch brief is delivered later. */
 
@@ -41,6 +42,7 @@ export async function launchFederatedWorkerAgent(args: {
   terminalCreation?: RuntimeTerminalCreate
 }> {
   const { runtime, db, params, effects } = args
+  const workerTab = workerTabStampForFederatedStart(params)
   if (!args.agent) {
     // Validation refuses a fresh launch with no agent; this only narrows the type.
     throw new Error(
@@ -101,6 +103,7 @@ export async function launchFederatedWorkerAgent(args: {
           createdWithAgent: agent,
           startupAgent: agent,
           startupLaunchSource: 'orchestration',
+          ...(workerTab ? { startupWorkerTab: workerTab } : {}),
           startupSuppressUpdatePrompt: true,
           ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
           activate: false,
@@ -158,7 +161,7 @@ export async function launchFederatedWorkerAgent(args: {
           launchSource: 'orchestration',
           suppressStartupUpdatePrompt: true,
           ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
-          title: `worker-${params.taskId}`,
+          workerTab,
           presentation: 'background'
         })
         effects.push({ kind: 'terminal', role: 'agent', action: 'created', id: terminal.handle })

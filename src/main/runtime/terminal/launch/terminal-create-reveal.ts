@@ -69,6 +69,7 @@ export function revealCreatedTerminal(args: {
           ...(effectiveLaunchConfig ? { launchConfig: effectiveLaunchConfig } : {}),
           ...(launchToken ? { launchToken } : {}),
           ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
+          ...(launchOpts.workerTab ? { workerTab: launchOpts.workerTab } : {}),
           ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
           activate: presentation === 'focused',
           ...(presentation ? { presentation } : {}),

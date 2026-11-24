@@ -23,6 +23,9 @@ export class KeyedChangeJournal {
     if (offset < 0 || cursor > this.revision) {
       return null
     }
+    if (offset === this.batches.length - 1) {
+      return this.batches[offset]!
+    }
     const keys = new Set<string>()
     for (let index = offset; index < this.batches.length; index++) {
       const batch = this.batches[index]

@@ -1,3 +1,6 @@
+import { structuredSessionLineageRoot } from '../../agent-session/structured-session-lineage-root'
+import { structuredWorkerTabStamp } from '../../orchestration/workers/launch/structured-worker-tab-stamps'
+import type { WorkerTabStamp } from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import {
   normalizeMobileSessionTabSelection,
   selectMobileSessionTab
@@ -189,6 +192,7 @@ export function projectStructuredSessionTab(
     title: defaultAgentChatLabel(input.agent),
     sessionId: input.sessionId,
     agent: input.agent,
+    ...structuredWorkerTabFields(input.sessionId, existing?.tabs ?? input.savedOrder?.tabs),
     isActive: input.activate
   }
   const tabs = [...(existing?.tabs ?? [])].map((candidate) => ({
@@ -254,5 +258,26 @@ export function projectStructuredSessionTab(
   const stored = runtime.storeMobileSessionSnapshot(input.workspaceId, selected)
   if (input.notify !== false) {
     emit(stored)
+  }
+}
+
+function structuredWorkerTabFields(
+  sessionId: string,
+  tabs: RuntimeMobileSessionTabsSnapshot['tabs'] = []
+): {
+  workerTab?: WorkerTabStamp
+  lineageRootSessionId?: string
+} {
+  const root = structuredSessionLineageRoot(sessionId)
+  const workerTab =
+    structuredWorkerTabStamp(sessionId) ??
+    tabs.find(
+      (tab): tab is RuntimeMobileSessionAgentTab =>
+        tab.type === 'agent-session' &&
+        (tab.sessionId === sessionId || tab.sessionId === root || tab.lineageRootSessionId === root)
+    )?.workerTab
+  return {
+    ...(workerTab ? { workerTab } : {}),
+    ...(root !== sessionId ? { lineageRootSessionId: root } : {})
   }
 }

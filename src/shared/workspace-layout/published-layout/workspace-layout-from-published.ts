@@ -29,7 +29,9 @@ function layoutTab(tab: PublishedTab): LayoutTab {
       'isPinned',
       'viewMode',
       'isPreview',
-      'agentSessionAgent'
+      'agentSessionAgent',
+      'workerTab',
+      'agentSessionLineageRootId'
     ])
   }
   if (tab.kind !== 'terminal') {

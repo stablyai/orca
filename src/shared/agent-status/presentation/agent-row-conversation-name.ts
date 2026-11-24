@@ -6,12 +6,22 @@ import { formatAgentTypeLabel } from './agent-type-label'
 import { isJcodeIdentityTerminalTitle } from '../title/providers/jcode-terminal-title'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from '../title/synthetic-agent-title'
 import type { TerminalTab } from '../../workspace-layout/terminal-tab-types'
-import { resolveTabNameSource } from '../../workspace-layout/tab-groups/tab-title-resolution'
+import {
+  resolveTabNameSource,
+  resolveTerminalTabTitle
+} from '../../workspace-layout/tab-groups/tab-title-resolution'
+import { stampedTaskTitle } from '../../orchestration/workers/worker-tab-stamp'
 import { aiVaultTitleOfSession } from '../../ai-vault/contracts/ai-vault-session-title'
 
 export type ConversationNameTab = Pick<
   TerminalTab,
-  'customTitle' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle' | 'title' | 'defaultTitle'
+  | 'customTitle'
+  | 'quickCommandLabel'
+  | 'aiVaultTitle'
+  | 'generatedTitle'
+  | 'title'
+  | 'defaultTitle'
+  | 'workerTab'
 >
 
 // Synthetic status labels describe state rather than a conversation name.
@@ -110,6 +120,9 @@ export function getAgentRowConversationName(
   paneLiveTitle?: string | null,
   providerSessionId?: string
 ): string | null {
+  if (stampedTaskTitle(tab)?.trim()) {
+    return resolveTerminalTabTitle(tab, generatedTitlesEnabled)
+  }
   const liveTitle =
     paneLiveTitle === undefined ? (tab.title?.trim() ?? '') : (paneLiveTitle?.trim() ?? '')
   const named = resolveTabNameSource(

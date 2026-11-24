@@ -1,3 +1,4 @@
+import { workerTabStampSchema } from '../../orchestration/workers/worker-tab-stamp'
 import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
 import { OptionalWorkerLaunchPreference } from './orchestration-worker-start-params'
@@ -9,6 +10,7 @@ export const FederationAttachStartParams = z.object({
   dispatchId: requiredString('Missing Dispatch ID'),
   taskId: requiredString('Missing Task ID'),
   taskSpec: requiredString('Missing Task spec'),
+  workerTab: workerTabStampSchema,
   /** Depth stamped by the Run home; omitted by older clients and defaults to 1. */
   depth: z.number().int().min(1).optional(),
   protocolVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),

@@ -1,3 +1,4 @@
+import type { WorkerTabStamp } from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import { OrcaRuntimeWithAgentSessionResumeOwnership } from './agent-session-resume-ownership'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
@@ -49,6 +50,8 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
       mutationId: string
       /** The caller's complete recipe; without one, the conversation's own pane record supplies it. */
       launchConfig?: SleepingAgentLaunchConfig
+      /** Orchestration reopen only: stamps the reopened worker's new tab. */
+      workerTab?: WorkerTabStamp
       signal?: AbortSignal
     }
   ): Promise<AgentSessionResumeResult> {
@@ -98,6 +101,7 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
       captureHostId: ExecutionHostId
       mutationId: string
       launchConfig?: SleepingAgentLaunchConfig
+      workerTab?: WorkerTabStamp
       signal?: AbortSignal
     },
     create: {
@@ -191,6 +195,7 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
         launchRuntime: resume.launchRuntime,
         resumeProviderSession: resume.resumeProviderSession,
         spawnIntent: 'user-resume',
+        ...(request.workerTab ? { workerTab: request.workerTab } : {}),
         identity: create.identity,
         createMutation: { clientIdentity: 'agent-session-resume', id: request.mutationId },
         onPtySpawnDispatched: create.onPtySpawnDispatched,

@@ -1,4 +1,9 @@
 import {
+  forgetStructuredWorkerTabStamp,
+  rememberStructuredWorkerTabStamp
+} from '../../../../orchestration/workers/launch/structured-worker-tab-stamps'
+import type { WorkerTabStamp } from '../../../../../../shared/orchestration/workers/worker-tab-stamp'
+import {
   closeStructuredAgentSessionChild,
   type StructuredAgentSessionCloseOptions
 } from '../../../../agent-session/lifecycle/structured-agent-session-close'
@@ -81,11 +86,12 @@ function ensureStructuredWorkerSessionBinding(
 }
 
 /** A reused worker's chat may have outlived its binding (abandon releases it); bind it again. */
-export function rebindReusedStructuredWorker(handle: string, db: OrchestrationDb): void {
+export function rebindReusedStructuredWorker(handle: string, db: OrchestrationDb) {
   const identity = resolveStructuredWorkerIdentity(handle, db)
   if (identity) {
     ensureStructuredWorkerSessionBinding(identity)
   }
+  return identity
 }
 
 /** A leveled Antigravity id names its effort, so a saved effort for the seeded model must not override it (#45701). */
@@ -132,6 +138,7 @@ export async function createStructuredWorkerSession(args: {
   dispatchId: string
   /** The dispatch's own `--model`/`--effort`, already narrowed to the seedable string subset. */
   options?: Readonly<Record<string, string>>
+  workerTab?: WorkerTabStamp
 }): Promise<{
   identity: StructuredWorkerIdentity
   host: StructuredAgentSessionHost
@@ -153,6 +160,9 @@ export async function createStructuredWorkerSession(args: {
     hostScope: { kind: 'local', hostId: 'local' }
   })
   let created: Awaited<ReturnType<typeof createStructuredAgentSessionForWorktree>> | undefined
+  if (args.workerTab) {
+    rememberStructuredWorkerTabStamp(sessionId, args.workerTab)
+  }
   try {
     created = await createStructuredAgentSessionForWorktree({
       runtime: args.runtime,
@@ -199,6 +209,7 @@ export async function createStructuredWorkerSession(args: {
   } catch (error) {
     // Failed post-create starts must retire the otherwise unowned live provider child.
     structuredWorkerIdentities.forget(identity.handle)
+    forgetStructuredWorkerTabStamp(sessionId)
     if (structuredCreateMayHaveCommitted(created)) {
       await discardStructuredWorkerSession(sessionId, args.runtime)
     }

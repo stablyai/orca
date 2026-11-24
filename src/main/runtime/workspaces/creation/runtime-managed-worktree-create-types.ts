@@ -1,3 +1,4 @@
+import type { WorkerTabStamp } from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
@@ -90,6 +91,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupSuppressUpdatePrompt?: boolean
   /** Main-internal: the startup terminal's tab title, such as an automation run's. */
   startupTitle?: string
+  /** Main-internal: the orchestration worker stamp for the startup terminal's tab. */
+  startupWorkerTab?: WorkerTabStamp
   startupCwd?: string
   /** The surface behind a host-built startup agent (`startupAgent` or `startupDraft`). */
   startupLaunchSource?: string

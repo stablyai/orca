@@ -1,3 +1,4 @@
+import type { WorkerTabStamp } from '../../orchestration/workers/worker-tab-stamp'
 import type { AgentStatusEntry } from '../../agent-status/contracts/agent-status-types'
 import type {
   BrowserCertificateFailure,
@@ -35,6 +36,8 @@ export type RuntimeMobileSessionTerminalTab = {
   /** Event-only lead-turn end time for paired clients; never persisted in AgentStatusEntry. */
   turnCompletedAt?: number
   launchAgent?: TuiAgent
+  /** Host-owned worker stamp of the parent tab; old hosts omit it, so the worker stays visible. */
+  workerTab?: WorkerTabStamp
   /** Whether the host's launch owner attests that the Orca launch it admitted still runs here; older hosts omit it. */
   launchAttested?: boolean
   startupCwd?: string
@@ -149,6 +152,10 @@ export type RuntimeMobileSessionAgentTab = {
   chatStatus?: RuntimeMobileSessionAgentTabStatus
   /** The desktop Agents list says this tab's agent has an unread turn. Phones only; hosts with no verdict omit it. */
   unread?: true
+  /** Host-owned worker stamp; old hosts omit it. */
+  workerTab?: WorkerTabStamp
+  /** The chat's session lineage root, stable across /clear; old hosts omit it. */
+  lineageRootSessionId?: string
   color?: string | null
   isPinned?: boolean
   isActive: boolean

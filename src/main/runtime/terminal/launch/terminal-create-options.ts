@@ -1,3 +1,4 @@
+import type { WorkerTabStamp } from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type {
   AgentProviderSessionMetadata,
@@ -68,6 +69,8 @@ export type TerminalCreateOptions = {
   telemetry?: WorktreeStartupLaunch['telemetry']
   /** Attribute host-built startupAgent launches by surface; missing/unknown surface becomes unknown. Ignore without startupAgent. */
   launchSource?: string
+  /** Orchestration worker stamp; `createTerminal` fills `workerLeafId` with the leaf it allocates. */
+  workerTab?: WorkerTabStamp
   title?: string
   focus?: boolean
   activate?: boolean

@@ -1,3 +1,4 @@
+import { normalizeWorkerTabsUiPreferences } from '../../../shared/orchestration/workers/worker-tabs-ui-preferences'
 import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
 import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-listing/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
@@ -53,6 +54,7 @@ export function getPersistedUI(
     ),
     worktreeCardProperties: normalizeWorktreeCardProperties(state.ui?.worktreeCardProperties),
     showAgentModels: state.ui?.showAgentModels !== false,
+    ...normalizeWorkerTabsUiPreferences(state.ui),
     agentActivityDisplayMode: normalizeAgentActivityDisplayMode(state.ui?.agentActivityDisplayMode),
     workspaceStatuses: normalizeWorkspaceStatuses(state.ui?.workspaceStatuses),
     workspaceBoardOpacity: clampWorkspaceBoardOpacity(state.ui?.workspaceBoardOpacity),

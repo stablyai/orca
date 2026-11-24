@@ -1,3 +1,4 @@
+import { withWorkerLeaf } from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import { normalizeMobileSessionTabSelection } from '../layout/mobile-session-tab-selection'
 import type { OrcaRuntimeWithTouchMobileSessionTabsForWorktree as TouchMobileSessionTabsForWorktreeMethods } from '../restoration/mobile-session-membership'
 import { OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding } from '../../session-lifecycle/close/has-live-or-persisted-serve-or-ssh-owned-pty-binding'
@@ -122,6 +123,7 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       title,
       ...(customTitle !== undefined ? { customTitle } : {}),
       ...(pty.launchAgent ? { launchAgent: pty.launchAgent } : {}),
+      ...(pty.workerTab ? { workerTab: withWorkerLeaf(pty.workerTab, args.leafId) } : {}),
       ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
       ...(viewMode ? { viewMode } : {}),
       parentLayout,

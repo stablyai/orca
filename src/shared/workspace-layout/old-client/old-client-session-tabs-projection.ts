@@ -168,6 +168,8 @@ function projectTab(tab: LayoutTab, scope: Scope): RuntimeMobileSessionSnapshotT
 }
 
 const tabProps = (tab: LayoutTab) => ({
+  ...(tab.workerTab ? { workerTab: tab.workerTab } : {}),
+  ...(tab.agentSessionLineageRootId ? { lineageRootSessionId: tab.agentSessionLineageRootId } : {}),
   ...(tab.color != null ? { color: tab.color } : {}),
   ...(tab.isPinned ? { isPinned: true } : {})
 })

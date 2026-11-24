@@ -132,6 +132,11 @@ export type PersistedUIState = {
   /** One-shot migration flag for deriving card properties from the two worktree card modes. */
   _worktreeCardModeDefaulted?: boolean
   showAgentModels?: boolean
+  /** Worker tabs: open when clicked (default) or always open (pre-fold behavior). Absent means open-when-clicked. */
+  workerTabsMode?: 'open-when-clicked' | 'always-open'
+  /** The first hide of a running worker explained where it went; never again. */
+  workerTabHideHintShown?: boolean
+  /** Deliberate Keep / Hide of worker tabs, by worktree then tab id. Absent means automatic. */
   agentActivityDisplayMode?: AgentActivityDisplayMode
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number

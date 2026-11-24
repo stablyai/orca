@@ -1,3 +1,4 @@
+import { workerTabStampForDispatch } from '../workers/launch/worker-tab-stamp-at-launch'
 import type { FederatedWorkerStartRequest } from './federated-worker-start-request'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
@@ -124,7 +125,6 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
         ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
         : 1
 
-  const setupDecision = createsWorktree ? (params.setup ?? 'inherit') : 'not_applicable'
   const runId = args.bindRunId()
   const started = db.createStartingWorkerDispatch({
     creator: resolveDispatchCreator(runtime, params.from, args.callerSession),
@@ -147,7 +147,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       agent: params.agent ?? null,
       launch: requestedLaunch,
       timeoutMs: budgets.readinessTimeoutMs,
-      setup: setupDecision,
+      setup: createsWorktree ? (params.setup ?? 'inherit') : 'not_applicable',
       setupSource: createsWorktree
         ? params.setup
           ? 'explicit_request'
@@ -188,6 +188,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           dispatchId: started.dispatch.id,
           taskId: taskForRemote.id,
           taskSpec: taskForRemote.spec,
+          workerTab: workerTabStampForDispatch(db, started.dispatch.id, params.terminal),
           // Carry home dispatch depth so remote workers cannot re-enter as roots when nesting.
           depth: started.dispatch.depth,
           protocolVersion: federationProtocolVersion,

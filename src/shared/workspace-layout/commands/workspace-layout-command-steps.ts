@@ -26,7 +26,11 @@ import { withWorkspace } from './workspace-layout-removal'
 
 export type Applied = LayoutApplyResult<WorkspaceLayoutModel>
 
-export const refuse = (code: LayoutRefusalCode): Applied => ({ ok: false, code })
+export const refuse = (code: LayoutRefusalCode, message?: string): Applied => ({
+  ok: false,
+  code,
+  ...(message ? { message } : {})
+})
 
 export function applied(
   model: WorkspaceLayoutModel,

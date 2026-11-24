@@ -17,7 +17,13 @@ export function resolveTerminalLaunchResult(
   result: TerminalSpawnResult,
   requested: Pick<
     TerminalCreateOptions,
-    'launchConfig' | 'launchAgent' | 'launchToken' | 'title' | 'viewMode' | 'requireFreshPane'
+    | 'launchConfig'
+    | 'launchAgent'
+    | 'launchToken'
+    | 'title'
+    | 'viewMode'
+    | 'requireFreshPane'
+    | 'workerTab'
   >
 ) {
   const stablePaneAdopted = admitStablePaneAdoption(result, requested)
@@ -43,7 +49,8 @@ export function resolveTerminalLaunchResult(
       ? undefined
       : (result.launchToken ?? (adoptedStablePane ? undefined : requested.launchToken)),
     effectiveTitle: refused || adoptedStablePane ? null : requested.title,
-    effectiveViewMode: refused || adoptedStablePane ? undefined : requested.viewMode
+    effectiveViewMode: refused || adoptedStablePane ? undefined : requested.viewMode,
+    workerTab: adoptedStablePane ? undefined : requested.workerTab
   }
 }
 
@@ -72,6 +79,9 @@ export function recordTerminalLaunchMetadata(
   pty.launchToken = launch.launchToken ?? null
   pty.launchIncarnationId = launch.launchToken ? pty.incarnationId : null
   pty.launchAgent = launch.launchAgent ?? null
+  if (launch.workerTab) {
+    pty.workerTab = launch.workerTab
+  }
   recordFreshLaunch(pty, {
     agent: pty.launchAgent ?? undefined,
     token: pty.launchToken ?? undefined,

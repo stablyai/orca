@@ -1,9 +1,11 @@
+import type { WorkerTabStamp } from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { TerminalPaneSplitDirection } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { RuntimeTerminalPresentation } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 /** Use requested/first group; revealed tabs honor user names, background worker tabs keep live titles. */
 export function newTabIn(opts: {
+  workerTab?: WorkerTabStamp
   viewMode?: 'terminal' | 'chat'
   targetGroupId?: string
   title?: string
@@ -15,11 +17,12 @@ export function newTabIn(opts: {
   const { viewMode, targetGroupId } = opts
   const title = opts.presentation === 'background' ? undefined : opts.title
   const row = {
+    ...(opts.workerTab ? { workerTab: opts.workerTab } : {}),
     ...(viewMode ? { viewMode } : {}),
     ...(title ? { customTitle: title } : {})
   }
   return {
-    placement: viewMode || title ? { kind: 'new-tab', row } : { kind: 'new-tab' },
+    placement: viewMode || title || opts.workerTab ? { kind: 'new-tab', row } : { kind: 'new-tab' },
     ...(targetGroupId ? { groupId: targetGroupId } : {})
   }
 }

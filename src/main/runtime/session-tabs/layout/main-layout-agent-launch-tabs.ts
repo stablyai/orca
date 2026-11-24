@@ -1,3 +1,9 @@
+import {
+  rememberStructuredWorkerTabStamp,
+  structuredWorkerTabStamp
+} from '../../orchestration/workers/launch/structured-worker-tab-stamps'
+import type { WorkerTabLineage } from '../../../../shared/orchestration/workers/worker-tab-stamp'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 // Main-owned early launch tabs are written before launch and withdrawn through main close; paired-runtime workspaces retain window relay.
 import { OrcaRuntimeWithCloseStructuredAgentSessionTab } from '../chat/structured-session-tab-close'
 import type {
@@ -28,6 +34,92 @@ export abstract class OrcaRuntimeWithMainLayoutAgentLaunchTabs extends OrcaRunti
     paneKey: string,
     context?: TerminalIdentityReadContext
   ): RuntimePtyWorktreeRecord | null
+
+  async rebindWorkerChatTab(
+    worktreeId: string,
+    sessionId: string,
+    lineage: WorkerTabLineage
+  ): Promise<void> {
+    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    const tab = session?.unifiedTabs?.[worktreeId]?.find(
+      (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
+    )
+    const stamp = structuredWorkerTabStamp(sessionId) ?? tab?.workerTab
+    if (!stamp) {
+      return
+    }
+    const workerTab = { ...stamp, current: lineage }
+    rememberStructuredWorkerTabStamp(sessionId, workerTab)
+    if (tab?.workerTab) {
+      const result = await this.applyLayoutCommand({
+        type: 'setTabProps',
+        workspace: worktreeId,
+        tabId: tab.id,
+        workerTabCurrent: lineage
+      })
+      if (!result.ok) {
+        throw new Error(result.code)
+      }
+    }
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (snapshot) {
+      this.storeMobileSessionSnapshot(worktreeId, {
+        ...snapshot,
+        snapshotVersion: (snapshot.snapshotVersion ?? 0) + 1,
+        tabs: snapshot.tabs.map((tab) =>
+          tab.type === 'agent-session' && tab.sessionId === sessionId ? { ...tab, workerTab } : tab
+        )
+      })
+      this.touchMobileSessionTabsForWorktree(worktreeId)
+    }
+  }
+
+  async rebindWorkerTerminalTab(paneKey: string, lineage: WorkerTabLineage): Promise<void> {
+    const pane = parsePaneKey(paneKey)
+    const pty = this.getPtyRecordForPaneKey(paneKey)
+    if (!pane || !pty) {
+      return
+    }
+    const session = this.getWorkspaceSessionForWorktree(pty.worktreeId)
+    const tab = session?.unifiedTabs?.[pty.worktreeId]?.find(
+      (tab) => tab.contentType === 'terminal' && tab.entityId === pane.tabId
+    )
+    const stamp = pty.workerTab ?? tab?.workerTab
+    if (!stamp || stamp.origin.workerLeafId !== pane.leafId) {
+      return
+    }
+    const workerTab = { ...stamp, current: { ...lineage, workerLeafId: pane.leafId } }
+    pty.workerTab = workerTab
+    if (tab?.workerTab) {
+      const result = await this.applyLayoutCommand({
+        type: 'setTabProps',
+        workspace: pty.worktreeId,
+        tabId: tab.id,
+        workerTabCurrent: workerTab.current
+      })
+      if (!result.ok) {
+        throw new Error(result.code)
+      }
+    }
+    this.publishPtyBackedMobileSessionTerminal(pty.worktreeId, pty, {
+      tabId: pane.tabId,
+      leafId: pane.leafId,
+      title: null,
+      activate: false
+    })
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+      await this.notifier?.revealTerminalSession?.(pty.worktreeId, {
+        ptyId: pty.ptyId,
+        tabId: pane.tabId,
+        leafId: pane.leafId,
+        title: null,
+        workerTab,
+        activate: false,
+        surfaceOwner: false,
+        presentation: 'background'
+      })
+    }
+  }
 
   /** Whether a running process holds this pane now: such a pane is attached to, never launched into. */
   hasLiveTerminalForPaneKey(paneKey: string, context?: TerminalIdentityReadContext): boolean {

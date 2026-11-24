@@ -1,3 +1,4 @@
+import { stampedTaskTitle, type WorkerTabStamp } from '../../orchestration/workers/worker-tab-stamp'
 import type { AiVaultSessionTitle } from '../../ai-vault/contracts/ai-vault-session-title'
 import type { Tab } from './tab-types'
 import type { TerminalTab } from '../terminal-tab-types'
@@ -37,10 +38,15 @@ export function resolveTabNameSource(
 export function resolveTerminalTabTitle(
   tab: Pick<TerminalTab, 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle' | 'title'> & {
     customTitle?: string | null
+    workerTab?: WorkerTabStamp
   },
   generatedTitlesEnabled: boolean,
   fallback = ''
 ): string {
+  const workerTitle = stampedTaskTitle(tab)?.trim()
+  if (workerTitle) {
+    return tab.customTitle?.trim() || tab.quickCommandLabel?.trim() || workerTitle
+  }
   const liveTitle = tab.title?.trim() ?? ''
   return (
     resolveTabNameSource(
@@ -60,11 +66,18 @@ export function resolveTerminalTabTitle(
 
 export function resolveUnifiedTabLabel(
   tab:
-    | Pick<Tab, 'customLabel' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedLabel' | 'label'>
+    | (Pick<
+        Tab,
+        'customLabel' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedLabel' | 'label'
+      > & { workerTab?: WorkerTabStamp })
     | undefined,
   generatedTitlesEnabled: boolean,
   fallback = ''
 ): string {
+  const workerTitle = tab && stampedTaskTitle(tab)?.trim()
+  if (workerTitle) {
+    return tab.customLabel?.trim() || tab.quickCommandLabel?.trim() || workerTitle
+  }
   const liveLabel = tab?.label?.trim() ?? ''
   return (
     resolveTabNameSource(

@@ -1,3 +1,8 @@
+import { structuredSessionLineageRoot } from '../../agent-session/structured-session-lineage-root'
+import {
+  rememberStructuredWorkerTabStamp,
+  structuredWorkerTabStamp
+} from '../../orchestration/workers/launch/structured-worker-tab-stamps'
 // Persist windowless chat tabs too, so the host layout remains complete.
 
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -85,9 +90,13 @@ export function chatTabLayoutCommand(
     )
   )
   const sessionId = 'close' in change ? change.close : change.open.sessionId
-  const tabId =
-    workspace?.tabs.find((tab) => tab.kind === 'agent-session' && tab.entityId === sessionId)?.id ??
-    null
+  const existing = workspace?.tabs.find(
+    (tab) => tab.kind === 'agent-session' && tab.entityId === sessionId
+  )
+  const tabId = existing?.id ?? null
+  if ('open' in change && existing?.workerTab) {
+    rememberStructuredWorkerTabStamp(sessionId, existing.workerTab)
+  }
   if ('close' in change) {
     return tabId && change.tabId === tabId
       ? { type: 'closeTabs', workspace: worktreeId, tabIds: [tabId], force: true }
@@ -100,10 +109,20 @@ export function chatTabLayoutCommand(
       : null
   }
   const { sessionId: openedSessionId, agent, tabId: openedTabId } = change.open
+  const root = structuredSessionLineageRoot(openedSessionId)
+  const workerTab =
+    structuredWorkerTabStamp(openedSessionId) ??
+    workspace?.tabs.find(
+      (tab) =>
+        tab.kind === 'agent-session' &&
+        (tab.entityId === root || tab.agentSessionLineageRootId === root)
+    )?.workerTab
   return {
     type: 'openAgentSessionTab',
     workspace: worktreeId,
     sessionId: openedSessionId,
+    ...(workerTab ? { workerTab } : {}),
+    ...(root !== openedSessionId ? { agentSessionLineageRootId: root } : {}),
     agent,
     tabId: openedTabId,
     ...(groupId ? { groupId } : {}),

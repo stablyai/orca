@@ -1,3 +1,4 @@
+import type { AgentPublicIdentity } from '../../orchestration/workers/worker-tab-stamp'
 // Normalize explicit hook/OSC status; a guarded interrupt fallback supplies done when the cancellation hook is missing.
 
 import type { ProgramStatusFacet } from '../../program-status/facet'
@@ -46,7 +47,11 @@ export type AgentStatusOrchestrationContext = {
   parentTerminalHandle?: string
   parentPaneKey?: string
   coordinatorHandle?: string
+  coordinatorIdentity?: AgentPublicIdentity
+  parentIdentity?: AgentPublicIdentity
   orchestrationRunId?: string
+  /** The worker was stopped by Stop worker / worker-stop, distinct from a failure. */
+  stopped?: true
   /** Durable orchestration categories combined with the current push-fed status observation. */
   attention?: OrchestrationFleetAttention
 }

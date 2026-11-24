@@ -1,3 +1,4 @@
+import type { WorkerTabStamp } from '../../../../../../../../shared/orchestration/workers/worker-tab-stamp'
 import type { RuntimeTerminalCreate } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
@@ -65,6 +66,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   agent: TuiAgent
   launchPreferences?: AgentLaunchPreferences
   taskId: string
+  workerTab?: WorkerTabStamp
   effects: WorkerEffect[]
 }): Promise<RuntimeTerminalCreate> {
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
@@ -73,7 +75,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     launchSource: 'orchestration',
     suppressStartupUpdatePrompt: true,
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
-    title: `worker-${args.taskId}`,
+    ...(args.workerTab ? { workerTab: args.workerTab } : {}),
     // Worker creation is background work and must not pull the sidebar away.
     surfaceOwner: false
   })
@@ -96,6 +98,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   dispatchId: string
   /** `--model`/`--effort`, laid over the saved selection; a leveled Antigravity `--model` replaces it. */
   launchPreferences?: AgentLaunchPreferences
+  workerTab?: WorkerTabStamp
   effects: WorkerEffect[]
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
   const options = narrowStructuredLaunchSeedOptions(args.launchPreferences)
@@ -104,7 +107,8 @@ export async function createStructuredWorkerSessionForWorktree(args: {
     worktreeId: args.worktreeId,
     agent: args.agent,
     dispatchId: args.dispatchId,
-    ...(options ? { options } : {})
+    ...(options ? { options } : {}),
+    ...(args.workerTab ? { workerTab: args.workerTab } : {})
   })
   args.effects.push({
     kind: 'terminal',

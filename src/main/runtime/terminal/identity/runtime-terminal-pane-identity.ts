@@ -1,3 +1,7 @@
+import {
+  withWorkerLeaf,
+  type WorkerTabStamp
+} from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import { AgentLaunchPaneAlreadyLiveError } from '../../../../shared/agent-launch/contracts/agent-launch-pane-already-live'
 import {
@@ -8,7 +12,11 @@ import {
 import { isValidHostTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import { randomUUID } from 'node:crypto'
 
-export function allocateTerminalPaneIdentity(opts: { tabId?: string; leafId?: string }): {
+export function allocateTerminalPaneIdentity(opts: {
+  tabId?: string
+  leafId?: string
+  workerTab?: WorkerTabStamp
+}): {
   tabId: string
   leafId: string
   paneKey: string
@@ -22,6 +30,9 @@ export function allocateTerminalPaneIdentity(opts: { tabId?: string; leafId?: st
     isTerminalLeafId(hintedLeafId)
   const tabId = canAdopt ? hintedTabId : randomUUID()
   const leafId = canAdopt ? hintedLeafId : randomUUID()
+  if (opts.workerTab) {
+    opts.workerTab = withWorkerLeaf(opts.workerTab, leafId)
+  }
   return { tabId, leafId, paneKey: makePaneKey(tabId, leafId) }
 }
 
@@ -55,5 +66,18 @@ export function materializedStablePaneReply(
       tabId: owner.tabId,
       leafId: owner.leafId
     }
+  }
+}
+
+/** The startup terminal's caller-named surface: its pane, title and orchestration worker stamp. */
+export function startupTerminalSurface(request: {
+  startupPaneKey?: string
+  startupTitle?: string
+  startupWorkerTab?: WorkerTabStamp
+}): { tabId?: string; leafId?: string; title?: string; workerTab?: WorkerTabStamp } {
+  return {
+    ...paneIdentity(request.startupPaneKey),
+    ...(request.startupTitle ? { title: request.startupTitle } : {}),
+    ...(request.startupWorkerTab ? { workerTab: request.startupWorkerTab } : {})
   }
 }

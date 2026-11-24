@@ -1,3 +1,4 @@
+import type { WorkerTabStamp } from '../../../../../../../shared/orchestration/workers/worker-tab-stamp'
 import { resolveResumeLaunchRecipe } from '../../../../../../../shared/agent-launch/choices/resume-launch-recipe'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
@@ -24,7 +25,7 @@ export type WorkerFollowUp = {
   /** The start owner admits the caller before resolving placement, which may release an owned shell. */
   place: (assertCreatorCurrent: () => void) => Promise<WorkerFollowUpPlacement>
   /** Resolves null when the agent refused to resume before spawning anything; a fresh one starts instead. */
-  reopen?: (dispatchId: string) => Promise<ReopenedWorker | null>
+  reopen?: (dispatchId: string, workerTab?: WorkerTabStamp) => Promise<ReopenedWorker | null>
   /** The send this follow-up answers, whose pending receipt names the Dispatch it accepted. */
   acceptedBy?: { callerFingerprint: string; requestId: string }
   /** The Dispatch whose unread mail this follow-up's Task tells it to check. */
@@ -47,7 +48,8 @@ export async function reopenWorkerTerminal(
   runtime: Pick<OrcaRuntimeService, 'resumeAgentSessionInWorkspace'>,
   worktreeId: string,
   session: WorkerResumeSession,
-  dispatchId: string
+  dispatchId: string,
+  workerTab?: WorkerTabStamp
 ): Promise<ReopenedWorker | null> {
   const resumed = await runtime.resumeAgentSessionInWorkspace(worktreeId, {
     ...session,
@@ -58,7 +60,8 @@ export async function reopenWorkerTerminal(
       session.providerSession
     ),
     // A retry of this follow-up reconciles the pane it may have started.
-    mutationId: dispatchId
+    mutationId: dispatchId,
+    ...(workerTab ? { workerTab } : {})
   })
   if (resumed.ok) {
     return { handle: resumed.handle, chat: false, userOpened: false }

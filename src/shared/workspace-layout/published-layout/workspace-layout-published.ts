@@ -1,6 +1,7 @@
 // Explicit layout.subscribe wire projection includes terminal startup inputs and permits live pane titles/status. Persistence-only records and view selection stay private.
 
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
+import type { WorkerTabStamp } from '../../orchestration/workers/worker-tab-stamp'
 import type { AiVaultSessionTitle } from '../../ai-vault/contracts/ai-vault-session-title'
 import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { TabContentType, TabGroupLayoutNode } from '../tab-groups/tab-types'
@@ -70,6 +71,8 @@ export type PublishedTab = {
   viewMode?: 'terminal' | 'chat'
   isPreview?: boolean
   agentSessionAgent?: AgentType
+  workerTab?: WorkerTabStamp
+  agentSessionLineageRootId?: string
   terminal?: PublishedTerminal
   /** What a non-plain editor tab shows, so a window lacking its open file can rebuild it. */
   editorView?: LayoutEditorView
@@ -153,7 +156,9 @@ function publishTab(
       'isPinned',
       'viewMode',
       'isPreview',
-      'agentSessionAgent'
+      'agentSessionAgent',
+      'workerTab',
+      'agentSessionLineageRootId'
     ])
   }
   const editorView = workspace.editorViews?.[tab.id]

@@ -59,6 +59,17 @@ export function getAgentRowPrimaryText(
   return getAgentPromptLabel(entry.prompt)
 }
 
+/** A worker row's label: the live dispatch's labels when they match, else its tab's stamped Task title. */
+export function getWorkerAgentRowPrimaryText(
+  entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt'>,
+  stampedTaskTitle: string | undefined
+): string {
+  if (!stampedTaskTitle?.trim() || orchestrationLabelsMatchLiveDispatch(entry)) {
+    return getAgentRowPrimaryText(entry)
+  }
+  return stampedTaskTitle.trim()
+}
+
 /** A prompt as a label: its words, else an attached file's name, else '' when it opens with pasted data. */
 export function getAgentPromptLabel(prompt: string): string {
   const text = prompt.trim()

@@ -84,3 +84,12 @@ export function isTerminalLeafMoveRequest(value: unknown): value is TerminalLeaf
     return false
   }
 }
+
+/** Desktop drag-out trusts the displayed PTY over stale bindings and permits moving the last known pane because the window may hold unseen siblings. */
+export type WindowPaneDetach = {
+  ptyId: string | null
+  /** The new tab's id, the same in every partition holding the pane; minted when absent. */
+  tabId?: string
+  /** The pane's folder, for the shell an unbound pane starts in its new tab. Older mains drop it. */
+  startupCwd?: string
+}

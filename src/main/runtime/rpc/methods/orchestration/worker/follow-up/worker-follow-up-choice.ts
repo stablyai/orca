@@ -95,7 +95,8 @@ export async function chooseWorkerFollowUpPlacement(
           worktreeId,
           agent: session.agent,
           earlierWork: earlierWork(db, latest),
-          reopen: (dispatchId) => reopenWorkerTerminal(runtime, worktreeId, session, dispatchId)
+          reopen: (dispatchId, workerTab) =>
+            reopenWorkerTerminal(runtime, worktreeId, session, dispatchId, workerTab)
         }
   }
   if (!options.agent) {

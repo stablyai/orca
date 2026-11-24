@@ -1,8 +1,9 @@
+import { runCoordinatorIdentity } from '../workers/launch/worker-tab-stamp-at-launch'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { creatorFirstParent, crewTaskDisplay } from './crew-rules'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { OrchestrationDb } from '../db/orchestration-db'
-import { buildWorkerAttentionContext } from '../workers/reports/worker-attention-context'
+import { projectWorkerAttentionContext } from '../workers/reports/worker-attention-context'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import type { createOrchestrationProjectionScope } from './runtime-agent-orchestration-scope'
 import { currentRunCoordinatorOrcaSessionId } from '../db/runs/run-coordinator-orca-session'
@@ -121,10 +122,20 @@ export function composeOrchestrationDispatch(
       coordinator,
       coordinatorIsSelf || coordinator.paneKey === selfPane
     ) ?? {}
-  const attention =
+  const facts =
     !deferAttention && db && typeof db.getWorkerAttentionFacts === 'function'
-      ? buildWorkerAttentionContext({ db, dispatch, task, evidence, session, now: scope.now })
+      ? db.getWorkerAttentionFacts(dispatch.id, scope.now)
       : undefined
+  const attention = facts
+    ? projectWorkerAttentionContext({
+        facts,
+        isRoot: facts.isRoot,
+        evidence,
+        session,
+        now: scope.now
+      })
+    : undefined
+  const coordinatorIdentity = owningRun ? runCoordinatorIdentity(owningRun) : null
   return {
     taskId: dispatch.task_id,
     dispatchId: dispatch.id,
@@ -134,7 +145,16 @@ export function composeOrchestrationDispatch(
     ...(parent.handle ? { parentTerminalHandle: parent.handle } : {}),
     ...(parent.paneKey ? { parentPaneKey: parent.paneKey } : {}),
     ...(coordinator.handle ? { coordinatorHandle: coordinator.handle } : {}),
+    ...(coordinatorIdentity ? { coordinatorIdentity } : {}),
+    ...(creatorSession
+      ? { parentIdentity: { kind: 'session' as const, lineageRootSessionId: creatorSession } }
+      : creatorPaneKey
+        ? { parentIdentity: { kind: 'pane' as const, paneKey: creatorPaneKey } }
+        : coordinatorIdentity
+          ? { parentIdentity: coordinatorIdentity }
+          : {}),
     ...(orchestrationRunId ? { orchestrationRunId } : {}),
+    ...(facts?.workerState === 'stopped' ? { stopped: true as const } : {}),
     ...(attention ? { attention } : {})
   }
 }

@@ -1,3 +1,4 @@
+import type { WorkerTabStamp } from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from '../../session-tabs/publication/session-tabs-change-publication'
 import { OrcaRuntimeWithFailedStartPanes } from './failed-start-pane'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
@@ -57,6 +58,8 @@ export type OwnedMobileTerminalCreateOptions = {
   identity?: { tabId: string; leafId: string; sessionId?: string }
   createMutation?: { clientIdentity: string; id: string }
   launchAgent?: TuiAgent
+  /** Only an orchestration worker reopen passes this; user resumes never stamp. */
+  workerTab?: WorkerTabStamp
   trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
   targetGroupId?: string

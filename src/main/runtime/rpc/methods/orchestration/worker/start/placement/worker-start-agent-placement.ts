@@ -1,3 +1,5 @@
+import type { WorkerTabStamp } from '../../../../../../../../shared/orchestration/workers/worker-tab-stamp'
+import { workerTabStampForDispatch } from '../../../../../../orchestration/workers/launch/worker-tab-stamp-at-launch'
 import type { RuntimeTerminalCreate } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 /** Use the shared executor for new workers; structured worktrees omit startup agent, then resolve host support before chat creation.
  * Keep worker lineage/effects and background presentation in factories; caller passes the pre-decided mode.
@@ -72,6 +74,8 @@ type WorkerAgentPlacementArgs = {
   onStage: (stage: string) => void
   /** A follow-up continuing a worker; a closed one is brought back in place of a launch. */
   followUp?: WorkerFollowUp | undefined
+  /** Stamp for the surface this start creates; absent when the Run has no coordinator identity. */
+  workerTab?: WorkerTabStamp
 }
 
 /** Setup evidence for existing placements and failures before placement creation. */
@@ -104,7 +108,9 @@ export async function placeWorkerAgent(
       setupReceipt: EXISTING_WORKTREE_SETUP
     }
   }
-  const reopened = existing && (await args.followUp?.reopen?.(args.dispatchId))
+  // Only surfaces Orca creates from here on carry the stamp; the `--terminal` path above is the user's.
+  args = { ...args, workerTab: workerTabStampForDispatch(args.db, args.dispatchId) }
+  const reopened = existing && (await args.followUp?.reopen?.(args.dispatchId, args.workerTab))
   if (existing && reopened) {
     args.effects.push({
       kind: 'terminal',
@@ -185,6 +191,7 @@ async function launchWorkerAgent(
             promisedAgentChat,
             onWorkspaceCreated,
             ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
+            ...(args.workerTab ? { workerTab: args.workerTab } : {}),
             effects: args.effects
           })
           return {
@@ -263,6 +270,7 @@ function workerSurfaceFactory(
         agent,
         dispatchId: args.dispatchId,
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
+        ...(args.workerTab ? { workerTab: args.workerTab } : {}),
         effects: args.effects
       })
       onStructuredSession(session)
@@ -280,6 +288,7 @@ function workerSurfaceFactory(
         agent,
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
         taskId: args.taskId,
+        ...(args.workerTab ? { workerTab: args.workerTab } : {}),
         effects: args.effects
       })
       onTerminalCreation(terminal)

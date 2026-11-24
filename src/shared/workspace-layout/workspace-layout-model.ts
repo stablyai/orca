@@ -8,6 +8,7 @@ import type { ClosedTerminalPanesByPaneKey } from './terminal-surfaces/closed-te
 import type { ClosedTerminalTabTombstone } from './terminal-surfaces/closed-terminal-tab-tombstones'
 import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { TabContentType, TabGroupLayoutNode } from './tab-groups/tab-types'
+import type { WorkerTabStamp } from '../orchestration/workers/worker-tab-stamp'
 import type { TerminalGrid, TerminalPaneLayoutNode, TerminalTab } from './terminal-tab-types'
 import type { PersistedOpenFile } from '../workspace-session/workspace-session-state-types'
 import type { BrowserWorkspace } from '../browser/workspaces/browser-workspace-types'
@@ -32,6 +33,8 @@ type LayoutTabFields = {
   viewMode?: 'terminal' | 'chat'
   isPreview?: boolean
   agentSessionAgent?: AgentType
+  workerTab?: WorkerTabStamp
+  agentSessionLineageRootId?: string
 }
 
 export type LayoutTerminalCreation = Pick<

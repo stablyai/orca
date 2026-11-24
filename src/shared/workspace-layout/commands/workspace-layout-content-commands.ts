@@ -261,7 +261,11 @@ export function openAgentSessionTab(
     ...(command.createdAt !== undefined ? { createdAt: command.createdAt } : {}),
     kind: 'agent-session',
     entityId: command.sessionId,
-    agentSessionAgent: command.agent
+    agentSessionAgent: command.agent,
+    ...(command.workerTab ? { workerTab: command.workerTab } : {}),
+    ...(command.agentSessionLineageRootId
+      ? { agentSessionLineageRootId: command.agentSessionLineageRootId }
+      : {})
   })
   const target = withSendersGroup(model, command.workspace, command.groupId)
   return applied(placeContentTab(target, command.workspace, tab, command, context).model, {

@@ -12,13 +12,10 @@ import {
 } from '../../ui-chrome/ui-chrome-types'
 import { isFeatureInteractionId } from '../../feature-education/interactions/feature-interactions'
 import type { FeatureInteractionId } from '../../feature-education/interactions/feature-interaction-catalog'
-import {
-  ACTIVITY_GROUP_BY_VALUES,
-  THREAD_READ_FILTER_VALUES
-} from '../../agent-status/presentation/agents-view-thread-filters'
 import { isReleaseChannel } from '../../updater/release-channel'
 import type { ReleaseChannel } from '../../updater/release-channel'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields-params'
+import { ClientUiAgentViewFields } from './client-ui-agent-view-fields-params'
 import { TaskResumeState } from './task-resume-state-params'
 import { WorkspaceCleanup } from '../workspace-cleanup/workspace-cleanup-ui-params'
 import { omitUndefinedValues, tolerateUnknownValues } from './ui-update-value-tolerance-params'
@@ -162,11 +159,7 @@ export const UiUpdateFields = z
       })
       .optional(),
     botChatFolds: z.record(z.string(), z.enum(['open', 'folded'])).optional(),
-    agentsShowChildAgents: z.boolean().optional(),
-    agentsCompactMode: z.boolean().optional(),
-    agentsShowSearch: z.boolean().optional(),
-    agentsReadFilter: z.enum(THREAD_READ_FILTER_VALUES).optional(),
-    agentsGroupBy: z.enum(ACTIVITY_GROUP_BY_VALUES).optional(),
+    ...ClientUiAgentViewFields,
     workspaceHostOrder: z.array(z.string()).optional(),
     automationHostFilter: z
       .union([

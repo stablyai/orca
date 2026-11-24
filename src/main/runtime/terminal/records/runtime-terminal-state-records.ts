@@ -1,3 +1,4 @@
+import type { WorkerTabStamp } from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import type { AgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type {
@@ -98,6 +99,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
   launchAgent: TuiAgent | null
+  /** Host-owned stamp when Orca created this PTY's surface for an orchestration worker. */
+  workerTab?: WorkerTabStamp
   /** Whether the process still runs an Orca launch; missing when main can't tell. */
   launchEvidence?: LaunchEvidence
   /** Identify flagged unmanaged --command panes before foreground reads; null for adopted/restored panes. */

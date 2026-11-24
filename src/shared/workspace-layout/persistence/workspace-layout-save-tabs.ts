@@ -18,7 +18,8 @@ const SHARED_OPTIONAL_FIELDS = [
   'aiVaultTitle',
   'quickCommandLabel',
   'isPinned',
-  'viewMode'
+  'viewMode',
+  'workerTab'
 ] as const
 
 export type WorkspaceSaveScope = {
@@ -101,7 +102,7 @@ export function saveTabBarEntry(
     color: tab.color,
     sortOrder: placement.sortOrder,
     createdAt: tab.createdAt,
-    ...pickStoredFields(tab, ['isPreview', 'agentSessionAgent']),
+    ...pickStoredFields(tab, ['isPreview', 'agentSessionAgent', 'agentSessionLineageRootId']),
     ...(lastFocusedAt !== undefined ? { lastFocusedAt } : {})
   }
 }

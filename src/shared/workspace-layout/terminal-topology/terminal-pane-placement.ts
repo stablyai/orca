@@ -14,7 +14,8 @@ const NewTabRow = terminalTabSchema
     startupCwd: true,
     quickCommandLabel: true,
     launchAgent: true,
-    viewMode: true
+    viewMode: true,
+    workerTab: true
   })
   .extend({ shellOverride: z.string().optional() })
   .partial()

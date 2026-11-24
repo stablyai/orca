@@ -110,7 +110,8 @@ const SHARED_TAB_FIELDS = {
   aiVaultTitle: tab('aiVaultTitle'),
   quickCommandLabel: tab('quickCommandLabel'),
   isPinned: tab('isPinned'),
-  viewMode: tab('viewMode')
+  viewMode: tab('viewMode'),
+  workerTab: tab('workerTab')
 } as const
 
 const ROW = {
@@ -148,6 +149,7 @@ const ENTRY_FIELDS = {
   sortOrder: TAB_ORDER,
   isPreview: tab('isPreview'),
   agentSessionAgent: tab('agentSessionAgent'),
+  agentSessionLineageRootId: tab('agentSessionLineageRootId'),
   lastFocusedAt: own('view', 'lastFocusedAt')
 } as const
 

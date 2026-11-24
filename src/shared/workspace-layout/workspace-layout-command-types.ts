@@ -1,3 +1,6 @@
+import type { GroupSide, NewGroupSplit } from './tab-groups/group-split-placement'
+export type { GroupSide, NewGroupSplit } from './tab-groups/group-split-placement'
+import type { WorkerTabStamp, WorkerTabLineage } from '../orchestration/workers/worker-tab-stamp'
 // Pure commands change layout only; runtime owns catalog/path/host-support/liveness refusals requiring external facts.
 
 import type { DrawnTabPlacement } from './workspace-layout-tab-placement'
@@ -20,18 +23,13 @@ import type * as LayoutModel from './workspace-layout-model'
 
 type On = { workspace: string }
 
-/** Desktop drag-out trusts the displayed PTY over stale bindings and permits moving the last known pane because the window may hold unseen siblings. */
-export type WindowPaneDetach = {
-  ptyId: string | null
-  /** The new tab's id, the same in every partition holding the pane; minted when absent. */
-  tabId?: string
-  /** The pane's folder, for the shell an unbound pane starts in its new tab. Older mains drop it. */
-  startupCwd?: string
-}
+import type { WindowPaneDetach } from './terminal-topology/terminal-leaf-move'
+export type { WindowPaneDetach } from './terminal-topology/terminal-leaf-move'
 
 export type LayoutCommand =
   | (On & {
       type: 'createTerminalTab'
+      workerTab?: WorkerTabStamp
       /** Ids the runtime minted before applying, e.g. a retried create's. */
       tabId?: string
       leafId?: string
@@ -121,6 +119,7 @@ export type LayoutCommand =
   | (On & { type: 'releasePaneTerminal'; tabId: string; leafId: string; ptyId: string })
   | (On & {
       type: 'setTabProps'
+      workerTabCurrent?: WorkerTabLineage
       tabId: string
       color?: string | null
       isPinned?: boolean
@@ -213,6 +212,8 @@ export type LayoutCommand =
     })
   | (On & {
       type: 'openAgentSessionTab'
+      workerTab?: WorkerTabStamp
+      agentSessionLineageRootId?: string
       /** The chat's own tab id, which status and attention address; minted when absent. */
       tabId?: string
       sessionId: string
@@ -267,16 +268,6 @@ export type EditorFileRename = {
   view?: LayoutEditorView
 }
 
-export type GroupSide = 'left' | 'right' | 'up' | 'down'
-
-/** Create a split group and its first tab atomically, never storing an empty group.
- * An optional last-group ID expands the target to a branch, supporting window-retained empty groups beside later splits. */
-export type NewGroupSplit = {
-  besideGroupId: string
-  besideLastGroupId?: string
-  direction: GroupSide
-}
-
 export type TabTitle =
   /** A generated title replaces the tab's existing one only with `replaceExisting`: first wins. */
   | {
@@ -308,6 +299,7 @@ export type UntitledTab = Omit<GeneratedTabTitle, 'title' | 'replaceExisting'> &
 }
 
 export type LayoutRefusalCode =
+  | 'worker_tab_conflict'
   | 'workspace_not_found'
   | 'tab_not_found'
   | 'pane_not_found'
@@ -360,7 +352,7 @@ export type LayoutCommandResult = {
 /** A command applied to a stored layout: its result, or why it changed nothing. */
 export type LayoutApplyOutcome =
   | { ok: true; result: LayoutCommandResult }
-  | { ok: false; code: LayoutRefusalCode }
+  | { ok: false; code: LayoutRefusalCode; message?: string }
 
 /** Refuse foreign ownership/partition moves and paused WSL moves; older windows log pauses as refusals.
  * Optional frameSeq identifies the stream position holding the effect; older hosts omit it. */
@@ -397,4 +389,4 @@ export type LayoutApplyResult<Model> =
       /** Leaf id → its new last outcome; null clears it. */
       outcomes?: PaneOutcomeChanges
     }
-  | { ok: false; code: LayoutRefusalCode }
+  | { ok: false; code: LayoutRefusalCode; message?: string }

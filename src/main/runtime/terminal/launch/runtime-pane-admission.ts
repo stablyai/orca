@@ -63,6 +63,7 @@ function admissionFor(args: AdmittedSpawnArgs): TerminalPaneAdmission {
     leafId,
     ...(args.groupId ? { groupId: args.groupId } : {}),
     ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
+    ...(row?.workerTab ? { workerTab: row.workerTab } : {}),
     ...(row?.viewMode ? { viewMode: row.viewMode } : {}),
     ...(row?.customTitle ? { title: row.customTitle } : {}),
     ...(args.cwd || args.launchAgent || args.launchRuntime?.pty.shellOverride

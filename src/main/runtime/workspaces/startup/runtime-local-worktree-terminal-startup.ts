@@ -1,6 +1,6 @@
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
-import { paneIdentity } from '../../terminal/identity/runtime-terminal-pane-identity'
+import { startupTerminalSurface } from '../../terminal/identity/runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree/creation/worktree-first-surface'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
@@ -116,8 +116,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       const terminal = await ports.createTerminal(`id:${worktree.id}`, {
         command: sequencedStartup.command,
         ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
-        ...paneIdentity(request.startupPaneKey),
-        ...(request.startupTitle ? { title: request.startupTitle } : {}),
+        ...startupTerminalSurface(request),
         ...(setup && startup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
         env: sequencedStartup.env,
         ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),

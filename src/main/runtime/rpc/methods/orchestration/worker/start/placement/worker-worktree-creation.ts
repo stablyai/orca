@@ -1,3 +1,4 @@
+import type { WorkerTabStamp } from '../../../../../../../../shared/orchestration/workers/worker-tab-stamp'
 import type { RuntimeTerminalCreate } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 /** Create PTY worktrees agent-first; structured workers create sessions afterwards without startup agents. Setup/default tabs/lineage stay identical. */
 
@@ -138,6 +139,7 @@ export async function createWorkerWorktree(args: {
   promisedAgentChat?: boolean
   onWorkspaceCreated?: (worktreeId: string) => void
   launchPreferences?: AgentLaunchPreferences
+  workerTab?: WorkerTabStamp
   effects: WorkerEffect[]
 }): Promise<{
   worktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
@@ -175,6 +177,7 @@ export async function createWorkerWorktree(args: {
           startupAgent: args.agent,
           startupLaunchSource: 'orchestration',
           startupSuppressUpdatePrompt: true,
+          ...(args.workerTab ? { startupWorkerTab: args.workerTab } : {}),
           ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {})
         }
       : {}),

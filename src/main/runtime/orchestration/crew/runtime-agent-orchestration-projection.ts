@@ -168,6 +168,7 @@ export class RuntimeAgentOrchestrationProjection {
         if (facts) {
           contexts[paneKey] = {
             ...context,
+            ...(facts.workerState === 'stopped' ? { stopped: true as const } : {}),
             attention: projectWorkerAttentionContext({
               facts,
               isRoot: facts.isRoot,

@@ -1,3 +1,4 @@
+import { prepareStartingWorkerTab } from '../../../../../orchestration/workers/launch/worker-tab-rebinding'
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
 import { refuseClaimedWorkerTerminal } from '../../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { probeWorkerOpenCodeModelLaunchSupport } from './launch/worker-opencode-model-preflight'
@@ -48,7 +49,6 @@ import {
   prepareWorkerStartCard,
   recordWorkerStartOutcome
 } from '../../../../../orchestration/workers/launch/worker-start-card'
-import { rebindReusedStructuredWorker } from '../../structured-workers/orchestration-structured-worker-session'
 import { placedWorkerParty, type WorkerFollowUp } from '../follow-up/worker-follow-up-placement'
 
 export async function startLocalWorker(args: {
@@ -246,23 +246,22 @@ export async function startLocalWorker(args: {
     const handle = terminalHandle
     const worktreeId = resolvedWorktree.id
     // A hand-over from the background wait gets a fresh delivery budget; one in time keeps the shared one.
+    const terminalBinding = (): Parameters<
+      OrchestrationDb['prepareStartingWorkerAuthority']
+    >[0] => ({
+      dispatchId: started.dispatch.id,
+      handle,
+      ...(authority ?? requireWorkerAuthority(runtime, handle)),
+      worktreeId,
+      effects,
+      setupState: setupReceipt.state,
+      terminalOwnership: external ? 'external' : 'created'
+    })
     const bindTerminal = (): void => {
-      const terminalAuthority = authority ?? requireWorkerAuthority(runtime, handle)
-      db.prepareStartingWorkerAuthority({
-        dispatchId: started.dispatch.id,
-        handle,
-        ...terminalAuthority,
-        worktreeId,
-        effects,
-        setupState: setupReceipt.state,
-        terminalOwnership: external ? 'external' : 'created'
-      })
+      db.prepareStartingWorkerAuthority(terminalBinding())
     }
     const handOver = async (deliveryDeadline = readinessDeadline): Promise<unknown> => {
-      bindTerminal()
-      if (workerChat) {
-        rebindReusedStructuredWorker(handle, db)
-      }
+      await prepareStartingWorkerTab(runtime, db, Boolean(workerChat), terminalBinding())
       return deliverAndSettleWorkerStartReadiness({
         runtime,
         db,

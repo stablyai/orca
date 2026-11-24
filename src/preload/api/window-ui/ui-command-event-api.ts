@@ -1,3 +1,4 @@
+import type { TerminalRevealPayload } from '../../../shared/terminal/terminal-reveal-payload'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
@@ -10,10 +11,8 @@ import type {
 import type { BrowserTabCreateRequest } from '../../../shared/browser/workspaces/browser-tab-create-request'
 import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
 import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
-import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type {
   AgentLaunchTabPublishReply,
-  AgentLaunchTabViewerRule,
   AgentLaunchTabPublishRequest
 } from '../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { AgentLaunchPaneVerdictEvent } from '../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
@@ -50,17 +49,9 @@ import type {
   BrowserPageTabShortcut
 } from '../../../shared/browser/guest-lifecycle/browser-page-command-target'
 import type { BrowserPageZoomCommand } from '../../../shared/browser/site-settings/browser-page-zoom'
-import type {
-  AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig
-} from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { TerminalPaneSplitSource } from '../../../shared/feature-education/feature-education-telemetry'
 import type { RendererTerminalSplitRequest } from '../../../shared/workspace-layout/terminal-topology/renderer-terminal-split-request'
 import type { RuntimeMobileSessionTabMove } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type {
-  RuntimeTerminalCreateRequestPayload,
-  RuntimeTerminalPresentation
-} from '../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeTerminalCreateRequestPayload } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TerminalTabCreateReply } from '../../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
 import type {
   TerminalTabCloseRequest,
@@ -188,35 +179,7 @@ export type UiCommandEventApi = {
       providesInitialSurface?: boolean
     }) => void
   ) => () => void
-  onCreateTerminal: (
-    callback: (data: {
-      requestId?: string
-      worktreeId: string
-      command?: string
-      cwd?: string
-      env?: Record<string, string>
-      launchConfig?: SleepingAgentLaunchConfig
-      resumeProviderSession?: AgentProviderSessionMetadata
-      launchToken?: string
-      launchAgent?: TuiAgent
-      viewMode?: 'terminal' | 'chat'
-      targetGroupId?: string
-      afterTabId?: string
-      shellOverride?: string
-      title?: string
-      ptyId?: string
-      activate?: boolean
-      focus?: boolean
-      presentation?: RuntimeTerminalPresentation
-      surfaceOwner?: false
-      agentLaunchViewer?: AgentLaunchTabViewerRule
-      tabId?: string
-      leafId?: string
-      splitFromLeafId?: string
-      splitDirection?: 'horizontal' | 'vertical'
-      splitTelemetrySource?: TerminalPaneSplitSource
-    }) => void
-  ) => () => void
+  onCreateTerminal: (callback: (data: TerminalRevealPayload) => void) => () => void
   onRequestTerminalCreate: (
     callback: (data: RuntimeTerminalCreateRequestPayload) => void
   ) => () => void

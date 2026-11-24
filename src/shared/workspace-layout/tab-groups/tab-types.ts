@@ -1,6 +1,7 @@
 import type { AiVaultSessionTitle } from '../../ai-vault/contracts/ai-vault-session-title'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type { ExecutionHostId } from '../../execution-host/execution-host'
+import type { WorkerTabStamp } from '../../orchestration/workers/worker-tab-stamp'
 
 export type TabGroupSplitDirection = 'horizontal' | 'vertical'
 
@@ -88,6 +89,10 @@ export type Tab = {
   viewMode?: 'terminal' | 'chat'
   /** Timestamp when the tab was last focused / activated by the user. */
   lastFocusedAt?: number
+  /** Host-owned: the surface Orca created for an orchestration worker. */
+  workerTab?: WorkerTabStamp
+  /** Host-owned, agent-session tabs: the chat's session lineage root, stable across /clear. */
+  agentSessionLineageRootId?: string
 }
 
 export type TabGroup = {

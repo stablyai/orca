@@ -1,3 +1,4 @@
+import { isWorkerLeaf } from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -104,14 +105,20 @@ function moveLeafInPartition(
   })
   const targetTab = {
     ...row,
+    ...(isWorkerLeaf(sourceTab.workerTab, leafId) ? { workerTab: sourceTab.workerTab } : {}),
     ptyId,
     ...(sourceTab.shellOverride ? { shellOverride: sourceTab.shellOverride } : {})
   }
-  const nextTabs = tabs.map((tab) =>
-    tab.id === sourceTabId && tab.ptyId === ptyId
-      ? { ...tab, ptyId: remainingPtyIds[0] ?? null }
-      : tab
-  )
+  const nextTabs = tabs.map((tab) => {
+    if (tab.id !== sourceTabId) {
+      return tab
+    }
+    const next = { ...tab, ...(tab.ptyId === ptyId ? { ptyId: remainingPtyIds[0] ?? null } : {}) }
+    if (isWorkerLeaf(tab.workerTab, leafId)) {
+      delete next.workerTab
+    }
+    return next
+  })
   const movedTitle = sourceLayout.titlesByLeafId?.[leafId]
   const terminalLayoutsByTabId = {
     ...session.terminalLayoutsByTabId,

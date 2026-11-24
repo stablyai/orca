@@ -36,6 +36,7 @@ import {
   salvagingRecord
 } from '../validation/zod-salvage'
 import { isStructuredAgentId } from '../agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { workerTabStampSchema } from '../orchestration/workers/worker-tab-stamp'
 
 const workspaceKeySchema = z.custom<WorkspaceKey>(
   (value) => typeof value === 'string' && isWorkspaceKey(value)
@@ -72,7 +73,8 @@ export const terminalTabSchema = z.object({
   launchAgent: z
     .custom<TuiAgent>((v) => isTuiAgent(v))
     .optional()
-    .catch(undefined)
+    .catch(undefined),
+  workerTab: workerTabStampSchema
 })
 
 const executionHostIdSchema = z.custom<ExecutionHostId>(
@@ -114,7 +116,9 @@ const tabSchema = z.object({
   isPreview: z.boolean().optional(),
   isPinned: z.boolean().optional(),
   // Preserve chat mode on restore; unknown future values degrade to terminal and missing legacy values remain absent.
-  viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional()
+  viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional(),
+  workerTab: workerTabStampSchema,
+  agentSessionLineageRootId: z.string().optional().catch(undefined)
 })
 
 const tabGroupSchema = z.object({

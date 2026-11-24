@@ -1,4 +1,5 @@
 import type { BotChangeScope } from '../../../../shared/bots/bot-change-scope'
+import type { WorkerTabStamp } from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import type { WorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
 import type { WorkspaceCleanupRunFinishedEvent } from '../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import type {
@@ -90,6 +91,7 @@ export type RuntimeNotifier = {
       launchConfig?: SleepingAgentLaunchConfig
       launchToken?: string
       launchAgent?: TuiAgent
+      workerTab?: WorkerTabStamp
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
       afterTabId?: string

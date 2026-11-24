@@ -1,3 +1,4 @@
+import { withWorkerLeaf } from '../../orchestration/workers/worker-tab-stamp'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { filterRecord, omitStoredFields, withoutKey } from '../persistence/stored-record-fields'
 import { canReplacePreviewContentType, partitionPinnedTabOrder } from '../tab-groups/tab-order'
@@ -66,6 +67,7 @@ export function createTerminalTab(
     id,
     entityId: id,
     createdAt: command.createdAt ?? context.now(),
+    ...(command.workerTab ? { workerTab: withWorkerLeaf(command.workerTab, leafId) } : {}),
     customTitle: command.title ?? null,
     color: command.color ?? null,
     ...(command.quickCommandLabel ? { quickCommandLabel: command.quickCommandLabel } : {}),
@@ -77,7 +79,6 @@ export function createTerminalTab(
   const placed = placeNewTab(workspace, command.workspace, tab, command, context)
   const paneKey = paneKeyOf(id, leafId)
   if (command.adopt) {
-    // Its terminal already runs: the pane binds to it and nothing starts.
     const leaves = { ...placed.leaves, [leafId]: adoptedLeaf(command.adopt) }
     const adopted = withWorkspace(model, command.workspace, { ...placed, leaves })
     return applied(adopted, { tabId: id, leafId, paneKey })
@@ -110,7 +111,6 @@ export function closeTab(
     next = {
       ...next,
       editorFiles: next.editorFiles.filter(
-        // Why the switch: shipped builds close through this code too.
         ORCA_LAYOUT_OWNER_IS_MAIN
           ? keptAfterEditorClose(workspace, next, tab.entityId)
           : (file) => !editorTabShowsFile(tab.entityId, file, next.worktreeId)
@@ -193,7 +193,18 @@ export function setTabProps(
   if (command.clearLaunchAgent && tab.kind !== 'terminal') {
     return refuse('invalid_params')
   }
+  if (
+    command.workerTabCurrent &&
+    (!tab.workerTab ||
+      (tab.kind === 'terminal' &&
+        command.workerTabCurrent.workerLeafId !== tab.workerTab.origin.workerLeafId))
+  ) {
+    return refuse('invalid_params')
+  }
   const props = {
+    ...(command.workerTabCurrent && tab.workerTab
+      ? { workerTab: { ...tab.workerTab, current: command.workerTabCurrent } }
+      : {}),
     ...(command.color !== undefined ? { color: command.color } : {}),
     ...(command.isPinned !== undefined ? { isPinned: command.isPinned } : {}),
     ...(command.viewMode !== undefined ? { viewMode: command.viewMode } : {})
@@ -207,7 +218,6 @@ export function setTabProps(
     tabs: workspace.tabs.map((entry) => (entry.id === tab.id ? next : entry))
   }
   if (command.isPinned !== undefined && command.isPinned !== (tab.isPinned === true)) {
-    // Pinning moves the tab to the edge of the pinned run, as the tab bar does.
     updated = {
       ...updated,
       groups: updated.groups.map((group) =>
@@ -246,8 +256,7 @@ export function promotePreviewTab(
   if (!tab) {
     return refuse('tab_not_found')
   }
-  const promoted = { ...tab }
-  delete promoted.isPreview
+  const { isPreview: _preview, ...promoted } = tab
   return updateTab(model, command.workspace, promoted)
 }
 
@@ -260,7 +269,6 @@ export function placeContentTab(
   context: LayoutContext
 ): { model: WorkspaceLayoutModel; refused: RefusedClose[] } {
   const workspace = workspaceOrEmpty(model, key)
-  // A host's open names no group; a window's names one from main's own frame.
   const group =
     workspace.groups.find((entry) => entry.id === placement.groupId) ?? workspace.groups[0]
   const preview = tab.isPreview
