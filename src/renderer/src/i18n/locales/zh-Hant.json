@@ -514,6 +514,13 @@
       "sshPage": {
         "stored": "已儲存到 {{host}} 的瀏覽器。",
         "googleCookiesSkipped": "未匯入 Google Cookie。請開啟一個透過 {{host}} 瀏覽的頁面，然後登入 Google。"
+      },
+      "picker": {
+        "menuItem": "匯入 Cookie…",
+        "search": "搜尋設定檔",
+        "lastUsed": "上次使用",
+        "noMatches": "沒有相符項目",
+        "googleNote": "Google 登入資訊未匯入"
       }
     },
     "passwords": {
@@ -17292,8 +17299,6 @@
             "ed8f54509d": "預設",
             "e5d31de1a9": "檢視區大小",
             "56f94f4ffa": "從檔案...",
-            "eb280bfb11": "從 {{value0}}",
-            "2293adf620": "匯入 Cookie",
             "cf7cdc67ef": "新增設定檔…",
             "7b838540c7": "瀏覽器選單",
             "a7a86702b3": "建立並切換到 {{value0}} 設定檔",

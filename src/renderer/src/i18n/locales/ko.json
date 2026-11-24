@@ -17992,8 +17992,6 @@
             "ed8f54509d": "기본",
             "e5d31de1a9": "뷰포트 크기",
             "56f94f4ffa": "파일에서…",
-            "eb280bfb11": "{{value0}}에서",
-            "2293adf620": "쿠키 가져오기",
             "cf7cdc67ef": "새 프로필…",
             "7b838540c7": "브라우저 메뉴",
             "a7a86702b3": "{{value0}} 프로필을 만들고 전환했습니다.",
@@ -23513,6 +23511,13 @@
       "sshPage": {
         "stored": "{{host}}용 브라우저에 저장했습니다.",
         "googleCookiesSkipped": "Google 쿠키는 가져오지 않았습니다. {{host}}를 통해 탐색하는 페이지를 열고 Google에 로그인하세요."
+      },
+      "picker": {
+        "menuItem": "쿠키 가져오기…",
+        "search": "프로필 검색",
+        "lastUsed": "최근 사용",
+        "noMatches": "일치하는 항목 없음",
+        "googleNote": "Google 로그인을 가져올 수 없습니다"
       }
     },
     "passwords": {

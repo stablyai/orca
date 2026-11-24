@@ -583,6 +583,13 @@
       "sshPage": {
         "stored": "Stored in the browser for {{host}}.",
         "googleCookiesSkipped": "Google cookies were not imported. Open a page that browses through {{host}}, then sign into Google."
+      },
+      "picker": {
+        "menuItem": "Import Cookies…",
+        "search": "Search profiles",
+        "lastUsed": "Last used",
+        "noMatches": "No matches",
+        "googleNote": "Google logins aren’t imported"
       }
     },
     "passwords": {
@@ -19001,8 +19008,6 @@
             "ed8f54509d": "Default",
             "e5d31de1a9": "Viewport Size",
             "56f94f4ffa": "From File…",
-            "eb280bfb11": "From {{value0}}",
-            "2293adf620": "Import Cookies",
             "cf7cdc67ef": "New Profile…",
             "7b838540c7": "Browser menu",
             "a7a86702b3": "Created and switched to {{value0}} profile",

@@ -543,6 +543,13 @@
       "sshPage": {
         "stored": "{{host}} tarayıcısında saklandı.",
         "googleCookiesSkipped": "Google çerezleri içe aktarılmadı. {{host}} üzerinden gezinen bir sayfa açın, ardından Google'da oturum açın."
+      },
+      "picker": {
+        "menuItem": "Çerezleri İçe Aktar…",
+        "search": "Profillerde ara",
+        "lastUsed": "Son kullanılan",
+        "noMatches": "Eşleşme yok",
+        "googleNote": "Google oturumları içe aktarılmaz"
       }
     },
     "passwords": {
@@ -17641,8 +17648,6 @@
             "ed8f54509d": "Varsayılan",
             "e5d31de1a9": "Görüntü Alanı Boyutu",
             "56f94f4ffa": "Dosyadan…",
-            "eb280bfb11": "{{value0}}'den",
-            "2293adf620": "Çerezleri İçe Aktar",
             "cf7cdc67ef": "Yeni Profil…",
             "7b838540c7": "Tarayıcı menüsü",
             "a7a86702b3": "{{value0}} profili oluşturuldu ve bu profile geçildi",

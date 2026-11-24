@@ -18075,8 +18075,6 @@
             "ed8f54509d": "默认",
             "e5d31de1a9": "视口尺寸",
             "56f94f4ffa": "从文件...",
-            "eb280bfb11": "从 {{value0}}",
-            "2293adf620": "导入 Cookie",
             "cf7cdc67ef": "新档案...",
             "7b838540c7": "浏览器菜单",
             "a7a86702b3": "创建并切换到 {{value0}} 配置文件",
@@ -23350,6 +23348,13 @@
       "sshPage": {
         "stored": "已存储到 {{host}} 的浏览器。",
         "googleCookiesSkipped": "未导入 Google Cookie。请打开一个通过 {{host}} 浏览的页面，然后登录 Google。"
+      },
+      "picker": {
+        "menuItem": "导入 Cookie…",
+        "search": "搜索配置文件",
+        "lastUsed": "上次使用",
+        "noMatches": "无匹配项",
+        "googleNote": "Google 登录信息未导入"
       }
     },
     "googleCookieClear": {

@@ -17580,8 +17580,6 @@
             "ed8f54509d": "デフォルト",
             "e5d31de1a9": "ビューポートのサイズ",
             "56f94f4ffa": "ファイルから…",
-            "eb280bfb11": "{{value0}} から",
-            "2293adf620": "Cookie のインポート",
             "cf7cdc67ef": "新規プロファイル…",
             "7b838540c7": "ブラウザメニュー",
             "a7a86702b3": "{{value0}} プロファイルを作成して切り替えました",
@@ -22048,6 +22046,13 @@
       "sshPage": {
         "stored": "{{host}} 用のブラウザに保存しました。",
         "googleCookiesSkipped": "Google の Cookie はインポートされませんでした。{{host}} 経由で閲覧するページを開き、Google にサインインしてください。"
+      },
+      "picker": {
+        "menuItem": "Cookie のインポート…",
+        "search": "プロファイルを検索",
+        "lastUsed": "前回使用",
+        "noMatches": "一致する項目がありません",
+        "googleNote": "Google ログインは対象外です"
       }
     },
     "passwords": {
