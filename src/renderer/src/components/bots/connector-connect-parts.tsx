@@ -160,6 +160,22 @@ export function connectorSetupFor(bot: { name: string }, hostName: string | null
     : translate('bots.setup.for', 'for {{name}}', { name: bot.name, ...HOW_TO_ASK_ESCAPED })
 }
 
+const INTRO_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  '#39': "'",
+  '#x2F': '/'
+}
+
+/** An escaped intro (see HOW_TO_ASK_ESCAPED) as plain text, for a tooltip. */
+function plainIntro(intro: string): string {
+  return intro
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(amp|lt|gt|quot|#39|#x2F);/g, (_, entity: string) => INTRO_ENTITIES[entity])
+}
+
 export function ConnectorSetupHeader({
   connector,
   title,
@@ -210,7 +226,11 @@ export function ConnectorSetupHeader({
             {corner}
           </div>
           <DialogDescription asChild size={bare ? 'compact' : 'default'}>
-            <div className={bare ? 'min-w-0 break-words' : 'break-words'}>
+            {/* Compact: one line; a long intro ends in … with the whole of it as the tooltip. */}
+            <div
+              className={bare ? (line ? 'min-w-0' : 'min-w-0 truncate') : 'break-words'}
+              title={bare && !line && intro ? plainIntro(intro) : undefined}
+            >
               {line ?? (intro ? <BotHowToAsk text={intro} /> : null)}
             </div>
           </DialogDescription>
