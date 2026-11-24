@@ -195,9 +195,17 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
       !this.isAgentCommandRunningInTab(ownerTabId)
         ? this.pageInputCredit.printer(ownerTabId)
         : null
-    if (pairedDeviceId && frame) {
+    if (pairedDeviceId && frame && ownerTabId) {
       const title = webContents.fromId(guestWebContentsId)?.getTitle() ?? ''
-      if (printForBrowserViewer(guestWebContentsId, frame, pairedDeviceId, title)) {
+      if (
+        printForBrowserViewer(
+          guestWebContentsId,
+          frame,
+          pairedDeviceId,
+          title,
+          this.guestIdsInTab(ownerTabId)
+        )
+      ) {
         return
       }
     }
@@ -211,6 +219,15 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
         this.pageEvents.emit(pageId, { kind: 'print', origin })
       }
     }
+  }
+
+  /** The tab's page and the popups its page opened. */
+  private guestIdsInTab(browserTabId: string): number[] {
+    const tabGuestId = this.webContentsIdByTabId.get(browserTabId)
+    const popupIds = [...this.popupOwnerContextByGuestId]
+      .filter(([, owner]) => owner.browserTabId === browserTabId)
+      .map(([popupId]) => popupId)
+    return tabGuestId === undefined ? popupIds : [tabGuestId, ...popupIds]
   }
 
   private isAgentCommandRunningInTab(browserTabId: string): boolean {

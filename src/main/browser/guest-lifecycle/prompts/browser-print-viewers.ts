@@ -67,17 +67,24 @@ export function addBrowserPrintViewer(
 
 /**
  * Prints the frame to PDF now, before the page changes or closes, and hands it to one of the
- * device's streams of the page. While an earlier print of the page waits for that device (its
- * save dialog is open), a new one is dropped, as a print dialog blocks the page locally.
- * False when that device isn't streaming the page with `prints: 1`.
+ * device's streams of the page, or of another page in its tab (a popup prints before the device
+ * streams it). While an earlier print of the page waits for that device (its save dialog is
+ * open), a new one is dropped, as a print dialog blocks the page locally. False when that device
+ * streams none of those pages with `prints: 1`.
  */
 export function printForBrowserViewer(
   guestWebContentsId: number,
   frame: Pick<WebFrameMain, 'printToPDF'>,
   pairedDeviceId: string,
-  title: string
+  title: string,
+  tabGuestWebContentsIds: readonly number[] = []
 ): boolean {
-  if (deviceViewers(guestWebContentsId, pairedDeviceId).length === 0) {
+  // One stream reads it, as its last slice releases it; the printing page's own stream first.
+  const receiver = (): BrowserPrintViewer | undefined =>
+    [guestWebContentsId, ...tabGuestWebContentsIds]
+      .map((guestId) => deviceViewers(guestId, pairedDeviceId).at(-1))
+      .find((viewer) => viewer !== undefined)
+  if (!receiver()) {
     return false
   }
   if (slotsOf(guestWebContentsId, pairedDeviceId).length > 0) {
@@ -97,8 +104,7 @@ export function printForBrowserViewer(
       if (slots.get(printId) !== slot) {
         return
       }
-      // One stream reads it, as its last slice releases it.
-      const viewer = deviceViewers(guestWebContentsId, pairedDeviceId).at(-1)
+      const viewer = receiver()
       if (!viewer || bytes.length > PRINT_MAX_BYTES) {
         forgetPrint(printId)
         return
