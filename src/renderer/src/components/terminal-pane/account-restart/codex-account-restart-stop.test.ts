@@ -96,12 +96,12 @@ describe('renderer account restart stop', () => {
     expect(store.clearCodexRestartNotice).toHaveBeenCalledTimes(1)
   })
 
-  it('reopens the prompt when the stop did not prove the process ended', async () => {
+  it('turns the prompt manual when the stop did not prove the process ended', async () => {
     const { replies } = heldReplies()
     const pending = stopCodexPaneForAccountRestart(pane)
     replies[0]({ outcome: 'unknown', opIds: ['op-1'] })
     await pending
-    expect(store.reopenCodexRestartPrompt).toHaveBeenCalledWith('pty-a')
+    expect(store.reopenCodexRestartPrompt).toHaveBeenCalledWith('pty-a', 'manual')
   })
 
   it('hands lanes main cannot stop back to the replacement restart', async () => {
@@ -112,12 +112,12 @@ describe('renderer account restart stop', () => {
     expect(store.reopenCodexRestartPrompt).not.toHaveBeenCalled()
   })
 
-  it('keeps an outdated local terminal service manual and says how to recover', async () => {
+  it('turns the prompt manual for an outdated local terminal service', async () => {
     const { replies } = heldReplies()
     const pending = stopCodexPaneForAccountRestart(pane)
     replies[0]({ outcome: 'not-started', reason: 'service-outdated', opIds: ['op-1'] })
     await expect(pending).resolves.toBe('handled')
-    expect(store.reopenCodexRestartPrompt).toHaveBeenCalledWith('pty-a', 'service-outdated')
+    expect(store.reopenCodexRestartPrompt).toHaveBeenCalledWith('pty-a', 'manual')
   })
 
   it('never falls back to an unfenced replacement for a legacy pane id', async () => {
@@ -125,7 +125,7 @@ describe('renderer account restart stop', () => {
     const pending = stopCodexPaneForAccountRestart(pane)
     replies[0]({ outcome: 'not-started', reason: 'invalid', opIds: ['op-1'] })
     await expect(pending).resolves.toBe('handled')
-    expect(store.reopenCodexRestartPrompt).toHaveBeenCalledWith('pty-a')
+    expect(store.reopenCodexRestartPrompt).toHaveBeenCalledWith('pty-a', 'manual')
   })
 
   it('a Dismiss with no operation in flight sends nothing', () => {
@@ -144,5 +144,13 @@ describe('renderer account restart stop', () => {
     await expect(pending).resolves.toBe('handled')
     expect(store.reopenCodexRestartPrompt).toHaveBeenCalledWith('pty-a')
     expect(store.clearCodexRestartNotice).not.toHaveBeenCalled()
+  })
+
+  it('keeps a retryable refusal answerable instead of manual', async () => {
+    const { replies } = heldReplies()
+    const pending = stopCodexPaneForAccountRestart(pane)
+    replies[0]({ outcome: 'not-started', reason: 'superseded', opIds: ['op-1'] })
+    await pending
+    expect(store.reopenCodexRestartPrompt).toHaveBeenCalledWith('pty-a')
   })
 })

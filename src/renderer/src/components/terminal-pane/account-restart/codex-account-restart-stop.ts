@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store/index'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import type {
+  CodexAccountRestartNotStartedReason,
   CodexAccountRestartStopRequest,
   CodexAccountRestartStopResult
 } from '../../../../../shared/agent-accounts/codex/codex-account-restart-stop'
@@ -46,12 +47,29 @@ export async function stopCodexPaneForAccountRestart(
   if (result.outcome === 'stopped') {
     // The exit arrives as a restart exit; the pane's normal resume picks up the selected account.
     store.clearCodexRestartNotice(pane.ptyId)
-  } else if (result.outcome === 'not-started' && result.reason === 'service-outdated') {
-    store.reopenCodexRestartPrompt(pane.ptyId, 'service-outdated')
+  } else if (requiresManualRestart(result)) {
+    // A route Orca cannot stop and resume safely: the user switches by restarting Codex themselves.
+    store.reopenCodexRestartPrompt(pane.ptyId, 'manual')
   } else {
     store.reopenCodexRestartPrompt(pane.ptyId)
   }
   return 'handled'
+}
+
+const MANUAL_REASONS: ReadonlySet<CodexAccountRestartNotStartedReason> = new Set([
+  'service-outdated',
+  'resume-unavailable',
+  'no-session',
+  'refused',
+  'invalid'
+])
+
+function requiresManualRestart(result: CodexAccountRestartStopResult): boolean {
+  // `unknown`: the stop may have run without proof, so the resume stayed on the old account.
+  return (
+    result.outcome === 'unknown' ||
+    (result.outcome === 'not-started' && MANUAL_REASONS.has(result.reason))
+  )
 }
 
 function noticeTargetOf(ptyId: string): string | null | undefined {

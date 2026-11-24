@@ -5,7 +5,7 @@ import CodexRestartChip from './CodexRestartChip'
 function notice(
   previousAccountLabel: string,
   nextAccountLabel: string,
-  restartBlockedBy?: 'service-outdated'
+  restartBlockedBy?: 'manual'
 ) {
   return {
     codexRestartNoticeByPtyId: {
@@ -47,14 +47,14 @@ export const accountSwitchedLongLabels = defineFixture({
   render: () => <Pane />
 })
 
-export const restartBlockedByOutdatedService = defineFixture({
+export const manualRestart = defineFixture({
   width: 960,
-  store: notice('dana@example.com', 'robin@example.org', 'service-outdated'),
+  store: notice('dana@example.com', 'robin@example.org', 'manual'),
   render: () => <Pane />
 })
 
-export const restartBlockedByOutdatedServiceNarrow = defineFixture({
+export const manualRestartNarrow = defineFixture({
   width: 360,
-  store: notice('dana@example.com', 'robin@example.org', 'service-outdated'),
+  store: notice('dana@example.com', 'robin@example.org', 'manual'),
   render: () => <Pane />
 })

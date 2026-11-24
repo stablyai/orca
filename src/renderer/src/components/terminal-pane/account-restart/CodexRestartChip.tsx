@@ -14,7 +14,7 @@ function isInsideHiddenTree(element: HTMLElement): boolean {
 type RestartNotice = {
   previousAccountLabel: string
   nextAccountLabel: string
-  restartBlockedBy?: 'service-outdated'
+  restartBlockedBy?: 'manual'
 }
 
 export default function CodexRestartChip({
@@ -80,6 +80,7 @@ function LoudRestartOverlay({
   const titleId = useId()
   const bodyId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
+  const manual = restartNotice.restartBlockedBy === 'manual'
 
   // Focus only if the user is not typing elsewhere. Focus the dialog, never Restart, so Space/Enter cannot destroy an unchosen session (#10863).
   useEffect(() => {
@@ -145,11 +146,10 @@ function LoudRestartOverlay({
           </div>
         </div>
         <div id={bodyId} className="text-sm leading-relaxed text-muted-foreground">
-          {restartNotice.restartBlockedBy === 'service-outdated'
-            ? // Retry fails the same way until the terminal service restarts; an Orca restart can reconnect to the same one.
-              t(
-                'auto.components.CodexRestartChip.f2b84c61d7',
-                'Terminal service is out of date. Restart it in Settings > Terminal.'
+          {manual
+            ? t(
+                'auto.components.CodexRestartChip.0c5d7e3a91',
+                "Can't restart automatically. Exit Codex and start it again to switch."
               )
             : t(
                 'auto.components.CodexRestartChip.9375620cc3',
@@ -158,13 +158,22 @@ function LoudRestartOverlay({
               )}
         </div>
         <div className="mt-1 flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={onDismiss}>
-            {t('auto.components.CodexRestartChip.6133594b12', 'Keep old account')}
-          </Button>
-          <Button type="button" variant="default" size="sm" onClick={onRestart}>
-            <RefreshCw />
-            {t('auto.components.CodexRestartChip.c72a5fb234', 'Restart')}
-          </Button>
+          {manual ? (
+            // Restart would only be refused again on a route Orca cannot stop safely.
+            <Button type="button" variant="default" size="sm" onClick={onDismiss}>
+              {t('auto.components.CodexRestartChip.7f2e9b4c10', 'Dismiss')}
+            </Button>
+          ) : (
+            <>
+              <Button type="button" variant="outline" size="sm" onClick={onDismiss}>
+                {t('auto.components.CodexRestartChip.6133594b12', 'Keep old account')}
+              </Button>
+              <Button type="button" variant="default" size="sm" onClick={onRestart}>
+                <RefreshCw />
+                {t('auto.components.CodexRestartChip.c72a5fb234', 'Restart')}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>
