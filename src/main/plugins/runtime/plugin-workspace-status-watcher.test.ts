@@ -322,4 +322,67 @@ describe('watchPluginWorkspaceStatus', () => {
       vi.useRealTimers()
     }
   })
+
+  it('resets the retry budget after a successful read', async () => {
+    vi.useFakeTimers()
+    try {
+      const calls: Deferred<ReturnType<typeof psRow>>[] = []
+      let fireAgentStatus!: () => void
+
+      const stop = watchPluginWorkspaceStatus({
+        delegate: {
+          callRuntime: () => {
+            const d = deferred<ReturnType<typeof psRow>>()
+            calls.push(d)
+            return d.promise
+          }
+        },
+        events: {
+          wantsEvent: () => true,
+          emitEvent: () => {}
+        },
+        onAgentStatus: (listener) => {
+          fireAgentStatus = listener
+          return () => {}
+        },
+        onSessionWritten: () => () => {},
+        onStateWritten: () => () => {},
+        delayMs: 10,
+        retryDelayMs: 50
+      })
+
+      fireAgentStatus()
+      await vi.advanceTimersByTimeAsync(10)
+      expect(calls).toHaveLength(1)
+
+      // Fail once, then succeed on the first retry to reset consecutiveFailures.
+      calls[0].reject(new Error('transient-1'))
+      await vi.advanceTimersByTimeAsync(50)
+      expect(calls).toHaveLength(2)
+
+      calls[1].resolve(psRow('done'))
+      await vi.advanceTimersByTimeAsync(0)
+
+      // Next failure should get a full 2-retry budget (3 calls total for this wave).
+      fireAgentStatus()
+      await vi.advanceTimersByTimeAsync(10)
+      expect(calls).toHaveLength(3)
+
+      calls[2].reject(new Error('wave2-fail-1'))
+      await vi.advanceTimersByTimeAsync(50)
+      expect(calls).toHaveLength(4)
+
+      calls[3].reject(new Error('wave2-fail-2'))
+      await vi.advanceTimersByTimeAsync(50)
+      expect(calls).toHaveLength(5)
+
+      calls[4].reject(new Error('wave2-fail-3'))
+      await vi.advanceTimersByTimeAsync(200)
+      expect(calls).toHaveLength(5)
+
+      stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
