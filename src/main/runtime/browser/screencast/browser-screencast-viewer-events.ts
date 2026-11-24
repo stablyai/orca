@@ -2,10 +2,6 @@ import type { BrowserScreencastResult } from '../../../../shared/browser/runtime
 import { addBrowserPagePromptViewer } from '../../../browser/guest-lifecycle/prompts/browser-page-prompt-viewers'
 import { addBrowserFileChooserViewer } from '../../../browser/guest-lifecycle/prompts/browser-file-chooser-viewers'
 import { addBrowserPrintViewer } from '../../../browser/guest-lifecycle/prompts/browser-print-viewers'
-import {
-  offerBrowserDownloadCopy,
-  releaseBrowserDownloadCopy
-} from '../../../browser/guest-lifecycle/manager/downloads/browser-download-copy-offers'
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import type { BrowserScreencastParams } from './browser-screencast-contracts'
 
@@ -16,7 +12,7 @@ export function startScreencastViewerEvents(
   page: { guestWebContentsId: number; browserPageId: string },
   params: Pick<
     BrowserScreencastParams,
-    'pagePrompts' | 'fileChoosers' | 'agentCursor' | 'downloads' | 'downloadCopies' | 'prints'
+    'pagePrompts' | 'fileChoosers' | 'agentCursor' | 'downloads' | 'prints'
   >,
   { emit, pairedDeviceId }: ScreencastViewer
 ): (() => void) | null {
@@ -51,11 +47,7 @@ export function startScreencastViewerEvents(
     )
   }
   if (params.downloads === 1) {
-    stops.push(
-      params.downloadCopies === 1 && pairedDeviceId
-        ? watchDownloadsWithCopies(page.browserPageId, pairedDeviceId, emit)
-        : browserManager.watchDownloads(page.browserPageId, emit)
-    )
+    stops.push(browserManager.watchDownloads(page.browserPageId, emit))
   }
   // The print() calls this viewer's own input makes.
   if (params.prints === 1 && pairedDeviceId) {
@@ -65,41 +57,5 @@ export function startScreencastViewerEvents(
     for (const stop of stops) {
       stop()
     }
-  }
-}
-
-/** Each finished download this host saved carries a copy only this device can take. */
-function watchDownloadsWithCopies(
-  browserPageId: string,
-  pairedDeviceId: string,
-  emit: (event: BrowserScreencastResult) => void
-): () => void {
-  let stopped = false
-  const stop = browserManager.watchDownloads(browserPageId, (event) => {
-    // A client-hosted page's download went to its workspace, and a claimed one is deleted once
-    // its feature reads it: neither is a file this host keeps.
-    if (
-      event.type !== 'downloadFinished' ||
-      event.download.status !== 'completed' ||
-      !event.download.savePath ||
-      event.download.remoteDestination ||
-      event.download.claimLabel
-    ) {
-      emit(event)
-      return
-    }
-    void offerBrowserDownloadCopy(pairedDeviceId, event.download.savePath).then((copyId) => {
-      if (stopped) {
-        if (copyId) {
-          releaseBrowserDownloadCopy(pairedDeviceId, { copyId })
-        }
-        return
-      }
-      emit(copyId ? { ...event, copyId } : event)
-    })
-  })
-  return () => {
-    stopped = true
-    stop()
   }
 }

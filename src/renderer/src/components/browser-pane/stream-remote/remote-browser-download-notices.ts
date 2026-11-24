@@ -4,9 +4,6 @@ import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/e
 import { translate } from '@/i18n/i18n'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { useAppStore } from '@/store'
-import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { formatBrowserRemoteDownloadMessage } from '../navigate/browser-download-destination-toast'
-import { offerRemoteBrowserDownloadCopy } from './remote-browser-download-copy'
 import {
   browserDownloadToastId,
   emitBrowserClientHostedDownloadNotice
@@ -18,13 +15,13 @@ import {
  */
 export function showRemoteBrowserDownloadNotice(
   event: BrowserScreencastDownloadResult,
-  target: RuntimeClientTarget & { kind: 'environment' }
+  environmentId: string
 ): void {
   const { download } = event
   const id = browserDownloadToastId(download.downloadId)
   const host = selectExecutionHostDisplayLabel(
     useAppStore.getState(),
-    toRuntimeExecutionHostId(target.environmentId)
+    toRuntimeExecutionHostId(environmentId)
   )
   // A claimed download's file is the feature's own, deleted once read: name the feature instead.
   const savePath = download.claimLabel ?? download.savePath
@@ -38,23 +35,10 @@ export function showRemoteBrowserDownloadNotice(
     )
     return
   }
-  if (event.copyId && !download.claimLabel && savePath && download.status === 'completed') {
-    offerRemoteBrowserDownloadCopy({
-      toastId: id,
-      target,
-      copyId: event.copyId,
-      savedOnServer: formatBrowserRemoteDownloadMessage({
-        workspaceRelativePath: savePath,
-        hostLabel: host
-      }),
-      filename: savePath.split(/[\\/]/).pop() || 'download'
-    })
-    return
-  }
   emitBrowserClientHostedDownloadNotice(
     {
       ...event.download,
-      // The server's own path; this computer has no copy.
+      // The server's own path; this computer has no copy (moving it here is separate work).
       ...(savePath
         ? { remoteDestination: { workspaceRelativePath: savePath, hostLabel: host } }
         : {})

@@ -1,16 +1,12 @@
 import { existsSync } from 'node:fs'
-import { lstat } from 'node:fs/promises'
 import path from 'node:path'
 
 import { app } from 'electron'
 
-import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
-
 import {
   buildBrowserDownloadCollisionCandidate,
   MAX_BROWSER_DOWNLOAD_COLLISION_ATTEMPTS,
-  normalizeBrowserDownloadFilename,
-  normalizeIncomingDownloadFilename
+  normalizeBrowserDownloadFilename
 } from '../../../shared/browser/downloads/browser-download-filename'
 
 export type BrowserDownloadDestination = {
@@ -31,16 +27,6 @@ function normalizeReservationKey(filePath: string, platform: NodeJS.Platform): s
   return platform === 'win32' || platform === 'darwin'
     ? normalizedPath.toLocaleLowerCase('en-US')
     : normalizedPath
-}
-
-async function pathExistsAsync(filePath: string): Promise<boolean> {
-  try {
-    await lstat(filePath)
-    return true
-  } catch (error) {
-    // A name we can't check is treated as taken.
-    return !isENOENT(error)
-  }
 }
 
 export class BrowserDownloadDestinationReservations {
@@ -74,27 +60,6 @@ export class BrowserDownloadDestinationReservations {
       }
     }
 
-    throw new Error('Could not choose a unique file name in Downloads.')
-  }
-
-  /** As `reserve`, for a name another machine sent, without blocking the main thread on the disk. */
-  async reserveIncoming(filename: string): Promise<BrowserDownloadDestination> {
-    const safeFilename = normalizeIncomingDownloadFilename(filename, this.platform)
-    const downloadsPath = this.downloadsPath()
-    for (let attempt = 0; attempt < MAX_BROWSER_DOWNLOAD_COLLISION_ATTEMPTS; attempt += 1) {
-      const candidateFilename = buildBrowserDownloadCollisionCandidate(safeFilename, attempt)
-      const savePath = path.join(downloadsPath, candidateFilename)
-      const reservationKey = normalizeReservationKey(savePath, this.platform)
-      if (this.reservedPathKeys.has(reservationKey) || (await pathExistsAsync(savePath))) {
-        continue
-      }
-      // Another reservation may have taken it while the disk answered.
-      if (this.reservedPathKeys.has(reservationKey)) {
-        continue
-      }
-      this.reservedPathKeys.add(reservationKey)
-      return { filename: candidateFilename, savePath, reservationKey }
-    }
     throw new Error('Could not choose a unique file name in Downloads.')
   }
 
