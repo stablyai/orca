@@ -36,7 +36,8 @@ describe('codex delete target', () => {
     const wslHomeDirs = ['\\\\wsl.localhost\\Ubuntu\\home\\me']
     expect(wslCodexDeleteTarget('Ubuntu', `/home/me/.codex/${ROLLOUT}`, wslHomeDirs)).toEqual({
       homePath: '/home/me/.codex',
-      wslDistro: 'Ubuntu'
+      wslDistro: 'Ubuntu',
+      wslHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\me\\.codex'
     })
     expect(wslCodexDeleteTarget('Debian', `/home/me/.codex/${ROLLOUT}`, wslHomeDirs)).toBeNull()
   })

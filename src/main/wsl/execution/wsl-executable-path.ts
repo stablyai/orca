@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { win32 as pathWin32 } from 'node:path'
 
 /** Prefer checked System32 wsl.exe to avoid PATH hijacking (#15749); use PATH only when that file is absent. */
@@ -12,5 +13,21 @@ export function resolveWslExecutablePath(): string {
   const absolute = pathWin32.join(systemRoot, 'System32', 'wsl.exe')
   // A host with WSL elsewhere still deserves a working call.
   cached = existsSync(absolute) ? absolute : 'wsl.exe'
+  return cached
+}
+
+/** Same checked System32 path, with the fs probe off the event loop. */
+export async function resolveWslExecutablePathAsync(): Promise<string> {
+  if (cached !== undefined) {
+    return cached
+  }
+  const systemRoot = process.env.SystemRoot || 'C:\\Windows'
+  const absolute = pathWin32.join(systemRoot, 'System32', 'wsl.exe')
+  try {
+    await access(absolute)
+    cached = absolute
+  } catch {
+    cached = 'wsl.exe'
+  }
   return cached
 }

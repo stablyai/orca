@@ -1,15 +1,15 @@
 import { runProcess } from '@orca/process-host'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { resolveCodexCommandForSpawn } from '../../codex-cli/command'
+import { resolveCodexCommandForDelete } from '../../codex-cli/command'
 import { resolveCliCommandAsync } from '../../../shared/shell/command-resolution/node-cli-command-async-resolution'
 import {
   buildWslExecArgs,
   buildWslLoginShellCommand
 } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
-import { resolveWslExecutablePath } from '../../wsl/execution/wsl-executable-path'
-import { resolveWslInteropSpawnCwd } from '../../wsl/execution/wsl-interop-spawn-directory'
+import { resolveWslExecutablePathAsync } from '../../wsl/execution/wsl-executable-path'
+import { resolveWslInteropSpawnCwdAsync } from '../../wsl/execution/wsl-interop-spawn-directory'
 
 const CLI_TIMEOUT_MS = 60_000
 const WSL_CLI_TIMEOUT_MS = 120_000
@@ -91,7 +91,7 @@ async function runNativeDelete(
 ): Promise<{ code: number | null; output: string; timedOut: boolean; spawnError?: string }> {
   const program =
     agent === 'codex'
-      ? await resolveCodexCommandForSpawn()
+      ? await resolveCodexCommandForDelete()
       : await resolveCliCommandAsync('opencode')
   const childEnv: NodeJS.ProcessEnv = { ...process.env, ...env }
   for (const key of clearInheritedEnv) {
@@ -150,9 +150,9 @@ async function runWslDelete(args: {
   try {
     const result = await runProcess(
       {
-        program: resolveWslExecutablePath(),
+        program: await resolveWslExecutablePathAsync(),
         args: buildWslExecArgs(wsl.distro, ['sh', '-c', buildWslLoginShellCommand(command)]),
-        cwd: resolveWslInteropSpawnCwd(),
+        cwd: await resolveWslInteropSpawnCwdAsync(),
         env: { ...process.env, WSL_UTF8: '1' },
         timeoutMs: WSL_CLI_TIMEOUT_MS,
         maxOutputBytes: MAX_OUTPUT_BYTES

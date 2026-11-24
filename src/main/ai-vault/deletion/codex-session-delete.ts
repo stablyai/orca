@@ -1,4 +1,4 @@
-import { join, posix, resolve } from 'node:path'
+import { join, posix, resolve, win32 } from 'node:path'
 import type { AiVaultDeleteSessionResult } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -9,7 +9,7 @@ import { isPathInsideOrEqual } from '../../../shared/file-access/cross-platform-
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { configuredAdditionalCodexHomePaths } from '../discovery/ai-vault-scan-roots'
 import { listHostCodexRolloutHomes } from '../../codex/history/cleanup/codex-host-rollout-homes'
-import { isOpenInCodex } from '../../codex/history/cleanup/codex-rollout-writer-lock'
+import { hasCodexWriterLock } from '../../codex/history/cleanup/codex-rollout-writer-lock'
 import { deleteCodexSessionWithCli } from './session-delete-command'
 
 const ROLLOUT_FILE = /^rollout-.+\.jsonl(?:\.zst)?$/i
@@ -56,7 +56,8 @@ export async function deleteHostCodexSession(
     return { outcome: 'deleted' }
   }
   // The CLI hides the reason; a writer lock proves the thread is still open somewhere.
-  if (!target.wslDistro && (await isOpenInCodex([target.homePath], filePath))) {
+  const lockHome = target.wslHomePath ?? target.homePath
+  if (await hasCodexWriterLock([lockHome], filePath)) {
     return { outcome: 'rejected', agent, reason: 'session-in-use' }
   }
   console.warn('[ai-vault] Codex session delete failed:', result.error)
@@ -71,7 +72,7 @@ export function codexThreadIdFromRolloutPath(filePath: string): string | null {
 async function resolveCodexDeleteTarget(
   filePath: string,
   wslHomeDirs: readonly string[]
-): Promise<{ homePath: string; wslDistro?: string } | null> {
+): Promise<{ homePath: string; wslDistro?: string; wslHomePath?: string } | null> {
   if (!ROLLOUT_FILE.test(filePath.split(/[\\/]/).at(-1) ?? '')) {
     return null
   }
@@ -91,14 +92,14 @@ async function resolveCodexDeleteTarget(
 function additionalWslCodexTarget(
   distro: string,
   linuxFilePath: string
-): { homePath: string; wslDistro: string } | null {
+): { homePath: string; wslDistro: string; wslHomePath: string } | null {
   for (const homePath of configuredAdditionalCodexHomePaths()) {
     const parsed = parseWslUncPath(homePath)
     if (
       parsed?.distro.toLowerCase() === distro.toLowerCase() &&
       isRolloutUnderWslHome(parsed.linuxPath, linuxFilePath)
     ) {
-      return { homePath: parsed.linuxPath, wslDistro: distro }
+      return { homePath: parsed.linuxPath, wslDistro: distro, wslHomePath: homePath }
     }
   }
   return null
@@ -108,7 +109,7 @@ export function wslCodexDeleteTarget(
   distro: string,
   linuxFilePath: string,
   wslHomeDirs: readonly string[]
-): { homePath: string; wslDistro: string } | null {
+): { homePath: string; wslDistro: string; wslHomePath: string } | null {
   for (const homeDir of wslHomeDirs) {
     const parsed = parseWslUncPath(homeDir)
     if (!parsed || parsed.distro.toLowerCase() !== distro.toLowerCase()) {
@@ -117,7 +118,7 @@ export function wslCodexDeleteTarget(
     for (const segments of WSL_CODEX_HOME_SEGMENTS) {
       const homePath = posix.join(parsed.linuxPath, ...segments)
       if (isRolloutUnderWslHome(homePath, linuxFilePath)) {
-        return { homePath, wslDistro: distro }
+        return { homePath, wslDistro: distro, wslHomePath: win32.join(homeDir, ...segments) }
       }
     }
   }

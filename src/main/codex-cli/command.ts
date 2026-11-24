@@ -54,6 +54,11 @@ export async function resolveCodexCommandForSpawn(): Promise<string> {
     : resolveCodexCommand()
 }
 
+/** Async on every platform, for work that must not block the Electron main thread. */
+export async function resolveCodexCommandForDelete(): Promise<string> {
+  return orUseManagedCopy('codex', await resolveCliCommandAsync('codex'))
+}
+
 export function resolveClaudeCommand(options: ResolveCommandOptions = {}): string {
   return orUseManagedCopy('claude', resolveGuestNativeAgentCommand('claude', options))
 }

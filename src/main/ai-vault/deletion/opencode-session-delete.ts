@@ -4,7 +4,6 @@ import type {
   AiVaultDatabaseRowAgent,
   AiVaultDeleteSessionResult
 } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
-import { splitOpenCodeSqliteCandidate } from '../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
@@ -37,7 +36,7 @@ export async function deleteHostOpenCodeSession(
     return { outcome: 'rejected', agent, reason: 'non-local-host' }
   }
   const filePath = typeof args.filePath === 'string' ? args.filePath.trim() : ''
-  const targetRow = resolveOpenCodeSessionRow(filePath, args.sessionId, agent)
+  const targetRow = resolveOpenCodeSessionRow(filePath, args.sessionId)
   if (!targetRow) {
     return { outcome: 'rejected', agent, reason: 'invalid-path' }
   }
@@ -45,6 +44,9 @@ export async function deleteHostOpenCodeSession(
   const target = await resolveOpenCodeDeleteTarget(targetRow.dbPath, args.wslHomeDirs)
   if (!target) {
     return { outcome: 'rejected', agent, reason: 'path-outside-known-roots' }
+  }
+  if ('error' in target) {
+    return { outcome: 'failed', agent, error: target.error }
   }
   // A store removed since the scan is already deleted; the row only needs its caches cleared.
   if (target.missing) {
@@ -66,27 +68,39 @@ export async function deleteHostOpenCodeSession(
 // A scanned row stores the database path and the session id separately; older clients used db#id.
 export function resolveOpenCodeSessionRow(
   filePath: string,
-  sessionId: string | undefined,
-  agent: AiVaultDatabaseRowAgent
+  sessionId: string | undefined
 ): { dbPath: string; sessionId: string } | null {
-  if (!filePath) {
+  const trimmed = filePath.trim()
+  if (!trimmed) {
     return null
   }
   const requestedSessionId = sessionId?.trim()
-  if (!filePath.includes('#') && !requestedSessionId) {
+  if (!requestedSessionId) {
+    return splitDbSessionPath(trimmed)
+  }
+  const parsed = splitDbSessionPath(trimmed)
+  if (parsed && /^ses/i.test(parsed.sessionId)) {
+    return parsed.sessionId === requestedSessionId ? parsed : null
+  }
+  // The scanned row stores the database path alone; a '#' may be part of a directory name.
+  return { dbPath: trimmed, sessionId: requestedSessionId }
+}
+
+function splitDbSessionPath(candidatePath: string): { dbPath: string; sessionId: string } | null {
+  const separatorIndex = candidatePath.lastIndexOf('#')
+  if (separatorIndex <= 0 || separatorIndex === candidatePath.length - 1) {
     return null
   }
-  const candidate = filePath.includes('#') ? filePath : `${filePath}#${requestedSessionId}`
-  const parsed = splitOpenCodeSqliteCandidate(candidate, agent)
-  if (!parsed || (requestedSessionId && requestedSessionId !== parsed.sessionId)) {
-    return null
+  return {
+    dbPath: candidatePath.slice(0, separatorIndex),
+    sessionId: candidatePath.slice(separatorIndex + 1)
   }
-  return parsed
 }
 
 type OpenCodeDeleteTarget =
   | { dbPath: string; wslDistro?: string; missing?: false }
   | { missing: true }
+  | { error: string }
 
 async function resolveOpenCodeDeleteTarget(
   dbPath: string,
@@ -103,8 +117,9 @@ async function resolveOpenCodeDeleteTarget(
     if (!roots.some((root) => isPathInsideOrEqual(root, wsl.linuxPath))) {
       return null
     }
-    if (!(await wslDatabaseExists(dbPath))) {
-      return { missing: true }
+    const existence = await wslDatabaseExistence(dbPath)
+    if (existence !== 'exists') {
+      return existence === 'missing' ? { missing: true } : existence
     }
     return { dbPath: wsl.linuxPath, wslDistro: wsl.distro }
   }
@@ -150,6 +165,16 @@ async function resolveNativeDatabaseContainment(
     : 'outside'
 }
 
-async function wslDatabaseExists(dbPath: string): Promise<boolean> {
-  return (await stat(dbPath).catch(() => null))?.isFile() === true
+async function wslDatabaseExistence(
+  dbPath: string
+): Promise<'exists' | 'missing' | { error: string }> {
+  try {
+    return (await stat(dbPath)).isFile()
+      ? 'exists'
+      : { error: 'OpenCode database path is not a file.' }
+  } catch (error) {
+    return isENOENT(error)
+      ? 'missing'
+      : { error: error instanceof Error ? error.message : String(error) }
+  }
 }

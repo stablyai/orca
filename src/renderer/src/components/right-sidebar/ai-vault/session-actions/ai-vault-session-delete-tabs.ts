@@ -2,6 +2,7 @@ import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store/index'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { findOriginalAiVaultSessionPane, type OriginalPaneState } from './ai-vault-original-pane'
+import { findAllOriginalAiVaultSessionPaneTabIds } from './ai-vault-original-pane-tabs'
 
 type OpenTabLookupState = OriginalPaneState & Pick<AppState, 'unifiedTabsByWorktree'>
 
@@ -30,9 +31,16 @@ export function findAiVaultSessionOpenTabIds(
       }
     }
   }
-  const originalPane = findOriginalAiVaultSessionPane(state, session)
-  if (originalPane) {
-    tabIds.add(originalPane.tabId)
+  const exactTabs = findAllOriginalAiVaultSessionPaneTabIds(state, session)
+  for (const tabId of exactTabs) {
+    tabIds.add(tabId)
+  }
+  // Prompt matching is ambiguous; use it only when no pane proved the provider session.
+  if (exactTabs.length === 0) {
+    const originalPane = findOriginalAiVaultSessionPane(state, session)
+    if (originalPane) {
+      tabIds.add(originalPane.tabId)
+    }
   }
   return [...tabIds]
 }
