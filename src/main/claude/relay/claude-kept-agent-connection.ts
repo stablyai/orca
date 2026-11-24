@@ -237,7 +237,10 @@ export async function openKeptClaudeAgentConnection(
     readingBarrier?.resolve()
     readingBarrier = null
     responder.dispose()
-    readToEnd.add(chatKey)
+    // A lost daemon may have dropped output Claude saved; only a seen end proves the journal whole.
+    if (child.outcomeLost !== true) {
+      readToEnd.add(chatKey)
+    }
     terminalError = withLostProviderOutcome(
       claudeStreamJsonExitError(managed.stderrTail(), managed.exitStatus),
       child
