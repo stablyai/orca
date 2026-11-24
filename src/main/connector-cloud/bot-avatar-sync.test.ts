@@ -287,11 +287,26 @@ it('leaves a drawn icon the cloud failed to take for the next real step, not the
   sync.retryOwed(true)
   await vi.waitFor(() => expect(sent).toHaveLength(8))
 
-  // A real step (any bot write) sends it.
-  up = true
+  // A sign-in while the one resend is on its way: that resend failing still gets the sign-in's try.
+  await vi.advanceTimersByTimeAsync(60_000)
   sync.changed()
   await vi.waitFor(() => expect(sent).toHaveLength(9))
-  expect(sent[8]).toMatchObject({ kind: 'upload' })
+  await vi.advanceTimersByTimeAsync(60_000)
+  let releaseResend = (): void => {}
+  hold = new Promise((resolve) => (releaseResend = resolve))
+  sync.retryOwed()
+  await vi.waitFor(() => expect(sent).toHaveLength(10))
+  sync.retryOwed(true)
+  hold = null
+  releaseResend()
+  await vi.waitFor(() => expect(sent).toHaveLength(11))
+
+  // A real step (any bot write) sends it.
+  await vi.advanceTimersByTimeAsync(60_000)
+  up = true
+  sync.changed()
+  await vi.waitFor(() => expect(sent).toHaveLength(12))
+  expect(sent[11]).toMatchObject({ kind: 'upload' })
   vi.useRealTimers()
 })
 

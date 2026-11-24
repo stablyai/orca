@@ -11,6 +11,7 @@ import type { Bot } from '../../shared/bot-types'
 import type { ConnectorBotAvatarRequest } from '../../shared/connector-bot-slack-contract'
 import type { BotController } from '../bots/bot-controller'
 import type { BotSlackIcons } from '../bots/bot-slack-icon-store'
+import { BotAvatarOwed } from './bot-avatar-owed'
 import { BotAvatarShown } from './bot-avatar-shown'
 import { botsCloudClient } from './bots-cloud-client'
 import type { ConnectorCloud } from './connector-cloud'
@@ -55,16 +56,13 @@ export class BotAvatarSync {
   private readonly refused = new Map<string, { avatar: string; waitMs: number; until: number }>()
   // Bots waiting for a send slot, each as last seen.
   private readonly queued = new Map<string, SyncedBot>()
-  // Bots a pass met while their send was in flight: their picture may have changed since.
+  // Bots a pass met mid-send: their picture may have changed since.
   private readonly changedWhileSending = new Set<string>()
-  // Bot writes so far, so a refusal that crossed one is not kept.
+  // Real steps so far (bot writes, a sign-in, an outage ending), so a failure that crossed one goes again.
   private writes = 0
   // Per bot, drawn icons kept so far, so a send that read none before one was kept is sent again.
   private readonly icons = new Map<string, number>()
-  // Bots whose drawn icon the cloud failed to take: sent again on a real step, never by the retry timer.
-  private readonly owed = new Set<string>()
-  // Owed bots resent once on the poll answering a missed call: they wait for a real step, never its pace.
-  private readonly answeredRetried = new Set<string>()
+  private readonly owed = new BotAvatarOwed()
   private readonly shown: BotAvatarShown
   // Per bot, its drawn icon while a send of it is out (or none, until one is kept), by look and icon count.
   private readonly prepared = new Map<
@@ -97,20 +95,14 @@ export class BotAvatarSync {
     // A write may be what registers a refused bot with the cloud: everything is tried again.
     this.writes++
     this.refused.clear()
-    // A real step: drawn icons the cloud failed to take go again too.
     this.owed.clear()
-    this.answeredRetried.clear()
     this.pass()
   }
 
-  /** Orca Cloud answers again, or an account signed in: only the drawn icons it failed to take go again. */
+  /** Owed drawings go again; a fresh step (a sign-in, an outage ending) also renews sends on their way. */
   retryOwed(fresh = false): void {
-    for (const botId of this.owed) {
-      if (!fresh && this.answeredRetried.has(botId)) {
-        continue
-      }
-      this.answeredRetried[fresh ? 'delete' : 'add'](botId)
-      this.owed.delete(botId)
+    this.writes += fresh ? 1 : 0
+    for (const botId of this.owed.take(fresh)) {
       this.sent.delete(botId)
       if (!this.sending.has(botId)) {
         this.resend(botId)
@@ -122,7 +114,6 @@ export class BotAvatarSync {
   iconStored(botId: string): void {
     this.icons.set(botId, (this.icons.get(botId) ?? 0) + 1)
     this.owed.delete(botId)
-    this.answeredRetried.delete(botId)
     this.sent.delete(botId)
     // One in flight read no icon or an older one: it is sent again once it lands.
     if (!this.sending.has(botId)) {
@@ -195,7 +186,6 @@ export class BotAvatarSync {
     if (!fromTimer) {
       for (const kept of [
         this.owed,
-        this.answeredRetried,
         this.shown,
         this.icons,
         this.prepared,
@@ -303,7 +293,6 @@ export class BotAvatarSync {
       this.resend(bot.id)
     } else if (sent) {
       this.owed.delete(bot.id)
-      this.answeredRetried.delete(bot.id)
       this.sent.set(bot.id, avatar)
       // Kept only for a retry: once taken, its bytes are let go.
       this.prepared.delete(bot.id)
