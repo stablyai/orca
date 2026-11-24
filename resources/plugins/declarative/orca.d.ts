@@ -112,7 +112,7 @@ declare module 'orca' {
     /** The agents in the focused workspace, or in the one `workspaceId` names (rejected when no workspace has it): their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after. */
     "agents.list": { params: { workspaceId?: string } | undefined; result: { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number; sessionId?: string | null; task?: { title: string } | null }[] } }
     /** Delivers a workspace, agent or editor event to this panel as `orca.on(event)`; needs the event's read capability, when it has one. The frame APIs call it for you. */
-    "events.subscribe": { params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" | "editor.typography.changed" }; result: { ok: true } }
+    "events.subscribe": { params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" | "workspace.status.changed" | "editor.typography.changed" }; result: { ok: true } }
     /** The font family, size, weight, line height, ligatures, word wrap and minimap Orca's file editor uses now, editor zoom included. `editor.typography.changed` reports each change after. */
     "editor.readTypography": { params: Record<string, never> | undefined; result: { fontFamily: string; cssFontFamily: string; fontSize: number; fontWeight: string; lineHeight: number; fontLigatures: boolean; wordWrap: "on" | "off"; minimap: boolean } }
   }
@@ -126,6 +126,8 @@ declare module 'orca' {
     "agent.status.changed": { workspaceId: string | null; workspaceListId?: string; paneKey: string; terminalId?: string; title?: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number }; sessionId?: string }
     /** The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers, its `workspaceId` included. Each new subscriber first gets the current context. */
     "workspace.changed": { context: { workspaceId?: string; branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }
+    /** A workspace's status changed (agent state, monitoring mode, board status, pin, sleep, notification mute, unread dot, or terminal count); `workspaceId` matches `workspace.list` and `status` matches `workspace.list({ includeStatus: true })`. */
+    "workspace.status.changed": { workspaceId: string; status: { state: "working" | "permission" | "done" | "active" | "inactive"; workingMode?: "monitoring"; workspaceStatus?: string; isPinned?: boolean; isSleeping?: boolean; muteNotifications?: boolean; unread: boolean; terminalCount: number; lastActivityAt: number | null } }
     /** What Orca's file editor uses changed (a setting or the editor zoom); the payload is what `editor.readTypography` now answers. Needs no capability. */
     "editor.typography.changed": { fontFamily: string; cssFontFamily: string; fontSize: number; fontWeight: string; lineHeight: number; fontLigatures: boolean; wordWrap: "on" | "off"; minimap: boolean }
   }

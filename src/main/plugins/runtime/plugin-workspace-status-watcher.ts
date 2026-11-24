@@ -107,6 +107,7 @@ export function watchPluginWorkspaceStatus(input: {
       return
     }
     if (!input.events.wantsEvent('workspace.status.changed')) {
+      lastById.clear()
       consecutiveFailures = 0
       return
     }
