@@ -65,6 +65,18 @@ export class ConnectorReach {
     }
   }
 
+  /** The poll stopped (sign-out, quit, a fence): what it knew is let go, and no cloud came back. */
+  stopped(): void {
+    const changed = this.unreachable || this.refusal !== null || this.unauthorized
+    this.unreachable = false
+    this.refusal = null
+    this.unauthorized = false
+    this.missed = false
+    if (changed) {
+      this.onChanged()
+    }
+  }
+
   reached(result: ConnectorResult<unknown>): void {
     const unreachable = !result.ok && (result.status === null || result.status >= 500)
     const refusal = result.ok ? null : (result.message ?? null)

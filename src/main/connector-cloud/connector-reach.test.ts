@@ -25,4 +25,11 @@ it('treats the poll answering after a missed outside call as the cloud back', ()
   // Its own outage recovering is a fresh step, told apart from the answer to a missed call.
   reach.reached(answered)
   expect(backs).toEqual(['answered', 'recovered'])
+
+  // The poll stopping (sign-out, quit) is not the cloud back: nothing owed starts for a stopped connector.
+  reach.missedOutsidePoll(noAnswer)
+  reach.reached(noAnswer)
+  reach.stopped()
+  reach.reached(answered)
+  expect(backs).toEqual(['answered', 'recovered'])
 })

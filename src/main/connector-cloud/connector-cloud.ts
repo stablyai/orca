@@ -378,6 +378,6 @@ export class ConnectorCloud {
     if (neededSignIn) {
       this.options.onStatusChanged?.()
     }
-    this.reach.reached({ ok: true, value: undefined })
+    this.reach.stopped()
   }
 }
