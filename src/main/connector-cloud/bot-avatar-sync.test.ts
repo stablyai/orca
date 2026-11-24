@@ -93,7 +93,7 @@ it('sends a drawn icon only for the look the bot has now, and the mascot id only
         }
       },
       cloud: () => ({
-        signedInAccount: () => account,
+        knownAccount: () => account,
         call: async <T extends z.ZodType>(
           _path: string,
           body: unknown,
@@ -449,7 +449,7 @@ it('keeps no record for a drawing another account may have taken, and keeps it t
         slackIcons: { ...icons, read: () => readBotSlackIcon(localBotHomeFilesystem, folder, bot) }
       },
       cloud: () => ({
-        signedInAccount: () => account,
+        knownAccount: () => account,
         call: async <T extends z.ZodType>(
           _path: string,
           _body: unknown,
@@ -468,7 +468,7 @@ it('keeps no record for a drawing another account may have taken, and keeps it t
   }
 })
 
-it('sends a picture again to another account that signs in, never again to the same one', async () => {
+it('sends a picture again to another account as it signs in, never again to the same one or while signed out', async () => {
   const bot = {
     id: 'bot-1',
     folderWorkspaceId: 'home-1',
@@ -478,8 +478,8 @@ it('sends a picture again to another account that signs in, never again to the s
     slack: { appId: 'A1', teamId: 'T1' },
     github: null
   }
-  let account = 'acct-1'
-  const sentAs: string[] = []
+  let account: string | null = 'acct-1'
+  const sentAs: (string | null)[] = []
   const sync = new BotAvatarSync({
     bots: {
       enabled: () => true,
@@ -495,7 +495,7 @@ it('sends a picture again to another account that signs in, never again to the s
       }
     },
     cloud: () => ({
-      signedInAccount: () => account,
+      knownAccount: () => account,
       call: async <T extends z.ZodType>(
         _path: string,
         _body: unknown,
@@ -508,11 +508,62 @@ it('sends a picture again to another account that signs in, never again to the s
   })
   sync.changed()
   await vi.waitFor(() => expect(sentAs).toEqual(['acct-1']))
-  sync.changed()
-  account = 'acct-2'
-  sync.changed()
-  await vi.waitFor(() => expect(sentAs).toEqual(['acct-1', 'acct-2']))
+  // Signed out, a bot write sends nothing again.
+  account = null
   sync.changed()
   await new Promise((resolve) => setImmediate(resolve))
+  expect(sentAs).toEqual(['acct-1'])
+  // Another account's sign-in sends it, with no bot write.
+  account = 'acct-2'
+  sync.retryOwed('signedIn')
+  await vi.waitFor(() => expect(sentAs).toEqual(['acct-1', 'acct-2']))
+  sync.changed()
+  sync.retryOwed('signedIn')
+  await new Promise((resolve) => setImmediate(resolve))
   expect(sentAs).toEqual(['acct-1', 'acct-2'])
+})
+
+it('saves a record whose save failed when a new drawing is stored, even if its upload hangs', async () => {
+  let failing = true
+  const onDisk = new Map<string, unknown>()
+  const shownRecords = new BotSlackIconShownRecords({
+    read: async () => null,
+    write: async (botId, shown) => {
+      if (failing) {
+        throw new Error('disk full')
+      }
+      onDisk.set(botId, shown)
+    },
+    exists: () => true
+  })
+  const drawing = { account: 'a1b2', mascot: 'A1' }
+  shownRecords.mark('bot-1', drawing)
+  await new Promise((resolve) => setImmediate(resolve))
+  shownRecords.answered()
+  await new Promise((resolve) => setImmediate(resolve))
+  failing = false
+  const bot = {
+    id: 'bot-1',
+    folderWorkspaceId: 'home-1',
+    avatar: 'mascot:A1',
+    avatarColor: null,
+    avatarOutfit: null,
+    slack: { appId: 'A1', teamId: 'T1' },
+    github: null
+  }
+  const sync = new BotAvatarSync({
+    bots: {
+      enabled: () => true,
+      list: () => [bot],
+      readAvatarImage: async () => null,
+      slackIcons: { shownRecords, read: async () => null }
+    },
+    cloud: () => ({
+      knownAccount: () => 'acct-1',
+      // The new drawing's upload never answers.
+      call: () => new Promise<never>(() => {})
+    })
+  })
+  sync.iconStored('bot-1')
+  await vi.waitFor(() => expect(onDisk.get('bot-1')).toEqual(drawing))
 })

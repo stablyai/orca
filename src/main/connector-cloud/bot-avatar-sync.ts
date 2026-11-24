@@ -43,19 +43,14 @@ function lookOf(bot: SyncedBot): string | null {
   return look
 }
 
-// What the cloud took for a bot, and under which account (its hash).
-function sentKey(account: string | null, picture: string): string {
-  return `${account ?? ''}|${picture}`
-}
-
 // What the cloud is sent for a bot: its picture and, for a mascot, its look.
 function pictureKey(bot: SyncedBot): string {
   return `${bot.avatar ?? ''}|${lookOf(bot) ?? ''}`
 }
 
 export class BotAvatarSync {
-  // Per bot, the picture key the cloud last took.
-  private readonly sent = new Map<string, string>()
+  // Per bot, the picture key the cloud last took, and the account (its hash) it took it as.
+  private readonly sent = new Map<string, { account: string | null; picture: string }>()
   // One send per bot at a time, so an older picture never lands after a newer one; the picture in flight.
   private readonly sending = new Map<string, string>()
   // Per bot, the avatar the cloud refused as an unknown bot, and until when it waits.
@@ -87,7 +82,7 @@ export class BotAvatarSync {
         slackIcons: Pick<BotSlackIcons, 'read' | 'shownRecords'>
       }
       cloud: () =>
-        | (Pick<ConnectorCloud, 'call'> & Partial<Pick<ConnectorCloud, 'signedInAccount'>>)
+        | (Pick<ConnectorCloud, 'call'> & Partial<Pick<ConnectorCloud, 'knownAccount'>>)
         | null
     }
   ) {
@@ -120,11 +115,17 @@ export class BotAvatarSync {
         this.resend(botId)
       }
     }
+    // Another account may have signed in: its connector gets each picture it hasn't taken.
+    if (why === 'signedIn') {
+      this.pass()
+    }
   }
 
   /** A window drew the bot's icon for its look: what was sent without it goes again. */
   iconStored(botId: string): void {
     this.icons.set(botId, (this.icons.get(botId) ?? 0) + 1)
+    // A real step: a record whose save failed goes again too.
+    this.shown.stepped()
     this.owed.delete(botId)
     this.sent.delete(botId)
     // One in flight read no icon or an older one: it is sent again once it lands.
@@ -159,7 +160,8 @@ export class BotAvatarSync {
     let waiting = false
     const present = new Set<string>()
     // A picture taken under another account is sent again: that account's connector may not have it.
-    const account = BotSlackIconShownRecords.accountKey(this.deps.cloud()?.signedInAccount?.())
+    // Signed out, none is: nothing would be taken, and the next sign-in passes again.
+    const account = BotSlackIconShownRecords.accountKey(this.deps.cloud()?.knownAccount?.())
     for (const bot of this.deps.bots.list()) {
       present.add(bot.id)
       // A bot that no longer needs its drawn icon (unlinked, or another kind of picture) lets its bytes go;
@@ -179,7 +181,8 @@ export class BotAvatarSync {
         }
         continue
       }
-      if (this.sent.get(bot.id) === sentKey(account, pictureKey(bot))) {
+      const taken = this.sent.get(bot.id)
+      if (taken?.picture === pictureKey(bot) && (account === null || taken.account === account)) {
         this.queued.delete(bot.id)
         continue
       }
@@ -268,7 +271,7 @@ export class BotAvatarSync {
       // The drawing the cloud last took for this bot, kept across restarts by the icon store.
       const shown = parsed.kind === 'mascot' && !icon ? await this.shown.get(bot.id) : null
       // Read after the last wait, so the hold-back and the record go by the account the send goes as.
-      const account = BotSlackIconShownRecords.accountKey(cloud.signedInAccount?.())
+      const account = BotSlackIconShownRecords.accountKey(cloud.knownAccount?.())
       sentAs = account
       // The window draws a new look right after the write: until it does, Slack keeps the last drawing.
       left =
@@ -282,7 +285,7 @@ export class BotAvatarSync {
       sent = result?.ok === true
       // Marked unless another account signed in during the send: which one took it is unknown then. A
       // sign-out or quit's fence (no account now) leaves the account the send went as.
-      const now = BotSlackIconShownRecords.accountKey(cloud.signedInAccount?.())
+      const now = BotSlackIconShownRecords.accountKey(cloud.knownAccount?.())
       if (sent && !left && (now === null || now === account)) {
         this.shown.mark(
           bot.id,
@@ -307,7 +310,7 @@ export class BotAvatarSync {
       this.resend(bot.id)
     } else if (sent) {
       this.owed.delete(bot.id)
-      this.sent.set(bot.id, sentKey(sentAs, avatar))
+      this.sent.set(bot.id, { account: sentAs, picture: avatar })
       // Kept only for a retry: once taken, its bytes are let go.
       this.prepared.delete(bot.id)
       // The picture may have changed while this one was on its way: only then is the roster read again.

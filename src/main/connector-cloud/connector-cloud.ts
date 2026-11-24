@@ -75,6 +75,9 @@ export class ConnectorCloud {
     return this.activeAccount()
   }
 
+  // The same account as the last sign-in hook saw it (null once signing out), from memory: no profile read.
+  readonly knownAccount = (): string | null => this.lastAccount
+
   private noteAccount(): void {
     const account = this.signingOut ? null : this.options.account()
     if (account !== this.lastAccount) {
@@ -87,9 +90,7 @@ export class ConnectorCloud {
   }
 
   /** A sign-in completed (not a refresh), even as the same account: bot pictures owed may go again. */
-  signedIn(): void {
-    this.reach.back('signedIn')
-  }
+  readonly signedIn = (): void => this.reach.back('signedIn')
 
   /** The poll answered (after its own outage or not), or a sign-in: a bot picture owed may go again. */
   readonly onBack: ConnectorReach['onBack'] = (listener) => this.reach.onBack(listener)

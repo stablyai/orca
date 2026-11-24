@@ -35,8 +35,7 @@ const pending = new Map<string, Map<string, Attempt>>()
 const running = new Set<string>()
 // Per bot, the look its last try failed at: not tried again until a real step clears it.
 // Kept by host, so one host's notice looks only at its own.
-// `off`: the host said the look wasn't current (its own bots off), which only its settings change mends.
-type Failure = { look: string; bot: Bot; off: boolean }
+type Failure = { look: string; bot: Bot }
 const failures = new Map<ExecutionHostId, Map<string, Failure>>()
 
 function failureOf(bot: Bot): Failure | undefined {
@@ -69,7 +68,7 @@ function recordSeen(bot: Bot): string {
 }
 
 // Ends an attempt that can't go on; a `failed` one waits for a real step.
-function forget(bot: Bot, attempt: number, failed = false, off = false): void {
+function forget(bot: Bot, attempt: number, failed = false): void {
   const key = botRefKey(bot)
   const entry = handled.get(key)
   if (entry?.attempt !== attempt) {
@@ -78,7 +77,7 @@ function forget(bot: Bot, attempt: number, failed = false, off = false): void {
   handled.delete(key)
   if (failed) {
     const kept = failures.get(bot.hostId) ?? new Map<string, Failure>()
-    kept.set(key, { look: entry.look, bot, off })
+    kept.set(key, { look: entry.look, bot })
     failures.set(bot.hostId, kept)
   }
 }
@@ -122,7 +121,7 @@ async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
     if (!want?.current || parsed?.kind !== 'mascot') {
       // The host hasn't saved this look yet (its saved record asks again), or its own bots are off (this
       // window can't see that switch): either way the next real step, such as focusing the window, asks.
-      forget(bot, attempt, want?.current === false, true)
+      forget(bot, attempt, want?.current === false)
       return
     }
     if (!want.wanted) {
@@ -140,9 +139,9 @@ async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
       clearFailure(bot)
       return
     }
-    // No drawing waits for a real step here. A drawing the host didn't take (its bots turned off, or its
-    // look changed meanwhile) waits for the host's settings to change, or a newer record.
-    forget(bot, attempt, true, Boolean(png))
+    // No drawing, or one the host didn't take (its bots turned off, or its look changed meanwhile): it
+    // waits for a real step here, such as the host's settings changing or a newer record.
+    forget(bot, attempt, true)
   } catch (error) {
     forget(bot, attempt, true)
     console.warn('[bots] could not draw the Slack icon', error)
@@ -260,11 +259,9 @@ function hostCameBack(hostId: ExecutionHostId): void {
 }
 
 // Each failed icon is tried again, from its record as it failed (a newer record already cleared it).
-function retry(kept: ReadonlyMap<string, Failure>, onlyOff = false): void {
-  for (const { bot, off } of kept.values()) {
-    if (off || !onlyOff) {
-      askAgain(bot)
-    }
+function retry(kept: ReadonlyMap<string, Failure>): void {
+  for (const { bot } of kept.values()) {
+    askAgain(bot)
   }
 }
 
@@ -275,7 +272,7 @@ function retryAll(): void {
   }
 }
 
-// A host's settings changing (its own bots turned on) retries that host's icons it called not current.
+// A host's settings changing (its own bots turned on, say) is a real step for that host's failed icons.
 // Read straight off the notice, so a host with none, or a notice of another kind, costs one lookup.
 function hostSettingsChanged(event: Event): void {
   const detail: unknown = event instanceof CustomEvent ? event.detail : undefined
@@ -288,7 +285,7 @@ function hostSettingsChanged(event: Event): void {
     'scope' in detail && detail.scope && typeof detail.scope === 'object' ? detail.scope : null
   const kinds = scope && 'kinds' in scope ? scope.kinds : undefined
   if (kept && (!Array.isArray(kinds) || kinds.includes('settings'))) {
-    retry(kept, true)
+    retry(kept)
   }
 }
 
