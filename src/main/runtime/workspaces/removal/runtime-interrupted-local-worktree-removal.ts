@@ -34,6 +34,7 @@ import {
   assertLeftoverIsRecordedCheckout,
   assertUnregisteredLeftoverRemovable,
   isLeftoverStillRemovable,
+  removeEmptyLeftoverDirectory,
   isRecordedCheckout,
   differentCheckoutAtPathError
 } from '../../../workspaces/removal/worktree-removal-leftover'
@@ -216,10 +217,11 @@ async function finishInterruptedLocalWorktreeRemoval(
     !native &&
     !deletable &&
     (await assertUnregisteredLeftoverRemovable(repo.path, record.worktreePath, worktrees))
-  if (leftover && !record.force) {
+  // An empty folder has nothing for force to override; a marked orphan still needs it.
+  if (leftover === 'orphan' && !record.force) {
     throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
   }
-  if (leftover) {
+  if (leftover === 'orphan') {
     await assertLeftoverIsRecordedCheckout(record, localOptions)
   }
   if (native) {
@@ -273,15 +275,21 @@ async function finishInterruptedLocalWorktreeRemoval(
       )
     } else {
       // Teardown awaited: re-read Git so a checkout registered at or inside the folder since survives.
-      if (
+      const still =
         leftover &&
         (await isLeftoverStillRemovable(repo.path, record, localOptions, args.stopSignal))
-      ) {
+      // A folder that changed kind since the first check (a marker or files appeared) is not the one checked.
+      if (still && still !== leftover) {
+        throw differentCheckoutAtPathError(record.worktreePath)
+      }
+      if (still === 'orphan') {
         await removeLocalWorktreePath(record.worktreePath, localOptions, args.stopSignal, {
           markerLast: true,
           requireMarker: true,
           ...markerOpts
         })
+      } else if (still === 'empty') {
+        await removeEmptyLeftoverDirectory(record.worktreePath)
       }
       result = await finishUnregisteredWorktreeRemoval(
         repo.path,
