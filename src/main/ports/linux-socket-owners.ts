@@ -1,11 +1,20 @@
 import { readdir, readlink } from 'node:fs/promises'
 import { runPortScanCommand } from './port-scan-command-client'
 
-/** Turns `ls -ln` directory listings into `<pid> socket:[<inode>]` lines. */
-export const SOCKET_HOLDER_AWK =
-  "awk '/^\\/proc\\/[0-9]+\\/fd:$/ { pid = substr($0, 7, length($0) - 10) } /socket:\\[[0-9]+\\]$/ { print pid, $NF }'"
+/**
+ * Turns `ls -ln` directory listings into `<pid> socket:[<inode>]` lines for the inodes in $1 (",1,2,"), then
+ * `seen <n>`: every well-formed socket line, so a format it can't read is told apart from no wanted holders.
+ */
+export const SOCKET_HOLDER_AWK = `awk -v want="$1" '
+/^\\/proc\\/[0-9]+\\/fd:$/ { pid = substr($0, 7, length($0) - 10); next }
+NF >= 2 && $(NF - 1) == "->" && $NF ~ /^socket:\\[[0-9]+\\]$/ && pid != "" {
+  seen++
+  if (index(want, "," substr($NF, 9, length($NF) - 9) ",")) print pid, $NF
+}
+END { print "seen", seen + 0 }'`
 // One C walk in the port-scan worker replaces ~one readlink promise per fd on Electron main; ls gets directory
-// arguments (one per process, not per fd) so a busy machine cannot exceed the exec argument limit.
+// arguments (one per process, not per fd) so a busy machine cannot exceed the exec argument limit, and awk
+// prints only the wanted inodes so output grows with listeners, not with every socket on the system.
 const SOCKET_LISTING_SCRIPT = `ls -ln /proc/[0-9]*/fd 2>/dev/null | ${SOCKET_HOLDER_AWK}`
 
 /** Map listening socket inodes to the pid a full /proc walk keeps: the last holder in /proc's listing order. */
@@ -19,27 +28,38 @@ export async function resolveLinuxSocketOwners(inodes: Set<number>): Promise<Map
   } catch {
     return new Map()
   }
-  const listing = await runPortScanCommand('/bin/sh', ['-c', SOCKET_LISTING_SCRIPT]).catch(
-    () => null
-  )
-  const holders = listing ? parseSocketHolderListing(listing.stdout) : []
-  // Every system has some socket holder, so an empty parse means an unrecognized ls layout.
-  if (holders.length === 0) {
+  const want = `,${[...inodes].join(',')},`
+  const listing = await runPortScanCommand('/bin/sh', [
+    '-c',
+    SOCKET_LISTING_SCRIPT,
+    'orca-port-scan',
+    want
+  ]).catch(() => null)
+  const parsed = listing ? parseSocketHolderListing(listing.stdout) : null
+  if (!parsed || parsed.seen === 0) {
     return walkProcSocketOwners(pids, inodes)
   }
-  return pickLastHolders(holders, pids, inodes)
+  return pickLastHolders(parsed.holders, pids, inodes)
 }
 
-/** Lines of `<pid> socket:[<inode>]` from the listing script. */
-export function parseSocketHolderListing(output: string): { pid: number; inode: number }[] {
+/** Holder lines and the `seen` total from the listing script; null when the total line is missing (cut short). */
+export function parseSocketHolderListing(
+  output: string
+): { holders: { pid: number; inode: number }[]; seen: number } | null {
   const holders: { pid: number; inode: number }[] = []
+  let seen: number | null = null
   for (const line of output.split('\n')) {
-    const match = /^(\d+) socket:\[(\d+)\]$/.exec(line.trim())
-    if (match) {
-      holders.push({ pid: Number(match[1]), inode: Number(match[2]) })
+    const holder = /^(\d+) socket:\[(\d+)\]$/.exec(line)
+    if (holder) {
+      holders.push({ pid: Number(holder[1]), inode: Number(holder[2]) })
+      continue
+    }
+    const total = /^seen (\d+)$/.exec(line)
+    if (total) {
+      seen = Number(total[1])
     }
   }
-  return holders
+  return seen === null ? null : { holders, seen }
 }
 
 /** Keep, per inode, the holder a walk in `pidOrder` would visit last; pids that appeared after the listing go last. */
