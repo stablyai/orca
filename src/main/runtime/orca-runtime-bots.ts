@@ -112,6 +112,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
         .forget(botId)
         .catch(() => undefined)
       this.lookAround.forget(botId)
+      this.botRunChatCloser?.forget(botId)
       this.botWork.forgetBot(botId)
       this.bots.memory.removed(botId)
     }
