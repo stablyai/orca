@@ -209,38 +209,42 @@ await next()`)
     expect(arrival.error).toBeUndefined()
   }, 60_000)
 
-  it('corrects its place once a dead ticket beyond the run ahead is removed', async () => {
-    // The middle waiter polls inside the stale window but slower than our recount, so the dead
-    // ticket stays visible to our count for at least one recount before the middle removes it.
-    const staleMs = 6000
+  it('corrects its place once a ticket beyond the run ahead dies and is removed', async () => {
+    // Long enough that no ticket here goes silent during the test, even on a loaded host.
+    const staleMs = 15_000
     const holder = await run({ staleMs })
-    // Leave a gap in the ids so a dead ticket can be placed ahead of a waiter that already polled.
+    // Leave a gap in the ids so another ticket can be placed ahead of a waiter that already polled.
     const gap = insertTicket({ pid: process.pid })
     openQueue().prepare('DELETE FROM tickets_v2 WHERE id = ?').run(gap)
-    const middle = run({ staleMs, pollMs: 4000 })
+    const middle = run({ staleMs, pollMs: 50 })
     await until(() => queueRows().length === 2, 'middle ticket')
+    // A live process owns the ticket ahead of the middle waiter, so both waiters count it.
+    const owner = spawnOwned(`await next()`)
+    insertTicket({ id: gap, pid: owner.pid })
     const messages = []
     const waiter = observe(run({ staleMs, log: (message) => messages.push(message) }))
     await until(() => messages.length > 0, 'first wait message')
-    // Our waiter only reads the middle waiter; the dead ticket lies beyond it.
-    insertTicket({ id: gap, pid: await exitedPid() })
-    await until(
-      () => messages.some((message) => message.startsWith(`${WAITING} Position 3 of 3.`)),
-      'count including the dead ticket',
-      10_000
+    expect(messages[0]).toMatch(
+      new RegExp(`^${WAITING} Position 3 of 3\\. Running now: pid ${process.pid} in `)
     )
-    // The middle waiter removes the dead ticket on its next poll; the recount follows.
+    // Our waiter only reads the middle waiter. When the owner dies, the middle waiter removes its
+    // ticket; our count must follow without any change in the run ahead of us or the holder.
+    await owner.kill()
+    await until(() => !queueRows().some((row) => row.id === gap), 'dead ticket removed')
     await until(
-      () => messages.at(-1).startsWith(`${WAITING} Position 2 of 2.`),
+      () =>
+        messages
+          .at(-1)
+          .startsWith(`${WAITING} Position 2 of 2. Running now: pid ${process.pid} in `),
       'corrected position',
-      10_000
+      staleMs
     )
     await holder()
     await (
       await within(middle, 'middle waiter')
     )()
     await within(waiter.promise, 'waiter')
-  }, 30_000)
+  }, 60_000)
 
   it('closes the slot connection and keeps the original error when the queue cannot open', async () => {
     await mkdir(queueFileFor(file), { recursive: true })
