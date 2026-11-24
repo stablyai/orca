@@ -72,6 +72,23 @@ export function botItemQuestionLine(text: string): string {
   return ''
 }
 
+/** Every way a question's first line has been written in "Question → answer" lines: this build's, then
+ *  the one builds before #47963 wrote (code-span contents lost their marks), which old answers, drafts
+ *  and older phones and servers still hold. */
+export function botItemQuestionLeads(text: string): string[] {
+  const first = text.split('\n').find((line) => line.trim().length > 0) ?? ''
+  const legacy = first
+    .trim()
+    .replace(/^(#{1,6}|>|[-*+]|\d+[.)])\s+/, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/(\*\*|__)(.+?)\1/g, '$2')
+    .replace(/(^|[^\w*])[*_]([^*_\s][^*_]*?)[*_](?=[^\w*]|$)/g, '$1$2')
+    .replace(/`([^`]*)`/g, '$1')
+    .trim()
+  const line = botItemQuestionLine(text)
+  return legacy && legacy !== line ? [line, legacy] : [line]
+}
+
 /** The ask a stored question event carries (written by v1.4.265 hosts), or null. */
 export function botItemAskOf(data: Record<string, unknown>): BotItemAsk | null {
   const parsed = BotItemAskSchema.safeParse(data.ask)
@@ -132,6 +149,18 @@ export function botItemQuickReplyText(
     : reply.label
 }
 
+/** Whether `text` is what a quick reply posts, as this build or an older one wrote it. */
+export function botItemIsQuickReplyText(
+  shape: BotItemQuestionShape,
+  decision: BotItemDecision,
+  reply: BotItemQuickReply,
+  text: string
+): boolean {
+  return shape.decisions.length > 1
+    ? botItemQuestionLeads(decision.question).some((lead) => text === `${lead} → ${reply.label}`)
+    : text === reply.label
+}
+
 /** The quick replies an owner's reply picked for each question line, none where they wrote their own
  *  words: read from what a quick reply posts, or from the picks a v1.4.265 host recorded. */
 export function botItemPickedReplies(
@@ -149,7 +178,7 @@ export function botItemPickedReplies(
       return decision.replies.filter((_, at) => picks.includes(at))
     }
     const quick = decision.replies.filter((option) =>
-      lines.includes(botItemQuickReplyText(shape, decision, option))
+      lines.some((line) => botItemIsQuickReplyText(shape, decision, option, line))
     )
     return quick.length > 0 || !decision.multi ? quick : multiPicks(shape, decision, lines)
   })
@@ -161,9 +190,11 @@ function multiPicks(
   decision: BotItemDecision,
   lines: readonly string[]
 ): BotItemQuickReply[] {
-  const head = `${botItemQuestionLine(decision.question)} →`
-  const line = shape.decisions.length > 1 ? lines.find((at) => at.startsWith(head)) : lines[0]
-  const words = (line?.startsWith(head) ? line.slice(head.length).trim() : line) ?? ''
+  const heads = botItemQuestionLeads(decision.question).map((lead) => `${lead} →`)
+  const headOf = (at: string): string | undefined => heads.find((head) => at.startsWith(head))
+  const line = shape.decisions.length > 1 ? lines.find((at) => headOf(at)) : lines[0]
+  const head = line === undefined ? undefined : headOf(line)
+  const words = (head ? line?.slice(head.length).trim() : line) ?? ''
   const picks = words ? labelRun(words, 0, decision.replies, new Set()) : null
   return picks ? decision.replies.filter((option) => picks.includes(option)) : []
 }

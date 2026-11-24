@@ -7,9 +7,10 @@
 // answer sent with the rest skipped ("send anyway") closes its ask's.
 import { botItemNamedAnswers } from './bot-item-answer-lines'
 import {
+  botItemIsQuickReplyText,
+  botItemQuestionLeads,
   botItemQuestionLine,
   botItemQuestionShape,
-  botItemQuickReplyText,
   type BotItemDecision,
   type BotItemQuestionShape
 } from './bot-item-ask'
@@ -102,7 +103,7 @@ function answeredLines(
   const picked = shape.decisions.findIndex(
     (decision, index) =>
       isOpen(index) &&
-      decision.replies.some((option) => botItemQuickReplyText(shape, decision, option) === text)
+      decision.replies.some((option) => botItemIsQuickReplyText(shape, decision, option, text))
   )
   if (picked !== -1) {
     return { lines: [picked], byOrder: false }
@@ -160,7 +161,9 @@ export function botItemQuestionPairing(
         }
         questions.set(event.id, entry)
         for (const decision of shape.decisions) {
-          asked.add(botItemQuestionLine(decision.question))
+          for (const lead of botItemQuestionLeads(decision.question)) {
+            asked.add(lead)
+          }
         }
         if (open?.entry.answers.includes(null)) {
           // A new ask replaces the earlier one's open lines; its answers so far stand.

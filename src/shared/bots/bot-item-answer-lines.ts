@@ -5,6 +5,7 @@
 // to it bumps WAITING_ASK_RULES (src/main/bots/bot-item-waiting-ask-keep.ts).
 import {
   botItemPickedReplies,
+  botItemQuestionLeads,
   botItemQuestionLine,
   botItemQuickReplyText,
   type BotItemQuestionShape
@@ -17,23 +18,28 @@ import { stripSentImagePromptMarkers } from '../native-chat/transcript/images/na
  *  questions whose first lines read the same take their lines in the ask's order, a bare "Question →"
  *  keeping an open one's place. */
 export function botItemNamedAnswers(shape: BotItemQuestionShape, text: string): (string | null)[] {
-  const heads = shape.decisions.map((decision) => `${botItemQuestionLine(decision.question)} →`)
+  // Each question's leads as this build and older ones wrote them; a line takes the first that it starts with.
+  const leads = shape.decisions.map((decision) =>
+    botItemQuestionLeads(decision.question).map((lead) => `${lead} →`)
+  )
   const answers: (string | null)[] = shape.decisions.map(() => null)
   const taken = shape.decisions.map(() => false)
   for (const line of text.split('\n').map((l) => l.trim())) {
+    const heads = leads.map((options) => options.find((head) => line.startsWith(head)))
     let best = -1
     heads.forEach((head, index) => {
-      if (!line.startsWith(head)) {
+      if (head === undefined) {
         return
       }
-      const longer = best === -1 || head.length > heads[best].length
+      const longer = best === -1 || head.length > (heads[best]?.length ?? 0)
       const free = head.length === heads[best]?.length && taken[best] && !taken[index]
       if (longer || free) {
         best = index
       }
     })
-    const words = best === -1 ? '' : line.slice(heads[best].length).trim()
-    if (best !== -1 && !taken[best] && (words || line === heads[best])) {
+    const head = heads[best]
+    const words = head === undefined ? '' : line.slice(head.length).trim()
+    if (head !== undefined && !taken[best] && (words || line === head)) {
       taken[best] = true
       answers[best] = words || null
     }
