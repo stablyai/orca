@@ -172,7 +172,7 @@ export class ProviderRelayHost {
     fromSeq: unknown
   ): Promise<ProviderRelayAttachResult> {
     // An ended relay's expiry keeps running through attaches: it lives at most a day after it ends.
-    const relay = this.require(relayId)
+    const relay = this.requireRelay(relayId)
     const result = await relay.attach(clientId, stream, typeof fromSeq === 'number' ? fromSeq : 0)
     // An ended relay with nothing left to ack is done once a client has seen its outcome.
     this.removeIfFinished(relay)
@@ -194,7 +194,7 @@ export class ProviderRelayHost {
 
   /** A closed chat wants nothing more from its agent, so the ended relay goes with its spool. */
   async close(relayId: unknown, grace: unknown): Promise<void> {
-    const relay = this.require(relayId)
+    const relay = this.requireRelay(relayId)
     await relay.close(grace === 'brief' ? 'brief' : undefined)
     if (!relay.live) {
       this.remove(relay)
@@ -202,7 +202,7 @@ export class ProviderRelayHost {
   }
 
   async detach(clientId: string, relayId: unknown): Promise<void> {
-    await this.require(relayId).detach(clientId)
+    await this.requireRelay(relayId).detach(clientId)
   }
 
   list(): ProviderRelayListResult {
@@ -234,7 +234,7 @@ export class ProviderRelayHost {
     )
   }
 
-  private require(relayId: unknown): ProviderRelay {
+  private requireRelay(relayId: unknown): ProviderRelay {
     const relay = typeof relayId === 'string' ? this.relays.get(relayId) : undefined
     if (!relay) {
       throw new Error('Relay not found')
@@ -243,7 +243,7 @@ export class ProviderRelayHost {
   }
 
   private requireAttached(clientId: string, relayId: unknown): ProviderRelay {
-    const relay = this.require(relayId)
+    const relay = this.requireRelay(relayId)
     if (relay.attachedClientId !== clientId) {
       throw new Error('Relay not attached to this client')
     }
