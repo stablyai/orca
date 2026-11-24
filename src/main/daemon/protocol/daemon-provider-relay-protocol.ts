@@ -118,6 +118,11 @@ export type ProviderRelayAttachResult = {
   initializeResultSent: boolean
   stderrTail: string
   exit: ProviderRelayExit | null
+  /**
+   * Work the daemon counted open while no app was attached, per marker group. The new app's own
+   * view starts empty, so it keeps these until it sees them end, and hands them back at its detach.
+   */
+  openWork?: Record<string, string[][]>
 }
 
 export type ProviderRelayInfo = {

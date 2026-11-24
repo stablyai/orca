@@ -134,6 +134,8 @@ export type ProviderRelayWorkChange =
   | { group: string; effect: 'roster'; keys: string[] }
 
 const KEY_SEPARATOR = '\u0000'
+/** No marker names it, so nothing ends it: a chat that carries it never idle-stops. */
+const UNACCOUNTED_GROUP = 'unaccounted-work'
 
 export function providerRelayWorkKey(parts: readonly string[]): string {
   return parts.join(KEY_SEPARATOR)
@@ -276,6 +278,18 @@ export class ProviderRelayOpenWork {
 
   get busy(): boolean {
     return this.overflowed || [...this.groups.values()].some((tasks) => tasks.size > 0)
+  }
+
+  /** The open tasks as key parts per group; work it couldn't account for is one task of its own. */
+  keys(): Record<string, string[][]> {
+    const open: Record<string, string[][]> = {}
+    for (const [group, tasks] of this.groups) {
+      open[group] = [...tasks].map((key) => key.split(KEY_SEPARATOR))
+    }
+    if (this.overflowed) {
+      open[UNACCOUNTED_GROUP] = [['unaccounted']]
+    }
+    return open
   }
 
   /** Work the daemon can't account for; the agent is never idle-stopped after it. */

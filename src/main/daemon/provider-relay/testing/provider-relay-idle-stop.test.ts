@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProviderRelayIdleStop } from '../provider-relay-idle-stop'
 import { readProviderRelayDetachPolicy } from '../provider-relay-work-markers'
 import { ProviderRelayPendingRequests } from '../provider-relay-pending-requests'
+import { ProviderRelayCarriedWork } from '../../../provider-relay/provider-relay-carried-work'
 import { CODEX_RELAY_WORK_MARKERS } from '../../../codex/app-server/codex-app-server-relay'
 
 const IDLE_MS = 30 * 60_000
@@ -115,5 +116,23 @@ describe('provider relay idle stop', () => {
     expect(pending.working.size).toBe(1)
     agent('{"jsonrpc":"2.0","id":7,"result":{"stopReason":"end_turn"}}', 3)
     expect(pending.working.size).toBe(0)
+  })
+
+  it('still counts a background command from before the first restart at the second quit', async () => {
+    const r = rig()
+    r.detach({ turn: [], command: [[T, 'cmd-1']] })
+    // The next launch attaches: its session never saw cmd-1 start, so the daemon hands it over.
+    r.state.attached = true
+    r.idle.disarm()
+    const carried = new ProviderRelayCarriedWork(CODEX_RELAY_WORK_MARKERS.markers)
+    carried.take(r.idle.carriedWork().openWork)
+    const second = carried.merge({ turn: [], command: [] })
+    r.detach(second ?? undefined)
+    await vi.advanceTimersByTimeAsync(3 * IDLE_MS)
+    expect(r.stop).not.toHaveBeenCalled()
+
+    // Seen ending while attached, it is dropped, and the chat can idle-stop again.
+    carried.observe(command('item/completed', 'completed'))
+    expect(carried.merge({ turn: [], command: [] })).toEqual({ turn: [], command: [] })
   })
 })

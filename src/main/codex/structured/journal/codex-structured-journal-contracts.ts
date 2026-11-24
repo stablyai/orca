@@ -67,6 +67,8 @@ export type CodexJournalTranslator = {
   cancelPrompt: (journalItemId: string) => CodexJournalTranslationAdmission
   resolvePrompt: (journalItemId: string) => void
   flush: () => void
+  /** A kept agent's running turn: its messages, in order, keep the ordinals the live run gave them. */
+  seedTurnOrdinals: (threadId: string, turnId: string, messageItemIds: readonly string[]) => void
   dispose: () => void
 }
 

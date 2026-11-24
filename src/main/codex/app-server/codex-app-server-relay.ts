@@ -2,6 +2,7 @@ import {
   registerReattachableProviderRelayAgent,
   type ProviderRelayWorkMarkers
 } from '../../provider-relay/app-provider-relays'
+import { createCodexRelayAckFloor } from './codex-relay-ack-floor'
 import { leadingJsonEnvelope } from '../../../shared/json-stream/json-rpc-record-prefix'
 
 const ENVELOPE_SCAN_CHARS = 4096
@@ -31,6 +32,7 @@ const RUNNING = { path: ['params', 'item', 'status'], is: 'inProgress' }
  */
 export const CODEX_RELAY_WORK_MARKERS: ProviderRelayWorkMarkers = {
   agent: CODEX_RELAY_AGENT,
+  ackFloor: createCodexRelayAckFloor,
   markers: [
     { group: 'turn', name: 'turn/started', effect: 'start', key: [THREAD] },
     { group: 'turn', name: 'turn/completed', effect: 'end', key: [THREAD] },

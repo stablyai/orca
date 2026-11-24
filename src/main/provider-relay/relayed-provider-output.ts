@@ -4,7 +4,18 @@ import type { ProviderRelayDataEvent } from '../daemon/protocol/daemon-provider-
 /** Acks batch this long after output; the daemon asks sooner (relayAckWanted) when it holds a lot. */
 const ACK_DELAY_MS = 1_000
 
+/**
+ * The provider's view of its open streamed items: it sees every agent line with its seq before the
+ * line is handed on, and names the seq of the earliest item still open. Acks stay below it, so a
+ * reattach replays that item whole onto its own row (rows are keyed by the provider's own ids).
+ */
+export type ProviderRelayAckFloor = {
+  observe: (seq: number, line: string) => void
+  floor: () => number | null
+}
+
 type OutputOptions = {
+  ackFloor?: ProviderRelayAckFloor
   stdout: Readable
   /** Holds output until `release()`, except the lines this lets through (answers to new requests). */
   passWhileHeld?: (line: string) => boolean
@@ -70,6 +81,7 @@ export class RelayedProviderOutput {
     if (seq <= this.deliveredSeq) {
       return
     }
+    this.options.ackFloor?.observe(seq, line)
     this.deliver(seq, this.deliveredPending.has(seq) ? null : line)
   }
 
@@ -141,7 +153,9 @@ export class RelayedProviderOutput {
 
   private ack(force = false): Promise<void> {
     this.acking = this.acking.then(async () => {
-      const target = this.pushedSeq
+      // The daemon's ask (its cap) releases the floor; the forced save keeps the text.
+      const floor = force ? null : (this.options.ackFloor?.floor() ?? null)
+      const target = floor === null ? this.pushedSeq : Math.min(this.pushedSeq, floor - 1)
       if (target <= this.ackedSeq || this.stopped) {
         return
       }

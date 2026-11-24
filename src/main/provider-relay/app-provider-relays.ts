@@ -20,9 +20,11 @@ import {
 } from './provider-relay-launch-inventory'
 import {
   KeptProviderRelayEndedError,
-  KeptProviderRelayUnreachableError
-} from './provider-relay-kept-errors'
+  KeptProviderRelayUnreachableError,
+  providerRelayRebinding
+} from './provider-relay-kept-rebind'
 export { KeptProviderRelayEndedError, KeptProviderRelayUnreachableError }
+export { withProviderRelayRebind } from './provider-relay-kept-rebind'
 import type { ManagedProviderProcess } from '../provider-process/managed-provider-process'
 import {
   resolveProviderChildEnv,
@@ -33,6 +35,8 @@ import { resolveProviderExecPath } from '../provider-process/provider-exec-path'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { providerRelayChannel, type ProviderRelayChannel } from './provider-relay-channel'
 import { RelayedProviderChild } from './relayed-provider-child'
+import { ProviderRelayCarriedWork } from './provider-relay-carried-work'
+import type { ProviderRelayAckFloor } from './relayed-provider-output'
 import { relayedManagedProcess } from './relayed-managed-process'
 
 /** Desktop composition installs this on macOS and Linux; anywhere else chats launch as before. */
@@ -54,6 +58,8 @@ export type ProviderRelayWorkMarkers = {
   /** The agent integration, recorded with each relay; register it as reattachable. */
   agent: string
   markers: readonly ProviderRelayWorkMarker[]
+  /** A fresh tracker per attach, so acks never pass the start of a streamed item still open. */
+  ackFloor?: () => ProviderRelayAckFloor
   requests?: readonly string[]
 }
 
@@ -82,6 +88,7 @@ let route: ProviderRelayRoute | null = null
 /** Every relay this app is attached to, by chat; quit detaches these instead of closing them. */
 const attached = new Map<string, RelayedProviderChild>()
 const markersFor = new WeakMap<RelayedProviderChild, ProviderRelayWorkMarkers>()
+const carriedFor = new WeakMap<RelayedProviderChild, ProviderRelayCarriedWork>()
 /** Attached children that kept running from before this app started. */
 const reattachedChildren = new WeakSet<RelayedProviderChild>()
 let quitting = false
@@ -112,18 +119,6 @@ function policyFor(
 export function listProviderRelaysAtLaunch(): Promise<void> {
   const installed = route
   return installed ? listKeptProviderRelays(() => installed.all()) : Promise.resolve()
-}
-
-/** Chats being reattached at launch: a proven-gone agent ends the rebind instead of starting anew. */
-const rebinding = new Set<string>()
-
-export async function withProviderRelayRebind<T>(chatKey: string, run: () => Promise<T>) {
-  rebinding.add(chatKey)
-  try {
-    return await run()
-  } finally {
-    rebinding.delete(chatKey)
-  }
 }
 
 async function connected(client: DaemonClient | null): Promise<DaemonClient | null> {
@@ -201,15 +196,19 @@ function relayedChild(
   launch: ProviderRelayLaunch,
   passWhileHeld?: (line: string) => boolean
 ): RelayedProviderChild {
-  return new RelayedProviderChild({
+  const carried = new ProviderRelayCarriedWork(launch.markers.markers)
+  const child = new RelayedProviderChild({
     channel,
     relayId,
     pid,
     policy: () => policyFor(launch.markers),
     quitting: providerRelayQuitting,
     durable: (force) => durableFor?.(launch.chatKey, force) ?? Promise.resolve(true),
+    ackFloor: carried.withFloor(launch.markers.ackFloor?.()),
     ...(passWhileHeld ? { passWhileHeld } : {})
   })
+  carriedFor.set(child, carried)
+  return child
 }
 
 /**
@@ -237,6 +236,7 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
     if (started) {
       forgetKeptProviderRelay(launch.chatKey, relay)
       reattachedChildren.add(child)
+      carriedFor.get(child)?.take(child.attachResult?.openWork)
       track(launch.chatKey, child, launch.markers)
       return { managed: relayedManagedProcess(child), child, reattached: true }
     }
@@ -248,7 +248,7 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
   }
   forgetKeptProviderRelay(launch.chatKey, relay)
   void channel.close(info.relayId).catch(() => {})
-  if (rebinding.has(launch.chatKey)) {
+  if (providerRelayRebinding(launch.chatKey)) {
     throw new KeptProviderRelayEndedError(launch.chatKey)
   }
   return null
@@ -354,6 +354,6 @@ export async function detachProviderRelayForQuit(
   }
   attached.delete(chatKey)
   // A failed detach request still hands the agent off: the closing stream detaches it daemon-side.
-  await child.detach(policyFor(markers, open)).catch(() => {})
+  await child.detach(policyFor(markers, carriedFor.get(child)?.merge(open) ?? open)).catch(() => {})
   return true
 }

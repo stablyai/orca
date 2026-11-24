@@ -13,3 +13,19 @@ export class KeptProviderRelayEndedError extends Error {
     this.name = 'KeptProviderRelayEndedError'
   }
 }
+
+/** Chats being reattached at launch: a proven-gone agent ends the rebind instead of starting anew. */
+const rebinding = new Set<string>()
+
+export async function withProviderRelayRebind<T>(chatKey: string, run: () => Promise<T>) {
+  rebinding.add(chatKey)
+  try {
+    return await run()
+  } finally {
+    rebinding.delete(chatKey)
+  }
+}
+
+export function providerRelayRebinding(chatKey: string): boolean {
+  return rebinding.has(chatKey)
+}

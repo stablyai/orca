@@ -9,7 +9,7 @@ import type {
 } from '../daemon/protocol/daemon-provider-relay-protocol'
 import { RELAY_WRITE_CHUNK_CHARS } from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayChannel } from './provider-relay-channel'
-import { RelayedProviderOutput } from './relayed-provider-output'
+import { RelayedProviderOutput, type ProviderRelayAckFloor } from './relayed-provider-output'
 
 /** The daemon refuses input past its queue cap; the write is offered again after this. */
 const INPUT_FULL_RETRY_MS = 50
@@ -29,6 +29,7 @@ export type RelayedProviderChildOptions = {
   durable?: (force: boolean) => Promise<boolean>
   /** Holds output until `releaseOutput()`, except the lines this lets through (answers to new requests). */
   passWhileHeld?: (line: string) => boolean
+  ackFloor?: ProviderRelayAckFloor
 }
 
 /**
@@ -67,7 +68,8 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
       stdout: this.stdout,
       ack: (seq) => options.channel.ack(options.relayId, seq),
       ...(options.durable ? { durable: options.durable } : {}),
-      ...(options.passWhileHeld ? { passWhileHeld: options.passWhileHeld } : {})
+      ...(options.passWhileHeld ? { passWhileHeld: options.passWhileHeld } : {}),
+      ...(options.ackFloor ? { ackFloor: options.ackFloor } : {})
     })
     this.ready = new Promise((resolve, reject) => {
       this.resolveReady = resolve

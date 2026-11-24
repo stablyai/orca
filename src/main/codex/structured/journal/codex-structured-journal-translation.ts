@@ -103,6 +103,8 @@ function createCodexTranslation(
   }
 
   return {
+    seedTurnOrdinals: (threadId, turnId, ids) =>
+      ids.forEach((id) => items.ordinals.ordinalFor(threadId, turnId, id)),
     restoreThread: (threadId, thread) => {
       if (threadId === (deps.primaryThreadId?.() ?? null)) {
         readActivity = createCodexProviderActivityReader()

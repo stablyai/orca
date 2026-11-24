@@ -198,7 +198,8 @@ export class ProviderRelay {
       maxClientRequestId: this.pending.maxClientRequestId,
       initializeResultSent,
       stderrTail: this.options.managed.stderrTail(),
-      exit: this.exitStatus
+      exit: this.exitStatus,
+      ...this.idleStop.carriedWork()
     }
   }
 

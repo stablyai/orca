@@ -29,6 +29,7 @@ export class ProviderRelayIdleStop {
   private policy: ProviderRelayDetachPolicy | null = null
   private reader: ProviderRelayWorkReader | null = null
   private work: ProviderRelayOpenWork | null = null
+  private carried: Record<string, string[][]> | null = null
   private armed = false
   /** Busy when last checked: the next agent line starts a fresh window. */
   private waitingForLine = false
@@ -88,7 +89,14 @@ export class ProviderRelayIdleStop {
     this.schedule(this.armed ? (this.policy?.idleStopMs ?? null) : null)
   }
 
+  /** The work open when an app attached, which it can't see yet; null when none was tracked. */
+  carriedWork(): { openWork?: Record<string, string[][]> } {
+    return this.carried ? { openWork: this.carried } : {}
+  }
+
   disarm(): void {
+    // A takeover or a dropped stream tracked nothing new, so what the last app was handed still stands.
+    this.carried = this.work?.keys() ?? this.carried
     this.armed = false
     this.waitingForLine = false
     this.work = null

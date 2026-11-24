@@ -1,3 +1,5 @@
+import { DEFAULT_CODEX_REQUEST_TIMEOUT_MS } from '../../app-server/codex-app-server-connection'
+import { seedKeptCodexTurnOrdinals } from '../threads/codex-kept-turn-ordinals'
 import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import {
@@ -156,6 +158,24 @@ export async function openCodexStructuredSession(
           ...(deps.logger ? { logger: deps.logger } : {})
         })
       ),
+      openInput.signal
+    )
+    current()
+  }
+  if (keptRunning && translator) {
+    await waitForPromiseWithSignal(
+      seedKeptCodexTurnOrdinals({
+        connection,
+        translator,
+        threadId: opened.threadId,
+        timeoutMs: deps.requestTimeoutMs ?? DEFAULT_CODEX_REQUEST_TIMEOUT_MS,
+        onError: (threadId, error) =>
+          deps.logger?.warn('numbering a kept turn from history failed', {
+            sessionId,
+            threadId,
+            error
+          })
+      }),
       openInput.signal
     )
     current()
