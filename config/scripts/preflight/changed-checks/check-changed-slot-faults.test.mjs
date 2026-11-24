@@ -13,6 +13,7 @@ import {
   queueRows,
   registerSlotHarness,
   run,
+  runWithFreshHolder,
   shownHolder,
   spawnOwned,
   UNNAMED,
@@ -77,7 +78,7 @@ await next()`)
     // True only during the synchronous turn of the decision that was paused.
     let resumed = false
     const waiter = observe(
-      run({
+      runWithFreshHolder({
         staleMs,
         log: (message) => messages.push({ message, resumed }),
         // Holds this waiter inside its decision transaction, and so the queue's write lock, until
@@ -135,7 +136,7 @@ await next()`)
     keepCheckingIn(ahead)
     const messages = []
     const waiter = observe(
-      run({ staleMs, log: (message) => messages.push({ message, at: Date.now() }) })
+      runWithFreshHolder({ staleMs, log: (message) => messages.push({ message, at: Date.now() }) })
     )
     await until(() => messages.length > 0, 'message naming the holder')
     expect(messages[0].message).toContain(`${shownHolder(process.pid)} in `)

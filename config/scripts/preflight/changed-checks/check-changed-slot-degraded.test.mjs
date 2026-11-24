@@ -1,8 +1,9 @@
 import { readdirSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
+import { DatabaseSync } from 'node:sqlite'
 import { setTimeout as delay } from 'node:timers/promises'
-import { describe, expect, it } from 'vitest'
-import { queueFileFor } from './check-changed-slot.mjs'
+import { describe, expect, it, vi } from 'vitest'
+import { queueFileFor, settleChangedCheckSlotCleanup } from './check-changed-slot.mjs'
 import {
   exitedPid,
   file,
@@ -32,6 +33,86 @@ function failDeletes(db, where, name) {
 
 // Production Windows runs check:changed concurrently and never loads the slot; these tests need POSIX ps or /proc.
 describe.skipIf(process.platform === 'win32')('check:changed slot without a usable queue', () => {
+  for (const errcode of [5, 6, 15, 261, 262, 271]) {
+    it(`retries slot contention code ${errcode} without the queue and still holds the SQLite lock`, async () => {
+      await mkdir(queueFileFor(file), { recursive: true })
+      const exec = DatabaseSync.prototype.exec
+      let remaining = 2
+      const injected = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (sql) {
+        if (this.location() === file && sql === 'BEGIN IMMEDIATE' && remaining-- > 0) {
+          throw Object.assign(new Error('transient slot contention'), { errcode })
+        }
+        return exec.call(this, sql)
+      })
+      let release
+      try {
+        release = await within(run(), 'waiter after transient slot contention')
+      } finally {
+        injected.mockRestore()
+      }
+      const other = outsider()
+      expect(other.tryLock()).toBe(false)
+      await release()
+      expect(other.tryLock()).toBe(true)
+    }, 180_000)
+  }
+
+  it('propagates slot storage errors without blaming or bypassing the queue', async () => {
+    const failure = Object.assign(new Error('slot storage failed'), { errcode: 10 })
+    const exec = DatabaseSync.prototype.exec
+    const injected = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (sql) {
+      if (this.location() === file && sql === 'BEGIN IMMEDIATE') {
+        throw failure
+      }
+      return exec.call(this, sql)
+    })
+    const messages = []
+    try {
+      await expect(run({ log: (message) => messages.push(message) })).rejects.toBe(failure)
+    } finally {
+      injected.mockRestore()
+    }
+    expect(messages).toEqual([])
+    await settleChangedCheckSlotCleanup()
+    expect(queueRows()).toEqual([])
+    await (
+      await run()
+    )()
+  }, 180_000)
+
+  it('bounds queue warnings to one line', async () => {
+    await (
+      await run()
+    )()
+    const db = openQueue()
+    db.exec(`CREATE TRIGGER fail_join BEFORE INSERT ON tickets_v4
+      BEGIN SELECT RAISE(ABORT, 'queue\n\t  ${'failure '.repeat(100)}'); END`)
+    const messages = []
+    const release = await run({ log: (message) => messages.push(message) })
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toMatch(DEGRADED)
+    expect(messages[0]).not.toMatch(/[\r\n\t]/)
+    expect(messages[0]).toHaveLength(278)
+    await release()
+  }, 180_000)
+
+  it('removes its committed ticket when a later queue decision degrades', async () => {
+    const holder = await run()
+    const messages = []
+    const waiter = observe(run({ log: (message) => messages.push(message) }))
+    const ticket = queueRows().find((row) => row.held_at === null)
+    const poisoned = insertTicket({ pid: process.pid, lane: 2, seenAt: Date.now() - 60 * 60_000 })
+    const db = openQueue()
+    failDeletes(db, `old.id = ${poisoned}`, 'keep_expired')
+    await until(() => messages.some((message) => DEGRADED.test(message)), 'degraded decision')
+    expect(queueRows().some((row) => row.id === ticket.id)).toBe(false)
+    expect(waiter.settled).toBe(false)
+    await holder()
+    await (
+      await within(waiter.promise, 'degraded waiter')
+    )()
+  }, 180_000)
+
   it('waits for the slot directly when the queue cannot open, still one holder at a time', async () => {
     await mkdir(queueFileFor(file), { recursive: true })
     // Counted before any connection opens; compared once every connection here has closed.

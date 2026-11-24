@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { setTimeout as delay } from 'node:timers/promises'
 import { pathToFileURL } from 'node:url'
-import { afterEach, beforeEach } from 'vitest'
+import { afterEach, beforeEach, vi } from 'vitest'
 import {
   acquireChangedCheckSlot,
   queueFileFor,
@@ -177,6 +177,17 @@ export function observe(promise) {
     }
   )
   return state
+}
+
+/** Pins only the first synchronous decision to the holder's heartbeat, independent of host stalls. */
+export function runWithFreshHolder(options = {}) {
+  const holder = queueRows().find((row) => row.held_at !== null)
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(Number(holder.seen_at))
+  try {
+    return run(options)
+  } finally {
+    clock.mockRestore()
+  }
 }
 
 /** Helper deadline: its message names the condition, unlike the runner's test timeout. */

@@ -176,6 +176,18 @@ process.exit(0)`)
     await within(first.promise, 'first waiter')
   }, 180_000)
 
+  it('expires at most eight old tickets in one decision', async () => {
+    const holder = await run()
+    for (let index = 0; index < 17; index++) {
+      insertTicket({ pid: process.pid, lane: 2, seenAt: Date.now() - 60 * 60_000 })
+    }
+    const once = run({ pollMs: 60 * 60_000 })
+    expect(queueRows().filter((row) => row.lane === 2)).toHaveLength(9)
+    once.abort()
+    await expect(once).rejects.toThrow()
+    await holder()
+  }, 180_000)
+
   it('clears at most a bounded number of tickets per decision and still gets through a backlog', async () => {
     const holder = await run()
     const dead = await exitedPid()
@@ -256,9 +268,12 @@ process.exit(0)`)
       })
     )
     await until(() => messages.some((message) => message.startsWith(WAITING)), 'wait message')
-    expect(messages.find((message) => message.startsWith(WAITING))).toMatch(
-      new RegExp(`^${WAITING} Position 102 of 102\\. `)
-    )
+    expect(
+      showsPlace(
+        messages.find((message) => message.startsWith(WAITING)),
+        'Position 102 of 102.'
+      )
+    ).toBe(true)
     await holder()
   }, 180_000)
 

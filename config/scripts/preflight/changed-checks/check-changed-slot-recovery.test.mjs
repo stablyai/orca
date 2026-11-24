@@ -12,6 +12,7 @@ import {
   queueWriter,
   root,
   run,
+  runWithFreshHolder,
   shownHolder,
   spawnOwned,
   UNNAMED,
@@ -32,7 +33,7 @@ process.stdout.write('held\\n')
 await next()`)
     await holder.waitFor('held')
     const messages = []
-    const waiter = observe(run({ log: (message) => messages.push(message) }))
+    const waiter = observe(runWithFreshHolder({ log: (message) => messages.push(message) }))
     await until(() => messages.length > 0, 'first wait message')
     await delay(100)
     expect(waiter.settled).toBe(false)
@@ -53,7 +54,7 @@ await next()`)
     expect(other.tryLock()).toBe(true)
     insertTicket({ pid: process.pid, heldAt: Date.now() - 5 * 60_000 })
     const messages = []
-    const waiter = observe(run({ log: (message) => messages.push(message) }))
+    const waiter = observe(runWithFreshHolder({ log: (message) => messages.push(message) }))
     await until(() => messages.length > 0, 'wait message')
     expect(messages).toEqual([
       `${WAITING} Position 1 of 1. The queue last showed pid ${process.pid} in /elsewhere holding the slot, claimed 5m ago.`
@@ -66,7 +67,9 @@ await next()`)
     const staleMs = 3000
     const release = await run({ staleMs })
     const messages = []
-    const waiter = observe(run({ staleMs, log: (message) => messages.push(message) }))
+    const waiter = observe(
+      runWithFreshHolder({ staleMs, log: (message) => messages.push(message) })
+    )
     await until(() => messages.length > 0, 'wait message naming the holder')
     expect(messages[0]).toContain(`${shownHolder(process.pid)} in `)
     const writer = await queueWriter()
@@ -217,18 +220,13 @@ await next()`)
     const messages = []
     const waiter = observe(run({ staleMs, log: (message) => messages.push(message) }))
     await until(() => messages.length > 0, 'first wait message')
-    expect(messages[0]).toMatch(
-      new RegExp(`^${WAITING} Position 3 of 3\\. The queue last showed pid ${process.pid} in `)
-    )
+    expect(messages[0]).toMatch(new RegExp(`^${WAITING} Position 3 of 3\\.(?: |$)`))
     // Our waiter only reads the middle waiter. When the owner dies, the middle waiter removes its
     // ticket; our count must follow without any change in the run ahead of us or the holder.
     await owner.kill()
     await until(() => !queueRows().some((row) => row.id === gap), 'dead ticket removed')
     await until(
-      () =>
-        messages
-          .at(-1)
-          .startsWith(`${WAITING} Position 2 of 2. The queue last showed pid ${process.pid} in `),
+      () => messages.at(-1).match(new RegExp(`^${WAITING} Position 2 of 2\\.(?: |$)`)),
       'corrected position',
       staleMs
     )

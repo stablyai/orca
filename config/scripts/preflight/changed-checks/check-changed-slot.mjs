@@ -100,9 +100,11 @@ export async function acquireChangedCheckSlot(file = slotFile, options = {}) {
         throw error
       }
       queue?.removeEventually(waiter?.id, waiter?.token)
-      log(
-        `The check:changed queue could not be used (${error.cause?.message ?? error.cause}); waiting for the slot without it.`
-      )
+      const reason = String(error.cause?.message ?? error.cause)
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 200)
+      log(`The check:changed queue could not be used (${reason}); waiting for the slot without it.`)
       return await waitDirectly(lock, pollMs, signal)
     }
   } catch (error) {
@@ -189,6 +191,9 @@ class Waiter {
       outcome = attempt(() => transaction(this.queue.db, () => this.decide(lock, claim)))
     } catch (error) {
       releaseClaim(lock, claim)
+      if (claim.error === error) {
+        throw error
+      }
       throw new QueueUnusable(error)
     }
     if (outcome === undefined) {
@@ -266,7 +271,14 @@ class Waiter {
 
     if (blocker === undefined) {
       this.beforeClaim?.()
-      if (tryLock(lock)) {
+      let locked
+      try {
+        locked = tryLock(lock)
+      } catch (error) {
+        claim.error = error
+        throw error
+      }
+      if (locked) {
         claim.locked = true
         s.hold.run(now, now, id, this.token)
         // Only one connection can hold the slot lock, so any other held ticket is left over.
@@ -597,7 +609,7 @@ function tryLock(lock) {
     lock.exec('BEGIN IMMEDIATE')
     return true
   } catch (error) {
-    if ((error.errcode & 0xff) !== 5) {
+    if (!isBusy(error)) {
       throw error
     }
     return false
