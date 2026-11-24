@@ -33,7 +33,9 @@ export function WorkerDockRowAction({
   // Only an action that can run gets a button: a remote worker, a cleared row or a failure with
   // nothing to acknowledge shows none rather than a live-looking control that does nothing.
   const canClear = owner && failed && Boolean(row.settlement)
-  const canStop = owner && !failed && row.stoppable && row.state !== 'saving'
+  // An exited worker with an open dispatch has nothing to clear; Stop settles it.
+  const exitedOpen = row.state === 'unexpected' && !row.settlement
+  const canStop = owner && (!failed || exitedOpen) && row.stoppable && row.state !== 'saving'
   const action = focusedAction ?? (canClear ? 'clear' : 'stop')
   const unavailable = !canStop || pending
   return (
@@ -51,7 +53,7 @@ export function WorkerDockRowAction({
           <TooltipTrigger asChild>
             <Button
               type="button"
-              variant="ghost-inset"
+              variant="ghost-on-accent"
               size="icon-xs"
               data-worker-dock-action={row.id}
               className={cn(narrow ? (action === 'clear' ? 'h-6 w-11' : 'size-11') : 'size-6.5')}

@@ -44,4 +44,5 @@ export type RemoteBrowserPageInputParams = {
   isActive: boolean
   mountedRef: React.RefObject<boolean>
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
+  getPageUrl: () => string
 }

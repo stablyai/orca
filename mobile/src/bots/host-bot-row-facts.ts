@@ -39,6 +39,8 @@ export type MobileBotRowFacts = {
   dot: BotRowStatus
   /** A folded row's glyph: its most urgent live workspace. */
   foldLive: ReturnType<typeof botFoldLiveStatus>
+  /** Its home's and workers' workspace ids, whose sessions' usage-limit stops its line says. */
+  workspaceIds: readonly string[]
   /** New Up next suggestions, counted apart from unread. */
   upNext?: number
   /** What its line reads beside the home's agent rows: its Chat, its threads' links, its waits. */
@@ -46,6 +48,8 @@ export type MobileBotRowFacts = {
   /** The first person asking for access, whom the Needs you line names. */
   askedForAccess?: string
   statusLine: string
+  /** What it's for, cut to show the match, when a search found it by that and not its name. */
+  searchPurpose?: string
   paused: boolean
   /** A server's bot: its computer, and that computer's word while it is down. */
   host?: { id: ExecutionHostId; label: string; word?: string }

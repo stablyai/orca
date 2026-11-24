@@ -216,8 +216,9 @@ export async function importGoogleSetupKeyOnHost(
 /** Opens the bot's chat and starts its Google setup there, with no message in the person's name. */
 export async function startGoogleSetupInChat(
   bot: Pick<Bot, 'id'> & Parameters<typeof openBotHomeTab>[0],
-  from: (typeof GOOGLE_SETUP_STARTED_FROM)[number]
+  from: (typeof GOOGLE_SETUP_STARTED_FROM)[number],
+  options?: { newApp?: true }
 ): Promise<void> {
-  await callBotRpc(bot, 'bots.googleSetup.start', { botId: bot.id, from })
+  await callBotRpc(bot, 'bots.googleSetup.start', { botId: bot.id, from, ...options })
   await openBotHomeTab(bot)
 }

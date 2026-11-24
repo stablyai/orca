@@ -209,7 +209,8 @@ export class DaemonServer {
       log: this.log,
       isAcceptingWork: () => this.lifecycle.isAcceptingWork(),
       requestEndpointRetirement: () => this.endpoint.requestRetirementForLoss(),
-      reevaluateIdleShutdown: () => this.lifecycle.reevaluateIdleShutdown()
+      reevaluateIdleShutdown: () => this.lifecycle.reevaluateIdleShutdown(),
+      hostTerminalUsage: () => this.automaticWork.gate.hostTerminalUsage()
     })
     this.requestRouter = new DaemonRequestRouter({
       host: this.host,
@@ -255,13 +256,13 @@ export class DaemonServer {
   }
 
   private isIdle(): boolean {
-    if (this.admission.inFlight > 0 || this.host.hasLiveSessions() || this.relays.liveCount > 0) {
-      return false
-    }
-    if (this.endpoint.lost) {
-      return true
-    }
-    return this.connections.transportCount === 0 && this.connections.size === 0
+    const noClients = this.connections.transportCount === 0 && this.connections.size === 0
+    return (
+      this.admission.inFlight === 0 &&
+      !this.host.hasLiveSessions() &&
+      this.relays.liveCount === 0 &&
+      (this.endpoint.lost || noClients)
+    )
   }
 
   private async disposeResources(): Promise<void> {

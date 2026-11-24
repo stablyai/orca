@@ -1,7 +1,6 @@
 // Orca's asks as the phone lists them in Needs you: the chats waiting on the owner and their workers,
 // read from the chats tree it already has, the connectors that need a sign-in or fix, the access
-// requests waiting on the bot, and paired servers' agents waiting to message it. Tool apps' sign-ins
-// stay on the desktop for now, so the phone's count can be lower than the desktop's.
+// requests waiting on the bot, and paired servers' agents waiting to message it.
 import { useMemo } from 'react'
 import type { ConnectorAccessRequest } from '../../../../src/shared/connector-bot-access-contract'
 import { accessRequestPerson } from '../../../../src/shared/bots/bot-access-request'

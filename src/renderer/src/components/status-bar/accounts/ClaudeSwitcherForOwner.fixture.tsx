@@ -29,13 +29,29 @@ const usage: ProviderRateLimits = {
     resetDescription: null
   }
 }
-function fixture(width = 520, wsl = false) {
+type FixtureOptions = {
+  /** The selected account still lists a login, but its usage read reports it signed out. */
+  signInAgain?: boolean
+  /** Press the card's Sign in button and hold the sign-in open. */
+  busy?: boolean
+}
+const SIGN_IN_AGAIN_EMAILS: Record<string, string> = {
+  selected: 'alex@example.com',
+  usable: 'sam@example.com',
+  stale: 'riley@example.com',
+  team: 'jordan@example.com'
+}
+function fixture(
+  width = 520,
+  wsl = false,
+  { signInAgain = false, busy = false }: FixtureOptions = {}
+) {
   const account = (
     id: string,
     extra: Partial<ClaudeManagedAccountSummary> = {}
   ): ClaudeManagedAccountSummary => ({
     id,
-    email: 'jinjing@example.com',
+    email: signInAgain ? SIGN_IN_AGAIN_EMAILS[id] : 'jinjing@example.com',
     organizationUuid: 'org-a1b2',
     organizationName: 'Acme',
     managedAuthRuntime: wsl ? 'wsl' : 'host',
@@ -47,7 +63,7 @@ function fixture(width = 520, wsl = false) {
     ...extra
   })
   const accounts = [
-    account('selected', { needsSignIn: true }),
+    account('selected', signInAgain ? {} : { needsSignIn: true }),
     account('usable', { updatedAt: 3 }),
     account('stale', { needsSignIn: true }),
     account('team', { organizationUuid: 'org-c3d4', organizationName: null })
@@ -86,6 +102,8 @@ function fixture(width = 520, wsl = false) {
     setup: () => {
       window.api.claudeAccounts.list = async () => state
       window.api.codexAccounts.list = async () => ({ accounts: [], activeAccountId: null })
+      // Why never settle: the busy capture holds the sign-in mid-flight.
+      window.api.claudeAccounts.reauthenticate = () => new Promise(() => {})
     },
     render: () => (
       <div className="flex h-[720px] items-end bg-background p-3">
@@ -103,13 +121,22 @@ function fixture(width = 520, wsl = false) {
         />
       </div>
     ),
-    interact: (frame) => {
+    interact: async (frame) => {
       frame
         .querySelector<HTMLButtonElement>('button[aria-label]')
         ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+      if (!busy) {
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      document
+        .querySelector<HTMLButtonElement>('[role="menu"] button[aria-label^="Sign in: alex"]')
+        ?.click()
     }
   })
 }
 export const duplicate = fixture()
 export const narrow = fixture(360)
 export const wsl = fixture(520, true)
+export const signInAgain = fixture(520, false, { signInAgain: true })
+export const signInAgainBusy = fixture(520, false, { signInAgain: true, busy: true })

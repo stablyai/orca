@@ -3,6 +3,7 @@ import type { RpcMethodName } from '../../../../src/shared/rpc-contract/rpc-para
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 import type { RpcCompatibleReader } from '../../transport/rpc/rpc-operation-contract'
 import {
+  browserPagePromptAnswerReplySchema,
   browserCertificateProceedReplySchema,
   browserCommandUnreadReplySchema,
   browserNavigationSettledSchema
@@ -62,6 +63,12 @@ export const browserDialogAccept = browserPageCommand(
 export const browserDialogDismiss = browserPageCommand(
   'browser.dialog-dismiss',
   'browser.dialogDismiss'
+)
+
+export const browserPagePromptAnswer = browserPageCommandReading(
+  'browser.page-prompt-answer',
+  'browser.pagePromptAnswer',
+  rpcResultVariant('browser-page-prompt-answer', browserPagePromptAnswerReplySchema)
 )
 
 export const browserCertificateProceed = browserPageCommandReading(

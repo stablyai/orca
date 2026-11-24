@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { AtSign } from 'lucide-react-native'
+import { Users } from 'lucide-react-native'
 import type { Bot } from '../../../src/shared/bot-types'
 import type { BotGroup } from '../../../src/shared/bots/bot-group'
 import {
@@ -44,15 +44,16 @@ export function useMobileBotGroupComposer(
     () => bots.filter((bot) => group?.members.some((member) => member.botId === bot.id)),
     [bots, group?.members]
   )
+  // This computer's members, then bots on paired computers as the room saved them, as the desktop lists them.
   const roomMentions = useMemo(
     () => [
-      ...memberBots.map((bot) => ({
+      ...[...memberBots, ...(group?.remoteMembers ?? [])].map((bot) => ({
         name: bot.name,
-        icon: <MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={18} />
+        icon: <MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={20} />
       })),
-      { name: 'everyone', icon: <AtSign size={16} color={colors.textSecondary} /> }
+      { name: 'everyone', icon: <Users size={20} color={colors.textSecondary} strokeWidth={2} /> }
     ],
-    [memberBots]
+    [memberBots, group?.remoteMembers]
   )
   const audience = group ? formatBotGroupAudience(draftAudience, group, bots, t) : ''
   /** Opens the photo library; undefined hides the composer's +. */
