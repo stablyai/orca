@@ -1,5 +1,6 @@
 import {
   isAiVaultDeletableAgent,
+  isAiVaultDatabaseRowAgent,
   isAiVaultSyntheticSessionPath as isSyntheticAiVaultSessionPath
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -48,17 +49,21 @@ export function aiVaultSessionDeleteBlockedReason(
       'Only sessions on this device can be deleted.'
     )
   }
-  if (isSyntheticAiVaultSessionPath(session.filePath)) {
-    return t(
-      'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonSyntheticPath',
-      "This session can't be deleted from Orca."
-    )
-  }
   if (!isAiVaultDeletableAgent(session.agent)) {
     return t(
       'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonUnsupportedAgent',
       "{{value0}} sessions can't be deleted from Orca.",
       { value0: agentLabel(session.agent) }
+    )
+  }
+  // OpenCode 2 rows are dbPath#sessionId by design; other synthetic paths are not deletable.
+  if (
+    isSyntheticAiVaultSessionPath(session.filePath) &&
+    !isAiVaultDatabaseRowAgent(session.agent)
+  ) {
+    return t(
+      'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonSyntheticPath',
+      "This session can't be deleted from Orca."
     )
   }
   if (runtimeHosted && host.deleteSupported === false) {

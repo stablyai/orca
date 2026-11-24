@@ -18,9 +18,8 @@ export type AiVaultDeleteSessionResult =
   | { outcome: 'rejected'; agent: AiVaultAgent; reason: AiVaultSessionDeleteRejectionCode }
   | { outcome: 'failed'; agent: AiVaultAgent; error: string }
 
-// Allow only sessions whose complete unshared data is derivable from the scanned path.
-// Exclude Antigravity/Kimi registries (Antigravity lacks IDs), Codex indexes/hardlink aliases (one-sided deletion reappears), and SQLite rows (OpenCode 1.17.x, Hermes state.db).
-export const AI_VAULT_DELETABLE_AGENTS = [
+// Agents whose transcript is a discoverable file or directory under the scanned roots.
+export const AI_VAULT_FILE_DELETABLE_AGENTS = [
   'copilot',
   'cursor',
   'devin',
@@ -35,10 +34,34 @@ export const AI_VAULT_DELETABLE_AGENTS = [
   'cline'
 ] as const satisfies readonly AiVaultAgent[]
 
+export type AiVaultFileDeletableAgent = (typeof AI_VAULT_FILE_DELETABLE_AGENTS)[number]
+
+// Every agent the UI may offer Delete for: file transcripts, Codex rollouts through `codex delete`,
+// and OpenCode 2 rows through `opencode session delete`. Excludes Antigravity/Kimi registries (no
+// stable session IDs), OpenCode 1 legacy rows (the current CLI reports success without removing
+// them), and SQLite stores without a delete command (Hermes, ZCode).
+export const AI_VAULT_DELETABLE_AGENTS = [
+  ...AI_VAULT_FILE_DELETABLE_AGENTS,
+  'codex',
+  'opencode2'
+] as const satisfies readonly AiVaultAgent[]
+
 export type AiVaultDeletableAgent = (typeof AI_VAULT_DELETABLE_AGENTS)[number]
 
 export function isAiVaultDeletableAgent(agent: AiVaultAgent): agent is AiVaultDeletableAgent {
-  return (AI_VAULT_DELETABLE_AGENTS as readonly AiVaultAgent[]).includes(agent)
+  return AI_VAULT_DELETABLE_AGENTS.some((deletable) => deletable === agent)
+}
+
+export function isAiVaultFileDeletableAgent(
+  agent: AiVaultAgent
+): agent is AiVaultFileDeletableAgent {
+  return AI_VAULT_FILE_DELETABLE_AGENTS.some((deletable) => deletable === agent)
+}
+
+export type AiVaultDatabaseRowAgent = 'opencode2'
+
+export function isAiVaultDatabaseRowAgent(agent: AiVaultAgent): agent is AiVaultDatabaseRowAgent {
+  return agent === 'opencode2'
 }
 
 // OpenCode 1.17.x uses synthetic dbPath#sessionId identities, never real transcript files to open/delete.
@@ -54,6 +77,8 @@ export const AI_VAULT_SESSION_DELETE_REJECTION_CODES = [
   'host-update-required',
   'synthetic-path',
   'path-outside-known-roots',
+  // Codex refuses to delete a thread another process has open.
+  'session-in-use',
   // Reject paths the scanner would not surface (wrong extensions or pruned subagents).
   'undiscoverable-path',
   // A root-level file does not name a session directory; deleting its parent would erase every session.
@@ -76,7 +101,7 @@ export type AiVaultSessionDeleteRemoval = {
 // CALLER CONTRACT: allowed is path-only. Before removal recheck kind and realpath containment in roots to reject same-named directories/symlinks.
 export type AiVaultSessionDeleteAllowedResult = {
   allowed: true
-  agent: AiVaultDeletableAgent
+  agent: AiVaultFileDeletableAgent
   // The transcript path (also the last `removals` entry); cache invalidation
   // keys off it.
   resolvedPath: string

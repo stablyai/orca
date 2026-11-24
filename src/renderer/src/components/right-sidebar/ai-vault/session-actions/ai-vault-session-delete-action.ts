@@ -19,6 +19,7 @@ import {
   aiVaultSessionRuntimeEnvironmentId,
   type AiVaultSessionDeleteHost
 } from './ai-vault-session-deletability'
+import { closeAiVaultSessionTabs } from './ai-vault-session-delete-tabs'
 
 export function useAiVaultSessionDeleteHost(
   session: Pick<AiVaultSession, 'executionHostId'>
@@ -39,6 +40,12 @@ export function useAiVaultSessionDeleteHost(
 }
 
 const HOST_PROBE_FEEDBACK_DELAY_MS = 1000
+const IN_USE_RETRY_DELAY_MS = 500
+const IN_USE_RETRY_ATTEMPTS = 10
+
+function waitForSessionRelease(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, IN_USE_RETRY_DELAY_MS))
+}
 
 // An unreachable host fails the delete itself; only a definite "no" stops before the dialog.
 async function runtimeHostLacksDelete(environmentId: string, hostLabel: string): Promise<boolean> {
@@ -89,7 +96,8 @@ export function useAiVaultSessionDeleteAction({
           await deleteChat({
             hostId: session.executionHostId,
             sessionId: chat.sessionId,
-            pairingRevision: session.hostPairingRevision
+            pairingRevision: session.hostPairingRevision,
+            onBeforeDelete: () => closeAiVaultSessionTabs(session)
           })
         ) {
           forgetAiVaultSessionResult(session.id)
@@ -133,16 +141,33 @@ export function useAiVaultSessionDeleteAction({
       if (!confirmed) {
         return
       }
+      closeAiVaultSessionTabs(session)
+      // Give the closed terminal process time to release its transcript before deleting.
+      await waitForSessionRelease()
       try {
-        const result = await window.api.aiVault.deleteSession({
-          agent: session.agent,
-          sessionId: session.sessionId,
-          filePath: session.filePath,
-          executionHostId: session.executionHostId,
-          ...(pairingRevision !== undefined
-            ? { expectedEnvironmentPairingRevision: pairingRevision }
-            : {})
-        })
+        const requestDelete = () =>
+          window.api.aiVault.deleteSession({
+            agent: session.agent,
+            sessionId: session.sessionId,
+            filePath: session.filePath,
+            executionHostId: session.executionHostId,
+            ...(pairingRevision !== undefined
+              ? { expectedEnvironmentPairingRevision: pairingRevision }
+              : {})
+          })
+        let result = await requestDelete()
+        // Codex refuses a live thread. A late writer-lock release gets a short retry window.
+        for (
+          let attempt = 0;
+          attempt < IN_USE_RETRY_ATTEMPTS &&
+          result.outcome === 'rejected' &&
+          result.reason === 'session-in-use';
+          attempt++
+        ) {
+          closeAiVaultSessionTabs(session)
+          await waitForSessionRelease()
+          result = await requestDelete()
+        }
         if (result.outcome === 'rejected' && result.reason === 'host-update-required') {
           toast.error(aiVaultSessionHostUpdateRequiredReason(hostLabel))
           return

@@ -27,7 +27,12 @@ function canReadOpenCodeSessions(db: SyncDatabase): boolean {
   )
 }
 
-function buildSessionListQuery(db: SyncDatabase, limited: boolean, scoped: boolean): string {
+function buildSessionListQuery(
+  db: SyncDatabase,
+  limited: boolean,
+  scoped: boolean,
+  legacyMigrationGuard: string
+): string {
   const parentIdPredicate = columnExists(db, 'session', 'parent_id') ? 'AND parent_id IS NULL' : ''
   const archivedPredicate = columnExists(db, 'session', 'time_archived')
     ? 'AND time_archived IS NULL'
@@ -37,7 +42,7 @@ function buildSessionListQuery(db: SyncDatabase, limited: boolean, scoped: boole
   const directory = scoped && columnExists(db, 'session', 'directory') ? ', directory' : ''
   return `SELECT id, time_created, time_updated${directory}
           FROM session
-          WHERE 1=1 ${parentIdPredicate} ${archivedPredicate}
+          WHERE 1=1 ${parentIdPredicate} ${archivedPredicate} ${legacyMigrationGuard}
           ORDER BY CASE WHEN time_updated > 0 THEN time_updated ELSE time_created END DESC
           ${limited ? 'LIMIT ?' : ''}`
 }
@@ -53,7 +58,15 @@ function readSessionRows(
   }
   const scoped = scopePaths !== undefined && scopePaths.length > 0
   const limited = Number.isFinite(limit) && !scoped
-  const statement = db.prepare(buildSessionListQuery(db, limited, scoped))
+  // OpenCode 2.x imports V1 rows into session_v2 but leaves the legacy table. Listing both shows
+  // every migrated session twice, and deleting the V2 row makes the V1 duplicate reappear.
+  const legacyMigrationGuard = tableExists(db, 'kv')
+    ? `AND NOT EXISTS (
+         SELECT 1 FROM kv
+         WHERE key = 'migration.v1-v2' AND json_extract(value, '$.phase') = 'completed'
+       )`
+    : ''
+  const statement = db.prepare(buildSessionListQuery(db, limited, scoped, legacyMigrationGuard))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query above selects exactly these columns.
   const rows = (
     limited ? statement.all(limit) : scoped ? statement.iterate() : statement.all()
