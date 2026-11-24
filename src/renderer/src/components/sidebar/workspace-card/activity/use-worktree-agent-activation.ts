@@ -8,7 +8,10 @@ import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
-import { activateTerminalTabOnOwner } from '@/lib/workspace/tabs/terminal-tab-owner-activation'
+import {
+  activateTerminalTabOnOwner,
+  resolveUnmirroredAgentTerminalOwner
+} from '@/lib/workspace/tabs/terminal-tab-owner-activation'
 import { structuredAgentSessionAddressTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { getPtyExecutionHost } from '../../../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
@@ -102,10 +105,16 @@ export function activateWorktreeAgentPane(
     })
     activateTerminalTabOnOwner(worktreeId, tabId, parsed.leafId)
   } else if (!activateStructuredAgentSessionTab({ worktreeId, tabId })) {
-    const liveEntry = useAppStore.getState().agentStatusByPaneKey.get(paneKey)
+    const current = useAppStore.getState()
+    const liveEntry = current.agentStatusByPaneKey.get(paneKey)
     if (liveEntry?.worktreeId === worktreeId) {
       // Live worker status can precede tab hydration; retain the row and activate its owning terminal.
-      activateTerminalTabOnOwner(worktreeId, tabId, parsed.leafId)
+      activateTerminalTabOnOwner(
+        worktreeId,
+        tabId,
+        parsed.leafId,
+        resolveUnmirroredAgentTerminalOwner(current, worktreeId, liveEntry, executionHostId)
+      )
       return
     }
     dismissStaleAgentRowByKey(paneKey)

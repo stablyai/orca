@@ -18,6 +18,7 @@ import {
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
+  type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../../../shared/execution-host/execution-host'
 import {
@@ -51,6 +52,8 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { workspaceKindForWorktreeId } from '../../../../../shared/agent-launch/contracts/workspace-launch-kind'
+import { structuredAgentSessionOwnerForTab } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-worktree-selection'
 
 /** Find native chats by Orca session ID and terminal tabs by their provider conversation. */
 export type TabSessionHistorySubject = {
@@ -142,7 +145,7 @@ export type NativeChatTabSession = {
 export type NativeChatCliForkIdentity = {
   workspaceId: string
   sessionId: string
-  executionHostScope: ExecutionHostScope
+  executionHostScope: ExecutionHostId
 }
 
 export function resolveNativeChatCliForkIdentity(
@@ -150,20 +153,24 @@ export function resolveNativeChatCliForkIdentity(
   args: { tab: Pick<TerminalTab, 'id' | 'worktreeId'>; nativeChat: NativeChatTabSession }
 ): NativeChatCliForkIdentity | null {
   const { nativeChat, tab } = args
+  const source = state.unifiedTabsByWorktree[tab.worktreeId]?.find(
+    (item) =>
+      item.id === tab.id &&
+      item.contentType === 'agent-session' &&
+      item.entityId === nativeChat.sessionId
+  )
+  const executionHostScope = source ? structuredAgentSessionOwnerForTab(state, source) : null
   if (
     !nativeChat.agent ||
     !agentForksConversations(nativeChat.agent) ||
-    !resolveAiVaultTargetWorkspacePath(state, tab.worktreeId)
+    (source?.agentSessionAgent && source.agentSessionAgent !== nativeChat.agent) ||
+    !executionHostScope ||
+    !canHostOfferTabSessionMove(executionHostScope) ||
+    !selectKnownWorktreeById(state, tab.worktreeId, executionHostScope)?.path
   ) {
     return null
   }
-  const executionHostScope = resolveAiVaultHostScopeDefaults(
-    getAiVaultResumeWorkspaceExecutionHostId(state, tab.worktreeId),
-    tab.worktreeId
-  ).defaultExecutionHostScope
-  return canHostOfferTabSessionMove(executionHostScope)
-    ? { workspaceId: tab.worktreeId, sessionId: nativeChat.sessionId, executionHostScope }
-    : null
+  return { workspaceId: tab.worktreeId, sessionId: nativeChat.sessionId, executionHostScope }
 }
 
 export function resolveTabSessionHistorySubject(
@@ -194,7 +201,11 @@ export function resolveTabSessionHistorySubject(
           kind: 'chat',
           workspaceId: identity.workspaceId,
           sessionId: identity.sessionId,
-          request: resolveAiVaultPanelSessionListRequest(state, identity.workspaceId)
+          request: resolveAiVaultPanelSessionListRequest(
+            state,
+            identity.workspaceId,
+            identity.executionHostScope
+          )
         }
       : null
   }

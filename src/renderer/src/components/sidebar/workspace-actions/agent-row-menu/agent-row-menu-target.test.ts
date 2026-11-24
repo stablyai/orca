@@ -8,6 +8,7 @@ it('rejects a replacement agent in the same terminal pane', () => {
     paneKey: 'tab:11111111-1111-4111-8111-111111111111',
     tabId: 'tab',
     kind: 'terminal',
+    executionHostId: null,
     leafId: '11111111-1111-4111-8111-111111111111',
     unifiedTabId: 'tab-ui',
     chatSessionId: null,

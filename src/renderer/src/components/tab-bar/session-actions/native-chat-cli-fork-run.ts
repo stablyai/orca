@@ -1,12 +1,17 @@
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store/index'
 import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
-import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId,
+  type ExecutionHostScope
+} from '../../../../../shared/execution-host/execution-host'
 import { prepareNativeChatCliFork } from '@/lib/agent-session/resume/cli-fork/native-chat-cli-fork-preparation'
 import type { NativeChatCliForkSubject } from '@/lib/agent-session/resume/cli-fork/native-chat-cli-fork-preparation'
 import {
   buildAiVaultCliForkStartupForWorktree,
   captureAiVaultCliForkOwner,
+  conversationHostUnavailableError,
   readAiVaultCliForkLaunchSettings
 } from '@/lib/agent-session/resume/history/ai-vault-session-fork-startup'
 import { launchAiVaultSessionAndReveal } from '@/lib/agent-session/resume/history/launch-ai-vault-session-and-reveal'
@@ -18,7 +23,6 @@ import {
   onRuntimeEnvironmentRevisionsChanged
 } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { resolveNativeChatCliForkIdentity } from './tab-session-history-switch'
-import type { NativeChatCliForkIdentity } from './tab-session-history-switch'
 import { translate } from '@/i18n/i18n'
 import { openDesktopStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { moveStructuredAgentLaunchDraft } from '@/lib/agent-session/launch/structured-agent-session-launch-draft'
@@ -27,11 +31,13 @@ import type { AppState } from '@/store/types'
 import type { AiVaultAgent } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TerminalPaneLayoutNode } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 
 const pending = new Map<string, AbortController>()
 const listeners = new Set<() => void>()
 const changed = () => listeners.forEach((listener) => listener())
-type PendingIdentity = Pick<NativeChatCliForkIdentity, 'executionHostScope' | 'sessionId'>
+type PendingIdentity = { executionHostScope: ExecutionHostScope; sessionId: string }
 const keyFor = (subject: PendingIdentity) => `${subject.executionHostScope}\0${subject.sessionId}`
 const subscribe = (listener: () => void) => {
   listeners.add(listener)
@@ -132,7 +138,11 @@ export async function runNativeChatCliFork(args: {
   onComplete?: () => void
 }): Promise<void> {
   const { subject, tab } = args
-  const key = keyFor({ ...subject, executionHostScope: subject.request.executionHostScope })
+  const host = parseExecutionHostId(subject.request.executionHostScope)
+  if (!host || host.kind === 'ssh') {
+    return
+  }
+  const key = keyFor({ ...subject, executionHostScope: host.id })
   if (pending.has(key)) {
     return
   }
@@ -142,16 +152,11 @@ export async function runNativeChatCliFork(args: {
     if (controller.signal.aborted || (owner && !matchesWebSessionIntentOwner(owner))) {
       return false
     }
-    const state = useAppStore.getState()
-    const source = state.unifiedTabsByWorktree[tab.worktreeId]?.find((item) => item.id === tab.id)
-    const current =
-      source?.contentType === 'agent-session' && source.entityId === subject.sessionId
-        ? resolveNativeChatCliForkIdentity(state, {
-            tab,
-            nativeChat: { sessionId: subject.sessionId, agent: args.agent }
-          })
-        : null
-    return current?.executionHostScope === subject.request.executionHostScope
+    const current = resolveNativeChatCliForkIdentity(useAppStore.getState(), {
+      tab,
+      nativeChat: { sessionId: subject.sessionId, agent: args.agent }
+    })
+    return current?.executionHostScope === host.id
   }
   if (!isCurrent()) {
     return
@@ -199,9 +204,28 @@ export async function runNativeChatCliFork(args: {
     if (!isCurrent()) {
       return
     }
+    // Select the owner's workspace before resolving shell settings or creating a local terminal.
+    const current = useAppStore.getState()
+    if (
+      (current.activeWorktreeId !== subject.workspaceId ||
+        current.activeWorkspaceExecutionHostId !== host.id) &&
+      activateAndRevealWorkspace(subject.workspaceId, {
+        executionHostId: host.id,
+        providesInitialSurface: true
+      }) === false
+    ) {
+      throw conversationHostUnavailableError()
+    }
+    const destination = useAppStore.getState()
+    if (
+      runtimeEnvironmentIdOrLocalUnlessTwin(destination, subject.workspaceId) !==
+      (host.kind === 'runtime' ? host.environmentId : null)
+    ) {
+      throw conversationHostUnavailableError()
+    }
     const target = prepared.session
     const startup = buildAiVaultCliForkStartupForWorktree({
-      state: useAppStore.getState(),
+      state: destination,
       worktreeId: subject.workspaceId,
       session: target,
       copied: prepared.copied,

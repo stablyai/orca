@@ -19,6 +19,20 @@ export function selectAiVaultPanelWorkspace(
   workspace: AiVaultPanelWorkspace
 ): AiVaultPanelWorkspaceRows {
   const worktree = selectKnownWorktreeById(state, workspace.worktreeId, workspace.executionHostId)
+  if (workspace.executionHostId && worktree) {
+    const repoId = worktree.repoId
+    return {
+      worktree,
+      repo: selectRepoByIdForActiveWorkspace(
+        {
+          repos: state.repos,
+          activeRepoId: repoId,
+          activeWorkspaceExecutionHostId: workspace.executionHostId
+        },
+        repoId
+      )
+    }
+  }
   const isActive = workspace.worktreeId === state.activeWorktreeId
   return {
     worktree,
