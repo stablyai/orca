@@ -185,8 +185,10 @@ export function usePluginInstallAction({
         if (themed && (await applyThemes(pluginKey).catch(() => false))) {
           return
         }
-        // Why: only a plugin that is on by now has anything to try; recipes still wait for review.
-        const on = execution === 'data' || approvalApplied
+        // Why: a plugin the host left for review is not on, so there is nothing to try, data plugins
+        // included; otherwise only a plugin that is on by now has anything to try, and recipes wait.
+        const pendingReview = result.needsReview === true
+        const on = !pendingReview && (execution === 'data' || approvalApplied)
         const tryIt = on ? pluginTryAction(pluginKey, preview.manifest) : null
         toast.success(
           translate(
