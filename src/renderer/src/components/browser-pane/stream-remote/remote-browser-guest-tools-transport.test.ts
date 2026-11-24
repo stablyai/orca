@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest'
 import { RemoteBrowserInputQueue } from './remote-browser-input-queue'
 
 const sent = vi.hoisted((): string[] => [])
+const sentEnables = vi.hoisted((): unknown[] => [])
 
 // Waits end only when their call is aborted; the host refuses a cancel from a retired request; an
 // enable for 'waits-for-page' stays pending, like one held until its remote page loads.
@@ -13,8 +14,12 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
     options: { signal?: AbortSignal }
   ) => {
     sent.push(method)
-    if (method === 'browser.grab.setMode' && params.requestId === 'waits-for-page') {
-      return new Promise(() => {})
+    if (method === 'browser.grab.setMode') {
+      sentEnables.push(params.requestId)
+      if (params.requestId === 'waits-for-page') {
+        return new Promise(() => {})
+      }
+      return Promise.resolve({ ok: true, clean: false })
     }
     if (method === 'browser.grab.await') {
       return new Promise((_resolve, reject) => {
@@ -30,14 +35,34 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
 const { createRemoteBrowserGuestToolsTransport } =
   await import('./remote-browser-guest-tools-transport')
 
-function transport() {
+function transport(inputQueue = new RemoteBrowserInputQueue()) {
   return createRemoteBrowserGuestToolsTransport({
     target: () => ({ kind: 'environment', environmentId: 'env-1' }),
     worktree: 'wt',
     remotePage: () => 'page',
-    inputQueue: new RemoteBrowserInputQueue()
+    inputQueue
   })
 }
+
+it('a cancelled enable still queued behind earlier input never sends; the next enable works', async () => {
+  const inputQueue = new RemoteBrowserInputQueue()
+  const tools = transport(inputQueue)
+  let releaseEarlierInput: () => void = () => {}
+  void inputQueue.enqueue(
+    () =>
+      new Promise<void>((resolve) => {
+        releaseEarlierInput = resolve
+      })
+  )
+  sentEnables.length = 0
+  const enableA = tools.setGrabMode({ browserPageId: 'page', enabled: true, requestId: 'a' })
+  await expect(tools.cancelGrab({ browserPageId: 'page', requestId: 'a' })).resolves.toBe(true)
+  const enableB = tools.setGrabMode({ browserPageId: 'page', enabled: true, requestId: 'b' })
+  releaseEarlierInput()
+  await expect(enableA).resolves.toEqual({ ok: false, reason: 'not-ready' })
+  await expect(enableB).resolves.toEqual({ ok: true, clean: false })
+  expect(sentEnables).toEqual(['b'])
+})
 
 it("a retired request's cancel leaves the wait of the request that replaced it running", async () => {
   const tools = transport()
@@ -59,8 +84,10 @@ it("a retired request's cancel leaves the wait of the request that replaced it r
 
 it('a cancel reaches the host while an earlier enable still waits for its page', async () => {
   const tools = transport()
+  sentEnables.length = 0
   void tools.setGrabMode({ browserPageId: 'page', enabled: true, requestId: 'waits-for-page' })
-  await Promise.resolve()
+  // The enable has reached the host, which holds it until the page loads.
+  await vi.waitFor(() => expect(sentEnables).toEqual(['waits-for-page']))
   sent.length = 0
   await expect(
     tools.cancelGrab({ browserPageId: 'page', requestId: 'waits-for-page' })

@@ -29,6 +29,9 @@ export function createRemoteBrowserGuestToolsTransport({
 }): BrowserGuestToolsTransport {
   // Each wait's request, so a request-scoped cancel ends only that request's wait.
   const awaitingSelections = new Map<AbortController, string | undefined>()
+  // Enables still queued behind earlier input: the host has no record of them yet, so a cancel
+  // retires them here and they never send.
+  const unsentEnables = new Set<{ requestId?: string; retired: boolean }>()
 
   const call = async <T>(
     method: string,
@@ -60,7 +63,17 @@ export function createRemoteBrowserGuestToolsTransport({
   return {
     setGrabMode: ({ enabled, requestId }) => {
       const page = remotePage()
+      const unsent = enabled ? { requestId, retired: false } : null
+      if (unsent) {
+        unsentEnables.add(unsent)
+      }
       return inInputOrder(async (): Promise<BrowserSetGrabModeResult> => {
+        if (unsent) {
+          unsentEnables.delete(unsent)
+          if (unsent.retired) {
+            return { ok: false, reason: 'not-ready' }
+          }
+        }
         try {
           return (
             (await call<BrowserSetGrabModeResult>(
@@ -108,6 +121,13 @@ export function createRemoteBrowserGuestToolsTransport({
       const cancelledSelections = [...awaitingSelections]
         .filter(([, waitRequestId]) => requestId === undefined || waitRequestId === requestId)
         .map(([controller]) => controller)
+      let retiredUnsent = false
+      for (const unsent of unsentEnables) {
+        if (requestId === undefined || unsent.requestId === requestId) {
+          unsent.retired = true
+          retiredUnsent = true
+        }
+      }
       // Ask the host to settle the pick first; aborting alone would leave its overlay armed until the call closes.
       // Not queued: an enable ahead of it in the queue waits for its page, and the host must see this
       // cancel meanwhile so the enable never arms.
@@ -121,7 +141,7 @@ export function createRemoteBrowserGuestToolsTransport({
       for (const controller of cancelledSelections) {
         controller.abort()
       }
-      return cancelled
+      return cancelled || retiredUnsent
     },
     captureSelectionScreenshot: ({ rect, selectionId }) => {
       const page = remotePage()
