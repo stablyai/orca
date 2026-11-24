@@ -21,6 +21,7 @@ import {
   mountedHistoryConsumers,
   nextGitHistoryRequestId,
   publishGitHistory,
+  releasedHistorySlots,
   retireGitHistorySlot,
   subscribeGitHistory,
   presentGitHistoryEntry,
@@ -114,25 +115,36 @@ export function useSourceControlGitHistory({
       return
     }
     mountedHistoryConsumers.set(slotKey, (mountedHistoryConsumers.get(slotKey) ?? 0) + 1)
+    releasedHistorySlots.delete(slotKey)
     return () => {
       const remaining = (mountedHistoryConsumers.get(slotKey) ?? 1) - 1
       if (remaining) {
         mountedHistoryConsumers.set(slotKey, remaining)
       } else {
         mountedHistoryConsumers.delete(slotKey)
+        releasedHistorySlots.add(slotKey)
       }
     }
   }, [consumesSlot, slotKey])
 
-  // Prune only when the catalog changes: a workspace switch must not sweep every retained request.
+  // A catalog change (or mount) sweeps every retained request; a workspace switch checks only the
+  // slots released since the last sweep, so it never walks the whole request map.
   // Declared after registration so a consumer whose worktree left the catalog has already released its slot.
+  const sweptCatalogRef = useRef<ReadonlyMap<string, unknown> | null>(null)
   useEffect(() => {
-    for (const [key, request] of latestGitHistoryRequest) {
-      if (!worktreeMap.has(request.worktreeId) && !mountedHistoryConsumers.has(key)) {
+    const candidates =
+      sweptCatalogRef.current === worktreeMap
+        ? [...releasedHistorySlots]
+        : [...latestGitHistoryRequest.keys()]
+    sweptCatalogRef.current = worktreeMap
+    releasedHistorySlots.clear()
+    for (const key of candidates) {
+      const request = latestGitHistoryRequest.get(key)
+      if (request && !worktreeMap.has(request.worktreeId) && !mountedHistoryConsumers.has(key)) {
         retireGitHistorySlot(key)
       }
     }
-  }, [worktreeMap])
+  }, [slotKey, worktreeMap])
 
   const refreshGitHistory = useCallback(
     async (options?: HistoryRefresh): Promise<void> => {
@@ -149,6 +161,10 @@ export function useSourceControlGitHistory({
       const worktreeId = activeWorktreeId
       const requestId = nextGitHistoryRequestId()
       latestGitHistoryRequest.set(slotKey, { worktreeId, id: requestId })
+      if (!mountedHistoryConsumers.has(slotKey)) {
+        // No consumer holds this slot, so the next switch may retire it.
+        releasedHistorySlots.add(slotKey)
+      }
       const isLatest = (): boolean => latestGitHistoryRequest.get(slotKey)?.id === requestId
       const previous = gitHistorySlots.get(slotKey)
       // Keep the previous page while refreshing; the read fence hides it if it no longer applies.

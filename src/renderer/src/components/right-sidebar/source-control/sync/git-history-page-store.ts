@@ -46,6 +46,8 @@ export const gitHistorySlots = new BoundedMap<string, GitHistoryEntry>({
 })
 export const latestGitHistoryRequest = new Map<string, { worktreeId: string; id: number }>()
 export const mountedHistoryConsumers = new Map<string, number>()
+/** Slots no consumer has held since the last sweep; a workspace switch checks only these. */
+export const releasedHistorySlots = new Set<string>()
 let gitHistoryRequestSeq = 0
 
 export function nextGitHistoryRequestId(): number {
@@ -68,6 +70,7 @@ export function publishGitHistory(slotKey: string, entry: GitHistoryEntry): void
 export function retireGitHistorySlot(slotKey: string): void {
   gitHistorySlots.delete(slotKey)
   latestGitHistoryRequest.delete(slotKey)
+  releasedHistorySlots.delete(slotKey)
   notifyGitHistorySlot(slotKey)
 }
 

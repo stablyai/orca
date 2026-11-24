@@ -40,6 +40,7 @@ vi.mock('@/lib/browser/workspace/workspace-browser-tab-open', () => ({
 }))
 
 import { useGitHistoryCommitActions } from './use-git-history-commit-actions'
+import { COMMIT_COMPARE_JOIN_WINDOW_MS } from './git-history-commit-compare'
 
 const COMMIT: GitHistoryItem = { id: 'c1', parentIds: [], subject: 'c1', message: 'c1' }
 
@@ -105,6 +106,23 @@ describe('useGitHistoryCommitActions context fencing', () => {
     await opening
     expect(mocks.openCommitAllDiffs.mock.lastCall?.[3]).toEqual(changed)
     expect(mocks.getRuntimeGitCommitCompare).toHaveBeenCalledTimes(2)
+  })
+
+  it('replaces a compare that outlived the owner timeout when the commit is reselected', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    mocks.getRuntimeGitCommitCompare
+      .mockReturnValueOnce(new Promise<GitCommitCompareResult>(() => {}))
+      .mockResolvedValueOnce(compare('fresh.ts'))
+    render(<Probe worktreeId="A" />)
+    const actions = latest!
+
+    void actions.loadCommitFiles(COMMIT)
+    clock.mockReturnValue(1_000 + COMMIT_COMPARE_JOIN_WINDOW_MS)
+    const reselected = actions.loadCommitFiles(COMMIT)
+
+    expect(mocks.getRuntimeGitCommitCompare).toHaveBeenCalledTimes(2)
+    await expect(reselected).resolves.toEqual([{ path: 'fresh.ts', status: 'modified' }])
+    clock.mockRestore()
   })
 
   it('reports a shared compare failure to every waiter and reads again afterwards', async () => {

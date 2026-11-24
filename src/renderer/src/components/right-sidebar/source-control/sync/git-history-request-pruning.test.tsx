@@ -44,12 +44,43 @@ describe('history request pruning', () => {
     expect(slotKey && gitHistorySlots.has(slotKey)).toBe(true)
 
     await act(async () =>
-      root.rerender(
-        <Probe worktreeId="B" worktreePath="/b" worktreeMap={new Map([['B', {}]])} />
-      )
+      root.rerender(<Probe worktreeId="B" worktreePath="/b" worktreeMap={new Map([['B', {}]])} />)
     )
 
     expect(latestGitHistoryRequest.has(slotKey!)).toBe(false)
     expect(gitHistorySlots.has(slotKey!)).toBe(false)
+  })
+
+  it('retires a closed section’s page at the next switch in a panel whose catalog lacks it', async () => {
+    mocks.getRuntimeGitHistory.mockResolvedValueOnce(historyResult('a commit'))
+    const section = mount({ worktreeId: 'A', worktreeMap: new Map([['A', {}]]) })
+    await act(() => Promise.resolve())
+    const slotKey = [...latestGitHistoryRequest.keys()].find((key) => key.startsWith('["A"'))!
+    const panelCatalog = new Map([
+      ['B', {}],
+      ['C', {}]
+    ])
+    const panel = mount({
+      worktreeId: 'B',
+      worktreePath: '/b',
+      worktreeMap: panelCatalog,
+      isGitHistoryNeeded: false
+    })
+    section.unmount()
+    expect(gitHistorySlots.has(slotKey)).toBe(true)
+
+    await act(async () =>
+      panel.rerender(
+        <Probe
+          worktreeId="C"
+          worktreePath="/c"
+          worktreeMap={panelCatalog}
+          isGitHistoryNeeded={false}
+        />
+      )
+    )
+
+    expect(latestGitHistoryRequest.has(slotKey)).toBe(false)
+    expect(gitHistorySlots.has(slotKey)).toBe(false)
   })
 })

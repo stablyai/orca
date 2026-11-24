@@ -1,10 +1,15 @@
 import { translate } from '@/i18n/i18n'
 import type { GitCommitCompareResult } from '../../../../../../shared/git/diff/git-diff-compare-types'
 
+type PendingCommitCompare = { read: Promise<GitCommitCompareResult>; startedAt: number }
+
 export type CommitCompareReads = {
   cache: Map<string, GitCommitCompareResult>
-  pending: Map<string, Promise<GitCommitCompareResult>>
+  pending: Map<string, PendingCommitCompare>
 }
+
+// The owner RPC gives up after 15s; a read older than that is presumed stuck and is not joined.
+export const COMMIT_COMPARE_JOIN_WINDOW_MS = 15_000
 
 export function commitDiffErrorMessage(error?: unknown): string {
   return error instanceof Error
@@ -15,28 +20,34 @@ export function commitDiffErrorMessage(error?: unknown): string {
       )
 }
 
-/** Joins the commit's read in flight, or starts one; a ready result is cached for later reads. */
+/** Joins the commit's recent read in flight, or starts one; a ready result is cached for later reads. */
 export function trackCommitCompare(
   reads: CommitCompareReads,
   commitId: string,
   dispatch: () => Promise<GitCommitCompareResult>
 ): Promise<GitCommitCompareResult> {
-  // Reselecting a commit before its compare settles must not ask the owner again.
+  // Reselecting a commit before its compare settles must not ask the owner again,
+  // unless that read has outlived the owner timeout and may never settle.
   const inFlight = reads.pending.get(commitId)
-  if (inFlight) {
-    return inFlight
+  if (inFlight && Date.now() - inFlight.startedAt < COMMIT_COMPARE_JOIN_WINDOW_MS) {
+    return inFlight.read
   }
   const read = dispatch().then((result) => {
     if (result.summary.status !== 'ready') {
       throw new Error(result.summary.errorMessage ?? commitDiffErrorMessage())
     }
-    reads.cache.set(commitId, result)
+    // A read replaced after the timeout must not overwrite its successor's result.
+    if (reads.pending.get(commitId)?.read === read || !reads.cache.has(commitId)) {
+      reads.cache.set(commitId, result)
+    }
     return result
   })
-  reads.pending.set(commitId, read)
-  // A failed read is not kept, so Retry or a later selection reads again.
+  reads.pending.set(commitId, { read, startedAt: Date.now() })
+  // A failed read is not kept, so Retry or a later selection reads again; a replaced read leaves its successor.
   const release = (): void => {
-    reads.pending.delete(commitId)
+    if (reads.pending.get(commitId)?.read === read) {
+      reads.pending.delete(commitId)
+    }
   }
   void read.then(release, release)
   return read
