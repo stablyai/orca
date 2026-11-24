@@ -138,6 +138,8 @@ export async function openKeptClaudeAgentConnection(
   }
   const { managed, child } = relayed
   handlers.onReattach?.()
+  const records = child.stdout.relayRecords
+  records.claim()
   const exited = Promise.withResolvers<Error>()
   let closing = false
   let terminalError: Error | null = null
@@ -171,7 +173,12 @@ export async function openKeptClaudeAgentConnection(
     draining = draining.then(async () => {
       while (head < lines.length) {
         await readingBarrier?.promise
-        deliver(lines[head++])
+        try {
+          deliver(lines[head++])
+        } finally {
+          // Acks cover only lines the chat took, so a pause or crash here replays the rest.
+          records.taken()
+        }
       }
       lines = []
       head = 0
