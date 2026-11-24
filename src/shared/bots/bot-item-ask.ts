@@ -60,10 +60,16 @@ export const BotItemAskSchema = z.object({
 
 export type BotItemAsk = z.infer<typeof BotItemAskSchema>
 
-/** A question's first line as plain words, for a one-line row, so a question the agent wrote in
+/** A question's first line with words, as plain words, for a one-line row, so a question the agent wrote in
  *  Markdown reads cleanly there. */
 export function botItemQuestionLine(text: string): string {
-  return markdownPlainLine(text.split('\n').find((line) => line.trim().length > 0) ?? '')
+  for (const line of text.split('\n')) {
+    const plain = markdownPlainLine(line)
+    if (plain) {
+      return plain
+    }
+  }
+  return ''
 }
 
 /** The ask a stored question event carries (written by v1.4.265 hosts), or null. */
