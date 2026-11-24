@@ -67,6 +67,7 @@ async function signIn(
     },
     {
       signal: new AbortController().signal,
+      stopped: () => null,
       onPrompt: (prompt) => {
         const url = new URL(prompt.authorizeUrl)
         used.authorize = url.searchParams.get('client_id') ?? undefined
@@ -159,20 +160,29 @@ describe('the Google app a sign-in goes through', () => {
 
 /** Signs in through the loopback return, with Google's token endpoint answering `token`. */
 async function failedSignIn(
-  token: (init: RequestInit | undefined, cancel: () => void) => Promise<Response>
+  token: (
+    init: RequestInit | undefined,
+    stop: (why: 'cancelled' | 'silent') => void
+  ) => Promise<Response>
 ) {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const cancelled = new AbortController()
+  const ended = new AbortController()
+  let stopped: 'cancelled' | 'silent' | null = null
+  const stop = (why: 'cancelled' | 'silent'): void => {
+    stopped = why
+    ended.abort()
+  }
   const http: typeof fetch = async (input, init) =>
     String(input).startsWith('https://oauth2.googleapis.com/token')
-      ? token(init, () => cancelled.abort())
+      ? token(init, stop)
       : Response.json({})
   let page: Promise<string> = Promise.resolve('')
   const error = await runGoogleSignIn(
     { http, now: () => 1_000, client: () => CURRENT },
     { choices: [], openBrowser: false },
     {
-      signal: cancelled.signal,
+      signal: ended.signal,
+      stopped: () => stopped,
       onPrompt: (prompt) => {
         const state = new URL(prompt.authorizeUrl).searchParams.get('state')
         page = fetch(`${prompt.redirectUri}?state=${state}&code=the-code`).then((r) => r.text())
@@ -253,13 +263,24 @@ describe('a Google sign-in that fails after Google returned', () => {
   })
 
   it('ends the tab as cancelled, with no failure logged, when cancelled during the exchange', async () => {
-    const { page, logged } = await failedSignIn((init, cancel) => {
-      cancel()
+    const { page, logged } = await failedSignIn((init, stop) => {
+      stop('cancelled')
       return Promise.reject(init?.signal?.reason)
     })
     expect(page).toContain('Google sign-in was cancelled')
     expect(page).not.toContain('Couldn’t sign in to Google')
     expect(logged).toEqual([])
+  })
+
+  it('fails, in the tab too, when the device that started it stops answering during the exchange', async () => {
+    const { error, page, logged } = await failedSignIn((init, stop) => {
+      stop('silent')
+      return Promise.reject(init?.signal?.reason)
+    })
+    expect(error).toBe('The device that started this sign-in stopped answering.')
+    expect(page).toContain('Couldn’t sign in to Google')
+    expect(page).toContain('The device that started this sign-in stopped answering.')
+    expect(logged).toEqual(['[google] sign-in failed at token exchange: owner_silent'])
   })
 
   it('says the account couldn’t be saved when writing it fails', async () => {

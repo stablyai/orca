@@ -19,6 +19,7 @@ import {
 } from '../orca-profiles/cloud-auth/loopback-callback'
 import { createOrcaCloudPkceSecrets } from '../orca-profiles/cloud-auth/profile-cloud-pkce'
 import { checkGoogleClientKey } from './google-client-check'
+import { exchangeFailureCategory, signInFailure } from './google-sign-in-failures'
 import { checkGoogleServices } from './google-readiness'
 import {
   readGoogleAccount,
@@ -29,7 +30,6 @@ import {
   accountFromIdToken,
   exchangeGoogleCode,
   GOOGLE_AUTHORIZE_URL,
-  GoogleTokenError,
   type GoogleHttp
 } from './google-token-endpoint'
 import {
@@ -67,36 +67,6 @@ export type GoogleSignInOptions = {
   openBrowser: boolean
   /** Signs a saved account in through this computer's app too, as a setup that just made it does. */
   currentApp?: boolean
-}
-
-const GOOGLE_SIGN_IN_FAILURES = {
-  network:
-    'Orca couldn’t reach Google from this computer. Check your VPN, proxy or HTTPS inspection, then try again.',
-  invalid_client:
-    'Google rejected this app’s client secret. Download the client file again and import it in Orca.',
-  invalid_grant: 'Google says this sign-in was already used or has expired. Start again in Orca.',
-  refused: 'Google didn’t finish the sign-in. Start again in Orca.',
-  no_account: 'Google didn’t say which account signed in. Try again.',
-  no_refresh_token: 'Google didn’t return a lasting sign-in. Try again.',
-  save_failed: 'Orca couldn’t save the Google account on this computer. Try again.'
-} as const
-
-type GoogleSignInFailureCategory = keyof typeof GOOGLE_SIGN_IN_FAILURES
-
-/** Logs the step and category only: never a code, token, account or address. */
-function signInFailure(
-  step: 'token exchange' | 'account' | 'save',
-  category: GoogleSignInFailureCategory
-): Error {
-  console.warn(`[google] sign-in failed at ${step}: ${category}`)
-  return new Error(GOOGLE_SIGN_IN_FAILURES[category])
-}
-
-function exchangeFailureCategory(error: unknown): GoogleSignInFailureCategory {
-  if (!(error instanceof GoogleTokenError)) {
-    return 'network'
-  }
-  return error.code === 'invalid_client' || error.code === 'invalid_grant' ? error.code : 'refused'
 }
 
 /** The app a sign-in goes through: its id and secret, and the Cloud project its APIs are checked in. */
@@ -263,13 +233,14 @@ export async function runGoogleSignIn(
       code,
       codeVerifier,
       redirectUri: expectation.redirectUri,
-      signal: channel.signal
+      signal: channel.signal,
+      stopped: channel.stopped
     })
     tab.held?.answer(GOOGLE_RETURN_PAGES.signedIn)
     return record
   } catch (error) {
     tab.held?.answer(
-      channel.signal.aborted
+      channel.stopped() === 'cancelled'
         ? GOOGLE_RETURN_PAGES.cancelled
         : GOOGLE_RETURN_PAGES.notSignedIn(
             error instanceof Error ? error.message : 'Return to Orca and try again.'
@@ -283,15 +254,24 @@ async function finishGoogleSignIn(
   deps: GoogleSignInDeps,
   client: GoogleSignInClient,
   asked: readonly GoogleServiceChoice[],
-  args: { code: string; codeVerifier: string; redirectUri: string; signal: AbortSignal }
+  args: {
+    code: string
+    codeVerifier: string
+    redirectUri: string
+    signal: AbortSignal
+    stopped: CallerOwnedSignInChannel<GoogleSignInPrompt, string>['stopped']
+  }
 ): Promise<GoogleAccountRecord> {
   const tokens = await exchangeGoogleCode(deps.http, client, args, args.signal).catch(
     (error: unknown) => {
       // A cancel aborts the request too; it is not a failure to explain.
-      if (args.signal.aborted) {
+      if (args.stopped() === 'cancelled') {
         throw error
       }
-      throw signInFailure('token exchange', exchangeFailureCategory(error))
+      throw signInFailure(
+        'token exchange',
+        args.stopped() === 'silent' ? 'owner_silent' : exchangeFailureCategory(error)
+      )
     }
   )
   const account = accountFromIdToken(tokens.idToken)
