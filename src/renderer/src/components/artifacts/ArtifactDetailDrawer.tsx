@@ -1,7 +1,7 @@
 import * as VisuallyHidden from 'radix-ui/visually-hidden'
-import type { ArtifactListItem } from '../../../../shared/artifacts'
+import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { artifactName } from './artifact-display-labels'
 import { ArtifactDetailHeader } from './ArtifactDetailHeader'
 import { ArtifactPreview } from './ArtifactPreview'
@@ -17,6 +17,7 @@ export function ArtifactDetailDrawer({
   onClose: () => void
   onDelete: (item: ArtifactListItem) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Sheet open={item !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
@@ -29,7 +30,7 @@ export function ArtifactDetailDrawer({
           <div className="flex h-full min-h-0 flex-col">
             <VisuallyHidden.Root asChild>
               <SheetDescription>
-                {translate(
+                {t(
                   'auto.components.artifacts.ArtifactDetailDrawer.description',
                   'Preview and manage this shared artifact.'
                 )}

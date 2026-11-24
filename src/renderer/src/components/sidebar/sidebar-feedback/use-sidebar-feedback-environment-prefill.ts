@@ -1,9 +1,9 @@
 import { useLayoutEffect, useEffect, useRef, type RefObject } from 'react'
-import { resolveClientEnvironmentInfo } from '@/lib/client-environment-info'
+import { resolveClientEnvironmentInfo } from '@/app-shell/platform/client-environment-info'
 import {
   appendClientEnvironmentFooter,
   type ClientEnvironmentInfo
-} from '../../../../../shared/client-environment-info'
+} from '../../../../../shared/feedback/client-environment-info'
 
 type FeedbackSelection = {
   feedback: string

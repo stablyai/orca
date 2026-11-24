@@ -1,3 +1,4 @@
+import type { DaemonLaunchNoteChange } from '../../protocol/daemon-launch-note-protocol'
 import {
   PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION,
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
@@ -9,7 +10,7 @@ import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty
 
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
 import type { SessionInfo } from '../../protocol/daemon-session-info'
-import type { PtyProcessInspectionOptions } from '../../../providers/pty-process-inspection'
+import type { PtyProcessInspectionOptions } from '../../../providers/pty/process-inspection'
 
 import {
   type TerminalProcessInspection as PtyProcessInspection,
@@ -59,6 +60,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       ...(options?.foregroundOnly === true ? { foregroundOnly: true } : {}),
       // Additive: an older daemon ignores it and pays for the full capture.
       ...(options?.steadyState === true ? { steadyState: true } : {}),
+      ...(options?.jobMembershipOnly === true ? { jobMembershipOnly: true } : {}),
       ...(options?.ignoreDetached === true ? { ignoreDetached: true } : {})
     })
   }
@@ -88,6 +90,11 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     } catch {
       return null
     }
+  }
+
+  setLaunchNote(id: string, change: DaemonLaunchNoteChange): void {
+    // Why fire and forget: an older daemon rejects the request and keeps no note, so restore declines.
+    void this.client.request('setLaunchNote', { sessionId: id, change }).catch(() => undefined)
   }
 
   async confirmShellForeground(id: string): Promise<boolean> {

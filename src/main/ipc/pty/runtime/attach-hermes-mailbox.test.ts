@@ -1,15 +1,15 @@
-import '../../../runtime/rpc/unused-default-rpc-methods.test-fixture'
+import '../../../runtime/rpc/dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { settledWriteStub } from '../../../providers/settled-pty-write-stub'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import { OrchestrationDb } from '../../../runtime/orchestration/db'
+import { settledWriteStub } from '../../../providers/testing/settled-pty-write-stub'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import { OrchestrationDb } from '../../../runtime/orchestration/db/orchestration-db'
 import { createRootDispatch } from '../../../runtime/orchestration/db/root-dispatch-test-fixture'
 import {
   createRuntime,
   PANE_KEY,
   PTY_ID,
   TERMINAL_HANDLE
-} from '../../../runtime/orchestration-mailbox-notification-test-harness'
+} from '../../../runtime/orchestration/mailbox/terminal-pointer/orchestration-mailbox-notification-test-harness'
 import { ptySizes } from '../delivery/visibility-state'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../provider/registry'
 import { attachPtyFromRuntimeController, getSizeFromRuntimeController } from './operations'
@@ -35,7 +35,7 @@ describe('mail to a Hermes terminal attached without a renderer', () => {
       vi.useFakeTimers()
       const db = new OrchestrationDb(':memory:')
       try {
-        const { runtime } = createRuntime(db, { headless: true, launchAgent: 'hermes' })
+        const { runtime } = await createRuntime(db, { headless: true, launchAgent: 'hermes' })
         const write = vi.fn((_id: string, data: string) => {
           if (data.includes('You have')) {
             runtime.onPtyData(
@@ -96,6 +96,9 @@ describe('mail to a Hermes terminal attached without a renderer', () => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attach needs runtime; its delivery callbacks are optional.
         const deps = { runtime } as unknown as PtyRuntimeControllerDeps
         expect(await attachPtyFromRuntimeController(deps, PTY_ID)).toBe(true)
+        await runtime.serializeMainTerminalBuffer(PTY_ID)
+        // A reattach hides the command start, so the retained frame is not paint until Hermes redraws it.
+        runtime.onPtyData(PTY_ID, `\x1b[H\x1b[J${screen}`, Date.now())
         await runtime.serializeMainTerminalBuffer(PTY_ID)
         runtime.onPtyData(PTY_ID, '\x1b]0;Hermes ready\x07', Date.now())
         runtime.notifyMessageArrived(mailbox, 'status')

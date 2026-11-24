@@ -26,7 +26,7 @@ import { hasEditorBytesDraft } from '../save/bytes/editor-bytes-documents'
 import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT
-} from '../../../../../shared/editor-save-events'
+} from '../../../../../shared/editor/saving/editor-save-events'
 
 const NOT_SAVED_MESSAGE = "The file wasn't saved. Try saving again."
 
@@ -46,7 +46,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     if (!(event instanceof CustomEvent)) {
       return
     }
-    const { fileId, onNotClosed }: EditorSaveAndCloseDetail = event.detail
+    const { fileId, tabId, onNotClosed }: EditorSaveAndCloseDetail = event.detail
     const file = store.getState().openFiles.find((openFile) => openFile.id === fileId)
     if (!file) {
       return
@@ -68,7 +68,11 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         return
       }
     }
-    store.getState().closeFile(fileId)
+    if (tabId) {
+      store.getState().closeUnifiedTab(tabId)
+    } else {
+      store.getState().closeFile(fileId)
+    }
   }
 
   const handleSaveFile = async (event: Event): Promise<void> => {

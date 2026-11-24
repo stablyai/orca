@@ -1,5 +1,5 @@
 import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
-import { registerRendererMemoryProfileContributor } from '../renderer-memory-profile'
+import { registerRendererMemoryProfileContributor } from '../../diagnostics/memory/renderer-memory-profile'
 import type { PaneRenderingDiagnostics } from './pane-manager-types'
 
 type RegisteredPaneManager = {
@@ -12,9 +12,12 @@ type RegisteredPaneManager = {
   getPanes?: (limit?: number) => { id: number; terminal: unknown }[]
   getPaneCount?: () => number
   isVisibleForAtlasRecovery?: () => boolean
+  containsElement?: (element: Element) => boolean
 }
 
 const liveManagers = new Set<RegisteredPaneManager>()
+// Kept at visibility changes so atlas recovery never walks hidden managers.
+const visibleManagers = new Set<RegisteredPaneManager>()
 const managerIds = new WeakMap<RegisteredPaneManager, number>()
 /** Detaches a manager's WebGL renderers and returns the step that reattaches them. */
 type WebglRendererDetacher = () => () => void
@@ -32,10 +35,20 @@ export function registerLivePaneManager(
     webglRendererDetachers.set(manager, detachWebglRenderers)
   }
   liveManagers.add(manager)
+  notePaneManagerVisibility(manager)
 }
 
 export function unregisterLivePaneManager(manager: RegisteredPaneManager): void {
   liveManagers.delete(manager)
+  visibleManagers.delete(manager)
+}
+
+export function notePaneManagerVisibility(manager: RegisteredPaneManager): void {
+  if (liveManagers.has(manager) && manager.isVisibleForAtlasRecovery?.() !== false) {
+    visibleManagers.add(manager)
+  } else {
+    visibleManagers.delete(manager)
+  }
 }
 
 export function resetAndRefreshAllTerminalWebglAtlases(
@@ -107,6 +120,16 @@ export function rebuildAllTerminalWebglRenderers(reason: string): void {
       // A manager disposed mid-rebuild must not block its siblings.
     }
   }
+}
+
+/** Whether an element sits inside an on-screen manager; checks only visible managers' roots, never their panes. */
+export function isElementInVisiblePaneManager(element: Element): boolean {
+  for (const manager of visibleManagers) {
+    if (manager.containsElement?.(element)) {
+      return true
+    }
+  }
+  return false
 }
 
 /** Report each pane’s WebGL/DOM state so freeze reports distinguish missed repaint from atlas corruption/context loss. */

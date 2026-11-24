@@ -1,6 +1,9 @@
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { editorModelRegistry, type EditorModelRegistryBridge } from '@/lib/editor-model-registry'
+import {
+  editorModelRegistry,
+  type EditorModelRegistryBridge
+} from '@/lib/editor/monaco/editor-model-registry'
 import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
 import {
   editorModelSiblingTabs,
@@ -11,7 +14,7 @@ import {
   getOpenFilesForExternalFileChange,
   type EditorPathMutationTarget
 } from '../../autosave/editor-autosave'
-import type { FileContent } from '../../editor-panel-content-types'
+import type { FileContent } from '../../loading/editor-panel-content-types'
 
 /** Apply rich/notebook/CSV commits to hidden retained models as one undo step; visible code models follow their own content sync. */
 export function applyEditorBufferText(

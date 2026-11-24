@@ -1,4 +1,4 @@
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { ptySizes } from './visibility-state'
 
 export type PtyGrid = { cols: number; rows: number }
@@ -77,18 +77,21 @@ export function commitAttachedPtySize(args: {
   return committedSize
 }
 
+/** A rendererless attach has no pane request, so commit only geometry the attach proved. */
 export function commitRuntimeAttachedPtySize(
   result: PtySpawnResult,
-  runtime: { reflowHeadlessTerminalToPtyGrid: NonNullable<HeadlessReflow> } | null | undefined
+  reflowHeadlessTerminalToPtyGrid: HeadlessReflow
 ): void {
-  const cachedBeforeAttach = ptySizes.get(result.id)
-  const size = resolveAttachedPtySize({ result, cachedBeforeAttach })
-  if (size) {
-    commitAttachedPtySize({
+  const committedSize = resolveAttachedPtySize({
+    result,
+    cachedBeforeAttach: ptySizes.get(result.id)
+  })
+  if (committedSize) {
+    ptySizes.set(result.id, committedSize)
+    reflowHeadlessTerminalToCommittedGrid({
       result,
-      requested: size,
-      cachedBeforeAttach,
-      reflowHeadlessTerminalToPtyGrid: runtime?.reflowHeadlessTerminalToPtyGrid.bind(runtime)
+      committedSize,
+      reflowHeadlessTerminalToPtyGrid
     })
   }
 }

@@ -1,0 +1,94 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type {
+  BotAccessDecision,
+  ConnectorAccessRequest
+} from '../../../src/shared/connector-bot-access-contract'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { accessDecideFailureLine } from './bot-access-request-copy'
+import { decideBotAccessRequest, readHostAccessRequests } from './bot-access-request-operations'
+import type { RouteBot } from './use-route-bot'
+
+export type BotAccessRequests = {
+  requests: readonly ConnectorAccessRequest[]
+  /** How many reads have landed, so a reader can wait for one that started after it asked. */
+  reads: number
+  deciding: boolean
+  decide: (request: ConnectorAccessRequest, decision: BotAccessDecision) => Promise<void>
+}
+
+const NONE: readonly ConnectorAccessRequest[] = []
+
+/** The route bot's waiting requests, read as the sheet opens and again with each route read while it is open; null without a route bot. */
+export function useBotAccessRequests({
+  client,
+  routeBot,
+  visible,
+  showToast
+}: {
+  client: RpcClient | null
+  routeBot: RouteBot | null
+  visible: boolean
+  showToast: (message: string, durationMs?: number) => void
+}): BotAccessRequests | null {
+  const t = useMobileTranslation()
+  const [requests, setRequests] = useState<readonly ConnectorAccessRequest[]>(NONE)
+  const [deciding, setDeciding] = useState(false)
+  const [reads, setReads] = useState(0)
+  // Answered here: a read that started before the host saved it must not bring it back, as on the desktop.
+  const answered = useRef(new Set<string>())
+  const botId = routeBot?.bot.id ?? null
+  const refreshRoute = routeBot?.refresh
+  // The host's botsChanged covers its waiting list too.
+  const routeReads = routeBot?.reads ?? 0
+
+  useEffect(() => {
+    if (!visible || !client || !botId) {
+      return
+    }
+    let current = true
+    void (async () => {
+      const read = await readHostAccessRequests(client)
+      // A failed read keeps the last rows.
+      if (current && read) {
+        setRequests(
+          read.filter(
+            (request) => request.botId === botId && !answered.current.has(request.requestId)
+          )
+        )
+        setReads((count) => count + 1)
+      }
+    })()
+    return () => {
+      current = false
+    }
+  }, [visible, client, botId, routeReads])
+
+  const decide = useCallback(
+    async (request: ConnectorAccessRequest, decision: BotAccessDecision) => {
+      if (!client) {
+        return
+      }
+      setDeciding(true)
+      try {
+        const answer = await decideBotAccessRequest(client, request.requestId, decision)
+        if (answer.ok || answer.error === 'expired') {
+          answered.current.add(request.requestId)
+          setRequests((rows) => rows.filter((row) => row.requestId !== request.requestId))
+        }
+        if (!answer.ok) {
+          showToast(accessDecideFailureLine(request, answer.error, t), 2400)
+        }
+        // The host added the person; show them under People with access.
+        if (answer.ok && decision === 'granted') {
+          refreshRoute?.()
+        }
+      } finally {
+        setDeciding(false)
+      }
+    },
+    [client, showToast, refreshRoute, t]
+  )
+
+  return botId ? { requests, reads, deciding, decide } : null
+}

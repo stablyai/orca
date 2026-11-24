@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PluginFrameGuest } from '../../../../../shared/plugins/frames/plugin-frame-bridge'
 import { currentPluginFrameTheme } from './plugin-panel-design-token-css'
-import { notePluginFrameIsolation } from '@/store/plugin-frame-isolation'
+import { notePluginFrameIsolation } from '@/store/plugins/frames/plugin-frame-isolation'
 
 export type PluginFrameEntryState =
   | { status: 'loading' }

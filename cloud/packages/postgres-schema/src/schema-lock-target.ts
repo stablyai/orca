@@ -98,6 +98,12 @@ const ADD_CONSTRAINT = new RegExp(
     `ADD\\s+CONSTRAINT\\s+${QUALIFIED}`,
   'i'
 )
+// Require IF EXISTS, as for constraints: a precheck skip would otherwise swallow the missing-column error.
+const DROP_COLUMN = new RegExp(
+  `^ALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(?:ONLY\\s+)?${QUALIFIED}\\s+` +
+    `DROP\\s+COLUMN\\s+IF\\s+EXISTS\\s+${QUALIFIED}\\s*$`,
+  'i'
+)
 // Require IF EXISTS or a precheck skip would swallow the missing-constraint error; bare DROP fails boot.
 const DROP_CONSTRAINT = new RegExp(
   `^ALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(?:ONLY\\s+)?${QUALIFIED}\\s+` +
@@ -106,7 +112,10 @@ const DROP_CONSTRAINT = new RegExp(
 )
 
 // Require IF EXISTS to preserve missing-index errors; bare DROP fails boot instead of being prechecked away.
-const DROP_INDEX = new RegExp(`^DROP\\s+INDEX\\s+(?:CONCURRENTLY\\s+)?IF\\s+EXISTS\\s+${QUALIFIED}\\s*$`, 'i')
+const DROP_INDEX = new RegExp(
+  `^DROP\\s+INDEX\\s+(?:CONCURRENTLY\\s+)?IF\\s+EXISTS\\s+${QUALIFIED}\\s*$`,
+  'i'
+)
 
 // Compare one literal reloption as catalog name=value; multi-option statements cannot be safely skipped together.
 const SET_RELOPTION = new RegExp(
@@ -166,6 +175,7 @@ function catalogName(written: string): string {
 const MUST_PARSE = [
   /^CREATE\s+(?:UNIQUE\s+)?INDEX\b/i,
   /^ALTER\s+TABLE\b[\s\S]*\bADD\s+COLUMN\b/i,
+  /^ALTER\s+TABLE\b[\s\S]*\bDROP\s+COLUMN\b/i,
   /^ALTER\s+TABLE\b[\s\S]*\bADD\s+CONSTRAINT\b/i,
   /^ALTER\s+TABLE\b[\s\S]*\bDROP\s+CONSTRAINT\b/i,
   /^ALTER\s+TABLE\b[\s\S]*\bSET\s+\(/i,
@@ -182,6 +192,15 @@ export function schemaLockTarget(statement: string): SchemaLockTarget | undefine
   const column = ADD_COLUMN.exec(sql)
   if (column?.[1] && column[2]) {
     return { kind: 'column', table: column[1], name: catalogName(column[2]), skipWhen: 'present' }
+  }
+  const droppedColumn = DROP_COLUMN.exec(sql)
+  if (droppedColumn?.[1] && droppedColumn[2]) {
+    return {
+      kind: 'column',
+      table: droppedColumn[1],
+      name: catalogName(droppedColumn[2]),
+      skipWhen: 'absent'
+    }
   }
   const added = ADD_CONSTRAINT.exec(sql)
   if (added?.[1] && added[2]) {

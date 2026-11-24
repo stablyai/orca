@@ -1,4 +1,4 @@
-import { iterateProcessOutputLines } from '../../process-output-field-scanner'
+import { iterateProcessOutputLines } from '../../process-observation/process-output-field-scanner'
 
 export const DEFAULT_BASE_REF_PROBES: readonly { ref: string; returnAs: string }[] = [
   { ref: 'refs/remotes/origin/main', returnAs: 'origin/main' },

@@ -200,7 +200,6 @@ export async function collectRendererCensus(page, configuredLineageDepth) {
       },
       agentRows: {
         storeLive: Object.keys(state.agentStatusByPaneKey ?? {}).length,
-        storeRetained: Object.keys(state.retainedAgentsByPaneKey ?? {}).length,
         mounted: mountedAgentRows,
         diagnosticMounted: diagnosticCensus?.agentRows.mountedDom ?? null
       },

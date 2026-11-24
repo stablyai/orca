@@ -113,7 +113,7 @@ export async function commitWithFinalWrite(
 // director at once and each runs a non-concurrent build over the whole table. POSTGRES_LOCK_TIMEOUT_MS
 // bounds how long that build waits for its lock, not how long it holds it. Build the index out of
 // band with CREATE INDEX CONCURRENTLY first, then add it here, where the pre-check skips it forever
-// after. relay-schema-lock-targets.test.ts pins the current list, so an addition fails CI.
+// after.
 // Constraint swaps are matched by NAME in pg_constraint, never by body, because the CHECK list is
 // generated from REGION_LIST. Changing a constraint's definition under the same name therefore does
 // nothing on boot: an operator drops it, and the next boot adds the current definition back.
@@ -261,6 +261,18 @@ CREATE TABLE IF NOT EXISTS relay_assignment_region_preferences (
 );
 CREATE INDEX IF NOT EXISTS relay_assignment_region_preferences_observed
   ON relay_assignment_region_preferences(observed_at);
+
+-- Relay edge fences that did not land (edge-relay-fence.ts). Small and short-lived: a row is
+-- deleted when its fence lands, the host has no row or is back on the edge, or after its last retry.
+CREATE TABLE IF NOT EXISTS relay_edge_fence_pending (
+  user_id TEXT NOT NULL,
+  relay_host_id TEXT NOT NULL,
+  cell_id TEXT NOT NULL,
+  assignment_epoch BIGINT NOT NULL,
+  attempts BIGINT NOT NULL,
+  next_attempt_at BIGINT NOT NULL,
+  PRIMARY KEY (user_id, relay_host_id)
+);
 
 CREATE TABLE IF NOT EXISTS relay_region_decisions (
   user_id TEXT NOT NULL, relay_host_id TEXT NOT NULL,

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/native-chat/native-chat-working-suppression'
+import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/native-chat/transcript/streaming/native-chat-working-suppression'
 
 export function useNativeChatWorkingSuppression(working: boolean, workingEpoch: number | null) {
   const [held, setHeld] = useState({

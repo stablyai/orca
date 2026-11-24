@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 /** Carry optional host through every re-resolution: one repo id can be registered on several hosts. */
 export type RuntimeRepoSelector =

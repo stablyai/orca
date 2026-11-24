@@ -1,0 +1,365 @@
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
+import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
+import { agentIdentityDatabasePath, sameProviderKey } from '../identity/agent-provider-key'
+import {
+  agentProviderKeyOf,
+  agentSightingOf,
+  PaneAgentIdentities,
+  type ProviderSessionSighting,
+  type SettledAgentIdentityPlace
+} from '../identity/pane-agent-identities'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentSessionRecord
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentProviderKey } from '../identity/agent-provider-key'
+import { sleepingRecordOfKey, sleepingRecordOfPane } from '../identity/sleeping-agent-records'
+import {
+  isReverseLookupUnavailable,
+  type ReverseLookupUnavailable
+} from '../identity/agent-identity-worker-protocol'
+import type { OrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address'
+
+import type { EnrichedAgentHookEventPayload } from './server-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import {
+  AgentIdentityWorkerClient,
+  type AgentIdentityClient
+} from '../identity/agent-identity-worker-client'
+import { AgentHookServerStatusQueries } from './server-status-queries'
+import { structuredStatusLegacyEvent } from './server-structured-status-row'
+
+type SleepingAgentSighting = Pick<
+  SleepingAgentSessionRecord,
+  'agent' | 'providerSession' | 'connectionId'
+>
+
+/** One terminal agent conversation's own transcript, as the payload naming it reported it. */
+export type TerminalAgentTranscriptSource = {
+  key: AgentProviderKey
+  providerSession: AgentProviderSessionMetadata
+  /** The identity store generation that vouched for `key`. */
+  authority: number
+}
+
+/** Terminal agent ids are named when a row is admitted, so walks and publications only copy them. */
+export abstract class AgentHookServerAgentIdentities extends AgentHookServerStatusQueries {
+  private identityPath: { from: string | null; path: string | null } = { from: null, path: null }
+  protected readonly agentIdentities = new PaneAgentIdentities(
+    // Read on every admission, so derived once per status path.
+    () => {
+      const from = this.lastStatusFilePath
+      if (from !== this.identityPath.from) {
+        this.identityPath = { from, path: from ? agentIdentityDatabasePath(from) : null }
+      }
+      return this.identityPath.path
+    },
+    (settled) => this.publishSettledAgentIdentities(settled),
+    () => this.createAgentIdentityClient()
+  )
+
+  /** The status path names the identity store, so each change ends or starts its authority
+   *  here, outside any admission. */
+  protected setStatusFilePath(path: string | null): void {
+    this.lastStatusFilePath = path
+    this.agentIdentities.syncAuthority()
+  }
+
+  /** One lazy identity worker per hook-server owner. */
+  protected createAgentIdentityClient(): AgentIdentityClient {
+    return new AgentIdentityWorkerClient()
+  }
+
+  /** Tab snapshot rows copy ids, so a settled id clears them. */
+  protected providerRowsByTab: Map<string, AgentStatusIpcPayload[]> | null = null
+
+  /** Window readers and session.tabs see a row's new id with no hook event attached, so no
+   *  transition effect or enriched subscriber runs again. */
+  protected abstract publishAgentIdentityProjection(row: EnrichedAgentHookEventPayload): void
+
+  protected abstract replaceTranscriptPollRow(
+    previous: EnrichedAgentHookEventPayload,
+    next: EnrichedAgentHookEventPayload
+  ): void
+
+  /** A committed answer, or the end of the authority that gave one, re-stamps the current rows
+   *  on its key and republishes each as a projection: status, clocks and order stay as they are. */
+  private publishSettledAgentIdentities(settled: SettledAgentIdentityPlace[]): void {
+    const projections: EnrichedAgentHookEventPayload[] = []
+    for (const { place, paneKey, canonicalSubject, identity } of settled) {
+      if (canonicalSubject) {
+        const subject = this.canonicalSubjectsByPane.get(paneKey)?.get(canonicalSubject)
+        const status = subject && this.canonicalStatusStore.getParent(subject)?.status
+        if (status) {
+          projections.push({ ...structuredStatusLegacyEvent(status), agentIdentity: identity })
+        }
+        continue
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+      const row = this.state.lastStatusByPaneKey.get(place) as
+        | EnrichedAgentHookEventPayload
+        | undefined
+      const carried = row?.agentIdentity
+      // The row may have moved on to another key since the request; only its own key settles.
+      if (
+        !carried ||
+        !sameProviderKey(carried.key, identity.key) ||
+        this.agentIdentities.isCurrent(carried) ||
+        (carried.pending && identity.pending)
+      ) {
+        continue
+      }
+      const next = { ...row, agentIdentity: identity }
+      if (
+        admitLegacyAgentStatus(
+          this.state,
+          'main-status-update',
+          next,
+          AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+        )
+      ) {
+        this.replaceTranscriptPollRow(row, next)
+        projections.push(next)
+      }
+    }
+    // Readers of the projection must not see the cached ids it replaces.
+    this.providerRowsByTab = null
+    for (const projection of projections) {
+      this.publishAgentIdentityProjection(projection)
+    }
+  }
+
+  // A prototype getter: the base class reads it while its own fields initialize.
+  protected override get legacyRowHooks() {
+    return {
+      prepareRow: (entry: AgentHookEventPayload, previous: AgentHookEventPayload | undefined) => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+        const row = entry as EnrichedAgentHookEventPayload
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
+        const before = previous as EnrichedAgentHookEventPayload | undefined
+        const identity = this.agentIdentities.assign(
+          agentSightingOf(row),
+          row.agentIdentity ?? before?.agentIdentity
+        )
+        if (identity) {
+          row.agentIdentity = identity
+        } else {
+          delete row.agentIdentity
+        }
+      },
+      rowChanged: (key: string, entry: AgentHookEventPayload | undefined) => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+        const identity = (entry as EnrichedAgentHookEventPayload | undefined)?.agentIdentity
+        this.agentIdentities.setPlace(key, key.split('\0', 1)[0] ?? key, identity)
+      }
+    }
+  }
+
+  /** Panes proven to run terminal agent `id` now; null when this host never minted it. A miss
+   *  in the live index awaits the store, since a dormant conversation keeps its id.
+   *  `includeSleeping` adds finished sleeping panes, as `worktree.ps` lists; they run nothing. */
+  async terminalAgentPlaces(
+    id: string,
+    { includeSleeping = false }: { includeSleeping?: boolean } = {}
+  ): Promise<{ paneKey: string; worktreeId?: string }[] | null> {
+    const authority = this.agentIdentities.authority()
+    const known = await this.agentIdentities.isTerminalIdentity(id)
+    // An owner that ended during the wait proves nothing, not even an empty terminal.
+    if (known !== true || authority !== this.agentIdentities.generation) {
+      return null
+    }
+    // Read the index after the await, so the places are the rows now, not when asked.
+    const places: { paneKey: string; worktreeId?: string }[] = []
+    for (const place of this.agentIdentities.placesOf(id)) {
+      // Canonical rows are never hydrated; a legacy row counts only once this runtime observed it,
+      // since a saved status (even Done) cannot prove its process survived Orca being closed.
+      // A sleeping row needs no such proof: it claims only a finished agent in a placed pane.
+      const subject = place.canonical
+        ? this.canonicalSubjectsByPane.get(place.paneKey)?.get(place.key)
+        : undefined
+      const row = place.canonical
+        ? subject && this.canonicalStatusStore.getParent(subject)?.status
+        : this.state.lastStatusByPaneKey.get(place.key)
+      const observed = place.canonical || this.runtimeObservedStatusPaneKeys.has(place.key)
+      const ended = row && 'agentPresence' in row && row.agentPresence?.ended === true
+      // Resume seeds, exited agents and unconfirmed restored rows prove no running agent.
+      if (
+        row &&
+        ('paneSleep' in row && row.paneSleep ? includeSleeping : observed && !ended) &&
+        row.providerSessionOnly !== true &&
+        row.restoredUnconfirmed !== true
+      ) {
+        places.push({
+          paneKey: place.paneKey,
+          ...(row.worktreeId ? { worktreeId: row.worktreeId } : {})
+        })
+      }
+    }
+    return places
+  }
+
+  /** Whether this host minted terminal agent `id`; undefined when the store cannot answer now. */
+  async isTerminalAgentId(id: string): Promise<boolean | undefined> {
+    return this.agentIdentities.isTerminalIdentity(id)
+  }
+
+  /** Orca ids this host linked to a provider's own session id; unavailable when this identity
+   *  file can't answer that by index; undefined when the store cannot answer now. */
+  async terminalAgentIdsOfProviderSession(
+    providerSessionId: string
+  ): Promise<OrcaSessionId[] | ReverseLookupUnavailable | undefined> {
+    return this.agentIdentities.idsOfProviderSession(providerSessionId)
+  }
+
+  /** Where terminal agent `id`'s transcript is: a current row carrying the id, in any state (a read
+   *  needs no running agent), else a sleeping record naming its provider key. The session id and
+   *  path come from one payload, never from a pane, so a row attributed to the wrong pane still
+   *  names its own conversation. null: nothing names it now; undefined: the store cannot answer.
+   *  `known` is an earlier answer: an id is never relinked, so while its store still stands a
+   *  recheck needs no second store question. */
+  async terminalAgentTranscriptSource(
+    id: string,
+    readSleeping: () => Readonly<Record<string, SleepingAgentSighting>>,
+    known?: TerminalAgentTranscriptSource
+  ): Promise<TerminalAgentTranscriptSource | ReverseLookupUnavailable | null | undefined> {
+    const authority = this.agentIdentities.authority()
+    const live = this.liveTranscriptSource(id, authority)
+    if (live?.providerSession.transcriptPath) {
+      return live
+    }
+    const linked =
+      known?.authority === authority
+        ? { key: known.key }
+        : await this.agentIdentities.providerKeyOf(id)
+    if (authority !== this.agentIdentities.generation) {
+      return undefined
+    }
+    if (!linked) {
+      return live ?? undefined
+    }
+    if (isReverseLookupUnavailable(linked)) {
+      return live ?? linked
+    }
+    const { key } = linked
+    const windows = process.platform === 'win32'
+    // Sleeping records carry no distro to prove a WSL path's owner.
+    if (!key || (windows && key.wslDistro !== '')) {
+      return live
+    }
+    const records = readSleeping()
+    if (live) {
+      // Recovery records belong to panes; unrelated saved agents must not slow a live read.
+      for (const place of this.agentIdentities.placesOf(id)) {
+        const record = sleepingRecordOfPane(records, place.paneKey, key, windows)
+        if (record?.providerSession.transcriptPath) {
+          return { key, providerSession: record.providerSession, authority }
+        }
+      }
+      return live
+    }
+    const record = sleepingRecordOfKey(records, key, windows)
+    if (record) {
+      return { key, providerSession: record.providerSession, authority }
+    }
+    return live
+  }
+
+  private liveTranscriptSource(
+    id: string,
+    authority: number
+  ): TerminalAgentTranscriptSource | null {
+    let best: { key: AgentProviderKey; row: EnrichedAgentHookEventPayload } | null = null
+    for (const place of this.agentIdentities.placesOf(id)) {
+      const subject = place.canonical
+        ? this.canonicalSubjectsByPane.get(place.paneKey)?.get(place.key)
+        : undefined
+      const status = subject && this.canonicalStatusStore.getParent(subject)?.status
+      const row = place.canonical
+        ? status && structuredStatusLegacyEvent(status)
+        : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+          (this.state.lastStatusByPaneKey.get(place.key) as
+            | EnrichedAgentHookEventPayload
+            | undefined)
+      const key = place.canonical
+        ? this.agentIdentities.canonicalIdentity(place.key)?.key
+        : row?.agentIdentity?.key
+      if (!row?.providerSession || !key) {
+        continue
+      }
+      // Rows of one conversation share its key; prefer one that reported the transcript path.
+      const hasPath = (candidate: EnrichedAgentHookEventPayload): boolean =>
+        Boolean(candidate.providerSession?.transcriptPath)
+      if (
+        !best ||
+        (hasPath(row) && !hasPath(best.row)) ||
+        (hasPath(row) === hasPath(best.row) && row.receivedAt > best.row.receivedAt)
+      ) {
+        best = { key, row }
+      }
+    }
+    return best?.row.providerSession
+      ? { key: best.key, providerSession: best.row.providerSession, authority }
+      : null
+  }
+
+  /** The pane's terminal agent id, keyed as Copy Session ID picks its id: a confirmed live row
+   *  (legacy or tmux-selected) wins even without a provider session; only an absent or
+   *  unconfirmed row falls back to the pane's sleeping record. An explicit request: it waits for
+   *  a pending lookup, or retries a failed one even during the backoff. */
+  async resolvePaneAgentId(
+    paneKey: string,
+    readSleeping: () => SleepingAgentSighting | undefined
+  ): Promise<OrcaSessionId | null> {
+    // Before selection, so a first click's lazy store start is not taken for its end.
+    const authority = this.agentIdentities.authority()
+    const selected = this.paneAgentSighting(paneKey, readSleeping)
+    if (!selected || selected.id) {
+      return selected?.id ?? null
+    }
+    const id = await this.agentIdentities.identify(selected.sighting)
+    // The owner may have closed, or the pane moved to another conversation, during the wait.
+    if (authority !== this.agentIdentities.generation) {
+      return null
+    }
+    const current = this.paneAgentSighting(paneKey, readSleeping)
+    const asked = agentProviderKeyOf(selected.sighting)
+    const now = current && agentProviderKeyOf(current.sighting)
+    return asked && now && sameProviderKey(asked, now) ? id : null
+  }
+
+  private paneAgentSighting(
+    paneKey: string,
+    readSleeping: () => SleepingAgentSighting | undefined
+  ): { sighting: ProviderSessionSighting; id?: OrcaSessionId } | null {
+    const resolved = this.resolvePaneKeyAlias(paneKey)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+    const legacy = this.state.lastStatusByPaneKey.get(resolved) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    const live = legacy ?? this.getTmuxSelectedStatus(resolved)
+    if (live && live.restoredUnconfirmed !== true) {
+      return live.structuredHost
+        ? null
+        : {
+            sighting: agentSightingOf(live),
+            ...(live.agentIdentity?.id && this.agentIdentities.isCurrent(live.agentIdentity)
+              ? { id: live.agentIdentity.id }
+              : {})
+          }
+    }
+    const sleeping = readSleeping()
+    // Sleeping records carry no WSL distro; a woken agent's own hook names it. A record from a
+    // foreign connection (a direct SSH relay) names no conversation on this host.
+    if (!sleeping || process.platform === 'win32') {
+      return null
+    }
+    return {
+      sighting: {
+        agent: sleeping.agent,
+        providerSession: sleeping.providerSession,
+        connectionId: sleeping.connectionId ?? null
+      }
+    }
+  }
+}

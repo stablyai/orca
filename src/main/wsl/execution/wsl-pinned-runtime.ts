@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { basename } from 'node:path'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import { materializeNodeRuntimeArchive } from '../../node-runtime/pinned-runtime-materializer'
 import { probeLinuxLibc } from '../../node-runtime/linux-libc-probe'
 import {
@@ -12,9 +12,12 @@ import {
 import {
   REMOTE_NODE_RUNTIME_READY,
   assertRemoteNodeRuntimePromoted
-} from '../../ssh/orcad-remote-node-runtime-report'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import { isGlibcBelow, PINNED_NODE_GLIBC_FLOOR } from '../../ssh/pinned-runtime-host-target'
+} from '../../managed-server/install/orcad-remote-node-runtime-report'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
+import {
+  isGlibcBelow,
+  PINNED_NODE_GLIBC_FLOOR
+} from '../../managed-server/install/pinned-runtime-host-target'
 import type { WslSpec } from './wsl-runner'
 
 const downloads = new Map<string, Promise<string>>()

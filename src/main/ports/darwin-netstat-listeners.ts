@@ -1,5 +1,5 @@
 import { isIP } from 'node:net'
-import { getProcessOutputFields } from '../../shared/process-output-field-scanner'
+import { getProcessOutputFields } from '../../shared/process-observation/process-output-field-scanner'
 import { dedupeRawPorts } from './local-workspace-port-address'
 import type { RawListeningPort } from './local-workspace-port-scan-state'
 

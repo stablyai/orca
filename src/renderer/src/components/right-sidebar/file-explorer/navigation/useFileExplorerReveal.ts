@@ -3,9 +3,9 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { getExplorerDisplayDepth } from './file-explorer-display-root'
-import { FILE_EXPLORER_FULL_ROOT } from '../../../../../../shared/file-explorer-display-root'
+import { FILE_EXPLORER_FULL_ROOT } from '../../../../../../shared/file-listing/file-explorer-display-root'
 import { useAppStore } from '@/store/index'
-import { getRevealAncestorDirs } from './file-explorer-paths'
+import { getRevealTarget } from './file-explorer-paths'
 import type { DirCache } from '../tree/file-explorer-types'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
 import { fileExplorerRevealDirToReadOn } from '../tree/file-explorer-dir-pages'
@@ -77,7 +77,7 @@ export function useFileExplorerReveal({
     }
   }, [cancelRevealScroll, flashTimeoutRef])
 
-  const pendingRevealAncestorDirs = useMemo(() => {
+  const pendingRevealTarget = useMemo(() => {
     if (
       !pendingExplorerReveal ||
       !activeWorktreeId ||
@@ -90,7 +90,7 @@ export function useFileExplorerReveal({
     if (getRelativePathInsideRoot(pendingExplorerReveal.filePath, worktreePath) === null) {
       return null
     }
-    return getRevealAncestorDirs(displayRootPath ?? worktreePath, pendingExplorerReveal.filePath)
+    return getRevealTarget(displayRootPath ?? worktreePath, pendingExplorerReveal.filePath)
   }, [activeWorktreeId, pendingExplorerReveal, worktreePath, displayRootPath])
 
   useEffect(() => {
@@ -114,17 +114,18 @@ export function useFileExplorerReveal({
       }
       return
     }
-    if (!pendingRevealAncestorDirs) {
+    if (!pendingRevealTarget) {
       clearPendingExplorerReveal()
       return
     }
+    const { ancestorDirs } = pendingRevealTarget
 
     useAppStore.setState((state) => {
       const currentExpanded = state.expandedDirs[activeWorktreeId] ?? new Set<string>()
       const nextExpanded = new Set(currentExpanded)
       let changed = false
 
-      for (const dirPath of pendingRevealAncestorDirs) {
+      for (const dirPath of ancestorDirs) {
         if (!nextExpanded.has(dirPath)) {
           nextExpanded.add(dirPath)
           changed = true
@@ -152,10 +153,10 @@ export function useFileExplorerReveal({
         return
       }
 
-      for (let depth = 0; depth < pendingRevealAncestorDirs.length; depth += 1) {
+      for (const dirPath of ancestorDirs) {
         const ancestorLoaded = await loadDir(
-          pendingRevealAncestorDirs[depth],
-          getExplorerDisplayDepth(worktreePath, pendingRevealAncestorDirs[depth]) - 1
+          dirPath,
+          getExplorerDisplayDepth(worktreePath, dirPath) - 1
         )
         if (!ancestorLoaded) {
           return
@@ -167,7 +168,7 @@ export function useFileExplorerReveal({
     clearPendingExplorerReveal,
     loadDir,
     pendingExplorerReveal,
-    pendingRevealAncestorDirs,
+    pendingRevealTarget,
     onRevealOutsideRoot,
     worktreePath,
     displayRootPath
@@ -179,23 +180,16 @@ export function useFileExplorerReveal({
       !activeWorktreeId ||
       pendingExplorerReveal.worktreeId !== activeWorktreeId ||
       !worktreePath ||
-      !pendingRevealAncestorDirs
+      !pendingRevealTarget
     ) {
       return
     }
 
-    const targetPath = pendingExplorerReveal.filePath
-    const parentDirPath =
-      pendingRevealAncestorDirs.length > 0
-        ? pendingRevealAncestorDirs.at(-1)!
-        : (displayRootPath ?? worktreePath)
+    const { targetPath, ancestorDirs } = pendingRevealTarget
+    const parentDirPath = ancestorDirs.at(-1) ?? displayRootPath ?? worktreePath
     const parentDirCache = dirCache[parentDirPath]
-    const missingExpandedAncestor = pendingRevealAncestorDirs.find(
-      (dirPath) => !expanded.has(dirPath)
-    )
-    const missingAncestor = pendingRevealAncestorDirs.find(
-      (dirPath) => !rowProjection.hasPath(dirPath)
-    )
+    const missingExpandedAncestor = ancestorDirs.find((dirPath) => !expanded.has(dirPath))
+    const missingAncestor = ancestorDirs.find((dirPath) => !rowProjection.hasPath(dirPath))
     const rootStillLoading = !rootCache || loadingDirPaths.has(displayRootPath ?? worktreePath)
     const parentDirStillLoading =
       parentDirPath === (displayRootPath ?? worktreePath)
@@ -208,16 +202,13 @@ export function useFileExplorerReveal({
       !rootStillLoading &&
       (rootCache?.error ||
         parentDirCache?.error ||
-        pendingRevealAncestorDirs.some((path) => dirCache[path]?.error))
+        ancestorDirs.some((path) => dirCache[path]?.error))
     ) {
       clearPendingExplorerReveal()
       return
     }
     const readOn = loadMoreDir
-      ? fileExplorerRevealDirToReadOn(dirCache, rowProjection, [
-          ...pendingRevealAncestorDirs,
-          targetPath
-        ])
+      ? fileExplorerRevealDirToReadOn(dirCache, rowProjection, [...ancestorDirs, targetPath])
       : null
     if (readOn !== null) {
       if (!loadingDirPaths.has(readOn)) {
@@ -277,7 +268,7 @@ export function useFileExplorerReveal({
     loadMoreDir,
     loadingDirPaths,
     pendingExplorerReveal,
-    pendingRevealAncestorDirs,
+    pendingRevealTarget,
     rowProjection,
     rootCache,
     setFlashingPath,

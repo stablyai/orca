@@ -1,16 +1,18 @@
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import {
   buildManagedCommandHook,
-  createManagedCommandMatcher,
-  getSharedManagedScriptPath,
-  hookDefinitionHasManagedCommand,
-  isPlainObject,
-  removeManagedCommands,
-  wrapPosixHookCommand,
   type HookDefinition
-} from '../agent-hooks/installer-utils'
-import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+} from '../agent-hooks/installation/configuration/hook-config-schema'
+import {
+  createManagedCommandMatcher,
+  hookDefinitionHasManagedCommand,
+  removeManagedCommands
+} from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
+import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
 
 const ZCODE_SCRIPT_BASE = 'zcode-hook'
 
@@ -42,8 +44,25 @@ export function getZCodeConfigPath(): string {
   return join(homedir(), '.zcode', 'cli', 'config.json')
 }
 
+function getZCodeRemoteCliDir(remoteHome: string): string {
+  return `${remoteHome.replace(/\/$/, '')}/.zcode/cli`
+}
+
 export function getZCodeRemoteConfigPath(remoteHome: string): string {
-  return `${remoteHome.replace(/\/$/, '')}/.zcode/cli/config.json`
+  return `${getZCodeRemoteCliDir(remoteHome)}/config.json`
+}
+
+/** npm zcode-app-cli reads this file instead of config.json. */
+export function getZCodeAppCliSettingsPath(): string {
+  // Relative overrides resolve against the zcode process cwd, which Orca cannot know.
+  const override = process.env.ZCODE_CLI_SETTINGS_FILE?.trim()
+  return override && isAbsolute(override)
+    ? override
+    : join(homedir(), '.zcode', 'cli', 'setting.json')
+}
+
+export function getZCodeRemoteAppCliSettingsPath(remoteHome: string): string {
+  return `${getZCodeRemoteCliDir(remoteHome)}/setting.json`
 }
 
 export function getZCodeManagedScriptFileName(): string {

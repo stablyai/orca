@@ -4,10 +4,10 @@ import { translate } from '@/i18n/i18n'
 import {
   ONBOARDING_FINAL_STEP,
   ONBOARDING_FLOW_VERSION
-} from '../../../../shared/onboarding-defaults'
-import type { EventProps } from '../../../../shared/telemetry-events'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+} from '../../../../shared/onboarding/onboarding-defaults'
+import type { EventProps } from '../../../../shared/telemetry/telemetry-event-classification'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { STEPS, type AgentSurface } from './use-onboarding-flow-types'
 import type { ThemeLookSettings } from './onboarding-theme-look-settings'
@@ -167,12 +167,11 @@ export async function prepareSkippedOnboardingPreferences({
         await updateSettings({ ...lookBeforePreview, theme: themeToRestore })
       }
     }
-    // Why: skipping bypasses step persistence, so save the visible agent page's choices before closing.
-    // The Chat or Terminal page alone keeps the saved setting, matching Continue there.
-    if (currentStepId === 'agent') {
-      const updates = {
+    // Later confirms the visible page without replacing an unvisited agent choice.
+    if (currentStepId === 'agent_surface' || currentStepId === 'agent') {
+      const updates: Partial<GlobalSettings> = {
         ...agentSurfaceSettingsUpdate(settings, agentSurface),
-        ...(selectedAgent ? { defaultTuiAgent: selectedAgent } : {})
+        ...(currentStepId === 'agent' ? { defaultTuiAgent: selectedAgent ?? 'blank' } : {})
       }
       if (Object.keys(updates).length > 0) {
         await updateSettings(updates)

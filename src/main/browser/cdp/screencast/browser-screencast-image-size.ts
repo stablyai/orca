@@ -1,4 +1,4 @@
-import type { BrowserScreencastFormat } from '../../../../shared/browser-screencast-protocol'
+import type { BrowserScreencastFormat } from '../../../../shared/browser/screencast/browser-screencast-protocol'
 
 type ImageSize = {
   width: number

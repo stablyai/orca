@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { OrcadManagedStopRequestSchema } from '../../../shared/orcad-stop-request'
+import { OrcadManagedStopRequestSchema } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import {
   ORCAD_INSTALL_MODEL,
   remoteInstallDirName,

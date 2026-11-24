@@ -1,13 +1,13 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
-import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
+import type { ConfirmationDialogContextValue } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { requestEditorFileSave, type EditorSaveFileTarget } from '../../autosave/editor-autosave'
 import {
   EDITOR_NOT_UTF8_SAVE_MESSAGE,
   EDITOR_STALE_SAVE_MESSAGE
 } from '../queue/editor-save-disk-precondition'
-import { FILE_BYTES_SAVE_UPDATE_REQUIRED_MESSAGE } from '../../../../../../shared/file-bytes-write'
+import { FILE_BYTES_SAVE_UPDATE_REQUIRED_MESSAGE } from '../../../../../../shared/file-write/file-bytes-write'
 import { EditorSaveDeniedByPluginError } from '../transforms/editor-save-plugin-hook'
 
 /** Asks before an explicit save rewrites a non-UTF-8 file as UTF-8, which can't be undone. */

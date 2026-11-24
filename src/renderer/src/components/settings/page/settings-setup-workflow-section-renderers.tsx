@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store'
+import { SharedLinksSettingsPane } from '../bots/SharedLinksSettingsPane'
 import { SessionHistorySettingsPane } from '../session-history/SessionHistorySettingsPane'
 import { ArtifactsSettingsPane } from '../artifacts/ArtifactsSettingsPane'
 import { AutomationsSettingsPane } from '../automations/AutomationsSettingsPane'
@@ -5,56 +7,94 @@ import { GeneralPane } from '../general/GeneralPane'
 import { IntegrationsPane } from '../integrations/IntegrationsPane'
 import { MobileSettingsPane } from '../mobile/MobileSettingsPane'
 import { OrcaAccountSettingsPane } from '../accounts/orca/OrcaAccountSettingsPane'
+import { ServerOrcaAccountPane } from '../accounts/orca/ServerOrcaAccountPane'
+import { SettingsHostScopeUnavailableNotice } from '../host-scope/SettingsHostScopePicker'
 import { SettingsSetupGuidePane } from '../setup-guide/SettingsSetupGuidePane'
 import { ShareSkillsSettingsPane } from '../skills/sharing/ShareSkillsSettingsPane'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { WorkspaceCleanupSettingsPane } from '../workspace-cleanup/WorkspaceCleanupSettingsPane'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 
 export function renderOrcaAccountSettingsSection(
-  context: SettingsRenderContext
+  context: SettingsRenderContext,
+  t: Translate = translate
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
+  const { target } = model.settingsHostScope
+  const serverName =
+    target.kind === 'environment'
+      ? (model.runtimeEnvironments.find((entry) => entry.id === target.environmentId)?.name ??
+        t('components.settings.notifications.server.fallbackHost', 'this server'))
+      : null
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="orca-account"
-      title={translate('auto.components.settings.orcaAccount.title', 'Orca Account')}
-      description={translate(
-        'auto.components.settings.orcaAccount.description',
-        'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
-      )}
+      title={t('auto.components.settings.orcaAccount.title', 'Orca Account')}
+      description={
+        serverName === null
+          ? t(
+              'auto.components.settings.orcaAccount.description',
+              'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
+            )
+          : t(
+              'components.settings.orcaAccount.server.sectionDescription',
+              'The Orca account {{host}} runs as, for its bots’ Slack, GitHub, Linear and webhooks.',
+              { host: serverName }
+            )
+      }
       searchEntries={navigation.getSectionSearchEntries('orca-account')}
     >
-      {view.isSectionMounted('orca-account') ? <OrcaAccountSettingsPane /> : null}
+      {!view.isSectionMounted('orca-account') ? null : !model.settingsHostScope.available ? (
+        <SettingsHostScopeUnavailableNotice />
+      ) : (
+        <SettingsGroup bodyClassName="py-4">
+          {target.kind === 'environment' ? (
+            <ServerOrcaAccountPane environmentId={target.environmentId} />
+          ) : (
+            <OrcaAccountSettingsPane />
+          )}
+        </SettingsGroup>
+      )}
     </SettingsSection>
   ) : null
 }
 
-export function renderSetupGuideSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+export function renderSetupGuideSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
   const { navigation, view } = context
   return (
     <SettingsSection
       id="setup-guide"
-      title={translate('auto.components.settings.Settings.6d119427ef', 'Onboarding checklist')}
-      description={translate(
+      title={t('auto.components.settings.Settings.6d119427ef', 'Onboarding checklist')}
+      description={t(
         'auto.components.settings.Settings.6855b0f77d',
         'Finish the core workflows that make Orca useful for parallel agent work.'
       )}
       searchEntries={navigation.getSectionSearchEntries('setup-guide')}
-      bodyClassName="overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none"
+      bodyClassName="overflow-hidden"
     >
       {view.isSectionMounted('setup-guide') ? <SettingsSetupGuidePane /> : null}
     </SettingsSection>
   )
 }
 
-export function renderGeneralSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+export function renderGeneralSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
   const { model, interactions, navigation, terminal, view } = context
   return (
     <SettingsSection
       id="general"
-      title={translate('auto.components.settings.Settings.7807c11c4d', 'General')}
-      description={translate(
+      hideHeader
+      title={t('auto.components.settings.Settings.7807c11c4d', 'General')}
+      description={t(
         'auto.components.settings.Settings.f9b77539fd',
         'Workspace defaults, app setup, and maintenance.'
       )}
@@ -62,9 +102,23 @@ export function renderGeneralSettingsSection(context: SettingsRenderContext): Re
     >
       {view.isSectionMounted('general') ? (
         <GeneralPane
+          subPage={model.generalSubPage}
+          onSelectSubPage={(page, sectionId) => {
+            if (sectionId) {
+              useAppStore
+                .getState()
+                .openSettingsTarget({ pane: 'general', repoId: null, sectionId })
+              return
+            }
+            model.setGeneralSubPage(page)
+            model.setHighlightedSettingsTarget(null)
+            model.setSettingsSearchQuery('')
+            interactions.contentScrollRef.current?.scrollTo({ top: 0 })
+          }}
           settings={model.settings}
           updateSettings={model.updateSettings}
           updateSettingsOrThrow={model.updateSettingsOrThrow}
+          hostScope={model.settingsHostScope}
           fontSuggestions={model.terminalFontSuggestions}
           onRequestFontSuggestions={interactions.requestFontSuggestions}
           wslSupportedPlatform={terminal.localWslSupportedPlatform}
@@ -78,19 +132,19 @@ export function renderGeneralSettingsSection(context: SettingsRenderContext): Re
 }
 
 export function renderIntegrationsSettingsSection(
-  context: SettingsRenderContext
+  context: SettingsRenderContext,
+  t: Translate = translate
 ): React.JSX.Element {
   const { navigation, view } = context
   return (
     <SettingsSection
       id="integrations"
-      title={translate('auto.components.settings.Settings.c9ca101a3b', 'Integrations')}
-      description={translate(
+      title={t('auto.components.settings.Settings.c9ca101a3b', 'Integrations')}
+      description={t(
         'auto.components.settings.Settings.b07041697f',
         'Connect GitHub, GitLab, Linear, and source-hosting services.'
       )}
       searchEntries={navigation.getSectionSearchEntries('integrations')}
-      bodyClassName="rounded-none border-0 bg-transparent p-0 shadow-none"
     >
       {view.isSectionMounted('integrations') ? <IntegrationsPane /> : null}
     </SettingsSection>
@@ -98,15 +152,16 @@ export function renderIntegrationsSettingsSection(
 }
 
 export function renderMobileSettingsSection(
-  context: SettingsRenderContext
+  context: SettingsRenderContext,
+  t: Translate = translate
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="mobile"
-      title={translate('auto.components.settings.Settings.c40dadaac8', 'Mobile')}
+      title={t('auto.components.settings.Settings.c40dadaac8', 'Mobile')}
       badge="Beta"
-      description={translate(
+      description={t(
         'auto.components.settings.Settings.c6c01ac209',
         'Control terminals and agents from your phone.'
       )}
@@ -118,14 +173,15 @@ export function renderMobileSettingsSection(
 }
 
 export function renderAutomationsSettingsSection(
-  context: SettingsRenderContext
+  context: SettingsRenderContext,
+  t: Translate = translate
 ): React.JSX.Element {
   const { model, navigation, view } = context
   return (
     <SettingsSection
       id="automations"
-      title={translate('auto.components.settings.automations.title', 'Automations')}
-      description={translate(
+      title={t('auto.components.settings.automations.title', 'Automations')}
+      description={t(
         'auto.components.settings.automations.description',
         'Schedule agent work and choose whether Automations appears in the sidebar.'
       )}
@@ -138,14 +194,17 @@ export function renderAutomationsSettingsSection(
   )
 }
 
-export function renderArtifactsSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+export function renderArtifactsSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
   const { model, navigation, view } = context
   return (
     <SettingsSection
       id="artifacts"
-      title={translate('auto.components.settings.artifacts.title', 'Artifacts')}
+      title={t('auto.components.settings.artifacts.title', 'Artifacts')}
       badge="Beta"
-      description={translate(
+      description={t(
         'auto.components.settings.artifacts.description',
         'Share HTML and Markdown files with your team and manage their public links.'
       )}
@@ -159,15 +218,16 @@ export function renderArtifactsSettingsSection(context: SettingsRenderContext): 
 }
 
 export function renderShareSkillsSettingsSection(
-  context: SettingsRenderContext
+  context: SettingsRenderContext,
+  t: Translate = translate
 ): React.JSX.Element {
   const { navigation, view } = context
   return (
     <SettingsSection
       id="share-skills"
-      title={translate('auto.components.settings.shareSkills.title', 'Share Skills')}
+      title={t('auto.components.settings.shareSkills.ca754fefa1', 'Share skills')}
       badge="Beta"
-      description={translate(
+      description={t(
         'auto.components.settings.shareSkills.description',
         'Share your skills with an unlisted link. Anyone who has it can install them.'
       )}
@@ -178,15 +238,36 @@ export function renderShareSkillsSettingsSection(
   )
 }
 
+export function renderSharedLinksSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element | null {
+  const { navigation, view } = context
+  if (!navigation.navSections.some((section) => section.id === 'shared-links')) {
+    return null
+  }
+  return (
+    <SettingsSection
+      id="shared-links"
+      title={t('settings.sharedLinks.title', 'Shared links')}
+      description={t('settings.sharedLinks.description', "Links you've published.")}
+      searchEntries={navigation.getSectionSearchEntries('shared-links')}
+    >
+      {view.isSectionMounted('shared-links') ? <SharedLinksSettingsPane /> : null}
+    </SettingsSection>
+  )
+}
+
 export function renderSessionHistorySettingsSection(
-  context: SettingsRenderContext
+  context: SettingsRenderContext,
+  t: Translate = translate
 ): React.JSX.Element {
   const { model, navigation, view } = context
   return (
     <SettingsSection
       id="session-history"
-      title={translate('sessionHistory.settings.title', 'Agent Session Search')}
-      description={translate(
+      title={t('sessionHistory.settings.title', 'Agent Session Search')}
+      description={t(
         'sessionHistory.settings.description',
         'Search everything your agents have said and done, on this computer and on any paired Orca server.'
       )}
@@ -200,4 +281,33 @@ export function renderSessionHistorySettingsSection(
       ) : null}
     </SettingsSection>
   )
+}
+
+export function renderWorkspaceCleanupSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element | null {
+  const { model, navigation, view } = context
+  // A paired browser's settings are its own; the cleanup rules live on the host it pairs with.
+  return model.showDesktopOnlySettings ? (
+    <SettingsSection
+      id="workspace-cleanup"
+      title={t('components.settings.workspaceCleanup.title', 'Workspace Cleanup')}
+      description={t(
+        'components.settings.workspaceCleanup.description',
+        "Remove workspaces you're done with. Before removing anything, Orca checks again for unsaved work."
+      )}
+      searchEntries={navigation.getSectionSearchEntries('workspace-cleanup')}
+    >
+      {view.isSectionMounted('workspace-cleanup') ? (
+        <WorkspaceCleanupSettingsPane
+          // A change waiting on its preview belongs to the host it was made for.
+          key={runtimeTargetEnvironmentId(model.settingsHostScope.target) ?? 'local'}
+          hostScope={model.settingsHostScope}
+          settings={model.settings}
+          updateSettings={model.updateSettingsOrThrow}
+        />
+      ) : null}
+    </SettingsSection>
+  ) : null
 }

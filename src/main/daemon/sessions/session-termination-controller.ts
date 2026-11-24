@@ -1,4 +1,4 @@
-import { PhysicalExitTracker } from '../../../shared/physical-exit-tracker'
+import { PhysicalExitTracker } from '../../../shared/process-observation/physical-exit-tracker'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import {
   IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS,

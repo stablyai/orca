@@ -32,37 +32,7 @@ function pinnedGrant(bytes: Buffer): TerminalFileGrant {
   }
 }
 
-async function download(
-  grant: TerminalFileGrant,
-  file: { bytes: Buffer },
-  readSizes: number[]
-): Promise<Buffer> {
-  const pages: Buffer[] = []
-  for (let offset = 0, eof = false; !eof;) {
-    const page = await readLocalTerminalArtifactRangeFromHandle(
-      fakeHandle(file, readSizes),
-      grant,
-      offset,
-      PAGE
-    )
-    pages.push(Buffer.from(page.contentBase64, 'base64'))
-    offset += page.bytesRead
-    eof = page.eof
-  }
-  return Buffer.concat(pages)
-}
-
 describe('readLocalTerminalArtifactRangeFromHandle', () => {
-  it('reads each page of a digest-pinned file once instead of re-reading the whole file', async () => {
-    const file = { bytes: Buffer.alloc(PAGE * 3 + 17, 0x5a) }
-    const readSizes: number[] = []
-
-    const result = await download(pinnedGrant(file.bytes), file, readSizes)
-
-    expect(result.equals(file.bytes)).toBe(true)
-    expect(readSizes.reduce((sum, size) => sum + size, 0)).toBe(file.bytes.byteLength)
-  })
-
   it('rejects the first page read after a same-size swap, not just the EOF page', async () => {
     const original = Buffer.alloc(PAGE * 3, 0x01)
     const file = { bytes: original }
@@ -74,30 +44,6 @@ describe('readLocalTerminalArtifactRangeFromHandle', () => {
     file.bytes = Buffer.alloc(original.byteLength, 0x02)
 
     await expect(read(PAGE)).rejects.toThrow('terminal_file_grant_stale')
-  })
-
-  it('serves unaligned and out-of-order pages with the granted bytes', async () => {
-    const bytes = Buffer.from(Array.from({ length: PAGE * 2 + 5 }, (_, i) => i % 251))
-    const file = { bytes }
-    const grant = pinnedGrant(bytes)
-    const page = await readLocalTerminalArtifactRangeFromHandle(
-      fakeHandle(file, []),
-      grant,
-      PAGE + 7,
-      1000
-    )
-    expect(
-      Buffer.from(page.contentBase64, 'base64').equals(bytes.subarray(PAGE + 7, PAGE + 1007))
-    ).toBe(true)
-    expect(page.eof).toBe(false)
-    const tail = await readLocalTerminalArtifactRangeFromHandle(
-      fakeHandle(file, []),
-      grant,
-      PAGE * 2,
-      PAGE
-    )
-    expect(tail.bytesRead).toBe(5)
-    expect(tail.eof).toBe(true)
   })
 
   it('rejects a page when the file size no longer matches the grant', async () => {

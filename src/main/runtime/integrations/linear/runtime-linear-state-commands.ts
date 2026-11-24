@@ -1,7 +1,7 @@
-import { updateIssueForAgent as updateLinearIssueForAgent } from '../../../linear/linear-issue-mutations'
-import { LinearWriteFailure } from '../../../linear/linear-issue-write-support'
-import { writeIssueRelation } from '../../../linear/issue-relation-write'
-import { linearError } from '../../../linear/issue-context/errors'
+import { updateIssueForAgent as updateLinearIssueForAgent } from '../../../linear/issues/linear-issue-mutations'
+import { LinearWriteFailure } from '../../../linear/issues/linear-issue-write-support'
+import { writeIssueRelation } from '../../../linear/issues/issue-relation-write'
+import { linearError } from '../../../linear/issues/context/linear-access-errors'
 import type { LinearCurrentIssueContextHints } from '../../../../shared/linear/agent-access'
 import type {
   LinearIssueRelationWriteRequest,

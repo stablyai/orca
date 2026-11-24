@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createTrackedJournalOpener } from './agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from './agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { TerminalChatQueue } from './terminal-chat-queue'
 import type { NativeChatTerminalActivity } from '../../shared/native-chat/native-chat-terminal-queue'
 

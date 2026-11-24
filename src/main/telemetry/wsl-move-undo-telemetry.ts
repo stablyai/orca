@@ -2,8 +2,8 @@
  * Undo telemetry for a WSL move ("use this project here again"): one enum-only row per request
  * that got past the gate, with how it ended and a duration bucket. Nothing a user or host named leaves.
  */
-import type { EventProps } from '../../shared/telemetry-events'
-import { WSL_MOVE_UNDO_OUTCOME_VALUES } from '../../shared/telemetry-wsl-move-event-schemas'
+import type { EventProps } from '../../shared/telemetry/telemetry-event-classification'
+import { WSL_MOVE_UNDO_OUTCOME_VALUES } from '../../shared/telemetry/schemas/telemetry-wsl-move-event-schemas'
 import type { WslMoveUseLocallyResult } from '../../shared/wsl-move/wsl-moved-project'
 import { track } from './client'
 import { durationBucket } from './wsl-move-telemetry'

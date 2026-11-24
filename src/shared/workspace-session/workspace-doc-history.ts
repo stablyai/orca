@@ -1,5 +1,5 @@
-import type { BrowserPageDocLocation } from '../browser-workspace-types'
-import { isDocPreviewUrl } from '../doc-preview-scheme'
+import type { BrowserPageDocLocation } from '../browser/workspaces/browser-workspace-types'
+import { isDocPreviewUrl } from '../document-preview/doc-preview-scheme'
 
 /** Persist document identity only; omitting URL gives preview grant URLs no place in history. */
 export type WorkspaceDocHistoryEntry = {
