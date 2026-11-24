@@ -247,6 +247,7 @@ enum { TREE_SWEEP_INTERVAL_MS = 100 };
 struct watcher {
     pid_t group;
     pid_t reaper;
+    long long reaper_start;
     long long leader_start;
     char tree_tag[64];
     long long next_sweep_ns;
@@ -278,6 +279,7 @@ struct proc_row {
     uid_t uid;
     long long start;
     int zombie;
+    int stale;
 };
 
 #if defined(__APPLE__)
@@ -289,6 +291,7 @@ static void row_from_kinfo(const struct kinfo_proc *k, struct proc_row *row) {
     row->start = (long long)k->kp_proc.p_starttime.tv_sec * 1000000LL +
                  (long long)k->kp_proc.p_starttime.tv_usec;
     row->zombie = k->kp_proc.p_stat == SZOMB;
+    row->stale = 0;
 }
 
 static int read_row(pid_t pid, struct proc_row *row) {
@@ -419,6 +422,7 @@ static int read_row(pid_t pid, struct proc_row *row) {
     row->uid = 0;
     row->start = (long long)start;
     row->zombie = state == 'Z' || state == 'X';
+    row->stale = 0;
     return 1;
 }
 
@@ -503,6 +507,12 @@ static int member_session(const struct tree_scan *scan, pid_t sid) {
 }
 #endif
 
+// The row's process still holds that PID, so whatever was read about it since the row is its own.
+static int same_identity(const struct proc_row *row) {
+    struct proc_row now;
+    return read_row(row->pid, &now) == 1 && now.start == row->start && !now.zombie;
+}
+
 static int tree_root(struct watcher *w, const struct tree_scan *scan, const struct proc_row *row) {
 #if defined(__linux__)
     (void)scan;
@@ -515,11 +525,13 @@ static int tree_root(struct watcher *w, const struct tree_scan *scan, const stru
         return 0;
     }
     pid_t sid = getsid(row->pid);
-    return (sid > 0 && member_session(scan, sid)) || carries_tree_tag(row->pid, w->tree_tag);
+    int owned = (sid > 0 && member_session(scan, sid)) || carries_tree_tag(row->pid, w->tree_tag);
+    return owned && same_identity(row);
 #endif
 }
 
-// 0 unknown, 1 member, 2 outside; resolved once along each ancestor chain.
+// 0 unknown, 1 member, 2 outside; resolved once along each ancestor chain. A stale row is
+// neither a member nor a parent.
 static void resolve_members(struct watcher *w, struct tree_scan *scan) {
     pid_t self = getpid();
     memset(scan->state, 0, scan->n);
@@ -530,7 +542,7 @@ static void resolve_members(struct watcher *w, struct tree_scan *scan) {
         while (scan->state[at] == 0 && depth < scan->n) {
             scan->chain[depth++] = at;
             const struct proc_row *row = &scan->rows[at];
-            if (row->pid == self || row->pid == w->reaper || row->pid <= 1) {
+            if (row->stale || row->pid == self || row->pid == w->reaper || row->pid <= 1) {
                 break;
             }
             if (tree_root(w, scan, row)) {
@@ -552,8 +564,91 @@ static void resolve_members(struct watcher *w, struct tree_scan *scan) {
     }
 }
 
-// Signals each live descendant (and the groups they lead) once, re-checking its start time
-// against PID reuse. Returns how many were alive, or -1 when the tree could not be read.
+#if defined(__APPLE__)
+// Only a session read between two identity checks of a member is that member's session.
+static void collect_member_sessions(struct watcher *w, struct tree_scan *scan) {
+    scan->sid_count = 0;
+    scan->sids[scan->sid_count++] = w->group;
+    for (;;) {
+        resolve_members(w, scan);
+        size_t before = scan->sid_count;
+        for (size_t i = 0; i < scan->n; i++) {
+            const struct proc_row *row = &scan->rows[i];
+            if (scan->state[i] != 1 || row->zombie) {
+                continue;
+            }
+            pid_t sid = getsid(row->pid);
+            if (sid > 0 && !member_session(scan, sid) && scan->sid_count <= scan->n &&
+                    same_identity(row)) {
+                scan->sids[scan->sid_count++] = sid;
+            }
+        }
+        if (scan->sid_count == before) {
+            return;
+        }
+    }
+}
+#endif
+
+// Rows are read one by one, so a parent link holds only if that parent was still the same process
+// after every row was read; a member whose identity changed is dropped and the tree re-resolved.
+static int drop_stale_members(struct tree_scan *scan, const struct proc_row *leader) {
+    int dropped = 0;
+    if (scan->leader_alive && !same_identity(leader)) {
+        scan->leader_alive = 0;
+        dropped = 1;
+    }
+    for (size_t i = 0; i < scan->n; i++) {
+        if (scan->state[i] == 1 && !scan->rows[i].stale && !same_identity(&scan->rows[i])) {
+            scan->rows[i].stale = 1;
+            dropped = 1;
+        }
+    }
+    return dropped;
+}
+
+#if defined(__linux__)
+#if !defined(SYS_pidfd_open) && defined(__NR_pidfd_open)
+#define SYS_pidfd_open __NR_pidfd_open
+#endif
+#if !defined(SYS_pidfd_send_signal) && defined(__NR_pidfd_send_signal)
+#define SYS_pidfd_send_signal __NR_pidfd_send_signal
+#endif
+#endif
+
+// Returns whether the member was still alive. On Linux a pidfd taken before the identity check
+// pins the signal to that process; elsewhere the check immediately precedes the kill.
+static int signal_member(const struct proc_row *row, int signal_number) {
+#if defined(__linux__) && defined(SYS_pidfd_open) && defined(SYS_pidfd_send_signal)
+    int fd = (int)syscall(SYS_pidfd_open, row->pid, 0);
+    if (fd < 0 && errno != ENOSYS) {
+        return 0;
+    }
+    int alive = same_identity(row);
+    if (alive && signal_number != 0) {
+        if (fd >= 0) {
+            syscall(SYS_pidfd_send_signal, fd, signal_number, NULL, 0);
+        } else {
+            kill(row->pid, signal_number);
+        }
+    }
+    if (fd >= 0) {
+        close(fd);
+    }
+    return alive;
+#else
+    if (!same_identity(row)) {
+        return 0;
+    }
+    if (signal_number != 0) {
+        kill(row->pid, signal_number);
+    }
+    return 1;
+#endif
+}
+
+// Signals each live descendant once, by PID after re-checking its start time. Returns how many
+// were alive, or -1 when the tree could not be read or its anchor's identity is unproven.
 static int sweep_tree(struct watcher *w, int signal_number) {
     struct tree_scan scan = {0};
     scan.rows = read_table(&scan.n);
@@ -565,62 +660,38 @@ static int sweep_tree(struct watcher *w, int signal_number) {
     scan.state = malloc(slots);
     scan.chain = malloc(slots * sizeof *scan.chain);
     scan.sids = malloc((slots + 1) * sizeof *scan.sids);
+    int live = -1;
     if (scan.state == NULL || scan.chain == NULL || scan.sids == NULL) {
-        free(scan.rows);
-        free(scan.state);
-        free(scan.chain);
-        free(scan.sids);
-        return -1;
+        goto done;
     }
+#if defined(__linux__)
+    // Orphans are adopted by this exact subreaper; any other process at its PID anchors nothing.
+    const struct proc_row *reaper = find_row(scan.rows, scan.n, w->reaper);
+    if (reaper == NULL || reaper->start != w->reaper_start || !same_identity(reaper)) {
+        goto done;
+    }
+#endif
     const struct proc_row *leader = find_row(scan.rows, scan.n, w->group);
     scan.leader_alive = leader != NULL && !leader->zombie && leader->start == w->leader_start;
-    struct proc_row *rows = scan.rows;
-    size_t n = scan.n;
-    unsigned char *state = scan.state;
+    do {
 #if defined(__APPLE__)
-    // The CLI session can outlive its leader; members can admit their sessions' orphans.
-    scan.sids[scan.sid_count++] = w->group;
-    for (;;) {
-        resolve_members(w, &scan);
-        size_t before = scan.sid_count;
-        for (size_t i = 0; i < n; i++) {
-            pid_t sid = state[i] == 1 && !rows[i].zombie ? getsid(rows[i].pid) : -1;
-            if (sid > 0 && !member_session(&scan, sid) && scan.sid_count <= n) {
-                scan.sids[scan.sid_count++] = sid;
-            }
-        }
-        if (scan.sid_count == before) {
-            break;
-        }
-    }
+        collect_member_sessions(w, &scan);
 #else
-    resolve_members(w, &scan);
+        resolve_members(w, &scan);
 #endif
-    int live = 0;
-    for (size_t i = 0; i < n; i++) {
-        struct proc_row now;
+    } while (drop_stale_members(&scan, leader));
+    live = 0;
+    for (size_t i = 0; i < scan.n; i++) {
+        const struct proc_row *row = &scan.rows[i];
         // The CLI group gets its own signal, so its members are never signalled twice.
-        if (state[i] != 1 || rows[i].zombie || rows[i].pgid == w->group ||
-                read_row(rows[i].pid, &now) != 1 || now.start != rows[i].start || now.zombie ||
-                now.pgid == w->group) {
-            continue;
-        }
-        live++;
-        if (signal_number == 0) {
-            continue;
-        }
-        if (now.pgid == now.pid) {
-            kill(-now.pid, signal_number);
-            continue;
-        }
-        // A member of a group led by another member already got that group's signal.
-        const struct proc_row *lead = find_row(rows, n, now.pgid);
-        if (lead == NULL || state[lead - rows] != 1 || lead->pgid != lead->pid) {
-            kill(now.pid, signal_number);
+        if (scan.state[i] == 1 && !row->zombie && row->pgid != w->group &&
+                signal_member(row, signal_number)) {
+            live++;
         }
     }
-    free(rows);
-    free(state);
+done:
+    free(scan.rows);
+    free(scan.state);
     free(scan.chain);
     free(scan.sids);
     return live;
@@ -961,15 +1032,24 @@ static _Noreturn void run_leader(struct watcher *watcher, char *command[]) {
     }
     watcher->group = getpid();
 #if defined(__linux__)
-    watcher->reaper = getppid();
+    // The parent recorded its own identity before fork; a different parent here is not ours.
+    if (getppid() != watcher->reaper) {
+        fail(EXIT_BOOTSTRAP);
+    }
 #elif defined(__APPLE__)
     struct proc_row leader_row;
     if (read_row(watcher->group, &leader_row) != 1) {
         fail(EXIT_BOOTSTRAP);
     }
     watcher->leader_start = leader_row.start;
-    snprintf(watcher->tree_tag, sizeof watcher->tree_tag, TREE_TAG_NAME "=%ld.%lld",
-             (long)watcher->group, leader_row.start);
+    // Random, so no unrelated process can carry it by deriving it from public process data.
+    unsigned char nonce[16];
+    arc4random_buf(nonce, sizeof nonce);
+    int tag_length = snprintf(watcher->tree_tag, sizeof watcher->tree_tag, TREE_TAG_NAME "=");
+    for (size_t i = 0; i < sizeof nonce; i++) {
+        tag_length += snprintf(watcher->tree_tag + tag_length,
+                               sizeof watcher->tree_tag - (size_t)tag_length, "%02x", nonce[i]);
+    }
 #endif
 
     // Stop signals stay blocked from the parent's fork, so the watcher installs its ignores first.
@@ -1181,6 +1261,12 @@ int main(int argc, char *argv[]) {
         return EXIT_BOOTSTRAP;
     }
     watcher_gone_fd = watcher_alive[0];
+    struct proc_row reaper_row;
+    if (read_row(getpid(), &reaper_row) != 1) {
+        return EXIT_BOOTSTRAP;
+    }
+    watcher.reaper = reaper_row.pid;
+    watcher.reaper_start = reaper_row.start;
 #endif
     // Blocked across fork so a stop signal lands either before it (default action, nothing started)
     // or on the leader's handler or this pid's ignore, never on the defaults in between.

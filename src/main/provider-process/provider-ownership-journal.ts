@@ -113,9 +113,8 @@ export async function waitForProviderOwnershipReap(
     ) {
       return false
     }
-    if ((await retireProviderWatcher(identity, { signal: proof.signal })) === 'refused') {
-      return false
-    }
+    // The watcher stops the CLI's detached tools after the group and exits by itself; killing it
+    // here could strand them, so an unfinished watcher just keeps the record for a later pass.
     return (
       !proof.signal.aborted &&
       (await waitForProviderGroupReap(
