@@ -80,6 +80,10 @@ vi.mock('node:os', async (importOriginal) => ({
 }))
 
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
+import {
+  applyCodexRegistrationPromotions,
+  planCodexRegistrationPromotion
+} from './config-plugin-registration-promotion'
 
 let tmpHome: string
 let userDataDir: string
@@ -208,6 +212,51 @@ describe('managed Codex config for a WSL distro config', () => {
       expect(readRuntimeConfig()).toMatch(/^model = "o4" # orca: /m)
     }
   )
+
+  it('appends a plugin table to a CRLF config without doubling carriage returns', () => {
+    const crlfConfig = 'model = "gpt-5"\r\n'
+    const runtimeConfig = `${crlfConfig}\r\n[plugins."ponytail@ponytail"]\r\nenabled = true\r\n`
+
+    expect(
+      applyCodexRegistrationPromotions(
+        crlfConfig,
+        planCodexRegistrationPromotion(runtimeConfig, crlfConfig, new Map())
+      )
+    ).toBe(runtimeConfig)
+  })
+
+  it('does not bring back a plugin the distro dropped when the baseline predates plugin tracking', () => {
+    writeSystemConfig('model = "gpt-5"\n\n[plugins."old@market"]\nenabled = true\n')
+    syncSystemConfigIntoManagedCodexHome()
+    const baselinePath = join(runtimeConfigPath(), '..', '.orca-config-settings-baseline.json')
+    const stored = JSON.parse(readFileSync(baselinePath, 'utf-8'))
+    delete stored.registrations
+    delete stored.mcpServers
+    writeFileSync(baselinePath, JSON.stringify(stored), 'utf-8')
+    writeSystemConfig('model = "gpt-5"\n')
+    wslTestState.wslPath = systemConfigPath()
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readRuntimeConfig()).not.toContain('old@market')
+  })
+
+  it('does not hold managed-copy plugins against a starter baseline', () => {
+    writeSystemConfig('')
+    wslTestState.wslPath = systemConfigPath()
+    simulateCodexSettingWrite('model', '"gpt-5"')
+    writeFileSync(
+      runtimeConfigPath(),
+      `${readRuntimeConfig()}\n[plugins."stale@market"]\nenabled = true\n`,
+      'utf-8'
+    )
+    syncSystemConfigIntoManagedCodexHome()
+    writeSystemConfig('model = "gpt-5"\n')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readRuntimeConfig()).not.toContain('stale@market')
+  })
 
   it('leaves an unchanged managed copy untouched on regeneration', () => {
     writeSystemConfig(

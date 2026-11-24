@@ -242,8 +242,8 @@ function appendRegistrationBlock(content: string, block: string, usesCrlf: boole
   const eol = usesCrlf ? '\r\n' : '\n'
   const rendered = block
     .split('\n')
-    .map((line) => withCrLine(line.replace(/\r$/, ''), usesCrlf))
-    .join('\n')
+    .map((line) => line.replace(/\r$/, ''))
+    .join(eol)
   if (content.trim() === '') {
     return `${rendered}${eol}`
   }
