@@ -304,6 +304,8 @@ export function AppRail({
                 label: destinationLabel(id),
                 icon: destinationIcon(id, 14),
                 current: destinationActive(id),
+                // Automations focuses its own title when opened.
+                ownsFocusOnOpen: id === 'automations',
                 onSelect: () => activateRailDestination(id)
               }))}
             />
