@@ -1249,23 +1249,13 @@
   },
   "diagnostics": {
     "connectionDiagnosticsView": {
-      "authFailed": "身分驗證失敗",
-      "connected": "已連線",
-      "connecting": "連線中",
       "copyReport": "複製報告",
-      "diagnosisHeading": "可能原因",
-      "disconnected": "已中斷連線",
-      "handshaking": "交握中",
       "noEvents": "尚無連線事件。App 嘗試連線至此主機時，就會顯示事件。",
       "noHosts": "沒有已配對的主機。",
-      "privacyHint": "傳送經過敏感資訊遮蔽且有大小上限的報告，包含主機名稱、端點、版本、連線狀態與事件，絕不包含終端機內容或憑證。",
-      "reconnecting": "重新連線中",
       "retrySending": "重新傳送",
-      "sendDiagnostics": "傳送診斷資料",
       "sending": "正在傳送…",
       "sent": "診斷資訊已傳送",
-      "stateWithAttempt": "{{state}} · 第 {{attempts}} 次嘗試",
-      "title": "網路診斷"
+      "stateWithAttempt": "{{state}} · 第 {{attempts}} 次嘗試"
     },
     "mobileWebBundleProbeRow": {
       "assets": "資源檔",
@@ -1286,14 +1276,11 @@
     "troubleshootCommonIssues": {
       "allowNotifications": "確認系統設定允許 Orca 傳送通知，且「專注模式」或「勿擾模式」已關閉。",
       "checkTailnet": "確認電腦未進入睡眠，且在您的 tailnet 中顯示為已連線。",
-      "desktopTitle": "桌面版應用程式未執行",
       "disableVpn": "停用該 VPN，或啟用分割通道／「允許 LAN」。",
-      "firewallTitle": "防火牆封鎖連接埠 {{port}}",
       "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "100.x.x.x 或 *.ts.net 等主機位址會透過 Tailscale 連線，請保持 Tailscale 開啟。",
       "macosFirewall": "macOS：「系統設定」→「網路」→「防火牆」，允許 Orca 連線。",
       "notificationNetwork": "試著改用行動網路或其他 Wi-Fi 網路。若切換後能收到通知，原本的網路可能導致通知延遲送達。",
-      "notificationsTitle": "推播通知",
       "openDesktop": "必須在電腦上開啟 Orca，才能接受連線。",
       "pairAfterUpdate": "更新後，可能需要透過 QR Code 重新配對。",
       "reconnectWifi": "試著讓兩部裝置重新連上 WiFi。",
@@ -1304,22 +1291,14 @@
       "retryHost": "返回主機清單，點一下主機以重試。",
       "sameNetwork": "兩部裝置必須連上同一個區域網路（LAN），透過 Tailscale 連線時除外。",
       "sameSubnet": "乙太網路（Ethernet）和 WiFi 必須位於同一個子網路。",
-      "tailscaleTitle": "無法連上 Tailscale 主機",
-      "timeoutTitle": "連線逾時",
       "updateTailscale": "請更新 Tailscale 應用程式，近期版本已修正重新連線的錯誤。",
       "vpnRouting": "Tailscale 以外的 VPN 可能將本機網路流量導向遠端伺服器。",
-      "vpnTitle": "其他 VPN 干擾",
       "wifiSignal": "檢查手機的 WiFi 訊號強度。",
-      "wifiTitle": "不同的 WiFi 網路",
       "windowsFirewall": "Windows：「Defender 防火牆」→「允許應用程式」，勾選 Orca 的「私人」選項。"
     },
     "troubleshootView": {
       "commonIssues": "常見問題",
-      "runAgain": "再次執行",
-      "runDiagnostics": "執行診斷",
-      "running": "執行中…",
-      "title": "疑難排解",
-      "viewNetworkDiagnostics": "查看網路診斷"
+      "title": "疑難排解"
     },
     "useTroubleshootDiagnostics": {
       "connected": "已連線",

@@ -1295,23 +1295,13 @@
   },
   "diagnostics": {
     "connectionDiagnosticsView": {
-      "authFailed": "échec de l'authentification",
-      "connected": "connecté",
-      "connecting": "connexion en cours",
       "copyReport": "Copier le rapport",
-      "diagnosisHeading": "Cause probable",
-      "disconnected": "déconnecté",
-      "handshaking": "négociation en cours",
       "noEvents": "Aucun événement de connexion pour le moment. Les événements s'affichent lorsque l'application tente de se connecter à cet hôte.",
       "noHosts": "Aucun hôte appairé.",
-      "privacyHint": "Envoie un rapport expurgé de taille limitée contenant le nom de l'hôte, le point de terminaison, les versions, l'état de la connexion et les événements — jamais le contenu des terminaux ni les identifiants de connexion.",
-      "reconnecting": "reconnexion en cours",
       "retrySending": "Réessayer l'envoi",
-      "sendDiagnostics": "Envoyer les diagnostics",
       "sending": "Envoi…",
       "sent": "Diagnostics envoyés",
-      "stateWithAttempt": "{{state}} · tentative {{attempts}}",
-      "title": "Diagnostics réseau"
+      "stateWithAttempt": "{{state}} · tentative {{attempts}}"
     },
     "mobileWebBundleProbeRow": {
       "assets": "Ressources",
@@ -1332,14 +1322,11 @@
     "troubleshootCommonIssues": {
       "allowNotifications": "Vérifiez que les paramètres système autorisent les notifications Orca et que le mode Concentration ou Ne pas déranger est désactivé.",
       "checkTailnet": "Vérifiez que l'ordinateur n'est pas en veille et apparaît connecté à votre tailnet.",
-      "desktopTitle": "Application de bureau arrêtée",
       "disableVpn": "Désactivez ce VPN ou activez le routage fractionné / « Autoriser le LAN ».",
-      "firewallTitle": "Pare-feu bloquant le port {{port}}",
       "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "Les adresses d'hôte comme 100.x.x.x ou *.ts.net passent par Tailscale — laissez-le ACTIVÉ.",
       "macosFirewall": "macOS : Réglages Système → Réseau → Pare-feu — autorisez Orca.",
       "notificationNetwork": "Essayez les données mobiles ou un autre réseau Wi-Fi. Si les alertes arrivent après ce changement, votre réseau retarde peut-être leur réception.",
-      "notificationsTitle": "Notifications push",
       "openDesktop": "Orca doit être ouvert sur votre ordinateur pour accepter les connexions.",
       "pairAfterUpdate": "Après une mise à jour, vous devrez peut-être refaire l'appairage via un QR code.",
       "reconnectWifi": "Essayez de reconnecter les deux appareils au WiFi.",
@@ -1350,22 +1337,14 @@
       "retryHost": "Revenez à la liste des hôtes et touchez votre hôte pour réessayer.",
       "sameNetwork": "Les deux appareils doivent être sur le même LAN (sauf s'ils sont connectés via Tailscale).",
       "sameSubnet": "Ethernet et le WiFi doivent utiliser le même sous-réseau.",
-      "tailscaleTitle": "Hôte Tailscale inaccessible",
-      "timeoutTitle": "Délai de connexion dépassé",
       "updateTailscale": "Mettez à jour l'application Tailscale — les versions récentes corrigent des bugs de reconnexion.",
       "vpnRouting": "Les VPN autres que Tailscale peuvent acheminer le trafic local via un serveur distant.",
-      "vpnTitle": "Interférences d'autres VPN",
       "wifiSignal": "Vérifiez la puissance du signal WiFi sur votre téléphone.",
-      "wifiTitle": "Réseaux WiFi différents",
       "windowsFirewall": "Windows : Pare-feu Windows Defender → Autoriser une application — autorisez Orca sur les réseaux privés."
     },
     "troubleshootView": {
       "commonIssues": "Problèmes courants",
-      "runAgain": "Relancer",
-      "runDiagnostics": "Lancer les diagnostics",
-      "running": "En cours…",
-      "title": "Dépannage",
-      "viewNetworkDiagnostics": "Voir les diagnostics réseau"
+      "title": "Dépannage"
     },
     "useTroubleshootDiagnostics": {
       "connected": "Connecté",

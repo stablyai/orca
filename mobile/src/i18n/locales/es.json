@@ -1295,23 +1295,13 @@
   },
   "diagnostics": {
     "connectionDiagnosticsView": {
-      "authFailed": "autenticación fallida",
-      "connected": "conectado",
-      "connecting": "conectando",
       "copyReport": "Copiar informe",
-      "diagnosisHeading": "Posible causa",
-      "disconnected": "desconectado",
-      "handshaking": "negociando la conexión",
       "noEvents": "Aún no hay eventos de conexión. Aparecerán a medida que la aplicación intente conectarse a este host.",
       "noHosts": "No hay hosts emparejados.",
-      "privacyHint": "Envía un informe de tamaño limitado con los datos sensibles ocultos, que incluye el nombre del host, el punto de conexión, las versiones, el estado de la conexión y los eventos; nunca el contenido del terminal ni las credenciales.",
-      "reconnecting": "reconectando",
       "retrySending": "Reintentar envío",
-      "sendDiagnostics": "Enviar diagnóstico",
       "sending": "Enviando…",
       "sent": "Diagnósticos enviados",
-      "stateWithAttempt": "{{state}} · intento {{attempts}}",
-      "title": "Diagnóstico de red"
+      "stateWithAttempt": "{{state}} · intento {{attempts}}"
     },
     "mobileWebBundleProbeRow": {
       "assets": "Recursos",
@@ -1332,14 +1322,11 @@
     "troubleshootCommonIssues": {
       "allowNotifications": "Comprueba que los ajustes del sistema permitan las notificaciones de Orca y que los modos de concentración y No molestar estén desactivados.",
       "checkTailnet": "Comprueba que el escritorio esté activo y aparezca conectado en tu red de Tailscale.",
-      "desktopTitle": "App de escritorio cerrada",
       "disableVpn": "Desactiva esa VPN o activa la tunelización dividida / \"Allow LAN\".",
-      "firewallTitle": "El cortafuegos bloquea el puerto {{port}}",
       "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "Las direcciones de host como 100.x.x.x o *.ts.net se conectan a través de Tailscale — mantenlo ACTIVADO.",
       "macosFirewall": "macOS: Ajustes del Sistema → Red → Firewall — permite las conexiones de Orca.",
       "notificationNetwork": "Prueba con datos móviles u otra red Wi-Fi. Si las alertas llegan tras cambiar de red, es posible que tu red esté retrasando la entrega.",
-      "notificationsTitle": "Notificaciones push",
       "openDesktop": "Orca debe estar abierto en tu escritorio para aceptar conexiones.",
       "pairAfterUpdate": "Tras una actualización, puede que debas volver a emparejar mediante un código QR.",
       "reconnectWifi": "Prueba a volver a conectar el WiFi en ambos dispositivos.",
@@ -1350,22 +1337,14 @@
       "retryHost": "Vuelve a la lista de hosts y toca tu host para reintentar.",
       "sameNetwork": "Ambos dispositivos deben estar en la misma LAN (salvo que se conecten a través de Tailscale).",
       "sameSubnet": "Ethernet y WiFi deben compartir la misma subred.",
-      "tailscaleTitle": "Host de Tailscale inaccesible",
-      "timeoutTitle": "Tiempo de espera de conexión agotado",
       "updateTailscale": "Actualiza la app de Tailscale: las versiones recientes corrigen errores de reconexión.",
       "vpnRouting": "Las VPN distintas de Tailscale pueden dirigir el tráfico local a través de un servidor remoto.",
-      "vpnTitle": "Interferencias de otras VPN",
       "wifiSignal": "Comprueba la intensidad de la señal WiFi en tu teléfono.",
-      "wifiTitle": "Redes WiFi diferentes",
       "windowsFirewall": "Windows: Firewall de Windows Defender → Permitir una aplicación — habilita Orca para redes privadas."
     },
     "troubleshootView": {
       "commonIssues": "Problemas comunes",
-      "runAgain": "Volver a ejecutar",
-      "runDiagnostics": "Ejecutar diagnósticos",
-      "running": "Ejecutando…",
-      "title": "Solución de problemas",
-      "viewNetworkDiagnostics": "Ver diagnósticos de red"
+      "title": "Solución de problemas"
     },
     "useTroubleshootDiagnostics": {
       "connected": "Conectado",

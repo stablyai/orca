@@ -21,6 +21,7 @@ export default function NativeTroubleshootRoute() {
       runDiagnostics={() => void runDiagnostics()}
       onBack={() => router.back()}
       onConnectionLog={() => router.push('/connection-log')}
+      onIssue={(id) => router.push({ pathname: '/troubleshoot-issue', params: { id } })}
       developerRow={
         // The bundle probe stays development-only: it fetches.
         <>

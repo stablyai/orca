@@ -2002,23 +2002,13 @@
   },
   "diagnostics": {
     "connectionDiagnosticsView": {
-      "authFailed": "kimlik doğrulanamadı",
-      "connected": "bağlı",
-      "connecting": "bağlanılıyor",
       "copyReport": "Raporu kopyala",
-      "diagnosisHeading": "Olası neden",
-      "disconnected": "bağlantı kesildi",
-      "handshaking": "el sıkışması yapılıyor",
       "noEvents": "Henüz bağlantı olayı yok. Uygulama bu sunucuya bağlanmaya çalıştıkça olaylar görünür.",
       "noHosts": "Eşleştirilmiş sunucu yok.",
-      "privacyHint": "Sunucu adını, uç noktayı, sürümleri, bağlantı durumunu ve olayları içeren, hassas bilgileri çıkarılmış ve boyutu sınırlı bir rapor gönderir. Terminal içeriklerini veya kimlik bilgilerini asla göndermez.",
-      "reconnecting": "yeniden bağlanılıyor",
       "retrySending": "Göndermeyi yeniden dene",
-      "sendDiagnostics": "Tanılama verilerini gönder",
       "sending": "Gönderiliyor…",
       "sent": "Tanılama bilgileri gönderildi",
-      "stateWithAttempt": "{{state}} · {{attempts}}. deneme",
-      "title": "Ağ tanılaması"
+      "stateWithAttempt": "{{state}} · {{attempts}}. deneme"
     },
     "mobileWebBundleProbeRow": {
       "assets": "Varlıklar",
@@ -2039,14 +2029,11 @@
     "troubleshootCommonIssues": {
       "allowNotifications": "Sistem ayarlarında Orca bildirimlerine izin verildiğini ve Focus veya Do Not Disturb modunun kapalı olduğunu kontrol edin.",
       "checkTailnet": "Bilgisayarınızın uyku modunda olmadığını ve tailnet ağınızda bağlı göründüğünü kontrol edin.",
-      "desktopTitle": "Masaüstü Uygulaması Çalışmıyor",
       "disableVpn": "Bu VPN'i devre dışı bırakın veya bölünmüş tünellemeyi / \"Allow LAN\" seçeneğini etkinleştirin.",
-      "firewallTitle": "Güvenlik Duvarı {{port}} Portunu Engelliyor",
       "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "100.x.x.x veya *.ts.net gibi sunucu adreslerine Tailscale üzerinden bağlanılır — Tailscale'i AÇIK tutun.",
       "macosFirewall": "macOS: System Settings → Network → Firewall — Orca'ya izin verin.",
       "notificationNetwork": "Hücresel bağlantıyı veya başka bir Wi-Fi ağını deneyin. Ağ değiştirdikten sonra bildirimler geliyorsa ağınız iletimi geciktiriyor olabilir.",
-      "notificationsTitle": "Anlık Bildirimler",
       "openDesktop": "Bağlantıları kabul edebilmesi için bilgisayarınızda Orca açık olmalıdır.",
       "pairAfterUpdate": "Güncellemeden sonra QR koduyla yeniden eşleştirme yapmanız gerekebilir.",
       "reconnectWifi": "Her iki cihazda da WiFi ağına yeniden bağlanmayı deneyin.",
@@ -2057,22 +2044,14 @@
       "retryHost": "Sunucu listesine dönün ve yeniden denemek için sunucunuza dokunun.",
       "sameNetwork": "Her iki cihaz da aynı LAN üzerinde olmalıdır (Tailscale üzerinden bağlı değillerse).",
       "sameSubnet": "Ethernet ve WiFi aynı alt ağda olmalıdır.",
-      "tailscaleTitle": "Tailscale Sunucusuna Ulaşılamıyor",
-      "timeoutTitle": "Bağlantı Zaman Aşımı",
       "updateTailscale": "Tailscale uygulamasını güncelleyin — son sürümler yeniden bağlanma hatalarını giderir.",
       "vpnRouting": "Tailscale dışındaki VPN'ler yerel trafiği uzak bir sunucu üzerinden yönlendirebilir.",
-      "vpnTitle": "Diğer VPN'lerden Kaynaklanan Sorunlar",
       "wifiSignal": "Telefonunuzdaki WiFi sinyal gücünü kontrol edin.",
-      "wifiTitle": "Farklı WiFi Ağları",
       "windowsFirewall": "Windows: Defender Firewall → Allow app — Orca'yı Private ağlarda etkinleştirin."
     },
     "troubleshootView": {
       "commonIssues": "Yaygın sorunlar",
-      "runAgain": "Yeniden çalıştır",
-      "runDiagnostics": "Tanılamayı çalıştır",
-      "running": "Çalıştırılıyor…",
-      "title": "Sorun Giderme",
-      "viewNetworkDiagnostics": "Ağ tanılamasını görüntüle"
+      "title": "Sorun Giderme"
     },
     "useTroubleshootDiagnostics": {
       "connected": "Bağlı",

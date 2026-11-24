@@ -1087,6 +1087,12 @@
       "children_other": "{{count}} children"
     }
   },
+  "diagnostics": {
+    "troubleshootView": {
+      "problems_one": "{{count}} problem",
+      "problems_other": "{{count}} problems"
+    }
+  },
   "dictation": {
     "controls": {
       "durationMinutes_one": "{{count}} minute",

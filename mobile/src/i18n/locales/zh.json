@@ -1883,23 +1883,13 @@
   },
   "diagnostics": {
     "connectionDiagnosticsView": {
-      "authFailed": "身份验证失败",
-      "connected": "已连接",
-      "connecting": "连接中",
       "copyReport": "复制报告",
-      "diagnosisHeading": "可能的原因",
-      "disconnected": "已断开连接",
-      "handshaking": "握手中",
       "noEvents": "暂无连接事件。应用尝试连接此主机时，会显示相关事件",
       "noHosts": "没有已配对的主机",
-      "privacyHint": "发送一份经过脱敏且大小受限的报告，包含主机名、端点、版本、连接状态和事件，绝不包含终端内容或凭据",
-      "reconnecting": "重新连接中",
       "retrySending": "重试发送",
-      "sendDiagnostics": "发送诊断信息",
       "sending": "正在发送…",
       "sent": "诊断信息已发送",
-      "stateWithAttempt": "{{state}} · 第 {{attempts}} 次尝试",
-      "title": "网络诊断"
+      "stateWithAttempt": "{{state}} · 第 {{attempts}} 次尝试"
     },
     "mobileWebBundleProbeRow": {
       "assets": "资源",
@@ -1920,14 +1910,11 @@
     "troubleshootCommonIssues": {
       "allowNotifications": "检查系统设置是否允许 Orca 发送通知，并确认专注模式或勿扰模式已关闭",
       "checkTailnet": "确认桌面未休眠，并在 tailnet 中显示为已连接",
-      "desktopTitle": "桌面应用未运行",
       "disableVpn": "关闭该 VPN，或启用分流功能／“允许 LAN”选项",
-      "firewallTitle": "防火墙拦截端口 {{port}}",
       "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "100.x.x.x 或 *.ts.net 等主机地址通过 Tailscale 连接，请保持 Tailscale 开启",
       "macosFirewall": "macOS：系统设置 → 网络 → 防火墙，允许 Orca 通过",
       "notificationNetwork": "尝试切换到蜂窝网络或其他 Wi-Fi 网络。如果切换后能收到通知，则原网络可能导致通知延迟",
-      "notificationsTitle": "推送通知",
       "openDesktop": "桌面上的 Orca 必须保持运行才能接受连接",
       "pairAfterUpdate": "更新后可能需要重新扫描二维码配对",
       "reconnectWifi": "尝试在两台设备上重新连接 WiFi",
@@ -1938,22 +1925,14 @@
       "retryHost": "返回主机列表，点按要连接的主机以重试",
       "sameNetwork": "两台设备必须处于同一 LAN（通过 Tailscale 连接时除外）",
       "sameSubnet": "以太网和 WiFi 必须位于同一子网",
-      "tailscaleTitle": "无法访问 Tailscale 主机",
-      "timeoutTitle": "连接超时",
       "updateTailscale": "请更新 Tailscale 应用，近期版本修复了重新连接时的问题",
       "vpnRouting": "Tailscale 以外的 VPN 可能会将本地流量经由远程服务器转发",
-      "vpnTitle": "其他 VPN 干扰",
       "wifiSignal": "检查手机的 WiFi 信号强度",
-      "wifiTitle": "WiFi 网络不同",
       "windowsFirewall": "Windows：Defender 防火墙 → 允许应用，允许 Orca 通过专用网络"
     },
     "troubleshootView": {
       "commonIssues": "常见问题",
-      "runAgain": "重新运行",
-      "runDiagnostics": "运行诊断",
-      "running": "运行中…",
-      "title": "故障排查",
-      "viewNetworkDiagnostics": "查看网络诊断"
+      "title": "故障排查"
     },
     "useTroubleshootDiagnostics": {
       "connected": "已连接",

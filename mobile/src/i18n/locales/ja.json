@@ -1246,23 +1246,13 @@
   },
   "diagnostics": {
     "connectionDiagnosticsView": {
-      "authFailed": "認証失敗",
-      "connected": "接続されています",
-      "connecting": "接続中",
       "copyReport": "レポートをコピー",
-      "diagnosisHeading": "考えられる原因",
-      "disconnected": "未接続",
-      "handshaking": "ハンドシェイク中",
       "noEvents": "接続イベントはまだありません。アプリがこのホストへの接続を試みると、イベントが表示されます。",
       "noHosts": "ペアリング済みのホストがありません。",
-      "privacyHint": "ホスト名、エンドポイント、バージョン、接続状態、イベントを含む、機密情報を伏せてサイズを制限したレポートを送信します。ターミナルの内容や認証情報は含まれません。",
-      "reconnecting": "再接続中",
       "retrySending": "送信を再試行",
-      "sendDiagnostics": "診断情報を送信",
       "sending": "送信中…",
       "sent": "診断情報を送信しました",
-      "stateWithAttempt": "{{state}} · 試行 {{attempts}} 回目",
-      "title": "ネットワーク診断"
+      "stateWithAttempt": "{{state}} · 試行 {{attempts}} 回目"
     },
     "mobileWebBundleProbeRow": {
       "assets": "アセット",
@@ -1283,14 +1273,11 @@
     "troubleshootCommonIssues": {
       "allowNotifications": "システム設定で Orca の通知が許可され、集中モードやおやすみモードがオフになっていることを確認してください。",
       "checkTailnet": "デスクトップがスリープ状態になっておらず、tailnet 内で接続済みと表示されていることを確認してください。",
-      "desktopTitle": "デスクトップアプリが未起動",
       "disableVpn": "その VPN を無効にするか、スプリットトンネリングまたは「LAN を許可」を有効にしてください。",
-      "firewallTitle": "ファイアウォールがポート {{port}} をブロック",
       "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "100.x.x.x や *.ts.net のようなホストアドレスには Tailscale 経由で接続します。Tailscale をオンにしておいてください。",
       "macosFirewall": "macOS: 「システム設定」→「ネットワーク」→「ファイアウォール」で Orca を許可してください。",
       "notificationNetwork": "モバイルデータ通信か別の Wi-Fi ネットワークを試してください。切り替え後に通知が届く場合は、元のネットワークで配信が遅れている可能性があります。",
-      "notificationsTitle": "プッシュ通知",
       "openDesktop": "接続を受け付けるには、デスクトップで Orca を起動しておく必要があります。",
       "pairAfterUpdate": "更新後は、QR コードで再度ペアリングする必要がある場合があります。",
       "reconnectWifi": "両方のデバイスで Wi-Fi を接続し直してください。",
@@ -1301,22 +1288,14 @@
       "retryHost": "ホスト一覧に戻り、ホストをタップして再試行してください。",
       "sameNetwork": "Tailscale 経由で接続する場合を除き、両方のデバイスを同じ LAN に接続する必要があります。",
       "sameSubnet": "Ethernet と Wi-Fi が同じサブネットに属している必要があります。",
-      "tailscaleTitle": "Tailscale ホストに接続できない",
-      "timeoutTitle": "接続タイムアウト",
       "updateTailscale": "Tailscale アプリを更新してください。最近のバージョンでは再接続の不具合が修正されています。",
       "vpnRouting": "Tailscale 以外の VPN では、ローカル通信がリモートサーバーを経由する場合があります。",
-      "vpnTitle": "他の VPN の干渉",
       "wifiSignal": "スマートフォンの Wi-Fi の電波強度を確認してください。",
-      "wifiTitle": "異なる Wi-Fi ネットワーク",
       "windowsFirewall": "Windows: 「Defender ファイアウォール」→「アプリの許可」で、プライベートネットワークでの Orca の通信を許可してください。"
     },
     "troubleshootView": {
       "commonIssues": "よくある問題",
-      "runAgain": "再実行",
-      "runDiagnostics": "診断を実行",
-      "running": "実行中…",
-      "title": "トラブルシューティング",
-      "viewNetworkDiagnostics": "ネットワーク診断を表示"
+      "title": "トラブルシューティング"
     },
     "useTroubleshootDiagnostics": {
       "connected": "接続済み",

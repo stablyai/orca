@@ -1246,23 +1246,13 @@
   },
   "diagnostics": {
     "connectionDiagnosticsView": {
-      "authFailed": "인증 실패",
-      "connected": "연결됨",
-      "connecting": "연결 중",
       "copyReport": "보고서 복사",
-      "diagnosisHeading": "추정 원인",
-      "disconnected": "연결 끊김",
-      "handshaking": "핸드셰이크 중",
       "noEvents": "아직 연결 이벤트가 없습니다. 앱이 이 호스트에 연결을 시도하면 이벤트가 표시됩니다.",
       "noHosts": "페어링된 호스트가 없습니다.",
-      "privacyHint": "호스트 이름, 엔드포인트, 버전, 연결 상태, 이벤트를 포함하되 민감한 정보를 가리고 크기를 제한한 보고서를 전송합니다. 터미널 내용이나 인증 정보는 절대 포함하지 않습니다.",
-      "reconnecting": "재연결 중",
       "retrySending": "다시 보내기",
-      "sendDiagnostics": "진단 정보 보내기",
       "sending": "전송 중…",
       "sent": "진단 정보를 보냈습니다",
-      "stateWithAttempt": "{{state}} · {{attempts}}번째 시도",
-      "title": "네트워크 진단"
+      "stateWithAttempt": "{{state}} · {{attempts}}번째 시도"
     },
     "mobileWebBundleProbeRow": {
       "assets": "에셋",
@@ -1283,14 +1273,11 @@
     "troubleshootCommonIssues": {
       "allowNotifications": "시스템 설정에서 Orca 알림이 허용되어 있고 집중 모드나 방해 금지 모드가 꺼져 있는지 확인하세요.",
       "checkTailnet": "데스크톱이 절전 모드가 아니며 tailnet에 연결된 상태로 표시되는지 확인하세요.",
-      "desktopTitle": "데스크톱 앱이 실행되지 않음",
       "disableVpn": "해당 VPN을 끄거나 분할 터널링 / \"LAN 허용\"을 켜세요.",
-      "firewallTitle": "방화벽에서 포트 {{port}} 차단",
       "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "100.x.x.x나 *.ts.net 같은 호스트 주소는 Tailscale을 통해 연결되므로 Tailscale을 켜 두세요.",
       "macosFirewall": "macOS: 시스템 설정 → 네트워크 → 방화벽에서 Orca를 허용하세요.",
       "notificationNetwork": "모바일 데이터나 다른 Wi-Fi 네트워크를 사용해 보세요. 전환 후 알림이 도착한다면 기존 네트워크에서 알림 전달이 지연되고 있을 수 있습니다.",
-      "notificationsTitle": "푸시 알림",
       "openDesktop": "연결을 받으려면 데스크톱에서 Orca가 실행 중이어야 합니다.",
       "pairAfterUpdate": "업데이트 후에는 QR 코드로 다시 페어링해야 할 수 있습니다.",
       "reconnectWifi": "두 기기에서 WiFi를 다시 연결해 보세요.",
@@ -1301,22 +1288,14 @@
       "retryHost": "호스트 목록으로 돌아가 호스트를 탭하여 다시 시도하세요.",
       "sameNetwork": "두 기기는 같은 LAN에 연결되어 있어야 합니다(Tailscale로 연결한 경우 제외).",
       "sameSubnet": "이더넷과 WiFi는 같은 서브넷을 사용해야 합니다.",
-      "tailscaleTitle": "Tailscale 호스트에 연결할 수 없음",
-      "timeoutTitle": "연결 시간 초과",
       "updateTailscale": "Tailscale 앱을 업데이트하세요. 최근 버전에는 재연결 버그 수정 사항이 포함되어 있습니다.",
       "vpnRouting": "Tailscale 이외의 VPN은 로컬 트래픽을 원격 서버로 우회시킬 수 있습니다.",
-      "vpnTitle": "다른 VPN의 간섭",
       "wifiSignal": "휴대폰의 WiFi 신호 강도를 확인하세요.",
-      "wifiTitle": "서로 다른 WiFi 네트워크",
       "windowsFirewall": "Windows: Defender 방화벽 → 앱 허용에서 개인 네트워크에 대해 Orca를 허용하세요."
     },
     "troubleshootView": {
       "commonIssues": "일반적인 문제",
-      "runAgain": "다시 실행",
-      "runDiagnostics": "진단 실행",
-      "running": "실행 중…",
-      "title": "문제 해결",
-      "viewNetworkDiagnostics": "네트워크 진단 보기"
+      "title": "문제 해결"
     },
     "useTroubleshootDiagnostics": {
       "connected": "연결됨",
