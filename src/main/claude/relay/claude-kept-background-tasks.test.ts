@@ -29,6 +29,7 @@ describe('a kept Claude agent across a reattach', () => {
     expect(session.childWork.live.get('f1')?.backgrounded).toBe(false)
     // A subagent the journal knows, still running after its turn, is a background one.
     expect(session.childWork.live.get('a1')?.backgrounded).toBe(true)
+    expect(session.childWork.live.get('a1')?.kind).toBe('agent')
     expect(session.backgroundTasks.goalBackgroundWork).toBe('live')
     expect(claudeRelayOpenWork({ ...session, providerSessionId: 's' }, false).task).toEqual([
       ['b1'],

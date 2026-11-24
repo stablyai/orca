@@ -1,7 +1,10 @@
 import { agentJournalLinkageFields } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { StructuredAgentSessionAppendOptions } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type {
+  StructuredAgentSessionAppendOptions,
+  StructuredAgentSessionEventSink
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
   createAgentSessionDeltaCoalescer,
   type AgentSessionDeltaCoalescerDeps
@@ -43,6 +46,8 @@ export type ClaudeStreamedTextCheckpoints = {
   /** Flush before settling; discard retained blocks so interrupted turns cannot accumulate text. */
   settle: () => void
   readonly pending: number
+  /** Some appended text isn't saved yet, so a relay ack must save it before releasing its lines. */
+  readonly unsaved: boolean
   dispose: () => void
 }
 
@@ -69,6 +74,7 @@ export function createClaudeStreamedTextCheckpoints(
   const writtenLinkage = new Map<string, StructuredAgentSessionAppendOptions>()
   const latestText = new Map<string, string>()
   const checkpointLengths = new Map<string, number>()
+  const unsaved = new Set<string>()
 
   /** Resolve each checkpoint afresh; later announcements revise provisional producers on the same row. */
   const producerOptions = (key: string): StructuredAgentSessionAppendOptions => {
@@ -93,6 +99,8 @@ export function createClaudeStreamedTextCheckpoints(
     const options = producerOptions(key)
     checkpointLengths.set(key, text.length)
     writtenLinkage.set(key, options)
+    // Emitted and flushed text is the block's whole text so far.
+    unsaved.delete(key)
     deps.persist(identity, text, options)
   }
 
@@ -109,6 +117,7 @@ export function createClaudeStreamedTextCheckpoints(
     writtenLinkage.delete(key)
     latestText.delete(key)
     checkpointLengths.delete(key)
+    unsaved.delete(key)
   }
 
   const finish = (ended: ClaudeStreamedBlockEnd, only?: (key: string) => boolean): void => {
@@ -130,6 +139,7 @@ export function createClaudeStreamedTextCheckpoints(
       const key = agentJournalItemKey(identity)
       identities.set(key, identity)
       scopes.set(key, parentToolUseId)
+      unsaved.add(key)
       coalescer.append(key, text)
     },
     flush: () => {
@@ -167,6 +177,9 @@ export function createClaudeStreamedTextCheckpoints(
     get pending() {
       return identities.size
     },
+    get unsaved() {
+      return unsaved.size > 0
+    },
     dispose: () => {
       coalescer.dispose()
       identities.clear()
@@ -174,6 +187,21 @@ export function createClaudeStreamedTextCheckpoints(
       writtenLinkage.clear()
       latestText.clear()
       checkpointLengths.clear()
+      unsaved.clear()
     }
   }
+}
+
+/** A relay ack's save, and the daemon's forced one, must cover text the checkpoints still hold. */
+export function bindClaudeUnsavedText(
+  sink: Pick<StructuredAgentSessionEventSink, 'bindLiveText'>,
+  streams: readonly Pick<ClaudeStreamedTextCheckpoints, 'unsaved' | 'flush'>[]
+): () => void {
+  return (
+    sink.bindLiveText?.({
+      read: () => [],
+      has: () => streams.some((stream) => stream.unsaved),
+      flush: () => streams.forEach((stream) => stream.flush())
+    }) ?? (() => {})
+  )
 }

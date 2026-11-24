@@ -147,6 +147,9 @@ export function createClaudeStreamedThinking(deps: {
     },
     get pending() {
       return checkpoints.pending
+    },
+    get unsaved() {
+      return checkpoints.unsaved
     }
   }
 }

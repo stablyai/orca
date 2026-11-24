@@ -154,10 +154,11 @@ export async function openKeptClaudeAgentConnection(
       child.stdin.write(line, (error) => (error ? reject(error) : resolve()))
     })
   // A broken input leaves the agent waiting on answers it will never get: end it, so the chat's
-  // next message starts a new one, rather than leave a turn stuck.
-  const inputBroke = (error: unknown): void => {
+  // next message starts a new one, rather than leave a turn stuck. Its end is a fault, not a close.
+  let inputBroken = false
+  const inputBroke = (): void => {
     if (!closing && terminalError === null) {
-      handlers.onFault?.(error instanceof Error ? error : new Error(String(error)))
+      inputBroken = true
       void close().catch(() => false)
     }
   }
@@ -234,11 +235,12 @@ export async function openKeptClaudeAgentConnection(
     keptQuery.close()
     // Messages it never took are provably unwritten; the next send cold-resumes with a new agent.
     inbox.fail(terminalError)
-    if (!closing) {
+    const expected = closing && !inputBroken
+    if (!expected) {
       withObservedProviderExit(terminalError)
       handlers.onFault?.(terminalError)
     }
-    handlers.onExit?.(terminalError, { expected: closing })
+    handlers.onExit?.(terminalError, { expected })
     exited.resolve(terminalError)
   }
   managed.onExit(() => {

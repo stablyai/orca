@@ -20,7 +20,7 @@ import { ClaudeSubagentIdentities } from '../../subagents/claude-subagent-identi
 import { ClaudeJournaledSubagents } from '../../subagents/claude-subagent-journaled-identities'
 import type { ClaudeStopCheck } from '../../claude-stop-readings'
 import { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
-import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
+import * as checkpoints from './claude-streamed-text-checkpoints'
 import {
   claudeFrameParentRef,
   claudeStreamTurnSource,
@@ -96,7 +96,7 @@ export function createClaudeJournalTranslator(
     onPersistenceFailure: deps.onBackgroundTaskJournalFailure,
     handedOff: deps.handedOff
   })
-  const streamedText = createClaudeStreamedTextCheckpoints({
+  const streamedText = checkpoints.createClaudeStreamedTextCheckpoints({
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     producer: subagents.linkage,
@@ -119,6 +119,7 @@ export function createClaudeJournalTranslator(
     streamedText.flush()
     streamedThinking.flush()
   }
+  const unbind = checkpoints.bindClaudeUnsavedText(deps.sink, [streamedText, streamedThinking])
 
   const messageContext: ClaudeMessageJournalContext = {
     sink: deps.sink,
@@ -297,6 +298,7 @@ export function createClaudeJournalTranslator(
       context.dispose()
       streamedText.dispose()
       streamedThinking.dispose()
+      unbind()
       tools.clear()
       prompts.clear()
       streamedBlocks.clear()

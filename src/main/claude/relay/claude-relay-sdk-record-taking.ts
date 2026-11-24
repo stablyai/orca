@@ -2,6 +2,10 @@ import { StringDecoder } from 'node:string_decoder'
 import type { ProviderRelayRecordTaking } from '../../provider-relay/relayed-provider-consumption'
 
 const UUID_KEY = '"uuid":"'
+/** An answer to this app's own request: the SDK takes it on read and never yields it. */
+const CONTROL_ANSWER = '{"type":"control_response"'
+/** Marks a held line that counts as taken as soon as every line before it is. */
+const TAKEN_ON_REACH = ''
 
 /** The message's own id: its last unescaped `"uuid":"` key, which the CLI writes after the body. */
 function lineUuid(line: string): string | null {
@@ -26,8 +30,9 @@ function lineUuid(line: string): string | null {
 
 /**
  * The SDK reads a relayed agent's lines as they come and queues their messages while Orca's reader
- * waits, so acks follow the messages Orca handled, matched by id. A line the SDK keeps to itself (a
- * control answer, a keep-alive) counts once a later message is handled.
+ * waits, so acks follow the messages Orca handled, matched by id. A control answer counts once
+ * every line before it does, so an idle chat's answers can't pile up; another line the SDK keeps to
+ * itself counts once a later message is handled.
  */
 export function claudeRelaySdkRecordTaking(records: ProviderRelayRecordTaking): {
   /** Each chunk the SDK reads, in the same tick. */
@@ -40,6 +45,13 @@ export function claudeRelaySdkRecordTaking(records: ProviderRelayRecordTaking): 
   let partial = ''
   let ids: (string | null)[] = []
   let head = 0
+  const takeReached = (): void => {
+    while (head < ids.length && ids[head] === TAKEN_ON_REACH) {
+      ids[head] = null
+      head += 1
+      records.taken()
+    }
+  }
   return {
     observe: (chunk) => {
       const parts = (partial + (typeof chunk === 'string' ? chunk : decoder.write(chunk))).split(
@@ -47,14 +59,21 @@ export function claudeRelaySdkRecordTaking(records: ProviderRelayRecordTaking): 
       )
       partial = parts.pop() ?? ''
       for (const part of parts) {
-        if (part.length > 0) {
+        if (part.length === 0) {
+          continue
+        }
+        if (!part.startsWith(CONTROL_ANSWER)) {
           ids.push(lineUuid(part))
+        } else if (head === ids.length) {
+          records.taken()
+        } else {
+          ids.push(TAKEN_ON_REACH)
         }
       }
     },
     handled: (message) => {
       const id = typeof message.uuid === 'string' ? message.uuid : null
-      const at = id === null ? -1 : ids.indexOf(id, head)
+      const at = id === null || id === TAKEN_ON_REACH ? -1 : ids.indexOf(id, head)
       if (at === -1) {
         return
       }
@@ -63,6 +82,7 @@ export function claudeRelaySdkRecordTaking(records: ProviderRelayRecordTaking): 
         head += 1
         records.taken()
       }
+      takeReached()
       if (head > 1_024 && head * 2 > ids.length) {
         ids = ids.slice(head)
         head = 0

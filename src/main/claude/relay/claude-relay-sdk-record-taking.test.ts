@@ -22,13 +22,23 @@ describe('Claude relay acks through the SDK', () => {
     })
     // The SDK read every line, but Orca's reader is paused: nothing may be acked.
     expect(consumption.upTo(4)).toBe(0)
+    // The control answer counts as soon as every line before it does.
     taking.handled({ type: 'system', uuid: 'u1' })
-    expect(consumption.upTo(4)).toBe(1)
-    // The control answer the SDK kept counts once the next handled message passes it.
+    expect(consumption.upTo(4)).toBe(2)
     taking.handled({ type: 'assistant', uuid: 'u2' })
     expect(consumption.upTo(4)).toBe(3)
     taking.handled({ type: 'result', uuid: 'u3' })
     expect(consumption.upTo(4)).toBe(4)
+  })
+
+  it("takes an idle chat's control answers at once, so they cannot pause its output", () => {
+    const consumption = new RelayedProviderConsumption(() => {})
+    const taking = claudeRelaySdkRecordTaking(consumption.taking)
+    for (let seq = 1; seq <= 3; seq += 1) {
+      consumption.pushed(true, seq)
+      taking.observe(`{"type":"control_response","response":{"request_id":"r${seq}"}}\n`)
+    }
+    expect(consumption.upTo(3)).toBe(3)
   })
 
   it('never throws on a nested id it cannot read', () => {

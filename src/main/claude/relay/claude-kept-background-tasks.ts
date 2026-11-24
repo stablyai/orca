@@ -11,12 +11,15 @@ export function restateKeptClaudeBackgroundTasks(
   /** The last app left a turn running; with none, every open task is background work. */
   turnRunning: boolean
 ): void {
+  const invocations = session.childWork.taskInvocations
   const starts = taskIds.map((task_id) => ({
     type: 'system',
     subtype: 'task_started',
     task_id,
+    // A subagent's kind is only in its unreplayed start; without it the task reads as unknown work.
+    ...(invocations.savedAsSubagent(task_id) ? { task_type: 'local_agent' } : {}),
     // Foreground work ends with its turn; mid-turn, only the journal knows which ran in the background.
-    is_backgrounded: !turnRunning || session.childWork.taskInvocations.savedAsBackground(task_id),
+    is_backgrounded: !turnRunning || invocations.savedAsBackground(task_id),
     status: 'running'
   }))
   for (const start of starts) {

@@ -95,7 +95,11 @@ export class ClaudeTaskInvocations {
   /** The journal has a background-task row for it, or a subagent row: a subagent still running
    *  after its turn ended is a background one. Foreground commands have neither. */
   savedAsBackground(id: string): boolean {
-    return this.saved?.background(id) !== undefined || this.saved?.isSubagent?.(id) === true
+    return this.saved?.background(id) !== undefined || this.savedAsSubagent(id)
+  }
+
+  savedAsSubagent(id: string): boolean {
+    return this.saved?.isSubagent?.(id) === true
   }
 
   excludeMonitor(id: string, run?: string): void {
