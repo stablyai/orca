@@ -241,3 +241,25 @@ export function botItemWaitEntryKey(
   const last = entries.findLast((entry) => entry.kind === 'event' && entry.event.kind === 'status')
   return last?.kind === 'event' && last.event.data.to === 'waiting' ? last.key : null
 }
+
+/** The open question, or the status entry that put the item in Needs you. */
+export function botItemNeedsYouEntryKey(
+  item: Pick<BotItem, 'question' | 'waitingAsk'>,
+  entries: readonly BotItemActivityEntry[]
+): string | null {
+  const questionId = item.waitingAsk ?? item.question?.eventId
+  if (questionId !== undefined) {
+    return (
+      entries.find((entry) => entry.key === questionId && entry.kind === 'comment' && !entry.onAsk)
+        ?.key ?? null
+    )
+  }
+  const target = entries.findLast(
+    (entry) =>
+      (entry.kind === 'comment' && entry.waiting && !entry.onAsk) ||
+      (entry.kind === 'event' &&
+        ((entry.event.kind === 'status' && entry.event.data.to === 'needs_you') ||
+          (entry.event.kind === 'made' && entry.event.data.status === 'needs_you')))
+  )
+  return target?.key ?? null
+}

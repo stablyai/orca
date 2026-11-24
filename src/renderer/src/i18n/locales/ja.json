@@ -25542,7 +25542,10 @@
         "lastItem": "最後の項目",
         "previous": "前の項目",
         "next": "次の項目",
-        "subWhere": "項目 {{number}} · {{chat}}"
+        "linkCount": "リンク{{count}}件",
+        "reply": "返信",
+        "replyAbove": "上の質問に返信",
+        "replyBelow": "下の質問に返信"
       },
       "activity": {
         "linked": "が {{links}} をリンクしました",

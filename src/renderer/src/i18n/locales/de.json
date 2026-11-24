@@ -24229,7 +24229,10 @@
         "lastItem": "Letztes Element",
         "previous": "Vorheriges Element",
         "next": "Nächstes Element",
-        "subWhere": "Element {{number}} · {{chat}}"
+        "linkCount": "{{count}} Links",
+        "reply": "Antworten",
+        "replyAbove": "Antworten, weiter oben",
+        "replyBelow": "Antworten, weiter unten"
       },
       "activity": {
         "linked": "hat {{links}} verknüpft",

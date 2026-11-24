@@ -25000,7 +25000,10 @@
         "lastItem": "Последний элемент",
         "previous": "Предыдущий элемент",
         "next": "Следующий элемент",
-        "subWhere": "Элемент {{number}} · {{chat}}"
+        "linkCount": "Ссылки: {{count}}",
+        "reply": "Ответить",
+        "replyAbove": "Ответить на вопрос выше",
+        "replyBelow": "Ответить на вопрос ниже"
       },
       "activity": {
         "linked": "связал {{links}}",
