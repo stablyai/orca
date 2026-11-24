@@ -4,7 +4,11 @@ import { LSOF_NONBLOCKING_ARGS } from '../../shared/process-observation/lsof-non
 import { getProcessOutputFields } from '../../shared/process-observation/process-output-field-scanner'
 import { readWindowsProcessTable } from '../windows/windows-process-table'
 import { runPortScanCommand } from './port-scan-command-client'
-import { parseDarwinNetstatListeners } from './darwin-netstat-listeners'
+import { readDarwinNetstatListeners } from './darwin-netstat-listeners'
+import {
+  rememberDarwinAttribution,
+  reusableDarwinAttribution
+} from './darwin-listener-attribution-cache'
 import { loadDarwinProcessMetadata } from './darwin-process-metadata'
 import {
   partitionListenersNeedingMetadata,
@@ -103,25 +107,32 @@ async function scanDarwinLsofPorts(
 ): Promise<PlatformListeningPortScan> {
   const listeners = options.requireMetadata
     ? null
-    : await runPortScanCommand('/usr/sbin/netstat', ['-aln', '-p', 'tcp'], 'listeners').catch(
-        () => null
-      )
+    : await runPortScanCommand('/usr/sbin/netstat', ['-Aaln', '-p', 'tcp'], 'listeners')
+        .then((result) => readDarwinNetstatListeners(result.stdout))
+        .catch(() => null)
   try {
-    const { stdout, spawnMs } = await runPortScanCommand(
-      '/usr/sbin/lsof',
-      [
-        '-O',
-        ...LSOF_NONBLOCKING_ARGS,
-        '-nP',
-        '-iTCP',
-        '-sTCP:LISTEN',
-        '-F',
-        // Socket identity distinguishes PID reuse on the same port for metadata caching.
-        'pcnd'
-      ],
-      'attribution'
-    )
-    const ports = parseLsofListeningOutput(stdout)
+    const socketSignature = listeners?.socketSignature ?? null
+    const reused = reusableDarwinAttribution(socketSignature)
+    const attribution = reused
+      ? { ports: reused, spawnMs: 0 }
+      : await runPortScanCommand(
+          '/usr/sbin/lsof',
+          [
+            '-O',
+            ...LSOF_NONBLOCKING_ARGS,
+            '-nP',
+            '-iTCP',
+            '-sTCP:LISTEN',
+            '-F',
+            // Socket identity distinguishes PID reuse on the same port for metadata caching.
+            'pcnd'
+          ],
+          'attribution'
+        ).then(({ stdout, spawnMs }) => ({ ports: parseLsofListeningOutput(stdout), spawnMs }))
+    if (!reused) {
+      rememberDarwinAttribution(socketSignature, attribution.ports)
+    }
+    const { ports, spawnMs } = attribution
     if (shouldSkipMetadataCommands(spawnMs, options)) {
       return { ports: ports.map(recallListenerMetadata), metadataAvailable: false }
     }
@@ -139,7 +150,7 @@ async function scanDarwinLsofPorts(
     if (options.requireMetadata || !listeners) {
       throw error
     }
-    return { ports: parseDarwinNetstatListeners(listeners.stdout), metadataAvailable: false }
+    return { ports: listeners.ports, metadataAvailable: false }
   }
 }
 

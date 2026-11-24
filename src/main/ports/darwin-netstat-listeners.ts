@@ -4,6 +4,13 @@ import { dedupeRawPorts } from './local-workspace-port-address'
 import type { RawListeningPort } from './local-workspace-port-scan-state'
 
 const MAX_RETAINED_CHARS = 2 * 1024 * 1024
+const HEADER = 'Proto Recv-Q Send-Q Local Address Foreign Address (state)'
+// `netstat -A` prefixes each row with the socket's kernel address (and Flowhash on newer macOS).
+const SOCKET_HEADERS = new Map([
+  [HEADER, 0],
+  [`Socket ${HEADER}`, 1],
+  [`Socket Flowhash ${HEADER}`, 2]
+])
 const STATES = new Set([
   'CLOSED',
   'LISTEN',
@@ -42,6 +49,8 @@ export class DarwinNetstatListeners {
   private title = false
   private header = false
   private retained = ''
+  /** Leading socket-identity columns before Proto: 0 without `-A`. */
+  socketColumns = 0
 
   write(chunk: string): void {
     this.pending += chunk
@@ -74,23 +83,17 @@ export class DarwinNetstatListeners {
     if (!line) {
       return
     }
-    const fields = getProcessOutputFields(line, 9)
     if (!this.title && line === 'Active Internet connections (including servers)') {
       this.title = true
     } else if (
       this.title &&
       !this.header &&
-      fields.join(' ') === 'Proto Recv-Q Send-Q Local Address Foreign Address (state)'
+      SOCKET_HEADERS.has(getProcessOutputFields(line, 11).join(' '))
     ) {
       this.header = true
-    } else if (
-      this.header &&
-      fields.length === 6 &&
-      /^tcp(?:4|6|46)$/.test(fields[0]) &&
-      /^\d+$/.test(fields[1]) &&
-      /^\d+$/.test(fields[2]) &&
-      STATES.has(fields[5])
-    ) {
+      this.socketColumns = SOCKET_HEADERS.get(getProcessOutputFields(line, 11).join(' ')) ?? 0
+    } else if (this.header && isTcpRow(getProcessOutputFields(line, 9), this.socketColumns)) {
+      const fields = getProcessOutputFields(line, 9).slice(this.socketColumns)
       if (fields[5] !== 'LISTEN' || !endpoint(fields[3])) {
         return
       }
@@ -104,18 +107,47 @@ export class DarwinNetstatListeners {
   }
 }
 
+function isTcpRow(fields: string[], socketColumns: number): boolean {
+  const row = fields.slice(socketColumns)
+  return (
+    fields.length === 6 + socketColumns &&
+    fields.slice(0, socketColumns).every((field) => /^[0-9a-f]+$/i.test(field)) &&
+    /^tcp(?:4|6|46)$/.test(row[0]) &&
+    /^\d+$/.test(row[1]) &&
+    /^\d+$/.test(row[2]) &&
+    STATES.has(row[5])
+  )
+}
+
 export function parseDarwinNetstatListeners(output: string): RawListeningPort[] {
+  return readDarwinNetstatListeners(output).ports
+}
+
+/** Ports plus a signature of each LISTEN socket's kernel identity and address; null without `-A` columns. */
+export function readDarwinNetstatListeners(output: string): {
+  ports: RawListeningPort[]
+  socketSignature: string | null
+} {
   const parser = new DarwinNetstatListeners()
   parser.write(output)
   const ports: RawListeningPort[] = []
-  for (const line of parser.finish().split('\n')) {
-    const fields = getProcessOutputFields(line, 6)
+  const sockets: string[] = []
+  const lines = parser.finish().split('\n')
+  for (const line of lines) {
+    const all = getProcessOutputFields(line, 6 + parser.socketColumns)
+    const fields = all.slice(parser.socketColumns)
     if (fields[5] === 'LISTEN') {
+      if (parser.socketColumns > 0) {
+        sockets.push(`${all[0].toLowerCase()} ${fields[3]}`)
+      }
       const port = endpoint(fields[3])
       if (port) {
         ports.push(port)
       }
     }
   }
-  return dedupeRawPorts(ports)
+  return {
+    ports: dedupeRawPorts(ports),
+    socketSignature: parser.socketColumns > 0 ? sockets.sort().join('\n') : null
+  }
 }
