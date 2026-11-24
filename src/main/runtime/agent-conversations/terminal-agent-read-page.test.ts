@@ -223,4 +223,26 @@ describe('readTerminalAgentPage', () => {
 
     expect(pages.map((page) => page.entries.map(idOf))).toEqual([[], [], ['e0', 'e1', 'e2']])
   })
+
+  it('keeps a message whose shown content was cut away as a shortened entry', async () => {
+    const image = { type: 'image', source: { type: 'url', url: 'https://example.test/a.png' } }
+    const path = transcriptFile([
+      message('e0'),
+      JSON.stringify({
+        type: 'user',
+        uuid: 'images-then-text',
+        message: {
+          role: 'user',
+          content: [...Array.from({ length: 6 }, () => image), { type: 'text', text: 'the prompt' }]
+        }
+      }),
+      message('e1')
+    ])
+
+    expect((await readPage(path, 5)).entries).toEqual([
+      { kind: 'message', role: 'assistant', text: 'e0' },
+      { kind: 'message', role: 'user', text: '(content not shown)', shortened: true },
+      { kind: 'message', role: 'assistant', text: 'e1' }
+    ])
+  })
 })

@@ -57,7 +57,16 @@ export async function readTerminalAgentPage(args: {
   const shortened = new Set(transcript.shortened ?? [])
   const entries = transcript.messages.flatMap((message, index): AgentReadEntry[] => {
     const entry = transcriptEntry(message)
-    return entry ? [shortened.has(index) ? { ...entry, shortened: true } : entry] : []
+    if (!shortened.has(index)) {
+      return entry ? [entry] : []
+    }
+    if (entry) {
+      return [{ ...entry, shortened: true }]
+    }
+    // Cutting dropped every block agent read shows; the message still says it was shortened.
+    return message.role === 'reasoning' || message.role === 'tool'
+      ? []
+      : [{ kind: 'message', role: message.role, text: '(content not shown)', shortened: true }]
   })
   const state = position
     ? undefined
