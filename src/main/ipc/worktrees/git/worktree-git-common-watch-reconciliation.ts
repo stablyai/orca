@@ -28,6 +28,9 @@ type GitCommonWatchReconciliationOptions = {
   shouldKeep: () => boolean
   onRootReplacement: () => void
   onEvents: (events: WorktreeBasePollEvent[]) => void
+  /** Agent turns and shell commands finishing in a repo this common dir serves trigger the throttled check. */
+  subscribeRepoActivity?: (listener: (repoId: string) => void) => () => void
+  ownsRepo?: (repoId: string) => boolean
 }
 
 type GitCommonWatchReconciliation = {
@@ -43,13 +46,20 @@ export function createGitCommonWatchReconciliation({
   canStart,
   shouldKeep,
   onRootReplacement,
-  onEvents
+  onEvents,
+  subscribeRepoActivity,
+  ownsRepo
 }: GitCommonWatchReconciliationOptions): GitCommonWatchReconciliation {
   const worktreesDir = join(commonDirPath, 'worktrees')
   let subscription: GitCommonPollingSubscription | null = null
-  let unsubscribeFocus: (() => void) | undefined
+  let unsubscribeTriggers: (() => void) | undefined
   const handleFocus = (): void => {
     subscription?.poke()
+  }
+  const handleRepoActivity = (repoId: string): void => {
+    if (ownsRepo?.(repoId)) {
+      subscription?.poke()
+    }
   }
   const starting = createSingleFlight()
   let onNetworkVolume: Promise<boolean> | null = null
@@ -136,7 +146,14 @@ export function createGitCommonWatchReconciliation({
         } else {
           subscription = reconciliation
           // Registered per subscription: a polling-fallback cycle restarts this object after unsubscribe.
-          unsubscribeFocus ??= visibility.onWindowFocused?.(handleFocus)
+          if (!unsubscribeTriggers) {
+            const unsubscribeFocus = visibility.onWindowFocused?.(handleFocus)
+            const unsubscribeActivity = subscribeRepoActivity?.(handleRepoActivity)
+            unsubscribeTriggers = () => {
+              unsubscribeFocus?.()
+              unsubscribeActivity?.()
+            }
+          }
         }
       })
     },
@@ -146,8 +163,8 @@ export function createGitCommonWatchReconciliation({
       }
     },
     unsubscribe: async () => {
-      unsubscribeFocus?.()
-      unsubscribeFocus = undefined
+      unsubscribeTriggers?.()
+      unsubscribeTriggers = undefined
       generation++
       await starting.pending()?.catch(() => {})
       const current = subscription

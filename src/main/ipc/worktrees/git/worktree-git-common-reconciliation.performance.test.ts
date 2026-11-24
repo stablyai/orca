@@ -81,6 +81,7 @@ function hide(): void {
   onHidden?.()
 }
 let visible = true
+let activity: ((repoId: string) => void) | null = null
 let events: WorktreeBasePollEvent[] = []
 
 async function startReconciliation(): Promise<
@@ -108,7 +109,14 @@ async function startReconciliation(): Promise<
     canStart: () => true,
     shouldKeep: () => true,
     onRootReplacement: () => {},
-    onEvents: (next) => events.push(...next)
+    onEvents: (next) => events.push(...next),
+    subscribeRepoActivity: (listener) => {
+      activity = listener
+      return () => {
+        activity = null
+      }
+    },
+    ownsRepo: (repoId) => repoId === 'repo'
   })
   await reconciliation.ensureStarted()
   reveal = () => {
@@ -251,5 +259,28 @@ it('runs only the reveal sweep when focus lands before show/restore', async () =
   reveal?.()
   await vi.advanceTimersByTimeAsync(0)
   expect(fs.stats).toBeLessThanOrEqual(FLEET * 7 + 1)
+  await stop()
+})
+
+it('re-checks on agent turns and shell commands in this repo, never above the old cadence', async () => {
+  const { unsubscribe: stop } = await startReconciliation()
+  await vi.advanceTimersByTimeAsync(30_000)
+  const added = addWorktreeEntry('agent-add')
+  activity?.('other-repo')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(events).toEqual([])
+  activity?.('repo')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(events).toContainEqual({ type: 'create', path: added })
+
+  // 100 agents each finishing a turn every second for ten minutes.
+  fs.stats = 0
+  for (let second = 0; second < 600; second += 1) {
+    for (let agent = 0; agent < 100; agent += 1) {
+      activity?.('repo')
+    }
+    await vi.advanceTimersByTimeAsync(1_000)
+  }
+  expect(fs.stats).toBeLessThanOrEqual(129_220)
   await stop()
 })

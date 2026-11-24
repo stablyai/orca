@@ -10,6 +10,7 @@ import type {
 } from '../creation/worktree-base-directory-poller'
 import { createSingleFlight } from './single-flight-promise'
 import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-reconciliation'
+import { onWorktreeActivity } from './worktree-activity-signal'
 import { startGitCommonPolling } from './worktree-git-common-polling'
 import { createNativeUpgradePoll } from './worktree-git-common-native-upgrade-poll'
 
@@ -51,7 +52,9 @@ export async function startGitCommonNarrowWatch(
       }
       armExistencePoll()
     },
-    onEvents
+    onEvents,
+    subscribeRepoActivity: onWorktreeActivity,
+    ownsRepo: (repoId) => target.repos.has(repoId)
   })
 
   const stopExistencePoll = (): void => {
