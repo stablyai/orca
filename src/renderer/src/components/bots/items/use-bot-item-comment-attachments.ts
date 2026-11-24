@@ -41,7 +41,7 @@ export function useBotItemCommentAttachments(
       environmentId,
       BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY
     ) === true
-  const { id, gone } = item.chat
+  const { id, gone, title } = item.chat
   const itemTarget =
     environmentId === null ||
     readCachedRuntimeEnvironmentCapability(
@@ -51,7 +51,17 @@ export function useBotItemCommentAttachments(
       ? botItemAttachmentTarget(item.uid)
       : null
   return useMemo((): BotItemCommentAttachments => {
-    if (!hostTakes || (!itemTarget && gone)) {
+    if (!itemTarget && gone) {
+      return {
+        session: null,
+        blocked: t(
+          'bots.items.comment.chatDeleted',
+          "{{chat}} was deleted, so files can't be attached here.",
+          { chat: title ?? t('bots.items.chatFallback', 'Chat') }
+        )
+      }
+    }
+    if (!hostTakes) {
       return {
         session: null,
         blocked: t(
@@ -68,5 +78,5 @@ export function useBotItemCommentAttachments(
       session: { sessionId: itemTarget ?? id, runtimeEnvironmentId: environmentId },
       blocked: null
     }
-  }, [environmentId, gone, hostLabel, hostTakes, id, itemTarget, t, target])
+  }, [environmentId, gone, hostLabel, hostTakes, id, itemTarget, t, target, title])
 }

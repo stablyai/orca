@@ -16,10 +16,12 @@ export async function botMailSession(
   bot: Bot,
   chatId: string
 ): Promise<string> {
-  return (
-    (await botChatTakingMail(runtime, bot, chatId))?.sessionId ??
-    (await runtimeBotChats(runtime).ensure(bot.id))
-  )
+  const original = await botChatTakingMail(runtime, bot, chatId)
+  if (original) {
+    return original.sessionId
+  }
+  const home = await runtimeBotChats(runtime).ensure(bot.id)
+  return botChatTakingMailNow(runtime, bot, home)?.sessionId ?? home
 }
 
 /** The destination still takes this mail after a claim; check and insert in the same turn. */
@@ -33,8 +35,11 @@ export function botMailSessionStillCurrent(
   if (!bot) {
     return false
   }
-  const original = botChatTakingMailNow(runtime, bot, chatId)
-  return (original?.sessionId ?? bot.chatSessionId) === sessionId
+  const recipient =
+    botChatTakingMailNow(runtime, bot, chatId) ??
+    (bot.chatSessionId && botChatTakingMailNow(runtime, bot, bot.chatSessionId))
+  // The saved Home id can still name a retired chat while a reset creates its successor.
+  return !!recipient && recipient.sessionId === sessionId
 }
 
 /** Closes a room member's chat. The workers it started still report, so its Runs go to the chat

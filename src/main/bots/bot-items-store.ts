@@ -18,6 +18,9 @@ export class BotItemsStore extends BotItemsOwner {
     const writable = migrateBotItems(db)
     if (writable) {
       ensureKeptWaitingAsks(db)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_item_events_comment_request
+        ON item_events(item_uid, json_extract(data, '$.requestId'))
+        WHERE kind = 'commented' AND json_extract(data, '$.requestId') IS NOT NULL`)
     }
     if (path !== ':memory:') {
       hardenSqliteDatabaseFiles(path)

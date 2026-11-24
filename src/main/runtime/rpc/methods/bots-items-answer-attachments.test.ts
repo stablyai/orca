@@ -6,6 +6,7 @@ import { agentSessionConversationView } from '../../../../shared/agent-session/l
 import { botItemEventId } from '../../../../shared/bots/bot-items'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { BotItemsStore } from '../../../bots/bot-items-store'
+import { runtimeBotChats } from '../../../bots/bot-chat-session'
 import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { setAgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { agentSessionAttachmentStoreRoot } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
@@ -83,6 +84,9 @@ it('claims an item answer for the chat it actually mails and replays the same an
     hasSession: (sessionId) => chats.has(sessionId)
   })
   let replaceDuringClaim = false
+  const retired = Promise.withResolvers<void>()
+  const successorReady = Promise.withResolvers<void>()
+  let reset: Promise<void> | undefined
   setAgentSessionAttachmentStore(attachments, async (sessionId, body) => {
     journal.writeAutocommit((db) =>
       claimAgentSessionAttachmentsInTransaction(db, {
@@ -90,12 +94,18 @@ it('claims an item answer for the chat it actually mails and replays the same an
         sessionId,
         body,
         required: true,
-        now: Date.now()
+        now: 1_800_000_000_000
       })
     )
     if (replaceDuringClaim && sessionId === ORIGINAL) {
-      chats.delete(ORIGINAL)
-      bot.chatSessionId = HOME
+      reset = runtimeBotChats(context.runtime).withChat(bot.id, async () => {
+        chats.delete(ORIGINAL)
+        retired.resolve()
+        await successorReady.promise
+        bot.chatSessionId = HOME
+      })
+      await retired.promise
+      setImmediate(successorReady.resolve)
     }
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the read-side host seam and note destination are used.
@@ -174,6 +184,7 @@ it('claims an item answer for the chat it actually mails and replays the same an
     const [owed] = items.owedMail(0).mails
     expect(owed).toBeDefined()
     expect(await sendBotItemMail(context.runtime, owed!)).toBe(true)
+    await reset
     expect(await sendBotItemMail(context.runtime, owed!)).toBe(true)
     const sent = mail.getMessageById(botItemMailId(owed!.id))!
     expect(sent.to_handle).toBe(`orca_session_id:${HOME}`)

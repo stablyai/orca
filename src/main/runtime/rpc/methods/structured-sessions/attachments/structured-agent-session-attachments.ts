@@ -16,7 +16,7 @@ import {
 import { remoteFileContentBudget } from '../../files/files-remote-content-budget'
 import type { AgentSessionAttachmentStore } from '../../../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { getAgentSessionAttachmentStore } from '../../../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
-import { ownerOnly } from '../../bots-caller-gates'
+import { botItemOwnerActor } from '../../bots-caller-gates'
 import { resolveItem } from '../../bots-items-write-support'
 
 async function requireStore(
@@ -46,9 +46,8 @@ export const STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS = [
     params: AttachmentUploadStartParams,
     handler: async (params, ctx) => {
       if ('item' in params) {
-        ownerOnly(ctx, 'Only your owner attaches files to item replies in Orca.')
+        botItemOwnerActor(ctx)
         const { runtime } = ctx
-        runtime.bots.assertEnabled()
         const item = await resolveItem(runtime.botItems.store(), params.item)
         if (!runtime.bots.list().some((bot) => bot.id === item.ownerBotId)) {
           throw new Error('The bot that owns this item is gone')
