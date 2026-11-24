@@ -2,7 +2,7 @@
 // eligibility, and the proof that activates a control (generation, resume secret, pending conns).
 import nacl from 'tweetnacl'
 import { buildHostChallengePlaintext, buildHostProofMacInput, buildHostProofTranscript } from '../../../packages/relay-contract/src/host-proof-transcript'
-import { HostChallengeAckSchema, HostHelloSchema, RELAY_HOST_CAPABILITY_CLIENT_KEEPALIVE, RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS } from '../../../packages/relay-contract/src/control-messages'
+import { HostChallengeAckSchema, HostHelloSchema, RELAY_HOST_CAPABILITY_CLIENT_KEEPALIVE, RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS, relayHostConnectionLimit } from '../../../packages/relay-contract/src/control-messages'
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
 import { metric } from './metrics'
 import type { EdgeClaims } from './env'
@@ -169,6 +169,7 @@ export abstract class HostRelayHandshake extends HostRelayBase {
     delete a.rebind
     this.attach(ws, a)
     const details = a.caps.includes(RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS)
+    const limit = relayHostConnectionLimit(a.caps)
     const activeConnIds: string[] = []
     const pendingConns: Record<string, unknown>[] = []
     for (const [connId, c] of Object.entries(await this.conns())) {
@@ -187,8 +188,8 @@ export abstract class HostRelayHandshake extends HostRelayBase {
       generation,
       controlResumeSecret: resumeSecret,
       leaseExpiresAt,
-      activeConnIds: activeConnIds.slice(0, 8),
-      pendingConns: pendingConns.slice(0, 8)
+      activeConnIds: activeConnIds.slice(0, limit),
+      pendingConns: pendingConns.slice(0, limit)
     })
     // After the ack, which strict shipped parsers must see unchanged; only hosts that asked get it.
     if (a.clientKeepalive) { this.send(ws, { type: 'keepalive-offer', v: 1, intervalMs: this.config.pingIntervalMs }) }

@@ -9,6 +9,7 @@ import {
   PositiveDurationMsSchema,
   RelayHostIdSchema
 } from './wire-scalars.js'
+import { RELAY_PROTOCOL_LIMITS } from './protocol-limits.js'
 
 const AppVersionSchema = z.string().min(1).max(128)
 const BoundedCiphertextSchema = z
@@ -54,6 +55,15 @@ export const RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME = 'idle-regional-rehome-
 // The host can send the keepalive below. A relay that supports it says so with a keepalive-offer
 // after the hello-ack; only then does the host send it. Relays that never offer keep pinging.
 export const RELAY_HOST_CAPABILITY_CLIENT_KEEPALIVE = 'client-keepalive-v1'
+// The host parses hello-ack connection lists up to maxConnectionsPerHost; shipped hosts reject more than 8.
+export const RELAY_HOST_CAPABILITY_WIDE_CONNECTION_LISTS = 'wide-connection-lists-v1'
+
+// The one per-host connection budget every relay enforces, sized to what the host's decoder accepts.
+export function relayHostConnectionLimit(hostCapabilities: Iterable<string> | undefined): number {
+  return new Set(hostCapabilities).has(RELAY_HOST_CAPABILITY_WIDE_CONNECTION_LISTS)
+    ? RELAY_PROTOCOL_LIMITS.maxConnectionsPerHost
+    : RELAY_PROTOCOL_LIMITS.legacyMaxConnectionsPerHost
+}
 // Exact frames: the edge answers the request without waking the host's object, so they never vary.
 export const RELAY_CLIENT_KEEPALIVE_FRAME = '{"type":"keepalive"}'
 export const RELAY_CLIENT_KEEPALIVE_ACK_FRAME = '{"type":"keepalive-ack"}'
@@ -95,8 +105,8 @@ export const HostHelloAckSchema = z
     generation: GenerationSchema,
     controlResumeSecret: Base64Url32ByteSchema,
     leaseExpiresAt: EpochMsSchema,
-    activeConnIds: z.array(OpaqueIdSchema).max(8),
-    pendingConns: z.array(PendingConnectionSchema).max(8)
+    activeConnIds: z.array(OpaqueIdSchema).max(RELAY_PROTOCOL_LIMITS.maxConnectionsPerHost),
+    pendingConns: z.array(PendingConnectionSchema).max(RELAY_PROTOCOL_LIMITS.maxConnectionsPerHost)
   })
   .strict()
 

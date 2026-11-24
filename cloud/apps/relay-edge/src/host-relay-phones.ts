@@ -3,6 +3,7 @@
 import nacl from 'tweetnacl'
 import type { RelayHello } from '../../../packages/relay-contract/src/credential-messages'
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
+import { relayHostConnectionLimit } from '../../../packages/relay-contract/src/control-messages'
 import { RELAY_PROTOCOL_LIMITS } from '../../../packages/relay-contract/src/protocol-limits'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import type { CredentialReservation } from './edge-backend'
@@ -15,7 +16,7 @@ export abstract class HostRelayPhones extends HostRelayControl {
 
   // Picks the least-busy slot of this host's splice pool for a new phone connection, so concurrent
   // phones land in different objects. Ties go to a random slot. Not a reservation: a slot can still
-  // hold several splices, and the 8-connection budget is enforced in authorizePhone.
+  // hold several splices, and the per-host connection budget is enforced in authorizePhone.
   // Object backend: null for a host the director has not pushed (never, or wiped since), so the
   // Worker answers the phone without this object or a splice object writing any storage.
   async allocateConnId(relayHostId: string): Promise<string | null> {
@@ -74,10 +75,12 @@ export abstract class HostRelayPhones extends HostRelayControl {
       await this.backend.failReservation(reservation).catch(() => {})
       return this.missedSeat(reservation)
     }
-    const conns = await this.conns()
-    if (Object.keys(conns).length >= RELAY_PROTOCOL_LIMITS.maxConnectionsPerHost) {
+    let conns = await this.conns()
+    if (Object.keys(conns).length >= relayHostConnectionLimit(control.a.caps)) {
+      // The liveness probes let other admissions and a control rebind run: recheck both.
       await this.pruneDeadConns(conns)
-      if (Object.keys(conns).length >= RELAY_PROTOCOL_LIMITS.maxConnectionsPerHost) {
+      conns = await this.conns()
+      if (this.activeControl()?.ws !== control.ws || Object.keys(conns).length >= relayHostConnectionLimit(control.a.caps)) {
         await this.backend.failReservation(reservation).catch(() => {})
         return { ok: false, code: RELAY_CLOSE_CODE.LIMIT_EXCEEDED }
       }
@@ -166,12 +169,14 @@ export abstract class HostRelayPhones extends HostRelayControl {
   }
 
   // A splice object that was reset never reports its close. Ask before refusing on the budget.
-  protected async pruneDeadConns(conns: Record<string, Conn>): Promise<void> {
-    const ids = Object.keys(conns)
+  // Rereads the map past the probes so admissions made meanwhile survive the write.
+  protected async pruneDeadConns(probed: Record<string, Conn>): Promise<void> {
+    const ids = Object.keys(probed)
     const alive = await Promise.all(ids.map((id) => this.splice(id).isAlive(id).catch(() => false)))
+    const conns = await this.conns()
     const dead: [string, Conn][] = []
     ids.forEach((id, i) => {
-      if (!alive[i]) {
+      if (!alive[i] && conns[id]) {
         dead.push([id, conns[id]])
         delete conns[id]
       }
