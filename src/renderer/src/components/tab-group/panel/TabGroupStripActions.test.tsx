@@ -6,6 +6,8 @@ import { useAppStore } from '@/store/index'
 import type { TitlebarChromeFoldLevel } from '@/app-shell/chrome/titlebar-chrome-fold'
 import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
 import { TabGroupStripActions } from './TabGroupStripActions'
 
 const repoId = 'demo-repo'
@@ -52,14 +54,18 @@ afterEach(() => {
 
 function Strip({ fold, split }: { fold: TitlebarChromeFoldLevel; split: boolean }) {
   return (
-    <TabGroupStripActions
-      isFocused
-      worktreeId={worktreeId}
-      groupId="demo-group"
-      onCloseGroup={split ? () => undefined : undefined}
-      foldLevel={fold}
-      onNewTab={() => undefined}
-    />
+    <TooltipProvider>
+      <ConfirmationDialogProvider>
+        <TabGroupStripActions
+          isFocused
+          worktreeId={worktreeId}
+          groupId="demo-group"
+          onCloseGroup={split ? () => undefined : undefined}
+          foldLevel={fold}
+          onNewTab={() => undefined}
+        />
+      </ConfirmationDialogProvider>
+    </TooltipProvider>
   )
 }
 
@@ -89,9 +95,13 @@ async function chooseAddQuickCommand(): Promise<void> {
 }
 
 function editorLabel(): HTMLInputElement {
-  return within(screen.getByRole('dialog', { name: 'Add Quick Command' })).getByPlaceholderText(
-    'Start dev server'
-  ) as HTMLInputElement
+  const input = within(
+    screen.getByRole('dialog', { name: 'Add Quick Command' })
+  ).getByPlaceholderText('Start dev server')
+  if (!(input instanceof HTMLInputElement)) {
+    throw new Error('The Add Quick Command label is not an input')
+  }
+  return input
 }
 
 async function fillAndSave(label: string): Promise<void> {

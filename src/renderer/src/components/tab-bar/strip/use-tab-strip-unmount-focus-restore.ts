@@ -42,15 +42,15 @@ export function useTabStripUnmountFocusRestore({
   groupId: string
   menuId: string
 }): void {
-  const latestRef = useRef({
-    open,
-    surface,
-    chip: null as HTMLElement | null,
-    activeId,
-    worktreeId,
-    groupId,
-    menuId
-  })
+  const latestRef = useRef<{
+    open: boolean
+    surface: HTMLElement | null
+    chip: HTMLElement | null
+    activeId: string | null
+    worktreeId: string
+    groupId: string
+    menuId: string
+  }>({ open, surface, chip: null, activeId, worktreeId, groupId, menuId })
   useLayoutEffect(() => {
     latestRef.current = { open, surface, chip: chip.current, activeId, worktreeId, groupId, menuId }
   })
