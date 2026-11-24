@@ -309,8 +309,8 @@ export class BotItemsHost {
   }
 
   /** A write to any Dispatch's rows (the database's notice), or a paired server's verdict on one. */
-  workersWritten(): void {
-    this.join.workersWritten()
+  workersWritten(dispatchIds: readonly string[] = []): void {
+    this.join.workersWritten(dispatchIds)
   }
 
   /** A Dispatch row changed: a start for an item is linked, and linked items re-read. */

@@ -341,7 +341,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** A paired server's worker verdicts changed: their bots re-read (all, if a bot can't be read). */
   protected botFederatedWorkersChanged(dispatchIds: readonly string[]): void {
     this.botChatTreeWorkers.drop(dispatchIds)
-    this.botItems.workersWritten()
+    this.botItems.workersWritten(dispatchIds)
     const botIds = this.botChatTreeIndex?.ownersOf(dispatchIds) ?? null
     if (botIds?.length !== 0) {
       this.botChangeNotices.changed({ ...(botIds ? { botIds } : {}), kinds: ['workers'] })
@@ -350,7 +350,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   protected botDispatchChanged(dispatchId: string | null, change: DispatchRowChange): void {
     this.botChatTreeWorkers.rowChanged(dispatchId, change)
-    this.botItems.workersWritten()
+    this.botItems.workersWritten(dispatchId === null ? [] : [dispatchId])
     if (change !== 'deleted') {
       this.botItems.dispatchChanged(dispatchId)
     }

@@ -30,7 +30,8 @@ function newJoin(): BotItemLinkJoin {
     getOrchestrationFleetAgentStatusSnapshot: () => []
   } as unknown as BotWorkRuntime
   const join = new BotItemLinkJoin(runtime, () => ({ pr: {}, issue: {} }))
-  db.workerStatusListener = () => join.workersWritten()
+  db.workerStatusListener = (dispatchId) =>
+    join.workersWritten(dispatchId === null ? [] : [dispatchId])
   return join
 }
 
@@ -99,5 +100,16 @@ describe('item worker links', () => {
       JSON.stringify({ subject: 'Late report', body: null })
     )
     expect((await itemLink(id, join)).report).toEqual({ subject: 'Late report', body: null })
+  })
+
+  it('show a kept worker’s report rewritten to the same length', async () => {
+    const id = failedWorker('Agent process exited with code 1')
+    const taskId = db.getDispatchContextById(id)!.task_id
+    const report = (body: string) => JSON.stringify({ subject: 'Done', body })
+    db.updateTaskStatus(taskId, 'failed', report(`a${'x'.repeat(100)}a`))
+    const join = newJoin()
+    await itemLink(id, join)
+    db.updateTaskStatus(taskId, 'failed', report(`a${'y'.repeat(100)}a`))
+    expect((await itemLink(id, join)).report?.body).toBe(`a${'y'.repeat(100)}a`)
   })
 })

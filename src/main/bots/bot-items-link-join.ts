@@ -106,10 +106,10 @@ export class BotItemLinkJoin {
     return reads
   }
 
-  /** A write to any Dispatch's rows, or a paired server's verdict on one: a read running now keeps
-   *  nothing it read. */
-  workersWritten(): void {
-    this.states.noteWrite()
+  /** A write to these Dispatches' rows, or a paired server's verdict on them: their kept reads go, and
+   *  a read running now keeps nothing it read. */
+  workersWritten(dispatchIds: readonly string[] = []): void {
+    this.states.noteWrite(dispatchIds)
   }
 
   /** Server-hosted work shows no PR state until a remote PR read exists. */

@@ -45,6 +45,8 @@ type Kept = {
 
 export class LinkedWorkerStates {
   private readonly kept = new Map<string, Kept>()
+  /** Kept refs by their newest Dispatch, so that Dispatch's row notice drops them at once. */
+  private readonly refsOf = new Map<string, Set<string>>()
   private keptChars = 0
   private source: unknown = null
   /** Counts the database's row notices: a read that saw one while it ran keeps nothing. */
@@ -52,9 +54,15 @@ export class LinkedWorkerStates {
 
   constructor(private readonly workRuntime: BotWorkRuntime) {}
 
-  /** Any write to a Dispatch's rows, or a paired server's verdict on one. */
-  noteWrite(): void {
+  /** Any write to a Dispatch's rows, or a paired server's verdict on one: kept reads ending at it go, since
+   *  a fingerprint shows only the length and ends of long text such as a rewritten report. */
+  noteWrite(dispatchIds: readonly string[] = []): void {
     this.writes += 1
+    for (const dispatchId of dispatchIds) {
+      for (const ref of this.refsOf.get(dispatchId) ?? []) {
+        this.forget(ref)
+      }
+    }
   }
 
   /** Each ref's worker, report and stop reason: kept ones when their rows are unchanged, the rest read in
@@ -104,10 +112,8 @@ export class LinkedWorkerStates {
       db,
       [...workers.values()].flatMap((worker) => worker?.dispatchId ?? [])
     )
-    // Rows written while the read ran may be newer than what it saw: keep nothing from it.
-    const keep = stamp !== null && `${this.writes}:${dataVersion(db)}:${dockRevision(db)}` === stamp
-    const finished: [string, Kept][] = []
     const reports = new Map<string, LinkedWorkerState['report'] | undefined>()
+    const finished: [string, Kept][] = []
     for (const [ref, worker] of workers) {
       if (!worker) {
         states.set(ref, null)
@@ -126,7 +132,7 @@ export class LinkedWorkerStates {
       const lineage = lineageOf.get(ref)
       const resource = lineage?.resource
       if (
-        keep &&
+        stamp !== null &&
         read !== undefined &&
         lineage &&
         worker.host === 'local' &&
@@ -157,10 +163,13 @@ export class LinkedWorkerStates {
       db,
       finished.map(([, kept]) => kept)
     )
-    for (const [ref, kept] of finished) {
-      const print = finishedPrints.get(printKey(kept))?.print
-      if (print !== undefined) {
-        this.keep(ref, { ...kept, print })
+    // Rows written since the read began, its fingerprints included, may be newer than what it saw.
+    if (`${this.writes}:${dataVersion(db)}:${dockRevision(db)}` === stamp) {
+      for (const [ref, kept] of finished) {
+        const print = finishedPrints.get(printKey(kept))?.print
+        if (print !== undefined) {
+          this.keep(ref, { ...kept, print })
+        }
       }
     }
     return states
@@ -180,6 +189,9 @@ export class LinkedWorkerStates {
         : { ...kept, report: undefined, chars: 0 }
     this.kept.set(ref, value)
     this.keptChars += value.chars
+    const refs = this.refsOf.get(value.dispatchId) ?? new Set()
+    refs.add(ref)
+    this.refsOf.set(value.dispatchId, refs)
   }
 
   private forget(ref: string): void {
@@ -187,11 +199,17 @@ export class LinkedWorkerStates {
     if (kept) {
       this.kept.delete(ref)
       this.keptChars -= kept.chars
+      const refs = this.refsOf.get(kept.dispatchId)
+      refs?.delete(ref)
+      if (refs?.size === 0) {
+        this.refsOf.delete(kept.dispatchId)
+      }
     }
   }
 
   private forgetAll(): void {
     this.kept.clear()
+    this.refsOf.clear()
     this.keptChars = 0
   }
 
