@@ -36,7 +36,8 @@ describe('buildBotNewChatSearchOptions', () => {
   it('finds only the side chat on the agent typed', () => {
     expect(search('codex')).toEqual(['New Codex Chat'])
     expect(search('Codex')).toEqual(['New Codex Chat'])
-    expect(search('cod')).toEqual(['New Codex Chat'])
+    // A shared prefix lists every chat it starts a word of, in the list's order.
+    expect(search('cod')).toEqual(['New Claude Code Chat', 'New Codex Chat'])
     expect(search('grok')).toEqual(['New Grok Chat'])
   })
 
