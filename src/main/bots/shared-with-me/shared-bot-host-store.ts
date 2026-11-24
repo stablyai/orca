@@ -22,7 +22,8 @@ export const SharedBotHeldMessage = z.object({
   // A new chat's session once the host started it: the chat the message lands in.
   startedAs: Text.optional(),
   // Kept on this device only, to draw it in its chat and send it again if the host refuses it.
-  text: z.string(),
+  // Absent in a store written before held messages kept their words.
+  text: z.string().default(''),
   // Sealed with it, and kept to send it again.
   attachments: z.array(z.object({ name: Text, contentBase64: z.string() })).optional(),
   sentAt: z.number().int().nonnegative()

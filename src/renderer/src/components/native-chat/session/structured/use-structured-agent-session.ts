@@ -278,6 +278,8 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     pending,
     /** A shared agent's held messages' lines, under the rows `messages` draws for them. */
     heldNotices: held.notices,
+    /** False for a new chat's placeholder: nothing of it is read from its host. */
+    readable: held.readable,
     /** A send is out, or a /clear holds sends; the chat takes none until it settles. */
     sendOut: sending || sends.held,
     /** The journal's rows for sent messages, which carry a rejected message's whole fact. */

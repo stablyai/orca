@@ -101,10 +101,25 @@ function hosts(
   dirs.push(dir)
   const accepts: [string, ConnectorShareAcceptRequest][] = []
   let mineReads = 0
+  // As the cloud does, a read lists every message it has taken, waiting unless `mine` says more.
+  const taken: [string, string][] = []
   const cloud: SharedBotsCloud = {
     mine: async () => {
       mineReads += 1
-      return { ok: true, value: { v: 1, shares: await mine() } }
+      const shares = (await mine()).map((listed) => ({
+        ...listed,
+        held: [
+          ...listed.held,
+          ...taken
+            .filter(
+              ([shareId, id]) =>
+                shareId === listed.shareId &&
+                !listed.held.some((message) => message.clientMessageId === id)
+            )
+            .map(([, clientMessageId]) => ({ clientMessageId, state: 'waiting' as const }))
+        ]
+      }))
+      return { ok: true, value: { v: 1, shares } }
     },
     accept: async (shareId, request) => {
       accepts.push([shareId, request])
@@ -112,7 +127,11 @@ function hosts(
     },
     hold: async (shareId, request) => {
       holds.push([shareId, request])
-      return hold(shareId, request)
+      const answer = await hold(shareId, request)
+      if (answer.ok) {
+        taken.push([shareId, request.clientMessageId])
+      }
+      return answer
     }
   }
   const published: string[][] = []
@@ -574,6 +593,23 @@ describe('a teammate’s messages while the shared agent’s computer is away', 
     expect(started.ok ? null : started.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
   })
 
+  it('keeps a placeholder whose swap meets a dropped link, never minting another for it', async () => {
+    const { service } = hosts(
+      () => away(),
+      () => 0
+    )
+    await service.refresh()
+    const environmentId = service.views()[0]!.environmentId
+    const started = await service.call(environmentId, 'bots.session.start', { botId: 'bot-1' })
+    const placeholder = StartedChat.parse(started.ok ? started.result : null).sessionId
+    const swap = await service.call(environmentId, 'bots.session.start', {
+      botId: 'bot-1',
+      newChatId: placeholder
+    })
+    service.stop()
+    expect(swap.ok ? null : swap.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
+  })
+
   it('sends a refused message again under a new id, in its place', async () => {
     let held: MineShare['held'] = []
     const { service, holds } = hosts(
@@ -655,30 +691,45 @@ describe('attachments kept while the host was away, sent once it is back', () =>
     )
     const keptPath = z.object({ path: z.string() }).parse(committed.ok && committed.result).path
     const sent: string[] = []
-    const params = await uploads.withKeptUploaded(
-      structuredAgentSessionMessageSendMutation({
-        sessionId: 'chat-0001',
-        clientOperationId: 'm1',
-        expectedRuntimeFence: null,
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'image-ref', path: keptPath }] }
-      }),
-      async (method) => {
-        sent.push(method)
-        return method === 'agentSessionAttachment.uploadStart'
-          ? ok({ uploadId: 'host-upload' })
-          : method === 'agentSessionAttachment.uploadCommit'
-            ? ok({ path: '/host/attachments/shot.png', name: 'shot.png', byteLength: 3 })
-            : ok({})
-      }
-    )
+    let sendParams: unknown = null
+    let hostTakesSend = false
+    const send = () =>
+      uploads.sendWithKept(
+        structuredAgentSessionMessageSendMutation({
+          sessionId: 'chat-0001',
+          clientOperationId: 'm1',
+          expectedRuntimeFence: null,
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'image-ref', path: keptPath }] }
+        }),
+        async (method, params) => {
+          sent.push(method)
+          if (method === 'agentSession.send') {
+            sendParams = params
+            return hostTakesSend
+              ? ok({})
+              : { id: 'x', ok: false as const, error: { code: 'unavailable', message: 'gone' } }
+          }
+          return method === 'agentSessionAttachment.uploadStart'
+            ? ok({ uploadId: 'host-upload' })
+            : method === 'agentSessionAttachment.uploadCommit'
+              ? ok({ path: '/host/attachments/shot.png', name: 'shot.png', byteLength: 3 })
+              : ok({})
+        }
+      )
+    // The host didn't take the send: the file stays here for the retry.
+    await send()
     expect(sent).toEqual([
       'agentSessionAttachment.uploadStart',
       'agentSessionAttachment.uploadAppend',
-      'agentSessionAttachment.uploadCommit'
+      'agentSessionAttachment.uploadCommit',
+      'agentSession.send'
     ])
-    expect(SendParams.parse(params).body.blocks).toEqual([
+    expect(SendParams.parse(sendParams).body.blocks).toEqual([
       { type: 'image-ref', path: '/host/attachments/shot.png' }
     ])
+    expect(uploads.isKept(keptPath)).toBe(true)
+    hostTakesSend = true
+    expect((await send()).ok).toBe(true)
     expect(uploads.isKept(keptPath)).toBe(false)
   })
 })

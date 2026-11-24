@@ -171,7 +171,9 @@ export class SharedBotHeldSends {
     params: unknown
   ): RuntimeRpcResponse<unknown> | null {
     if (method === 'bots.session.start') {
-      return link !== 'live' && entry.hostKey
+      // A start naming a placeholder is its swap to the real chat: only the host answers it, so a
+      // link that dropped meanwhile leaves that placeholder in place rather than minting another.
+      return link !== 'live' && entry.hostKey && !NewChatParams.safeParse(params).success
         ? {
             id: method,
             ok: true,
@@ -219,12 +221,12 @@ export class SharedBotHeldSends {
     this.deps.changed()
   }
 
-  /** A live send's attachments kept here while the host was away go to its store first. */
-  withKeptUploaded(
+  /** A live send; its attachments kept here while the host was away go to its store first. */
+  sendWithKept(
     params: unknown,
     request: (method: string, params: unknown) => Promise<RpcResponse>
-  ): Promise<unknown> {
-    return this.uploads.withKeptUploaded(params, request)
+  ): Promise<RpcResponse> {
+    return this.uploads.sendWithKept(params, request)
   }
 
   /** Holds a refused message again under a new id, in place of the refused one. */

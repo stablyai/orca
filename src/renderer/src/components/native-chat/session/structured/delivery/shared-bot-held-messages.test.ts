@@ -6,6 +6,8 @@ import type {
 } from '../../../../../../../shared/bots/shared-bot-hosts'
 import { projectStructuredAgentSessionMessages } from '../../../conversation/projection/structured-agent-session-message-projection'
 import { sharedBotHeldMessages } from './shared-bot-held-messages'
+import { structuredChatHistoryPhase } from '../../status/native-chat-view-state'
+import { newSharedBotChatId } from '../../../../../../../shared/bots/shared-bot-hosts'
 
 const WORDS = { waiting: (owner: string) => `Waiting for ${owner}’s computer`, notSent: 'Not sent' }
 
@@ -77,5 +79,25 @@ describe('a teammate’s held messages in their chat', () => {
     const none = sharedBotHeldMessages(null, 'chat-0001', WORDS, () => {})
     expect(none.messages).toEqual([])
     expect(none.notices.size).toBe(0)
+  })
+})
+
+describe('a new chat’s placeholder while the owner’s computer is away', () => {
+  // As `openSharedBotChat` opens it: no launch record, its transport on.
+  const launch = { lifecycle: null, transportEnabled: true }
+  const phase = (messages: SharedBotHeldView[], sessionId: string) => {
+    const { readable } = sharedBotHeldMessages(host(messages), sessionId, WORDS, () => {})
+    return { readable, phase: structuredChatHistoryPhase(launch, { status: 'idle', readable }) }
+  }
+
+  it('is never read from its host, before or after its first held message, and its history is what is drawn', () => {
+    const placeholder = newSharedBotChatId('1')
+    expect(phase([], placeholder)).toEqual({ readable: false, phase: 'known' })
+    expect(phase([{ ...held('m1', 'waiting'), sessionId: placeholder }], placeholder)).toEqual({
+      readable: false,
+      phase: 'known'
+    })
+    // The real chat it moves to is read as any chat is.
+    expect(phase([], 'chat-0001')).toEqual({ readable: true, phase: 'reading' })
   })
 })

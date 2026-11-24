@@ -20,7 +20,8 @@ export type SharedBotHeldMessages = {
   /** Drawn after the chat's rows; the host's own row replaces each once it records it. */
   messages: readonly StructuredAgentSessionOptimisticMessage[]
   notices: ReadonlyMap<string, NativeChatDeliveryNotice>
-  /** False for a new chat its away host hasn't started: nothing of it is there to read until it holds a message. */
+  /** False for a new chat's placeholder: its host has nothing of it to read, held messages or not,
+   *  until the tab moves to the chat the host starts for it. */
   readable: boolean
 }
 
@@ -71,7 +72,7 @@ export function sharedBotHeldMessages(
       queuedAt: message.sentAt
     })),
     notices,
-    readable: true
+    readable: !isSharedBotNewChatId(sessionId)
   }
 }
 

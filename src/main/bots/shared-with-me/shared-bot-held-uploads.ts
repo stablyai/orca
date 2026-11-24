@@ -66,14 +66,14 @@ export class SharedBotHeldUploads {
   }
 
   /**
-   * A send going live whose attachments were kept here while the host was away (a message too large
-   * to hold, sent again once it is back): they go to the host's store first, and the send names them
-   * there.
+   * Sends `agentSession.send` live. Attachments kept here while the host was away (a message too
+   * large to hold, sent again once it is back) go to the host's store first and the send names them
+   * there; they are forgotten here only once the host has taken the send, so a retry still has them.
    */
-  async withKeptUploaded(
+  async sendWithKept(
     params: unknown,
     request: (method: string, params: unknown) => Promise<RpcResponse>
-  ): Promise<unknown> {
+  ): Promise<RpcResponse> {
     const send = SendParams.safeParse(params).data
     const kept = send?.body.blocks.flatMap((block) => {
       const path = block.type === 'image-ref' ? block.path : undefined
@@ -81,7 +81,7 @@ export class SharedBotHeldUploads {
       return path && attachment ? [{ path, attachment }] : []
     })
     if (!send || !kept?.length) {
-      return params
+      return request('agentSession.send', params)
     }
     const call: AgentSessionAttachmentCall = async (method, uploadParams) => {
       const answer = await request(method, uploadParams)
@@ -100,20 +100,26 @@ export class SharedBotHeldUploads {
       )
       stored.set(path, hostPath)
     }
-    this.release([...stored.keys()])
     const blocks = send.body.blocks.map((block) => {
       const hostPath = block.type === 'image-ref' && block.path ? stored.get(block.path) : undefined
       return hostPath ? { ...block, path: hostPath } : block
     })
     // The body's fingerprint covers its paths, so the send is made again around the new ones.
     const { envelope, body, retryUnknown: _retry, ...control } = send
-    return structuredAgentSessionMessageSendMutation({
-      ...control,
-      sessionId: envelope.sessionId,
-      clientOperationId: envelope.clientOperationId,
-      expectedRuntimeFence: envelope.expectedRuntimeFence,
-      body: { ...body, blocks }
-    })
+    const response = await request(
+      'agentSession.send',
+      structuredAgentSessionMessageSendMutation({
+        ...control,
+        sessionId: envelope.sessionId,
+        clientOperationId: envelope.clientOperationId,
+        expectedRuntimeFence: envelope.expectedRuntimeFence,
+        body: { ...body, blocks }
+      })
+    )
+    if (response.ok) {
+      this.release([...stored.keys()])
+    }
+    return response
   }
 
   /** An `agentSessionAttachment.upload*` call, answered here as the host's store would. */

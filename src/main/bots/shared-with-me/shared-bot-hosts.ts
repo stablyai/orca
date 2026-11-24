@@ -187,11 +187,10 @@ export class SharedBotHosts {
     }
     try {
       const link = this.linkFor(entry)
-      const sent =
+      const response =
         method === 'agentSession.send'
-          ? await this.held.withKeptUploaded(params, (upload, args) => link.request(upload, args))
-          : params
-      const response = await link.request(method, sent)
+          ? await this.held.sendWithKept(params, (sent, args) => link.request(sent, args))
+          : await link.request(method, params)
       this.held.noteAnswer(entry, method, params, response)
       return this.withMeta(entry, response)
     } catch {
