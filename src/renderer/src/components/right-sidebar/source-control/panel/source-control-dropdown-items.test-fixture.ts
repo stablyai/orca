@@ -83,7 +83,8 @@ export const STATES: Record<string, DropdownActionInputs> = {
     upstreamStatus: { hasUpstream: true, upstreamName: 'origin/feature', ahead: 2, behind: 0 },
     prState: null,
     hostedReviewCreation: NEEDS_PUSH,
-    primaryActionKind: 'create_pr_intent'
+    // The commit area pushes first; Create PR intent is the header's face, not this primary.
+    primaryActionKind: 'push'
   }),
   mergeConflict: state({ hasUnresolvedConflicts: true, conflictOperation: 'merge' }),
   rebaseConflict: state({

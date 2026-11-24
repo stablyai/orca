@@ -4,6 +4,7 @@ import type {
   DropdownActionKind
 } from '../../../../../../shared/source-control/dropdown/source-control-dropdown-item-types'
 import { resolveDropdownItems } from './source-control-dropdown-items'
+import { resolveCommitAreaPrimaryAction } from '../review/source-control-primary-action'
 import { CHANGED_STATES, STATES } from './source-control-dropdown-items.test-fixture'
 
 // Actions main's menu could run in each state: enabled and not idle (Force Push and Fetch always
@@ -32,8 +33,18 @@ function menuRows(inputs: DropdownActionInputs): string[] {
   )
 }
 
-/** The menu's enabled rows plus the action the primary button runs. */
-function reachable(inputs: DropdownActionInputs): string[] {
+/** The primary the commit area really shows for these inputs, as use-action-model hands it on. */
+function productionPrimary(
+  inputs: DropdownActionInputs
+): DropdownActionInputs['primaryActionKind'] {
+  const primary = resolveCommitAreaPrimaryAction(inputs)
+  return primary.disabled ? undefined : primary.kind
+}
+
+/** The menu's enabled rows plus the action the production primary button runs. */
+function reachable(fixture: DropdownActionInputs): string[] {
+  // The fixture's primary is not trusted: a resolver that stops enabling Commit must fail here.
+  const inputs = { ...fixture, primaryActionKind: productionPrimary(fixture) }
   const kinds = new Set<string>()
   for (const entry of resolveDropdownItems(inputs)) {
     if (entry.kind !== 'separator' && !entry.disabled) {
@@ -66,6 +77,12 @@ describe('resolveDropdownItems keeps every action main could run reachable', () 
         (entry) => entry.kind !== 'separator' && entry.disabled && entry.kind !== 'fetch'
       )
     ).toEqual([])
+  })
+})
+
+describe('dropdown fixtures', () => {
+  it.each(Object.keys(STATES))('%s names the primary the commit area resolves', (name) => {
+    expect(STATES[name].primaryActionKind).toBe(productionPrimary(STATES[name]))
   })
 })
 
