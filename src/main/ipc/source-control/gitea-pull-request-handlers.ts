@@ -1,5 +1,4 @@
 import { ipcMain } from 'electron'
-import type { GiteaMergeMethod, GiteaPRFileStatus } from '../../../shared/gitea/gitea-types'
 import {
   addGiteaPullRequestReviewComment,
   getGiteaPullRequestChecks,
@@ -9,126 +8,62 @@ import {
   listGiteaPullRequestReviewComments,
   mergeGiteaPullRequest
 } from '../../gitea/pull-request-review-operations'
-import type { Store } from '../../persistence/loading-store/store'
 import {
-  assertRegisteredRepo,
-  repoConnectionId,
-  type GiteaRepoSelectorArgs
-} from './gitea-repo-access'
+  GiteaAddPullRequestReviewComment,
+  GiteaIssueByNumber,
+  GiteaMergePullRequest,
+  GiteaPullRequestChecks,
+  GiteaPullRequestFileContents
+} from '../../../shared/rpc-contract/source-control/gitea-params'
+import type { Store } from '../../persistence/loading-store/store'
+import type { GiteaRepoSelectorArgs } from './gitea-repo-access'
+import { parseGiteaRepoArgs } from './gitea'
+
+type Args = GiteaRepoSelectorArgs & Record<string, unknown>
 
 export function registerGiteaPullRequestHandlers(store: Store): void {
-  ipcMain.handle(
-    'gitea:prDetail',
-    async (_event, args: GiteaRepoSelectorArgs & { number: number }) => {
-      const repo = assertRegisteredRepo(args, store)
-      if (typeof args.number !== 'number') {
-        return null
-      }
-      return getGiteaPullRequestDetail(repo.path, args.number, repoConnectionId(repo))
-    }
-  )
+  ipcMain.handle('gitea:prDetail', async (_event, args: Args) => {
+    const { target, params } = parseGiteaRepoArgs(GiteaIssueByNumber, args, store)
+    return getGiteaPullRequestDetail(target, params.number)
+  })
 
-  ipcMain.handle(
-    'gitea:prFiles',
-    async (_event, args: GiteaRepoSelectorArgs & { number: number }) => {
-      const repo = assertRegisteredRepo(args, store)
-      if (typeof args.number !== 'number') {
-        return []
-      }
-      return listGiteaPullRequestFiles(repo.path, args.number, repoConnectionId(repo))
-    }
-  )
+  ipcMain.handle('gitea:prFiles', async (_event, args: Args) => {
+    const { target, params } = parseGiteaRepoArgs(GiteaIssueByNumber, args, store)
+    return listGiteaPullRequestFiles(target, params.number)
+  })
 
-  ipcMain.handle(
-    'gitea:prFileContents',
-    async (
-      _event,
-      args: GiteaRepoSelectorArgs & {
-        path: string
-        oldPath?: string
-        status: GiteaPRFileStatus
-        baseSha: string
-        headSha: string
-      }
-    ) => {
-      const repo = assertRegisteredRepo(args, store)
-      if (typeof args.path !== 'string' || !args.path) {
-        return { original: '', modified: '', originalIsBinary: false, modifiedIsBinary: false }
-      }
-      return getGiteaPullRequestFileContents(
-        repo.path,
-        {
-          path: args.path,
-          oldPath: typeof args.oldPath === 'string' ? args.oldPath : undefined,
-          status: args.status,
-          baseSha: typeof args.baseSha === 'string' ? args.baseSha : '',
-          headSha: typeof args.headSha === 'string' ? args.headSha : ''
-        },
-        repoConnectionId(repo)
-      )
-    }
-  )
+  ipcMain.handle('gitea:prFileContents', async (_event, args: Args) => {
+    const { target, params } = parseGiteaRepoArgs(GiteaPullRequestFileContents, args, store)
+    return getGiteaPullRequestFileContents(target, {
+      path: params.path,
+      oldPath: params.oldPath,
+      status: params.status,
+      baseSha: params.baseSha,
+      headSha: params.headSha
+    })
+  })
 
-  ipcMain.handle(
-    'gitea:prChecks',
-    async (_event, args: GiteaRepoSelectorArgs & { headSha: string }) => {
-      const repo = assertRegisteredRepo(args, store)
-      if (typeof args.headSha !== 'string' || !args.headSha) {
-        return []
-      }
-      return getGiteaPullRequestChecks(repo.path, args.headSha, repoConnectionId(repo))
-    }
-  )
+  ipcMain.handle('gitea:prChecks', async (_event, args: Args) => {
+    const { target, params } = parseGiteaRepoArgs(GiteaPullRequestChecks, args, store)
+    return getGiteaPullRequestChecks(target, params.headSha)
+  })
 
-  ipcMain.handle(
-    'gitea:prMerge',
-    async (_event, args: GiteaRepoSelectorArgs & { number: number; method?: GiteaMergeMethod }) => {
-      const repo = assertRegisteredRepo(args, store)
-      if (typeof args.number !== 'number') {
-        return { ok: false, error: 'Pull request number is required.' }
-      }
-      const method: GiteaMergeMethod =
-        args.method === 'rebase' || args.method === 'squash' ? args.method : 'merge'
-      return mergeGiteaPullRequest(repo.path, args.number, method, repoConnectionId(repo))
-    }
-  )
+  ipcMain.handle('gitea:prMerge', async (_event, args: Args) => {
+    const { target, params } = parseGiteaRepoArgs(GiteaMergePullRequest, args, store)
+    return mergeGiteaPullRequest(target, params.number, params.method)
+  })
 
-  ipcMain.handle(
-    'gitea:prReviewComments',
-    async (_event, args: GiteaRepoSelectorArgs & { number: number }) => {
-      const repo = assertRegisteredRepo(args, store)
-      if (typeof args.number !== 'number') {
-        return []
-      }
-      return listGiteaPullRequestReviewComments(repo.path, args.number, repoConnectionId(repo))
-    }
-  )
+  ipcMain.handle('gitea:prReviewComments', async (_event, args: Args) => {
+    const { target, params } = parseGiteaRepoArgs(GiteaIssueByNumber, args, store)
+    return listGiteaPullRequestReviewComments(target, params.number)
+  })
 
-  ipcMain.handle(
-    'gitea:prAddReviewComment',
-    async (
-      _event,
-      args: GiteaRepoSelectorArgs & { number: number; path: string; line: number; body: string }
-    ) => {
-      const repo = assertRegisteredRepo(args, store)
-      if (typeof args.number !== 'number') {
-        return { ok: false, error: 'Pull request number is required.' }
-      }
-      if (typeof args.path !== 'string' || !args.path) {
-        return { ok: false, error: 'File path is required.' }
-      }
-      if (typeof args.line !== 'number') {
-        return { ok: false, error: 'Line is required.' }
-      }
-      if (typeof args.body !== 'string' || !args.body.trim()) {
-        return { ok: false, error: 'Comment body is required.' }
-      }
-      return addGiteaPullRequestReviewComment(
-        repo.path,
-        args.number,
-        { path: args.path, line: args.line, body: args.body.trim() },
-        repoConnectionId(repo)
-      )
-    }
-  )
+  ipcMain.handle('gitea:prAddReviewComment', async (_event, args: Args) => {
+    const { target, params } = parseGiteaRepoArgs(GiteaAddPullRequestReviewComment, args, store)
+    return addGiteaPullRequestReviewComment(target, params.number, {
+      path: params.path,
+      line: params.line,
+      body: params.body
+    })
+  })
 }

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { ArrowRight, ExternalLink, GitPullRequest, LoaderCircle, Send, X } from 'lucide-react'
+import { giteaApiFor } from '@/runtime/repository-gitea/gitea-owner-api'
 import { toast } from 'sonner'
 import { VisuallyHidden } from 'radix-ui'
 import { GiteaPrMergeButton } from '@/components/gitea-item-dialog/gitea-pr-merge-button'
@@ -70,14 +71,14 @@ function GiteaPullRequestWorkspaceContent({
     }
     setSubmitting(true)
     try {
-      const result = await window.api.gitea.addIssueComment(
+      const result = await giteaApiFor(scope).addIssueComment(
         scoped(scope, { number: item.number, body })
       )
       if (!result.ok) {
         throw new Error(result.error)
       }
       setCommentDraft('')
-      setComments(await window.api.gitea.issueComments(scoped(scope, { number: item.number })))
+      setComments(await giteaApiFor(scope).issueComments(scoped(scope, { number: item.number })))
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -99,7 +100,7 @@ function GiteaPullRequestWorkspaceContent({
       }
       setMerging(true)
       try {
-        const result = await window.api.gitea.prMerge(
+        const result = await giteaApiFor(scope).prMerge(
           scoped(scope, { number: item.number, method })
         )
         if (!result.ok) {
@@ -128,13 +129,13 @@ function GiteaPullRequestWorkspaceContent({
         return false
       }
       try {
-        const result = await window.api.gitea.prAddReviewComment(
+        const result = await giteaApiFor(scope).prAddReviewComment(
           scoped(scope, { number: item.number, path, line, body })
         )
         if (!result.ok) {
           throw new Error(result.error)
         }
-        const refreshed = await window.api.gitea.prReviewComments(
+        const refreshed = await giteaApiFor(scope).prReviewComments(
           scoped(scope, { number: item.number })
         )
         setReviewComments(refreshed)

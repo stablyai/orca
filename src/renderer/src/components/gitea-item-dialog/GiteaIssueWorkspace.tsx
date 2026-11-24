@@ -1,5 +1,7 @@
 import { useAppStore } from '@/store'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { giteaApiFor } from '@/runtime/repository-gitea/gitea-owner-api'
+import { scoped } from './gitea-pr-request-scope'
 import {
   ArrowRight,
   CircleDot,
@@ -80,17 +82,8 @@ export function GiteaIssueWorkspace({
     }
     requestRef.current += 1
     const requestId = requestRef.current
-    const args = {
-      repoPath: scope.repoPath,
-      repoId: scope.repoId ?? null,
-      sourceContext: scope.sourceContext ?? null,
-      number: item.number
-    }
-    const listArgs = {
-      repoPath: scope.repoPath,
-      repoId: scope.repoId ?? null,
-      sourceContext: scope.sourceContext ?? null
-    }
+    const args = scoped(scope, { number: item.number })
+    const listArgs = scoped(scope, {})
     setDetail(null)
     setComments([])
     setCommentDraft('')
@@ -101,10 +94,10 @@ export function GiteaIssueWorkspace({
     // Why: load each resource independently so the issue body/comments still
     // render when only labels/assignees fail, and surface at least one error.
     void Promise.allSettled([
-      window.api.gitea.issue(args),
-      window.api.gitea.issueComments(args),
-      window.api.gitea.labels(listArgs),
-      window.api.gitea.assignees(listArgs)
+      giteaApiFor(scope).issue(args),
+      giteaApiFor(scope).issueComments(args),
+      giteaApiFor(scope).labels(listArgs),
+      giteaApiFor(scope).assignees(listArgs)
     ])
       .then(([issueResult, commentsResult, labelsResult, assigneesResult]) => {
         if (requestId !== requestRef.current) {
@@ -148,10 +141,8 @@ export function GiteaIssueWorkspace({
     if (!scope || !item) {
       return
     }
-    const issue = await window.api.gitea.issue({
-      repoPath: scope.repoPath,
-      repoId: scope.repoId ?? null,
-      sourceContext: scope.sourceContext ?? null,
+    const issue = await giteaApiFor(scope).issue({
+      ...scoped(scope, {}),
       number: item.number
     })
     if (issue) {
@@ -195,10 +186,8 @@ export function GiteaIssueWorkspace({
     }
     setSubmitting(true)
     try {
-      const result = await window.api.gitea.addIssueComment({
-        repoPath: scope.repoPath,
-        repoId: scope.repoId ?? null,
-        sourceContext: scope.sourceContext ?? null,
+      const result = await giteaApiFor(scope).addIssueComment({
+        ...scoped(scope, {}),
         number: item.number,
         body
       })
@@ -207,10 +196,8 @@ export function GiteaIssueWorkspace({
       }
       setCommentDraft('')
       setComments(
-        await window.api.gitea.issueComments({
-          repoPath: scope.repoPath,
-          repoId: scope.repoId,
-          sourceContext: scope.sourceContext,
+        await giteaApiFor(scope).issueComments({
+          ...scoped(scope, {}),
           number: item.number
         })
       )

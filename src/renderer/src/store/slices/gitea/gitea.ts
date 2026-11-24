@@ -11,11 +11,9 @@ import type {
   GiteaWorkItemFilter
 } from '../../../../../shared/gitea/gitea-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { giteaApiFor } from '@/runtime/repository-gitea/gitea-owner-api'
 
-// Gitea is a repo-scoped task source (like GitLab): the renderer calls
-// window.api.gitea directly and the main process resolves the SSH connection
-// from the repo, so no runtime client is needed. Connection credentials live
-// on the local machine, so status reads are local too.
+// Repo calls go to the host that owns the repo; server connections belong to this client's runtime.
 
 const CACHE_TTL = 60_000
 const MAX_CACHE_ENTRIES = 300
@@ -24,6 +22,8 @@ export type GiteaIssueScope = {
   repoPath: string
   repoId?: string | null
   sourceContext?: TaskSourceContext | null
+  /** The repo's own host, from its row. */
+  repoOwnerExecutionHostId?: string
 }
 
 export type GiteaSlice = {
@@ -83,22 +83,21 @@ function evictStale<T>(cache: Record<string, CacheEntry<T>>): Record<string, Cac
 // server selections. An explicit sourceContext pins the server; otherwise the
 // currently selected server (or 'all') scopes the key.
 function scopeKey(scope: GiteaIssueScope, selectedServerId?: GiteaServerSelection | null): string {
-  const repoKey = scope.repoId?.trim() || scope.repoPath
+  const repoKey = `${scope.repoOwnerExecutionHostId ?? 'local'}:${scope.repoId?.trim() || scope.repoPath}`
   const serverKey = scope.sourceContext
     ? JSON.stringify(scope.sourceContext)
     : `selected:${selectedServerId ?? 'all'}`
   return `${repoKey}@${serverKey}`
 }
 
-function requestArgs(scope: GiteaIssueScope): {
-  repoPath: string
-  repoId?: string | null
-  sourceContext?: TaskSourceContext | null
-} {
+function requestArgs(scope: GiteaIssueScope): GiteaIssueScope {
   return {
     repoPath: scope.repoPath,
     repoId: scope.repoId ?? null,
-    sourceContext: scope.sourceContext ?? null
+    sourceContext: scope.sourceContext ?? null,
+    ...(scope.repoOwnerExecutionHostId
+      ? { repoOwnerExecutionHostId: scope.repoOwnerExecutionHostId }
+      : {})
   }
 }
 
@@ -172,7 +171,7 @@ export const createGiteaSlice: StateCreator<AppState, [], [], GiteaSlice> = (set
       return cached.data
     }
     const generation = get().giteaCacheGeneration
-    const items = await window.api.gitea.listWorkItems({
+    const items = await giteaApiFor(scope).listWorkItems({
       ...requestArgs(scope),
       filter,
       limit
@@ -196,7 +195,7 @@ export const createGiteaSlice: StateCreator<AppState, [], [], GiteaSlice> = (set
       return cached.data
     }
     const generation = get().giteaCacheGeneration
-    const issue = await window.api.gitea.issue({
+    const issue = await giteaApiFor(scope).issue({
       ...requestArgs(scope),
       number: issueNumber
     })
@@ -213,7 +212,7 @@ export const createGiteaSlice: StateCreator<AppState, [], [], GiteaSlice> = (set
   },
 
   createGiteaIssue: async (scope, input) => {
-    const result = await window.api.gitea.createIssue({ ...requestArgs(scope), ...input })
+    const result = await giteaApiFor(scope).createIssue({ ...requestArgs(scope), ...input })
     if (result.ok) {
       // Invalidate cached lists for this repo so the new issue appears.
       const prefix = `${scopeKey(scope, get().giteaStatus?.selectedServerId)}:`
@@ -228,7 +227,7 @@ export const createGiteaSlice: StateCreator<AppState, [], [], GiteaSlice> = (set
   },
 
   updateGiteaIssue: async (scope, issueNumber, updates) => {
-    const result = await window.api.gitea.updateIssue({
+    const result = await giteaApiFor(scope).updateIssue({
       ...requestArgs(scope),
       number: issueNumber,
       updates
@@ -250,6 +249,6 @@ export const createGiteaSlice: StateCreator<AppState, [], [], GiteaSlice> = (set
   },
 
   addGiteaIssueComment: async (scope, issueNumber, body) => {
-    return window.api.gitea.addIssueComment({ ...requestArgs(scope), number: issueNumber, body })
+    return giteaApiFor(scope).addIssueComment({ ...requestArgs(scope), number: issueNumber, body })
   }
 })

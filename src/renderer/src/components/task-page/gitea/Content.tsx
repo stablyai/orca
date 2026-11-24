@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { GiteaWorkItem } from '../../../../../shared/gitea/gitea-types'
+import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { GiteaIssueScope } from '@/store/slices/gitea/gitea'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
@@ -21,7 +23,12 @@ export function TaskPageGiteaContent({
   const [selection, setSelection] = useState<GiteaWorkspaceSelection | null>(null)
 
   const makeScope = useCallback(
-    (repo: Repo): GiteaIssueScope => ({ repoPath: repo.path, repoId: repo.id }),
+    (repo: Repo): GiteaIssueScope => ({
+      repoPath: repo.path,
+      repoId: repo.id,
+      sourceContext: getTaskPageRepoSourceContext(repo, 'gitea'),
+      repoOwnerExecutionHostId: getRepoExecutionHostId(repo)
+    }),
     []
   )
   const openDetail = useCallback(

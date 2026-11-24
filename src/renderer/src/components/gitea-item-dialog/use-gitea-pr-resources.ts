@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { giteaApiFor } from '@/runtime/repository-gitea/gitea-owner-api'
 import { translate } from '@/i18n/i18n'
 import type {
   GiteaComment,
@@ -35,10 +36,10 @@ export function useGiteaPrResources(selection: GiteaWorkspaceSelection | null) {
     setReviewComments([])
     setLoading(true)
     void Promise.allSettled([
-      window.api.gitea.prDetail(scoped(scope, { number: item.number })),
-      window.api.gitea.prFiles(scoped(scope, { number: item.number })),
-      window.api.gitea.issueComments(scoped(scope, { number: item.number })),
-      window.api.gitea.prReviewComments(scoped(scope, { number: item.number }))
+      giteaApiFor(scope).prDetail(scoped(scope, { number: item.number })),
+      giteaApiFor(scope).prFiles(scoped(scope, { number: item.number })),
+      giteaApiFor(scope).issueComments(scoped(scope, { number: item.number })),
+      giteaApiFor(scope).prReviewComments(scoped(scope, { number: item.number }))
     ])
       .then(([detailResult, filesResult, commentsResult, reviewsResult]) => {
         if (requestId !== requestRef.current) {
@@ -65,7 +66,7 @@ export function useGiteaPrResources(selection: GiteaWorkspaceSelection | null) {
           )
         }
         if (prDetail?.headSha) {
-          void window.api.gitea
+          void giteaApiFor(scope)
             .prChecks(scoped(scope, { headSha: prDetail.headSha }))
             .then((result) => {
               if (requestId === requestRef.current) {

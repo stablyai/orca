@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { giteaApiFor } from '@/runtime/repository-gitea/gitea-owner-api'
+import { scoped } from './gitea-pr-request-scope'
 import { DiffEditor } from '@monaco-editor/react'
 import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -44,11 +46,9 @@ function GiteaPrFileDiffContent({
   const load = useCallback(() => {
     requestRef.current += 1
     const requestId = requestRef.current
-    void window.api.gitea
+    void giteaApiFor(scope)
       .prFileContents({
-        repoPath: scope.repoPath,
-        repoId: scope.repoId ?? null,
-        sourceContext: scope.sourceContext ?? null,
+        ...scoped(scope, {}),
         path: file.path,
         oldPath: file.oldPath,
         status: file.status,

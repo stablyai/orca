@@ -1,3 +1,4 @@
+import { resolveGiteaRepoTarget, type GiteaRepoTarget } from './requests/gitea-repo-target'
 import type {
   GiteaMergeMethod,
   GiteaMutationResult,
@@ -8,7 +9,6 @@ import type {
   GiteaPRReviewComment,
   GiteaPullRequestDetail
 } from '../../shared/gitea/gitea-types'
-import { getGiteaRepoRef } from './repository-ref'
 import {
   encodedRepoPath,
   giteaRepoGet,
@@ -96,11 +96,10 @@ function looksBinary(content: string): boolean {
 }
 
 export async function getGiteaPullRequestDetail(
-  repoPath: string,
-  prNumber: number,
-  connectionId?: string | null
+  target: GiteaRepoTarget,
+  prNumber: number
 ): Promise<GiteaPullRequestDetail | null> {
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  const repo = await resolveGiteaRepoTarget(target)
   if (!repo) {
     return null
   }
@@ -136,11 +135,10 @@ export async function getGiteaPullRequestDetail(
 }
 
 export async function listGiteaPullRequestFiles(
-  repoPath: string,
-  prNumber: number,
-  connectionId?: string | null
+  target: GiteaRepoTarget,
+  prNumber: number
 ): Promise<GiteaPRFile[]> {
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  const repo = await resolveGiteaRepoTarget(target)
   if (!repo) {
     return []
   }
@@ -168,15 +166,14 @@ export async function listGiteaPullRequestFiles(
 // show a Monaco diff. Added files have no base content; deleted files have no
 // head content.
 export async function getGiteaPullRequestFileContents(
-  repoPath: string,
+  target: GiteaRepoTarget,
   args: {
     path: string
     oldPath?: string
     status: GiteaPRFileStatus
     baseSha: string
     headSha: string
-  },
-  connectionId?: string | null
+  }
 ): Promise<GiteaPRFileContents> {
   const empty: GiteaPRFileContents = {
     original: '',
@@ -184,7 +181,7 @@ export async function getGiteaPullRequestFileContents(
     originalIsBinary: false,
     modifiedIsBinary: false
   }
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  const repo = await resolveGiteaRepoTarget(target)
   if (!repo) {
     return empty
   }
@@ -210,11 +207,10 @@ export async function getGiteaPullRequestFileContents(
 }
 
 export async function getGiteaPullRequestChecks(
-  repoPath: string,
-  headSha: string,
-  connectionId?: string | null
+  target: GiteaRepoTarget,
+  headSha: string
 ): Promise<GiteaPRCheck[]> {
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  const repo = await resolveGiteaRepoTarget(target)
   if (!repo || !headSha) {
     return []
   }
@@ -233,12 +229,11 @@ export async function getGiteaPullRequestChecks(
 }
 
 export async function mergeGiteaPullRequest(
-  repoPath: string,
+  target: GiteaRepoTarget,
   prNumber: number,
-  method: GiteaMergeMethod,
-  connectionId?: string | null
+  method: GiteaMergeMethod
 ): Promise<GiteaMutationResult> {
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  const repo = await resolveGiteaRepoTarget(target)
   if (!repo) {
     return { ok: false, error: 'This repository is not a recognized Gitea remote.' }
   }
@@ -263,11 +258,10 @@ type RawGiteaReviewComment = {
 
 // Lists inline (diff-anchored) review comments across all reviews of a PR.
 export async function listGiteaPullRequestReviewComments(
-  repoPath: string,
-  prNumber: number,
-  connectionId?: string | null
+  target: GiteaRepoTarget,
+  prNumber: number
 ): Promise<GiteaPRReviewComment[]> {
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  const repo = await resolveGiteaRepoTarget(target)
   if (!repo) {
     return []
   }
@@ -303,12 +297,11 @@ export async function listGiteaPullRequestReviewComments(
 
 // Adds a diff-anchored review comment on a file line (new-file line number).
 export async function addGiteaPullRequestReviewComment(
-  repoPath: string,
+  target: GiteaRepoTarget,
   prNumber: number,
-  args: { path: string; line: number; body: string },
-  connectionId?: string | null
+  args: { path: string; line: number; body: string }
 ): Promise<GiteaMutationResult> {
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  const repo = await resolveGiteaRepoTarget(target)
   if (!repo) {
     return { ok: false, error: 'This repository is not a recognized Gitea remote.' }
   }

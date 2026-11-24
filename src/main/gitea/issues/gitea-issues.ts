@@ -1,3 +1,4 @@
+import { resolveGiteaRepoTarget, type GiteaRepoTarget } from '../requests/gitea-repo-target'
 import type {
   GiteaComment,
   GiteaCreateIssueResult,
@@ -9,7 +10,7 @@ import type {
   GiteaWorkItem,
   GiteaWorkItemFilter
 } from '../../../shared/gitea/gitea-types'
-import { getGiteaRepoRef, type GiteaRepoRef } from '../repository-ref'
+import type { GiteaRepoRef } from '../repository-ref'
 import { encodedRepoPath, giteaRepoGet, giteaRepoWrite } from '../requests/gitea-request'
 import { getServerForHost } from '../servers/gitea-server-store'
 import {
@@ -104,12 +105,11 @@ async function issueContext(repo: GiteaRepoRef): Promise<GiteaIssueContext> {
 // the selected repo by owner + full_name. "Open"/"Closed" use the repo-level
 // endpoint, which is naturally scoped and cheaper.
 export async function listGiteaWorkItems(
-  repoPath: string,
+  target: GiteaRepoTarget,
   filter?: GiteaWorkItemFilter,
-  limit?: number,
-  connectionId?: string | null
+  limit?: number
 ): Promise<GiteaWorkItem[]> {
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  const repo = await resolveGiteaRepoTarget(target)
   if (!repo) {
     return []
   }
@@ -139,11 +139,8 @@ export async function listGiteaWorkItems(
     .filter((item): item is GiteaWorkItem => item !== null)
 }
 
-export async function listGiteaLabels(
-  repoPath: string,
-  connectionId?: string | null
-): Promise<GiteaLabel[]> {
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+export async function listGiteaLabels(target: GiteaRepoTarget): Promise<GiteaLabel[]> {
+  const repo = await resolveGiteaRepoTarget(target)
   if (!repo) {
     return []
   }
@@ -163,11 +160,8 @@ export async function listGiteaLabels(
     .filter((label): label is GiteaLabel => label !== null)
 }
 
-export async function listGiteaAssignees(
-  repoPath: string,
-  connectionId?: string | null
-): Promise<GiteaUser[]> {
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+export async function listGiteaAssignees(target: GiteaRepoTarget): Promise<GiteaUser[]> {
+  const repo = await resolveGiteaRepoTarget(target)
   if (!repo) {
     return []
   }
@@ -186,11 +180,10 @@ export async function listGiteaAssignees(
 }
 
 export async function getGiteaIssue(
-  repoPath: string,
-  issueNumber: number,
-  connectionId?: string | null
+  target: GiteaRepoTarget,
+  issueNumber: number
 ): Promise<GiteaIssue | null> {
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  const repo = await resolveGiteaRepoTarget(target)
   if (!repo) {
     return null
   }
@@ -207,11 +200,10 @@ export async function getGiteaIssue(
 }
 
 export async function listGiteaIssueComments(
-  repoPath: string,
-  issueNumber: number,
-  connectionId?: string | null
+  target: GiteaRepoTarget,
+  issueNumber: number
 ): Promise<GiteaComment[]> {
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  const repo = await resolveGiteaRepoTarget(target)
   if (!repo) {
     return []
   }
@@ -230,11 +222,10 @@ export async function listGiteaIssueComments(
 }
 
 export async function createGiteaIssue(
-  repoPath: string,
-  input: { title: string; body?: string; assignees?: string[]; labelIds?: number[] },
-  connectionId?: string | null
+  target: GiteaRepoTarget,
+  input: { title: string; body?: string; assignees?: string[]; labelIds?: number[] }
 ): Promise<GiteaCreateIssueResult> {
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  const repo = await resolveGiteaRepoTarget(target)
   if (!repo) {
     return { ok: false, error: 'This repository is not a recognized Gitea remote.' }
   }
@@ -262,12 +253,11 @@ export async function createGiteaIssue(
 }
 
 export async function updateGiteaIssue(
-  repoPath: string,
+  target: GiteaRepoTarget,
   issueNumber: number,
-  updates: GiteaIssueUpdate,
-  connectionId?: string | null
+  updates: GiteaIssueUpdate
 ): Promise<GiteaMutationResult> {
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  const repo = await resolveGiteaRepoTarget(target)
   if (!repo) {
     return { ok: false, error: 'This repository is not a recognized Gitea remote.' }
   }
@@ -307,12 +297,11 @@ export async function updateGiteaIssue(
 }
 
 export async function addGiteaIssueComment(
-  repoPath: string,
+  target: GiteaRepoTarget,
   issueNumber: number,
-  body: string,
-  connectionId?: string | null
+  body: string
 ): Promise<GiteaMutationResult> {
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  const repo = await resolveGiteaRepoTarget(target)
   if (!repo) {
     return { ok: false, error: 'This repository is not a recognized Gitea remote.' }
   }

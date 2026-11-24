@@ -9,7 +9,7 @@ export type GiteaRepoRef = {
   webBaseUrl: string
 }
 
-type LocalGitExecOptions = {
+export type GiteaLocalGitOptions = {
   wslDistro?: string
 }
 
@@ -126,7 +126,7 @@ export async function getGiteaRepoRefForRemote(
   repoPath: string,
   remoteName: string,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: GiteaLocalGitOptions = {}
 ): Promise<GiteaRepoRef | null> {
   return repoRefProbeCache.get(repoPath, remoteName, connectionId, localGitOptions)
 }
@@ -134,7 +134,7 @@ export async function getGiteaRepoRefForRemote(
 export async function getGiteaRepoRef(
   repoPath: string,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: GiteaLocalGitOptions = {}
 ): Promise<GiteaRepoRef | null> {
   return getGiteaRepoRefForRemote(repoPath, 'origin', connectionId, localGitOptions)
 }

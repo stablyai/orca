@@ -1,19 +1,17 @@
 import type { GiteaIssueScope } from '@/store/slices/gitea/gitea'
 
-// Builds the common { repoPath, repoId, sourceContext, ...extra } payload that
-// the Gitea PR IPC calls expect from a task-source scope.
+/** The repo selector plus call fields every repo-scoped Gitea call takes. */
 export function scoped<T extends Record<string, unknown>>(
   scope: GiteaIssueScope,
   extra: T
-): {
-  repoPath: string
-  repoId: string | null
-  sourceContext: GiteaIssueScope['sourceContext']
-} & T {
+): Required<Pick<GiteaIssueScope, 'repoPath'>> & Omit<GiteaIssueScope, 'repoPath'> & T {
   return {
     repoPath: scope.repoPath,
     repoId: scope.repoId ?? null,
     sourceContext: scope.sourceContext ?? null,
+    ...(scope.repoOwnerExecutionHostId
+      ? { repoOwnerExecutionHostId: scope.repoOwnerExecutionHostId }
+      : {}),
     ...extra
   }
 }

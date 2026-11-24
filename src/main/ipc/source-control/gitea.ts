@@ -1,11 +1,5 @@
-import { z } from 'zod'
 import { ipcMain } from 'electron'
-import type {
-  GiteaConnectArgs,
-  GiteaIssueUpdate,
-  GiteaServerSelection,
-  GiteaWorkItemFilter
-} from '../../../shared/gitea/gitea-types'
+import type { z } from 'zod'
 import {
   connect,
   disconnect,
@@ -23,182 +17,106 @@ import {
   listGiteaWorkItems,
   updateGiteaIssue
 } from '../../gitea/issues/gitea-issues'
+import {
+  GiteaAddIssueComment,
+  GiteaConnectParams,
+  GiteaCreateIssue,
+  GiteaIssueByNumber,
+  GiteaSelectServerParams,
+  GiteaServerIdParams,
+  GiteaUpdateIssue,
+  GiteaWorkItemsList
+} from '../../../shared/rpc-contract/source-control/gitea-params'
 import type { Store } from '../../persistence/loading-store/store'
 import { _resetPreflightCache } from '../../preflight/agent-detection'
 import { registerGiteaPullRequestHandlers } from './gitea-pull-request-handlers'
-import {
-  assertRegisteredRepo,
-  repoConnectionId,
-  type GiteaRepoSelectorArgs
-} from './gitea-repo-access'
+import { giteaRepoTarget, type GiteaRepoSelectorArgs } from './gitea-repo-access'
 
-const VALID_FILTERS = new Set<GiteaWorkItemFilter>(['assigned', 'created', 'all', 'closed'])
+type RepoScoped<Schema extends z.ZodObject> = GiteaRepoSelectorArgs & Omit<z.input<Schema>, 'repo'>
 
-function normalizeServerId(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined
-}
-
-function normalizeServerSelection(value: unknown): GiteaServerSelection | undefined {
-  return normalizeServerId(value)
-}
-
-function clampLimit(value: unknown, fallback = 30): number {
-  const limit = typeof value === 'number' && Number.isFinite(value) ? value : fallback
-  return Math.min(Math.max(1, limit), 100)
-}
-
-const issueUpdateSchema = z.object({
-  title: z.string().optional(),
-  body: z.string().optional(),
-  state: z.enum(['open', 'closed']).optional(),
-  assignees: z.array(z.string()).optional(),
-  labelIds: z.array(z.number().int().positive()).optional()
-})
-
-function normalizeIssueUpdate(value: unknown): GiteaIssueUpdate | null {
-  const result = issueUpdateSchema.safeParse(value)
-  return result.success ? result.data : null
-}
-
-function normalizeStringArray(value: unknown): string[] | undefined {
-  const result = z.array(z.string()).safeParse(value)
-  return result.success ? result.data : undefined
-}
-
-function normalizeNumberArray(value: unknown): number[] | undefined {
-  const result = z.array(z.number().int().positive()).safeParse(value)
-  return result.success ? result.data : undefined
+/** Validates a repo-scoped payload with the shared RPC schema; the repo comes from the selector. */
+export function parseGiteaRepoArgs<Schema extends z.ZodObject>(
+  schema: Schema,
+  args: GiteaRepoSelectorArgs,
+  store: Store
+): { target: ReturnType<typeof giteaRepoTarget>; params: z.output<Schema> } {
+  const target = giteaRepoTarget(args, store)
+  return { target, params: schema.parse({ ...args, repo: target.repoPath }) }
 }
 
 export function registerGiteaHandlers(store: Store): void {
-  ipcMain.handle('gitea:connect', async (_event, args: GiteaConnectArgs) => {
-    if (typeof args?.baseUrl !== 'string' || typeof args?.token !== 'string') {
-      return { ok: false, error: 'Server URL and access token are required.' }
-    }
-    const result = await connect({ baseUrl: args.baseUrl, token: args.token })
+  ipcMain.handle('gitea:connect', async (_event, args: unknown) => {
+    const result = await connect(GiteaConnectParams.parse(args))
     if (result.ok) {
       _resetPreflightCache()
     }
     return result
   })
 
-  ipcMain.handle('gitea:disconnect', async (_event, args?: { serverId?: string }) => {
-    await disconnect(normalizeServerId(args?.serverId))
+  ipcMain.handle('gitea:disconnect', async (_event, args: unknown) => {
+    await disconnect(GiteaServerIdParams.parse(args).serverId)
     _resetPreflightCache()
   })
 
-  ipcMain.handle('gitea:selectServer', async (_event, args: { serverId: GiteaServerSelection }) => {
-    const serverId = normalizeServerSelection(args?.serverId)
-    if (!serverId) {
-      return getStatus()
-    }
-    return selectServer(serverId)
-  })
+  ipcMain.handle('gitea:selectServer', async (_event, args: unknown) =>
+    selectServer(GiteaSelectServerParams.parse(args).serverId)
+  )
 
   ipcMain.handle('gitea:status', async () => getStatus())
 
-  ipcMain.handle('gitea:testConnection', async (_event, args?: { serverId?: string }) => {
-    return testConnection(normalizeServerId(args?.serverId))
-  })
+  ipcMain.handle('gitea:testConnection', async (_event, args: unknown) =>
+    testConnection(GiteaServerIdParams.parse(args).serverId)
+  )
 
   ipcMain.handle(
     'gitea:listWorkItems',
-    async (
-      _event,
-      args: GiteaRepoSelectorArgs & { filter?: GiteaWorkItemFilter; limit?: number }
-    ) => {
-      const repo = assertRegisteredRepo(args, store)
-      const filter = args.filter && VALID_FILTERS.has(args.filter) ? args.filter : undefined
-      return listGiteaWorkItems(repo.path, filter, clampLimit(args.limit), repoConnectionId(repo))
+    async (_event, args: RepoScoped<typeof GiteaWorkItemsList>) => {
+      const { target, params } = parseGiteaRepoArgs(GiteaWorkItemsList, args, store)
+      return listGiteaWorkItems(target, params.filter, params.limit)
     }
   )
 
-  ipcMain.handle(
-    'gitea:issue',
-    async (_event, args: GiteaRepoSelectorArgs & { number: number }) => {
-      const repo = assertRegisteredRepo(args, store)
-      if (typeof args.number !== 'number') {
-        return null
-      }
-      return getGiteaIssue(repo.path, args.number, repoConnectionId(repo))
-    }
-  )
+  ipcMain.handle('gitea:issue', async (_event, args: RepoScoped<typeof GiteaIssueByNumber>) => {
+    const { target, params } = parseGiteaRepoArgs(GiteaIssueByNumber, args, store)
+    return getGiteaIssue(target, params.number)
+  })
 
   ipcMain.handle(
     'gitea:issueComments',
-    async (_event, args: GiteaRepoSelectorArgs & { number: number }) => {
-      const repo = assertRegisteredRepo(args, store)
-      if (typeof args.number !== 'number') {
-        return []
-      }
-      return listGiteaIssueComments(repo.path, args.number, repoConnectionId(repo))
+    async (_event, args: RepoScoped<typeof GiteaIssueByNumber>) => {
+      const { target, params } = parseGiteaRepoArgs(GiteaIssueByNumber, args, store)
+      return listGiteaIssueComments(target, params.number)
     }
   )
 
-  ipcMain.handle('gitea:labels', async (_event, args: GiteaRepoSelectorArgs) => {
-    const repo = assertRegisteredRepo(args, store)
-    return listGiteaLabels(repo.path, repoConnectionId(repo))
+  ipcMain.handle('gitea:labels', async (_event, args: GiteaRepoSelectorArgs) =>
+    listGiteaLabels(giteaRepoTarget(args, store))
+  )
+
+  ipcMain.handle('gitea:assignees', async (_event, args: GiteaRepoSelectorArgs) =>
+    listGiteaAssignees(giteaRepoTarget(args, store))
+  )
+
+  ipcMain.handle('gitea:createIssue', async (_event, args: RepoScoped<typeof GiteaCreateIssue>) => {
+    const { target, params } = parseGiteaRepoArgs(GiteaCreateIssue, args, store)
+    return createGiteaIssue(target, {
+      title: params.title,
+      body: params.body,
+      assignees: params.assignees,
+      labelIds: params.labelIds
+    })
   })
 
-  ipcMain.handle('gitea:assignees', async (_event, args: GiteaRepoSelectorArgs) => {
-    const repo = assertRegisteredRepo(args, store)
-    return listGiteaAssignees(repo.path, repoConnectionId(repo))
+  ipcMain.handle('gitea:updateIssue', async (_event, args: RepoScoped<typeof GiteaUpdateIssue>) => {
+    const { target, params } = parseGiteaRepoArgs(GiteaUpdateIssue, args, store)
+    return updateGiteaIssue(target, params.number, params.updates)
   })
-
-  ipcMain.handle(
-    'gitea:createIssue',
-    async (
-      _event,
-      args: GiteaRepoSelectorArgs & {
-        title: string
-        body?: string
-        assignees?: string[]
-        labelIds?: number[]
-      }
-    ) => {
-      const repo = assertRegisteredRepo(args, store)
-      if (typeof args.title !== 'string' || !args.title.trim()) {
-        return { ok: false, error: 'Title is required.' }
-      }
-      return createGiteaIssue(
-        repo.path,
-        {
-          title: args.title.trim(),
-          body: typeof args.body === 'string' ? args.body : undefined,
-          assignees: normalizeStringArray(args.assignees),
-          labelIds: normalizeNumberArray(args.labelIds)
-        },
-        repoConnectionId(repo)
-      )
-    }
-  )
-
-  ipcMain.handle(
-    'gitea:updateIssue',
-    async (_event, args: GiteaRepoSelectorArgs & { number: number; updates: GiteaIssueUpdate }) => {
-      const repo = assertRegisteredRepo(args, store)
-      if (typeof args.number !== 'number') {
-        return { ok: false, error: 'Issue number is required.' }
-      }
-      const updates = normalizeIssueUpdate(args.updates)
-      if (!updates) {
-        return { ok: false, error: 'Updates object is required.' }
-      }
-      return updateGiteaIssue(repo.path, args.number, updates, repoConnectionId(repo))
-    }
-  )
 
   ipcMain.handle(
     'gitea:addIssueComment',
-    async (_event, args: GiteaRepoSelectorArgs & { number: number; body: string }) => {
-      const repo = assertRegisteredRepo(args, store)
-      if (typeof args.number !== 'number') {
-        return { ok: false, error: 'Issue number is required.' }
-      }
-      if (typeof args.body !== 'string' || !args.body.trim()) {
-        return { ok: false, error: 'Comment body is required.' }
-      }
-      return addGiteaIssueComment(repo.path, args.number, args.body.trim(), repoConnectionId(repo))
+    async (_event, args: RepoScoped<typeof GiteaAddIssueComment>) => {
+      const { target, params } = parseGiteaRepoArgs(GiteaAddIssueComment, args, store)
+      return addGiteaIssueComment(target, params.number, params.body)
     }
   )
 
