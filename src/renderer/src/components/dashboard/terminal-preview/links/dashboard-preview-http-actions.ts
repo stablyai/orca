@@ -149,10 +149,6 @@ export function dashboardPreviewHttpActions(
       sourceTabId: source.tabId,
       sourceOwner: owner,
       forceDestination: destination ?? current.destinations.primary,
-      // Chooser rows pass a choice; a direct open of a reachable localhost link keeps the host route.
-      ...(choice === undefined && !inSourceGroup && current.destinations.plainClick
-        ? { requireOwnerHostRoute: true }
-        : {}),
       ...(inSourceGroup ? { openInSourceGroup: true } : {}),
       ...(actionContext ? { actionContext } : {}),
       ...(onAdmission ? { onAdmission } : {}),

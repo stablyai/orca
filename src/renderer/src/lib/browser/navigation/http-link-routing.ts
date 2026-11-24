@@ -211,13 +211,9 @@ function executeHttpLink(
           canReveal: reveal.canReveal,
           onDetailedOutcome
         },
-        // An automatic localhost open needs the owner's own route at admission: a desktop fallback
-        // would send the same URL to this machine's service instead.
-        ...(opts.allowClientBrowserFallback && !opts.requireOwnerHostRoute
-          ? { allowClientBrowserFallback: true }
-          : {}),
+        ...(opts.allowClientBrowserFallback ? { allowClientBrowserFallback: true } : {}),
         // Why: only links that already open in Orca may use a "This device" SSH host's desktop tab.
-        ...(openLinksInApp && !opts.requireOwnerHostRoute ? { allowSshDeviceBrowser: true } : {}),
+        ...(openLinksInApp ? { allowSshDeviceBrowser: true } : {}),
         ...(effectiveSourceOwner?.kind === 'runtime'
           ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
           : effectiveSourceOwner?.kind === 'ssh'

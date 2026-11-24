@@ -95,14 +95,12 @@ export function useNativeChatLinkClick(
         followsLinkMode && usesHttpLinkMode()
           ? httpLinkModeForLink(state.settings, routed.destinations)
           : null
-      // Surfaces outside the link mode keep the setting's order and no localhost marker.
-      const { primary, alternate } = routed.destinations
-      const routing = {
-        ...routed,
-        destinations: desktopMode
-          ? plainClickDestinationsFor(routed.destinations)
-          : { primary, ...(alternate ? { alternate } : {}) }
-      }
+      const routing = desktopMode
+        ? {
+            ...routed,
+            destinations: plainClickDestinationsFor(routed.destinations)
+          }
+        : routed
       // Desktop chat follows the link mode, so effective "leave to terminal" no longer blocks it.
       const plainClickBehavior = desktopMode
         ? undefined

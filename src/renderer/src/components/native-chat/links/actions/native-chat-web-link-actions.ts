@@ -53,7 +53,6 @@ export function openNativeChatWebLink(
   deps: Pick<NativeChatWebLinkDeps, 'worktreeId' | 'sourceOwner' | 'sourceTabId'> & {
     actionContext?: LinkActionContext
     onAdmission?: (outcome: HttpLinkAdmission) => void
-    requireOwnerHostRoute?: boolean
   },
   destination: HttpLinkDestination | undefined,
   openInSourceGroup = false
@@ -65,7 +64,6 @@ export function openNativeChatWebLink(
     sourceOwner: deps.sourceOwner,
     modifierHeld: false,
     ...(destination ? { forceDestination: destination } : {}),
-    ...(deps.requireOwnerHostRoute ? { requireOwnerHostRoute: true } : {}),
     ...(deps.actionContext ? { actionContext: deps.actionContext } : {}),
     ...(deps.onAdmission ? { onAdmission: deps.onAdmission } : {})
   })
@@ -77,13 +75,8 @@ export function handleNativeChatWebLink(
   url: string,
   deps: NativeChatWebLinkDeps
 ): boolean {
-  // Direct opens only; a reachable localhost link keeps its owner's route through admission.
   const open = (destination: HttpLinkDestination | undefined): void =>
-    openNativeChatWebLink(
-      url,
-      deps.destinations.plainClick ? { ...deps, requireOwnerHostRoute: true } : deps,
-      destination
-    )
+    openNativeChatWebLink(url, deps, destination)
 
   if (isTerminalLinkDirectActivation(event)) {
     event.preventDefault()

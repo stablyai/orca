@@ -29,8 +29,6 @@ export type OpenHttpLinkOptions = {
   forceSystemBrowser?: boolean
   /** Unconditional for local sources: open inside Orca regardless of settings. */
   forceInApp?: boolean
-  /** An open that skipped the chooser for a reachable remote localhost link: no desktop fallback. */
-  requireOwnerHostRoute?: boolean
   /** Treat this link as if links open in Orca (desktop localhost links); force flags still win. */
   preferInApp?: boolean
   /** The Shift escape-hatch modifier was held; resolveModifierRouting decides what it means. */
@@ -209,8 +207,6 @@ export type RoutedHttpLinkOptions = {
   sourceOwner?: HttpLinkSourceOwner
   modifierHeld?: boolean
   forceDestination?: HttpLinkDestination
-  /** A gesture open of a reachable localhost link (not a chooser pick): admission keeps the host route. */
-  requireOwnerHostRoute?: boolean
   requestOpenLinksInAppPreference?: HttpLinkRoutingPreferenceRequester
   /** Present for chooser actions: the click-time capture wins over anything read now. */
   actionContext?: LinkActionContext
@@ -248,7 +244,6 @@ export function openRoutedHttpLink(url: string, routed: RoutedHttpLinkOptions): 
       worktreeId: deps.worktreeId,
       forceInApp: deps.forceDestination === 'orca',
       forceSystemBrowser: deps.forceDestination === 'system',
-      ...(deps.requireOwnerHostRoute ? { requireOwnerHostRoute: true } : {}),
       sourceOwner,
       ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {}),
       ...(deps.onAdmission ? { onAdmission: deps.onAdmission } : {})
