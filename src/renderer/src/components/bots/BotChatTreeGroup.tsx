@@ -1,4 +1,5 @@
 // One chat in the Chats tab: one folded row; its chevron shows the workers it started, capped and stepped.
+import { BOT_CHAT_ROW_ATTRIBUTE, BotChatEndMenu, openRowMenuFromKeyboard } from './BotChatEndMenu'
 import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
@@ -217,68 +218,74 @@ export function BotChatTreeGroup({
   }
   return (
     <div className="flex flex-col">
-      <div className="group/bot-chat relative flex w-full min-w-0 items-start gap-1 rounded-md py-1.5 pr-2 pl-0.5 hover:bg-accent">
-        <button
-          type="button"
-          aria-label={[label, chat.unread ? t('bots.chats.unread', 'Unread') : null]
-            .filter(Boolean)
-            .join(' · ')}
-          className="absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          onClick={pressRow}
-          // A held key repeats its click; it must not open the chat again and again.
-          onKeyDown={(event) => {
-            if (event.repeat) {
-              event.preventDefault()
-            }
-          }}
-        />
-        <span className="flex h-5 w-3.5 shrink-0 items-center justify-center">
-          {foldable ? (
-            <button
-              type="button"
-              aria-expanded={open}
-              aria-label={
-                open
-                  ? t('bots.chats.fold', 'Fold {{name}}', { name: title })
-                  : t('bots.chats.unfold', 'Unfold {{name}}', { name: title })
+      <BotChatEndMenu bot={bot} chat={chat}>
+        <div className="group/bot-chat relative flex w-full min-w-0 items-start gap-1 rounded-md py-1.5 pr-2 pl-0.5 hover:bg-accent">
+          <button
+            type="button"
+            {...{ [BOT_CHAT_ROW_ATTRIBUTE]: '' }}
+            aria-label={[label, chat.unread ? t('bots.chats.unread', 'Unread') : null]
+              .filter(Boolean)
+              .join(' · ')}
+            className="absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            onClick={pressRow}
+            // A held key repeats its click; it must not open the chat again and again.
+            onKeyDown={(event) => {
+              if (openRowMenuFromKeyboard(event)) {
+                return
               }
-              className={cn('relative size-3.5', FOLD_TOGGLE_CLASS)}
-              onClick={toggleFold}
-            >
-              <ChevronRight className={cn('size-3', open && 'rotate-90')} />
-            </button>
-          ) : null}
-        </span>
-        <BotChatStatusSlot
-          chat={chat}
-          stop={stopIndex.bySession.get(chat.chatId) ?? null}
-          className="h-5 w-4"
-          iconClassName="size-3.5"
-          onClick={pressRow}
-        />
-        <span className="min-w-0 flex-1 pl-1">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span
-              className={cn(
-                'min-w-0 truncate text-[13px] font-medium text-foreground',
-                chat.unread && 'font-semibold'
-              )}
-            >
-              {title}
-            </span>
-            {chat.unseen ? (
-              <span className="shrink-0 rounded border border-input px-1 text-[10px] leading-[14px] font-semibold text-foreground">
-                {t('bots.chats.newTag', 'New')}
-              </span>
+              if (event.repeat) {
+                event.preventDefault()
+              }
+            }}
+          />
+          <span className="flex h-5 w-3.5 shrink-0 items-center justify-center">
+            {foldable ? (
+              <button
+                type="button"
+                aria-expanded={open}
+                aria-label={
+                  open
+                    ? t('bots.chats.fold', 'Fold {{name}}', { name: title })
+                    : t('bots.chats.unfold', 'Unfold {{name}}', { name: title })
+                }
+                className={cn('relative size-3.5', FOLD_TOGGLE_CLASS)}
+                onClick={toggleFold}
+              >
+                <ChevronRight className={cn('size-3', open && 'rotate-90')} />
+              </button>
             ) : null}
-            <span className="flex-1" />
-            <ChatRowMeta chat={chat} />
           </span>
-          <span className="block truncate text-2xs text-muted-foreground">
-            <BotChatLine bot={bot} chat={chat} folded={false} />
+          <BotChatStatusSlot
+            chat={chat}
+            stop={stopIndex.bySession.get(chat.chatId) ?? null}
+            className="h-5 w-4"
+            iconClassName="size-3.5"
+            onClick={pressRow}
+          />
+          <span className="min-w-0 flex-1 pl-1">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span
+                className={cn(
+                  'min-w-0 truncate text-[13px] font-medium text-foreground',
+                  chat.unread && 'font-semibold'
+                )}
+              >
+                {title}
+              </span>
+              {chat.unseen ? (
+                <span className="shrink-0 rounded border border-input px-1 text-[10px] leading-[14px] font-semibold text-foreground">
+                  {t('bots.chats.newTag', 'New')}
+                </span>
+              ) : null}
+              <span className="flex-1" />
+              <ChatRowMeta chat={chat} />
+            </span>
+            <span className="block truncate text-2xs text-muted-foreground">
+              <BotChatLine bot={bot} chat={chat} folded={false} />
+            </span>
           </span>
-        </span>
-      </div>
+        </div>
+      </BotChatEndMenu>
       {open ? (
         <div className="mb-1 ml-6 flex flex-col @max-[240px]:ml-3.5">
           {workers.map((worker) => (

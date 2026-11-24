@@ -49,7 +49,7 @@ export class StructuredAgentSessionHostRuntimeState {
     /** Expire published starts; still-acquiring attempts abort here. */
     onStartupExpired?: (expired: StructuredAgentSessionExpiredStartup) => void,
     private readonly deliveryActive?: (sessionId: string) => boolean,
-    private readonly childWork?: Pick<
+    readonly childWork?: Pick<
       StructuredAgentSessionClientDelivery,
       'childWorkOpen' | 'drainChildWork'
     >

@@ -13,12 +13,7 @@ import {
 } from '../../../../shared/rpc-contract/bots-params'
 import { googleSetupRuns } from '../../../google/google-setup-runs'
 import { readSharedBotActivity } from '../../../bots/bot-activity-host'
-import {
-  requireStructuredHost,
-  runtimeBotChats,
-  startBotSession,
-  botOnAgent
-} from '../../../bots/bot-chat-session'
+import { runtimeBotChats, startBotSession, botOnAgent } from '../../../bots/bot-chat-session'
 import { readPairedBotRosters, withPairedBotRosters } from '../../../bots/paired-bot-rosters'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { openEmptyBotChat, runtimeBotChatTreeHost } from '../../../bots/bot-chat-tree-host'
@@ -28,6 +23,8 @@ import { ownerOnly } from './bots-caller-gates'
 import { BOT_CREATE_METHOD } from './bots-create'
 import { BOT_AGENT_CHOICES_METHOD } from './bots-agent-choices'
 import { BOT_CHATS_METHODS, botChatsSummary, readBotChats } from './bots-chats'
+import { BOT_END_CHAT_METHOD } from './bots-end-chat'
+import { ownerTypedLatest } from './bots-owner-turn'
 import { BOT_CHAT_TREE_METHODS } from './bots-chat-tree'
 import { BOT_MEMORY_METHODS } from './bots-memory'
 import { BOT_KICKOFF_METHODS } from './bots-kickoff'
@@ -106,13 +103,6 @@ async function newHomeChat(params: BotChatResetParams, context: RpcContext) {
   return { sessionId }
 }
 
-/** Whether the chat's latest message is its owner's own, not an automation run's, a connector's or Orca's. */
-async function ownerTypedLatest(runtime: RpcContext['runtime'], sessionId: string) {
-  const reads = await (await requireStructuredHost(runtime)).journalReads(sessionId)
-  const body = (await reads.promptItem('last'))?.body
-  return body?.kind === 'message' && !body.from && !body.origin && !body.memorySource
-}
-
 // Off, nothing creates a bot or opens its Chat; listing, editing and deleting stay.
 export const BOT_METHODS = [
   defineMethod({
@@ -187,6 +177,7 @@ export const BOT_METHODS = [
   BOT_CREATE_METHOD,
   BOT_AGENT_CHOICES_METHOD,
   ...BOT_CHATS_METHODS,
+  BOT_END_CHAT_METHOD,
   ...BOT_CHAT_TREE_METHODS,
   ...BOT_MEMORY_METHODS,
   defineMethod({

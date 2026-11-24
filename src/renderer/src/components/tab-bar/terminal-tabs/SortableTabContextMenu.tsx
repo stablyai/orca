@@ -1,3 +1,4 @@
+import { BotChatEndTabMenuItem } from '../../bots/BotChatEndTabMenuItem'
 import { Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
 import {
   ContextMenuItem,
@@ -224,6 +225,7 @@ export function SortableTabContextMenu({
         {t('auto.components.tab.bar.SortableTabContextMenu.89359a36f7', 'Close')}
         {closeShortcut ? <ContextMenuShortcut>{closeShortcut}</ContextMenuShortcut> : null}
       </ContextMenuItem>
+      <BotChatEndTabMenuItem worktreeId={tab.worktreeId} sessionId={nativeChat?.sessionId} />
       <ContextMenuItem inset onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
         {t('auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30', 'Close Others')}
       </ContextMenuItem>
