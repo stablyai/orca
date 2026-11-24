@@ -43,9 +43,10 @@ export function readClaudeInit(message: Record<string, unknown>): ClaudeInitObse
 }
 
 /** Whether a frame naming another session refuses startup; foreign frames that do not are ignored.
- *  `system/init` names the running session. Older CLIs (2.1.117) stamp a resume's SessionStart
- *  hook frames with a boot id before switching to the resumed session, so on a resume they prove
- *  nothing either way; the first turn's init still checks it. */
+ *  `system/init` names the running session. Older CLIs (2.1.117) run a resume's SessionStart
+ *  hooks before switching from a boot id to the resumed session and stamp their frames with the
+ *  boot id, so on a resume those frames prove nothing either way; the first turn's init still
+ *  checks it. */
 export function claudeForeignFrameRefusesStartup(
   message: Record<string, unknown>,
   launch: { resumesTranscript: boolean }
@@ -53,7 +54,10 @@ export function claudeForeignFrameRefusesStartup(
   if (message.type === 'system' && message.subtype === 'init') {
     return true
   }
-  return !launch.resumesTranscript && readClaudeInit(message) !== null
+  if (launch.resumesTranscript && message.hook_name === 'SessionStart:resume') {
+    return false
+  }
+  return readClaudeInit(message) !== null
 }
 
 /** Init and status frames describe the running mode; absent fields preserve the last report. */

@@ -57,12 +57,14 @@ describe('claudeForeignFrameRefusesStartup', () => {
 
   it('still refuses a foreign SessionStart frame on a new session, which names its id at boot', () => {
     const fresh = { resumesTranscript: false }
-    expect(
-      claudeForeignFrameRefusesStartup(
-        { ...resumeHookStarted, hook_name: 'SessionStart:startup' },
-        fresh
-      )
-    ).toBe(true)
+    const startup = { ...resumeHookStarted, hook_name: 'SessionStart:startup' }
+    expect(claudeForeignFrameRefusesStartup(startup, fresh)).toBe(true)
+    expect(claudeForeignFrameRefusesStartup(resumeHookStarted, fresh)).toBe(true)
+  })
+
+  it('still refuses a foreign SessionStart frame on a resume when it is not the resume hook', () => {
+    const startup = { ...resumeHookStarted, hook_name: 'SessionStart:startup' }
+    expect(claudeForeignFrameRefusesStartup(startup, { resumesTranscript: true })).toBe(true)
   })
 
   it('ignores ordinary foreign frames', () => {
