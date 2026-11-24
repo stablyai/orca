@@ -29,6 +29,7 @@ export function useWaitingQuestionPage(
   { events, eventsRead, hasEarlier, failed, loadEarlier }: BotItemViewRead
 ): boolean {
   const needsPage =
+    !failed &&
     eventsRead &&
     hasEarlier &&
     questionId !== undefined &&
@@ -39,7 +40,7 @@ export function useWaitingQuestionPage(
       loadEarlier()
     }
   }, [needsPage, earliest, loadEarlier])
-  return needsPage && !failed
+  return needsPage
 }
 
 type Loaded = {
