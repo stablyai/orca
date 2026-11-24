@@ -2457,6 +2457,13 @@ html.native-shell .app-layout {
   --native-chat-quiet-leave-top: calc(-20px * var(--chat-estimated-spacing-scale, 1));
 }
 
+/* Why CanvasText: plugin path icons opt out of forced-color adjustment, so name the system text color. */
+@media (forced-colors: active) {
+  .plugin-panel-icon {
+    color: CanvasText;
+  }
+}
+
 /* Why: keyframes run when the content mounts already in its final state. */
 @keyframes compact-agent-expansion-reveal {
   from {
