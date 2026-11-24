@@ -3,6 +3,7 @@ import { MOBILE_WEB_CATALOG_MAX_RAW_BYTES } from '../../../src/shared/mobile-web
 import { SHA256_PATTERN } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import { DEVICE_STORE_MAX_VALUE_LENGTH } from '../device-store/device-store-value-codec'
 import { decodeCanonicalBase64Bytes } from '../transport/encryption/base64-byte-codec'
+import { inflateCatalogGzip } from './catalog-gzip-member'
 
 const storedCatalogSchema = z.object({
   v: z.literal(1),
@@ -13,7 +14,7 @@ const storedCatalogSchema = z.object({
 // Compact JSON adds 94 bytes for the v1 fields and 64-character SHA.
 const MAX_V1_BYTES = MOBILE_WEB_CATALOG_MAX_RAW_BYTES + 94
 
-export async function decodeStoredPageCatalog(raw: string) {
+export function decodeStoredPageCatalog(raw: string) {
   if (raw.length > DEVICE_STORE_MAX_VALUE_LENGTH) {
     return null
   }
@@ -30,7 +31,6 @@ export async function decodeStoredPageCatalog(raw: string) {
     return null
   }
   try {
-    const { inflateCatalogGzip } = await import('./catalog-gzip-member')
     const bytes = inflateCatalogGzip(compressed, hint, MAX_V1_BYTES)
     const json: unknown = JSON.parse(
       new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)

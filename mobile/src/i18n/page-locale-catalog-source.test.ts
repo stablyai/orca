@@ -92,10 +92,13 @@ it('admits one complete member to first paint and known SHA at the cache limits'
 
 it('keeps malformed and oversized v1 rows out of both admission paths', async () => {
   const trailing = Buffer.concat([Buffer.from(valid, 'base64'), Buffer.of(0)])
-  const concatenated = Buffer.concat([Buffer.from(valid, 'base64'), Buffer.from(valid, 'base64')])
+  // A second member that changes the bytes fails the trailer; a byte-identical repeat decodes the same verified row.
+  const other = Buffer.from(encodeDeviceStoreValue({ ...row, catalog: { notice: 'x' } }), 'base64')
+  const concatenated = Buffer.concat([Buffer.from(valid, 'base64'), other])
+  const prepended = Buffer.concat([other, Buffer.from(valid, 'base64')])
   const oversized = encodeDeviceStoreValue({
     ...row,
-    catalog: { notice: atDecodedLimit.catalog.notice + 'a' }
+    catalog: { notice: `${atDecodedLimit.catalog.notice}a` }
   })
   const oversizedWithSmallHint = Buffer.from(oversized, 'base64')
   oversizedWithSmallHint.writeUInt32LE(16, oversizedWithSmallHint.length - 4)
@@ -105,10 +108,11 @@ it('keeps malformed and oversized v1 rows out of both admission paths', async ()
     Buffer.from(valid, 'base64').subarray(0, -3).toString('base64'),
     trailing.toString('base64'),
     concatenated.toString('base64'),
+    prepended.toString('base64'),
     gzipSync(Buffer.of(0xc3, 0x28)).toString('base64'),
     encodeDeviceStoreValue({ ...row, catalog: [] }),
     encodeDeviceStoreValue({ ...row, sha256: 'invalid' }),
-    valid + '\n',
+    `${valid}\n`,
     'a'.repeat(DEVICE_STORE_MAX_VALUE_LENGTH + 4),
     oversized,
     oversizedWithSmallHint.toString('base64')
@@ -153,11 +157,9 @@ it('restricts the raw retry to the encoded catalog method being absent', async (
       new AbortController().signal,
       () => true
     )
-    if (retry) {
-      await expect(catalog).resolves.toEqual({ sha256, catalog: row.catalog })
-    } else {
-      await expect(catalog).rejects.toThrow('answered no ru catalog')
-    }
+    await (retry
+      ? expect(catalog).resolves.toEqual({ sha256, catalog: row.catalog })
+      : expect(catalog).rejects.toThrow('answered no ru catalog'))
     expect(calls).toEqual(
       retry
         ? ['mobileWeb.bundle.localeCatalogEncoded', 'mobileWeb.bundle.localeCatalog']

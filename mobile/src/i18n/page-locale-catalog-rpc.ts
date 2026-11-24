@@ -16,6 +16,7 @@ import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-request-port'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/client-state/bridge-rpc-client-contract'
 import type { LocaleCatalog } from './bundled-locale-catalogs'
+import { inflateCatalogGzip } from './catalog-gzip-member'
 
 export type CatalogLocale = Exclude<SupportedUiLocale, 'en'>
 export type HeldCatalog = { readonly sha256: string; readonly catalog: LocaleCatalog }
@@ -84,10 +85,7 @@ export async function requestHostLocaleCatalog(
   }
   const { value } = reply.outcome
   if (!('catalog' in value)) {
-    const [{ decodePageCatalogGzip }, { inflateCatalogGzip }] = await Promise.all([
-      import('./page-locale-catalog-gzip'),
-      import('./catalog-gzip-member')
-    ])
+    const { decodePageCatalogGzip } = await import('./page-locale-catalog-gzip')
     if (!isCurrent()) {
       throw new Error('catalog source retired')
     }

@@ -65,7 +65,6 @@
     "markdown-it-cjk-friendly": "^2.0.3",
     "markdown-it-footnote": "^4.0.0",
     "mermaid": "11.17.2",
-    "pako": "2.1.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
