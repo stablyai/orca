@@ -7,6 +7,7 @@ import {
 } from '../failures/native-chat-resume-failure-guidance'
 import { resumeActivityLabel } from '../tree/native-chat-resume-activity-label'
 import type { ResumeToastRow } from './native-chat-resume-toast-view'
+import { botChatLabelParts, botChatLabelText, nameKeptEnd } from './resume-toast-row-label'
 
 function rowActions(row: ResumeToastRow, remote: boolean, t: Translate): ResumeFailureAction[] {
   if (row.state !== 'needs-you') {
@@ -83,6 +84,18 @@ function StateMark({ row }: { row: ResumeToastRow }): React.JSX.Element {
   )
 }
 
+/** Never shrinks, so a sub-pixel squeeze can't clip it; past its cap the chat keeps a word and the
+ *  name's middle ellipsizes, keeping its end so similar names stay apart. */
+function BotNameSegment({ name }: { name: string }): React.JSX.Element {
+  const { head, tail } = nameKeptEnd(name)
+  return (
+    <span className="flex min-w-0 max-w-[calc(100%-4rem)] shrink-0">
+      <span className="min-w-0 truncate">{head}</span>
+      {tail && <span className="shrink-0 whitespace-pre">{tail}</span>}
+    </span>
+  )
+}
+
 export function NativeChatResumeToastRow({
   row,
   name: chatName,
@@ -94,7 +107,7 @@ export function NativeChatResumeToastRow({
 }: {
   row: ResumeToastRow
   name: string
-  /** The bot whose chat this is; the chat title truncates first so the bot stays named. */
+  /** The bot whose chat this is, named in the locale's order; the chat title truncates first. */
   owner?: string
   age: string
   busy: boolean
@@ -103,12 +116,8 @@ export function NativeChatResumeToastRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const actions = rowActions(row, remote, t)
-  const name = owner
-    ? t('auto.components.NativeChatResumeToast.botChat', '{{bot}} · {{chat}}', {
-        bot: owner,
-        chat: chatName
-      })
-    : chatName
+  const labelParts = owner ? botChatLabelParts(t) : null
+  const name = owner && labelParts ? botChatLabelText(labelParts, owner, chatName) : chatName
   const reason = row.openOnly
     ? t('auto.components.NativeChatResumeFailureGuidance.fallbackShort', 'Couldn’t resume.')
     : row.failure
@@ -122,16 +131,23 @@ export function NativeChatResumeToastRow({
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-baseline gap-2">
           <span className="flex min-w-0 flex-1 text-xs text-foreground/90" title={name}>
-            {owner && (
-              <>
-                {/* Never shrinks, so even a sub-pixel squeeze can't clip it; past its cap the chat keeps a word. */}
-                <span className="max-w-[calc(100%-4rem)] shrink-0 truncate">{owner}</span>
-                <span aria-hidden="true" className="shrink-0 px-1 text-muted-foreground">
-                  ·
-                </span>
-              </>
+            {owner && labelParts ? (
+              labelParts.map((part) =>
+                part.kind === 'bot' ? (
+                  <BotNameSegment key={part.key} name={owner} />
+                ) : part.kind === 'chat' ? (
+                  <span key={part.key} className="min-w-0 truncate">
+                    {chatName}
+                  </span>
+                ) : (
+                  <span key={part.key} className="shrink-0 whitespace-pre text-muted-foreground">
+                    {part.text}
+                  </span>
+                )
+              )
+            ) : (
+              <span className="min-w-0 truncate">{chatName}</span>
             )}
-            <span className="min-w-0 truncate">{chatName}</span>
           </span>
           <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{age}</span>
         </div>

@@ -6,7 +6,6 @@ import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/statu
 import { structuredChatShownName } from '@/runtime/native-chat/naming/structured-chat-shown-name'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { useBotsEnabled, useHostBots } from '@/lib/bot-catalog'
-import { findBotByWorkspace } from '../../bots/bot-workspace'
 import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from '../../settings/chat/native-chat-resume-setting-target'
 import {
   localNativeChatRestartStore,
@@ -20,6 +19,7 @@ import type { ResumeFailureAction } from '../failures/native-chat-resume-failure
 import { resumeRunFailures } from '../runs/native-chat-resume-run-view'
 import type { ResumeCandidate } from '../tree/native-chat-resume-on-restart-grouping'
 import { resumeToastView } from './native-chat-resume-toast-view'
+import { resumeRowBotName } from './resume-toast-row-label'
 import { NativeChatResumeToast } from './NativeChatResumeToast'
 import { useResumeToastAutoDismiss } from './use-resume-toast-auto-dismiss'
 
@@ -164,9 +164,8 @@ function ConnectedResumeToast({
   const feed = getStructuredAgentSessionStatusFeed(store.target)
   const nameFor = (sessionId: string, fallback: string) =>
     structuredChatShownName(feed, sessionId)?.trim() || fallback
-  // Every bot's own chat is "Home", so a bot's rows lead with its name; scoped to this host's bots.
   const botNameFor = (candidate: ResumeCandidate): string | undefined =>
-    botsEnabled ? findBotByWorkspace(hostBots, candidate.workspaceId, hostId)?.name : undefined
+    botsEnabled ? resumeRowBotName(hostBots, candidate, hostId) : undefined
 
   const onRowAction = (action: ResumeFailureAction, sessionId: string): void => {
     if (action === 'dismiss') {

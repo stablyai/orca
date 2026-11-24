@@ -188,8 +188,9 @@ export const botChatsResumed = defineFixture({
   )
 })
 
-const LONG_BOT = 'Customer Onboarding Research Assistant 02'
-/** Narrowest toast: the chat title truncates before a long bot name, and the age and actions stay. */
+const LONG_BOT = 'Customer Onboarding Research Assistant'
+/** Narrowest toast: the chat title truncates before a long bot name, whose end survives so two
+ *  similar names stay apart; the age and actions stay. */
 export const botChatsLongNames = defineFixture({
   width: NARROWEST,
   render: () => (
@@ -204,10 +205,10 @@ export const botChatsLongNames = defineFixture({
       {...actions}
       {...botChats({
         'chat-0': {
-          bot: LONG_BOT,
+          bot: `${LONG_BOT} 01`,
           chat: 'Summarize every interview from last week and draft the findings deck'
         },
-        'chat-1': { bot: LONG_BOT, chat: 'Home' },
+        'chat-1': { bot: `${LONG_BOT} 02`, chat: 'Home' },
         'chat-2': { bot: 'UX Designer', chat: PROMPTS[0] ?? '' }
       })}
     />
