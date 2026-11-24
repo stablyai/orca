@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { GoogleDefaultRead } from '../google/google-bot-accounts'
 import type { GoogleAccountView } from '../google/google-connect-types'
 import { botConnectorServices } from './bot-connectors-view'
 
@@ -9,7 +10,11 @@ const account = (email: string): GoogleAccountView => ({
   connectedAt: 0
 })
 
-function googleRow(googleAccounts?: string[], hostEmails = ['Me@Work.com', 'me@gmail.com']) {
+function googleRow(
+  googleAccounts?: string[],
+  hostEmails = ['Me@Work.com', 'me@gmail.com'],
+  googleDefault: GoogleDefaultRead = { email: 'me@work.com' }
+) {
   const services = botConnectorServices(
     { slack: null, linear: null, github: null, google: true, googleAccounts },
     {
@@ -17,7 +22,7 @@ function googleRow(googleAccounts?: string[], hostEmails = ['Me@Work.com', 'me@g
       linear: false,
       google: hostEmails.map(account),
       googleApp: true,
-      googleDefault: 'me@work.com'
+      googleDefault
     }
   )
   return services.find((service) => service.source === 'google')
@@ -35,5 +40,12 @@ describe('orca bot connectors, Google', () => {
     expect(googleRow(['gone@x.com'])?.gap).toContain(
       'None of the Google accounts on this computer is chosen for you'
     )
+  })
+
+  it('marks no default when the computer’s is unreadable and several are chosen', () => {
+    const detail = googleRow(['me@work.com', 'me@gmail.com'], undefined, {
+      unreadable: 'Keychain denied.'
+    })?.detail
+    expect(detail).toBe('Me@Work.com: Gmail ready; me@gmail.com: Gmail ready')
   })
 })

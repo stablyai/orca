@@ -6,10 +6,11 @@ import type { GoogleAccountView, GoogleServiceReadiness } from '../google/google
 import { GOOGLE_SERVICE_INFO } from '../google/google-scopes'
 import { googleBotConnectState, type GoogleHostConnect } from '../google/google-bot-connect-state'
 import {
-  botDefaultGoogleAccount,
   botGoogleAccess,
+  botGoogleDefault,
   botMayUseGoogleAccount,
-  googleEmailKey
+  googleEmailKey,
+  type GoogleDefaultRead
 } from '../google/google-bot-accounts'
 
 export type BotConnectorService = {
@@ -47,13 +48,13 @@ export const LINEAR_NO_KEY =
 // linear: a Linear API key or a Connect Linear login on this computer.
 // google: the Google accounts connected on this computer; absent from hosts that report none.
 // googleApp: whether this computer has a Google app (client) to sign in with.
-// googleDefault: the account a call without --account uses.
+// googleDefault: this computer's default as the host reads it: an account, none, or unreadable.
 export type LocalSignIns = {
   gh: 'signed-in' | 'signed-out' | 'missing'
   linear: boolean
   google?: readonly GoogleAccountView[]
   googleApp?: boolean
-  googleDefault?: string | null
+  googleDefault?: GoogleDefaultRead
 }
 
 const OFFER_GOOGLE = '`orca bot connectors --offer google`'
@@ -76,12 +77,14 @@ function googleService(
   bot: Pick<Bot, 'google' | 'googleAccounts'>,
   hostAccounts: readonly GoogleAccountView[],
   app: boolean,
-  computerDefault: string | null
+  computerDefault: GoogleDefaultRead
 ): BotConnectorService {
-  // Only the accounts the bot may use, and the default its calls without --account go to.
+  // Only the accounts the bot may use, and the default its calls without --account go to: the
+  // host's rule, so an unreadable default marks none.
   const access = botGoogleAccess(bot)
   const accounts = hostAccounts.filter((account) => botMayUseGoogleAccount(access, account.email))
-  const defaultAccount = botDefaultGoogleAccount(access, computerDefault)
+  const read = botGoogleDefault(access, computerDefault)
+  const defaultAccount = 'email' in read ? read.email : null
   const isDefault = (account: GoogleAccountView): boolean =>
     defaultAccount !== null && googleEmailKey(account.email) === defaultAccount
   const connected = accounts.filter((account) => account.status === 'connected')
@@ -178,7 +181,14 @@ export function botConnectorServices(
       ...(cloudSlack?.approveUrl ? { approveUrl: cloudSlack.approveUrl } : {})
     },
     ...(local.google
-      ? [googleService(bot, local.google, local.googleApp === true, local.googleDefault ?? null)]
+      ? [
+          googleService(
+            bot,
+            local.google,
+            local.googleApp === true,
+            local.googleDefault ?? { email: null }
+          )
+        ]
       : [])
   ]
 }

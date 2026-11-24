@@ -6,6 +6,9 @@ import { GOOGLE_METHODS } from './google'
 const BOT_TOKEN = 'scout-token'
 const setDefaultAccount = vi.fn(async (email: string) => email)
 const disconnect = vi.fn()
+const checkAccounts = vi.fn(async (_only?: (email: string) => boolean) => [
+  hostAccount('Me@Gmail.com')
+])
 type DefaultRead = { email: string } | { unreadable: string; accounts: string[] }
 const computerDefault: { read: DefaultRead } = vi.hoisted(() => ({
   read: { email: 'me@work.com' }
@@ -33,6 +36,8 @@ vi.mock('../../../google/google-connect', () => ({
     accounts: async () => [hostAccount('me@work.com'), hostAccount('Me@Gmail.com')],
     client: async () => ({ clientId: 'client' }),
     clientCheck: async () => null,
+    checkClient: async () => null,
+    checkAccounts,
     defaultAccount: async () => 'me@work.com'
   })
 }))
@@ -180,5 +185,18 @@ describe('Google as a bot limited to some accounts sees it', () => {
     } finally {
       computerDefault.read = { email: 'me@work.com' }
     }
+  })
+
+  it('checks only its own accounts with --check', async () => {
+    await call(
+      'google.status',
+      { botToken: BOT_TOKEN, check: true },
+      { google: true, googleAccounts: ['me@gmail.com'] }
+    )
+    const only = checkAccounts.mock.calls.at(-1)?.[0]
+    expect(only?.('ME@gmail.com')).toBe(true)
+    expect(only?.('me@work.com')).toBe(false)
+    await call('google.status', { check: true }, { google: true })
+    expect(checkAccounts.mock.calls.at(-1)?.[0]).toBeUndefined()
   })
 })

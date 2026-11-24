@@ -124,8 +124,16 @@ export const GOOGLE_METHODS = [
       { runtime, pairedDeviceId }
     ): Promise<GoogleStatusView> => {
       const connect = google()
+      // A bot limited to some accounts sees only those (and the default its own calls use), so a
+      // check reads only its accounts' tokens.
+      const caller = botOfToken(runtime, botToken, pairedDeviceId)
+      const access = caller.kind === 'bot' ? botGoogleAccess(caller.bot) : null
+      const only =
+        access?.kind === 'some'
+          ? (email: string) => botMayUseGoogleAccount(access, email)
+          : undefined
       const [accounts, clientKey] = check
-        ? await Promise.all([connect.checkAccounts(), connect.checkClient()])
+        ? await Promise.all([connect.checkAccounts(only), connect.checkClient()])
         : [await connect.accounts(), await connect.clientCheck()]
       const view = {
         ...(await statusView(runtime, connect)),
@@ -133,16 +141,13 @@ export const GOOGLE_METHODS = [
         defaultAccount: await connect.defaultAccount(),
         ...(clientKey ? { clientKey } : {})
       }
-      // A bot limited to some accounts sees only those, and the default its own calls use.
-      const caller = botOfToken(runtime, botToken, pairedDeviceId)
-      const access = caller.kind === 'bot' ? botGoogleAccess(caller.bot) : null
-      if (access?.kind !== 'some') {
+      if (access?.kind !== 'some' || !only) {
         return view
       }
       const fallback = botGoogleDefault(access, await readGoogleDefaultAccount())
       return {
         ...view,
-        accounts: accounts.filter((account) => botMayUseGoogleAccount(access, account.email)),
+        accounts: accounts.filter((account) => only(account.email)),
         defaultAccount: 'email' in fallback ? fallback.email : null
       }
     }
