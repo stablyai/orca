@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { DeepLinkState } from '../deep-link-state'
 import {
+  drainWorktreeDeepLink,
   formatWorktreeDeepLink,
-  openWorktreeDeepLink,
   parseWorktreeDeepLink
 } from './worktree-deep-link'
 
@@ -22,23 +23,42 @@ describe('worktree deep link', () => {
     expect(parseWorktreeDeepLink('orca://worktree?selector=%20')).toBeNull()
   })
 
-  it('activates the worktree the selector resolves to', async () => {
-    const activated: string[] = []
-    const runtime = {
-      activateManagedWorktree: async (selector: string) => {
-        activated.push(selector)
-      }
-    }
-    expect(await openWorktreeDeepLink({ selector: 'branch:fix-login' }, runtime)).toBe(true)
-    expect(activated).toEqual(['branch:fix-login'])
+  it('holds a link until drained, and a repeat click does not stack', () => {
+    const state = new DeepLinkState(() => 0)
+    const url = 'orca://worktree?selector=branch%3Afix-login'
+    expect(state.capture([url, url])).toBe(true)
+    expect(state.consumeWorktreeLink()).toBe('branch:fix-login')
+    expect(state.consumeWorktreeLink()).toBeNull()
   })
 
-  it('reports false for a selector that matches no worktree', async () => {
+  it('focuses the worktree the held selector names once a window can take it', async () => {
+    const state = new DeepLinkState(() => 0)
+    state.capture(['orca://worktree?selector=branch%3Afix-login'])
+    const focused: string[] = []
+    let ready = false
     const runtime = {
-      activateManagedWorktree: async () => {
+      canFocusManagedWorktree: () => ready,
+      focusManagedWorktree: async (selector: string) => {
+        focused.push(selector)
+      }
+    }
+    await drainWorktreeDeepLink(state, runtime)
+    expect(focused).toEqual([])
+    ready = true
+    await drainWorktreeDeepLink(state, runtime)
+    expect(focused).toEqual(['branch:fix-login'])
+  })
+
+  it('drops a selector that matches no worktree', async () => {
+    const state = new DeepLinkState(() => 0)
+    state.capture(['orca://worktree?selector=branch%3Agone'])
+    const runtime = {
+      canFocusManagedWorktree: () => true,
+      focusManagedWorktree: async () => {
         throw new Error('selector_not_found')
       }
     }
-    expect(await openWorktreeDeepLink({ selector: 'branch:gone' }, runtime)).toBe(false)
+    await drainWorktreeDeepLink(state, runtime)
+    expect(state.consumeWorktreeLink()).toBeNull()
   })
 })

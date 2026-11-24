@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import { drainWorktreeDeepLink } from '../open-routing/worktree-deep-link'
 import { registerCoreHandlers } from '../../ipc/register-core-handlers/register-core-handlers'
 import { attachMainWindowServices } from '../../window/attach-main-window-services'
 import { initTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
@@ -36,6 +37,10 @@ export function attachMainWindowCoreServices(
   const attachment = attachmentTail.then(() => installMainWindowCoreServices(window, deps))
   attachmentTail = attachment.catch(() => {})
   return attachment
+}
+
+function drainPendingWorktreeLink(): void {
+  void drainWorktreeDeepLink(state.deepLinks, state.core.runtime)
 }
 
 async function installMainWindowCoreServices(
@@ -77,6 +82,8 @@ async function installMainWindowCoreServices(
   ) {
     throw new Error('Main window services must be initialized before attaching')
   }
+  // A link clicked before the window was ready is held until its graph is.
+  runtime.onWindowGraphReady(drainPendingWorktreeLink)
   await registerCoreHandlers(
     store,
     runtime,

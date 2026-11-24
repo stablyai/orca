@@ -50,6 +50,17 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     createdWorktree?: Worktree
   ): WorktreeTerminalProvisioningHost
 
+  /** Whether a window holds the live graph, so a focus request reaches a mounted renderer. */
+  canFocusManagedWorktree(): boolean {
+    return this.graphStatus === 'ready' && this.hasAuthoritativeWindow()
+  }
+
+  /** Selects an existing worktree in the host window; unlike activation it never wakes a VM or provisions terminals. */
+  async focusManagedWorktree(worktreeSelector: string): Promise<void> {
+    const worktree = await this.resolveGitWorktreeSelector(worktreeSelector)
+    this.notifyHostActivateWorktree(worktree.repoId, worktree.id)
+  }
+
   async activateManagedWorktree(
     worktreeSelector: string,
     opts: {

@@ -21,23 +21,26 @@ export function formatWorktreeDeepLink({ selector }: WorktreeDeepLink): string {
   return `orca://worktree?selector=${encodeURIComponent(selector)}`
 }
 
-type WorktreeActivator = {
-  activateManagedWorktree(selector: string): Promise<unknown>
+type WorktreeFocuser = {
+  canFocusManagedWorktree(): boolean
+  focusManagedWorktree(selector: string): Promise<void>
 }
 
-/** Same path as `orca worktree activate`; an unknown or ambiguous selector leaves the window as it is. */
-export async function openWorktreeDeepLink(
-  link: WorktreeDeepLink,
-  runtime: WorktreeActivator | null
-): Promise<boolean> {
-  if (!runtime) {
-    return false
+/** Focuses the held link once a window can take it; a selector matching no worktree is dropped. */
+export async function drainWorktreeDeepLink(
+  deepLinks: { consumeWorktreeLink(): string | null },
+  runtime: WorktreeFocuser | null
+): Promise<void> {
+  if (!runtime?.canFocusManagedWorktree()) {
+    return
+  }
+  const selector = deepLinks.consumeWorktreeLink()
+  if (!selector) {
+    return
   }
   try {
-    await runtime.activateManagedWorktree(link.selector)
-    return true
+    await runtime.focusManagedWorktree(selector)
   } catch (error) {
     console.warn('[deep-link] worktree link not opened', error)
-    return false
   }
 }

@@ -7,6 +7,13 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/sessi
 import { rendererStatusReplica } from './renderer-status-replica'
 
 export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithSessionTitleAuthority {
+  private readonly windowGraphReadyListeners = new Set<() => void>()
+
+  /** Fires each time a window's graph becomes ready; registering the same function twice keeps one. */
+  onWindowGraphReady(listener: () => void): void {
+    this.windowGraphReadyListeners.add(listener)
+  }
+
   /** Phone frames held for an unseeded renderer's snapshot are owed once it loses authority. */
   protected releaseUnseededPhoneFrames(): void {
     for (const worktreeId of rendererStatusReplica(this).unseededWorktrees()) {
@@ -165,6 +172,11 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     this.graphStatus = 'ready'
     this.setTerminalSideEffectConsumerAvailable(windowId !== HEADLESS_RUNTIME_WINDOW_ID)
     this.refreshWritableFlags()
+    if (windowId !== HEADLESS_RUNTIME_WINDOW_ID) {
+      for (const listener of this.windowGraphReadyListeners) {
+        listener()
+      }
+    }
   }
 
   markGraphReloadFailed(

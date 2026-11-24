@@ -24,7 +24,7 @@ import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-boots
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/quit/main-process-quit'
 import { shouldActivateDesktopForSecondInstance } from './startup/profile-startup/single-instance-lock'
-import { openWorktreeDeepLink } from './startup/open-routing/worktree-deep-link'
+import { drainWorktreeDeepLink } from './startup/open-routing/worktree-deep-link'
 import type { DeepLink } from './startup/deep-link-state'
 import { resolveOsOpenedDocuments } from './startup/open-routing/os-opened-documents'
 import {
@@ -96,7 +96,7 @@ function publishDeepLink(link: DeepLink): void {
   if (link.kind === 'skill-share') {
     window.webContents.send('ui:openSkillShare', link.shareId)
   } else if (link.kind === 'worktree') {
-    void openWorktreeDeepLink(link.link, state.core.runtime)
+    void drainWorktreeDeepLink(state.deepLinks, state.core.runtime)
   } else {
     // Only a doorbell: the renderer pulls the link, so it is delivered exactly once.
     window.webContents.send('ui:botLinkPending')

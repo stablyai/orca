@@ -13,7 +13,11 @@ import {
   skillShareIdFromArguments
 } from '../../shared/skills/sharing/skill-share-link'
 import { formatConnectorLinkDeepLink, parseConnectorLinkDeepLink } from './connector-link-deep-link'
-import { parseWorktreeDeepLink, type WorktreeDeepLink } from './open-routing/worktree-deep-link'
+import {
+  formatWorktreeDeepLink,
+  parseWorktreeDeepLink,
+  type WorktreeDeepLink
+} from './open-routing/worktree-deep-link'
 import { PendingDeepLinkState } from './open-routing/skill-share-deep-link-state'
 
 export type DeepLink =
@@ -54,6 +58,7 @@ export class DeepLinkState {
   // Skill and bot shares keep the shared repeat-click and burst guard.
   private readonly skillShares: PendingDeepLinkState
   private readonly botShares: PendingDeepLinkState
+  private readonly worktreeLinks: PendingDeepLinkState
   private pendingBotLink: BotDeepLink | null = null
   // The latest link of each service, so a GitHub link never replaces a Linear one.
   private readonly pendingConnectorLinks = new Map<ConnectorLinkSource, ConnectorLinkDeepLink>()
@@ -62,6 +67,7 @@ export class DeepLinkState {
   constructor(now?: () => number) {
     this.skillShares = new PendingDeepLinkState(([shareId]) => shareId ?? null, now)
     this.botShares = new PendingDeepLinkState(([shareId]) => shareId ?? null, now)
+    this.worktreeLinks = new PendingDeepLinkState(([selector]) => selector ?? null, now)
   }
 
   /** Whether macOS `open-url` should claim this URL. */
@@ -82,8 +88,7 @@ export class DeepLinkState {
         continue
       }
       if (link.kind === 'worktree') {
-        // Acted on at once, never held: a stale link must not move the window later.
-        publish?.(link)
+        this.worktreeLinks.capture([link.link.selector], () => publish?.(link))
         continue
       }
       if (link.kind === 'bot') {
@@ -104,6 +109,10 @@ export class DeepLinkState {
 
   consumeBotShare(): string | null {
     return this.botShares.consume()
+  }
+
+  consumeWorktreeLink(): string | null {
+    return this.worktreeLinks.consume()
   }
 
   consumeBotLink(): BotDeepLink | null {
@@ -143,12 +152,14 @@ export class DeepLinkState {
     this.pendingConnectorLinks.clear()
     const accessRequest = this.consumeAccessRequest()
     const botShareId = this.consumeBotShare()
+    const worktreeSelector = this.consumeWorktreeLink()
     return [
       ...(shareId ? [`orca://skills/share/${shareId}`] : []),
       ...(bot ? [formatBotDeepLink(bot)] : []),
       ...connectorLinks.map(formatConnectorLinkDeepLink),
       ...(accessRequest ? [formatBotAccessRequestDeepLink(accessRequest)] : []),
-      ...(botShareId ? [`orca://bots/share/${botShareId}`] : [])
+      ...(botShareId ? [`orca://bots/share/${botShareId}`] : []),
+      ...(worktreeSelector ? [formatWorktreeDeepLink({ selector: worktreeSelector })] : [])
     ]
   }
 }
