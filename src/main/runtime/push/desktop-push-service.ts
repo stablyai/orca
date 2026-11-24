@@ -145,6 +145,10 @@ export class DesktopPushService {
     this.liveActivities.unregister(deviceId, activityId)
   }
 
+  resolveLiveActivitySession(deviceId: string, activityId: string, sessionId: string) {
+    return this.liveActivities.resolveSession(deviceId, activityId, sessionId)
+  }
+
   async test(deviceId: string): Promise<MobilePushTestResult> {
     return sendPushTest(this.client, this.registry, deviceId, this.stopped, this.deliveryMode)
   }

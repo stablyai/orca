@@ -8,6 +8,7 @@ import { DEFAULT_SCOPE_HOST_METHODS } from './runtime-rpc-mobile-tracker-methods
 export type MobileRpcMethodRoute = 'execution-host' | 'paired-desktop' | 'default-scope-host'
 
 export const EXECUTION_HOST_METHODS = [
+  'notifications.resolveLiveActivitySession',
   'notifications.registerLiveActivity',
   'notifications.unregisterLiveActivity',
   // Signing in/out needs the same power as running commands on the host (workspace).

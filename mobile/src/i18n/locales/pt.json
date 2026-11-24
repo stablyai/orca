@@ -5867,7 +5867,7 @@
   "liveActivities": {
     "enable": "Atividades ao Vivo",
     "showNames": "Mostrar nomes das sessões",
-    "description": "Acompanhe sessões abertas neste iPhone na tela bloqueada e na Dynamic Island. Os nomes ficam ocultos até você ativá-los.",
+    "description": "Veja o total de agentes dos computadores e servidores pareados. Os nomes ficam ocultos até você ativá-los.",
     "systemDisabled": "As Atividades ao Vivo estão indisponíveis ou desativadas nos Ajustes do iOS para o Orca.",
     "rebuild": "Instale uma versão para iOS com suporte a Atividades ao Vivo. O Expo Go não é compatível.",
     "saveFailed": "Não foi possível atualizar as Atividades ao Vivo. Tente novamente.",
@@ -5876,6 +5876,10 @@
     "attention": "Precisa de atenção",
     "done": "Concluído",
     "failed": "Falha",
-    "unavailable": "Estado indisponível"
+    "unavailable": "Estado indisponível",
+    "session": "Sessão",
+    "allHosts": "Todos os hosts pareados",
+    "partial": "Cobertura parcial",
+    "more": "mais"
   }
 }

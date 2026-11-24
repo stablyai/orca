@@ -1,4 +1,4 @@
-import { useLiveActivityLinks } from '../src/live-activities/use-live-activity-links'
+import { LiveActivityNavigation } from '../src/live-activities/use-live-activity-links'
 import { startLiveActivitySync } from '../src/live-activities/live-activity-sync'
 import { startAndroidForegroundPushPresentation } from '../src/notifications/foreground-delivery/android-foreground-push'
 import { registerPushDismissalTask } from '../src/notifications/dismissal/push-background-dismissal'
@@ -91,7 +91,6 @@ export default function RootLayout() {
   }, [pathname, hostId, worktreeId, executionHost])
   const openNotificationRoute = useOpenNotificationRoute()
   usePairingLinks()
-  useLiveActivityLinks()
 
   useEffect(() => {
     // Reconcile the crash-persistent pairing journal before another scan can replace it.
@@ -199,6 +198,7 @@ export default function RootLayout() {
   return (
     <RpcClientProvider>
       <OrcaQueryProvider>
+        <LiveActivityNavigation />
         <View style={styles.root} onLayout={onNavigatorLayout}>
           <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
           <SideRailProvider>

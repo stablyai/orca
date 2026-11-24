@@ -5,87 +5,150 @@ import WidgetKit
 @main
 struct OrcaSessionWidget: Widget {
   var body: some WidgetConfiguration {
-    ActivityConfiguration(for: OrcaSessionAttributes.self) { context in
-      HStack(spacing: 12) {
-        Image(systemName: symbol(context)).font(.title2).accessibilityHidden(true)
-        VStack(alignment: .leading, spacing: 4) {
-          Text(context.state.title).font(.headline).lineLimit(1).privacySensitive()
-          Text(label(context)).font(.subheadline)
+    ActivityConfiguration(for: OrcaAgentOverviewAttributes.self) { context in
+      VStack(alignment: .leading, spacing: 8) {
+        HStack {
+          Text("Orca").font(.headline)
+          Spacer()
+          overviewCounter(context, attention: false)
+          overviewCounter(context, attention: true)
         }
-        Spacer(minLength: 8)
-        time(context)
+        OverviewSessions(context: context)
       }
-      .padding()
-      .widgetURL(link(context))
+      .padding(12)
+      .widgetURL(overviewLink(context))
     } dynamicIsland: { context in
       DynamicIsland {
+        DynamicIslandExpandedRegion(.leading) {
+          overviewCounter(context, attention: false, expanded: true)
+        }
+        DynamicIslandExpandedRegion(.trailing) {
+          overviewCounter(context, attention: true, expanded: true)
+        }
         DynamicIslandExpandedRegion(.bottom) {
-          VStack(alignment: .leading, spacing: 8) {
-            Text(context.state.title).font(.headline).lineLimit(1).privacySensitive()
-            HStack(spacing: 8) {
-              Image(systemName: symbol(context)).accessibilityHidden(true)
-              Text(label(context)).font(.subheadline)
-              Spacer(minLength: 8)
-              time(context, font: .headline, width: 80)
-            }
-          }
-          .padding(.horizontal, 8)
-          .padding(.top, 4)
-          .frame(maxWidth: .infinity, alignment: .leading)
+          OverviewSessions(context: context, maximumRows: 2)
+            .padding(.horizontal, 8)
+            .padding(.top, 4)
+            .padding(.bottom, 8)
         }
       } compactLeading: {
-        Image(systemName: symbol(context)).accessibilityLabel(label(context))
+        overviewCounter(context, attention: false)
       } compactTrailing: {
-        if context.isStale {
-          Image(systemName: "wifi.slash").accessibilityHidden(true)
-        } else {
-          time(context)
-        }
+        overviewCounter(context, attention: true)
       } minimal: {
-        Image(systemName: symbol(context)).accessibilityLabel(label(context))
+        HStack(spacing: 2) {
+          Image(systemName: overviewSymbol(context.isStale ? "unavailable" : context.state.state))
+          Text(context.isStale ? "?" : overviewNumber(context.state.counts.working + context.state.counts.attention + context.state.counts.failed)).monospacedDigit()
+        }
+          .font(.caption2)
+          .accessibilityLabel(overviewSummary(context))
       }
-      .contentMargins(.bottom, 16, for: .expanded)
+      .contentMargins(.bottom, 12, for: .expanded)
       .contentMargins(.trailing, 8, for: .compactTrailing)
-      .widgetURL(link(context))
+      .widgetURL(overviewLink(context))
     }
   }
+}
 
-  private func link(_ context: ActivityViewContext<OrcaSessionAttributes>) -> URL? {
-    URL(string: "orca://live-activity?id=\(context.attributes.linkId)")
+private func overviewLink(_ context: ActivityViewContext<OrcaAgentOverviewAttributes>) -> URL? {
+  URL(string: "orca://live-activity?id=\(context.attributes.linkId)")
+}
+
+private func overviewLabel(_ context: ActivityViewContext<OrcaAgentOverviewAttributes>, _ key: String) -> String {
+  context.attributes.labels[key] ?? key
+}
+
+private func overviewSummary(_ context: ActivityViewContext<OrcaAgentOverviewAttributes>) -> String {
+  if context.isStale { return overviewLabel(context, "unavailable") }
+  return "\(context.state.counts.working) \(overviewLabel(context, "working")), \(context.state.counts.attention) \(overviewLabel(context, "attention")), \(context.state.counts.failed) \(overviewLabel(context, "failed"))" + (context.state.complete ? "" : ", " + overviewLabel(context, "partial"))
+}
+
+private func overviewSymbol(_ state: String) -> String {
+  switch state {
+  case "working": return "gearshape"
+  case "attention": return "hand.raised"
+  case "done": return "checkmark.circle"
+  case "failed": return "exclamationmark.circle"
+  default: return "wifi.slash"
+  }
+}
+
+private func overviewNumber(_ count: Int) -> String {
+  count >= 1000 ? count.formatted(.number.notation(.compactName)) : String(count)
+}
+
+private func overviewCounter(_ context: ActivityViewContext<OrcaAgentOverviewAttributes>, attention: Bool, expanded: Bool = false) -> some View {
+  let count = attention ? context.state.counts.attention + context.state.counts.failed : context.state.counts.working
+  return HStack(spacing: 4) {
+    Image(systemName: attention ? "hand.raised" : "gearshape.2").accessibilityHidden(true)
+    Text(context.isStale ? "?" : "\(context.state.complete ? "" : "≥")\(overviewNumber(count))")
+      .monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
+  }
+  .font(expanded ? .headline : .subheadline)
+  .accessibilityElement(children: .ignore)
+  .accessibilityLabel(context.isStale ? overviewLabel(context, "unavailable") : "\(count) \(overviewLabel(context, attention ? "attention" : "working"))" + (context.state.complete ? "" : ", " + overviewLabel(context, "partial")))
+}
+
+private struct OverviewSessions: View {
+  let context: ActivityViewContext<OrcaAgentOverviewAttributes>
+  var maximumRows = 3
+  @Environment(\.dynamicTypeSize) private var typeSize
+
+  private var limit: Int { min(maximumRows, typeSize.isAccessibilitySize ? 1 : typeSize > .large ? 2 : 3) }
+  private var otherSessions: Int {
+    let counts = context.state.counts
+    return max(0, counts.working + counts.attention + counts.done + counts.failed + counts.unavailable - min(limit, context.state.sessions.count))
   }
 
-  private func label(_ context: ActivityViewContext<OrcaSessionAttributes>) -> String {
-    let state = context.isStale ? "unavailable" : context.state.state
-    return context.attributes.labels[state] ?? "Orca"
-  }
-
-  private func symbol(_ context: ActivityViewContext<OrcaSessionAttributes>) -> String {
-    if context.isStale { return "wifi.slash" }
-    switch context.state.state {
-    case "working": return "gearshape"
-    case "attention": return "hand.raised"
-    case "done": return "checkmark.circle"
-    case "failed": return "exclamationmark.circle"
-    default: return "wifi.slash"
-    }
-  }
-
-  @ViewBuilder
-  private func time(
-    _ context: ActivityViewContext<OrcaSessionAttributes>,
-    font: Font = .caption,
-    width: CGFloat = 64
-  ) -> some View {
-    if context.isStale || context.state.state == "unavailable" {
-      Text(Date(timeIntervalSince1970: context.state.updatedAt), style: .relative)
-        .font(font).monospacedDigit().lineLimit(1)
-    } else if context.state.state == "working" || context.state.state == "attention" {
-      Text(Date(timeIntervalSince1970: context.state.stateStartedAt), style: .timer)
-        .font(font).monospacedDigit().frame(width: width, alignment: .trailing)
-        .multilineTextAlignment(.trailing)
-    } else {
-      Text(Date(timeIntervalSince1970: context.state.updatedAt), style: .time)
-        .font(font).monospacedDigit()
+  var body: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      if context.isStale {
+        Text(overviewLabel(context, "unavailable")).font(.subheadline)
+      } else {
+        ForEach(Array(context.state.sessions.prefix(limit).enumerated()), id: \.element.renderId) { index, session in
+          if let url = URL(string: "orca://live-activity?id=\(context.attributes.linkId)&scope=\(session.scopeId)&session=\(session.id)") {
+            Link(destination: url) {
+              HStack(spacing: 8) {
+                Image(systemName: overviewSymbol(session.state))
+                  .accessibilityLabel(overviewLabel(context, session.state))
+                Text(session.title.isEmpty ? "\(overviewLabel(context, "session")) \(index + 1)" : session.title)
+                  .lineLimit(1).privacySensitive()
+                Spacer(minLength: 4)
+                if session.state == "working" || session.state == "attention" {
+                  Text(Date(timeIntervalSince1970: session.stateStartedAt), style: .timer)
+                    .font(.subheadline).monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .frame(width: 64, alignment: .trailing).multilineTextAlignment(.trailing)
+                } else {
+                  Image(systemName: overviewSymbol(session.state)).accessibilityHidden(true)
+                }
+              }
+              .font(.subheadline)
+              .contentShape(Rectangle())
+            }
+          }
+        }
+        if context.state.sessions.isEmpty {
+          Text(overviewLabel(context, context.state.state)).font(.subheadline)
+        }
+      }
+      HStack(spacing: 4) {
+        Text(overviewLabel(context, context.state.complete && !context.isStale ? "allHosts" : "partial"))
+        if context.state.complete || context.state.knownSources < context.state.totalSources {
+          Text("\(context.isStale ? 0 : context.state.knownSources)/\(context.state.totalSources)")
+        }
+        Spacer(minLength: 4)
+        if otherSessions > 0 && !context.isStale {
+          Text("+\(otherSessions) \(overviewLabel(context, "more"))")
+        }
+        if context.state.counts.done > 0 && !context.isStale {
+          Image(systemName: "checkmark.circle").accessibilityHidden(true)
+          Text("\(context.state.counts.done)").monospacedDigit()
+            .accessibilityLabel("\(context.state.counts.done) \(overviewLabel(context, "done"))")
+        }
+      }
+      .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+      .fixedSize(horizontal: false, vertical: true)
     }
   }
 }

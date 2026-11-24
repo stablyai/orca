@@ -1,86 +1,98 @@
-# iOS agent Live Activities
+# iOS agent overview Live Activity
 
-Issue: [#8127](https://github.com/stablyai/orca/issues/8127). The macOS notch in
-[#47748](https://github.com/stablyai/orca/pull/47748) is related context; this feature
-does not depend on that branch.
+Issue: [#8127](https://github.com/stablyai/orca/issues/8127).
+The macOS notch in [#47748](https://github.com/stablyai/orca/pull/47748) is context;
+this feature does not depend on or modify that branch.
 
 ## Behavior
 
-Enable **Settings → Notifications → Live Activities** on an iPhone. This switch is
-independent of ordinary notification permission. Opening a working agent session
-starts an activity, up to four per phone. Sessions can be terminal agents or
-structured chats, in worktrees or folder workspaces, on the paired computer or a
-server reached through it. A session already being followed keeps its activity
-when you change tabs or leave the app.
+Enable **Settings → Notifications → Live Activities** in a rebuilt native iOS app.
+Opening a working session starts one global overview of the phone's paired
+computers and known relayed servers. The compact Dynamic Island shows working
+and attention counts. Failures contribute to the attention count. Expanded and
+Lock Screen presentations show prioritized sessions, their state and elapsed
+state time, with a remainder count for sessions that do not fit. The expanded
+Island shows up to two rows; the Lock Screen shows up to three.
+Large text reduces the visible rows while preserving totals.
 
-The Lock Screen and compact, minimal and expanded Dynamic Island show durable
-working, attention, completed and failed states. Elapsed time uses SwiftUI's timer,
-without JavaScript timers or pushes every second. A completed or failed activity
-ends and remains on the Lock Screen for up to five minutes, subject to iOS policy.
-Missing/stale evidence is shown as unavailable, never as successful completion.
+The source set includes the saved phone host catalog and servers discovered through
+each connected desktop's existing relay catalog. It is bounded to 32 source grants,
+including aliases; exceeding this bound refuses enrollment instead of silently
+truncating the total. New pairings or discovered servers rotate the overview on
+foreground reconciliation. An offline host or an unreadable catalog does not mean
+zero agents: counts become lower bounds, marked **≥**, with **Partial coverage**.
+A fully stale card shows unavailable data.
+
+Each executor contributes its own terminal and structured-chat sessions across
+worktrees and folder workspaces, including sessions never opened on the phone.
+PTY and saved-tab ownership exclude remote mirrors. Conversation identity
+deduplicates alternate views on one host; the gateway deduplicates direct/relayed
+aliases of the same authenticated host. Subagents are not separately invented
+from prompts or tool output. Recent completed/failed outcomes remain visible for
+about five minutes, refreshed by host updates and heartbeats; intentional stops
+are excluded.
+
+The overview remains active when all tasks finish so a new task can update it
+while the app is suspended. Activity creation still requires the foreground app;
+push-to-start is not implemented. iOS limits an activity to eight hours. After
+expiry or user dismissal, a later working turn opened in the app can create a
+new overview. No foreground JavaScript socket is assumed to run while suspended.
 
 Names are hidden by default. **Show session names** separately consents to sending
-the bounded display title through Orca's push service and APNs and displaying it
-on the Lock Screen. Prompts, terminal output, commands and provider error messages
-are never included. The name is also marked `privacySensitive` in SwiftUI. Changing
-either preference immediately dismisses existing cards. A later turn can start a
-new one with the new privacy choice.
+bounded session titles through Orca's push service and APNs. The gateway masks
+titles unless the overview's control registration allows them. Native titles are
+also marked privacy-sensitive. Prompts, commands, terminal output, provider error
+details, host addresses and workspace paths are not added as metadata. Changing
+privacy or disabling the feature ends the current card and its enrollments.
 
-Taps contain only a random local link ID. The native app resolves its stored
-host/workspace/pane/execution-host destination and reuses notification navigation,
-including saved-host and credential checks. URLs contain no pairing credentials.
-Destinations and dismissed-turn tombstones are bounded and retained across app
-restarts so the same turn is not recreated after dismissal.
+Each session row has its own link; tapping the compact overview opens Orca.
+Links contain only opaque overview/scope/session identifiers. The phone resolves
+the source using its local route map, reconnects with saved credentials, and asks
+the authenticated executing host to resolve the session identifier. The host
+revalidates current ownership before returning a workspace/pane. Existing
+notification navigation handles local, folder and remote destinations. Closed,
+revoked or unavailable destinations fall back to the host screen, not another
+session.
 
 ## Architecture and suspended updates
 
-- `mobile/modules/orca-live-activities`: a local Expo module using ActivityKit.
-  It requests `.token` activities, observes token and lifecycle changes, reattaches
-  existing activities and reads the system authorization on start/resume. The state
-  observer owns the subscription lifetime: token-stream completion cannot discard
-  a terminal state, and completed observers are removed by generation.
-- `mobile/plugins/ios-live-activities.js`: generates the WidgetKit extension target
-  during Expo prebuild, sharing the Codable attributes source with the native
-  module. `ios/` remains generated and is not committed.
-- The host-served session page uses the optional, validated
-  `native.liveActivity.track` bridge verb. The shell binds the paired host and owns
-  native tokens/preferences. Old shells omit the grant. Android and browser clients
-  use the unavailable native implementation and continue working.
-- `notifications.registerLiveActivity` / `unregisterLiveActivity` run on the
-  execution host. The transport, not request parameters, supplies the paired mobile
-  principal. Relayed servers receive their delegated principal.
-- `HostLiveActivities` follows canonical mobile session-tab publications without a
-  mobile socket subscription. Status/failure/freshness are the existing agent
-  contracts. Registrations live with the revocable device registry and survive host
-  restart, with an eight-hour maximum lease. Sends recheck the principal and its
-  ancestors. No session is started or awakened to keep the activity alive.
-- Durable state changes are sent to the gateway. One deadline timer handles latest
-  state retries, ordering at whole-second APNs timestamps, five-minute heartbeats
-  and lease expiry. Intermediate tool events do not generate separate pushes.
-- The authenticated gateway endpoint `/v1/live-activities/send` reuses APNs token
-  authentication and HTTP/2 transport. It sends `apns-push-type: liveactivity`, the
-  app topic suffixed with `.push-type.liveactivity`, and bounded `aps` content. The
-  private APNs key stays in the service. Registration succeeds only after APNs
-  accepts the initial update; that acceptance does not prove delivery on a phone.
+- The local Expo module and generated WidgetKit extension use versioned
+  OrcaAgentOverviewAttributes. Old per-session activities are ended on upgrade.
+  An older native module without the overview bridge is unavailable to new JS.
+- Native routes retain only the trusted paired-host/execution-host destinations.
+  Enrollment control and per-source secrets live in the phone's Keychain.
+- The phone gives one coordinator host the ActivityKit token and control
+  credential. Other hosts receive only their own contribution credential.
+  Token changes and coordinator failover are fenced by a persisted control
+  revision; stale bootstrap requests cannot restore an old token.
+- Each host keeps a revocable device-scoped enrollment and a durable contribution
+  sequence. It follows canonical session publications without a phone subscription.
+  Initial/renewed inventories require the existing authoritative census; uncertain
+  ownership or unreadable sessions remain partial. Tool-only updates are coalesced.
+- /v1/live-activities/register bootstraps an immutable source cohort. The
+  authenticated /v1/live-activities/send accepts host-scoped contributions, not
+  arbitrary whole-overview APNs updates. Source secrets are hashed into public
+  scope IDs and bound to the authenticated host fingerprint.
+- The gateway persists the cohort, contributions and delivery leases in the
+  existing SQLite/PostgreSQL database. It merges only fresh source data using
+  gateway receipt clocks, applies privacy, and picks attention/failure/working rows.
+  Only this gateway sends the complete APNs content state.
+- A durable single-writer lease and whole-second timestamp ordering serialize
+  APNs delivery across worker processes. In-flight old-token results cannot erase
+  a rotated activity. Replayed source sequences cannot refresh stale coverage.
+  Freshness expiry is scheduled even when no new host request arrives.
+- Contributions retry after failure and send five-minute heartbeats. The gateway
+  coalesces unchanged summaries and expires source freshness after 15 minutes.
+  The widget itself never fetches network data; SwiftUI updates elapsed time.
+  Combined content is byte-bounded, with at most three short opaque session rows.
 
-After registration, the host and gateway send directly to APNs while the app is
-suspended or the phone is locked. The widget has no network connection. An update
-sets a 15-minute stale date; the widget renders an unavailable state when iOS marks
-it stale. Host or gateway loss therefore does not leave an indefinitely confident
-working label. Delivery remains subject to APNs connectivity and Apple's budgets.
+Android and web clients use the unavailable native bridge. Ordinary push
+notification preferences remain independent.
 
-Activity creation requires the foreground app. Tasks started while the app is
-suspended do not create new activities; push-to-start is not implemented. Activity
-token rotation is observed and retried through connected hosts; if iOS rotates a
-token while the app has no usable authenticated host connection, registration
-waits for reconnection. No background WebSocket runtime is assumed. iOS also limits
-activity duration to eight hours. Devices without Dynamic Island can use the Lock
-Screen; unsupported or system-disabled devices cannot enable the feature.
+## Build and external requirements
 
-## Build and infrastructure requirements
-
-This changes the native fingerprint and requires a new native client, not Expo Go
-or a JavaScript-only update. From the checkout:
+This changes the native fingerprint. Expo Go or a JS-only update cannot install
+the ActivityKit module or widget extension.
 
 ```sh
 pnpm -C mobile install --frozen-lockfile
@@ -88,68 +100,61 @@ ORCA_BACKGROUND_LAUNCH=1 pnpm -C mobile native ensure ios --rebuild
 ORCA_BACKGROUND_LAUNCH=1 pnpm -C mobile start --dev-client
 ```
 
-Use Xcode to build/install on a physical iPhone with development signing. The app
-and `OrcaSessionActivity` extension need separate provisioning profiles. Register
-the extension App ID `com.stably.orca.mobile.activity` in the same Apple team before
-using the release lane; Fastlane obtains profiles but does not create a missing
-App ID. The extension needs no App Group or separate APNs entitlement. The app
-already has `aps-environment`; `app.config.js` passes its actual selected environment
-to the ActivityKit bridge (`development` → `sandbox`). Release uses
-`ORCA_IOS_APS_ENVIRONMENT=production` as before.
+The Expo plugin copies the widget/attributes Swift into the generated iOS target.
+After editing those sources, refresh the generated copies before using a direct
+xcodebuild command. A successful build of stale generated Swift does not qualify
+the changed source. Generated iOS files are not committed.
 
-The push service must deploy this endpoint using an APNs key authorized for the
-app's Live Activity topic and correct environment. Its credentials are
-`ORCA_PUSH_APNS_KEY`, `ORCA_PUSH_APNS_KEY_ID`, `ORCA_PUSH_APPLE_TEAM_ID` and
-`ORCA_PUSH_APNS_TOPIC`. Cloud deployment is owned by the private
-`stablyai/orca-cloud` repository. This change does not deploy that service or create
-Apple credentials. An older gateway cannot update activities; the phone ends the
-unregistered card and reports the failure in Live Activities settings.
+Physical builds need the app profile and a separate
+com.stably.orca.mobile.activity extension profile in the same Apple team.
+Fastlane does not create a missing extension App ID. The app's actual
+aps-environment selects sandbox or production; the extension needs no App Group.
+All source hosts need this registration contract and the gateway needs both new
+endpoints, the additive overview tables, and its overview worker running.
+An older source cannot contribute and remains unknown.
+
+Deployment is owned by the private stablyai/orca-cloud infrastructure. This
+change does not deploy it or create certificates, provisioning profiles or APNs
+keys. Required gateway credentials remain ORCA_PUSH_APNS_KEY,
+ORCA_PUSH_APNS_KEY_ID, ORCA_PUSH_APPLE_TEAM_ID and ORCA_PUSH_APNS_TOPIC.
+Durable gateway acceptance proves enrollment, not APNs delivery on a phone.
+Token rotation without a usable authenticated host connection waits for
+reconnection. New source enrollment also requires the foreground phone.
+
+## Qualification
+
+Local checks cover real device-registry persistence/revocation, overlapping host
+updates, authenticated gateway merging, alias deduplication, hidden-name
+serialization, replay rejection, freshness expiry, cohort ownership and
+old-token in-flight fencing. Native iOS builds and simulator screenshots are
+separate from physical-device APNs qualification.
+
+Use an explicit model, OS, build, APNs environment and viewport. Keep screenshots
+outside Git. The temporary simulator fixture uses the shipping widget with
+synthetic multi-host counts; it qualifies presentation only.
+
+1. Check one overview with several sessions across multiple hosts, hidden names,
+   opted-in names, compact/expanded/minimal and Lock Screen presentations.
+2. Check attention/failure ordering, extra-session count and large text; tap
+   different rows cold/warm into exact local, folder and remote sessions.
+3. Suspend/lock a physical iPhone, then start, finish and fail tasks on several
+   already enrolled hosts without reopening the app. One finished host must not
+   end the overview or erase another host's work.
+4. Disconnect one host past freshness expiry. Healthy counts remain lower bounds;
+   unavailable hosts must not be reported as zero or keep a confident old count.
+5. Restart a host and gateway; exercise token rollover, coordinator failover,
+   revocation, new/removal pairings, dismissal and privacy changes.
+6. Recheck ordinary Android notifications and web sessions.
+
+The global native app compiles, and the separate simulator fixture exercises
+the shipping overview widget with synthetic multi-host data. These checks do not
+qualify the complete global data path. Physical-iPhone suspension, production gateway deployment, signed archives and
+exact session tap routing still require qualification. The machine has no valid
+physical-device signing identity. The existing aiialabs-bryan server and its
+notch-validation processes were inspected read-only and preserved.
 
 Official references:
-[Apple ActivityKit updates](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications),
-[Apple Live Activity lifecycle](https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities),
-[Expo local modules](https://docs.expo.dev/workflow/customizing/),
-[Expo module API](https://docs.expo.dev/modules/module-api/).
-Expo also offers `expo-widgets`; the existing local-module architecture and a small
-SwiftUI extension avoid adding a separate JavaScript widget runtime for this surface.
-
-## Manual qualification
-
-Use an explicit iPhone model, iOS version, build type, APNs environment and viewport.
-Keep screenshots outside Git and attach before/after images to the eventual PR.
-
-1. With the preference off, start a session; no card should appear. Enable it and
-   open a new working turn. Check generic names, then separately opt in to names.
-2. Check compact, minimal, expanded and Lock Screen layouts, light/dark and large
-   text. Verify elapsed time changes while JavaScript is suspended.
-3. Lock a physical phone and allow the agent to request attention, complete and
-   fail. Verify each update without reopening the app. A simulator injection alone
-   does not qualify APNs or suspension behavior.
-4. Tap cold and warm cards repeatedly. Check exact terminal/chat selection, folder
-   workspaces, directly paired servers and relayed remote execution hosts.
-5. Dismiss an activity, respond to an attention request, reconnect and cold-launch.
-   Verify no duplicate or resurrected card for the same turn. Exercise token
-   rollover, host restart, host revocation, disable and privacy changes.
-6. Disconnect host/gateway and check stale rendering. Restore connectivity and
-   verify recovery. Check ordinary Android notifications and browser sessions.
-
-Local validation on the implementation machine includes Expo prebuild, TypeScript,
-the actual web bundle build and focused privacy/persistence/APNs wire checks.
-The complete Expo iOS app, local ActivityKit module and shipping SwiftUI/WidgetKit
-extension compiled successfully with Xcode 27.2 and the iOS Simulator 27.2 SDK
-(Debug, arm64, without device signing). Compilation alone does not qualify
-rendering or APNs delivery. Presentation was checked on an iPhone 17 Pro simulator
-with iOS 27.2 (24B8117): compact/expanded Dynamic Island and Lock Screen working,
-attention, completed and failed cards. A temporary SwiftUI fixture supplied
-synthetic states to the actual compiled extension without APNs; tapping a card
-dispatched its widget URL to that fixture. These captures qualify presentation,
-not production registration, session routing or suspended delivery. The real Expo
-app opened after a clean install; its Portuguese notification settings were checked
-with Live Activities enabled independently of ordinary notifications and a separate
-name opt-in. Both choices were returned to off. Compact accessibility was checked
-as the state label plus elapsed time, without the technical SF Symbol name. Minimal Island,
-large text, appearance variants, physical-iPhone suspension, signed archives and
-production APNs delivery still require qualification. This Mac has no valid iOS
-signing identity, and no physical device was connected. The Linux host
-`aiialabs-bryan` was inspected read-only over Tailscale; its existing notch-validation
-server and agents were preserved. It has not run this new build.
+[ActivityKit lifecycle](https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities),
+[ActivityKit APNs updates](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications),
+[Apple Live Activity design](https://developer.apple.com/design/human-interface-guidelines/live-activities),
+[Expo local modules](https://docs.expo.dev/modules/overview/).

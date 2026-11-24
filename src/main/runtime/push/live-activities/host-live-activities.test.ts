@@ -48,7 +48,9 @@ it('keeps overlapping registrations accepted and delivers the newest terminal st
   const wire: LiveActivityPush[] = []
   const host = new HostLiveActivities(
     {
-      listMobileSessionTabs: async () => frame,
+      listAllMobileSessionTabsInventory: async () => ({ snapshots: [frame], authoritative: true }),
+      projectLocalAgentSessionTabs: (snapshot) => ({ frame: snapshot, complete: true }),
+      restoreStructuredAgentSessionTabs: async () => {},
       onMobileSessionTabsChanged: (listener) => {
         publish = (next) => listener(next, next.snapshotVersion)
         return () => {}
@@ -56,6 +58,7 @@ it('keeps overlapping registrations accepted and delivers the newest terminal st
     },
     registry,
     {
+      registerLiveActivityOverview: async () => true,
       sendLiveActivity: async (push) => {
         wire.push(push)
         entered.resolve()
@@ -67,10 +70,9 @@ it('keeps overlapping registrations accepted and delivers the newest terminal st
   try {
     const registration = {
       activityId: 'activity',
-      token: 'aabb',
-      apnsEnvironment: 'sandbox' as const,
-      worktreeId: 'folder:workspace',
-      paneKey: `${parentTabId}:${leafId}`,
+      schemaVersion: 2 as const,
+      overviewId: '33333333-3333-4333-8333-333333333333',
+      scopeKey: 'a'.repeat(64),
       showNames: false
     }
     const first = host.register(phone.deviceId, registration)
@@ -95,14 +97,20 @@ it('keeps overlapping registrations accepted and delivers the newest terminal st
     expect(await first).toEqual({ registered: true })
     expect(await concurrent).toEqual({ registered: true })
     await vi.advanceTimersByTimeAsync(1_000)
-    expect(wire.at(-1)).toEqual({
-      token: 'aabb',
-      apnsEnvironment: 'sandbox',
-      timestamp: 21,
-      event: 'end',
-      content: { state: 'failed', title: 'Orca', stateStartedAt: 20, updatedAt: 21 }
+    const latest = wire.at(-1)!
+    expect(latest.event).toBe('update')
+    expect(latest.sequence).toBe(2)
+    expect(latest.content.counts).toEqual({
+      working: 0,
+      attention: 0,
+      failed: 1,
+      done: 0,
+      unavailable: 0
     })
-    expect(registry.getDevice(phone.deviceId)?.liveActivities).toEqual([])
+    expect(latest.content.sessions.map(({ title, state }) => [title, state])).toEqual([
+      ['', 'failed']
+    ])
+    expect(registry.getDevice(phone.deviceId)?.liveActivities).toHaveLength(1)
   } finally {
     host.stop()
     vi.useRealTimers()

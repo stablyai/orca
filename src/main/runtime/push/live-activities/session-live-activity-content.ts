@@ -5,21 +5,21 @@ import {
 } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { RuntimeMobileSessionClientTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
-import type { LiveActivityContent } from '../../../../shared/notifications/live-activity-contract'
+import type { LiveActivitySessionContent } from '../../../../shared/notifications/live-activity-contract'
 
 export function sessionLiveActivityContent(
   tab: RuntimeMobileSessionClientTab | undefined,
   showNames: boolean,
-  previous: LiveActivityContent | undefined,
+  previous: LiveActivitySessionContent | undefined,
   now: number
-): LiveActivityContent {
+): LiveActivitySessionContent {
   const status =
     tab?.type === 'terminal'
       ? tab.agentStatus
       : tab?.type === 'agent-session'
         ? tab.chatStatus
         : undefined
-  const state: LiveActivityContent['state'] =
+  const state: LiveActivitySessionContent['state'] =
     !status ||
     !isAgentStatusFresh(status, now) ||
     agentTurnEndedOnPurpose(status) ||

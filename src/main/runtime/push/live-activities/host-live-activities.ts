@@ -4,12 +4,13 @@ import type { DeviceRegistry } from '../../rpc/server/pairing/device-registry'
 import { findPrincipalDevice } from '../../rpc/server/pairing/device-entry'
 import type { LiveActivityRegistration } from '../../../../shared/notifications/live-activity-contract'
 import { sessionTabPaneKey } from '../../../../shared/remote-runtime/session-graph/session-tab-pane-key'
-import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import type { PushGatewayClient } from '../push-gateway-client'
-import { sessionLiveActivityContent } from './session-live-activity-content'
+import { liveActivitySessionId } from './agent-overview-content'
+import { deliverHostLiveActivity } from './host-live-activity-delivery'
+import { refreshHostLiveActivityCensus } from './host-live-activity-census'
 
 const LIFETIME_MS = 8 * 60 * 60_000
-const HEARTBEAT_MS = 5 * 60_000
 
 /** The executing host owns updates after the phone's connection has gone away. */
 export class HostLiveActivities {
@@ -19,10 +20,16 @@ export class HostLiveActivities {
   constructor(
     private readonly runtime: Pick<
       OrcaRuntimeService,
-      'listMobileSessionTabs' | 'onMobileSessionTabsChanged'
+      | 'listAllMobileSessionTabsInventory'
+      | 'onMobileSessionTabsChanged'
+      | 'projectLocalAgentSessionTabs'
+      | 'restoreStructuredAgentSessionTabs'
     >,
     private readonly registry: DeviceRegistry,
-    private readonly gateway: Pick<PushGatewayClient, 'sendLiveActivity'>
+    private readonly gateway: Pick<
+      PushGatewayClient,
+      'sendLiveActivity' | 'registerLiveActivityOverview'
+    >
   ) {}
 
   restore(): void {
@@ -65,16 +72,20 @@ export class HostLiveActivities {
     }
     if (
       existing &&
-      (existing.input.worktreeId !== input.worktreeId || existing.input.paneKey !== input.paneKey)
+      (existing.input.overviewId !== input.overviewId || existing.input.scopeKey !== input.scopeKey)
     ) {
       return { registered: false }
     }
-    const stored = { ...input, expiresAt, credentialRevision: device.credentialRevision ?? 0 }
+    const stored = {
+      ...input,
+      expiresAt,
+      credentialRevision: device.credentialRevision ?? 0,
+      sequence: saved?.sequence ?? 0
+    }
     if (
       (!saved ||
-        saved.token !== input.token ||
+        JSON.stringify(saved.bootstrap) !== JSON.stringify(input.bootstrap) ||
         saved.showNames !== input.showNames ||
-        saved.apnsEnvironment !== input.apnsEnvironment ||
         saved.credentialRevision !== stored.credentialRevision) &&
       !this.registry.setLiveActivities(deviceId, [
         ...(device.liveActivities ?? []).filter(
@@ -86,6 +97,9 @@ export class HostLiveActivities {
       return { registered: false }
     }
     if (existing) {
+      if (JSON.stringify(existing.input.bootstrap) !== JSON.stringify(input.bootstrap)) {
+        existing.bootstrapReady = false
+      }
       if (existing.principal.credentialRevision !== (device.credentialRevision ?? 0)) {
         existing.principal = {
           deviceId,
@@ -95,7 +109,7 @@ export class HostLiveActivities {
         existing.sent = undefined
         existing.sentAt = 0
       }
-      if (existing.input.token !== input.token || existing.input.showNames !== input.showNames) {
+      if (existing.input.showNames !== input.showNames) {
         existing.sent = undefined
       }
       existing.input = input
@@ -114,32 +128,38 @@ export class HostLiveActivities {
       timestamp: 0,
       nextAt: Date.now(),
       dirty: false,
-      sawPane: false,
+      frames: new Map(),
+      initialized: false,
+      authoritative: false,
+      censusAuthoritative: false,
+      censusAt: 0,
+      sequence: stored.sequence,
       stop: () => {}
     }
     this.activities.set(key, entry)
     entry.stop = this.runtime.onMobileSessionTabsChanged(
       (frame) => {
-        if (worktreeIdsEqual(frame.worktree, input.worktreeId)) {
-          entry.frame = frame
-          void this.send(key, entry)
+        const id = worktreeIdentityKey(frame.worktree)
+        const previous = entry.frames.get(id)
+        if (previous && previous.publicationEpoch !== frame.publicationEpoch) {
+          entry.authoritative = false
+          entry.censusAuthoritative = false
+        }
+        entry.frames.set(id, frame)
+        entry.collecting?.set(id, frame)
+        if (entry.initialized) {
+          entry.dirty = true
+          entry.nextAt = Math.min(entry.nextAt, Date.now() + 250)
+          this.schedule()
         }
       },
       deviceId,
       'mobile',
-      { observation: 'caller', acceptsWorktree: (id) => worktreeIdsEqual(id, input.worktreeId) }
+      { observation: 'caller' }
     )
     try {
-      const initial = await this.runtime.listMobileSessionTabs(`id:${input.worktreeId}`, deviceId, {
-        includeAgentSenders: false
-      })
-      if (
-        !entry.frame ||
-        (entry.frame.publicationEpoch === initial.publicationEpoch &&
-          entry.frame.snapshotVersion <= initial.snapshotVersion)
-      ) {
-        entry.frame = initial
-      }
+      await refreshHostLiveActivityCensus(entry, this.runtime)
+      entry.initialized = true
       await this.send(key, entry)
     } catch {
       this.remove(key, entry)
@@ -154,7 +174,39 @@ export class HostLiveActivities {
     const entry = this.activities.get(key)
     if (entry) {
       this.remove(key, entry)
+    } else {
+      const device = this.registry.getDevice(deviceId)
+      if (device) {
+        this.registry.setLiveActivities(
+          deviceId,
+          (device.liveActivities ?? []).filter((saved) => saved.activityId !== activityId)
+        )
+      }
     }
+  }
+
+  resolveSession(
+    deviceId: string,
+    activityId: string,
+    sessionId: string
+  ): { worktreeId: string; paneKey: string } | null {
+    const entry = this.activities.get(JSON.stringify([deviceId, activityId]))
+    if (
+      !entry ||
+      entry.expiresAt <= Date.now() ||
+      !findPrincipalDevice(this.registry.listDevices({ fresh: true }), entry.principal)
+    ) {
+      return null
+    }
+    for (const frame of entry.frames.values()) {
+      for (const tab of this.runtime.projectLocalAgentSessionTabs(frame).frame.tabs) {
+        const paneKey = sessionTabPaneKey(tab)
+        if (paneKey && liveActivitySessionId(activityId, frame.worktree, paneKey) === sessionId) {
+          return { worktreeId: frame.worktree, paneKey }
+        }
+      }
+    }
+    return null
   }
 
   stop(): void {
@@ -218,6 +270,7 @@ export class HostLiveActivities {
       entry.dirty = true
       return entry.pending
     }
+    entry.dirty = false
     const run = this.deliver(key, entry).finally(() => {
       entry.pending = undefined
       if (entry.dirty) {
@@ -230,79 +283,14 @@ export class HostLiveActivities {
     return run
   }
 
-  private async deliver(key: string, entry: TrackedActivity): Promise<void> {
-    if (this.activities.get(key) !== entry) {
-      return
-    }
-    const now = Date.now()
-    const tab = entry.frame?.tabs.find(
-      (candidate) => sessionTabPaneKey(candidate) === entry.input.paneKey
-    )
-    const lostPane = !tab && entry.sawPane
-    if (tab) {
-      entry.sawPane = true
-    }
-    const content = sessionLiveActivityContent(tab, entry.input.showNames, entry.content, now)
-    if (now >= entry.expiresAt) {
-      content.state = 'unavailable'
-    }
-    entry.content = content
-    const identity = JSON.stringify([content.state, content.title, content.stateStartedAt])
-    if (entry.sent === identity && now - entry.sentAt < HEARTBEAT_MS) {
-      entry.nextAt = Math.min(entry.sentAt + HEARTBEAT_MS, entry.expiresAt)
-      return
-    }
-    const timestamp = Math.floor(now / 1000)
-    // APNs uses whole seconds for ordering; never race two different states with the same stamp.
-    if (timestamp <= entry.timestamp) {
-      entry.nextAt = (entry.timestamp + 1) * 1000
-      return
-    }
-    if (
-      findPrincipalDevice(this.registry.listDevices({ fresh: true }), entry.principal)?.scope !==
-      'mobile'
-    ) {
-      this.remove(key, entry)
-      return
-    }
-    const turnEnded =
-      tab?.type === 'terminal'
-        ? tab.agentStatus?.state === 'done'
-        : tab?.type === 'agent-session' && tab.chatStatus?.state === 'done'
-    const event =
-      content.state === 'done' ||
-      content.state === 'failed' ||
-      turnEnded ||
-      lostPane ||
-      now >= entry.expiresAt
-        ? 'end'
-        : 'update'
-    entry.timestamp = timestamp
-    const token = entry.input.token
-    entry.nextAt = now + 30_000
-    try {
-      const outcome = await this.gateway.sendLiveActivity({
-        token: entry.input.token,
-        apnsEnvironment: entry.input.apnsEnvironment,
-        timestamp,
-        event,
-        content
-      })
-      if (token !== entry.input.token) {
-        entry.nextAt = Date.now()
-        return
-      }
-      if (outcome === 'sent') {
-        entry.sentAt = now
-      }
-      if (outcome === 'dead' || (outcome === 'sent' && event === 'end')) {
-        this.remove(key, entry)
-      } else if (outcome === 'sent') {
-        entry.sent = identity
-        entry.nextAt = Math.min(now + HEARTBEAT_MS, entry.expiresAt)
-      }
-    } catch {
-      entry.nextAt = now + 30_000
-    }
+  private deliver(key: string, entry: TrackedActivity): Promise<void> {
+    return deliverHostLiveActivity(entry, {
+      runtime: this.runtime,
+      registry: this.registry,
+      gateway: this.gateway,
+      isCurrent: () => this.activities.get(key) === entry,
+      refreshCensus: () => refreshHostLiveActivityCensus(entry, this.runtime),
+      remove: () => this.remove(key, entry)
+    })
   }
 }

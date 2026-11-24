@@ -1,10 +1,14 @@
 export type NativeActivity = { activityId: string; linkId: string; token: string; state: string }
 export type LiveActivityRoute = {
   hostId: string
-  worktreeId: string
-  paneKey: string
+  worktreeId?: string
+  paneKey?: string
   executionHost?: string
-  turnKey: string
+  turnKey?: string
+  overviewId?: string
+  scopeId?: string
+  activityId?: string
+  scopeCount?: string
 }
 export type NativeLiveActivities = {
   environment(): Promise<'sandbox' | 'production'>
@@ -13,6 +17,7 @@ export type NativeLiveActivities = {
   activities(): Promise<NativeActivity[]>
   forgetRoute(linkId: string): Promise<void>
   route(linkId: string): Promise<LiveActivityRoute | null>
+  storeRoute(linkId: string, route: LiveActivityRoute): Promise<void>
   start(
     linkId: string,
     route: LiveActivityRoute,

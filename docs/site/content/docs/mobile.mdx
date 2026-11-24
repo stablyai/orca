@@ -121,20 +121,23 @@ The mobile terminal has a dedicated **Terminal settings** screen (Settings → T
 ## iPhone Live Activities
 
 In a native iOS build with Live Activities support, enable **Settings → Notifications →
-Live Activities** to follow working sessions you open on the phone. The Lock Screen and
-Dynamic Island show working, attention, completed and failed states, with elapsed time.
-Tap a card to return to its session, including sessions on remote servers.
+Live Activities** and open a working session to start one overview across paired
+computers and known relayed servers. The Dynamic Island shows working/attention counts;
+expanded and Lock Screen views show up to three prioritized sessions with elapsed time.
+Tap a session row to open it, including sessions on remote servers. Unavailable sources
+make the counts partial rather than zero.
 
 Names are hidden by default. **Show session names** separately enables their display
 on the Lock Screen and sends those titles through Orca's push service and Apple. Prompts,
 commands, terminal output and error details are not included. Changing either setting
-removes existing cards; a later turn can start a new one. iOS's Live Activities setting
+replaces or removes the overview. iOS's Live Activities setting
 must also allow Orca to use this feature.
 
-Updates after the app is suspended require the paired host to stay running and its push
-service to support ActivityKit delivery. If updates stop, the card becomes unavailable.
-Opening the app creates activities; tasks started while it is suspended do not create
-new cards. iOS limits their duration to eight hours. Devices without Dynamic Island can
+Updates after the app is suspended require the source hosts to stay running and the push
+service to consolidate their states through ActivityKit/APNs. If updates stop, the card
+becomes unavailable. An existing overview can follow new tasks from enrolled hosts while
+the app is suspended; creating the overview or enrolling new hosts requires the foreground
+app. iOS limits its duration to eight hours. Devices without Dynamic Island can
 still show the Lock Screen card. Expo Go and older native builds do not support it.
 
 ## Troubleshooting

@@ -11,10 +11,10 @@ it('round-trips activity leases and cannot restore them after the phone is revok
     const phone = registry.addDevice('Phone', 'mobile')
     const lease = {
       activityId: 'activity',
-      token: 'aabb',
-      apnsEnvironment: 'sandbox' as const,
-      worktreeId: 'folder:workspace',
-      paneKey: 'pane',
+      schemaVersion: 2 as const,
+      overviewId: '11111111-1111-4111-8111-111111111111',
+      scopeKey: 'a'.repeat(64),
+      sequence: 7,
       showNames: false,
       expiresAt: 1_900_000_000_000,
       credentialRevision: 0
@@ -24,10 +24,10 @@ it('round-trips activity leases and cannot restore them after the phone is revok
     expect(restored.getDevice(phone.deviceId)?.liveActivities).toEqual([
       {
         activityId: 'activity',
-        token: 'aabb',
-        apnsEnvironment: 'sandbox',
-        worktreeId: 'folder:workspace',
-        paneKey: 'pane',
+        schemaVersion: 2,
+        overviewId: '11111111-1111-4111-8111-111111111111',
+        scopeKey: 'a'.repeat(64),
+        sequence: 7,
         showNames: false,
         expiresAt: 1_900_000_000_000,
         credentialRevision: 0

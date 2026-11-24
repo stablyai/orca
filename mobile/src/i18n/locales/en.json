@@ -8544,7 +8544,7 @@
   "liveActivities": {
     "enable": "Live Activities",
     "showNames": "Show session names",
-    "description": "Follow sessions opened on this iPhone on the Lock Screen and Dynamic Island. Names stay hidden unless you enable them.",
+    "description": "See agent totals across paired computers and servers. Names stay hidden unless you enable them.",
     "systemDisabled": "Live Activities are unavailable or disabled in iOS Settings for Orca.",
     "rebuild": "Install an iOS build with Live Activities support. Expo Go is not supported.",
     "saveFailed": "Could not update Live Activities. Try again.",
@@ -8553,6 +8553,10 @@
     "done": "Completed",
     "failed": "Failed",
     "unavailable": "Status unavailable",
-    "deliveryFailed": "Live Activity updates could not be registered. Update the paired host and its push service, then open a working session to retry."
+    "deliveryFailed": "Live Activity updates could not be registered. Update the paired host and its push service, then open a working session to retry.",
+    "session": "Session",
+    "allHosts": "All paired hosts",
+    "partial": "Partial coverage",
+    "more": "more"
   }
 }

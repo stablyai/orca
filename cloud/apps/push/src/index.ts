@@ -17,12 +17,13 @@ const {
   sessions,
   deliveryStore,
   worker,
+  overviewWorker,
   observability,
   closeTransports,
   requestDrain
 } = createPushServer(config, database)
 
-const stopBackground = startPushBackground(config, { challenges, sessions, deliveryStore, worker })
+const stopBackground = startPushBackground(config, { challenges, sessions, deliveryStore, worker, overviewWorker })
 observability.start()
 
 server.listen(config.port, () => {

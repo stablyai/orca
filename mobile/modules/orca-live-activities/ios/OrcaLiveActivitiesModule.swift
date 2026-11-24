@@ -20,25 +20,26 @@ public class OrcaLiveActivitiesModule: Module {
       Bundle.main.object(forInfoDictionaryKey: "OrcaActivityAPNsEnvironment") as? String ?? "sandbox"
     }
     AsyncFunction("hasTurn") { (route: [String: String]) -> Bool in
-      self.records().values.contains { stored in route.allSatisfy { stored[$0.key] == $0.value } }
+      self.records().values.contains { stored in stored["overviewId"] != nil && route.allSatisfy { stored[$0.key] == $0.value } }
     }
     AsyncFunction("authorization") { () -> Bool in
       ActivityAuthorizationInfo().areActivitiesEnabled
     }
     AsyncFunction("activities") { () -> [[String: Any]] in
-      for activity in Activity<OrcaSessionAttributes>.activities { self.watch(activity) }
-      return Activity<OrcaSessionAttributes>.activities.map { activity in
+      for legacy in Activity<OrcaSessionAttributes>.activities {
+        await legacy.end(nil, dismissalPolicy: .immediate)
+        self.forgetStoredRoute(legacy.attributes.linkId)
+      }
+      for activity in Activity<OrcaAgentOverviewAttributes>.activities { self.watch(activity) }
+      return Activity<OrcaAgentOverviewAttributes>.activities.map { activity in
         ["activityId": activity.id, "linkId": activity.attributes.linkId,
          "token": activity.pushToken.map(self.hex) ?? "", "state": String(describing: activity.activityState)]
       }
     }
     AsyncFunction("forgetRoute") { (linkId: String) in
-      self.lock.lock()
-      defer { self.lock.unlock() }
-      var records = self.records()
-      records.removeValue(forKey: linkId)
-      UserDefaults.standard.set(records, forKey: self.recordsKey)
+      self.forgetStoredRoute(linkId)
     }
+    AsyncFunction("storeRoute") { (linkId: String, route: [String: String]) in self.storeRoute(linkId, route) }
     AsyncFunction("route") { (linkId: String) -> [String: String]? in
       self.records()[linkId]
     }
@@ -49,10 +50,16 @@ public class OrcaLiveActivitiesModule: Module {
       let active = await MainActor.run { UIApplication.shared.applicationState == .active }
       guard active else { throw NSError(domain: "OrcaLiveActivities", code: 2) }
       let now = Date().timeIntervalSince1970
+      let attributes = OrcaAgentOverviewAttributes(linkId: linkId, labels: labels)
+      guard try JSONEncoder().encode(attributes).count <= 1200 else {
+        throw NSError(domain: "OrcaLiveActivities", code: 3)
+      }
       let activity = try Activity.request(
-        attributes: OrcaSessionAttributes(linkId: linkId, labels: labels),
-        content: ActivityContent(state: OrcaSessionAttributes.ContentState(
-          state: "working", title: title, stateStartedAt: now, updatedAt: now
+        attributes: attributes,
+        content: ActivityContent(state: OrcaAgentOverviewAttributes.ContentState(
+          schemaVersion: 2, state: "unavailable", title: title, stateStartedAt: now, updatedAt: now,
+          counts: .init(working: 0, attention: 0, done: 0, failed: 0, unavailable: 0),
+          sessions: [], knownSources: 0, totalSources: Int(route["scopeCount"] ?? "1") ?? 1, complete: false
         ), staleDate: Date().addingTimeInterval(900)),
         pushType: .token
       )
@@ -61,7 +68,7 @@ public class OrcaLiveActivitiesModule: Module {
       return activity.id
     }
     AsyncFunction("end") { (activityId: String) in
-      if let activity = Activity<OrcaSessionAttributes>.activities.first(where: { $0.id == activityId }) {
+      if let activity = Activity<OrcaAgentOverviewAttributes>.activities.first(where: { $0.id == activityId }) {
         await activity.end(nil, dismissalPolicy: .immediate)
       }
       self.cancelWatch(activityId)
@@ -82,12 +89,20 @@ public class OrcaLiveActivitiesModule: Module {
     return UserDefaults.standard.dictionary(forKey: recordsKey) as? [String: [String: String]] ?? [:]
   }
 
+  private func forgetStoredRoute(_ id: String) {
+    lock.lock()
+    defer { lock.unlock() }
+    var saved = records()
+    saved.removeValue(forKey: id)
+    UserDefaults.standard.set(saved, forKey: recordsKey)
+  }
+
   private func storeRoute(_ id: String, _ route: [String: String]) {
     lock.lock()
     defer { lock.unlock() }
     var saved = records()
-    let live = Set(Activity<OrcaSessionAttributes>.activities.map { $0.attributes.linkId })
-    if saved.count >= 64, let oldest = saved.filter({ !live.contains($0.key) })
+    let live = Set(Activity<OrcaAgentOverviewAttributes>.activities.map { $0.attributes.linkId })
+    if saved.count >= 64, let oldest = saved.filter({ !live.contains($0.key) && !live.contains($0.value["overviewId"] ?? "") })
       .min(by: { ($0.value["createdAt"] ?? "") < ($1.value["createdAt"] ?? "") })?.key {
       saved.removeValue(forKey: oldest)
     }
@@ -110,7 +125,7 @@ public class OrcaLiveActivitiesModule: Module {
 
   private func hex(_ bytes: Data) -> String { bytes.map { String(format: "%02x", $0) }.joined() }
 
-  private func watch(_ activity: Activity<OrcaSessionAttributes>) {
+  private func watch(_ activity: Activity<OrcaAgentOverviewAttributes>) {
     lock.lock()
     defer { lock.unlock() }
     guard !isDestroyed, watches[activity.id] == nil,

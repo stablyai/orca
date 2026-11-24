@@ -1,5 +1,6 @@
 import {
   LiveActivityRegistrationParams,
+  LiveActivitySessionParams,
   LiveActivityRemovalParams
 } from '../../../../../shared/notifications/live-activity-contract'
 import type { z } from 'zod'
@@ -54,6 +55,21 @@ export async function pushCoverage(
 
 // Legacy callers retain filtered socket alerts; push clients opt into the full event stream.
 export const NOTIFICATION_METHODS = [
+  defineMethod({
+    name: 'notifications.resolveLiveActivitySession',
+    permission: 'workspace',
+    params: LiveActivitySessionParams,
+    handler: async (params, { runtime, clientKind, pairedDeviceId }) => ({
+      target:
+        clientKind === 'mobile' && pairedDeviceId
+          ? runtime.resolveMobileLiveActivitySession(
+              pairedDeviceId,
+              params.activityId,
+              params.sessionId
+            )
+          : null
+    })
+  }),
   defineMethod({
     name: 'notifications.registerLiveActivity',
     permission: 'workspace',

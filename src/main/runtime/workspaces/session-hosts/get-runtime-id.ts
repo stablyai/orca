@@ -32,8 +32,12 @@ export abstract class OrcaRuntimeWithGetRuntimeId extends TerminalListHostScope 
   }
 
   // Why by tab: one worktree's tabs can be split across local and runtime partitions (#18202).
-  protected getWorkspaceSessionHostIdsForTab(worktreeId: string, tabId: string): ExecutionHostId[] {
-    return this.workspaceSessions.getHostIdsForTab(worktreeId, tabId)
+  protected getWorkspaceSessionHostIdsForTab(
+    worktreeId: string,
+    tabId: string,
+    options?: { requireExactTab?: true }
+  ): ExecutionHostId[] {
+    return this.workspaceSessions.getHostIdsForTab(worktreeId, tabId, options)
   }
 
   protected getWorkspaceSessionHostIdForTab(worktreeId: string, tabId: string): ExecutionHostId {

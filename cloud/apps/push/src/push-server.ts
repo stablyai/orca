@@ -39,7 +39,9 @@ import { PushObservability } from './push-observability.js'
 import { reserveRequestConnection } from './database/push-background-database.js'
 import { createPushReadiness } from './http/push-readiness.js'
 import { PushRequestDrain } from './http/push-request-drain.js'
-import { LiveActivitySendSchema } from '@orca-cloud/push-contract/live-activity-messages'
+import { LiveActivityBootstrapSchema, LiveActivityContributionSchema } from '@orca-cloud/push-contract/live-activity-messages'
+import { LiveActivityOverviewStore } from './delivery/live-activity-overview-store.js'
+import { LiveActivityOverviewWorker } from './delivery/live-activity-overview-worker.js'
 
 export type PushServerOptions = {
   now?: () => number
@@ -83,6 +85,8 @@ export function createPushServer(
   const liveActivityApns = config.apns && apnsTransport
     ? new ApnsClient({ topic: config.apnsTopic, credentials: config.apns, transport: apnsTransport, now })
     : null
+  const liveActivityStore = new LiveActivityOverviewStore(database, now)
+  const overviewWorker = new LiveActivityOverviewWorker(liveActivityStore, liveActivityApns)
   const dispatcher = new PushDispatcher({
     devices,
     badges,
@@ -197,13 +201,22 @@ export function createPushServer(
   app.use('/v1/devices/*', limitAuthenticatedIp, bearerSession)
   app.use('/v1/send', limitAuthenticatedIp, bearerSession)
   app.use('/v1/live-activities/send', limitAuthenticatedIp, bearerSession)
+  app.use('/v1/live-activities/register', limitAuthenticatedIp, bearerSession)
 
-  app.post('/v1/live-activities/send', limitBody, async (context) => {
-    const body = LiveActivitySendSchema.safeParse(await context.req.json().catch(() => null))
+  app.post('/v1/live-activities/register', limitBody, async (context) => {
+    const body = LiveActivityBootstrapSchema.safeParse(await context.req.json().catch(() => null))
     if (!body.success) return context.json({ error: 'invalid_request' }, 400)
     if (!liveActivityApns) return context.json({ error: 'apns_not_configured' }, 503)
-    const outcome = await liveActivityApns.sendLiveActivity(body.data)
-    return context.json({ status: outcome.status })
+    const registered = await liveActivityStore.register(context.get('hostFingerprint'), body.data)
+    return context.json({ registered })
+  })
+
+  app.post('/v1/live-activities/send', limitBody, async (context) => {
+    const body = LiveActivityContributionSchema.safeParse(await context.req.json().catch(() => null))
+    if (!body.success) return context.json({ error: 'invalid_request' }, 400)
+    if (!liveActivityApns) return context.json({ error: 'apns_not_configured' }, 503)
+    const status = await liveActivityStore.contribute(context.get('hostFingerprint'), body.data)
+    return context.json({ status })
   })
 
   app.post('/v1/host/challenge', limitUnauthenticatedIp, limitBody, async (context) => {
@@ -331,6 +344,8 @@ export function createPushServer(
     deliveryStore,
     unauthenticatedIps,
     worker,
+    overviewWorker,
+    liveActivityStore,
     observability,
     ready,
     closeTransports: (): void => {

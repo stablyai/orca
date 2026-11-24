@@ -48,6 +48,7 @@ export type RuntimeServiceCommandSurface = {
   testMobilePushDevice: RuntimeMobileNotificationController['testPushDevice']
   registerMobileLiveActivity: RuntimeMobileNotificationController['registerLiveActivity']
   unregisterMobileLiveActivity: RuntimeMobileNotificationController['unregisterLiveActivity']
+  resolveMobileLiveActivitySession: RuntimeMobileNotificationController['resolveLiveActivitySession']
   registerMobilePushDevice: RuntimeMobileNotificationController['registerPushDevice']
   unregisterMobilePushDevice: RuntimeMobileNotificationController['unregisterPushDevice']
   coveredMobilePushTokenDigests: RuntimeMobileNotificationController['coveredPushTokenDigests']
@@ -169,6 +170,7 @@ export function installRuntimeServiceCommandSurface(
     testMobilePushDevice: notifications.testPushDevice.bind(notifications),
     registerMobileLiveActivity: notifications.registerLiveActivity.bind(notifications),
     unregisterMobileLiveActivity: notifications.unregisterLiveActivity.bind(notifications),
+    resolveMobileLiveActivitySession: notifications.resolveLiveActivitySession.bind(notifications),
     registerMobilePushDevice: notifications.registerPushDevice.bind(notifications),
     unregisterMobilePushDevice: notifications.unregisterPushDevice.bind(notifications),
     coveredMobilePushTokenDigests: notifications.coveredPushTokenDigests.bind(notifications),

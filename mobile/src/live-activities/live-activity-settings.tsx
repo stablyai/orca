@@ -82,7 +82,7 @@ export function LiveActivitySettings() {
         title={enabledLabel}
         footer={t(
           'liveActivities.description',
-          'Follow sessions opened on this iPhone on the Lock Screen and Dynamic Island. Names stay hidden unless you enable them.'
+          'See agent totals across paired computers and servers. Names stay hidden unless you enable them.'
         )}
       >
         <ListRow

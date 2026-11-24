@@ -16,7 +16,10 @@ import {
   type PushGatewayResult
 } from './push-gateway-response'
 import { PushGatewaySession } from './push-gateway-session'
-import type { LiveActivityPush } from '../../../shared/notifications/live-activity-contract'
+import type {
+  LiveActivityBootstrap,
+  LiveActivityPush
+} from '../../../shared/notifications/live-activity-contract'
 
 const RegisterResponseSchema = z.object({ registrationId: z.string().min(1).max(512) })
 
@@ -124,6 +127,14 @@ export class PushGatewayClient {
       z.object({ status: z.enum(['sent', 'dead', 'error']) })
     )
     return result.ok ? result.value.status : 'error'
+  }
+
+  async registerLiveActivityOverview(input: LiveActivityBootstrap): Promise<boolean> {
+    const result = await readPushGatewayJson(
+      await this.authorized('/v1/live-activities/register', { method: 'POST', body: input }),
+      z.object({ registered: z.boolean() })
+    )
+    return result.ok && result.value.registered
   }
 
   async send(input: {

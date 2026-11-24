@@ -140,14 +140,18 @@ export class RuntimeWorkspaceSessionController {
   }
 
   /** Find partitions owning this exact tab, routed first; fall back to the route only when none owns it. Worktree ids repeat across hosts. */
-  getHostIdsForTab(worktreeId: string, tabId: string): ExecutionHostId[] {
+  getHostIdsForTab(
+    worktreeId: string,
+    tabId: string,
+    options?: { requireExactTab?: true }
+  ): ExecutionHostId[] {
     const routedHostId = this.tryGetHostId(worktreeId)
     if (!routedHostId) {
       return []
     }
     const store = this.deps.getStore()
     if (!store?.getWorkspaceSession) {
-      return [routedHostId]
+      return options?.requireExactTab ? [] : [routedHostId]
     }
     const holders = [
       ...new Set([routedHostId, ...(store.getWorkspaceSessionHostIds?.() ?? [])])
@@ -155,7 +159,7 @@ export class RuntimeWorkspaceSessionController {
       const session = store.getWorkspaceSession!(hostId)
       return session ? workspaceSessionListsTerminalTab(session, worktreeId, tabId) : false
     })
-    return holders.length > 0 ? holders : [routedHostId]
+    return holders.length > 0 || options?.requireExactTab ? holders : [routedHostId]
   }
 
   get(worktreeId: string): WorkspaceSessionState | null {

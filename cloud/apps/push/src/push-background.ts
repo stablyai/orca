@@ -55,7 +55,7 @@ export function startPushBackground(
   runtime: Pick<
     ReturnType<typeof createPushServer>,
     'challenges' | 'sessions' | 'deliveryStore' | 'worker'
-  >
+  > & Partial<Pick<ReturnType<typeof createPushServer>, 'overviewWorker'>>
 ): () => Promise<void> {
   if (config.mode === 'validation') return async () => {}
   const { challenges, sessions, deliveryStore, worker } = runtime
@@ -73,8 +73,9 @@ export function startPushBackground(
     prune('deliveries', () => deliveryStore.prune(), DELIVERY_PRUNE_INTERVAL_MS)
   ]
   worker.start()
+  runtime.overviewWorker?.start()
   return async () => {
     for (const stop of stops) stop()
-    await worker.stop()
+    await Promise.all([worker.stop(), runtime.overviewWorker?.stop()])
   }
 }
