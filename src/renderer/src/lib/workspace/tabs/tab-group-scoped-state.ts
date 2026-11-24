@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store/index'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 
 /** Per-tab-group state that outlives a mounted view and is disposed when its group or workspace is removed. */
 export type TabGroupScopedState<T> = {
@@ -32,13 +33,20 @@ function ensureRemovalSubscription(): void {
     if (next === before) {
       return
     }
-    for (const registry of registries) {
-      for (const worktreeId of registry.worktreeIds()) {
-        const groups = next[worktreeId]
-        if (groups === before[worktreeId]) {
-          continue
-        }
-        registry.retire(worktreeId, groups ? new Set(groups.map((g) => g.id)) : null)
+    const changes = readRecordChanges(next, before)
+    // Addressed writes (every tab activation) name their workspaces; only a resync visits every remembered one.
+    const changed =
+      changes?.kind === 'addressed'
+        ? changes.keys
+        : new Set([...registries].flatMap((registry) => registry.worktreeIds()))
+    for (const worktreeId of changed) {
+      const groups = next[worktreeId]
+      if (groups === before[worktreeId]) {
+        continue
+      }
+      const openGroupIds = groups ? new Set(groups.map((g) => g.id)) : null
+      for (const registry of registries) {
+        registry.retire(worktreeId, openGroupIds)
       }
     }
   })
