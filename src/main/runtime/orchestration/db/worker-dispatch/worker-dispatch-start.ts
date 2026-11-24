@@ -57,6 +57,8 @@ export function createStartingWorkerDispatch(
     originRef?: string
     /** The question it was started to answer; a retry or follow-up without one keeps its earlier start's. */
     forMessageId?: string
+    /** Its worker, and the workers under it, start as chats; a retry or follow-up keeps its earlier start's. */
+    chatLineage?: boolean
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -187,6 +189,11 @@ export function createStartingWorkerDispatch(
           .map((earlier) => (earlier ? this.getDispatchContextById(earlier)?.for_message_id : null))
           .find((ref) => ref) ??
         null,
+      chatLineage:
+        params.chatLineage === true ||
+        [params.retryOf, params.followUpOf].some(
+          (earlier) => earlier && this.getDispatchContextById(earlier)?.chat_lineage === 1
+        ),
       ...recordedCreatorIdentity(params.creator)
     })
     if (params.takesMailOf) {

@@ -25,6 +25,10 @@ function routePrefix(route: SourceRoute): string {
   return `${JSON.stringify([route.storageScope, route.authorityConnectionIdentity])}\u0000`
 }
 
+export function sshCookieImportRoute(targetId: string): string {
+  return `ssh:${targetId}`
+}
+
 function sourceEntries(value: unknown): StoredSources {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {}
@@ -76,10 +80,37 @@ function change(apply: (sources: SourceFile) => SourceFile | null): Promise<void
   return run
 }
 
-export function forgetClientRouteCookieImportSource(
-  route: SourceRoute,
+export function recordClientRouteCookieImportSource(args: {
+  route: string
   profileId: string
-): Promise<void> {
+  source: BrowserSessionProfileSource
+}): Promise<void> {
+  const { browserFamily, profileName, importedAt } = args.source
+  const key = `${args.route}\u0000${args.profileId}`
+  return change((sources) => ({
+    ...sources,
+    legacySources: { ...sources.legacySources, [key]: { browserFamily, profileName, importedAt } }
+  }))
+}
+
+export function forgetClientRouteCookieImportSource({
+  route,
+  profileId
+}: {
+  route: SourceRoute | string
+  profileId: string
+}): Promise<void> {
+  if (typeof route === 'string') {
+    const key = `${route}\u0000${profileId}`
+    return change((sources) => {
+      if (!(key in sources.legacySources)) {
+        return null
+      }
+      const legacySources = { ...sources.legacySources }
+      delete legacySources[key]
+      return { ...sources, legacySources }
+    })
+  }
   const key = routePrefix(route) + profileId
   const legacyKey = `${route.environmentId}\u0000${profileId}`
   return change((sources) => {
@@ -97,19 +128,29 @@ export function forgetClientRouteCookieImportSource(
   })
 }
 
-export async function openClientRouteCookieImportSources(route: SourceRoute) {
-  const prefix = routePrefix(route)
-  const legacyPrefix = `${route.environmentId}\u0000`
+function displaySources(route: string, stored: StoredSources) {
+  const prefix = `${route}\u0000`
   const sources: Record<string, BrowserSessionProfileSource> = Object.create(null)
-  await changes
-  const { legacySources, scopedSources } = await load()
-  for (const [key, source] of Object.entries(legacySources)) {
-    if (source && key.startsWith(legacyPrefix)) {
-      // Flat records identify the server for its badge but carry no authority to refresh cookies.
+  for (const [key, source] of Object.entries(stored)) {
+    if (source && key.startsWith(prefix)) {
+      // Unscoped records supply a badge without refresh authority.
       const { browserFamily, profileName, importedAt } = source
-      sources[key.slice(legacyPrefix.length)] = { browserFamily, profileName, importedAt }
+      sources[key.slice(prefix.length)] = { browserFamily, profileName, importedAt }
     }
   }
+  return sources
+}
+
+export async function clientRouteCookieImportSources(route: string) {
+  await changes
+  return displaySources(route, (await load()).legacySources)
+}
+
+export async function openClientRouteCookieImportSources(route: SourceRoute) {
+  const prefix = routePrefix(route)
+  await changes
+  const { legacySources, scopedSources } = await load()
+  const sources = displaySources(route.environmentId, legacySources)
   for (const [key, source] of Object.entries(scopedSources)) {
     if (key.startsWith(prefix)) {
       const profileId = key.slice(prefix.length)

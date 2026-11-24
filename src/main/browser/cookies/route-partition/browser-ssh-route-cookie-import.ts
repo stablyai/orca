@@ -5,6 +5,11 @@ import {
 } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { preparedLocalSshBrowserPartition } from '../../routing/local-host-partitions/local-ssh-browser-partitions'
+import { bindLocalSshBrowserPartition } from '../../routing/local-host-partitions/local-ssh-browser-partition-bindings'
+import {
+  recordClientRouteCookieImportSource,
+  sshCookieImportRoute
+} from '../client-route/client-route-cookie-import-source-store'
 import {
   browserCookieImportSource,
   cookieFileImportSource,
@@ -16,6 +21,8 @@ import {
 export type SshRouteCookieImportTarget = {
   sshTargetId: string
   browserProfileId: string
+  /** A configured host's jar can be filled from Settings before any of its pages opens. */
+  targetRegistered: boolean
 }
 
 export function importCookiesIntoSshRoutePartition(
@@ -39,8 +46,11 @@ async function importIntoSshRoutePartition(
     return browserCookieImportFailure('profileNotFound')
   }
   const resolvePartition = (): string | null =>
-    preparedLocalSshBrowserPartition(target.sshTargetId, target.browserProfileId)
-  // Refuse before the file picker opens; the page that asked has already prepared this jar.
+    preparedLocalSshBrowserPartition(target.sshTargetId, target.browserProfileId) ??
+    (target.targetRegistered
+      ? bindLocalSshBrowserPartition(target.sshTargetId, target.browserProfileId)
+      : null)
+  // Refuse before the file picker opens: an unknown host has no jar to fill.
   if (resolvePartition() === null) {
     return browserCookieImportFailure('sshHostDisconnected')
   }
@@ -50,8 +60,16 @@ async function importIntoSshRoutePartition(
       currentPartition: resolvePartition,
       routeChanged: () => browserCookieImportFailure('sshHostDisconnected')
     },
-    resolveSource
+    resolveSource,
+    (_partition, source) =>
+      recordClientRouteCookieImportSource({
+        route: sshCookieImportRoute(target.sshTargetId),
+        profileId: target.browserProfileId,
+        source
+      })
   )
-  // No profile badge: the profile's own jar is unchanged.
-  return imported.ok ? { ...imported.result, profileId: target.browserProfileId } : imported
+  if (!imported.ok) {
+    return imported
+  }
+  return { ...imported.result, profileId: target.browserProfileId }
 }

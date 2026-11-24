@@ -68,29 +68,30 @@ it('keeps the pressed Stop intent when that attempt fails before pointerup', () 
     'stop'
   )
 })
-it('keeps a focused unavailable Stop focusable and never turns activation into acknowledgment', () => {
-  const action = vi.fn()
+it.each([
+  ['a saving row', { ...running, state: 'saving' as const, stoppable: false }],
+  ['a remote worker', { ...running, ownerActionsAvailable: false }],
+  ['a failure with nothing to acknowledge', { ...running, state: 'failed' as const }],
+  [
+    'a remote failure',
+    { ...running, state: 'failed' as const, settlement: 'failure-1', ownerActionsAvailable: false }
+  ]
+])('shows no Stop or Clear for %s, which has nothing it can do here', (_name, row) => {
   render(
     <TooltipProvider>
       <WorkerDockRow
-        row={{ ...running, retired: true, state: 'saving', stoppable: false }}
+        row={row}
         narrow={false}
         mixed={false}
         modelColumn={false}
         visible
         pending={false}
         onOpen={() => {}}
-        onAction={action}
+        onAction={() => {}}
       />
     </TooltipProvider>
   )
-  const target = screen.getByRole('button', { name: /Stop Verifier/ })
-  act(() => target.focus())
-  expect(target).toHaveFocus()
-  expect(target).toHaveAttribute('aria-disabled', 'true')
-  expect(target).not.toHaveAttribute('disabled')
-  fireEvent.click(target)
-  expect(action).not.toHaveBeenCalled()
+  expect(screen.queryByRole('button', { name: /^(Stop|Clear) Verifier/ })).toBeNull()
 })
 
 it('keeps a focused Stop unavailable when its accepted failure arrives', () => {

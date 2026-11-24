@@ -7,9 +7,13 @@ import {
 import { useRemoteBrowserPageKeyboard } from './use-remote-browser-page-keyboard'
 import type { BrowserPageEditCommand } from '../assemble-chrome/context-menu/browser-page-context-menu-items'
 import { RemoteBrowserInputQueue } from './remote-browser-input-queue'
+import type { RemoteBrowserHostMenuPress } from './remote-browser-host-context-menus'
 import { useRemoteBrowserPageHover } from './use-remote-browser-page-hover'
 import { useRemoteBrowserSelectPopup } from './remote-browser-select-popup'
-import type { RemoteBrowserPageInputParams } from './remote-browser-page-input-params'
+import type {
+  RemoteBrowserKeyboardProxyHandlers,
+  RemoteBrowserPageInputParams
+} from './remote-browser-page-input-params'
 import {
   getRemoteBrowserMouseButton,
   mapRemoteBrowserClientPoint,
@@ -44,8 +48,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerMove: (event: React.PointerEvent<HTMLImageElement>) => void
-  handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
-  handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
+  keyboardProxyHandlers: RemoteBrowserKeyboardProxyHandlers
   runRemoteEditCommand: (command: BrowserPageEditCommand) => void
   selectPopupElement: React.JSX.Element | null
 } {
@@ -53,8 +56,10 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     busy,
     pickerAvailable,
     pagePointerOwned,
+    hostContextMenus,
     inputQueue,
     imageRef,
+    keyboardProxyRef,
     remoteViewportRef,
     remoteCssViewportSizeRef,
     remoteViewportSizeRef,
@@ -72,10 +77,12 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
   const {
     checkSelectListAfterPress,
     readSelectPopupAfterPress,
+    readSelectPopupAfterKey,
     closeSelectPopupForPageInput,
     selectPopupElement
   } = useRemoteBrowserSelectPopup(input)
   const rightPressForwardedRef = useRef(false)
+  const menuPressRef = useRef<RemoteBrowserHostMenuPress | null>(null)
   // macOS Control+click is a right press, through to its release.
   const controlClickRef = useRef(false)
   const getRemoteImagePoint = useCallback(
@@ -108,19 +115,34 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     const point = getRemoteImagePoint(event)
     controlClickRef.current = isMacControlClick(event)
     const button = controlClickRef.current ? 'right' : getRemoteBrowserMouseButton(event.button)
-    // Right presses open Orca's page menu unless a page tool owns the pointer.
-    if (button === 'right' && !pagePointerOwned) {
+    const pageMenuPress = button === 'right' && !pagePointerOwned
+    // Older hosts open no page menus, so their right presses only open Orca's probed menu.
+    if (pageMenuPress && !hostContextMenus.supported) {
       return
     }
     if (!target || !pageId || !image || !operationToken || !point || !button) {
       return
+    }
+    const menuPress = pageMenuPress
+      ? hostContextMenus.notePress(event.clientX, event.clientY)
+      : null
+    menuPressRef.current = menuPress
+    if (!menuPress) {
+      hostContextMenus.clearPress()
     }
     if (button === 'right') {
       rightPressForwardedRef.current = true
     }
     const modifiers = readRemoteBrowserMouseModifiers(event, target)
     event.preventDefault()
-    image.focus()
+    const keyboardProxy = keyboardProxyRef.current
+    // A press commits the composition into the field it was typed for, as on a local page.
+    if (keyboardProxy && 'composing' in keyboardProxy.dataset) {
+      keyboardProxy.blur()
+    }
+    if (document.activeElement !== keyboardProxy) {
+      ;(keyboardProxy ?? image).focus({ preventScroll: true })
+    }
     // Why: a release over the letterbox gutter or outside the pane must still send mouseUp, or
     // the host page keeps the button held.
     if (typeof image.setPointerCapture === 'function') {
@@ -144,6 +166,9 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
           { ...params, x: point.x, y: point.y },
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
+        if (menuPress) {
+          hostContextMenus.markPressSent(menuPress)
+        }
         await callRuntimeRpc(
           target,
           'browser.mouseDown',
@@ -186,6 +211,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     if (!target || !pageId || !operationToken || !point || !button) {
       return
     }
+    const menuPress = button === 'right' && !pagePointerOwned ? menuPressRef.current : null
     if (button === 'right') {
       rightPressForwardedRef.current = false
     }
@@ -204,6 +230,10 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
           { ...params, x: point.x, y: point.y },
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
+        // Windows hosts open the page menu on the release.
+        if (menuPress) {
+          hostContextMenus.markPressSent(menuPress)
+        }
         await callRuntimeRpc(
           target,
           'browser.mouseUp',
@@ -230,20 +260,25 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     })
   }
 
-  const { handleRemoteScreenshotKeyDown, handleRemoteScreenshotPaste, runRemoteEditCommand } =
-    useRemoteBrowserPageKeyboard({
-      pickerAvailable,
-      runtimeTarget,
-      lifecycle,
-      runtimeWorktree,
-      enqueueRemoteInput,
-      createRemoteOperationToken,
-      isCurrentRemoteOperationToken,
-      closeMissingRemotePage,
-      scheduleRemoteTabInfoRefresh,
-      setPaneNotice,
-      closeSelectPopupForPageInput
-    })
+  const {
+    handleRemoteScreenshotKeyDown,
+    handleRemoteScreenshotPaste,
+    handleRemoteKeyboardProxyText,
+    runRemoteEditCommand
+  } = useRemoteBrowserPageKeyboard({
+    pickerAvailable,
+    runtimeTarget,
+    lifecycle,
+    runtimeWorktree,
+    enqueueRemoteInput,
+    createRemoteOperationToken,
+    isCurrentRemoteOperationToken,
+    closeMissingRemotePage,
+    scheduleRemoteTabInfoRefresh,
+    setPaneNotice,
+    closeSelectPopupForPageInput,
+    readSelectPopupAfterKey
+  })
 
   const handleRemotePointerMove = useRemoteBrowserPageHover({
     busy,
@@ -261,8 +296,11 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     handleRemotePointerDown,
     handleRemotePointerUp,
     handleRemotePointerMove,
-    handleRemoteScreenshotKeyDown,
-    handleRemoteScreenshotPaste,
+    keyboardProxyHandlers: {
+      onKeyDown: handleRemoteScreenshotKeyDown,
+      onPaste: handleRemoteScreenshotPaste,
+      onText: handleRemoteKeyboardProxyText
+    },
     runRemoteEditCommand,
     selectPopupElement
   }

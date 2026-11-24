@@ -12,6 +12,7 @@ import {
   loadBrowserExtensionIntoProfile,
   unloadBrowserExtensionFromProfile
 } from './browser-extension-session-loader'
+import { listBrowserExtensionRouteProfileIds } from './browser-extension-route-profiles'
 
 function isEnabledIn(profileId: string, extensionId: string): boolean {
   return browserSessionRegistry.getEnabledExtensionIds(profileId).includes(extensionId)
@@ -32,13 +33,15 @@ export async function reloadBrowserExtensionWhereEnabled(
   extension: InstalledBrowserExtension,
   options: { refresh?: boolean } = {}
 ): Promise<void> {
-  const profileIds = browserSessionRegistry
-    .listProfiles()
-    .map((profile) => profile.id)
-    .filter(
-      (profileId) =>
-        isEnabledIn(profileId, extension.id) && getBrowserExtensionSessionForProfile(profileId)
-    )
+  // SSH and This-device pages run their own copy too.
+  const everyProfileId = [
+    ...browserSessionRegistry.listProfiles().map((profile) => profile.id),
+    ...listBrowserExtensionRouteProfileIds()
+  ]
+  const profileIds = everyProfileId.filter(
+    (profileId) =>
+      isEnabledIn(profileId, extension.id) && getBrowserExtensionSessionForProfile(profileId)
+  )
   for (const profileId of profileIds) {
     unloadBrowserExtensionFromProfile(profileId, extension.id)
   }
@@ -47,10 +50,9 @@ export async function reloadBrowserExtensionWhereEnabled(
   // Profiles idle or going idle load the new copy, as a reload, when they reopen.
   noteBrowserExtensionReloadedWhileIdle(
     extension.id,
-    browserSessionRegistry
-      .listProfiles()
-      .map((profile) => profile.id)
-      .filter((profileId) => isEnabledIn(profileId, extension.id) && !attached.has(profileId))
+    everyProfileId.filter(
+      (profileId) => isEnabledIn(profileId, extension.id) && !attached.has(profileId)
+    )
   )
   // Why go on after a failure on refresh: every profile is already unloaded and nothing rolls an
   // unpacked reload back. A Web Store replace stops at the first failure, since its caller then

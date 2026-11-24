@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "重新登入",
-      "usageSignInMessage": "所選 Claude 帳戶需要您重新登入。請開啟設定 > AI 供應商帳戶，或選擇系統預設。"
+      "usageSignInMessage": "此帳戶需要您重新登入。"
     }
   },
   "agentHistory": {
@@ -392,6 +392,13 @@
     "queuedMessages": {
       "deleteAll": "全部刪除",
       "editMessage": "編輯訊息",
+      "showLess": "收合",
+      "moreCount_one": "還有 {{count}} 則",
+      "moreCount_other": "還有 {{count}} 則",
+      "deleteMessage": "刪除訊息",
+      "queuedCount_one": "{{count}} 則排隊中的訊息",
+      "queuedCount_other": "{{count}} 則排隊中的訊息",
+      "foldNeedsAttention": "{{more}}，有訊息需要處理",
       "pausedState": "已暫停",
       "queuedState": "已排隊",
       "resume": "繼續",
@@ -2232,6 +2239,8 @@
       "editSavedArguments": "請在設定 > 代理程式 > 引數中編輯。",
       "emptyMessage": "此訊息為空，因此未傳送。",
       "fullAccessAsRoot": "{{agent}} 以 root 身分執行時不會使用「完整存取權」。請在執行此聊天的電腦上，前往「設定 → 代理程式」為 {{agent}} 選擇其他權限，然後開始新的聊天。",
+      "botToolsNeedStatusHooks": "{{agent}} 機器人需要代理程式狀態鉤子：機器人的工具正是透過它們以機器人身分運作。請在「設定 → 代理程式」中為 {{agent}} 開啟，然後開始新的聊天。",
+      "botToolsGatewayOutdated": "{{agent}} 的閘道仍在執行舊版 Orca 外掛，因此此機器人的工具無法以機器人身分運作。請執行 `hermes gateway stop`，然後開始新的聊天。",
       "historyInOtherAccount": "此聊天的歷史記錄位於另一個 Claude 帳戶中。請切換回該帳戶以繼續此聊天。",
       "historyTooLarge": "此對話的歷史記錄過大，無法在此恢復。",
       "hostFault": "Orca 遇到問題，因此此操作未完成。",
@@ -2421,6 +2430,7 @@
       "images_one": "{{count}} 張圖片",
       "images_other": "{{count}} 張圖片",
       "moreActions": "更多操作",
+      "you": "你",
       "send": "傳送",
       "sendAgainHint": "再次傳送此訊息",
       "sendHint": "傳送此訊息",
@@ -2530,6 +2540,7 @@
       "unsavedMarkdown": "尚未儲存的 Markdown 變更",
       "urlPrompt": "請輸入網址，或留空以開啟新分頁。",
       "allowAutoClose": "允許自動關閉",
+      "agents": "代理程式",
       "renameTerminalFailed": "無法重新命名終端機。{{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -2743,6 +2754,8 @@
       "conversationCleared": "此對話已被清除。",
       "goalsUnsupported": "此代理程式不支援目標。",
       "historyUnavailable": "Orca 目前無法開啟此聊天的歷史記錄。",
+      "diskFull": "執行此聊天的電腦磁碟已滿。",
+      "freeDiskSpace": "請釋放該磁碟空間後重試。",
       "savedInOtherFolder": "此對話儲存在另一個資料夾中。",
       "historyUnreadable": "Orca 無法讀取此聊天的已儲存歷史記錄。",
       "historyUnusable": "無法載入此聊天。",
@@ -2842,16 +2855,35 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "工作樹已刪除。",
+      "projectRemoved": "專案已從 Orca 移除。",
       "folderWorkspaceRemoved": "資料夾工作區已移除。"
     },
     "nativeChatView": {
       "linkedMessageMissing": "找不到該訊息。"
     },
+    "tabsSheet": {
+      "needsYou": "需要你處理",
+      "working": "工作中",
+      "everythingElse": "其他",
+      "closeTab": "關閉 {{title}}"
+    },
+    "tabRows": {
+      "browser": "瀏覽器",
+      "markdown": "Markdown 筆記",
+      "file": "檔案",
+      "chat": "聊天",
+      "terminal": "終端機"
+    },
     "browserProfile": {
       "default": "預設"
     },
     "tabBar": {
+      "oneTab": "1 個分頁",
       "tabCount": "{{count}} 個分頁",
+      "anotherNeedsYou": "另一個分頁需要你處理",
+      "actionsHint": "顯示此分頁的操作",
+      "next": "下一個分頁",
+      "previous": "上一個分頁",
       "hint": "顯示所有分頁"
     }
   },
@@ -3431,6 +3463,9 @@
       "planModelUnavailable": "模型「{{model}}」無法用於 {{label}}。",
       "planModelWithoutThinking": "模型「{{model}}」不支援設定思考強度。",
       "planThinkingLevelInvalid": "思考強度「{{level}}」不適用於 {{model}}。",
+      "commandTemplateEmptyDictationCleanup": "聽寫整理的命令範本為空。",
+      "dictationCleanupAgentUnsupported": "請在「設定 -> 語音 -> 整理」中為 AI 整理選擇支援的代理程式。支援的代理程式：{{agents}}，也可選擇「自訂命令」。",
+      "agentCannotGenerateDictationCleanup": "代理程式「{{agent}}」不支援聽寫整理。支援的代理程式：{{agents}}，也可選擇「自訂命令」。",
       "promptTooLargeForArgument": "{{label}} 的提示詞過大，無法作為單一命令列引數傳遞。請減少暫存的變更後再試一次。",
       "promptTooLargeForWindows": "{{label}} 的提示詞過大，無法用於 Windows 命令列。請減少暫存的變更後再試一次。",
       "pullRequestDetailsUnparseable": "無法解析產生的 PR 詳細資料。",
@@ -4111,7 +4146,6 @@
       "extraAgentArguments": "額外的代理程式引數",
       "allAutomations": "全部自動化",
       "schedule": "排程",
-      "nextRun": "下次執行",
       "agent": "代理程式",
       "project": "專案",
       "unavailable": "不可用",
@@ -4162,7 +4196,6 @@
       "newWorkspacePerRun": "每次執行建立新工作區",
       "instructions": "指示",
       "runNow": "立即執行",
-      "viewAllRuns": "查看所有執行",
       "savedAgent": "{{agent}}（已儲存）",
       "chooseAProjectSetUpOnThisHost": "請選擇此主機上已設定的專案。",
       "newAutomation": "新增自動化",
@@ -4186,9 +4219,6 @@
       "letYourAgentsWorkOnASchedule": "讓代理程式依排程工作",
       "createAnAutomationToRunATaskOnThisHost": "建立自動化以在此主機上執行任務。",
       "nextDate": "下次：{{date}}",
-      "lastResult": "上次：{{status}} · {{date}}",
-      "latestResultNotReported": "未回報最新結果",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "請重新連線至此主機以重新整理或變更。已儲存的資訊仍可在下方查看。",
       "recentRuns": "最近執行",
       "outcome": "結果",
@@ -4211,7 +4241,6 @@
       "fullOutputUnavailable": "無法載入完整輸出。",
       "retryFullOutput": "重試",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "已載入的歷程記錄中沒有符合的執行。請載入更多以繼續。",
-      "noMatchingRunsYet": "尚無符合的執行。",
       "runSummary": "{{title}}，{{status}}，{{date}}",
       "scheduled": "已排定",
       "loadMoreRuns": "載入更多執行",
@@ -4435,6 +4464,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "向左捲動 · 隱藏 {{amount}} 個",
+      "scrollRight": "向右捲動 · 隱藏 {{amount}} 個"
+    },
     "link": {
       "pairTitle": "配對電腦",
       "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",
@@ -4608,15 +4641,18 @@
         "next": "下一個項目",
         "subWhere": "事項 {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "暫不"
-      },
       "write": {
         "offline": "{{host}} 已離線。"
       },
       "thisComputer": "電腦",
       "readFailedClosedPage": "無法讀取更多已關閉的事項。",
-      "skillLimit": "訊息未傳送。請最多選擇 {{limit}} 個技能檔案後再試一次。"
+      "skillLimit": "訊息未傳送。請最多選擇 {{limit}} 個技能檔案後再試一次。",
+      "ask": {
+        "notSentYet": "尚未傳送",
+        "replaced": "代理程式提出了新問題。請先閱讀，再回覆。",
+        "replacedByNewer": "已由較新的問題取代",
+        "skipped": "已略過"
+      }
     },
     "needs": {
       "chat": "你與 {{name}} 的對話",
@@ -5045,6 +5081,7 @@
       "toolClaudePrepareFailed": "無法在 Claude Code 中準備 {{name}}。請檢查工具設定。",
       "toolNameTaken": "這個機器人已經有名為 {{name}} 的工具。",
       "toolNameTakenByAgent": "你的 {{agent}} 已經有名為 {{name}} 的工具，這個機器人也會取得它。請用 --name 換一個名稱。",
+      "toolNameTakenByCodexStdio": "你的 Codex 已經有名為 {{name}} 的本機工具，所以這個機器人的 {{name}} 無法執行。請重新命名這個機器人的工具。",
       "toolNotUpdated": "工具沒有更新。",
       "toolSignInAddressIncomplete": "請貼上登入頁面最後停留的完整位址。",
       "toolSignInAddressWrong": "這不是本次登入結束時的位址。請用「連線」重新開始，登入後貼上瀏覽器顯示的位址。",
@@ -5161,6 +5198,10 @@
       "today": "今天",
       "yesterday": "昨天",
       "lastTidied": "上次整理 {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "將於 {{time}} 繼續",
+      "hitLimit": "已達上限 · {{time}} 重設"
     }
   },
   "sidebar": {

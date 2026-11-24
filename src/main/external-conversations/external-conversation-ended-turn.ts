@@ -121,3 +121,23 @@ function outboxTurn(
       }
     : {}
 }
+
+/** The message that opened a turn, read from its own rows; undefined when they can't be read. */
+export async function turnOpenerOf(
+  chat: Pick<ConversationChat, 'journalReads'>,
+  sessionId: string,
+  turnId: string
+): Promise<AgentJournalRenderItem | null | undefined> {
+  const reads = await chat.journalReads(sessionId).catch(() => null)
+  const window = await reads
+    ?.operationWindow({
+      turnIds: [turnId],
+      itemIds: [turnId],
+      anchorsOnly: true,
+      withoutToolOutput: true
+    })
+    .catch(() => null)
+  return reads && window
+    ? readEndedChatTurnOpener(async () => reads, window.snapshot.items, turnId)
+    : undefined
+}

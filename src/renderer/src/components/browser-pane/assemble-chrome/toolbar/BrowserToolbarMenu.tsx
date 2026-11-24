@@ -83,10 +83,11 @@ export function BrowserToolbarMenu({
   overflow
 }: BrowserToolbarMenuProps): React.JSX.Element {
   const t = useTranslate()
-  const { pageRoute, detectedBrowsers, fetchDetectedBrowsers } = useBrowserPageCookieImport(
-    worktreeId,
-    clientHostEnvironmentId ? { environmentId: clientHostEnvironmentId, browserPageId } : null
-  )
+  const { pageRoute, detectedBrowsers, detectedBrowsersLoaded, fetchDetectedBrowsers } =
+    useBrowserPageCookieImport(
+      worktreeId,
+      clientHostEnvironmentId ? { environmentId: clientHostEnvironmentId, browserPageId } : null
+    )
   // The page's own host, not the one Settings › Browser shows.
   const profileEnvironmentId = clientHostEnvironmentId ?? streamedPage?.environmentId ?? null
   const profileHostId = profileEnvironmentId
@@ -109,8 +110,14 @@ export function BrowserToolbarMenu({
   // Force the menu open for the tour unless a new tab page is already showing the Import hint.
   const importHintOnPage =
     isBlankTab && shouldShowBrowserImportHint({ persistedUIReady, browserImportHintHidden })
+  // The picker replaces the menu it opened from, so the tour stops holding the menu while it shows.
+  const [importPickerOpen, setImportPickerOpen] = useState(false)
   const shouldForceMenuOpen =
-    showsCookieImport && browserCookieTourStepActive && isActive && !importHintOnPage
+    showsCookieImport &&
+    browserCookieTourStepActive &&
+    isActive &&
+    !importHintOnPage &&
+    !importPickerOpen
 
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
@@ -385,9 +392,12 @@ export function BrowserToolbarMenu({
                 browserPageId,
                 effectiveProfileId,
                 detectedBrowsers,
+                detectedBrowsersLoaded,
                 onFetchDetectedBrowsers: () => void fetchDetectedBrowsers(),
                 browserSessionImportState,
                 pageRoute,
+                pickerOpen: importPickerOpen,
+                onPickerOpenChange: setImportPickerOpen,
                 onImportFromBrowser: (browserFamily, browserProfile) =>
                   void handleImportFromBrowser(browserFamily, browserProfile),
                 onImportFromFile: () => void handleImportFromFile()

@@ -215,6 +215,23 @@ function deriveRoutePartition(
   })
 }
 
+/** The jar a page or import already bound for this profile on the route; null when none has. Never creates a binding; it migrates an older build's one the same way import does. */
+export function boundRoutePartition(
+  routeIdentity: ClientRouteIdentity,
+  browserProfileId: string
+): string | null {
+  const bindings = currentBrowserRoutePartitionBindingStore()
+  const derived = deriveRoutePartition(routeIdentity, browserProfileId, bindings)
+  const persisted = bindings.get(derived.partition)
+  if (persisted === null) {
+    return null
+  }
+  if (persisted !== derived.bindingFingerprint) {
+    throw new Error('browser_route_partition_binding_conflict')
+  }
+  return derived.partition
+}
+
 export function bindRoutePartition(
   routeIdentity: ClientRouteIdentity,
   browserProfileId: string,

@@ -43,6 +43,7 @@ import { useBotHostHas } from '@/lib/bot-host-status'
 import { Button } from '@/components/ui/button'
 import { DEFAULT_BOT_AVATAR_COLOR } from '../../../../shared/bots/bot-avatar-color'
 import { botTemplate, type BotTemplateSkill } from '../../../../shared/bots/bot-templates'
+import { botTemplateWord } from '../../../../shared/bots/bot-template-text'
 import { NewBotTemplateParts } from './NewBotTemplateParts'
 import type { BotCreateParams } from '../../../../shared/rpc-contract/bots-params'
 import { NewBotProposalFields, NewBotTakesOver } from './NewBotProposalFields'
@@ -220,6 +221,7 @@ export function NewBotDialog({
                 {
                   templatePackages,
                   skills: [...kept],
+                  templateNameShown: template ? botTemplateWord(template, 'name', t) : undefined,
                   fromOffer: offerHere ? fromOffer : undefined
                 }
               )

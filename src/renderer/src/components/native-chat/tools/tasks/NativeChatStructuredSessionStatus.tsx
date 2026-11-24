@@ -6,7 +6,7 @@ import { useWorkerDockFeed } from './dock/worker-dock-feed'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useWorkerDockOwnerActions } from './dock/use-worker-dock-owner-actions'
-import { useWorkerDockRosterState } from './dock/NativeChatWorkerDockFrame'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 import { Button } from '@/components/ui/button'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import { NativeChatCrewBackgroundTasksStatus } from './NativeChatCrewBackgroundTasksStatus'
@@ -30,6 +30,15 @@ const WorkerDockProviderDetailsDialog = lazy(() =>
   }))
 )
 
+/** An exited worker whose dispatch is still open is not settled: with the feed away it has no Stop. */
+function workerDockRowSettled(row: { state: string; settlement: string | null }): boolean {
+  return (
+    row.state === 'failed' ||
+    row.state === 'saving' ||
+    (row.state === 'unexpected' && Boolean(row.settlement))
+  )
+}
+
 export function NativeChatStructuredSessionStatus(props: {
   sessionId: string
   target?: RuntimeClientTarget
@@ -52,7 +61,6 @@ export function NativeChatStructuredSessionStatus(props: {
   )
   const { backgroundTasks, stop } = props
 
-  const roster = useWorkerDockRosterState()
   const target = props.target ?? LOCAL
   const ownerActionsAvailable = target.kind === 'local'
   const expandedHere = expanded?.sessionId === props.sessionId && expanded.expanded
@@ -77,8 +85,7 @@ export function NativeChatStructuredSessionStatus(props: {
     () =>
       new Map(
         [...feed.rows].map(([id, row]) => {
-          const settled =
-            row.state === 'failed' || row.state === 'unexpected' || row.state === 'saving'
+          const settled = workerDockRowSettled(row)
           const prompt = settled ? undefined : openApprovals.get(row.dispatchId)
           return [
             id,
@@ -100,8 +107,7 @@ export function NativeChatStructuredSessionStatus(props: {
   const workerIdentities = useMemo(
     () =>
       feed.snapshot?.identities.map((row) => {
-        const settled =
-          row.state === 'failed' || row.state === 'unexpected' || row.state === 'saving'
+        const settled = workerDockRowSettled(row)
         const prompt = settled ? undefined : openApprovals.get(row.dispatchId)
         return !feed.available && !settled
           ? { ...row, state: 'unavailable' as const, changedAt: null }
@@ -152,11 +158,18 @@ export function NativeChatStructuredSessionStatus(props: {
       ),
     [target]
   )
+  // The rows as rendered now: a Stop pressed before the feed dropped, or a Retry, re-checks them.
+  const stopAvailable = useLatestHandler((dispatchId: string) =>
+    [...controlledWorkerRows.values()].some(
+      (row) => row.dispatchId === dispatchId && row.stoppable && row.ownerActionsAvailable
+    )
+  )
   const owner = useWorkerDockOwnerActions(
     target,
     feed.party,
     controlledWorkerIdentities,
-    workerOpen
+    workerOpen,
+    stopAvailable
   )
   const { dialog, failure } = owner
   if (crew) {
@@ -190,7 +203,6 @@ export function NativeChatStructuredSessionStatus(props: {
         isVisible={props.isVisible}
         sessionId={props.sessionId}
         workerRows={controlledWorkerRows}
-        ownerActionsAvailable={ownerActionsAvailable}
         workerIdentities={controlledWorkerIdentities}
         onOpenWorker={owner.open}
         onWorkerAction={owner.action}
@@ -210,7 +222,6 @@ export function NativeChatStructuredSessionStatus(props: {
         expanded={expandedHere}
         onExpandedChange={(value) => {
           setExpanded({ sessionId: props.sessionId, expanded: value })
-          roster.setExpanded(value)
         }}
         onStop={stop.onStop}
         currentAgentId={props.currentAgentId ?? null}

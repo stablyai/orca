@@ -100,6 +100,14 @@ function findPotentiallyLiveAttachmentsForCreator(
   return rows
 }
 
+/** Whether the creator's own live Dispatch starts its workers as chats: the row depth reads, one indexed lookup. */
+export function creatorStartsChatWorkers(this: OrchestrationDb, creator: DispatchCreator): boolean {
+  return (
+    creator.kind !== 'system' &&
+    findActiveDispatchForCreator.call(this, creator)?.chat_lineage === 1
+  )
+}
+
 export function resolveCreatorDepth(this: OrchestrationDb, creator: DispatchCreator): number {
   return (
     requireOrchestrationAdmission(
@@ -132,6 +140,7 @@ export function liveDispatchCreatorEvaluation(db: OrchestrationDb, creator: Disp
 }
 
 export type DispatchDepthMethods = {
+  creatorStartsChatWorkers: typeof creatorStartsChatWorkers
   resolveCreatorDepth: typeof resolveCreatorDepth
   resolveCreatorDispatchId: typeof resolveCreatorDispatchId
   resolveChildDispatchDepth: typeof resolveChildDispatchDepth
@@ -139,6 +148,7 @@ export type DispatchDepthMethods = {
 
 export function attachDispatchDepth(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
+    creatorStartsChatWorkers,
     resolveCreatorDepth,
     resolveCreatorDispatchId,
     resolveChildDispatchDepth

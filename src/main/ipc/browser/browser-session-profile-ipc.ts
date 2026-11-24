@@ -2,6 +2,7 @@ import { retainLocalGoogleCookieClearTarget } from '../../browser/cookies/browse
 import { browserCookieImportFailure } from '../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import { registerGoogleCookieClearHandlers } from './browser-google-cookie-clear-ipc'
 import { registerClientHostCookieImportHandlers } from './browser-client-host-cookie-import-ipc'
+import { registerCookieClearHandlers } from './browser-cookie-clear-ipc'
 import { BrowserWindow, ipcMain } from 'electron'
 import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
@@ -120,7 +121,11 @@ export function registerBrowserSessionProfileHandlers(): void {
       const sshTargetId = sshRouteTargetId(args)
       if (sshTargetId) {
         return importCookieFileIntoSshRoutePartition(
-          { sshTargetId, browserProfileId: args.profileId },
+          {
+            sshTargetId,
+            browserProfileId: args.profileId,
+            targetRegistered: await isRegisteredSshTarget(sshTargetId)
+          },
           () => pickCookieFile(parent)
         )
       }
@@ -195,15 +200,7 @@ export function registerBrowserSessionProfileHandlers(): void {
 
   registerGoogleCookieClearHandlers()
   registerClientHostCookieImportHandlers()
-
-  ipcMain.removeHandler('browser:session:clearDefaultCookies')
-
-  ipcMain.handle('browser:session:clearDefaultCookies', async (event): Promise<boolean> => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return false
-    }
-    return browserSessionRegistry.clearDefaultSessionCookies()
-  })
+  registerCookieClearHandlers()
 
   ipcMain.removeHandler('browser:session:detectBrowsers')
   ipcMain.removeHandler('browser:session:detectBrowsersForClientHost')
@@ -250,6 +247,7 @@ export function registerBrowserSessionProfileHandlers(): void {
         return importCookiesIntoSshRoutePartition({
           sshTargetId,
           browserProfileId: args.profileId,
+          targetRegistered: await isRegisteredSshTarget(sshTargetId),
           browserFamily: args.browserFamily,
           browserProfile: args.browserProfile
         })
@@ -267,6 +265,11 @@ export function registerBrowserSessionProfileHandlers(): void {
       return result
     }
   )
+}
+
+async function isRegisteredSshTarget(targetId: string): Promise<boolean> {
+  const { getSshConnectionStore } = await import('../ssh/ssh')
+  return getSshConnectionStore()?.getTarget(targetId) !== undefined
 }
 
 /** A page routed through an SSH host names its host, so the import lands in that host's jar. */

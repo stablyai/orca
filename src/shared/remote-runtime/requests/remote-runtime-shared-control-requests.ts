@@ -36,6 +36,8 @@ export function requestSharedControl<TResult>(args: {
   refreshTimeoutOnKeepalive?: boolean
   /** Runs once the socket is ready, just before sending; a throw rejects without sending. */
   beforeSend?: () => void
+  /** Tags a background request so an idle host doesn't count it as use. */
+  idlePassive?: boolean
   prepareGuard?: () => Promise<() => boolean | void>
   captureSendGuard?: () => () => void
 }): Promise<RuntimeRpcResponse<TResult>> {
@@ -54,7 +56,8 @@ export function requestSharedControl<TResult>(args: {
             deviceToken: args.deviceToken,
             method: args.method,
             params,
-            envelope
+            envelope,
+            idlePassive: args.idlePassive
           }),
         args.params,
         args.envelope,

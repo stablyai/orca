@@ -253,10 +253,10 @@ export type BrowserApi = {
   sessionImportFromBrowserForClientHost: (
     args: BrowserClientHostCookieImportArgs & BrowserCookieImportSelection
   ) => Promise<BrowserCookieImportResult | null>
-  /** Import sources for a client-hosted environment, or null when the server hosts its pages. */
-  sessionClientRouteImportSources: (args: {
-    environmentId: string
-  }) => Promise<Record<string, BrowserSessionProfileSource> | null>
+  /** Import sources of a paired server's or SSH host's jars on this desktop, keyed by browser profile ID. */
+  sessionClientRouteImportSources: (
+    args: { environmentId: string } | { sshTargetId: string }
+  ) => Promise<Record<string, BrowserSessionProfileSource> | null>
   /** Site permissions are local to this computer and browser profile. */
   sitePermissionsList: (args: { profileId: string }) => Promise<BrowserSitePermissionEntry[]>
   /** Null forgets the answer so the site is asked again. */

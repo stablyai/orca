@@ -9,6 +9,10 @@ import {
   type RemoteBrowserJavaScriptDialogAsk
 } from './remote-browser-javascript-dialog'
 import type { RemoteBrowserRpcCall } from './remote-browser-page-session'
+import type {
+  BrowserFileChooserAnswerResult,
+  BrowserFileChooserRequest
+} from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 
 type StreamedPagePromptRequest = BrowserPagePromptRequest<BrowserStreamedPagePromptKind>
 
@@ -19,6 +23,12 @@ export type RemoteBrowserPagePromptDeps = {
   /** False when no app on this computer opened the link. */
   openExternalAppLink: (url: string) => Promise<boolean>
   reportPagePromptFailed: (request: StreamedPagePromptRequest) => void
+  /** This computer's file picker; empty when the user closes it. */
+  pickFiles: (multiple: boolean) => Promise<string[]>
+  /** Copies the files to the page's host and returns its paths; empty when none arrived (reported here). */
+  stageFilesOnHost: (page: RemoteBrowserDialogPage, paths: string[]) => Promise<string[]>
+  /** The page's input was gone or the answer failed after the files uploaded. */
+  reportFilesNotDelivered: (error: unknown) => void
   callRpc: RemoteBrowserRpcCall
 }
 
@@ -45,6 +55,29 @@ export class RemoteBrowserPagePrompts {
       // Answered: the host's own close for it must not cancel the answer on its way.
       this.open.delete(request.requestId)
       void this.answerOnHost(page, request, answer).catch(() => {})
+    })
+  }
+
+  /** This window's input opened the page's file picker: pick here, upload, then hand the files to the page. */
+  chooseFiles(request: BrowserFileChooserRequest, page: RemoteBrowserDialogPage): void {
+    const answer = (files: string[] | null) =>
+      this.deps.callRpc<{ result: BrowserFileChooserAnswerResult }>(
+        page.target,
+        'browser.fileChooserAnswer',
+        { requestId: request.requestId, files },
+        { timeoutMs: 15_000, suppressFeatureInteraction: true }
+      )
+    void (async () => {
+      const picked = await this.deps.pickFiles(request.multiple)
+      const files = picked.length > 0 ? await this.deps.stageFilesOnHost(page, picked) : []
+      const { result } = await answer(files.length > 0 ? files : null)
+      if (files.length > 0 && result !== 'answered') {
+        this.deps.reportFilesNotDelivered(null)
+      }
+    })().catch((error: unknown) => {
+      // The page still waits on its picker: close it.
+      void answer(null).catch(() => {})
+      this.deps.reportFilesNotDelivered(error)
     })
   }
 

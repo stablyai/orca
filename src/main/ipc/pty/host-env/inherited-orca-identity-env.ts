@@ -5,7 +5,8 @@
 // as that owner terminal.
 import {
   BOT_TOOLS_TOKEN_ENV,
-  ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
+  ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV,
+  ORCA_AGENT_SESSION_TOOL_TOKEN_ENV
 } from '../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import {
   ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV,
@@ -30,6 +31,7 @@ export const INHERITED_ORCA_IDENTITY_ENV_KEYS = [
   ...AGENT_PANE_HOOK_ENV_KEYS,
   ...ORCA_AGENT_SESSION_CALLER_ENV_KEYS,
   ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV,
+  ORCA_AGENT_SESSION_TOOL_TOKEN_ENV,
   // A pane's workspace scope (terminal-workspace-scope.ts).
   'ORCA_WORKSPACE_ID',
   'ORCA_PROJECT_GROUP_ID',

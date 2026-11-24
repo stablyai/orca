@@ -836,6 +836,10 @@
             "keepForkUpToDate": "Keep Fork Up to Date"
           }
         },
+        "serverList": {
+          "updatesCount_one": "{{count}} update",
+          "updatesCount_other": "{{count}} updates"
+        },
         "sshHostServer": {
           "automationsLeftDisabled_one": "This host’s Orca server took over {{count}} automation but couldn’t turn it back on. Turn it on in Automations.",
           "automationsLeftDisabled_other": "This host’s Orca server took over {{count}} automations but couldn’t turn them back on. Turn them on in Automations.",
@@ -1481,6 +1485,7 @@
       "botMissing": "The bot this automation runs as no longer exists.",
       "botPaused": "{{bot}} is paused, so Orca skipped this run.",
       "botsOff": "Bots are turned off in Settings, so Orca skipped this run.",
+      "botsOffByTeam": "Bots are turned off by your team, so Orca skipped this run.",
       "destinationChanged": "The automation destination changed before this run could launch.",
       "hooksReviewBlocked": "The agent is waiting for someone to review new or changed hooks (\"Hooks need review\"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.",
       "legacyTwinHosts": "This automation was saved before Orca tracked which host it runs on, and its project is on more than one host. Open the automation and pick the host it should run on.",
@@ -1721,6 +1726,7 @@
       "toolGone": "This bot no longer has that tool.",
       "toolNameTaken": "This bot already has a tool named {{name}}.",
       "toolNameTakenByAgent": "Your {{agent}} already has a tool named {{name}}, which this bot gets too. Pick another name with --name.",
+      "toolNameTakenByCodexStdio": "Your Codex already has a local tool named {{name}}, so this bot's {{name}} can't run. Rename this bot's tool.",
       "toolNeedsNoSignIn": "{{name}} uses its saved values and needs no sign-in.",
       "toolNotFound": "This bot has no tool named {{name}}.",
       "toolNotUpdated": "The tool was not updated.",
@@ -1857,10 +1863,6 @@
       "matchCount_other": "{{count}} matches",
       "pausedMatches_one": "{{count}} paused match",
       "pausedMatches_other": "{{count}} paused matches"
-    },
-    "section": {
-      "showMore_one": "Show {{count}} more bot",
-      "showMore_other": "Show {{count}} more bots"
     },
     "settingsView": {
       "memoryFiles_one": "{{count}} file",
@@ -2772,6 +2774,8 @@
         "attachmentsExpired": "{{names}} expired.",
         "backgroundTaskNotStopped": "The background task wasn't stopped.",
         "backgroundTasksNotStopped": "The background tasks weren't stopped.",
+        "botToolsGatewayOutdated": "{{agent}}'s gateway is still running an older copy of Orca's plugin, so this bot's tools can't act as the bot. Run `hermes gateway stop`, then start a new chat.",
+        "botToolsNeedStatusHooks": "{{agent}} bots need Agent status hooks: they are how a bot's tools act as the bot. Turn them on for {{agent}} in Settings → Agents, then start a new chat.",
         "cancelUnconfirmed": "Cancellation was not confirmed.",
         "cancelled": "This message was withdrawn before the agent started it.",
         "chatClosed": "The chat closed before this message was sent.",
@@ -3121,7 +3125,7 @@
         "runWebSearch_other": "Searched the web {{count}} times"
       },
       "toolAdded": {
-        "heading": "Added a tool",
+        "added": "Added",
         "remove": "Remove",
         "removed": "Removed"
       },
@@ -3134,6 +3138,8 @@
         "agentCount_other": "{{count}} agents",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
+        "cleared_one": "Cleared 1 worker",
+        "cleared_other": "Cleared {{count}} workers",
         "commandCount_one": "{{count}} command",
         "commandCount_other": "{{count}} commands",
         "monitorCount_one": "{{count}} monitor",
@@ -3169,6 +3175,8 @@
         "compactAfterSending": "Your earlier message is still being sent. Run /compact once it has gone.",
         "continuationSuperseded": "This chat has moved on. Check the latest messages before continuing.",
         "conversationCleared": "This conversation has been cleared.",
+        "diskFull": "The disk on the computer running this chat is full.",
+        "freeDiskSpace": "Free up space on that disk, then try again.",
         "goalsUnsupported": "This agent doesn't support goals.",
         "historyUnavailable": "Orca couldn't open this chat's history right now.",
         "historyUnreadable": "Orca couldn't read this chat's saved history.",

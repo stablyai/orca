@@ -18,6 +18,7 @@ import {
 } from '../../cookies/staging/browser-session-cookie-staging'
 import {
   BROWSER_SESSION_META_FILE_NAME,
+  didReadBrowserSessionMeta,
   forgetBrowserSessionProfileMeta,
   getCachedBrowserExtensionEnabledIds,
   loadBrowserSessionMeta,
@@ -42,10 +43,13 @@ import {
   attachBrowserExtensionsToProfileSession,
   getBrowserExtensionSessionForProfile
 } from '../../extensions/profile-sessions/browser-extension-session-loader'
+import {
+  browserExtensionRouteSessionProfile as routeSessionProfile,
+  browserExtensionSourceProfileId as sourceProfileId
+} from '../../extensions/profile-sessions/browser-extension-route-profiles'
 import { isBrowserExtensionSupportEnabled } from '../../extensions/browser-extension-support'
 import { trackBrowserSessionCookies } from '../../cookies/session-restore/browser-session-cookie-restore'
-import { clearBrowserCookieJar } from '../../cookies/session-restore/browser-session-cookie-clear'
-import { withCookieImportSourceLock } from '../../cookies/mutation/cookie-mutation-lock'
+import { clearBrowserCookieJarWithSource } from '../../cookies/session-restore/browser-session-cookie-clear'
 
 type ExtensionIdListKey = 'enabledExtensionIdsByProfileId' | 'pinnedExtensionIdsByProfileId'
 type ExtensionIdListUpdate = (byProfile: Record<string, string[]>) => Record<string, string[]>
@@ -79,13 +83,12 @@ class BrowserSessionRegistry {
   }
 
   private resetDefaultProfile(): void {
-    const persisted = this.loadPersistedSource()
     this.profiles.set('default', {
       id: 'default',
       scope: 'default',
       partition: this.defaultPartition,
       label: 'Default',
-      source: persisted
+      source: this.loadPersistedMeta().defaultSource
     })
   }
 
@@ -93,10 +96,6 @@ class BrowserSessionRegistry {
     return (
       this.metadataPathOverride ?? join(app.getPath('userData'), BROWSER_SESSION_META_FILE_NAME)
     )
-  }
-
-  private loadPersistedSource(): BrowserSessionProfile['source'] {
-    return this.loadPersistedMeta().defaultSource
   }
 
   private persistMeta(updates: Partial<BrowserSessionMeta>): void {
@@ -112,8 +111,8 @@ class BrowserSessionRegistry {
     return loadBrowserSessionMeta(() => this.metadataPath, this.defaultPartition)
   }
 
-  // Restore profiles and their policies before any webview loads.
-  initializeBrowserSessionsFromPersistedState(): void {
+  // Restore profiles and their policies before any webview loads; false when the saved profiles could not be read.
+  initializeBrowserSessionsFromPersistedState(): boolean {
     const meta = this.loadPersistedMeta()
     const migration = inspectRetiredBrowserSessionProfileUserAgentModes(
       meta.profiles,
@@ -132,23 +131,23 @@ class BrowserSessionRegistry {
         this.profiles.set('default', { ...current, source: meta.defaultSource })
       }
     }
-    if (meta.profiles.length > 0) {
-      this.hydrateFromPersisted(meta.profiles)
-    }
+    const hydrated = this.hydrateFromPersisted(meta.profiles)
 
     // Hydration skips the default profile, so install its policies separately.
     const defaultProfile = this.getDefaultProfile()
     void installBrowserSessionPartitionPolicies(defaultProfile).catch(() => {
       console.warn('[proxy] Failed to apply proxy to browser partition', defaultProfile.partition)
     })
+    return hydrated && didReadBrowserSessionMeta(this.metadataPath)
   }
 
   /**
    * Starts a profile's extensions when it gets a page or Settings acts on them, never at launch, and
-   * they stop once it has none. Only local browser profiles (no route, SSH or doc preview) run them.
+   * they stop once it has none. A local profile, or an SSH or This-device page's session running a
+   * local profile's extensions; never a doc preview.
    */
   attachExtensions(profileId: string): void {
-    const profile = this.profiles.get(profileId)
+    const profile = this.profiles.get(profileId) ?? routeSessionProfile(profileId)
     // Why these first: the enabled list is read from disk, and this runs for every new tab.
     if (
       profile &&
@@ -159,7 +158,9 @@ class BrowserSessionRegistry {
     }
   }
 
-  getEnabledExtensionIds(profileId: string): string[] {
+  /** A remote page's session uses its local profile's list. */
+  getEnabledExtensionIds(pageProfileId: string): string[] {
+    const profileId = sourceProfileId(pageProfileId)
     const cached = getCachedBrowserExtensionEnabledIds(this.metadataPath, profileId)
     return cached ?? this.loadPersistedMeta().enabledExtensionIdsByProfileId[profileId] ?? []
   }
@@ -169,7 +170,7 @@ class BrowserSessionRegistry {
   }
 
   getPinnedExtensionIds(profileId: string): string[] {
-    return this.loadPersistedMeta().pinnedExtensionIdsByProfileId[profileId] ?? []
+    return this.loadPersistedMeta().pinnedExtensionIdsByProfileId[sourceProfileId(profileId)] ?? []
   }
 
   updatePinnedExtensionIds(update: ExtensionIdListUpdate): void {
@@ -221,10 +222,7 @@ class BrowserSessionRegistry {
   }
 
   resolvePartition(profileId: string | null | undefined): string {
-    if (!profileId) {
-      return this.defaultPartition
-    }
-    return this.profiles.get(profileId)?.partition ?? this.defaultPartition
+    return this.resolveKnownPartition(profileId) ?? this.defaultPartition
   }
 
   resolveKnownPartition(profileId: string | null | undefined): string | null {
@@ -311,33 +309,38 @@ class BrowserSessionRegistry {
     return true
   }
 
-  async clearDefaultSessionCookies(): Promise<boolean> {
-    const partition = this.defaultPartition
-    try {
-      const jar = session.fromPartition(partition)
-      return await withCookieImportSourceLock(jar, async () => {
-        if (this.defaultPartition !== partition) {
-          return false
-        }
-        // Clear import metadata first so quitting during storage cleanup cannot leave a stale source badge.
-        this.profiles.set('default', { ...this.getDefaultProfile(), source: null })
-        const pendingCookieImports = { ...this.loadPersistedMeta().pendingCookieImports }
-        delete pendingCookieImports[partition]
-        this.persistMeta({ defaultSource: null, pendingCookieDbPath: null, pendingCookieImports })
-        this.onProfilesChanged?.()
-        await clearBrowserCookieJar(jar)
-        return true
-      })
-    } catch {
+  /** Clears every cookie in one profile's own jar; false for an unknown profile or a failed clear. */
+  async clearProfileSessionCookies(profileId: string): Promise<boolean> {
+    const partition = this.profiles.get(profileId)?.partition
+    if (!partition) {
       return false
     }
+    return clearBrowserCookieJarWithSource(partition, () => {
+      const profile = this.profiles.get(profileId)
+      if (profile?.partition !== partition) {
+        return false
+      }
+      // Clear metadata first so quitting during storage cleanup cannot leave a stale badge.
+      this.profiles.set(profileId, { ...profile, source: null })
+      const pendingCookieImports = { ...this.loadPersistedMeta().pendingCookieImports }
+      delete pendingCookieImports[partition]
+      this.persistMeta({
+        ...(profileId === 'default'
+          ? { defaultSource: null, pendingCookieDbPath: null }
+          : { profiles: [...this.profiles.values()].filter((p) => p.id !== 'default') }),
+        pendingCookieImports
+      })
+      this.onProfilesChanged?.()
+      return true
+    }).catch(() => false)
   }
 
-  hydrateFromPersisted(profiles: BrowserSessionProfile[]): void {
-    for (const profile of profiles) {
-      if (!isValidPersistedBrowserSessionProfile(profile, this.activeOrcaProfileId)) {
-        continue
-      }
+  /** False when it rejected an entry: a profile on disk the registry lacks, not a deleted one. */
+  hydrateFromPersisted(profiles: BrowserSessionProfile[]): boolean {
+    const valid = profiles.filter((profile) =>
+      isValidPersistedBrowserSessionProfile(profile, this.activeOrcaProfileId)
+    )
+    for (const profile of valid) {
       this.profiles.set(profile.id, profile)
       if (profile.partition !== this.defaultPartition) {
         void installBrowserSessionPartitionPolicies(profile).catch(() => {
@@ -345,6 +348,7 @@ class BrowserSessionRegistry {
         })
       }
     }
+    return valid.length === profiles.length
   }
 }
 

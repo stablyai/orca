@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "Войти снова",
-      "usageSignInMessage": "Для выбранной учётной записи Claude нужен повторный вход. Откройте «Настройки → Учётные записи ИИ-провайдеров» или выберите «Системная по умолчанию»."
+      "usageSignInMessage": "Для этой учётной записи нужен повторный вход."
     }
   },
   "agentHistory": {
@@ -400,6 +400,17 @@
     "queuedMessages": {
       "deleteAll": "Удалить все",
       "editMessage": "Изменить сообщение",
+      "showLess": "Показать меньше",
+      "moreCount_one": "Ещё {{count}}",
+      "moreCount_other": "Ещё {{count}}",
+      "moreCount_few": "Ещё {{count}}",
+      "moreCount_many": "Ещё {{count}}",
+      "deleteMessage": "Удалить сообщение",
+      "queuedCount_one": "{{count}} сообщение в очереди",
+      "queuedCount_other": "{{count}} сообщения в очереди",
+      "queuedCount_few": "{{count}} сообщения в очереди",
+      "queuedCount_many": "{{count}} сообщений в очереди",
+      "foldNeedsAttention": "{{more}}, сообщение требует внимания",
       "pausedState": "Приостановлено",
       "queuedState": "В очереди",
       "resume": "Продолжить",
@@ -2378,6 +2389,8 @@
       "editSavedArguments": "Измените их в разделе «Настройки» > «Агенты» > «Аргументы».",
       "emptyMessage": "Сообщение пустое, поэтому оно не отправлено.",
       "fullAccessAsRoot": "{{agent}} не может работать в режиме «Полный доступ» от root. Выберите для {{agent}} другой режим доступа в разделе «Настройки → Агенты» на компьютере с этим чатом, затем начните новый чат.",
+      "botToolsNeedStatusHooks": "Ботам {{agent}} нужны «Хуки статуса агентов»: через них инструменты бота действуют от имени бота. Включите их для {{agent}} в разделе «Агенты» настроек, затем начните новый чат.",
+      "botToolsGatewayOutdated": "Шлюз {{agent}} всё ещё работает со старой версией плагина Orca, поэтому инструменты этого бота не могут действовать от его имени. Выполните `hermes gateway stop`, затем начните новый чат.",
       "historyInOtherAccount": "История этого чата находится в другой учётной записи Claude. Вернитесь в неё, чтобы продолжить.",
       "historyTooLarge": "История разговора слишком велика для восстановления здесь.",
       "hostFault": "В Orca произошла ошибка, поэтому действие не выполнено.",
@@ -2571,6 +2584,7 @@
       "images_one": "{{count}} изображение",
       "images_other": "{{count}} изображения",
       "moreActions": "Другие действия",
+      "you": "Вы",
       "send": "Отправить",
       "sendAgainHint": "Отправить это сообщение ещё раз",
       "sendHint": "Отправить это сообщение",
@@ -2680,6 +2694,7 @@
       "unsavedMarkdown": "Несохранённые изменения в Markdown",
       "urlPrompt": "Введите URL или оставьте поле пустым, чтобы открыть новую вкладку.",
       "allowAutoClose": "Разрешить автоматическое закрытие",
+      "agents": "Агенты",
       "renameTerminalFailed": "Не удалось переименовать терминал. {{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -2893,6 +2908,8 @@
       "conversationCleared": "Этот разговор очищен.",
       "goalsUnsupported": "Этот агент не поддерживает цели.",
       "historyUnavailable": "Сейчас Orca не удалось открыть историю чата.",
+      "diskFull": "Диск на компьютере, где работает этот чат, заполнен.",
+      "freeDiskSpace": "Освободите место на этом диске и повторите попытку.",
       "savedInOtherFolder": "Этот разговор сохранён в другой папке.",
       "historyUnreadable": "Orca не удалось прочитать сохранённую историю чата.",
       "historyUnusable": "Не удалось загрузить этот чат.",
@@ -2992,16 +3009,35 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "Рабочее дерево удалено.",
+      "projectRemoved": "Проект удалён из Orca.",
       "folderWorkspaceRemoved": "Рабочее пространство папки удалено."
     },
     "nativeChatView": {
       "linkedMessageMissing": "Не удалось найти это сообщение."
     },
+    "tabsSheet": {
+      "needsYou": "Требуют вашего внимания",
+      "working": "В работе",
+      "everythingElse": "Всё остальное",
+      "closeTab": "Закрыть {{title}}"
+    },
+    "tabRows": {
+      "browser": "Браузер",
+      "markdown": "Заметка Markdown",
+      "file": "Файл",
+      "chat": "Чат",
+      "terminal": "Терминал"
+    },
     "browserProfile": {
       "default": "По умолчанию"
     },
     "tabBar": {
+      "oneTab": "1 вкладка",
       "tabCount": "Вкладок: {{count}}",
+      "anotherNeedsYou": "другая вкладка требует вашего внимания",
+      "actionsHint": "Показывает действия для этой вкладки",
+      "next": "Следующая вкладка",
+      "previous": "Предыдущая вкладка",
       "hint": "Показывает все вкладки"
     }
   },
@@ -3617,6 +3653,9 @@
       "planModelUnavailable": "Модель «{{model}}» недоступна для {{label}}.",
       "planModelWithoutThinking": "Модель «{{model}}» не поддерживает настройку глубины рассуждений.",
       "planThinkingLevelInvalid": "Глубина рассуждений «{{level}}» недопустима для {{model}}.",
+      "commandTemplateEmptyDictationCleanup": "Не задан шаблон команды для правки диктовки.",
+      "dictationCleanupAgentUnsupported": "Выберите поддерживаемого агента для правки с ИИ в разделе «Настройки -> Голос -> Правка текста». Поддерживаемые агенты: {{agents}} или «Своя команда».",
+      "agentCannotGenerateDictationCleanup": "Агент «{{agent}}» не поддерживает правку диктовки. Поддерживаемые агенты: {{agents}} или «Своя команда».",
       "promptTooLargeForArgument": "Запрос для {{label}} слишком большой для передачи одним аргументом командной строки. Добавьте в индекс меньше изменений и повторите попытку.",
       "promptTooLargeForWindows": "Запрос для {{label}} слишком большой для командной строки Windows. Добавьте в индекс меньше изменений и повторите попытку.",
       "pullRequestDetailsUnparseable": "Не удалось разобрать сгенерированные сведения о пул-реквесте.",
@@ -4321,7 +4360,6 @@
       "extraAgentArguments": "Дополнительные аргументы агента",
       "allAutomations": "Все автоматизации",
       "schedule": "Расписание",
-      "nextRun": "Следующий запуск",
       "agent": "Агент",
       "project": "Проект",
       "unavailable": "Недоступно",
@@ -4372,7 +4410,6 @@
       "newWorkspacePerRun": "Новая рабочая область для каждого запуска",
       "instructions": "Инструкции",
       "runNow": "Запустить сейчас",
-      "viewAllRuns": "Показать все запуски",
       "savedAgent": "{{agent}} (сохранён)",
       "chooseAProjectSetUpOnThisHost": "Выберите проект, настроенный на этом хосте.",
       "newAutomation": "Новая автоматизация",
@@ -4396,9 +4433,6 @@
       "letYourAgentsWorkOnASchedule": "Пусть агенты работают по расписанию",
       "createAnAutomationToRunATaskOnThisHost": "Создайте автоматизацию для выполнения задачи на этом хосте.",
       "nextDate": "Следующий: {{date}}",
-      "lastResult": "Последний: {{status}} · {{date}}",
-      "latestResultNotReported": "Последний результат не сообщён",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Подключитесь к хосту заново для обновления или изменений. Сохранённая информация доступна ниже.",
       "recentRuns": "Недавние запуски",
       "outcome": "Результат",
@@ -4421,7 +4455,6 @@
       "fullOutputUnavailable": "Не удалось загрузить полный вывод.",
       "retryFullOutput": "Повторить",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "В загруженной истории нет подходящих запусков. Загрузите ещё, чтобы продолжить.",
-      "noMatchingRunsYet": "Подходящих запусков пока нет.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
       "scheduled": "По расписанию",
       "loadMoreRuns": "Загрузить ещё запуски",
@@ -4645,6 +4678,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "Прокрутить влево · скрыто: {{amount}}",
+      "scrollRight": "Прокрутить вправо · скрыто: {{amount}}"
+    },
     "link": {
       "pairTitle": "Подключить компьютер",
       "pairRequired": "Чтобы открыть эту ссылку, подключите этот телефон к компьютеру, а затем снова откройте ссылку.",
@@ -4830,15 +4867,18 @@
         "next": "Следующий элемент",
         "subWhere": "Элемент {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "Не сейчас"
-      },
       "write": {
         "offline": "{{host}} не в сети."
       },
       "thisComputer": "Компьютер",
       "readFailedClosedPage": "Не удалось прочитать больше закрытых элементов.",
-      "skillLimit": "Сообщение не отправлено. Выберите не больше {{limit}} файлов навыков и попробуйте снова."
+      "skillLimit": "Сообщение не отправлено. Выберите не больше {{limit}} файлов навыков и попробуйте снова.",
+      "ask": {
+        "notSentYet": "ещё не отправлено",
+        "replaced": "Агент задал новый вопрос. Прочитайте его, затем ответьте.",
+        "replacedByNewer": "Заменён более новым вопросом",
+        "skipped": "Пропущены"
+      }
     },
     "needs": {
       "chat": "Ваш чат с {{name}}",
@@ -5273,6 +5313,7 @@
       "toolClaudePrepareFailed": "Не удалось подготовить {{name}} в Claude Code. Проверьте настройку инструмента.",
       "toolNameTaken": "У этого бота уже есть инструмент с именем {{name}}.",
       "toolNameTakenByAgent": "У вашего {{agent}} уже есть инструмент с именем {{name}}, и этот бот тоже его получает. Выберите другое имя через --name.",
+      "toolNameTakenByCodexStdio": "У вашего Codex уже есть локальный инструмент с именем {{name}}, поэтому {{name}} этого бота не может работать. Переименуйте инструмент этого бота.",
       "toolNotUpdated": "Инструмент не обновлён.",
       "toolSignInAddressIncomplete": "Вставьте полный адрес, на котором закончилась страница входа.",
       "toolSignInAddressWrong": "Это не тот адрес, на котором заканчивается этот вход. Начните заново кнопкой «Подключить», войдите и вставьте адрес из браузера.",
@@ -5389,6 +5430,10 @@
       "today": "сегодня",
       "yesterday": "вчера",
       "lastTidied": "последняя уборка {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Продолжит в {{time}}",
+      "hitLimit": "Лимит исчерпан · сброс в {{time}}"
     }
   },
   "sidebar": {

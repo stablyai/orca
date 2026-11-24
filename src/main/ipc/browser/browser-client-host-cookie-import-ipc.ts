@@ -8,9 +8,12 @@ import {
   importCookieFileIntoClientRoutePartition,
   importCookiesIntoClientRoutePartition
 } from '../../browser/cookies/client-route/browser-client-route-cookie-import'
-import { clearClientRouteDefaultCookies } from '../../browser/cookies/client-route/browser-client-route-cookie-clear'
-import { openClientRouteCookieImportSources } from '../../browser/cookies/client-route/client-route-cookie-import-source-store'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+import {
+  clientRouteCookieImportSources,
+  openClientRouteCookieImportSources,
+  sshCookieImportRoute
+} from '../../browser/cookies/client-route/client-route-cookie-import-source-store'
 import { pickCookieFile } from '../../browser/cookies/imports/cookie-file-picker'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
@@ -38,8 +41,7 @@ export function registerClientHostCookieImportHandlers(): void {
   for (const channel of [
     'browser:session:importFromBrowserForClientHost',
     'browser:session:importCookiesForClientHost',
-    'browser:session:clientRouteImportSources',
-    'browser:session:clearDefaultCookiesForClientHost'
+    'browser:session:clientRouteImportSources'
   ]) {
     ipcMain.removeHandler(channel)
   }
@@ -82,22 +84,28 @@ export function registerClientHostCookieImportHandlers(): void {
     }
   )
 
-  // Overlay desktop imports unavailable to the server's profile records.
+  // Overlay desktop imports unavailable to the server's profile records, or to an SSH host's.
   ipcMain.handle(
     'browser:session:clientRouteImportSources',
-    async (event, args: { environmentId: string }) => {
-      if (!isTrustedBrowserRenderer(event.sender) || typeof args?.environmentId !== 'string') {
+    async (event, args: { environmentId?: unknown; sshTargetId?: unknown }) => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
         return {}
       }
-      const route = getPairedRuntimeBrowserClientRouteIdentity(args.environmentId)
+      const { environmentId, sshTargetId } = args ?? {}
+      if (typeof environmentId !== 'string') {
+        return typeof sshTargetId === 'string'
+          ? clientRouteCookieImportSources(sshCookieImportRoute(sshTargetId))
+          : {}
+      }
+      const route = getPairedRuntimeBrowserClientRouteIdentity(environmentId)
       if (!route) {
         return null
       }
       const { sources } = await openClientRouteCookieImportSources({
         ...route,
-        environmentId: args.environmentId
+        environmentId
       })
-      const current = getPairedRuntimeBrowserClientRouteIdentity(args.environmentId)
+      const current = getPairedRuntimeBrowserClientRouteIdentity(environmentId)
       if (!current) {
         return null
       }
@@ -105,17 +113,6 @@ export function registerClientHostCookieImportHandlers(): void {
         current.authorityConnectionIdentity === route.authorityConnectionIdentity
         ? sources
         : {}
-    }
-  )
-
-  // Clears the jar Settings import fills for this server's This-device pages.
-  ipcMain.handle(
-    'browser:session:clearDefaultCookiesForClientHost',
-    async (event, args: { environmentId: string }): Promise<boolean | null> => {
-      if (!isTrustedBrowserRenderer(event.sender) || typeof args?.environmentId !== 'string') {
-        return false
-      }
-      return clearClientRouteDefaultCookies(args.environmentId)
     }
   )
 }

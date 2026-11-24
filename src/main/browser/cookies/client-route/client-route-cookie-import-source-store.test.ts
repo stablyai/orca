@@ -57,8 +57,13 @@ it('persists concurrent imports separately for each Orca profile and pairing', a
       chromeProfile: { directory: 'Default', id: 'beta-import' }
     })
     vi.resetModules()
-    const { openClientRouteCookieImportSources: reopen, forgetClientRouteCookieImportSource } =
-      await import('./client-route-cookie-import-source-store')
+    const {
+      openClientRouteCookieImportSources: reopen,
+      forgetClientRouteCookieImportSource,
+      clientRouteCookieImportSources,
+      recordClientRouteCookieImportSource,
+      sshCookieImportRoute
+    } = await import('./client-route-cookie-import-source-store')
     const original = await reopen(route('alpha'))
     expect(original.sources.work?.chromeProfile?.id).toBe('work-import')
     expect(original.sources.personal?.browserFamily).toBe('firefox')
@@ -76,8 +81,23 @@ it('persists concurrent imports separately for each Orca profile and pairing', a
     await rm(storePath, { recursive: true })
     await rename(savedPath, storePath)
 
-    await forgetClientRouteCookieImportSource(route('alpha'), 'work')
-    await forgetClientRouteCookieImportSource(route('alpha'), 'legacy')
+    const sshRoute = sshCookieImportRoute('development')
+    await recordClientRouteCookieImportSource({
+      route: sshRoute,
+      profileId: 'work',
+      source: original.sources.work
+    })
+    expect((await clientRouteCookieImportSources(sshRoute)).work).toEqual({
+      browserFamily: 'chrome',
+      importedAt: 2,
+      profileName: undefined
+    })
+    expect((await reopen(route('alpha'))).sources.work?.chromeProfile?.id).toBe('work-import')
+    await forgetClientRouteCookieImportSource({ route: sshRoute, profileId: 'work' })
+    expect((await clientRouteCookieImportSources(sshRoute)).work).toBeUndefined()
+
+    await forgetClientRouteCookieImportSource({ route: route('alpha'), profileId: 'work' })
+    await forgetClientRouteCookieImportSource({ route: route('alpha'), profileId: 'legacy' })
     vi.resetModules()
     const { openClientRouteCookieImportSources: afterClear } =
       await import('./client-route-cookie-import-source-store')

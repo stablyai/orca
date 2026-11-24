@@ -8,7 +8,7 @@ import { RelayHostOfflineStreak } from './relay-host-offline-streak'
 import { RelayResolveTimeoutBudget } from './mobile-relay-resume-director'
 import { encodeBase64Url } from '../encryption/mobile-session-id-encoding'
 import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
-import { relayFailureAllowsGraceRetry } from './relay-credential-eligibility'
+import { isExplicitCredentialRejection } from './relay-credential-eligibility'
 import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
@@ -64,7 +64,7 @@ export class MobileRelaySessionEstablisher {
     this.relay = relay
   }
 
-  // Try only grace-repairable BAD_OUTER_CREDENTIAL failures with another eligible credential.
+  // Try the grace credential only after an explicit rejection.
   async dialEligible(
     credentials: { token: string; version: number }[]
   ): Promise<
@@ -81,7 +81,7 @@ export class MobileRelaySessionEstablisher {
       }
       lastError = result.error
       this.args.onDialFailure(result.error)
-      if (!relayFailureAllowsGraceRetry(result.error)) {
+      if (!isExplicitCredentialRejection(result.error)) {
         break
       }
       // Why: a rejected version stays invalid; retry only the grace credential.

@@ -127,6 +127,9 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const once = getOnceFlags(flags)
     const schedule = getCreateScheduleFlag(flags, on, once)
     const bot = await getBotTargetFlags(flags, client, on, schedule, once)
+    if (!bot && flags.has('item')) {
+      throw new RuntimeClientError('invalid_argument', "--item goes with --bot: a bot's own item")
+    }
     if (bot) {
       const saved = await createBotAutomation(client, flags, bot, schedule, on, once)
       printSavedAutomation(saved, json, on)

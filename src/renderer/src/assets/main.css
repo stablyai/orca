@@ -183,6 +183,16 @@
   --color-activity-bar-indicator: var(--tab-active-indicator, var(--foreground));
   /* The theme's accent where one is set (link color); the built-in note blue otherwise. */
   --color-theme-accent: var(--text-link, var(--callout-note));
+  /* A theme-accent button's fill: the accent, unless no label reads on it (then the built-in accent). */
+  --color-theme-accent-fill: var(--theme-accent-fill, var(--text-link, var(--callout-note)));
+  /* Its hover: 12% toward the neutral opposite of the label, so the label keeps 4.5:1 either way. */
+  --color-theme-accent-fill-hover: color-mix(
+    in srgb,
+    var(--theme-accent-fill, var(--text-link, var(--callout-note))) 88%,
+    oklch(from var(--theme-accent-foreground) calc(1 - l) 0 0)
+  );
+  /* The label on a theme-accent fill: derived from the accent (near-black or white, whichever reads better). */
+  --color-theme-accent-foreground: var(--theme-accent-foreground);
   --color-git-graph-ref: var(--git-graph-ref);
   --color-git-graph-remote-ref: var(--git-graph-remote-ref);
   --color-git-graph-base-ref: var(--git-graph-base-ref);
@@ -500,6 +510,8 @@
   --status-warning-foreground: color-mix(in srgb, var(--status-warning) 70%, var(--foreground));
   /* GitHub's own hues for the two callout kinds no status token covers. */
   --callout-note: #0969da;
+  /* Keep in step with accentInkHex (src/shared/color/accent-ink.ts): white reads better on this accent. */
+  --theme-accent-foreground: #fafafa;
   --callout-important: #8250df;
   --git-decoration-added: #587c0c;
   --git-decoration-modified: #895503;
@@ -537,6 +549,8 @@
   /* Warning text on a plain surface; the bare hue is ~3:1 on light backgrounds. */
   --status-warning-foreground: color-mix(in srgb, var(--status-warning) 70%, var(--foreground));
   --callout-note: #4493f8;
+  /* Keep in step with accentInkHex (src/shared/color/accent-ink.ts): near-black reads better on this accent. */
+  --theme-accent-foreground: #171717;
   --callout-important: #ab7df8;
   --git-decoration-added: #81b88b;
   --git-decoration-modified: #e2c08d;
@@ -2595,11 +2609,6 @@ html.native-shell .app-layout {
 
 .settings-target-highlight[data-settings-target-loose] {
   --settings-target-halo: 10px;
-  border-radius: var(--radius-md);
-}
-
-[data-settings-scroll-list] .settings-target-highlight {
-  --settings-target-tint: color-mix(in srgb, var(--foreground) 12%, transparent);
   border-radius: var(--radius-md);
 }
 

@@ -7,7 +7,7 @@ import { browserCookieImportSource } from '../route-partition/browser-route-part
 vi.mock('electron', () => ({}))
 vi.mock('../browser-cookie-import', () => ({}))
 vi.mock('../imports/import-cookie-file', () => ({}))
-vi.mock('../session-restore/browser-session-cookie-restore', () => ({}))
+vi.mock('../session-restore/browser-session-cookie-route-restore', () => ({}))
 
 let home: string
 let root: string

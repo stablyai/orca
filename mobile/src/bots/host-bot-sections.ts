@@ -146,8 +146,19 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
     ({ drawn: entry }) => entry.activity
   ).map(({ drawn: entry }) => entry)
   const searching = inputs.search.trim().length > 0
+  // Matching paused bots the options hide are counted, as the desktop's search does.
+  const pausedMatches =
+    searching && view.hidePausedBots
+      ? drawn.filter(({ entry }) => entry.kind === 'bot' && entry.bot.paused).length
+      : 0
+  // Nothing matches: the section goes, so the list's no-match view shows when no workspace matches either.
+  if (searching && arranged.length === 0 && pausedMatches === 0) {
+    return { sections: [], listedIdentities }
+  }
   const lines = searching
-    ? []
+    ? pausedMatches > 0
+      ? [{ key: 'paused-matches', text: pausedMatchesLine(pausedMatches) }]
+      : []
     : [
         ...(total === 0 && newBotHostId
           ? [{ key: 'no-bots', text: translate('bots.list.noBotsYet', 'No bots yet.') }]
@@ -159,8 +170,8 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
       {
         key: BOTS_GROUP_KEY,
         title: translate('bots.section.title', 'Bots'),
-        // Paused bots the options hide leave the count too, as on the desktop.
-        count: view.hidePausedBots ? shownTotal : total,
+        // Paused bots the options hide leave the count too, as on the desktop; a search counts its matches.
+        count: searching ? arranged.length : view.hidePausedBots ? shownTotal : total,
         ...(newBotHostId ? { newBotHostId } : {}),
         // Groups are this computer's: New group counts its bots alone, whatever the search hides.
         botCount: local?.kind === 'listed' ? local.bots.length : 0,
@@ -180,6 +191,12 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
     ],
     listedIdentities
   }
+}
+
+function pausedMatchesLine(count: number): string {
+  return count === 1
+    ? translate('bots.search.pausedMatches_one', '{{count}} paused match', { count })
+    : translate('bots.search.pausedMatches_other', '{{count}} paused matches', { count })
 }
 
 /** Whether a row stays in the project list: not one the Bots section lists. */
