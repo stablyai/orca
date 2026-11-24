@@ -38,6 +38,7 @@ const NODE_RUNTIME_INCLUDE = [
   'config/scripts/preflight/changed-checks/check-changed-slot.test.mjs',
   'config/scripts/preflight/changed-checks/check-changed-slot-recovery.test.mjs',
   'config/scripts/preflight/changed-checks/check-changed-slot-faults.test.mjs',
+  'config/scripts/preflight/changed-checks/check-changed-slot-degraded.test.mjs',
   // Bun on macOS fails its read-only directory case with ENOTEMPTY; Node passes it.
   ...(process.platform === 'darwin'
     ? ['config/scripts/worktree-storage/reclaim-worktree-generated-files.test.mjs']

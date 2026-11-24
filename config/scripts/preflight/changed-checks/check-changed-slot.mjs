@@ -62,6 +62,11 @@ export function queueFileFor(file) {
  *
  * The wait line reports what the waiter's last check of the queue showed. It never claims who
  * holds the lock now.
+ *
+ * If the queue cannot be used (it cannot be opened, set up or written with an error other than
+ * busy), the waiter prints one warning, leaves the queue and waits for the slot directly with the
+ * same BEGIN IMMEDIATE, as before the queue existed: exactly one run still holds the slot, but
+ * that waiter no longer keeps its place in line.
  */
 export async function acquireChangedCheckSlot(file = slotFile, options = {}) {
   const timing = timingFor(options.staleMs ?? 30_000, options.launcherCheckMs)
@@ -74,25 +79,58 @@ export async function acquireChangedCheckSlot(file = slotFile, options = {}) {
   let waiter
   try {
     lock = new DatabaseSync(file)
-    queue = new Queue(queueFileFor(file), timing)
-    waiter = new Waiter(queue, describeSelf(options.ancestors), timing, log)
-    // Test-only hooks: inside the decision transaction after the queue is read and before the
-    // claim; after a committed decision and before its line is printed; on each recount.
-    waiter.beforeClaim = options.beforeClaim
-    waiter.beforeReport = options.beforeReport
-    waiter.onRecount = options.onRecount
-    for (;;) {
-      signal?.throwIfAborted()
-      // Polls before the first await, so an uncontended call joins the queue in call order.
-      if (waiter.poll(lock)) {
-        return holdSlot(lock, queue, waiter.id, waiter.token, timing)
+    try {
+      queue = new Queue(queueFileFor(file), timing)
+      waiter = new Waiter(queue, describeSelf(options.ancestors), timing, log)
+      // Test-only hooks: inside the decision transaction after the queue is read and before the
+      // claim; after a committed decision and before its line is printed; on each recount.
+      waiter.beforeClaim = options.beforeClaim
+      waiter.beforeReport = options.beforeReport
+      waiter.onRecount = options.onRecount
+      for (;;) {
+        signal?.throwIfAborted()
+        // Polls before the first await, so an uncontended call joins the queue in call order.
+        if (waiter.poll(lock)) {
+          return holdSlot(lock, queue, waiter.id, waiter.token, timing)
+        }
+        await delay(pollMs, undefined, { signal })
       }
-      await delay(pollMs, undefined, { signal })
+    } catch (error) {
+      if (!(error instanceof QueueUnusable)) {
+        throw error
+      }
+      queue?.removeEventually(waiter?.id, waiter?.token)
+      log(
+        `The check:changed queue could not be used (${error.cause?.message ?? error.cause}); waiting for the slot without it.`
+      )
+      return await waitDirectly(lock, pollMs, signal)
     }
   } catch (error) {
     closeQuietly(lock)
     queue?.removeEventually(waiter?.id, waiter?.token)
     throw error
+  }
+}
+
+/** A queue failure other than busy: the waiter stops using the queue. */
+class QueueUnusable extends Error {
+  constructor(cause) {
+    super('queue unusable', { cause })
+  }
+}
+
+/** Waits for the slot the way runs did before the queue: the same lock, no place in line. */
+async function waitDirectly(lock, pollMs, signal) {
+  for (;;) {
+    signal?.throwIfAborted()
+    if (tryLock(lock)) {
+      let releasing
+      return () => {
+        releasing ??= track(Promise.resolve().then(() => closeQuietly(lock)))
+        return releasing
+      }
+    }
+    await delay(pollMs, undefined, { signal })
   }
 }
 
@@ -141,17 +179,17 @@ class Waiter {
         )
       }
     }
-    if (!this.queue.setup()) {
-      return false
-    }
     const claim = { locked: false }
     let outcome
     try {
+      if (!this.queue.setup()) {
+        return false
+      }
       // A busy queue skips this poll: no decision is made from unavailable or unrefreshed state.
       outcome = attempt(() => transaction(this.queue.db, () => this.decide(lock, claim)))
     } catch (error) {
       releaseClaim(lock, claim)
-      throw error
+      throw new QueueUnusable(error)
     }
     if (outcome === undefined) {
       releaseClaim(lock, claim)
@@ -191,11 +229,8 @@ class Waiter {
       s.beat.run(now, this.lane, id, this.token)
       lastBeat = now
     }
-    // Oldest first. A ticket that cannot be deleted is skipped: it no longer blocks anyone, since
-    // it has not checked in for staleMs, so only cleanup waits on it.
-    for (const row of s.expired.all(now - expireMs, id, EXPIRE_BATCH)) {
-      maintain(this.queue.db, () => s.remove.run(row.id))
-    }
+    // Oldest first, at most EXPIRE_BATCH per decision.
+    s.expire.run(now - expireMs, id, EXPIRE_BATCH)
 
     // Walk to the nearest ticket whose turn comes before ours. Each dead ticket met is removed and
     // each silent one moved aside, at most MAX_STEPS per decision, so later walks never revisit them.
@@ -209,8 +244,7 @@ class Waiter {
             [NORMAL, LAST_ID],
             [YIELDING, id]
           ]
-    walk: for (const [lane, start] of lanes) {
-      let before = start
+    walk: for (const [lane, before] of lanes) {
       for (let row = s.ahead.get(lane, before); row; row = s.ahead.get(lane, before)) {
         if (steps === MAX_STEPS) {
           // More to clear than one decision may do: not first yet; the next poll continues.
@@ -219,18 +253,13 @@ class Waiter {
           break walk
         }
         steps += 1
-        let cleared
         if (processGone(row.pid)) {
-          cleared = maintain(this.queue.db, () => s.remove.run(row.id))
+          s.remove.run(row.id)
         } else if (row.seen_at < now - staleMs) {
-          cleared = maintain(this.queue.db, () => s.silence.run(SILENT, row.id))
+          s.silence.run(SILENT, row.id)
         } else {
           blocker = row
           break walk
-        }
-        if (!cleared) {
-          // It could not be cleared, but a dead or silent ticket does not block: walk past it.
-          before = row.id
         }
       }
     }
@@ -240,11 +269,8 @@ class Waiter {
       if (tryLock(lock)) {
         claim.locked = true
         s.hold.run(now, now, id, this.token)
-        // Only one connection can hold the slot lock, so any other held ticket is left over. One
-        // that cannot be deleted stays, unnamed once its heartbeat is old, and blocks nothing.
-        for (const row of s.otherHeld.all(id)) {
-          maintain(this.queue.db, () => s.remove.run(row.id))
-        }
+        // Only one connection can hold the slot lock, so any other held ticket is left over.
+        s.removeOtherHeld.run(id)
         return { id, lastBeat, view: this.view, held: true }
       }
     }
@@ -263,16 +289,19 @@ class Waiter {
       this.lane !== previous.lane ||
       now - previous.at >= beatMs
     ) {
-      const count = (lane, before) => s.count.get(lane, before, COUNT_CAP).n
+      // Reading one entry past the cap tells "exactly 100" from "more than 100".
+      const count = (lane, before) => s.count.get(lane, before, COUNT_CAP + 1).n
       const parts =
         this.lane === NORMAL ? [count(NORMAL, id)] : [count(NORMAL, LAST_ID), count(YIELDING, id)]
       const totals = [count(NORMAL, LAST_ID), count(YIELDING, LAST_ID)]
       this.onRecount?.()
+      const ahead = parts.reduce((sum, n) => sum + n, 0)
+      const total = totals.reduce((sum, n) => sum + n, 0)
       place = {
-        position: parts.reduce((sum, n) => sum + n, 0) + 1,
-        total: totals.reduce((sum, n) => sum + n, 0),
-        positionCapped: parts.includes(COUNT_CAP),
-        totalCapped: totals.includes(COUNT_CAP)
+        position: ahead + 1,
+        total,
+        positionCapped: parts.some((n) => n > COUNT_CAP),
+        totalCapped: totals.some((n) => n > COUNT_CAP)
       }
       at = now
     }
@@ -296,13 +325,14 @@ class Waiter {
     const age = holder === undefined ? undefined : now - holder.seen_at
     const shown =
       age !== undefined && age >= 0 && age < this.timing.holderFreshMs && !processGone(holder.pid)
-    const notice = `${position}/${total}/${shown ? holder.id : first ? 'unnamed' : ''}`
+    const over = `over ${COUNT_CAP}`
+    const place = `${WAITING} Position ${positionCapped ? over : position} of ${totalCapped ? over : total}.`
+    // Keyed on what is shown, so a correction that keeps the same numbers is still printed.
+    const notice = `${place}/${shown ? holder.id : first ? 'unnamed' : ''}`
     if (notice === this.lastNotice) {
       return
     }
     this.lastNotice = notice
-    const over = `over ${COUNT_CAP}`
-    const place = `${WAITING} Position ${positionCapped ? over : position} of ${totalCapped ? over : total}.`
     if (shown) {
       const where = holder.cwd ? ` in ${holder.cwd}` : ''
       this.log(
@@ -340,7 +370,7 @@ function holdSlot(lock, queue, id, token, timing) {
   function release(resolve) {
     clearInterval(timer)
     // No heartbeat is written after this point, so from startedAt + holderFreshMs on, no waiter
-    // can name this holder, whatever its ticket says.
+    // shows this holder, whatever its ticket says, as long as the wall clock does not step back.
     const startedAt = Date.now()
     const unlock = () => {
       closeQuietly(lock)
@@ -381,7 +411,11 @@ function holdSlot(lock, queue, id, token, timing) {
 class Queue {
   constructor(file, timing) {
     // Short, so a stalled peer costs one poll; busy work is retried on a later poll.
-    this.db = new DatabaseSync(file, { timeout: 100 })
+    try {
+      this.db = new DatabaseSync(file, { timeout: 100 })
+    } catch (error) {
+      throw new QueueUnusable(error)
+    }
     this.timing = timing
     this.statements = undefined
     this.closed = false
@@ -399,7 +433,7 @@ class Queue {
         this.db.exec('PRAGMA journal_mode = WAL')
         this.db.exec('PRAGMA synchronous = NORMAL')
         transaction(this.db, () =>
-          this.db.exec(`CREATE TABLE IF NOT EXISTS tickets_v3 (
+          this.db.exec(`CREATE TABLE IF NOT EXISTS tickets_v4 (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             token TEXT NOT NULL,
             pid INTEGER NOT NULL,
@@ -409,9 +443,9 @@ class Queue {
             lane INTEGER NOT NULL,
             held_at INTEGER
           );
-          CREATE INDEX IF NOT EXISTS tickets_v3_lane ON tickets_v3 (lane, id) WHERE held_at IS NULL;
-          CREATE INDEX IF NOT EXISTS tickets_v3_held ON tickets_v3 (id) WHERE held_at IS NOT NULL;
-          CREATE INDEX IF NOT EXISTS tickets_v3_seen ON tickets_v3 (seen_at)
+          CREATE INDEX IF NOT EXISTS tickets_v4_lane ON tickets_v4 (lane, id) WHERE held_at IS NULL;
+          CREATE INDEX IF NOT EXISTS tickets_v4_held ON tickets_v4 (id) WHERE held_at IS NOT NULL;
+          CREATE INDEX IF NOT EXISTS tickets_v4_seen ON tickets_v4 (seen_at)
             WHERE held_at IS NULL;`)
         )
         this.statements = prepareStatements(this.db)
@@ -490,38 +524,37 @@ function prepareStatements(db) {
   const columns = 'id, pid, cwd, seen_at, lane, held_at'
   return {
     insert: db.prepare(
-      'INSERT INTO tickets_v3 (token, pid, cwd, enqueued_at, seen_at, lane) VALUES (?, ?, ?, ?, ?, ?)'
+      'INSERT INTO tickets_v4 (token, pid, cwd, enqueued_at, seen_at, lane) VALUES (?, ?, ?, ?, ?, ?)'
     ),
     own: db.prepare(
-      'SELECT lane, seen_at FROM tickets_v3 WHERE id = ? AND token = ? AND held_at IS NULL'
+      'SELECT lane, seen_at FROM tickets_v4 WHERE id = ? AND token = ? AND held_at IS NULL'
     ),
-    beat: db.prepare('UPDATE tickets_v3 SET seen_at = ?, lane = ? WHERE id = ? AND token = ?'),
-    expired: db.prepare(
-      `SELECT id FROM tickets_v3 INDEXED BY tickets_v3_seen
-       WHERE held_at IS NULL AND seen_at < ? AND id <> ? ORDER BY seen_at LIMIT ?`
+    beat: db.prepare('UPDATE tickets_v4 SET seen_at = ?, lane = ? WHERE id = ? AND token = ?'),
+    expire: db.prepare(
+      `DELETE FROM tickets_v4 WHERE id IN (
+         SELECT id FROM tickets_v4 INDEXED BY tickets_v4_seen
+         WHERE held_at IS NULL AND seen_at < ? AND id <> ? ORDER BY seen_at LIMIT ?)`
     ),
     ahead: db.prepare(
-      `SELECT ${columns} FROM tickets_v3 INDEXED BY tickets_v3_lane
+      `SELECT ${columns} FROM tickets_v4 INDEXED BY tickets_v4_lane
        WHERE held_at IS NULL AND lane = ? AND id < ? ORDER BY id DESC LIMIT 1`
     ),
     count: db.prepare(
-      `SELECT COUNT(*) AS n FROM (SELECT 1 FROM tickets_v3 INDEXED BY tickets_v3_lane
+      `SELECT COUNT(*) AS n FROM (SELECT 1 FROM tickets_v4 INDEXED BY tickets_v4_lane
        WHERE held_at IS NULL AND lane = ? AND id < ? LIMIT ?)`
     ),
-    silence: db.prepare('UPDATE tickets_v3 SET lane = ? WHERE id = ?'),
+    silence: db.prepare('UPDATE tickets_v4 SET lane = ? WHERE id = ?'),
     holder: db.prepare(
-      `SELECT ${columns} FROM tickets_v3 INDEXED BY tickets_v3_held
-       WHERE held_at IS NOT NULL ORDER BY held_at DESC, id DESC LIMIT 1`
+      `SELECT ${columns} FROM tickets_v4 INDEXED BY tickets_v4_held
+       WHERE held_at IS NOT NULL ORDER BY id DESC LIMIT 1`
     ),
-    otherHeld: db.prepare(
-      'SELECT id FROM tickets_v3 INDEXED BY tickets_v3_held WHERE held_at IS NOT NULL AND id <> ?'
-    ),
-    hold: db.prepare('UPDATE tickets_v3 SET held_at = ?, seen_at = ? WHERE id = ? AND token = ?'),
+    hold: db.prepare('UPDATE tickets_v4 SET held_at = ?, seen_at = ? WHERE id = ? AND token = ?'),
     beatHeld: db.prepare(
-      'UPDATE tickets_v3 SET seen_at = ? WHERE id = ? AND token = ? AND held_at IS NOT NULL'
+      'UPDATE tickets_v4 SET seen_at = ? WHERE id = ? AND token = ? AND held_at IS NOT NULL'
     ),
-    remove: db.prepare('DELETE FROM tickets_v3 WHERE id = ?'),
-    removeOwn: db.prepare('DELETE FROM tickets_v3 WHERE id = ? AND token = ?')
+    removeOtherHeld: db.prepare('DELETE FROM tickets_v4 WHERE held_at IS NOT NULL AND id <> ?'),
+    remove: db.prepare('DELETE FROM tickets_v4 WHERE id = ?'),
+    removeOwn: db.prepare('DELETE FROM tickets_v4 WHERE id = ? AND token = ?')
   }
 }
 
@@ -555,27 +588,6 @@ function transaction(db, body) {
       db.exec('ROLLBACK')
     }
     throw error
-  }
-}
-
-/**
- * Runs one change to another request's ticket inside the decision transaction. If that row cannot
- * be changed (a write error specific to it), only this change is undone and false is returned, so
- * one bad row never stops the queue. If the error ended the whole transaction, it is rethrown.
- */
-function maintain(db, change) {
-  db.exec('SAVEPOINT maintain')
-  try {
-    change()
-    db.exec('RELEASE maintain')
-    return true
-  } catch (error) {
-    if (!db.isTransaction || isBusy(error)) {
-      throw error
-    }
-    db.exec('ROLLBACK TO maintain')
-    db.exec('RELEASE maintain')
-    return false
   }
 }
 

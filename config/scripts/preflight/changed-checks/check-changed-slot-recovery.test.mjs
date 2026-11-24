@@ -1,17 +1,9 @@
-import { readdirSync } from 'node:fs'
-import { mkdir } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import { describe, expect, it } from 'vitest'
-import {
-  acquireChangedCheckSlot,
-  formatAge,
-  queueFileFor,
-  settleChangedCheckSlotCleanup
-} from './check-changed-slot.mjs'
+import { formatAge, settleChangedCheckSlotCleanup } from './check-changed-slot.mjs'
 import {
   createQueue,
   exitedPid,
-  file,
   insertTicket,
   observe,
   openQueue,
@@ -117,7 +109,7 @@ await next()`)
     const release = await run({ staleMs })
     const [held] = queueRows()
     const db = openQueue()
-    db.prepare('DELETE FROM tickets_v3 WHERE id = ?').run(held.id)
+    db.prepare('DELETE FROM tickets_v4 WHERE id = ?').run(held.id)
     // Several holder heartbeats pass with the row gone.
     await delay((staleMs / 15) * 5)
     expect(queueRows()).toEqual([])
@@ -132,7 +124,7 @@ await next()`)
     const staleMs = 1500
     const release = await run({ staleMs })
     const db = openQueue()
-    db.exec('DROP TABLE tickets_v3')
+    db.exec('DROP TABLE tickets_v4')
     // Holder heartbeats now fail with a non-busy error; none may escape or end the hold.
     await delay((staleMs / 15) * 5)
     const other = outsider()
@@ -216,7 +208,7 @@ await next()`)
     const holder = await run({ staleMs })
     // Leave a gap in the ids so another ticket can be placed ahead of a waiter that already polled.
     const gap = insertTicket({ pid: process.pid })
-    openQueue().prepare('DELETE FROM tickets_v3 WHERE id = ?').run(gap)
+    openQueue().prepare('DELETE FROM tickets_v4 WHERE id = ?').run(gap)
     const middle = run({ staleMs, pollMs: 50 })
     await until(() => queueRows().length === 2, 'middle ticket')
     // A live process owns the ticket ahead of the middle waiter, so both waiters count it.
@@ -246,15 +238,6 @@ await next()`)
     )()
     await within(waiter.promise, 'waiter')
   }, 240_000)
-
-  it('closes the slot connection and keeps the original error when the queue cannot open', async () => {
-    await mkdir(queueFileFor(file), { recursive: true })
-    const before = readdirSync('/dev/fd').length
-    await expect(acquireChangedCheckSlot(file, { ancestors: [], log: () => {} })).rejects.toThrow(
-      /unable to open/i
-    )
-    expect(readdirSync('/dev/fd').length).toBe(before)
-  }, 180_000)
 
   it('formats holder ages', () => {
     expect(formatAge(12_000)).toBe('12s')

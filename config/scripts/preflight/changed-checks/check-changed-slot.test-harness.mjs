@@ -35,10 +35,14 @@ let rawRoot
 const owned = []
 
 function own(cleanup) {
-  if (teardownClosed) {
-    throw new Error('a resource was created after teardown finished draining')
-  }
   owned.push(cleanup)
+}
+
+/** Every helper checks this before it creates anything, so nothing is created unowned. */
+function assertOpen() {
+  if (teardownClosed) {
+    throw new Error('a test resource was requested after teardown finished draining')
+  }
 }
 
 /** Teardown could not confirm something stopped; the slot and temp root are kept, not torn down. */
@@ -62,14 +66,14 @@ export function registerSlotHarness() {
     teardownDeadline = Date.now() + TEARDOWN_MS
     const errors = []
     // Owned cleanups and background slot cleanup can each start more of the other, so drain both
-    // until a pass finds nothing new; every wait shares the one teardown deadline.
+    // until a pass finds nothing new. Every wait, cleanups included, shares the one deadline.
     for (;;) {
       while (owned.length > 0) {
-        const cleanup = owned.pop()
-        try {
-          await cleanup()
-        } catch (error) {
-          errors.push(error)
+        const outcome = await bounded(owned.pop(), DRAIN_MS)
+        if (!outcome.settled) {
+          errors.push(new CustodyKept('a cleanup did not finish before the teardown deadline'))
+        } else if (outcome.error) {
+          errors.push(outcome.error)
         }
       }
       if (!(await settles(settleChangedCheckSlotCleanup(), DRAIN_MS))) {
@@ -81,15 +85,35 @@ export function registerSlotHarness() {
       }
     }
     teardownClosed = true
+    if (owned.length > 0) {
+      // Registered too late to drain: reported and dropped, so they never reach the next test.
+      errors.push(new CustodyKept(`${owned.length} cleanup(s) registered after draining stopped`))
+      owned.length = 0
+    }
     if (errors.some((error) => error instanceof CustodyKept)) {
       errors.push(new CustodyKept(`kept ${rawRoot} because something may still be using it`))
     } else {
-      await rm(rawRoot, { recursive: true, force: true })
+      const removal = await bounded(() => rm(rawRoot, { recursive: true, force: true }), DRAIN_MS)
+      if (!removal.settled || removal.error) {
+        errors.push(removal.error ?? new CustodyKept(`could not remove ${rawRoot} in time`))
+      }
     }
     if (errors.length > 0) {
       throw new AggregateError(errors, 'teardown failed')
     }
   })
+}
+
+/** Runs `fn` against the teardown deadline; reports whether it settled and how. */
+async function bounded(fn, timeoutMs) {
+  let error
+  const work = Promise.resolve()
+    .then(fn)
+    .catch((caught) => {
+      error = caught
+    })
+  const settled = await settles(work, timeoutMs)
+  return { settled, error }
 }
 
 async function settles(promise, timeoutMs) {
@@ -114,13 +138,18 @@ async function settles(promise, timeoutMs) {
  * released. If admitted work does not settle, the slot stays held and the root is kept.
  */
 export function run(options = {}, onAcquired = (release) => release) {
+  assertOpen()
   const controller = new AbortController()
+  // A test's own signal is combined with, never substituted for, the harness's.
+  const signal = options.signal
+    ? AbortSignal.any([controller.signal, options.signal])
+    : controller.signal
   const acquisition = acquireChangedCheckSlot(file, {
     pollMs: 5,
     log: () => {},
     ancestors: [],
-    signal: controller.signal,
-    ...options
+    ...options,
+    signal
   })
   const continuation = acquisition.then(onAcquired)
   continuation.catch(() => {})
@@ -174,6 +203,7 @@ export function within(promise, label, timeoutMs = 60_000) {
 
 /** `program` exists so a test can exercise a spawn that fails. */
 export function spawnOwned(body, { program = process.execPath } = {}) {
+  assertOpen()
   const child = spawn(
     program,
     [
@@ -207,7 +237,8 @@ ${body}`
   const closed = new Promise((resolve) => {
     child.once('close', (code, signal) => resolve({ code, signal }))
   })
-  let killedHere = false
+  // Errors seen before our own kill are never excused by it.
+  let errorsBeforeKill
   own(async () => {
     if (!(await started)) {
       // A failed spawn has no process; its pipes may still report 'close', but need not.
@@ -216,7 +247,8 @@ ${body}`
     }
     if (child.exitCode === null && child.signalCode === null) {
       try {
-        killedHere = child.kill('SIGKILL')
+        errorsBeforeKill ??= errors.length
+        child.kill('SIGKILL')
       } catch (error) {
         throw new CustodyKept(`child ${child.pid} could not be killed: ${error.message}`)
       }
@@ -226,7 +258,10 @@ ${body}`
     }
     // A pipe broken by our own kill is expected; anything else the child's pipes reported is not.
     const unexpected = errors.filter(
-      (error) => !(killedHere && ['EPIPE', 'ERR_STREAM_DESTROYED'].includes(error.code))
+      (error, index) =>
+        errorsBeforeKill === undefined ||
+        index < errorsBeforeKill ||
+        !['EPIPE', 'ERR_STREAM_DESTROYED'].includes(error.code)
     )
     if (unexpected.length > 0) {
       throw new AggregateError(unexpected, `child ${child.pid} reported errors`)
@@ -262,13 +297,15 @@ ${body}`
       }, `child output ${text}`)
     },
     async kill() {
-      killedHere = child.kill('SIGKILL')
+      errorsBeforeKill ??= errors.length
+      child.kill('SIGKILL')
       await closed
     }
   }
 }
 
 export function openQueue() {
+  assertOpen()
   const db = new DatabaseSync(queueFileFor(file))
   own(() => db.isOpen && db.close())
   return db
@@ -277,7 +314,7 @@ export function openQueue() {
 export function queueRows() {
   const db = new DatabaseSync(queueFileFor(file))
   try {
-    return db.prepare('SELECT * FROM tickets_v3 ORDER BY id').all()
+    return db.prepare('SELECT * FROM tickets_v4 ORDER BY id').all()
   } finally {
     db.close()
   }
@@ -296,7 +333,7 @@ export function insertTicket({
     return Number(
       db
         .prepare(
-          'INSERT INTO tickets_v3 (id, token, pid, cwd, enqueued_at, seen_at, lane, held_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+          'INSERT INTO tickets_v4 (id, token, pid, cwd, enqueued_at, seen_at, lane, held_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         )
         .run(id, randomUUID(), pid, cwd, seenAt, seenAt, lane, heldAt).lastInsertRowid
     )
@@ -307,10 +344,11 @@ export function insertTicket({
 
 /** Keeps a ticket checking in, like a live waiter that never reaches the front, until teardown. */
 export function keepCheckingIn(id) {
+  assertOpen()
   const db = new DatabaseSync(queueFileFor(file), { timeout: 100 })
   const timer = setInterval(() => {
     try {
-      db.prepare('UPDATE tickets_v3 SET seen_at = ? WHERE id = ?').run(Date.now(), id)
+      db.prepare('UPDATE tickets_v4 SET seen_at = ? WHERE id = ?').run(Date.now(), id)
     } catch {
       // Busy: the next beat retries.
     }
@@ -323,6 +361,7 @@ export function keepCheckingIn(id) {
 
 /** A raw connection on the slot file, like a run from a checkout without the queue. */
 export function outsider() {
+  assertOpen()
   const db = new DatabaseSync(file)
   own(() => db.isOpen && db.close())
   return {

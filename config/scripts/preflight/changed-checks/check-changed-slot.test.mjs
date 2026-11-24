@@ -208,59 +208,121 @@ process.exit(0)`)
     await within(waiter.promise, 'waiter')
   }, 180_000)
 
-  it('stops counting a long line at its cap and says so', async () => {
+  for (const { ahead, line } of [
+    { ahead: 99, line: 'Position 100 of 100.' },
+    { ahead: 100, line: 'Position 101 of over 100.' },
+    { ahead: 101, line: 'Position over 100 of over 100.' }
+  ]) {
+    it(`says ${line} with ${ahead} tickets ahead, and prints the correction when one leaves`, async () => {
+      const holder = await run({ staleMs: 60_000 })
+      const ids = []
+      for (let index = 0; index < ahead; index++) {
+        ids.push(insertTicket({ pid: process.pid }))
+      }
+      const messages = []
+      observe(run({ staleMs: 60_000, log: (message) => messages.push(message) }))
+      await until(() => messages.length > 0, 'wait message')
+      expect(messages[0].startsWith(`${WAITING} ${line} `)).toBe(true)
+      // One ticket ahead leaves: the new count must be printed even where the sum barely moves.
+      openQueue().prepare('DELETE FROM tickets_v4 WHERE id = ?').run(ids[0])
+      const corrected = {
+        99: 'Position 99 of 99.',
+        100: 'Position 100 of 100.',
+        101: 'Position 101 of over 100.'
+      }[ahead]
+      await until(
+        () => messages.at(-1).startsWith(`${WAITING} ${corrected} `),
+        'corrected count',
+        30_000
+      )
+      await holder()
+    }, 180_000)
+  }
+
+  it('counts each lane against the cap separately, so 60 + 41 ahead is shown exactly', async () => {
     const holder = await run({ staleMs: 60_000 })
-    for (let index = 0; index < 120; index++) {
+    for (let index = 0; index < 60; index++) {
       insertTicket({ pid: process.pid })
     }
+    for (let index = 0; index < 41; index++) {
+      insertTicket({ pid: process.pid, lane: 1 })
+    }
     const messages = []
-    observe(run({ staleMs: 60_000, log: (message) => messages.push(message) }))
-    await until(() => messages.length > 0, 'wait message')
-    expect(messages[0]).toMatch(new RegExp(`^${WAITING} Position over 100 of over 100\\. `))
+    observe(
+      run({
+        staleMs: 60_000,
+        ancestors: [await exitedPid()],
+        log: (message) => messages.push(message)
+      })
+    )
+    await until(() => messages.some((message) => message.startsWith(WAITING)), 'wait message')
+    expect(messages.find((message) => message.startsWith(WAITING))).toMatch(
+      new RegExp(`^${WAITING} Position 102 of 102\\. `)
+    )
+    await holder()
+  }, 180_000)
+
+  it('prints the corrected line when a ticket changes lane and the numbers stay the same', async () => {
+    const holder = await run({ staleMs: 60_000 })
+    const ids = []
+    for (let index = 0; index < 101; index++) {
+      ids.push(insertTicket({ pid: process.pid }))
+    }
+    const messages = []
+    observe(
+      run({
+        staleMs: 60_000,
+        ancestors: [await exitedPid()],
+        log: (message) => messages.push(message)
+      })
+    )
+    const line = (text) => messages.some((message) => message.startsWith(`${WAITING} ${text} `))
+    await until(() => line('Position over 100 of over 100.'), 'capped line')
+    // 101 + 0 ahead becomes 100 + 1: the same position and total, but now countable exactly.
+    openQueue().prepare('UPDATE tickets_v4 SET lane = 1 WHERE id = ?').run(ids[0])
+    await until(() => line('Position 102 of 102.'), 'corrected line', 30_000)
     await holder()
   }, 180_000)
 
   for (const lane of [0, 2]) {
-    for (const { side, age, first } of [
-      { side: 'inside', age: 25_000, first: 'returned' },
-      { side: 'outside', age: 35_000, first: 'later' }
+    for (const { side, age, keeps } of [
+      { side: 'inside', age: 25_000, keeps: true },
+      { side: 'outside', age: 35_000, keeps: false }
     ]) {
       it(`keeps or gives up its place on return from ${side} the expiry horizon (lane ${lane})`, async () => {
-        // expireMs = 10 * staleMs = 30 s. The later waiter's 500 ms polls stay well inside the 3 s
-        // stale window even on a loaded host, so it is never set aside.
+        // expireMs = 10 * staleMs = 30 s.
         const staleMs = 3000
         const holder = await run({ staleMs })
-        const order = []
-        // The returning waiter polls far more often than the later one, so it finds its own row
-        // still present before anyone else could expire it.
-        const returned = run({ staleMs, pollMs: 5 }, (release) => {
-          order.push('returned')
-          return release()
-        })
+        const returned = observe(run({ staleMs, pollMs: 5 }))
         await until(() => queueRows().some((row) => row.held_at === null), 'returning ticket')
         const ticket = queueRows().find((row) => row.held_at === null)
-        const later = run({ staleMs, pollMs: 500 }, (release) => {
-          order.push('later')
-          return release()
-        })
+        // The later waiter decides once, when it joins, and then not for an hour: it can neither
+        // prune the returning ticket nor be the first to decide after the change below.
+        observe(run({ staleMs, pollMs: 60 * 60_000 }))
         await until(
           () => queueRows().filter((row) => row.held_at === null).length === 2,
           'later ticket'
         )
+        const later = queueRows().find((row) => row.held_at === null && row.id !== ticket.id)
         // As if the returning waiter had stopped for `age`, with its row still present.
+        const changedAt = Date.now()
         openQueue()
-          .prepare('UPDATE tickets_v3 SET seen_at = ?, lane = ? WHERE id = ?')
-          .run(Date.now() - age, lane, ticket.id)
+          .prepare('UPDATE tickets_v4 SET seen_at = ?, lane = ? WHERE id = ?')
+          .run(changedAt - age, lane, ticket.id)
+        // The returning waiter is the only one polling, so its next decision is the first one.
         await until(() => {
-          const rows = queueRows()
-          const kept = rows.find((row) => row.id === ticket.id)
-          return side === 'inside'
-            ? kept?.lane === 0 && kept.seen_at > Date.now() - staleMs
-            : !kept && rows.filter((row) => row.held_at === null).length === 2
-        }, 'returning waiter checked in')
+          const rows = queueRows().filter((row) => row.held_at === null)
+          return keeps
+            ? rows.some((row) => row.id === ticket.id && row.seen_at >= changedAt)
+            : !rows.some((row) => row.id === ticket.id) && rows.length === 2
+        }, 'returning waiter decided')
+        const mine = queueRows().find((row) => row.held_at === null && row.id !== later.id)
+        // Inside the horizon it keeps its id, ahead of the later waiter; outside, it rejoins
+        // behind it, in its own lane.
+        expect(mine.id < later.id).toBe(keeps)
+        expect(mine.lane).toBe(0)
+        expect(returned.settled).toBe(false)
         await holder()
-        await within(Promise.all([returned, later]), 'both waiters')
-        expect(order[0]).toBe(first)
       }, 180_000)
     }
   }
@@ -343,18 +405,18 @@ process.exit(0)`)
       // moves it aside.
       const peer = spawnOwned(`const db = new DatabaseSync(queueFile, { timeout: 5000 })
 const id = Number(db.prepare(
-  'INSERT INTO tickets_v3 (token, pid, cwd, enqueued_at, seen_at, lane) VALUES (\\'peer\\', ?, ?, ?, ?, 0)'
+  'INSERT INTO tickets_v4 (token, pid, cwd, enqueued_at, seen_at, lane) VALUES (\\'peer\\', ?, ?, ?, ?, 0)'
 ).run(process.pid, process.cwd(), Date.now() - 120_000, Date.now() - 120_000).lastInsertRowid)
 process.stdout.write('queued\\n')
 await next()
 db.exec('BEGIN IMMEDIATE')
-db.prepare('UPDATE tickets_v3 SET seen_at = ?, lane = 0 WHERE id = ?').run(Date.now(), id)
+db.prepare('UPDATE tickets_v4 SET seen_at = ?, lane = 0 WHERE id = ?').run(Date.now(), id)
 process.stdout.write('refreshing\\n')
 await next()
 db.exec('COMMIT')
 process.stdout.write('committed\\n')
 await next()
-db.prepare('DELETE FROM tickets_v3 WHERE id = ?').run(id)
+db.prepare('DELETE FROM tickets_v4 WHERE id = ?').run(id)
 process.stdout.write('left\\n')
 await next()`)
       await peer.waitFor('queued')
@@ -395,7 +457,7 @@ await next()`)
           const other = new DatabaseSync(queueFileFor(file), { timeout: 0 })
           try {
             other
-              .prepare('UPDATE tickets_v3 SET seen_at = ?, lane = 0 WHERE id = ?')
+              .prepare('UPDATE tickets_v4 SET seen_at = ?, lane = 0 WHERE id = ?')
               .run(Date.now(), peer)
             attempts.push('committed')
           } catch (error) {
@@ -447,7 +509,7 @@ await next()`)
       return release()
     })
     const db = openQueue()
-    db.prepare('DELETE FROM tickets_v3 WHERE id = ?').run(firstTicket.id)
+    db.prepare('DELETE FROM tickets_v4 WHERE id = ?').run(firstTicket.id)
     await until(
       () => queueRows().filter((row) => row.held_at === null).length === 2,
       'first ticket rejoining'

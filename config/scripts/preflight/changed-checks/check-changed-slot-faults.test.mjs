@@ -4,7 +4,6 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { describe, expect, it } from 'vitest'
 import { settleChangedCheckSlotCleanup } from './check-changed-slot.mjs'
 import {
-  exitedPid,
   insertTicket,
   root,
   keepCheckingIn,
@@ -26,7 +25,7 @@ registerSlotHarness()
 
 /** Makes every delete of one ticket fail as a write error would, until the trigger is dropped. */
 function failDeletes(db, id, name) {
-  db.exec(`CREATE TRIGGER ${name} BEFORE DELETE ON tickets_v3 WHEN old.id = ${id}
+  db.exec(`CREATE TRIGGER ${name} BEFORE DELETE ON tickets_v4 WHEN old.id = ${id}
     BEGIN SELECT RAISE(ABORT, 'simulated write failure'); END`)
   return () => db.exec(`DROP TRIGGER IF EXISTS ${name}`)
 }
@@ -157,47 +156,12 @@ await next()`)
       expect(message).not.toContain('The queue last showed')
     }
     recover()
-    db.prepare('DELETE FROM tickets_v3 WHERE id = ?').run(ahead)
+    db.prepare('DELETE FROM tickets_v4 WHERE id = ?').run(ahead)
     legacy.close()
     await within(waiter.promise, 'waiter')
     await settleChangedCheckSlotCleanup()
     expect(queueRows().some((row) => row.id === held.id)).toBe(false)
   }, 180_000)
-
-  for (const { label, ticket } of [
-    {
-      label: 'an expired ticket',
-      ticket: async () => ({ pid: process.pid, seenAt: Date.now() - 60 * 60_000, lane: 2 })
-    },
-    { label: 'a dead ticket ahead', ticket: async () => ({ pid: await exitedPid() }) },
-    {
-      label: 'a left-over held ticket',
-      ticket: async () => ({
-        pid: process.pid,
-        heldAt: Date.now() - 60_000,
-        seenAt: Date.now() - 60_000
-      })
-    }
-  ]) {
-    it(`admits a waiter although ${label} cannot be deleted, and clears it once it can`, async () => {
-      await (
-        await run()
-      )()
-      const stuck = insertTicket(await ticket())
-      const db = openQueue()
-      const recover = failDeletes(db, stuck, 'keep_stuck')
-      // One bad row must not stop the queue: the claim goes through and the row stays.
-      const release = await within(run({ staleMs: 1000 }), 'waiter despite the stuck ticket')
-      expect(queueRows().some((row) => row.id === stuck)).toBe(true)
-      await release()
-      recover()
-      // Once the row can be deleted, the next decision clears it.
-      await (
-        await within(run({ staleMs: 1000 }), 'next waiter')
-      )()
-      expect(queueRows().some((row) => row.id === stuck)).toBe(false)
-    }, 180_000)
-  }
 
   it('reports a holder only as what the queue last showed, even when it hands over before the line prints', async () => {
     // A 6 s naming window, so the handover inside the pause still leaves the holder's last
@@ -328,23 +292,5 @@ await next()`)
     await within(settleChangedCheckSlotCleanup(), 'removal giving up')
     expect(queueRows().find((row) => row.id === ticket.id)?.lane).toBe(2)
     recover()
-  }, 180_000)
-
-  it('leaves a later call from the same process alone after an earlier join failed and rolled back', async () => {
-    await (
-      await run()
-    )()
-    const db = openQueue()
-    db.exec(`CREATE TRIGGER fail_join BEFORE INSERT ON tickets_v3
-      BEGIN SELECT RAISE(ABORT, 'simulated write failure'); END`)
-    await expect(run()).rejects.toThrow('simulated write failure')
-    db.exec('DROP TRIGGER fail_join')
-    // The rolled-back join leaves its id free, so the next ticket reuses it.
-    const release = await within(run(), 'later call')
-    await settleChangedCheckSlotCleanup()
-    const rows = queueRows()
-    expect(rows).toHaveLength(1)
-    expect(rows[0].held_at).not.toBeNull()
-    await release()
   }, 180_000)
 })
