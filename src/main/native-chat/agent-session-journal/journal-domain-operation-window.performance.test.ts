@@ -10,6 +10,7 @@ import { applyJournalDomainDispatch } from './journal-domain-dispatch'
 import { applyJournalDomainItem } from './journal-domain-item'
 import { readJournalDomainOperationWindow } from './journal-domain-operation-window'
 import { JournalSqlScope } from './journal-sql-scope'
+import { keptSends, type Send } from './journal-operation-window-sends'
 import { codexTurnLifecycleIdentity } from '../../codex/structured/journal/codex-structured-journal-translation-turns'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -293,4 +294,41 @@ it('reads the newest turns with the same work however many turns came before the
   expect([own.work.rows, pinned.work.rows, whole.work.rows]).toEqual([74, 2001, 1999])
   expect(anchored.snapshot.submissions.map((send) => send.clientMessageId)).toEqual(long.sends)
   expect(snapshot.submissions.map((send) => send.clientMessageId)).toContain('m0')
+})
+
+it('walks a family of sends linked by provider id and queued card once, however long it is', () => {
+  // Send i shares a provider id with i+1 when i is even and a queued card when odd; only the newest
+  // sits in the window, so the whole chain is held through its links.
+  const family = (size: number) => {
+    let reads = 0
+    const sends = Array.from({ length: size }, (_, index): Send => {
+      const link = (odd: boolean, at: number) => (at % 2 === (odd ? 1 : 0) ? `l${at}` : null)
+      const provider = link(false, index) ?? link(false, index - 1)
+      const card = link(true, index) ?? link(true, index - 1)
+      return {
+        messageId: `m${index}`,
+        itemId: `i${index}`,
+        ordinal: index,
+        dispatchState: 'accepted',
+        recovered: false,
+        get providerItemId() {
+          reads++
+          return provider
+        },
+        get queuedMessageId() {
+          reads++
+          return card
+        },
+        submittedSequence: null,
+        positions: [index],
+        answeredSequence: null
+      }
+    })
+    const kept = keptSends(sends, new Set(), size - 1, null, false)
+    return { kept: kept.length, reads }
+  }
+  expect([family(100), family(1000)]).toEqual([
+    { kept: 100, reads: 798 },
+    { kept: 1000, reads: 7998 }
+  ])
 })

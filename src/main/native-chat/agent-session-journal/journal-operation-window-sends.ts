@@ -266,19 +266,32 @@ export function keptSends(
         (unanswered(send) && (!anchorsOnly || send.positions.every(after)))
     )
   )
-  for (let grown = true; grown;) {
-    grown = false
-    const providers = new Set([...kept].flatMap((send) => send.providerItemId ?? []))
-    const cards = new Set([...kept].flatMap((send) => send.queuedMessageId ?? []))
-    for (const send of sends) {
-      if (
-        !kept.has(send) &&
-        ((send.providerItemId !== null && providers.has(send.providerItemId)) ||
-          (send.queuedMessageId !== null && cards.has(send.queuedMessageId)))
-      ) {
-        kept.add(send)
-        grown = true
+  // Each family (sends sharing a provider id or queued card) is walked once, from its first held member.
+  const families = new Map<string, Send[]>()
+  const family = (send: Send) => [
+    ...(send.providerItemId === null ? [] : [`p:${send.providerItemId}`]),
+    ...(send.queuedMessageId === null ? [] : [`c:${send.queuedMessageId}`])
+  ]
+  for (const send of sends) {
+    for (const key of family(send)) {
+      const members = families.get(key)
+      if (members) {
+        members.push(send)
+      } else {
+        families.set(key, [send])
       }
+    }
+  }
+  const frontier = [...kept]
+  for (let send = frontier.pop(); send; send = frontier.pop()) {
+    for (const key of family(send)) {
+      for (const related of families.get(key) ?? []) {
+        if (!kept.has(related)) {
+          kept.add(related)
+          frontier.push(related)
+        }
+      }
+      families.delete(key)
     }
   }
   return sends.filter((send) => kept.has(send))
