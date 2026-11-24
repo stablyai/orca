@@ -180,6 +180,16 @@ export function getCodexPaneAccount(ptyId: string): CodexPaneAccountRecord | nul
   return readRegistry().panes[ptyId] ?? null
 }
 
+/** Attribution already in memory, without touching disk; undefined until the registry has loaded authoritatively. */
+export function peekLoadedCodexPaneAccount(
+  ptyId: string
+): CodexPaneAccountRecord | null | undefined {
+  if (!cachedRegistry || !cachedRegistryIsAuthoritative) {
+    return undefined
+  }
+  return cachedRegistry.panes[ptyId] ?? null
+}
+
 export function isCodexPaneHomeRouteProvenAwayFromSharedHome(
   route: CodexPaneHomeRoute | undefined
 ): boolean {

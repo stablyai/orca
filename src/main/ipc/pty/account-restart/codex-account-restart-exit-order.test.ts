@@ -9,10 +9,16 @@ type ExitPayload = {
   replacedByRestart?: true
 }
 
-const h = vi.hoisted(() => ({
-  handlers: new Map<string, (event: unknown, args: unknown) => unknown>(),
-  exitListener: null as ((payload: ExitPayload) => void) | null,
-  killFenced: null as unknown as Mock<(...args: unknown[]) => Promise<PtyFencedTerminationOutcome>>
+type HoistedState = {
+  handlers: Map<string, (event: unknown, args: unknown) => unknown>
+  exitListener: ((payload: ExitPayload) => void) | null
+  killFenced: Mock<(...args: unknown[]) => Promise<PtyFencedTerminationOutcome>>
+}
+
+const h = vi.hoisted((): HoistedState => ({
+  handlers: new Map(),
+  exitListener: null,
+  killFenced: vi.fn<(...args: unknown[]) => Promise<PtyFencedTerminationOutcome>>()
 }))
 
 vi.mock('../pty-host-bindings', () => ({
@@ -74,11 +80,14 @@ vi.mock('../../../agent-hooks/server/agent-hook-server', () => ({
   }
 }))
 vi.mock('../../../codex/configuration/homes/codex-pane-account-registry', () => ({
-  getCodexPaneAccount: () => ({ selectionKey: 'host', accountId: 'old', homeRoute: 'account-home' })
+  peekLoadedCodexPaneAccount: () => ({
+    selectionKey: 'host',
+    accountId: 'old',
+    homeRoute: 'account-home'
+  })
 }))
-vi.mock('../../../codex/configuration/homes/codex-stale-pane-accounts', () => ({
-  listStaleCodexPanes: ({ ptyIds }: { ptyIds: string[] }) =>
-    ptyIds.map((ptyId) => ({ ptyId, launchAccountId: 'old', activeAccountId: 'new' }))
+vi.mock('../../../codex-accounts/account-management/runtime-selection', () => ({
+  getSelectedCodexAccountIdForTarget: () => 'new'
 }))
 vi.mock('../../../pty/process-retirement/pty-exit-proof', () => ({
   PtyExitProof: { from: () => ({}) }
@@ -111,13 +120,14 @@ function setup() {
     markPtyStopRequested: vi.fn()
   }
   const sendPtyExitToRenderer = vi.fn()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listener reads only these fields.
-  const session = {
+  const sessionFields = {
     runtime,
     consumeSyntheticKillExit: () => false,
     sendPtyExitToRenderer,
     acceptPtyDataForRenderer: () => {}
-  } as unknown as PtyIpcSession
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listener reads only these fields.
+  const session = sessionFields as unknown as PtyIpcSession
   bindProviderListeners(session)
   installCodexAccountRestartIpcHandlers({
     store: undefined,
@@ -143,14 +153,14 @@ function setup() {
         releaseStop = resolve
       })
   )
-  const request = () =>
-    h.handlers.get('pty:stopCodexForAccountRestart')!(null, {
+  const request = async (): Promise<unknown> =>
+    await h.handlers.get('pty:stopCodexForAccountRestart')!(null, {
       worktreeId: 'wt',
       tabId: 'tab',
       leafId: pane.leafId,
       ptyId: pane.ptyId,
       opId: `op-${pane.ptyId}`
-    }) as Promise<{ outcome: string }>
+    })
   const emitExit = (payload: Partial<ExitPayload> = {}) =>
     h.exitListener!({ id: pane.ptyId, code: 0, incarnationId: pane.incarnationId, ...payload })
   const stopDispatched = async () => {

@@ -21,6 +21,7 @@ describe('detached account restart', () => {
     await executeDetachedCodexPaneRestart(
       {
         worktreeId: 'workspace',
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the no-leaf branch reads no tab fields.
         tab: { id: 'tab', ptyId: 'pty' } as never,
         leafId: null,
         generation: 0

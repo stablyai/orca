@@ -79,8 +79,9 @@ export function codexAccountRestartPaneKey(
   return `${request.worktreeId}\0${request.tabId}\0${request.leafId}`
 }
 
-function isValidRequest(request: unknown): request is CodexAccountRestartStopRequest {
-  const r = request as Partial<CodexAccountRestartStopRequest> | null | undefined
+function isValidRequest(
+  r: Partial<CodexAccountRestartStopRequest> | null | undefined
+): r is CodexAccountRestartStopRequest {
   return Boolean(
     r &&
     typeof r.worktreeId === 'string' &&

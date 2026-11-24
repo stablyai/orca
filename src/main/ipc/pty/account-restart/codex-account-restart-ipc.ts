@@ -4,8 +4,8 @@ import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-r
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
-import { getCodexPaneAccount } from '../../../codex/configuration/homes/codex-pane-account-registry'
-import { listStaleCodexPanes } from '../../../codex/configuration/homes/codex-stale-pane-accounts'
+import { getSelectedCodexAccountIdForTarget } from '../../../codex-accounts/account-management/runtime-selection'
+import { peekLoadedCodexPaneAccount } from '../../../codex/configuration/homes/codex-pane-account-registry'
 import { PtyExitProof } from '../../../pty/process-retirement/pty-exit-proof'
 import { getPtyIpc } from '../pty-host-bindings'
 import { resolvePersistedStablePaneOwner } from '../pane/stable-owner'
@@ -67,7 +67,8 @@ export function resolveCodexRestartOccupant(
   if (!incarnationId || (owner.incarnationId && owner.incarnationId !== incarnationId)) {
     return 'superseded'
   }
-  const account = getCodexPaneAccount(ptyId)
+  // The stale notice that offered this restart already loaded attribution, so main never reads disk here.
+  const account = peekLoadedCodexPaneAccount(ptyId)
   if (!account) {
     return 'not-stale'
   }
@@ -76,7 +77,10 @@ export function resolveCodexRestartOccupant(
     return 'resume-unavailable'
   }
   const settings = deps.getSettings?.()
-  if (!settings || listStaleCodexPanes({ ptyIds: [ptyId], settings }).length === 0) {
+  if (
+    !settings ||
+    account.accountId === getSelectedCodexAccountIdForTarget(settings, { runtime: 'host' })
+  ) {
     return 'not-stale'
   }
   const session = agentHookServer
