@@ -23,24 +23,41 @@ export async function readFirstMessageActsFor(
   })
 }
 
+// Bot requests addressed to one chat: a seek on the mailbox index, bounded by that chat's mail.
+const REQUESTS_TO_SQL = `SELECT m.id FROM messages m JOIN bot_requests r ON r.message_id = m.id
+  WHERE m.to_handle = ?`
+
 /** Whether a chat was started for a request pulled from a paired server: its first message is that
  *  request, filed under the server's reverse conversation, and addressed to this very chat (`root`,
  *  its /clear root). Earlier versions kept such a chat's acts-for as the owner's; it acts for no
- *  one. A chat that merely received such a request later, or one a person opened, is not one. */
+ *  one. A chat that merely received such a request later, or one a person opened, is not one. Its
+ *  journal is read only for a chat such a request was addressed to; when that read fails, it is
+ *  counted as one, so an unproven chat never keeps the owner's authority. */
 export async function isPulledRequestChat(
   db: OrchestrationDb,
-  reads: Promise<Pick<JournalSqlReads, 'promptItem'>>,
+  reads: () => Promise<Pick<JournalSqlReads, 'promptItem'>>,
   root: OrcaSessionId
 ): Promise<boolean> {
-  const firstPrompt = await (await reads).promptItem('first')
-  const mail =
-    firstPrompt?.body.kind === 'message' ? firstPrompt.body.from?.orchestration : undefined
-  if (mail?.message !== 'mail-notice') {
+  const pulled = new Set(
+    db.db
+      .prepare(REQUESTS_TO_SQL)
+      .all(formatOrcaSessionAddress(root))
+      .map((row) => String(row.id))
+      .filter((messageId) => isPulledServerRequest(db, messageId))
+  )
+  if (pulled.size === 0) {
     return false
   }
-  const address = formatOrcaSessionAddress(root)
-  return mail.messages.some(
-    ({ messageId }) =>
-      isPulledServerRequest(db, messageId) && db.getMessageById(messageId)?.to_handle === address
-  )
+  try {
+    const firstPrompt = await (await reads()).promptItem('first')
+    const mail =
+      firstPrompt?.body.kind === 'message' ? firstPrompt.body.from?.orchestration : undefined
+    return (
+      mail?.message === 'mail-notice' &&
+      mail.messages.some(({ messageId }) => pulled.has(messageId))
+    )
+  } catch (error) {
+    console.warn('[bots] could not read whether a chat began with a paired server request', error)
+    return true
+  }
 }

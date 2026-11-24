@@ -158,18 +158,27 @@ describe("the card of an ask to a paired computer's agent", () => {
     expect(readClientAskOutcome(db, 'msg_status')).toEqual(NOTHING)
   })
 
-  it("keeps a handoff's card to its own reply once a later ask shares the thread it opened", () => {
+  it("keeps a handoff's earlier reply once a later ask shares its thread, and takes none after", () => {
+    const at = (
+      table: 'messages' | 'federation_relay_items',
+      idColumn: string,
+      id: string,
+      time: string
+    ) => db.db.prepare(`UPDATE ${table} SET created_at = ? WHERE ${idColumn} = ?`).run(time, id)
     issue('msg_handoff')
     returned(conversationId, 'msg_handoff_reply', 'msg_handoff', 'On it.')
+    at('messages', 'id', 'msg_handoff_reply', '2026-11-01 10:00:00')
     // The unambiguous case: alone in its thread, its first reply is its own.
     expect(readClientAskOutcome(db, 'msg_handoff')).toMatchObject({
       outcome: 'answered',
       answer: 'On it.'
     })
 
-    // A later question and handoff sent into the handoff's thread, and their replies.
+    // A later question and handoff sent into the handoff's thread, after its reply came back.
     issue('msg_later_question', { type: 'question', threadId: 'msg_handoff' })
     issue('msg_later_handoff', { type: 'handoff', threadId: 'msg_handoff' })
+    at('federation_relay_items', 'message_id', 'msg_later_question', '2026-11-01 10:00:05')
+    at('federation_relay_items', 'message_id', 'msg_later_handoff', '2026-11-01 10:00:09')
     db.insertPeerMailMessage({
       conversationId,
       remoteParty: 'bot:Literature',
@@ -184,15 +193,20 @@ describe("the card of an ask to a paired computer's agent", () => {
       }
     })
     returned(conversationId, 'msg_later_question_declined', 'msg_handoff', 'Declined.')
+    // Plain replies of the same second as the later ask, or after it, could answer either.
+    returned(conversationId, 'msg_same_second', 'msg_handoff', 'Same second.')
+    at('messages', 'id', 'msg_same_second', '2026-11-01 10:00:05')
+    returned(conversationId, 'msg_after', 'msg_handoff', 'After.')
+    at('messages', 'id', 'msg_after', '2026-11-01 10:00:20')
 
-    // Only what names the handoff could be its own now: its earlier plain reply is ambiguous.
-    expect(readClientAskOutcome(db, 'msg_handoff')).toEqual(NOTHING)
-    returned(conversationId, 'msg_handoff_declined', 'msg_handoff', 'Declined on Client A.')
     expect(readClientAskOutcome(db, 'msg_handoff')).toEqual({
-      outcome: 'dropped',
-      answer: null,
-      mailIds: ['msg_handoff_declined'],
+      outcome: 'answered',
+      answer: 'On it.',
+      mailIds: ['msg_handoff_reply'],
       chatId: null
     })
+    // Had that reply come back only after the later ask, nothing would be taken for the handoff.
+    at('messages', 'id', 'msg_handoff_reply', '2026-11-01 10:00:30')
+    expect(readClientAskOutcome(db, 'msg_handoff')).toEqual(NOTHING)
   })
 })

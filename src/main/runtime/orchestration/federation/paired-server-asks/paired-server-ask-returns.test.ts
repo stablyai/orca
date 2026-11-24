@@ -9,7 +9,8 @@ import { declinePairedServerAsk, importPairedServerItem } from './paired-server-
 import { tellSender } from '../../../rpc/methods/orchestration/messaging/bot-request-sender-notice'
 import { flushPairedServerReturns } from './paired-server-ask-returns'
 import { retirePairedServerRoute } from './paired-server-ask-removal'
-import { admitPairedServerAsks } from './paired-server-ask-admission'
+import { admitPairedServerAsks, stillAdmits } from './paired-server-ask-admission'
+import { notePairedServerAnswer } from './paired-server-asks-loop'
 import { queuePeerMailReply } from '../peer-mail/peer-mail-delivery'
 import { ORCHESTRATION_PEER_MAIL_METHODS } from '../../../rpc/methods/orchestration/federation/peer-mail-methods'
 import { replyOverPeerMail } from '../../../rpc/methods/orchestration/messaging/peer-mail-reply'
@@ -470,7 +471,7 @@ describe('what this computer hands back to a paired server', () => {
     })
     const repaired = { ...SERVER, pairing: 'fingerprint_b', wire: { ...SERVER.wire } }
 
-    expect(noteAnnounced(db, repaired, 'seen_b')).toEqual(['docs'])
+    expect(noteAnnounced(db, repaired, 'seen_b')).toEqual({ replaced: true, cards: ['docs'] })
 
     expect(getPairedServerAsk(db, 'm_old_card')).toBeUndefined()
     expect(getPairedServerAsk(db, 'm_old_admit')).toBeUndefined()
@@ -522,5 +523,58 @@ describe('what this computer hands back to a paired server', () => {
     })
     expect(db.listPendingFederationRelay(old, 'to_home')).toEqual([])
     expect(owedList()).toEqual([current])
+  })
+
+  it('ends an ask admitted under the old pairing in the gap before its re-pair was announced', () => {
+    const old = 'peerconv_0000000000f7'
+    open(old, SERVER.environmentId)
+    recordAnnouncedPairing(db, SERVER.serverKey, {
+      environmentId: SERVER.environmentId,
+      pairingFingerprint: SERVER.pairing,
+      serverSeenFingerprint: 'seen_a'
+    })
+    holdPairedServerAsk(db, {
+      message_id: 'm_old_admitted',
+      conversation_id: old,
+      server_key: SERVER.serverKey,
+      environment_id: SERVER.environmentId,
+      root_session: 'orca_session_id:asker',
+      bot_id: 'docs',
+      payload: '{}',
+      state: 'admit'
+    })
+    // The catalog changed while the admission waited, but no new pairing is announced yet: the
+    // commit still admits it, and its request lands unread.
+    expect(stillAdmits(db, getPairedServerAsk(db, 'm_old_admitted')!, 'docs')).toBe(true)
+    const request = db.insertMessage({ from: 'Ranger', to: 'term_docs', subject: 'Hi' })
+    db.linkPeerMailMessage({
+      conversationId: old,
+      peerFingerprint: SERVER.pairing,
+      messageId: request.id,
+      senderLabel: 'Ranger',
+      environmentId: SERVER.environmentId
+    })
+    db.db
+      .prepare(
+        `INSERT INTO bot_requests (message_id, root_key, to_bot_id, purpose, depth, record)
+         VALUES (?, 'root', 'docs', 'question', 0, ?)`
+      )
+      .run(request.id, JSON.stringify({ purpose: 'question', toBotName: 'Docs' }))
+
+    const repaired = { ...SERVER, pairing: 'fingerprint_b', wire: { ...SERVER.wire } }
+    notePairedServerAnswer(runtime, db, repaired, { clientAsks: { seenAs: 'seen_b' } })
+
+    // It ends here as unpaired, taken unread, with no notice owed to the old pairing; the held row
+    // went with the announcement, so a stale decline of it queues nothing either.
+    expect(db.getBotRequestOutcome(request.id)).toBe('dropped')
+    expect(db.getMessageById(request.id)?.read).toBeTruthy()
+    expect(getPairedServerAsk(db, 'm_old_admitted')).toBeUndefined()
+    declinePairedServerAsk(runtime, db, {
+      conversationId: old,
+      messageId: 'm_old_admitted',
+      to: 'bot:docs',
+      subject: 'Hi'
+    })
+    expect(db.listPendingFederationRelay(old, 'to_home')).toEqual([])
   })
 })

@@ -304,7 +304,7 @@ export async function readBotTurn(
     recorded &&
     isOrcaSessionId(root) &&
     recorded.actsFor.some((asker) => asker.kind !== 'unknown') &&
-    (await isPulledRequestChat(db, host.journalReads(root), root))
+    (await isPulledRequestChat(db, () => host.journalReads(root), root))
   ) {
     // Started for a request pulled from a paired server, and kept as the owner's by an earlier
     // version: it acts for no one, as such a chat is recorded now.

@@ -65,16 +65,18 @@ const ISSUED_SQL = `SELECT i.dispatch_id, json_extract(i.payload, '$.threadId') 
 
 // The ask's thread as that conversation brought it back, and mail on it that came over no
 // conversation (this Orca's own notices among it). Mail another conversation brought is not it.
-const REPLIES_SQL = `SELECT m.id, m.body, m.payload, p.conversation_id FROM messages m
+const REPLIES_SQL = `SELECT m.id, m.body, m.payload, p.conversation_id,
+    CAST(strftime('%s', m.created_at) AS INTEGER) AS sent_at FROM messages m
   LEFT JOIN peer_mail_messages p ON p.message_id = m.id
   WHERE m.thread_id = ?1 AND (p.conversation_id = ?2 OR p.conversation_id IS NULL)
   ORDER BY m.rowid`
 
-// Another ask this Orca sent that computer on the same conversation, in the thread this ask opened:
-// a seek on the client-ask thread index.
-const SHARED_THREAD_SQL = `SELECT 1 FROM federation_relay_items
+// When another ask this Orca sent that computer on the same conversation first shared the thread
+// this ask opened, to the second (both stores keep seconds): a seek on the client-ask thread index.
+const SHARED_SINCE_SQL = `SELECT MIN(CAST(strftime('%s', created_at) AS INTEGER)) AS since
+  FROM federation_relay_items
   WHERE kind = 'client_ask' AND dispatch_id = ?1 AND json_extract(payload, '$.threadId') = ?2
-    AND direction = 'to_worker' AND message_id <> ?2 LIMIT 1`
+    AND direction = 'to_worker' AND message_id <> ?2`
 
 const DECLINED = '_declined'
 
@@ -112,10 +114,14 @@ export function readClientAskOutcome(
   }
   const conversationId = String(issued.dispatch_id)
   const ownThread = typeof issued.thread_id !== 'string' || issued.thread_id === messageId
-  // A plain reply in the thread this ask opened is its own only while no later ask shares that
-  // thread; once one does, only a reply that names this ask is.
-  const plainIsOwn =
-    ownThread && db.db.prepare(SHARED_THREAD_SQL).get(conversationId, messageId) === undefined
+  // A plain reply in the thread this ask opened is its own while no later ask shares that thread,
+  // and after, only when it came back in an earlier second than that ask went out: a reply of the
+  // same second or later could answer either, so only one that names this ask is.
+  const sharedSince = ownThread
+    ? db.db.prepare(SHARED_SINCE_SQL).get(conversationId, messageId)?.since
+    : undefined
+  const plainIsOwn = (sentAt: number) =>
+    ownThread && (typeof sharedSince !== 'number' || sentAt < sharedSince)
   const question = db.db
     .prepare('SELECT awaiting FROM peer_questions_out WHERE message_id = ? AND conversation_id = ?')
     .get(messageId, conversationId)
@@ -128,11 +134,12 @@ export function readClientAskOutcome(
       id: String(row.id),
       body: String(row.body),
       payload: typeof row.payload === 'string' ? row.payload : null,
-      fromComputer: row.conversation_id !== null
+      fromComputer: row.conversation_id !== null,
+      sentAt: Number(row.sent_at)
     }))
     .filter((reply) =>
       reply.fromComputer
-        ? names(reply) || (plainIsOwn && namedAsk(reply) === null)
+        ? names(reply) || (plainIsOwn(reply.sentAt) && namedAsk(reply) === null)
         : // tellUnpairedPeerQuestions names the question it settles.
           reply.body.includes(`Your question ${messageId} there will not be answered`)
     )

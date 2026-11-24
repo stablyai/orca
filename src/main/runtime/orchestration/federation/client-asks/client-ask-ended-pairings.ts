@@ -19,14 +19,32 @@ CREATE TABLE IF NOT EXISTS ended_client_pairings (
   settled_at             TEXT,
   PRIMARY KEY (environment_id, peer_fingerprint)
 );
-CREATE INDEX IF NOT EXISTS idx_ended_client_pairings_unsettled
-  ON ended_client_pairings(environment_id) WHERE settled_at IS NULL;
 -- An ask's card finds the ask it names by its id alone, and any later ask in the thread it opened.
 CREATE INDEX IF NOT EXISTS idx_federation_relay_client_asks
   ON federation_relay_items(message_id) WHERE kind = 'client_ask';
 CREATE INDEX IF NOT EXISTS idx_federation_relay_client_ask_threads
   ON federation_relay_items(dispatch_id, json_extract(payload, '$.threadId'))
   WHERE kind = 'client_ask';`
+
+/** After `CLIENT_ASKS_SCHEMA_SQL`: an earlier build of this table kept only the pairing and when it
+ *  ended, and settled each end in the write that recorded it, so its rows gain the columns as
+ *  settled (nothing for a restart to replay). Then the unsettled-end index, which names them. */
+export function migrateEndedClientPairings(
+  db: OrchestrationDb['db'],
+  hasColumn: (table: string, column: string) => boolean
+): void {
+  for (const column of ['server_name', 'reason']) {
+    if (!hasColumn('ended_client_pairings', column)) {
+      db.exec(`ALTER TABLE ended_client_pairings ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`)
+    }
+  }
+  if (!hasColumn('ended_client_pairings', 'settled_at')) {
+    db.exec('ALTER TABLE ended_client_pairings ADD COLUMN settled_at TEXT')
+    db.exec('UPDATE ended_client_pairings SET settled_at = ended_at')
+  }
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_ended_client_pairings_unsettled
+    ON ended_client_pairings(environment_id) WHERE settled_at IS NULL`)
+}
 
 /** The credential fingerprint a paired device holds now: null once it was removed, undefined when
  *  there is no registry to tell. */

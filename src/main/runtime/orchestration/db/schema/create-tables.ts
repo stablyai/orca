@@ -13,7 +13,10 @@ import { WORKER_PRESENCE_SCHEMA_SQL } from '../worker-presence/worker-presence-s
 import { PAIRED_SERVER_ASKS_SCHEMA_SQL } from '../federation/paired-server-asks-store'
 import { ensurePairedServerOwedReturns } from '../federation/paired-server-owed-returns'
 import { WORKER_BOUND_TERMINAL_SCHEMA_SQL } from '../worker-terminal/worker-bound-terminals'
-import { CLIENT_ASKS_SCHEMA_SQL } from '../../federation/client-asks/client-ask-ended-pairings'
+import {
+  CLIENT_ASKS_SCHEMA_SQL,
+  migrateEndedClientPairings
+} from '../../federation/client-asks/client-ask-ended-pairings'
 
 export function createTables(this: OrchestrationDb): void {
   this.db.exec(
@@ -41,6 +44,7 @@ export function createTables(this: OrchestrationDb): void {
     )
   }
   ensurePairedServerOwedReturns(this.db)
+  migrateEndedClientPairings(this.db, (table, column) => this.hasColumn(table, column))
   this.createMailboxDeliveryIndexesIfPossible()
   this.db.exec(DERIVED_DELIVERY_SCHEMA_SQL)
 }

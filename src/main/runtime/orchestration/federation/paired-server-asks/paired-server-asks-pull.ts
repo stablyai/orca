@@ -167,12 +167,12 @@ export function owesAnnouncement(db: OrchestrationDb, asks: PairedServerAsks): b
  *  what any other pairing of this server left here ends in the same write: its owed replies are retired (the server told their
  *  askers when it ended that pairing) and its held asks go unanswered, since no answer could go
  *  back. A failed write leaves the announcement owed, so the next answered pull settles them.
- *  Returns the agents whose waiting cards went. */
+ *  Returns whether it replaced an earlier one, and the agents whose waiting cards went. */
 export function noteAnnounced(
   db: OrchestrationDb,
   asks: PairedServerAsks,
   seenAs: string
-): string[] {
+): { replaced: boolean; cards: string[] } {
   const earlier = getAnnouncedPairing(db, asks.serverKey)
   const dropped = runLifecycleWriteTransaction(db.db, 'paired_server_announced', () => {
     recordAnnouncedPairing(db, asks.serverKey, {
@@ -184,7 +184,7 @@ export function noteAnnounced(
       !earlier ||
       (earlier.pairingFingerprint === asks.pairing && earlier.serverSeenFingerprint === seenAs)
     ) {
-      return []
+      return null
     }
     db.db
       .prepare(
@@ -208,7 +208,7 @@ export function noteAnnounced(
     return cards
   })
   delete asks.wire.previousPairing
-  return [...new Set(dropped)]
+  return { replaced: dropped !== null, cards: [...new Set(dropped ?? [])] }
 }
 
 /** The same server answers under a pairing the old one's rows don't name: they follow it, but only

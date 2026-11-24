@@ -18,7 +18,7 @@ const requests: Record<string, { to: string; environmentId: string | null }> = {
   msg_pulled_elsewhere: { to: formatOrcaSessionAddress(OTHER), environmentId: 'env_s' },
   msg_direct_here: { to: formatOrcaSessionAddress(ROOT), environmentId: null }
 }
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read uses only these four lookups.
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read uses only these lookups and one query.
 const db = {
   getBotRequest: (id: string) =>
     requests[id]
@@ -34,11 +34,22 @@ const db = {
   getPeerMailMessage: (id: string) => (requests[id] ? { conversation_id: id } : undefined),
   getPeerMailConversation: (id: string) =>
     requests[id] ? { role: 'peer', environment_id: requests[id].environmentId } : undefined,
-  getMessageById: (id: string) => (requests[id] ? { to_handle: requests[id].to } : undefined)
+  db: {
+    prepare: () => ({
+      all: (to: string) =>
+        Object.entries(requests)
+          .filter(([, request]) => request.to === to)
+          .map(([id]) => ({ id }))
+    })
+  }
 } as unknown as OrchestrationDb
 
-/** A chat whose first message is mail naming `messageIds`, or one a person typed. */
-function firstPrompt(messageIds: string[] | null): Promise<Pick<JournalSqlReads, 'promptItem'>> {
+let journalReads = 0
+
+/** A chat whose first message is mail naming `messageIds`, or one a person typed; counts reads. */
+function firstPrompt(
+  messageIds: string[] | null
+): () => Promise<Pick<JournalSqlReads, 'promptItem'>> {
   const body = messageIds
     ? {
         kind: 'message',
@@ -51,10 +62,13 @@ function firstPrompt(messageIds: string[] | null): Promise<Pick<JournalSqlReads,
         }
       }
     : { kind: 'message', text: 'hello' }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read uses only the first prompt's body.
-  return Promise.resolve({
-    promptItem: async () => ({ itemId: 'i', revision: 1, sequence: 0, observedAt: 0, body })
-  } as unknown as Pick<JournalSqlReads, 'promptItem'>)
+  return () => {
+    journalReads += 1
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read uses only the first prompt's body.
+    return Promise.resolve({
+      promptItem: async () => ({ itemId: 'i', revision: 1, sequence: 0, observedAt: 0, body })
+    } as unknown as Pick<JournalSqlReads, 'promptItem'>)
+  }
 }
 
 it('knows a chat started for a pulled request, addressed to that chat, as acting for no one', async () => {
@@ -66,4 +80,16 @@ it('keeps a chat a person opened, a direct request, and a chat that only receive
   expect(await isPulledRequestChat(db, firstPrompt(['msg_direct_here']), ROOT)).toBe(false)
   // Its first message is a pulled request, but one another chat was started for.
   expect(await isPulledRequestChat(db, firstPrompt(['msg_pulled_elsewhere']), ROOT)).toBe(false)
+})
+
+it("never reads a chat's journal when no paired server's request was addressed to it", async () => {
+  journalReads = 0
+  const elsewhere = createOrcaSessionId(() => '44444444-4444-4444-8444-444444444444')
+  expect(await isPulledRequestChat(db, firstPrompt(['msg_pulled_here']), elsewhere)).toBe(false)
+  expect(journalReads).toBe(0)
+})
+
+it('counts a chat a pulled request was addressed to as one when its journal cannot be read', async () => {
+  const unreadable = () => Promise.reject(new Error('journal gone'))
+  expect(await isPulledRequestChat(db, unreadable, ROOT)).toBe(true)
 })
