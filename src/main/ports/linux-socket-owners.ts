@@ -17,6 +17,9 @@ END { print "seen", seen + 0 }'`
 // prints only the wanted inodes so output grows with listeners, not with every socket on the system.
 const SOCKET_LISTING_SCRIPT = `ls -ln /proc/[0-9]*/fd 2>/dev/null | ${SOCKET_HOLDER_AWK}`
 
+const LISTING_RETRY_SCANS = 9
+let scansUntilListingRetry = 0
+
 /** Map listening socket inodes to the pid a full /proc walk keeps: the last holder in /proc's listing order. */
 export async function resolveLinuxSocketOwners(inodes: Set<number>): Promise<Map<number, number>> {
   if (inodes.size === 0) {
@@ -28,6 +31,11 @@ export async function resolveLinuxSocketOwners(inodes: Set<number>): Promise<Map
   } catch {
     return new Map()
   }
+  // After a failed listing, don't pay for it and the walk on every scan; retry it every 10th scan.
+  if (scansUntilListingRetry > 0) {
+    scansUntilListingRetry -= 1
+    return walkProcSocketOwners(pids, inodes)
+  }
   const want = `,${[...inodes].join(',')},`
   const listing = await runPortScanCommand('/bin/sh', [
     '-c',
@@ -37,6 +45,7 @@ export async function resolveLinuxSocketOwners(inodes: Set<number>): Promise<Map
   ]).catch(() => null)
   const parsed = listing ? parseSocketHolderListing(listing.stdout) : null
   if (!parsed || parsed.seen === 0) {
+    scansUntilListingRetry = LISTING_RETRY_SCANS
     return walkProcSocketOwners(pids, inodes)
   }
   return pickLastHolders(parsed.holders, pids, inodes)
