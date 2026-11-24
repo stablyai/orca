@@ -1,4 +1,4 @@
-import { beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeStructuredChatTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import type { AgentSessionStatusSummary } from '../../../../../../shared/agent-session/agent-session-wire'
@@ -19,7 +19,7 @@ if (!isStructuredTab(chatTab)) {
 }
 const tab: StructuredTab = chatTab
 const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-const openedAt = Date.now()
+const openedAt = Date.UTC(2026, 0, 15, 12, 0, 0)
 
 function summary(overrides: Partial<AgentSessionStatusSummary> = {}): AgentSessionStatusSummary {
   return {
@@ -50,10 +50,16 @@ const sidebarRows = () =>
     .map((row) => row.paneKey)
 
 beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(openedAt)
   useAppStore.setState({ unifiedTabsByWorktree: { [tab.worktreeId]: [tab] } })
   useAppStore.getState().transactAgentStatuses((transaction) => {
     transaction.getState().removeAgentStatus(paneKey)
   })
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 it('shows a chat with no request yet as an idle session-boundary row, updated in place by the first send', () => {
