@@ -2097,7 +2097,7 @@ html.native-shell .app-layout {
   --border: color-mix(in oklab, var(--worktree-sidebar-foreground) 5%, var(--worktree-sidebar));
 }
 
-.worktree-agent-row-hover:hover {
+.worktree-agent-row-hover:is(:hover, [data-agent-row-menu-open]) {
   background: var(--worktree-sidebar-accent);
 }
 
@@ -4545,15 +4545,14 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   }
 }
 
-/* Why: a context menu outlines what it acts on; !important beats every row/card state wash
-   while open, and box-shadow keeps the outline from shifting layout. */
 .agent-disclosure-row[data-agent-row-menu-open] {
-  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--worktree-sidebar-ring) 60%, transparent) !important;
-  background: color-mix(in srgb, var(--worktree-sidebar-ring) 12%, transparent) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--worktree-sidebar-ring) 60%, transparent) !important;
 }
 
+/* Preserve the card's active and selected shadows. */
 [data-worktree-card-menu-open] > [data-worktree-card-surface] {
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--worktree-sidebar-ring) 60%, transparent) !important;
+  outline: 1px solid color-mix(in oklab, var(--worktree-sidebar-ring) 60%, transparent);
+  outline-offset: -1px;
 }
 
 .agent-disclosure-row[data-agent-row-menu]:focus-visible {
