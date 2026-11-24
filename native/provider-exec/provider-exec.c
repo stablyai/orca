@@ -839,6 +839,10 @@ static int drop_stale_members(struct tree_scan *scan, const struct proc_row *lea
 // counts as alive unless it is gone.
 static int signal_member(struct proc_row *row, int signal_number, int *sent) {
     *sent = 0;
+    // A probe needs no signalling handle; the start-time check alone decides liveness.
+    if (signal_number == 0) {
+        return same_identity(row);
+    }
 #if defined(__linux__)
     int fd = (int)syscall(SYS_pidfd_open, row->pid, 0);
     if (fd < 0) {
@@ -1130,6 +1134,31 @@ static int sweep_tree(struct watcher *w, int signal_number) {
 }
 #endif
 
+// The next whole-table read backs off from 100 ms to 1 s; members or doubt are rechecked sooner.
+static void schedule_next_check(struct watcher *w, long long now_ns, int live) {
+    long long tick = (long long)TREE_SWEEP_INTERVAL_MS * 1000000LL;
+    long long last_chance = w->deadline_ns - tick;
+    // While members or doubt remain, recheck each interval; otherwise wait for the next full sweep.
+    w->next_sweep_ns = live != 0 ? now_ns + tick : w->next_full_ns;
+    // Backoff never skips the last sweep before the phase deadline, so a late tool still gets TERM.
+    if (w->next_sweep_ns > last_chance && now_ns < last_chance) {
+        w->next_sweep_ns = last_chance;
+    }
+}
+
+static void schedule_after_full_sweep(struct watcher *w, int live) {
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+        return;
+    }
+    long long now_ns = (long long)now.tv_sec * 1000000000LL + now.tv_nsec;
+    long long interval = w->sweep_interval_ms > 0 ? w->sweep_interval_ms : TREE_SWEEP_INTERVAL_MS;
+    w->sweep_interval_ms =
+        interval * 2 > TREE_SWEEP_MAX_INTERVAL_MS ? TREE_SWEEP_MAX_INTERVAL_MS : interval * 2;
+    w->next_full_ns = now_ns + interval * 1000000LL;
+    schedule_next_check(w, now_ns, live);
+}
+
 // Rate-limited to one table read per sweep interval, backing off to 1 s while nothing is found.
 // During TERM grace and reap it also sweeps while the CLI group lives, so a tool that was deferred
 // or born late still gets its signal. Absence needs the group gone before the sweep began.
@@ -1159,17 +1188,9 @@ static int tree_absent(struct watcher *w, int signal_number) {
                now_ns >= last_chance;
     if (full) {
         live = sweep_tree(w, signal_number);
-        long long interval =
-            w->sweep_interval_ms > 0 ? w->sweep_interval_ms : TREE_SWEEP_INTERVAL_MS;
-        w->sweep_interval_ms = interval * 2 > TREE_SWEEP_MAX_INTERVAL_MS ? TREE_SWEEP_MAX_INTERVAL_MS
-                                                                       : interval * 2;
-        w->next_full_ns = now_ns + interval * 1000000LL;
-    }
-    // While members or doubt remain, recheck each interval; otherwise wait for the next full sweep.
-    w->next_sweep_ns = live != 0 ? now_ns + tick : w->next_full_ns;
-    // Backoff never skips the last sweep before the phase deadline, so a late tool still gets TERM.
-    if (w->next_sweep_ns > last_chance && now_ns < last_chance) {
-        w->next_sweep_ns = last_chance;
+        schedule_after_full_sweep(w, live);
+    } else {
+        schedule_next_check(w, now_ns, live);
     }
     // Only a full sweep decides; a probe can show members alive but never prove the tree empty.
     if (!group_gone || !full) {
@@ -1189,6 +1210,8 @@ static long long monotonic_ns(struct watcher *w) {
 
 // Once the CLI group is gone: a tool the CLI started after the first sweep is found by a second.
 static void complete_if_tree_gone(struct watcher *w, int group_gone, int members, int signal_number) {
+    // This confirmation counts as the first sweep after the group is gone.
+    w->swept_group_gone = group_gone;
     if (!group_gone || (members != 0 && members != TREE_UNPROVABLE)) {
         return;
     }
@@ -1203,6 +1226,7 @@ static void kill_group(struct watcher *w) {
         return;
     }
     int members = sweep_tree(w, SIGKILL);
+    schedule_after_full_sweep(w, members);
     int group_gone = kill(-w->group, SIGKILL) < 0 && errno == ESRCH;
     complete_if_tree_gone(w, group_gone, members, SIGKILL);
     w->phase = WATCH_REAP;
@@ -1215,6 +1239,7 @@ static void watcher_term(struct watcher *w) {
     w->group_term_pending = 1;
     int members = sweep_tree(w, SIGTERM);
     w->group_term_pending = 0;
+    schedule_after_full_sweep(w, members);
     int group_gone = kill(-w->group, SIGTERM) < 0 && errno == ESRCH;
     complete_if_tree_gone(w, group_gone, members, SIGTERM);
     if (w->sigterm_grace_ms == 0) {
