@@ -429,6 +429,30 @@ static int read_row(pid_t pid, struct proc_row *row) {
     return 1;
 }
 
+// NSpid lists this process's PID in the procfs mount's namespace and each nested one, so a single
+// entry equal to getpid() proves /proc describes this namespace.
+static int procfs_in_own_namespace(void) {
+    FILE *status = fopen("/proc/self/status", "re");
+    if (status == NULL) {
+        return 0;
+    }
+    char line[256];
+    int own = 0;
+    while (fgets(line, sizeof line, status) != NULL) {
+        if (strncmp(line, "NSpid:", 6) == 0) {
+            char *end;
+            long pid = strtol(line + 6, &end, 10);
+            while (*end == ' ' || *end == '\t') {
+                end++;
+            }
+            own = end != line + 6 && pid == (long)getpid() && (*end == '\n' || *end == '\0');
+            break;
+        }
+    }
+    fclose(status);
+    return own;
+}
+
 static struct proc_row *read_table(size_t *count) {
     DIR *dir = opendir("/proc");
     if (dir == NULL) {
@@ -667,6 +691,17 @@ static int signal_member(struct proc_row *row, int signal_number) {
 // when the tree could not be read, its anchor is unproven, or a member vanished mid-sweep.
 static int sweep_once(struct watcher *w, int signal_number) {
     struct tree_scan scan = {0};
+#if defined(__linux__)
+    // procfs start times are boot-clock ticks: a row whose tick has not ended before the scan
+    // could share it with a replacement at the same PID, so it is left for a later sweep.
+    struct timespec boot;
+    long ticks_per_second = sysconf(_SC_CLK_TCK);
+    if (ticks_per_second <= 0 || clock_gettime(CLOCK_BOOTTIME, &boot) != 0) {
+        return -1;
+    }
+    long long scan_tick = (long long)boot.tv_sec * ticks_per_second +
+                          (long long)boot.tv_nsec * ticks_per_second / 1000000000LL;
+#endif
     scan.rows = read_table(&scan.n);
     if (scan.rows == NULL) {
         return -1;
@@ -708,6 +743,12 @@ static int sweep_once(struct watcher *w, int signal_number) {
         if (scan.state[i] != 1 || row->zombie || row->pgid == w->group) {
             continue;
         }
+#if defined(__linux__)
+        if (row->start >= scan_tick) {
+            dropped = 1;
+            continue;
+        }
+#endif
         if (signal_member(row, signal_number)) {
             live++;
         } else {
@@ -1307,14 +1348,8 @@ int main(int argc, char *argv[]) {
     }
     watcher_gone_fd = watcher_alive[0];
     // A /proc from another PID namespace names other processes, so no tree is anchored on it.
-    char self_link[32];
-    ssize_t self_length = readlink("/proc/self", self_link, sizeof self_link - 1);
     struct proc_row reaper_row;
-    if (self_length > 0) {
-        self_link[self_length] = '\0';
-    }
-    if (self_length > 0 && strtol(self_link, NULL, 10) == (long)getpid() &&
-            read_row(getpid(), &reaper_row) == 1) {
+    if (procfs_in_own_namespace() && read_row(getpid(), &reaper_row) == 1) {
         watcher.reaper = reaper_row.pid;
         watcher.reaper_start = reaper_row.start;
     } else {
