@@ -7,6 +7,7 @@ import {
   useClearNotesConfirm
 } from '../../review-note-delivery/notes-copy-clear'
 import type { MarkdownReviewNote } from '@/lib/editor/markdown/review-notes/markdown-review-notes'
+import { SendNotesSlot } from '../../review-note-delivery/SendNotesButton'
 import { useTranslate } from '@/i18n/use-translate'
 
 type RichMarkdownReviewRailActionsProps = {
@@ -35,58 +36,64 @@ export function RichMarkdownReviewRailActions({
   const t = useTranslate()
   const clearConfirm = useClearNotesConfirm()
   return (
-    <div className="rich-markdown-review-rail-actions">
-      <button
-        type="button"
-        className="rich-markdown-review-rail-toggle"
-        aria-label={
-          railOpen
-            ? t(
-                'auto.components.editor.RichMarkdownReviewRailActions.af02dc2456',
-                'Hide review notes'
-              )
-            : t(
-                'auto.components.editor.RichMarkdownReviewRailActions.8aaf2c4c69',
-                'Show review notes'
-              )
-        }
-        aria-expanded={railOpen}
-        title={
-          railOpen
-            ? t(
-                'auto.components.editor.RichMarkdownReviewRailActions.af02dc2456',
-                'Hide review notes'
-              )
-            : t(
-                'auto.components.editor.RichMarkdownReviewRailActions.8aaf2c4c69',
-                'Show review notes'
-              )
-        }
-        onClick={onToggleRail}
-      >
-        <MessageSquare className="size-3.5" />
-        <span>{notes.length}</span>
-      </button>
-      <NotesSendMenu
-        owner={owner}
-        worktreeId={worktreeId}
-        groupId={worktreeId}
-        modeIdParts={['markdown-notes', worktreeId, filePath, 'rail']}
-        scopes={unsentScope}
-        batchTrigger={{}}
-        menuFooter={
-          owner ? (
-            <NotesMenuCopyClearItems
-              onCopy={onCopyNotes}
-              onClear={() =>
-                clearConfirm.requestClear(diffNotesClearRequest(owner, notes, filePath))
+    <>
+      {notes.length > 0 ? (
+        <div className="rich-markdown-review-rail-actions">
+          <button
+            type="button"
+            className="rich-markdown-review-rail-toggle"
+            aria-label={
+              railOpen
+                ? t(
+                    'auto.components.editor.RichMarkdownReviewRailActions.af02dc2456',
+                    'Hide review notes'
+                  )
+                : t(
+                    'auto.components.editor.RichMarkdownReviewRailActions.8aaf2c4c69',
+                    'Show review notes'
+                  )
+            }
+            aria-expanded={railOpen}
+            title={
+              railOpen
+                ? t(
+                    'auto.components.editor.RichMarkdownReviewRailActions.af02dc2456',
+                    'Hide review notes'
+                  )
+                : t(
+                    'auto.components.editor.RichMarkdownReviewRailActions.8aaf2c4c69',
+                    'Show review notes'
+                  )
+            }
+            onClick={onToggleRail}
+          >
+            <MessageSquare className="size-3.5" />
+            <span>{notes.length}</span>
+          </button>
+          <SendNotesSlot fitContent>
+            <NotesSendMenu
+              owner={owner}
+              worktreeId={worktreeId}
+              groupId={worktreeId}
+              modeIdParts={['markdown-notes', worktreeId, filePath, 'rail']}
+              scopes={unsentScope}
+              batchTrigger={{}}
+              menuFooter={
+                owner ? (
+                  <NotesMenuCopyClearItems
+                    onCopy={onCopyNotes}
+                    onClear={() =>
+                      clearConfirm.requestClear(diffNotesClearRequest(owner, notes, filePath))
+                    }
+                  />
+                ) : null
               }
+              onDelivered={onDelivered}
             />
-          ) : null
-        }
-        onDelivered={onDelivered}
-      />
+          </SendNotesSlot>
+        </div>
+      ) : null}
       {clearConfirm.dialog}
-    </div>
+    </>
   )
 }

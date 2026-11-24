@@ -3,12 +3,18 @@ import { translate } from '@/i18n/i18n'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
+import type { DiffCommentDeliverySnapshot } from '../../../../../shared/file-review/diff-comment-mutation'
+import {
+  diffCommentSendKey,
+  holdNotesForSend
+} from '@/components/notes/delivery/notes-send-in-flight'
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   enqueueDiffCommentPersist,
   mutateDiffComments,
   normalizeDiffComment
 } from './diff-comment-persistence'
+import { enqueueDeliveredDiffCommentCleanup } from './diff-comment-delivery-cleanup'
 import { selectWorktreeDiffCommentsOrEmpty } from './worktree-diff-comments-selector'
 import { readOwnedDiffComments, type DiffCommentOwner } from './diff-comment-owner'
 
@@ -36,25 +42,7 @@ export type DiffCommentsSlice = {
   ) => Promise<boolean>
 }
 
-export type DiffCommentDeliverySnapshot = Pick<
-  DiffComment,
-  'body' | 'filePath' | 'id' | 'lineNumber' | 'selectedText' | 'source' | 'startLine'
->
-
-function deliverySnapshotMatches(
-  comment: DiffComment,
-  snapshot: DiffCommentDeliverySnapshot
-): boolean {
-  return (
-    comment.id === snapshot.id &&
-    comment.body === snapshot.body &&
-    comment.filePath === snapshot.filePath &&
-    comment.lineNumber === snapshot.lineNumber &&
-    comment.startLine === snapshot.startLine &&
-    comment.selectedText === snapshot.selectedText &&
-    comment.source === snapshot.source
-  )
-}
+export type { DiffCommentDeliverySnapshot } from '../../../../../shared/file-review/diff-comment-mutation'
 
 // Why: best-effort telemetry runs only after the note is on disk, so a throw here must not report a failed save.
 function recordReviewNoteInteraction(get: () => AppState): void {
@@ -162,24 +150,16 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       reportLostDiffCommentOwner('clear')
       return false
     }
-    const worktreeId = owner.worktreeId
     if (comments.length === 0) {
       return true
     }
-    const snapshotsById = new Map(comments.map((comment) => [comment.id, comment]))
-    const result = mutateDiffComments(set, owner, (existing) => {
-      const next = existing.filter((comment) => {
-        const snapshot = snapshotsById.get(comment.id)
-        // Why: delivery is async; a note edited after its snapshot was sent is a fresh pending note that must stay visible.
-        return !snapshot || !deliverySnapshotMatches(comment, snapshot)
-      })
-      return next.length === existing.length ? null : next
-    })
-    if (!result) {
-      return true
-    }
+    const cleanup = enqueueDeliveredDiffCommentCleanup(set, get, owner, comments)
+    holdNotesForSend(
+      comments.map((note) => diffCommentSendKey(owner, note)),
+      cleanup
+    )
     try {
-      await enqueueDiffCommentPersist(set, worktreeId, get, result)
+      await cleanup
     } catch (err) {
       console.error('Failed to persist diff comments:', err)
       return false

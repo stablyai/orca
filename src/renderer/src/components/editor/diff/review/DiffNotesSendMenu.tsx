@@ -9,6 +9,7 @@ import type { SendNotesButtonSize } from '../../review-note-delivery/SendNotesBu
 import {
   copyNotesText,
   diffNotesClearRequest,
+  type NotesClearRequest,
   NotesMenuCopyClearItems,
   useClearNotesConfirm
 } from '../../review-note-delivery/notes-copy-clear'
@@ -29,7 +30,8 @@ export function DiffNotesSendMenu({
   iconClassName = 'size-3.5',
   align = 'end',
   batch,
-  respondToOpenRequest = false
+  requestClear,
+  openRequestTabId
 }: {
   /** The copy `comments` were read from, so delivered notes clear there. */
   owner: DiffCommentOwner | null
@@ -43,25 +45,23 @@ export function DiffNotesSendMenu({
   align?: 'start' | 'center' | 'end'
   /** The shared "Send N notes" button, with Copy and Clear for the file (or all notes) in its menu. */
   batch?: { size?: SendNotesButtonSize; flush?: boolean }
-  // Enable on exactly one instance per worktree to avoid opening multiple menus for one shortcut.
-  respondToOpenRequest?: boolean
+  requestClear?: (request: NotesClearRequest) => void
+  openRequestTabId?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const openRequest = useAppStateValue((s) =>
-    respondToOpenRequest && s.diffNotesSendMenuOpenRequest?.worktreeId === worktreeId
+    openRequestTabId && s.diffNotesSendMenuOpenRequest?.tabId === openRequestTabId
       ? s.diffNotesSendMenuOpenRequest
       : null
   )
   // Enforce TTL when opening commits in NotesSendMenu; render-time clocks are stale or require polling.
-  const hasPendingOpenRequest = respondToOpenRequest && openRequest?.worktreeId === worktreeId
-  const openRequestNonce = hasPendingOpenRequest ? (openRequest?.nonce ?? null) : null
-  const openRequestExpiresAt = hasPendingOpenRequest
-    ? (openRequest?.issuedAt ?? 0) + OPEN_REQUEST_TTL_MS
-    : null
-  const handleOpenRequestHandled = useCallback(
-    () => useAppStore.getState().consumeDiffNotesSendMenuOpenRequest(worktreeId),
-    [worktreeId]
+  const claimOpenRequest = useCallback(
+    () =>
+      Boolean(
+        openRequest && useAppStore.getState().consumeDiffNotesSendMenuOpenRequest(openRequest)
+      ),
+    [openRequest]
   )
   const unsentNotes = useMemo(() => comments.filter((comment) => !comment.sentAt), [comments])
   const fileNotes = useMemo(
@@ -99,7 +99,7 @@ export function DiffNotesSendMenu({
       <NotesMenuCopyClearItems
         onCopy={() => void copyNotesText(formatDiffComments(requestedNotes))}
         onClear={() =>
-          clearConfirm.requestClear(
+          (requestClear ?? clearConfirm.requestClear)(
             diffNotesClearRequest(owner, requestedNotes, canSendFileScope ? filePath : undefined)
           )
         }
@@ -112,7 +112,13 @@ export function DiffNotesSendMenu({
         owner={owner}
         worktreeId={worktreeId}
         groupId={groupId}
-        modeIdParts={['diff-notes', worktreeId, groupId, filePath ?? 'all']}
+        modeIdParts={[
+          'diff-notes',
+          worktreeId,
+          groupId,
+          filePath ?? 'all',
+          ...(openRequestTabId ? [openRequestTabId] : [])
+        ]}
         scopes={scopes}
         // File menus must not broaden delivery before the user enters All unsent notes.
         defaultScopeId={canSendFileScope ? 'file' : 'all'}
@@ -121,14 +127,14 @@ export function DiffNotesSendMenu({
         align={align}
         batchTrigger={batch}
         menuFooter={menuFooter}
-        openRequestNonce={openRequestNonce}
-        openRequestExpiresAt={openRequestExpiresAt}
-        onOpenRequestHandled={handleOpenRequestHandled}
+        openRequestNonce={openRequest?.nonce}
+        openRequestExpiresAt={openRequest ? openRequest.issuedAt + OPEN_REQUEST_TTL_MS : null}
+        onClaimOpenRequest={claimOpenRequest}
         onDelivered={(notes) =>
           void (owner && useAppStore.getState().clearDeliveredDiffComments(owner, notes))
         }
       />
-      {batch ? clearConfirm.dialog : null}
+      {batch && !requestClear ? clearConfirm.dialog : null}
     </>
   )
 }

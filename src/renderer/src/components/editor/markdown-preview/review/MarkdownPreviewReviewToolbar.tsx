@@ -1,4 +1,5 @@
 import { MessageSquare } from 'lucide-react'
+import { SendNotesSlot } from '../../review-note-delivery/SendNotesButton'
 import { useTranslate } from '@/i18n/use-translate'
 import { NotesSendMenu } from '../../review-note-delivery/NotesSendMenu'
 import {
@@ -52,30 +53,32 @@ export function MarkdownPreviewReviewToolbar({
         <span>{t('auto.components.editor.MarkdownPreview.322afab6ff', 'Review notes')}</span>
       </button>
       {sourceWorktree ? (
-        <NotesSendMenu
-          // Until the shown copy is listed its notes are unknown, not all sent.
-          owner={notesKnown ? commentOwner : null}
-          worktreeId={sourceWorktree.id}
-          groupId={sourceWorktree.id}
-          modeIdParts={['markdown-notes', sourceWorktree.id, filePath, 'preview-toolbar']}
-          scopes={unsentMarkdownReviewScope}
-          batchTrigger={{}}
-          menuFooter={
-            commentOwner ? (
-              <NotesMenuCopyClearItems
-                onCopy={() => void handleCopyMarkdownReviewNotes()}
-                onClear={() =>
-                  clearConfirm.requestClear(
-                    diffNotesClearRequest(commentOwner, markdownReviewNotes, filePath)
-                  )
-                }
-              />
-            ) : null
-          }
-          onDelivered={(notes) =>
-            void (commentOwner && clearDeliveredDiffComments(commentOwner, notes))
-          }
-        />
+        <SendNotesSlot fitContent>
+          <NotesSendMenu
+            // Until the shown copy is listed its notes are unknown, not all sent.
+            owner={notesKnown ? commentOwner : null}
+            worktreeId={sourceWorktree.id}
+            groupId={sourceWorktree.id}
+            modeIdParts={['markdown-notes', sourceWorktree.id, filePath, 'preview-toolbar']}
+            scopes={unsentMarkdownReviewScope}
+            batchTrigger={{}}
+            menuFooter={
+              commentOwner ? (
+                <NotesMenuCopyClearItems
+                  onCopy={() => void handleCopyMarkdownReviewNotes()}
+                  onClear={() =>
+                    clearConfirm.requestClear(
+                      diffNotesClearRequest(commentOwner, markdownReviewNotes, filePath)
+                    )
+                  }
+                />
+              ) : null
+            }
+            onDelivered={(notes) =>
+              void (commentOwner && clearDeliveredDiffComments(commentOwner, notes))
+            }
+          />
+        </SendNotesSlot>
       ) : null}
       {clearConfirm.dialog}
     </div>

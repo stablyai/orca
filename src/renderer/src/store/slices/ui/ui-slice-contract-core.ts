@@ -143,6 +143,14 @@ export type UiViewHistory =
   | 'artifacts'
   | 'mobile'
 
+export type DiffNotesSendMenuOpenRequest = {
+  worktreeId: string
+  fileId: string
+  tabId: string
+  nonce: number
+  issuedAt: number
+}
+
 export type UISliceCore = {
   sidebarOpen: boolean
   sidebarWidth: number
@@ -154,10 +162,10 @@ export type UISliceCore = {
   closeAgentSendPopoverTargetMode: (id?: string, instanceId?: string) => void
   sendPromptToSidebarAgentTarget: (paneKey: string) => Promise<boolean>
   /** Shortcut request for the active notes menu; issuedAt expires requests the menu never consumed. */
-  diffNotesSendMenuOpenRequest: { worktreeId: string; nonce: number; issuedAt: number } | null
-  /** Reveal Source Control and request its notes send menu open; returns false (no-op) when the active worktree has no unsent notes. */
+  diffNotesSendMenuOpenRequest: DiffNotesSendMenuOpenRequest | null
+  /** Open Changes and its notes menu only when the selected copy has a sendable note. */
   openDiffNotesSendMenuForActiveWorktree: () => boolean
-  consumeDiffNotesSendMenuOpenRequest: (worktreeId: string) => void
+  consumeDiffNotesSendMenuOpenRequest: (request: DiffNotesSendMenuOpenRequest) => boolean
   /** Persisted read timestamps by pane; absent ack or newer stateStartedAt makes the row unvisited. */
   acknowledgedAgentsByPaneKey: Record<string, number>
   /** `explicit` only from a user action on the row (Mark read, a jump, a dashboard ack). */

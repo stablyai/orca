@@ -303,6 +303,8 @@
   right: 14px;
   z-index: 45;
   display: inline-flex;
+  width: max-content;
+  max-width: calc(100% - 28px);
   align-items: center;
   gap: 4px;
 }

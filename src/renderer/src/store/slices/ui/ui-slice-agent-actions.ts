@@ -13,6 +13,16 @@ import { createUiActivityActions } from './ui-slice-activity-actions'
 import { selectKnownWorktreeById } from '../../workspaces/selection/known-worktree-selection'
 import { combinedUncommittedDiffId } from '../editor/git/open-combined-diff'
 import { editorOpenOwner } from '../editor/git/editor-open-owner'
+import { editorViewTab } from '../editor/tabs/editor-view-placement'
+import { selectDiffCommentView } from '../diff-comments/diff-comment-owner'
+import {
+  diffCommentSendKey,
+  isNoteInFlight
+} from '@/components/notes/delivery/notes-send-in-flight'
+import {
+  isMarkdownReviewNotesEnabled,
+  withoutMarkdownReviewNotes
+} from '@/lib/editor/markdown/review-notes/markdown-review-notes-setting'
 
 let agentSendTargetModeInstanceCounter = 0
 
@@ -88,44 +98,70 @@ export function createUiAgentActions(
     },
     diffNotesSendMenuOpenRequest: null,
     openDiffNotesSendMenuForActiveWorktree: () => {
-      const worktreeId = get().activeWorktreeId
+      const state = get()
+      const worktreeId = state.activeWorktreeId
       if (!worktreeId) {
         return false
       }
-      // Why: no unsent notes means nothing to send, so don't hijack focus or reveal the panel.
-      if (
-        !get()
-          .getDiffComments(worktreeId)
-          .some((comment) => !comment.sentAt)
-      ) {
-        return false
-      }
-      // The Changes tab's Send notes button answers the request once its toolbar is showing.
-      const worktree = selectKnownWorktreeById(get(), worktreeId)
+      const worktree = selectKnownWorktreeById(state, worktreeId)
       if (!worktree) {
         return false
       }
-      // Reuse an open Changes tab as it is: reopening would replace its entry snapshots and comparison.
-      const changesId = combinedUncommittedDiffId(worktreeId, editorOpenOwner(get(), worktreeId))
-      const changesTab = get().openFiles.some((file) => file.id === changesId)
-        ? (get().unifiedTabsByWorktree[worktreeId] ?? []).find((tab) => tab.entityId === changesId)
-        : undefined
+      const contentOwner = editorOpenOwner(state, worktreeId)
+      const changesId = combinedUncommittedDiffId(worktreeId, contentOwner)
+      const changesFile = state.openFiles.find((file) => file.id === changesId)
+      const { owner, comments } = selectDiffCommentView(
+        state,
+        worktreeId,
+        changesFile ?? contentOwner
+      )
+      const visible =
+        comments && !isMarkdownReviewNotesEnabled(state.settings)
+          ? withoutMarkdownReviewNotes(comments)
+          : comments
+      if (
+        !owner ||
+        !visible?.some((note) => !note.sentAt && !isNoteInFlight(diffCommentSendKey(owner, note)))
+      ) {
+        return false
+      }
+
+      // Reopening an existing Changes tab would replace its entry snapshots and comparison.
+      const changesTab = changesFile ? editorViewTab(state, changesId) : undefined
       if (changesTab) {
         get().activateTab(changesTab.id, { worktreeId })
         get().setActiveFile(changesId, worktreeId)
       } else {
         get().openAllDiffs(worktreeId, worktree.path)
       }
+      const openedTab = editorViewTab(get(), changesId)
+      if (!openedTab) {
+        return false
+      }
       const nonce = (get().diffNotesSendMenuOpenRequest?.nonce ?? 0) + 1
-      set({ diffNotesSendMenuOpenRequest: { worktreeId, nonce, issuedAt: Date.now() } })
+      set({
+        diffNotesSendMenuOpenRequest: {
+          worktreeId,
+          fileId: changesId,
+          tabId: openedTab.id,
+          nonce,
+          issuedAt: Date.now()
+        }
+      })
       return true
     },
-    consumeDiffNotesSendMenuOpenRequest: (worktreeId) =>
-      set((s) =>
-        s.diffNotesSendMenuOpenRequest?.worktreeId === worktreeId
-          ? { diffNotesSendMenuOpenRequest: null }
-          : s
-      ),
+    consumeDiffNotesSendMenuOpenRequest: (request) => {
+      const state = get()
+      if (state.diffNotesSendMenuOpenRequest !== request) {
+        return false
+      }
+      set({ diffNotesSendMenuOpenRequest: null })
+      return (
+        state.activeWorktreeId === request.worktreeId &&
+        state.activeFileId === request.fileId &&
+        editorViewTab(state, request.fileId)?.id === request.tabId
+      )
+    },
     closeAgentSendPopoverTargetMode: (id, instanceId) =>
       set((s) => {
         if (!s.agentSendPopoverTargetMode) {

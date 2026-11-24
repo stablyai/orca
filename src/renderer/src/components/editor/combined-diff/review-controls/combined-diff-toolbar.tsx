@@ -2,6 +2,7 @@ import type React from 'react'
 import { PanelLeftOpen, Space, WrapText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
+import { editorViewTab } from '@/store/slices/editor/tabs/editor-view-placement'
 import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -48,6 +49,7 @@ export function CombinedDiffToolbar({
   diffShowWhitespace,
   diffWordWrap,
   file,
+  viewStateScopeId,
   fileTreeCollapsed,
   isAllMode,
   isBranchMode,
@@ -70,6 +72,7 @@ export function CombinedDiffToolbar({
   diffShowWhitespace: boolean | undefined
   diffWordWrap: boolean | undefined
   file: OpenFile
+  viewStateScopeId?: string
   fileTreeCollapsed: boolean
   isAllMode: boolean
   isBranchMode: boolean
@@ -84,8 +87,14 @@ export function CombinedDiffToolbar({
   toggleSideBySide: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const isFocusedTab = useAppStore((s) => s.activeFileId === file.id)
+  const openRequestTabId = useAppStore((s) => editorViewTab(s, file.id, viewStateScopeId)?.id)
   const hasSections = sectionCount > 0
+  const summary = changedFilesSummary(
+    sectionCount,
+    (isAllMode || isBranchMode) && branchCompare ? branchCompare.baseRef : null,
+    isCommitMode && commitCompare ? commitCompare.compareRef : null,
+    t
+  )
   return (
     <div
       className={cn(
@@ -115,13 +124,8 @@ export function CombinedDiffToolbar({
             </TooltipContent>
           </Tooltip>
         )}
-        <span className="min-w-0 truncate text-xs text-muted-foreground">
-          {changedFilesSummary(
-            sectionCount,
-            (isAllMode || isBranchMode) && branchCompare ? branchCompare.baseRef : null,
-            isCommitMode && commitCompare ? commitCompare.compareRef : null,
-            t
-          )}
+        <span className="min-w-0 truncate text-xs text-muted-foreground" title={summary}>
+          {summary}
         </span>
         <SendNotesSlot className="ml-1">
           <DiffNotesSendMenu
@@ -131,8 +135,7 @@ export function CombinedDiffToolbar({
             comments={diffCommentsForWorktree}
             align="start"
             batch={{ flush: hasSections }}
-            // Only the focused Changes tab opens for the Send review notes shortcut.
-            respondToOpenRequest={isFocusedTab}
+            openRequestTabId={openRequestTabId}
           />
         </SendNotesSlot>
       </div>

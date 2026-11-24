@@ -113,9 +113,9 @@ export function ClearNotesDialog({
   )
 }
 
-type PendingClear = { description: string; clear: () => Promise<boolean> }
+export type NotesClearRequest = { description: string; clear: () => Promise<boolean> }
 
-async function runClear(pending: PendingClear): Promise<boolean> {
+async function runClear(pending: NotesClearRequest): Promise<boolean> {
   try {
     return await pending.clear()
   } catch (error) {
@@ -129,10 +129,10 @@ async function runClear(pending: PendingClear): Promise<boolean> {
  * user picked Clear, so notes added while the dialog is open stay.
  */
 export function useClearNotesConfirm(): {
-  requestClear: (pending: PendingClear) => void
-  dialog: React.JSX.Element
+  requestClear: (pending: NotesClearRequest) => void
+  dialog: React.JSX.Element | null
 } {
-  const [pending, setPending] = useState<PendingClear | null>(null)
+  const [pending, setPending] = useState<NotesClearRequest | null>(null)
   const [isClearing, setIsClearing] = useState(false)
   const mountedRef = useRef(true)
   useEffect(() => {
@@ -166,7 +166,7 @@ export function useClearNotesConfirm(): {
 
   return {
     requestClear: setPending,
-    dialog: (
+    dialog: pending ? (
       <ClearNotesDialog
         open={pending !== null}
         description={pending?.description ?? ''}
@@ -174,7 +174,7 @@ export function useClearNotesConfirm(): {
         onConfirm={() => void confirm()}
         onDismiss={() => setPending(null)}
       />
-    )
+    ) : null
   }
 }
 
@@ -183,7 +183,7 @@ export function diffNotesClearRequest(
   owner: DiffCommentOwner,
   notes: readonly { id: string }[],
   filePath?: string
-): PendingClear {
+): NotesClearRequest {
   const ids = notes.map((note) => note.id)
   return {
     description: clearNotesDescription(ids.length, filePath),

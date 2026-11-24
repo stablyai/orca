@@ -40,6 +40,44 @@ export function BrowserGuestGrabBanner({
   if (grab.state === 'idle') {
     return null
   }
+  const bannerMessage =
+    grab.state === 'error'
+      ? t('auto.components.browser.pane.BrowserPane.4328a0a062', 'Grab failed: {{value0}}', {
+          value0: grab.error ?? 'Unknown error'
+        })
+      : grabIntent === 'annotate'
+        ? pendingAnnotationPayload
+          ? t(
+              'auto.components.browser.pane.BrowserPane.b733a91bd9',
+              'Add feedback for the selected element.'
+            )
+          : isBrowserAnnotationPageFull(browserAnnotationsLength)
+            ? browserAnnotationLimitMessage(t)
+            : browserAnnotationsLength === 1
+              ? t(
+                  'auto.components.browser.pane.BrowserPane.074f0ed10b',
+                  '{{value0}} annotation ready. Select another element or copy all feedback.',
+                  { value0: browserAnnotationsLength }
+                )
+              : browserAnnotationsLength > 0
+                ? t(
+                    'auto.components.browser.pane.BrowserPane.a2164a6e5a',
+                    '{{value0}} annotations ready. Select another element or copy all feedback.',
+                    { value0: browserAnnotationsLength }
+                  )
+                : t(
+                    'auto.components.browser.pane.BrowserPane.777b5bc4ec',
+                    'Click an element to add feedback for the agent.'
+                  )
+        : grab.state === 'confirming'
+          ? t(
+              'auto.components.browser.pane.BrowserPane.e852e20cea',
+              'Copied — press S to screenshot, or select another element'
+            )
+          : t(
+              'auto.components.browser.pane.BrowserPane.168350ae6a',
+              'Click or hover an element, then press C to copy or S to screenshot.'
+            )
   return (
     <div
       className={cn(
@@ -53,44 +91,11 @@ export function BrowserGuestGrabBanner({
           grab.state === 'error' ? 'text-destructive' : 'text-muted-foreground'
         )}
       />
-      <span className={cn('min-w-0 truncate', grabIntent !== 'annotate' && 'flex-1')}>
-        {grab.state === 'error'
-          ? t('auto.components.browser.pane.BrowserPane.4328a0a062', 'Grab failed: {{value0}}', {
-              value0: grab.error ?? 'Unknown error'
-            })
-          : grabIntent === 'annotate'
-            ? pendingAnnotationPayload
-              ? t(
-                  'auto.components.browser.pane.BrowserPane.b733a91bd9',
-                  'Add feedback for the selected element.'
-                )
-              : isBrowserAnnotationPageFull(browserAnnotationsLength)
-                ? browserAnnotationLimitMessage(t)
-                : browserAnnotationsLength === 1
-                  ? t(
-                      'auto.components.browser.pane.BrowserPane.074f0ed10b',
-                      '{{value0}} annotation ready. Select another element or copy all feedback.',
-                      { value0: browserAnnotationsLength }
-                    )
-                  : browserAnnotationsLength > 0
-                    ? t(
-                        'auto.components.browser.pane.BrowserPane.a2164a6e5a',
-                        '{{value0}} annotations ready. Select another element or copy all feedback.',
-                        { value0: browserAnnotationsLength }
-                      )
-                    : t(
-                        'auto.components.browser.pane.BrowserPane.777b5bc4ec',
-                        'Click an element to add feedback for the agent.'
-                      )
-            : grab.state === 'confirming'
-              ? t(
-                  'auto.components.browser.pane.BrowserPane.e852e20cea',
-                  'Copied — press S to screenshot, or select another element'
-                )
-              : t(
-                  'auto.components.browser.pane.BrowserPane.168350ae6a',
-                  'Click or hover an element, then press C to copy or S to screenshot.'
-                )}
+      <span
+        className={cn('min-w-0 truncate', grabIntent !== 'annotate' && 'flex-1')}
+        title={bannerMessage}
+      >
+        {bannerMessage}
       </span>
       {grabIntent === 'annotate' ? (
         <SendNotesSlot className="justify-end">

@@ -6,7 +6,10 @@ import { TaskSourceContextSchema } from '../../work-items/task-source-context-sc
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../workspace-attachments/workspace-linked-item-source-context'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
-import { DiffCommentSchema } from '../../file-review/diff-comment-schema'
+import {
+  DiffCommentDeliverySnapshotSchema,
+  DiffCommentSchema
+} from '../../file-review/diff-comment-schema'
 import { sleepingAgentLaunchConfigSchema } from '../../workspace-session/workspace-session-sleeping-agents'
 import { AgentArgs, LaunchPreferences } from '../terminal/agent-session-params'
 import { LaunchSourceParam } from '../agent-launch/launch-source-param'
@@ -107,7 +110,8 @@ export const FolderWorkspaceUpdate = lazyZodSchema(() =>
         firstAgentMessageRenameError: z.string().nullable().optional(),
         lastActivityAt: OptionalFiniteNumber,
         diffComments: z.array(DiffCommentSchema).optional(),
-        diffCommentsBase: z.array(DiffCommentSchema).optional()
+        diffCommentsBase: z.array(DiffCommentSchema).optional(),
+        deliveredDiffCommentSnapshots: z.array(DiffCommentDeliverySnapshotSchema).optional()
       })
       .superRefine(assertLinkedTaskSourceContextMatch)
   })

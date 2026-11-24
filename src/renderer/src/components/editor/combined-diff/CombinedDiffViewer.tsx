@@ -294,6 +294,7 @@ export default function CombinedDiffViewer({
       diffShowWhitespace={diffShowWhitespace}
       diffWordWrap={diffWordWrap}
       file={file}
+      viewStateScopeId={viewStateScopeId}
       fileTreeCollapsed={preferences.fileTreeCollapsed}
       isAllMode={entrySet.isAllMode}
       isBranchMode={entrySet.isBranchMode}

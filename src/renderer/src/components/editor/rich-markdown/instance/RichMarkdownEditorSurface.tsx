@@ -334,19 +334,17 @@ export function RichMarkdownEditorSurface({
           onCancelPopover={onCancelAnnotationPopover}
           onSubmit={onSubmitAnnotation}
         />
-        {markdownComments.length > 0 ? (
-          <RichMarkdownReviewRailActions
-            owner={commentOwner}
-            worktreeId={worktreeId}
-            filePath={filePath}
-            notes={markdownComments}
-            railOpen={reviewRailOpen}
-            unsentScope={unsentMarkdownReviewScope}
-            onToggleRail={onToggleReviewRail}
-            onCopyNotes={onCopyReviewNotes}
-            onDelivered={onReviewNotesDelivered}
-          />
-        ) : null}
+        <RichMarkdownReviewRailActions
+          owner={commentOwner}
+          worktreeId={worktreeId}
+          filePath={filePath}
+          notes={markdownComments}
+          railOpen={reviewRailOpen}
+          unsentScope={unsentMarkdownReviewScope}
+          onToggleRail={onToggleReviewRail}
+          onCopyNotes={onCopyReviewNotes}
+          onDelivered={onReviewNotesDelivered}
+        />
       </div>
     </div>
   )

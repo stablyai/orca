@@ -31,9 +31,9 @@ import type { DiffCommentDeliverySnapshot } from '@/store/slices/diff-comments/c
 import {
   diffCommentSendKey,
   holdNotesForSend,
-  isNoteInFlight,
-  useNotesInFlightVersion
+  isNoteInFlight
 } from '@/components/notes/delivery/notes-send-in-flight'
+import { useNotesInFlightVersion } from '@/components/notes/delivery/use-notes-in-flight-version'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { recomputeOn } from '@/lib/recompute-on'
@@ -82,7 +82,7 @@ export type NotesSendMenuProps<TNote> = {
   openRequestNonce?: number | null
   // Check expiry on the opening commit; render clocks can lag or freeze.
   openRequestExpiresAt?: number | null
-  onOpenRequestHandled?: () => void
+  onClaimOpenRequest?: () => boolean
   onDelivered: (notes: readonly TNote[]) => void
 }
 
@@ -108,7 +108,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   menuFooter,
   openRequestNonce = null,
   openRequestExpiresAt = null,
-  onOpenRequestHandled,
+  onClaimOpenRequest,
   onDelivered
 }: NotesSendMenuProps<TNote>): React.JSX.Element | null {
   const t = useTranslate()
@@ -254,22 +254,31 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   }, [batchHidden, targetModeId])
 
   useEffect(() => {
-    if (openRequestNonce == null) {
+    if (openRequestNonce == null || !onClaimOpenRequest) {
       return
     }
-    // Consume even expired or undeliverable requests so a later mount cannot reopen them.
-    const expired = openRequestExpiresAt != null && Date.now() >= openRequestExpiresAt
-    if (!expired && hasDeliverableNotes && primaryScope) {
-      handleOpenChange(true)
+    let cancelled = false
+    // Let mount effects settle so Strict Mode replay cannot dismiss a newly opened picker.
+    queueMicrotask(() => {
+      if (cancelled || !onClaimOpenRequest()) {
+        return
+      }
+      // Consume even expired or undeliverable requests so a later mount cannot reopen them.
+      const expired = openRequestExpiresAt != null && Date.now() >= openRequestExpiresAt
+      if (!expired && hasDeliverableNotes && primaryScope) {
+        handleOpenChange(true)
+      }
+    })
+    return () => {
+      cancelled = true
     }
-    onOpenRequestHandled?.()
   }, [
     openRequestNonce,
     openRequestExpiresAt,
     hasDeliverableNotes,
     primaryScope,
     handleOpenChange,
-    onOpenRequestHandled
+    onClaimOpenRequest
   ])
 
   // Unknown owner: whether the notes are held cannot be told yet, so show nothing.

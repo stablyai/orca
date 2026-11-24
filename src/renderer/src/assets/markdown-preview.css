@@ -285,6 +285,7 @@
   align-items: center;
   justify-content: center;
   min-width: 0;
+  white-space: nowrap;
   height: 26px;
   border: 1px solid transparent;
   border-radius: 5px;
@@ -295,6 +296,12 @@
   font-weight: 600;
   gap: 6px;
   padding: 0 8px;
+}
+
+.markdown-review-toolbar-button > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .markdown-review-toolbar-button:hover:not(:disabled) {

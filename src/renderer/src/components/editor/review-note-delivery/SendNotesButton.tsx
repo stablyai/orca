@@ -92,17 +92,20 @@ const SendNotesSlotContext = createContext<SendNotesSlotValue | null>(null)
  */
 export function SendNotesSlot({
   className,
+  fitContent = false,
   children
 }: {
   className?: string
+  fitContent?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
   const slotRef = useRef<HTMLSpanElement>(null)
   const sizerRef = useRef<HTMLSpanElement>(null)
   const [face, setFace] = useState<SendNotesFace | null>(null)
-  const [fit, setFit] = useState<{ tier: SendNotesTier; minWidth: number }>({
+  const [fit, setFit] = useState<{ tier: SendNotesTier; minWidth: number; fullWidth: number }>({
     tier: 'full',
-    minWidth: 0
+    minWidth: 0,
+    fullWidth: 0
   })
 
   useLayoutEffect(() => {
@@ -119,8 +122,11 @@ export function SendNotesSlot({
       const available = slot.getBoundingClientRect().width
       const tier: SendNotesTier = available >= full ? 'full' : available >= short ? 'short' : 'icon'
       const minWidth = Math.ceil(icon)
+      const fullWidth = Math.ceil(full)
       setFit((prev) =>
-        prev.tier === tier && prev.minWidth === minWidth ? prev : { tier, minWidth }
+        prev.tier === tier && prev.minWidth === minWidth && prev.fullWidth === fullWidth
+          ? prev
+          : { tier, minWidth, fullWidth }
       )
     }
     measure()
@@ -140,7 +146,10 @@ export function SendNotesSlot({
       ref={slotRef}
       data-send-notes-slot=""
       className={cn('relative flex min-w-0 flex-1 items-center', className)}
-      style={face ? { minWidth: fit.minWidth } : undefined}
+      // A zero flex basis gives the preceding text its natural width until only the icon fits.
+      style={
+        face ? { minWidth: fit.minWidth, width: fitContent ? fit.fullWidth : undefined } : undefined
+      }
     >
       <SendNotesSlotContext.Provider value={value}>{children}</SendNotesSlotContext.Provider>
       {face ? (

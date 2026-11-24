@@ -8,11 +8,8 @@ import type {
 } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 import { formatBrowserAnnotationsAsMarkdown } from '../../../../../../shared/browser/annotations/browser-annotation-output'
 import { EMPTY_BROWSER_ANNOTATIONS } from '../../describe-page/browser-annotation-geometry'
-import {
-  holdNotesForSend,
-  isNoteInFlight,
-  useNotesInFlightVersion
-} from '@/components/notes/delivery/notes-send-in-flight'
+import { holdNotesForSend, isNoteInFlight } from '@/components/notes/delivery/notes-send-in-flight'
+import { useNotesInFlightVersion } from '@/components/notes/delivery/use-notes-in-flight-version'
 import { recomputeOn } from '@/lib/recompute-on'
 
 export type BrowserAnnotationsClearRequest = {
@@ -177,14 +174,22 @@ export function useBrowserPageAnnotationSend({
           'Browser annotations'
         ),
         launchSource: 'notes_send',
+        canSendPrompt: () => {
+          const current = new Set(useAppStore.getState().browserAnnotationsByPageId[browserTabId])
+          return sendableAnnotations.every(
+            (annotation) => current.has(annotation) && !isNoteInFlight(annotation)
+          )
+        },
         onPromptDelivered: handleBrowserAnnotationsSentToAgent,
         onPromptHandedOff: handleBrowserAnnotationsHandedOff
       })
     },
     [
+      browserTabId,
       handleBrowserAnnotationsSentToAgent,
       handleBrowserAnnotationsHandedOff,
       openAgentSendPopoverTargetMode,
+      sendableAnnotations,
       worktreeId
     ]
   )
