@@ -24,16 +24,20 @@ function TabWidthFixture({
   browserTabs,
   clientHostedBrowserRows,
   editorFiles,
-  tabBarOrder
+  tabBarOrder,
+  initialActiveIndex = 0,
+  isGroupFocused
 }: {
   count: number
   titles?: string[]
   agentTabs?: boolean
+  initialActiveIndex?: number
+  isGroupFocused?: boolean
 } & Pick<
   TabBarProps,
   'browserTabs' | 'clientHostedBrowserRows' | 'editorFiles' | 'tabBarOrder'
 >): React.JSX.Element {
-  const [activeTabId, setActiveTabId] = useState('tab-0')
+  const [activeTabId, setActiveTabId] = useState(`tab-${initialActiveIndex}`)
   const tabs: TerminalTab[] = Array.from({ length: count }, (_, index) => ({
     id: `tab-${index}`,
     worktreeId: WORKSPACE_ID,
@@ -55,6 +59,7 @@ function TabWidthFixture({
           activeTabType="terminal"
           worktreeId={WORKSPACE_ID}
           groupId="tab-width-group"
+          isGroupFocused={isGroupFocused}
           browserTabs={browserTabs}
           clientHostedBrowserRows={clientHostedBrowserRows}
           editorFiles={editorFiles}
@@ -330,4 +335,56 @@ function AgentIdentityFixture(): React.JSX.Element {
 export const agentIdentityChanges = defineFixture({
   width: 900,
   render: () => <AgentIdentityFixture />
+})
+
+// Narrow-pane condensing: 6 tabs, the 4th active, at the widths the option-D design walks through.
+const NARROW_TITLES = [
+  'Build server',
+  'Release notes draft',
+  'Test runner',
+  'API docs review',
+  'Migration plan',
+  'Shell'
+]
+
+function NarrowStripFixture(): React.JSX.Element {
+  return <TabWidthFixture count={6} titles={NARROW_TITLES} initialActiveIndex={3} isGroupFocused />
+}
+
+function narrowStrip(width: number): ReturnType<typeof defineFixture> {
+  return defineFixture({ width, render: () => <NarrowStripFixture /> })
+}
+
+export const narrow640 = narrowStrip(640)
+export const narrow440 = narrowStrip(440)
+export const narrow330 = narrowStrip(330)
+export const narrow280 = narrowStrip(280)
+export const narrow230 = narrowStrip(230)
+export const narrow205 = narrowStrip(205)
+export const narrowChipOnly = narrowStrip(120)
+
+async function nextFrames(count: number): Promise<void> {
+  for (let index = 0; index < count; index++) {
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+  }
+}
+
+/** Opens the "+N" list and moves keyboard focus one row, so the current row and the focused row differ. */
+async function openOverflowList(frame: HTMLElement): Promise<void> {
+  await nextFrames(4)
+  frame
+    .querySelector('[data-tab-strip-overflow-chip]')
+    ?.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })
+    )
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  const focused = document.activeElement
+  focused?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }))
+  await nextFrames(2)
+}
+
+export const narrowOverflowListOpen = defineFixture({
+  width: 280,
+  render: () => <NarrowStripFixture />,
+  interact: openOverflowList
 })
