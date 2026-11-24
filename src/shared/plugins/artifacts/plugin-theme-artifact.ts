@@ -181,12 +181,25 @@ function isThemeColorValue(value: string): boolean {
   )
 }
 
+// Why: `transparent` is how a theme removes this border; other tokens must paint a color.
+const TRANSPARENT_TOKENS = new Set(['--chat-inline-code-border'])
+
 const themeFields = {
   base: z.enum(['light', 'dark']),
-  tokens: z.record(
-    z.string().refine((token) => THEME_TOKEN_SET.has(token), 'is not a public theme token'),
-    z.string().refine(isThemeColorValue, 'must be a color value')
-  )
+  tokens: z
+    .record(
+      z.string().refine((token) => THEME_TOKEN_SET.has(token), 'is not a public theme token'),
+      z.string()
+    )
+    .superRefine((tokens, ctx) => {
+      for (const [token, value] of Object.entries(tokens)) {
+        const transparent =
+          TRANSPARENT_TOKENS.has(token) && value.trim().toLowerCase() === 'transparent'
+        if (!transparent && !isThemeColorValue(value)) {
+          ctx.addIssue({ code: 'custom', path: [token], message: 'must be a color value' })
+        }
+      }
+    })
 }
 
 // Why VS Code's shape: authors can paste a VS Code theme's `tokenColors` unchanged.
