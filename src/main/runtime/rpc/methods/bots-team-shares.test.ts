@@ -18,13 +18,13 @@ describe('bots.teamShares.add', () => {
           }
         },
         // The cloud answers a second send that overlaps the first with 429: not sent.
-        emailBotInvite: async () => {
+        botCloudAuth: async () => {
           inFlight += 1
           most = Math.max(most, inFlight)
           await Promise.resolve()
           await Promise.resolve()
           inFlight -= 1
-          return inFlight === 0
+          return { status: 'ok', value: inFlight === 0 }
         }
       }
     } as unknown as Parameters<typeof add.handler>[1]

@@ -10,6 +10,7 @@ import {
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { ownerOnly } from './bots-caller-gates'
 import { removeBotShare } from '../../../bots/team-share/bot-share-access'
+import { sendBotInviteEmail } from '../../../bots/team-share/bot-invite-email'
 
 const OWNER_ONLY = 'Only your owner shares you with people, in Orca.'
 
@@ -22,7 +23,8 @@ async function emailInvites(
   // One at a time: the cloud sends one invite per sharer at once and answers a second with 429.
   const emailed: string[] = []
   for (const invite of invites) {
-    if (await context.runtime.emailBotInvite({ to: invite.email, agentName: bot.name })) {
+    const email = { to: invite.email, agentName: bot.name }
+    if (await sendBotInviteEmail(context.runtime.botCloudAuth, email)) {
       emailed.push(invite.shareId)
     }
   }

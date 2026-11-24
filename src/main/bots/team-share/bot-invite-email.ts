@@ -41,11 +41,15 @@ export async function postBotInvite(
   return answer.data?.sent === true
 }
 
-/** Whether the email went out; never throws, since a share is never refused for its email. */
+/** Whether the email went out; false (Email not sent yet) on a host with no Orca Cloud. Never
+ *  throws, since a share is never refused for its email. */
 export async function sendBotInviteEmail(
-  call: BotInviteCloudCall,
+  call: BotInviteCloudCall | null,
   invite: BotInviteEmail
 ): Promise<boolean> {
+  if (!call) {
+    return false
+  }
   try {
     const result = await call((token, apiBaseUrl) => postBotInvite(apiBaseUrl, token, invite))
     return result.status === 'ok' && result.value
