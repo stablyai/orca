@@ -1,5 +1,8 @@
 import type { RuntimeDeviceGrant } from '../callers/rpc-method-permission'
 import type { DeviceRegistry } from './pairing/device-registry'
+import type { BotShareDeviceStore } from './pairing/bot-share-device-store'
+import { mintBotShareOffer, type BotShareOfferAsk } from './pairing/bot-share-offer'
+import type { BotTeamShareOffer } from '../../../../shared/bots/bot-team-share-seal'
 import type { DeviceScope } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TokenDeviceEntry } from './pairing/device-entry'
 import type { E2EEKeypair } from './pairing/e2ee-keypair'
@@ -40,6 +43,18 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     return this.deviceRegistry
   }
 
+  getBotShareDevices(): BotShareDeviceStore | null {
+    return this.botShareDevices
+  }
+
+  /** A device that signs in through Relay on its own: a phone, or a teammate's share device. */
+  isRelayClientDevice(deviceId: string): boolean {
+    return (
+      this.deviceRegistry?.getDevice(deviceId)?.scope === 'mobile' ||
+      (this.botShareDevices?.get(deviceId) ?? null) !== null
+    )
+  }
+
   getE2EEPublicKey(): string | null {
     return this.e2eeKeypair?.publicKeyB64 ?? null
   }
@@ -60,12 +75,39 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     return this.pushUnregisterOutbox
   }
 
-  setMobileRelayBinding(deviceId: string, binding: RelayDeviceBinding): boolean {
-    const current = this.deviceRegistry?.getDevice(deviceId)
-    if (
-      current?.scope !== 'mobile' ||
-      this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) === 'local-only'
-    ) {
+  /** A teammate's device asked to reach a shared bot: see `mintBotShareOffer`. */
+  async mintBotShareOffer(ask: BotShareOfferAsk): Promise<BotTeamShareOffer> {
+    const store = this.botShareDevices
+    const relay = this.mobileRelayPairingProvider
+    const hostPublicKeyB64 = this.e2eeKeypair?.publicKeyB64
+    if (!store || !relay || !hostPublicKeyB64) {
+      throw new Error('share_offer_unavailable')
+    }
+    return await mintBotShareOffer(
+      {
+        store,
+        relay,
+        hostPublicKeyB64,
+        bindRelay: (deviceId, binding) => this.setRelayDeviceBinding(deviceId, binding),
+        revokeRelay: (binding) => {
+          this.queueRelayDeviceRevoke(binding)
+        }
+      },
+      ask
+    )
+  }
+
+  /** Binds a phone or share device to its Relay credential, in whichever store holds it. */
+  async setRelayDeviceBinding(deviceId: string, binding: RelayDeviceBinding): Promise<boolean> {
+    const share = this.botShareDevices?.get(deviceId) ?? null
+    const phone = share ? null : this.deviceRegistry?.getDevice(deviceId)
+    const current =
+      share ??
+      (phone?.scope === 'mobile' &&
+      this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) !== 'local-only'
+        ? phone
+        : null)
+    if (!current) {
       return false
     }
     if (
@@ -78,7 +120,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
         return false
       }
     }
-    const updated = this.deviceRegistry?.setRelayBinding(deviceId, binding) ?? false
+    const updated =
+      (share
+        ? await this.botShareDevices?.setRelayBinding(deviceId, binding)
+        : this.deviceRegistry?.setRelayBinding(deviceId, binding)) ?? false
     if (updated) {
       this.mobileRelayPairingProvider?.onDemandStateChanged?.()
     }

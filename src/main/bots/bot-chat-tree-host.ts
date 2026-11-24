@@ -102,15 +102,21 @@ async function readBotChatBase(host: BotChatTreeHost, bot: Bot) {
   return { store, inputs, build }
 }
 
-/** The bot's newest empty side chat on its agent whose tab is open, so New chat opens it again. */
-export async function openEmptyBotChat(host: BotChatTreeHost, bot: Bot): Promise<string | null> {
+/** The bot's newest empty side chat on its agent whose tab is open, so New chat opens it again;
+ *  `reusable` narrows it to the chats the asker may have. */
+export async function openEmptyBotChat(
+  host: BotChatTreeHost,
+  bot: Bot,
+  reusable: (chatId: string) => boolean = () => true
+): Promise<string | null> {
   const { store, inputs, build } = await readBotChatBase(host, bot)
   const tabbed = new Set((await host.chatTabs(inputs.workspaceId)).map((tab) => tab.sessionId))
   const chat = orderedBaseChats(build.chats.values()).find(
     (entry) =>
       entry.empty &&
       tabbed.has(entry.chatId) &&
-      store?.getRecord(entry.chatId)?.provider === bot.agent
+      store?.getRecord(entry.chatId)?.provider === bot.agent &&
+      reusable(entry.chatId)
   )
   return chat?.chatId ?? null
 }

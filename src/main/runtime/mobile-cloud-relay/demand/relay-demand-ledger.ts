@@ -1,8 +1,10 @@
 import type { DeviceRegistry } from '../../rpc/server/pairing/device-registry'
-import type { RelayRevokeOutbox } from '../pairing/relay-revoke-outbox'
+import type { RelayDeviceBinding, RelayRevokeOutbox } from '../pairing/relay-revoke-outbox'
 
 type RelayDemandLedgerOptions = {
   deviceRegistry: DeviceRegistry
+  // Teammates reach a shared bot through Relay alone, so their devices keep it up like phones.
+  botShareDevices?: () => readonly { relayBinding?: RelayDeviceBinding }[]
   revokeOutbox: RelayRevokeOutbox
   relayHostId: string
   now?: () => number
@@ -41,10 +43,8 @@ export class RelayDemandLedger {
       return true
     }
     const now = (this.options.now ?? Date.now)()
-    return this.options.deviceRegistry.listDevices().some((device) => {
-      const binding = device.relayBinding
+    return this.relayClients().some(({ relayBinding: binding }) => {
       if (
-        device.scope !== 'mobile' ||
         !binding ||
         binding.ownerIdentityKey !== ownerIdentityKey ||
         binding.relayHostId !== this.options.relayHostId
@@ -56,10 +56,21 @@ export class RelayDemandLedger {
     })
   }
 
+  /** Phones and teammates' share devices: what reaches this host through Relay. */
+  private relayClients(): readonly { relayBinding?: RelayDeviceBinding }[] {
+    return [
+      ...this.options.deviceRegistry.listDevices().filter((device) => device.scope === 'mobile'),
+      ...(this.options.botShareDevices?.() ?? [])
+    ]
+  }
+
   nextPendingExpiry(): number | null {
     const now = (this.options.now ?? Date.now)()
     let next: number | null = null
-    for (const device of this.options.deviceRegistry.listDevices()) {
+    for (const device of [
+      ...this.options.deviceRegistry.listDevices(),
+      ...(this.options.botShareDevices?.() ?? [])
+    ]) {
       const expiresAt = device.relayBinding?.inviteExpiresAt
       if (expiresAt && expiresAt > now && (next === null || expiresAt < next)) {
         next = expiresAt

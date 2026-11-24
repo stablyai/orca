@@ -9,7 +9,11 @@ import {
   type DeviceProofPurpose
 } from '../../../../shared/remote-runtime/pairing/device-key-proof'
 import { DeviceRegistry } from '../server/pairing/device-registry'
-import { DEVICE_REGISTRY_FILENAME } from '../server/pairing/mobile-pairing-files'
+import {
+  BOT_SHARE_DEVICES_FILENAME,
+  DEVICE_REGISTRY_FILENAME
+} from '../server/pairing/mobile-pairing-files'
+import { BotShareDeviceStore } from '../server/pairing/bot-share-device-store'
 import { SimulatedMobileE2EEV2Peer } from '../../mobile-cloud-relay/testing/simulated-mobile-e2ee-v2-peer'
 import { registerSocketDeviceKey } from '../server/runtime-rpc-device-key-registration'
 import { generateKeyPair } from '../../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
@@ -50,11 +54,16 @@ function sign(key: nacl.SignKeyPair, purpose: DeviceProofPurpose, transcriptHash
   return Buffer.from(nacl.sign.detached(message, key.secretKey)).toString('base64')
 }
 
-function harness(registry: DeviceRegistry, metadata?: MobileSocketTransportMetadata) {
+function harness(
+  registry: DeviceRegistry,
+  metadata?: MobileSocketTransportMetadata,
+  botShareDevices?: BotShareDeviceStore
+) {
   const transport = new FakeTransport()
   const ready: AuthenticatedMobileSocket[] = []
   const wiring = new MobileSocketWiring({
     deviceRegistry: registry,
+    ...(botShareDevices ? { botShareDevices } : {}),
     e2eeKeypair: {
       publicKey: desktop.publicKey,
       secretKey: desktop.secretKey,
@@ -87,7 +96,7 @@ function harness(registry: DeviceRegistry, metadata?: MobileSocketTransportMetad
     const reply = ws.sent[1] ? JSON.parse(peer.openText(String(ws.sent[1]))!) : null
     return { ws, peer, transcriptHashB64, reply, socket: ready.at(-1) }
   }
-  return { connect, ready }
+  return { connect, ready, transport }
 }
 
 function freshRegistry(): DeviceRegistry {
@@ -256,5 +265,78 @@ describe('device-key authentication (host)', () => {
         error: { code: 'unauthorized' }
       })
     }
+  })
+
+  describe('a teammate’s share device', () => {
+    const relay = (relayDeviceId: string): MobileSocketTransportMetadata => ({
+      transport: 'relay',
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      relayDeviceId,
+      basisConnId: 'basis',
+      credentialKind: 'resume'
+    })
+
+    it('signs in as its one-bot grant, never as a paired device, and is cut off once removed', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'orca-share-key-'))
+      const registry = new DeviceRegistry(dir)
+      const shares = new BotShareDeviceStore(dir)
+      const key = nacl.sign.keyPair()
+      const device = await shares.add({
+        botId: 'bot-1',
+        accountId: 'acct-alice',
+        name: 'Alice',
+        scope: 'runtime',
+        devicePublicKeyB64: Buffer.from(key.publicKey).toString('base64')
+      })
+      const keyAuth = (hash: string) => ({
+        deviceId: device.deviceId,
+        deviceProofB64: sign(key, 'auth', hash)
+      })
+      const { connect, transport } = harness(registry, relay(device.deviceId), shares)
+      const signedIn = connect(keyAuth)
+      expect(signedIn.reply).toMatchObject({ type: 'e2ee_authenticated' })
+      expect(signedIn.socket?.device.botShare).toEqual({
+        botId: 'bot-1',
+        accountId: 'acct-alice',
+        name: 'Alice'
+      })
+      expect(registry.getDevice(device.deviceId)).toBeNull()
+      // Relay's outer authorization for another device can't choose this one.
+      expect(harness(registry, relay('someone-else'), shares).connect(keyAuth).reply).toEqual({
+        type: 'e2ee_error',
+        error: { code: 'unauthorized' }
+      })
+
+      await shares.remove(device.deviceId)
+      transport.receive(signedIn.ws, signedIn.peer.sealText('{}'))
+      expect(signedIn.ws.close).toHaveBeenCalledWith(4001, 'Unauthorized')
+      expect(harness(registry, relay(device.deviceId), shares).connect(keyAuth).reply).toEqual({
+        type: 'e2ee_error',
+        error: { code: 'device_revoked', deviceId: device.deviceId }
+      })
+    })
+
+    it('refuses a malformed row without telling the client its key is gone', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'orca-share-key-'))
+      const key = nacl.sign.keyPair()
+      const row = {
+        deviceId: 'share-1',
+        accountId: 'acct-alice',
+        name: 'Alice',
+        scope: 'mobile',
+        devicePublicKeyB64: Buffer.from(key.publicKey).toString('base64'),
+        pairedAt: 1
+      }
+      // No botId: a row this build can't fully read grants nothing, and is never a phone.
+      writeFileSync(join(dir, BOT_SHARE_DEVICES_FILENAME), JSON.stringify({ v: 1, devices: [row] }))
+      const registry = new DeviceRegistry(dir)
+      const { connect } = harness(registry, undefined, new BotShareDeviceStore(dir))
+      const refused = connect((hash) => ({
+        deviceId: row.deviceId,
+        deviceProofB64: sign(key, 'auth', hash)
+      }))
+      expect(refused.reply).toEqual({ type: 'e2ee_error', error: { code: 'registry_unavailable' } })
+      expect(refused.socket).toBeUndefined()
+    })
   })
 })

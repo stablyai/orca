@@ -1,6 +1,7 @@
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcAnyMethodDeclaration } from '../core'
 import type { DeviceRegistry } from './pairing/device-registry'
+import type { BotShareDeviceStore } from './pairing/bot-share-device-store'
 import type { E2EEKeypair } from './pairing/e2ee-keypair'
 import type { MobileSocketTransportMetadata } from '../mobile/mobile-socket-wiring'
 import type { ServeNetworkSourceOptions } from './serve-network-source-policy'
@@ -87,7 +88,12 @@ export type MobilePairingOfferAvailable = {
 export type MobilePairingOffer = PairingOfferUnavailable | MobilePairingOfferAvailable
 
 export type PairingIdentityInitialization =
-  | { ok: true; deviceRegistry: DeviceRegistry; e2eeKeypair: E2EEKeypair }
+  | {
+      ok: true
+      deviceRegistry: DeviceRegistry
+      botShareDevices: BotShareDeviceStore
+      e2eeKeypair: E2EEKeypair
+    }
   | { ok: false; failure: PairingOfferUnavailable }
 
 export function pairingUnavailable(

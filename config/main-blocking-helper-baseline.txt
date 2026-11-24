@@ -1245,6 +1245,7 @@
 1 src/main/runtime/rpc/methods/terminal/session-terminal-scrollback.ts
 1 src/main/runtime/rpc/methods/workspaces/worktree.ts
 5 src/main/runtime/rpc/server/network-source-policy-store.ts
+3 src/main/runtime/rpc/server/pairing/bot-share-device-store.ts # startup load hardens and sets aside a corrupt file once; per share change writeSecureFileAsync keeps only its renameSync
 11 src/main/runtime/rpc/server/pairing/device-registry-disk-merge.ts
 2 src/main/runtime/rpc/server/pairing/device-registry-file-read.ts
 3 src/main/runtime/rpc/server/pairing/e2ee-keypair.ts

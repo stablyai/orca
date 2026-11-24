@@ -234,7 +234,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
       return this.relayPairingRequestSuperseded()
     }
     try {
-      if (!this.setMobileRelayBinding(device.deviceId, relayPairing.binding)) {
+      if (!(await this.setRelayDeviceBinding(device.deviceId, relayPairing.binding))) {
         this.queueOrRetainRelayDeviceRevoke(device.deviceId, relayPairing.binding)
         return refuseAutomaticWithoutRelay({
           code: 'relay_binding_failed',

@@ -24,6 +24,7 @@ import {
 } from '../../orchestration/mailbox/routing/structured-session-mail-address'
 import { refuseUndeliverableSessionRecipientWith } from './orchestration/messaging/session-recipient'
 import { namedOrCallerBot } from './bots-caller-bot'
+import { botShareChatFilter, botShareScopeOf } from '../../../bots/team-share/bot-share-chats'
 import { defineMethod } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
@@ -38,6 +39,12 @@ const BOT_CHATS_METHOD = defineMethod({
   handler: async (params, context) => {
     const { runtime } = context
     const { bot, caller } = namedOrCallerBot(params, context)
+    const share = botShareScopeOf(context)
+    if (share) {
+      const owns = botShareChatFilter(runtime, share)
+      const chats = await readBotChats(runtime, bot, null, params.all ?? false)
+      return { bot: bot.name, chats: chats.filter((chat) => owns(chat.id)) }
+    }
     // With the bot named, the claim only marks which row is the asking chat, so a paired client's counts.
     const asking = caller ?? (params.botId ? params.callerSessionId : undefined)
     return {
