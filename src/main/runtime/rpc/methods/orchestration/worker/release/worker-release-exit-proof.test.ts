@@ -697,10 +697,7 @@ describe('worker release once the exact process is proven exited', () => {
     await call('orchestration.workerRetain', { dispatch: from })
     const task = db.createTask({ spec: 'reuses the kept terminal', runId: activeRunId })
     // The terminal resolves again for the reuse, then is gone once more.
-    vi.mocked(runtime.showTerminal).mockImplementation(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worker start reads only the handle, worktree and status of a shown terminal.
-      async (handle) => ({ handle, worktreeId: 'repo::worktree', status: 'running' }) as never
-    )
+    fixture.terminalBack()
     const started: unknown = await call('orchestration.workerStart', {
       task: task.id,
       from: 'term_coord',

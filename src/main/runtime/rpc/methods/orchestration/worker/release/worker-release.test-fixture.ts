@@ -42,7 +42,7 @@ export function createWorkerReleaseFixture() {
   vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
     handle === 'term_worker' ? workerIncarnation : null
   )
-  vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
+  const liveAuthority: OrcaRuntimeService['getOrchestrationDispatchAuthority'] = (handle) =>
     handle === 'term_worker'
       ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub supplies only the authority fields worker start reads.
         ({
@@ -52,7 +52,7 @@ export function createWorkerReleaseFixture() {
           hostScope: { kind: 'local', hostId: 'local' }
         } as never)
       : null
-  )
+  vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation(liveAuthority)
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
   vi.spyOn(runtime, 'showTerminal').mockImplementation(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: release reads only the handle, worktree and status of a shown terminal.
@@ -154,9 +154,20 @@ export function createWorkerReleaseFixture() {
     })
   }
 
+  /** The terminal is gone: as in the runtime, its handle stops resolving and its dispatch authority with it. */
   function goneAfterSettle(): void {
     vi.mocked(runtime.showTerminal).mockRejectedValue(new Error('terminal_handle_stale'))
+    vi.mocked(runtime.getOrchestrationDispatchAuthority).mockReturnValue(null)
     vi.spyOn(runtime, 'resolveTerminalHandleByProcessIncarnation').mockReturnValue(null)
+  }
+
+  /** The terminal resolves again, with its live dispatch authority. */
+  function terminalBack(): void {
+    vi.mocked(runtime.showTerminal).mockImplementation(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: release reads only the handle, worktree and status of a shown terminal.
+      async (handle) => ({ handle, worktreeId: 'repo::worktree', status: 'running' }) as never
+    )
+    vi.mocked(runtime.getOrchestrationDispatchAuthority).mockImplementation(liveAuthority)
   }
 
   function saveSession(resourceId: string, sessionId: string): string {
@@ -181,6 +192,7 @@ export function createWorkerReleaseFixture() {
     startSettledWorker,
     loseWorkerTerminal,
     goneAfterSettle,
+    terminalBack,
     saveSession
   }
 }
