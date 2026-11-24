@@ -1,9 +1,12 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { grantCodexProjectTrustOffMain } from '../../codex/trust/project-trust/codex-project-trust-worker-client'
 import { runExclusivelyForCodexTrustConfig } from '../../codex/trust/toml/codex-trust-config-mutation-queue'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
+import { isPlainObject } from '../../agent-hooks/installation/configuration/hooks-json-read'
 import { canonicalizeAgentTrustPath as canonicalize } from './agent-trust-path-canonicalization'
 import { recordOrcaCreatedAntigravityTrust } from './antigravity-workspace-trust-ownership'
 import type { TuiAgentConfig } from '../../../shared/agent-launch/catalog/tui-agent-config-types'
@@ -132,6 +135,94 @@ function kimiWorkspaceTrustKey(root: string): string {
   const name = slug === '' || slug === '.' || slug === '..' ? 'workspace' : slug
   const hash = createHash('sha256').update(normalized).digest('hex').slice(0, 12)
   return `wd_${name}_${hash}`
+}
+
+/**
+ * Mistral Vibe stores trust as two path lists in `$VIBE_HOME/trusted_folders.toml`
+ * (core/trusted_folders.py); a path in `untrusted` is refused even after a later trust write, so the
+ * entry has to be moved between the lists the way Vibe's own `trust()` does.
+ */
+export function markMistralVibeWorkspaceTrusted(
+  workspacePath: string,
+  env: Record<string, string | undefined>,
+  home: string
+): void {
+  const trustFile = join(vibeHome(env, home), 'trusted_folders.toml')
+  if (vibeTrustStatus(trustFile, workspacePath) === 'trusted') {
+    return
+  }
+  const lists = readVibeTrustLists(trustFile)
+  if (!lists) {
+    // Preserve a file Orca cannot parse; the agent can repair it after manual trust approval.
+    return
+  }
+  const entry = vibeTrustKey(workspacePath)
+  const trusted = lists.trusted.filter((path) => path !== entry)
+  const untrusted = lists.untrusted.filter((path) => path !== entry)
+  trusted.push(entry)
+  mkdirSync(dirname(trustFile), { recursive: true, mode: 0o700 })
+  writeFileAtomically(trustFile, stringifyToml({ trusted, untrusted }), { mode: 0o600 })
+}
+
+/** `VIBE_HOME` moves the store; Vibe resolves `~` itself, so an unset var means `<agentHome>/.vibe`. */
+function vibeHome(env: Record<string, string | undefined>, home: string): string {
+  return env.VIBE_HOME ? resolve(env.VIBE_HOME) : join(home, '.vibe')
+}
+
+/**
+ * Vibe keys on `Path(workspace).expanduser().resolve()` (Python), which is the physical path, unlike
+ * `fs.realpath` it does not fold Windows case. Reads both lists because a stale `untrusted` entry wins.
+ */
+function vibeTrustStatus(trustFile: string, workspacePath: string): 'trusted' | 'untrusted' | 'none' {
+  const lists = readVibeTrustLists(trustFile)
+  if (!lists) {
+    return 'none'
+  }
+  const entry = vibeTrustKey(workspacePath)
+  if (lists.untrusted.includes(entry)) {
+    return 'untrusted'
+  }
+  return lists.trusted.includes(entry) ? 'trusted' : 'none'
+}
+
+function vibeTrustKey(workspacePath: string): string {
+  try {
+    return realpathSync.native(workspacePath)
+  } catch {
+    // Missing paths retain their supplied spelling, as Vibe's resolve() does.
+    return resolve(workspacePath)
+  }
+}
+
+/** Vibe also writes `untrusted`; a missing file holds neither list, and a broken one is left alone. */
+function readVibeTrustLists(
+  trustFile: string
+): { trusted: string[]; untrusted: string[] } | null {
+  let text: string
+  try {
+    text = readFileSync(trustFile, 'utf-8')
+  } catch (error) {
+    return isDefinitiveAbsence(error) ? { trusted: [], untrusted: [] } : null
+  }
+  let parsed: unknown
+  try {
+    parsed = parseToml(text)
+  } catch {
+    return null
+  }
+  const lists: string[][] = []
+  for (const name of ['trusted', 'untrusted']) {
+    const value = isPlainObject(parsed) ? parsed[name] : undefined
+    if (value === undefined) {
+      lists.push([])
+      continue
+    }
+    if (!Array.isArray(value) || !value.every((path) => typeof path === 'string')) {
+      return null
+    }
+    lists.push(value)
+  }
+  return { trusted: lists[0], untrusted: lists[1] }
 }
 
 /** Lock configs in hook-installer order: managed runtime home before system home. */

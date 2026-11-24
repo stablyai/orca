@@ -258,7 +258,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Installers expose vibe; keep mistral-vibe for wrapped installs.
     detectCmd: 'vibe',
     detectCmdAliases: ['mistral-vibe'],
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    // Why: Vibe blocks a first launch in an untrusted folder, and it has no --trust flag; writing its
+    // trust store is the only way to keep the prompt from consuming a dispatched worker's brief (#48436).
+    preflightTrust: 'mistral-vibe'
   },
   // Qwen 0.24.7 drops Enter for 500ms after paste on Windows/Node <20; delayed retry is harmless if the first submit landed.
   // prettier-ignore
