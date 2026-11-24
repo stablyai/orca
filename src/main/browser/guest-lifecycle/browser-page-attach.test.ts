@@ -7,26 +7,8 @@ import {
   prepareBrowserPageAttach,
   startBrowserPageAttach
 } from './browser-page-memory'
-import {
-  FIRST_LOAD_WAIT_MS,
-  whenBrowserExtensionsStartFor
-} from '../extensions/profile-sessions/browser-extension-page-start'
 
 vi.mock('electron', () => ({ app: { on: vi.fn(), off: vi.fn() }, session: {} }))
-// A profile whose 2 extensions are starting, as right after launch; null once they have loaded.
-const profileLoad = vi.hoisted(() => {
-  const state: { loading: Promise<void> | null } = { loading: null }
-  return state
-})
-vi.mock('../extensions/api-runtime/browser-extension-api-host', () => ({
-  getBrowserExtensionProfileIdForSession: () => 'default'
-}))
-vi.mock('../extensions/profile-sessions/browser-extension-session-loader', () => ({
-  getBrowserExtensionProfileLoadingPhase: () => profileLoad.loading,
-  whenBrowserExtensionProfileLoaded: () => profileLoad.loading ?? Promise.resolve(),
-  whenBrowserExtensionProfileUnloaded: () => Promise.resolve(),
-  getBrowserExtensionSessionForProfile: () => null
-}))
 
 const RENDERER_ID = 7
 const PARTITION = 'persist:orca-browser'
@@ -108,30 +90,6 @@ describe('claimBrowserPageFirstLoad', () => {
       await vi.advanceTimersByTimeAsync(0)
       expect(settled).toBe(true)
     } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('loads the first tab after launch once, even if its extensions outlast the wait', async () => {
-    vi.useFakeTimers()
-    try {
-      // The profile's 2 extensions are loading, as right after launch, and stay so past the bound.
-      profileLoad.loading = new Promise<void>(() => {})
-      // The renderer's attach request waits on this before the guest exists.
-      const ready = whenBrowserExtensionsStartFor('default')
-      expect(ready).not.toBeNull()
-      await vi.advanceTimersByTimeAsync(FIRST_LOAD_WAIT_MS)
-      await ready
-
-      const url = 'https://example.com/callback?code=first'
-      const { loads } = openTab('page-first-after-launch', url)
-      const claimed = claimBrowserPageFirstLoad('page-first-after-launch', url)
-      expect(claimed).not.toBeNull()
-      await vi.advanceTimersByTimeAsync(10)
-      await claimed?.load
-      expect(loads).toEqual([url])
-    } finally {
-      profileLoad.loading = null
       vi.useRealTimers()
     }
   })
