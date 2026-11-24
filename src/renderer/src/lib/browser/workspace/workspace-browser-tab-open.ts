@@ -12,6 +12,7 @@ import {
 } from './workspace-browser-link-open'
 import { createWebRuntimeSessionBrowserTab } from '@/runtime/browser/creation/web-runtime-browser-creation'
 import { browserCreateFailureCode } from '@/runtime/browser/creation/web-runtime-browser-creation-failure'
+import type { WebRuntimeBrowserCreationFailureInfo } from '@/runtime/browser/creation/web-runtime-browser-creation-context'
 import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/browser/creation/web-runtime-browser-client-target-group'
 import { useAppStore } from '@/store/index'
 import { resolveNewBrowserTabProfile } from '@/store/slices/browser/profiles/browser-new-tab-profile'
@@ -193,7 +194,7 @@ export async function openWorkspaceBrowserTab(
   const host = parseExecutionHostId(route.executionHostId)
   if (!environmentId) {
     if (!host || host.kind === 'runtime') {
-      throw openFailure(presentation.error, `unresolved client host: ${route.executionHostId}`)
+      throw openFailure(presentation.error, 'workspace host is unresolved')
     }
     return createClientBrowserTab(state, request, host.id, presentation)
   }
@@ -201,10 +202,7 @@ export async function openWorkspaceBrowserTab(
     route.executionHostId &&
     (!host || (host.kind === 'runtime' && host.environmentId !== environmentId))
   ) {
-    throw openFailure(
-      presentation.error,
-      `host ${route.executionHostId} does not own runtime ${environmentId}`
-    )
+    throw openFailure(presentation.error, 'workspace host does not own its runtime')
   }
   // Preserve desktop-provider behavior only for opted-in sources and SSH-deployed servers.
   if (
@@ -236,7 +234,7 @@ export async function openWorkspaceBrowserTab(
   }
   const targetGroupId = placement.groupId
   let created = false
-  let failureCode: string | null = null
+  let failure: WebRuntimeBrowserCreationFailureInfo | null = null
   try {
     created = await createWebRuntimeSessionBrowserTab({
       worktreeId: request.workspaceId,
@@ -267,17 +265,26 @@ export async function openWorkspaceBrowserTab(
       stagedTitle: presentation.title,
       stagedFocusAddressBar: false,
       failureLogMode: 'operation-only',
-      onFailureCode: (code) => (failureCode = code)
+      onFailure: (info) => (failure = info)
     })
   } catch (error) {
-    const code = browserCreateFailureCode(error) ?? failureCode ?? 'no code'
-    throw openFailure(presentation.error, `runtime browser tab creation failed (${code})`, error)
+    throw openFailure(presentation.error, remoteOpenFailureReason(failure, error), error)
   }
   if (!created) {
-    const reason = `runtime browser tab creation was unavailable (${failureCode ?? 'no code'})`
-    throw openFailure(presentation.error, reason)
+    throw openFailure(presentation.error, remoteOpenFailureReason(failure, null))
   }
   return null
+}
+
+// The first error's stage and code (cleanup can throw its own); unknown stage stays generic.
+function remoteOpenFailureReason(
+  failure: WebRuntimeBrowserCreationFailureInfo | null,
+  error: unknown
+): string {
+  const code = failure?.code ?? browserCreateFailureCode(error) ?? 'no code'
+  return failure
+    ? `remote browser open failed at ${failure.stage} (${code})`
+    : `remote browser open failed (${code})`
 }
 
 /** Detailed link results are additive to the generic page-id contract. */

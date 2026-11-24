@@ -14,7 +14,10 @@ import {
   discardStagedWebRuntimeBrowserTab,
   StagedWebRuntimeBrowserTabCancelledError
 } from './web-runtime-browser-tab-staging'
-import type { WebRuntimeBrowserCreationContext } from './web-runtime-browser-creation-context'
+import type {
+  WebRuntimeBrowserCreationContext,
+  WebRuntimeBrowserCreationFailureInfo
+} from './web-runtime-browser-creation-context'
 
 const DEFINITIVE_BROWSER_CREATE_FAILURE_CODES = [
   'browser_error',
@@ -113,17 +116,20 @@ export function finishWebRuntimeBrowserCreationFailure(
   ) {
     useAppStore.getState().closeEmptyGroup(args.worktreeId, args.clientTargetGroupId)
   }
-  if (error instanceof StagedWebRuntimeBrowserTabCancelledError) {
+  const cancelled = error instanceof StagedWebRuntimeBrowserTabCancelledError
+  // Why: without stage and code a failed link open left only a generic toast (P0 "Unable to open URL").
+  const info: WebRuntimeBrowserCreationFailureInfo = {
+    stage: context.createdPageId ? 'materialize' : context.createAttempted ? 'create' : 'prepare',
+    code: cancelled ? 'closed_before_open' : browserCreateFailureCode(error)
+  }
+  args.onFailure?.(info)
+  if (cancelled) {
     console.warn('[web-runtime-session] browser tab was closed before its create finished')
   } else if (args.failureLogMode === 'operation-only') {
-    // Why the code: without it a failed link open left only a generic toast (P0 "Unable to open URL").
-    const code = browserCreateFailureCode(error)
-    args.onFailureCode?.(code)
-    console.warn(`[web-runtime-session] failed to create browser tab (${code ?? 'no code'})`)
-    recordRendererCrashBreadcrumb('web_runtime_browser_create_failed', {
-      code,
-      createAttempted: context.createAttempted
-    })
+    console.warn(
+      `[web-runtime-session] failed to open browser tab at ${info.stage} (${info.code ?? 'no code'})`
+    )
+    recordRendererCrashBreadcrumb('web_runtime_browser_create_failed', info)
   } else {
     console.warn(
       '[web-runtime-session] failed to create browser tab:',
