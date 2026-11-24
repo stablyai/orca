@@ -328,7 +328,9 @@ function Sidebar({
               >
                 <SidebarContentViewport>
                   <SidebarNav />
-                  {sidebarBody !== 'agents' ? <ChatWorkspaceSection /> : null}
+                  {sidebarBody !== 'agents' ? (
+                    <ChatWorkspaceSection onWorktreeCardClick={closeWorkspaceBoard} />
+                  ) : null}
                   {projectsFirst ? [projectsSection, botsSection] : [botsSection, projectsSection]}
                 </SidebarContentViewport>
                 <SidebarSectionDragOverlay sidebarStyle={leftSidebarStyle} />

@@ -22416,7 +22416,9 @@
       "expand": "Expandir chats",
       "collapse": "Contraer chats",
       "newProjectDate": "Nuevo proyecto-{{date}}",
-      "updateHost": "Actualiza Orca en el equipo seleccionado para crear un espacio de chat."
+      "updateHost": "Actualiza Orca en el equipo seleccionado para crear un espacio de chat.",
+      "hostRequired": "Elige este equipo o un servidor Orca enlazado",
+      "createdNotOpened": "Se creó el espacio de chat, pero no se pudo abrir. Búscalo en Chats."
     }
   },
   "rendererRecovery": {

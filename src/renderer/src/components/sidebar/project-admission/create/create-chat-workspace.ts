@@ -21,7 +21,9 @@ import {
 export async function createChatWorkspace(hostId: ExecutionHostId): Promise<void> {
   const host = parseExecutionHostId(hostId)
   if (!host || host.kind === 'ssh') {
-    throw new Error('Choose this computer or a paired Orca server')
+    throw new Error(
+      translate('sidebar.chats.hostRequired', 'Choose this computer or a paired Orca server')
+    )
   }
   const owner = host.kind === 'runtime' ? host.environmentId : null
   const now = new Date()
@@ -50,13 +52,22 @@ export async function createChatWorkspace(hostId: ExecutionHostId): Promise<void
     throw new Error(repoCreateErrorText(result))
   }
   const { repo } = upsertAddedRepoWithProjectHostSetup(result.repo, { runtimeEnvironmentId: owner })
+  const state = useAppStore.getState()
+  if (state.collapsedGroups.has('sidebar:chats')) {
+    state.toggleCollapsedGroup('sidebar:chats')
+  }
   const options = worktreeRefreshOptions(owner)
   await useAppStore.getState().fetchWorktrees(repo.id, options)
   const workspace = selectWorktreesByRepo(useAppStore.getState())[repo.id]?.find(
     (row) => (row.hostId ?? 'local') === options.executionHostId
   )
   if (!workspace) {
-    throw new Error('Chat workspace was created but could not be opened. Find it under Chat.')
+    throw new Error(
+      translate(
+        'sidebar.chats.createdNotOpened',
+        'Chat workspace was created but could not be opened. Find it under Chats.'
+      )
+    )
   }
   activateAndRevealWorktree(workspace.id, {
     sidebarRevealBehavior: 'auto',

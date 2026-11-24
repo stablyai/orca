@@ -22171,7 +22171,9 @@
       "expand": "Développer les discussions",
       "collapse": "Réduire les discussions",
       "newProjectDate": "Nouveau projet-{{date}}",
-      "updateHost": "Mettez à jour Orca sur l’hôte sélectionné pour créer un espace de discussion."
+      "updateHost": "Mettez à jour Orca sur l’hôte sélectionné pour créer un espace de discussion.",
+      "hostRequired": "Choisissez cet ordinateur ou un serveur Orca jumelé",
+      "createdNotOpened": "L’espace de chat a été créé, mais n’a pas pu être ouvert. Retrouvez-le dans Discussions."
     }
   },
   "editor": {

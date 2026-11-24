@@ -38,16 +38,20 @@ export function preserveSidebarWorktreePosition(worktreeId: string): () => void 
   if (typeof document === 'undefined') {
     return () => {}
   }
-  const getScroller = (): HTMLElement | null =>
-    findPrimarySidebarWorktreeOption(worktreeId)?.closest<HTMLElement>('[data-worktree-sidebar]') ??
-    null
-  const scroller = getScroller()
   const activeOption = findPrimarySidebarWorktreeOption(worktreeId)
+  const scroller = activeOption?.closest<HTMLElement>('[data-worktree-sidebar]')
   const activeRowKey = activeOption?.dataset.worktreeRowKey
   const row = activeOption?.closest<HTMLElement>('[data-worktree-virtual-row]') ?? null
   if (!scroller || !row) {
     return () => {}
   }
+  const section = scroller.dataset.sidebarWorkspaceSection
+  const getScroller = (): HTMLElement | null =>
+    scroller.isConnected
+      ? scroller
+      : (Array.from(document.querySelectorAll<HTMLElement>('[data-worktree-sidebar]')).find(
+          (element) => element.dataset.sidebarWorkspaceSection === section
+        ) ?? null)
   const previousScrollTop = scroller.scrollTop
   const previousScrollHeight = scroller.scrollHeight
   const previousTop = row.getBoundingClientRect().top

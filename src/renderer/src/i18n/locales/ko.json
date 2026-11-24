@@ -24035,7 +24035,9 @@
       "expand": "채팅 펼치기",
       "collapse": "채팅 접기",
       "newProjectDate": "새 프로젝트-{{date}}",
-      "updateHost": "채팅 작업 공간을 만들려면 선택한 호스트의 Orca를 업데이트하세요."
+      "updateHost": "채팅 작업 공간을 만들려면 선택한 호스트의 Orca를 업데이트하세요.",
+      "hostRequired": "이 컴퓨터 또는 페어링된 Orca 서버를 선택하세요",
+      "createdNotOpened": "채팅 작업 공간을 만들었지만 열 수 없습니다. 채팅에서 찾아보세요."
     }
   },
   "editor": {

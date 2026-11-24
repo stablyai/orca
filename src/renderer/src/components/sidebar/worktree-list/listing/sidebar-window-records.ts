@@ -22,7 +22,7 @@ export function indexSidebarWindowRecords(
   )
   const worktree = (row: Worktree): Worktree => byWorktree.get(getWorktreeHostIdentity(row)) ?? row
   const folder = (row: FolderWorkspace): FolderWorkspace =>
-    byFolder.get(folderKey(row.id, row.executionHostId)) ?? row
+    byFolder.get(folderKey(row.id, getFolderWorkspaceHostId(row, groups))) ?? row
   return {
     worktree,
     folder,

@@ -6,7 +6,11 @@ import WorktreeList from '../worktree-list/listing/WorktreeList'
 import { NewChatWorkspaceMenu } from './NewChatWorkspaceMenu'
 import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 
-export function ChatWorkspaceSection() {
+export function ChatWorkspaceSection({
+  onWorktreeCardClick
+}: {
+  onWorktreeCardClick?: () => void
+}) {
   const t = useTranslate()
   const repos = useAppStore((state) => state.repos)
   const hasChats = useMemo(() => repos.some((repo) => repo.chatWorkspace), [repos])
@@ -19,7 +23,7 @@ export function ChatWorkspaceSection() {
       <SidebarSectionHeader
         title={t('sidebar.chats.title', 'Chats')}
         sectionId="chats"
-        actions={<NewChatWorkspaceMenu />}
+        actions={<NewChatWorkspaceMenu onBeforeCreate={onWorktreeCardClick} />}
         fold={{
           collapsed,
           disabled: !hasChats,
@@ -33,6 +37,7 @@ export function ChatWorkspaceSection() {
         <div className="flex max-h-64 min-h-24 flex-col">
           <WorktreeList
             workspaceSection="chats"
+            onWorktreeCardClick={onWorktreeCardClick}
             scrollOffsetRef={scrollOffsetRef}
             scrollAnchorRef={scrollAnchorRef}
           />

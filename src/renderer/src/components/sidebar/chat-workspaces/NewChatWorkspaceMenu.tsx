@@ -20,7 +20,11 @@ import { createChatWorkspace } from '../project-admission/create/create-chat-wor
 
 const NOOP = (): void => {}
 
-export function NewChatWorkspaceMenu(): React.JSX.Element {
+export function NewChatWorkspaceMenu({
+  onBeforeCreate
+}: {
+  onBeforeCreate?: () => void
+}): React.JSX.Element {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -36,6 +40,7 @@ export function NewChatWorkspaceMenu(): React.JSX.Element {
       return
     }
     setOpen(false)
+    onBeforeCreate?.()
     setCreating(true)
     void createChatWorkspace(hostId)
       .catch((error: unknown) =>
@@ -46,7 +51,16 @@ export function NewChatWorkspaceMenu(): React.JSX.Element {
 
   return (
     <>
-      <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
+      <DropdownMenu
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next)
+          if (!next) {
+            setHostSubOpen(false)
+          }
+        }}
+        modal={false}
+      >
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
