@@ -10,6 +10,7 @@ import { app, BrowserWindow, webContents } from 'electron'
 import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
 import { writeElectronFixtureResult } from '../../electron-fixtures/electron-fixture-result'
 import { letFixtureWindowPaint } from '../../electron-fixtures/electron-fixture-window'
+import { createFixtureKeyPress } from './grab-fixture-key-press'
 import {
   setupGrabShortcutForwarding,
   refreshGrabShortcutPolicies
@@ -113,12 +114,7 @@ async function run(): Promise<void> {
     hasActiveGrabOp: () => true
   })
   const evalPage = (code: string): Promise<unknown> => page.executeJavaScript(code)
-  const press = async (key: string): Promise<void> => {
-    page.sendInputEvent({ type: 'keyDown', keyCode: key })
-    page.sendInputEvent({ type: 'char', keyCode: key })
-    page.sendInputEvent({ type: 'keyUp', keyCode: key })
-    await wait(80)
-  }
+  const press = createFixtureKeyPress(page, forwarded)
   // A field focused before the pick stays focused when the picker arms.
   await evalPage(`document.getElementById('search').focus()`)
   await manager.setGrabMode('page-1', true, page, renderer)

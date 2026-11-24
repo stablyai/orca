@@ -1,5 +1,6 @@
 import type { WebContents } from 'electron'
 import type { BrowserManager } from '../../guest-lifecycle/manager/browser-manager'
+import { hoverForPick } from './grab-fixture-hover'
 
 export async function verifyGrabSelectionReplacement(
   page: WebContents,
@@ -43,8 +44,7 @@ export async function verifyGrabSelectionReplacement(
   const target = await page.executeJavaScript(
     "(() => {const r=document.getElementById('buy').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()"
   )
-  page.sendInputEvent({ type: 'mouseMove', ...target })
-  await wait(80)
+  await hoverForPick(page, target)
   page.sendInputEvent({ type: 'mouseDown', button: 'left', clickCount: 1, ...target })
   page.sendInputEvent({ type: 'mouseUp', button: 'left', clickCount: 1, ...target })
   const newResult = await newPick

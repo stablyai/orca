@@ -1,6 +1,7 @@
 import type { WebContents } from 'electron'
 import type { BrowserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../../shared/browser/annotations/browser-annotation-viewport-bridge'
+import { hoverForPick } from './grab-fixture-hover'
 
 /** Real private function handoff and capture; all bytes stay in memory on this synthetic page. */
 export async function verifyGrabPickLifetime(
@@ -36,8 +37,7 @@ export async function verifyGrabPickLifetime(
       }
       await wait(20)
     }
-    page.sendInputEvent({ type: 'mouseMove', x: 280, y: 180 })
-    await wait(80)
+    await hoverForPick(page, { x: 280, y: 180 })
     page.sendInputEvent({ type: 'mouseDown', button: 'left', clickCount: 1, x: 280, y: 180 })
     page.sendInputEvent({ type: 'mouseUp', button: 'left', clickCount: 1, x: 280, y: 180 })
     return result
