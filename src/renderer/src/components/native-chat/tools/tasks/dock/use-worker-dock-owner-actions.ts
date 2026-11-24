@@ -10,6 +10,7 @@ import {
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { createNonSecureContextUuid } from '../../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { WorkerDockRowView } from './WorkerDockRow'
+import type { WorkerDockStopBlock } from './worker-dock-stop-check'
 
 /** A strip failure and the retry of the request that failed; no retry when none applies. */
 export type WorkerDockFailure = { message: string; retry?: () => void }
@@ -28,8 +29,9 @@ export function useWorkerDockOwnerActions(
   party: string | null | undefined,
   identities: WorkerDockSnapshot['identities'] | undefined,
   workerOpen: (row: WorkerDockRowView) => void,
-  /** Read just before each Stop request, so a Stop or Retry is never sent once its row can't stop. */
-  stopAvailable?: (dispatchId: string) => boolean
+  /** Read just before each Stop request and each Retry of it, so neither is sent once the
+   *  pressed row can't stop. */
+  stopBlock?: (row: WorkerDockRowView, party: string) => WorkerDockStopBlock
 ) {
   const t = useTranslate()
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
@@ -127,23 +129,27 @@ export function useWorkerDockOwnerActions(
       }
       const requestId = createNonSecureContextUuid()
       const settlement = kind === 'clear' ? row.settlement : null
-      track(new Set([row.id]), () =>
-        settlement
-          ? clear([{ dispatchId: row.dispatchId, settlement }])
-          : stopAvailable && !stopAvailable(row.dispatchId)
-            ? Promise.reject(
-                new Error(
-                  t('components.native-chat.workerDock.unavailable', 'Worker status unavailable')
-                )
+      track(new Set([row.id]), () => {
+        if (settlement) {
+          return clear([{ dispatchId: row.dispatchId, settlement }])
+        }
+        const block = stopBlock?.(row, party)
+        return block
+          ? Promise.reject(
+              new Error(
+                block === 'settled'
+                  ? t('components.native-chat.workerDock.alreadyStopped', 'Already stopped')
+                  : t('components.native-chat.workerDock.cantStop', "Can't stop now")
               )
-            : callRuntimeRpc(target, 'orchestration.workerDockStop', {
-                party,
-                dispatch: row.dispatchId,
-                requestId
-              })
-      )
+            )
+          : callRuntimeRpc(target, 'orchestration.workerDockStop', {
+              party,
+              dispatch: row.dispatchId,
+              requestId
+            })
+      })
     },
-    [clear, party, stopAvailable, t, target, track]
+    [clear, party, stopBlock, t, target, track]
   )
   const clearAll = useCallback(() => {
     const captured = (identities ?? []).flatMap((row) =>

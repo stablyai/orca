@@ -1,11 +1,22 @@
 import { useTranslate } from '@/i18n/use-translate'
-import { lazy, Suspense, useCallback, useContext, useMemo, useState } from 'react'
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useNativeChatPinnedWorkerApprovals } from '../../worker-approvals/native-chat-worker-approval-feed'
 import { useWorkerDockFeed } from './dock/worker-dock-feed'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useWorkerDockOwnerActions } from './dock/use-worker-dock-owner-actions'
+import { workerDockStopBlock } from './dock/worker-dock-stop-check'
+import { useWorkerDockGestureHeld } from './dock/NativeChatWorkerDockFrame'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { Button } from '@/components/ui/button'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
@@ -158,18 +169,43 @@ export function NativeChatStructuredSessionStatus(props: {
       ),
     [target]
   )
-  // The rows as rendered now: a Stop pressed before the feed dropped, or a Retry, re-checks them.
-  const stopAvailable = useLatestHandler((dispatchId: string) =>
-    [...controlledWorkerRows.values()].some(
-      (row) => row.dispatchId === dispatchId && row.stoppable && row.ownerActionsAvailable
-    )
+  const dockNow = useMemo(
+    () => ({
+      party: feed.party,
+      rows: controlledWorkerRows,
+      identities: controlledWorkerIdentities
+    }),
+    [feed.party, controlledWorkerRows, controlledWorkerIdentities]
   )
+  // A held press (mouse or Space) shows the rows frozen at press time, so its release would read
+  // them as still stoppable after an outage that recovered mid-press. Each held dispatch must stay
+  // stoppable in every live update until release; one lapse cancels that press.
+  const gestureHeld = useWorkerDockGestureHeld()
+  const heldStoppable = useRef<ReadonlySet<string> | null>(null)
+  useLayoutEffect(() => {
+    if (!gestureHeld) {
+      heldStoppable.current = null
+      return
+    }
+    const now = new Set(
+      (dockNow.identities ?? [])
+        .filter((row) => dockNow.party && !workerDockStopBlock(row, dockNow.party, dockNow))
+        .map((row) => row.id)
+    )
+    const previous = heldStoppable.current
+    heldStoppable.current = previous ? new Set([...previous].filter((id) => now.has(id))) : now
+  }, [gestureHeld, dockNow])
+  // Read live when a Stop or its Retry is sent, never from the rows a held press froze.
+  const stopBlock = useLatestHandler((row: WorkerDockRowView, party: string) => {
+    const block = workerDockStopBlock(row, party, dockNow)
+    return block ?? (heldStoppable.current?.has(row.id) === false ? 'blocked' : null)
+  })
   const owner = useWorkerDockOwnerActions(
     target,
     feed.party,
     controlledWorkerIdentities,
     workerOpen,
-    stopAvailable
+    stopBlock
   )
   const { dialog, failure } = owner
   if (crew) {

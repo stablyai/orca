@@ -22777,6 +22777,8 @@
         "remoteOwner": "Stop or clear this from the computer it runs on",
         "restore": "Show in dock again",
         "unavailable": "Worker status unavailable",
+        "alreadyStopped": "Already stopped",
+        "cantStop": "Can't stop now",
         "empty": "0 workers",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
