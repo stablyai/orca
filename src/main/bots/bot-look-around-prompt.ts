@@ -47,7 +47,7 @@ export function lookAroundPrompt(input: {
     '- why: one sentence on why now.',
     '- ask: the message your owner would send you to do it, written as them.',
     '- link: the thread, issue or pull request it is about.',
-    'Quote each value in straight single quotes, on one line, with no apostrophe, double quote or curly quote inside; other quoting is refused. Suggest only things with a concrete next step; if nothing is worth it, suggest nothing.',
+    'Quote each value in straight single quotes, on one line, with no apostrophe, double or curly quote, or `&`, `|`, `<`, `>`, `^` inside; other quoting is refused. Suggest only things with a concrete next step; if nothing is worth it, suggest nothing.',
     '',
     `When done, end with ${BOT_QUIET_MARKER}; one short line for your owner may come before it.`
   ]

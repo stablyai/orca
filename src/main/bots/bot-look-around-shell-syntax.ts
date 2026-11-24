@@ -143,3 +143,12 @@ export function powerShellWordRefusal(parts: readonly Word[]): string | null {
   }
   return null
 }
+
+/** On Windows a bare name may resolve to a `.cmd` or `.bat` launcher, which cmd.exe re-parses: a
+ *  quoted `&`, `|`, `<`, `>` or `^` would reach it as an operator, from PowerShell or Git Bash. */
+export function windowsLauncherWordRefusal(parts: readonly Word[]): string | null {
+  const operator = parts.find(({ text, quoted }) => quoted && /[&|<>^]/.test(text))
+  return operator
+    ? syntaxRefusal(`'${operator.text}' (cmd.exe reads & | < > ^ even in quotes on Windows)`)
+    : null
+}

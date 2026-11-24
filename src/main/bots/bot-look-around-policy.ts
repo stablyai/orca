@@ -11,6 +11,7 @@ import {
   TRAILING_REDIRECT,
   trimBlanks,
   unwrapShell,
+  windowsLauncherWordRefusal,
   words
 } from './bot-look-around-shell-syntax'
 
@@ -119,9 +120,13 @@ function partRefusal(part: string, shell: LookAroundShell): string | null {
   if (!parsed) {
     return shellSyntaxRefusal(inner)
   }
-  const powerShellRefusal = shell === 'powershell' ? powerShellWordRefusal(parsed) : null
-  if (powerShellRefusal !== null) {
-    return powerShellRefusal
+  const wordRefusal =
+    (shell === 'powershell' ? powerShellWordRefusal(parsed) : null) ??
+    (shell === 'powershell' || process.platform === 'win32'
+      ? windowsLauncherWordRefusal(parsed)
+      : null)
+  if (wordRefusal !== null) {
+    return wordRefusal
   }
   if (parsed.length === 0) {
     return notARead('an empty command runs nothing')

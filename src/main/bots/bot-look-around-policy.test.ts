@@ -105,6 +105,10 @@ const POWERSHELL: readonly (readonly [string, string])[] = [
   ["gh pr view 'a\u0000b'", 'a control or invisible character'],
   ['﻿git status', 'a control or invisible character'],
   ['git status\n; git log', 'a second line'],
+  // cmd.exe re-parses a `.cmd` launcher's arguments, quotes or not.
+  ["orca bot list 'x&echo.pwned>file'", 'cmd.exe reads & | < > ^'],
+  ["gh pr list --search 'a|b'", 'cmd.exe reads & | < > ^'],
+  ["gh pr list --search 'a^b'", 'cmd.exe reads & | < > ^'],
   // Curly quotes close PowerShell strings; these dashes read as `-`.
   ["gh pr view 'x’; Remove-Item f; ‘y'", 'a curly quote or dash ("’"'],
   ["gh pr view 'x‘; Remove-Item f; ’y'", 'a curly quote or dash ("‘"'],
@@ -159,6 +163,21 @@ describe('lookAroundToolDecision', () => {
     } else {
       expect(answer.decision).toBe('deny')
       expect(answer.decision === 'deny' && answer.reason).toContain(named)
+    }
+  })
+
+  it("refuses cmd.exe operators in Bash's quoted words only on Windows", () => {
+    const command = "orca bot list 'x&echo.pwned>file'"
+    expect(lookAroundToolDecision('Bash', { command })).toEqual({ decision: 'allow' })
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      const answer = lookAroundToolDecision('Bash', { command })
+      expect(answer.decision === 'deny' && answer.reason).toContain('cmd.exe reads & | < > ^')
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
     }
   })
 
