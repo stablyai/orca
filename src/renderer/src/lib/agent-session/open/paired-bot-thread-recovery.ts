@@ -1,6 +1,7 @@
 import {
   structuredSessionOpenFailure,
-  type StructuredSessionOpenDeps
+  type StructuredSessionOpenDeps,
+  type StructuredSessionOpenTarget
 } from '../../../../../shared/agent-session/view/open-structured-agent-session'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { createRuntimeRpcAbortError } from '@/runtime/rpc/calls/abortable-runtime-environment-call'
@@ -38,10 +39,14 @@ export function pairedBotThreadRecovery(
   const registration = getRuntimeEnvironmentRegistration(environmentId)
   const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
   let minimumReceivedFrame: number | undefined
-  const recordReveal = (result: StructuredSessionRevealOutcome): void => {
+  let confirmedReveal: StructuredSessionOpenTarget | undefined
+  const recordReveal = (result: StructuredSessionRevealOutcome): boolean => {
     if (typeof result === 'object' && 'sessionId' in result) {
+      confirmedReveal = result
       minimumReceivedFrame = nextReceivedSessionTabsFrame()
+      return true
     }
+    return false
   }
   const find = <T>(
     pending: Map<string, Pending<T>>,
@@ -94,15 +99,18 @@ export function pairedBotThreadRecovery(
     return observe(request)
   }
   return {
-    isLocating: (): boolean => find(pendingLocations) !== undefined,
-    inventoryAfterReveal: async (): Promise<number | undefined> => {
-      const pending = find(pendingReveals)
-      if (pending) {
-        recordReveal(await observe(pending))
+    resumePending: async (): Promise<boolean> => {
+      if (find(pendingLocations)) {
+        return true
       }
-      return minimumReceivedFrame
+      const pending = find(pendingReveals)
+      return pending ? recordReveal(await observe(pending)) : false
     },
+    minimumInventoryFrame: (): number | undefined => minimumReceivedFrame,
     locate: async (address: string, messageIds: readonly string[]): Promise<LocateResult> => {
+      if (confirmedReveal) {
+        return { location: { kind: 'chat', ...confirmedReveal } }
+      }
       try {
         return await wait(pendingLocations, JSON.stringify([address, messageIds]), (beforeSend) =>
           callStructuredSessionParty(owner, 'orchestration.partyLocation', address, messageIds, {
@@ -117,6 +125,12 @@ export function pairedBotThreadRecovery(
       worktreeId: string
       sessionId: string
     }): Promise<StructuredSessionRevealOutcome> => {
+      if (
+        confirmedReveal?.sessionId === target.sessionId &&
+        confirmedReveal.worktreeId === target.worktreeId
+      ) {
+        return confirmedReveal
+      }
       try {
         const outcome = await wait(
           pendingReveals,

@@ -39,8 +39,10 @@ import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { getRuntimeEnvironmentRegistration } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import {
   bindPendingBotThreadChat,
+  bindPendingBotThreadHost,
   cancelPendingBotThreadOpen,
   runBotThreadOpen
 } from './agent-session/open/bot-thread-open-lifecycle'
@@ -151,6 +153,15 @@ async function resolveBotLinkHome(
         : undefined
       const currentPairing = (): boolean =>
         !environmentId || getRuntimeEnvironmentRegistration(environmentId) === registration
+      if (environmentId) {
+        const connection = getRuntimeEnvironmentConnectionGeneration(environmentId)
+        bindPendingBotThreadHost(
+          signal,
+          () =>
+            currentPairing() &&
+            getRuntimeEnvironmentConnectionGeneration(environmentId) === connection
+        )
+      }
       const sessionId =
         hostId === LOCAL_EXECUTION_HOST_ID ? null : await serverThreadSession(bot, conversation)
       if (signal.aborted || !currentPairing()) {

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { runBotThreadOpen } from './bot-thread-open-lifecycle'
+import { bindPendingBotThreadHost, runBotThreadOpen } from './bot-thread-open-lifecycle'
 
 function holdOpen(): { promise: Promise<void>; finish: () => void } {
   let finish!: () => void
@@ -9,20 +9,25 @@ function holdOpen(): { promise: Promise<void>; finish: () => void } {
   return { promise, finish }
 }
 
-it('an earlier open cannot retire the newer open after it is canceled', async () => {
+it('an earlier pairing cannot absorb or retire a replacement click', async () => {
   const earlier = holdOpen()
   const newer = holdOpen()
-  let earlierSignal: AbortSignal | undefined
-  const first = runBotThreadOpen('first thread', (signal) => {
+  let earlierSignal!: AbortSignal
+  let samePairing = true
+  const first = runBotThreadOpen('linked thread', (signal) => {
     earlierSignal = signal
     return earlier.promise
   })
-  const second = runBotThreadOpen('second thread', () => newer.promise)
-  expect(earlierSignal?.aborted).toBe(true)
+  bindPendingBotThreadHost(earlierSignal, () => samePairing)
+  const duplicateBeforePairing = runBotThreadOpen('linked thread', () => Promise.resolve())
+  expect(duplicateBeforePairing).toBe(first)
+  samePairing = false
+  const second = runBotThreadOpen('linked thread', () => newer.promise)
+  expect(earlierSignal.aborted).toBe(true)
 
   earlier.finish()
   await first
-  const duplicate = runBotThreadOpen('second thread', () => Promise.resolve())
+  const duplicate = runBotThreadOpen('linked thread', () => Promise.resolve())
   expect(duplicate).toBe(second)
 
   newer.finish()

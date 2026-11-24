@@ -3,7 +3,13 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host/execu
 type ThreadChat = { executionHostId: ExecutionHostId; worktreeId: string; sessionId: string }
 
 let pending:
-  | { key: string; controller: AbortController; result: Promise<void>; chat?: ThreadChat }
+  | {
+      key: string
+      controller: AbortController
+      result: Promise<void>
+      chat?: ThreadChat
+      currentHost?: () => boolean
+    }
   | undefined
 
 /** A newer navigation in this window takes precedence over a pending external bot thread link. */
@@ -16,6 +22,12 @@ export function cancelPendingBotThreadOpen(): void {
 export function bindPendingBotThreadChat(signal: AbortSignal, chat: ThreadChat): void {
   if (pending?.controller.signal === signal) {
     pending.chat = chat
+  }
+}
+
+export function bindPendingBotThreadHost(signal: AbortSignal, currentHost: () => boolean): void {
+  if (pending?.controller.signal === signal) {
+    pending.currentHost = currentHost
   }
 }
 
@@ -33,7 +45,7 @@ export function runBotThreadOpen(
   key: string,
   open: (signal: AbortSignal) => Promise<void>
 ): Promise<void> {
-  if (pending?.key === key) {
+  if (pending?.key === key && pending.currentHost?.() !== false) {
     return pending.result
   }
   cancelPendingBotThreadOpen()

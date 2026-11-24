@@ -82,10 +82,9 @@ export function pairedBotThreadOpenDeps(
     locate: recovery?.locate,
     reveal: recovery?.reveal ?? ((target) => revealStructuredSession({ ...target, signal })),
     refresh: async ({ worktreeId, sessionId }, owner) => {
-      if (recovery?.isLocating()) {
+      if (await recovery?.resumePending()) {
         return
       }
-      const minimumReceivedFrame = await recovery?.inventoryAfterReveal()
       if (!current()) {
         return
       }
@@ -100,7 +99,7 @@ export function pairedBotThreadOpenDeps(
                 worktreeId,
                 sessionId,
                 timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS,
-                minimumReceivedFrame,
+                minimumReceivedFrame: recovery?.minimumInventoryFrame(),
                 signal: requestSignal,
                 current
               })

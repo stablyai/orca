@@ -4,7 +4,12 @@ import { cancelPendingBotThreadOpen } from './bot-thread-open-lifecycle'
 
 export type BotThreadNavigate = <T>(action: () => T) => T
 
-function changedSelection(state: AppState, previous: AppState): boolean {
+type GroupTabId = (
+  groups: AppState['groupsByWorktree'][string] | undefined,
+  groupId: string | undefined
+) => string | null | undefined
+
+function changedSelection(state: AppState, previous: AppState, groupTabId: GroupTabId): boolean {
   const { activeWorktreeId: workspace } = state
   if (
     workspace !== previous.activeWorktreeId ||
@@ -34,8 +39,8 @@ function changedSelection(state: AppState, previous: AppState): boolean {
   ) {
     return true
   }
-  const currentId = groups?.find((group) => group.id === currentGroup)?.activeTabId
-  const previousId = previousGroups?.find((group) => group.id === previousGroup)?.activeTabId
+  const previousId = groupTabId(previousGroups, previousGroup)
+  const currentId = groupTabId(groups, currentGroup)
   if (!currentId || (currentId === previousId && currentGroup === previousGroup)) {
     return false
   }
@@ -53,8 +58,19 @@ export async function withBotThreadOpenNavigation(
   open: (navigate: BotThreadNavigate) => Promise<void>
 ): Promise<void> {
   let navigating = false
+  let groupIndex = 0
+  const groupTabId: GroupTabId = (groups, groupId) => {
+    if (!groups || !groupId) {
+      return
+    }
+    // Reordering tabs in another group keeps the selected group's position.
+    if (groups[groupIndex]?.id !== groupId) {
+      groupIndex = groups.findIndex((group) => group.id === groupId)
+    }
+    return groups[groupIndex]?.activeTabId
+  }
   const unsubscribe = useAppStore.subscribe((state, previous) => {
-    if (!navigating && changedSelection(state, previous)) {
+    if (!navigating && changedSelection(state, previous, groupTabId)) {
       cancelPendingBotThreadOpen()
     }
   })
