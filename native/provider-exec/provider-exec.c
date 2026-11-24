@@ -1202,6 +1202,17 @@ static void seen_member(struct watcher *w, const struct proc_row *row) {
     }
 }
 
+// A remembered member still in the CLI group gets only the group's signals, as the sweep gives it,
+// so a TERM it already had from the group, or a child the CLI starts during grace, isn't signalled.
+static int deliver_to_known(struct watcher *w, struct proc_row *row, int signal_number) {
+    struct proc_row now;
+    if (read_row(row->pid, &now) == 1 && now.start == row->start && !now.zombie &&
+            now.pgid == w->group) {
+        return 1;
+    }
+    return deliver_to_member(w, row, signal_number);
+}
+
 // Only a read that shows the PID gone or reused retires a member; a failed read is doubt.
 static int member_gone(const struct proc_row *row) {
     struct proc_row now;
@@ -1218,7 +1229,7 @@ static int signal_unseen_known(struct watcher *w, int signal_number, int *doubt)
         struct identity item = w->known.items[i];
         if (item.value != w->sweep_generation) {
             struct proc_row row = {.pid = item.pid, .start = item.start};
-            if (deliver_to_member(w, &row, signal_number)) {
+            if (deliver_to_known(w, &row, signal_number)) {
                 live++;
             } else if (member_gone(&row)) {
                 continue;
@@ -1239,7 +1250,7 @@ static int probe_known_members(struct watcher *w, int signal_number) {
     int live = 0;
     for (size_t i = 0; i < w->known.count; i++) {
         struct proc_row row = {.pid = w->known.items[i].pid, .start = w->known.items[i].start};
-        live += deliver_to_member(w, &row, signal_number);
+        live += deliver_to_known(w, &row, signal_number);
     }
     return live;
 }
@@ -1252,7 +1263,7 @@ static int anchor_lost(struct watcher *w, int signal_number) {
     int doubt = 0;
     for (size_t i = 0; i < w->known.count; i++) {
         struct proc_row row = {.pid = w->known.items[i].pid, .start = w->known.items[i].start};
-        if (deliver_to_member(w, &row, signal_number)) {
+        if (deliver_to_known(w, &row, signal_number)) {
             live++;
         } else if (!member_gone(&row)) {
             doubt = 1;
