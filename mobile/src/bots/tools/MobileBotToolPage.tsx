@@ -73,7 +73,7 @@ export function MobileBotToolPage(props: {
   useBackClaim(() => {
     if (removing) {
       setRemoving(false)
-    } else if (readingProblem) {
+    } else if (readingProblem && problem && problem.kind !== 'sign-in') {
       setReadingProblem(false)
     } else if (signingIn) {
       closeSignIn()

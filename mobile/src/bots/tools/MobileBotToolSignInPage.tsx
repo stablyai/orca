@@ -102,7 +102,8 @@ export function MobileBotToolSignInPage(props: {
             }
             accessibilityRole="link"
             busy={signIn.starting}
-            disabled={props.disabled}
+            // Opening the page again needs only the phone's browser.
+            disabled={!attempt && props.disabled}
             onPress={attempt ? signIn.openAgain : signIn.start}
           />
         </SettingsSection>

@@ -170,9 +170,10 @@ export function MobileBotEditToolPage(props: {
       <MobileBotToolValuePage
         title={label}
         initial={[draft.name]}
-        fields={() => [{ label, required: true }]}
-        problem={([next]) =>
-          props.taken.has(next)
+        fields={() => [{ label, required: true, maxLength: 64 }]}
+        problem={([typed]) => {
+          const next = typed.trim()
+          return props.taken.has(next)
             ? {
                 text: t(
                   'bots.tools.nameTaken',
@@ -187,7 +188,7 @@ export function MobileBotEditToolPage(props: {
                 }
               }
             : null
-        }
+        }}
         onCancel={close}
         onDone={([next]) => patch({ name: next.trim() })}
       />
@@ -254,10 +255,11 @@ export function MobileBotEditToolPage(props: {
         title={url ? t('bots.tools.header', 'Header') : t('bots.tools.variable', 'Variable')}
         initial={[row?.key ?? '', row?.value ?? '']}
         fields={([key]) => [
-          { label: t('bots.tools.keyPlaceholder', 'Name'), required: true },
+          { label: t('bots.tools.keyPlaceholder', 'Name'), required: true, maxLength: 256 },
           {
             label: t('bots.tools.valuePlaceholder', 'Value'),
             secret: true,
+            maxLength: 4096,
             required: !keeps(key),
             placeholder: keeps(key)
               ? t('bots.tools.savedPlaceholder', 'Saved value · enter to replace')

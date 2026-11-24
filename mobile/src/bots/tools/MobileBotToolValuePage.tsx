@@ -18,6 +18,7 @@ export type ToolValueField = {
   secret?: boolean
   url?: boolean
   required?: boolean
+  maxLength?: number
 }
 
 export type ToolValueProblem = { text: string; fix?: { label: string; values: string[] } }
@@ -38,7 +39,11 @@ export function MobileBotToolValuePage(props: {
   const fields = props.fields(values)
   const problem = props.problem?.(values) ?? null
   const ready =
-    problem === null && fields.every((field, index) => !field.required || values[index].trim())
+    problem === null &&
+    fields.every(
+      // A secret may be only spaces; a name may not.
+      (field, index) => !field.required || (field.secret ? values[index] : values[index].trim())
+    )
   const done = () => {
     if (ready) {
       props.onDone(values)
@@ -62,6 +67,7 @@ export function MobileBotToolValuePage(props: {
             placeholder={field.placeholder}
             secureTextEntry={field.secret && !shown}
             keyboardType={field.url ? 'url' : undefined}
+            maxLength={field.maxLength}
             autoCapitalize="none"
             autoCorrect={false}
             autoComplete="off"
