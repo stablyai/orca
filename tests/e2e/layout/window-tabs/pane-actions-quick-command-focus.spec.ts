@@ -85,7 +85,12 @@ async function setOwnerPaneWidth(page: Page, groupId: string, split: boolean, px
     },
     { gid: groupId, split, px }
   )
-  await page.waitForTimeout(200)
+  // Let the resize observers and the fold commit settle over a few frames.
+  await page.evaluate(async () => {
+    for (let frame = 0; frame < 4; frame++) {
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+    }
+  })
 }
 
 /** Narrow until the titlebar folds into the strip: ⋯ shows and quick commands move into it. */
