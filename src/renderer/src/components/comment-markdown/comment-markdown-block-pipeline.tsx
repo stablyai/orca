@@ -43,7 +43,7 @@ function sameBlockRender(previous: MemoizedMarkdownProps, next: MemoizedMarkdown
   const is: Readonly<Record<string, unknown>> = next
   let count = 0
   for (const key in was) {
-    if (key === 'fadeFrom') {
+    if (key === 'fadeFrom' || !Object.hasOwn(was, key)) {
       continue
     }
     count += 1
@@ -52,7 +52,7 @@ function sameBlockRender(previous: MemoizedMarkdownProps, next: MemoizedMarkdown
     }
   }
   for (const key in is) {
-    if (key !== 'fadeFrom') {
+    if (key !== 'fadeFrom' && Object.hasOwn(is, key)) {
       count -= 1
     }
   }
