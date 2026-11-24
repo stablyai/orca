@@ -92,10 +92,9 @@ it('admits one complete member to first paint and known SHA at the cache limits'
 
 it('keeps malformed and oversized v1 rows out of both admission paths', async () => {
   const trailing = Buffer.concat([Buffer.from(valid, 'base64'), Buffer.of(0)])
-  // A second member that changes the bytes fails the trailer; a byte-identical repeat decodes the same verified row.
+  const concatenated = Buffer.concat([Buffer.from(valid, 'base64'), Buffer.from(valid, 'base64')])
   const other = Buffer.from(encodeDeviceStoreValue({ ...row, catalog: { notice: 'x' } }), 'base64')
-  const concatenated = Buffer.concat([Buffer.from(valid, 'base64'), other])
-  const prepended = Buffer.concat([other, Buffer.from(valid, 'base64')])
+  const differingMember = Buffer.concat([Buffer.from(valid, 'base64'), other])
   const oversized = encodeDeviceStoreValue({
     ...row,
     catalog: { notice: `${atDecodedLimit.catalog.notice}a` }
@@ -108,7 +107,7 @@ it('keeps malformed and oversized v1 rows out of both admission paths', async ()
     Buffer.from(valid, 'base64').subarray(0, -3).toString('base64'),
     trailing.toString('base64'),
     concatenated.toString('base64'),
-    prepended.toString('base64'),
+    differingMember.toString('base64'),
     gzipSync(Buffer.of(0xc3, 0x28)).toString('base64'),
     encodeDeviceStoreValue({ ...row, catalog: [] }),
     encodeDeviceStoreValue({ ...row, sha256: 'invalid' }),
