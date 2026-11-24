@@ -1,7 +1,10 @@
 import { createServer, type ServerResponse } from 'node:http'
 import type { WebContents } from 'electron'
 import type { BrowserManager } from '../../guest-lifecycle/manager/browser-manager'
-import { executeGrabScript } from '../grab-guest-execution'
+import { executeGrabScript, grabDocumentScope, requestGrabExecution } from '../grab-guest-execution'
+
+/** Why the slow-load teardowns settled as they did; printed by the fixture, never asserted. */
+export const recoveryDiagnostics: Record<string, unknown> = {}
 
 /** Exercise legitimate load waiting, cancelled old-document work and recovery on the same native guest. */
 export async function verifyGrabExecutionRecovery(
@@ -49,14 +52,47 @@ export async function verifyGrabExecutionRecovery(
   try {
     const slow = await startLoad('/slow')
     const loadingObserved = guest.isLoadingMainFrame()
-    const teardown = manager.setGrabMode('page-1', false, guest)
-    const contended = manager.setGrabMode('page-1', false, guest)
+    const started = Date.now()
+    const since = (): number => Date.now() - started
+    const scopeAtCall = grabDocumentScope(guest)
+    Object.assign(recoveryDiagnostics, {
+      scopeAtCall: { current: scopeAtCall.current, documentId: scopeAtCall.documentId }
+    })
+    const teardown = manager.setGrabMode('page-1', false, guest).then((done) => {
+      recoveryDiagnostics.teardownSettledMs = since()
+      return done
+    })
+    const contended = manager.setGrabMode('page-1', false, guest).then((done) => {
+      recoveryDiagnostics.contendedSettledMs = since()
+      return done
+    })
     // Network delivery outlasts the old execution cap; assert the operation's outcome, not elapsed time.
     await new Promise((resolve) => setTimeout(resolve, 2_300))
+    recoveryDiagnostics.releasedMs = since()
     slow.release()
     await slow.loaded
+    recoveryDiagnostics.loadedMs = since()
     const slowLoadFinished = await teardown
     const contendedLoadFinished = await contended
+    const scopeAfter = grabDocumentScope(guest)
+    Object.assign(recoveryDiagnostics, {
+      scopeAfter: {
+        same: scopeAfter === scopeAtCall,
+        current: scopeAfter.current,
+        documentId: scopeAfter.documentId
+      },
+      loadingAfter: guest.isLoadingMainFrame(),
+      // Does the loaded page produce frames, and what does a clean run now report?
+      paint: await guest.executeJavaScript(`new Promise((resolve) => {
+        const start = performance.now();
+        const timer = setTimeout(() => resolve('no frame in 2000ms'), 2000);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          clearTimeout(timer); resolve('frames after ' + Math.round(performance.now() - start) + 'ms');
+        }));
+      })`),
+      cleanProbe: await requestGrabExecution(guest, '', { clean: true }),
+      cleanProbeSettledMs: since()
+    })
 
     const cancelled = await startLoad('/cancel')
     const abort = new AbortController()

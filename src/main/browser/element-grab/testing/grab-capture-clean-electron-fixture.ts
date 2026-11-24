@@ -6,7 +6,10 @@ import { applyBackgroundActivationPolicy } from '../../../window/activation/fore
 import { writeElectronFixtureResult } from '../../electron-fixtures/electron-fixture-result'
 import { letFixtureWindowPaint } from '../../electron-fixtures/electron-fixture-window'
 import { verifyGrabPickLifetime } from './grab-pick-lifetime-electron-fixture'
-import { verifyGrabExecutionRecovery } from './grab-execution-recovery-electron-fixture'
+import {
+  recoveryDiagnostics,
+  verifyGrabExecutionRecovery
+} from './grab-execution-recovery-electron-fixture'
 
 // A page that is one flat colour everywhere: any other pixel in a capture is the picker's highlight or label.
 const PAGE = `<!doctype html><meta charset="utf-8"><title>Flat</title>
@@ -179,6 +182,8 @@ async function run(): Promise<void> {
         .digest('hex')
     })}\n`
   )
+  // Last, so it stays inside the output tail a failed assertion prints.
+  process.stderr.write(`[recovery-diag] ${JSON.stringify(recoveryDiagnostics)}\n`)
   window.destroy()
   app.exit(0)
 }
