@@ -25,8 +25,13 @@ export class SettledDispatchReadCache<T> {
   private insertedAt = 0
   private readonly droppedAt = new Map<string, number>()
   private readonly inserted = new Set<string>()
-  /** Walked sets already checked against drops, at an epoch and start. */
-  private readonly checked = new WeakMap<ReadonlySet<string>, string>()
+  /** Walked sets already checked against drops, at an epoch and start, with the answer. */
+  private readonly checked = new WeakMap<
+    ReadonlySet<string>,
+    { stamp: string; unchanged: boolean }
+  >()
+  /** Scopes forgotten by `keepScopes`, so a read begun before cannot bring one back. */
+  private readonly scopeDroppedAt = new Map<string, number>()
   private source: unknown = null
 
   /** `followsInserts`: a new Dispatch can extend a kept read's walk (a follow-up), so inserts are kept
@@ -43,6 +48,11 @@ export class SettledDispatchReadCache<T> {
       this.drop(null)
     }
     return this.epoch
+  }
+
+  /** Whether `value` is still what `key` keeps (a drop since removed it). */
+  holds(scope: string, key: string, value: T): boolean {
+    return this.scopes.get(scope)?.get(key)?.value === value
   }
 
   get(scope: string, key: string): T | undefined {
@@ -67,7 +77,12 @@ export class SettledDispatchReadCache<T> {
     walked: ReadonlySet<string>,
     started: number
   ): void {
-    if (this.clearedAt > started || this.insertedAt > started || !this.unchanged(walked, started)) {
+    if (
+      this.clearedAt > started ||
+      this.insertedAt > started ||
+      (this.scopeDroppedAt.get(scope) ?? 0) > started ||
+      !this.unchanged(walked, started)
+    ) {
       return
     }
     let entries = this.scopes.get(scope)
@@ -111,6 +126,8 @@ export class SettledDispatchReadCache<T> {
           this.remove(scope, key)
         }
         this.scopes.delete(scope)
+        this.epoch += 1
+        this.scopeDroppedAt.set(scope, this.epoch)
       }
     }
   }
@@ -118,9 +135,12 @@ export class SettledDispatchReadCache<T> {
   /** The database's notice of a Dispatch row write; one to a row no Dispatch owns changes no read. */
   rowChanged(dispatchId: string | null, change: DispatchRowChange): void {
     if (change === 'inserted' && dispatchId !== null && this.followsInserts) {
+      // Any read in flight may have walked what this continues; with nothing kept, none needs the id.
       this.epoch += 1
       this.insertedAt = this.epoch
-      this.inserted.add(dispatchId)
+      if (this.groups.size > 0) {
+        this.inserted.add(dispatchId)
+      }
       if (this.inserted.size > this.max) {
         this.inserted.clear()
         this.drop(null)
@@ -152,6 +172,7 @@ export class SettledDispatchReadCache<T> {
       this.groups.clear()
       this.groupsOf.clear()
       this.droppedAt.clear()
+      this.scopeDroppedAt.clear()
       this.clearedAt = this.epoch
       return
     }
@@ -172,16 +193,19 @@ export class SettledDispatchReadCache<T> {
   /** No Dispatch of `walked` was dropped since `started`; one check per set until the next drop. */
   private unchanged(walked: ReadonlySet<string>, started: number): boolean {
     const stamp = `${this.epoch}:${started}`
-    if (this.checked.get(walked) === stamp) {
-      return true
+    const checked = this.checked.get(walked)
+    if (checked?.stamp === stamp) {
+      return checked.unchanged
     }
+    let unchanged = true
     for (const id of walked) {
       if ((this.droppedAt.get(id) ?? 0) > started) {
-        return false
+        unchanged = false
+        break
       }
     }
-    this.checked.set(walked, stamp)
-    return true
+    this.checked.set(walked, { stamp, unchanged })
+    return unchanged
   }
 
   private remove(scope: string, key: string): void {

@@ -55,16 +55,17 @@ export class LinkedWorkerStates {
 
   /** Each ref's worker, report and stop reason: kept ones as kept, the rest read in one batch. Left out
    *  when unreadable; null when its records are gone. */
-  async readStates(unique: readonly string[]): Promise<Map<string, LinkedWorkerState | null>> {
+  async readStates(
+    unique: readonly string[],
+    /** False on the one re-read of hits a write dropped while this read ran. */
+    recheck = true
+  ): Promise<Map<string, LinkedWorkerState | null>> {
     const db = this.workRuntime.getOrchestrationDb()
     // A new follow-up continues its predecessor's worker: reads that walked it are read again.
     const inserts = this.kept.takeInserted()
     try {
-      for (const inserted of inserts) {
-        const before = db.getDispatchContextById(inserted)?.follow_up_of_dispatch_id
-        if (before) {
-          this.kept.drop(before)
-        }
+      for (const before of followedUp(db, inserts)) {
+        this.kept.drop(before)
       }
     } catch (error) {
       // An unread insert may continue any kept read.
@@ -72,7 +73,12 @@ export class LinkedWorkerStates {
       throw error
     }
     const started = this.kept.begin(db)
-    const evidenceOf = workerStatusEvidence(this.workRuntime.getAgentStatusSnapshotFn?.() ?? [])
+    // Only a kept read, or a local worker to keep, needs this machine's agent statuses.
+    let evidence: ReturnType<typeof workerStatusEvidence> | null = null
+    const evidenceOf: ReturnType<typeof workerStatusEvidence> = (worker) =>
+      (evidence ??= workerStatusEvidence(this.workRuntime.getAgentStatusSnapshotFn?.() ?? []))(
+        worker
+      )
     const hits = new Map<string, KeptWorker>()
     const missing: string[] = []
     for (const ref of unique) {
@@ -144,7 +150,21 @@ export class LinkedWorkerStates {
           session: { paneKey: session.paneKey, address: session.address },
           evidence: evidenceOf(session)
         }
-        this.kept.set(KEPT_SCOPE, ref, value, latest.id, walked, started)
+        // A copy: a kept substring would otherwise pin the whole Task spec or result it was cut from.
+        this.kept.set(KEPT_SCOPE, ref, structuredClone(value), latest.id, walked, started)
+      }
+    }
+    const dropped = recheck
+      ? [...hits].flatMap(([ref, kept]) => (this.kept.holds(KEPT_SCOPE, ref, kept) ? [] : [ref]))
+      : []
+    if (dropped.length > 0) {
+      // Written while this read ran: what it kept from before is no longer current.
+      const again = await this.readStates(dropped, false)
+      for (const ref of dropped) {
+        states.delete(ref)
+        if (again.has(ref)) {
+          states.set(ref, again.get(ref) ?? null)
+        }
       }
     }
     return states
@@ -175,6 +195,20 @@ function taskReport(result: string | null): LinkedWorkerState['report'] {
     // Plain text is its own report.
   }
   return { subject: result.trim(), body: null }
+}
+
+/** The Dispatches these inserted ones follow up, in one read. */
+function followedUp(db: OrchestrationDb, inserted: readonly string[]): string[] {
+  if (inserted.length === 0) {
+    return []
+  }
+  const rows = db.db
+    .prepare(
+      `SELECT d.follow_up_of_dispatch_id AS before FROM json_each(?) inserted
+        JOIN dispatch_contexts d ON d.id = inserted.value WHERE d.follow_up_of_dispatch_id IS NOT NULL`
+    )
+    .all(JSON.stringify(inserted))
+  return rows.map((row) => String(row.before))
 }
 
 function reportLength(report: LinkedWorkerState['report']): number {
