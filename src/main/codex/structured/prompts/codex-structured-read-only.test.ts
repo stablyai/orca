@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { disposeCodexServerRequest } from './codex-server-request-disposition'
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
@@ -50,6 +50,41 @@ describe('a read-only Codex session', () => {
       command: "/bin/zsh -lc 'gh pr merge 12'"
     })
     expect(connection.respond).toHaveBeenCalledWith(7, { decision: 'decline' })
+  })
+
+  it.each([
+    "{touch,/tmp/pwned};/bin/sh -c 'git status'",
+    "/tmp/evil/bash -c 'git status'",
+    "./sh -c 'git status'"
+  ])('declines %s, whose prefix is no shell path', (command) => {
+    expect(
+      answer(CODEX_COMMAND_APPROVAL_METHOD, { command }).connection.respond
+    ).toHaveBeenCalledWith(7, { decision: 'decline' })
+  })
+
+  describe('on Windows, where the command may run in PowerShell', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    beforeEach(() => Object.defineProperty(process, 'platform', { value: 'win32' }))
+    afterEach(() => platform && Object.defineProperty(process, 'platform', platform))
+
+    it.each([
+      'git log x,--output=f',
+      'gh pr view 12,--web',
+      'gh pr view @args',
+      `gh pr view 'x" --web "y'`,
+      "gh pr view 'x\\' 'y'",
+      "gh pr view '' 12"
+    ])('declines %s', (command) => {
+      expect(
+        answer(CODEX_COMMAND_APPROVAL_METHOD, { command }).connection.respond
+      ).toHaveBeenCalledWith(7, { decision: 'decline' })
+    })
+
+    it('still accepts a plain read', () => {
+      expect(
+        answer(CODEX_COMMAND_APPROVAL_METHOD, { command: 'gh pr view 12' }).connection.respond
+      ).toHaveBeenCalledWith(7, { decision: 'accept' })
+    })
   })
 
   it('declines an argv array, whose words could hide a flag inside one argument', () => {

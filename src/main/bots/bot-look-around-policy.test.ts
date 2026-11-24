@@ -22,6 +22,23 @@ const BASH: readonly (readonly [string, string])[] = [
   ["gh pr list --search 'a;b && c || d'", ALLOW],
   ['"${ORCA_CLI_COMMAND:-orca}" bot list && "${ORCA_CLI_COMMAND:-orca}" bot chats', ALLOW],
   ["/bin/zsh -lc 'git status && git log -3 2>&1'", ALLOW],
+  ["/bin/sh -c 'git status'", ALLOW],
+  ["/opt/homebrew/bin/bash -lc 'git log -3'", ALLOW],
+  ["sh -c 'git status'", ALLOW],
+  // A shell wrapper unwraps only after a bare shell name or a system shell path.
+  ["{touch,/tmp/pwned};/bin/sh -c 'git status'", '"{touch,/tmp/pwned}"'],
+  ["echo>pwned;/bin/sh -c 'git status'", 'a redirect (">")'],
+  ["rm${IFS}-rf${IFS}x;/bin/sh -c 'git status'", 'expansion ("$")'],
+  ["$(id)/sh -c 'git status'", 'expansion ("$(")'],
+  ["`id`/sh -c 'git status'", 'expansion ("`")'],
+  ["./sh -c 'git status'", '"./sh" isn\'t a read'],
+  ["/tmp/evil/bash -c 'git status'", '"/tmp/evil/bash" isn\'t a read'],
+  ["sh\n-c 'git status'", 'a second line'],
+  ["/usr/bin/zsh -lc 'git status; rm x'", '"rm x" isn\'t a read'],
+  // Control and invisible characters, and newlines a trim would drop.
+  ["gh pr view 'a\u0000b'", 'a control or invisible character'],
+  ['﻿git status', 'a control or invisible character'],
+  ['git status\n; git log', 'a second line'],
   // Pipes, other redirects, expansion and subshells.
   ['gh pr checks 12 | head', 'a pipe ("|")'],
   ['gh pr list |tee out', 'a pipe ("|")'],
@@ -85,6 +102,9 @@ const POWERSHELL: readonly (readonly [string, string])[] = [
   ["gh pr list --search 'is:open draft'", ALLOW],
   ["gh pr list --author=@me --json 'number,title'", ALLOW],
   ["orca bot suggest --title 'Fix CI' --why 'It is red' --ask 'Fix it'", ALLOW],
+  ["gh pr view 'a\u0000b'", 'a control or invisible character'],
+  ['﻿git status', 'a control or invisible character'],
+  ['git status\n; git log', 'a second line'],
   // Curly quotes close PowerShell strings; these dashes read as `-`.
   ["gh pr view 'x’; Remove-Item f; ‘y'", 'a curly quote or dash ("’"'],
   ["gh pr view 'x‘; Remove-Item f; ’y'", 'a curly quote or dash ("‘"'],
