@@ -24919,8 +24919,6 @@
       "composio": {
         "withComposio": "Con Composio"
       },
-      "allApps": "Todas las apps",
-      "onBot": "En {{bot}}",
       "mcp": {
         "addTitle": "Añadir {{app}}",
         "advanced": "Avanzado",
@@ -25148,7 +25146,7 @@
       "controlBriefIfAdded": "Cualquier persona que añadas puede actuar como tú aquí.",
       "controlBriefOnHost": "Pueden actuar como tú en {{computer}}.",
       "controlBriefIfAddedOnHost": "Cualquier persona que añadas puede actuar como tú en {{computer}}.",
-      "reachSlack": "Publicar en Slack como @{{name}}",
+      "reachSlack": "Publicar en Slack como {{name}}",
       "here": "aquí",
       "thisServer": "este servidor",
       "there": "allí",

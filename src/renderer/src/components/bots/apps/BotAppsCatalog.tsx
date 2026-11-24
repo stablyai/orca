@@ -1,7 +1,9 @@
-// Add to <bot>'s body: the rail, the search and the list it filters, or the step an Add opened.
+// Add apps' body: the header, the search, the chips and the list they filter, or the step an Add opened.
 import React, { useCallback, useDeferredValue, useRef, useState } from 'react'
-import { Search } from 'lucide-react'
+import { Plus, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
@@ -23,34 +25,19 @@ import { webhookSetUpDraft } from '../webhooks/use-webhooks-connector'
 import {
   BOT_APP_CATEGORIES,
   DIRECT_APPS,
-  botAppCategoryName,
-  directAppLine,
-  matchesAppQuery,
   type BotAppCategory,
   type BotDirectApp
 } from './bot-app-catalog'
 import { BotAppBrandLogo } from './BotAppBrandLogo'
-import { BotAppCategoryIcon } from './BotAppCategoryIcon'
-import { BotAppCaption } from './BotAppRow'
 import { BotAppStepHeader } from './BotAppStepParts'
 import { ComposioAccountStep, WebhooksStep } from './BotAppSteps'
 import { CustomAppStep } from './BotAppUrlStep'
-import {
-  ComposioCatalogList,
-  ComposioSearchGroup,
-  ComposioSection,
-  composioSignedIn,
-  type ComposioActions,
-  type ComposioPick
-} from './BotAppComposio'
-import {
-  BotAppsRail,
-  BotAppsRailMenu,
-  type BotAppsRailProps,
-  type BotAppsView
-} from './BotAppsRail'
+import { composioSignedIn, type ComposioActions, type ComposioPick } from './BotAppComposio'
+import { BotAppsAddedButton, type BotAddedSources } from './BotAppsAdded'
+import { BotAppsChips, type BotAppsView } from './BotAppsChips'
+import { BotAppsList } from './BotAppsList'
+import { BotAppsNoMatch, DirectAppRow, useCustomApps, type DirectRow } from './BotAppsRows'
 import { botMcpAppUrlTag } from '../../../../../shared/bots/bot-mcp-apps'
-import { BotAppsMineList, BotAppsNoMatch, DirectAppRow, type DirectRow } from './BotAppsRows'
 import { botToolApps } from './bot-tool-apps'
 import { botMcpAppLine } from '../../../../../shared/bots/bot-app-lines'
 
@@ -65,6 +52,7 @@ export type BotAppsStep =
 /** Mounted only while the dialog shows, so each opening starts on All apps with an empty search. */
 export function BotAppsCatalog({
   bot,
+  title,
   onOpenChange,
   onManage,
   onAdd,
@@ -72,6 +60,7 @@ export function BotAppsCatalog({
   setStep
 }: {
   bot: Bot
+  title: string
   onOpenChange: (open: boolean) => void
   /** Closes the dialog for the bot's Connectors tab, where every app it has is a row. */
   onManage: () => void
@@ -87,12 +76,19 @@ export function BotAppsCatalog({
   // Let the dialog and its search field paint before mounting the catalog rows.
   const showApps = useDeferredValue(true, false)
   const searchRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const switchView = (next: BotAppsView): void => {
+    if (listRef.current) {
+      listRef.current.scrollTop = 0
+    }
+    setView(next)
+  }
   const close = useCallback(() => onOpenChange(false), [onOpenChange])
   const manage = onManage
   const webhooks = state.catalog.find((connector) => connector.id === 'webhooks')
   // Which apps the bot has, from its tools alone: no check starts its servers.
   const toolApps = botToolApps(useBotTools(bot, 'none').view)
-  // A connector shows once it can be added, or once the bot has it; an MCP app always.
+  // A connector shows once it can be added or when the bot already has it.
   const direct: DirectRow[] = DIRECT_APPS.flatMap((app): DirectRow[] => {
     if (app.route === 'mcp') {
       const tool = toolApps.find((entry) => entry.app?.id === app.id)?.tool
@@ -112,11 +108,12 @@ export function BotAppsCatalog({
   const mineDirect = direct.filter((row) => row.added)
   const byUrl = toolApps.filter((entry) => entry.app === null)
   const webhooksAdded = webhooks !== undefined && state.added(webhooks)
-  const mineCount = mineDirect.length + byUrl.length + (webhooksAdded ? 1 : 0) + signedIn.size
-  const categories = BOT_APP_CATEGORIES.flatMap((category) => {
-    const count = direct.filter((row) => row.app.category === category).length
-    return count > 0 ? [{ category, count }] : []
-  })
+  const categories = BOT_APP_CATEGORIES.filter((category) =>
+    direct.some((row) => row.app.category === category)
+  )
+  const custom = useCustomApps(
+    !webhooks || !state.available(webhooks) ? 'off' : webhooksAdded ? 'added' : 'available'
+  )
 
   const connectComposio = (app: ComposioPick, attempt: number): void => {
     setStep({ kind: 'composio-wait', app, attempt, error: null })
@@ -151,7 +148,7 @@ export function BotAppsCatalog({
   const browseAll = (): void => {
     setQuery('')
     if (composio.status?.key === 'ok') {
-      setView('catalog')
+      switchView('catalog')
     } else {
       setStep({ kind: 'composio-account' })
     }
@@ -244,19 +241,20 @@ export function BotAppsCatalog({
       onManage={manage}
     />
   )
-  const composioMine = [...signedIn].map(([slug, label]) => ({
-    slug,
-    name: composioAppName(
+  const added: BotAddedSources = {
+    direct: mineDirect,
+    byUrl,
+    webhooks: webhooksAdded,
+    composio: [...signedIn].map(([slug, label]) => ({
       slug,
-      composio.connections?.connections.find((entry) => entry.app === slug)?.name
-    ),
-    line: label ?? ''
-  }))
-  const searching = query.trim() !== ''
-  const searchAll = (): void => {
-    setView('all')
-    searchRef.current?.focus()
+      name: composioAppName(
+        slug,
+        composio.connections?.connections.find((entry) => entry.app === slug)?.name
+      ),
+      line: label ?? ''
+    }))
   }
+  const addByUrl = (): void => setStep({ kind: 'custom' })
   const noMatch = (where: 'all' | 'mine' | BotAppCategory): React.JSX.Element => (
     <BotAppsNoMatch
       where={where}
@@ -266,126 +264,49 @@ export function BotAppsCatalog({
         setQuery('')
         searchRef.current?.focus()
       }}
-      onSearchAll={searchAll}
-      onAddByUrl={() => setStep({ kind: 'custom' })}
+      onSearchAll={() => {
+        switchView('all')
+        searchRef.current?.focus()
+      }}
+      onAddByUrl={addByUrl}
     />
   )
-
-  const renderList = (): React.ReactNode => {
-    const composioSection = (alone: boolean) => (
-      <ComposioSection
-        view={composio}
-        actions={composioActions}
-        onBrowseAll={browseAll}
-        alone={alone}
-      />
-    )
-    if (view === 'catalog') {
-      return (
-        <ComposioCatalogList
-          bot={bot}
-          query={query}
-          view={composio}
-          actions={composioActions}
-          empty={noMatch('all')}
-        />
-      )
-    }
-    if (view === 'mine') {
-      return (
-        <BotAppsMineList
-          botName={bot.name}
-          query={query}
-          direct={mineDirect}
-          renderDirect={directRow}
-          byUrl={byUrl}
-          webhooks={webhooksAdded}
-          composio={composioMine}
-          onManage={manage}
-          empty={noMatch('mine')}
-        />
-      )
-    }
-    if (searching) {
-      const hits =
-        view === 'composio'
-          ? []
-          : direct.filter(
-              (row) =>
-                (view === 'all' || row.app.category === view) &&
-                matchesAppQuery(query, row.name, directAppLine(row.app))
-            )
-      const where = view === 'all' || view === 'composio' ? 'all' : view
-      const composioGroup = (
-        <ComposioSearchGroup
-          bot={bot}
-          query={query}
-          view={composio}
-          actions={composioActions}
-          divided={hits.length > 0}
-          empty={noMatch(where)}
-        />
-      )
-      return (
-        <>
-          {hits.length > 0 ? (
-            <section aria-label={t('bots.apps.appsCaption', 'Apps')}>
-              <BotAppCaption title={t('bots.apps.appsCaption', 'Apps')} count={hits.length} />
-              <ul className="flex flex-col">{hits.map(directRow)}</ul>
-            </section>
-          ) : null}
-          {composioGroup}
-        </>
-      )
-    }
-    if (view === 'composio') {
-      return composioSection(true)
-    }
-    const shown = view === 'all' ? categories : categories.filter((c) => c.category === view)
-    return (
-      <>
-        {shown.map(({ category }) => (
-          <section key={category} aria-label={botAppCategoryName(category)}>
-            <BotAppCaption
-              icon={<BotAppCategoryIcon category={category} />}
-              title={botAppCategoryName(category)}
-            />
-            <ul className="flex flex-col">
-              {direct.filter((row) => row.app.category === category).map(directRow)}
-            </ul>
-          </section>
-        ))}
-        {view === 'all' ? composioSection(shown.length === 0) : null}
-      </>
-    )
-  }
-
-  const railProps: BotAppsRailProps = {
-    bot,
-    view,
-    onView: (next) => {
-      setView(next)
-      setQuery('')
-    },
-    mineCount,
-    categories,
-    composio: true,
-    onAddByUrl: () => setStep({ kind: 'custom' }),
-    onWebhooks: webhooks && state.available(webhooks) ? () => setStep({ kind: 'webhooks' }) : null
+  const pickView = (next: BotAppsView): void => {
+    switchView(next)
+    setQuery('')
   }
   const searchLabel =
     view === 'catalog'
       ? t('bots.apps.searchComposio', 'Search Composio apps')
       : view === 'mine'
-        ? t('bots.apps.searchMine', 'Search On {{bot}}', { bot: bot.name })
+        ? t('bots.apps.searchAdded', 'Search added apps')
         : t('bots.apps.search', 'Search apps')
   return (
-    <div className="flex min-h-0 flex-1">
-      <BotAppsRail {...railProps} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="mx-4 mt-3 flex gap-2">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+    <>
+      <div className="flex h-16 shrink-0 items-center gap-2 pr-4.5 pl-6">
+        <DialogTitle className="min-w-0 flex-1">
+          <span className="block truncate" title={title}>
+            {title}
+          </span>
+        </DialogTitle>
+        <BotAppsAddedButton
+          sources={added}
+          pressed={view === 'mine'}
+          onToggle={() => pickView(view === 'mine' ? 'all' : 'mine')}
+        />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t('bots.apps.close', 'Close')}
+          onClick={close}
+        >
+          <X className="size-4" />
+        </Button>
+      </div>
+      <div className="flex shrink-0 flex-col gap-3 px-6">
+        <div className="flex gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               ref={searchRef}
               autoFocus
@@ -395,18 +316,39 @@ export function BotAppsCatalog({
               placeholder={searchLabel}
               aria-label={searchLabel}
               inset="leadingIcon"
-              className="h-8"
+              className="h-9.5"
             />
           </div>
-          <BotAppsRailMenu {...railProps} />
+          <Button variant="outline" className="h-9.5 max-w-1/2" onClick={addByUrl}>
+            <Plus />
+            <span className="truncate">{t('bots.apps.addByUrl', 'Add by URL')}</span>
+          </Button>
         </div>
-        <div
-          aria-busy={!showApps}
-          className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto px-3 pt-0.5 pb-3.5"
-        >
-          {showApps ? renderList() : null}
-        </div>
+        <BotAppsChips view={view} onView={pickView} categories={categories} />
       </div>
-    </div>
+      <div
+        ref={listRef}
+        aria-busy={!showApps}
+        className="scrollbar-sleek @container mt-1 min-h-0 flex-1 overflow-y-auto px-4 pb-4"
+      >
+        {showApps ? (
+          <BotAppsList
+            bot={bot}
+            view={view}
+            query={query}
+            direct={direct}
+            renderDirect={directRow}
+            custom={custom}
+            onCustom={(id) => setStep({ kind: id === 'url' ? 'custom' : 'webhooks' })}
+            added={added}
+            onManage={manage}
+            composio={composio}
+            composioActions={composioActions}
+            onBrowseAll={browseAll}
+            noMatch={noMatch}
+          />
+        ) : null}
+      </div>
+    </>
   )
 }

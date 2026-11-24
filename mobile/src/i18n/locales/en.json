@@ -830,7 +830,17 @@
       "offOneBody": "To turn them on, open Orca on {{host}} and go to Settings › Bots › Enable bots.",
       "offServerBody": "To turn them on, open Orca on {{desktop}} and go to Settings › Bots › Enable bots on {{host}}.",
       "offManyTitle": "Bots are off on your computers",
-      "offManyBody": "To turn them on, open Orca on each computer and go to Settings › Bots › Enable bots."
+      "offManyBody": "To turn them on, open Orca on each computer and go to Settings › Bots › Enable bots.",
+      "waits": {
+        "questions_one": "question",
+        "questions_other": "{{count}} questions",
+        "access_one": "access request",
+        "access_other": "{{count}} access requests",
+        "workers_one": "worker",
+        "workers_other": "{{count}} workers",
+        "items_one": "item",
+        "items_other": "{{count}} items"
+      }
     }
   },
   "hooks": {
@@ -3342,7 +3352,8 @@
       "attachFailed": "Attach failed"
     },
     "ask": {
-      "submit": "Submit",
+      "send": "Send",
+      "notNow": "Not now",
       "next": "Next",
       "skip": "Skip",
       "step": "Step {{step}}",
@@ -3367,14 +3378,6 @@
     },
     "promptStrip": {
       "expand": "Expand"
-    },
-    "question": {
-      "submitSelectedOptions": "Submit selected options",
-      "submitCount": "Submit ({{count}})",
-      "submit": "Submit",
-      "otherReplyPlaceholder": "Or type a reply…",
-      "replyPlaceholder": "Type your reply…",
-      "sendReply": "Send reply"
     },
     "queuedMessages": {
       "deleteAll": "Delete all",
@@ -3727,7 +3730,23 @@
       "cancelledBy": "Cancelled on {{device}}",
       "thisPhone": "this phone",
       "computer": "the computer",
-      "otherDevice": "another device"
+      "otherDevice": "another device",
+      "questionCancelled": "Question cancelled",
+      "youAnswered": "You answered: <answer>{{answer}}</answer>",
+      "answeredCount_one": "You answered <answer>{{count}} question</answer>",
+      "answeredCount_other": "You answered <answer>{{count}} questions</answer>",
+      "answeredCount": "You answered <answer>{{count}} questions</answer>"
+    },
+    "approvalRecord": {
+      "cancelled": "Request for <tool>{{tool}}</tool> cancelled",
+      "coordinatorAllowed": "Coordinator allowed <tool>{{tool}}</tool>",
+      "coordinatorDenied": "Coordinator denied <tool>{{tool}}</tool>",
+      "allowedUnnamed": "Allowed <tool>{{tool}}</tool>",
+      "deniedUnnamed": "Denied <tool>{{tool}}</tool>",
+      "youAllowed": "You allowed <tool>{{tool}}</tool>",
+      "youAllowedForSession": "You allowed <tool>{{tool}}</tool> for this session",
+      "youDenied": "You denied <tool>{{tool}}</tool>",
+      "youAnswered": "You answered <tool>{{tool}}</tool>: <answer>{{answer}}</answer>"
     },
     "subagentGroup": {
       "stateCompleted": "completed",
@@ -4224,6 +4243,7 @@
       "failed": "Failed"
     },
     "workerApproval": {
+      "allowFor": "Allow {{tool}} for {{worker}}?",
       "title": "{{worker}} · {{title}}",
       "allow": "Allow",
       "deny": "Deny",
@@ -4239,7 +4259,7 @@
         "deniedInTerminal": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied in its terminal",
         "allowedInChat": "<tool>{{tool}}</tool> for <task>{{task}}</task> allowed in its chat",
         "deniedInChat": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied in its chat",
-        "autoDenied": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied automatically after 2:00",
+        "timedOut": "<tool>{{tool}}</tool> for <task>{{task}}</task> timed out",
         "waitsInTerminal": "<tool>{{tool}}</tool> for <task>{{task}}</task> waits in its terminal",
         "workerEnded": "<tool>{{tool}}</tool> for <task>{{task}}</task> closed: the worker ended",
         "closedUnnamed": "<tool>{{tool}}</tool> for <task>{{task}}</task> closed without a recorded answer",
@@ -5500,11 +5520,9 @@
       "runNow": "Run now",
       "pause": "Pause {{name}}",
       "resume": "Resume {{name}}",
-      "empty": "Ask in chat to set up an automation.",
       "newAutomation": "New automation",
       "runQueued": "Automation run queued.",
       "runFailed": "Couldn’t start the run",
-      "emptyTitle": "No automations yet",
       "viewRuns": "View runs",
       "paused": "Paused",
       "newDraft": "Set up an automation that "
@@ -5550,7 +5568,6 @@
       "access": "Access",
       "whoCanAsk": "Who can ask",
       "deleteBot": "Delete bot…",
-      "agentDetail": "Used for bot conversations and automations. A new model applies to new conversations; the Home Chat keeps its current one.",
       "accountChecking": "Checking…",
       "signedOut": "Signed out of Orca",
       "computerFoot": "Its connectors, tools and files live on {{host}}.",
@@ -5570,7 +5587,6 @@
       "model": "Model",
       "effort": "Effort",
       "backToAgent": "Back to Agent and model",
-      "chatDefaultNote": "Using your chat default. Background runs use your Agents setting.",
       "useChatDefaults": "Use chat defaults",
       "modelDefault": "Default",
       "signInChanged": "Orca sign-in changed",
@@ -5581,7 +5597,8 @@
       "memoryFiles_one": "{{count}} file",
       "memoryFiles_other": "{{count}} files",
       "none": "None",
-      "readFailed": "Couldn’t load"
+      "readFailed": "Couldn’t load",
+      "usingChatDefault": "Using your chat default."
     },
     "saveFailed": "Couldn’t save",
     "sheet": {
@@ -5794,7 +5811,10 @@
       "needsLocalBot": "This group needs at least one bot on this computer.",
       "remoteOnComputer": "Add or remove bots from other computers in Orca on {{host}}.",
       "stopCouldNotBeConfirmed": "Stop could not be confirmed.",
-      "notStarted": "Not started"
+      "notStarted": "Not started",
+      "memberCount_one": "{{count}} bot",
+      "memberCount_other": "{{count}} bots",
+      "memberCount": "{{count}} bots"
     },
     "templates": {
       "title": "Bot templates",
@@ -6257,8 +6277,7 @@
       "noBotsYet": "No bots yet.",
       "offline": "Offline",
       "updateToSee": "Update Orca on {{host}} to see its bots.",
-      "offEnd": "Bots are off on {{host}}.",
-      "updateToCreate": "Update Orca on {{host}} to make bots from your phone."
+      "offEnd": "Bots are off on {{host}}."
     },
     "chats": {
       "replying": "Replying…",
@@ -6390,7 +6409,6 @@
       "filter": {
         "needsYou": "Needs you only",
         "label": "Filter items",
-        "remove": "Remove filter {{name}}",
         "clear": "Clear filter",
         "clearAll": "Clear filters"
       },
@@ -6519,9 +6537,6 @@
         "confirm": "Set Waiting",
         "offline": "{{host}} is offline. What you typed is kept; Set Waiting works again when it’s back."
       },
-      "strip": {
-        "view": "View"
-      },
       "group": {
         "stale": "Stale",
         "closed": "Closed",
@@ -6585,23 +6600,19 @@
       "skillLimit": "Message not sent. Keep at most {{limit}} selected skill files and try again."
     },
     "needs": {
-      "permissionTool": "Permission · {{tool}}",
       "permission": "Permission needed",
       "waiting": "Waiting for you",
       "whereItRuns": "{{need}} · open it where it runs",
-      "worker": "Worker: {{name}}",
       "actionFor": "{{action}}: {{title}}",
       "open": "Open",
       "chat": "Your chat with {{name}}",
       "access": "{{person}} asked for access",
-      "connector": "{{name}} needs you to sign in again or fix it.",
-      "signIn": "{{name}} needs you to sign in.",
-      "signInAgain": "{{name}} needs you to sign in again.",
       "fixConnector": "Open {{name}}",
-      "runSignIn": "Couldn’t run until you sign in.",
-      "openRun": "Open run",
       "pairedAsk": "{{from}} wants to message {{name}}",
-      "pairedAskDetail": "Permission · Message {{name}}"
+      "connectorFix": "Sign in or fix it",
+      "questions": "{{count}} questions",
+      "signInApps": "Sign in to {{count}} apps",
+      "listSeparator": ", "
     },
     "chat": {
       "nothingToReport": "Nothing to report",
@@ -6657,7 +6668,7 @@
       "codexNoSandbox": "No Codex sandbox.",
       "whoeverAskedApproves": "If it asks, whoever asked can approve.",
       "reachLinear": "Comment on, update and create Linear issues as you",
-      "reachSlack": "Post in Slack as @{{name}}",
+      "reachSlack": "Post in Slack as {{name}}",
       "reachGitHub": "Comment, review and push on GitHub as you",
       "reachGoogleEmail": "Read and send your email",
       "reachGoogleCalendar": "Use your calendar",
@@ -6962,7 +6973,6 @@
       "nameLabel": "Bot name",
       "mascot": "Mascot",
       "mascotN": "Mascot {{n}} of {{total}}",
-      "background": "Background color",
       "outfit": "Outfit",
       "outfitNone": "No outfit",
       "outfitTie": "Tie",
@@ -6977,7 +6987,8 @@
       "choosePhoto": "Choose from Photos",
       "slackToo": "Changes your bot’s picture in Slack too.",
       "tooBig": "That image is over 10 MB.",
-      "tooSmall": "Too small. Use an image at least 128 px."
+      "tooSmall": "Too small. Use an image at least 128 px.",
+      "color": "Color"
     },
     "agentSwitch": {
       "title": "Switch {{name}} to {{agent}}?",
@@ -6992,9 +7003,7 @@
       "addButton": "Add",
       "sourceLabel": "Server URL or start command",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "Only {{name}} gets it, in addition to your own tools.",
       "details": "Details",
-      "commandWarning": "The command runs in this bot’s home folder on {{host}}. Adding or saving can start it during the native check. Only add software you trust.",
       "serverType": "Server type",
       "urlMode": "Connect to a URL",
       "commandMode": "Run a command",
@@ -7003,7 +7012,6 @@
       "removeTitle": "Remove {{app}}?",
       "removeNote": "{{bot}} can no longer use {{app}}. You can add it again any time.",
       "remove": "Remove",
-      "signInOrca": "Works with Claude and Codex",
       "signInMissing": "{{agent}} isn’t signed in",
       "signInHeld": "Held by {{agent}}",
       "back": "Back to Tools",
@@ -7057,34 +7065,21 @@
       "reading": "Reading tool details…",
       "url": "Server URL",
       "urlPlaceholder": "https://example.com/mcp",
-      "transport": "Streamable HTTP · localhost means this bot’s computer.",
       "headers": "Headers",
-      "authHint": "If the server needs browser sign-in, Connect appears after its native check.",
       "executable": "Executable",
       "commandPlaceholder": "npx",
       "args": "Arguments",
-      "argumentLabel": "Argument {{index}}",
-      "removeArgumentLabel": "Remove argument {{index}}",
       "addArg": "Add argument",
-      "argsHint": "One exact argument per row. Spaces and empty arguments are preserved.",
       "env": "Environment variables",
       "keyPlaceholder": "Name",
       "valuePlaceholder": "Value",
       "savedPlaceholder": "Saved value · enter to replace",
-      "headerName": "header name {{index}}",
-      "headerValue": "header value {{index}}",
-      "variableName": "variable name {{index}}",
-      "variableValue": "variable value {{index}}",
-      "removeHeader": "Remove header {{index}}",
-      "removeVariable": "Remove variable {{index}}",
       "addHeader": "Add header",
       "addVariable": "Add variable",
-      "secretsHint": "Saved values stay private. Leave a saved value blank to keep it, enter a value to replace it, or remove its row to delete it.",
       "show": "Show",
       "hide": "Hide",
       "nameTaken": "A tool named {{name}} already exists. Choose another name.",
       "useName": "Use {{name}}",
-      "workingFolder": "Working folder: {{folder}}",
       "checkUnfinished": "The native check did not finish. Check again to retry.",
       "input": {
         "invalid": "Enter a valid server name and URL or executable.",
@@ -7099,7 +7094,17 @@
         "denied": "Access wasn’t allowed.",
         "expired": "The sign-in expired. Try again.",
         "couldNotSignIn": "Couldn’t sign in. Try again."
-      }
+      },
+      "trust": "Only add software you trust.",
+      "argument": "Argument",
+      "removeArgument": "Remove argument",
+      "header": "Header",
+      "variable": "Variable",
+      "removeHeaderRow": "Remove header",
+      "removeVariableRow": "Remove variable",
+      "emptyArgument": "Empty",
+      "valueNew": "New value",
+      "valueSaved": "Saved"
     },
     "handToBot": {
       "menu": "Hand to bot…",
@@ -7136,15 +7141,12 @@
       "lookingOn": "Looking on {{host}}…",
       "foundOn": "{{count}} found on {{host}}",
       "otherApp": "Another app…",
-      "otherAppNote": "Your old bot copies its files for you",
       "noneFoundNote": "No bots found in OpenClaw (~/.openclaw), Hermes (~/.hermes) or OpenBot.",
       "sendStep": "Send your old bot this message",
-      "copiedNote": "Copied. Paste it to your old bot wherever you chat with it.",
       "copyAgain": "Copy again",
       "copyMessage": "Copy message",
       "seeMessage": "See the message",
       "addStep": "Add the folder it made",
-      "addStepNote": "It saves a folder ending in -export in Downloads on {{host}}.",
       "folderItems_one": "{{count}} item",
       "folderItems_other": "{{count}} items",
       "removePath": "Remove {{name}}",
@@ -7154,16 +7156,15 @@
       "replyLabel": "Its reply",
       "title": "Import from another app",
       "newBot": "New bot",
-      "exportDescription": "Ask your old bot for a copy of itself, then give the copy to your new bot.",
-      "description": "Your new bot reads the old one and sets itself up.",
       "nameAnother": "Name a new bot",
-      "importedBefore": "{{bot}} came from this bot",
       "update": "Update {{bot}}",
       "updateDraft": "Bring over anything new from {{name}} in {{app}}.",
       "keysStay": "Keys and logins stay behind",
       "nudgeOne": "We found a bot in {{app}}.",
       "nudgeMany": "We found {{count}} bots in {{app}}.",
-      "noFolders": "No folders"
+      "noFolders": "No folders",
+      "more": "More actions",
+      "makeNew": "Make a new bot instead"
     },
     "host": {
       "errors": {
@@ -7301,10 +7302,8 @@
       "composio": {
         "connectTitle": "Connect Composio",
         "once": "Once, for all your bots",
-        "thenApp": "Then you sign in to {{app}} on Composio’s page.",
-        "keyStoredOnHost": "Stored on {{host}}; bots never see it. Composio holds your app sign-ins.",
-        "addKey": "Add key and continue",
-        "browseAll": "Browse Composio apps"
+        "browseAll": "Browse Composio apps",
+        "keyOnHost": "Stored on {{host}}; bots never see it."
       },
       "close": "Close",
       "couldNotSignIn": "Couldn’t sign in to {{app}}",
@@ -7365,8 +7364,7 @@
       "key": {
         "label": "Composio API key",
         "placeholder": "Paste your key",
-        "getKey": "Get a key",
-        "checking": "Checking…"
+        "getKey": "Get a key"
       },
       "signInEnded": "The sign-in was turned down, failed, or took too long.",
       "signInOnComposio": "Sign in to {{app}} on Composio’s page.",
@@ -7620,23 +7618,18 @@
       "addFailed": "Couldn’t add {{names}}.",
       "fullBot": "Nobody was added: {{names}} would go past the {{count}} people a bot can have.",
       "fullWorkspace": "Nobody was added: {{names}} would go past the {{count}} people this workspace can have.",
-      "canAsk": "Can ask",
       "retry": "Try again",
       "searching": "Searching…",
       "cancel": "Cancel",
       "selectedHeading": "Selected",
-      "you": "You",
-      "owner": "Owner",
-      "addedCount": "{{count}} of {{max}} added",
       "incomplete": "Not everyone is listed. Search by name to find someone.",
-      "selected": "{{count}} selected",
-      "addOne": "Add 1 person",
-      "addMany": "Add {{count}} people",
       "searchIn": "Search people in {{workspace}}",
       "peopleIn": "People in {{workspace}}",
       "noOneNamed": "No one named “{{query}}” in {{workspace}}",
       "needsSlack": "Add {{name}} to Slack first to pick people from your workspace.",
-      "noMatchDetail": "Members, guests and people from other organizations in {{workspace}}’s Slack can be added. Anyone else gets a private note to ask you."
+      "noMatchDetail": "Members, guests and people from other organizations in {{workspace}}’s Slack can be added. Anyone else gets a private note to ask you.",
+      "add": "Add",
+      "allAdded": "They can already ask"
     },
     "linear": {
       "whoCanAsk": {
@@ -7933,12 +7926,15 @@
       "heading": "Paired servers",
       "remove": "Remove",
       "removeServer": "Remove {{server}}",
-      "tooltip": "Bots and agents on these servers can ask {{name}} without asking you each time.",
-      "unnamed": "Paired server"
+      "unnamed": "Paired server",
+      "footer": "Their agents can ask without your approval."
     },
     "usageLimit": {
       "continuesAt": "Continues at {{time}}",
       "hitLimit": "Hit limit · resets {{time}}"
+    },
+    "upcoming": {
+      "needsSignIn": "Needs sign-in"
     }
   },
   "mobileWebShell": {

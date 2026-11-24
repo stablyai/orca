@@ -242,15 +242,12 @@ async function updateAgentCli(
     .map((text) => text.trim())
     .filter(Boolean)
     .join('\n')
-  if (result.code !== 0 || result.timedOut) {
-    return { ok: false, output, command }
-  }
   const latest = after ? await latestRelease(agent, after) : null
-  // A package manager behind the release (e.g. Homebrew) exits cleanly on the old version.
-  if (after && latest && compareAppVersions(after, latest) < 0) {
-    return { ok: false, output, command }
-  }
-  return { ok: true }
+  // The version decides when readable: a failed run that leaves the CLI at the latest release is done
+  // (e.g. a wrapper around a desktop app's CLI), and a clean exit still behind it (e.g. Homebrew) is not.
+  const current =
+    after && latest ? compareAppVersions(after, latest) >= 0 : result.code === 0 && !result.timedOut
+  return current ? { ok: true } : { ok: false, output, command }
 }
 
 /** Joins an update of `agent` already running on this host. */

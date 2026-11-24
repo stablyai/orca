@@ -24004,8 +24004,6 @@
       "composio": {
         "withComposio": "透過 Composio"
       },
-      "allApps": "所有應用程式",
-      "onBot": "在 {{bot}} 上",
       "mcp": {
         "addTitle": "新增 {{app}}",
         "advanced": "進階",
@@ -24228,7 +24226,7 @@
       "controlBriefIfAdded": "你新增的任何人都可以在這裡以你的身份操作。",
       "controlBriefOnHost": "他們可以在 {{computer}} 上以你的身份操作。",
       "controlBriefIfAddedOnHost": "你新增的任何人都可以在 {{computer}} 上以你的身份操作。",
-      "reachSlack": "以 @{{name}} 身份在 Slack 傳送訊息",
+      "reachSlack": "以 {{name}} 身份在 Slack 傳送訊息",
       "here": "這裡",
       "thisServer": "此伺服器",
       "there": "那裡",

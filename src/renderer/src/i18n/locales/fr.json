@@ -24940,8 +24940,6 @@
       "composio": {
         "withComposio": "Avec Composio"
       },
-      "allApps": "Toutes les apps",
-      "onBot": "Sur {{bot}}",
       "mcp": {
         "addTitle": "Ajouter {{app}}",
         "advanced": "Avancé",
@@ -25169,7 +25167,7 @@
       "controlBriefIfAdded": "Toute personne que vous ajoutez peut agir en votre nom ici.",
       "controlBriefOnHost": "Ces personnes peuvent agir en votre nom sur {{computer}}.",
       "controlBriefIfAddedOnHost": "Toute personne que vous ajoutez peut agir en votre nom sur {{computer}}.",
-      "reachSlack": "Publier dans Slack en tant que @{{name}}",
+      "reachSlack": "Publier dans Slack en tant que {{name}}",
       "here": "ici",
       "thisServer": "ce serveur",
       "there": "là-bas",

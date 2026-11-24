@@ -25847,6 +25847,19 @@
       }
     }
   },
+  "tabStrip": {
+    "overflow": {
+      "chipOnlyName_one": "{{title}}, {{count}} tab",
+      "chipOnlyName_other": "{{title}}, {{count}} tabs",
+      "entryNeedsAttention": "{{title}}, needs attention",
+      "moreTabs_one": "{{count}} more tab",
+      "moreTabs_other": "{{count}} more tabs",
+      "needAttention_one": ", {{count}} needs attention",
+      "needAttention_other": ", {{count}} need attention",
+      "openTabs_one": "{{count}} open tab",
+      "openTabs_other": "{{count}} open tabs"
+    }
+  },
   "updates": {
     "installOnQuit": {
       "title": "Update ready to install",
@@ -28235,7 +28248,7 @@
       "codexNoSandbox": "No Codex sandbox.",
       "whoeverAskedApproves": "If it asks, whoever asked can approve.",
       "reachLinear": "Comment on, update and create Linear issues as you",
-      "reachSlack": "Post in Slack as @{{name}}",
+      "reachSlack": "Post in Slack as {{name}}",
       "reachGitHub": "Comment, review and push on GitHub as you",
       "trust": "Add only people you’d trust at your keyboard.",
       "adviceHeading": "Before you share",
@@ -28985,7 +28998,6 @@
     "composio": {
       "connectedAs": "Connected as {{label}}",
       "connected": "Connected",
-      "group": "More apps with Composio",
       "key": {
         "label": "Composio API key",
         "placeholder": "Paste your key",
@@ -29707,12 +29719,10 @@
       "duplicateSkill": "Same name, in {{folder}} · not shared"
     },
     "apps": {
-      "title": "Add to {{bot}}",
       "close": "Close",
       "signingIn": "Signing in",
       "add": "Add",
       "composio": {
-        "note": "These connect through your Composio account.",
         "browseAll": "Browse Composio apps",
         "searchCaption": "Composio apps",
         "allCaption": "All Composio apps",
@@ -29722,9 +29732,9 @@
         "accountThenCatalog": "Once, for all your bots. Then pick from all of Composio’s apps.",
         "keyStored": "Stored on this computer; bots never see it. Composio holds your app sign-ins.",
         "addKey": "Add key and continue",
-        "keyStoredOnHost": "Stored on {{host}}; bots never see it. Composio holds your app sign-ins."
+        "keyStoredOnHost": "Stored on {{host}}; bots never see it. Composio holds your app sign-ins.",
+        "signsIn": "Signs in through your Composio account."
       },
-      "allApps": "All apps",
       "closeKeepsSigningIn": "Sign-in continues in your browser",
       "openPageAgain": "Open page again",
       "webhooks": {
@@ -29737,7 +29747,9 @@
         "line": "Any MCP server {{bot}} should use",
         "failedLine": "{{app}} is on {{bot}} but not signed in. Try again, or remove it in Settings › Tools.",
         "done": "{{app}} is on {{bot}}",
-        "doneLine": "{{bot}} can use its tools from its next turn."
+        "doneLine": "{{bot}} can use its tools from its next turn.",
+        "name": "Custom",
+        "rowLine": "Any MCP server"
       },
       "couldNotSignIn": "Couldn’t sign in to {{app}}",
       "done": "Done",
@@ -29749,11 +29761,11 @@
       },
       "signInAllow": "Sign in to {{app}} and allow access.",
       "viaComposio": "via Composio",
-      "onBot": "On {{bot}}",
       "appsCaption": "Apps",
       "searchComposio": "Search Composio apps",
-      "searchMine": "Search On {{bot}}",
+      "searchAdded": "Search added apps",
       "search": "Search apps",
+      "filters": "App filters",
       "categories": "Categories",
       "addByUrl": "Add by URL",
       "noMatch": "No app matches “{{query}}”.",
@@ -29842,7 +29854,17 @@
         "box": "Files and folders",
         "miro": "Boards, sticky notes and frames",
         "reddit": "Posts, comments and subreddits"
-      }
+      },
+      "addAppsTitle": "Add apps to {{bot}}",
+      "addedCount": "{{count}} added",
+      "addedCaption": "Added",
+      "chip": {
+        "all": "All",
+        "composio": "Composio",
+        "more": "More"
+      },
+      "setUpNamed": "Set up {{name}}",
+      "setUp": "Set up"
     },
     "panel": {
       "idle": "Idle",

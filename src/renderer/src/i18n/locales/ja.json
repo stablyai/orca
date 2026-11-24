@@ -25643,8 +25643,6 @@
       "composio": {
         "withComposio": "Composio 経由"
       },
-      "allApps": "すべてのアプリ",
-      "onBot": "{{bot}} 上",
       "mcp": {
         "addTitle": "{{app}} を追加",
         "advanced": "詳細設定",
@@ -25867,7 +25865,7 @@
       "controlBriefIfAdded": "追加した人は誰でもここであなたとして操作できます。",
       "controlBriefOnHost": "アクセスを許可した人は {{computer}} 上であなたとして操作できます。",
       "controlBriefIfAddedOnHost": "追加した人は誰でも {{computer}} 上であなたとして操作できます。",
-      "reachSlack": "Slack で @{{name}} として投稿する",
+      "reachSlack": "Slack で {{name}} として投稿する",
       "here": "ここ",
       "thisServer": "このサーバー",
       "there": "そこ",

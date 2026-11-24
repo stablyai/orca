@@ -27875,12 +27875,10 @@
         "title": "要在另一台电脑上登录？",
         "line": "在那台电脑上登录 {{app}}，然后复制未能加载的页面的地址"
       },
-      "title": "添加到 {{bot}}",
       "close": "关闭",
       "signingIn": "正在登录",
       "add": "添加",
       "composio": {
-        "note": "这些应用通过你的 Composio 账户连接",
         "browseAll": "浏览 Composio 应用",
         "searchCaption": "Composio 应用",
         "allCaption": "全部 Composio 应用",
@@ -27892,7 +27890,6 @@
         "addKey": "添加密钥并继续",
         "keyStoredOnHost": "存储在 {{host}} 上，bots 永远看不到它。你的应用登录信息由 Composio 保管"
       },
-      "allApps": "全部应用",
       "closeKeepsSigningIn": "登录会在浏览器中继续进行",
       "openPageAgain": "再次打开页面",
       "webhooks": {
@@ -27912,10 +27909,8 @@
       "back": "返回",
       "signInAllow": "登录 {{app}} 并允许访问",
       "viaComposio": "通过 Composio",
-      "onBot": "{{bot}} 的应用",
       "appsCaption": "应用",
       "searchComposio": "搜索 Composio 应用",
-      "searchMine": "搜索 {{bot}} 的应用",
       "search": "搜索应用",
       "categories": "分类",
       "addByUrl": "通过 URL 添加",
@@ -29587,7 +29582,7 @@
       "codexNoSandbox": "不使用 Codex 沙盒",
       "whoeverAskedApproves": "如果它请求批准，提问的人可以批准",
       "reachLinear": "以你的身份评论、更新和创建 Linear 议题",
-      "reachSlack": "以 @{{name}} 的身份在 Slack 中发消息",
+      "reachSlack": "以 {{name}} 的身份在 Slack 中发消息",
       "reachGitHub": "以你的身份在 GitHub 上评论、评审和推送",
       "trust": "只添加你放心把键盘交给对方的人",
       "adviceHeading": "分享之前",
@@ -29729,7 +29724,6 @@
     "composio": {
       "connectedAs": "已以 {{label}} 身份连接",
       "connected": "已连接",
-      "group": "通过 Composio 使用更多应用",
       "key": {
         "label": "Composio API 密钥",
         "placeholder": "粘贴你的密钥",
