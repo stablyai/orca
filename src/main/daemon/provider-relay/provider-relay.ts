@@ -228,8 +228,8 @@ export class ProviderRelay {
     })
   }
 
-  ack(seq: number): void {
-    this.spool.ack(seq)
+  ack(seq: number, keepFrom?: number): void {
+    this.spool.ack(seq, keepFrom)
   }
 
   close(grace?: 'brief'): Promise<unknown> {

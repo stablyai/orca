@@ -24,7 +24,13 @@ export type ProviderRelayRequest =
    * surrogate pair split between two writes is joined before it is encoded.
    */
   | { id: string; type: 'relayWrite'; payload: { relayId: string; data: string } }
-  | { id: string; type: 'relayAck'; payload: { relayId: string; seq: number } }
+  /**
+   * The client received through `seq`. `keepFrom` (optional) is the first line it still needs after
+   * a restart, such as the start of an open streamed item: memory is freed through `seq`, lines from
+   * `keepFrom` on are kept in the spool file, and a later attach replays from there. A kept span
+   * longer than the file cap is released through `seq` rather than stalling the agent.
+   */
+  | { id: string; type: 'relayAck'; payload: { relayId: string; seq: number; keepFrom?: number } }
   | { id: string; type: 'relayClose'; payload: { relayId: string; grace?: 'brief' } }
   | { id: string; type: 'relayList' }
   | { id: string; type: 'relayDetach'; payload: { relayId: string } }
@@ -96,8 +102,9 @@ export type ProviderRelayDataEvent = {
 
 /**
  * Acks may be batched (about once a second is plenty). The daemon sends this once each time unacked
- * output reaches half its memory cap, and again when an ack through `seq` still leaves it there; the
- * client should then ack everything it has received.
+ * output reaches half its memory cap (half the spool file cap while the last ack set `keepFrom`), and
+ * again when an ack through `seq` still leaves it there; the client should then ack everything it has
+ * received.
  */
 export type ProviderRelayAckWantedEvent = {
   type: 'event'

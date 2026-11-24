@@ -186,9 +186,12 @@ export class ProviderRelayHost {
     this.requireAttached(clientId, relayId).write(data)
   }
 
-  ack(clientId: string, relayId: unknown, seq: unknown): void {
+  ack(clientId: string, relayId: unknown, seq: unknown, keepFrom?: unknown): void {
     const relay = this.requireAttached(clientId, relayId)
-    relay.ack(typeof seq === 'number' ? seq : 0)
+    relay.ack(
+      typeof seq === 'number' ? seq : 0,
+      typeof keepFrom === 'number' ? keepFrom : undefined
+    )
     this.removeIfFinished(relay)
   }
 

@@ -133,4 +133,34 @@ describe('provider relay spool', () => {
     expect(delivered).toEqual([1, 2, 3, 4])
     await spool.dispose()
   })
+
+  it('keeps lines from keepFrom on for a later attach even when the ack passes them, past the memory cap', async () => {
+    const path = join(dir, 'r.ndjson')
+    const delivered: number[] = []
+    const spool = new ProviderRelaySpool({
+      path,
+      deliver: (record) => delivered.push(record.seq),
+      onPressureChanged: () => {},
+      memoryCapBytes: 4096
+    })
+    await spool.attach(0)
+    for (let i = 0; i < 20; i++) {
+      spool.append('x'.repeat(500))
+    }
+    spool.ack(20, 5)
+    for (let i = 0; i < 20; i++) {
+      spool.append('y'.repeat(500))
+    }
+    spool.ack(40, 5)
+    await spool.detach()
+    expect(spool.ackedSeq).toBe(4)
+    delivered.length = 0
+
+    expect(await spool.attach(spool.ackedSeq)).toBe(40)
+    expect(delivered).toEqual(Array.from({ length: 36 }, (_, i) => i + 5))
+    spool.ack(40)
+    await spool.detach()
+    expect(existsSync(path)).toBe(false)
+    await spool.dispose()
+  })
 })
