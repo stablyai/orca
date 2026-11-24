@@ -5,7 +5,34 @@ import { ChatWorkspaceSection } from './ChatWorkspaceSection'
 import { makeRepo, makeWorktree } from '../../worktree-jump/worktree-jump-palette-test-fixtures'
 import WorktreeList from '../worktree-list/listing/WorktreeList'
 import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
-import { SidebarHeaderActions } from '../chrome/sidebar-header-actions'
+import SidebarHeader from '../chrome/SidebarHeader'
+import { SidebarSectionHeader } from '../SidebarSectionHeader'
+import { SidebarProjectsListSlot } from '../SidebarBotsSplit'
+import { useAppStore } from '@/store'
+import { PROJECTS_SECTION_GROUP_KEY } from '../../../../../shared/sidebar-list/sections/group-keys'
+
+function ProjectsHeader() {
+  return <SidebarHeader collapsible reorderable={false} onWorkspaceBoardMenuOpenChange={() => {}} />
+}
+
+function PopulatedSidebar() {
+  const collapsed = useAppStore((state) => state.collapsedGroups.has(PROJECTS_SECTION_GROUP_KEY))
+  return (
+    <div className="flex h-[520px] flex-col bg-worktree-sidebar text-worktree-sidebar-foreground">
+      <ProjectsHeader />
+      <SidebarProjectsListSlot botsShown collapsed={collapsed}>
+        <WorktreeList scrollOffsetRef={offset} scrollAnchorRef={anchor} />
+      </SidebarProjectsListSlot>
+      <ChatWorkspaceSection />
+      <SidebarSectionHeader
+        title="Bots"
+        sectionId="bots"
+        actions={null}
+        fold={{ collapsed: true, label: 'Expand Bots', onToggle: () => {} }}
+      />
+    </div>
+  )
+}
 
 export const empty = defineFixture({
   width: 320,
@@ -14,11 +41,8 @@ export const empty = defineFixture({
   render: () => (
     <DndContext>
       <div className="bg-worktree-sidebar pb-4">
+        <ProjectsHeader />
         <ChatWorkspaceSection />
-        <div className="mt-2 flex h-8 items-center justify-between px-4">
-          <span className="text-xs font-semibold text-muted-foreground/80">Projects</span>
-          <SidebarHeaderActions onWorkspaceBoardMenuOpenChange={() => {}} />
-        </div>
       </div>
     </DndContext>
   )
@@ -116,17 +140,30 @@ export const populated = defineFixture({
   render: () => (
     <DndContext>
       <ConfirmationDialogProvider>
-        <div className="flex h-[520px] flex-col bg-worktree-sidebar text-worktree-sidebar-foreground">
-          <ChatWorkspaceSection />
-          <div className="mt-2 flex h-8 shrink-0 items-center justify-between px-4">
-            <span className="text-xs font-semibold text-muted-foreground/80">Projects</span>
-            <SidebarHeaderActions onWorkspaceBoardMenuOpenChange={() => {}} />
-          </div>
-          <WorktreeList scrollOffsetRef={offset} scrollAnchorRef={anchor} />
-        </div>
+        <PopulatedSidebar />
       </ConfirmationDialogProvider>
     </DndContext>
   )
+})
+
+export const collapsed = defineFixture({
+  ...populated,
+  store: {
+    ...populated.store,
+    collapsedGroups: new Set([PROJECTS_SECTION_GROUP_KEY, 'sidebar:chats'])
+  }
+})
+
+export const projectCollapsed = defineFixture({
+  ...populated,
+  store: { ...populated.store, collapsedGroups: new Set([PROJECTS_SECTION_GROUP_KEY]) },
+  interact: async (frame) => {
+    const header = frame.querySelector<HTMLElement>(
+      '[data-sidebar-workspace-section="chats"] [aria-expanded="true"]'
+    )
+    header?.click()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
 })
 
 export const before = defineFixture({
@@ -136,10 +173,7 @@ export const before = defineFixture({
     <DndContext>
       <ConfirmationDialogProvider>
         <div className="flex h-[520px] flex-col bg-worktree-sidebar text-worktree-sidebar-foreground">
-          <div className="mt-2 flex h-8 shrink-0 items-center justify-between px-4">
-            <span className="text-xs font-semibold text-muted-foreground/80">Projects</span>
-            <SidebarHeaderActions onWorkspaceBoardMenuOpenChange={() => {}} />
-          </div>
+          <ProjectsHeader />
           <WorktreeList scrollOffsetRef={offset} scrollAnchorRef={anchor} />
         </div>
       </ConfirmationDialogProvider>

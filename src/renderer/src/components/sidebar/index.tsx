@@ -220,8 +220,9 @@ function Sidebar({
   )
   const botsShown = sidebarBody !== 'agents' && botsEnabled
   // Projects folds only when Bots is shown, so turning bots off always brings the list back.
+  const projectsCollapsible = botsShown || sidebarBody !== 'agents'
   const projectsCollapsed = useAppStore(
-    (s) => botsShown && s.collapsedGroups.has(PROJECTS_SECTION_GROUP_KEY)
+    (s) => projectsCollapsible && s.collapsedGroups.has(PROJECTS_SECTION_GROUP_KEY)
   )
   const sidebarRef = React.useCallback(
     (node: HTMLDivElement | null) => {
@@ -247,7 +248,8 @@ function Sidebar({
         activityBadgeTarget={setAgentBadgeTarget}
         onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
         activityOptionsTarget={setAgentOptionsTarget}
-        collapsible={botsShown}
+        collapsible={projectsCollapsible}
+        reorderable={botsShown}
         projectsCollapseTarget={setProjectsCollapseTarget}
       />
       <SeveredTerminalDaemonBanner />
@@ -294,6 +296,7 @@ function Sidebar({
           </SidebarProjectsListSlot>
           {projectsCollapsed ? null : <WslMovedProjectsSection />}
           {projectsCollapsed ? null : <HiddenProjectsSection />}
+          <ChatWorkspaceSection onWorktreeCardClick={closeWorkspaceBoard} />
         </>
       )}
     </React.Fragment>
@@ -328,9 +331,6 @@ function Sidebar({
               >
                 <SidebarContentViewport>
                   <SidebarNav />
-                  {sidebarBody !== 'agents' ? (
-                    <ChatWorkspaceSection onWorktreeCardClick={closeWorkspaceBoard} />
-                  ) : null}
                   {projectsFirst ? [projectsSection, botsSection] : [botsSection, projectsSection]}
                 </SidebarContentViewport>
                 <SidebarSectionDragOverlay sidebarStyle={leftSidebarStyle} />

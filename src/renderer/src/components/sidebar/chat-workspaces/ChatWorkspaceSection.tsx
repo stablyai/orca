@@ -26,7 +26,6 @@ export function ChatWorkspaceSection({
         actions={<NewChatWorkspaceMenu onBeforeCreate={onWorktreeCardClick} />}
         fold={{
           collapsed,
-          disabled: !hasChats,
           onToggle: () => toggle('sidebar:chats'),
           label: collapsed
             ? t('sidebar.chats.expand', 'Expand Chats')
@@ -34,7 +33,7 @@ export function ChatWorkspaceSection({
         }}
       />
       {hasChats && !collapsed ? (
-        <div className="flex max-h-64 min-h-24 flex-col">
+        <div className="flex max-h-64 min-h-0 flex-col">
           <WorktreeList
             workspaceSection="chats"
             onWorktreeCardClick={onWorktreeCardClick}

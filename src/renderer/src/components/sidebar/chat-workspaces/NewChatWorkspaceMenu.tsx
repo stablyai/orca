@@ -67,6 +67,7 @@ export function NewChatWorkspaceMenu({
               <Button
                 variant="ghost"
                 size="icon-xs"
+                type="button"
                 disabled={creating}
                 aria-label={label}
                 aria-busy={creating}
