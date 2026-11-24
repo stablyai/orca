@@ -75,6 +75,7 @@ export function snapshotCodexRuntimeSettingsBaseline(
               : runtimeConfig
           )
         : new Map(),
+      registrationsTracked: Boolean(options.mirroredRegistrations),
       mcpServers: options.mirroredMcpServers ?? new Set(),
       mcpServerRoot: options.mirroredMcpServerRoot ?? false
     })

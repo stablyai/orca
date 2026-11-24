@@ -201,6 +201,23 @@ describe('managed Codex config for a WSL distro config', () => {
     expect(readRuntimeConfig()).not.toContain('old@market')
   })
 
+  it('does not hold managed-copy plugins against a starter baseline', () => {
+    writeSystemConfig('')
+    wslTestState.wslPath = systemConfigPath()
+    simulateCodexSettingWrite('model', '"gpt-5"')
+    writeFileSync(
+      runtimeConfigPath(),
+      `${readRuntimeConfig()}\n[plugins."stale@market"]\nenabled = true\n`,
+      'utf-8'
+    )
+    syncSystemConfigIntoManagedCodexHome()
+    writeSystemConfig('model = "gpt-5"\n')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readRuntimeConfig()).not.toContain('stale@market')
+  })
+
   it('leaves an unchanged managed copy untouched on regeneration', () => {
     writeSystemConfig(
       'model = "gpt-5"\n\n[hooks.state."/home/u/.codex/hooks.json:stop:0:0"]\ntrusted_hash = "sha256:abc"\n\n[projects."/home/u/repo"]\ntrust_level = "trusted"\n'

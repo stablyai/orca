@@ -19,7 +19,7 @@ export type CodexSettingsBaseline = {
   conflicts: ReadonlyMap<string, CodexSettingsConflict>
   /** Absent registrations were never mirrored, so runtime-only tables count as additions. */
   registrations: ReadonlyMap<string, ReadonlyMap<string, string>>
-  /** Read-only: false for files from builds that may predate plugin tracking. */
+  /** False for bootstrap baselines and for files from builds that may predate plugin tracking. */
   registrationsTracked?: boolean
   /** MCP server names the last mirror copied from the canonical source. */
   mcpServers: ReadonlySet<string>
@@ -33,6 +33,7 @@ type StoredSettingsBaseline = {
   registrations?: Record<string, Record<string, string>>
   mcpServers?: string[]
   mcpServerRoot?: boolean
+  untrackedRegistrations?: boolean
 }
 
 /** Unreadable baselines stall the mirror; absent or invalid baselines can be rebuilt. */
@@ -86,7 +87,8 @@ function readParsedCodexSettingsBaseline(
       conflicts,
       registrations: readStoredRegistrations(parsed.registrations),
       // The always-written MCP list arrived after plugin tracking.
-      registrationsTracked: parsed.mcpServers !== undefined,
+      registrationsTracked:
+        parsed.mcpServers !== undefined && parsed.untrackedRegistrations !== true,
       mcpServers: readStoredMcpServers(parsed.mcpServers),
       // Older mirrors owned the whole MCP root; retain that removal policy for one pass.
       mcpServerRoot: parsed.mcpServers === undefined || parsed.mcpServerRoot === true
@@ -148,6 +150,9 @@ export function writeCodexSettingsBaseline(
   }
   if (baseline.mcpServerRoot) {
     file.mcpServerRoot = true
+  }
+  if (baseline.registrationsTracked === false) {
+    file.untrackedRegistrations = true
   }
   const baselinePath = getCodexSettingsBaselinePath(runtimeHomePath)
   const serialized = `${JSON.stringify(file, null, 2)}\n`
