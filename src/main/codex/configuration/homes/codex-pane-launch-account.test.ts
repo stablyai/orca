@@ -29,4 +29,12 @@ describe('pane launch account attribution', () => {
   it('falls back to the selection for a home no account owns', () => {
     expect(resolve('/homes/shared')).toMatchObject({ accountId: 'account-b' })
   })
+
+  it('names the default account when the child got no CODEX_HOME, even if A was selected', () => {
+    expect(resolve(null)).toMatchObject({ accountId: null, homeRoute: 'real-home' })
+  })
+
+  it('records an unowned shared home as such, so the restart cannot claim its account', () => {
+    expect(resolve('/homes/shared')).toMatchObject({ homeRoute: 'shared-home' })
+  })
 })

@@ -101,6 +101,10 @@ export function resolveCodexRestartOccupant(
   if (account.selectionKey !== 'host' || account.homeRoute === 'wsl-home') {
     return 'resume-unavailable'
   }
+  // A shared or unrecorded home names no account; the launch account cannot be proven.
+  if (account.homeRoute !== 'account-home' && account.homeRoute !== 'real-home') {
+    return 'resume-unavailable'
+  }
   const settings = deps.getSettings?.()
   if (
     !settings ||

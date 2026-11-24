@@ -16,6 +16,7 @@ type HoistedState = {
   fencedTerminationSupported: boolean
   rendererLive: boolean
   selectedAccount: string
+  homeRoute: string
   providerStartup: Promise<void> | undefined
 }
 
@@ -26,6 +27,7 @@ const h = vi.hoisted((): HoistedState => ({
   fencedTerminationSupported: true,
   rendererLive: true,
   selectedAccount: 'new',
+  homeRoute: 'account-home',
   providerStartup: undefined
 }))
 
@@ -94,7 +96,7 @@ vi.mock('../../../codex/configuration/homes/codex-pane-account-registry', () => 
   peekLoadedCodexPaneAccount: () => ({
     selectionKey: 'host',
     accountId: 'old',
-    homeRoute: 'account-home'
+    homeRoute: h.homeRoute
   })
 }))
 vi.mock('../../../codex-accounts/account-management/runtime-selection', () => ({
@@ -201,6 +203,7 @@ describe('account restart exits arriving out of order', () => {
     h.fencedTerminationSupported = true
     h.rendererLive = true
     h.selectedAccount = 'new'
+    h.homeRoute = 'account-home'
     h.providerStartup = undefined
   })
 
@@ -483,5 +486,15 @@ describe('account restart exits arriving out of order', () => {
       sendPtyExitToRenderer: t.sendPtyExitToRenderer
     })
     expect(t.sendPtyExitToRenderer).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a pane launched in an unowned shared home manual, with zero stops', async () => {
+    const t = setup()
+    h.homeRoute = 'shared-home'
+    await expect(t.request()).resolves.toMatchObject({
+      outcome: 'not-started',
+      reason: 'resume-unavailable'
+    })
+    expect(h.killFenced).not.toHaveBeenCalled()
   })
 })
