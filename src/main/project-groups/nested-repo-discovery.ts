@@ -12,9 +12,17 @@ import {
   normalizeNestedRepoScanOptions,
   readNestedRepoGitignoreRules,
   type NestedRepoDirectoryEntry,
+  type NestedRepoGitIdentity,
   type NestedRepoScanFilesystem,
   type TraversalFolder
 } from './nested-repo-scan-rules'
+import { resolveLocalGitCommonDir } from './nested-repo-git-common-dir'
+
+const GIT_IDENTITY_PRIORITY: Record<NestedRepoGitIdentity['kind'], number> = {
+  main: 3,
+  bare: 2,
+  linked: 1
+}
 
 async function probeGitMarkers(dirPath: string): Promise<{
   hasGitMarker: boolean
@@ -131,6 +139,7 @@ export async function scanNestedRepos(args: {
     joinPath: join,
     basename,
     hasGitMarker,
+    resolveGitCommonDir: resolveLocalGitCommonDir,
     isSelectedPathGitRepo: async (path: string) =>
       (await mayNeedGitDiscovery(path, args.signal)) &&
       !args.signal?.aborted &&
@@ -169,6 +178,7 @@ export async function scanNestedRepos(args: {
   const foldersToTraverse: (TraversalFolder | undefined)[] = [
     { path: args.path, depth: 0, segments: [], ignoreRules: [] }
   ]
+  const seenByCommonDir = new Map<string, { index: number; priority: number }>()
   let nextFolderIndex = 0
 
   while (nextFolderIndex < foldersToTraverse.length) {
@@ -240,11 +250,29 @@ export async function scanNestedRepos(args: {
         break
       }
       if (childHasGitMarker) {
-        repos.push({
+        const candidate: NestedRepoCandidate = {
           path: childPath,
           displayName: filesystem.basename(childPath),
           depth: currentFolder.depth + 1
-        })
+        }
+        const identity = await filesystem.resolveGitCommonDir?.(childPath)
+        if (noteAbort()) {
+          break
+        }
+        if (identity) {
+          const priority = GIT_IDENTITY_PRIORITY[identity.kind]
+          const existing = seenByCommonDir.get(identity.commonDir)
+          if (existing) {
+            if (priority > existing.priority) {
+              repos[existing.index] = candidate
+              existing.priority = priority
+              emitProgress()
+            }
+            continue
+          }
+          seenByCommonDir.set(identity.commonDir, { index: repos.length, priority })
+        }
+        repos.push(candidate)
         emitProgress()
         // Hide submodule-style descendants until the group UI supports selecting them.
         continue
