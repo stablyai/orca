@@ -24,6 +24,38 @@ async function loopbackPortAnswers(port: number): Promise<boolean> {
   )
 }
 
+const LISTENER_POLL_MS = 100
+
+/** Resolves once something accepts connections on 127.0.0.1:`port`; throws after `timeoutMs` or once
+ *  the forward closes. A system SSH forward reports started before OpenSSH has logged in and bound. */
+export async function waitForLoopbackListener(
+  port: number,
+  timeoutMs: number,
+  isOpen: () => boolean
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    if (!isOpen()) {
+      throw new Error(`Port forward on 127.0.0.1:${port} closed while starting`)
+    }
+    const answered = await assertPortNotShadowingListener(
+      '127.0.0.1',
+      port,
+      LOOPBACK_PROBE_TIMEOUT_MS
+    ).then(
+      () => false,
+      () => true
+    )
+    if (answered) {
+      return
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(`Port forward did not start listening on 127.0.0.1:${port}`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, LISTENER_POLL_MS))
+  }
+}
+
 type FreeLocalPortForward = {
   remotePort: number
   add: (localPort: number) => Promise<PortForwardEntry>
