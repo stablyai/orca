@@ -136,15 +136,21 @@ export class LinkedWorkerStates {
     const workers =
       missing.length > 0 ? await readWorkers(this.workRuntime, missing, lineageOf) : new Map()
     // A kept worker dropped while the walk ran (its rows written or deleted) is read again, not shown stale.
-    const dropped = hits.flatMap(([ref, kept]) => (this.kept.get(ref) === kept ? [] : [ref]))
-    if (dropped.length > 0) {
-      for (const [ref, worker] of await readWorkers(this.workRuntime, dropped, lineageOf)) {
-        workers.set(ref, worker)
+    // Until none is: each re-read awaits too, and a hit can be dropped only once.
+    const reread = new Set<string>()
+    for (;;) {
+      const dropped = hits.flatMap(([ref, kept]) =>
+        reread.has(ref) || this.kept.get(ref) === kept ? [] : [ref]
+      )
+      if (dropped.length === 0) {
+        break
       }
       for (const ref of dropped) {
-        if (!workers.has(ref)) {
-          states.delete(ref)
-        }
+        reread.add(ref)
+        states.delete(ref)
+      }
+      for (const [ref, worker] of await readWorkers(this.workRuntime, dropped, lineageOf)) {
+        workers.set(ref, worker)
       }
     }
     const reasons = readWorkerDockReasons(
