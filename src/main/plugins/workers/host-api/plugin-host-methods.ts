@@ -184,6 +184,12 @@ function summarizeParams(method: string, params: unknown): string {
       return `terminal=${String(record.terminalId)}`
     case 'workspace.create':
       return `project=${String(record.projectId)} agent=${String(record.agent ?? 'none')} promptChars=${textLength(record.prompt)} setup=${String(record.setup ?? 'default')} open=${record.open === true}`
+    case 'host.addSshTarget':
+      return `host=${String(record.host)} proxyCommand=${typeof record.proxyCommand === 'string'}`
+    case 'host.connect':
+      return `host=${String(record.hostId)}`
+    case 'project.add':
+      return `host=${String(record.hostId ?? 'local')} kind=${String(record.kind ?? 'git')}`
     case 'project.setHidden':
       return `project=${String(record.projectId)} host=${String(record.hostId ?? 'any')} hidden=${record.hidden === true}`
     case 'agent.resume':

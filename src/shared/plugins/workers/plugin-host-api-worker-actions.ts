@@ -6,14 +6,16 @@ import { PLUGIN_WORKSPACE_CREATE_API } from './plugin-host-api-workspace-create'
 import { PLUGIN_AUTOMATION_API } from './plugin-host-api-automation-methods'
 import { PLUGIN_AGENT_HISTORY_API } from './plugin-host-api-agent-history'
 import { PLUGIN_PROJECT_VISIBILITY_API } from './plugin-host-api-project-visibility'
+import { PLUGIN_HOSTS_API } from './plugin-host-api-hosts'
 
-/** Worker-only methods that act on Orca: its status bar, projects, workspaces, terminals, agents,
- *  agent session history and automations. Spread into PLUGIN_HOST_API. */
+/** Worker-only methods that act on Orca: its status bar, SSH hosts, projects, workspaces,
+ *  terminals, agents, agent session history and automations. Spread into PLUGIN_HOST_API. */
 export const PLUGIN_WORKER_ACTIONS_API = {
   ...PLUGIN_STATUS_BAR_API,
   ...PLUGIN_APPEARANCE_API,
   ...PLUGIN_WORKSPACE_ACTIONS_API,
   ...PLUGIN_PROJECT_VISIBILITY_API,
+  ...PLUGIN_HOSTS_API,
   ...PLUGIN_TERMINAL_ACTIONS_API,
   ...PLUGIN_WORKSPACE_CREATE_API,
   ...PLUGIN_AUTOMATION_API,

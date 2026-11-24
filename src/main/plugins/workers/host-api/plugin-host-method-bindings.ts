@@ -31,9 +31,11 @@ import { PLUGIN_WORKSPACE_CREATE_HANDLERS } from './plugin-host-workspace-create
 import { PLUGIN_AUTOMATION_HANDLERS } from './plugin-host-automation-bindings'
 import { PLUGIN_AGENT_HISTORY_HANDLERS } from './plugin-host-agent-history-bindings'
 import { PLUGIN_PROJECT_VISIBILITY_HANDLERS } from './plugin-host-project-visibility-binding'
+import { PLUGIN_HOSTS_HANDLERS } from './plugin-host-hosts-bindings'
 import {
   pluginHostRpc as rpc,
   pluginWorkspaceSelector as workspaceSelector,
+  type PluginEnvironmentRpc,
   type PluginRuntimeRpc
 } from './plugin-host-runtime-call'
 import type { PluginAppearanceService } from '../../appearance/plugin-appearance-service'
@@ -118,6 +120,8 @@ export type PluginHostServices = {
   statusBar?: PluginStatusBarServices | null
   /** The runtime methods the `orca` CLI calls, for workspace actions; absent without a runtime. */
   runtimeRpc?: PluginRuntimeRpc | null
+  /** Runtime methods on a paired Orca server, such as an SSH host's; absent where none is bound. */
+  environmentRpc?: PluginEnvironmentRpc | null
   /** Orca's window, for actions only it can take; absent in headless serve. */
   renderer?: PluginHostRendererActions | null
   /** Asks the person before the plugin acts; absent where nobody can be asked (headless serve).
@@ -275,6 +279,7 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
   ...PLUGIN_STATUS_BAR_HANDLERS,
   ...PLUGIN_WORKSPACE_ACTION_HANDLERS,
   ...PLUGIN_PROJECT_VISIBILITY_HANDLERS,
+  ...PLUGIN_HOSTS_HANDLERS,
   ...PLUGIN_TERMINAL_ACTION_HANDLERS,
   ...PLUGIN_WORKSPACE_CREATE_HANDLERS,
   ...PLUGIN_AUTOMATION_HANDLERS,

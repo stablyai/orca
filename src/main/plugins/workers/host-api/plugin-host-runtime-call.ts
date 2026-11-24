@@ -17,6 +17,16 @@ export type PluginRuntimeRpc = (
   }
 ) => Promise<unknown>
 
+/** A runtime RPC on a paired Orca server (an SSH host's server), answered as the runtime replies. */
+export type PluginEnvironmentRpc = (
+  environmentId: string,
+  method: string,
+  params: unknown,
+  options: { timeoutMs: number; signal?: AbortSignal }
+) => Promise<
+  { ok: true; result: unknown } | { ok: false; error: { code: string; message: string } }
+>
+
 type Failure = [PluginErrorCode, string]
 const NO_LIVE_TERMINAL: Failure = ['action_failed', 'no live terminal has this id']
 const NO_WINDOW: Failure = ['unavailable', "Orca's window is not available"]

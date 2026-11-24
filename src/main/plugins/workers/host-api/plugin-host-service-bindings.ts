@@ -2,7 +2,7 @@ import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../../../shared/plugins/work
 import type { PluginHostServices, PluginDesktopFrameServices } from './plugin-host-method-bindings'
 import type { PluginPanelBridgeServices } from './plugin-host-panel-method-bindings'
 import type { PluginStatusBarState } from '../../status-bar/plugin-status-bar-state'
-import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
+import type { PluginEnvironmentRpc, PluginRuntimeRpc } from './plugin-host-runtime-call'
 import type { PluginHostRendererActions } from '../../view/plugin-host-renderer-actions'
 import {
   pluginSettingValueIssue,
@@ -53,6 +53,8 @@ export type PluginRuntimeDelegate = {
   listAgentTaskTitles?(): ReadonlyMap<string, string>
   /** The runtime RPC the `orca` CLI calls, in process; absent where none is bound. */
   callRuntime?: PluginRuntimeRpc
+  /** Runtime methods on a paired Orca server; absent where none is bound. */
+  callEnvironment?: PluginEnvironmentRpc
 }
 
 export function bindPluginHostServices(input: {
@@ -82,6 +84,7 @@ export function bindPluginHostServices(input: {
       ? statusBarServices(input.statusBar, input.declaredStatusBarItemIds, input.statusBarRevision)
       : null,
     runtimeRpc: delegate.callRuntime ?? null,
+    environmentRpc: delegate.callEnvironment ?? null,
     renderer: input.renderer ?? null,
     resolveActiveWorktreeContext: async () => {
       const context = await delegate.resolveActiveWorktreeContext()
