@@ -22,7 +22,6 @@ import { worktreeRemovalLifetime } from '../workspaces/removal/worktree-removal-
 import { cancelHistoryGc } from '../pty/history/terminal-history-gc'
 import { fenceMainProcessCloudOnQuit } from '../startup/cloud-startup/main-process-connector-startup'
 import { ConnectorTurnEvents } from '../connector-cloud/connector-turn-events'
-import { BOT_SLACK_ICON_SHOWN_SETTLE_MS } from '../bots/bot-slack-icon-shown'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { flushUnsavedCloudSessions } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
 import { getWorkspaceCleanupRunner } from '../workspaces/cleanup/workspace-cleanup-runner-registry'
@@ -174,9 +173,8 @@ export function beginDesktopCoreShutdown(
   const connectorTurnEndsFlush = ConnectorTurnEvents.settled()
   const botMemoryHistoryFlush = runtime?.bots.memory.historySettled() ?? Promise.resolve()
   // Which Slack drawing each bot shows, unsaved after a failed write: one bounded last try.
-  const botSlackIconRecordsFlush = runtime
-    ? settleWithinMs(runtime.bots.slackIcons.shownRecords.settled(), BOT_SLACK_ICON_SHOWN_SETTLE_MS)
-    : Promise.resolve()
+  const botSlackIconRecordsFlush =
+    runtime?.bots.slackIcons.shownRecords.finalSave() ?? Promise.resolve()
   const browserJoins = native.retireBrowsers()
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
   const finalStore = profile.store

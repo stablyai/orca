@@ -271,12 +271,10 @@ export class BotAvatarSync {
         ? ({ ok: true } as const)
         : body && (await botsCloudClient(cloud).setAvatar(bot.id, body))
       sent = result?.ok === true
-      // Marked only if the account didn't switch during the send: which one took it is unknown then.
-      if (
-        sent &&
-        !left &&
-        account === BotSlackIconShownRecords.accountKey(cloud.signedInAccount?.())
-      ) {
+      // Marked unless another account signed in during the send: which one took it is unknown then. A
+      // sign-out or quit's fence (no account now) leaves the account the send went as.
+      const now = BotSlackIconShownRecords.accountKey(cloud.signedInAccount?.())
+      if (sent && !left && (now === null || now === account)) {
         this.shown.mark(
           bot.id,
           carried && parsed.kind === 'mascot' ? { account, mascot: parsed.id } : null

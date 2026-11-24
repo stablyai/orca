@@ -3,8 +3,6 @@ import { installConnectorHost } from '../connector-cloud/connector-host-install'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { BackendServiceCleanup } from '../backend/service-composition'
-import { BOT_SLACK_ICON_SHOWN_SETTLE_MS } from '../bots/bot-slack-icon-shown'
-import { settleWithinMs } from '../startup/quit/quit-teardown-deadline'
 
 /** orcad's connector, as its own Orca account and install id; installed before RPC admits a sign-in. */
 export function installOrcadConnector(
@@ -29,10 +27,7 @@ export function installOrcadConnector(
         runtime.getConnectorCloud()?.fence()
         host.stop()
         // Records of which Slack drawing each bot shows get one bounded last try before exit.
-        await settleWithinMs(
-          runtime.bots.slackIcons.shownRecords.settled(),
-          BOT_SLACK_ICON_SHOWN_SETTLE_MS
-        )
+        await runtime.bots.slackIcons.shownRecords.finalSave()
       })
       runtime.getConnectorCloud()?.connect()
     }

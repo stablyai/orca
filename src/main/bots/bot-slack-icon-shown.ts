@@ -35,6 +35,7 @@ export class BotSlackIconShownRecords {
   // Bots already tried on an answer since their last step: they wait for a real step or quit.
   private readonly spent = new Set<string>()
   private running: Promise<void> | null = null
+  private final: Promise<void> | null = null
   // The bot being saved, so its deletion removes its files only after that save lands.
   private saving: { botId: string; done: Promise<void> } | null = null
 
@@ -113,6 +114,20 @@ export class BotSlackIconShownRecords {
     return this.running ?? Promise.resolve()
   }
 
+  /** The last save before quit, relaunch or a host's stop: shared by every caller, so a stuck disk costs
+   *  one wait of at most `BOT_SLACK_ICON_SHOWN_SETTLE_MS` however many of them ask. */
+  finalSave(): Promise<void> {
+    this.final ??= new Promise<void>((resolve) => {
+      const deadline = setTimeout(resolve, BOT_SLACK_ICON_SHOWN_SETTLE_MS)
+      deadline.unref?.()
+      void this.settled().finally(() => {
+        clearTimeout(deadline)
+        resolve()
+      })
+    })
+    return this.final
+  }
+
   /** A deleted bot keeps nothing here; settles once a save of it already on its way has landed. */
   forget(botId: string): Promise<void> {
     this.byBot.delete(botId)
@@ -124,37 +139,42 @@ export class BotSlackIconShownRecords {
   }
 
   private wake(): void {
-    this.running ??= this.drain().finally(() => {
-      this.running = null
-    })
+    this.running ??= this.drain()
   }
 
   // One save at a time, each of the bot's latest record; a bot asked for again while due goes once.
   private async drain(): Promise<void> {
-    for (let botId = firstOf(this.due); botId !== undefined; botId = firstOf(this.due)) {
-      this.due.delete(botId)
-      const revision = this.unsaved.get(botId)
-      const shown = this.byBot.get(botId)
-      if (revision === undefined || shown === undefined) {
-        continue
-      }
-      const done = this.disk.write(botId, shown).then(
-        () => {
-          // A newer record marked meanwhile is due on its own.
-          if (this.unsaved.get(botId) === revision) {
-            this.unsaved.delete(botId)
-            this.spent.delete(botId)
-          }
-        },
-        () => {
-          if (this.unsaved.get(botId) === revision && !this.spent.has(botId)) {
-            this.answerable.add(botId)
-          }
+    // Begins after the caller's turn, so `running` is set before it can clear it.
+    await Promise.resolve()
+    try {
+      for (let botId = firstOf(this.due); botId !== undefined; botId = firstOf(this.due)) {
+        this.due.delete(botId)
+        const revision = this.unsaved.get(botId)
+        const shown = this.byBot.get(botId)
+        if (revision === undefined || shown === undefined) {
+          continue
         }
-      )
-      this.saving = { botId, done }
-      await done
-      this.saving = null
+        const done = this.disk.write(botId, shown).then(
+          () => {
+            // A newer record marked meanwhile is due on its own.
+            if (this.unsaved.get(botId) === revision) {
+              this.unsaved.delete(botId)
+              this.spent.delete(botId)
+            }
+          },
+          () => {
+            if (this.unsaved.get(botId) === revision && !this.spent.has(botId)) {
+              this.answerable.add(botId)
+            }
+          }
+        )
+        this.saving = { botId, done }
+        await done
+        this.saving = null
+      }
+    } finally {
+      // In the same turn as the last check for due work, so a mark right after starts a new writer.
+      this.running = null
     }
   }
 }

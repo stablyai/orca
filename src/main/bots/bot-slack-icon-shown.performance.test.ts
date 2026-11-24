@@ -1,7 +1,7 @@
 // Guards PR #47381: each /poll answer may retry failed shown.json saves; a lasting failure, a stuck write,
 // and bursts of marks, answers and steps must keep disk attempts and held work bounded by the bots, not by
 // the poll's answers.
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { BotSlackIconShownRecords } from './bot-slack-icon-shown'
 
 const idle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
@@ -64,4 +64,72 @@ it('writes each bot at most twice after a stuck write, however long the burst be
   expect(await savesAfterStuckBurst(10, 10)).toBeLessThanOrEqual(20)
   expect(await savesAfterStuckBurst(10, 100)).toBeLessThanOrEqual(20)
   expect(await savesAfterStuckBurst(100, 100)).toBeLessThanOrEqual(200)
+})
+
+// Records visited by poll answers once every failed record has had its answer retry: none, at any count.
+async function visitsOnSpentAnswers(bots: number, answers: number): Promise<number> {
+  const records = new BotSlackIconShownRecords({
+    read: async () => null,
+    write: async () => {
+      throw new Error('disk full')
+    },
+    exists: () => true
+  })
+  for (let bot = 0; bot < bots; bot += 1) {
+    records.mark(`bot-${bot}`, { account: 'a1b2', mascot: 'G1' })
+  }
+  await idle()
+  records.answered()
+  await idle()
+  // Any walk over a set or map (spread, for-of, keys, values, forEach) on the answers counts.
+  const walks = [Set.prototype, Map.prototype].flatMap((prototype) =>
+    (['keys', 'values', 'entries', 'forEach', Symbol.iterator] as const).map((method) =>
+      vi.spyOn(prototype, method)
+    )
+  )
+  const count = (): number => walks.reduce((total, walk) => total + walk.mock.calls.length, 0)
+  try {
+    // Installing the spies walks a few collections itself.
+    const before = count()
+    for (let answer = 0; answer < answers; answer += 1) {
+      records.answered()
+    }
+    return count() - before
+  } finally {
+    walks.forEach((walk) => walk.mockRestore())
+  }
+}
+
+it('visits no record on poll answers once retries are spent', async () => {
+  expect(await visitsOnSpentAnswers(10, 10)).toBe(0)
+  expect(await visitsOnSpentAnswers(100, 1000)).toBe(0)
+})
+
+// Distinct writer promises over rounds of slow failing saves with a real step during each.
+async function writersAcrossSteppedRounds(rounds: number): Promise<number> {
+  const writers = new Set<Promise<void>>()
+  let left = rounds
+  const records = new BotSlackIconShownRecords({
+    read: async () => null,
+    write: async () => {
+      await idle()
+      if (left-- > 0) {
+        writers.add(records.settled())
+      }
+      throw new Error('disk full')
+    },
+    exists: () => true
+  })
+  records.mark('bot-1', { account: 'a1b2', mascot: 'G1' })
+  writers.add(records.settled())
+  while (left > 0) {
+    await idle()
+  }
+  await records.settled()
+  return writers.size
+}
+
+it('keeps one writer however many real steps arrive during slow failing saves', async () => {
+  expect(await writersAcrossSteppedRounds(10)).toBe(1)
+  expect(await writersAcrossSteppedRounds(100)).toBe(1)
 })

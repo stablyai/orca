@@ -2,11 +2,15 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import type { Bot } from '../../shared/bot-types'
 import { localBotHomeFilesystem } from './bot-home'
 import { BotSlackIcons } from './bot-slack-icon-store'
-import { type BotSlackIconShown, BotSlackIconShownRecords } from './bot-slack-icon-shown'
+import {
+  BOT_SLACK_ICON_SHOWN_SETTLE_MS,
+  type BotSlackIconShown,
+  BotSlackIconShownRecords
+} from './bot-slack-icon-shown'
 
 type Disk = {
   records: BotSlackIconShownRecords
@@ -156,5 +160,46 @@ it('never brings back a deleted bot folder through a record save already on its 
     ).toBe(false)
   } finally {
     await rm(root, { recursive: true, force: true })
+  }
+})
+
+it('saves a record marked in any turn while the writer is finishing', async () => {
+  for (let depth = 0; depth < 12; depth += 1) {
+    const onDisk = new Map<string, BotSlackIconShown | null>()
+    const records: BotSlackIconShownRecords = new BotSlackIconShownRecords({
+      read: async () => null,
+      write: async (botId, shown) => {
+        onDisk.set(botId, shown)
+        if (botId === 'bot-1') {
+          // Another upload's mark, `depth` turns after this last save lands.
+          let later = Promise.resolve()
+          for (let turn = 0; turn < depth; turn += 1) {
+            later = later.then(() => undefined)
+          }
+          void later.then(() => records.mark('bot-2', G2))
+        }
+      },
+      exists: () => true
+    })
+    records.mark('bot-1', G1)
+    await idle()
+    expect(onDisk.get('bot-2')).toEqual(G2)
+  }
+})
+
+it('waits for a stuck disk once at quit, however many shutdown paths ask', async () => {
+  vi.useFakeTimers()
+  try {
+    const { records, hold } = disk()
+    hold()
+    records.mark('bot-1', G1)
+    let done = 0
+    void records.finalSave().then(() => (done += 1))
+    await vi.advanceTimersByTimeAsync(BOT_SLACK_ICON_SHOWN_SETTLE_MS / 2)
+    void records.finalSave().then(() => (done += 1))
+    await vi.advanceTimersByTimeAsync(BOT_SLACK_ICON_SHOWN_SETTLE_MS / 2)
+    expect(done).toBe(2)
+  } finally {
+    vi.useRealTimers()
   }
 })

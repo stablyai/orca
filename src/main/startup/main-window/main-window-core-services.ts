@@ -4,8 +4,6 @@ import { attachMainWindowServices } from '../../window/attach-main-window-servic
 import { initTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
 import { resolveUpdateInstallMode } from '../../updater/updater-service'
 import { fenceMainProcessCloudOnQuit } from '../cloud-startup/main-process-connector-startup'
-import { BOT_SLACK_ICON_SHOWN_SETTLE_MS } from '../../bots/bot-slack-icon-shown'
-import { settleWithinMs } from '../quit/quit-teardown-deadline'
 import { mainProcessState as state } from '../main-process-state'
 import { prepareCodexAiVaultSessionResume } from '../../codex/history/resume/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../../codex/history/rollouts/codex-session-source-home'
@@ -109,10 +107,9 @@ async function installMainWindowCoreServices(
       onBeforeRelaunch: async () => {
         state.isQuitting = true
         fenceMainProcessCloudOnQuit()
-        const shown = state.core.runtime?.bots.slackIcons.shownRecords.settled()
         await Promise.all([
           preserveAgentAuthBeforeRestart({ codexRuntimeHome, store }),
-          shown && settleWithinMs(shown, BOT_SLACK_ICON_SHOWN_SETTLE_MS)
+          state.core.runtime?.bots.slackIcons.shownRecords.finalSave()
         ])
       },
       orcaAccount,
