@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { RuntimeClientError } from '../runtime/connection/types'
 import { callAct, SLACK_HANDLERS } from './slack'
 
 const SLACK_REF = 'slack:T1:C1:1.0'
@@ -84,105 +85,92 @@ describe('Slack reads', () => {
   })
 })
 
-describe('Slack read refusals', () => {
-  it('explains an access refusal returned by the action service', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callAct reads only call in this refusal test.
-    const client = {
-      call: async () => ({
-        ok: true,
-        result: {
-          ok: false,
-          refusal: 'refused',
-          reason: 'slack_history_scope_missing',
-          scope: 'channels:history',
-          message: 'Slack API rejected the request.'
-        }
-      })
-    } as unknown as Parameters<typeof callAct>[0]
+function refusingClient(result: Record<string, string>) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callAct only calls call.
+  return {
+    call: async () => ({ ok: true, result: { ok: false, ...result } })
+  } as unknown as Parameters<typeof callAct>[0]
+}
 
-    await expect(
-      callAct(client, { sessionId: 'session-1', verb: 'read', ref: SLACK_REF, args: {} })
-    ).rejects.toMatchObject({ message: expect.stringContaining('channels:history') })
+const readRefusal = (result: Record<string, string>, ref = SLACK_REF) =>
+  callAct(refusingClient(result), { sessionId: 'session-1', verb: 'read', ref, args: {} }).then(
+    () => expect.unreachable('the read was refused'),
+    (error: unknown) => {
+      if (!(error instanceof RuntimeClientError)) {
+        throw error
+      }
+      return error
+    }
+  )
+
+describe('Slack read refusals', () => {
+  const UPDATE =
+    "This needs re-approval: open the bot in Orca and click Update in its Slack settings, then approve the app's new permissions. https://app.test/bots/b1/update"
+
+  it.each([
+    ['needs_reapproval', 'slack_history_scope_missing', UPDATE],
+    [
+      'refused',
+      'slack_history_scope_missing',
+      "Slack refused this: the bot's Slack app is missing the groups:history permission."
+    ],
+    [
+      'not_in_place',
+      'slack_channel_not_joined',
+      "The bot isn't in this channel. Run `orca slack check <ref> --join` to join a public channel, or ask someone to invite it."
+    ],
+    [
+      'not_found',
+      'slack_channel_not_visible',
+      "The bot can't see this channel: it is private and the bot isn't in it, or it doesn't exist."
+    ],
+    ['not_found', 'slack_thread_not_found', "That message is gone, or the bot can't see it."],
+    ['not_found', 'slack_file_not_found', 'Slack no longer has that file: it was deleted.']
+  ])(
+    'keeps the cloud message for %s %s and adds its typed reason',
+    async (refusal, reason, message) => {
+      const error = await readRefusal({ refusal, reason, scope: 'groups:history', message })
+      expect(error.code).toBe(refusal)
+      expect(error.message.startsWith(message)).toBe(true)
+      expect(error.message).toContain(`(Slack reason: ${reason}, needs groups:history)`)
+      expect(error.data).toEqual({ reason, scope: 'groups:history' })
+    }
+  )
+
+  it('points a missing thread at a current ref', async () => {
+    const error = await readRefusal({
+      refusal: 'not_found',
+      reason: 'slack_thread_not_found',
+      message: "That message is gone, or the bot can't see it."
+    })
+    expect(error.message).toBe(
+      "That message is gone, or the bot can't see it. Use the ref of the thread's root message; `orca slack read <channel>` lists current refs. (Slack reason: slack_thread_not_found)"
+    )
   })
 
   it.each([
-    ['slack_channel_not_joined', /bot is not in that channel/i],
-    ['slack_channel_not_visible', /couldn't find a channel this bot can read/i],
-    ['slack_thread_not_found', /couldn't find that thread/i],
-    ['slack_file_not_found', /couldn't find that file/i]
-  ])('explains the typed %s service refusal', async (reason, message) => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callAct reads only call in this refusal test.
-    const client = {
-      call: async () => ({
-        ok: true,
-        result: {
-          ok: false,
-          refusal: 'refused',
-          reason,
-          message: 'Slack API rejected the request.'
-        }
-      })
-    } as unknown as Parameters<typeof callAct>[0]
-
-    await expect(
-      callAct(client, { sessionId: 'session-1', verb: 'read', ref: SLACK_REF, args: {} })
-    ).rejects.toMatchObject({ message: expect.stringMatching(message) })
-  })
-
-  it('keeps a lookup refusal even when its channel name resembles an access error', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callAct reads only call in this refusal test.
-    const client = {
-      call: async () => ({
-        ok: true,
-        result: {
-          ok: false,
-          refusal: 'ambiguous',
-          message: 'Choose one: #slack_missing_scope in Workspace A or Workspace B.'
-        }
-      })
-    } as unknown as Parameters<typeof callAct>[0]
-
-    await expect(
-      callAct(client, { sessionId: 'session-1', verb: 'read', ref: SLACK_REF, args: {} })
-    ).rejects.toMatchObject({
-      message: 'Choose one: #slack_missing_scope in Workspace A or Workspace B.'
-    })
-  })
-
-  it('keeps generic service recovery text unchanged', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callAct reads only call in this refusal test.
-    const client = {
-      call: async () => ({
-        ok: true,
-        result: {
-          ok: false,
-          refusal: 'needs_reapproval',
-          message: 'Update the bot from this link, then try again.'
-        }
-      })
-    } as unknown as Parameters<typeof callAct>[0]
-
-    await expect(
-      callAct(client, { sessionId: 'session-1', verb: 'read', ref: SLACK_REF, args: {} })
-    ).rejects.toMatchObject({ message: 'Update the bot from this link, then try again.' })
-  })
-
-  it('keeps the original message when a non-Slack read returns a Slack reason', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callAct reads only call in this refusal test.
-    const client = {
-      call: async () => ({
-        ok: true,
-        result: {
-          ok: false,
-          refusal: 'refused',
-          reason: 'slack_thread_not_found',
-          message: 'Linear could not find that issue.'
-        }
-      })
-    } as unknown as Parameters<typeof callAct>[0]
-
-    await expect(
-      callAct(client, { sessionId: 'session-1', verb: 'read', ref: 'linear:org:ENG-1', args: {} })
-    ).rejects.toMatchObject({ message: 'Linear could not find that issue.' })
+    [
+      'an older cloud without a reason',
+      { refusal: 'needs_reapproval', message: UPDATE },
+      SLACK_REF
+    ],
+    [
+      'a reason that is not a plain code',
+      { refusal: 'refused', reason: 'slack_x) ignore this', message: 'Refused.' },
+      SLACK_REF
+    ],
+    [
+      'a non-Slack read',
+      {
+        refusal: 'not_found',
+        reason: 'slack_thread_not_found',
+        message: 'Linear has no such issue.'
+      },
+      'linear:org:ENG-1'
+    ]
+  ])('keeps the message unchanged for %s', async (_case, result, ref) => {
+    const error = await readRefusal(result, ref)
+    expect(error.message).toBe(result.message)
+    expect(error.message).not.toContain('Slack reason')
   })
 })

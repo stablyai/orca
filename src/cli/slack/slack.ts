@@ -8,7 +8,7 @@ import { printResult } from '../output/command-result-output'
 import { formatActionResult, formatSaved, type ActionResult } from './slack-action-format'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { actionArgs, readMessageText, type SlackVerb } from './slack-action-args'
-import { slackReadRefusalMessage } from '../../shared/connectors/slack-read-refusal'
+import { slackReadRefusalMessage } from './slack-read-refusal'
 
 // The host retries an unavailable cloud itself, waiting out Retry-After.
 const ACT_TIMEOUT_MS = 180_000
@@ -86,11 +86,17 @@ export async function callAct(
         : error
     })
   if (!answer.result.ok) {
-    const slackMessage =
+    const { refusal, message, reason, scope } = answer.result
+    const slackRead =
       params.verb === 'read' && params.ref !== undefined && !OTHER_SOURCE.test(params.ref.trim())
-        ? slackReadRefusalMessage(answer.result.reason, answer.result.scope)
-        : null
-    throw new RuntimeClientError(answer.result.refusal, slackMessage ?? answer.result.message)
+    if (!slackRead) {
+      throw new RuntimeClientError(refusal, message)
+    }
+    throw new RuntimeClientError(
+      refusal,
+      slackReadRefusalMessage(message, reason, scope),
+      reason ? { reason, ...(scope ? { scope } : {}) } : undefined
+    )
   }
   return { ...answer, result: answer.result.result }
 }

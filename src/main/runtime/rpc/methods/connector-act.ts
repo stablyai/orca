@@ -27,7 +27,6 @@ import {
   serverSignInSteps,
   type OrcaSignInServer
 } from '../../../../shared/bots/host-orca-sign-in'
-import { slackReadRefusalMessage } from '../../../../shared/connectors/slack-read-refusal'
 
 /** A refusal whose code the CLI reads and whose message a bot can act on. */
 export class ConnectorActError extends Error {
@@ -100,12 +99,6 @@ export function actFailure(
       'bot_not_in_cloud',
       "This bot isn't on Orca Cloud from this machine yet: connect it to Slack, Linear or GitHub, or wait a moment after connecting it."
     )
-  }
-  const slackRead =
-    verb === 'read' && actionGoesToSlack({ verb, ref, title: undefined, conversation: null })
-  const slackMessage = slackRead ? slackReadRefusalMessage(failure.error) : null
-  if (slackMessage) {
-    return new ConnectorActError('connector_refused', slackMessage)
   }
   const reason = failure.error ?? `HTTP ${failure.status}`
   return failure.status === 400
