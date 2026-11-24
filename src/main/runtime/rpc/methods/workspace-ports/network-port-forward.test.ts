@@ -26,6 +26,7 @@ const request = {
 
 describe('network.portForward', () => {
   it('dials only the host’s own loopback, whatever the client names', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the guard only passes the returned socket through; this test never uses it.
     const connect = vi.fn(() => ({}) as never)
     for (const host of [
       '10.0.0.5',

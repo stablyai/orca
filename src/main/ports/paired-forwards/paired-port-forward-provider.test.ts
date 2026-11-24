@@ -1,4 +1,4 @@
-import { connect, type AddressInfo } from 'node:net'
+import { connect } from 'node:net'
 import { Duplex, PassThrough } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import { browserTunnelTargetBlockReason } from '../../browser/network/tunnels/browser-network-tunnel-destination-policy'
@@ -123,7 +123,7 @@ describe('PairedPortForwardProvider', () => {
         await expect(
           new Promise((resolve, reject) => {
             const socket = connect({ host: external.address, port: forward.entry.localPort })
-            socket.once('connect', () => resolve((socket.address() as AddressInfo).address))
+            socket.once('connect', () => resolve('connected'))
             socket.once('error', reject)
           })
         ).rejects.toMatchObject({ code: 'ECONNREFUSED' })

@@ -8,6 +8,7 @@ import { NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY } from '../../../../shared/remo
 import { isLoopbackBrowserUrl } from '../../../../shared/browser/navigation/loopback-browser-url'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { forwardedUrlForRemoteUrl } from './workspace-port-urls'
+import { openSystemHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import {
   serverForwardsPorts,
   serverSshForwardTargetId,
@@ -22,7 +23,7 @@ export function portSystemBrowserOpener(
   worktreeId: string | null
 ): (() => Promise<void>) | null {
   if (target.kind === 'local') {
-    return () => window.api.shell.openUrl(url)
+    return () => openSystemHttpLink(url)
   }
   // A paired server's localhost reaches the system browser only through a forward of its port.
   return serverForwardsPorts(target.environmentId) &&
@@ -69,7 +70,7 @@ export async function openServerLoopbackInSystemBrowser(
     state.portForwardsByConnection[sshTargetId ?? environmentId] ?? []
   )
   if (known) {
-    await window.api.shell.openUrl(known)
+    await openSystemHttpLink(known)
     return
   }
   if (sshTargetId) {
@@ -119,7 +120,7 @@ export async function openServerLoopbackInSystemBrowser(
     )
     return
   }
-  await window.api.shell.openUrl(target)
+  await openSystemHttpLink(target)
   if (created) {
     toast.success(
       translate(
