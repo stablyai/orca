@@ -83,14 +83,14 @@ export function ManagedRuntimeInstallRow(props: {
     const spoken = view.spokenStatus === null ? null : said(view.spokenStatus, !trailing)
     // A status like "Installed by Orca · 1.5.0" splits into parts, so it wraps at its dot like the rest.
     const [first, ...rest] = spoken === null ? status.split(' · ') : [status]
-    const truncate = cn('min-w-0', !wraps && 'truncate')
+    const statusClass = cn('min-w-0', view.count && 'wrap-anywhere', !wraps && 'truncate')
     parts.push({
       key: 'status',
       fixed: false,
       node: (
         <span className="flex min-w-0 items-center gap-1.5">
           {view.busy ? <LoadingSpinner className="size-3" /> : null}
-          <span className={truncate} title={spoken ?? status}>
+          <span className={statusClass} title={spoken ?? status}>
             {spoken === null ? (
               first
             ) : (
@@ -107,7 +107,7 @@ export function ManagedRuntimeInstallRow(props: {
       parts.push({
         key: `status-${index}`,
         fixed: false,
-        node: <span className={truncate}>{segment}</span>
+        node: <span className={statusClass}>{segment}</span>
       })
     )
   }
