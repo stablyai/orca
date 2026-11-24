@@ -9,7 +9,7 @@ import { yieldToEventLoop } from '../../../shared/concurrency/event-loop-yield'
 import { RetainedRunReconciler } from './retained-run-reconciliation'
 
 export type AutomationRunCompletionObservation = {
-  status: 'completed' | 'dispatch_failed'
+  status: 'completed' | 'dispatch_failed' | 'skipped_needs_interactive_auth'
   outputSnapshot?: AutomationRunOutputSnapshot | null
   error?: string | null
 } & AutomationRunFailureCodeFields

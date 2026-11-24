@@ -184,6 +184,11 @@ async function waitForAgentStart(
 
 export const AGENT_HOOKS_REVIEW_BLOCKED_ERROR = AUTOMATION_RUN_FAILURE_COPY.hooksReviewBlocked
 
+/** The one blocked screen only a person can clear, so the run is a skip rather than a failure. */
+function isSignInBlock(blockedReason: string): boolean {
+  return blockedReason.endsWith('-sign-in-prompt')
+}
+
 function describeBlockedAgent(blockedReason: string): AutomationRunFailure {
   return blockedReason === 'agent-hooks-review-prompt'
     ? automationRunFailure('hooksReviewBlocked')
@@ -214,7 +219,12 @@ async function buildObservation(
     return { status: 'completed', outputSnapshot, error: null }
   }
   return {
-    status: 'dispatch_failed',
+    // A signed-out agent stays blocked until someone signs in, so the run ends as the skip the
+    // history and the run page already explain, instead of a failure nobody can retry past.
+    status:
+      wait.blockedReason && isSignInBlock(wait.blockedReason)
+        ? 'skipped_needs_interactive_auth'
+        : 'dispatch_failed',
     outputSnapshot,
     ...(wait.blockedReason
       ? describeBlockedAgent(wait.blockedReason)
