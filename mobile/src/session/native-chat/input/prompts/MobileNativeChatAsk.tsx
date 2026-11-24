@@ -40,14 +40,14 @@ type Props = {
   // Use option indices so Claude’s selector can navigate without pasting labels.
   onAnswer: (selections: AskAnswerSelection[], onCreated?: (id: string) => void) => Promise<boolean>
   onCancel?: () => Promise<boolean>
-  /** The footer's Not now, named for what `onCancel` does there. */
+  /** The footer's Cancel, named for what `onCancel` does there. */
   cancelLabel?: string
   // Collapse writes nothing to the agent.
   onCollapse?: () => void
   /** Per question; structured prompts hide "Other…" where the provider takes no free text. */
   allowOther?: readonly boolean[]
   freeTextInputs?: readonly (AgentJournalFreeTextInput | undefined)[]
-  /** Why the last answer didn't go, in the footer between Not now and Send. */
+  /** Why the last answer didn't go, in the footer between Cancel and Send. */
   notice?: string | null
   /** Each question's identity: when the prompt drops one (answered elsewhere), the rest keep their picks. */
   questionKeys?: readonly string[]
@@ -261,7 +261,7 @@ export function MobileNativeChatAsk({
       onCollapse()
     })
 
-  // Send and Return only move on: leaving is Not now's, so an empty Return never cancels.
+  // Send and Return only move on: leaving is Cancel's, so an empty Return never cancels.
   const confirm = (): void => {
     if (askConfirmAction({ isLast, anyAnswered: anyAnswered(), waitsForAnswer }) === 'proceed') {
       void advance()
@@ -387,7 +387,11 @@ export function MobileNativeChatAsk({
       <View style={styles.footer}>
         {onCancel || collapse ? (
           <MobilePendingButton
-            label={cancelLabel ?? t('chat.ask.notNow', 'Not now')}
+            // Cancel declines the question; with nothing to cancel the card only folds, for later.
+            label={
+              cancelLabel ??
+              (onCancel ? t('common.cancel', 'Cancel') : t('chat.ask.notNow', 'Not now'))
+            }
             pending={cancelBusy}
             disabled={sending}
             onPress={() => (onCancel ? void cancel('cancel') : collapse?.())}
