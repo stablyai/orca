@@ -18,6 +18,7 @@ import type {
   WorkspaceCopyRemovalResult
 } from '../../shared/perforce/workspace-copy/workspace-copy-types'
 import { isFolderRepo, isPerforceRepo } from '../../shared/repository/repo-kind'
+import { PERFORCE_REPO_ICON } from '../../shared/repository/appearance/perforce-repo-icon'
 import type { Repo } from '../../shared/repository/repo-types'
 import { invalidateAuthorizedRootsCache } from '../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { resolveWorkspaceCopyBackend } from '../perforce/perforce-copy-backend'
@@ -156,14 +157,18 @@ export class RuntimePerforceCopyCommands {
 
   // Never unmarks: a server that does not answer is no evidence the folder stopped being a workspace.
   private async detectProject(repo: Repo, hostId: ExecutionHostId): Promise<boolean> {
-    if (isPerforceRepo(repo)) {
+    const marked = isPerforceRepo(repo)
+    if (marked && repo.repoIcon) {
       return true
     }
-    const detected = await perforceBackendForHost(hostId).detect(repo.path)
-    if (!detected.isWorkspace) {
+    if (!marked && !(await perforceBackendForHost(hostId).detect(repo.path)).isWorkspace) {
       return false
     }
-    this.host.getStore().updateRepo(repo, { vcs: 'perforce' })
+    // Why: a Perforce project without an icon gets the Perforce mark, as a GitHub one gets its avatar.
+    this.host.getStore().updateRepo(repo, {
+      vcs: 'perforce',
+      ...(repo.repoIcon ? {} : { repoIcon: PERFORCE_REPO_ICON })
+    })
     this.host.reposChanged()
     return true
   }

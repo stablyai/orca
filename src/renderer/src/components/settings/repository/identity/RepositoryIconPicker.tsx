@@ -3,6 +3,8 @@ import { toast } from 'sonner'
 import { RotateCcw } from 'lucide-react'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { RepoIcon } from '../../../../../../shared/repository/appearance/repo-icon'
+import { PERFORCE_REPO_ICON } from '../../../../../../shared/repository/appearance/perforce-repo-icon'
+import { isPerforceRepo } from '../../../../../../shared/repository/repo-kind'
 import {
   DEFAULT_REPO_BADGE_COLOR,
   normalizeRepoBadgeColor
@@ -124,6 +126,10 @@ export function RepositoryIconPicker({
   }
 
   const handleResetToDefault = async () => {
+    if (isPerforceRepo(repo)) {
+      setIcon(PERFORCE_REPO_ICON)
+      return
+    }
     setResetting(true)
     try {
       const resolution = await resolveGitHubAvatar({ forceLive: true }).catch(() => null)

@@ -144,7 +144,9 @@ describe('RuntimePerforceCopyCommands', () => {
 
   it('never unmarks a Perforce project when p4 does not answer', async () => {
     detectedWorkspace = false
-    const { commands, store } = makeCommands(makeRepo({ vcs: 'perforce' }))
+    const { commands, store } = makeCommands(
+      makeRepo({ vcs: 'perforce', repoIcon: { type: 'lucide', name: 'Folder' } })
+    )
     await expect(commands.runPerforceCopyOperation('id:repo-1', 'detectProject', {})).resolves.toBe(
       true
     )

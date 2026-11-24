@@ -25572,6 +25572,7 @@
   "perforce": {
     "ui": {
       "changelistNumber": "Changelist {{id}}",
+      "repoIcon": "Perforce",
       "editDescription": "Edit description",
       "shelveFiles": "Shelve files",
       "unshelveFiles": "Unshelve files",

@@ -21,12 +21,18 @@ import {
   Sparkles,
   SquareTerminal,
   Wrench,
+  createLucideIcon,
   type LucideIcon
 } from 'lucide-react'
 import type { RepoIcon } from '../../../../shared/repository/appearance/repo-icon'
+import { PERFORCE_MARK_PATH } from '../../../../shared/repository/appearance/perforce-repo-icon'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+
+const PerforceMark = createLucideIcon('Perforce', [
+  ['path', { d: PERFORCE_MARK_PATH, fill: 'currentColor', stroke: 'none', key: 'mark' }]
+])
 
 export const getRepoLucideIconOptions = createLocalizedCatalog(() => [
   {
@@ -124,7 +130,8 @@ export const getRepoLucideIconOptions = createLocalizedCatalog(() => [
     label: translate('auto.components.repo.repo.icon.857977b901', 'Shapes'),
     icon: Shapes
   },
-  { name: 'Box', label: translate('auto.components.repo.repo.icon.0ad395d475', 'Box'), icon: Box }
+  { name: 'Box', label: translate('auto.components.repo.repo.icon.0ad395d475', 'Box'), icon: Box },
+  { name: 'Perforce', label: translate('perforce.ui.repoIcon', 'Perforce'), icon: PerforceMark }
 ])
 
 export function getRepoLucideIcon(name: string | null | undefined): LucideIcon {
