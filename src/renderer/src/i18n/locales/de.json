@@ -22768,7 +22768,6 @@
       "description": "Die Agenten dort verwenden die Standardkonten der Distribution für Claude und Codex, bis Orca in WSL aktualisiert wird."
     },
     "antigravity": {
-      "chatSignIn": "Anmelden",
       "chatCancel": "Abbrechen",
       "chatCopyLink": "Anmeldelink kopieren",
       "chatCopyFailed": "Der Link konnte nicht kopiert werden.",
@@ -22779,7 +22778,6 @@
       "chatCancelled": "Anmeldung abgebrochen.",
       "chatExpired": "Zeitüberschreitung bei der Anmeldung. Erneut versuchen.",
       "chatFailed": "Anmeldung fehlgeschlagen. Erneut versuchen.",
-      "chatOtherClient": "In einem anderen Client läuft bereits eine Anmeldung.",
       "chatReadFailed": "Die Anmeldung auf {{host}} konnte nicht überprüft werden.",
       "retry": "Erneut versuchen",
       "changed": "Das native Konto hat sich geändert. Vor dem Start von agy erneut ein gespeichertes Konto auswählen.",

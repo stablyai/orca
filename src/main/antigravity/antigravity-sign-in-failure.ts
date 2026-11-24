@@ -15,7 +15,7 @@ export function agyLoginFailure(output: string): string {
   }
   // agy 1.5.16: `couldn't log in: token exchange failed: oauth2: "invalid_grant" "Malformed auth code."`
   if (/invalid_grant/i.test(output)) {
-    return "Google didn't accept that code. Start sign-in again and paste the new code."
+    return "Google didn't accept that code. Sign in again to get a new one."
   }
   if (/access_denied|denied access|cancelled/i.test(output)) {
     return 'Google sign-in for Antigravity was not approved. Start sign-in again.'

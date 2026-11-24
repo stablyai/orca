@@ -22324,7 +22324,6 @@
       "cancel": "Cancelar"
     },
     "antigravity": {
-      "chatSignIn": "Iniciar sesión",
       "chatCancel": "Cancelar",
       "chatCopyLink": "Copiar enlace de inicio de sesión",
       "chatCopyFailed": "No se pudo copiar el enlace.",
@@ -22335,7 +22334,6 @@
       "chatCancelled": "Inicio de sesión cancelado.",
       "chatExpired": "El inicio de sesión caducó. Inténtalo de nuevo.",
       "chatFailed": "No se pudo iniciar sesión. Inténtalo de nuevo.",
-      "chatOtherClient": "Hay un inicio de sesión en curso en otro cliente.",
       "chatReadFailed": "No se pudo comprobar el inicio de sesión en {{host}}.",
       "retry": "Reintentar",
       "remove": "Eliminar",

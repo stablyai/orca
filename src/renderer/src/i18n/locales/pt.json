@@ -23727,7 +23727,6 @@
       "description": "Os agentes lá usam as contas padrão do Claude e do Codex da distribuição até que o Orca no WSL seja atualizado."
     },
     "antigravity": {
-      "chatSignIn": "Entrar",
       "chatCancel": "Cancelar",
       "chatCopyLink": "Copiar link de login",
       "chatCopyFailed": "Não foi possível copiar o link.",
@@ -23738,7 +23737,6 @@
       "chatCancelled": "Login cancelado.",
       "chatExpired": "O tempo para entrar esgotou. Tente novamente.",
       "chatFailed": "Falha ao entrar. Tente novamente.",
-      "chatOtherClient": "O login está em andamento em outro cliente.",
       "chatReadFailed": "Não foi possível verificar o login em {{host}}.",
       "retry": "Tentar novamente",
       "changed": "A conta nativa mudou. Selecione uma conta salva novamente antes de iniciar o agy.",

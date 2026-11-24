@@ -25343,7 +25343,6 @@
       "description": "WSL'deki Orca güncellenene kadar buradaki ajanlar dağıtımın varsayılan Claude ve Codex hesaplarını kullanır."
     },
     "antigravity": {
-      "chatSignIn": "Oturum aç",
       "chatCancel": "İptal",
       "chatCopyLink": "Oturum açma bağlantısını kopyala",
       "chatCopyFailed": "Bağlantı kopyalanamadı.",
@@ -25354,7 +25353,6 @@
       "chatCancelled": "Oturum açma iptal edildi.",
       "chatExpired": "Oturum açma zaman aşımına uğradı. Yeniden deneyin.",
       "chatFailed": "Oturum açılamadı. Yeniden deneyin.",
-      "chatOtherClient": "Başka bir istemcide oturum açma işlemi devam ediyor.",
       "chatReadFailed": "{{host}} üzerindeki oturum durumu kontrol edilemedi.",
       "retry": "Tekrar dene",
       "changed": "agy'nin kendi hesabı değişti. agy'yi başlatmadan önce kayıtlı bir hesabı yeniden seçin.",

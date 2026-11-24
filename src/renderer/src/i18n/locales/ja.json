@@ -23586,7 +23586,6 @@
       "cancel": "キャンセル"
     },
     "antigravity": {
-      "chatSignIn": "サインイン",
       "chatCancel": "キャンセル",
       "chatCopyLink": "サインインリンクをコピー",
       "chatCopyFailed": "リンクをコピーできませんでした。",
@@ -23597,7 +23596,6 @@
       "chatCancelled": "サインインをキャンセルしました。",
       "chatExpired": "サインインがタイムアウトしました。もう一度お試しください。",
       "chatFailed": "サインインに失敗しました。もう一度お試しください。",
-      "chatOtherClient": "別のクライアントでサインインが進行中です。",
       "chatReadFailed": "{{host}} のサインインを確認できませんでした。",
       "retry": "再試行",
       "changed": "ネイティブアカウントが変更されました。AGYを起動する前に、保存したアカウントを再度選択してください。",

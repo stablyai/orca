@@ -22430,7 +22430,6 @@
       "description": "在 WSL 中的 Orca 更新之前，那裡的代理程式將使用該發行版預設的 Claude 和 Codex 帳戶。"
     },
     "antigravity": {
-      "chatSignIn": "登入",
       "chatCancel": "取消",
       "chatCopyLink": "複製登入連結",
       "chatCopyFailed": "無法複製連結。",
@@ -22441,7 +22440,6 @@
       "chatCancelled": "已取消登入。",
       "chatExpired": "登入逾時。請再試一次。",
       "chatFailed": "登入失敗。請再試一次。",
-      "chatOtherClient": "另一個應用程式正在登入。",
       "chatReadFailed": "無法檢查 {{host}} 上的登入狀態。",
       "retry": "重試",
       "changed": "原生帳戶已變更。請在啟動 agy 前重新選擇已儲存的帳戶。",

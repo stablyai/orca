@@ -30,7 +30,7 @@ export function chatSignInLine(
   t: Translate = translate
 ): string | null {
   if (otherClients(flow)) {
-    return t('accounts.antigravity.chatOtherClient', 'Sign-in is in progress in another client.')
+    return t('accounts.antigravity.chatOtherWindow', 'Sign-in is in progress in another window.')
   }
   switch (flow?.phase) {
     case 'starting':
@@ -39,8 +39,8 @@ export function chatSignInLine(
       return openFailed
         ? t('accounts.antigravity.chatOpenFailed', 'Copy the link and open it in your browser.')
         : t(
-            'accounts.antigravity.chatWaitingForCode',
-            'Finish signing in in your browser, then paste the code.'
+            'accounts.antigravity.chatFinishInBrowser',
+            'Finish in your browser, then paste the code.'
           )
     case 'verifying':
       return t('accounts.antigravity.chatVerifying', 'Finishing sign-in…')

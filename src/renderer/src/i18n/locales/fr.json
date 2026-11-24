@@ -23060,7 +23060,6 @@
       "cancel": "Annuler"
     },
     "antigravity": {
-      "chatSignIn": "Se connecter",
       "chatCancel": "Annuler",
       "chatCopyLink": "Copier le lien de connexion",
       "chatCopyFailed": "Impossible de copier le lien.",
@@ -23071,7 +23070,6 @@
       "chatCancelled": "Connexion annulée.",
       "chatExpired": "La connexion a expiré. Réessayez.",
       "chatFailed": "La connexion a échoué. Réessayez.",
-      "chatOtherClient": "Une connexion est en cours dans un autre client.",
       "chatReadFailed": "Impossible de vérifier la connexion sur {{host}}.",
       "retry": "Réessayer",
       "changed": "Le compte natif a changé. Sélectionnez à nouveau un compte enregistré avant de lancer agy.",

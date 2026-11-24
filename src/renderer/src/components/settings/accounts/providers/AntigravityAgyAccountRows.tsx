@@ -119,7 +119,6 @@ export function AntigravityAgyAccountRows({
       <div key="signing-in" data-settings-row="" className="py-3">
         <AntigravityChatSignInFlowPanel
           signIn={signIn}
-          alert={null}
           title={
             <p className="text-sm font-medium">
               {t('accounts.antigravity.signInGoogle', 'Sign in with Google')}
