@@ -114,7 +114,7 @@ export function sendClientAsk(args: {
     sender: peerMailSender(runtime, caller.address),
     rootSession: clientAskRootSession(db, caller.address)
   }
-  if (type.data === 'question' || type.data === 'handoff') {
+  if (type.data === 'question') {
     // Kept until its answer or notice comes back, so an ended pairing can tell the asker none will;
     // recorded first, as `send --on` does, and forgotten if the queue refuses it.
     recordPeerQuestionOut(db, {

@@ -4,7 +4,7 @@ import SyncDatabase from '../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../sqlite/harden-database-files'
 import { BotItemError } from './bot-item-error'
 import { ensureKeptWaitingAsks } from './bot-item-waiting-ask-keep'
-import { migrateBotItems } from './bot-items-schema'
+import { ensureBotItemsChatIndex, migrateBotItems } from './bot-items-schema'
 import { BotItemsOwner } from './bot-items-owner'
 
 export { BotItemError }
@@ -18,6 +18,7 @@ export class BotItemsStore extends BotItemsOwner {
     const writable = migrateBotItems(db)
     if (writable) {
       ensureKeptWaitingAsks(db)
+      ensureBotItemsChatIndex(db)
     }
     if (path !== ':memory:') {
       hardenSqliteDatabaseFiles(path)

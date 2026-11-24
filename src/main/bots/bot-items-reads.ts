@@ -107,7 +107,7 @@ export class BotItemsReads extends BotItemsTables {
     return { items, counts }
   }
 
-  /** Whether one of the bot's open items belongs to this chat; reads only the bot's open items. */
+  /** Whether one of the bot's open items belongs to this chat; reads only that chat's items. */
   chatOwnsOpenItem(botId: string, chatId: string): boolean {
     return (
       this.db

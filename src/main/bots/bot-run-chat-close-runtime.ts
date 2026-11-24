@@ -12,7 +12,7 @@ import {
   lineageLiveSession,
   readAgentSessionRecordStore
 } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
-import { sessionAwaitsBotReply } from '../runtime/orchestration/db/bot-requests/bot-request-sender-pending'
+import { sessionAwaitsMail } from '../runtime/orchestration/db/bot-requests/bot-request-sender-pending'
 import { structuredSessionMailReach } from '../runtime/orchestration/mailbox/routing/structured-session-mail-address'
 import { botTurns } from './bot-automation-sessions'
 import { closeBotSession } from './bot-chat-session'
@@ -56,32 +56,34 @@ export function startBotRunChatCloser(runtime: OrcaRuntimeService, store: Store)
       const linked = [sessionId, live.sessionId].some(
         (id) => findLinksForSession(store, id).length > 0
       )
+      const host = getStructuredAgentSessionHost()
       return {
         // A wake or any later write counts: it only ever keeps the chat open longer.
         lastActivityAt: Math.max(live.lastTurn?.at ?? 0, live.updatedAt),
-        kept: home || linked || reach.kind !== 'reachable'
+        kept: home || linked || reach.kind === 'other-host',
+        // Someone has it up: closing would take it away from them.
+        inUse:
+          reach.kind === 'unverifiable' ||
+          host?.reads.viewed(live.sessionId) === true ||
+          host?.isSessionTabVisible(live.sessionId) === true
       }
     },
-    use: async (bot, sessionId) => {
+    busy: async (bot, sessionId) => {
       const live = liveSession(sessionId)
-      const host = getStructuredAgentSessionHost()
       const targeted = (store.listAutomations?.() ?? []).some((automation) =>
         [sessionId, live].includes(automation.bot?.chat?.sessionId ?? '')
       )
-      // Someone has it up, it owns work, or an automation still runs in it: it stays open.
-      if (
-        targeted ||
-        host?.reads.viewed(live) === true ||
-        host?.isSessionTabVisible(live) === true ||
-        (await runtime.botItems.chatHasOpenItems(bot.id, sessionId))
-      ) {
-        return 'held'
+      if (targeted || botTurns.running(live)) {
+        return true
       }
-      const waitingOnLimit = (await host?.readUsageLimitContinue(live))?.state === 'scheduled'
-      return botTurns.running(live) || waitingOnLimit ? 'working' : 'free'
+      const host = getStructuredAgentSessionHost()
+      return (
+        (await host?.readUsageLimitContinue(live))?.state === 'scheduled' ||
+        (await runtime.botItems.chatHasOpenItems(bot.id, sessionId))
+      )
     },
     owesReply: (sessionId) =>
-      sessionAwaitsBotReply(runtime.getOrchestrationDb(), [sessionId, liveSession(sessionId)]),
+      sessionAwaitsMail(runtime.getOrchestrationDb(), [sessionId, liveSession(sessionId)]),
     close: async (sessionId, admit) =>
       (
         await closeBotSession(runtime, liveSession(sessionId), {

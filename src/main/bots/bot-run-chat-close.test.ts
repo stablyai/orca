@@ -12,18 +12,20 @@ function botOf(id: string, runChatsCloseAfter?: BotRunChatCloseAfter): Bot {
 
 function closerWith(input: {
   bots: Bot[]
-  chats: Record<string, BotRunChatState>
+  chats: Record<string, Omit<BotRunChatState, 'inUse'>>
   busy?: string[]
-  held?: string[]
-  /** Owes a reply from the start, or (`askedLate`) only once its close is being admitted. */
+  inUse?: string[]
+  /** Owes a reply from the start, or (`late`) only once its close is being admitted. */
   asked?: string[]
-  askedLate?: string[]
+  /** What happens to a chat between the sweep's checks and its close. */
+  late?: Record<string, 'asked' | 'opened'>
 }) {
   let now = 0
   let file = ''
   let writes = 0
   const closed: string[] = []
   const owes = new Set(input.asked)
+  const inUse = new Set(input.inUse)
   const closer = new BotRunChatCloser({
     path: () => 'list.jsonl',
     read: async () => file,
@@ -39,18 +41,16 @@ function closerWith(input: {
     bots: () => input.bots,
     hostDefault: () => '24h',
     ready: async () => {},
-    chat: (_bot, sessionId) => input.chats[sessionId] ?? null,
-    use: async (_bot, sessionId) =>
-      input.held?.includes(sessionId)
-        ? 'held'
-        : input.busy?.includes(sessionId)
-          ? 'working'
-          : 'free',
+    chat: (_bot, sessionId) => {
+      const chat = input.chats[sessionId]
+      return chat ? { ...chat, inUse: inUse.has(sessionId) } : null
+    },
+    busy: async (_bot, sessionId) => input.busy?.includes(sessionId) === true,
     owesReply: (sessionId) => owes.has(sessionId),
     close: async (sessionId, admit) => {
-      // A question sent from it lands between the sweep's checks and the close.
-      if (input.askedLate?.includes(sessionId)) {
-        owes.add(sessionId)
+      const late = input.late?.[sessionId]
+      if (late) {
+        ;(late === 'asked' ? owes : inUse).add(sessionId)
       }
       if (!admit()) {
         return false
@@ -94,12 +94,13 @@ describe('BotRunChatCloser', () => {
         otherProfile: { lastActivityAt: 0, kept: false },
         inTab: { lastActivityAt: 0, kept: false },
         asked: { lastActivityAt: 0, kept: false },
-        askedLate: { lastActivityAt: 0, kept: false }
+        askedLate: { lastActivityAt: 0, kept: false },
+        openedLate: { lastActivityAt: 0, kept: false }
       },
       busy: ['working'],
-      held: ['inTab'],
+      inUse: ['inTab'],
       asked: ['asked'],
-      askedLate: ['askedLate']
+      late: { askedLate: 'asked', openedLate: 'opened' }
     })
     for (const [bot, sessionId] of [
       [bots[0], 'due'],
@@ -112,6 +113,7 @@ describe('BotRunChatCloser', () => {
       [bots[0], 'inTab'],
       [bots[0], 'asked'],
       [bots[0], 'askedLate'],
+      [bots[0], 'openedLate'],
       [botOf('elsewhere'), 'otherProfile']
     ] as const) {
       run.closer.arm(bot, sessionId)
@@ -127,6 +129,8 @@ describe('BotRunChatCloser', () => {
     expect(run.tracked().sort()).toEqual([
       'asked',
       'askedLate',
+      'inTab',
+      'openedLate',
       'otherProfile',
       'renamed',
       'weekly',

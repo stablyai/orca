@@ -31,8 +31,10 @@ const RemovedSchema = z.object({ sessionId: z.string().min(1), removed: z.litera
 /** One of the bot's chats as the closer sees it now; null when it is gone or closed. */
 export type BotRunChatState = {
   lastActivityAt: number
-  /** Home Chats, chats linked to a thread and chats this host can't vouch for never close on their own. */
+  /** Home Chats, chats linked to a thread and chats run elsewhere never close on their own. */
   kept: boolean
+  /** Open on a screen or in a tab, or not checkable right now: not now, checked again later. */
+  inUse: boolean
 }
 
 export type BotRunChatCloseDeps = {
@@ -48,11 +50,10 @@ export type BotRunChatCloseDeps = {
   ready: () => Promise<void>
   /** Reads this one chat's record. */
   chat: (bot: Bot, sessionId: string) => BotRunChatState | null
-  /** `held`: someone keeps it (open on a screen or in a tab, owning an open item, or the chat an
-   *  automation runs in), so it stays open for good. `working`: a turn or a usage-limit wait. */
-  use: (bot: Bot, sessionId: string) => Promise<'held' | 'working' | 'free'>
-  /** It asked another bot, here or on a paired computer, and the answer hasn't come back. Read in
-   *  the close's own lane too, so a reply can never be owed to a chat that closed. */
+  /** Busy: a turn or a usage-limit wait, an open item it owns, or an automation that runs in it. */
+  busy: (bot: Bot, sessionId: string) => Promise<boolean>
+  /** It asked another bot, here or on a paired computer, and the answer hasn't come back, or mail
+   *  for it is still on its way. Read in the close's own lane too, so none lands on a closed chat. */
   owesReply: (sessionId: string) => boolean
   /** Closes it once `admit` agrees in the session's own lane, and only while it is idle. */
   close: (sessionId: string, admit: () => boolean) => Promise<boolean>
@@ -180,6 +181,9 @@ export class BotRunChatCloser {
       if (!chat || chat.kept) {
         return null
       }
+      if (chat.inUse) {
+        return { ...entry, since: this.deps.now() }
+      }
       // Re-read each time: Close after can change while the checks run.
       const current = this.deps.bots().find((candidate) => candidate.id === bot.id)
       const ms = current ? this.closeAfterMs(current) : null
@@ -190,13 +194,11 @@ export class BotRunChatCloser {
     if (first !== 'due') {
       return first
     }
-    const use = this.deps.owesReply(entry.sessionId)
-      ? 'working'
-      : await this.deps.use(bot, entry.sessionId)
-    if (use !== 'free') {
-      return use === 'held' ? null : { ...entry, since: this.deps.now() }
+    // Each of these can end, so the chat is checked again a whole Close after from now.
+    if (this.deps.owesReply(entry.sessionId) || (await this.deps.busy(bot, entry.sessionId))) {
+      return { ...entry, since: this.deps.now() }
     }
-    // A turn, a wake, a question or a new Close after may come at any point up to the close itself.
+    // A turn, a wake, a question, an open tab or a new Close after may come up to the close itself.
     const closed = await this.deps.close(
       entry.sessionId,
       () => waiting() === 'due' && !this.deps.owesReply(entry.sessionId)

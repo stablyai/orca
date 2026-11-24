@@ -10,7 +10,7 @@ function formatChat(chat: BotChatRow, address: string, now: number): string {
   const active = ago(chat.lastActivityAt, now)
   const title = oneLine(chat.title)
   const name = chat.closed
-    ? `closed (takes no mail; orca bot reopen --chat ${chat.id})${title ? `  ${JSON.stringify(title)}` : ''}`
+    ? `${chat.reason === 'ended' ? `closed (takes no mail; orca bot reopen --chat ${chat.id})` : 'closed (takes no mail)'}${title ? `  ${JSON.stringify(title)}` : ''}`
     : chat.home
       ? 'Home Chat (current)'
       : title
