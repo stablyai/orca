@@ -37,6 +37,10 @@ export class GrabNativeKeySession {
     guest.on('destroyed', this.stop)
     guest.on('did-start-navigation', this.onNavigation)
     this.unregisterSuspension = registerAgentInputSuspension(guest, async (suspended) => {
+      // Already live: republishing would bump the revision and drop a key the page reports meanwhile.
+      if (!suspended && this.enabled && !this.pending) {
+        return
+      }
       if (!(await this.setEnabled(!suspended))) {
         throw new Error('Could not suspend browser tool shortcuts safely')
       }

@@ -71,7 +71,8 @@ export function installBrowserGuestExecution(
       }
       retiredHosts.delete(host)
     }
-    return true
+    // Also covers a host no arm could attribute to itself (moved, or never observed).
+    return authority.noOverlayHost()
   }
   const execute = (request: Extract<GrabExecutionRequest, { kind: 'execute' }>) =>
     request.worldId === 0
@@ -151,20 +152,28 @@ export function installBrowserGuestExecution(
         } else if (request.overlayControl) {
           const armed = authority
             ? await authority.observeArm(() => execute(request))
-            : { value: await execute(request), host: null }
-          const control = asControl(armed.value)
-          if (!control) {
-            throw new Error('Missing overlay control')
-          }
-          const next: Overlay = { id: request.id, control, host: armed.host }
-          if (retiredOverlay === request.id || (authority && !armed.host)) {
-            tearDown(next)
+            : { ok: true as const, value: await execute(request), host: null, added: [] }
+          const control = armed.ok ? asControl(armed.value) : null
+          const host = armed.ok ? armed.host : null
+          if (!control || retiredOverlay === request.id || (authority && !host)) {
+            // A failed arm keeps every host it added under this preload's watch, so a later clean
+            // stays negative until each one is verifiably detached, whatever its teardown claims.
+            for (const added of armed.added) {
+              retiredHosts.add(added)
+            }
+            if (control) {
+              tearDown({ id: request.id, control, host })
+            }
+            authority?.discard(armed.added)
+            if (!control) {
+              throw new Error('Missing overlay control')
+            }
             value = false
           } else {
             if (overlay) {
               tearDown(overlay)
             }
-            overlay = next
+            overlay = { id: request.id, control, host }
             value = true
           }
         } else {

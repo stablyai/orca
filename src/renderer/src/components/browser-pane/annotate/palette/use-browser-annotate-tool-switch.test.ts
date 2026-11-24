@@ -2,7 +2,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserGrabPayload } from '../../../../../../shared/browser/element-grab/browser-grab-types'
-import { syntheticGrabPayload } from '../testing/synthetic-grab-payload'
+import { syntheticGrabPayload } from '../testing/synthetic-grab-payload.fixture'
 import { useGrabMode } from '../grab/useGrabMode'
 import { useBrowserPageGrabAnnotations } from '../grab/use-browser-page-grab-annotations'
 import type { MarkupModeController } from '../capture/useMarkupMode'

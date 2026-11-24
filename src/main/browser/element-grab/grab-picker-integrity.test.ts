@@ -47,6 +47,56 @@ it('reports a clean page only when the overlay host it armed is really gone, wha
   await expect(executeGrabScript(guest, '', { clean: true })).resolves.toBe(true)
 })
 
+it('keeps a clean negative after a failed arm until every overlay host it left is really gone', async () => {
+  const hosts: HTMLElement[] = []
+  const addHost = (parent: Element): HTMLElement => {
+    const host = document.createElement('div')
+    host.id = '__orca-grab-host'
+    parent.appendChild(host)
+    hosts.push(host)
+    return host
+  }
+  const guest = guestWith(async (code) => {
+    if (code === 'ambiguous') {
+      // Two hosts: the arm cannot tell which one is the picker's, so it fails.
+      addHost(document.documentElement)
+      addHost(document.documentElement)
+      return () => true
+    }
+    if (code === 'throws') {
+      addHost(document.body)
+      throw new Error('arm script failed after inserting its host')
+    }
+    if (code === 'unrecognizable') {
+      // The host arrives inside a wrapper, so no added node is recognizably the picker's host.
+      const wrapper = document.createElement('div')
+      addHost(wrapper)
+      document.body.appendChild(wrapper)
+      return () => true
+    }
+    return true
+  })
+
+  await expect(executeGrabScript(guest, 'ambiguous', { overlayControl: true })).resolves.toBe(false)
+  // The page puts a host back after the failed arm's cleanup; its teardown claimed success.
+  document.documentElement.appendChild(hosts[1])
+  await expect(executeGrabScript(guest, '', { clean: true })).resolves.toBe(false)
+  hosts[1].remove()
+  await expect(executeGrabScript(guest, '', { clean: true })).resolves.toBe(true)
+
+  await expect(executeGrabScript(guest, 'throws', { overlayControl: true })).resolves.toBeNull()
+  document.body.appendChild(hosts[2])
+  await expect(executeGrabScript(guest, '', { clean: true })).resolves.toBe(false)
+  hosts[2].remove()
+
+  await expect(executeGrabScript(guest, 'unrecognizable', { overlayControl: true })).resolves.toBe(
+    false
+  )
+  await expect(executeGrabScript(guest, '', { clean: true })).resolves.toBe(false)
+  hosts[3].remove()
+  await expect(executeGrabScript(guest, '', { clean: true })).resolves.toBe(true)
+})
+
 it('keeps presence tied to the originally picked node and refuses a pick the trusted pointer did not hit', async () => {
   const original = document.createElement('button')
   original.id = 'target'
@@ -64,9 +114,16 @@ it('keeps presence tied to the originally picked node and refuses a pick the tru
   window.dispatchEvent(new MouseEvent('click', { clientX: 5, clientY: 5 }))
 
   const picked = await requestGrabExecution(guest, 'pick', { capturePick: 'held' })
-  const selectionId =
+  const page =
     picked.ok && picked.value && typeof picked.value === 'object' && 'page' in picked.value
-      ? (picked.value.page as { selectionId?: string }).selectionId
+      ? picked.value.page
+      : null
+  const selectionId =
+    page &&
+    typeof page === 'object' &&
+    'selectionId' in page &&
+    typeof page.selectionId === 'string'
+      ? page.selectionId
       : undefined
   if (!selectionId) {
     throw new Error('The original pick was not accepted')

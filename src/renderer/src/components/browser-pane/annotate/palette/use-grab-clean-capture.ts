@@ -25,6 +25,26 @@ async function settleCleanCapture(
   }
 }
 
+async function captureCleanRequest(
+  request: CleanCaptureRequest,
+  pending: PendingCleanCapture
+): Promise<MarkupBaseImage> {
+  try {
+    const capture = await window.api.browser.captureCleanPage({
+      browserPageId: request.pageId,
+      requestId: request.requestId
+    })
+    if (!capture || pending.current !== request) {
+      throw new Error('markup: the clean page capture was superseded')
+    }
+    return await flattenCapturedPage(capture)
+  } finally {
+    if (pending.current === request) {
+      pending.current = null
+    }
+  }
+}
+
 /** Cancellation targets this exact request, including while it waits for the guest to load. */
 export function useGrabCleanCapture(): {
   waitForCleanPage: (pageId: string) => Promise<boolean>
@@ -59,23 +79,7 @@ export function useGrabCleanCapture(): {
     [begin]
   )
   const captureCleanPage = useCallback(
-    async (pageId: string): Promise<MarkupBaseImage> => {
-      const request = begin(pageId)
-      try {
-        const capture = await window.api.browser.captureCleanPage({
-          browserPageId: request.pageId,
-          requestId: request.requestId
-        })
-        if (!capture || pending.current !== request) {
-          throw new Error('markup: the clean page capture was superseded')
-        }
-        return await flattenCapturedPage(capture)
-      } finally {
-        if (pending.current === request) {
-          pending.current = null
-        }
-      }
-    },
+    (pageId: string): Promise<MarkupBaseImage> => captureCleanRequest(begin(pageId), pending),
     [begin]
   )
   return { waitForCleanPage, captureCleanPage, cancelClean }

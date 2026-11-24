@@ -56,6 +56,10 @@ class GrabChordSession {
     guest.on('destroyed', this.stop)
     policies.add(this)
     this.unregisterSuspension = registerAgentInputSuspension(guest, async (suspended) => {
+      // Already live: republishing would bump the revision and drop a chord the page reports meanwhile.
+      if (!suspended && this.enabled && !this.pending && !this.navigating) {
+        return
+      }
       if (!(await this.publish(!suspended && !this.navigating))) {
         throw new Error('Could not suspend the browser grab chord safely')
       }

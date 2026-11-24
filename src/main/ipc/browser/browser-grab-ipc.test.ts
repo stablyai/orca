@@ -7,7 +7,11 @@ const mocks = vi.hoisted(
     handlers: Map<string, (event: unknown, args: unknown) => unknown>
     run: (enabled: boolean, signal: AbortSignal) => Promise<boolean>
     cancelledOps: string[]
-    capture: () => Promise<{ dataUrl: string; width: number; height: number } | null>
+    capture: (signal: AbortSignal) => Promise<{
+      dataUrl: string
+      width: number
+      height: number
+    } | null>
   } => ({
     guest: null,
     handlers: new Map<string, (event: unknown, args: unknown) => unknown>(),
@@ -28,7 +32,7 @@ vi.mock('../../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getAuthorizedGuest: () => mocks.guest,
     cancelGrabOp: (page: string) => mocks.cancelledOps.push(page),
-    captureCleanPage: () => mocks.capture(),
+    captureCleanPage: (_guest: unknown, signal: AbortSignal) => mocks.capture(signal),
     setGrabMode: (
       _page: string,
       enabled: boolean,
@@ -42,6 +46,7 @@ vi.mock('../../browser/guest-lifecycle/manager/browser-manager', () => ({
 vi.mock('./browser-renderer-trust', () => ({ isTrustedBrowserRenderer: () => true }))
 
 import { registerBrowserGrabHandlers, resetGrabModeState } from './browser-grab-ipc'
+import { captureCleanGuestPage } from '../../browser/element-grab/grab-clean-page-capture'
 
 beforeEach(() => {
   resetGrabModeState()
@@ -177,18 +182,36 @@ it('an arm admitted while Draw captures the cleaned page waits for that capture 
     modes.push(enabled)
     return true
   }
-  let finishCapture: (() => void) | undefined
-  let captureStarted: (() => void) | undefined
+  let finishReadback: (() => void) | undefined
+  let readbackStarted: (() => void) | undefined
   const started = new Promise<void>((resolve) => {
-    captureStarted = resolve
+    readbackStarted = resolve
   })
-  // The physical capture ignores cancellation, like a native readback already in flight.
-  mocks.capture = () => {
-    captureStarted?.()
-    return new Promise((resolve) => {
-      finishCapture = () => resolve({ dataUrl: 'data:image/png;base64,AA', width: 8, height: 8 })
-    })
+  const paint: string[] = []
+  // The production helper over a native readback that is already in flight and cannot be cancelled.
+  const readbackGuest = {
+    isDestroyed: () => false,
+    capturePage: () => {
+      readbackStarted?.()
+      return new Promise<{
+        isEmpty: () => boolean
+        toDataURL: () => string
+        getSize: () => { width: number; height: number }
+      }>((resolve) => {
+        finishReadback = () =>
+          resolve({
+            isEmpty: () => false,
+            toDataURL: () => 'data:image/png;base64,AA',
+            getSize: () => ({ width: 8, height: 8 })
+          })
+      })
+    }
   }
+  mocks.capture = (signal) =>
+    captureCleanGuestPage(readbackGuest, signal, () => {
+      paint.push('hold')
+      return () => paint.push('release')
+    })
   const capture = Promise.resolve(
     mocks.handlers.get('browser:captureCleanPage')?.(
       { sender: { id: 17 } },
@@ -196,14 +219,19 @@ it('an arm admitted while Draw captures the cleaned page waits for that capture 
     )
   )
   await started
+  // Admitting the arm aborts the capture; native readback is still pending.
   const arm = setMode('page', true, 'rearm')
-  await Promise.resolve()
+  for (let turn = 0; turn < 5; turn++) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
   expect(modes).toEqual([false])
+  expect(paint).toEqual(['hold'])
 
-  finishCapture?.()
+  finishReadback?.()
   await expect(capture).resolves.toBeNull()
   await expect(arm).resolves.toEqual({ ok: true, clean: false })
   expect(modes).toEqual([false, true])
+  expect(paint).toEqual(['hold', 'release'])
 })
 
 it('hands Draw the capture of the document its own request cleaned', async () => {

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { syntheticGrabPayload } from '../testing/synthetic-grab-payload'
+import { syntheticGrabPayload } from '../testing/synthetic-grab-payload.fixture'
 import { useHeldGrabPick } from './use-held-grab-pick'
 
 afterEach(() => {
