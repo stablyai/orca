@@ -191,6 +191,26 @@ export function shouldApplyRecoveredWebSessionTabsSnapshot(
   receivedFrame: number,
   runtimeId?: string
 ): boolean {
+  return canApplyWebSessionTabsFrame(environmentId, snapshot, receivedFrame, runtimeId, 'recovery')
+}
+
+/** Rank a read without advancing the workspace cursor when only one of its tabs will be drawn. */
+export function canProjectWebSessionTabsRead(
+  environmentId: string,
+  snapshot: RuntimeMobileSessionTabsResult,
+  receivedFrame: number,
+  runtimeId?: string
+): boolean {
+  return canApplyWebSessionTabsFrame(environmentId, snapshot, receivedFrame, runtimeId, 'read')
+}
+
+function canApplyWebSessionTabsFrame(
+  environmentId: string,
+  snapshot: RuntimeMobileSessionTabsResult,
+  receivedFrame: number,
+  runtimeId: string | undefined,
+  source: 'recovery' | 'read'
+): boolean {
   if (
     runtimeId &&
     (isRetiredSessionTabsRuntimeId(environmentId, runtimeId) ||
@@ -207,8 +227,11 @@ export function shouldApplyRecoveredWebSessionTabsSnapshot(
   }
 
   const latest = latestReceivedSessionTabsSnapshotByWorktree.get(key)
-  if (!latest || latest.receivedFrame === receivedFrame) {
-    return latest !== undefined
+  if (!latest) {
+    return source === 'read'
+  }
+  if (latest.receivedFrame === receivedFrame) {
+    return true
   }
   if (latest.publicationEpoch !== snapshot.publicationEpoch) {
     return receivedFrame > latest.receivedFrame

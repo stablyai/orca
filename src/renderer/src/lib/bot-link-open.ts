@@ -31,16 +31,23 @@ import {
   activateAiVaultStructuredSession,
   structuredSessionOpenFeedback
 } from './agent-session/open/activate-ai-vault-structured-session'
-import { structuredSessionOpenDepsWaitingForPairedTab } from './agent-session/open/open-existing-structured-session'
+import { pairedBotThreadOpenDeps } from './agent-session/open/open-existing-structured-session'
+import { activateStructuredAgentSessionById } from './agent-session/structured-agent-session-tab-activation'
 import { isHome } from '../../../shared/bots/bot-homes'
 import type { BotDeepLink } from '../../../shared/bot-deep-link'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { getRuntimeEnvironmentRegistration } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
+  bindPendingBotThreadChat,
   cancelPendingBotThreadOpen,
   runBotThreadOpen
 } from './agent-session/open/bot-thread-open-lifecycle'
+import {
+  withBotThreadOpenNavigation,
+  type BotThreadNavigate
+} from './agent-session/open/bot-thread-open-navigation'
 
 type LinkConversation = NonNullable<BotDeepLink['conversation']>
 
@@ -113,13 +120,16 @@ export function openBotLinkHome(
   }
   return runBotThreadOpen(
     JSON.stringify([botId, conversation.source, conversation.externalId]),
-    (signal) => resolveBotLinkHome(botId, { conversation, signal })
+    (signal) =>
+      withBotThreadOpenNavigation(signal, (navigate) =>
+        resolveBotLinkHome(botId, { conversation, signal, navigate })
+      )
   )
 }
 
 async function resolveBotLinkHome(
   botId: string,
-  link?: { conversation: LinkConversation; signal: AbortSignal }
+  link?: { conversation: LinkConversation; signal: AbortSignal; navigate: BotThreadNavigate }
 ): Promise<void> {
   await refreshBots()
   if (link?.signal.aborted) {
@@ -133,25 +143,39 @@ async function resolveBotLinkHome(
         await openBotHomeTab(bot)
         return
       }
-      const { conversation, signal } = link
+      const { conversation, signal, navigate } = link
+      const target = botTarget(bot)
+      const environmentId = runtimeTargetEnvironmentId(target)
+      const registration = environmentId
+        ? getRuntimeEnvironmentRegistration(environmentId)
+        : undefined
+      const currentPairing = (): boolean =>
+        !environmentId || getRuntimeEnvironmentRegistration(environmentId) === registration
       const sessionId =
         hostId === LOCAL_EXECUTION_HOST_ID ? null : await serverThreadSession(bot, conversation)
-      if (signal.aborted) {
+      if (signal.aborted || !currentPairing()) {
         return
       }
       if (!sessionId) {
         sayThreadMissing()
         return
       }
-      // A server's chat tabs reach this window only once its home is open here, as the sidebar opens it.
-      if (!openBotHome(bot)) {
+      const workspaceId = folderWorkspaceKey(bot.folderWorkspaceId)
+      bindPendingBotThreadChat(signal, {
+        executionHostId: hostId,
+        worktreeId: workspaceId,
+        sessionId
+      })
+      // Home selects the paired workspace and starts its ordinary tab subscription.
+      if (!navigate(() => openBotHome(bot))) {
         return
       }
-      const workspaceId = folderWorkspaceKey(bot.folderWorkspaceId)
-      const stillShowingHome = (): boolean => {
+      const current = (): boolean => {
         const { activeWorktreeId, activeWorkspaceExecutionHostId, activeView } =
           useAppStore.getState()
         return (
+          !signal.aborted &&
+          currentPairing() &&
           activeWorktreeId === workspaceId &&
           activeWorkspaceExecutionHostId === hostId &&
           activeView === 'terminal'
@@ -162,11 +186,13 @@ async function resolveBotLinkHome(
         {
           deps: {
             ...structuredSessionOpenFeedback,
-            ...structuredSessionOpenDepsWaitingForPairedTab(stillShowingHome, signal)
+            ...pairedBotThreadOpenDeps(signal, current, (args) =>
+              navigate(() => activateStructuredAgentSessionById(args))
+            )
           },
           retry: () => openBotLinkHome(botId, conversation)
         },
-        botTarget(bot)
+        target
       )
       return
     }

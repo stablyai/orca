@@ -78,6 +78,15 @@ function writeHostSessionTabIdMapping(
   hostSessionTabMappingKeysByEnvironmentAndWorktree.set(args.environmentId, mappingKeysByWorktree)
 }
 
+export function recordHostSessionTabIdMapping(
+  args: { environmentId: string; worktreeId: string; tabId: string },
+  hostTabId: string,
+  hostGroupId?: string
+): void {
+  writeHostSessionTabIdMapping(args, hostTabId, hostGroupId)
+  markHostSessionTabMappingsChanged(args.worktreeId)
+}
+
 export function resolveHostSessionTabIdForWebSessionTab(
   _state: WebSessionTabsSyncState,
   args: { environmentId: string; worktreeId: string; tabId: string }

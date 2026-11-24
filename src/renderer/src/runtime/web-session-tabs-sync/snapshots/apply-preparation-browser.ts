@@ -29,6 +29,7 @@ import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/agent-session
 import { executionHostIdForSessionTabsOwner } from '../../native-chat/local-sessions/local-structured-session-owner'
 import { isAgentSessionTabOfAnotherHost } from '../identity/mirror-row-ownership'
 import { isUnlistedCreatedChat } from '@/lib/agent-session/launch/pane/structured-agent-session-unlisted-created-chats'
+import { retainDirectlyOpenedChats } from '../tracking/directly-opened-chat-tabs'
 
 export function prepareWebSessionTabsSnapshotBrowser(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBase>
@@ -49,12 +50,32 @@ export function prepareWebSessionTabsSnapshotBrowser(
   const targetGroupId = chooseTargetGroupId(state, snapshot)
   const hostGroupIdByTabId = buildHostGroupIdByTabId(snapshot.tabGroups)
   const currentUnifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
-  const publishedAgentSessionIds = new Set(
-    snapshot.tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.sessionId)
+  const directlyOpened = retainDirectlyOpenedChats(
+    environmentId,
+    snapshot,
+    currentUnifiedTabs,
+    hostGroupIdByTabId
   )
+  const agentSnapshot = directlyOpened
+    ? {
+        ...snapshot,
+        tabs: snapshot.tabs.filter(
+          (tab) =>
+            tab.type !== 'agent-session' ||
+            (!directlyOpened.has(tab.sessionId) &&
+              (!tab.replacesSessionId || !directlyOpened.has(tab.replacesSessionId)))
+        )
+      }
+    : snapshot
+  const publishedAgentSessionIds = new Set(directlyOpened?.keys())
+  for (const tab of agentSnapshot.tabs) {
+    if (tab.type === 'agent-session') {
+      publishedAgentSessionIds.add(tab.sessionId)
+    }
+  }
   // A chat this frame publishes or replaces is its to rebuild, whichever host last showed it.
   const claimedAgentSessionIds = new Set(publishedAgentSessionIds)
-  for (const tab of snapshot.tabs) {
+  for (const tab of agentSnapshot.tabs) {
     if (tab.type === 'agent-session' && tab.replacesSessionId) {
       claimedAgentSessionIds.add(tab.replacesSessionId)
     }
@@ -139,7 +160,7 @@ export function prepareWebSessionTabsSnapshotBrowser(
     navigationIntentTab?.id ?? resolveWebSessionVisibleTabId(state, worktreeId)
   )
   const mirroredAgentTabs = buildMirroredAgentTabs(
-    snapshot,
+    agentSnapshot,
     executionHostIdForSessionTabsOwner(environmentId),
     hostGroupIdByTabId,
     targetGroupId,
@@ -147,6 +168,9 @@ export function prepareWebSessionTabsSnapshotBrowser(
     currentUnifiedTabs,
     now
   )
+  if (directlyOpened) {
+    mirroredAgentTabs.push(...directlyOpened.values())
+  }
   const mirroredEditorFileIds = new Set(mirroredEditorTabs.map((entry) => entry.file.id))
   const mirroredEditorHostTabIds = new Set(mirroredEditorTabs.map((entry) => entry.hostTabId))
   const mirroredOpenFiles = [

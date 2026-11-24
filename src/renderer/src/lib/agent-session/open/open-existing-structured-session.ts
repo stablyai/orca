@@ -27,8 +27,6 @@ import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-p
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { OrchestrationPartyLocationResult } from '../../../../../shared/orchestration/orchestration-caller-status'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 
 const STRUCTURED_SESSION_RESTORE_TIMEOUT_MS = 5_000
 
@@ -72,44 +70,36 @@ const defaultDeps: StructuredSessionOpenAdapterDeps = {
   reveal: revealStructuredSession
 }
 
-export function structuredSessionOpenDepsWaitingForPairedTab(
-  stillShowingWorkspace: () => boolean,
-  signal: AbortSignal
+export function pairedBotThreadOpenDeps(
+  signal: AbortSignal,
+  current: () => boolean,
+  activate: StructuredSessionOpenAdapterDeps['activate']
 ): StructuredSessionOpenAdapterDeps {
-  let superseded = false
-  let mirrorDeadline: number | undefined
-  const current = (): boolean => {
-    superseded ||= !stillShowingWorkspace()
-    return !superseded && !signal.aborted
-  }
   return {
     ...defaultDeps,
     current,
     signal,
+    activate,
     reveal: (target) => revealStructuredSession({ ...target, signal }),
     refresh: async ({ worktreeId, sessionId }, owner) => {
-      if (!current()) {
-        return
+      if (current() && owner.kind === 'environment') {
+        const timeout = new AbortController()
+        const requestSignal = AbortSignal.any([signal, timeout.signal])
+        await withStructuredSessionRestoreTimeout(
+          import('@/runtime/web-session-tabs-sync/inventory/paired-chat-tab-reply').then(
+            ({ readPairedChatTab }) =>
+              readPairedChatTab({
+                environmentId: owner.environmentId,
+                worktreeId,
+                sessionId,
+                timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS,
+                signal: requestSignal,
+                current
+              })
+          ),
+          () => timeout.abort()
+        )
       }
-      const deadline = performance.now() + STRUCTURED_SESSION_RESTORE_TIMEOUT_MS
-      const snapshot = await refreshStructuredSessionTabs(worktreeId, owner, signal)
-      if (
-        !snapshot ||
-        typeof snapshot.worktree !== 'string' ||
-        !worktreeIdsEqual(snapshot.worktree, worktreeId) ||
-        !Array.isArray(snapshot.tabs) ||
-        !snapshot.tabs.some((tab) => tab.type === 'agent-session' && tab.sessionId === sessionId)
-      ) {
-        return
-      }
-      // The reply can beat the mirror. A retry within this open shares the first wait's budget.
-      mirrorDeadline ??= deadline
-      await waitForPairedStructuredSessionTab(
-        { workspaceId: worktreeId, sessionId, target: owner },
-        mirrorDeadline - performance.now(),
-        current,
-        signal
-      )
     }
   }
 }
@@ -140,12 +130,7 @@ type DesktopInteractionOptions = {
   onError?: () => void
 }
 
-type InFlightActivation = {
-  result: Promise<StructuredSessionOpenResult>
-  current?: () => boolean
-}
-
-const activationsInFlight = new Map<string, InFlightActivation>()
+const activationsInFlight = new Map<string, Promise<StructuredSessionOpenResult>>()
 
 /** Admission precedes every owner effect; joiners only observe the rich settlement. */
 export async function openDesktopStructuredSessionInteraction(
@@ -170,12 +155,12 @@ export async function openDesktopStructuredSessionInteraction(
     throw error
   }
   const key =
-    source.kind === 'history'
+    source.kind === 'history' && !options.deps?.signal
       ? `${executionHostIdForStructuredTarget(owner)}\0${source.structuredSession.workspaceId}\0${source.structuredSession.sessionId}`
       : undefined
   const pending = key === undefined ? undefined : activationsInFlight.get(key)
-  if (pending && pending.current?.() !== false) {
-    return pending.result
+  if (pending) {
+    return pending
   }
   const deps = options.deps ?? defaultDeps
   let initialized = true
@@ -202,12 +187,12 @@ export async function openDesktopStructuredSessionInteraction(
       }
     )
     .finally(() => {
-      if (key !== undefined && activationsInFlight.get(key)?.result === activation) {
+      if (key !== undefined) {
         activationsInFlight.delete(key)
       }
     })
   if (key !== undefined) {
-    activationsInFlight.set(key, { result: activation, current: deps.current })
+    activationsInFlight.set(key, activation)
   }
   return activation
 }
@@ -338,68 +323,36 @@ type AgentSessionRevealReply =
 
 async function refreshStructuredSessionTabs(
   worktreeId: string,
-  host: RuntimeClientTarget,
-  signal?: AbortSignal
-): Promise<RuntimeMobileSessionTabsResult | undefined> {
+  host: RuntimeClientTarget
+): Promise<void> {
   if (host.kind === 'local') {
     await withStructuredSessionRestoreTimeout(refreshLocalStructuredSessionWorktreeTabs(worktreeId))
-    return undefined
+    return
   }
-  return withStructuredSessionRestoreTimeout(
-    callRuntimeRpc<RuntimeMobileSessionTabsResult>(
+  // Paired inventories arrive through their existing host-scoped subscription.
+  await withStructuredSessionRestoreTimeout(
+    callRuntimeRpc(
       host,
       'session.tabs.list',
       { worktree: toRuntimeWorktreeSelector(worktreeId) },
-      { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS, signal }
+      { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS }
     )
   )
 }
 
-function waitForPairedStructuredSessionTab(
-  tab: Parameters<typeof findStructuredAgentSessionTab>[1],
-  timeoutMs: number,
-  current: () => boolean,
-  signal: AbortSignal
-): Promise<void> {
-  if (
-    timeoutMs <= 0 ||
-    !current() ||
-    findStructuredAgentSessionTab(useAppStore.getState().unifiedTabsByWorktree, tab)
-  ) {
-    return Promise.resolve()
-  }
-  return new Promise((resolve) => {
-    const finish = (): void => {
-      clearTimeout(timer)
-      unsubscribe()
-      signal.removeEventListener('abort', finish)
-      resolve()
-    }
-    const timer = setTimeout(finish, timeoutMs)
-    const unsubscribe = useAppStore.subscribe((state, previous) => {
-      if (
-        !current() ||
-        (state.unifiedTabsByWorktree[tab.workspaceId] !==
-          previous.unifiedTabsByWorktree[tab.workspaceId] &&
-          findStructuredAgentSessionTab(state.unifiedTabsByWorktree, tab))
-      ) {
-        finish()
-      }
-    })
-    signal.addEventListener('abort', finish, { once: true })
-  })
-}
-
-async function withStructuredSessionRestoreTimeout<T>(promise: Promise<T>): Promise<T> {
+async function withStructuredSessionRestoreTimeout<T>(
+  promise: Promise<T>,
+  onTimeout?: () => void
+): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
       promise,
       new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(
-          () => reject(new Error('structured_session_restore_timeout')),
-          STRUCTURED_SESSION_RESTORE_TIMEOUT_MS
-        )
+        timer = setTimeout(() => {
+          onTimeout?.()
+          reject(new Error('structured_session_restore_timeout'))
+        }, STRUCTURED_SESSION_RESTORE_TIMEOUT_MS)
       })
     ])
   } finally {

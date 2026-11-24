@@ -1,0 +1,122 @@
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
+import { getRuntimeEnvironmentRegistration } from '../../rpc/environment-revisions/runtime-environment-revision'
+import {
+  MAX_TRACKED_SESSION_TABS_RECEIPTS,
+  sessionTabsFreshnessKey,
+  type MirroredAgentTab
+} from '../state'
+import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
+import { isCurrentSessionTabsRuntimeFrame } from './publisher-identity-fences'
+
+type ChatPublication = {
+  tabId: string
+  hostTabId: string
+  hostGroupId?: string
+  registration: ReturnType<typeof getRuntimeEnvironmentRegistration>
+  connectionGeneration: number
+  runtimeId?: string
+  publicationEpoch: string
+  snapshotVersion: number
+  previousEpoch?: string
+}
+
+const directlyOpenedChats = new Map<string, Map<string, ChatPublication>>()
+
+export function forgetDirectlyOpenedChat(
+  environmentId: string,
+  worktreeId: string,
+  sessionId: string
+): void {
+  const key = sessionTabsFreshnessKey(environmentId, worktreeId)
+  const entries = directlyOpenedChats.get(key)
+  if (entries?.delete(sessionId) && entries.size === 0) {
+    directlyOpenedChats.delete(key)
+  }
+}
+
+export function clearDirectlyOpenedChats(matches: (key: string) => boolean): void {
+  for (const key of directlyOpenedChats.keys()) {
+    if (matches(key)) {
+      directlyOpenedChats.delete(key)
+    }
+  }
+}
+
+export function clearDirectlyOpenedChatsForWorktree(
+  environmentId: string,
+  worktreeId: string
+): void {
+  directlyOpenedChats.delete(sessionTabsFreshnessKey(environmentId, worktreeId))
+}
+
+export function recordDirectlyOpenedChat(
+  environmentId: string,
+  worktreeId: string,
+  sessionId: string,
+  publication: ChatPublication
+): void {
+  const key = sessionTabsFreshnessKey(environmentId, worktreeId)
+  const entries = directlyOpenedChats.get(key) ?? new Map<string, ChatPublication>()
+  entries.set(sessionId, publication)
+  directlyOpenedChats.delete(key)
+  directlyOpenedChats.set(key, entries)
+  if (directlyOpenedChats.size > MAX_TRACKED_SESSION_TABS_RECEIPTS) {
+    const oldest = directlyOpenedChats.keys().next()
+    if (!oldest.done) {
+      directlyOpenedChats.delete(oldest.value)
+    }
+  }
+}
+
+/** An older full frame can update other surfaces while the directly opened chat awaits its own frame. */
+export function retainDirectlyOpenedChats(
+  environmentId: string,
+  snapshot: RuntimeMobileSessionTabsResult,
+  currentTabs: readonly Tab[],
+  hostGroupIdByTabId: Map<string, string>
+): ReadonlyMap<string, MirroredAgentTab> | undefined {
+  const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
+  const entries = directlyOpenedChats.get(key)
+  if (!entries) {
+    return
+  }
+  if (isWebSessionTabsWorktreeRemovalFrame(snapshot)) {
+    directlyOpenedChats.delete(key)
+    return
+  }
+  const registration = getRuntimeEnvironmentRegistration(environmentId)
+  const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
+  const retained = new Map<string, MirroredAgentTab>()
+  for (const tab of currentTabs) {
+    const proof = entries.get(tab.entityId)
+    if (tab.contentType !== 'agent-session' || !proof || tab.id !== proof.tabId) {
+      continue
+    }
+    const earlier =
+      snapshot.publicationEpoch === proof.publicationEpoch
+        ? snapshot.snapshotVersion < proof.snapshotVersion
+        : snapshot.publicationEpoch === proof.previousEpoch
+    if (
+      earlier &&
+      registration === proof.registration &&
+      generation === proof.connectionGeneration &&
+      isCurrentSessionTabsRuntimeFrame(environmentId, proof.runtimeId)
+    ) {
+      retained.set(tab.entityId, { hostTabId: proof.hostTabId, unifiedTab: tab })
+      if (proof.hostGroupId) {
+        hostGroupIdByTabId.set(proof.hostTabId, proof.hostGroupId)
+      }
+    }
+  }
+  for (const sessionId of entries.keys()) {
+    if (!retained.has(sessionId)) {
+      entries.delete(sessionId)
+    }
+  }
+  if (entries.size === 0) {
+    directlyOpenedChats.delete(key)
+  }
+  return retained.size > 0 ? retained : undefined
+}
