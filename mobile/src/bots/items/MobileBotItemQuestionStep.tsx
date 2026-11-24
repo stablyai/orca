@@ -15,6 +15,7 @@ import type {
 } from '../../../../src/shared/bots/use-bot-item-question-steps'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
 import { colors, feedback, pressedStyle, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
@@ -195,7 +196,11 @@ export function MobileBotItemQuestionStep({
       ) : null}
       <View style={styles.head}>
         <View style={styles.question}>
-          <MobileMarkdown content={decision.question} tone="strong" />
+          <MobileMarkdown
+            content={decision.question}
+            tone="strong"
+            rangeSelectable={INLINE_TEXT_SELECTION}
+          />
         </View>
         <StepNav steps={steps} />
       </View>

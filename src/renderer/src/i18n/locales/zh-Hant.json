@@ -367,6 +367,12 @@
       "caveat": "這會在遠端主機上，以此頁面上次的網址開啟新頁面。登入狀態及其他暫存狀態可能不同；透過表單提交開啟的頁面則會顯示空白。",
       "failed": "無法在遠端主機上開啟此頁面。檢查連線並重試。"
     },
+    "deviceMove": {
+      "toThisComputer": "在這台電腦上開啟",
+      "toHost": "在 {{host}} 上開啟",
+      "tooltip": "在另一端的新分頁中開啟此位址，並關閉此分頁。你可能需要重新登入。",
+      "failedToThisComputer": "無法在這台電腦上開啟此頁面。"
+    },
     "sshRoute": {
       "preparingTitle": "透過 SSH 主機連線",
       "errorTitle": "SSH 瀏覽器路由無法使用",
@@ -514,6 +520,13 @@
       "sshPage": {
         "stored": "已儲存到 {{host}} 的瀏覽器。",
         "googleCookiesSkipped": "未匯入 Google Cookie。請開啟一個透過 {{host}} 瀏覽的頁面，然後登入 Google。"
+      },
+      "picker": {
+        "menuItem": "匯入 Cookie…",
+        "search": "搜尋設定檔",
+        "lastUsed": "上次使用",
+        "noMatches": "沒有相符項目",
+        "googleNote": "Google 登入資訊未匯入"
       }
     },
     "passwords": {
@@ -598,15 +611,15 @@
       },
       "permissionsDescriptionOwnAgents": "新聊天會採用「設定 → 代理程式」中各代理程式的權限設定。",
       "launch": {
-        "on": "Chat UI 已開啟",
-        "off": "Chat UI 已關閉",
+        "on": "聊天介面已開啟",
+        "off": "聊天介面已關閉",
         "agents": "各代理程式的預設啟動模式",
-        "agentsDescription": "選擇各代理程式要在 Chat UI 或 CLI 中開啟。",
+        "agentsDescription": "選擇各代理程式要在聊天介面或 CLI 中開啟。",
         "chatDescription": "新代理程式預設會以聊天模式啟動。",
         "cliDescription": "新代理程式預設會以 CLI 啟動。",
         "turnOn": "開啟",
         "turnOff": "關閉",
-        "toggle": "預設使用 Chat UI"
+        "toggle": "預設使用聊天介面"
       }
     },
     "terminal": {
@@ -1085,7 +1098,8 @@
         "ownShort": "自有技能",
         "showMore": "顯示另外 {{count}} 個",
         "notLoaded": "沒有代理程式載入此技能"
-      }
+      },
+      "whoCanAsk": "誰可以向 {{bot}} 提問"
     },
     "sharedLinks": {
       "keywordBots": "機器人"
@@ -1922,12 +1936,16 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "結構化代理程式工作階段尚不可用。稍後重試。",
         "gone": "此聊天不再在此主機上，因此無法在此處重新開啟。",
         "hostCannotOpen": "在 Orca 更新之前，無法重新開啟此聊天。",
         "worktreeDeleted": "工作樹已刪除。",
         "projectRemoved": "專案已從 Orca 移除。",
-        "folderWorkspaceRemoved": "資料夾工作區已移除。"
+        "folderWorkspaceRemoved": "資料夾工作區已移除。",
+        "chatStillStarting": "此聊天仍在啟動中。請稍後再試。",
+        "chatOpenFailed": "無法開啟此聊天。",
+        "chatOpenRetry": "重試",
+        "chatOpenShowDetails": "顯示詳細資料",
+        "chatOpenHideDetails": "隱藏詳細資料"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "使用已佈建根目錄的配方不支援稀疏檢出。"
@@ -2057,7 +2075,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "尚未設定專案位置",
         "hostLocalGitProject": "此專案沒有相符的 Git 遠端儲存庫",
-        "hostLocalFolderProject": "資料夾專案無法連結到其他主機"
+        "hostLocalFolderProject": "資料夾專案無法連結到其他主機",
+        "pendingNotSetUp": "已在此主機追蹤專案，但尚未設定",
+        "pendingSettingUp": "專案設定進行中",
+        "pendingError": "專案設定需要處理",
+        "pendingUnsupported": "此主機不支援此專案"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "請更新伺服器以查看其 SSH 主機上的連接埠。",
@@ -3849,27 +3871,20 @@
         "cleanup": {
           "WorkspaceCleanupDialog": {
             "3828408538": "刪除 {{value0}}",
-            "b6bae1eed1": "取消",
-            "38ca0b1400": "這將永久刪除它們的本機檔案。您無法復原此操作。",
             "e97e4580c7": "有改動",
             "9623a5107d": "未推送的提交",
             "e8b3741ff7": "被忽略",
             "a9957007eb": "忽略 {{value0}}",
             "bef0adef9b": "分支",
             "bbb1ab6a6f": "選擇{{value0}}",
-            "b771c92598": "刪除所選內容",
             "7eee951968": "掃描工作區",
             "191f0bc98e": "關閉",
-            "7ae2ad30f4": "重新整理",
             "7f451a3e2c": "無法忽略清理建議",
             "662b8ec3f8": "工作區清理掃描失敗",
             "9cc26c019d": "移除",
             "0e2d235c63": "工作區掃描就緒",
             "4a35c08764": "檢視",
             "47123d0108": "收集工作區資訊。您可以關閉它然後再回來。",
-            "1d3503357d": "刪除作業會繼續進行，您可以先關閉此視窗，稍後再回來。",
-            "4c2990886e": "已刪除 {{value0}}/{{value1}}",
-            "86ba852118": "{{value0}}，{{value1}} 個失敗",
             "archivedStatus": "已封存",
             "mergedStatus": "已合併",
             "unchangedStatus": "沒有新提交",
@@ -6059,11 +6074,6 @@
           "changesLost_other": "{{count}} 項未提交的變更將遺失",
           "uncountedChangesLost": "未提交的變更將遺失"
         },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "子工作區將被刪除",
-          "alsoDeletesChildren_other": "刪除此工作區也會刪除 {{count}} 個子工作區。",
-          "moreChildren_other": "另有 {{count}} 個"
-        },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "顯示工作目錄樹",
           "ad99f4eea9": "保持隱藏",
@@ -7709,7 +7719,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "已刪除設定檔「{{value0}}」。",
-          "2d4bea7f35": "預設 cookie 已清除。",
           "796d846483": "沒有匯入 cookie",
           "c29648fe5b": "目前",
           "b4c167764d": "已從檔案將 {{value0}} 個 Cookie 匯入到 {{value1}}。",
@@ -7717,10 +7726,7 @@
           "b4e9d3f2a1c5": "已從 {{value1}} 匯入 {{value0}} 個 Cookie 到 {{value2}}。",
           "c5a273a809": "從 {{value0}}",
           "80bffd32bf": "匯入 Cookie",
-          "bd7d68f138": "從檔案...",
-          "4054c458e1": "清除預設 cookie",
-          "3b662becd5": "要清除預設設定檔中的 cookie 嗎？",
-          "f159cf5a3e": "這可能會讓你登出此設定檔中的網站。"
+          "bd7d68f138": "從檔案..."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "如果 cookie 匯入不合適，「電腦使用」可以控制本機應用程式，並可視情況使用瀏覽器現有的已登入工作階段。安裝 Orca Computer Use 技能； macOS 還需要隱私權限。",
@@ -17316,8 +17322,6 @@
             "ed8f54509d": "預設",
             "e5d31de1a9": "檢視區大小",
             "56f94f4ffa": "從檔案...",
-            "eb280bfb11": "從 {{value0}}",
-            "2293adf620": "匯入 Cookie",
             "cf7cdc67ef": "新增設定檔…",
             "7b838540c7": "瀏覽器選單",
             "a7a86702b3": "建立並切換到 {{value0}} 設定檔",
@@ -19623,6 +19627,10 @@
       "railLabel": "你的訊息",
       "railImageMessage": "圖片附件",
       "railEmptyMessage": "訊息",
+      "railFilterPlaceholder": "篩選你的訊息",
+      "railNoMatches": "沒有相符的訊息",
+      "railTickLabel": "第 {{index}} 則訊息，共 {{count}} 則：{{text}}",
+      "railMatchCount": "{{count}} / {{total}}",
       "prompt": {
         "collapse": "收合",
         "expand": "展開"
@@ -19638,7 +19646,6 @@
         "terminalRequired": "請在終端機中回答這個 OMP 問題。",
         "openTerminal": "在終端機中回答",
         "recommended": "推薦",
-        "stepAnswered": "{{value0}}，已回答",
         "stepOf": "第 {{value0}} 個，共 {{value1}} 個",
         "answered": "已回答",
         "title": "問題",
@@ -19747,7 +19754,9 @@
         "paused": "目標已暫停",
         "blocked": "目標受阻",
         "limited": "目標受限",
-        "attachmentsUnsupported": "在設定目標之前刪除附件。"
+        "attachmentsUnsupported": "在設定目標之前刪除附件。",
+        "checks_other": "{{count}} 次檢查",
+        "last-check": "最近一次目標檢查"
       },
       "fileLinks": {
         "notFound": "未找到檔案：{{value0}}",
@@ -19868,7 +19877,16 @@
         "settingsRejected": "Codex 無法套用所選的模型與推理強度。此次目標變更未送出。請檢查選項後再試一次。",
         "settingsUnconfirmed": "Codex 未確認所選的模型與推理強度。此次目標變更未送出。請查看聊天後再試一次。",
         "pauseUnconfirmed": "Codex 已停止執行，但尚未確認目標已暫停。請先確認目標狀態再繼續。",
-        "stopUnconfirmed": "Codex 無法確認「停止」操作。請先查看聊天再繼續。"
+        "stopUnconfirmed": "Codex 無法確認「停止」操作。請先查看聊天再繼續。",
+        "noGoal": "此聊天中 Codex 沒有可變更的目標。請輸入 /goal 並接上目標內容來設定。"
+      },
+      "automationResult": {
+        "openRun": "開啟執行紀錄",
+        "notRead": "{{name}} 尚未讀取此內容，將隨你的下一則訊息一併送出。",
+        "read": "{{name}} 已隨你的下一則訊息讀取此內容。",
+        "sentWithOne": "已隨附 1 個自動化結果傳送",
+        "sentWithMany": "已隨附 {{count}} 個自動化結果傳送",
+        "cleared": "在聊天清除前已送達，不會傳給 {{name}}。"
       },
       "slashCommandDescriptions": {
         "clearConversation": "清除對話",
@@ -20018,7 +20036,7 @@
         "turnWorking": "此聊天的代理正在工作。請在其回合結束後再切換分支。",
         "worktree": "工作樹"
       },
-      "explicitChatWindows": "此 Agent 的聊天尚不支援 Windows。請改為在終端機中開啟。",
+      "explicitChatWindows": "此代理程式的聊天尚不支援 Windows。請改為在終端機中開啟。",
       "fork": {
         "action": "從此回覆建立分支",
         "pending": "正在從此聊天建立分支…",
@@ -20036,6 +20054,27 @@
         "sourceTooltip": "{{name}} 的分支",
         "unknownSourceTooltip": "另一個聊天的分支"
       },
+      "importPlan": {
+        "comes": "將匯入",
+        "changed": "將匯入並調整",
+        "already": "已存在",
+        "stays": "保留在 {{app}}",
+        "fromAgain": "來自 {{app}}（再次匯入）",
+        "from": "來自 {{app}}",
+        "selected": "已選取 {{chosen}} / {{total}} 項 · 金鑰與登入資訊絕不會被複製",
+        "importOne": "匯入 1 個項目",
+        "importMany": "匯入 {{count}} 個項目",
+        "askedOne": "已要求匯入 1 個項目",
+        "askedMany": "已要求匯入 {{count}} 個項目"
+      },
+      "importDone": {
+        "heading": "匯入完成",
+        "title": "已從 {{app}} 匯入 {{name}}",
+        "open": "開啟",
+        "stayed": "保留在 {{app}}：{{things}}。{{app}} 中的內容皆未變更。",
+        "unchanged": "{{app}} 中的內容皆未變更。",
+        "paused": "自動化已暫停，以免重複執行。請先在 {{app}} 關閉舊 bot，再開啟這些自動化。"
+      },
       "cardKindHidden": {
         "description": "你可以隨時在此處變更",
         "settingsLink": "設定 > 聊天介面 > 回合活動",
@@ -20050,11 +20089,149 @@
       },
       "splitRight": "向右分割",
       "splitDown": "向下分割",
+      "automationRun": {
+        "waitOver": "等待結束",
+        "scheduled": "已排程",
+        "runNow": "立即執行",
+        "github": "GitHub",
+        "slack": "Slack",
+        "linear": "Linear",
+        "webhook": "Webhook",
+        "gmail": "Gmail",
+        "calendar": "日曆",
+        "instructions": "指示",
+        "event": "事件",
+        "startError": "錯誤",
+        "couldNotStart": "無法啟動",
+        "queued": "已排隊",
+        "deadlineReached": "已到期限",
+        "due": "預定 {{time}}",
+        "dueRan": "預定 {{due}}，執行於 {{ran}}",
+        "reused": "重複使用：{{what}}",
+        "reusedFrom": "重複使用的事件：{{what}} · 發生於 {{time}}",
+        "whatOn": "{{what}}（{{where}}）",
+        "whatIn": "{{what}}（{{where}}）",
+        "whatAt": "{{what}} · {{where}}",
+        "factsAt": "{{facts}} · {{time}}",
+        "someoneWrote": "有人寫道",
+        "personWrote": "{{name}} 寫道",
+        "callerSent": "呼叫端傳送的內容",
+        "external": "外部內容 · 作為資訊而非指示傳送給 bot",
+        "shortened": "已縮短為 4,096 個字元，與傳送給 bot 的內容相同。",
+        "memberAccess": "執行時，{{name}} 在「誰可以提問」名單中。",
+        "someMemberAccess": "執行時，此內容由「誰可以提問」名單中的人傳送。",
+        "otherAccess": "不在「誰可以提問」名單中，或存取權未知。",
+        "ownerAccess": "來自 bot 的擁有者。",
+        "sampleCall": "範例呼叫",
+        "firstCall": "首次呼叫",
+        "webhookCall": "Webhook 呼叫",
+        "openOnGitHub": "在 GitHub 開啟",
+        "openInSlack": "在 Slack 開啟",
+        "openInLinear": "在 Linear 開啟",
+        "openLink": "開啟連結",
+        "accessibleName": "自動化執行。{{label}}：{{name}}。{{reason}}。",
+        "accessibleNameAt": "自動化執行。{{label}}：{{name}}。{{reason}}。{{time}}。",
+        "accessibleNameNoReason": "自動化執行。{{label}}：{{name}}。",
+        "accessibleNameNoReasonAt": "自動化執行。{{label}}：{{name}}。{{time}}。",
+        "copyInstructions": "複製指示",
+        "copyEvent": "複製事件",
+        "openAutomation": "開啟自動化",
+        "sendAgain": "再次傳送",
+        "sentAgain": "已再次傳送",
+        "showAll": "顯示全部",
+        "showLess": "收合",
+        "what": {
+          "github": {
+            "issue_opened": "議題已建立",
+            "pr_opened": "PR 已建立",
+            "pr_pushed": "推送",
+            "pr_merged": "已合併",
+            "comment": "留言",
+            "review_comment": "審查留言",
+            "review": "審查",
+            "mentioned": "提及",
+            "review_requested": "已請求審查",
+            "assigned": "已指派",
+            "ci_failed": "CI 失敗",
+            "ci_finished": "CI 完成",
+            "ci_passed": "CI 通過",
+            "pr_conflicted": "衝突",
+            "pr_closed": "已關閉",
+            "pr_ready": "可供審查",
+            "labeled": "已加標籤",
+            "issue_closed": "議題已關閉",
+            "deploy_finished": "部署完成",
+            "security_alert": "安全性警示",
+            "workflow_finished": "工作流程執行完成"
+          },
+          "slack": {
+            "mentioned": "提及",
+            "message": "訊息",
+            "reaction": "表情回應"
+          },
+          "linear": {
+            "assigned": "已指派",
+            "mentioned": "提及",
+            "issue_created": "議題已建立",
+            "issue_moved": "議題已移動"
+          },
+          "gmail": {
+            "new_email": "新電子郵件"
+          },
+          "calendar": {
+            "starting_soon": "會議即將開始"
+          },
+          "other": "事件"
+        },
+        "afterThirtyDays": "30 天後",
+        "cancel": "取消",
+        "cancelled": "已取消",
+        "couldNotFinish": "無法完成",
+        "createdAutomation": "已建立自動化",
+        "finished": "已完成",
+        "happened": "已發生",
+        "noDeadline": "無期限",
+        "noReplyBy": "{{time}} 前無回覆",
+        "nothingBy": "{{time}} 前無任何事件",
+        "paused": "已暫停",
+        "replied": "{{actor}} 已回覆",
+        "rowAccessibleName": "{{label}}：{{name}}。{{details}}",
+        "thenLine": "接著",
+        "thenOnce": "事件發生時執行一次",
+        "thenOnceBy": "執行一次；若無事件，則於 {{time}} 執行",
+        "until": "至 {{time}}",
+        "updatedAutomation": "已更新自動化",
+        "waiting": "等待中",
+        "waitsFor": "等待"
+      },
+      "eventRow": {
+        "showLess": "收合",
+        "showMore": "展開",
+        "running": "正在執行",
+        "failed": "失敗"
+      },
       "dock": {
         "label": "訊息框和提示"
       },
       "automationSaved": {
-        "openFullPage": "開啟頁面"
+        "resultsInRuns": "結果顯示於每次執行中",
+        "paused": "已暫停",
+        "webhookHint": "請將你的服務指向此 URL",
+        "gettingUrl": "正在取得 URL…",
+        "editDraft": "請修改「{{name}}」，讓它",
+        "resultsInEachRun": "每次執行中",
+        "resultsChat": "聊天",
+        "noRuns": "尚無執行記錄",
+        "recentRuns": "最近的執行",
+        "when": "時機",
+        "results": "結果",
+        "agent": "代理程式",
+        "runNow": "立即執行",
+        "loading": "載入中",
+        "deleted": "此自動化已刪除",
+        "loadFailed": "無法讀取此自動化",
+        "openFullPage": "開啟頁面",
+        "onAgent": "由 {{name}} 執行"
       },
       "usageLimitActions": {
         "handOff": "交接給代理程式"
@@ -20154,8 +20331,6 @@
           "noSizes": "尚未測量工作區大小。",
           "noSizesDescription": "測量磁碟用量後會顯示大小。",
           "measureSizesTitle": "掃描工作區大小",
-          "sizeOnDisk": "磁碟用量：{{value0}}",
-          "checkingGitRow": "正在檢查 Git 狀態",
           "searchPlaceholder": "搜尋名稱、存放庫、分支、路徑、主機",
           "searchLabel": "搜尋工作區",
           "filters": "篩選條件",
@@ -20213,7 +20388,6 @@
           "noMatches": "沒有工作區符合這些篩選條件。",
           "noMatchesDescription": "所有工作區都在同一清單中；請放寬篩選條件或清除篩選。",
           "sortBy": "排序方式",
-          "sortByField": "按 {{value0}} 排序",
           "sort": {
             "lastActivity": "最近活動",
             "lastVisited": "上次開啟",
@@ -20269,17 +20443,11 @@
             "none": "沒有"
           },
           "idleSignalField": "閒置依據",
-          "updatedAgo": "更新於 {{value0}}",
-          "refreshing": "重新整理中…",
-          "refreshingProgress": "正在重新整理 {{value0}}/{{value1}}",
-          "notMeasured": "尚未測量",
           "openWorkspaceNamed": "開啟 {{value0}}",
           "openWorkspace": "開啟工作區",
-          "workspaceStatus": "工作區狀態：{{value0}}",
           "measuringSizesProgress": "正在掃描 {{value0}}/{{value1}}",
           "measuringSizes": "正在掃描大小",
           "measureSizesFailed": "無法掃描工作區大小",
-          "selectedCount": "已選擇 {{value0}}",
           "gitStatusCheckFailed": "Git 狀態檢查失敗",
           "gitStatusUnverified": "無法驗證 Git 狀態",
           "deleteAnyway": "仍然刪除",
@@ -20327,12 +20495,11 @@
               "finishedAgents": "已完成的代理程式"
             }
           },
-          "forceDeleteRisk_other": "{{count}} 個工作區目前存在風險，可能需要強制刪除",
           "selectionVanishedCount_other": "所選的 {{count}} 個工作區已不存在。",
           "selectionWithheldCount_other": "所選的 {{count}} 個工作區已被目前的篩選條件隱藏，因此已取消選取。",
-          "selectAllSafetyChecked_other": "選取全部 {{count}} 個已通過安全檢查的工作區",
-          "clearSelection": "清除選取",
-          "lastActive": "上次活動時間：{{value0}}"
+          "lastActive": "上次活動時間：{{value0}}",
+          "sortAscending": "升冪",
+          "sortDescending": "降冪"
         },
         "scan": {
           "progress": "正在掃描工作區（{{value0}}/{{value1}}）",
@@ -20370,6 +20537,71 @@
           "ignoredFilesBlocker": "被忽略的本機檔案",
           "ignoredFilesNamed": "被忽略的檔案：{{value0}}",
           "ignoredFilesUnchecked": "被忽略的檔案未完整檢查"
+        },
+        "confirm": {
+          "title_other": "刪除 {{count}} 個工作區？",
+          "localFilesSection": "本機檔案將遺失",
+          "back": "返回",
+          "deletePermanently": "永久刪除",
+          "retryDescription": "這會永久刪除 {{name}} 及其本機檔案。",
+          "showMore": "再顯示 {{count}} 個"
+        },
+        "review": {
+          "title": "檢查工作區",
+          "refresh": "重新整理",
+          "checking": "正在檢查變更",
+          "updatesAvailable": "有更新。重新整理"
+        },
+        "row": {
+          "sizeLabel": "大小",
+          "reviewLabel": "審查",
+          "statusLabel": "狀態",
+          "signalsLabel": "訊號",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "不是 Git 工作區。請改為從 Orca 中移除該專案。",
+          "unreachable": "無法連線 {{host}}。重新連線後即可刪除，或將其從 Orca 中移除。",
+          "mainCheckout": "無法刪除專案的主要簽出。",
+          "uncommittedFiles_other": "{{count}} 個未提交的檔案",
+          "couldntCheck": "無法檢查變更"
+        },
+        "group": {
+          "empty": "這裡沒有工作區。",
+          "nothingLocal": "無本機內容",
+          "localFiles": "有本機檔案",
+          "cannotDelete": "無法刪除",
+          "label": "工作區分組",
+          "selected": "已選 {{count}} 個"
+        },
+        "footer": {
+          "delete_other": "刪除 {{count}} 個工作區",
+          "selected": "已選 {{count}} 個",
+          "waitForDelete": "請等待目前的刪除完成。"
+        },
+        "selectAll": {
+          "partial": "已選 {{selected}}/{{total}} 個",
+          "all": "全選 {{count}} 個"
+        },
+        "runCard": {
+          "title": "正在刪除工作區",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "關閉",
+          "show": "顯示"
+        },
+        "done": {
+          "failedLine_other": "{{count}} 個無法刪除。",
+          "title": "已刪除 {{deleted}}/{{total}} 個工作區",
+          "singleTitle": "已刪除 {{deleted}}/{{total}} 個工作區",
+          "button": "完成"
+        },
+        "deleting": {
+          "title_other": "正在刪除 {{count}} 個工作區",
+          "runInBackground": "在背景執行",
+          "progress": "已刪除 {{done}}/{{total}}",
+          "statusDeleted": "已刪除",
+          "statusDeleting": "正在刪除…",
+          "statusFailed": "無法刪除",
+          "statusWaiting": "等待中",
+          "unconfirmed": "無法確認已刪除。請重新整理以檢查。"
         }
       },
       "creation": {
@@ -20813,12 +21045,13 @@
       "downloadSize": "下載大小為 {{size}} MB。",
       "downloading": "正在下載 {{done}} MB。",
       "downloadingOf": "正在下載 {{done}} MB，共 {{total}} MB。",
-      "external": "使用此主機上找到的 {{agent}} 副本。",
-      "extracting": "正在解壓縮 {{agent}}。",
+      "external": "使用您自己的 {{agent}}",
+      "externalShort": "使用您自己的副本",
+      "extracting": "正在解壓縮 {{agent}}…",
+      "extractingShort": "正在解壓縮…",
       "failed": "安裝失敗。請再試一次。",
       "cancelFailed": "無法取消安裝。請再試一次。",
       "install": "安裝 {{agent}}",
-      "installManaged": "安裝 Orca 提供的副本",
       "notInstalled": "尚未安裝。",
       "progress": "{{agent}} 下載",
       "readFailed": "無法檢查此主機上的 {{agent}}。正在重試。",
@@ -20835,7 +21068,8 @@
       "thisComputer": "這台電腦",
       "unavailable": "{{agent}} 無法在此主機上使用。",
       "update": "更新",
-      "verifying": "正在檢查已下載的執行環境。",
+      "verifying": "正在驗證…",
+      "verifyingAgent": "正在驗證 {{agent}}…",
       "installTitle": "安裝 {{agent}} 即可開始聊天",
       "continueTitle": "安裝 {{agent}} 以繼續",
       "heroBody": "只需下載一次，共 {{size}} MB。執行此聊天的電腦上，所有 {{agent}} 聊天皆可共用。",
@@ -20853,7 +21087,7 @@
       "checkingTitle": "正在檢查下載內容",
       "progressOf": "{{done}} / {{total}} MB",
       "unpackingDetail": "正在解壓縮執行環境",
-      "checkingDetail": "正在檢查已下載的執行環境",
+      "checkingDetail": "正在驗證 {{agent}}…",
       "stepDownload": "下載",
       "stepUnpack": "解壓縮",
       "stepCheck": "檢查"
@@ -21157,7 +21391,7 @@
       "demoPassword": "密碼",
       "demoCookie": "Cookie",
       "switchedNoteTitle": "新的代理程式將在聊天介面中開啟",
-      "switchedNoteBody": "偏好終端機？隨時可以切換回來：在設定中搜尋 <term>Chat UI</term>。",
+      "switchedNoteBody": "偏好終端機？隨時可以切換回來：在設定中搜尋 <term>聊天介面</term>。",
       "openSettings": "開啟設定"
     },
     "botsTeammate": {
@@ -23709,6 +23943,9 @@
     "terminalUnverifiable": "Orca 無法確認 WSL 發行版 {{distro}} 是否正在執行，因此沒有啟動此終端機。請啟動該發行版後重試。"
   },
   "bots": {
+    "whoCanAsk": {
+      "caption": "誰可以提問"
+    },
     "activity": {
       "title": "活動"
     },
@@ -23810,8 +24047,6 @@
       "composio": {
         "withComposio": "透過 Composio"
       },
-      "allApps": "所有應用程式",
-      "onBot": "在 {{bot}} 上",
       "mcp": {
         "addTitle": "新增 {{app}}",
         "advanced": "進階",
@@ -23888,7 +24123,6 @@
     "row": {
       "runsOn": "在 {{host}} 上執行",
       "disconnected": "已中斷連線",
-      "hostDisconnected": "{{host}} 已中斷連線",
       "idle": "閒置",
       "paused": "已暫停",
       "reading": "正在閱讀你的訊息",
@@ -23909,7 +24143,10 @@
         "lastItem": "最後一個項目",
         "previous": "上一個項目",
         "next": "下一個項目",
-        "subWhere": "事項 {{number}} · {{chat}}"
+        "linkCount": "{{count}} 個連結",
+        "reply": "回覆",
+        "replyAbove": "回覆上方的問題",
+        "replyBelow": "回覆下方的問題"
       },
       "activity": {
         "linked": "連結了 {{links}}",
@@ -24032,11 +24269,12 @@
       "controlBriefIfAdded": "你新增的任何人都可以在這裡以你的身份操作。",
       "controlBriefOnHost": "他們可以在 {{computer}} 上以你的身份操作。",
       "controlBriefIfAddedOnHost": "你新增的任何人都可以在 {{computer}} 上以你的身份操作。",
-      "reachSlack": "以 @{{name}} 身份在 Slack 傳送訊息",
+      "reachSlack": "以 {{name}} 身份在 Slack 傳送訊息",
       "here": "這裡",
       "thisServer": "此伺服器",
       "there": "那裡",
-      "executionComputer": "此代理程式執行所在的電腦"
+      "executionComputer": "此代理程式執行所在的電腦",
+      "whoCanAsk": "誰可以向 {{name}} 提問"
     },
     "webhooks": {
       "delete": {
@@ -24132,7 +24370,8 @@
       "youAndOthers_one": "你和另外 {{count}} 人",
       "youAndOthers_other": "你和另外 {{count}} 人",
       "shareAction": "分享",
-      "sharingOn": "開啟"
+      "sharingOn": "開啟",
+      "whoCanAsk": "誰可以提問"
     },
     "failures": {
       "lookUnfinished": "上次四處檢視沒有完成。",
@@ -24289,6 +24528,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "重新整理模型",
     "catalogUnsupportedLaunch": "此主機上無法使用 {{agent}} 模型。目前的選擇仍會套用。",
     "catalogEmpty": "{{agent}} 沒有可用模型。",
     "setByArguments": "由引數設定",

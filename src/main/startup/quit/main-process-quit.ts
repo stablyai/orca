@@ -1,10 +1,12 @@
 import { closeEnvironmentStore } from '../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
 import { app, type Event } from 'electron'
 import { shutdownPairedRuntimeBrowserClientHosts } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+import { closeAllPairedPortForwards } from '../../ports/paired-forwards/paired-port-forwards'
 import { disposeDesktopBrowserBridge } from '../../ipc/browser/desktop-browser-bridge-wiring'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { settleTeardownWithinDeadline, type NamedQuitTeardown } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
+import { abortPluginGitForShutdown } from '../../plugins/installation/plugin-git-repository'
 import { destroySystemTray } from '../../tray/system-tray'
 import { shutdownTelemetry } from '../../telemetry/client'
 import { shutdownObservability } from '../../observability/index'
@@ -102,6 +104,8 @@ function installWillQuitHandler(): void {
     // A UI change still inside its debounce must reach the file before exit.
     const settingsFileShutdown = state.settingsFile?.dispose() ?? Promise.resolve()
     state.settingsFile = null
+    // Not awaited: signals catalog git to stop without delaying quit; the startup sweep catches leftovers.
+    abortPluginGitForShutdown()
     const updateQuitInProgress = isQuittingForUpdate()
     const coreTeardowns = beginDesktopCoreShutdown(
       state.core,
@@ -120,7 +124,8 @@ function installWillQuitHandler(): void {
         retireBrowserClientHosts: () => {
           disposeDesktopBrowserBridge()
           return [
-            { name: 'browser-client-hosts', promise: shutdownPairedRuntimeBrowserClientHosts() }
+            { name: 'browser-client-hosts', promise: shutdownPairedRuntimeBrowserClientHosts() },
+            { name: 'paired-port-forwards', promise: closeAllPairedPortForwards() }
           ]
         },
         isDevParentShutdown: isDevParentShutdownRequested

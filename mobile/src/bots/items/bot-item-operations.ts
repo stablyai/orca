@@ -14,6 +14,7 @@ import type {
   BotItemCommentSkill,
   BotItemStatus
 } from '../../../../src/shared/bots/bot-items'
+import { botItemStatusFields } from '../../../../src/shared/bots/bot-item-status-fields'
 import { readHostMethodReply } from '../../host-screen/sidebar-feed/host-sidebar-feed-operations'
 import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
 import { RpcRefusedError } from '../../transport/rpc/rpc-refused-error'
@@ -100,7 +101,10 @@ export type BotItemRead<T> =
 export async function readBotItems(
   client: RpcClient,
   botId: string,
-  { chatIds, ...page }: { chatIds?: readonly string[] | null; closedCursor?: string } = {}
+  {
+    chatIds,
+    ...page
+  }: { chatIds?: readonly string[] | null; closedCursor?: string; closedOnly?: boolean } = {}
 ): Promise<BotItemRead<BotItemsListRead>> {
   try {
     const answer = readHostMethodReply(
@@ -213,16 +217,14 @@ export function setBotItemsStatus(
   client: RpcClient,
   uids: readonly string[],
   status: BotItemStatus,
-  note?: string
+  note: string | undefined,
+  /** The host advertises BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY. */
+  cancelTakesNoReason: boolean
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
     const reply = await itemsStatus.request(
       client,
-      {
-        items: [...uids],
-        status,
-        ...(note ? (status === 'waiting' ? { note } : { reason: note }) : {})
-      },
+      { items: [...uids], ...botItemStatusFields(status, note, cancelTakesNoReason) },
       { failWhenDisconnected: true }
     )
     try {

@@ -207,8 +207,7 @@
       "next": "下一步",
       "other": "其他…",
       "skip": "跳過",
-      "step": "第 {{step}} 步",
-      "submit": "送出"
+      "step": "第 {{step}} 步"
     },
     "askRow": {
       "asked": "已提問：",
@@ -380,14 +379,6 @@
     },
     "promptStrip": {
       "expand": "展開"
-    },
-    "question": {
-      "otherReplyPlaceholder": "或輸入回覆…",
-      "replyPlaceholder": "輸入您的回覆…",
-      "sendReply": "傳送回覆",
-      "submit": "送出",
-      "submitCount": "送出（{{count}}）",
-      "submitSelectedOptions": "送出所選選項"
     },
     "queuedMessages": {
       "deleteAll": "全部刪除",
@@ -4506,7 +4497,6 @@
       "access": "存取",
       "whoCanAsk": "誰可以提問",
       "deleteBot": "刪除機器人…",
-      "agentDetail": "用於機器人的對話和自動化。新模型適用於新對話；主聊天保持當前模型。",
       "accountChecking": "檢查中…",
       "signedOut": "已登出 Orca",
       "orcaAccount": "Orca 帳戶",
@@ -4521,7 +4511,6 @@
       "onlyYou": "僅你自己",
       "model": "模型",
       "effort": "推理強度",
-      "chatDefaultNote": "使用你的聊天預設設定。後臺執行使用你的「代理程式」設定。",
       "modelDefault": "預設",
       "signInChanged": "Orca 登入已變更",
       "sameAsChatsDetail": "使用你的聊天權限設定。",
@@ -4564,26 +4553,12 @@
       "peerTold": "{{from}} 告知了 {{to}}",
       "startAConversationWithThisGroupMentionBots": "與此群組開始對話。用 @名稱 或 @everyone 提及機器人。",
       "items": {
-        "thisGroup": "此群組",
-        "thread": "討論串",
-        "all": "它們的全部工作",
-        "orNames": "{{names}} 或 {{last}}",
-        "outsideRoom_one": "此房間外還有 {{count}} 項",
-        "outsideRoom_other": "此房間外還有 {{count}} 項",
-        "outsideThread_one": "此討論串外還有 {{count}} 項",
-        "outsideThread_other": "此討論串外還有 {{count}} 項",
-        "outside_one": "此群組外還有 {{count}} 項",
-        "outside_other": "此群組外還有 {{count}} 項",
         "emptyTitle": "此群組還沒有事項",
-        "emptyBody": "當 {{names}} 在此群組中接手某項工作時，會顯示在這裡。",
         "needsYouCount_one": "{{count}} 個需要您處理",
         "needsYouCount_other": "{{count}} 個需要您處理",
         "workingCount_one": "{{count}} 個執行中",
         "workingCount_other": "{{count}} 個執行中",
         "filterBot": "機器人",
-        "outsideRoom": "此房間外還有 {{count}} 項",
-        "outsideThread": "此討論串外還有 {{count}} 項",
-        "outside": "此群組外還有 {{count}} 項",
         "needsYouCount": "{{count}} 個需要您處理",
         "workingCount": "{{count}} 個執行中"
       },
@@ -4621,8 +4596,7 @@
     },
     "items": {
       "filter": {
-        "clearAll": "清除篩選",
-        "chat": "聊天"
+        "clearAll": "清除篩選"
       },
       "tab": "項目",
       "activity": {
@@ -4881,7 +4855,6 @@
       "colorInk": "墨黑",
       "title": "名稱和圖片",
       "mascot": "吉祥物",
-      "background": "背景顏色",
       "choosePhoto": "從「照片」選擇",
       "slackToo": "也會更改你的機器人在 Slack 中的圖片。"
     },
@@ -4898,9 +4871,7 @@
       "addButton": "新增",
       "sourceLabel": "伺服器 URL 或啟動命令",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "除了你自己的工具外，只有 {{name}} 會獲得它。",
       "details": "詳情",
-      "commandWarning": "命令在 {{host}} 上此機器人的主資料夾中執行。新增或儲存可能會在原生檢查期間啟動它。只新增你信任的軟體。",
       "serverType": "伺服器型別",
       "urlMode": "連線到 URL",
       "commandMode": "執行命令",
@@ -4908,7 +4879,6 @@
       "removeTitle": "要移除 {{app}} 嗎？",
       "removeNote": "{{bot}} 將無法再使用 {{app}}。你隨時可以重新新增。",
       "remove": "移除",
-      "signInOrca": "適用於 Claude 和 Codex",
       "signInMissing": "{{agent}} 未登入",
       "signInHeld": "由 {{agent}} 保管",
       "wontStart": "無法啟動",
@@ -4970,7 +4940,17 @@
         "denied": "未獲准存取。",
         "expired": "登入已逾期。請再試一次。",
         "couldNotSignIn": "無法登入。請再試一次。"
-      }
+      },
+      "trust": "只新增你信任的軟體。",
+      "argument": "引數",
+      "removeArgument": "移除引數",
+      "header": "標頭",
+      "variable": "變數",
+      "removeHeaderRow": "移除標頭",
+      "removeVariableRow": "移除變數",
+      "emptyArgument": "空白",
+      "valueNew": "新值",
+      "valueSaved": "已儲存"
     },
     "handToBot": {
       "menu": "移交給機器人…",
@@ -5003,7 +4983,6 @@
       "rowDetail": "{{app}} {{kind}}",
       "bringOver": "遷移過來",
       "otherApp": "其他應用程式…",
-      "otherAppNote": "舊機器人會幫你複製它的檔案",
       "noneFoundNote": "在 OpenClaw（~/.openclaw）、Hermes（~/.hermes）或 OpenBot 中沒有找到機器人。",
       "sendStep": "把這條訊息發給舊機器人",
       "copyMessage": "複製訊息",
@@ -5014,18 +4993,13 @@
       "replyLabel": "它的回覆",
       "title": "從其他應用程式匯入",
       "newBot": "新機器人",
-      "exportDescription": "讓舊機器人複製一份自己，然後把副本交給你的新機器人。",
-      "description": "你的新機器人會讀取舊機器人並自行完成設定。",
       "nameAnother": "為新機器人命名",
-      "importedBefore": "{{bot}} 來自此機器人",
       "keysStay": "金鑰和登入資訊不會帶過來",
       "chooseFolderTitle": "選擇資料夾",
       "loadingFolders": "正在載入資料夾…",
       "lookingOn": "正在 {{host}} 上查詢…",
       "foundOn": "在 {{host}} 上找到 {{count}} 個",
-      "copiedNote": "已複製。請在你平常與舊機器人聊天的地方貼上。",
       "copyAgain": "再次複製",
-      "addStepNote": "它會在 {{host}} 的 Downloads 資料夾中儲存名稱以 -export 結尾的資料夾。",
       "folderItems_one": "{{count}} 個項目",
       "folderItems_other": "{{count}} 個項目",
       "chooseAnother": "選擇其他資料夾…",
@@ -5187,6 +5161,9 @@
       },
       "webhooks": {
         "line": "來自任何工具或指令碼的事件"
+      },
+      "composio": {
+        "keyOnHost": "儲存在 {{host}}；機器人永遠看不到。"
       }
     },
     "share": {

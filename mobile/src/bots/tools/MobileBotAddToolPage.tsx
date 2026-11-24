@@ -80,7 +80,6 @@ export function MobileBotAddToolPage(props: {
           setSource(next)
           setError(null)
         }}
-        monospace
         placeholder={t('bots.tools.sourcePlaceholder', 'https://… or npx …')}
         accessibilityLabel={t('bots.tools.sourceLabel', 'Server URL or start command')}
         autoCapitalize="none"
@@ -90,27 +89,11 @@ export function MobileBotAddToolPage(props: {
         returnKeyType="done"
         onSubmitEditing={add}
       />
-      {error ? (
-        <SettingsNote error>{error}</SettingsNote>
-      ) : (
-        <SettingsNote>
-          {t('bots.tools.scope', 'Only {{name}} gets it, in addition to your own tools.', {
-            name: props.bot.name
-          })}
-        </SettingsNote>
-      )}
+      {error ? <SettingsNote error>{error}</SettingsNote> : null}
       {typed ? (
         <SettingsSection
           title={t('bots.tools.details', 'Details')}
-          footer={
-            url
-              ? undefined
-              : t(
-                  'bots.tools.commandWarning',
-                  'The command runs in this bot’s home folder on {{host}}. Adding or saving can start it during the native check. Only add software you trust.',
-                  { host: props.hostName }
-                )
-          }
+          footer={url ? undefined : t('bots.tools.trust', 'Only add software you trust.')}
         >
           <ListRow
             key="type"

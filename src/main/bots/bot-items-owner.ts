@@ -187,9 +187,6 @@ export class BotItemsOwner extends BotItemsWrites {
   ): { items: BotItemOwnerOutcome[] } {
     assertBotItemText('note', input.reason)
     assertBotItemText('text', input.comment)
-    if (input.to === 'canceled' && !input.reason?.trim()) {
-      throw new BotItemError('invalid_argument', 'Canceling needs a reason.')
-    }
     const wait =
       input.to === 'waiting'
         ? botItemWaitText(input.note, {
