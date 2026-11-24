@@ -1,5 +1,5 @@
-import type { AgentLaunchIntent } from '../../shared/agent-launch-intent'
-import { STRUCTURED_ACCOUNT_ENV_IGNORED_WARNING } from '../../shared/agent-launch-account-env'
+import type { AgentLaunchIntent } from '../../shared/agent-launch/contracts/agent-launch-intent'
+import { STRUCTURED_ACCOUNT_ENV_IGNORED_WARNING } from '../../shared/agent-launch/startup/agent-launch-account-env'
 
 export function combineLaunchWarnings(
   create: string | undefined,

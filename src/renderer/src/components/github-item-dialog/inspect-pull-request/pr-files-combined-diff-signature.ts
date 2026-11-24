@@ -1,5 +1,6 @@
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../../shared/github/pull-request-types'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubPRFile } from '../../../../../shared/github/pull-requests/pull-request-types'
 
 /** Identifies one diff set: the PR revision plus the file shapes rendered for it. */
 export function getPRFilesCombinedDiffSignature({

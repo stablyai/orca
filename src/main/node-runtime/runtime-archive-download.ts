@@ -2,36 +2,43 @@ import { createHash } from 'node:crypto'
 import { open, rm } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
-import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
-import { getZipExtractorCommand } from '../../shared/zip-extractor-command'
+import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
+import { getTarProgram, getZipExtractorCommand } from '../../shared/archives/zip-extractor-command'
 import type { MainHttpClient } from '../network/http-client'
 import { isRetryableDownloadError, type HttpStatusError } from '../network/transient-download-error'
 import type { PinnedRuntimeArchive, PinnedRuntimeExecutable } from './pinned-runtime-materializer'
+
+/** Hex digest of a download; npm publishes only a sha512 (its `dist.integrity`). */
+export type ArchiveDigest = { archiveSha256: string } | { archiveSha512: string }
+
+export type VerifiedArchive = Omit<PinnedRuntimeArchive, 'archiveSha256'> & ArchiveDigest
 
 const MAX_RUNTIME_ARCHIVE_BYTES = 200 * 1024 * 1024
 export const RUNTIME_ARCHIVE_RETRY_DELAYS_MS = [1_000, 3_000, 9_000]
 
 /** Missing/misconfigured extractors need actionable errors; unset cwd means ENOENT/ENOTDIR identifies the program. */
+/** Without `member`, a tar.gz extracts whole. */
 export async function extractRuntimeArchive(
-  runtime: Pick<PinnedRuntimeExecutable, 'label' | 'member'>,
+  runtime: Pick<PinnedRuntimeExecutable, 'label'> & { member?: string },
   archivePath: string,
   extractDir: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  timeoutMs = 120_000
 ): Promise<ProcessResult> {
   const { label } = runtime
   const command = archivePath.endsWith('.zip')
     ? getZipExtractorCommand(archivePath, extractDir)
     : {
-        file: 'tar',
-        args: ['-xzf', archivePath, '-C', extractDir, runtime.member],
+        file: getTarProgram(),
+        args: ['-xzf', archivePath, '-C', extractDir, ...(runtime.member ? [runtime.member] : [])],
         label: 'tar'
       }
   try {
     return await runProcess({
       program: command.file,
       args: command.args,
-      timeoutMs: 120_000,
+      timeoutMs,
       signal
     })
   } catch (error) {
@@ -59,17 +66,25 @@ export function downloadFailureMessage(label: string, error: unknown): string {
 }
 
 export async function downloadVerifiedArchive(
-  archive: PinnedRuntimeArchive,
+  archive: VerifiedArchive,
   destination: string,
   fetcher: MainHttpClient['fetch'],
   signal?: AbortSignal,
   retryDelaysMs: readonly number[] = RUNTIME_ARCHIVE_RETRY_DELAYS_MS,
   /** Restart from zero on each attempt. */
-  onBytes?: (bytes: number) => void
+  onBytes?: (bytes: number) => void,
+  connectTimeoutMs?: number
 ): Promise<void> {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      await downloadVerifiedArchiveOnce(archive, destination, fetcher, signal, onBytes)
+      await downloadVerifiedArchiveOnce(
+        archive,
+        destination,
+        fetcher,
+        signal,
+        onBytes,
+        connectTimeoutMs
+      )
       return
     } catch (error) {
       const delay = retryDelaysMs[attempt]
@@ -88,13 +103,18 @@ export async function downloadVerifiedArchive(
 }
 
 async function downloadVerifiedArchiveOnce(
-  archive: PinnedRuntimeArchive,
+  archive: VerifiedArchive,
   destination: string,
   fetcher: MainHttpClient['fetch'],
   signal?: AbortSignal,
-  onBytes?: (bytes: number) => void
+  onBytes?: (bytes: number) => void,
+  connectTimeoutMs?: number
 ): Promise<void> {
-  const { label, url, archiveSha256: expectedSha256 } = archive
+  const { label, url } = archive
+  const [algorithm, expected] =
+    'archiveSha512' in archive
+      ? ['sha512', archive.archiveSha512]
+      : ['sha256', archive.archiveSha256]
   const maxBytes = archive.maxArchiveBytes ?? MAX_RUNTIME_ARCHIVE_BYTES
   const stall = new AbortController()
   const downloadSignal = signal ? AbortSignal.any([signal, stall.signal]) : stall.signal
@@ -102,13 +122,22 @@ async function downloadVerifiedArchiveOnce(
     retryable: true
   })
   const stallTimer = setTimeout(() => stall.abort(stalled), 120_000)
+  // A dropped connection never answers; retrying it would only repeat the wait.
+  const unanswered: HttpStatusError = Object.assign(
+    new Error(`${label} download got no response within ${(connectTimeoutMs ?? 0) / 1000} s`),
+    { retryable: false }
+  )
+  const connectTimer =
+    connectTimeoutMs === undefined
+      ? undefined
+      : setTimeout(() => stall.abort(unanswered), connectTimeoutMs)
   try {
     // Verified files own the cache; no-store lets Remove free space and retries refetch.
     const response = await fetcher(url, {
       redirect: 'follow',
       cache: 'no-store',
       signal: downloadSignal
-    })
+    }).finally(() => clearTimeout(connectTimer))
     if (!response.ok || !response.body) {
       await response.body?.cancel().catch(() => undefined)
       const text = `${label} download failed: ${response.status} ${response.statusText}`
@@ -129,7 +158,7 @@ async function downloadVerifiedArchiveOnce(
       throw error
     })
     const reader = response.body.getReader()
-    const hash = createHash('sha256')
+    const hash = createHash(algorithm)
     let total = 0
     try {
       for (;;) {
@@ -156,14 +185,14 @@ async function downloadVerifiedArchiveOnce(
       await handle.close()
     }
     const actual = hash.digest('hex')
-    if (actual !== expectedSha256) {
+    if (actual !== expected) {
       throw new ReleaseMismatchError(
-        `${label} archive checksum mismatch: expected ${expectedSha256}, got ${actual}`
+        `${label} archive checksum mismatch: expected ${expected}, got ${actual}`
       )
     }
   } catch (error) {
-    // Normalize fetch’s own AbortError back to our stall reason unless the caller canceled.
-    const downloadError = stall.signal.aborted && !signal?.aborted ? stalled : error
+    // Normalize fetch’s own AbortError back to our reason (stalled or unanswered) unless the caller canceled.
+    const downloadError = stall.signal.aborted && !signal?.aborted ? stall.signal.reason : error
     stall.abort()
     throw downloadError
   } finally {

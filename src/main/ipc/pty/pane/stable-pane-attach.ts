@@ -4,11 +4,11 @@ import {
   SessionNotFoundError,
   TerminalHostGoneError,
   TerminalSessionOwnerUnverifiedError
-} from '../../../daemon/daemon-errors'
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+} from '../../../daemon/protocol/daemon-errors'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { keepAbsentPaneBindingForSwap, releaseAbsentPaneOwner } from './absent-pane-owner'
 import { excludeReplacedPaneOwner } from './replaced-pane-owner'
-import { PANE_NOT_LIVE_ERROR } from '../../../../shared/pane-attach-only-view'
+import { PANE_NOT_LIVE_ERROR } from '../../../../shared/terminal/pty/lifecycle/pane-attach-only-view'
 import type { StablePaneOwner, StablePaneSpawnContext } from './stable-owner'
 
 type StablePaneAttachAttempt =

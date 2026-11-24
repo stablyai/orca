@@ -4,11 +4,12 @@ import type {
   GitHubProjectSort,
   GitHubProjectView,
   GitHubProjectViewLayout
-} from '../../../shared/github/project-types'
-import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
-import { githubProjectHost } from '../../../shared/github/project-identity'
+} from '../../../shared/github/projects/project-types'
+import type { GitHubProjectViewError } from '../../../shared/github/projects/project-result-types'
+import { githubProjectHost } from '../../../shared/github/projects/project-identity'
 import { driftError, extractGraphqlErrors } from './project-error-classification'
-import { projectGhExecOptions, runGraphql, type GraphqlVars } from './internals'
+import { projectGhExecOptions } from './project-host-execution'
+import { runGraphql, type GraphqlVars } from './project-graphql'
 import { normalizeField, type RawProjectV2Field } from './project-view-field-normalization'
 import { FIELD_CONFIG_FRAGMENT } from './project-view-query-fragments'
 
@@ -44,10 +45,6 @@ export type RawProjectView = {
 
 // Older GHES hosts omit vertical grouping so one missing field cannot break all views.
 const hostsWithoutVerticalGroupBy = new Set<string>()
-
-export function resetVerticalGroupByCapabilityForTests(): void {
-  hostsWithoutVerticalGroupBy.clear()
-}
 
 function verticalGroupBySelection(host: string | undefined): string {
   return hostsWithoutVerticalGroupBy.has(githubProjectHost(host))
@@ -137,7 +134,10 @@ export async function fetchProjectViewsPage(args: {
   const top = res.data[root]
   const project = top?.projectV2 ?? null
   if (!project || typeof project.id !== 'string') {
-    return { ok: false, error: { type: 'not_found', message: 'Project not found.' } }
+    return {
+      ok: false,
+      error: { type: 'not_found', message: 'Project not found.', reason: 'project_not_found' }
+    }
   }
   const pageInfo = project.views?.pageInfo
   const views = (project.views?.nodes ?? []).filter((v): v is RawProjectView => v !== null)

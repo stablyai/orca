@@ -1,10 +1,9 @@
-import { getProjectHostSetupCompatibilityFromState } from '@/store/project-host-setup-selector'
 import type { AppState } from '../../../types'
-import type { ProjectHostSetup } from '../../../../../../shared/project-types'
+import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
-import { findRepoForHost } from '../../repo-host-identity'
-import { reuseEqualCatalogRows } from '../../worktree-catalog-reconciliation'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { findRepoForHost } from '../../../repos/repo-host-identity'
+import { reuseEqualCatalogRows } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -12,14 +11,14 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { toVisibleWorktree } from './worktree-catalog-visibility'
-import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
+import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
 import type { WorktreeHostMatchOptions, RepoHostSummary } from './worktree-slice-types'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/catalog/workspace-record-fields'
 
 export function withRepoHostOwnership<
   T extends {
@@ -123,11 +122,11 @@ export function toVisibleWorktrees(
 }
 
 export function getProjectHostSetupForRepoHost(
-  state: Parameters<typeof getProjectHostSetupCompatibilityFromState>[0],
+  state: Partial<Pick<AppState, 'projectHostSetups'>>,
   repoId: string,
   hostId: ExecutionHostId
 ): ProjectHostSetup | undefined {
-  return getProjectHostSetupCompatibilityFromState(state).setups.find(
+  return state.projectHostSetups?.find(
     (setup) => setup.repoId === repoId && setup.hostId === hostId
   )
 }

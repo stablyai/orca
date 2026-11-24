@@ -2,24 +2,24 @@ import type { IPty } from 'node-pty'
 import {
   getCommandTokenPathBasename,
   getFirstCommandToken
-} from '../../../shared/command-token-scanner'
+} from '../../../shared/shell/command-resolution/command-token-scanner'
 import {
   collectDescendantsFromIndex,
   getProcessTableIndex
-} from '../../../shared/process-table-index'
-import { hasControllingTty } from '../../../shared/posix-controlling-terminal'
-import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
-import type { PtyChildProcessVerdict } from '../../../shared/terminal-process-inspection'
-import { readWindowsPtyJobProcessIds } from '../../providers/windows-pty-job-membership'
-import { readWindowsConsoleAttachedProcessIds } from '../../providers/windows-console-attached-processes'
-import { isWindowsShellAloneInJob } from '../../providers/windows-shell-alone-in-job'
+} from '../../../shared/process-observation/tables/process-table-index'
+import { hasControllingTty } from '../../../shared/terminal/pty/native-process/posix-controlling-terminal'
+import type { ProcessTableRow } from '../../../shared/process-observation/tables/process-table-snapshot'
+import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import { readWindowsPtyJobProcessIds } from '../../providers/foreground/windows/pty-job-membership'
+import { readWindowsConsoleAttachedProcessIds } from '../../providers/foreground/windows/console-attached-processes'
+import { isWindowsShellAloneInJob } from '../../providers/foreground/windows/shell-alone-in-job'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
 import {
   readWindowsProcessIdentityTable,
   readWindowsProcessIdentityTableFresh
 } from '../../windows/windows-process-table'
 
-function executableName(command: string): string {
+export function executableName(command: string): string {
   return getCommandTokenPathBasename(getFirstCommandToken(command)).replace(/^-/, '')
 }
 
@@ -57,7 +57,8 @@ export async function inspectSpawnFileWindowsChildProcesses(
   shellPath: string,
   fresh = true,
   /** Adoption only: may fork the console-list helper to set aside detached daemons. */
-  ignoreDetached = false
+  ignoreDetached = false,
+  jobMembershipOnly = false
 ): Promise<PtyChildProcessVerdict> {
   try {
     const members = readWindowsPtyJobProcessIds(proc)
@@ -73,12 +74,15 @@ export async function inspectSpawnFileWindowsChildProcesses(
         const rows = await (fresh
           ? readWindowsProcessIdentityTableFresh()
           : readWindowsProcessIdentityTable())
-        if ([...members].some((pid) => !rows.some((row) => row.pid === pid && row.name))) {
+        // Panes polling one shared snapshot share its index instead of each rescanning the table.
+        const byPid = getProcessTableIndex(rows).byPid
+        if ([...members].some((pid) => !byPid.get(pid)?.name)) {
           throw new Error('Incomplete shell job identity')
         }
         return rows
       },
-      ignoreDetached ? () => readWindowsConsoleAttachedProcessIds(shellPid) : undefined
+      ignoreDetached ? () => readWindowsConsoleAttachedProcessIds(shellPid) : undefined,
+      jobMembershipOnly
     )
     return alone ? 'no-children' : 'children'
   } catch {

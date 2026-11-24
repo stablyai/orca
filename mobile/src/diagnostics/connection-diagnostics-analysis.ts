@@ -2,12 +2,12 @@ import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-r
 import {
   relayHostReachabilityForCloseCode,
   type RelayHostReachabilityFromCloseCode
-} from '../transport/relay-host-reachability'
+} from '../transport/relay/relay-host-reachability'
 import type {
   ConnectionLogEntry,
-  ConnectionState,
   MobileConnectionDiagnosticPath
-} from '../transport/types'
+} from './connection/connection-log-types'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 export type ConnectionDiagnosis = {
   likelyCause: string
@@ -183,8 +183,7 @@ const RELAY_DIAL_ADVICE: Record<
     nextStep: 'Check this phone’s network connection; Relay recovery retries automatically.'
   },
   connecting: {
-    likelyCause: (code) =>
-      `Relay closed the dial with code ${code}; recovery re-resolves and retries.`,
+    likelyCause: (code) => `Relay closed the dial with code ${code}; recovery will retry.`,
     nextStep: 'Keep Orca open while Relay recovery retries.'
   }
 }
@@ -202,7 +201,11 @@ function relayDialFailure(failure: ConnectionLogEntry | undefined): ConnectionDi
       reportability: 'none'
     }
   }
-  const advice = RELAY_DIAL_ADVICE[relayHostReachabilityForCloseCode(code)]
+  const reachability = relayHostReachabilityForCloseCode(
+    code,
+    failure.relayCredentialRejected === true
+  )
+  const advice = RELAY_DIAL_ADVICE[reachability]
   return { likelyCause: advice.likelyCause(code), nextStep: advice.nextStep, reportability: 'none' }
 }
 
@@ -254,6 +257,9 @@ function diagnosticEvidence(entry: ConnectionLogEntry): string {
 }
 
 function isDiagnosticFailure(entry: ConnectionLogEntry): boolean {
+  if (entry.code === 'native-render-failed') {
+    return false
+  }
   return /suspended-dial|relay director resolve failed \((?:401|503)\)|liveness-timeout|liveness timeout|connection health check failed|relay-dial-failed|relay dial failed|relay-session-failed|active relay session failed|authentication-rejected|unauthorized|pairing may be revoked|connect-timeout|websocket connect timeout|handshake-timeout|handshake timeout/i.test(
     diagnosticEvidence(entry)
   )

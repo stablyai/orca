@@ -14,10 +14,10 @@ import {
   getEffectiveKeybindingsForAction,
   getEffectiveKeybindingsForDefinition,
   getDefaultBindings,
+  isDefaultKeybinding,
   keybindingConflictGroups,
   bindingsOverlap,
-  isKeybindingInterceptedBeforeBrowserChords,
-  isKeybindingInterceptedByMainProcess
+  keybindingMainProcessConflictGroups
 } from './effective'
 import { isDoubleTapBinding } from './normalization'
 
@@ -32,7 +32,7 @@ function formatModifierGlyph(modifier: ModifierToken, isMac: boolean): string {
     case 'Alt':
       return isMac ? '⌥' : 'Alt'
     case 'Shift':
-      return isMac ? '⇧' : 'Shift'
+      return '⇧'
   }
 }
 
@@ -60,7 +60,7 @@ export function formatKeybinding(binding: string, platform: NodeJS.Platform): st
     parts.push(isMac ? '⌥' : 'Alt')
   }
   if (parsed.shift) {
-    parts.push(isMac ? '⇧' : 'Shift')
+    parts.push('⇧')
   }
   parts.push(formatKeyToken(parsed.key, isMac))
   return parts
@@ -174,18 +174,9 @@ export function findKeybindingConflictsForDefinitions(
       overrides,
       definitions
     )) {
-      const groups = new Set(keybindingConflictGroups(definition))
-      // Why: main consumes these before renderer handlers run, but a focused browser guest runs its own chords ahead of the after-browser ones.
-      if (
-        options.includeMainProcessInterception &&
-        isKeybindingInterceptedByMainProcess(definition)
-      ) {
-        for (const scope of scopes) {
-          if (scope !== 'browser' || isKeybindingInterceptedBeforeBrowserChords(definition)) {
-            groups.add(scope)
-          }
-        }
-      }
+      const groups = options.includeMainProcessInterception
+        ? keybindingMainProcessConflictGroups(definition, scopes)
+        : new Set(keybindingConflictGroups(definition))
       for (const group of groups) {
         for (const identity of keybindingConflictIdentities(definition.id, binding, platform)) {
           const conflictKey = `${group}\u0000${identity}`
@@ -221,16 +212,13 @@ export function findKeybindingConflictsForDefinitions(
         const definition = byId.get(id)
         return (
           !definition?.implicitDefaultYields ||
-          Object.hasOwn(overrides ?? {}, id) ||
+          // Why: an override can carry the action's own default, which still shares that chord on purpose.
+          !getDefaultBindings(definition, platform).some((ownDefault) =>
+            bindingsOverlap(definition, binding, definition, ownDefault, platform)
+          ) ||
           !Array.from(actionIds).every((otherId) => {
             const other = byId.get(otherId)
-            return (
-              otherId === id ||
-              (other &&
-                getDefaultBindings(other, platform).some((ownDefault) =>
-                  bindingsOverlap(definition, binding, other, ownDefault, platform)
-                ))
-            )
+            return otherId === id || (other && isDefaultKeybinding(other, binding, platform))
           })
         )
       })

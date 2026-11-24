@@ -1,12 +1,14 @@
-import { initializeMainProcessI18nAndMenu } from './main-process-i18n-menu'
+import { closeDesktopCoreAfterStartupFailure } from '../core-desktop/desktop-core-startup-failure'
+import { initializeMainProcessI18nAndMenu } from './main-window/main-process-i18n-menu'
 import { mainProcessState as state } from './main-process-state'
+import { markHostShuttingDown } from './quit/host-shutdown-state'
 import { initializeReadyFoundation } from './main-process-ready-foundation'
 import { initializeReadyRuntimeServices } from './main-process-ready-runtime'
-import { releaseDesktopActivationAfter } from './serve-desktop-activation'
+import { releaseDesktopActivationAfter } from './serve-launch/serve-desktop-activation'
 import {
   initializeMainProcessRuntimeLaunch,
   type MainProcessRuntimeLaunchOptions
-} from './main-process-runtime-launch'
+} from './runtime-startup/main-process-runtime-launch'
 
 export async function initializeMainProcessReady(
   launchOptions: MainProcessRuntimeLaunchOptions
@@ -20,6 +22,7 @@ export async function initializeMainProcessReady(
   }
   try {
     await initializeReadyFoundation()
+    await state.wslMoveStartupRewriteReady
     await initializeReadyRuntimeServices()
     // Window creation can proceed while translations and the native menu initialize.
     const i18nAndMenuReady = initializeMainProcessI18nAndMenu()
@@ -36,17 +39,15 @@ export async function initializeMainProcessReady(
     }
   } catch (error) {
     // Startup now exits after failure; reopening would use a closing profile writer.
+    markHostShuttingDown()
     state.desktopActivationGate = null
-    try {
-      await state.store?.freezeWritesAsync()
-      state.profileStateAdmission?.release()
-      state.profileStateAdmission = undefined
-    } catch (closeError) {
-      console.error(
-        '[persistence] Failed to close profile persistence after startup failure:',
-        closeError
-      )
-    }
+    await closeDesktopCoreAfterStartupFailure(state.core, {
+      store: state.store,
+      releaseAdmission: () => {
+        state.profileStateAdmission?.release()
+        state.profileStateAdmission = undefined
+      }
+    })
     throw error
   }
 }

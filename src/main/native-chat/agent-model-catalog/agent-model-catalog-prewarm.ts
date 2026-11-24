@@ -1,14 +1,12 @@
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type {
   AgentModelCatalogService,
   AgentModelCatalogServiceDeps
 } from './agent-model-catalog-service-contract'
-import type { AgentModelCatalogProbe, AgentModelCatalogSuccess } from './agent-model-catalog-store'
 import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
 
 export async function newChatCatalogKey(
-  deps: AgentModelCatalogServiceDeps,
+  deps: Pick<AgentModelCatalogServiceDeps, 'resolveAccountHome'>,
   agent: string,
   folder?: string
 ): Promise<{ fingerprint: string; accountHome: AgentSessionAccountHome } | null> {
@@ -42,11 +40,7 @@ async function runBounded<T>(
 export async function prewarmAgentModelCatalog(
   deps: AgentModelCatalogServiceDeps,
   signal: AbortSignal,
-  read: AgentModelCatalogService['read'],
-  listWith: (
-    probe: AgentModelCatalogProbe,
-    home: AgentSessionAccountHome
-  ) => () => Promise<AgentModelCatalogSuccess>
+  read: AgentModelCatalogService['read']
 ): Promise<void> {
   if (signal.aborted) {
     return
@@ -56,18 +50,10 @@ export async function prewarmAgentModelCatalog(
   const used = Object.keys(probes).filter(
     (agent) =>
       !deps.listsInChatFolder?.has(agent) &&
+      !deps.listsOnDemand?.has(agent) &&
       (deps.store.hasEntryForAgent(agent) || deps.hasChatRecords?.(agent) === true)
   )
   await runBounded(used, 2, signal, async (agent) => {
-    if (independentAgentModelCatalog(agent)) {
-      await read({ agent, waitForListing: true })
-      return
-    }
-    const probe = probes[agent]
-    const key = probe ? await newChatCatalogKey(deps, agent) : null
-    if (!probe || !key || signal.aborted || !deps.store.probeDue(key.fingerprint)) {
-      return
-    }
-    await deps.store.refresh(key.fingerprint, agent, probe, listWith(probe, key.accountHome))
+    await read({ agent, waitForListing: true })
   })
 }

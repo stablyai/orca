@@ -2,10 +2,10 @@ import { tmpdir } from 'node:os'
 import { join, basename } from 'node:path'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { getShellLaunchConfig } from '../../local-pty-shell-ready'
-import { selectShellStartupFeatures } from '../../../shell-startup-features'
-import { escapeRegex } from '../../../../shared/string-utils'
-import { getShellReadyWrapperRoot } from '../../local-pty-shell-ready-wrapper-root'
+import { getShellLaunchConfig } from '../../local-pty/local-pty-shell-ready'
+import { selectShellStartupFeatures } from '../../../pty/shell-startup/shell-startup-features'
+import { escapeRegex } from '../../../../shared/text/regex-escaping'
+import { getShellReadyWrapperRoot } from '../../local-pty/local-pty-shell-ready-wrapper-root'
 
 const RUN_MARKER = /^[ \t]*#[ \t]*Run:.*$/m
 

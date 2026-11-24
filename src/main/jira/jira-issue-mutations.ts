@@ -1,3 +1,4 @@
+import { taskProviderFailure } from '../../shared/work-items/task-provider-failure'
 import type {
   JiraCreateIssueArgs,
   JiraCreateIssueResult,
@@ -29,13 +30,13 @@ function toUserFieldValue(site: JiraSite, value: unknown): unknown {
 
 /** Shape customFields named by userFieldKeys into user references. */
 export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreateIssueResult> {
-  const entry = getClients(args.siteId)[0]
+  const entry = (await getClients(args.siteId))[0]
   if (!entry) {
-    return { ok: false, error: 'Not connected to Jira.' }
+    return taskProviderFailure('jira.notConnected', 'Not connected to Jira.')
   }
   const title = args.title.trim()
   if (!title) {
-    return { ok: false, error: 'Title is required.' }
+    return taskProviderFailure('jira.titleRequired', 'Title is required.')
   }
 
   await acquire()
@@ -46,7 +47,7 @@ export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreate
       summary: title
     }
     if (args.description?.trim()) {
-      fields.description = toBodyText(entry.site, args.description.trim())
+      fields.description = await toBodyText(entry.site, args.description.trim())
     }
     const userFieldKeys = new Set(args.userFieldKeys ?? [])
     for (const [fieldKey, value] of Object.entries(args.customFields ?? {})) {
@@ -66,10 +67,12 @@ export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreate
     return { ok: true, id: created.id, key: created.key, url: issueUrl(entry.site, created.key) }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
-    return { ok: false, error: error instanceof Error ? error.message : 'Failed to create issue.' }
+    return error instanceof Error
+      ? { ok: false, error: error.message }
+      : taskProviderFailure('jira.createFailed', 'Failed to create issue.')
   } finally {
     release()
   }
@@ -80,12 +83,12 @@ export async function updateIssue(
   updates: JiraIssueUpdate,
   siteId?: string | null
 ): Promise<JiraMutationResult> {
-  const entry = getClients(siteId)[0]
+  const entry = (await getClients(siteId))[0]
   if (!entry) {
-    return { ok: false, error: 'Not connected to Jira.' }
+    return taskProviderFailure('jira.notConnected', 'Not connected to Jira.')
   }
   if (updates.labels && updates.labelOperations) {
-    return { ok: false, error: 'Pass labels or labelOperations, not both.' }
+    return taskProviderFailure('jira.labelsConflict', 'Pass labels or labelOperations, not both.')
   }
   await acquire()
   try {
@@ -127,7 +130,9 @@ export async function updateIssue(
       }
       if (updates.transitionComment?.trim()) {
         transitionBody.update = {
-          comment: [{ add: { body: toBodyText(entry.site, updates.transitionComment.trim()) } }]
+          comment: [
+            { add: { body: await toBodyText(entry.site, updates.transitionComment.trim()) } }
+          ]
         }
       }
       await jiraRequest(entry, `${issueBase}/transitions`, {
@@ -138,10 +143,12 @@ export async function updateIssue(
     return { ok: true }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
-    return { ok: false, error: error instanceof Error ? error.message : 'Failed to update issue.' }
+    return error instanceof Error
+      ? { ok: false, error: error.message }
+      : taskProviderFailure('jira.updateFailed', 'Failed to update issue.')
   } finally {
     release()
   }
@@ -152,9 +159,9 @@ export async function addIssueComment(
   body: string,
   siteId?: string | null
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  const entry = getClients(siteId)[0]
+  const entry = (await getClients(siteId))[0]
   if (!entry) {
-    return { ok: false, error: 'Not connected to Jira.' }
+    return taskProviderFailure('jira.notConnected', 'Not connected to Jira.')
   }
   await acquire()
   try {
@@ -163,16 +170,18 @@ export async function addIssueComment(
       `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}/comment`,
       {
         method: 'POST',
-        body: JSON.stringify({ body: toBodyText(entry.site, body) })
+        body: JSON.stringify({ body: await toBodyText(entry.site, body) })
       }
     )
     return { ok: true, id: comment.id }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
-    return { ok: false, error: error instanceof Error ? error.message : 'Failed to add comment.' }
+    return error instanceof Error
+      ? { ok: false, error: error.message }
+      : taskProviderFailure('jira.commentFailed', 'Failed to add comment.')
   } finally {
     release()
   }

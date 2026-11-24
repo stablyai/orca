@@ -14,7 +14,7 @@
   },
   "toolingSha256": "920c7f5bc20e856ddf73f4f2ec5d47b9e2810b222a378b1a2e3c00650972247e",
   "reproductionTool": {
-    "path": "config/scripts/claude-usage-hardening-cost-benchmark.mjs",
+    "path": "config/scripts/performance/claude-usage/claude-usage-hardening-cost-benchmark.mjs",
     "sha256": "f0b6cd7a16512fb42be591f2cc9baa607cf55ae1870e9aed0bb9163b366b2825",
     "differenceFromMeasuredTool": "The shape identifier and output property were renamed to maximaPattern for lint. Replacing all six maximaPattern occurrences with shape in the final tool reconstructs toolingSha256 exactly. Fixtures, timing operations, source graphs, ordering and assertions are unchanged.",
     "reversedRenameSha256": "920c7f5bc20e856ddf73f4f2ec5d47b9e2810b222a378b1a2e3c00650972247e"

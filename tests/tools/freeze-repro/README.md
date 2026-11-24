@@ -51,7 +51,7 @@ ORCA_FREEZE_OPEN_COUNT=30 \
 pnpm run repro:live-remote-realistic-freeze
 ```
 
-Or: `node config/scripts/live-remote-realistic-freeze-repro.mjs`
+Or: `node config/scripts/diagnostics/remote-freeze/live-remote-realistic-freeze-repro.mjs`
 
 ### Scenarios
 
@@ -170,16 +170,15 @@ Generation-aware **latest-wins single-flight** for exclusive host focus:
 
 ## Files
 
-| Path                                                           | Role                               |
-| -------------------------------------------------------------- | ---------------------------------- |
-| `config/scripts/live-remote-realistic-freeze-repro.mjs`        | Naturalistic harness               |
-| `config/scripts/live-remote-bulk-open-freeze-repro.mjs`        | Parallel stress harness            |
-| `config/scripts/live-remote-freeze-rpc.mjs`                    | Cross-platform bounded CLI runner  |
-| `config/scripts/live-remote-bulk-open-freeze-metrics.mjs`      | Shared thresholds / handle extract |
-| `config/scripts/live-remote-bulk-open-freeze-metrics.test.mjs` | Unit tests                         |
-| `src/main/runtime/terminal-focus-navigation-coalescer.ts`      | Host focus single-flight           |
-| `pnpm run repro:live-remote-realistic-freeze`                  | package entry                      |
-| `pnpm run repro:live-remote-bulk-open-freeze`                  | package entry                      |
+| Path                                                                                | Role                               |
+| ----------------------------------------------------------------------------------- | ---------------------------------- |
+| `config/scripts/diagnostics/remote-freeze/live-remote-realistic-freeze-repro.mjs`   | Naturalistic harness               |
+| `config/scripts/diagnostics/remote-freeze/live-remote-bulk-open-freeze-repro.mjs`   | Parallel stress harness            |
+| `config/scripts/diagnostics/remote-freeze/live-remote-freeze-rpc.mjs`               | Cross-platform bounded CLI runner  |
+| `config/scripts/diagnostics/remote-freeze/live-remote-bulk-open-freeze-metrics.mjs` | Shared thresholds / handle extract |
+| `src/main/runtime/terminal/focus/terminal-focus-navigation-coalescer.ts`            | Host focus single-flight           |
+| `pnpm run repro:live-remote-realistic-freeze`                                       | package entry                      |
+| `pnpm run repro:live-remote-bulk-open-freeze`                                       | package entry                      |
 
 ---
 

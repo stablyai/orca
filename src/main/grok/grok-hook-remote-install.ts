@@ -1,12 +1,12 @@
 import type { SFTPWrapper } from 'ssh2'
 
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import { wrapPosixHookCommand } from '../agent-hooks/installer-utils'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
 import {
   readHooksJsonRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote
-} from '../agent-hooks/installer-utils-remote'
+  writeHooksJsonRemote
+} from '../agent-hooks/installation/configuration/hooks-json-remote'
+import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
 import { buildInstalledGrokConfig } from './grok-hook-config'
 import { GROK_HOME_ENVELOPE_MAX_LENGTH } from './windows-grok-hook-script'
 
@@ -53,11 +53,7 @@ export async function installRemoteGrokHook(
     if (!config) {
       return status(configPath, 'Could not parse remote Grok hook config')
     }
-    buildInstalledGrokConfig(
-      config,
-      wrapPosixHookCommand(scriptPath, {}, { requiredEnvVar: 'ORCA_PANE_KEY' }),
-      'grok-hook.sh'
-    )
+    buildInstalledGrokConfig(config, wrapPosixHookCommand(scriptPath), 'grok-hook.sh')
     await writeManagedScriptRemote(sftp, scriptPath, script)
     await writeHooksJsonRemote(sftp, configPath, config)
     return {

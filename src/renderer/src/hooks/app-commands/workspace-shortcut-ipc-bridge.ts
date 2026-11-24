@@ -1,0 +1,143 @@
+import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/terminal/quick-commands/quick-commands-menu-events'
+import { TOGGLE_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/workspace-board/surface/useWorkspaceBoardPanel'
+import { activateTabNumberShortcut } from '@/lib/keyboard/tab-number-shortcuts'
+import { emitCmdJRowIndexJump } from '@/lib/workspace/search/palette/cmd-j-row-index-jump'
+import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/worktree-list/listing/visible-worktrees'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
+import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
+import { useAppStore } from '../../store/index'
+import { showWorkspaceListThen } from '../../components/app-rail/app-rail-navigation'
+import { toggleAgentDashboardFromShortcut } from './agent-dashboard-command'
+import { openNewWorkspaceFromShortcut } from './new-workspace-command'
+import { canNavigateWorktreeHistory } from '../../app-shell/chrome/titlebar-worktree-history-controls'
+
+export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void {
+  unsubs.push(
+    window.api.ui.onOpenQuickOpen(() => {
+      const store = useAppStore.getState()
+      if (store.activeView === 'terminal' && store.activeWorktreeId !== null) {
+        store.openModal('quick-open')
+      }
+    })
+  )
+
+  unsubs.push(
+    window.api.ui.onToggleQuickCommandsMenu(() => {
+      window.dispatchEvent(new CustomEvent(TOGGLE_QUICK_COMMANDS_MENU_EVENT))
+    })
+  )
+
+  unsubs.push(
+    window.api.ui.onOpenNewWorkspace(() => {
+      const store = useAppStore.getState()
+      openNewWorkspaceFromShortcut(store)
+    })
+  )
+
+  if (window.api.ui.onOpenWorkspaceBoard) {
+    unsubs.push(
+      window.api.ui.onOpenWorkspaceBoard(() => {
+        const store = useAppStore.getState()
+        if (store.activeView === 'settings') {
+          return
+        }
+        runBuiltInOrReplacement('workspace.openBoard', () => {
+          const toggleBoard = (): void => {
+            window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
+          }
+          if (showWorkspaceListThen(useAppStore, toggleBoard)) {
+            return
+          }
+          store.setSidebarOpen(true)
+          toggleBoard()
+        })
+      })
+    )
+  }
+
+  if (window.api.ui.onToggleAgentDashboard) {
+    unsubs.push(
+      window.api.ui.onToggleAgentDashboard(() => {
+        toggleAgentDashboardFromShortcut(useAppStore.getState(), () => {
+          void window.api.dashboard.openPopout()
+        })
+      })
+    )
+  }
+
+  unsubs.push(
+    window.api.ui.onOpenTasks(() => {
+      const store = useAppStore.getState()
+      if (store.activeView === 'settings' || !store.repos.some((repo) => isGitRepoKind(repo))) {
+        return
+      }
+      runBuiltInOrReplacement('view.tasks', () => store.openTaskPage())
+    })
+  )
+
+  unsubs.push(
+    window.api.ui.onJumpToWorktreeIndex((index) => {
+      const store = useAppStore.getState()
+      // Route Cmd+J digits to palette recents because main already prevented their native input.
+      if (store.activeModal === 'worktree-palette') {
+        emitCmdJRowIndexJump(index)
+        return
+      }
+      if (store.activeView !== 'terminal') {
+        return
+      }
+      const visibleTargets = getVisibleWorktreeShortcutTargets()
+      const target = visibleTargets[index]
+      if (target) {
+        activateAndRevealWorkspace(target.id, {
+          navigationIntent: 'user-open',
+          // Why: the digit addresses a workspace-list row, so show the list it acted on.
+          showWorkspaceList: true,
+          ...(target.executionHostId ? { executionHostId: target.executionHostId } : {})
+        })
+      }
+    })
+  )
+
+  unsubs.push(
+    window.api.ui.onJumpToTabIndex((index) => {
+      // Why: dropped while Cmd+J is open — never switch tabs behind the overlay.
+      if (useAppStore.getState().activeModal === 'worktree-palette') {
+        return
+      }
+      activateTabNumberShortcut(index)
+    })
+  )
+
+  const navigateWorktreeHistory = (direction: 'back' | 'forward'): void => {
+    const store = useAppStore.getState()
+    if (!canNavigateWorktreeHistory(store)) {
+      return
+    }
+    if (direction === 'back') {
+      runBuiltInOrReplacement('worktree.history.back', () => store.goBackWorktree())
+    } else {
+      runBuiltInOrReplacement('worktree.history.forward', () => store.goForwardWorktree())
+    }
+  }
+  unsubs.push(window.api.ui.onWorktreeHistoryNavigate(navigateWorktreeHistory))
+
+  // Why bubble phase: a streamed browser page claims its side-button presses with preventDefault first.
+  const onMouseSideButton = (event: MouseEvent): void => {
+    if (event.defaultPrevented || (event.button !== 3 && event.button !== 4)) {
+      return
+    }
+    event.preventDefault()
+    navigateWorktreeHistory(event.button === 3 ? 'back' : 'forward')
+  }
+  window.addEventListener('mouseup', onMouseSideButton)
+  unsubs.push(() => window.removeEventListener('mouseup', onMouseSideButton))
+
+  unsubs.push(
+    window.api.ui.onToggleStatusBar(() => {
+      const store = useAppStore.getState()
+      store.setStatusBarVisible(!store.statusBarVisible)
+    })
+  )
+}

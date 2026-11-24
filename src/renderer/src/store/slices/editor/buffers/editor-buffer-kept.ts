@@ -2,6 +2,7 @@ import type { EditorBufferRecord } from './editor-buffer-record'
 
 /** Keep dirty records/models after last-view no-prompt removal. No writer means no autosave; reopened identities join them. */
 export type EditorBufferKept = {
+  resourceKey?: string
   record: EditorBufferRecord
   draft: string | undefined
   /** The views that closed; their model stays alive while the record is kept. */

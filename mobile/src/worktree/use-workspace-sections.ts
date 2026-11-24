@@ -1,23 +1,32 @@
 import { useMemo } from 'react'
+import { withoutProjectsListedElsewhere } from './project-sections/projects-listed-elsewhere'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import type {
   WorkspaceGroupBy,
   WorkspaceSortBy
 } from '../../../src/shared/workspace-view/workspace-view-options'
 import {
-  buildSectionRepoMap,
   buildMobileWorkspacePlan,
-  type FilterState,
-  type ProjectSectionCatalog,
-  type Section,
-  type SectionRepo,
-  type Worktree
-} from './workspace-list-sections'
-import { buildFilterRepos, type WorkspaceSectionRepo } from './workspace-filter-repos'
+  type ProjectSectionCatalog
+} from './workspace-list/workspace-list-sections'
+import { buildSectionRepoMap } from './workspace-list/section-repo-map'
+import type {
+  FilterState,
+  Section,
+  SectionRepo,
+  Worktree
+} from './workspace-list/workspace-list-types'
+import { buildFilterRepos, type WorkspaceSectionRepo } from './repositories/workspace-filter-repos'
+import type { WorktreeHostContextOf } from './row-presentation/worktree-host-context-labels'
+import type { MobileLineageStores } from './agent-lineage/mobile-workspace-lineage'
 
 export function useWorkspaceSections(args: {
   displayWorktrees: Worktree[]
+  /** Every row the host has, including those listed elsewhere (a Bots section); defaults to displayWorktrees. */
+  allHostRows?: readonly Worktree[]
+  hostContextOf: WorktreeHostContextOf
   sortMode: WorkspaceSortBy
   filters: FilterState
   search: string
@@ -31,14 +40,19 @@ export function useWorkspaceSections(args: {
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   /** Each repo's host, for rows that predate their own hostId. */
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
+  /** The stores the list spans, so a parent on another machine nests its children. */
+  lineageStores?: MobileLineageStores
 }): {
   sections: Section[]
   rawSections: Section[]
   uniqueRepos: WorkspaceSectionRepo[]
   repoById: ReadonlyMap<string, SectionRepo>
 } {
+  const t = useMobileTranslation()
   const {
     displayWorktrees,
+    allHostRows,
+    hostContextOf,
     sortMode,
     filters,
     search,
@@ -49,17 +63,18 @@ export function useWorkspaceSections(args: {
     filterCatalogRepos,
     collapsedGroups,
     workspaceStatuses,
-    repoHostIdByRepoId
+    repoHostIdByRepoId,
+    lineageStores
   } = args
 
   const uniqueRepos = useMemo(
     () => buildFilterRepos(filterCatalogRepos, displayWorktrees),
-    [filterCatalogRepos, displayWorktrees]
+    [filterCatalogRepos, displayWorktrees, t]
   )
 
   const repoById = useMemo(
     () => buildSectionRepoMap(projectCatalog.repos, displayWorktrees),
-    [projectCatalog.repos, displayWorktrees]
+    [projectCatalog.repos, displayWorktrees, t]
   )
 
   const plan = useMemo(
@@ -71,15 +86,18 @@ export function useWorkspaceSections(args: {
         search,
         groupMode,
         pinnedIds,
-        projectCatalog,
+        withoutProjectsListedElsewhere(projectCatalog, displayWorktrees, allHostRows),
         workspaceStatuses,
         undefined,
         showPinnedInGroups,
-        repoHostIdByRepoId
+        repoHostIdByRepoId,
+        lineageStores
       ),
     [
       repoHostIdByRepoId,
+      lineageStores,
       displayWorktrees,
+      allHostRows,
       sortMode,
       filters,
       search,
@@ -87,11 +105,15 @@ export function useWorkspaceSections(args: {
       pinnedIds,
       projectCatalog,
       workspaceStatuses,
-      showPinnedInGroups
+      showPinnedInGroups,
+      t
     ]
   )
 
-  const rawSections = useMemo(() => plan.render(collapsedGroups), [plan, collapsedGroups])
+  const rawSections = useMemo(
+    () => plan.render(collapsedGroups, hostContextOf),
+    [plan, collapsedGroups, hostContextOf]
+  )
 
   const sections = useMemo(
     () =>

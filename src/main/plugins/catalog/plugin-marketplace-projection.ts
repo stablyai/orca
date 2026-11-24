@@ -1,0 +1,217 @@
+import {
+  OFFICIAL_MARKETPLACE_OWNER,
+  isOfficialMarketplaceGitSource,
+  isOfficialOrganizationGitSource,
+  type PluginMarketplaceEntry,
+  type PluginMarketplaceGitSource
+} from '../../../shared/plugins/catalog/plugin-marketplace'
+import type {
+  PluginBlockNotice,
+  PluginKillListEntry
+} from '../../../shared/plugins/catalog/plugin-kill-list'
+import type {
+  PluginMarketplaceCachedSnapshot,
+  PluginMarketplaceRegisteredSource
+} from './plugin-marketplace-store'
+import { selectPluginCatalogRelease } from '../../../shared/plugins/catalog/plugin-catalog'
+import {
+  pluginShaImageUrl,
+  type PluginHostImages
+} from '../../../shared/plugins/images/plugin-image-url'
+import type { PluginCatalogRelease } from '../../../shared/plugins/catalog/plugin-catalog-release'
+import { estimatePluginAddedAt } from '../../../shared/plugins/catalog/plugin-added-at'
+import type { RequiredPluginRule } from '../../../shared/orca-profiles/orca-cloud-team-policy'
+import type { PluginMarketplaceTeamPolicy } from './plugin-marketplace-team-policy'
+import { requiredPluginReleaseAllowed } from '../installation/required-plugin-release-policy'
+
+export type PluginMarketplaceSourceState = {
+  id: string
+  source: PluginMarketplaceGitSource
+  addedAt: number
+  marketplace: {
+    name: string
+    owner: string
+    resolvedCommit: string
+    fetchedAt: number
+  } | null
+  stale: boolean
+  official: boolean
+  managed?: boolean
+  managedByTeams?: string[]
+  error?: string
+}
+
+export type PluginMarketplaceListing = {
+  marketplaceSourceId: string
+  marketplaceName: string
+  marketplaceOwner: string
+  marketplaceCommit: string
+  pluginKey: string
+  source: PluginMarketplaceEntry['source']
+  description?: string
+  categories: string[]
+  official: boolean
+  managedByTeams?: string[]
+  bundled: boolean
+  blockedByKillList?: PluginBlockNotice
+  /** Estimated listing date (ISO 8601): a community plugin's oldest dated release. Absent for
+   *  official plugins and undated releases; catalogs carry no listing date of their own. */
+  addedAt?: string
+  /** The release offered to this host: the newest it can install, else the one needing the least
+   *  newer Orca. Absent for v1 catalogs. */
+  release?: PluginCatalogRelease
+  /** Every release the catalog lists for this plugin, newest first. */
+  releases?: PluginCatalogRelease[]
+  /** The offered release's images, served by main from verified bytes. */
+  images?: PluginHostImages
+} & PluginCatalogListingDetails
+
+/** Display fields a release carries, flattened so list rows need not know release records. */
+export type PluginCatalogListingDetails = {
+  name?: string
+  version?: string
+  license?: string
+  repository?: string
+  homepage?: string
+  updatedAt?: string
+  changelog?: string
+}
+
+const DETAIL_KEYS = [
+  'name',
+  'license',
+  'repository',
+  'homepage',
+  'updatedAt',
+  'changelog'
+] as const satisfies readonly (keyof PluginCatalogListingDetails & keyof PluginCatalogRelease)[]
+
+/** Catalog images as the renderer loads them: hash-addressed, verified, never hotlinked. */
+export function pluginCatalogListingImages(release: PluginCatalogRelease | undefined): {
+  images?: PluginHostImages
+} {
+  const images = release?.images
+  if (!images) {
+    return {}
+  }
+  const host = (image: { sha256: string; alt: string; width: number; height: number }) => ({
+    url: pluginShaImageUrl(image.sha256),
+    alt: image.alt,
+    width: image.width,
+    height: image.height
+  })
+  return {
+    images: {
+      ...(images.icon ? { icon: host(images.icon) } : {}),
+      ...(images.cover ? { cover: host(images.cover) } : {}),
+      ...(images.screenshots?.length ? { screenshots: images.screenshots.map(host) } : {})
+    }
+  }
+}
+
+/** The release to offer this host; without a host version, the newest. */
+export function offeredCatalogRelease(
+  releases: readonly PluginCatalogRelease[] | undefined,
+  hostVersion: string | null
+): PluginCatalogRelease | undefined {
+  if (!releases) {
+    return undefined
+  }
+  return hostVersion ? selectPluginCatalogRelease(releases, hostVersion) : releases[0]
+}
+
+export function pluginCatalogListingDetails(
+  release: PluginCatalogRelease | undefined
+): PluginCatalogListingDetails {
+  if (!release) {
+    return {}
+  }
+  const details: PluginCatalogListingDetails = { version: release.version }
+  for (const key of DETAIL_KEYS) {
+    const value = release[key]
+    if (value !== undefined) {
+      details[key] = value
+    }
+  }
+  return details
+}
+
+/** One catalog entry as clients see it: trust is derived here, never taken from the catalog. */
+export function pluginMarketplaceListing(input: {
+  source: PluginMarketplaceRegisteredSource
+  snapshot: PluginMarketplaceCachedSnapshot
+  entry: PluginMarketplaceEntry
+  hostVersion: string | null
+  blocked: (PluginKillListEntry & PluginBlockNotice) | null
+  requiredRules?: readonly RequiredPluginRule[] | undefined
+  managedByTeams?: string[] | undefined
+}): PluginMarketplaceListing | null {
+  const { source, snapshot, entry, blocked, requiredRules } = input
+  const rules = requiredRules?.filter(({ pluginKey }) => pluginKey === entry.id)
+  const releases = rules?.length
+    ? entry.releases?.filter((release) =>
+        requiredPluginReleaseAllowed(rules, entry.id, release.version, source.source)
+      )
+    : entry.releases
+  const release = offeredCatalogRelease(releases, input.hostVersion)
+  if (rules?.length && !release) {
+    return null
+  }
+  const official =
+    isOfficialMarketplaceGitSource(source.source.url) &&
+    snapshot.marketplace.owner.toLowerCase() === OFFICIAL_MARKETPLACE_OWNER &&
+    isOfficialOrganizationGitSource(entry.source.url)
+  const addedAt = estimatePluginAddedAt(entry.releases, official)
+  return {
+    marketplaceSourceId: source.id,
+    marketplaceName: snapshot.marketplace.name,
+    marketplaceOwner: snapshot.marketplace.owner,
+    marketplaceCommit: snapshot.marketplaceCommit,
+    pluginKey: entry.id,
+    source: entry.source,
+    ...(entry.description ? { description: entry.description } : {}),
+    ...(addedAt ? { addedAt } : {}),
+    categories: entry.categories,
+    official,
+    ...(input.managedByTeams ? { managedByTeams: input.managedByTeams } : {}),
+    bundled: false,
+    ...(release ? { release, releases } : {}),
+    ...pluginCatalogListingDetails(release),
+    ...pluginCatalogListingImages(release),
+    ...(blocked
+      ? {
+          blockedByKillList: {
+            reason: blocked.reason,
+            ...(blocked.team ? { team: true as const } : {}),
+            ...(blocked.advisoryUrl ? { advisoryUrl: blocked.advisoryUrl } : {})
+          }
+        }
+      : {})
+  }
+}
+
+export function pluginMarketplaceSourceState(
+  source: PluginMarketplaceRegisteredSource,
+  snapshot: PluginMarketplaceCachedSnapshot | null,
+  error?: string,
+  teamPolicy?: PluginMarketplaceTeamPolicy
+): PluginMarketplaceSourceState {
+  const managedByTeams = teamPolicy?.managedByTeams(source.source)
+  return {
+    id: source.id,
+    source: source.source,
+    addedAt: source.addedAt,
+    marketplace: snapshot
+      ? {
+          name: snapshot.marketplace.name,
+          owner: snapshot.marketplace.owner,
+          resolvedCommit: snapshot.marketplaceCommit,
+          fetchedAt: snapshot.fetchedAt
+        }
+      : null,
+    stale: Boolean(error),
+    official: isOfficialMarketplaceGitSource(source.source.url),
+    ...(managedByTeams ? { managed: true, managedByTeams } : {}),
+    ...(error ? { error } : {})
+  }
+}

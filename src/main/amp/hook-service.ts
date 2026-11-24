@@ -3,11 +3,11 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import { dirname, join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   readTextFileRemote,
   writeTextFileRemoteAtomic
-} from '../agent-hooks/installer-utils-remote'
+} from '../agent-hooks/installation/remote/hook-text-files-remote'
 import {
   AMP_PLUGIN_FILE,
   AMP_PLUGIN_MARKER,

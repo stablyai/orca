@@ -1,32 +1,34 @@
-import { selectCanonicalProjects } from '../project-host-setup-selector'
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
-import type { Repo } from '../../../../shared/repo-types'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { getRepoHostIdentity } from '../slices/repo-host-identity'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
-import { defaultCreationHost } from '@/lib/default-creation-host'
-import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
+import { getRepoHostIdentity } from '../../../../shared/repository/repo-host-identity'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
+import { defaultCreationHost } from '@/runtime/hosts/selection/default-creation-host'
+import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type { RepoSlice } from './repo-state'
 import { ERROR_TOAST_DURATION } from './repo-state'
 import { fetchRuntimeAddProjectPathStatus, getRuntimeEnvironmentDisplayName } from './owner-routing'
-import { adoptFromEndpoint } from '../adopt-from-endpoint'
+import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 import { warnIfProjectKnownInAnotherProfile } from '../projects/project-profile-presence'
 import { warnIfProjectCrossesWslFilesystemBoundary } from '../projects/project-wsl-filesystem-boundary-advisory'
-import { selectWorktreesByRepo } from '../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../workspaces/catalog/workspace-record-fields'
 import {
   clearPendingRuntimeRepoRemoval,
   runExclusiveForRuntimeEnvironment
 } from './pending-runtime-repo-removals'
+import { RuntimeRpcCallError } from '../../runtime/rpc/calls/runtime-rpc-result'
+import { readWslHostWindowsDriveRefusal } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
+import { showWslHostWindowsDriveRefusal } from '@/lib/workspace/creation/wsl-host-windows-drive-refusal-toast'
 
 export function createRepoAddActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -62,7 +64,8 @@ export function createRepoAddActions(
                   target,
                   'repo.add',
                   { path, kind, ...(displayName ? { displayName } : {}) },
-                  { timeoutMs: 15_000 }
+                  // Adding a repo is the user's act: it may wake an idle-stopped WSL host (#46567).
+                  { timeoutMs: 15_000, wake: true }
                 )
               ).repo
               clearPendingRuntimeRepoRemoval(environmentId, added.id)
@@ -119,10 +122,7 @@ export function createRepoAddActions(
           return {
             repos: nextRepos,
             ...mergeProjectCompatibilityForHostRepoChange({
-              previous: {
-                endpointProjects: s.endpointProjects,
-                endpointProjectHostSetups: s.endpointProjectHostSetups
-              },
+              previous: { projects: s.projects, projectHostSetups: s.projectHostSetups },
               nextRepos,
               hostId
             }),
@@ -145,15 +145,23 @@ export function createRepoAddActions(
           // Why: the cross-profile advisory applies to SSH-added projects too; the presence lookup already keys on connection/host.
           await warnIfProjectKnownInAnotherProfile(repo, get().activeOrcaProfileId)
           // Why after the set(): the project row carrying the runtime override only exists once the repo is in state.
-          warnIfProjectCrossesWslFilesystemBoundary(
-            repo,
-            selectCanonicalProjects(get()),
-            get().settings
-          )
+          warnIfProjectCrossesWslFilesystemBoundary(repo, get().projects, get().settings)
         }
         return repo
       } catch (err) {
         console.error('Failed to add project:', err)
+        const driveRefusal =
+          err instanceof RuntimeRpcCallError
+            ? readWslHostWindowsDriveRefusal(err.response.error.data)
+            : null
+        if (driveRefusal) {
+          if (options?.onWindowsDriveRefusal) {
+            options.onWindowsDriveRefusal(driveRefusal)
+          } else {
+            showWslHostWindowsDriveRefusal(driveRefusal)
+          }
+          return null
+        }
         const message = err instanceof Error ? err.message : String(err)
         const duration = ERROR_TOAST_DURATION
         toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
@@ -208,9 +216,9 @@ export function createRepoAddActions(
           const {
             resolveDismissedOnboardingFolderAgentLaunch,
             revealOnboardingFolderWithAgentLaunch
-          } = await import('@/lib/onboarding-folder-agent-launch')
+          } = await import('@/components/onboarding/onboarding-folder-agent-launch')
           // Why: adding the first folder from Landing skips onboarding's completeRepo hook; carry the default agent into the first terminal here.
-          const launch = resolveDismissedOnboardingFolderAgentLaunch({
+          const launch = await resolveDismissedOnboardingFolderAgentLaunch({
             worktreeId: folderWorktree.id,
             store: get(),
             onboarding: onboardingBeforeAdd,

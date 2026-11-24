@@ -1,28 +1,38 @@
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
-import { isFolderRepo } from '../../../../shared/repo-kind'
-import type { Repo } from '../../../../shared/repo-types'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   splitWorktreeId
 } from '../../../../shared/worktree/id'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { agentHookServer } from '../../../agent-hooks/server'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { NativeLocalWorktreeMetadataScanExpectation } from '../../../persistence/tracking-repos/missing-local-worktree-metadata-pruning'
-import { pruneWorkspaceCleanupScanSnapshots } from '../../../workspace-cleanup-scan-snapshot'
-import { pruneWorkspaceSpaceAnalysisSnapshots } from '../../../workspace-space-analysis-snapshot'
-import { isLocalWorktreeScanGenerationCurrent } from '../../../local-worktree-scan-generation'
-import { localWorktreePathsExistOrAreUnverifiable } from '../../../local-worktree-path-presence'
-import { worktreeRetentionPathComparisonKey } from '../../../worktree-retention-path-comparison'
-import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { pruneWorkspaceCleanupScanSnapshots } from '../../../workspaces/cleanup/workspace-cleanup-scan-snapshot'
+import { pruneWorkspaceSpaceAnalysisSnapshots } from '../../../workspaces/space-analysis/workspace-space-analysis-snapshot'
+import { isLocalWorktreeScanGenerationCurrent } from '../../../workspaces/catalog/local-worktree-scan-generation'
+import { localWorktreePathsExistOrAreUnverifiable } from '../../../workspaces/catalog/local-worktree-path-presence'
+import { worktreeRetentionPathComparisonKey } from '../../../workspaces/catalog/worktree-retention-path-comparison'
+import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 
 type AuthoritativeLocalMetadataPruneStore = Pick<
   Store,
   'getRepos' | 'pruneSessionlessMissingLocalWorktreeMetadataForRepo' | 'getProfileStorageDirectory'
 > &
-  Partial<Pick<Store, 'selectProbeableLocalWorktreeMetadataCandidates'>>
+  Partial<
+    Pick<
+      Store,
+      | 'selectProbeableLocalWorktreeMetadataCandidates'
+      | 'selectRemovableLocalWorktreeSessionOwnersForRepo'
+      | 'pruneMissingLocalWorktreeSessionsForRepo'
+    >
+  >
 
 export function canPruneAuthoritativeLocalMetadata<
   T extends Partial<AuthoritativeLocalMetadataPruneStore>
@@ -105,11 +115,7 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
     worktreeRetentionPathComparisonKey(repo.path, platform),
     ...gitWorktrees.map((worktree) => worktreeRetentionPathComparisonKey(worktree.path, platform))
   ])
-  // Advisory eligibility shrinks stat fan-out; deletion still rechecks authoritatively (#17775).
-  const removableCandidates =
-    store.selectProbeableLocalWorktreeMetadataCandidates?.(scan) ?? scan.metadata
-  const probeCandidates = removableCandidates.flatMap((metadata) => {
-    const { worktreeId } = metadata
+  const isProbeable = (worktreeId: string): string | null => {
     const parsed = splitWorktreeId(worktreeId)
     const nativeAbsolute = parsed
       ? platform === 'win32'
@@ -123,21 +129,43 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
       worktreeId.includes(FOLDER_WORKSPACE_INSTANCE_SEPARATOR) ||
       livePathKeys.has(worktreeRetentionPathComparisonKey(parsed.worktreePath, platform))
     ) {
-      return []
+      return null
     }
-    return [{ metadata, pathValue: parsed.worktreePath }]
+    return parsed.worktreePath
+  }
+  // Advisory eligibility shrinks stat fan-out; deletion still rechecks authoritatively (#17775).
+  const removableCandidates =
+    store.selectProbeableLocalWorktreeMetadataCandidates?.(scan) ?? scan.metadata
+  const probeCandidates = removableCandidates.flatMap((metadata) => {
+    const pathValue = isProbeable(metadata.worktreeId)
+    return pathValue ? [{ metadata, pathValue }] : []
+  })
+  // Saved session state of a deleted worktree outlives its metadata; probe those owners too.
+  const sessionCandidates = (
+    store.selectRemovableLocalWorktreeSessionOwnersForRepo?.(repo.id) ?? []
+  ).flatMap((worktreeId) => {
+    const pathValue = isProbeable(worktreeId)
+    return pathValue ? [{ worktreeId, pathValue }] : []
   })
   const presenceByPath = await pathsExistOrAreUnverifiable(
-    probeCandidates.map(({ pathValue }) => pathValue),
+    [
+      ...new Set([
+        ...probeCandidates.map(({ pathValue }) => pathValue),
+        ...sessionCandidates.map(({ pathValue }) => pathValue)
+      ])
+    ],
     { signal }
   )
   if (!generationCurrent() || !isCallerCurrent()) {
     return result([], generationCurrent())
   }
-  const missingMetadata = probeCandidates.flatMap(({ metadata, pathValue }) =>
+  const missingSessionIds = sessionCandidates.flatMap(({ worktreeId, pathValue }) =>
+    presenceByPath.get(pathValue) === false ? [worktreeId] : []
+  )
+  let missingMetadata = probeCandidates.flatMap(({ metadata, pathValue }) =>
     presenceByPath.get(pathValue) === false ? [metadata] : []
   )
-  if (missingMetadata.length === 0) {
+  if (missingMetadata.length === 0 && missingSessionIds.length === 0) {
     return result([], generationCurrent())
   }
 
@@ -145,10 +173,25 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
   if (!generationCurrent() || !isCallerCurrent() || isWslMoveRepoBlocked(repo)) {
     return result([], generationCurrent())
   }
-  const removedIds = store.pruneSessionlessMissingLocalWorktreeMetadataForRepo(
-    scan,
-    missingMetadata
+  const releasedIds = new Set(
+    missingSessionIds.length > 0
+      ? (store.pruneMissingLocalWorktreeSessionsForRepo?.(scan, missingSessionIds) ?? [])
+      : []
   )
+  if (releasedIds.size > 0) {
+    // The advisory filter skipped these rows while a session still owned them.
+    const probedIds = new Set(probeCandidates.map(({ metadata }) => metadata.worktreeId))
+    missingMetadata = [
+      ...missingMetadata,
+      ...scan.metadata.filter(
+        ({ worktreeId }) => releasedIds.has(worktreeId) && !probedIds.has(worktreeId)
+      )
+    ]
+  }
+  const removedIds =
+    missingMetadata.length > 0
+      ? store.pruneSessionlessMissingLocalWorktreeMetadataForRepo(scan, missingMetadata)
+      : []
   if (removedIds.length > 0) {
     const snapshotDirectory = store.getProfileStorageDirectory()
     const targets: {

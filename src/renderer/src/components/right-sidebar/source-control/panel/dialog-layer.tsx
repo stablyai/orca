@@ -1,7 +1,7 @@
 import React from 'react'
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
+import { BaseRefPicker } from '@/components/source-control/BaseRefPicker'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -11,8 +11,8 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
-import { SourceControlAgentActionDialog } from '../../SourceControlAgentActionDialog'
+import { useTranslate } from '@/i18n/use-translate'
+import { SourceControlAgentActionDialog } from '../ai/SourceControlAgentActionDialog'
 import { SourceControlTextGenerationDialog } from '../ai/text-generation-dialog'
 import { SourceControlDiscardDialog } from '../commit/discard-dialog'
 
@@ -34,6 +34,7 @@ export function SourceControlDialogLayer({
   baseRefDialogOpen,
   onBaseRefDialogOpenChange,
   baseRefRepoId,
+  baseRefHostId,
   pickerBaseRef,
   onSelectBaseRef,
   onUsePrimaryBaseRef,
@@ -77,6 +78,7 @@ export function SourceControlDialogLayer({
   onConfirmDiscard: DiscardDialogProps['onConfirm']
   baseRefDialogOpen: boolean
   onBaseRefDialogOpenChange: (open: boolean) => void
+  baseRefHostId?: BaseRefPickerProps['hostId']
   baseRefRepoId: string
   pickerBaseRef: BaseRefPickerProps['currentBaseRef']
   onSelectBaseRef: BaseRefPickerProps['onSelect']
@@ -110,6 +112,7 @@ export function SourceControlDialogLayer({
   onGeneratePullRequestFields: TextGenerationDialogProps['onGenerate']
   onSavePullRequestDefaults: TextGenerationDialogProps['onSaveDefaults']
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <Dialog
@@ -123,7 +126,7 @@ export function SourceControlDialogLayer({
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="text-sm">
-              {translate('auto.components.right.sidebar.SourceControl.574d2f4413', 'Clear Notes')}
+              {t('auto.components.right.sidebar.SourceControl.574d2f4413', 'Clear Notes')}
             </DialogTitle>
             <DialogDescription className="text-xs">{clearNotesDescription}</DialogDescription>
           </DialogHeader>
@@ -134,7 +137,7 @@ export function SourceControlDialogLayer({
               onClick={onDismissClearNotes}
               disabled={isClearingNotes}
             >
-              {translate('auto.components.right.sidebar.SourceControl.05bb8f4a48', 'Cancel')}
+              {t('auto.components.right.sidebar.SourceControl.05bb8f4a48', 'Cancel')}
             </Button>
             <Button
               type="button"
@@ -143,7 +146,7 @@ export function SourceControlDialogLayer({
               disabled={isClearingNotes || clearNotesCount === 0}
             >
               <Trash2 className="size-4" />
-              {translate('auto.components.right.sidebar.SourceControl.574d2f4413', 'Clear Notes')}
+              {t('auto.components.right.sidebar.SourceControl.574d2f4413', 'Clear Notes')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -159,21 +162,20 @@ export function SourceControlDialogLayer({
         <DialogContent className="flex max-h-[min(85vh,36rem)] max-w-xl flex-col overflow-hidden">
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-sm">
-              {translate(
-                'auto.components.right.sidebar.SourceControl.476b77745b',
-                'Change Base Ref'
-              )}
+              {t('auto.components.right.sidebar.SourceControl.476b77745b', 'Change Base Ref')}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              {translate(
+              {t(
                 'auto.components.right.sidebar.SourceControl.c9ad22888e',
                 'Pick the branch compare target for this repository.'
               )}
             </DialogDescription>
           </DialogHeader>
-          <div className="min-h-0 overflow-y-auto scrollbar-sleek">
+          {/* Why: overflow clips the search field's 3px focus ring; -m-1/p-1 makes room without shifting it. */}
+          <div className="-m-1 min-h-0 overflow-y-auto p-1 scrollbar-sleek">
             <BaseRefPicker
               repoId={baseRefRepoId}
+              hostId={baseRefHostId}
               currentBaseRef={pickerBaseRef}
               onSelect={onSelectBaseRef}
               onUsePrimary={onUsePrimaryBaseRef}
@@ -187,11 +189,11 @@ export function SourceControlDialogLayer({
         onOpenChange={onResolveConflictsComposerOpenChange}
         actionId="resolveConflicts"
         recoveryContext={recoveryContext}
-        title={translate(
+        title={t(
           'auto.components.right.sidebar.SourceControl.19652ddd76',
           'Resolve Conflicts With AI'
         )}
-        description={translate(
+        description={t(
           'auto.components.right.sidebar.SourceControl.901140f47d',
           'Review and edit the full command input before starting an agent.'
         )}
@@ -209,9 +211,10 @@ export function SourceControlDialogLayer({
         onSaveAgentDefault={onSaveAgentDefault}
         onOpenSettings={onOpenSourceControlAiSettings}
         {...resolveConflictsEditor}
-        onLaunched={() =>
+        onLaunched={(backgroundWorkspaceId) =>
+          !backgroundWorkspaceId &&
           toast.success(
-            translate(
+            t(
               'auto.components.right.sidebar.SourceControl.e48caaf0dd',
               'Started an AI agent for the conflicts.'
             )
@@ -222,15 +225,15 @@ export function SourceControlDialogLayer({
         open={sourceControlAiActionsVisible && commitGenerationDialogOpen}
         onOpenChange={onCommitGenerationDialogOpenChange}
         actionId="commitMessage"
-        title={translate(
+        title={t(
           'auto.components.right.sidebar.SourceControl.6b122529d4',
           'Generate Commit Message'
         )}
-        description={translate(
+        description={t(
           'auto.components.right.sidebar.SourceControl.f4c766f1ca',
           'Choose the agent and command template for this run.'
         )}
-        generateLabel="Generate"
+        generateLabel={t('auto.components.right.sidebar.SourceControl.aee92f8684', 'Generate')}
         settings={settings}
         repo={repo}
         discoveryHostKey={discoveryHostKey}
@@ -242,15 +245,15 @@ export function SourceControlDialogLayer({
         open={sourceControlAiActionsVisible && pullRequestGenerationDialogOpen}
         onOpenChange={onPullRequestGenerationDialogOpenChange}
         actionId="pullRequest"
-        title={translate(
+        title={t(
           'auto.components.right.sidebar.SourceControl.1a6a6e0bc5',
           'Generate Hosted Review Details'
         )}
-        description={translate(
+        description={t(
           'auto.components.right.sidebar.SourceControl.f4c766f1ca',
           'Choose the agent and command template for this run.'
         )}
-        generateLabel="Generate"
+        generateLabel={t('auto.components.right.sidebar.SourceControl.aee92f8684', 'Generate')}
         settings={settings}
         repo={repo}
         discoveryHostKey={discoveryHostKey}

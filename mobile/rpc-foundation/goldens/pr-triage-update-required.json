@@ -4,18 +4,18 @@
   "family": "session.pr-triage",
   "namedDeltas": [],
   "values": {
-    "c2a44248892e": {
-      "launched": {
-        "kind": "not-started",
-        "message": "Update Orca on your computer to start an agent from your phone."
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
         "$rpc": "undefined"
+      }
+    },
+    "f4cb28c6c51b": {
+      "launched": {
+        "kind": "not-started",
+        "message": "Update Orca on this host to start an agent from your phone."
       }
     }
   },
@@ -30,7 +30,7 @@
           "settlements": {
             "launch": "eb79a9b3682a"
           },
-          "state": "c2a44248892e",
+          "state": "f4cb28c6c51b",
           "effects": []
         }
       }

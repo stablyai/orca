@@ -2,7 +2,7 @@ import {
   getRepoExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { AppState } from '../../../types'
 
 // Why: an SSH per-workspace-env project's host is the runtime-owned SSH target; once that runtime is destroyed, remove the project or it lingers as a dead, never-connectable one.
@@ -20,7 +20,7 @@ export async function purgeOrphanedRuntimeSshProjects(
     purgeableSshTargetIds.map((id) => toSshExecutionHostId(id))
   )
   const orphanedSetups = get()
-    .endpointProjectHostSetups.filter((setup) => destroyedHostIds.has(setup.hostId))
+    .projectHostSetups.filter((setup) => destroyedHostIds.has(setup.hostId))
     .map((setup) => ({ setupId: setup.id, hostId: setup.hostId }))
   const purgedRepoIds = new Set<string>()
   for (const target of orphanedSetups) {

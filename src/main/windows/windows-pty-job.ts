@@ -1,6 +1,6 @@
 import type { IPty } from 'node-pty'
 import { createRequire } from 'node:module'
-import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
+import { recordSelfInitiatedTreeKill } from '../crash-reporting/process-exits/self-initiated-tree-kill-log'
 
 /** Kernel job handles own ConPTY descendants across PID reuse/reparenting (#9045/#10475/#10087). Per-PTY jobs make explicit teardown exact without kill-on-close, preserving background children on clean shell exit. */
 
@@ -10,6 +10,7 @@ type ConptyNative = {
   terminateJob: (id: number, shellPid: number) => boolean
   listJobProcessIds: (id: number, shellPid: number) => number[] | null
   assignCurrentProcessToJob: () => boolean
+  assignCurrentProcessToStrictJob?: () => boolean
   /** Absent on builds that predate the terminal process ceiling. */
   setActiveProcessLimit?: (limit: number) => boolean
 }
@@ -141,6 +142,19 @@ export function assignHostProcessToKillOnCloseJob(): boolean {
   return hostJobAssigned
 }
 
+/** Native messaging helpers must inherit ownership even when they request breakaway. */
+export function assignHostProcessToStrictKillOnCloseJob(): boolean {
+  const native = nativeLoader()
+  if (typeof native?.assignCurrentProcessToStrictJob !== 'function') {
+    return false
+  }
+  try {
+    return native.assignCurrentProcessToStrictJob()
+  } catch {
+    return false
+  }
+}
+
 function assignHostProcessOnce(): boolean {
   const native = nativeLoader()
   if (!native) {
@@ -171,21 +185,18 @@ export function isPtyJobOwnershipAvailable(): boolean {
   return nativeLoader() !== null
 }
 
-/** Test-only: substitute the native module (it is resolved via createRequire). */
-export function __setConptyJobNativeForTests(loader?: () => ConptyNative | null): void {
-  nativeLoader = loader ?? loadConptyNative
-  cachedNative = undefined
-  hostJobAssigned = null
-}
-
 type UnreadyWindowsPty = IPty & { _agent?: { kill?: () => void } }
 
 // Bypass node-pty's output-deferred kill to release silent ConPTY hosts, input pipes and output workers immediately.
-export function killConptyNow(proc: IPty): void {
+export function killConptyNow(proc: IPty): boolean {
   const pane: UnreadyWindowsPty = proc
   try {
-    pane._agent?.kill?.()
+    if (!pane._agent?.kill) {
+      return false
+    }
+    pane._agent.kill()
+    return true
   } catch {
-    // Best effort; the host job still reaps the console host with the daemon.
+    return false
   }
 }

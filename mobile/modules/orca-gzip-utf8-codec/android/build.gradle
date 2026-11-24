@@ -15,6 +15,8 @@ android {
 }
 
 dependencies {
+  // Android ships no brotli decoder; Google's pure-Java one, as okhttp-brotli uses.
+  implementation 'org.brotli:dec:0.1.2'
   testImplementation 'junit:junit:4.13.2'
   // The android.jar used by JVM unit tests stubs org.json; the shared vectors are JSON.
   testImplementation 'org.json:json:20240303'

@@ -1,11 +1,18 @@
-import type { RuntimeMobileSessionTabGroup } from '../../../../shared/runtime-types'
-import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
-import { structuredAgentSessionHostTabId } from '../../../../shared/structured-agent-session-host-tab-id'
+import type { RuntimeMobileSessionTabGroup } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type {
+  Tab,
+  TabGroup,
+  TabGroupLayoutNode
+} from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import {
+  structuredAgentSessionHostTabId,
+  isReopenedChatTabId
+} from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import {
   getActiveTabNavOrder,
   getGroupVisibleTabOrder,
   type VisibleTabRef
-} from '../../components/tab-bar/group-tab-order'
+} from '../../lib/workspace/tabs/order/group-tab-order'
 import type { MobileSessionWorktreeInputs } from './types'
 import { isEditorSurfaceTab } from './mobile-session-surfaces'
 
@@ -191,7 +198,12 @@ export function buildMobileSessionGroupProjection(
       visibleOrder.map((item) => [
         item.tabId ?? item.id,
         item.type === 'agent-session'
-          ? structuredAgentSessionHostTabId(item.id)
+          ? (() => {
+              const actual = inputs.hostTabIds.get(item.tabId ?? item.id)
+              return actual && isReopenedChatTabId(actual)
+                ? actual
+                : structuredAgentSessionHostTabId(item.id)
+            })()
           : (item.tabId ?? item.id)
       ])
     )

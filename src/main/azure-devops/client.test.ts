@@ -1,336 +1,237 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
-import {
-  getAzureDevOpsAuthStatus,
-  getAzureDevOpsPullRequestForBranch,
-  getAzureDevOpsPullRequestForBranchOrThrow
-} from './client'
-import { _resetAzureDevOpsPreviewApiVersionCache } from './azure-devops-api-request'
-import { _resetAzureDevOpsRepoRefCache } from './repository-ref'
-import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
+import type { RawAzureDevOpsPullRequest } from './pull-request-mappers'
 
-const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
-
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock
+const { requestJson, readHead, headIsEquivalent } = vi.hoisted(() => ({
+  requestJson: vi.fn(),
+  readHead: vi.fn(),
+  headIsEquivalent: vi.fn()
 }))
 
-function primeGitExecWithDefaultBranch(defaultRef = 'refs/remotes/origin/main'): void {
-  gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-    if (args[0] === 'remote') {
-      return { stdout: 'https://dev.azure.com/acme/Project/_git/repo\n', stderr: '' }
-    }
-    if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
-      return { stdout: `refs/remotes/origin/HEAD\0${defaultRef}\n`, stderr: '' }
-    }
-    throw new Error(`unexpected git call: ${args.join(' ')}`)
+vi.mock('./azure-devops-api-request', () => ({
+  azureDevOpsTokenConfigured: () => true,
+  getAzureDevOpsAuthConfig: () => ({}),
+  normalizeAzureDevOpsApiBaseUrl: (value: string) => value,
+  requestAzureDevOpsJson: requestJson,
+  requestAzureDevOpsJsonAtBase: vi.fn()
+}))
+vi.mock('./repository-ref', () => ({
+  getAzureDevOpsRepoRef: async () => ({
+    host: 'dev.azure.com',
+    project: 'proj',
+    repository: 'repo',
+    apiBaseUrl: 'https://dev.azure.com/org/proj',
+    webBaseUrl: 'https://dev.azure.com/org/proj/_git/repo'
   })
+}))
+vi.mock('../source-control/repo-default-branch', () => ({
+  shouldHideNonOpenReviewOnDefaultBranch: async () => false
+}))
+vi.mock('../source-control/review-current-head', () => ({ readCurrentReviewHead: readHead }))
+vi.mock('../source-control/merged-review-head-equivalence', () => ({
+  mergedReviewHeadIsEquivalent: headIsEquivalent
+}))
+
+import { getAzureDevOpsPullRequestForBranch } from './client'
+
+function pr(id: number, status: string, head: string): RawAzureDevOpsPullRequest {
+  return {
+    pullRequestId: id,
+    title: `PR ${id}`,
+    status,
+    creationDate: new Date(Date.UTC(2026, 0, id)).toISOString(),
+    lastMergeSourceCommit: { commitId: head }
+  }
 }
 
-const OLD_ENV = process.env
-const OLD_FETCH = globalThis.fetch
+function serve(
+  pages: Record<string, RawAzureDevOpsPullRequest[]>,
+  commits: string[] = []
+): string[] {
+  const listStatuses: string[] = []
+  requestJson.mockImplementation(async (_repo, path: string, options) => {
+    if (path.endsWith('/pullRequests')) {
+      const status = options.searchParams['searchCriteria.status']
+      listStatuses.push(status)
+      return { value: pages[status] ?? [] }
+    }
+    if (path.endsWith('/commits')) {
+      return { value: commits.map((commitId) => ({ commitId })) }
+    }
+    return path.endsWith('/statuses') ? [] : { id: 'repo-id' }
+  })
+  return listStatuses
+}
 
-describe('Azure DevOps client', () => {
+describe('getAzureDevOpsPullRequestForBranch', () => {
   beforeEach(() => {
-    process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'pat-token' }
-    gitExecFileAsyncMock.mockReset()
-    _resetAzureDevOpsRepoRefCache()
-    _resetAzureDevOpsPreviewApiVersionCache()
-    __resetRepoDefaultBranchCacheForTests()
+    requestJson.mockReset()
+    readHead.mockReset()
+    headIsEquivalent.mockReset()
+    headIsEquivalent.mockResolvedValue(false)
   })
-
   afterEach(() => {
-    process.env = OLD_ENV
-    globalThis.fetch = OLD_FETCH
-    _resetAzureDevOpsRepoRefCache()
+    vi.useRealTimers()
   })
 
-  it('authenticates against an on-prem Server that requires -preview api-versions (STA-3494)', async () => {
-    process.env.ORCA_AZURE_DEVOPS_API_BASE_URL = 'https://ado.example.com:8443/tfs/MyCollection'
-    const versions: (string | null)[] = []
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      const url = new URL(String(input))
-      expect(url.pathname).toBe('/tfs/MyCollection/_apis/connectionData')
-      versions.push(url.searchParams.get('api-version'))
-      if (!url.searchParams.get('api-version')?.endsWith('-preview')) {
-        return new Response(
-          JSON.stringify({
-            message: 'The requested version "7.1" of the resource is under preview.',
-            typeKey: 'VssInvalidPreviewVersionException'
-          }),
-          { status: 400, headers: { 'Content-Type': 'application/json' } }
-        )
-      }
-      return Response.json({ authenticatedUser: { providerDisplayName: 'Server User' } })
-    }) as never
-
-    await expect(getAzureDevOpsAuthStatus()).resolves.toEqual({
-      configured: true,
-      authenticated: true,
-      account: 'Server User',
-      baseUrl: 'https://ado.example.com:8443/tfs/MyCollection',
-      tokenConfigured: true
-    })
-    expect(versions).toEqual(['7.1', '7.1-preview'])
-  })
-
-  it('resolves a PR for a branch through repository, PR, and status REST calls', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({
-      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
-    })
-    const requests: { pathname: string; search: string; authorization: string | null }[] = []
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      const url = new URL(String(input))
-      requests.push({
-        pathname: url.pathname,
-        search: url.search,
-        authorization: null
+  it('treats a completed PR as the branch review only while its head is the checkout HEAD', async () => {
+    serve({ all: [pr(1, 'completed', 'old-head')] })
+    await expect(
+      getAzureDevOpsPullRequestForBranch('/repo', 'feature/x', null, null, {
+        currentHeadOid: 'new-head'
       })
-      const response = (body: unknown): Response =>
-        new Response(JSON.stringify(body), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        })
-
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
-        return response({
-          id: 'repo-guid',
-          webUrl: 'https://dev.azure.com/acme/Project/_git/repo'
-        })
-      }
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
-        expect(url.searchParams.get('searchCriteria.sourceRefName')).toBe(
-          'refs/heads/feature/azure'
-        )
-        expect(url.searchParams.get('searchCriteria.status')).toBe('all')
-        return response({
-          value: [
-            {
-              pullRequestId: 17,
-              title: 'Old Azure PR',
-              status: 'completed',
-              creationDate: '2026-05-10T00:00:00Z',
-              lastMergeSourceCommit: { commitId: 'oldsha' }
-            },
-            {
-              pullRequestId: 18,
-              title: 'Azure branch',
-              status: 'active',
-              creationDate: '2026-05-11T00:00:00Z',
-              mergeStatus: 'succeeded',
-              lastMergeSourceCommit: { commitId: 'abc123' }
-            }
-          ]
-        })
-      }
-      if (
-        url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/18/statuses'
-      ) {
-        return response({ value: [{ state: 'succeeded' }] })
-      }
-      return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
-    }) as never
-
-    await expect(
-      getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/feature/azure')
-    ).resolves.toEqual({
-      number: 18,
-      title: 'Azure branch',
-      state: 'open',
-      url: 'https://dev.azure.com/acme/Project/_git/repo/pullrequest/18',
-      status: 'success',
-      updatedAt: '2026-05-11T00:00:00Z',
-      mergeable: 'MERGEABLE',
-      headSha: 'abc123'
-    })
-    expect(requests.map((request) => request.pathname)).toEqual([
-      '/acme/Project/_apis/git/repositories/repo',
-      '/acme/Project/_apis/git/repositories/repo-guid/pullRequests',
-      '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/18/statuses'
-    ])
-  })
-
-  it('getAzureDevOpsPullRequestForBranchOrThrow surfaces a list failure instead of null (finding 4)', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({
-      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
-    })
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      const url = new URL(String(input))
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
-        return new Response(
-          JSON.stringify({
-            id: 'repo-guid',
-            webUrl: 'https://dev.azure.com/acme/Project/_git/repo'
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        )
-      }
-      return new Response(JSON.stringify({ message: 'forbidden' }), { status: 403 })
-    }) as never
-
-    await expect(
-      getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/feature/azure')
     ).resolves.toBeNull()
-    _resetAzureDevOpsRepoRefCache()
-    await expect(
-      getAzureDevOpsPullRequestForBranchOrThrow('/repo', 'refs/heads/feature/azure')
-    ).rejects.toThrow(/Azure DevOps request failed/)
-  })
 
-  it('uses the most recent branch PR instead of preferring stale active PRs', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({
-      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
-    })
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      const url = new URL(String(input))
-      const response = (body: unknown): Response =>
-        new Response(JSON.stringify(body), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        })
-
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
-        return response({ id: 'repo-guid' })
-      }
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
-        return response({
-          value: [
-            {
-              pullRequestId: 20,
-              title: 'Stale active PR',
-              status: 'active',
-              creationDate: '2026-05-10T00:00:00Z',
-              mergeStatus: 'succeeded',
-              lastMergeSourceCommit: { commitId: 'oldsha' }
-            },
-            {
-              pullRequestId: 21,
-              title: 'Latest completed PR',
-              status: 'completed',
-              creationDate: '2026-05-15T00:00:00Z',
-              closedDate: '2026-05-16T00:00:00Z',
-              mergeStatus: 'succeeded',
-              lastMergeSourceCommit: { commitId: 'newsha' }
-            }
-          ]
-        })
-      }
-      if (
-        url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/21/statuses'
-      ) {
-        return response({ value: [{ state: 'succeeded' }] })
-      }
-      return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
-    }) as never
-
-    await expect(
-      getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/feature/azure')
-    ).resolves.toMatchObject({
-      number: 21,
-      title: 'Latest completed PR',
-      state: 'merged',
-      headSha: 'newsha'
+    readHead.mockResolvedValue('old-head')
+    await expect(getAzureDevOpsPullRequestForBranch('/repo', 'feature/x')).resolves.toMatchObject({
+      number: 1,
+      state: 'merged'
     })
   })
 
-  it('hides a stale completed/abandoned PR whose source branch is the repo default branch (#9171)', async () => {
-    primeGitExecWithDefaultBranch()
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      const url = new URL(String(input))
-      const response = (body: unknown): Response =>
-        new Response(JSON.stringify(body), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        })
-
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
-        return response({ id: 'repo-guid' })
-      }
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
-        return response({
-          value: [
-            {
-              pullRequestId: 30,
-              title: 'Accidental PR from main',
-              status: 'abandoned',
-              creationDate: '2026-05-10T00:00:00Z',
-              closedDate: '2026-05-11T00:00:00Z',
-              lastMergeSourceCommit: { commitId: 'stale-main-oid' }
-            }
-          ]
-        })
-      }
-      return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
-    }) as never
-
-    await expect(getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/main')).resolves.toBeNull()
+  it('keeps a completed PR when HEAD is an earlier commit of it or the PR is linked', async () => {
+    serve({ all: [pr(3, 'completed', 'final-head')] }, ['earlier-head', 'final-head'])
+    const lookup = (currentHeadOid: string, linked: number | null = null) =>
+      getAzureDevOpsPullRequestForBranch('/repo', 'feature/x', linked, null, { currentHeadOid })
+    await expect(lookup('earlier-head')).resolves.toMatchObject({ number: 3, state: 'merged' })
+    await expect(lookup('unrelated-head')).resolves.toBeNull()
+    await expect(lookup('unrelated-head', 3)).resolves.toMatchObject({ number: 3 })
   })
 
-  it('discards a completed default-branch shadow and refetches the linked PR (#9171)', async () => {
-    primeGitExecWithDefaultBranch()
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      const url = new URL(String(input))
-      const response = (body: unknown): Response =>
-        new Response(JSON.stringify(body), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        })
-
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
-        return response({ id: 'repo-guid' })
-      }
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
-        return response({
-          value: [
-            {
-              pullRequestId: 32,
-              title: 'Completed PR from main',
-              status: 'completed',
-              creationDate: '2026-05-10T00:00:00Z',
-              closedDate: '2026-05-12T00:00:00Z',
-              lastMergeSourceCommit: { commitId: 'shadow-oid' }
-            }
-          ]
-        })
-      }
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/40') {
-        return response({
-          pullRequestId: 40,
-          title: 'Linked PR',
-          status: 'active',
-          creationDate: '2026-05-13T00:00:00Z',
-          mergeStatus: 'succeeded',
-          lastMergeSourceCommit: { commitId: 'linked-oid' }
-        })
-      }
-      if (
-        url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/40/statuses'
-      ) {
-        return response({ value: [{ state: 'succeeded' }] })
-      }
-      return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
-    }) as never
-
-    await expect(
-      getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/main', 40)
-    ).resolves.toMatchObject({ number: 40, state: 'open' })
-  })
-
-  it('cancels unread error-response bodies so bundled undici cannot crash on socket close', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({
-      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
-    })
-    let cancelledBodies = 0
-    const fetchMock = vi.fn(async () =>
-      cancelTrackingResponse(502, () => {
-        cancelledBodies += 1
+  it('keeps a completed PR when HEAD is an equivalent local rebase of it', async () => {
+    serve({ all: [{ ...pr(6, 'completed', 'final-head'), targetRefName: 'refs/heads/main' }] }, [
+      'final-head'
+    ])
+    const lookup = (userRefresh = false) =>
+      getAzureDevOpsPullRequestForBranch('/repo', 'feature/x', null, null, {
+        currentHeadOid: 'rebased-head',
+        userRefresh
+      })
+    await expect(lookup()).resolves.toBeNull()
+    headIsEquivalent.mockResolvedValue(true)
+    await expect(lookup(true)).resolves.toMatchObject({ number: 6, state: 'merged' })
+    expect(headIsEquivalent).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        repoPath: '/repo',
+        reviewHeadOid: 'final-head',
+        baseBranchName: 'main',
+        headOid: 'rebased-head'
       })
     )
-    globalThis.fetch = fetchMock as never
+  })
 
-    await getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/feature/azure')
+  it('reuses the rebase proof until the PR head, HEAD or target changes, the TTL ends or the user refreshes', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const completed = (head: string, target: string) => ({
+      ...pr(7, 'completed', head),
+      targetRefName: `refs/heads/${target}`
+    })
+    const pages = { all: [completed('memo-head', 'main')] }
+    serve(pages, ['memo-head'])
+    headIsEquivalent.mockResolvedValue(true)
+    const lookup = (currentHeadOid: string, userRefresh = false) =>
+      getAzureDevOpsPullRequestForBranch('/repo', 'feature/x', null, null, {
+        currentHeadOid,
+        userRefresh
+      })
+    await expect(lookup('rebased-a')).resolves.toMatchObject({ number: 7, state: 'merged' })
+    await expect(lookup('rebased-a')).resolves.toMatchObject({ number: 7, state: 'merged' })
+    expect(headIsEquivalent).toHaveBeenCalledTimes(1)
+    await lookup('rebased-b')
+    expect(headIsEquivalent).toHaveBeenCalledTimes(2)
+    pages.all = [completed('memo-head-2', 'main')]
+    await lookup('rebased-b')
+    expect(headIsEquivalent).toHaveBeenCalledTimes(3)
+    pages.all = [completed('memo-head-2', 'release')]
+    await lookup('rebased-b')
+    expect(headIsEquivalent).toHaveBeenCalledTimes(4)
+    await lookup('rebased-b', true)
+    expect(headIsEquivalent).toHaveBeenCalledTimes(5)
+    vi.setSystemTime(Date.now() + 6 * 60 * 60_000 - 60_000)
+    await lookup('rebased-b')
+    expect(headIsEquivalent).toHaveBeenCalledTimes(5)
+    vi.setSystemTime(Date.now() + 60_000)
+    await lookup('rebased-b')
+    expect(headIsEquivalent).toHaveBeenCalledTimes(6)
+  })
 
-    expect(fetchMock).toHaveBeenCalled()
-    expect(cancelledBodies).toBe(fetchMock.mock.calls.length)
+  it('keeps a completed PR when the checkout HEAD cannot be read', async () => {
+    const requests = serve({ all: [pr(8, 'completed', 'final-head')] })
+    readHead.mockResolvedValue(null)
+    await expect(getAzureDevOpsPullRequestForBranch('/repo', 'feature/x')).resolves.toMatchObject({
+      number: 8,
+      state: 'merged'
+    })
+    expect(requests).toEqual(['all'])
+    expect(requestJson).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringMatching(/\/commits$/),
+      expect.anything(),
+      expect.anything()
+    )
+    expect(headIsEquivalent).not.toHaveBeenCalled()
+  })
+
+  it('pages PR commits, treats the page cap as proof only, and keeps the PR when commits are unreadable', async () => {
+    let completed = pr(4, 'completed', 'final-head')
+    const commitsPages: (string | undefined)[] = []
+    requestJson.mockImplementation(async (_repo, path: string, options) => {
+      if (path.endsWith('/pullRequests')) {
+        return { value: [completed] }
+      }
+      if (!path.endsWith('/commits')) {
+        return path.endsWith('/statuses') ? [] : { id: 'repo-id' }
+      }
+      const token = options.searchParams.continuationToken
+      commitsPages.push(token)
+      if (path.includes('/5/')) {
+        throw new Error('commits unavailable')
+      }
+      const page = Number(token ?? 0)
+      options.onResponse(
+        new Response(null, { headers: { 'x-ms-continuationtoken': `${page + 1}` } })
+      )
+      return { value: [{ commitId: `commit-${page}` }] }
+    })
+    const lookup = (currentHeadOid: string, throwOnFailure = false, userRefresh = false) =>
+      getAzureDevOpsPullRequestForBranch(
+        '/repo',
+        'feature/x',
+        null,
+        null,
+        { currentHeadOid, userRefresh },
+        throwOnFailure
+      )
+    await expect(lookup('commit-9')).resolves.toMatchObject({ number: 4, state: 'merged' })
+    expect(commitsPages).toEqual([undefined, '1', '2', '3', '4', '5', '6', '7', '8', '9'])
+    await expect(lookup('commit-10')).resolves.toBeNull()
+    expect(commitsPages).toHaveLength(10)
+
+    completed = pr(5, 'completed', 'final-head')
+    const merged = { number: 5, state: 'merged' }
+    await expect(lookup('earlier-head')).resolves.toMatchObject(merged)
+    commitsPages.length = 0
+    await expect(lookup('earlier-head', true)).resolves.toMatchObject(merged)
+    expect(commitsPages).toEqual([])
+    await expect(lookup('earlier-head', true, true)).resolves.toMatchObject(merged)
+    expect(commitsPages).toEqual([undefined])
+    expect(headIsEquivalent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ reviewHeadOid: 'final-head', headOid: 'earlier-head' })
+    )
+  })
+
+  it('prefers the active PR and asks for it separately only when the recent page is full', async () => {
+    const recent = serve({ all: [pr(2, 'completed', 'head'), pr(1, 'active', 'head')] })
+    await expect(getAzureDevOpsPullRequestForBranch('/repo', 'feature/x')).resolves.toMatchObject({
+      number: 1
+    })
+    expect(recent).toEqual(['all'])
+
+    const completed = Array.from({ length: 10 }, (_, index) => pr(index + 2, 'completed', 'head'))
+    const full = serve({ all: completed, active: [pr(1, 'active', 'head')] })
+    await expect(getAzureDevOpsPullRequestForBranch('/repo', 'feature/x')).resolves.toMatchObject({
+      number: 1,
+      state: 'open'
+    })
+    expect(full).toEqual(['all', 'active'])
   })
 })

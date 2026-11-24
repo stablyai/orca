@@ -11,3 +11,8 @@ export type EmulatorSessionInfo = {
   streamCodec?: EmulatorStreamCodec
   backend?: EmulatorBackendKind
 }
+
+export type EmulatorActiveSession = EmulatorSessionInfo & {
+  worktreeId: string
+  backend: EmulatorBackendKind
+}

@@ -1,54 +1,57 @@
+import { normalizeStatusBarUsageFormat } from '../../../../../shared/status-bar/status-bar-usage-format'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
-import { normalizeRightSidebarRoute } from '../../right-sidebar-route'
+import { normalizeRightSidebarRoute } from '../right-sidebar/right-sidebar-route'
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
-} from '../../../../../shared/manual-repo-order'
-import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup-browse-state'
+} from '../../../../../shared/repository/manual-repo-order'
+import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 import {
   normalizeExecutionHostScope,
   normalizeExecutionHostOrder,
   normalizeVisibleExecutionHostIds
-} from '../../../../../shared/execution-host'
-import { normalizeFeatureInteractions } from '../../../../../shared/feature-interactions'
-import { normalizeContextualTourIds } from '../../../../../shared/contextual-tours'
-import { normalizeFeatureTipIds } from '../../../../../shared/feature-tips'
-import {
-  DEFAULT_HIDE_SLEEPING_WORKSPACES,
-  normalizeWorktreeCardProperties,
-  normalizeAgentActivityDisplayMode
-} from '../../../../../shared/constants'
+} from '../../../../../shared/execution-host/execution-host'
+import { hydrateFeatureInteractions } from './ui-slice-feature-interactions-hydration'
+import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
+import { normalizeFeatureTipIds } from '../../../../../shared/feature-education/feature-tips'
+import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../../../shared/workspace-view/sleeping-workspace-visibility'
+import { normalizeAgentActivityDisplayMode } from '../../../../../shared/agent-status/presentation/agent-activity-display-mode'
+import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/row-display/card-properties'
 import {
   normalizeActivityGroupBy,
   normalizeThreadReadFilter
-} from '../../../../../shared/agents-view-thread-filters'
+} from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
   normalizeWorkspaceStatuses
-} from '../../../../../shared/workspace-statuses'
-import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pet-types'
-import { clampMarkdownTocPanelWidth } from '../../../../../shared/markdown-toc-panel-width'
-import { normalizeBrowserDevToolsDockLayout } from '../../../../../shared/browser-devtools-dock'
-import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/combined-diff-file-tree-width'
-import { parsePersistedAutomationHostFilter } from '../../../../../shared/automation-host-filter'
-import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
-import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
-import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser-page-zoom'
-import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
-import { isReleaseChannel } from '../../../../../shared/release-channel'
+} from '../../../../../shared/workspace/status/workspace-statuses'
+import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pets/pet-types'
+import { clampMarkdownTocPanelWidth } from '../../../../../shared/editor/markdown/markdown-toc-panel-width'
+import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/source-control/diff/combined-diff-file-tree-width'
+import { parsePersistedAutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
+import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
+import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser/site-settings/browser-page-zoom'
+import { normalizeKagiSessionLink } from '../../../../../shared/browser/navigation/browser-url'
+import { isReleaseChannel } from '../../../../../shared/updater/release-channel'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   sanitizeSetupScriptPromptDismissals
-} from '../../../lib/setup-script-prompt'
+} from '../../../runtime/repo-hooks/setup-script-prompt'
 import { isBundledPetId, DEFAULT_PET_ID } from '../../../components/pet/pet-models'
-import { getRepoHostIdentity } from '../repo-host-identity'
-import type { PersistedUIWriteBaseline } from '../persisted-ui-write-baseline'
+import { getRepoHostIdentity } from '../../../../../shared/repository/repo-host-identity'
 import {
+  withWslMovedRepoIds,
+  withWslMovedSetupScriptDismissals
+} from '../../repos/wsl-moved-repo-ui-retention'
+
+import {
+  type PersistedUIWriteBaseline,
   capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields
-} from '../persisted-ui-write-baseline'
+} from './persisted-ui-write-baseline'
 import {
   hydrateTrustedOrcaHooks,
   hydrateUnexpectedSignoutDismissal,
@@ -56,13 +59,21 @@ import {
   preserveStringArrayIdentity,
   sanitizeHydratedActiveView,
   sanitizePersistedRepoIds,
-  sanitizeExplorerPreferences,
+  sanitizePerWorktreePreferences,
   sanitizeWorkspaceCleanupDismissals,
   sanitizePersistedSidebarWidth,
-  hydratedUIPartialMatchesState,
+  sanitizeActivityBarArrangement,
+  keepUnchangedHydratedFields,
+  hydratedFieldsAreState,
   clampPetSize
 } from './ui-slice-hydration-sanitizers'
-import { hydrateAgentReadState, sanitizeTaskResumeState } from './ui-slice-hydration-values'
+import {
+  hydrateOneShotNoticesSeen,
+  hydrateReadAndBotState,
+  sanitizeTaskResumeState
+} from './ui-slice-bot-sidebar-hydration'
+import { hydrateWslMovedSection } from './ui-slice-wsl-moved-section-actions'
+import { hydrateBrowserPaneLayout } from './browser-pane-layout-hydration'
 import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
@@ -75,7 +86,12 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
       set((s) => {
         const manualRepoOrder = normalizeManualRepoOrder(ui.manualRepoOrder)
         const orderedRepos = applyManualRepoOrder(s.repos, manualRepoOrder)
-        const validRepoIds = new Set(s.repos.map((repo) => repo.id))
+        const listedRepoIds = new Set(s.repos.map((repo) => repo.id))
+        // An empty catalog keeps everything; otherwise a moved repo whose host has not loaded stays.
+        const validRepoIds =
+          listedRepoIds.size === 0
+            ? listedRepoIds
+            : withWslMovedRepoIds(listedRepoIds, s.wslMovedProjects)
         const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
         const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
         const persistedAgentsFilterRepoIds = sanitizePersistedRepoIds(ui.agentsFilterRepoIds)
@@ -114,6 +130,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           sidebarOpen: typeof ui.sidebarOpen === 'boolean' ? ui.sidebarOpen : true,
           rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
           ...normalizeRightSidebarRoute(ui.rightSidebarTab, ui.rightSidebarExplorerView),
+          ...sanitizeActivityBarArrangement(ui, s),
           groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
           sortBy,
           // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
@@ -138,7 +155,8 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           // Why !== false: profiles written before #8873 have no key, and they are
           // precisely the ones showing the bug, so absence must mean "exempt".
           alwaysShowDefaultBranchWorkspace: ui.alwaysShowDefaultBranchWorkspace !== false,
-          ...sanitizeExplorerPreferences(ui),
+          ...sanitizePerWorktreePreferences(ui),
+          gitGraphFiltersByWorktree: ui.gitGraphFiltersByWorktree ?? {},
           // Why: startup hydrates UI before repo catalogs, so defer repo-filter validation to the all-host refresh.
           filterRepoIds:
             validRepoIds.size === 0
@@ -168,6 +186,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
           worktreeCardProperties: normalizeWorktreeCardProperties(ui.worktreeCardProperties),
           _worktreeCardModeDefaulted: ui._worktreeCardModeDefaulted === true,
+          showAgentModels: ui.showAgentModels !== false,
           agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
           workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
           workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
@@ -177,6 +196,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           statusBarVisible: ui.statusBarVisible ?? true,
           usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
           statusBarUsageMode: normalizeStatusBarUsageMode(ui.statusBarUsageMode),
+          statusBarUsageFormat: normalizeStatusBarUsageFormat(ui.statusBarUsageFormat),
           // Why: default true so existing users see the pet on first enabling the flag; only an explicit Hide persists false.
           petVisible: ui.petVisible ?? ui.sidekickVisible ?? true,
           petSize: clampPetSize(ui.petSize ?? ui.sidekickSize ?? PET_SIZE_DEFAULT, {
@@ -206,15 +226,16 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             ? ui.releaseChannelOverride
             : null,
           updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
+          seenMacosUpdateRequirement: ui.seenMacosUpdateRequirement ?? null,
           osc52ClipboardDefaultOnNoticePending: ui.osc52ClipboardDefaultOnNoticePending === true,
           browserDefaultUrl: ui.browserDefaultUrl ?? null,
           browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
           browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(ui.browserDefaultZoomLevel),
           browserKagiSessionLink: normalizeKagiSessionLink(ui.browserKagiSessionLink ?? ''),
-          browserDevToolsDock: normalizeBrowserDevToolsDockLayout(ui.browserDevToolsDock),
+          ...hydrateBrowserPaneLayout(ui),
           taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
           featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
-          featureInteractions: normalizeFeatureInteractions(ui.featureInteractions),
+          ...hydrateFeatureInteractions(s.workspaceBoardUsedBeforeLaunch, ui),
           contextualToursSeenIds: normalizeContextualTourIds(ui.contextualToursSeenIds),
           contextualToursAutoEligible:
             typeof ui.contextualToursAutoEligible === 'boolean'
@@ -224,9 +245,13 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           setupScriptPromptDismissedRepoIds:
             validRepoHostIdentities.size === 0
               ? sanitizeSetupScriptPromptDismissals(ui.setupScriptPromptDismissedRepoIds)
-              : filterSetupScriptPromptDismissalsToValidRepos(
+              : withWslMovedSetupScriptDismissals(
                   ui.setupScriptPromptDismissedRepoIds,
-                  validRepoHostIdentities
+                  filterSetupScriptPromptDismissalsToValidRepos(
+                    ui.setupScriptPromptDismissedRepoIds,
+                    validRepoHostIdentities
+                  ),
+                  s.wslMovedProjects
                 ),
           setupGuideSidebarDismissed: ui.setupGuideSidebarDismissed === true,
           setupGuideBrowserMilestoneMigrated: ui.setupGuideBrowserMilestoneMigrated === true,
@@ -241,13 +266,9 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           usagePercentageDisplayChangeNoticeDismissed:
             ui.usagePercentageDisplayChangeNoticeDismissed === true,
           statusBarCompactChangeNoticeDismissed: ui.statusBarCompactChangeNoticeDismissed !== false,
-          // Why: default false so existing users still see the CTA; only explicit dismissal persists true.
-          usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
-          codexTerminalServerIsolationNoticeSeen:
-            ui.codexTerminalServerIsolationNoticeSeen === true,
-          codexSharedSettingsNoticeSeen: ui.codexSharedSettingsNoticeSeen === true,
-          claudeDiffPanelNoticeSeen: ui.claudeDiffPanelNoticeSeen === true,
-          ...hydrateAgentReadState(ui),
+          ...hydrateOneShotNoticesSeen(ui),
+          ...hydrateWslMovedSection(ui),
+          ...hydrateReadAndBotState(ui),
           workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
             ui.workspaceCleanup?.dismissals
           ),
@@ -261,6 +282,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             source === 'startup' ? sanitizeHydratedActiveView(ui.activeView) : s.activeView,
           persistedUIReady: true
         }
+        keepUnchangedHydratedFields(s, hydrated as Partial<UISlice>)
         // Capture authoritative baseline before overlaying dirty/in-flight local fields or their diff vanishes (STA-5781). Nonnumeric width fallback may differ from main until the next drag.
         const nextWriteBaseline = capturePersistedUIWriteBaseline(hydrated)
         const previousBaseline = s.persistedUIWriteBaseline
@@ -285,7 +307,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         const nextWriteBaselineGeneration = writeBaselineMoved
           ? s.persistedUIWriteBaselineGeneration + 1
           : s.persistedUIWriteBaselineGeneration
-        if (hydratedUIPartialMatchesState(s, hydrated as Partial<UISlice>)) {
+        if (hydratedFieldsAreState(s, hydrated as Partial<UISlice>)) {
           if (!writeBaselineMoved) {
             return s
           }

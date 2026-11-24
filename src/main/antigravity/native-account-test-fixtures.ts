@@ -23,7 +23,7 @@ export function credential(subject: string, generation = 1, email = `${subject}@
     token: {
       access_token: `synthetic-${generation}`,
       refresh_token: `refresh-${generation}`,
-      expiry: generation
+      expiry: `2030-01-01T00:00:${String(generation).padStart(2, '0')}Z`
     },
     future_field: { generation, preserved: true }
   })
@@ -37,7 +37,7 @@ export function refreshedWithoutIdToken(generation: number, refreshToken = 'refr
     token: {
       access_token: `synthetic-${generation}`,
       refresh_token: refreshToken,
-      expiry: generation
+      expiry: `2030-01-01T00:00:${String(generation).padStart(2, '0')}Z`
     }
   })
 }
@@ -46,8 +46,8 @@ export function harness(initial: string | null = credential('a')) {
   let native = initial
   let vault: AntigravityAccountVault = { accounts: [], selectedAccountId: null }
   const store: AntigravityAccountStore = {
-    read: vi.fn(() => structuredClone(vault)),
-    write: vi.fn((next) => {
+    read: vi.fn(async () => structuredClone(vault)),
+    write: vi.fn(async (next) => {
       vault = structuredClone(next)
     })
   }

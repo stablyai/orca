@@ -1,4 +1,4 @@
-import type { OwnerRepo } from '../../gh-utils'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import {
   authorFieldsFromUnknown,
   extractHeadOwnerLogin,
@@ -30,6 +30,7 @@ export function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
       : [],
     updatedAt: String(item.updated_at ?? item.updatedAt ?? ''),
     ...authorFieldsFromUnknown(item),
+    ...(typeof item.comments === 'number' ? { commentCount: item.comments } : {}),
     ...(item.assignees !== undefined ? { assignees: usersFromUnknown(item.assignees) } : {})
   }
 }

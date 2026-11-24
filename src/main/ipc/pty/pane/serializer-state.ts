@@ -1,5 +1,6 @@
 import type { WebContents } from 'electron'
-import { RendererTerminalSerializerReadiness } from '../../renderer-terminal-serializer-readiness'
+import { abortWhenRendererGone } from '../../renderer-requests/renderer-lifetime-abort'
+import { RendererTerminalSerializerReadiness } from './renderer-terminal-serializer-readiness'
 import { isValidPaneKey, paneKeyPtyId } from './key-state'
 
 // Predeclare renderer serialization before spawn to suppress daemon seeding; generations fence pane-key reuse.
@@ -29,7 +30,14 @@ export function registerPendingPaneSerializerCleanup(sender: WebContents | undef
     return
   }
   pendingPaneSerializerCleanupRegistered.add(sender.id)
-  sender.once('destroyed', () => cleanupPendingPaneSerializersForSender(sender.id))
+  const lifetime = abortWhenRendererGone(sender)
+  lifetime.signal.addEventListener(
+    'abort',
+    () => cleanupPendingPaneSerializersForSender(sender.id),
+    {
+      once: true
+    }
+  )
 }
 
 export function declarePendingPaneSerializer(

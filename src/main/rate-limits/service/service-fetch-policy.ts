@@ -4,22 +4,45 @@ import {
   LIVE_CLAUDE_INGEST_DEDUPE_MS,
   MIN_REFETCH_MS,
   normalizeClaudeConfigDir,
-  type ClaudeRuntimeAuthPreparation,
-  type ActiveRateLimitProvider,
-  type ClaudeStatusLineRateLimits,
-  type NormalizedClaudeAccountSelectionTarget,
-  type ProviderRateLimits
+  type ActiveRateLimitProvider
 } from './service-types'
-import type { RateLimitWindow } from '../../../shared/rate-limit-types'
+import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
+import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
+import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
+  isSameClaudeUsageReset,
   isSameClaudeUsageWindow,
   isStaleClaudeUsageWindow,
   mapClaudeUsageWindow
-} from '../claude-usage-window'
-import { readUserClaudeConfigDir } from '../../claude-accounts/claude-profile-paths'
-import { getClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
+} from '../providers/claude/claude-usage-window'
+import { claudeOAuthUsageDisabledResult } from '../providers/claude/claude-usage-result'
+import {
+  ClaudeLiveUsageSessionReports,
+  type ClaudeLiveUsageWindowKind
+} from '../providers/claude/claude-live-usage-session-reports'
+import { readUserClaudeConfigDir } from '../../claude-accounts/profiles/claude-profile-paths'
+import { getClaudeProfileRouter } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 
 export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchTargets {
+  private readonly claudeSessionReports = new ClaudeLiveUsageSessionReports()
+
+  protected isClaudeOAuthUsageEnabled(): boolean {
+    return this.claudeOAuthUsageEnabledResolver?.() ?? true
+  }
+
+  protected claudeUsageFetchSignal(signal: AbortSignal): AbortSignal {
+    return AbortSignal.any([signal, this.claudeUsageAbortController.signal])
+  }
+
+  protected claudeUsageWithoutOAuth(): ProviderRateLimits {
+    const live = this.liveClaudeUsage ? withoutResetWindows(this.liveClaudeUsage, Date.now()) : null
+    return live?.session || live?.weekly ? live : claudeOAuthUsageDisabledResult()
+  }
+
   protected getMiniMaxCredentialError(message: string): ProviderRateLimits {
     return {
       provider: 'minimax',
@@ -43,6 +66,12 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       status: 'error',
       usageMetadata: { failureKind: 'keychain-unavailable', source: 'web' }
     }
+  }
+
+  protected claudeStateAtCycleStart(limits: ProviderRateLimits | null): ProviderRateLimits {
+    return this.isClaudeOAuthUsageEnabled()
+      ? this.withFetchingStatus(limits, 'claude')
+      : this.claudeUsageWithoutOAuth()
   }
 
   // Retry-After remains binding even when live posts restore ok display; early polls waste budget and prolong 429s.
@@ -71,6 +100,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     fresh: ProviderRateLimits,
     previous: ProviderRateLimits | null
   ): ProviderRateLimits {
+    if (!this.isClaudeOAuthUsageEnabled()) {
+      return this.claudeUsageWithoutOAuth()
+    }
     this.lastClaudeCheckCompletedAt = fresh.updatedAt
     // Failed OAuth must preserve newer live display while forwarding Retry-After to the poll gate.
     const current = this.state.claude
@@ -95,15 +127,23 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     ) {
       return
     }
-    this.lastClaudeAuthSnapshot = {
+    const snapshot = {
       // System Default uses the user config folder without injecting a managed one.
       configDir: normalizeClaudeConfigDir(
         authPreparation?.envPatch.CLAUDE_CONFIG_DIR ??
           getClaudeProfileRouter()?.userConfigDir() ??
           readUserClaudeConfigDir(process.env)
       ),
+      home: authPreparation?.configDir,
       provenance: authPreparation?.provenance ?? 'system'
     }
+    if (
+      snapshot.configDir !== this.lastClaudeAuthSnapshot?.configDir ||
+      snapshot.provenance !== this.lastClaudeAuthSnapshot?.provenance
+    ) {
+      this.liveClaudeUsage = null
+    }
+    this.lastClaudeAuthSnapshot = snapshot
   }
 
   ingestLiveClaudeRateLimits(event: ClaudeStatusLineRateLimits): void {
@@ -125,25 +165,52 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     }
     const previous = this.state.claude
     const now = Date.now()
+    const configDir = snapshot.configDir
+    const sessionId = event.sessionId ?? null
+    const sessionReports = this.claudeSessionReports
     // An idle session's older snapshot must not roll back newer account usage.
     const keepIfNewer = (
+      kind: ClaudeLiveUsageWindowKind,
       incoming: RateLimitWindow | null,
       current: RateLimitWindow | null | undefined
     ): RateLimitWindow | null => {
-      if (!incoming || isStaleClaudeUsageWindow(current, incoming, now)) {
+      if (!incoming) {
+        return null
+      }
+      const reset = sessionReports.recordReset(sessionId, configDir, kind, incoming)
+      if (
+        current &&
+        !sessionReports.hasChanged(sessionId, configDir, kind, incoming) &&
+        !isSameClaudeUsageWindow(current, incoming) &&
+        sessionReports.isResetWindow(configDir, kind, incoming, now)
+      ) {
+        return null
+      }
+      if (
+        isStaleClaudeUsageWindow(current, incoming, now) &&
+        !(reset && isSameClaudeUsageReset(current?.resetsAt ?? null, incoming.resetsAt))
+      ) {
         return null
       }
       return isSameClaudeUsageWindow(current ?? null, incoming) ? (current ?? null) : incoming
     }
     const incomingSession = mapClaudeUsageWindow(event.fiveHour ?? undefined, 300)
     const incomingWeekly = mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080)
-    const freshSession = keepIfNewer(incomingSession, previous?.session)
-    const freshWeekly = keepIfNewer(incomingWeekly, previous?.weekly)
+    const freshSession = keepIfNewer('session', incomingSession, previous?.session)
+    const freshWeekly = keepIfNewer('weekly', incomingWeekly, previous?.weekly)
+    if (sessionId !== null) {
+      sessionReports.remember(sessionId, configDir, {
+        session: incomingSession,
+        weekly: incomingWeekly
+      })
+    }
     if (!freshSession && !freshWeekly) {
       return
     }
     // Kept snapshots can outlive a reset; never relabel a past-reset window as live.
     const inherited = previous ? withoutResetWindows(previous, now) : null
+    // Statusline posts carry no plan; keep the one read for this same login, with its account.
+    const sameLogin = inherited?.usageMetadata?.authProvenance === snapshot.provenance
     // Partial statusline payloads leave unreported windows unchanged.
     const session = freshSession ?? inherited?.session ?? null
     const weekly = freshWeekly ?? inherited?.weekly ?? null
@@ -156,6 +223,26 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     ) {
       return
     }
+    const priorLive = this.liveClaudeUsage ? withoutResetWindows(this.liveClaudeUsage, now) : null
+    this.liveClaudeUsage = {
+      provider: 'claude',
+      session: freshSession ?? priorLive?.session ?? null,
+      weekly: freshWeekly ?? priorLive?.weekly ?? null,
+      updatedAt: now,
+      error: null,
+      status: 'ok',
+      usageMetadata: {
+        source: 'live-session',
+        lastSuccessfulSource: 'live-session',
+        authProvenance: snapshot.provenance
+      }
+    }
+    this.rememberUsageReadingAccount(
+      'claude',
+      this.claudeFetchTarget,
+      snapshot.home,
+      snapshot.provenance
+    )
     if (
       previous?.status === 'ok' &&
       previous.usageMetadata?.source === 'live-session' &&
@@ -172,8 +259,10 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
         provider: 'claude',
         session,
         weekly,
-        // Statusline lacks Fable scope; retain the latest OAuth value.
+        // Statusline lacks Fable scope and credits; retain the latest OAuth values.
         fableWeekly: inherited?.fableWeekly ?? null,
+        extraUsage: inherited?.extraUsage ?? null,
+        ...(sameLogin && inherited.planType ? { planType: inherited.planType } : {}),
         updatedAt: Date.now(),
         error: null,
         status: 'ok',
@@ -182,7 +271,10 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
           lastSuccessfulSource: 'live-session',
           credentialSource: previous?.usageMetadata?.credentialSource,
           retryAtMs: previous?.usageMetadata?.retryAtMs,
-          authProvenance: snapshot.provenance
+          authProvenance: snapshot.provenance,
+          ...(sameLogin && inherited.usageMetadata?.readingAccount
+            ? { readingAccount: inherited.usageMetadata.readingAccount }
+            : {})
         }
       }
     })

@@ -1,0 +1,272 @@
+import '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import {
+  getConnectionExecutionHostId,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import {
+  projectedStructuredChatTabSavedName,
+  type StructuredChatTabNames
+} from '@/runtime/native-chat/naming/structured-chat-tab-name'
+import type { Worktree } from '../../../../../shared/worktree/types'
+import { tabFromWorktreeAttributedStatusEntry } from '../../sidebar/workspace-card/activity/worktree-agent-row-fallback-tab'
+import { agentEntrySessionStartedAt as effectiveWorktreeAgentRowStartedAt } from '../../../../../shared/agent-session/lifecycle/resume/agent-session-start-time'
+import type { BuildActivityEventsArgs } from './activity-event-builder'
+import { standaloneActivityWorktree } from './activity-standalone-worktree'
+import type { Translate } from '@/i18n/use-translate'
+
+export type ActivityTabContext = { worktreeId: string; tab: TerminalTab }
+export type ActivityEventOwner = { worktree: Worktree; repo: Repo | null; knownWorktree: boolean }
+export type ActivityTabHostIndex = Map<string, Map<string, ExecutionHostId | null>>
+
+// Key derived tab context by original native tab and saved name so unchanged pane builds retain identity.
+const agentSessionTerminalTabs = new WeakMap<Tab, { name: string | null; tab: TerminalTab }>()
+const attributedTabContexts = new WeakMap<AgentStatusEntry, ActivityTabContext | null>()
+
+function terminalTabFromAgentSessionTab(tab: Tab, names: StructuredChatTabNames): TerminalTab {
+  // The chat's name lives on its host, so a rename changes it without changing the tab.
+  const name = projectedStructuredChatTabSavedName(tab, names)
+  const cached = agentSessionTerminalTabs.get(tab)
+  if (cached && cached.name === name) {
+    return cached.tab
+  }
+  const derived: TerminalTab = {
+    id: tab.id,
+    ptyId: null,
+    worktreeId: tab.worktreeId,
+    title: name ?? tab.generatedLabel ?? tab.label,
+    customTitle: name,
+    color: tab.color,
+    isPinned: tab.isPinned,
+    sortOrder: tab.sortOrder,
+    createdAt: tab.createdAt
+  }
+  agentSessionTerminalTabs.set(tab, { name, tab: derived })
+  return derived
+}
+
+export function buildActivityTabContext(
+  tabsByWorktree: Record<string, TerminalTab[]>,
+  unifiedTabsByWorktree: Record<string, Tab[]> | undefined,
+  names: StructuredChatTabNames
+): Map<string, ActivityTabContext> {
+  const contexts = new Map<string, ActivityTabContext>()
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    for (const tab of tabs) {
+      contexts.set(tab.id, { worktreeId, tab })
+    }
+  }
+  for (const [worktreeId, tabs] of Object.entries(unifiedTabsByWorktree ?? {})) {
+    for (const tab of tabs) {
+      if (tab.contentType !== 'agent-session' || contexts.has(tab.id)) {
+        continue
+      }
+      contexts.set(tab.id, { worktreeId, tab: terminalTabFromAgentSessionTab(tab, names) })
+    }
+  }
+  return contexts
+}
+
+export function attributedActivityTabContext(entry: AgentStatusEntry): ActivityTabContext | null {
+  const cached = attributedTabContexts.get(entry)
+  if (cached !== undefined) {
+    return cached
+  }
+  const tab = tabFromWorktreeAttributedStatusEntry(entry, effectiveWorktreeAgentRowStartedAt(entry))
+  const context = tab ? { worktreeId: tab.worktreeId, tab } : null
+  attributedTabContexts.set(entry, context)
+  return context
+}
+
+function activityTabHostsOf(tabs: readonly Tab[]): Map<string, ExecutionHostId | null> | null {
+  let byTabId: Map<string, ExecutionHostId | null> | null = null
+  for (const tab of tabs) {
+    if (
+      (tab.contentType !== 'terminal' && tab.contentType !== 'agent-session') ||
+      !tab.executionHostId
+    ) {
+      continue
+    }
+    byTabId ??= new Map()
+    const contextTabId = tab.contentType === 'terminal' ? tab.entityId : tab.id
+    const existing = byTabId.get(contextTabId)
+    byTabId.set(
+      contextTabId,
+      existing === undefined || existing === tab.executionHostId ? tab.executionHostId : null
+    )
+  }
+  return byTabId
+}
+
+export function buildActivityTabHostIndex(
+  unifiedTabsByWorktree?: Record<string, Tab[]>
+): ActivityTabHostIndex {
+  const index: ActivityTabHostIndex = new Map()
+  for (const [worktreeId, tabs] of Object.entries(unifiedTabsByWorktree ?? {})) {
+    const byTabId = activityTabHostsOf(tabs)
+    if (byTabId) {
+      index.set(worktreeId, byTabId)
+    }
+  }
+  return index
+}
+
+export type TabBucketChange<T extends TerminalTab | Tab> = {
+  worktreeId: string
+  before: readonly T[]
+  after: readonly T[]
+}
+
+/**
+ * Whether a replaced bucket kept every tab's id and kind in place with no id repeated, so each
+ * id's winning occurrence and owner stay where they were.
+ */
+export function keepsActivityTabIdentities<T extends TerminalTab | Tab>({
+  before,
+  after
+}: TabBucketChange<T>): boolean {
+  return (
+    before.length === after.length &&
+    new Set(after.map((tab) => tab.id)).size === after.length &&
+    before.every(
+      (tab, index) =>
+        tab.id === after[index].id &&
+        ('contentType' in tab ? tab.contentType : null) ===
+          ('contentType' in after[index] ? after[index].contentType : null)
+    )
+  )
+}
+
+/**
+ * Patches the indexes in place for buckets that kept their tab identities. Returns false, having
+ * changed nothing, when a context's owner can't be proven from the replaced buckets alone.
+ */
+export function patchActivityTabIndexes(
+  context: Map<string, ActivityTabContext>,
+  hosts: ActivityTabHostIndex,
+  terminalChanges: readonly TabBucketChange<TerminalTab>[],
+  unifiedChanges: readonly TabBucketChange<Tab>[],
+  names: StructuredChatTabNames
+): boolean {
+  const updates: [string, ActivityTabContext][] = []
+  for (const { worktreeId, before, after } of terminalChanges) {
+    after.forEach((tab, index) => {
+      // A later bucket may hold the same id and win; only the entry this bucket placed moves.
+      const entry = context.get(tab.id)
+      if (
+        tab !== before[index] &&
+        entry?.worktreeId === worktreeId &&
+        entry.tab === before[index]
+      ) {
+        updates.push([tab.id, { worktreeId, tab }])
+      }
+    })
+  }
+  for (const { worktreeId, before, after } of unifiedChanges) {
+    for (const [index, tab] of after.entries()) {
+      const prior = before[index]
+      if (tab.contentType !== 'agent-session' || tab === prior) {
+        continue
+      }
+      const entry = context.get(tab.id)
+      if (!entry || entry.worktreeId !== worktreeId) {
+        continue
+      }
+      if (entry.tab !== terminalTabFromAgentSessionTab(prior, names)) {
+        return false
+      }
+      updates.push([tab.id, { worktreeId, tab: terminalTabFromAgentSessionTab(tab, names) }])
+    }
+  }
+  for (const [tabId, entry] of updates) {
+    context.set(tabId, entry)
+  }
+  for (const { worktreeId, after } of unifiedChanges) {
+    const byTabId = activityTabHostsOf(after)
+    if (byTabId) {
+      hosts.set(worktreeId, byTabId)
+    } else {
+      hosts.delete(worktreeId)
+    }
+  }
+  return true
+}
+
+export function resolveActivityExecutionHostId(
+  context: ActivityTabContext,
+  entry: AgentStatusEntry,
+  terminalPtyId: string | null | undefined,
+  tabHostIndex: ActivityTabHostIndex
+): ExecutionHostId | undefined {
+  const tabHostId = tabHostIndex.get(context.worktreeId)?.get(context.tab.id)
+  if (tabHostId) {
+    return tabHostId
+  }
+  // Resolve runtime PTY ownership before null connectionId can be mistaken for local.
+  const runtimeEnvironmentId = getRemoteRuntimePtyEnvironmentId(terminalPtyId ?? '')
+  if (runtimeEnvironmentId) {
+    return toRuntimeExecutionHostId(runtimeEnvironmentId)
+  }
+  if (entry.connectionId !== undefined) {
+    return getConnectionExecutionHostId(entry.connectionId)
+  }
+  const connectionId = parseAppSshPtyId(terminalPtyId ?? '')?.connectionId
+  return connectionId ? toSshExecutionHostId(connectionId) : undefined
+}
+
+export function resolveActivityEventOwner(
+  args: BuildActivityEventsArgs,
+  context: ActivityTabContext,
+  entry: AgentStatusEntry,
+  terminalPtyId: string | null | undefined,
+  tabHostIndex: ActivityTabHostIndex,
+  ownerCache: Map<string, ActivityEventOwner>,
+  t?: Translate
+): ActivityEventOwner {
+  const executionHostId = resolveActivityExecutionHostId(
+    context,
+    entry,
+    terminalPtyId,
+    tabHostIndex
+  )
+  // Memoize per build by workspace/host; misses otherwise rescan detected worktrees for each pane.
+  const ownerCacheKey = `${context.worktreeId}\0${executionHostId ?? ''}`
+  const cached = ownerCache.get(ownerCacheKey)
+  if (cached) {
+    return cached
+  }
+  const resolvedWorktree = args.resolveWorktree?.(context.worktreeId, executionHostId)
+  const mappedWorktree = args.worktreeMap.get(context.worktreeId)
+  const worktree =
+    resolvedWorktree ??
+    mappedWorktree ??
+    standaloneActivityWorktree(context.worktreeId, executionHostId, t)
+  let repo =
+    executionHostId && args.repos
+      ? findIndexedRepoOwnerForHost(args.repos, worktree.repoId, executionHostId)
+      : null
+  if (!repo && worktree.runtimeOwnerEnvironmentId && args.repos) {
+    repo = findIndexedRepoOwnerForHost(
+      args.repos,
+      worktree.repoId,
+      toRuntimeExecutionHostId(worktree.runtimeOwnerEnvironmentId)
+    )
+  }
+  const owner: ActivityEventOwner = {
+    worktree,
+    repo: repo ?? args.repoMap.get(worktree.repoId) ?? null,
+    knownWorktree: Boolean(
+      resolvedWorktree || mappedWorktree || args.tabsByWorktree[context.worktreeId]
+    )
+  }
+  ownerCache.set(ownerCacheKey, owner)
+  return owner
+}

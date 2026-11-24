@@ -6,9 +6,13 @@ import {
   type NativeChatEditFile,
   type NativeChatEditLine
 } from './native-chat-edit-model'
-import { editFilesFromPatchText, splitMoveMarker } from './native-chat-edit-patch-files'
+import {
+  editFilesFromPatchText,
+  nativeChatDiffChangedPaths,
+  splitMoveMarker
+} from './native-chat-edit-patch-files'
 import { editLinesFromUnifiedPatch, editLinesFromWholeFile } from './native-chat-unified-patch'
-import type { NativeChatEditPatch } from '../../native-chat-types'
+import type { NativeChatEditPatch } from '../native-chat-types'
 
 // NotebookEdit has only new cell text; diff cards would falsely mark unchanged cells added. Keep the generic view.
 const CLAUDE_EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'str_replace'])
@@ -254,5 +258,10 @@ export function editFilesFromToolPair(pair: {
   if (!patchText) {
     return null
   }
-  return editFilesFromPatchText(patchText, text(input?.path) ?? text(input?.file_path))
+  return editFilesFromPatchText(
+    patchText,
+    text(input?.path) ?? text(input?.file_path),
+    false,
+    nativeChatDiffChangedPaths(input?.paths)
+  )
 }

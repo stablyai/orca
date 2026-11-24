@@ -1,8 +1,7 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 283575c0a81fa24ea2d73cb8096de05bce7ab26b..c7b19bda70eececb4688250f8bd11cbe6db6a9aa 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
-@@ -245,10 +245,9 @@ const ROMAN_NUMERALS = [
+@@ -245,10 +245,9 @@
  ];
  const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
  /**
@@ -15,11 +14,46 @@ index 283575c0a81fa24ea2d73cb8096de05bce7ab26b..c7b19bda70eececb4688250f8bd11cbe
  /**
  * Convert a number to lowercase roman numerals.
  * @example toRoman(1) // 'i'
+@@ -897,6 +896,26 @@
+ 	};
+ }
+ /**
++* Orca patch: marker columns are counted without the delimiter, so trim() left later sibling tasks indented and
++* parseIndentedBlocks cut into them. Dedent by the first task; a task one column deeper is a sibling, and other
++* text at or within the first task's column stays nested under the task above.
++*/
++function dedentOrderedItemTaskBlock(blockLines) {
++	const isTaskLine = (line) => /^\s*[-+*]\s+\[[ xX]\][^\S\r\n]/.test(line);
++	const leadingWidth = (line) => line.length - line.trimStart().length;
++	const firstIndex = blockLines.findIndex((line) => line.trim() !== "");
++	if (firstIndex === -1 || !isTaskLine(blockLines[firstIndex])) return null;
++	const firstIndent = leadingWidth(blockLines[firstIndex]);
++	return blockLines.slice(firstIndex).map((line) => {
++		if (line.trim() === "") return "";
++		const indent = leadingWidth(line);
++		const depth = indent - firstIndent;
++		if (isTaskLine(line)) return depth === 1 ? line.trimStart() : line.slice(Math.min(indent, firstIndent));
++		if (depth > 0) return depth === 1 ? ` ${line.slice(firstIndent)}` : line.slice(firstIndent);
++		return indent > 0 ? `  ${line.trimStart()}` : line;
++	}).join("\n").trimEnd();
++}
++/**
+ * Recursively builds a nested structure from a flat array of list items
+ * based on their indentation levels. Creates proper markdown tokens with
+ * nested lists where appropriate.
+@@ -920,7 +939,7 @@
+ 				raw: mainText,
+ 				tokens: lexer.inlineTokens(mainText)
+ 			});
+-			const additionalContent = blockLines.join("\n").trim();
++			const additionalContent = dedentOrderedItemTaskBlock(blockLines) ?? blockLines.join("\n").trim();
+ 			if (additionalContent) {
+ 				const blockTokens = lexer.blockTokens(additionalContent);
+ 				tokens.push(...blockTokens);
 diff --git a/dist/index.js b/dist/index.js
-index 1fa29e72a755ce527b1840765bbe44e80df38c3d..9a857225b17a51fa6afd14674502e556566bef8c 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -233,10 +233,9 @@ const ROMAN_NUMERALS = [
+@@ -233,10 +233,9 @@
  ];
  const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
  /**
@@ -32,11 +66,46 @@ index 1fa29e72a755ce527b1840765bbe44e80df38c3d..9a857225b17a51fa6afd14674502e556
  /**
  * Convert a number to lowercase roman numerals.
  * @example toRoman(1) // 'i'
+@@ -885,6 +884,26 @@
+ 	};
+ }
+ /**
++* Orca patch: marker columns are counted without the delimiter, so trim() left later sibling tasks indented and
++* parseIndentedBlocks cut into them. Dedent by the first task; a task one column deeper is a sibling, and other
++* text at or within the first task's column stays nested under the task above.
++*/
++function dedentOrderedItemTaskBlock(blockLines) {
++	const isTaskLine = (line) => /^\s*[-+*]\s+\[[ xX]\][^\S\r\n]/.test(line);
++	const leadingWidth = (line) => line.length - line.trimStart().length;
++	const firstIndex = blockLines.findIndex((line) => line.trim() !== "");
++	if (firstIndex === -1 || !isTaskLine(blockLines[firstIndex])) return null;
++	const firstIndent = leadingWidth(blockLines[firstIndex]);
++	return blockLines.slice(firstIndex).map((line) => {
++		if (line.trim() === "") return "";
++		const indent = leadingWidth(line);
++		const depth = indent - firstIndent;
++		if (isTaskLine(line)) return depth === 1 ? line.trimStart() : line.slice(Math.min(indent, firstIndent));
++		if (depth > 0) return depth === 1 ? ` ${line.slice(firstIndent)}` : line.slice(firstIndent);
++		return indent > 0 ? `  ${line.trimStart()}` : line;
++	}).join("\n").trimEnd();
++}
++/**
+ * Recursively builds a nested structure from a flat array of list items
+ * based on their indentation levels. Creates proper markdown tokens with
+ * nested lists where appropriate.
+@@ -908,7 +927,7 @@
+ 				raw: mainText,
+ 				tokens: lexer.inlineTokens(mainText)
+ 			});
+-			const additionalContent = blockLines.join("\n").trim();
++			const additionalContent = dedentOrderedItemTaskBlock(blockLines) ?? blockLines.join("\n").trim();
+ 			if (additionalContent) {
+ 				const blockTokens = lexer.blockTokens(additionalContent);
+ 				tokens.push(...blockTokens);
 diff --git a/dist/kit/index.cjs b/dist/kit/index.cjs
-index a1f217bd0eb67c84404a4e4b447379eaf3a7f367..1f26c89d35a87bcd98113ad425245a9d86cb7ef0 100644
 --- a/dist/kit/index.cjs
 +++ b/dist/kit/index.cjs
-@@ -233,10 +233,9 @@ const ROMAN_NUMERALS = [
+@@ -233,10 +233,9 @@
  ];
  const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
  /**
@@ -49,11 +118,46 @@ index a1f217bd0eb67c84404a4e4b447379eaf3a7f367..1f26c89d35a87bcd98113ad425245a9d
  /**
  * Convert a number to lowercase roman numerals.
  * @example toRoman(1) // 'i'
+@@ -839,6 +838,26 @@
+ 	};
+ }
+ /**
++* Orca patch: marker columns are counted without the delimiter, so trim() left later sibling tasks indented and
++* parseIndentedBlocks cut into them. Dedent by the first task; a task one column deeper is a sibling, and other
++* text at or within the first task's column stays nested under the task above.
++*/
++function dedentOrderedItemTaskBlock(blockLines) {
++	const isTaskLine = (line) => /^\s*[-+*]\s+\[[ xX]\][^\S\r\n]/.test(line);
++	const leadingWidth = (line) => line.length - line.trimStart().length;
++	const firstIndex = blockLines.findIndex((line) => line.trim() !== "");
++	if (firstIndex === -1 || !isTaskLine(blockLines[firstIndex])) return null;
++	const firstIndent = leadingWidth(blockLines[firstIndex]);
++	return blockLines.slice(firstIndex).map((line) => {
++		if (line.trim() === "") return "";
++		const indent = leadingWidth(line);
++		const depth = indent - firstIndent;
++		if (isTaskLine(line)) return depth === 1 ? line.trimStart() : line.slice(Math.min(indent, firstIndent));
++		if (depth > 0) return depth === 1 ? ` ${line.slice(firstIndent)}` : line.slice(firstIndent);
++		return indent > 0 ? `  ${line.trimStart()}` : line;
++	}).join("\n").trimEnd();
++}
++/**
+ * Recursively builds a nested structure from a flat array of list items
+ * based on their indentation levels. Creates proper markdown tokens with
+ * nested lists where appropriate.
+@@ -862,7 +881,7 @@
+ 				raw: mainText,
+ 				tokens: lexer.inlineTokens(mainText)
+ 			});
+-			const additionalContent = blockLines.join("\n").trim();
++			const additionalContent = dedentOrderedItemTaskBlock(blockLines) ?? blockLines.join("\n").trim();
+ 			if (additionalContent) {
+ 				const blockTokens = lexer.blockTokens(additionalContent);
+ 				tokens.push(...blockTokens);
 diff --git a/dist/kit/index.js b/dist/kit/index.js
-index ee2b2a9114cb40daa6061340ccd80d128c2981ba..8152d964a20dfac20fc3234f93182325593d027d 100644
 --- a/dist/kit/index.js
 +++ b/dist/kit/index.js
-@@ -232,10 +232,9 @@ const ROMAN_NUMERALS = [
+@@ -232,10 +232,9 @@
  ];
  const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
  /**
@@ -66,11 +170,46 @@ index ee2b2a9114cb40daa6061340ccd80d128c2981ba..8152d964a20dfac20fc3234f93182325
  /**
  * Convert a number to lowercase roman numerals.
  * @example toRoman(1) // 'i'
+@@ -838,6 +837,26 @@
+ 	};
+ }
+ /**
++* Orca patch: marker columns are counted without the delimiter, so trim() left later sibling tasks indented and
++* parseIndentedBlocks cut into them. Dedent by the first task; a task one column deeper is a sibling, and other
++* text at or within the first task's column stays nested under the task above.
++*/
++function dedentOrderedItemTaskBlock(blockLines) {
++	const isTaskLine = (line) => /^\s*[-+*]\s+\[[ xX]\][^\S\r\n]/.test(line);
++	const leadingWidth = (line) => line.length - line.trimStart().length;
++	const firstIndex = blockLines.findIndex((line) => line.trim() !== "");
++	if (firstIndex === -1 || !isTaskLine(blockLines[firstIndex])) return null;
++	const firstIndent = leadingWidth(blockLines[firstIndex]);
++	return blockLines.slice(firstIndex).map((line) => {
++		if (line.trim() === "") return "";
++		const indent = leadingWidth(line);
++		const depth = indent - firstIndent;
++		if (isTaskLine(line)) return depth === 1 ? line.trimStart() : line.slice(Math.min(indent, firstIndent));
++		if (depth > 0) return depth === 1 ? ` ${line.slice(firstIndent)}` : line.slice(firstIndent);
++		return indent > 0 ? `  ${line.trimStart()}` : line;
++	}).join("\n").trimEnd();
++}
++/**
+ * Recursively builds a nested structure from a flat array of list items
+ * based on their indentation levels. Creates proper markdown tokens with
+ * nested lists where appropriate.
+@@ -861,7 +880,7 @@
+ 				raw: mainText,
+ 				tokens: lexer.inlineTokens(mainText)
+ 			});
+-			const additionalContent = blockLines.join("\n").trim();
++			const additionalContent = dedentOrderedItemTaskBlock(blockLines) ?? blockLines.join("\n").trim();
+ 			if (additionalContent) {
+ 				const blockTokens = lexer.blockTokens(additionalContent);
+ 				tokens.push(...blockTokens);
 diff --git a/dist/ordered-list/index.cjs b/dist/ordered-list/index.cjs
-index 9373d830293b67e463c9764cec5bacd8c189b473..4292a2b0f1b45fdc0f06d6fe7f351f7484e45974 100644
 --- a/dist/ordered-list/index.cjs
 +++ b/dist/ordered-list/index.cjs
-@@ -19,10 +19,9 @@ const ROMAN_NUMERALS = [
+@@ -19,10 +19,9 @@
  ];
  const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
  /**
@@ -83,11 +222,46 @@ index 9373d830293b67e463c9764cec5bacd8c189b473..4292a2b0f1b45fdc0f06d6fe7f351f74
  /**
  * Convert a number to lowercase roman numerals.
  * @example toRoman(1) // 'i'
+@@ -333,6 +332,26 @@
+ 	};
+ }
+ /**
++* Orca patch: marker columns are counted without the delimiter, so trim() left later sibling tasks indented and
++* parseIndentedBlocks cut into them. Dedent by the first task; a task one column deeper is a sibling, and other
++* text at or within the first task's column stays nested under the task above.
++*/
++function dedentOrderedItemTaskBlock(blockLines) {
++	const isTaskLine = (line) => /^\s*[-+*]\s+\[[ xX]\][^\S\r\n]/.test(line);
++	const leadingWidth = (line) => line.length - line.trimStart().length;
++	const firstIndex = blockLines.findIndex((line) => line.trim() !== "");
++	if (firstIndex === -1 || !isTaskLine(blockLines[firstIndex])) return null;
++	const firstIndent = leadingWidth(blockLines[firstIndex]);
++	return blockLines.slice(firstIndex).map((line) => {
++		if (line.trim() === "") return "";
++		const indent = leadingWidth(line);
++		const depth = indent - firstIndent;
++		if (isTaskLine(line)) return depth === 1 ? line.trimStart() : line.slice(Math.min(indent, firstIndent));
++		if (depth > 0) return depth === 1 ? ` ${line.slice(firstIndent)}` : line.slice(firstIndent);
++		return indent > 0 ? `  ${line.trimStart()}` : line;
++	}).join("\n").trimEnd();
++}
++/**
+ * Recursively builds a nested structure from a flat array of list items
+ * based on their indentation levels. Creates proper markdown tokens with
+ * nested lists where appropriate.
+@@ -356,7 +375,7 @@
+ 				raw: mainText,
+ 				tokens: lexer.inlineTokens(mainText)
+ 			});
+-			const additionalContent = blockLines.join("\n").trim();
++			const additionalContent = dedentOrderedItemTaskBlock(blockLines) ?? blockLines.join("\n").trim();
+ 			if (additionalContent) {
+ 				const blockTokens = lexer.blockTokens(additionalContent);
+ 				tokens.push(...blockTokens);
 diff --git a/dist/ordered-list/index.js b/dist/ordered-list/index.js
-index ace73267067e8c785e080cbf5bc6655a0527aa36..de1bb3061ec1629b20616f10a42eeba0a4e2222d 100644
 --- a/dist/ordered-list/index.js
 +++ b/dist/ordered-list/index.js
-@@ -18,10 +18,9 @@ const ROMAN_NUMERALS = [
+@@ -18,10 +18,9 @@
  ];
  const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
  /**
@@ -100,3 +274,39 @@ index ace73267067e8c785e080cbf5bc6655a0527aa36..de1bb3061ec1629b20616f10a42eeba0
  /**
  * Convert a number to lowercase roman numerals.
  * @example toRoman(1) // 'i'
+@@ -332,6 +331,26 @@
+ 	};
+ }
+ /**
++* Orca patch: marker columns are counted without the delimiter, so trim() left later sibling tasks indented and
++* parseIndentedBlocks cut into them. Dedent by the first task; a task one column deeper is a sibling, and other
++* text at or within the first task's column stays nested under the task above.
++*/
++function dedentOrderedItemTaskBlock(blockLines) {
++	const isTaskLine = (line) => /^\s*[-+*]\s+\[[ xX]\][^\S\r\n]/.test(line);
++	const leadingWidth = (line) => line.length - line.trimStart().length;
++	const firstIndex = blockLines.findIndex((line) => line.trim() !== "");
++	if (firstIndex === -1 || !isTaskLine(blockLines[firstIndex])) return null;
++	const firstIndent = leadingWidth(blockLines[firstIndex]);
++	return blockLines.slice(firstIndex).map((line) => {
++		if (line.trim() === "") return "";
++		const indent = leadingWidth(line);
++		const depth = indent - firstIndent;
++		if (isTaskLine(line)) return depth === 1 ? line.trimStart() : line.slice(Math.min(indent, firstIndent));
++		if (depth > 0) return depth === 1 ? ` ${line.slice(firstIndent)}` : line.slice(firstIndent);
++		return indent > 0 ? `  ${line.trimStart()}` : line;
++	}).join("\n").trimEnd();
++}
++/**
+ * Recursively builds a nested structure from a flat array of list items
+ * based on their indentation levels. Creates proper markdown tokens with
+ * nested lists where appropriate.
+@@ -355,7 +374,7 @@
+ 				raw: mainText,
+ 				tokens: lexer.inlineTokens(mainText)
+ 			});
+-			const additionalContent = blockLines.join("\n").trim();
++			const additionalContent = dedentOrderedItemTaskBlock(blockLines) ?? blockLines.join("\n").trim();
+ 			if (additionalContent) {
+ 				const blockTokens = lexer.blockTokens(additionalContent);
+ 				tokens.push(...blockTokens);

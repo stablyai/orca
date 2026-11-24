@@ -9,7 +9,7 @@ const outputPath = path.join(
   mobileRoot,
   'src',
   'components',
-  'pr-sidebar',
+  'mermaid',
   'mermaid-page-engine.generated.ts'
 )
 
@@ -32,13 +32,15 @@ async function main() {
     minifyWhitespace: true,
     minifyIdentifiers: true,
     minifySyntax: false,
-    // The floor the shell's WebViews hold, the same pair the terminal engine is built for.
-    target: ['chrome74', 'safari15'],
+    // The page that imports this already ships es2022 syntax, so Chrome 74 lowering only added bytes; keep Safari 15.
+    target: ['safari15'],
     write: false,
     charset: 'utf8',
     legalComments: 'none',
     logLevel: 'silent',
     nodePaths: [path.join(mobileRoot, 'node_modules')],
+    // The page imports KaTeX for Markdown math too; left external, both share one katex chunk.
+    external: ['katex'],
     define: { 'process.env.NODE_ENV': '"production"' }
   })
   const bundle = Buffer.from(outputFiles[0].contents).toString('utf8')

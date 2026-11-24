@@ -1,5 +1,5 @@
 /* eslint-disable no-control-regex -- Terminal control-sequence parsing intentionally matches raw control bytes. */
-import { ownRetainedString } from '../../shared/own-retained-string'
+import { ownRetainedString } from '../../shared/text/own-retained-string'
 import type {
   AdvertisedUrl,
   AdvertisedUrlChangeEvent,

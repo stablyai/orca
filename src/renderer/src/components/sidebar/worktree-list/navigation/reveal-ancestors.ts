@@ -1,13 +1,18 @@
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/group-keys'
-import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import {
+  getProjectGroupHeaderKey,
+  PROJECTS_SECTION_GROUP_KEY
+} from '../../../../../../shared/sidebar-list/sections/group-keys'
+import type { ProjectGroupingModel } from '../../../../../../shared/sidebar-list/sections/project-section-grouping'
 
 function getProjectIdFromHeaderRowKey(rowKey: string): string | null {
   if (!rowKey.startsWith('project:')) {
     return null
   }
-  return rowKey.slice('project:'.length)
+  const withoutPrefix = rowKey.slice('project:'.length)
+  const setupSeparator = withoutPrefix.indexOf('::setup:')
+  return setupSeparator === -1 ? withoutPrefix : withoutPrefix.slice(0, setupSeparator)
 }
 
 function getRepoIdsFromHeaderRowKey(
@@ -17,6 +22,11 @@ function getRepoIdsFromHeaderRowKey(
 ): string[] {
   if (rowKey.startsWith('repo:')) {
     return [rowKey.slice('repo:'.length)]
+  }
+  const setupMarker = '::setup:'
+  const setupIndex = rowKey.indexOf(setupMarker)
+  if (rowKey.startsWith('project:') && setupIndex !== -1) {
+    return [rowKey.slice(setupIndex + setupMarker.length)]
   }
   const projectId = getProjectIdFromHeaderRowKey(rowKey)
   if (!projectId) {
@@ -81,4 +91,17 @@ export function getSidebarRowRevealAncestorKeys(args: {
     }
   }
   return [...keys]
+}
+
+/** A found row lives in the Projects list, so a folded Projects section is its outermost collapsed
+ * ancestor: unfold it the same way, and let the reveal rerun with real geometry. True when it toggled. */
+export function unfoldProjectsSectionForReveal(args: {
+  collapsedGroups: ReadonlySet<string>
+  toggleGroup: (key: string) => void
+}): boolean {
+  if (!args.collapsedGroups.has(PROJECTS_SECTION_GROUP_KEY)) {
+    return false
+  }
+  args.toggleGroup(PROJECTS_SECTION_GROUP_KEY)
+  return true
 }

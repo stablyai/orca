@@ -1,12 +1,20 @@
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
+import type { WorktreeStartupLaunch } from '../../../../../../shared/worktree/creation/launch-types'
+import type { agentPickerLaunchInputs } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
+import { toAgentLaunchPreferences } from '../../../../../../shared/agent-launch/choices/agent-launch-preferences'
+import { pickApprovedSetupHashes } from '../../../../../../shared/worktree/creation/approved-setup-hashes'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult
 } from '../../../../../../shared/worktree/create-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { WorkspaceKey } from '../../../../../../shared/folder-workspace-types'
-import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { WorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
+import type {
+  CrossStoreInferredSource,
+  CrossStoreParentRef
+} from '../../../../../../shared/worktree/lineage-types'
+import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
 import type { WorkspaceLinkedItem } from '../../../../../../shared/worktree/types'
 
 /** Trailing bag for `createWorktree` args that outgrew its positional list. */
@@ -14,19 +22,29 @@ export type CreateWorktreeCallOptions = {
   branchIntent?: CreateWorktreeArgs['branchIntent']
   /** Captured before background preparation so navigation cannot retarget creation. */
   executionHostId?: ExecutionHostId
-  automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
   /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
   startupDraft?: string
   /** A terminal agent the owning host may plan from its own settings; `startup` stays the fallback. */
   hostAgentLaunch?: HostAgentLaunch
+  creationAgentLaunch?: HostAgentLaunch & {
+    inputs?: ReturnType<typeof agentPickerLaunchInputs>
+    draft?: string
+  }
+  legacyStartup?: () => WorktreeStartupLaunch | undefined
   setupOnly?: boolean
+  hookTrustContext?: 'vm'
+  /** Hash of the confirmed setup content; see CreateWorktreeArgs. */
+  approvedSetupHash?: string
+  approvedSetupHashes?: string[]
   /** True only when `name` came from the creature-name generator; gates host-side retirement. */
   nameWasGenerated?: boolean
   displayNameKind?: CreateWorktreeArgs['displayNameKind']
   /** Parent picked in the composer. Sets sidebar nesting only; ignored if it no longer exists. */
   parentWorktreeId?: string
+  /** Saved with the workspace, so a task id in it nests the workspace at creation. */
+  note?: string
   provisionedRoot?: {
     runtimeId: string
     executionHostId: ExecutionHostId
@@ -41,8 +59,12 @@ export type HostAgentLaunch = {
   launchSource?: string
 }
 
-/** `hostPlannedStartup`: the host was asked to build the agent launch, so no desktop plan may run. */
-export type CreatedWorktreeResult = CreateWorktreeResult & { hostPlannedStartup?: true }
+/** `hostPlannedStartup`: the host was asked to build the agent launch, so no desktop plan may run.
+ * `hostOwnsCreateSettings`: the host used its own create settings, so choices about them belong there. */
+export type CreatedWorktreeResult = CreateWorktreeResult & {
+  hostPlannedStartup?: true
+  hostOwnsCreateSettings?: true
+}
 
 /** Pack create inputs once for both transports; retry-specific fields live in WorktreeCreateAttempt. */
 export type WorktreeCreateRequest = Omit<CreateWorktreeArgs, 'parentWorkspace' | 'manualOrder'> & {
@@ -54,6 +76,10 @@ export type WorktreeCreateAttempt = {
   name: string
   branchNameOverride?: string
   parentWorkspace?: WorkspaceKey
+  /** A parent on another machine, named by its own store before the first attempt. */
+  crossStoreParent?: CrossStoreParentRef
+  /** Set when this desktop inferred `crossStoreParent` (a task id in the note) rather than a pick. */
+  crossStoreParentInferredFrom?: CrossStoreInferredSource
   manualOrder?: number
 }
 
@@ -71,6 +97,7 @@ function sharedCreateFields(
     ...(attempt.branchNameOverride ? { branchNameOverride: attempt.branchNameOverride } : {}),
     ...(request.branchIntent ? { branchIntent: request.branchIntent } : {}),
     setupDecision: request.setupDecision,
+    ...(options ? pickApprovedSetupHashes(options) : {}),
     ...(options?.setupOnly !== undefined ? { setupOnly: options.setupOnly } : {}),
     sparseCheckout: request.sparseCheckout,
     ...(request.displayName ? { displayName: request.displayName } : {}),
@@ -98,6 +125,8 @@ function sharedCreateFields(
       : {}),
     ...(attempt.manualOrder !== undefined ? { manualOrder: attempt.manualOrder } : {}),
     ...(attempt.parentWorkspace ? { parentWorkspace: attempt.parentWorkspace } : {}),
+    ...(attempt.crossStoreParent ? { crossStoreParent: attempt.crossStoreParent } : {}),
+    ...(options?.note ? { comment: options.note } : {}),
     ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {}),
     ...(request.linkedGitLabMR !== undefined ? { linkedGitLabMR: request.linkedGitLabMR } : {}),
     ...(request.linkedGitLabIssue !== undefined
@@ -113,9 +142,6 @@ function sharedCreateFields(
     ...(options?.linkedWorkItem !== undefined ? { linkedWorkItem: options.linkedWorkItem } : {}),
     ...(options?.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: options.linkedTaskSourceContext }
-      : {}),
-    ...(options?.automationProvenanceRequest
-      ? { automationProvenanceRequest: options.automationProvenanceRequest }
       : {})
   }
 }
@@ -135,32 +161,62 @@ export function buildLocalWorktreeCreateArgs(
 export function buildRuntimeWorktreeCreateParams(
   request: WorktreeCreateRequest,
   attempt: WorktreeCreateAttempt,
-  hostAgentLaunch?: HostAgentLaunch
+  hostAgentLaunch?: HostAgentLaunch,
+  creationAgentLaunch?: CreateWorktreeCallOptions['creationAgentLaunch']
 ): Record<string, unknown> {
   const { startup, options } = request
   return {
     repo: request.repoId,
     ...sharedCreateFields(request, attempt),
-    // Why: the host defaults a bare `parentWorkspace` to CLI provenance; app picks are manual.
-    ...(attempt.parentWorkspace ? { parentWorkspaceOrigin: 'manual' } : {}),
+    // Why: the host defaults a bare parent (same- or cross-store) to CLI provenance; app picks are manual.
+    ...(attempt.crossStoreParentInferredFrom
+      ? { crossStoreParentInferredFrom: attempt.crossStoreParentInferredFrom }
+      : attempt.parentWorkspace || attempt.crossStoreParent
+        ? { parentWorkspaceOrigin: 'manual' }
+        : {}),
     // Switch point: a host lists the window's creation under its id only on the dark path.
     ...(ORCA_SIDEBAR_INPUTS_IS_MAIN && request.creationId
       ? { creationId: request.creationId }
       : {}),
     ...(options?.startupDraft ? { startupDraft: options.startupDraft } : {}),
-    ...(hostAgentLaunch
-      ? buildHostAgentLaunchParams(hostAgentLaunch)
-      : startup
-        ? {
-            startupCommand: startup.command,
-            ...(startup.env ? { startupEnv: startup.env } : {}),
-            ...(startup.launchConfig ? { startupLaunchConfig: startup.launchConfig } : {}),
-            ...(startup.startupCommandDelivery
-              ? { startupCommandDelivery: startup.startupCommandDelivery }
-              : {}),
-            activate: true
-          }
-        : {})
+    ...(creationAgentLaunch
+      ? {
+          ...(creationAgentLaunch.draft
+            ? {
+                startupDraft: creationAgentLaunch.draft
+              }
+            : buildHostAgentLaunchParams(creationAgentLaunch)),
+          ...(creationAgentLaunch.inputs?.agentArgs !== undefined
+            ? { startupAgentArgs: creationAgentLaunch.inputs.agentArgs }
+            : {}),
+          ...(creationAgentLaunch.inputs?.sessionOptions
+            ? { startupSessionOptions: creationAgentLaunch.inputs.sessionOptions }
+            : {}),
+          ...(toAgentLaunchPreferences(
+            creationAgentLaunch.inputs?.sessionOptions,
+            creationAgentLaunch.agent
+          )
+            ? {
+                startupLaunchPreferences: toAgentLaunchPreferences(
+                  creationAgentLaunch.inputs?.sessionOptions,
+                  creationAgentLaunch.agent
+                )
+              }
+            : {})
+        }
+      : hostAgentLaunch
+        ? buildHostAgentLaunchParams(hostAgentLaunch)
+        : startup
+          ? {
+              startupCommand: startup.command,
+              ...(startup.env ? { startupEnv: startup.env } : {}),
+              ...(startup.launchConfig ? { startupLaunchConfig: startup.launchConfig } : {}),
+              ...(startup.startupCommandDelivery
+                ? { startupCommandDelivery: startup.startupCommandDelivery }
+                : {}),
+              activate: true
+            }
+          : {})
   }
 }
 

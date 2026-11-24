@@ -1,15 +1,71 @@
 import path from 'node:path'
+import { WorkspacePortPathIndex } from './workspace-port-path-index'
+import { realpath } from 'node:fs/promises'
+import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
+import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
+import { PrioritySemaphore } from '../../shared/concurrency/priority-semaphore'
+import { mapWithConcurrency } from '../../shared/concurrency/map-with-concurrency'
 import type {
   WorkspacePort,
   WorkspacePortOwner,
   WorkspacePortProbe
-} from '../../shared/workspace-ports'
+} from '../../shared/workspace/ports/workspace-ports'
 import type { AdvertisedUrlWatcher } from './advertised-url-watcher'
 import { connectHostForBindHost } from './local-workspace-port-address'
 import type {
   NormalizedWorkspacePortProbe,
   RawListeningPort
 } from './local-workspace-port-scan-state'
+
+const REALPATH_TIMEOUT_MS = 1_000
+const realpathSlots = new PrioritySemaphore(2)
+let aliasStart = 0
+const pendingRealpaths = new Map<string, Promise<string | null | undefined>>()
+
+function observeRealpath(root: string, deadline: number): Promise<string | null | undefined> {
+  const pending = pendingRealpaths.get(root)
+  if (pending) {
+    return pending
+  }
+  const controller = new AbortController()
+  const lookup = realpathSlots
+    .acquire(0, controller.signal)
+    .then((release) => {
+      if (controller.signal.aborted || Date.now() >= deadline) {
+        release()
+        return undefined
+      }
+      return realpathUnlessWslStopped(root).finally(release)
+    })
+    .catch((error: unknown) =>
+      error instanceof Error &&
+      'code' in error &&
+      (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+        ? null
+        : undefined
+    )
+    .finally(() => {
+      if (pendingRealpaths.get(root) === operation) {
+        pendingRealpaths.delete(root)
+      }
+    })
+  const operation = withTimeout(lookup, Math.max(0, deadline - Date.now()), undefined).finally(() =>
+    controller.abort()
+  )
+  pendingRealpaths.set(root, operation)
+  return operation
+}
+
+/**
+ * A WSL root's realpath is a 9P touch that starts a stopped distro (E9). The port scan is background,
+ * so it never wakes one: a stopped root's alias stays unknown, as a timed-out lookup's does.
+ */
+async function realpathUnlessWslStopped(root: string): Promise<string | undefined> {
+  if (await blockedWslDistroForPath(root)) {
+    return undefined
+  }
+  return normalizeComparablePath(await realpath(root))
+}
 
 const HTTP_PORTS: Record<number, true> = {
   80: true,
@@ -29,7 +85,10 @@ export function attributePortToWorkspace(
   port: Pick<RawListeningPort, 'cwd' | 'commandLine'>,
   worktrees: WorkspacePortProbe[]
 ): WorkspacePortOwner | undefined {
-  return attributePortToNormalizedWorkspaces(port, normalizeWorkspacePortProbes(worktrees))
+  return attributePortToNormalizedWorkspaces(
+    port,
+    new WorkspacePortPathIndex(normalizeWorkspacePortProbes(worktrees))
+  )
 }
 
 export function normalizeWorkspacePortProbes(
@@ -41,18 +100,52 @@ export function normalizeWorkspacePortProbes(
   }))
 }
 
+export async function resolveWorkspacePortProbes(
+  worktrees: readonly WorkspacePortProbe[],
+  requireFresh = false
+): Promise<{ probes: NormalizedWorkspacePortProbe[]; complete: boolean }> {
+  const probes = normalizeWorkspacePortProbes(worktrees)
+  const paths = [...new Set(worktrees.map((worktree) => worktree.path))]
+  paths.push(...paths.splice(0, aliasStart++ % (paths.length || 1)))
+  const older = paths.map((workspacePath) => pendingRealpaths.get(workspacePath))
+  if (requireFresh) {
+    // An older observation may release native work, but its alias cannot authorize this request.
+    await Promise.all(older.filter((operation) => operation !== undefined))
+  }
+  const deadline = Date.now() + REALPATH_TIMEOUT_MS
+  const resolvedPaths = new Map<string, string | null | undefined>()
+  await withTimeout(
+    mapWithConcurrency(paths, 2, async (workspacePath, index) => {
+      const old = older[index]
+      const blocked = requireFresh && old && pendingRealpaths.get(workspacePath) === old
+      if (blocked || Date.now() >= deadline) {
+        return
+      }
+      resolvedPaths.set(workspacePath, await observeRealpath(workspacePath, deadline))
+    }),
+    Math.max(0, deadline - Date.now()),
+    []
+  )
+  const aliases = probes.flatMap((probe) => {
+    const normalizedPath = resolvedPaths.get(probe.worktree.path)
+    return normalizedPath && normalizedPath !== probe.normalizedPath
+      ? [{ ...probe, normalizedPath }]
+      : []
+  })
+  return {
+    probes: [...probes, ...aliases],
+    complete: paths.every((workspacePath) => resolvedPaths.get(workspacePath) !== undefined)
+  }
+}
+
 function attributePortToNormalizedWorkspaces(
   port: Pick<RawListeningPort, 'cwd' | 'commandLine'>,
-  worktrees: readonly NormalizedWorkspacePortProbe[]
+  index: WorkspacePortPathIndex
 ): WorkspacePortOwner | undefined {
   const cwd = port.cwd ? normalizeComparablePath(port.cwd) : null
   const commandLine = port.commandLine ? normalizeComparableText(port.commandLine) : null
 
-  const cwdMatch = cwd
-    ? pickDeepestMatching(worktrees, ({ normalizedPath }) =>
-        isSameOrDescendant(cwd, normalizedPath)
-      )
-    : undefined
+  const cwdMatch = cwd ? index.findCwd(cwd) : undefined
   if (cwdMatch) {
     return toOwner(cwdMatch.worktree, 'cwd')
   }
@@ -61,17 +154,32 @@ function attributePortToNormalizedWorkspaces(
     return undefined
   }
 
-  const commandMatch = pickDeepestMatching(worktrees, ({ normalizedPath }) =>
-    includesPathBoundary(commandLine, normalizedPath)
-  )
+  const commandMatch = index.findCommand(commandLine)
   return commandMatch ? toOwner(commandMatch.worktree, 'command') : undefined
 }
+type AttributedListeningPort = { port: RawListeningPort; owner: WorkspacePortOwner | undefined }
+
+export function attributePortsToWorkspaces(
+  ports: readonly RawListeningPort[],
+  worktrees: readonly NormalizedWorkspacePortProbe[]
+): AttributedListeningPort[] {
+  let index: WorkspacePortPathIndex | undefined
+  return ports.map((port) => ({
+    port,
+    owner:
+      port.cwd || port.commandLine
+        ? attributePortToNormalizedWorkspaces(
+            port,
+            (index ??= new WorkspacePortPathIndex(worktrees))
+          )
+        : undefined
+  }))
+}
+
 export function enrichPort(
-  port: RawListeningPort,
-  worktrees: readonly NormalizedWorkspacePortProbe[],
+  { port, owner }: AttributedListeningPort,
   urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup'>
 ): WorkspacePort {
-  const owner = attributePortToNormalizedWorkspaces(port, worktrees)
   const base = {
     id: `${port.host}:${port.port}:${port.pid ?? 'unknown'}`,
     bindHost: port.host,
@@ -100,25 +208,22 @@ export function enrichPort(
 }
 
 export function reconcileAdvertisedUrls(
-  ports: RawListeningPort[],
+  ports: readonly AttributedListeningPort[],
   worktrees: readonly NormalizedWorkspacePortProbe[],
-  urlWatcher: Pick<AdvertisedUrlWatcher, 'reconcileScan'>
+  urlWatcher: Pick<AdvertisedUrlWatcher, 'reconcileWorkspaces'>
 ): void {
   const observationsByWorktree = new Map<string, { port: number; pid?: number }[]>()
   for (const worktree of worktrees) {
     observationsByWorktree.set(worktree.worktree.id, [])
   }
-  for (const port of ports) {
-    const owner = attributePortToNormalizedWorkspaces(port, worktrees)
+  for (const { port, owner } of ports) {
     if (!owner) {
       continue
     }
     observationsByWorktree.get(owner.worktreeId)?.push({ port: port.port, pid: port.pid })
   }
-  for (const [worktreeId, observations] of observationsByWorktree) {
-    // Invalidate disappeared/changed listeners before lazy lookup can pin a stale banner.
-    urlWatcher.reconcileScan([worktreeId], observations)
-  }
+  // Invalidate disappeared/changed listeners before lazy lookup can pin a stale banner.
+  urlWatcher.reconcileWorkspaces(observationsByWorktree)
 }
 
 export function compareWorkspacePorts(a: WorkspacePort, b: WorkspacePort): number {
@@ -155,41 +260,6 @@ function toOwner(
     path: worktree.path,
     confidence
   }
-}
-
-function pickDeepestMatching<T extends { normalizedPath: string }>(
-  candidates: readonly T[],
-  predicate: (candidate: T) => boolean
-): T | undefined {
-  let best: T | undefined
-  for (const candidate of candidates) {
-    if (!predicate(candidate)) {
-      continue
-    }
-    if (!best || candidate.normalizedPath.length > best.normalizedPath.length) {
-      best = candidate
-    }
-  }
-  return best
-}
-
-function isSameOrDescendant(candidate: string, parent: string): boolean {
-  return candidate === parent || candidate.startsWith(`${parent}/`)
-}
-
-function includesPathBoundary(commandLine: string, normalizedPath: string): boolean {
-  let index = commandLine.indexOf(normalizedPath)
-  while (index !== -1) {
-    const before = index === 0 ? '' : commandLine[index - 1]
-    const after = commandLine[index + normalizedPath.length] ?? ''
-    const startsOnBoundary = before === '' || /\s|["'=]/.test(before)
-    const endsOnBoundary = after === '' || /[\s"'/:]/.test(after)
-    if (startsOnBoundary && endsOnBoundary) {
-      return true
-    }
-    index = commandLine.indexOf(normalizedPath, index + normalizedPath.length)
-  }
-  return false
 }
 
 function normalizeComparablePath(input: string): string {

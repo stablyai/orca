@@ -1,50 +1,64 @@
-import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { toast } from 'sonner'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { translate } from '@/i18n/i18n'
-import {
-  canQueueWorkspaceCleanupCandidate,
-  type WorkspaceCleanupCandidate
-} from '../../../../shared/workspace-cleanup'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { useTranslate } from '@/i18n/use-translate'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   getWorkspaceCleanupCandidateIdentity,
   resolveWorkspaceCleanupRemovalHostId
-} from '../../../../shared/workspace-cleanup-host-identity'
-import { WorkspaceCleanupBrowseToolbar } from './workspace-cleanup-browse-toolbar'
-import { WorkspaceCleanupConfirmRemove } from './workspace-cleanup-confirm-remove'
-import { WorkspaceCleanupConfirmStopAgents } from './workspace-cleanup-confirm-stop-agents'
-import { WorkspaceCleanupDialogHeader } from './workspace-cleanup-dialog-header'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
+import { WorkspaceCleanupBrowseToolbar } from './browse/workspace-cleanup-browse-toolbar'
+import { WorkspaceCleanupConfirmStep } from './removal/workspace-cleanup-confirm-step'
+import { WorkspaceCleanupRunStep } from './removal/run/workspace-cleanup-run-step'
+import { useWorkspaceCleanupRunStore } from './removal/run/workspace-cleanup-run-store'
+import {
+  WorkspaceCleanupGroupCards,
+  WORKSPACE_CLEANUP_GROUP_PANEL_ID,
+  getWorkspaceCleanupGroupTabId
+} from './dialog/workspace-cleanup-group-cards'
+import { WorkspaceCleanupSelectAllBar } from './dialog/workspace-cleanup-select-all-bar'
+import {
+  focusWorkspaceCleanupConfirmOpener,
+  type WorkspaceCleanupConfirmOpener
+} from './dialog/workspace-cleanup-confirm-opener-focus'
+import { WorkspaceCleanupPickFooter } from './dialog/workspace-cleanup-pick-footer'
+import { useWorkspaceCleanupPickRows } from './dialog/use-workspace-cleanup-pick-rows'
+import { useWorkspaceCleanupSettleResortGate } from './candidate-list/use-workspace-cleanup-settle-resort-gate'
+import { listActiveWorkspaceCleanupFacetGroups } from './browse/workspace-cleanup-active-facets'
+import type { WorkspaceCleanupGroup } from '../../../../shared/workspace-cleanup/workspace-cleanup-groups'
+import { WorkspaceCleanupConfirmStopAgents } from './removal/agent-consent/workspace-cleanup-confirm-stop-agents'
+import { WorkspaceCleanupDialogHeader } from './dialog/workspace-cleanup-dialog-header'
 import {
   getWorkspaceCleanupDeletionPhaseByIdentity,
   selectWorkspaceCleanupDeletionPhases
-} from './workspace-cleanup-deletion-phases'
+} from './removal/workspace-cleanup-deletion-phases'
 import {
   WorkspaceCleanupInitialScanBanner,
   WorkspaceCleanupNotice,
   WorkspaceCleanupSkeletonRows
-} from './workspace-cleanup-dialog-notices'
-import { WorkspaceCleanupRowList } from './workspace-cleanup-row-list'
-import { formatWorkspaceCleanupScanNotice } from './workspace-cleanup-scan-notice'
-import { applyWorkspaceCleanupGitEvidence } from './workspace-cleanup-git-evidence'
-import { useWorkspaceCleanupBrowseState } from './use-workspace-cleanup-browse-state'
+} from './dialog/workspace-cleanup-dialog-notices'
+import { WorkspaceCleanupRowList } from './candidate-list/workspace-cleanup-row-list'
+import { formatWorkspaceCleanupScanNotice } from './scanning/workspace-cleanup-scan-notice'
+import { applyWorkspaceCleanupGitEvidence } from './candidate-evidence/workspace-cleanup-git-evidence'
+import { useWorkspaceCleanupBrowseState } from './browse/use-workspace-cleanup-browse-state'
 import {
   useWorkspaceCleanupDialogLifecycle,
   type WorkspaceCleanupDialogLifecycle
-} from './use-workspace-cleanup-dialog-lifecycle'
-import { useWorkspaceCleanupFacetRows } from './use-workspace-cleanup-facet-rows'
-import { useWorkspaceCleanupGitEvidence } from './use-workspace-cleanup-git-evidence'
-import { useWorkspaceCleanupRowOrder } from './use-workspace-cleanup-row-order'
-import { openWorkspaceCleanupForgetLocally } from './workspace-cleanup-forget-locally-button'
+} from './dialog/use-workspace-cleanup-dialog-lifecycle'
+import { useWorkspaceCleanupFacetRows } from './browse/use-workspace-cleanup-facet-rows'
+import { useWorkspaceCleanupGitEvidence } from './candidate-evidence/use-workspace-cleanup-git-evidence'
+import { useWorkspaceCleanupBulkSelection } from './browse/use-workspace-cleanup-bulk-selection'
+import { useWorkspaceCleanupSpaceScan } from './browse/use-workspace-cleanup-space-scan'
+import { useWorkspaceCleanupIgnore } from './browse/use-workspace-cleanup-ignore'
+import { openWorkspaceCleanupForgetLocally } from './removal/workspace-cleanup-forget-locally-button'
 import {
-  formatVanishedSelectionNotice,
-  formatWithheldSelectionNotice,
+  getLiveDeletableCandidates,
   toggleSetMember
-} from './workspace-cleanup-selection-model'
+} from './browse/workspace-cleanup-selection-model'
+import { useWorkspaceCleanupFilterSelectionPrune } from './browse/use-workspace-cleanup-filter-selection-prune'
 
 export default function WorkspaceCleanupDialog(): React.JSX.Element | null {
   const lifecycle = useWorkspaceCleanupDialogLifecycle()
@@ -63,25 +77,24 @@ function WorkspaceCleanupDialogContent({
   removal,
   startWorkspaceCleanupScan
 }: WorkspaceCleanupDialogLifecycle): React.JSX.Element {
+  const t = useTranslate()
   const scan = useAppStore((s) => s.workspaceCleanupScan)
   const scanProgress = useAppStore((s) => s.workspaceCleanupProgress)
   const error = useAppStore((s) => s.workspaceCleanupError)
-  const spaceError = useAppStore((s) => s.workspaceSpaceScanError)
   const repos = useAppStore((s) => s.repos)
   const markCandidateViewed = useAppStore((s) => s.markWorkspaceCleanupCandidateViewed)
-  const dismissCandidates = useAppStore((s) => s.dismissWorkspaceCleanupCandidates)
-  const refreshWorkspaceSpace = useAppStore((s) => s.refreshWorkspaceSpace)
-  const workspaceSpaceScanning = useAppStore((s) => s.workspaceSpaceScanning)
-  const workspaceSpaceProgress = useAppStore((s) => s.workspaceSpaceScanProgress)
+  const spaceScan = useWorkspaceCleanupSpaceScan()
   const genericDeletionPhaseByWorktreeId = useAppStore(
     useShallow(selectWorkspaceCleanupDeletionPhases)
   )
   const browse = useWorkspaceCleanupBrowseState()
   const [facetPanelOpen, setFacetPanelOpen] = useState(false)
+  const [activeGroup, setActiveGroup] = useState<WorkspaceCleanupGroup>('nothing-local')
+  const run = useWorkspaceCleanupRunStore((s) => s.run)
+  const dismissRun = useWorkspaceCleanupRunStore((s) => s.dismissRun)
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(() => new Set())
   const [rowsScrollElement, setRowsScrollElement] = useState<HTMLDivElement | null>(null)
   const wasOpenRef = useRef(open)
-  const mountedRef = useMountedRef()
 
   // Keep facet time stable but no older than dialog open; stale hydration must not misclassify idle/agent freshness.
   const [openedAt, setOpenedAt] = useState(() => Date.now())
@@ -129,10 +142,32 @@ function WorkspaceCleanupDialogContent({
     now: facetNow,
     facetPanelOpen
   })
-  const rows = useWorkspaceCleanupRowOrder({
-    rows: facetRows.rows,
-    streaming: loading,
-    sort: browse.sort
+  const shouldResortAtSettle = useWorkspaceCleanupSettleResortGate({
+    open,
+    selectedIds,
+    rowsScrollElement
+  })
+  const {
+    rowsByGroup,
+    groupSummaries,
+    getRowGroup,
+    resetGroups,
+    uncheckedCount,
+    updatesAvailable,
+    releaseRows,
+    selectedCandidates
+  } = useWorkspaceCleanupPickRows({
+    liveRows: facetRows.rows,
+    allRows: facetRows.allRows,
+    sort: browse.sort,
+    filters: browse.filters,
+    candidates: evidencedCandidates,
+    open,
+    loading,
+    gitEvidence,
+    selectedIds,
+    deletingIdentities,
+    shouldResortAtSettle
   })
   // Host-qualify selection: identical workspace IDs on different hosts must never confirm one row and delete another (STA-4343).
   const candidateIdentities = useMemo(
@@ -149,164 +184,102 @@ function WorkspaceCleanupDialogContent({
     [repos, scan?.errors]
   )
   const initialLoading = loading && candidates.length === 0
-  const runSpaceScan = useCallback(() => {
-    void refreshWorkspaceSpace().catch((scanError: unknown) => {
-      if (!mountedRef.current) {
-        return
-      }
-      toast.error(
-        translate(
-          'components.workspace.cleanup.browse.measureSizesFailed',
-          'Could not scan workspace sizes'
-        ),
-        {
-          description: scanError instanceof Error ? scanError.message : String(scanError)
-        }
-      )
-    })
-  }, [mountedRef, refreshWorkspaceSpace])
-
-  const selectedCandidates = useMemo(() => {
-    const byIdentity = new Map(rows.map((row) => [row.identity, row.candidate]))
-    return [...selectedIds]
-      .map((identity) => byIdentity.get(identity))
-      .filter(
-        (candidate): candidate is WorkspaceCleanupCandidate =>
-          candidate != null &&
-          canQueueWorkspaceCleanupCandidate(candidate) &&
-          !deletingIdentities.has(getWorkspaceCleanupCandidateIdentity(candidate))
-      )
-  }, [deletingIdentities, rows, selectedIds])
-  const selectedCount = selectedCandidates.length
-
-  const pruneSelectionToVisibleRows = useEffectEvent(() => {
-    const next = new Set(
-      [...selectedIds].filter(
-        (identity) =>
-          facetRows.facetMatchedIdentities.has(identity) && !deletingIdentities.has(identity)
-      )
-    )
-    if (next.size === selectedIds.size) {
-      return
-    }
-    setSelectedIds(next)
-    toast.info(formatWithheldSelectionNotice(selectedIds.size - next.size))
+  const facetMatchedIdentities = useWorkspaceCleanupFilterSelectionPrune({
+    open,
+    confirming: removal.confirming,
+    filters: browse.filters,
+    matchedRows: facetRows.rows,
+    deletingIdentities,
+    selectedIds,
+    setSelectedIds
   })
 
-  useEffect(() => {
-    if (!open || removal.confirming) {
-      return
-    }
-    // Prune destructive selections only when user filters change; streaming reclassification must not silently deselect rows.
-    pruneSelectionToVisibleRows()
-  }, [browse.filters, open, removal.confirming])
-
-  const pruneVanishedSelections = useEffectEvent(() => {
-    const isDeleting = (identity: string): boolean => deletingIdentities.has(identity)
-    const kept = [...selectedIds].filter(
-      (identity) => candidateIdentities.has(identity) && !isDeleting(identity)
-    )
-    if (kept.length === selectedIds.size) {
-      return
-    }
-    const vanishedCount = [...selectedIds].filter(
-      (identity) => !candidateIdentities.has(identity) && !isDeleting(identity)
-    ).length
-    setSelectedIds(new Set(kept))
-    if (vanishedCount > 0) {
-      toast.info(formatVanishedSelectionNotice(vanishedCount))
-    }
-  })
-
-  useEffect(() => {
-    if (loading) {
-      return
-    }
-    pruneVanishedSelections()
-  }, [candidateIdentities, deletingIdentities, loading])
-
+  const { ignoreCandidate: recordIgnore, restoreCandidate: recordRestore } =
+    useWorkspaceCleanupIgnore(setSelectedIds)
+  // Ignore/Restore touches only that row: once the change is committed it leaves or re-enters
+  // the list (at the end), and nothing else moves.
   const ignoreCandidate = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
-      void dismissCandidates([candidate])
-        .then(() => {
-          if (mountedRef.current) {
-            setSelectedIds((current) => {
-              const next = new Set(current)
-              next.delete(getWorkspaceCleanupCandidateIdentity(candidate))
-              return next
-            })
-          }
-        })
-        .catch((err: unknown) => {
-          if (mountedRef.current) {
-            toast.error(
-              translate(
-                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.7f451a3e2c',
-                'Could not ignore cleanup suggestion'
-              ),
-              { description: err instanceof Error ? err.message : String(err) }
-            )
-          }
-        })
+      void recordIgnore(candidate).then((done) => {
+        if (done) {
+          releaseRows([getWorkspaceCleanupCandidateIdentity(candidate)])
+        }
+      })
     },
-    [dismissCandidates, mountedRef, setSelectedIds]
+    [recordIgnore, releaseRows]
+  )
+  const restoreCandidate = useCallback(
+    (candidate: WorkspaceCleanupCandidate) => {
+      void recordRestore(candidate).then((done) => {
+        if (done) {
+          releaseRows([getWorkspaceCleanupCandidateIdentity(candidate)])
+        }
+      })
+    },
+    [recordRestore, releaseRows]
   )
 
-  const toggleExpandedRow = useCallback((identity: string) => {
-    setExpandedRowIds((current) => toggleSetMember(current, identity))
-  }, [])
+  const toggleExpandedRow = useCallback(
+    (identity: string) => setExpandedRowIds((current) => toggleSetMember(current, identity)),
+    []
+  )
 
   const toggleSelectedRow = useCallback(
-    (identity: string) => {
-      setSelectedIds((current) => toggleSetMember(current, identity))
-    },
+    (identity: string) => setSelectedIds((current) => toggleSetMember(current, identity)),
     [setSelectedIds]
   )
 
-  const selectableIdentities = useMemo(
+  const selectedCount = selectedCandidates.length
+  const hasActiveFilters = useMemo(
     () =>
-      removal.removalInFlight
-        ? []
-        : facetRows.selectableIdentities.filter((identity) => !deletingIdentities.has(identity)),
-    [deletingIdentities, facetRows.selectableIdentities, removal.removalInFlight]
+      browse.filters.query.trim().length > 0 ||
+      listActiveWorkspaceCleanupFacetGroups(browse.filters).length > 0,
+    [browse.filters]
   )
-  const selectedSelectableCount = useMemo(() => {
-    let count = 0
-    for (const identity of selectableIdentities) {
-      if (selectedIds.has(identity)) {
-        count += 1
-      }
-    }
-    return count
-  }, [selectableIdentities, selectedIds])
 
-  const toggleSelectAll = useCallback(
-    (selectAll: boolean) => {
-      setSelectedIds((current) => {
-        const next = new Set(current)
-        for (const identity of selectableIdentities) {
-          if (selectAll) {
-            next.add(identity)
-          } else {
-            next.delete(identity)
-          }
-        }
-        return next
-      })
-    },
-    [selectableIdentities, setSelectedIds]
-  )
+  const bulk = useWorkspaceCleanupBulkSelection({
+    rows: rowsByGroup[activeGroup],
+    matchedIdentities: facetMatchedIdentities,
+    selectedIds,
+    setSelectedIds,
+    deletingIdentities,
+    removalInFlight: removal.removalInFlight,
+    evidencedCandidates,
+    candidateIdentities,
+    loading
+  })
 
   const openConfirmRemove = removal.openConfirmRemove
+  // Back returns focus to whichever control opened confirmation.
+  const confirmOpenerRef = useRef<WorkspaceCleanupConfirmOpener | null>(null)
+  const liveConfirmCandidates = useMemo(
+    () =>
+      getLiveDeletableCandidates(
+        facetRows.allRows,
+        removal.confirming ? removal.confirmCandidates : [],
+        deletingIdentities
+      ),
+    [deletingIdentities, facetRows.allRows, removal.confirmCandidates, removal.confirming]
+  )
   const handleRemoveRow = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
       if (removalInFlightRef.current) {
         return
       }
-      setSelectedIds(new Set([getWorkspaceCleanupCandidateIdentity(candidate)]))
-      openConfirmRemove([candidate])
+      const liveCandidates = getLiveDeletableCandidates(
+        facetRows.allRows,
+        [candidate],
+        deletingIdentities
+      )
+      if (liveCandidates.length === 0) {
+        return
+      }
+      const identity = getWorkspaceCleanupCandidateIdentity(candidate)
+      confirmOpenerRef.current = { kind: 'row', identity }
+      setSelectedIds(new Set([identity]))
+      openConfirmRemove(liveCandidates)
     },
-    [openConfirmRemove, removalInFlightRef, setSelectedIds]
+    [deletingIdentities, facetRows.allRows, openConfirmRemove, removalInFlightRef, setSelectedIds]
   )
   const handleViewCandidate = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
@@ -320,46 +293,56 @@ function WorkspaceCleanupDialogContent({
     [closeModal, markCandidateViewed]
   )
 
-  const handleOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      if (!nextOpen) {
-        closeModal()
-      }
-    },
-    [closeModal]
-  )
-
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && closeModal()}>
       <DialogContent
         showCloseButton={false}
         className="flex h-[min(820px,90vh)] w-[calc(100vw-3rem)] max-w-[calc(100vw-3rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[calc(100vw-3rem)] xl:w-[980px] xl:max-w-[980px]"
       >
         {removal.agentStopRequest ? (
           <WorkspaceCleanupConfirmStopAgents
-            candidates={removal.agentStopRequest.candidates}
+            request={removal.agentStopRequest}
+            activeGroup={activeGroup}
             onBack={removal.cancelStopAgents}
-            onConfirm={removal.confirmStopAgents}
+            onConfirm={() => removal.confirmStopAgents(liveConfirmCandidates)}
           />
-        ) : !removal.confirming ? (
+        ) : run ? (
+          <WorkspaceCleanupRunStep
+            run={run}
+            now={facetNow}
+            onDeleteAnyway={removal.confirmUnverifiedRemoval}
+            onClose={closeModal}
+            onDone={() => dismissRun(run.id)}
+          />
+        ) : removal.confirming ? (
+          <WorkspaceCleanupConfirmStep
+            candidates={liveConfirmCandidates}
+            now={facetNow}
+            onBack={() => {
+              removal.backToList()
+              focusWorkspaceCleanupConfirmOpener(confirmOpenerRef.current, activeGroup)
+            }}
+            onClose={closeModal}
+            onConfirm={() => removal.confirmRemove(liveConfirmCandidates)}
+          />
+        ) : (
           <>
             <WorkspaceCleanupDialogHeader
-              selectedCount={selectedCount}
+              title={t('components.workspace.cleanup.review.title', 'Review workspaces')}
               loading={loading}
-              scannedAt={scan?.scannedAt ?? null}
-              scanProgress={scanProgress}
-              deleteDisabled={
-                selectedCount === 0 || removal.removalProgress !== null || removal.removalInFlight
-              }
-              onDeleteSelected={() => openConfirmRemove(selectedCandidates)}
-              onRefresh={() => startWorkspaceCleanupScan({ notifyWhenReady: true })}
+              checking={gitEvidence.pendingWorktreeIds.size > 0}
+              updatesAvailable={updatesAvailable}
+              onRefresh={() => {
+                resetGroups()
+                startWorkspaceCleanupScan({ notifyWhenReady: true })
+              }}
               onClose={closeModal}
             />
 
             {initialLoading ? <WorkspaceCleanupInitialScanBanner progress={scanProgress} /> : null}
             {error ? <WorkspaceCleanupNotice tone="destructive" message={error} /> : null}
-            {!error && spaceError ? (
-              <WorkspaceCleanupNotice tone="destructive" message={spaceError} />
+            {!error && spaceScan.error ? (
+              <WorkspaceCleanupNotice tone="destructive" message={spaceScan.error} />
             ) : null}
             {!error && scanNoticeMessage ? (
               <WorkspaceCleanupNotice message={scanNoticeMessage} />
@@ -370,30 +353,48 @@ function WorkspaceCleanupDialogContent({
               facetRows={facetRows}
               facetPanelOpen={facetPanelOpen}
               onFacetPanelOpenChange={setFacetPanelOpen}
-              selectableCount={selectableIdentities.length}
-              selectedCount={selectedSelectableCount}
-              spaceScanning={workspaceSpaceScanning}
-              spaceProgress={workspaceSpaceProgress}
+              spaceScanning={spaceScan.scanning}
+              spaceProgress={spaceScan.progress}
               gitPendingCount={gitEvidence.pendingWorktreeIds.size}
               gitCheckedTotal={gitEvidence.totalCount}
-              onRunSpaceScan={runSpaceScan}
-              onToggleSelectAll={toggleSelectAll}
+              onRunSpaceScan={spaceScan.runSpaceScan}
             />
 
+            <WorkspaceCleanupGroupCards
+              active={activeGroup}
+              summaries={groupSummaries}
+              onChange={setActiveGroup}
+            />
+            {activeGroup !== 'cannot-delete' ? (
+              <WorkspaceCleanupSelectAllBar
+                selectableCount={bulk.bulkSelectableCount}
+                selectedBulkCount={bulk.selectedBulkCount}
+                selectedDisplayedCount={bulk.selectedDisplayedCount}
+                onToggle={bulk.toggleSelectAll}
+              />
+            ) : null}
+
             <ScrollArea className="min-h-0 flex-1" viewportRef={setRowsScrollElement}>
-              <div>
-                {initialLoading ? <WorkspaceCleanupSkeletonRows /> : null}
+              <div
+                role="tabpanel"
+                id={WORKSPACE_CLEANUP_GROUP_PANEL_ID}
+                aria-labelledby={getWorkspaceCleanupGroupTabId(activeGroup)}
+              >
+                {initialLoading || (uncheckedCount > 0 && rowsByGroup[activeGroup].length === 0) ? (
+                  <WorkspaceCleanupSkeletonRows />
+                ) : null}
                 <WorkspaceCleanupRowList
-                  rows={rows}
+                  rows={rowsByGroup[activeGroup]}
                   now={facetNow}
-                  scannedCount={candidates.length}
+                  scannedCandidates={candidates}
+                  hasActiveFilters={hasActiveFilters}
+                  getRowGroup={getRowGroup}
                   hasScanned={scan != null}
-                  loading={loading}
+                  loading={loading || uncheckedCount > 0}
                   deletionPhaseByIdentity={deletionPhaseByIdentity}
                   deletingIdentities={deletingIdentities}
                   expandedRowIds={expandedRowIds}
                   selectedIds={selectedIds}
-                  gitPendingWorktreeIds={gitEvidence.pendingWorktreeIds}
                   rowFailures={removal.rowFailures}
                   scrollElement={rowsScrollElement}
                   onClearFilters={browse.clearFilters}
@@ -401,23 +402,23 @@ function WorkspaceCleanupDialogContent({
                   onToggleSelected={toggleSelectedRow}
                   onView={handleViewCandidate}
                   onIgnore={ignoreCandidate}
+                  onRestore={restoreCandidate}
                   onRemove={handleRemoveRow}
                   onForgetLocally={openWorkspaceCleanupForgetLocally}
                   onDeleteAnyway={removal.confirmUnverifiedRemoval}
                 />
               </div>
             </ScrollArea>
+
+            <WorkspaceCleanupPickFooter
+              selectedCount={selectedCount}
+              deleteBlocked={removal.removalInFlight}
+              onDelete={() => {
+                confirmOpenerRef.current = { kind: 'bulk' }
+                openConfirmRemove(selectedCandidates)
+              }}
+            />
           </>
-        ) : (
-          <WorkspaceCleanupConfirmRemove
-            candidates={removal.confirmCandidates}
-            now={facetNow}
-            reviewInfoByWorktreeId={facetRows.reviewInfoByWorktreeId}
-            progress={removal.removalProgress}
-            onBack={removal.backToList}
-            onCancel={removal.cancelConfirmRemove}
-            onConfirm={removal.confirmRemove}
-          />
         )}
       </DialogContent>
     </Dialog>

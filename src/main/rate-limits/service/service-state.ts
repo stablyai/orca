@@ -1,9 +1,12 @@
+import type { LocalAccountRuntimeTarget } from '../../../shared/agent-accounts/local-account-runtime'
 import type { BrowserWindow } from 'electron'
 import type {
+  AntigravityAccountUsage,
   InactiveAccountUsage,
   ProviderRateLimits,
   RateLimitState
-} from '../../../shared/rate-limit-types'
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { AntigravityAccountUsageRecorder } from '../providers/antigravity/antigravity-account-usage'
 import {
   type ActiveRateLimitProvider,
   type InactiveCodexAccountInfo,
@@ -14,15 +17,17 @@ import {
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
   type AntigravityUsageEnabledResolver,
+  type ClaudeOAuthUsageEnabledResolver,
+  type MuseUsageEnabledResolver,
   type ZcodePlanRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
-  type NormalizedCodexAccountSelectionTarget,
-  type NormalizedClaudeAccountSelectionTarget,
-  type InactiveClaudeAccountInfo,
-  type NetworkProxySettings,
   DEFAULT_POLL_MS
 } from './service-types'
-import { readGrokAuthSession } from '../grok-auth'
+import type { NormalizedCodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
+import type { InactiveClaudeAccount } from '../providers/claude/claude-managed-account-usage'
+import type { NetworkProxySettings } from '../../../shared/network/network-proxy'
+import { readGrokAuthSession } from '../providers/grok/grok-auth'
 
 export abstract class RateLimitServiceState {
   protected state: InternalRateLimitState = {
@@ -35,7 +40,8 @@ export abstract class RateLimitServiceState {
     minimax: null,
     grok: null,
     cursor: null,
-    zcode: null
+    zcode: null,
+    muse: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
   // Async Keychain/desktop DB probing belongs in fetch cycles, never synchronous construction.
@@ -55,7 +61,8 @@ export abstract class RateLimitServiceState {
     grok: 0,
     antigravity: 0,
     cursor: 0,
-    zcode: 0
+    zcode: 0,
+    muse: 0
   }
   // Failures increase activation backoff; success/unavailable resets it.
   protected activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
@@ -68,12 +75,15 @@ export abstract class RateLimitServiceState {
     grok: 0,
     antigravity: 0,
     cursor: 0,
-    zcode: 0
+    zcode: 0,
+    muse: 0
   }
   protected mainWindow: BrowserWindow | null = null
+  /** Paired clients streaming usage (accounts.subscribe); headless hosts have no window to watch. */
+  protected usageViewers = 0
   protected detachWindowListeners: (() => void) | null = null
   protected isFetching = false
-  protected fullFetchQueued = false
+  protected fullFetchQueued: { force: boolean } | null = null
   protected codexOnlyFetchQueued = false
   protected claudeOnlyFetchQueued = false
   protected grokOnlyFetchQueued = false
@@ -81,10 +91,20 @@ export abstract class RateLimitServiceState {
   protected fetchIdleResolvers: (() => void)[] = []
   protected codexFetchGeneration = 0
   protected claudeFetchGeneration = 0
+  protected claudeUsageAbortController = new AbortController()
+  protected liveClaudeUsage: ProviderRateLimits | null = null
   // Why: cached display receipts cannot establish when the selected account was last checked.
   protected lastClaudeCheckCompletedAt: number | null = null
   // Capture account attribution once per cycle instead of rerunning auth preparation on every post.
-  protected lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
+  protected lastClaudeAuthSnapshot: {
+    configDir: string | null
+    home: string | undefined
+    provenance: string
+  } | null = null
+  /** Where the applied host-runtime Claude/Codex readings were taken. */
+  protected usageReadingAccounts: Partial<
+    Record<'claude' | 'codex', { home: string; provenance: string }>
+  > = {}
   protected opencodeFetchGeneration = 0
   protected minimaxFetchGeneration = 0
   protected zcodeFetchGeneration = 0
@@ -105,12 +125,21 @@ export abstract class RateLimitServiceState {
     wslDistro: null
   }
   protected openCodeGoConfigResolver: (() => OpenCodeGoRateLimitConfig) | null = null
-  protected openCodeGoApiKeyResolver: (() => string | null) | null = null
-  protected miniMaxConfigResolver: (() => MiniMaxRateLimitConfig) | null = null
-  protected zcodePlanConfigResolver: (() => ZcodePlanRateLimitConfig) | null = null
+  protected openCodeGoApiKeyResolver: (() => string | null | Promise<string | null>) | null = null
+  protected miniMaxConfigResolver:
+    | (() => MiniMaxRateLimitConfig | Promise<MiniMaxRateLimitConfig>)
+    | null = null
+  protected zcodePlanConfigResolver:
+    | (() => ZcodePlanRateLimitConfig | Promise<ZcodePlanRateLimitConfig>)
+    | null = null
   protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
+  protected claudeOAuthUsageEnabledResolver: ClaudeOAuthUsageEnabledResolver | null = null
   protected antigravityUsageEnabledResolver: AntigravityUsageEnabledResolver | null = null
-  protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
+  protected antigravityFetchTarget: LocalAccountRuntimeTarget = { runtime: 'host', wslDistro: null }
+  protected antigravityAccountUsageRecorder: AntigravityAccountUsageRecorder | null = null
+  protected antigravityAccounts: AntigravityAccountUsage[] = []
+  protected museUsageEnabledResolver: MuseUsageEnabledResolver | null = null
+  protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccount[]) | null = null
   protected inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   protected networkProxySettingsResolver: (() => NetworkProxySettings) | null = null
   protected inactiveClaudeCache = new Map<string, ProviderRateLimits>()
@@ -124,6 +153,10 @@ export abstract class RateLimitServiceState {
   protected inactiveCodexAccountsGeneration = 0
   protected stateListeners = new Set<(state: RateLimitState) => void>()
 
+  private publicationPending = false
+  private publicationInFlight: Promise<void> | null = null
+  protected publicationStopped = false
+
   constructor() {}
 
   onStateChange(listener: (state: RateLimitState) => void): () => void {
@@ -133,7 +166,7 @@ export abstract class RateLimitServiceState {
     }
   }
 
-  protected abstract getState(): RateLimitState
+  protected abstract getState(): Promise<RateLimitState>
 
   protected buildInactiveArray(
     cache: Map<string, ProviderRateLimits>,
@@ -162,23 +195,83 @@ export abstract class RateLimitServiceState {
     return result
   }
 
+  protected rememberUsageReadingAccount(
+    provider: 'claude' | 'codex',
+    target: { runtime: 'host' | 'wsl' },
+    home: string | null | undefined,
+    provenance: string | null
+  ): void {
+    const previous = this.usageReadingAccounts[provider]
+    // The same object while unchanged: its identity is how readers see the reading's source move.
+    this.usageReadingAccounts[provider] =
+      target.runtime !== 'host' || !home || provenance === null
+        ? undefined
+        : previous?.home === home && previous.provenance === provenance
+          ? previous
+          : { home, provenance }
+  }
+
   protected updateState(next: InternalRateLimitState): void {
     this.state = next
     this.pushToRenderer()
   }
 
+  getAccountRefreshGenerations(): readonly [claude: number, codex: number] {
+    return [this.claudeFetchGeneration, this.codexFetchGeneration]
+  }
+
   protected pushToRenderer(): void {
-    const state = this.getState()
-    for (const listener of this.stateListeners) {
-      try {
-        listener(state)
-      } catch {
-        // ignore — one bad listener must not break the others
-      }
-    }
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+    if (this.publicationStopped) {
       return
     }
-    this.mainWindow.webContents.send('rateLimits:update', state)
+    this.publicationPending = true
+    if (!this.publicationInFlight) {
+      this.publicationInFlight = Promise.resolve().then(() => this.publishLatestState())
+      void this.publicationInFlight.catch((error: unknown) =>
+        console.warn('[rate-limits] Failed to publish usage state', error)
+      )
+    }
+  }
+
+  private async publishLatestState(): Promise<void> {
+    try {
+      while (this.publicationPending && !this.publicationStopped) {
+        this.publicationPending = false
+        if (!this.stateListeners.size && (!this.mainWindow || this.mainWindow.isDestroyed())) {
+          continue
+        }
+        const claudeGeneration = this.claudeFetchGeneration
+        const codexGeneration = this.codexFetchGeneration
+        let state: RateLimitState
+        try {
+          state = await this.getState()
+        } catch (error) {
+          if (this.publicationPending && !this.publicationStopped) {
+            continue
+          }
+          throw error
+        }
+        // Usage-only updates can progress, but account switches invalidate snapshot attribution.
+        if (
+          this.publicationStopped ||
+          claudeGeneration !== this.claudeFetchGeneration ||
+          codexGeneration !== this.codexFetchGeneration
+        ) {
+          continue
+        }
+        for (const listener of this.stateListeners) {
+          try {
+            listener(state)
+          } catch {
+            // One failing listener must not interrupt delivery.
+          }
+        }
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          this.mainWindow.webContents.send('rateLimits:update', state)
+        }
+      }
+    } finally {
+      this.publicationInFlight = null
+    }
   }
 }

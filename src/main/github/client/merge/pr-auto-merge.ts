@@ -1,12 +1,20 @@
-import { invalidateReviewLookupsAfterPRMutation } from '../../pr-mutation-review-invalidation'
-import type { GitHubPRMergeMethod } from '../../../../shared/github/pull-request-types'
-import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
-import { classifyPullRequestUpdateError } from '../../gh-error-classification'
-import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
+import { invalidateReviewLookupsAfterPRMutation } from '../../pull-requests/refresh/pr-mutation-review-invalidation'
+import type { GitHubPRMergeMethod } from '../../../../shared/github/pull-requests/pull-request-types'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
+import { classifyPullRequestUpdateError } from '../../api/gh-error-classification'
+import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import { githubPRStackExecutionScope, type GhExecOptions } from './../github-exec-scope'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
 import { getRestPRByNumber } from './../lookup/pr-number-lookup'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
+import {
+  classifiedFailure,
+  codeHostFailure,
+  type CodeHostFailure
+} from '../../../../shared/source-control/code-host-failure-copy'
 export const PR_AUTO_MERGE_IDENTITY_JSON_FIELDS = 'id,headRefOid,baseRefName'
 
 export const GITHUB_AUTO_MERGE_METHODS: Record<GitHubPRMergeMethod, 'MERGE' | 'SQUASH' | 'REBASE'> =
@@ -17,14 +25,16 @@ export const GITHUB_AUTO_MERGE_METHODS: Record<GitHubPRMergeMethod, 'MERGE' | 'S
   }
 
 // GitHub rejects auto-merge for clean/mergeable PRs; explain that state directly.
-export function classifySetAutoMergeError(message: string, enabled = true): string {
+export function classifySetAutoMergeError(message: string, enabled = true): CodeHostFailure {
   if (enabled && /in clean status/i.test(message)) {
-    return 'This pull request can already be merged. Use Merge instead of auto-merge.'
+    return codeHostFailure('github.autoMergeAlreadyMergeable')
   }
-  return classifyPullRequestUpdateError(
-    message,
-    `${enabled ? 'enable' : 'disable'} auto-merge for pull request`
-  ).message
+  return classifiedFailure(
+    classifyPullRequestUpdateError(
+      message,
+      enabled ? 'github.autoMergeEnableFailed' : 'github.autoMergeDisableFailed'
+    )
+  )
 }
 
 export type PRAutoMergeIdentity = {
@@ -122,10 +132,7 @@ export async function enablePRAutoMerge(
     try {
       const restData = await getRestPRByNumber(ownerRepo, prNumber, ghOptions)
       if (restData.stack) {
-        return {
-          ok: false,
-          error: 'GitHub does not support auto-merge for stacked pull requests.'
-        }
+        return codeHostFailure('github.stackAutoMergeUnsupported')
       }
     } catch {
       // GitHub remains authoritative when stack metadata cannot be read.
@@ -133,7 +140,7 @@ export async function enablePRAutoMerge(
   }
   const pr = await getPRAutoMergeIdentity(prNumber, ownerRepo, ghOptions)
   if (!pr?.id) {
-    return { ok: false, error: 'Could not resolve GitHub pull request ID' }
+    return codeHostFailure('github.pullRequestIdUnresolved')
   }
   const mergeQueuePath = await resolveMergeQueueAutoMergePath(
     pr,
@@ -145,13 +152,9 @@ export async function enablePRAutoMerge(
     try {
       await enqueuePullRequest(pr, ghOptions)
     } catch (err) {
-      return {
-        ok: false,
-        error: classifyPullRequestUpdateError(
-          errorMessage(err),
-          'add pull request to the merge queue'
-        ).message
-      }
+      return classifiedFailure(
+        classifyPullRequestUpdateError(errorMessage(err), 'github.mergeQueueAddFailed')
+      )
     }
     return { ok: true }
   }
@@ -205,7 +208,7 @@ export async function setPRAutoMerge(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
   await acquire()
   try {
@@ -217,9 +220,6 @@ export async function setPRAutoMerge(
         ghOptions,
         githubPRStackExecutionScope(connectionId, localGitOptions)
       )
-      if (result.ok) {
-        invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
-      }
       return result
     }
     const args = ['pr', 'merge', String(prNumber), '--disable-auto']
@@ -230,13 +230,13 @@ export async function setPRAutoMerge(
       ...ghOptions,
       env: { ...process.env, GH_PROMPT_DISABLED: '1' }
     })
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
-    return { ok: false, error: classifySetAutoMergeError(message, enabled) }
+    return classifySetAutoMergeError(message, enabled)
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     release()
   }
 }
