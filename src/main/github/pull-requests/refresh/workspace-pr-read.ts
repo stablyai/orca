@@ -85,7 +85,7 @@ export function workspacePRRefreshCandidate(
 }
 
 /** Whether the queue should read this answer again: a final state never, nor a branch that had no
- *  PR while its head and link stay the same; otherwise once the cadence's interval has passed. */
+ *  PR at its recorded head while that head and its link stay the same; otherwise once the cadence's interval has passed. */
 function needsRead(candidate: GitHubPRRefreshCandidate, now: number): boolean {
   if (candidate.cachedPRState === 'merged' || candidate.cachedPRState === 'closed') {
     return false
@@ -93,6 +93,7 @@ function needsRead(candidate: GitHubPRRefreshCandidate, now: number): boolean {
   if (
     candidate.cachedHasPR === false &&
     candidate.linkedPRNumber == null &&
+    candidate.cachedHeadOid != null &&
     !hasStaleHead(candidate)
   ) {
     return false

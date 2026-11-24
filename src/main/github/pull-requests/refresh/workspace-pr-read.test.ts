@@ -45,9 +45,14 @@ function pr(state: PRInfo['state']): PRInfo {
 }
 
 /** A main-process store with no window: only this module writes its cache. */
-function storeWith(data: PRInfo | null, ageMs: number, repos: Repo[] = [repo]) {
+function storeWith(
+  data: PRInfo | null,
+  ageMs: number,
+  repos: Repo[] = [repo],
+  fetchedHeadOid: string | null = 'abc123'
+) {
   // The window's entries carry the head they were read at, beyond the persisted type.
-  const entry = { data, fetchedAt: NOW - ageMs, fetchedHeadOid: 'abc123' }
+  const entry = { data, fetchedAt: NOW - ageMs, fetchedHeadOid }
   let cache: PersistedState['githubCache'] = { pr: { [cacheKey]: entry }, issue: {} }
   return {
     getRepos: () => repos,
@@ -94,6 +99,8 @@ describe('a workspace PR read outside its row', () => {
     const newer = { data: pr('merged'), fetchedAt: NOW }
     const saved = withNewerCacheEntries({ [cacheKey]: newer }, { [cacheKey]: older })
     expect(saved[cacheKey]).toBe(newer)
+    // A key the window dropped (a rejected read) stays dropped, however new main's copy is.
+    expect(withNewerCacheEntries({ [cacheKey]: newer }, {})).toEqual({})
   })
 
   it('writes nothing back for a repo no longer registered', () => {
@@ -115,6 +122,9 @@ describe('a workspace PR read outside its row', () => {
     expect(enqueue).not.toHaveBeenCalled()
     readWorkspacePR(storeWith(null, 24 * HOUR), { ...worktree, head: 'def456' }, repo)
     expect(enqueue).toHaveBeenCalledTimes(1)
+    // No recorded head proves nothing about the current one.
+    readWorkspacePR(storeWith(null, 24 * HOUR, [repo], null), worktree, repo)
+    expect(enqueue).toHaveBeenCalledTimes(2)
   })
 
   it('never reads a final PR again, however old, even with pending checks', () => {

@@ -15,16 +15,16 @@ export function evictStaleEntries<T extends { fetchedAt: number }>(
   return Object.fromEntries(entries.slice(0, maxEntries))
 }
 
-/** `incoming`, keeping each entry of `current` read later than incoming's own, under the bound: a
- *  window's save and main's own write each keep the other's newer reads. */
+/** `incoming`, keeping each of its entries `current` read later, under the bound. A key `incoming`
+ *  lacks stays deleted: a window drops an entry it rejected on purpose. */
 export function withNewerCacheEntries<T extends { fetchedAt: number }>(
   current: Record<string, T>,
   incoming: Record<string, T>
 ): Record<string, T> {
   let merged = incoming
-  for (const [key, entry] of Object.entries(current)) {
-    const kept = incoming[key]
-    if (!kept || entry.fetchedAt > kept.fetchedAt) {
+  for (const [key, kept] of Object.entries(incoming)) {
+    const entry = current[key]
+    if (entry && entry.fetchedAt > kept.fetchedAt) {
       merged = merged === incoming ? { ...incoming } : merged
       merged[key] = entry
     }
