@@ -19,6 +19,7 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
 import { commentOnBotItem } from './bot-item-operations'
 import { botItemWriteFailure } from './use-bot-item-moves'
+import { phoneBotItemReturnText } from './phone-bot-item-refused-reply'
 
 const usePendingComments = createBotItemPendingCommentsHook({ useEffect, useSyncExternalStore })
 
@@ -29,7 +30,7 @@ export function usePhoneBotItemPendingComments({
   events,
   hostName,
   showToast,
-  returnText,
+  draftKey,
   refresh
 }: {
   client: RpcClient | null
@@ -39,8 +40,8 @@ export function usePhoneBotItemPendingComments({
   events: readonly BotItemEvent[]
   hostName: string
   showToast: (message: string) => void
-  /** A replaced question's reply, dropped: its words back to the comment box if it is empty. */
-  returnText: (text: string) => void
+  /** The item's comment box draft, which a refused reply's words go back to. */
+  draftKey: string
   /** Re-reads the item once the host refuses a reply to a replaced question. */
   refresh: () => void
 }) {
@@ -82,7 +83,7 @@ export function usePhoneBotItemPendingComments({
             ? error.message
             : String(error)
       ),
-    returnText,
+    returnText: phoneBotItemReturnText(key, draftKey),
     refresh,
     requestIds,
     questionIds,
