@@ -473,9 +473,6 @@
           "sleep": "절전",
           "performance": "성능"
         }
-      },
-      "sessionHost": {
-        "sshDetail": "이 SSH 호스트의 페이지는 이 컴퓨터에서 열립니다."
       }
     },
     "agents": {
@@ -1783,16 +1780,6 @@
                 "notWebLink": "웹 링크가 아닙니다."
               }
             }
-          }
-        },
-        "ports": {
-          "serverPortForward": {
-            "updateServer": "{{host}}에서 포트 {{port}}을(를) 전달하지 못했습니다. {{host}}의 Orca를 업데이트한 뒤 다시 시도하세요.",
-            "failed": "{{host}}에서 포트 {{port}}을(를) 전달하지 못했습니다. 연결을 확인한 뒤 다시 시도하세요.",
-            "forwarded": "{{host}}에서 포트 {{port}}을(를) 전달했습니다",
-            "opened": "기본 브라우저에서 {{address}}을(를) 열었습니다.",
-            "otherMachine": "포트 {{port}}을(를) 전달하지 못했습니다. 이 워크스페이스는 {{host}}에서 직접 실행되지 않습니다.",
-            "useSshPorts": "{{host}}에서 포트 {{port}}을(를) 전달하지 못했습니다. 포트 패널에서 전달한 뒤 다시 시도하세요."
           }
         }
       },
@@ -23430,12 +23417,7 @@
     },
     "serverPage": {
       "download": {
-        "started": "{{host}}의 {{path}}(으)로 다운로드 중",
-        "saveHere": "이 컴퓨터에 저장",
-        "copying": "{{filename}}을(를) 이 컴퓨터로 다운로드 중…",
-        "copied": "{{path}}에 저장했습니다",
-        "copyFailed": "{{filename}}을(를) 이 컴퓨터에 저장하지 못했습니다.",
-        "showInFolder": "폴더에서 보기"
+        "started": "{{host}}의 {{path}}(으)로 다운로드 중"
       },
       "print": {
         "failed": "페이지를 PDF로 저장하지 못했습니다"
@@ -23674,25 +23656,6 @@
     },
     "loadStall": {
       "waitingForHost": "{{host}} 응답을 기다리는 중…"
-    },
-    "profileCookieClear": {
-      "label": "쿠키",
-      "action": "쿠키 지우기…",
-      "rowLocal": "이 컴퓨터의 {{profile}}에 있는 모든 사이트에서 로그아웃합니다.",
-      "rowServer": "{{host}}의 {{profile}}에 있는 모든 사이트에서 로그아웃합니다. 이 컴퓨터의 페이지와 스트리밍되는 페이지 모두에 적용됩니다.",
-      "rowSsh": "{{host}}용 {{profile}}에 있는 모든 사이트에서 로그아웃합니다.",
-      "unavailable": "선택한 호스트에서는 이 프로필에 사용할 수 없습니다.",
-      "confirmTitle": "{{host}}의 {{profile}}에서 쿠키를 지울까요?",
-      "confirmTitleLocal": "이 컴퓨터의 {{profile}}에서 쿠키를 지울까요?",
-      "confirmDescriptionServer": "이 프로필의 모든 사이트에서 로그아웃합니다. 이 컴퓨터의 페이지와 스트리밍되는 페이지 모두에 적용됩니다. 다른 프로필과 호스트의 쿠키는 그대로 유지됩니다.",
-      "confirmDescription": "이 프로필의 모든 사이트에서 로그아웃합니다. 다른 프로필과 호스트의 쿠키는 그대로 유지됩니다.",
-      "clear": "지우기",
-      "cancel": "취소",
-      "cleared": "{{host}}의 {{profile}}에서 쿠키를 지웠습니다.",
-      "clearedLocal": "이 컴퓨터의 {{profile}}에서 쿠키를 지웠습니다.",
-      "failed": "{{host}}의 {{profile}}에서 쿠키를 지우지 못했습니다. 다시 시도하세요.",
-      "failedLocal": "이 컴퓨터의 {{profile}}에서 쿠키를 지우지 못했습니다. 다시 시도하세요.",
-      "sshHostOption": "{{host}}(SSH)"
     }
   },
   "runtimeRpc": {
