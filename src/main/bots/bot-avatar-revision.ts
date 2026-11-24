@@ -1,53 +1,87 @@
-// A bot's avatar revision, which every picture, color or outfit write bumps (see bots.avatar.upload's
-// `expectedAvatarRevision`). The record saves on a debounce but the home's bot.json at once, so after a
-// crash bot.json can be ahead; the higher of the two is the revision.
+import { createHash } from 'node:crypto'
+import {
+  BOT_AVATAR_FILE,
+  isBotAvatarImage,
+  parseBotAvatar,
+  uploadAvatar
+} from '../../shared/bot-avatar'
+import { join } from 'node:path'
+import { z } from 'zod'
 import type { Bot } from '../../shared/bot-types'
-import { type BotHomeFilesystem, botHomeAvatarRevision, botHomeFolder } from './bot-home'
+import { BotAvatarColorSchema } from '../../shared/bots/bot-avatar-color'
+import { BotStoredOutfitSchema } from '../../shared/bots/bot-avatar-outfit'
+import { type BotHomeFilesystem, botHomeFolder, writeBotHome } from './bot-home'
 
 type RevisionHomes = { filesystem: BotHomeFilesystem; botsRoot: () => string }
 
-/** The higher of the record's revision and its home's bot.json. */
-export async function botAvatarRevision(homes: RevisionHomes, bot: Bot): Promise<number> {
-  const home = await botHomeAvatarRevision(homes.filesystem, botHomeFolder(bot, homes.botsRoot()))
-  return Math.max(bot.avatarRevision ?? 0, home)
-}
+const homePicture = z.object({
+  id: z.string(),
+  name: z.string(),
+  agent: z.string(),
+  members: z.array(z.unknown()),
+  avatar: z.string().nullable(),
+  avatarColor: BotAvatarColorSchema.nullable().optional(),
+  avatarOutfit: BotStoredOutfitSchema.nullable().optional(),
+  generatedOverMascot: z
+    .string()
+    .regex(/^mascot:[A-Z][0-9]+$/)
+    .optional(),
+  avatarRevision: z.number().int().nonnegative().optional()
+})
 
-type RevisionStore = { getBots?: () => Bot[]; saveBot?: (bot: Bot) => void }
-
-const repairs = new WeakMap<object, Promise<void>>()
-
-/**
- * Once per store, before its bots are first listed: a record left behind its home's bot.json (the
- * profile lost its last save) is raised to it. A fresh read then anchors a new Generate at the real
- * revision, while a request made before the crash still holds the older one and is refused.
- */
-export function repairBotAvatarRevisions(
-  store: RevisionStore | null | undefined,
-  homes: RevisionHomes
-): Promise<void> {
-  if (!store?.getBots || !store.saveBot) {
-    return Promise.resolve()
-  }
-  let repair = repairs.get(store)
-  if (!repair) {
-    repair = raiseBehindRecords(store, homes).catch((error: unknown) => {
-      console.warn('[bots] could not read the avatar revisions of bot homes', error)
+/** Only a readable home belonging to this bot can establish a revision, including legacy zero. */
+export async function botWithHomePicture(homes: RevisionHomes, bot: Bot): Promise<Bot> {
+  const path = join(botHomeFolder(bot, homes.botsRoot()), 'bot.json')
+  const home = await homes.filesystem
+    .readText(path)
+    .then((text) => homePicture.parse(JSON.parse(text ?? 'null')))
+    .catch(() => {
+      throw new Error('bot_avatar_home_unreadable')
     })
-    repairs.set(store, repair)
+  if (home.id !== bot.id) {
+    throw new Error('bot_folder_not_owned')
   }
-  return repair
+  if ((home.avatarRevision ?? 0) <= (bot.avatarRevision ?? 0)) {
+    return bot
+  }
+  return {
+    ...bot,
+    avatar: home.avatar,
+    avatarRevision: home.avatarRevision,
+    avatarColor: home.avatarColor === undefined ? bot.avatarColor : home.avatarColor,
+    avatarOutfit: home.avatarOutfit === undefined ? bot.avatarOutfit : home.avatarOutfit,
+    generatedOverMascot: home.generatedOverMascot
+  }
 }
 
-async function raiseBehindRecords(store: RevisionStore, homes: RevisionHomes): Promise<void> {
-  for (const listed of store.getBots?.() ?? []) {
-    const home = await botAvatarRevision(homes, listed)
-    if (home <= (listed.avatarRevision ?? 0)) {
-      continue
-    }
-    // Re-read before repair so a newer write or deletion during the home read wins.
-    const current = store.getBots?.().find((entry) => entry.id === listed.id)
-    if (current && home > (current.avatarRevision ?? 0)) {
-      store.saveBot?.({ ...current, avatarRevision: home })
-    }
+export async function writeBotAvatarImage(
+  homes: RevisionHomes,
+  bot: Bot,
+  png: Uint8Array,
+  expectedAvatarRevision?: number
+): Promise<Bot> {
+  if (!isBotAvatarImage(png)) {
+    throw new Error('bot_avatar_invalid')
   }
+  const folderPath = botHomeFolder(bot, homes.botsRoot())
+  const current = await botWithHomePicture(homes, bot)
+  const revision = current.avatarRevision ?? 0
+  if (expectedAvatarRevision !== undefined && expectedAvatarRevision !== revision) {
+    throw new Error('bot_avatar_changed')
+  }
+  const version = createHash('sha256').update(png).digest('hex').slice(0, 16)
+  const avatar = uploadAvatar(version)
+  const next: Bot = { ...current, avatar, avatarRevision: revision + 1, updatedAt: Date.now() }
+  if (
+    expectedAvatarRevision !== undefined &&
+    current.avatar &&
+    parseBotAvatar(current.avatar)?.kind === 'mascot'
+  ) {
+    next.generatedOverMascot = current.avatar
+  } else {
+    delete next.generatedOverMascot
+  }
+  await homes.filesystem.writeBytes(join(folderPath, BOT_AVATAR_FILE), png)
+  await writeBotHome(homes.filesystem, folderPath, next)
+  return next
 }

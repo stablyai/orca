@@ -1,13 +1,7 @@
 // The bots on this computer, each homed in a folder workspace of the hidden Bots project group.
 import { BOT_IMPORT_REPLY_FILE } from '../../shared/bots/bot-import'
-import { createHash } from 'node:crypto'
 import { join } from 'node:path'
-import {
-  BOT_AVATAR_FILE,
-  isBotAvatarImage,
-  isUploadAvatar,
-  uploadAvatar
-} from '../../shared/bot-avatar'
+import { BOT_AVATAR_FILE, isUploadAvatar } from '../../shared/bot-avatar'
 import { type Bot, botFolderName } from '../../shared/bot-types'
 import { assertBotNameFree, freeBotName } from './bot-free-name'
 import { areHostBotsEnabled, assertHostBotsEnabled } from './bot-team-policy'
@@ -26,7 +20,7 @@ import { botOfferCreation } from './bot-offer-creation'
 import { assertBotOwnsHome, type BotHomeFilesystem, botHomeFolder, writeBotHome } from './bot-home'
 import { type BotMemoryRecord, hostBotMemoryRecord } from './bot-memory-record'
 import { stampBotLinkOwners } from '../../shared/bot-link-owners'
-import { botAvatarRevision, repairBotAvatarRevisions } from './bot-avatar-revision'
+import { botWithHomePicture, writeBotAvatarImage } from './bot-avatar-revision'
 import { makeBotsHome } from './bot-home-workspace'
 import { newBotRecord } from './bot-new-record'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
@@ -118,9 +112,18 @@ export class BotController {
     return this.deps.getStore()?.getBots?.() ?? []
   }
 
-  /** Before a client reads the list: see repairBotAvatarRevisions. */
-  avatarRevisionsRepaired(): Promise<void> {
-    return repairBotAvatarRevisions(this.deps.getStore(), this.deps)
+  /** A fresh Generate can recover a lost profile save. A concurrent catalog change keeps its original guard. */
+  generationRevision(botId: string, seen: number): Promise<number> {
+    return this.serialize(async () => {
+      const store = this.requireStore()
+      const listed = this.requireBot(store, botId)
+      const bot = await botWithHomePicture(this.deps, listed)
+      if (listed !== bot) {
+        store.saveBot(bot)
+        this.deps.notifyBotsWritten(false)
+      }
+      return (listed.avatarRevision ?? 0) === seen ? (bot.avatarRevision ?? 0) : seen
+    })
   }
 
   /** The list with what a client needs to draw it as this host's own sidebar does. */
@@ -213,7 +216,7 @@ export class BotController {
   update(botId: string, edit: BotHostUpdates | ((bot: Bot) => BotHostUpdates)): Promise<Bot> {
     return this.serialize(async () => {
       const store = this.requireStore()
-      const bot = this.requireBot(store, botId)
+      const bot = await botWithHomePicture(this.deps, this.requireBot(store, botId))
       const updates = typeof edit === 'function' ? edit(bot) : edit
       if (updates.name !== undefined) {
         assertBotNameFree(store.getBots(), updates.name, botId)
@@ -221,12 +224,11 @@ export class BotController {
       const updated: Bot = { ...applyBotUpdates(bot, updates), updatedAt: Date.now() }
       // Any picture, color or outfit choice counts, even one that sets the same value again. Every other edit
       // keeps the highest revision seen, so rewriting bot.json from a record that lost it can't lower it.
-      const revision = await botAvatarRevision(this.deps, bot)
+      const revision = bot.avatarRevision ?? 0
       const look = [updates.avatar, updates.avatarColor, updates.avatarOutfit]
       if (look.some((value) => value !== undefined)) {
+        delete updated.generatedOverMascot
         updated.avatarRevision = revision + 1
-      } else if (revision > 0) {
-        updated.avatarRevision = revision
       }
       const next = stampBotLinkOwners(bot, updated, () => this.deps.accountUserId?.() ?? null)
       await writeBotHome(this.deps.filesystem, botHomeFolder(next, this.deps.botsRoot()), next)
@@ -249,20 +251,7 @@ export class BotController {
     return this.serialize(async () => {
       const store = this.requireStore()
       const bot = this.requireBot(store, botId)
-      if (!isBotAvatarImage(png)) {
-        throw new Error('bot_avatar_invalid')
-      }
-      const folderPath = botHomeFolder(bot, this.deps.botsRoot())
-      await assertBotOwnsHome(this.deps.filesystem, folderPath, botId)
-      const revision = await botAvatarRevision(this.deps, bot)
-      if (expectedAvatarRevision !== undefined && expectedAvatarRevision !== revision) {
-        throw new Error('bot_avatar_changed')
-      }
-      const version = createHash('sha256').update(png).digest('hex').slice(0, 16)
-      const avatar = uploadAvatar(version)
-      const next: Bot = { ...bot, avatar, avatarRevision: revision + 1, updatedAt: Date.now() }
-      await this.deps.filesystem.writeBytes(join(folderPath, BOT_AVATAR_FILE), png)
-      await writeBotHome(this.deps.filesystem, folderPath, next)
+      const next = await writeBotAvatarImage(this.deps, bot, png, expectedAvatarRevision)
       store.saveBot(next)
       this.deps.notifyBotsWritten(false)
       return next

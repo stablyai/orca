@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -135,20 +135,49 @@ describe('BotController', () => {
       expect(existsSync(join(botsRoot(), 'reviewer', BOT_AVATAR_FILE))).toBe(false)
     })
 
-    it('lists the revision bot.json kept after a lost profile save, so a fresh upload commits and a pre-crash one is refused', async () => {
-      const bot = await bots.create({ name: 'Reviewer' })
-      const saved = await bots.setAvatarImage(bot.id, squarePng(512))
-      // The profile's debounced write never happened: the record is back where it was.
-      store.saveBot({ ...saved, avatarRevision: undefined })
-
-      await bots.avatarRevisionsRepaired()
-      const listed = bots.list().find((entry) => entry.id === bot.id)
-      expect(listed?.avatarRevision).toBe(1)
-
-      await expect(bots.setAvatarImage(bot.id, squarePng(512, 1), 0)).rejects.toThrow(
+    it('recovers the whole picture from a newer home after a transient failure without admitting a stale upload', async () => {
+      const older = await bots.create({ name: 'Reviewer', avatar: mascotAvatar('A1') })
+      await bots.update(older.id, { avatarOutfit: 'tie' })
+      const saved = await bots.setAvatarImage(older.id, squarePng(512))
+      const folder = join(botsRoot(), 'reviewer')
+      const path = join(folder, 'bot.json')
+      const healthy = readFileSync(path, 'utf8')
+      store.saveBot(older)
+      vi.spyOn(localBotHomeFilesystem, 'readText').mockResolvedValueOnce(null)
+      try {
+        await expect(bots.setAvatarImage(older.id, squarePng(512, 1), 0)).rejects.toThrow(
+          'bot_avatar_home_unreadable'
+        )
+      } finally {
+        vi.restoreAllMocks()
+      }
+      writeFileSync(path, JSON.stringify({ ...JSON.parse(healthy), avatarRevision: 'bad' }))
+      await expect(bots.setAvatarImage(older.id, squarePng(512, 1), 0)).rejects.toThrow(
+        'bot_avatar_home_unreadable'
+      )
+      writeFileSync(path, healthy)
+      await expect(bots.setAvatarImage(older.id, squarePng(512, 1), 0)).rejects.toThrow(
         'bot_avatar_changed'
       )
-      expect((await bots.setAvatarImage(bot.id, squarePng(512, 2), 1)).avatarRevision).toBe(2)
+      expect(readFileSync(join(folder, BOT_AVATAR_FILE))).toEqual(Buffer.from(squarePng(512)))
+      expect(await bots.generationRevision(older.id, 0)).toBe(2)
+      expect(bots.list().find((entry) => entry.id === older.id)).toMatchObject({
+        avatar: saved.avatar,
+        avatarOutfit: 'tie',
+        avatarRevision: 2
+      })
+      expect((await bots.setAvatarImage(older.id, squarePng(512, 2), 2)).avatarRevision).toBe(3)
+    })
+
+    it('restores a mascot under a look picked at its revision only while the automatic replacement is current', async () => {
+      const bot = await bots.create({ name: 'Reviewer', avatar: mascotAvatar('A1') })
+      const look = { avatarOutfit: 'tie', lookAtRevision: 0 }
+      await bots.setAvatarImage(bot.id, squarePng(512), 0)
+      expect((await bots.update(bot.id, look)).avatar).toBe(mascotAvatar('A1'))
+      await bots.setAvatarImage(bot.id, squarePng(512), 2)
+      const manual = await bots.setAvatarImage(bot.id, squarePng(512, 1))
+      expect((await bots.update(bot.id, { ...look, lookAtRevision: 2 })).avatar).toBe(manual.avatar)
+      expect(await bots.readAvatarImage(bot.id)).toEqual(Buffer.from(squarePng(512, 1)))
     })
 
     it("keeps the revision in the home's bot.json, so a profile that lost its last save still refuses, renamed or not", async () => {

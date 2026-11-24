@@ -65,7 +65,10 @@ function cancelRun(request: Request): void {
 }
 
 function tryApply(request: Request): void {
-  tryApplyWith(request, finish)
+  tryApplyWith(request, (applied, saved) => {
+    finish(applied)
+    applied.host?.ended(saved)
+  })
 }
 
 function land(request: Request, made: GeneratedAvatar): void {
@@ -77,7 +80,6 @@ function land(request: Request, made: GeneratedAvatar): void {
   }
   request.status = 'landed'
   if (request.owner.kind === 'creating') {
-    // Held until Create settles.
     return
   }
   request.host?.landed(made, false)
@@ -116,11 +118,10 @@ function onPictureEvent(event: BotPictureEvent): void {
       request.eligible = false
       tryApply(request)
     } else if (anchor?.waiting && event.kind === 'ack') {
-      anchor.acked = Math.max(anchor.acked, event.revision)
+      anchor.acked.add(event.revision)
     } else if (anchor?.waiting && event.kind === 'idle' && request.owner.kind === 'bot') {
       // Only a save's own acknowledged revision moves the anchor. One that failed has none, so the
       // anchor stays: the catalog may already hold a newer choice from elsewhere, which must still win.
-      anchor.revision = Math.max(anchor.revision, anchor.acked)
       anchor.waiting = false
       tryApply(request)
     }
@@ -200,6 +201,10 @@ export function startAvatarRequest({
   return id
 }
 
+export function avatarRequestPending(id: string | null): boolean {
+  return id !== null && requests.has(id)
+}
+
 export function cancelAvatarRequest(id: string): void {
   const request = requests.get(id)
   if (request && request.status === 'running') {
@@ -227,24 +232,13 @@ export function releaseAvatarRequest(id: string): void {
   }
 }
 
-/** Create captured the dialog's picture: a run still going is now for the bot being made. Null when there
- *  is none, or it can't follow (a newer choice was made, or the host can't check the revision). */
+/** Hold the draft until Create settles. Only an eligible result can follow a successfully created bot. */
 export function handOffAvatarRequest(
   id: string | null,
   target: { hostId: BotRef['hostId']; name: string }
 ): { created: (bot: Bot) => void; failed: () => void } | null {
   const request = id ? requests.get(id) : undefined
   if (!request || request.owner.kind !== 'draft' || request.status !== 'running') {
-    return null
-  }
-  if (!request.eligible) {
-    // The picture submitted is the newer choice.
-    cancelRun(request)
-    return null
-  }
-  if (!botHostHas(target.hostId, BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY)) {
-    cancelRun(request)
-    failedForToast(target.name)
     return null
   }
   const draftKey = request.owner.key
@@ -256,12 +250,22 @@ export function handOffAvatarRequest(
         return
       }
       settled = true
+      if (
+        !request.eligible ||
+        !botHostHas(target.hostId, BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY)
+      ) {
+        cancelRun(request)
+        if (request.eligible) {
+          failedForToast(target.name)
+        }
+        return
+      }
       request.owner = { kind: 'bot', ref: { hostId: bot.hostId, id: bot.id }, name: bot.name }
       // The bot as Create (and its first picture's upload) acknowledged it.
       request.anchor = {
         revision: bot.avatarRevision ?? 0,
         waiting: false,
-        acked: 0
+        acked: new Set()
       }
       notify()
       if (request.status === 'failed') {

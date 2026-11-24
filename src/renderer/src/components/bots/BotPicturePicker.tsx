@@ -141,7 +141,7 @@ export function BotPicturePicker({
   // Generate is current while chosen, even before it holds a picture; selected is applied. Reopened
   // while a run goes on, or after it failed, the picker opens on it.
   const [onGenerate, setOnGenerate] = useState(
-    () => sharedFace !== undefined && sharedFace.run.kind !== 'idle'
+    () => sharedFace?.run.kind === 'running' || sharedFace?.run.kind === 'error'
   )
   const ownIntake = useBotAvatarIntakeState({
     // A new picture replaces the custom one in place, or lands beside the mascot shown.

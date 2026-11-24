@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { botRefKey, type BotRef } from '@/lib/bot-hosts'
 import { botHostHas } from '@/lib/bot-host-status'
-import { uploadBotAvatar } from '@/lib/bot-catalog'
+import { readBotGenerationRevision, uploadBotAvatar } from '@/lib/bot-catalog'
 import type { Bot } from '../../../../shared/bot-types'
 import { BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import type {
@@ -25,7 +25,7 @@ export type AvatarRequestHost = {
   landed: (made: GeneratedAvatar, apply: boolean) => void
   failed: (failure: AvatarGenerationFailure, agent: AvatarImageAgent) => void
   /** Back to idle with nothing made (canceled). */
-  ended: () => void
+  ended: (saved?: Bot) => void
 }
 
 /** Who a picture is for, as a run starts: a bot not yet made (`key` names its picture choices in the
@@ -39,7 +39,11 @@ export type Owner =
 
 /** The bot revision an upload requires: the one at Generate, or, while picture saves begun earlier are
  *  still in flight, the one they are acknowledged at. */
-export type Anchor = { revision: number; waiting: boolean; acked: number }
+export type Anchor = {
+  revision: number | Promise<number | null>
+  waiting: boolean
+  acked: Set<number>
+}
 
 export type Request = {
   id: string
@@ -70,15 +74,17 @@ export function canCheckRevision(ref: BotRef): boolean {
 export function anchorAt(bot: Bot): Anchor {
   // A legacy bot has no revision yet: 0, sent explicitly, so its first automatic upload is still checked.
   return {
-    revision: bot.avatarRevision ?? 0,
+    revision: canCheckRevision(bot)
+      ? readBotGenerationRevision(bot, bot.avatarRevision ?? 0).catch(() => null)
+      : (bot.avatarRevision ?? 0),
     waiting: botPictureOpsOpen(botRefKey(bot)),
-    acked: 0
+    acked: new Set<number>()
   }
 }
 
 /** Uploads a landed picture to its bot, once, if it is still the latest choice and the host can check;
  *  `finish` forgets the request. */
-export function tryApply(request: Request, finish: (request: Request) => void): void {
+export function tryApply(request: Request, finish: (request: Request, saved?: Bot) => void): void {
   if (request.status !== 'landed' || request.owner.kind !== 'bot' || !request.made) {
     return
   }
@@ -96,17 +102,32 @@ export function tryApply(request: Request, finish: (request: Request) => void): 
     }
     return
   }
-  const anchor = request.anchor ?? { revision: 0, waiting: false, acked: 0 }
-  if (anchor.waiting) {
+  const anchor = request.anchor
+  if (!anchor || anchor.waiting) {
     return
   }
   // Claimed before the upload starts, so nothing else can issue it.
   request.status = 'applying'
   const { png, description } = request.made
   const automatic = beginAutomaticBotPictureUpload(botRefKey(ref))
-  void uploadBotAvatar(ref, png, anchor.revision)
+  const upload = async (): Promise<Bot> => {
+    let revision = await anchor.revision
+    if (revision === null) {
+      throw new Error('bot_avatar_home_unreadable')
+    }
+    while (anchor.acked.delete(revision + 1)) {
+      revision += 1
+    }
+    if (!request.eligible) {
+      throw new Error('bot_avatar_changed')
+    }
+    return uploadBotAvatar(ref, png, revision)
+  }
+  let acknowledged: Bot | undefined
+  void upload()
     .then(
       (saved) => {
+        acknowledged = saved
         keepSavedPictureDescription(saved, png, description, { prefer: 'known' })
       },
       (error: unknown) => {
@@ -122,7 +143,7 @@ export function tryApply(request: Request, finish: (request: Request) => void): 
       }
     )
     .finally(() => {
-      finish(request)
+      finish(request, acknowledged)
       automatic.end()
     })
 }

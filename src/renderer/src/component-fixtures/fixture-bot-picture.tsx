@@ -80,6 +80,9 @@ export function stubUpload(generation: AvatarGenerationApi = NO_IMAGE_AGENTS): v
   Reflect.set(window.api, 'runtime', {
     ...runtime,
     call: async (request: Parameters<typeof call>[0]) => {
+      if (request.method === 'bots.avatar.read') {
+        return { ok: true, result: { png: null, revision: perf.avatarRevision ?? 0 } }
+      }
       if (request.method === 'bots.avatar.upload') {
         return { ok: true, result: { bot: { ...perf, avatar: 'upload:fixture' } } }
       }

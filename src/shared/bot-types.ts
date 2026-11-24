@@ -177,6 +177,8 @@ export const BotSchema = z.object({
   /** What the mascot wears; absent or null, nothing. Kept as stored: one this version doesn't know draws
    *  as none (wornBotOutfit) but survives a save, for the version that added it. */
   avatarOutfit: BotStoredOutfitSchema.nullable().optional().catch(undefined),
+  /** Mascot replaced by an automatic upload at the current revision. */
+  generatedOverMascot: z.string().optional().catch(undefined),
   /** Bumped by every picture, color or outfit write, so a write can require that none landed since it was
    *  asked for (bots.avatar.upload `expectedAvatarRevision`). Absent is 0; older hosts drop it. */
   avatarRevision: z.number().int().nonnegative().optional().catch(undefined),

@@ -1,6 +1,7 @@
 // Generating an avatar with a local image-capable agent. The run lives in the request store: unmounting
 // the hook releases it, which ends a run for a bot not yet made and lets one for a bot that exists land.
 import { useEffect, useRef, useState } from 'react'
+import type { Bot } from '../../../../shared/bot-types'
 import { useAppStore } from '@/store'
 import type {
   AvatarGenerationFailure,
@@ -11,6 +12,7 @@ import { describesRealPerson } from '../../../../shared/avatar-generation/avatar
 import { pickAvatarAgent } from '../../../../shared/avatar-generation/avatar-generation-agent-choice'
 import { refreshAvatarCapability, useAvatarCapability } from './avatar-generation-capability-store'
 import {
+  avatarRequestPending,
   cancelAvatarRequest,
   handOffAvatarRequest,
   releaseAvatarRequest,
@@ -26,6 +28,7 @@ const NO_AGENTS: readonly AvatarImageAgentStatus[] = []
 
 export type AvatarGenerationRun =
   | { kind: 'idle' }
+  | { kind: 'saving' }
   | { kind: 'running'; agent: AvatarImageAgent }
   | { kind: 'error'; failure: AvatarGenerationFailure; agent?: AvatarImageAgent }
 
@@ -83,6 +86,7 @@ export function useAvatarGeneration(
   const [run, setRun] = useState<AvatarGenerationRun>({ kind: 'idle' })
   const [result, setResult] = useState<GeneratedAvatar | null>(null)
   const current = useRef<string | null>(null)
+  const lastSaved = useRef<Bot | undefined>(undefined)
   // A result can land after the face moved; the host decides then whether it applies.
   const latest = useRef({ onResult, onStart, owner, onFailed })
   useEffect(() => {
@@ -112,7 +116,7 @@ export function useAvatarGeneration(
 
   const generate = (description: string): void => {
     const text = description.trim()
-    if (!text || !agent || run.kind === 'running') {
+    if (!text || !agent || avatarRequestPending(current.current)) {
       return
     }
     if (describesRealPerson(text)) {
@@ -127,9 +131,12 @@ export function useAvatarGeneration(
         if (!ours()) {
           return
         }
-        current.current = null
+        const saving = avatarRequestPending(id)
+        if (!saving) {
+          current.current = null
+        }
         setResult(made)
-        setRun({ kind: 'idle' })
+        setRun({ kind: saving ? 'saving' : 'idle' })
         latest.current.onResult(made, apply)
       },
       failed: (failure, failedAgent) => {
@@ -139,17 +146,27 @@ export function useAvatarGeneration(
           latest.current.onFailed?.()
         }
       },
-      ended: () => {
+      ended: (saved) => {
         if (ours()) {
+          lastSaved.current = saved
           current.current = null
           setRun({ kind: 'idle' })
         }
       }
     }
+    const target: AvatarRequestOwner = latest.current.owner?.() ?? { kind: 'draft', key: draftKey }
+    const saved = lastSaved.current
+    const owner =
+      target.kind === 'bot' &&
+      saved?.id === target.bot.id &&
+      saved.hostId === target.bot.hostId &&
+      (saved.avatarRevision ?? 0) > (target.bot.avatarRevision ?? 0)
+        ? { ...target, bot: saved }
+        : target
     id = startAvatarRequest({
       description: text,
       agent,
-      owner: latest.current.owner?.() ?? { kind: 'draft', key: draftKey },
+      owner,
       host
     })
     if (!id) {

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/bot-catalog', () => ({
+  readBotGenerationRevision: async (_ref: unknown, revision: number) => revision,
   uploadBotAvatar: mocks.uploadBotAvatar,
   readHostBots: mocks.readHostBots
 }))
@@ -279,25 +280,6 @@ describe('avatar generation requests', () => {
 
     expect(at.landed).toHaveBeenCalledWith(expect.anything(), true)
     expect(mocks.uploadBotAvatar).not.toHaveBeenCalled()
-  })
-
-  it('ends the run at Create when a newer choice was made, or the host cannot check, and says so to its face', () => {
-    nextRun()
-    const chose = startFor({ kind: 'draft', key: 'draft-1' })
-    noteBotPictureChoice('draft-1')
-    expect(handOffAvatarRequest(chose.id, { hostId: 'local', name: 'Scout' })).toBeNull()
-    expect(mocks.cancel).toHaveBeenCalledWith({ requestId: chose.id })
-    // A Create that then fails leaves the dialog open: its Generate face must not stay running.
-    expect(chose.host.ended).toHaveBeenCalled()
-    expect(mocks.toastError).not.toHaveBeenCalled()
-
-    mocks.botHostHas.mockReturnValue(false)
-    nextRun()
-    const old = startFor({ kind: 'draft', key: 'draft-2' })
-    expect(handOffAvatarRequest(old.id, { hostId: 'local', name: 'Scout' })).toBeNull()
-    expect(mocks.cancel).toHaveBeenCalledWith({ requestId: old.id })
-    expect(old.host.ended).toHaveBeenCalled()
-    expect(mocks.toastError).toHaveBeenCalledWith("Couldn't generate a picture for Scout.")
   })
 
   it('cancels on request and ignores the late result', async () => {

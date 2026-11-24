@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { DEFAULT_BOT_AVATAR_COLOR } from '../../../../../shared/bots/bot-avatar-color'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import {
   ORCA_APP_RESTART_STARTED_EVENT,
@@ -123,16 +122,6 @@ export function saveBotLook(
   })()
 }
 
-// Whether `change` is what the bot already shows (the default color stands for no color).
-function shows(saved: BotLookUpdate, change: BotLookUpdate): boolean {
-  return (
-    (!('avatarColor' in change) ||
-      (change.avatarColor ?? DEFAULT_BOT_AVATAR_COLOR) ===
-        (saved.avatarColor ?? DEFAULT_BOT_AVATAR_COLOR)) &&
-    (!('avatarOutfit' in change) || (change.avatarOutfit ?? null) === (saved.avatarOutfit ?? null))
-  )
-}
-
 /**
  * The tile color and outfit save on their own, the latest picks after a pause, one save at a time so the host
  * gets them in the order they were made; until they land they show as picked.
@@ -141,9 +130,7 @@ export function useBotLookSave(
   key: string,
   update: (look: BotLookUpdate) => Promise<unknown>,
   delayMs: number,
-  hold?: BotLookHold,
-  /** The bot's look as saved: a pick of it, with nothing else picked or saving, sends nothing. */
-  saved: BotLookUpdate = {}
+  hold?: BotLookHold
 ): { picked: BotLookUpdate | null; pick: (change: BotLookUpdate) => void; flush: () => void } {
   const [picked, setPicked] = useState<BotLookUpdate | null>(null)
   const timer = useRef<{
@@ -172,9 +159,6 @@ export function useBotLookSave(
   const pick = (change: BotLookUpdate): void => {
     // Newer than a picture still being generated, even a pick of the look already saved.
     noteBotPictureChoice(key)
-    if (!timer.current && !lookSaves.has(key) && shows(saved, change)) {
-      return
-    }
     const look = { ...timer.current?.look, ...change }
     setPicked((shown) => ({ ...shown, ...change }))
     if (timer.current) {

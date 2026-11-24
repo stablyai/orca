@@ -66,7 +66,10 @@ export function useGenerateFace(
     select: false
   })
   // The field folds to one line of description while the slot holds a picture.
-  const folded = picture !== null && !editing && generation.run.kind === 'idle'
+  const folded =
+    picture !== null &&
+    !editing &&
+    (generation.run.kind === 'idle' || generation.run.kind === 'saving')
   return {
     ...generation,
     /** The run goes on with the picker closed. */
@@ -91,6 +94,9 @@ export function useGenerateFace(
       setFocus((now) => ({ count: now.count + 1, select: true }))
     },
     generate: () => {
+      if (generation.run.kind === 'saving') {
+        return
+      }
       setEditing(false)
       generation.generate(description)
     },
@@ -312,7 +318,7 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
       box.setSelectionRange(box.value.length, box.value.length)
     }
   }, [count, select])
-  const ready = face.description.trim().length > 0 && !running
+  const ready = face.description.trim().length > 0 && !running && face.run.kind !== 'saving'
   return (
     <div className="flex flex-col rounded-md border border-input bg-background focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
       <textarea
