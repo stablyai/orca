@@ -1,6 +1,6 @@
 import type { BridgeSessionBack } from './bridge-host-back'
 import { parseMobileSessionAccessTarget } from '../../session/mobile-session-item-target'
-import type { BridgeClientMessage } from '../bridge/protocol/bridge-envelope'
+import type { BridgeClientMessage, BridgeHostMessage } from '../bridge/protocol/bridge-envelope'
 import type { BridgeInitRoute } from '../bridge/protocol/bridge-init-route'
 import { BRIDGE_APP_INACTIVE_FRAME } from '../bridge/page-lifecycle/bridge-app-inactive'
 import {
@@ -8,7 +8,6 @@ import {
   type BridgeAppFrame
 } from '../bridge/page-lifecycle/bridge-app-resumed'
 import { BRIDGE_PROTOCOL_VERSION } from '../bridge/protocol/bridge-frame-fields'
-import type { BridgeServerMessage } from '../bridge/protocol/bridge-envelope'
 
 /** Document capabilities survive connection rebuilds, but never a different document's ready. */
 export class BridgePageReaders {
@@ -45,7 +44,7 @@ export class BridgePageReaders {
   deliverAppFrame(
     frame: BridgeAppFrame,
     deliverable: boolean,
-    send: (message: BridgeServerMessage) => void,
+    send: (message: BridgeHostMessage) => void,
     onLegacySwapSafe: (round: number) => void
   ): void {
     if (!deliverable) {
