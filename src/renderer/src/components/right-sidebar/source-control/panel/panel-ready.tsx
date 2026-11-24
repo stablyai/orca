@@ -137,7 +137,7 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
         />
 
         {isGitHistoryVisible ? (
-          <SourceControlChangeScopeBar {...props} graphSupported={graphSupport === true} />
+          <SourceControlChangeScopeBar {...props} graphSupported={graphSupport.support === true} />
         ) : null}
 
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
