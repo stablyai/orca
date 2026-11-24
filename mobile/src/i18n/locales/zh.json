@@ -8072,7 +8072,8 @@
       "fix": {
         "turnOn": "启用",
         "copyForAdmin": "复制给管理员",
-        "checkAgain": "重新检查"
+        "checkAgain": "重新检查",
+        "allowAgain": "再次允许"
       },
       "adminRequest": "请在 Google 管理控制台（安全性 › API 控件 › 管理第三方应用访问权限）中将此 Google 应用标记为“可信”：{{clientId}}",
       "copied": "已复制。请发送给你的 Google 管理员",
@@ -8080,12 +8081,14 @@
         "ready": "就绪",
         "apiOff": "已在 Google Cloud 中停用",
         "adminBlocked": "已被你公司的 Google 管理员阻止",
-        "error": "无法检查"
+        "error": "无法检查",
+        "notAllowed": "你没有允许"
       },
       "headline": {
         "connected": "Google 已连接",
         "toFixOne": "快完成了：还有 1 个问题需要解决",
-        "toFix": "快完成了：还有 {{count}} 个问题需要处理"
+        "toFix": "快完成了：还有 {{count}} 个问题需要处理",
+        "ended": "Google 访问已结束。"
       },
       "defaultBadge": "默认",
       "setDefault": "设为默认",
@@ -8102,7 +8105,11 @@
         "confirm": "断开连接",
         "removeFromHost": "从 {{host}} 移除",
         "revoke": "移除并在 Google 撤销授权"
-      }
+      },
+      "reconnect": "重新连接",
+      "addAccount": "添加另一个账号",
+      "signIn": "登录 Google",
+      "handoff": "选择你的账号，然后选择“允许”。"
     },
     "saveFailed": "无法保存",
     "sheet": {
