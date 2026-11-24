@@ -63,6 +63,9 @@ export type CallerOwnedSignInPolicy<
   busyMessage: string
   /** Whether a start of `next` replaces the running flow instead of being refused (newest wins). */
   supersedes?: (running: SignInProgress<TProvider, TPrompt>, next: TProvider) => boolean
+  /** How long the owner may go without asking before the flow ends (default OWNER_SILENCE_MS). A sign-in
+   *  finished on this host outlives a caller that slept meanwhile, up to its own deadline. */
+  ownerSilenceMs?: number
 }
 
 type Flow<TProvider extends string, TPrompt, TCode, TResult extends object> = {
@@ -300,7 +303,7 @@ export class CallerOwnedSignInFlows<
         flow.stop = 'silent'
         this.end(flow)
       }
-    }, OWNER_SILENCE_MS)
+    }, this.policy.ownerSilenceMs ?? OWNER_SILENCE_MS)
   }
 
   private end(flow: Flow<TProvider, TPrompt, TCode, TResult>): void {
