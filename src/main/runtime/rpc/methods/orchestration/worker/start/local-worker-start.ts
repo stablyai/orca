@@ -1,5 +1,4 @@
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
-import { refuseClaimedWorkerTerminal } from '../../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { probeWorkerOpenCodeModelLaunchSupport } from './launch/worker-opencode-model-preflight'
 import { resolveWorkerConfiguredAgentParams } from './launch/worker-configured-agent-preflight'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
@@ -39,7 +38,7 @@ import {
   closeFailedSetupOnceRetryReady,
   releaseRetriedWorkerTerminal
 } from '../release/retried-worker-terminal-release'
-import { requireWorkerAuthority, type WorkerEffect } from './placement/worker-placement-topology'
+import { requireWorkerAuthority } from './placement/worker-placement-topology'
 import { prepareLocalWorkerStart } from './launch/worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './readiness/worker-start-readiness-settlement'
 import { handOverWhenReady, wakeReusedSleptAgent } from './readiness/placed-worker-readiness'
@@ -49,13 +48,7 @@ import {
   recordWorkerStartOutcome
 } from '../../../../../orchestration/workers/launch/worker-start-card'
 import { rebindReusedStructuredWorker } from '../../structured-workers/orchestration-structured-worker-session'
-import {
-  placedWorkerParty,
-  prepareRetainedWorkerChat,
-  type WorkerFollowUp
-} from '../follow-up/worker-follow-up-placement'
-import { qualifyLiveWorkerFollowUp } from './admission/worker-start-authority'
-import { OrchestrationError } from '../../../../../orchestration/orchestration-error'
+import { placedWorkerParty, type WorkerFollowUp } from '../follow-up/worker-follow-up-placement'
 
 export async function startLocalWorker(args: {
   params: WorkerStartInput
@@ -146,47 +139,15 @@ export async function startLocalWorker(args: {
   if (followUp?.retainedChat) {
     await runtime.ensureStructuredAgentSessionHost()
   }
-  // No await from the tab and claim checks through the Dispatch insert.
-  const retained = followUp?.retainedChat
-    ? prepareRetainedWorkerChat(runtime, db, followUp.retainedChat, resolvedWorktree?.id)
-    : undefined
-  refuseClaimedWorkerTerminal(
-    db,
-    retained?.authority.handle ?? params.terminal,
-    runtime,
-    followUp?.of
-  )
-  const run = args.bindRun()
-  if (retained && followUp) {
-    qualifyLiveWorkerFollowUp(runtime, coordinator, params.from, callerSession, run.id, followUp)
-  }
-  const effects: WorkerEffect[] = []
-  if (resolvedWorktree) {
-    effects.push(
-      { kind: 'worktree', action: 'reused', id: resolvedWorktree.id },
-      { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
-    )
-  }
-  const started = createLocalWorkerStartDispatch(args, {
+  const { run, started, retained, effects } = createLocalWorkerStartDispatch(args, {
     params,
-    run,
     requestedWorktree,
     createsWorktree,
     mode,
     resolvedWorktreeId: resolvedWorktree?.id,
     repoSelector: creationTarget?.repoSelector,
     agent,
-    launchReceipt: launch.receipt,
-    retainedChat: retained
-      ? {
-          authority: retained.authority,
-          worktreeId: retained.worktreeId,
-          effects: [
-            ...effects,
-            { kind: 'terminal', role: 'agent', action: 'reused', id: retained.authority.handle }
-          ]
-        }
-      : undefined
+    launchReceipt: launch.receipt
   })
   releaseRetriedWorkerTerminal(runtime, db, params)
   const task = started.task
@@ -281,19 +242,7 @@ export async function startLocalWorker(args: {
     // A hand-over from the background wait gets a fresh delivery budget; one in time keeps the shared one.
     const bindTerminal = (): void => {
       if (retained) {
-        const custody = db.getWorkerTerminalResourceByOwner(started.dispatch.id)
-        if (
-          db.getWorkerDispatch(started.dispatch.id)?.state !== 'starting' ||
-          db.getDispatchContextById(started.dispatch.id)?.status !== 'pending' ||
-          custody?.id !== retained.authority.resourceId ||
-          custody.ownership_state !== 'owned'
-        ) {
-          throw new OrchestrationError(
-            'dispatch_inactive',
-            `Dispatch ${started.dispatch.id} no longer holds its starting worker.`
-          )
-        }
-        return
+        return retained.assertStarting(started.dispatch.id)
       }
       const terminalAuthority = authority ?? requireWorkerAuthority(runtime, handle)
       db.prepareStartingWorkerAuthority({

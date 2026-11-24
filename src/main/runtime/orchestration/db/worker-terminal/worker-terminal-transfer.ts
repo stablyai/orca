@@ -31,7 +31,7 @@ export function requireRetainedWorkerTerminal(
     ['requested', 'releasing', 'unknown'].includes(row.release_state)
   ) {
     throw new OrchestrationError(
-      'terminal_release_in_progress',
+      'terminal_busy',
       `Terminal ${selected.handle} has a release in progress. No effects were applied.`,
       { effectsApplied: false }
     )

@@ -168,6 +168,7 @@ export function prepareRetainedWorkerChat(
   authority: RetainedWorkerAuthority
   worktreeId: string
   publish: () => Promise<ReopenedWorker>
+  assertStarting: (dispatchId: string) => void
 } {
   const host = getStructuredAgentSessionHost()
   const identity = resolveStructuredWorkerIdentity(selected.handle, db)
@@ -200,6 +201,20 @@ export function prepareRetainedWorkerChat(
     publish: async () => {
       await publishChatTabInBackground(runtime, host, running.sessionId)
       return { handle: selected.handle, chat: true, userOpened: false }
+    },
+    assertStarting: (dispatchId) => {
+      const custody = db.getWorkerTerminalResourceByOwner(dispatchId)
+      if (
+        db.getWorkerDispatch(dispatchId)?.state !== 'starting' ||
+        db.getDispatchContextById(dispatchId)?.status !== 'pending' ||
+        custody?.id !== selected.resourceId ||
+        custody.ownership_state !== 'owned'
+      ) {
+        throw new OrchestrationError(
+          'dispatch_inactive',
+          `Dispatch ${dispatchId} no longer holds its starting worker.`
+        )
+      }
     }
   }
 }

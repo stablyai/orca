@@ -26,14 +26,22 @@ vi.mock(
   })
 )
 
-const worktree = {
-  id: WORKSPACE_X,
-  repoId: 'repo_1',
+const git = {
   path: '/work/tree-x',
   head: 'abc',
   branch: 'main',
   isBare: false,
-  isMainWorktree: false,
+  isMainWorktree: false
+}
+
+const worktree = {
+  ...git,
+  git,
+  id: WORKSPACE_X,
+  repoId: 'repo_1',
+  parentWorktreeId: null,
+  childWorktreeIds: [],
+  lineage: null,
   displayName: 'Worker workspace',
   comment: '',
   linkedIssue: null,
@@ -140,6 +148,9 @@ describe('follow-up custody for a closed retained worker chat', () => {
         observedCustody.push(custodyRows())
         return {
           ok: true,
+          replayed: false,
+          fence: 7,
+          cursor: { epoch: 'test', sequence: 1 },
           value: {
             clientMessageId: clientOperationId,
             queued: { messageId: clientOperationId, position: 1, state: 'waiting' }
@@ -205,7 +216,7 @@ describe('follow-up custody for a closed retained worker chat', () => {
 
   it.each([
     ['ambiguous custody', 'worker_identity_changed'],
-    ['release in progress', 'terminal_release_in_progress'],
+    ['release in progress', 'terminal_busy'],
     ['user reopened the chat', 'worker_identity_changed'],
     ['owner changed', 'worker_identity_changed']
   ] as const)('refuses %s before accepting a Task or exposing the chat', async (scenario, code) => {
@@ -238,10 +249,16 @@ describe('follow-up custody for a closed retained worker chat', () => {
       before = snapshot()
       return worktree
     })
-    expect(await send()).toMatchObject({
+    const response = await send()
+    expect(response).toMatchObject({
       ok: false,
       error: { code, data: { effectsApplied: false } }
     })
+    if (scenario === 'release in progress') {
+      expect(response).toMatchObject({
+        error: { message: expect.stringContaining('release in progress') }
+      })
+    }
     expect(snapshot()).toEqual(before)
     expect(observedCustody).toEqual([])
   })

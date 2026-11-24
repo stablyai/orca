@@ -279,27 +279,13 @@ export async function prepareWorkerStart(
         )
       }
     })
-    const spec = [
-      params.spec,
-      placement.delivery === 'started_fresh' ? placement.earlierWork : undefined
-    ]
+    const { delivery, worktreeId, reopen, retainedChat, earlierWork, ...launchPlacement } =
+      placement
+    const spec = [params.spec, delivery === 'started_fresh' ? earlierWork : undefined]
       .filter(Boolean)
       .join('\n\n')
-    params = {
-      ...params,
-      worktree: `id:${placement.worktreeId}`,
-      ...(placement.terminal ? { terminal: placement.terminal } : {}),
-      ...(placement.agent ? { agent: placement.agent } : {}),
-      ...(placement.model ? { model: placement.model } : {}),
-      ...(placement.effort ? { effort: placement.effort } : {}),
-      spec
-    }
-    followUp = {
-      ...followUp,
-      reopen: placement.reopen,
-      retainedChat: placement.retainedChat,
-      earlierWork: placement.earlierWork
-    }
+    params = { ...params, worktree: `id:${worktreeId}`, ...launchPlacement, spec }
+    followUp = { ...followUp, reopen, retainedChat, earlierWork }
     await assertWorkerStartTaskSpecWithinPromptBudget(spec)
   }
   return {

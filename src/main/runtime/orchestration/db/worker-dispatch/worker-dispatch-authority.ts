@@ -1,11 +1,6 @@
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 import { dispatchAssigneeOrcaSessionId } from '../../addressing/session-lineage/dispatch-assignee-orca-session-id'
-import {
-  beginLifecycleWriteTransaction,
-  commitLifecycleWriteTransaction,
-  rollbackLifecycleWriteTransaction
-} from '../lifecycle-transition'
 
 export function prepareStartingWorkerAuthority(
   this: OrchestrationDb,
@@ -26,7 +21,11 @@ export function prepareStartingWorkerAuthority(
     sleptProcessIncarnation?: string | null
   }
 ): void {
-  const transaction = beginLifecycleWriteTransaction(this.db, 'starting_worker_authority')
+  // A retained follow-up already holds the write transaction that accepts its Dispatch.
+  const ownsTransaction = !this.db.isTransaction
+  if (ownsTransaction) {
+    this.db.exec('BEGIN IMMEDIATE')
+  }
   try {
     // Read under the transaction so guarded updates cannot race another state change.
     const dispatch = this.getDispatchContextById(params.dispatchId)
@@ -178,9 +177,13 @@ export function prepareStartingWorkerAuthority(
         }
       }
     }
-    commitLifecycleWriteTransaction(this.db, transaction)
+    if (ownsTransaction) {
+      this.db.exec('COMMIT')
+    }
   } catch (error) {
-    rollbackLifecycleWriteTransaction(this.db, transaction)
+    if (ownsTransaction) {
+      this.db.exec('ROLLBACK')
+    }
     throw error
   }
 }

@@ -6,15 +6,18 @@ import {
 } from './launch/worker-launch-preferences'
 import { resolveDispatchAssigneeParty } from '../../../../../orchestration/addressing/orchestration-party'
 import type { WorkerStartInput } from './worker-start-input'
-import type { RunRow } from '../../../../../orchestration/db/orchestration-records'
-import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { startLocalWorker } from './local-worker-start'
 import { resolveDispatchCreator } from '../../runs/dispatch-creator'
+import { refuseClaimedWorkerTerminal } from '../../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
+import { qualifyLiveWorkerFollowUp } from './admission/worker-start-authority'
+import { prepareRetainedWorkerChat } from '../follow-up/worker-follow-up-placement'
+import type { WorkerEffect } from './placement/worker-placement-topology'
 
 export function createLocalWorkerStartDispatch(
   {
     runtime,
     db,
+    bindRun,
     taskDeps,
     coordinator,
     callerSession,
@@ -26,18 +29,15 @@ export function createLocalWorkerStartDispatch(
   }: Parameters<typeof startLocalWorker>[0],
   {
     params,
-    run,
     requestedWorktree,
     createsWorktree,
     mode,
     resolvedWorktreeId,
     repoSelector,
     agent,
-    launchReceipt,
-    retainedChat
+    launchReceipt
   }: {
     params: WorkerStartInput
-    run: RunRow
     requestedWorktree: string
     createsWorktree: boolean
     mode: WorkerStartModeReceipt
@@ -45,9 +45,28 @@ export function createLocalWorkerStartDispatch(
     repoSelector: string | undefined
     agent: TuiAgent | undefined
     launchReceipt: OrchestrationWorkerLaunchReceipt
-    retainedChat: Parameters<OrchestrationDb['createStartingWorkerDispatch']>[0]['retainedChat']
   }
 ) {
+  // No await from the native tab and claim checks through the Dispatch insert.
+  const retained = followUp?.retainedChat
+    ? prepareRetainedWorkerChat(runtime, db, followUp.retainedChat, resolvedWorktreeId)
+    : undefined
+  refuseClaimedWorkerTerminal(
+    db,
+    retained?.authority.handle ?? params.terminal,
+    runtime,
+    followUp?.of
+  )
+  const run = bindRun()
+  if (retained && followUp) {
+    qualifyLiveWorkerFollowUp(runtime, coordinator, params.from, callerSession, run.id, followUp)
+  }
+  const effects: WorkerEffect[] = resolvedWorktreeId
+    ? [
+        { kind: 'worktree', action: 'reused', id: resolvedWorktreeId },
+        { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
+      ]
+    : []
   const startOptions = {
     worktree: requestedWorktree,
     mode,
@@ -73,7 +92,7 @@ export function createLocalWorkerStartDispatch(
         : 'orchestration_default'
       : 'existing_worktree'
   }
-  return db.createStartingWorkerDispatch({
+  const started = db.createStartingWorkerDispatch({
     creator: resolveDispatchCreator(runtime, params.from, callerSession),
     maxDepth: runtime.getNestedWorkerMaxDepth(),
     requiredCreatorDispatchId: helperCreator?.id,
@@ -97,11 +116,21 @@ export function createLocalWorkerStartDispatch(
     runtimeEpoch: runtime.getRuntimeId(),
     mutationReceipt: orchestrationMutation,
     followUpOf: followUp?.of,
-    retainedChat,
+    retainedChat: retained
+      ? {
+          authority: retained.authority,
+          worktreeId: retained.worktreeId,
+          effects: [
+            ...effects,
+            { kind: 'terminal', role: 'agent', action: 'reused', id: retained.authority.handle }
+          ]
+        }
+      : undefined,
     acceptedBy: followUp?.acceptedBy,
     takesMailOf: followUp?.takesMailOf,
     ...(params.origin ? { originRef: params.origin } : {}),
     ...(params.forQuestion ? { forMessageId: params.forQuestion } : {}),
     ...(chatLineage ? { chatLineage } : {})
   })
+  return { run, started, retained, effects }
 }
