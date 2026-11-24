@@ -5,7 +5,7 @@ import {
 /** A message to a worker that finished becomes its next Task: worker-start run for the sender, on that same worker.
  *  Open workers take it in place, closed ones reopen in their saved conversation, and agents that keep none start fresh. */
 
-import { lineageAncestors } from '../../../../../bots/bot-item-dispatch-facts'
+import { dispatchItemUid, lineageAncestors } from '../../../../../bots/bot-item-dispatch-facts'
 import { resolveItem } from '../../bots-items-write-support'
 import { BOT_ITEM_ORIGIN_PREFIX } from '../../bots-items-worker-origin'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
@@ -98,17 +98,19 @@ export function assertFollowUpForItem(forItem: string | undefined, followsUp: bo
 async function assertSameItem(
   ctx: FollowUpContext,
   db: OrchestrationDb,
-  latest: DispatchContextRow,
+  plan: Extract<WorkerFollowUpPlan, { kind: 'start' }>,
   forItem: string
 ): Promise<void> {
   const store = ctx.runtime.botItems.store()
   const item = await resolveItem(store, forItem)
-  // Its start settles it without a lookup; else two items linking its steps are enough to tell.
+  // The worker's steps: the addressed one's and its newest one's, which a handed-over terminal can
+  // part. Their starts settle it without a lookup; else two items linking them are enough to tell.
+  const steps = [
+    ...new Set([...lineageAncestors(db, plan.addressed), ...lineageAncestors(db, plan.latest.id)])
+  ]
   const elsewhere =
-    (latest.origin_ref !== null && latest.origin_ref !== `${BOT_ITEM_ORIGIN_PREFIX}${item.uid}`) ||
-    (await store.itemsLinking('dispatch', lineageAncestors(db, latest.id), 2)).some(
-      (uid) => uid !== item.uid
-    )
+    steps.some((id) => (dispatchItemUid(db, id) ?? item.uid) !== item.uid) ||
+    (await store.itemsLinking('dispatch', steps, 2)).some((uid) => uid !== item.uid)
   if (elsewhere) {
     throw new OrchestrationError(
       'invalid_argument',
@@ -132,7 +134,7 @@ export async function startWorkerFollowUp(args: {
   const { ctx, db } = args
   const { latest, resource } = args.plan
   if (args.forItem !== undefined) {
-    await assertSameItem(ctx, db, latest, args.forItem)
+    await assertSameItem(ctx, db, args.plan, args.forItem)
   }
   const { subject, body } = args.message
   let delivery: WorkerFollowUpDelivery = 'follow_up'

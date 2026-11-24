@@ -18,6 +18,10 @@ export async function readNewestBotActingTurn(
    *  it were the whole chat: enough for what that turn alone can say, such as where its work started. */
   widen = true
 ): Promise<BotActingTurn> {
+  if (!widen && before !== undefined) {
+    // Finding a turn before another may need older turns, which an unwidened read never reads.
+    throw new Error('an unwidened acting-turn read takes no earlier turn')
+  }
   for (let newestTurns = widen ? 8 : 1; ; newestTurns *= 4) {
     const { snapshot, complete } = await reads.operationWindow({
       latestTurns: newestTurns,

@@ -102,7 +102,10 @@ async function originUrl(context: RpcContext, sessionId: string): Promise<string
     )
     return turn.originPlace?.url ?? null
   } catch (error) {
-    console.warn('[bots] could not read where an item started', error)
+    // A newest turn only the whole conversation's sends could place: no origin, as designed.
+    if (!(error instanceof Error && error.name === 'JournalWindowNotIndexed')) {
+      console.warn('[bots] could not read where an item started', error)
+    }
     return null
   }
 }

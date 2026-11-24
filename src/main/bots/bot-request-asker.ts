@@ -1,5 +1,6 @@
 // Who a bot's running turn acts for: whom its conversation acts for (recorded when it started), and any
 // person the cloud stamped on a message the turn took, or another bot's request. Never the model's say-so.
+import type { AutomationRunMessage } from '../../shared/automations/automation-run-message'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
@@ -16,7 +17,7 @@ import {
   type AutomationTriggeredBy,
   type BotRequestAsker
 } from '../../shared/bots/bot-acts-for'
-import { requestsOriginPlace } from './bot-request-origin-place'
+import { originOf, requestsOriginPlace } from './bot-request-origin-place'
 
 /** The conversation a request came in, as Orca Cloud names it. */
 export type BotRequestConversation = { source: ConnectorSource; externalId: string }
@@ -29,6 +30,9 @@ export type BotWakingPlace = {
   url?: string
   /** The message itself as an action ref, from the cloud; a reaction goes on it. */
   messageRef?: string
+  /** An automation's event whose run posts its results back to this thread: only then is it where
+   *  the turn's work started, since another setting means the owner wants them elsewhere. */
+  resultsHere?: true
 }
 
 /** What the running turn acts for. */
@@ -64,8 +68,9 @@ export type BotActingTurnLookups = {
   botRequestActsFor: (messageId: string) => BotRequestActsFor | null
   /** Whom the conversation acts for, as Orca recorded it when the conversation started. */
   conversationActsFor: readonly BotRequestAsker[]
-  /** The thread, issue or pull request an automation run's event happened on. */
-  automationPlace?: () => BotWakingPlace | null
+  /** The thread, issue or pull request an automation run's event happened on: the run the prompt
+   *  records, when it records one. */
+  automationPlace?: (run?: AutomationRunMessage) => BotWakingPlace | null
   /** The workspace of the conversation this session answers, from its link. */
   conversationWorkspaceId: string | null
 }
@@ -77,12 +82,6 @@ export type BotRequestActsFor = {
   askedBy?: BotRequestAsker[]
   origin?: AutomationTriggeredBy
   originPlace?: BotWakingPlace
-}
-
-/** Every message that opened the turn woke at the same place, or the turn names none. */
-const originOf = (places: (BotWakingPlace | undefined)[]): { originPlace?: BotWakingPlace } => {
-  const originPlace = requestsOriginPlace(places, false)
-  return originPlace ? { originPlace } : {}
 }
 
 const MAX_REQUEST_TEXT = 500
@@ -142,7 +141,9 @@ function readItem(body: AgentJournalItemBody, lookups: BotActingTurnLookups): It
   if (body.asker) {
     return { kind: 'asker', ...stampedAsker(body.asker, lookups.conversationWorkspaceId) }
   }
-  const wokenAt = body.memorySource ? (lookups.automationPlace?.() ?? null) : undefined
+  const wokenAt = body.memorySource
+    ? (lookups.automationPlace?.(body.automationRun) ?? null)
+    : undefined
   // A person's connector message whose asker didn't parse is someone Orca can't name, never the owner;
   // an event no one asked through acts for its conversation, like an automation's prompt.
   if (body.origin === 'connector' && !body.memorySource) {

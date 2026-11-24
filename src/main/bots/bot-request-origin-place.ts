@@ -24,3 +24,14 @@ export function requestsOriginPlace(
 }
 
 const page = (url: string | undefined) => url?.split('#')[0]
+
+/** Every message that opened the turn woke at the same place, or the turn names none. */
+export const originOf = (
+  places: (BotWakingPlace | undefined)[]
+): { originPlace?: BotWakingPlace } => {
+  const originPlace = requestsOriginPlace(
+    places.map((place) => (place?.resultsHere ? place : undefined)),
+    false
+  )
+  return originPlace ? { originPlace } : {}
+}
