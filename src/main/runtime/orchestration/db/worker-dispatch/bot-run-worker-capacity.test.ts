@@ -114,7 +114,7 @@ it('keeps workers in the same Run budget while a task reset owes their paired se
     name: 'Server',
     peerFingerprint: 'fp_server'
   })
-  for (let index = 1; index <= 8; index++) {
+  for (let index = 1; index <= 2; index++) {
     const key = String(index).padStart(12, '0')
     const taskId = `task_${key}`
     reserveRemotePlacement(db, {
@@ -124,7 +124,7 @@ it('keeps workers in the same Run budget while a task reset owes their paired se
       create: { spec: 'Paired work' },
       enforceBotRunCapacity: true
     })
-    if (index < 8) {
+    if (index === 1) {
       recordRemoteStart(db, {
         conversationId: link.conversation_id,
         taskId,
@@ -145,7 +145,13 @@ it('keeps workers in the same Run budget while a task reset owes their paired se
     })
   db.resetTasks()
   expect(db.listTasks({ runId })).toHaveLength(0)
-  expect(getRemoteRunLink(db, link.conversation_id)?.state).toBe('cancel_owed')
+  expect(getRemoteRunLink(db, link.conversation_id)).toMatchObject({
+    state: 'cancel_owed',
+    cancel_owed_workers: 2
+  })
+  for (let index = 0; index < 6; index++) {
+    startLocal()
+  }
   expect(() => startLocal()).toThrow('This Run already has 8 active workers.')
 
   closeRemoteRunLink(db, link.conversation_id, 'Cancellation confirmed')
