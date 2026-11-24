@@ -90,6 +90,7 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     windowsInstallScript: 'https://mimo.xiaomi.com/install.ps1'
   },
   { agent: 'gemini', loginCommand: ['gemini'], slashCommand: '/auth' },
+  { agent: 'muse', loginCommand: ['muse', 'login'] },
   {
     agent: 'droid',
     loginCommand: ['droid'],
