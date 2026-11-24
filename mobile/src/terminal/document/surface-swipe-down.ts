@@ -1,5 +1,5 @@
 import type { TerminalDocumentScope } from './document-scope'
-import { notify } from './host-notify'
+import { notify } from './host-bridge/host-notify'
 
 // A release this far below its start, mostly vertical, reads as "swipe down" (the host may dismiss the keyboard).
 const SWIPE_DOWN_MIN_PX = 56

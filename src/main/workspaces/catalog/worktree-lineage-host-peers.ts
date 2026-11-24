@@ -1,15 +1,15 @@
 import type { Worktree } from '../../../shared/worktree/types'
-import type { Repo } from '../../../shared/repo-types'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../shared/worktree/id'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import {
   getConnectedWorktreeLineageIds,
   projectResolvedWorktreeLineage
-} from '../../../shared/resolved-worktree-lineage'
+} from '../../../shared/worktree/lineage/resolved-worktree-lineage'
 import { readAllWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
-import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
+import { mergeWorktree } from '../../ipc/worktrees/metadata/worktree-metadata-merge'
 import { resolveRepoOwnershipEvidence } from '../../ipc/worktrees/listing/worktree-host-ownership'
 import {
   getFolderWorkspaceInstanceIdentity,
@@ -17,14 +17,28 @@ import {
   isFolderWorkspaceIdForRepo,
   mergeFolderWorkspace
 } from '../../ipc/worktrees/folder-workspace-model'
-import type { RuntimeStore } from '../../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
+import { withInlineFolderLineage } from './inline-folder-lineage'
 
 type HostPeerStore = Pick<
   RuntimeStore,
-  'getRepos' | 'getAllWorktreeMeta' | 'getAllWorktreeMetaForHost' | 'getAllWorktreeLineage'
+  | 'getRepos'
+  | 'getAllWorktreeMeta'
+  | 'getAllWorktreeMetaForHost'
+  | 'getAllWorktreeLineage'
+  | 'getAllWorkspaceLineage'
 >
 
+/** A listing's rows with their worktree lineage projected and their own folder parents attached. */
 export function projectWorktreeLineageWithHostPeers<T extends Worktree>(
+  store: HostPeerStore,
+  repo: Repo,
+  rows: readonly T[]
+) {
+  return withInlineFolderLineage(store, projectWorktreeLineage(store, repo, rows))
+}
+
+function projectWorktreeLineage<T extends Worktree>(
   store: HostPeerStore,
   repo: Repo,
   rows: readonly T[]

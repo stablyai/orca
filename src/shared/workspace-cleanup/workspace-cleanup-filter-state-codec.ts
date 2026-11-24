@@ -1,4 +1,4 @@
-import { normalizeExecutionHostId, type ExecutionHostId } from '../execution-host'
+import { normalizeExecutionHostId, type ExecutionHostId } from '../execution-host/execution-host'
 import type { HostedReviewProvider } from '../source-control/hosted-review/hosted-review-contracts'
 import {
   WORKSPACE_CLEANUP_AGENT_STATE_VALUES,

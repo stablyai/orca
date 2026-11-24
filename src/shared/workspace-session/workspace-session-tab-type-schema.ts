@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 export const tabContentTypeSchema = z.enum([
   'terminal',
@@ -6,9 +6,11 @@ export const tabContentTypeSchema = z.enum([
   'diff',
   'conflict-review',
   'check-details',
+  'git-graph',
   'agent-session',
   'browser',
-  'simulator'
+  'simulator',
+  'room'
 ])
 
 export const workspaceVisibleTabTypeSchema = z.enum([

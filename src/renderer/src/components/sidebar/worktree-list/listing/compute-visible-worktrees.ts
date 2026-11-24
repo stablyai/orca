@@ -1,11 +1,19 @@
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { HiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { ExecutionHostId, ExecutionHostScope } from '../../../../../../shared/execution-host'
-import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
-import { selectVisibleSidebarWorktrees } from '../../../../../../shared/sidebar-list/visible-worktrees'
+import type {
+  ExecutionHostId,
+  ExecutionHostScope
+} from '../../../../../../shared/execution-host/execution-host'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import {
+  selectVisibleSidebarWorktrees,
+  withoutBotListedWorktrees
+} from '../../../../../../shared/sidebar-list/selection/visible-worktrees'
+import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import { buildDesktopWorkspaceRowFactReader } from './desktop-workspace-row-facts'
 import { sidebarWorkspaceRowFilters } from '../controls/sidebar-filter-actions'
 import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
@@ -28,10 +36,13 @@ export type VisibleWorktreeOptions = {
   pairedDeviceIdsByEnvironment: ReadonlyMap<string, string>
   alwaysShowDefaultBranchWorkspace?: boolean
   repoMap: Map<string, Repo>
+  hiddenProjects: HiddenProjects
   workspaceHostScope: ExecutionHostScope
   visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
   defaultHostId: ExecutionHostId
   worktreeLineageById: Record<string, WorktreeLineage>
+  /** selectSidebarLineageParentIdentities: present only while a store holds a cross-store parent. */
+  lineageParentIdentities?: SidebarLineageParentIdentities
   injectLineageAncestors?: boolean
   preserveLineageParentOrder?: boolean
   forcedVisibleWorktreeIds?: readonly string[]
@@ -39,6 +50,8 @@ export type VisibleWorktreeOptions = {
   sortedByHostIdentity?: boolean
   /** Exempt from the sleeping sweep only; unlike forcedVisibleWorktreeIds, every other filter still applies. */
   sleepingSweepExemptWorktreeIds?: ReadonlySet<string>
+  /** Host identities listed under their bot instead of their project; not a filter, so muting and filter counts ignore it. */
+  botListedWorktreeIdentities?: ReadonlySet<string>
 }
 
 export function computeVisibleWorktrees(
@@ -51,12 +64,16 @@ export function computeVisibleWorktrees(
     ? getWorktreeHostIdentity
     : (worktree: Worktree) => worktree.id
   return selectVisibleSidebarWorktrees({
-    rows: getIndexedAllWorktrees(worktreesByRepo),
+    rows: withoutBotListedWorktrees(
+      getIndexedAllWorktrees(worktreesByRepo),
+      opts.botListedWorktreeIdentities
+    ),
     ancestorByIdentity: getLineageAncestorIndex(worktreesByRepo),
     rankOf: (worktree) => rankByKey.get(keyOf(worktree)),
     filters: sidebarWorkspaceRowFilters(opts),
     facts: buildDesktopWorkspaceRowFactReader(opts),
     worktreeLineageById: opts.worktreeLineageById,
+    lineageParentIdentities: opts.lineageParentIdentities,
     filterRepoIds: opts.filterRepoIds,
     injectLineageAncestors: opts.injectLineageAncestors,
     preserveLineageParentOrder: opts.preserveLineageParentOrder,

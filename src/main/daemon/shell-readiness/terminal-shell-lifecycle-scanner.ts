@@ -58,6 +58,10 @@ export class TerminalShellLifecycleScanner {
     return this.generationState
   }
 
+  get focusReportingArming(): number | null {
+    return this.inputModes.focusReportingArming
+  }
+
   get isAlternateScreenActive(): boolean {
     return this.altActive
   }

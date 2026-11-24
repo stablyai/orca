@@ -2,8 +2,8 @@ import { MessagesSquare, SquareTerminal } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { ContextMenuItem } from '@/components/ui/context-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { useTranslate } from '@/i18n/use-translate'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ResumeInNewCliTooltipText } from '../session-actions/ai-vault-session-cli-fork-copy'
 
 /** History opens a new tab; active-tab controls switch surfaces. */
@@ -24,6 +24,7 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
   onResumeInNewCli?: (event: Event) => void
   cliPending?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
   return (
     <>
@@ -35,14 +36,11 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
         >
           <MessagesSquare className="size-3.5" />
           {action === 'resume'
-            ? translate(
+            ? t(
                 'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
                 'Resume in New Chat'
               )
-            : translate(
-                'components.tab.bar.SortableTabContextMenu.switchToChatView',
-                'Continue in Chat UI'
-              )}
+            : t('components.tab.bar.SortableTabContextMenu.switchToChatView', 'Continue in chat')}
         </Item>
       ) : null}
       {onResumeInNewCli ? (
@@ -55,13 +53,13 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
                 <SquareTerminal className="size-3.5" />
               )}
               {action === 'resume'
-                ? translate(
+                ? t(
                     'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
                     'Resume in New Terminal'
                   )
-                : translate(
+                : t(
                     'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                    'Continue with Terminal Agent'
+                    'Continue in terminal'
                   )}
             </Item>
           </TooltipTrigger>

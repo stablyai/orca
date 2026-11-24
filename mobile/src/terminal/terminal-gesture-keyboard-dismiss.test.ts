@@ -5,11 +5,18 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   TerminalLiveInputFocusTarget,
   TerminalLiveInputFocusTimerRef
-} from './terminal-live-input'
-import { useTerminalLiveInputFocus } from './use-terminal-live-input-focus'
+} from './live-input/terminal-live-input'
+import { useTerminalLiveInputFocus } from './live-input/use-terminal-live-input-focus'
+
+const keyboard = vi.hoisted(() => ({ height: 0 }))
+
+vi.mock('../platform/keyboard/keyboard-occlusion', () => ({
+  currentSoftKeyboardHeight: () => keyboard.height
+}))
 
 describe('terminal gesture keyboard dismiss', () => {
   function mount(keyboardHeight: number, dismissKeyboard: () => void) {
+    keyboard.height = keyboardHeight
     const activeHandleRef: RefObject<string | null> = { current: 'terminal-a' }
     const timerRef: TerminalLiveInputFocusTimerRef = { current: null }
     let focused = true
@@ -26,13 +33,12 @@ describe('terminal gesture keyboard dismiss', () => {
     let handlers: ReturnType<typeof useTerminalLiveInputFocus> | null = null
     let renderer: ReactTestRenderer | null = null
 
-    function Harness(props: { readonly keyboardHeight: number }): null {
+    function Harness(): null {
       handlers = useTerminalLiveInputFocus({
         activeHandleRef,
         canSend: true,
         dismissKeyboard,
         inputRef,
-        keyboardHeight: props.keyboardHeight,
         lifecycleIdentity: null,
         lifecycleKey: 'host-a:connected',
         reopenFocusedInputWhenKeyboardHidden: true,
@@ -42,7 +48,7 @@ describe('terminal gesture keyboard dismiss', () => {
     }
 
     act(() => {
-      renderer = create(createElement(Harness, { keyboardHeight }))
+      renderer = create(createElement(Harness))
     })
     if (!handlers || !renderer) {
       throw new Error('gesture dismiss harness did not render')
@@ -60,7 +66,7 @@ describe('terminal gesture keyboard dismiss', () => {
         act(() => renderer?.unmount())
       },
       render: (nextHeight: number) => {
-        act(() => renderer?.update(createElement(Harness, { keyboardHeight: nextHeight })))
+        keyboard.height = nextHeight
       }
     }
   }

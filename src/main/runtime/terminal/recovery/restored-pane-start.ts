@@ -1,7 +1,7 @@
 // Share one main-owned restored-pane start across CLI, mobile and orchestration triggers; resume only from this workspace's stored terminal/agent.
 
 import { isPtyIdMintedForAnotherWorkspace } from './foreign-pane-bindings'
-import type { RuntimeMobileSessionCreateTerminalResult as CreatedTerminal } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionCreateTerminalResult as CreatedTerminal } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 export type StartedPty = Pick<CreatedTerminal, 'startupCwdFallback'> & { id: string }

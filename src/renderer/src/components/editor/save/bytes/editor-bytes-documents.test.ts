@@ -42,14 +42,16 @@ vi.mock('@/store/index', () => ({
   }
 }))
 const writeRuntimeFileBytes = vi.fn()
-vi.mock('@/runtime/runtime-file-bytes-write', () => ({
+vi.mock('@/runtime/files/mutations/runtime-file-bytes-write', () => ({
   writeRuntimeFileBytes: (...args: unknown[]) => writeRuntimeFileBytes(...args)
 }))
 
 import {
   editorBytesDocument,
   editorBytesEdits,
+  holdEditorBytesEdits,
   loadEditorBytes,
+  releaseEditorBytesEdits,
   saveEditorBytesDraft,
   setEditorBytesDraft
 } from './editor-bytes-documents'
@@ -105,6 +107,26 @@ describe('binary custom editor saves', () => {
     expect(state.openFiles[0].isDirty).toBe(true)
     expect(state.openFiles[0].externalMutation).toBe('changed')
     expect(editorBytesDocument('book')).toBe(edited)
+  })
+})
+
+describe('binary editor views holding unserialized edits', () => {
+  it('keeps the tab dirty after a write while a view still holds edits newer than it', async () => {
+    const view = Symbol('view')
+    setEditorBytesDraft('book', edited)
+    holdEditorBytesEdits('book', view)
+    writeRuntimeFileBytes.mockResolvedValue({ ok: true })
+    await expect(save()).resolves.toBe('written')
+    expect(state.openFiles[0].isDirty).toBe(true)
+    releaseEditorBytesEdits('book', view)
+  })
+
+  it('does not report a save while the only unsaved edits are still unserialized', async () => {
+    const view = Symbol('view')
+    holdEditorBytesEdits('book', view)
+    await expect(save()).resolves.toBe('failed')
+    expect(writeRuntimeFileBytes).not.toHaveBeenCalled()
+    releaseEditorBytesEdits('book', view)
   })
 })
 

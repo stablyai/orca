@@ -1,13 +1,14 @@
 import { createHmac, randomUUID } from 'node:crypto'
-import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { renameSync, rmSync, writeFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import {
   RuntimeHostDescriptorSchema,
   type RuntimeHostDescriptor
 } from '../../../../shared/remote-runtime/host-status/runtime-host-descriptor'
-import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/profile-state-access-identity'
+import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/access/profile-state-access-identity'
 import { withFileTransactionLock } from '../../../filesystem/file-transaction-lock'
-import type { RuntimeSourceStamp } from '../../../../shared/runtime-source-env'
+import type { RuntimeSourceStamp } from '../../../../shared/remote-runtime/host-catalog/runtime-source-env'
 
 export const HOST_INSTALLATION_FILENAME = 'host-installation.json'
 const MAX_INSTALLATION_FILE_BYTES = 4 * 1024
@@ -22,10 +23,10 @@ function errorCode(error: unknown): unknown {
   return error instanceof Error && 'code' in error ? error.code : undefined
 }
 
-function readInstallation(filePath: string): InstallationRead {
+async function readInstallation(filePath: string): Promise<InstallationRead> {
   let raw: string
   try {
-    raw = readFileSync(filePath, 'utf8')
+    raw = await readFile(filePath, 'utf8')
   } catch (error) {
     if (errorCode(error) === 'ENOENT') {
       return { kind: 'missing' }
@@ -46,15 +47,27 @@ function readInstallation(filePath: string): InstallationRead {
   }
 }
 
+/** The profile's existing identity, never created or repaired; undefined when absent or unreadable. */
+export async function readExistingHostInstallationId(
+  userDataPath: string
+): Promise<string | undefined> {
+  try {
+    const current = await readInstallation(join(userDataPath, HOST_INSTALLATION_FILENAME))
+    return current.kind === 'valid' ? current.installationId : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export async function loadOrCreateHostInstallationId(userDataPath: string): Promise<string> {
   const filePath = join(userDataPath, HOST_INSTALLATION_FILENAME)
-  const current = readInstallation(filePath)
+  const current = await readInstallation(filePath)
   if (current.kind === 'valid') {
     return current.installationId
   }
   // Decide only after any racing creator/repairer publishes.
   return await withFileTransactionLock(filePath, async () => {
-    const locked = readInstallation(filePath)
+    const locked = await readInstallation(filePath)
     if (locked.kind === 'valid') {
       return locked.installationId
     }
@@ -117,6 +130,36 @@ export function publishHostDescriptor(
 
 export function getPublishedHostDescriptor(runtimeId: string): RuntimeHostDescriptor | null {
   return publishedByRuntimeId.get(runtimeId) ?? null
+}
+
+/** The installationId a caller's parent ref names; desktops without a paired transport publish no
+ * descriptor, so the file is read, never created. */
+export async function readCallerStoreInstallationId(
+  runtimeId: string,
+  userDataPath: string
+): Promise<string | undefined> {
+  return (
+    getPublishedHostDescriptor(runtimeId)?.installationId ??
+    (await readExistingHostInstallationId(userDataPath))
+  )
+}
+
+/** This store's lineage identity: the published descriptor's installationId, else the profile's own file. */
+export async function readStoreInstallationId(
+  runtimeId: string | null,
+  userDataPath: string
+): Promise<string | undefined> {
+  const published = runtimeId ? getPublishedHostDescriptor(runtimeId)?.installationId : undefined
+  if (published) {
+    return published
+  }
+  try {
+    return await loadOrCreateHostInstallationId(userDataPath)
+  } catch (error) {
+    // Unknown identity leaves every cross-store child standalone.
+    console.warn('[runtime] Store installation id unavailable:', error)
+    return undefined
+  }
 }
 
 /** Null until this runtime publishes a descriptor; unstamped processes keep the unfenced CLI path. */

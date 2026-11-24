@@ -1,0 +1,38 @@
+import {
+  leadingGeminiGlyphStatus,
+  type AgentStatus
+} from '../../../../../shared/agent-status/title/agent-title-core'
+import { isOpenCodeNativeTitle } from '../../../../../shared/agent-status/title/providers/opencode-terminal-title'
+import { detectAgentStatusFromTitle } from '../../../../../shared/agent-status/title/agent-title-status'
+import { getAgentLabel } from '../../../../../shared/agent-status/title/agent-title-identity'
+import { getPiCompatibleTitleSeparatorStatus } from '../../../../../shared/agent-status/title/providers/pi-compatible-synthetic-title'
+
+const EXPLICIT_IDLE_SEND_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
+const CLAUDE_IDLE_PREFIX = '\u2733'
+
+export function detectAgentSendTitleStatus(title: string | null | undefined): AgentStatus | null {
+  if (!title || getAgentLabel(title) === null) {
+    return null
+  }
+
+  const status = detectAgentStatusFromTitle(title)
+  if (status !== 'idle') {
+    return status
+  }
+
+  // Immediate selected-target sends need readiness; a bare agent name proves only identity.
+  return isExplicitIdleSendTitle(title) ? status : null
+}
+
+function isExplicitIdleSendTitle(title: string): boolean {
+  return (
+    EXPLICIT_IDLE_SEND_TITLE_RE.test(title) ||
+    // Expose hookless OpenCode by title, but runtime still requires launch/process evidence before writing.
+    isOpenCodeNativeTitle(title) ||
+    title.startsWith(CLAUDE_IDLE_PREFIX) ||
+    title.startsWith('* ') ||
+    leadingGeminiGlyphStatus(title) === 'idle' ||
+    // Owned panes show `Pi - cwd`/`OMP > cwd` (rebranded from `π`), so read the separator, not the raw brand.
+    getPiCompatibleTitleSeparatorStatus(title) === 'idle'
+  )
+}

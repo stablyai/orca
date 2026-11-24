@@ -1,12 +1,12 @@
-import type { getIssueByUuidForAgent as getLinearIssueByUuidForAgent } from '../../../linear/linear-issue-lookups'
+import type { getIssueByUuidForAgent as getLinearIssueByUuidForAgent } from '../../../linear/issues/linear-issue-lookups'
 import type { LinearIssueTaskUpdateRequest } from '../../../../shared/linear/agent-access'
 import type {
   LinearIssueTaskUpdateResult,
   LinearIssueSummary
 } from '../../../../shared/linear/agent-result-types'
-import { getTeamLabelsOrThrow as getLinearTeamLabelsOrThrow } from '../../../linear/teams'
+import { getTeamLabelsOrThrow as getLinearTeamLabelsOrThrow } from '../../../linear/teams/linear-team-queries'
 import { sameStringSet } from './linear-label-id-equality'
-import { linearError } from '../../../linear/issue-context/errors'
+import { linearError } from '../../../linear/issues/context/linear-access-errors'
 import { RuntimeLinearProjectWriteCommands } from './runtime-linear-project-write-commands'
 
 export class RuntimeLinearLabelWriteCommands extends RuntimeLinearProjectWriteCommands {

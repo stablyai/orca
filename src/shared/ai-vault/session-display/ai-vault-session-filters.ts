@@ -2,8 +2,8 @@
 import {
   normalizeRuntimePathForComparison,
   normalizeRuntimePathSeparators
-} from '../../cross-platform-path'
-import { isClipboardTextByteLengthOverLimit } from '../../clipboard-text'
+} from '../../file-access/cross-platform-path'
+import { isClipboardTextByteLengthOverLimit } from '../../clipboard/clipboard-text'
 import { splitAiVaultSearchQuery } from '../search/ai-vault-search-query-operators'
 import {
   aiVaultSessionInScope,
@@ -20,7 +20,7 @@ import {
   isAiVaultSessionRecoverableEmpty,
   isAiVaultSessionResumableContent
 } from '../contracts/ai-vault-types'
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import { sessionPreviewSearchText } from './ai-vault-session-display'
 
 // Move the plain descriptor type without importing renderer project-attribution runtime.
@@ -208,19 +208,7 @@ function matchesQuery(
   filters: Pick<AiVaultSessionFilterState, 'sessionProjectById' | 'projectLabelByKey'>
 ): boolean {
   if (parsed.terms.length > 0) {
-    const searchable = [
-      session.title,
-      session.sessionId,
-      session.agent,
-      session.branch,
-      session.model,
-      session.cwd,
-      session.filePath,
-      sessionPreviewSearchText(session)
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
+    const searchable = sessionSearchableText(session)
     if (parsed.terms.some((term) => !searchable.includes(term))) {
       return false
     }
@@ -237,6 +225,31 @@ function matchesQuery(
     },
     parsed
   )
+}
+
+// Session objects are replaced, never mutated, so the folded text can live as long as the object.
+// Building it costs a few KB per session; rebuilding it per keystroke over thousands of sessions janks typing.
+const searchableTextBySession = new WeakMap<AiVaultSession, string>()
+
+function sessionSearchableText(session: AiVaultSession): string {
+  let searchable = searchableTextBySession.get(session)
+  if (searchable === undefined) {
+    searchable = [
+      session.title,
+      session.sessionId,
+      session.agent,
+      session.branch,
+      session.model,
+      session.cwd,
+      session.filePath,
+      sessionPreviewSearchText(session)
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+    searchableTextBySession.set(session, searchable)
+  }
+  return searchable
 }
 
 function sessionSortTime(session: AiVaultSession, sort: AiVaultSort): number {

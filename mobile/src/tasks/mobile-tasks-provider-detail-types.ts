@@ -1,10 +1,7 @@
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import type {
-  ProviderCheckSummary,
-  GitHubOwnerRepo,
-  RpcClient,
-  LinearMobileIssue
-} from './mobile-tasks-dependencies'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
+import type { ProviderCheckSummary } from '../../../src/shared/github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../src/shared/github/repositories/repository-identity'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { HostedReviewDecision } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 
 export type RepoSummary = {
@@ -17,6 +14,7 @@ export type RepoSummary = {
   executionHostId?: ExecutionHostId | null
   issueSourcePreference?: IssueSourcePreference
   upstream?: { owner: string; repo: string; host?: string } | null
+  hiddenAt?: number
 }
 
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
@@ -47,6 +45,9 @@ export type GitHubWorkItem = {
   checksSummary?: ProviderCheckSummary
   mergeable?: GitHubPRMergeableState
   mergeStateStatus?: string | null
+  autoMergeEnabled?: boolean
+  autoMergeAllowed?: boolean | null
+  mergeQueueRequired?: boolean | null
 }
 
 export type GitHubAssignableUser = {
@@ -131,16 +132,6 @@ export type SetupDecision = 'inherit' | 'run' | 'skip'
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
 
-export type RepoHooksResponse = {
-  hooks: { scripts?: { setup?: string } } | null
-  source: string | null
-  setupRunPolicy?: SetupRunPolicy
-  setupTrust?: {
-    contentHash: string
-    scriptContent: string
-  }
-}
-
 export type LinearProject = {
   id: string
   name: string
@@ -154,8 +145,6 @@ export type LinearIssueChild = {
   title: string
   url: string
 }
-
-export type LinearIssue = LinearMobileIssue
 
 export type LinearState = {
   id: string
@@ -178,6 +167,8 @@ export type DetailComment = {
   authorAvatarUrl?: string
   user?: { displayName?: string }
   isBot?: boolean
+  // True when the host's gh/glab account wrote it; older hosts send it only for GitHub GraphQL reads.
+  viewerDidAuthor?: boolean
   body: string
   createdAt?: string
   url?: string
@@ -244,14 +235,15 @@ export type DetailPayload =
       comments: DetailComment[]
       labels: string[]
       assignees: string[]
-      pipelineJobs: Array<{
+      pipelineJobs: {
         id?: number
         name: string
         stage: string
         status: string
+        allowFailure?: boolean
         webUrl?: string | null
         duration?: number | null
-      }>
+      }[]
     }
   | {
       provider: 'linear'

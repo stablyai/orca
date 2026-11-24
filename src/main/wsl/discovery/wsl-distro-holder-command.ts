@@ -1,8 +1,8 @@
 import {
   ORCAD_WSL_HOLDER_BLOCKED_FILENAME,
   ORCAD_WSL_HOLDER_RELEASE_FILENAME
-} from '../../../shared/orcad-idle-exit'
-import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
+import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 
 /** `$0` of the holder's shell; the token that identifies our holder in a process command line. */
 export const WSL_DISTRO_HOLDER_MARKER = 'orca-wsl-distro-holder'

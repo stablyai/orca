@@ -1,7 +1,8 @@
 import type { AppState } from '@/store/types'
-import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-types'
-import type { Tab } from '../../../../shared/tab-types'
-import { editorRowHost } from '../../../../shared/session-tab-file-host'
+import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import { editorRowHost } from '../../../../shared/workspace-session/session-tab-file-host'
+import { remoteTabFaviconUrl } from '../../../../shared/browser/browser-favicon-url'
 import type { MobileSessionWorktreeInputs } from './types'
 import { isUnifiedTabActiveInActiveGroup } from './mobile-session-surfaces'
 
@@ -29,11 +30,19 @@ export function buildMobileBrowserTab(
     loading: activePage?.loading ?? workspace.loading,
     canGoBack: activePage?.canGoBack ?? workspace.canGoBack,
     canGoForward: activePage?.canGoForward ?? workspace.canGoForward,
+    faviconUrl: remoteTabFaviconUrl(activePage?.faviconUrl),
     // Null means the active page cleared its failure; do not resurrect a stale workspace error.
     loadError: activePage ? activePage.loadError : workspace.loadError,
     certificateFailure: activePage
       ? (inputs.certificateFailureByBrowserPageId.get(activePage.id) ?? null)
       : null,
+    // Like the local tab strip: any of the tab's pages playing makes the tab audible.
+    ...(pages.some((page) => inputs.audibleBrowserPageIds.has(page.id))
+      ? { audible: true as const }
+      : {}),
+    ...(inputs.audioMutedBrowserWorkspaceIds.has(workspace.id)
+      ? { audioMuted: true as const }
+      : {}),
     color: unifiedTab?.color ?? null,
     isPinned: unifiedTab?.isPinned === true,
     isActive: unifiedTabId

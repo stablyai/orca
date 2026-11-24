@@ -1,10 +1,12 @@
 import { useCallback } from 'react'
+import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   getWorktreeParentPickerAnchor,
   PARENT_PICKER_EXIT_ANIMATION_MS
 } from '../context-menu/worktree-context-menu-policy'
 
-type PendingParentPicker = { childWorktreeId: string; anchorElement: HTMLElement }
+/** The clicked row itself: a same-id twin on another host must never become the child. */
+export type PendingParentPicker = { child: Worktree; anchorElement: HTMLElement }
 
 export function useWorktreeParentPickerTransition(args: {
   fallbackTimerRef: React.MutableRefObject<number | null>
@@ -14,7 +16,7 @@ export function useWorktreeParentPickerTransition(args: {
   setParentPicker: (picker: PendingParentPicker | null) => void
   setParentPickerOpen: (open: boolean) => void
   unmountTimerRef: React.MutableRefObject<number | null>
-  worktreeId: string
+  worktree: Worktree
 }) {
   const openPendingParentPicker = useCallback(() => {
     const pending = args.pendingRef.current
@@ -49,11 +51,11 @@ export function useWorktreeParentPickerTransition(args: {
   const handleOpenParentPicker = useCallback(
     (event?: { preventDefault: () => void }) => {
       event?.preventDefault()
-      const anchorElement = getWorktreeParentPickerAnchor(args.scopeRef.current, args.worktreeId)
+      const anchorElement = getWorktreeParentPickerAnchor(args.scopeRef.current, args.worktree.id)
       if (!anchorElement) {
         return
       }
-      args.pendingRef.current = { childWorktreeId: args.worktreeId, anchorElement }
+      args.pendingRef.current = { child: args.worktree, anchorElement }
       args.setMenuOpenState(false)
       args.fallbackTimerRef.current = window.setTimeout(openPendingParentPicker, 50)
     },

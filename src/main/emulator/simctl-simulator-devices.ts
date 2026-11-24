@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import type { ExecFileException } from 'node:child_process'
 import { platform } from 'node:os'
 import { EmulatorError } from './emulator-errors'
-import { emulatorFailureText } from '../../shared/emulator-failure-copy'
+import { emulatorFailureText } from '../../shared/emulator/emulator-failure-copy'
 import { execServeSimCommand, type ServeSimExecutable } from './serve-sim-execution'
 
 export type SimulatorDevice = {
@@ -11,6 +11,8 @@ export type SimulatorDevice = {
   state: string
   runtime: string
   isAvailable?: boolean
+  lastUsedAt?: string
+  availabilityError?: string
 }
 
 type SimctlDevice = {
@@ -18,6 +20,9 @@ type SimctlDevice = {
   udid?: string
   state?: string
   isAvailable?: boolean
+  lastBootedAt?: string
+  lastUsedAt?: string
+  availabilityError?: string
 }
 
 type SimctlDeviceList = {
@@ -38,7 +43,9 @@ function parseSimctlDevices(stdout: string): SimulatorDevice[] {
         udid: device.udid,
         state: device.state ?? 'unknown',
         runtime,
-        isAvailable: device.isAvailable
+        isAvailable: device.isAvailable,
+        lastUsedAt: device.lastUsedAt ?? device.lastBootedAt,
+        availabilityError: device.availabilityError
       })
     }
   }

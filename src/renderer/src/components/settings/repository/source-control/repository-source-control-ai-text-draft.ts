@@ -21,7 +21,7 @@ import {
   type ActionRecipeTextDraft
 } from './repository-source-control-ai-recipe-text'
 import { retireActionLaunchPreferences } from '../../source-control/source-control-ai-action-recipe-draft'
-import { readInheritedCommandTemplate } from './repository-source-control-ai-labels'
+import { resolveSourceControlActionCommandTemplate } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 
 export function resetActionDraftLaunchPreferences(
   current: Partial<Record<SourceControlActionId, ActionRecipeTextDraft>>,
@@ -136,7 +136,8 @@ export function createRepoActionTextDraftEditors(
       const draft =
         current[actionId] ?? readActionRecipeTextDraft(immediateRepoAiRef.current, actionId)
       const currentTemplate =
-        draft.commandInputTemplate || readInheritedCommandTemplate(source, actionId)
+        draft.commandInputTemplate ||
+        resolveSourceControlActionCommandTemplate(source.actions, actionId)
       const separator = currentTemplate.endsWith('\n') || currentTemplate.length === 0 ? '' : ' '
       return patchActionTextDraft(current, immediateRepoAiRef.current, actionId, {
         commandInputTemplate: `${currentTemplate}${separator}{${variable}}`

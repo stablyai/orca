@@ -1,5 +1,5 @@
 import { countAgentTuiInputLines } from './agent-tui-input-clear'
-import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../orchestration-timing-budgets'
+import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../orchestration/orchestration-timing-budgets'
 import {
   iterateTerminalInputChunks,
   TERMINAL_INPUT_CHUNK_MAX_BYTES
@@ -85,8 +85,8 @@ export function getAgentPromptHeldSubmitBudgetMs(
   const config = TUI_AGENT_CONFIG[agent]
   const startupMs = config.submitRetryBudgetMs ?? 0
   const pasteBurstMs = getWindowsInputRecordPasteBurstMs(platform, agent, pastePayload)
-  // Why the cap: with the render gate (<= 8 s + ingest), ingest itself and this wait, delivery
-  // stays <= 38 s, inside worker-start's 50 s grace once observation is shortened by delivery time.
+  // Why the cap: with the render gate (<= 8 s + ingest), ingest itself and this wait plus one
+  // recheck, delivery stays <= 40 s, inside worker-start's 50 s grace once observation is shortened.
   const capMs =
     AGENT_PROMPT_EFFECT_TIMEOUT_MS -
     2 * getTerminalPasteIngestMs(platform, Buffer.byteLength(pastePayload, 'utf8'))
@@ -100,9 +100,38 @@ export const PASTED_CONTENT_PLACEHOLDER = /\[Pasted Content (\d+) chars\](?: #\d
 const HELD_PROMPT_EXTRA_CHARS_PER_LINE_FEED = 2
 const HELD_PROMPT_COUNT_SLACK_CHARS = 8
 const HELD_PROMPT_TEXT_MIN_CHARS = 32
+// OpenCode collapses a paste of 3+ lines or more than 150 chars to its trimmed text's line count,
+// unless its `prompt.paste` config is 'full'.
+const OPENCODE_PASTED_LINES_PLACEHOLDER = /^\[Pasted ~(\d+) lines\]$/
+const OPENCODE_PASTE_COLLAPSE_MIN_LINES = 3
+const OPENCODE_PASTE_COLLAPSE_OVER_CHARS = 150
 
-/** Whether a composer draft is `prompt` still held, as Codex's paste placeholders or as text;
- *  `absorbedEnters` is how many Enters may have joined the paste as newlines. */
+/** The text OpenCode measures a paste of `prompt` by. */
+function openCodePasteText(prompt: string): string {
+  return sanitizeAgentPromptText(prompt).replace(/\r\n?/g, '\n').trim()
+}
+
+/** Whether OpenCode's default paste handling shows `prompt` as `[Pasted ~N lines]`. */
+export function openCodeCollapsesPaste(prompt: string): boolean {
+  const pasted = openCodePasteText(prompt)
+  return (
+    pasted.length > OPENCODE_PASTE_COLLAPSE_OVER_CHARS ||
+    countAgentTuiInputLines(pasted) >= OPENCODE_PASTE_COLLAPSE_MIN_LINES
+  )
+}
+
+/** Whether the composer's typed text is exactly `prompt`: proof its paste landed. Spacing the
+ *  projection can't vouch for, such as a wrap or trailing whitespace, fails it and keeps the wait. */
+export function isCompleteAgentPromptDraft(
+  draft: string | null | undefined,
+  prompt: string
+): boolean {
+  const lineEndings = (text: string): string => text.replace(/\r\n?/g, '\n')
+  return !!draft && lineEndings(draft) === lineEndings(sanitizeAgentPromptText(prompt))
+}
+
+/** Whether a composer draft is `prompt` still held, as Codex's or OpenCode's paste placeholders or
+ *  as text; `absorbedEnters` is how many Enters may have joined the paste as newlines. */
 export function isHeldAgentPromptDraft(
   draft: string | undefined,
   prompt: string,
@@ -110,6 +139,10 @@ export function isHeldAgentPromptDraft(
 ): boolean {
   if (!draft) {
     return false
+  }
+  const openCodeLines = OPENCODE_PASTED_LINES_PLACEHOLDER.exec(draft.trim())?.[1]
+  if (openCodeLines !== undefined) {
+    return Number(openCodeLines) === countAgentTuiInputLines(openCodePasteText(prompt))
   }
   const expected = sanitizeAgentPromptText(prompt).replace(/\r\n?/g, '\n')
   let pastedChars = 0

@@ -2,10 +2,10 @@
  * Mixed-host scopes return ambiguous; callers must fail visibly rather than defaulting to local. */
 
 import type { FolderWorkspace } from './folder-workspace-types'
-import type { ProjectGroup } from '../project-group-types'
-import type { Repo } from '../repo-types'
-import { isPathInsideOrEqual } from '../cross-platform-path'
-import { getProjectGroupSubtreeIds } from '../project-groups'
+import type { ProjectGroup } from '../project/groups/project-group-types'
+import type { Repo } from '../repository/repo-types'
+import { isPathInsideOrEqual } from '../file-access/cross-platform-path'
+import { getProjectGroupSubtreeIds } from '../project/groups/project-groups'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -14,7 +14,7 @@ import {
   toSshExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../execution-host'
+} from '../execution-host/execution-host'
 
 export type FolderWorkspaceHostState = {
   folderWorkspaces: readonly FolderWorkspace[]
@@ -209,10 +209,16 @@ export type QualifiedFolderHostState<W extends FolderHostWorkspace = FolderHostW
   repos?: readonly FolderHostRepo[]
 }
 
+export type QualifiedFolderWorkspaceSelection<W extends FolderHostWorkspace = FolderWorkspace> = {
+  workspace: W
+  hostId: ExecutionHostId
+  connectionId: string | null
+}
+
 export type QualifiedFolderWorkspaceResult<W extends FolderHostWorkspace> =
   | {
       kind: 'selected'
-      value: { workspace: W; hostId: ExecutionHostId; connectionId: string | null }
+      value: QualifiedFolderWorkspaceSelection<W>
     }
   | { kind: 'ambiguous' }
   | { kind: 'missing' }

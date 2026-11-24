@@ -1,11 +1,14 @@
-import type { RateLimitWindow } from '../../../shared/rate-limit-types'
+import type {
+  RateLimitWindow,
+  ProviderRateLimits
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { isCodexUsageSignInRequired } from '../../../shared/agent-accounts/codex/codex-auth-errors'
 import { RateLimitServiceFetchControl } from './service-fetch-control'
 import {
   LONG_STALE_THRESHOLD_MS,
   MAX_ACTIVE_FAILURE_STREAK,
   STALE_THRESHOLD_MS,
-  type ActiveRateLimitProvider,
-  type ProviderRateLimits
+  type ActiveRateLimitProvider
 } from './service-types'
 
 export function hasUsageWindows(limits: ProviderRateLimits): boolean {
@@ -50,8 +53,8 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
       }
     }
 
-    // Explicit unavailability clears stale usage, including removed settings.
-    if (fresh.status === 'unavailable') {
+    // Unavailability and a rejected Codex login clear the prior reading and its provenance.
+    if (fresh.status === 'unavailable' || isCodexUsageSignInRequired(fresh)) {
       return fresh
     }
 

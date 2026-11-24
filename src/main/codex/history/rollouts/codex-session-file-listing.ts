@@ -1,6 +1,7 @@
 import { readdirSync } from 'node:fs'
 import { opendir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 
 export type CodexSessionBridgeIncrementalOptions = {
   /** Directory entries to process before yielding back to the event loop. */
@@ -26,7 +27,7 @@ export function listCodexSessionJsonlFiles(rootPath: string): string[] {
       }
     }
   } catch (error) {
-    console.warn('[codex-session-bridge] Failed to list system Codex sessions:', error)
+    warnUnlessAbsent(error)
   }
   return files.sort()
 }
@@ -52,6 +53,10 @@ export async function* listCodexSessionJsonlFilesIncrementally(
   )
 }
 
+export function isCodexSessionRolloutFileName(fileName: string): boolean {
+  return fileName.endsWith('.jsonl') || fileName.endsWith('.jsonl.zst')
+}
+
 export async function* listCodexSessionRolloutFilesIncrementally(
   rootPath: string,
   options: CodexSessionBridgeIncrementalOptions,
@@ -60,7 +65,7 @@ export async function* listCodexSessionRolloutFilesIncrementally(
   yield* listCodexSessionFilesIncrementally(
     rootPath,
     options,
-    (fileName) => fileName.endsWith('.jsonl') || fileName.endsWith('.jsonl.zst'),
+    isCodexSessionRolloutFileName,
     onDirectoryError
   )
 }
@@ -98,8 +103,15 @@ async function* listCodexSessionFilesIncrementally(
       }
     } catch (error) {
       await onDirectoryError?.(currentDirectory, error)
-      console.warn('[codex-session-bridge] Failed to list system Codex sessions:', error)
+      warnUnlessAbsent(error)
     }
+  }
+}
+
+// Day folders exist only for days with sessions, so absence is an empty listing, not a failure.
+function warnUnlessAbsent(error: unknown): void {
+  if (!isDefinitiveAbsence(error)) {
+    console.warn('[codex-session-bridge] Failed to list system Codex sessions:', error)
   }
 }
 

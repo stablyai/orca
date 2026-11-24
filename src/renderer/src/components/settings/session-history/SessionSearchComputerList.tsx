@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const VISIBLE_COMPUTER_LIMIT = 6
 
@@ -14,6 +14,7 @@ export function SessionSearchComputerList({
   local: React.ReactNode
   servers: readonly SessionSearchServerRowEntry[]
 }): React.JSX.Element {
+  const t = useTranslate()
   const [expanded, setExpanded] = useState(false)
   const visibleServerCount = VISIBLE_COMPUTER_LIMIT - 1
   const hiddenCount = Math.max(0, servers.length - visibleServerCount)
@@ -24,13 +25,13 @@ export function SessionSearchComputerList({
     <div>
       {showSubheads ? (
         <p className="pt-4 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          {translate('sessionHistory.settings.thisComputer', 'This computer')}
+          {t('sessionHistory.settings.thisComputer', 'This computer')}
         </p>
       ) : null}
       {local}
       {showSubheads ? (
         <p className="pt-4 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          {translate('sessionHistory.settings.remoteServers', 'Orca remote servers')}
+          {t('sessionHistory.settings.remoteServers', 'Orca remote servers')}
         </p>
       ) : null}
       {shownServers.map((server) => (
@@ -46,12 +47,12 @@ export function SessionSearchComputerList({
         >
           {expanded ? (
             <>
-              {translate('sessionHistory.settings.showFewer', 'Show fewer')}
+              {t('sessionHistory.settings.showFewer', 'Show fewer')}
               <ChevronUp />
             </>
           ) : (
             <>
-              {translate('sessionHistory.settings.showMore', 'Show {{count}} more', {
+              {t('sessionHistory.settings.showMore', 'Show {{count}} more', {
                 count: hiddenCount
               })}
               <ChevronDown />

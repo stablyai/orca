@@ -1,6 +1,12 @@
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import { type WorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import {
+  type WorkspaceKey,
+  parseWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   removeWorkspaceSessionOwners,
@@ -11,7 +17,7 @@ import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
-import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-identity-metadata'
+import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-metadata/worktree-identity-metadata'
 
 export function pruneWorktreeStateForRepo(
   state: PersistedState,
@@ -129,6 +135,13 @@ export function pruneWorktreeStateForRepo(
     }
     if (parentScope?.type === 'worktree' && belongsToHost(parentScope.worktreeId)) {
       delete state.workspaceLineageByChildKey[childKey as WorkspaceKey]
+    }
+  }
+  // Only the child decides: a parent in another store shares no repo ids with this one.
+  for (const childKey of Object.keys(state.crossStoreLineageByChildKey ?? {})) {
+    const childScope = parseWorkspaceKey(childKey)
+    if (childScope?.type === 'worktree' && belongsToHost(childScope.worktreeId)) {
+      delete state.crossStoreLineageByChildKey?.[childKey]
     }
   }
   pruneMobileClientTabSelections(belongsToHost)

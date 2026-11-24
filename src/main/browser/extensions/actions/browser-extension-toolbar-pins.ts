@@ -1,8 +1,9 @@
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import {
   withExtensionEnabled,
   withoutExtension
 } from '../profile-sessions/browser-extension-profile-enablement'
+import { browserExtensionSourceProfileId } from '../profile-sessions/browser-extension-route-profiles'
 
 // Why cached: toolbars refetch on every badge change, and the registry reads its file each call.
 const pinnedByProfileId = new Map<string, string[]>()
@@ -22,9 +23,9 @@ export function setBrowserExtensionPinned(
   extensionId: string,
   pinned: boolean
 ): void {
-  // The per-profile id-set edits are the same ones the enabled lists use.
+  // The per-profile id-set edits are the same ones the enabled lists use; SSH and This-device pages share their local profile's pins.
   browserSessionRegistry.updatePinnedExtensionIds((byProfile) =>
-    withExtensionEnabled(byProfile, profileId, extensionId, pinned)
+    withExtensionEnabled(byProfile, browserExtensionSourceProfileId(profileId), extensionId, pinned)
   )
   pinnedByProfileId.clear()
 }

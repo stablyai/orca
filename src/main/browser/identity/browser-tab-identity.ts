@@ -1,14 +1,20 @@
 // Share identity between WebContents, CDP and request hooks so user agents and client hints agree.
 
+import { release } from 'node:os'
+import { app } from 'electron'
+import { loadWindowsNativeRegistry } from '../../windows/windows-native-registry'
 import type { BrowserProcessUserAgentIdentity } from './browser-process-user-agent'
-import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
+import {
+  chromeShapedSiteUserAgent,
+  googleAuthUserAgent,
+  isChromeShapedSiteUrl,
+  isGoogleAuthUrl
+} from './browser-site-user-agent'
 
 type UserAgentBrand = { brand: string; version: string }
 
-export type UserAgentMetadata = {
-  brands: UserAgentBrand[]
-  fullVersionList: UserAgentBrand[]
-  fullVersion: string
+/** CDP requires these; it fills omitted brands, versions, bitness and form factors natively. */
+export type CdpUserAgentMetadata = {
   platform: string
   platformVersion: string
   architecture: string
@@ -16,15 +22,42 @@ export type UserAgentMetadata = {
   mobile: boolean
 }
 
+export type UserAgentMetadata = CdpUserAgentMetadata & {
+  brands: UserAgentBrand[]
+  fullVersionList: UserAgentBrand[]
+  fullVersion: string
+}
+
 export type BrowserTabIdentity =
-  /** Desktop client hints remain browser-owned. */
+  /** Chromium's desktop client hints; temporary CDP overrides restate them. */
   | { kind: 'process'; userAgent: string }
-  /** Electron's own UA on Google sign-in hosts; client hints remain browser-owned. */
-  | { kind: 'google-auth'; userAgent: string }
+  /** A host-pinned UA (Google sign-in, Chase) with the same desktop client hints. */
+  | { kind: 'site'; userAgent: string }
   | { kind: 'mobile'; userAgent: string; userAgentMetadata: UserAgentMetadata }
 
-export function googleAuthTabIdentity(): BrowserTabIdentity {
-  return { kind: 'google-auth', userAgent: googleAuthUserAgent() }
+type SiteTabIdentity = Extract<BrowserTabIdentity, { kind: 'site' }>
+
+export function googleAuthTabIdentity(): SiteTabIdentity {
+  return { kind: 'site', userAgent: googleAuthUserAgent() }
+}
+
+function chromeShapedSiteTabIdentity(): SiteTabIdentity {
+  return { kind: 'site', userAgent: chromeShapedSiteUserAgent() }
+}
+
+const SITE_TAB_IDENTITY_RULES = [
+  { identity: googleAuthTabIdentity, matchesUrl: isGoogleAuthUrl },
+  { identity: chromeShapedSiteTabIdentity, matchesUrl: isChromeShapedSiteUrl }
+]
+
+/** Only a UA distinct from the process UA can mark a tab's request as belonging to its site. */
+export function distinctSiteTabIdentities(
+  processUserAgent: string
+): { identity: SiteTabIdentity; matchesUrl: (url: string) => boolean }[] {
+  return SITE_TAB_IDENTITY_RULES.map((rule) => ({
+    identity: rule.identity(),
+    matchesUrl: rule.matchesUrl
+  })).filter((rule) => rule.identity.userAgent !== processUserAgent)
 }
 
 // Desktop presets preserve process identity; only mobile presets replace it.
@@ -40,7 +73,64 @@ export function resolveBrowserTabIdentity(args: {
   if (args.mobile) {
     return buildMobileTabIdentity(args.processIdentity.userAgent)
   }
+  if (isChromeShapedSiteUrl(args.url)) {
+    return chromeShapedSiteTabIdentity()
+  }
   return { kind: 'process', userAgent: args.processIdentity.userAgent }
+}
+
+let desktopMetadata: CdpUserAgentMetadata | undefined
+
+/** Chromium's own desktop values; a UA-only CDP override would blank every client hint. */
+export function desktopUserAgentMetadata(): CdpUserAgentMetadata {
+  desktopMetadata ??= {
+    platform:
+      process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows' : 'Linux',
+    platformVersion: desktopPlatformVersion(),
+    architecture: desktopArchitecture(),
+    model: '',
+    mobile: false
+  }
+  return desktopMetadata
+}
+
+function desktopPlatformVersion(): string {
+  if (process.platform === 'darwin') {
+    // Chromium formats the same SysInfo numbers as major.minor.bugfix.
+    return process.getSystemVersion?.() ?? ''
+  }
+  // Chromium withholds the Linux version.
+  return process.platform === 'win32' ? windowsUniversalApiContractVersion() : ''
+}
+
+// Chromium reports this contract's HIWORD.LOWORD, falling back to its highest known version.
+function windowsUniversalApiContractVersion(): string {
+  const build = Number(release().split('.')[2])
+  if (build < 17763) {
+    // Before 1809 Chromium maps the Windows 10 release (build threshold) to its contract version.
+    return `${[10586, 14393, 15063, 16299, 17134].filter((min) => build >= min).length + 1}.0.0`
+  }
+  try {
+    const registry = loadWindowsNativeRegistry()
+    const contract = registry.getRegistryKey(
+      registry.HK.LM,
+      'SOFTWARE\\Microsoft\\WindowsRuntime\\WellKnownContracts'
+    )?.['Windows.Foundation.UniversalApiContract']?.value
+    if (typeof contract === 'number') {
+      return `${contract >>> 16}.${contract & 0xffff}.0`
+    }
+  } catch {
+    // The registry addon ships with the desktop app only.
+  }
+  return '19.0.0'
+}
+
+// Chromium reports the hardware, so x64 builds translated on ARM present arm.
+function desktopArchitecture(): string {
+  if (process.arch === 'arm64' || process.arch === 'arm' || app.runningUnderARM64Translation) {
+    return 'arm'
+  }
+  return process.arch === 'x64' || process.arch === 'ia32' ? 'x86' : ''
 }
 
 // Match the mobile UA version to the client-hint brands.

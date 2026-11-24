@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog } from 'electron'
 import { join } from 'node:path'
-import { normalizeBrowserDownloadFilename } from '../../../../shared/browser-download-filename'
+import { normalizeBrowserDownloadFilename } from '../../../../shared/browser/downloads/browser-download-filename'
 
 function suggestedName(url: string, filename: string | undefined): string {
   if (filename) {

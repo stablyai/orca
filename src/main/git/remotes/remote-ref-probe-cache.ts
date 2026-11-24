@@ -1,13 +1,14 @@
+import { readLocalGitConfigSignature } from '../../github/repositories/local-git-config-signature'
 import { runCoalescedProbe, type CoalescedProbes } from './coalesced-probe'
 import { isTransientGitProbeError, readRemoteUrl } from './remote-url-probe'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 const REPO_REF_CACHE_MAX_ENTRIES = 512
 
-// Expire negatives so newly added remotes appear without restart, including on SSH/WSL without config watchers.
+// Expire negatives and unsigned (WSL) answers so remote changes appear without restart or config watchers.
 export const NEGATIVE_ENTRY_TTL_MS = 5 * 60_000
 
-type CachedRepoRef<Ref> = { value: Ref | null; expiresAt: number }
+type CachedRepoRef<Ref> = { value: Ref | null; expiresAt: number; configSignature?: string }
 
 export type RemoteRefLocalGitOptions = {
   wslDistro?: string
@@ -31,10 +32,15 @@ export function createRemoteRefProbeCache<Ref>(
   const repoRefCache = new Map<string, CachedRepoRef<Ref>>()
   const inFlight: CoalescedProbes<Ref | null> = new Map()
 
-  function remember(cacheKey: string, value: Ref | null): void {
+  function remember(cacheKey: string, value: Ref | null, configSignature?: string): void {
+    // Only a config signature proves a hit still matches the remote URL; unsigned identity expires.
     repoRefCache.set(cacheKey, {
       value,
-      expiresAt: value === null ? Date.now() + NEGATIVE_ENTRY_TTL_MS : Number.POSITIVE_INFINITY
+      expiresAt:
+        value !== null && configSignature !== undefined
+          ? Number.POSITIVE_INFINITY
+          : Date.now() + NEGATIVE_ENTRY_TTL_MS,
+      configSignature
     })
     while (repoRefCache.size > REPO_REF_CACHE_MAX_ENTRIES) {
       const oldestKey = repoRefCache.keys().next().value
@@ -51,12 +57,13 @@ export function createRemoteRefProbeCache<Ref>(
     repoPath: string,
     remoteName: string,
     connectionId: string | null | undefined,
-    localGitOptions: RemoteRefLocalGitOptions
+    localGitOptions: RemoteRefLocalGitOptions,
+    configSignature: string | undefined
   ): Promise<Ref | null> {
     // Stale probes may answer their own callers, but cannot publish over a successor.
     const publish = (value: Ref | null): void => {
       if (ownsKey()) {
-        remember(cacheKey, value)
+        remember(cacheKey, value, configSignature)
       }
     }
     try {
@@ -67,7 +74,8 @@ export function createRemoteRefProbeCache<Ref>(
           ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
           ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
         },
-        remoteName
+        remoteName,
+        configSignature
       )
       // null means an SSH repo unavailable to this local reader, not a missing remote.
       if (stdout === null) {
@@ -90,16 +98,30 @@ export function createRemoteRefProbeCache<Ref>(
     async get(repoPath, remoteName, connectionId, localGitOptions = {}) {
       const runtimeKey = connectionId || `local:${localGitOptions.wslDistro ?? 'host'}`
       const cacheKey = `${runtimeKey}\0${repoPath}\0${remoteName}`
+      // Signed before the read, so a config edit during the probe forces the next hit to re-probe.
+      const configSignature = await readLocalGitConfigSignature({
+        repoPath,
+        connectionId,
+        wslDistro: localGitOptions.wslDistro
+      })
       const cached = repoRefCache.get(cacheKey)
       if (cached) {
-        if (cached.expiresAt > Date.now()) {
+        if (cached.expiresAt > Date.now() && cached.configSignature === configSignature) {
           return cached.value
         }
         repoRefCache.delete(cacheKey)
       }
       // Coalesce worktree-list bursts so each branch does not spawn the same probe.
-      return runCoalescedProbe(inFlight, cacheKey, (ownsKey) =>
-        probe(cacheKey, ownsKey, repoPath, remoteName, connectionId, localGitOptions)
+      return runCoalescedProbe(inFlight, `${cacheKey}\0${configSignature ?? ''}`, (ownsKey) =>
+        probe(
+          cacheKey,
+          ownsKey,
+          repoPath,
+          remoteName,
+          connectionId,
+          localGitOptions,
+          configSignature
+        )
       )
     },
     clear() {

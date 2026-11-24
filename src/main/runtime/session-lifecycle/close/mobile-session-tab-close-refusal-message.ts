@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionTabCloseResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabCloseResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 type MobileSessionTabCloseRefusalReason = NonNullable<
   RuntimeMobileSessionTabCloseResult['refusalReason']

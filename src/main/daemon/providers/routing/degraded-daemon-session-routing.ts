@@ -1,4 +1,4 @@
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import { SessionNotFoundError } from '../../protocol/daemon-errors'
 

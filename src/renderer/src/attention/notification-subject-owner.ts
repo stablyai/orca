@@ -1,32 +1,36 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import type { NotificationWorkspaceOwner } from '../../../shared/notification-source'
+import {
+  getRepoExecutionHostId,
+  isRemoteExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import type { NotificationWorkspaceOwner } from '../../../shared/notifications/notification-source'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { getPtyExecutionHost } from '../../../shared/terminal/pty/lifecycle/terminal-execution-host'
-import type { Tab } from '../../../shared/tab-types'
+import type { Tab } from '../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '@/store/types'
-import type { PtyTransport } from '@/components/terminal-pane/pty-transport-types'
-import { resolveTerminalTabPtyOwnership } from '@/lib/terminal-tab-for-pty-id'
-import { resolveExactWorktreeRoute, routeForOwner } from '@/lib/worktree-owner-route'
+import type { PtyTransport } from '@/components/terminal-pane/pty-transport/pty-transport-types'
+import { resolveTerminalTabPtyOwnership } from '@/lib/workspace/tabs/terminal-tab-for-pty-id'
+import {
+  resolveExactWorktreeRoute,
+  routeForOwner
+} from '@/lib/workspace/ownership/worktree-owner-route'
 import {
   findIndexedWorktreeOwner,
   findIndexedWorktreeOwnerForHost,
   findIndexedFolderWorkspaceOwner,
-  findIndexedRepoOwner,
-  findIndexedProjectGroupOwner,
-  getCatalogOwnerHostId
-} from '@/lib/worktree-runtime-owner-index'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+  findIndexedProjectGroupOwner
+} from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { findIndexedRepoOwner } from '@/lib/workspace/ownership/repo-owner-index'
+import '@/lib/workspace/ownership/workspace-catalog-owner-index'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 
 type SubjectOwnerState = WorktreeRuntimeOwnerState &
   Partial<
     Pick<
       AppState,
-      | 'tabsByWorktree'
-      | 'unifiedTabsByWorktree'
-      | 'ptyIdsByTabId'
-      | 'terminalLayoutsByTabId'
-      | 'retainedAgentsByPaneKey'
+      'tabsByWorktree' | 'unifiedTabsByWorktree' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId'
     >
   >
 
@@ -47,7 +51,7 @@ export function resolveNotificationTabOwner(
     }
     const group = findIndexedProjectGroupOwner(state.projectGroups, folder.projectGroupId, hostId)
     return routeForOwner({
-      hostId: getCatalogOwnerHostId({
+      hostId: getRepoExecutionHostId({
         executionHostId: folder.executionHostId ?? group?.executionHostId,
         connectionId: folder.connectionId ?? group?.connectionId
       })
@@ -63,7 +67,7 @@ export function resolveNotificationTabOwner(
   const repo = !owner.hostId ? findIndexedRepoOwner(state.repos, owner.repoId) : null
   const resolution = resolveExactWorktreeRoute(state, {
     ...owner,
-    hostId: owner.hostId ?? (repo ? getCatalogOwnerHostId(repo) : hostId)
+    hostId: owner.hostId ?? (repo ? getRepoExecutionHostId(repo) : hostId)
   })
   return resolution.kind === 'resolved' ? resolution.route : null
 }
@@ -95,6 +99,17 @@ export type TerminalNotificationBinding = {
   workspaceOwner?: NotificationWorkspaceOwner
 }
 
+// Never names this computer: a local machine mute must not silence work proven to run elsewhere.
+function remoteWorkspaceNotificationOwner(
+  state: SubjectOwnerState,
+  workspaceId: string
+): NotificationWorkspaceOwner | null {
+  const owner = resolveNotificationTabOwner(state, { worktreeId: workspaceId })
+  return owner?.runtimeEnvironmentId || isRemoteExecutionHostId(owner?.executionHostId)
+    ? owner
+    : null
+}
+
 export function resolveTerminalNotificationOwner(
   state: SubjectOwnerState,
   workspaceId: string,
@@ -104,11 +119,11 @@ export function resolveTerminalNotificationOwner(
     return subject.workspaceOwner
   }
   const pane = subject.paneKey ? parsePaneKey(subject.paneKey) : null
-  const retained = subject.paneKey ? state.retainedAgentsByPaneKey?.[subject.paneKey] : undefined
-  const retainedTab =
-    retained?.worktreeId === workspaceId && retained.tab.id === pane?.tabId
-      ? retained.tab
-      : undefined
+  const notificationTab = state.unifiedTabsByWorktree?.[workspaceId]?.find(
+    (candidate) =>
+      candidate.contentType === 'terminal' &&
+      (candidate.entityId === pane?.tabId || candidate.id === pane?.tabId)
+  )
   const terminalTab = state.tabsByWorktree?.[workspaceId]?.find((tab) => tab.id === pane?.tabId)
   const layout = pane ? state.terminalLayoutsByTabId?.[pane.tabId] : undefined
   const tabPtys = pane ? state.ptyIdsByTabId?.[pane.tabId] : undefined
@@ -116,7 +131,7 @@ export function resolveTerminalNotificationOwner(
     subject.ptyId ??
     (pane ? layout?.ptyIdsByLeafId?.[pane.leafId] : null) ??
     (tabPtys?.length === 1 ? tabPtys[0] : null) ??
-    (terminalTab ?? retainedTab)?.ptyId
+    terminalTab?.ptyId
   if (ptyId) {
     const binding = resolveTerminalTabPtyOwnership(
       {
@@ -127,11 +142,20 @@ export function resolveTerminalNotificationOwner(
       workspaceId,
       ptyId
     )
-    if (binding.kind !== 'owned' && !(binding.kind === 'none' && ptyId === retainedTab?.ptyId)) {
-      return null
+    // A known tab still owns delayed delivery after its PTY binding disappears.
+    const tabOwner =
+      binding.kind === 'none' && notificationTab
+        ? resolveNotificationTabOwner(state, notificationTab)
+        : null
+    if (tabOwner) {
+      return tabOwner
     }
+    // A null owner bypasses machine mute, so a prefixed id names its machine even when unbound.
     const transportHost = getPtyExecutionHost(ptyId)
     if (transportHost === 'foreign') {
+      return remoteWorkspaceNotificationOwner(state, workspaceId)
+    }
+    if (!transportHost && binding.kind !== 'owned') {
       return null
     }
     // A currently bound, unprefixed PTY belongs to this client's IPC transport.
@@ -149,10 +173,6 @@ export function resolveTerminalNotificationOwner(
       ? workspaceOwner
       : transportOwner
   }
-  const tab = state.unifiedTabsByWorktree?.[workspaceId]?.find(
-    (candidate) =>
-      candidate.contentType === 'terminal' &&
-      (candidate.entityId === pane?.tabId || candidate.id === pane?.tabId)
-  )
-  return tab ? resolveNotificationTabOwner(state, tab) : null
+  const tabOwner = notificationTab ? resolveNotificationTabOwner(state, notificationTab) : null
+  return tabOwner ?? remoteWorkspaceNotificationOwner(state, workspaceId)
 }

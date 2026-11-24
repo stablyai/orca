@@ -1,5 +1,5 @@
-import type { CommandSpec } from '../args'
-import { LOCAL_COMMAND_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { LOCAL_COMMAND_FLAGS } from '../arguments/args'
 
 export const INTROSPECTION_COMMAND_SPECS: CommandSpec[] = [
   {
