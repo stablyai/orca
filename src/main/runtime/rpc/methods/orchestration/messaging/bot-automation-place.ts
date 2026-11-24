@@ -7,8 +7,9 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { AutomationRunMessage } from '../../../../../../shared/automations/automation-run-message'
 
 /** The automation run in progress in this chat: the one its prompt records, read among that
- *  automation's runs alone; else (an older prompt) the only one in progress. Where its event happened,
- *  never whom the chat acts for, which the conversation's own record says. */
+ *  automation's runs alone by a bare read with no owner to fence; else (an older prompt) the only
+ *  one in progress. Where its event happened, never whom the chat acts for, which the
+ *  conversation's own record says. */
 function runningAutomationRun(
   runtime: OrcaRuntimeService,
   sessionId: string,
@@ -16,7 +17,11 @@ function runningAutomationRun(
 ) {
   const running = (
     recorded
-      ? runtime.listAutomationRuns(recorded.automationId).filter((run) => run.id === recorded.runId)
+      ? (
+          runtime
+            .listAutomationRunsByAutomation([recorded.automationId])
+            .get(recorded.automationId) ?? []
+        ).filter((run) => run.id === recorded.runId)
       : runtime.listAutomationRuns()
   ).filter((run) => run.chatSessionId === sessionId && !isFinalAutomationRunStatus(run.status))
   return running.length === 1 ? running[0] : undefined

@@ -104,20 +104,40 @@ async function assertSameItem(
 ): Promise<void> {
   const store = ctx.runtime.botItems.store()
   const item = await resolveItem(store, forItem)
-  // The worker's steps: the addressed one's, its newest one's and those of every earlier owner of its
-  // terminal, which a handed-over terminal parts, each read once and at most 200. Their starts settle
-  // it without a lookup; else two items linking them are enough to tell.
-  const priorOwners = parseWorkerTerminalPriorOwnerIds(
-    plan.resource?.prior_owner_dispatch_ids ?? '[]'
-  )
+  // The worker's steps: the addressed one's, its newest one's, then those of every earlier owner of
+  // its terminal, which a handed-over terminal parts, each read once. Past 200 it can't tell, so
+  // refuses. Their starts settle it without a lookup; else two items linking them are enough to tell.
   const steps = new Set<string>()
   let elsewhere = false
-  for (const start of [plan.addressed, plan.latest.id, ...(priorOwners ?? [])]) {
-    for (let id: string | null = start; id && !steps.has(id) && steps.size < 200 && !elsewhere;) {
+  let unchecked = false
+  const walk = (start: string): void => {
+    let id: string | null = start
+    for (; id && !steps.has(id) && steps.size < 200 && !elsewhere;) {
       steps.add(id)
       elsewhere = (dispatchItemUid(db, id) ?? item.uid) !== item.uid
       id = db.getDispatchContextById(id)?.follow_up_of_dispatch_id ?? null
     }
+    unchecked ||= !elsewhere && id !== null && !steps.has(id)
+  }
+  walk(plan.addressed)
+  walk(plan.latest.id)
+  const savedOwners = plan.resource?.prior_owner_dispatch_ids ?? '[]'
+  // A saved list this long names more owners than the 200 steps checked, so it is never parsed.
+  unchecked ||= !elsewhere && savedOwners.length > 16_384
+  if (!elsewhere && !unchecked) {
+    for (const owner of parseWorkerTerminalPriorOwnerIds(savedOwners) ?? []) {
+      walk(owner)
+      if (elsewhere || unchecked) {
+        break
+      }
+    }
+  }
+  if (unchecked && !elsewhere) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `This worker's history is too long to check that it worked only for item ${item.number}. Start one for it with \`orchestration worker-start --item ${item.number}\`. Nothing was sent.`,
+      { effectsApplied: false }
+    )
   }
   elsewhere ||= (await store.itemsLinking('dispatch', [...steps], 2)).some(
     (uid) => uid !== item.uid
