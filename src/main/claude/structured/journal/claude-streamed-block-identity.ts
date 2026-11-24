@@ -1,5 +1,9 @@
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import {
+  claudeRecord,
+  claudeText,
+  readClaudeMessageEnvelope
+} from './claude-structured-item-translation'
 
 // Stream and final frames have different UUIDs; reconcile by message.id and block order to avoid duplicate rows.
 
@@ -37,6 +41,56 @@ export type ClaudeStreamedBlockRegistry = {
 /** A content block's transcript-stable id: what a streamed row and its saved transcript row share. */
 export function claudeSourceBlockId(messageId: string, index: number): string {
   return `block:${messageId}:${index}`
+}
+
+export function claudeBlockIsText(block: unknown): boolean {
+  return claudeRecord(block)?.type === 'text'
+}
+
+/**
+ * A CLI older than 2.1 writes one transcript row per content block and leaves off apiBlockIndex.
+ * The block order is then the only index it records: the message's own content array, or for a row
+ * that holds one block, its position among the parent chain's rows for the same message id.
+ */
+export function claudeSourceBlockIndex(
+  row: Record<string, unknown>,
+  chain: readonly Record<string, unknown>[]
+): number | null {
+  if (typeof row.apiBlockIndex === 'number') {
+    return row.apiBlockIndex
+  }
+  const envelope = readClaudeMessageEnvelope({
+    ...row,
+    session_id: row.session_id ?? row.sessionId
+  })
+  if (!envelope?.messageId) {
+    return null
+  }
+  const at = chain.findIndex((entry) => entry.uuid === row.uuid)
+  if (at === -1) {
+    return null
+  }
+  let index = 0
+  for (let position = at - 1; position >= 0; position -= 1) {
+    if (claudeMessageIdOf(chain[position]!) !== envelope.messageId) {
+      break
+    }
+    index += 1
+  }
+  for (let position = at + 1; position < chain.length; position += 1) {
+    if (claudeMessageIdOf(chain[position]!) !== envelope.messageId) {
+      break
+    }
+    index += 1
+  }
+  return index
+}
+
+function claudeMessageIdOf(row: Record<string, unknown>): string | null {
+  return (
+    readClaudeMessageEnvelope({ ...row, session_id: row.session_id ?? row.sessionId })?.messageId ??
+    null
+  )
 }
 
 function scopeKey(sessionId: string, parentToolUseId: string | null): string {

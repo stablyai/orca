@@ -3,7 +3,10 @@ import { AgentConversationCopyError } from '../../native-chat/conversation-adopt
 import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { decodeClaudeTranscriptLine } from '../../native-chat/transcript-decoding/transcript-line-decoders-claude'
 import { isLocalCommandCaveatRow } from './claude-rewind-fork'
-import { claudeSourceBlockId } from '../structured/journal/claude-streamed-block-identity'
+import {
+  claudeSourceBlockId,
+  claudeSourceBlockIndex
+} from '../structured/journal/claude-streamed-block-identity'
 import { isClaudeTranscriptRootPrompt } from './claude-transcript-root-prompt'
 import {
   claudeRecord,
@@ -111,11 +114,15 @@ export function claudeConversationForkBoundary(
   }
   const selected = chain.findIndex((row) => {
     const message = claudeRecord(row.message)
+    if (row.uuid === checkpoint.throughMessage?.uuid) {
+      return true
+    }
+    if (typeof message?.id !== 'string') {
+      return false
+    }
+    const index = claudeSourceBlockIndex(row, chain)
     return (
-      row.uuid === checkpoint.throughMessage?.uuid ||
-      (typeof message?.id === 'string' &&
-        typeof row.apiBlockIndex === 'number' &&
-        claudeSourceBlockId(message.id, row.apiBlockIndex) === checkpoint.throughMessage?.uuid)
+      index !== null && claudeSourceBlockId(message.id, index) === checkpoint.throughMessage?.uuid
     )
   })
   const opener = checkpoint.rootMessage
