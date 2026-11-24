@@ -4863,7 +4863,7 @@
             "cursor": {
               "expired": {
                 "label": "サインインの有効期限切れ",
-                "message": "Orca を実行しているコンピュータのターミナルで cursor-agent login を実行し、使用状況を再試行してください。"
+                "message": "Orca を実行しているコンピュータのターミナルで cursor-agent login を実行し、使用状況の取得を再試行してください。"
               },
               "plan": "プラン"
             },

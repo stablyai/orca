@@ -25160,8 +25160,8 @@
       "weekdays": "dias úteis, {{schedule}}"
     },
     "palette": {
-      "placeholder": "Buscar bots, chats, terminais, worktrees, configurações e ações...",
-      "description": "Buscar bots, chats, terminais, worktrees, configurações e ações",
+      "placeholder": "Buscar bots, chats, terminais, espaços de trabalho, tarefas, configurações e ações...",
+      "description": "Buscar bots, chats, terminais, espaços de trabalho, tarefas, configurações e ações",
       "scopedPlaceholder": "Buscar bots...",
       "scopedLabel": "Buscar bots",
       "scopeHint": "Digite @ para mostrar só bots",
@@ -25170,14 +25170,14 @@
       "searchEverything": "Buscar em tudo por \"{{text}}\"",
       "noMatch": "Nenhum bot corresponde a \"{{text}}\"",
       "noBotsYet": "Ainda não há bots",
-      "filtersPaused": "Os filtros se aplicam a worktrees, não a bots",
+      "filtersPaused": "Os filtros se aplicam a espaços de trabalho, não a bots",
       "showEverything": "Mostrar tudo",
       "footerBots": "Bots",
       "matchesPurpose": "Corresponde ao propósito.",
       "scopedStatus_one": "Mostrando só bots. {{count}} resultado encontrado.",
       "scopedStatus_other": "Mostrando só bots. {{count}} resultados encontrados.",
       "scopedStatus_many": "Mostrando só bots. {{count}} resultados encontrados.",
-      "sidebarSearchLabel": "Buscar bots, worktrees e abas do navegador",
+      "sidebarSearchLabel": "Buscar bots, espaços de trabalho e abas do navegador",
       "section": "Bots"
     },
     "templates": {
