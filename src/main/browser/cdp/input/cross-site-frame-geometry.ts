@@ -54,11 +54,15 @@ function frameMapping(model: Record<string, unknown> | null): FrameMapping | nul
   return { ...toBorderBox, offset: applyInverse(toBorderBox, content[0]) }
 }
 
+/** The owner's mapping, and whether its session timed out instead of answering. */
 export async function frameOwnerMapping(
   send: GuestSessionCdpSender,
   sessionId: string | undefined,
   backendNodeId: number
-): Promise<FrameMapping | null> {
+): Promise<{ timedOut: boolean; mapping: FrameMapping | null }> {
   const box = await settle(send('DOM.getBoxModel', { backendNodeId }, sessionId))
-  return frameMapping(readRecord(box.outcome === 'ok' ? box.value : null, 'model'))
+  return {
+    timedOut: box.outcome === 'timeout',
+    mapping: frameMapping(readRecord(box.outcome === 'ok' ? box.value : null, 'model'))
+  }
 }
