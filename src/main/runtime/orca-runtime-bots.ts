@@ -225,7 +225,12 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     bots: () => this.bots.list(),
     store: () => this.store,
     // Closed items also go to each bot's memory/journal/.
-    notify: (scope) => this.botJournal(scope),
+    notify: (scope) => {
+      this.botJournal(scope)
+      if (scope.kinds?.includes('items')) {
+        this.botRunChatCloser?.itemsChanged(scope.botIds ?? [])
+      }
+    },
     sendMail: (mail) => this.botSessions.sendItemMail(mail)
   })
 

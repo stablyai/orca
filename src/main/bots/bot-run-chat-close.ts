@@ -5,13 +5,9 @@ import {
   botRunChatCloseAfterMs,
   type BotRunChatCloseAfter
 } from '../../shared/bots/bot-run-chat-close'
-import { lineText, parseLine, type Entry, type Line } from './bot-run-chat-close-lines'
+import { RunChatList, type Entry, type Line, type RunChatListFile } from './bot-run-chat-close-list'
 
 const MAX_TIMER_DELAY_MS = 2_147_483_647
-// The list is rewritten once its lines (changes appended since the last rewrite) pass this many per
-// tracked chat, so writes stay proportional to changes.
-const COMPACT_LINES_PER_CHAT = 2
-const COMPACT_MIN_LINES = 1000
 // A sweep that failed (chat records unavailable) waits an hour, doubling to a day.
 const FAILED_SWEEP_RETRY_MS = 60 * 60 * 1000
 const MAX_FAILED_SWEEP_RETRY_MS = 24 * 60 * 60 * 1000
@@ -27,12 +23,8 @@ export type BotRunChatState = {
   inUse: boolean
 }
 
-export type BotRunChatCloseDeps = {
-  /** This host's list, one change per line; the last line for a chat wins. */
-  path: () => string
-  read: (path: string) => Promise<string | null>
-  append: (path: string, text: string) => Promise<void>
-  write: (path: string, text: string) => Promise<void>
+/** This host's list, one change per line; the last line for a chat wins. */
+export type BotRunChatCloseDeps = RunChatListFile & {
   now: () => number
   bots: () => readonly Bot[]
   hostDefault: () => BotRunChatCloseAfter
@@ -52,18 +44,20 @@ export type BotRunChatCloseDeps = {
 }
 
 export class BotRunChatCloser {
-  private entries: { path: string; byChat: Map<string, Entry>; lines: number } | null = null
+  private readonly list: RunChatList
   private failedAt: number | null = null
   private failures = 0
-  // Parked chats wait for a sweep, except once per launch, so a held chat never wakes an idle Orca.
-  private sweptThisLaunch = false
+  // A parked chat sets no timer once checked this launch: what holds it wakes it when it ends.
+  private readonly checkedThisLaunch = new Set<string>()
   private timer: ReturnType<typeof setTimeout> | undefined
   private timerAt: number | undefined
   private windows = ''
   // Every read and write of the list runs here, one at a time.
   private queue: Promise<void> = Promise.resolve()
 
-  constructor(private readonly deps: BotRunChatCloseDeps) {}
+  constructor(private readonly deps: BotRunChatCloseDeps) {
+    this.list = new RunChatList(deps)
+  }
 
   /** A run's own conversation just finished: its countdown starts now. A bot on Never tracks none. */
   arm(bot: Bot, sessionId: string): void {
@@ -73,26 +67,58 @@ export class BotRunChatCloser {
     }
     const entry: Entry = { sessionId, botId: bot.id, since: this.deps.now() }
     void this.serial(async () => {
-      const byChat = await this.all()
-      byChat.delete(sessionId)
-      byChat.set(sessionId, entry)
-      await this.save([entry])
-      // Only ever earlier: a later deadline is already covered by the timer's own rearm.
-      if (this.timerAt === undefined || entry.since + ms < this.timerAt) {
-        this.setTimer(entry.since + ms)
-      }
+      await this.list.save([entry])
+      this.moveTimerEarlier(entry.since + ms)
+    })
+  }
+
+  /** What held these chats open ended (a turn, a viewer leaving): each parked one counts down again. */
+  wake(sessionIds: readonly string[]): void {
+    void this.serial(async () => {
+      const byChat = await this.list.load()
+      await this.unpark(sessionIds.flatMap((id) => byChat.get(id) ?? []))
+    })
+  }
+
+  /** These bots' items changed, so an item holding one of their parked chats may have closed. */
+  itemsChanged(botIds: readonly string[]): void {
+    void this.serial(async () => {
+      const byChat = await this.list.load()
+      const parked = botIds.flatMap((botId) => this.list.parkedOf(botId))
+      await this.unpark(parked.flatMap((id) => byChat.get(id) ?? []))
     })
   }
 
   /** A deleted bot's chats are no longer this closer's. */
   forget(botId: string): void {
     void this.serial(async () => {
-      const byChat = await this.all()
+      const byChat = await this.list.load()
       const removed = [...byChat.values()].filter((entry) => entry.botId === botId)
-      removed.forEach((entry) => byChat.delete(entry.sessionId))
-      await this.save(removed.map(({ sessionId }) => ({ sessionId, removed: true as const })))
+      await this.list.save(removed.map(({ sessionId }) => ({ sessionId, removed: true as const })))
       await this.rearmNow()
     })
+  }
+
+  private async unpark(entries: readonly Entry[]): Promise<void> {
+    const now = this.deps.now()
+    const woken = entries.flatMap(({ sessionId, botId, parked }) =>
+      parked ? [{ sessionId, botId, since: now }] : []
+    )
+    await this.list.save(woken)
+    for (const entry of woken) {
+      const bot = this.deps.bots().find((candidate) => candidate.id === entry.botId)
+      const ms = bot ? this.closeAfterMs(bot) : null
+      if (ms !== null) {
+        this.moveTimerEarlier(entry.since + ms)
+      }
+    }
+  }
+
+  // Only ever earlier: a later deadline is already covered by the timer's own rearm.
+  private moveTimerEarlier(at: number): void {
+    if (this.timerAt === undefined || at < this.timerAt) {
+      this.setTimer(at)
+    }
   }
 
   /** Settings or bots changed: a new Close after moves the timer, nothing else does. */
@@ -120,7 +146,6 @@ export class BotRunChatCloser {
     return this.serial(async () => {
       try {
         await this.sweepDue()
-        this.sweptThisLaunch = true
         this.failedAt = null
         this.failures = 0
       } catch (error) {
@@ -142,7 +167,7 @@ export class BotRunChatCloser {
 
   private async sweepDue(): Promise<void> {
     const now = this.deps.now()
-    const byChat = await this.all()
+    const byChat = await this.list.load()
     const bots = new Map(this.deps.bots().map((bot) => [bot.id, bot]))
     const due = [...byChat.values()].flatMap((entry) => {
       const bot = bots.get(entry.botId)
@@ -159,15 +184,9 @@ export class BotRunChatCloser {
     const changes: Line[] = []
     for (const { entry, bot } of due) {
       const next = await this.settle(entry, bot, now, automationChats)
-      if (next) {
-        byChat.set(entry.sessionId, next)
-        changes.push(next)
-      } else {
-        byChat.delete(entry.sessionId)
-        changes.push({ sessionId: entry.sessionId, removed: true })
-      }
+      changes.push(next ?? { sessionId: entry.sessionId, removed: true })
     }
-    await this.save(changes)
+    await this.list.save(changes)
   }
 
   /** What stays of a due entry: null once the chat closed or isn't one to close, else a later start. */
@@ -198,7 +217,7 @@ export class BotRunChatCloser {
     if (first !== 'due') {
       return first
     }
-    // Each of these can end, so the chat is checked again a whole Close after from now.
+    // Each of these ends on its own: the chat is parked until what ends it wakes it.
     if (
       this.deps.owesReply(entry.sessionId) ||
       (await this.deps.busy(bot, entry.sessionId, automationChats))
@@ -218,6 +237,7 @@ export class BotRunChatCloser {
   }
 
   private parked(entry: Entry): Entry {
+    this.checkedThisLaunch.add(entry.sessionId)
     return { sessionId: entry.sessionId, botId: entry.botId, since: this.deps.now(), parked: true }
   }
 
@@ -228,7 +248,7 @@ export class BotRunChatCloser {
 
   private async rearmNow(): Promise<void> {
     this.windows = this.windowsKey()
-    const next = this.nextDeadline(await this.all())
+    const next = this.nextDeadline(await this.list.load())
     if (this.timer && this.timerAt === next) {
       return
     }
@@ -255,13 +275,14 @@ export class BotRunChatCloser {
     this.timerAt = next
   }
 
-  private nextDeadline(byChat: Map<string, Entry>): number | null {
+  private nextDeadline(byChat: ReadonlyMap<string, Entry>): number | null {
     const bots = new Map(this.deps.bots().map((bot) => [bot.id, bot]))
     let next: number | null = null
     for (const entry of byChat.values()) {
       const bot = bots.get(entry.botId)
       // A bot this profile doesn't have keeps its chats for the profile that does.
-      const ms = bot && !(entry.parked && this.sweptThisLaunch) ? this.closeAfterMs(bot) : null
+      const waits = entry.parked && this.checkedThisLaunch.has(entry.sessionId)
+      const ms = bot && !waits ? this.closeAfterMs(bot) : null
       if (ms !== null && (next === null || entry.since + ms < next)) {
         next = entry.since + ms
       }
@@ -282,52 +303,5 @@ export class BotRunChatCloser {
       this.deps.hostDefault(),
       this.deps.bots().map((bot) => [bot.id, bot.runChatsCloseAfter ?? null])
     ])
-  }
-
-  private async all(): Promise<Map<string, Entry>> {
-    const path = this.deps.path()
-    if (this.entries?.path !== path) {
-      const byChat = new Map<string, Entry>()
-      const text = await this.deps.read(path).catch(() => null)
-      let lines = 0
-      for (const line of text?.split('\n') ?? []) {
-        const parsed = parseLine(line)
-        if (!parsed) {
-          continue
-        }
-        lines += 1
-        byChat.delete(parsed.sessionId)
-        if (!('removed' in parsed)) {
-          byChat.set(parsed.sessionId, parsed)
-        }
-      }
-      this.entries = { path, byChat, lines }
-    }
-    return this.entries.byChat
-  }
-
-  /** Appends the changes, or rewrites the list once the appended lines outgrow it. */
-  private async save(changes: readonly Line[]): Promise<void> {
-    if (changes.length === 0) {
-      return
-    }
-    const byChat = await this.all()
-    const entries = this.entries
-    if (!entries) {
-      return
-    }
-    const path = this.deps.path()
-    try {
-      const lines = entries.lines + changes.length
-      if (lines > Math.max(COMPACT_MIN_LINES, byChat.size * COMPACT_LINES_PER_CHAT)) {
-        await this.deps.write(path, [...byChat.values()].map(lineText).join(''))
-        entries.lines = byChat.size
-      } else {
-        await this.deps.append(path, changes.map(lineText).join(''))
-        entries.lines = lines
-      }
-    } catch (error) {
-      console.warn('[bots] could not save the finished run chat list', error)
-    }
   }
 }

@@ -30,6 +30,7 @@ import type { SubscriberDeliveryRetention } from './agent-session-subscriber-del
 import { SubscriberLanes } from './agent-session-subscriber-lane-runners'
 import { trackSubscriberRetention } from './agent-session-subscriber-retention'
 import { AgentSessionPromptSuggestionDelivery } from './agent-session-prompt-suggestion-delivery'
+import { noteAgentSessionViewerLeft } from './agent-session-viewer-left'
 
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 
@@ -334,6 +335,7 @@ export class AgentSessionSubscribers {
     if (session?.size === 0) {
       this.bySession.delete(subscriber.sessionId)
       this.forkMarkers.delete(subscriber)
+      noteAgentSessionViewerLeft(subscriber.sessionId)
     }
     this.promptSuggestions.reconcile(subscriber.sessionId)
   }

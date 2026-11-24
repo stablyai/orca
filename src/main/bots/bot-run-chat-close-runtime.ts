@@ -1,6 +1,9 @@
 // The finished run chat closer on this host: its chat records, settings and the bot chat close.
 import { appendFile, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
+import { onAgentSessionViewerLeft } from '../native-chat/agent-session-wire/publication/subscribers/agent-session-viewer-left'
+import { createCanonicalOrcaSessionResolver } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { resolveHostOwnedSetting } from '../../shared/settings/host-owned-settings'
 import { writePluginFileAtomically } from '../plugins/installation/plugin-atomic-file-write'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
@@ -22,6 +25,23 @@ import { BotRunChatCloser } from './bot-run-chat-close'
 function liveSession(sessionId: string): string {
   const records = readAgentSessionRecordStore()
   return (records && lineageLiveSession(records, sessionId)?.sessionId) ?? sessionId
+}
+
+/** What held a finished run chat open may have ended (its turn, its last viewer): it counts down
+ *  again. One lookup by the chat's id and its /clear root; cached per lineage change. */
+export function wakeRunChat(
+  runtime: Pick<OrcaRuntimeService, 'botRunChatCloser'>,
+  sessionId: string
+): void {
+  const closer = runtime.botRunChatCloser
+  if (closer) {
+    const records = readAgentSessionRecordStore()
+    const root =
+      records && isOrcaSessionId(sessionId)
+        ? createCanonicalOrcaSessionResolver(records)(sessionId)
+        : sessionId
+    closer.wake([sessionId, root])
+  }
 }
 
 /** Starts the closer on this host's runtime and keeps its timer in step with Close after. */
@@ -95,6 +115,7 @@ export function startBotRunChatCloser(runtime: OrcaRuntimeService, store: Store)
         })
       ).stopped
   })
+  onAgentSessionViewerLeft((sessionId) => wakeRunChat(runtime, sessionId))
   store.onSettingsChanged(() => closer.settingsChanged())
   runtime.onBotsWritten(() => closer.settingsChanged())
   closer.rearm()

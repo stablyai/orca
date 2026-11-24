@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Bot } from '../../shared/bot-types'
 import type { BotRunChatCloseAfter } from '../../shared/bots/bot-run-chat-close'
-import { BotRunChatCloser, type BotRunChatState } from './bot-run-chat-close'
+import {
+  BotRunChatCloser,
+  type BotRunChatCloseDeps,
+  type BotRunChatState
+} from './bot-run-chat-close'
 
 const HOUR = 60 * 60 * 1000
 
@@ -26,7 +30,7 @@ function closerWith(input: {
   const closed: string[] = []
   const owes = new Set(input.asked)
   const inUse = new Set(input.inUse)
-  const closer = new BotRunChatCloser({
+  const deps: BotRunChatCloseDeps = {
     path: () => 'list.jsonl',
     read: async () => file,
     append: async (_path, text) => {
@@ -60,15 +64,27 @@ function closerWith(input: {
       closed.push(sessionId)
       return true
     }
-  })
+  }
+  const closer = new BotRunChatCloser(deps)
   return {
     closer,
+    owes,
+    /** A new launch reading the same list. */
+    restart: () => new BotRunChatCloser(deps),
     closed,
     at: (ms: number) => {
       now = ms
     },
     writes: () => writes,
     lines: () => file.split('\n').filter(Boolean).length,
+    parked: () => {
+      const byChat = new Map<string, boolean>()
+      for (const line of file.split('\n').filter(Boolean)) {
+        const parsed = JSON.parse(line)
+        byChat.set(String(parsed.sessionId), parsed.parked === true)
+      }
+      return [...byChat].flatMap(([id, parked]) => (parked ? [id] : []))
+    },
     // Replays the list as a restart reads it: the last line for a chat wins.
     tracked: () => {
       const byChat = new Map<string, boolean>()
@@ -157,5 +173,51 @@ describe('BotRunChatCloser', () => {
 
     expect(run.tracked().sort()).toEqual(['kept'])
     expect(run.lines()).toBeLessThanOrEqual(1001)
+  })
+
+  it('a parked chat sets no timer, and counts down again when what held it ends', async () => {
+    const bots = [botOf('follows'), botOf('other')]
+    const idle = { lastActivityAt: 0, kept: false }
+    const run = closerWith({
+      bots,
+      chats: { asked: idle, item: idle, elsewhere: idle },
+      asked: ['asked'],
+      busy: ['unused', 'item', 'elsewhere']
+    })
+    run.closer.arm(bots[0], 'asked')
+    run.closer.arm(bots[0], 'item')
+    run.closer.arm(bots[1], 'elsewhere')
+    run.at(25 * HOUR)
+    await run.closer.sweep()
+    const parkedTimer = run.closer.nextSweepAt()
+
+    // Its answer came back, so its turn ended; another bot's item change wakes only that bot's.
+    run.owes.delete('asked')
+    run.at(30 * HOUR)
+    run.closer.wake(['asked'])
+    await run.closer.sweep()
+    const afterTurn = run.parked()
+    run.closer.itemsChanged(['follows'])
+    await run.closer.sweep()
+    const wokenTimer = run.closer.nextSweepAt()
+    const stillParked = run.parked()
+    run.closer.clear()
+    // A new launch checks each parked chat once, then waits for its wake.
+    const relaunch = run.restart()
+    relaunch.rearm()
+    await relaunch.sweep()
+    const relaunchTimer = relaunch.nextSweepAt()
+    run.at(49 * HOUR)
+    await relaunch.sweep()
+    const afterCheck = relaunch.nextSweepAt()
+    relaunch.clear()
+
+    expect(parkedTimer).toBeUndefined()
+    expect(wokenTimer).toBe(54 * HOUR)
+    expect(afterTurn.sort()).toEqual(['elsewhere', 'item'])
+    expect(stillParked).toEqual(['elsewhere'])
+    expect(run.closed).toEqual([])
+    expect(relaunchTimer).toBe(49 * HOUR)
+    expect(afterCheck).toBe(54 * HOUR)
   })
 })

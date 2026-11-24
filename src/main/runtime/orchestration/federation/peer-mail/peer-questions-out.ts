@@ -1,6 +1,7 @@
 // The questions this Orca's agents asked agents on paired computers, kept until an answer or notice
 // for each comes back, so an unpair or re-pair tells the askers still waiting that none will come.
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import { resolveBareOrchestrationRecipient } from '../../../rpc/methods/orchestration/messaging/recipient-routing'
@@ -118,12 +119,17 @@ export function tellUnpairedPeerQuestions(
           pairing: peerMailPairing(params.server)
         }
       : { ...params, pairing: params.currentPairing ?? null }
-  db.db
+  // No answer will come for these either; the chats that sent them may close again.
+  const handedOff = db.db
     .prepare(
       `DELETE FROM peer_handoffs_out
-       WHERE environment_id = ?1 AND (?2 IS NULL OR peer_fingerprint <> ?2)`
+       WHERE environment_id = ?1 AND (?2 IS NULL OR peer_fingerprint <> ?2) RETURNING asker`
     )
-    .run(params.environmentId, pairing)
+    .all(params.environmentId, pairing)
+    .flatMap(({ asker }) => parseOrcaSessionAddress(String(asker)) ?? [])
+  if (handedOff.length > 0) {
+    runtime.botRunChatCloser?.wake(handedOff)
+  }
   const waiting = db.db
     .prepare(
       `SELECT message_id, conversation_id, asker, thread_id FROM peer_questions_out

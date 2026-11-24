@@ -89,7 +89,7 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   forgetPeerQuestionOut(db, 'msg_failed')
   expect(sessionAwaitsMail(db, ['handing'])).toBe(false)
   handOff('msg_unpaired')
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no question awaits, so no notice reads the runtime.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no question awaits, so only the absent closer is read from the runtime.
   tellUnpairedPeerQuestions({} as never, db, {
     environmentId: 'server',
     serverName: 'Server',
