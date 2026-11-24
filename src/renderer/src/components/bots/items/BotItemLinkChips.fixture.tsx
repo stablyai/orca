@@ -34,7 +34,7 @@ export const hoverMergedPr = defineFixture({
   width: 720,
   store,
   setup: signedIn(),
-  render: () => header(),
+  render: () => header(LINKS.slice(1, 2)),
   interact: (frame) => hover(frame, '#41188')
 })
 
@@ -42,7 +42,7 @@ export const hoverIssue = defineFixture({
   width: 720,
   store,
   setup: signedIn(),
-  render: () => header(),
+  render: () => header(LINKS.slice(2, 3)),
   interact: (frame) => hover(frame, '#41201')
 })
 
@@ -72,11 +72,7 @@ export const hoverPassingPr = defineFixture({
   width: 720,
   store,
   setup: signedIn(),
-  render: () =>
-    header([
-      pr(41236, 'open', 'success', 'Share link API with expiring tokens'),
-      pr(41230, 'open', 'failure', 'Share dialog: view-only links by default')
-    ]),
+  render: () => header([pr(41236, 'open', 'success', 'Share link API with expiring tokens')]),
   interact: (frame) => hover(frame, '#41236')
 })
 
@@ -98,17 +94,14 @@ export const lookupFails = defineFixture({
   interact: (frame) => hover(frame, `#${FAILING}`)
 })
 
-/** "+N": a GitHub row in its popover shows the same card. */
+/** A GitHub row in the links menu shows the same card. */
 export const overflowRow = defineFixture({
   width: 420,
   store,
   setup: signedIn(),
-  render: () => header(),
+  render: () => header(LINKS),
   interact: async (frame) => {
-    const more = [...frame.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
-      button.textContent?.startsWith('+')
-    )
-    more?.click()
+    frame.querySelector<HTMLButtonElement>('button[aria-label="4 links"]')?.click()
     await new Promise((resolve) => setTimeout(resolve, 300))
     const row = [
       ...document.querySelectorAll<HTMLButtonElement>('[data-radix-popper-content-wrapper] button')
@@ -136,7 +129,7 @@ export const fileChipTooltip = defineFixture({
   width: 720,
   store,
   setup: signedIn(),
-  render: () => header(),
+  render: () => header(LINKS.slice(3, 4)),
   interact: async (frame) => {
     hoverElement(chip(frame, 'share-dialog-mock'))
     await new Promise((resolve) => setTimeout(resolve, 900))
@@ -189,7 +182,7 @@ export const clickOpensLink = defineFixture({
   width: 720,
   store,
   setup: signedIn(),
-  render: () => <PaneProbe />,
+  render: () => <PaneProbe links={LINKS.slice(1, 2)} />,
   interact: async (frame) => {
     const target = chip(frame, '#41188')
     hoverElement(target)
@@ -217,8 +210,7 @@ export const idle = defineFixture({
   render: () => <PaneProbe />
 })
 
-/** The failing PR's first lookup fails and a retry answers: for driving Retry and a reopened card with
- *  a real pointer and keyboard, on a chip and, in a short window, in the "+N" list. */
+/** The first lookup fails and a retry answers from the links menu. */
 export const retryRecovers = defineFixture({
   width: 720,
   store,

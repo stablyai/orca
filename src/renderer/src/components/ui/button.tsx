@@ -57,6 +57,8 @@ const buttonVariants = cva(
         // A quiet secondary link, such as a dialog footer's "Manual steps".
         'link-muted':
           'text-muted-foreground underline-offset-4 hover:text-foreground hover:underline',
+        // A link-style action on an error line, e.g. "Delete anyway" under a failed row.
+        'destructive-link': 'text-destructive underline-offset-4 hover:underline',
         'menu-launch':
           'min-w-0 flex-1 justify-start rounded-l-[7px] rounded-r-none text-foreground',
         'menu-segment': 'rounded-l-none border-l border-border',
@@ -72,7 +74,11 @@ const buttonVariants = cva(
           'text-chat-foreground-faint hover:bg-accent hover:text-chat-foreground aria-expanded:bg-accent aria-expanded:text-chat-foreground aria-pressed:bg-foreground/10 aria-pressed:text-primary aria-pressed:hover:text-primary dark:aria-pressed:bg-accent',
         // The worktree card's "rename failed" chip, for a failure the user can open.
         'destructive-chip':
-          'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive'
+          'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive',
+        // An item's way to what is waiting on the owner: the open ask's amber, which means only that. The
+        // faint fill keeps its amber text at 4.5:1 in the light theme.
+        'needs-you':
+          'border border-agent-question/45 bg-agent-question/6 text-agent-question-text hover:bg-agent-question/20 hover:text-foreground'
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',

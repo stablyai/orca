@@ -10,7 +10,9 @@ const cardVariants = cva(
       size: {
         default: 'gap-6 py-6',
         sm: 'gap-3 py-2.5 shadow-xs',
-        list: 'gap-6 py-1'
+        list: 'gap-6 py-1',
+        // A bottom-right notification card: content owns its padding; notice surface, edge and shadow.
+        notice: 'gap-0 border-(--notice-border) bg-(--notice-surface) py-0 shadow-notice'
       }
     },
     defaultVariants: { size: 'default' }

@@ -1928,12 +1928,16 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "結構化代理程式工作階段尚不可用。稍後重試。",
         "gone": "此聊天不再在此主機上，因此無法在此處重新開啟。",
         "hostCannotOpen": "在 Orca 更新之前，無法重新開啟此聊天。",
         "worktreeDeleted": "工作樹已刪除。",
         "projectRemoved": "專案已從 Orca 移除。",
-        "folderWorkspaceRemoved": "資料夾工作區已移除。"
+        "folderWorkspaceRemoved": "資料夾工作區已移除。",
+        "chatStillStarting": "此聊天仍在啟動中。請稍後再試。",
+        "chatOpenFailed": "無法開啟此聊天。",
+        "chatOpenRetry": "重試",
+        "chatOpenShowDetails": "顯示詳細資料",
+        "chatOpenHideDetails": "隱藏詳細資料"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "使用已佈建根目錄的配方不支援稀疏檢出。"
@@ -3859,27 +3863,20 @@
         "cleanup": {
           "WorkspaceCleanupDialog": {
             "3828408538": "刪除 {{value0}}",
-            "b6bae1eed1": "取消",
-            "38ca0b1400": "這將永久刪除它們的本機檔案。您無法復原此操作。",
             "e97e4580c7": "有改動",
             "9623a5107d": "未推送的提交",
             "e8b3741ff7": "被忽略",
             "a9957007eb": "忽略 {{value0}}",
             "bef0adef9b": "分支",
             "bbb1ab6a6f": "選擇{{value0}}",
-            "b771c92598": "刪除所選內容",
             "7eee951968": "掃描工作區",
             "191f0bc98e": "關閉",
-            "7ae2ad30f4": "重新整理",
             "7f451a3e2c": "無法忽略清理建議",
             "662b8ec3f8": "工作區清理掃描失敗",
             "9cc26c019d": "移除",
             "0e2d235c63": "工作區掃描就緒",
             "4a35c08764": "檢視",
             "47123d0108": "收集工作區資訊。您可以關閉它然後再回來。",
-            "1d3503357d": "刪除作業會繼續進行，您可以先關閉此視窗，稍後再回來。",
-            "4c2990886e": "已刪除 {{value0}}/{{value1}}",
-            "86ba852118": "{{value0}}，{{value1}} 個失敗",
             "archivedStatus": "已封存",
             "mergedStatus": "已合併",
             "unchangedStatus": "沒有新提交",
@@ -19609,6 +19606,10 @@
       "railLabel": "你的訊息",
       "railImageMessage": "圖片附件",
       "railEmptyMessage": "訊息",
+      "railFilterPlaceholder": "篩選你的訊息",
+      "railNoMatches": "沒有相符的訊息",
+      "railTickLabel": "第 {{index}} 則訊息，共 {{count}} 則：{{text}}",
+      "railMatchCount": "{{count}} / {{total}}",
       "prompt": {
         "collapse": "收合",
         "expand": "展開"
@@ -20139,8 +20140,6 @@
           "noSizes": "尚未測量工作區大小。",
           "noSizesDescription": "測量磁碟用量後會顯示大小。",
           "measureSizesTitle": "掃描工作區大小",
-          "sizeOnDisk": "磁碟用量：{{value0}}",
-          "checkingGitRow": "正在檢查 Git 狀態",
           "searchPlaceholder": "搜尋名稱、存放庫、分支、路徑、主機",
           "searchLabel": "搜尋工作區",
           "filters": "篩選條件",
@@ -20198,7 +20197,6 @@
           "noMatches": "沒有工作區符合這些篩選條件。",
           "noMatchesDescription": "所有工作區都在同一清單中；請放寬篩選條件或清除篩選。",
           "sortBy": "排序方式",
-          "sortByField": "按 {{value0}} 排序",
           "sort": {
             "lastActivity": "最近活動",
             "lastVisited": "上次開啟",
@@ -20254,17 +20252,11 @@
             "none": "沒有"
           },
           "idleSignalField": "閒置依據",
-          "updatedAgo": "更新於 {{value0}}",
-          "refreshing": "重新整理中…",
-          "refreshingProgress": "正在重新整理 {{value0}}/{{value1}}",
-          "notMeasured": "尚未測量",
           "openWorkspaceNamed": "開啟 {{value0}}",
           "openWorkspace": "開啟工作區",
-          "workspaceStatus": "工作區狀態：{{value0}}",
           "measuringSizesProgress": "正在掃描 {{value0}}/{{value1}}",
           "measuringSizes": "正在掃描大小",
           "measureSizesFailed": "無法掃描工作區大小",
-          "selectedCount": "已選擇 {{value0}}",
           "gitStatusCheckFailed": "Git 狀態檢查失敗",
           "gitStatusUnverified": "無法驗證 Git 狀態",
           "deleteAnyway": "仍然刪除",
@@ -20312,12 +20304,11 @@
               "finishedAgents": "已完成的代理程式"
             }
           },
-          "forceDeleteRisk_other": "{{count}} 個工作區目前存在風險，可能需要強制刪除",
           "selectionVanishedCount_other": "所選的 {{count}} 個工作區已不存在。",
           "selectionWithheldCount_other": "所選的 {{count}} 個工作區已被目前的篩選條件隱藏，因此已取消選取。",
-          "selectAllSafetyChecked_other": "選取全部 {{count}} 個已通過安全檢查的工作區",
-          "clearSelection": "清除選取",
-          "lastActive": "上次活動時間：{{value0}}"
+          "lastActive": "上次活動時間：{{value0}}",
+          "sortAscending": "升冪",
+          "sortDescending": "降冪"
         },
         "scan": {
           "progress": "正在掃描工作區（{{value0}}/{{value1}}）",
@@ -20355,6 +20346,71 @@
           "ignoredFilesBlocker": "被忽略的本機檔案",
           "ignoredFilesNamed": "被忽略的檔案：{{value0}}",
           "ignoredFilesUnchecked": "被忽略的檔案未完整檢查"
+        },
+        "confirm": {
+          "title_other": "刪除 {{count}} 個工作區？",
+          "localFilesSection": "本機檔案將遺失",
+          "back": "返回",
+          "deletePermanently": "永久刪除",
+          "retryDescription": "這會永久刪除 {{name}} 及其本機檔案。",
+          "showMore": "再顯示 {{count}} 個"
+        },
+        "review": {
+          "title": "檢查工作區",
+          "refresh": "重新整理",
+          "checking": "正在檢查變更",
+          "updatesAvailable": "有更新。重新整理"
+        },
+        "row": {
+          "sizeLabel": "大小",
+          "reviewLabel": "審查",
+          "statusLabel": "狀態",
+          "signalsLabel": "訊號",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "不是 Git 工作區。請改為從 Orca 中移除該專案。",
+          "unreachable": "無法連線 {{host}}。重新連線後即可刪除，或將其從 Orca 中移除。",
+          "mainCheckout": "無法刪除專案的主要簽出。",
+          "uncommittedFiles_other": "{{count}} 個未提交的檔案",
+          "couldntCheck": "無法檢查變更"
+        },
+        "group": {
+          "empty": "這裡沒有工作區。",
+          "nothingLocal": "無本機內容",
+          "localFiles": "有本機檔案",
+          "cannotDelete": "無法刪除",
+          "label": "工作區分組",
+          "selected": "已選 {{count}} 個"
+        },
+        "footer": {
+          "delete_other": "刪除 {{count}} 個工作區",
+          "selected": "已選 {{count}} 個",
+          "waitForDelete": "請等待目前的刪除完成。"
+        },
+        "selectAll": {
+          "partial": "已選 {{selected}}/{{total}} 個",
+          "all": "全選 {{count}} 個"
+        },
+        "runCard": {
+          "title": "正在刪除工作區",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "關閉",
+          "show": "顯示"
+        },
+        "done": {
+          "failedLine_other": "{{count}} 個無法刪除。",
+          "title": "已刪除 {{deleted}}/{{total}} 個工作區",
+          "singleTitle": "已刪除 {{deleted}}/{{total}} 個工作區",
+          "button": "完成"
+        },
+        "deleting": {
+          "title_other": "正在刪除 {{count}} 個工作區",
+          "runInBackground": "在背景執行",
+          "progress": "已刪除 {{done}}/{{total}}",
+          "statusDeleted": "已刪除",
+          "statusDeleting": "正在刪除…",
+          "statusFailed": "無法刪除",
+          "statusWaiting": "等待中",
+          "unconfirmed": "無法確認已刪除。請重新整理以檢查。"
         }
       },
       "creation": {
@@ -20798,12 +20854,13 @@
       "downloadSize": "下載大小為 {{size}} MB。",
       "downloading": "正在下載 {{done}} MB。",
       "downloadingOf": "正在下載 {{done}} MB，共 {{total}} MB。",
-      "external": "使用此主機上找到的 {{agent}} 副本。",
-      "extracting": "正在解壓縮 {{agent}}。",
+      "external": "使用您自己的 {{agent}}",
+      "externalShort": "使用您自己的副本",
+      "extracting": "正在解壓縮 {{agent}}…",
+      "extractingShort": "正在解壓縮…",
       "failed": "安裝失敗。請再試一次。",
       "cancelFailed": "無法取消安裝。請再試一次。",
       "install": "安裝 {{agent}}",
-      "installManaged": "安裝 Orca 提供的副本",
       "notInstalled": "尚未安裝。",
       "progress": "{{agent}} 下載",
       "readFailed": "無法檢查此主機上的 {{agent}}。正在重試。",
@@ -20820,7 +20877,8 @@
       "thisComputer": "這台電腦",
       "unavailable": "{{agent}} 無法在此主機上使用。",
       "update": "更新",
-      "verifying": "正在檢查已下載的執行環境。",
+      "verifying": "正在驗證…",
+      "verifyingAgent": "正在驗證 {{agent}}…",
       "installTitle": "安裝 {{agent}} 即可開始聊天",
       "continueTitle": "安裝 {{agent}} 以繼續",
       "heroBody": "只需下載一次，共 {{size}} MB。執行此聊天的電腦上，所有 {{agent}} 聊天皆可共用。",
@@ -20838,7 +20896,7 @@
       "checkingTitle": "正在檢查下載內容",
       "progressOf": "{{done}} / {{total}} MB",
       "unpackingDetail": "正在解壓縮執行環境",
-      "checkingDetail": "正在檢查已下載的執行環境",
+      "checkingDetail": "正在驗證 {{agent}}…",
       "stepDownload": "下載",
       "stepUnpack": "解壓縮",
       "stepCheck": "檢查"
@@ -23893,7 +23951,10 @@
         "lastItem": "最後一個項目",
         "previous": "上一個項目",
         "next": "下一個項目",
-        "subWhere": "事項 {{number}} · {{chat}}"
+        "linkCount": "{{count}} 個連結",
+        "reply": "回覆",
+        "replyAbove": "回覆上方的問題",
+        "replyBelow": "回覆下方的問題"
       },
       "activity": {
         "linked": "連結了 {{links}}",

@@ -36,6 +36,7 @@ export function MobileBotItemCommentCard({
   failed,
   ref,
   onShowQuestion,
+  onShowLive,
   flash,
   itemScope,
   quickReplies,
@@ -52,6 +53,8 @@ export function MobileBotItemCommentCard({
   ref?: Ref<HostInstance>
   /** Its quote's tap; null while the question isn't in the Activity read so far. */
   onShowQuestion?: (() => void) | null
+  /** Replaced: shows the ask that waits now; null when none waits. */
+  onShowLive?: (() => void) | null
   /** Shown from a reply's quote: a brief highlight, again for each new `at`; `end` stays the same. */
   flash?: { at: number; still: boolean; end: () => void }
   /** The item on its host, which an ask's held answers are kept under. */
@@ -110,6 +113,7 @@ export function MobileBotItemCommentCard({
           answers={entry.answers}
           byOrder={entry.byOrder}
           ended={entry.ended}
+          onShowLive={onShowLive ?? undefined}
           actions={quickReplies}
           disabled={repliesDisabled}
           // Ruled off only below something: a question with no body stays under the name.

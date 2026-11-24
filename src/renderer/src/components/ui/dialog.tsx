@@ -260,12 +260,15 @@ function DialogFooter({
   className,
   showCloseButton = false,
   start,
+  variant = 'default',
   children,
   ...props
 }: React.ComponentProps<'div'> & {
   showCloseButton?: boolean
   /** Unified layout only: one extra on the left (a link, a ghost action or "Don't ask again"). */
   start?: React.ReactNode
+  /** `bar`: a full-width footer strip with a top divider, for edge-to-edge dialogs (p-0). */
+  variant?: 'default' | 'bar'
 }) {
   const t = useTranslate()
   const { unified } = useDialogLayout()
@@ -282,7 +285,11 @@ function DialogFooter({
     return (
       <div
         data-slot="dialog-footer"
-        className={cn('mt-2 flex flex-wrap items-center gap-2', className)}
+        className={cn(
+          'mt-2 flex flex-wrap items-center gap-2',
+          variant === 'bar' && 'mt-0 border-t border-border px-4 py-3',
+          className
+        )}
         {...props}
       >
         {start ? (
@@ -313,7 +320,11 @@ function DialogFooter({
   return (
     <div
       data-slot="dialog-footer"
-      className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)}
+      className={cn(
+        'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end',
+        variant === 'bar' && 'border-t border-border px-4 py-3',
+        className
+      )}
       {...props}
     >
       {children}

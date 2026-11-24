@@ -128,6 +128,30 @@ it('keeps a newer streamed settlement when an older detail window arrives later'
   expect(hook.result.current.available).toBe(true)
 })
 
+it('asks the host once for a window already being read, and hands the second caller that read', async () => {
+  const target = { kind: 'local' } as const
+  const presence = { revision: 'feed-test:2', open: true }
+  const hook = renderHook(() =>
+    useWorkerDockFeed(target, '33333333-3333-4333-8333-333333333333', true, presence)
+  )
+  await act(async () => {
+    rpc.event({ revision: 1, expired: false, identities: [], rows: [], anchor: null })
+  })
+  const before = rpc.calls
+  let first: Promise<void> | undefined
+  let second: Promise<void> | undefined
+  act(() => {
+    first = hook.result.current.loadWindow?.('tail-worker')
+    second = hook.result.current.loadWindow?.('tail-worker')
+  })
+  expect(rpc.calls).toBe(before + 1)
+  expect(second).toBe(first)
+  await act(async () => {
+    rpc.resolve({ revision: 1, expired: false, identities: [], rows: [], anchor: null })
+    await first
+  })
+})
+
 it('seeds a source again after a failed cold read, and never after one that succeeded', async () => {
   const target = { kind: 'local' } as const
   const session = '22222222-2222-4222-8222-222222222222'
