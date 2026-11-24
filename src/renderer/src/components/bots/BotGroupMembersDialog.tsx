@@ -197,7 +197,7 @@ export function BotGroupMembersDialog({
         className={
           group
             ? 'sm:max-w-md'
-            : 'flex w-[calc(100%-2rem)] max-w-md flex-col gap-3.5 p-4 sm:max-w-md'
+            : 'w-[calc(100%-2rem)] max-w-md grid-rows-[auto_auto_auto_minmax(3.5rem,1fr)] gap-3.5 p-4 sm:max-w-md'
         }
         {...(!group && { 'aria-describedby': undefined })}
       >
@@ -248,9 +248,9 @@ export function BotGroupMembersDialog({
           </div>
           <BotNameSuggestion suggestion={suggestion} onTake={setName} compact={!group} />
         </div>
-        {/* Retain room to scroll the picker when a save error makes the dialog taller. */}
-        <div className={group ? undefined : 'grid grid-rows-[auto_minmax(3.5rem,1fr)] gap-1.5'}>
-          <div className={group ? undefined : 'grid gap-1.5'}>
+        {/* Size the picker in the dialog grid so a wrapped error still leaves room to scroll it. */}
+        <div className={group ? undefined : 'contents'}>
+          <div className={group ? undefined : '-mb-2 grid gap-1.5'}>
             <div
               className={
                 group
