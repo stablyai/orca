@@ -3,6 +3,7 @@ import { loadPushConfig } from './config.js'
 import { openPushDatabase } from './database/push-database.js'
 import { createPushServer } from './push-server.js'
 import { resolvePublicUrlProxyAddresses } from './http/public-url-proxy-addresses.js'
+import { clientIpPolicy, describeClientIpPolicy } from './http/client-ip-rate-limit.js'
 
 const loadedConfig = loadPushConfig()
 const [database, publicUrlProxyAddresses] = await Promise.all([
@@ -27,8 +28,7 @@ const config = {
 console.log(
   JSON.stringify({
     event: 'orca_push_client_ip_policy',
-    trustedProxyHops: config.trustedProxyHops,
-    trustedProxyAddresses: config.trustedProxyAddresses
+    ...describeClientIpPolicy(clientIpPolicy(config))
   })
 )
 const {

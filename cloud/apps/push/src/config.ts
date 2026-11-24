@@ -1,6 +1,6 @@
 import { PUSH_DEFAULTS } from '@orca-cloud/push-contract/push-limits'
-import { isIP } from 'node:net'
 import { z } from 'zod'
+import { parseTrustedProxy } from './http/trusted-proxy-addresses.js'
 
 export const PUSH_DATABASE_POOL_MAX = 10
 
@@ -36,22 +36,33 @@ const EnvSchema = z.object({
   // How many proxies append to x-forwarded-for after the client. 0 is Cloud Run
   // alone; raise it to 1 when a load balancer fronts the service.
   ORCA_PUSH_TRUSTED_PROXY_HOPS: z.coerce.number().int().nonnegative().max(8).default(0),
-  // Comma-separated proxy addresses skipped at the end of x-forwarded-for, on top of
-  // the addresses ORCA_PUSH_PUBLIC_URL resolves to at startup.
+  // Comma-separated proxy addresses or CIDR ranges skipped at the end of x-forwarded-for, on top
+  // of the exact addresses ORCA_PUSH_PUBLIC_URL resolves to at startup. Behind an IPv6 load
+  // balancer, list the forwarding rule's /64 (for example 2600:1901:0:1234::/64): Google can
+  // append any address in it, not only the one DNS returns.
   ORCA_PUSH_TRUSTED_PROXY_ADDRESSES: z
     .string()
     .optional()
     .transform((value, context) => {
-      const addresses = (value ?? '')
+      const entries = (value ?? '')
         .split(',')
-        .map((address) => address.trim())
-        .filter((address) => address.length > 0)
-      const invalid = addresses.filter((address) => isIP(address) === 0)
-      if (invalid.length > 0) {
-        context.addIssue({ code: 'custom', message: 'must list IP addresses' })
-        return z.NEVER
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+      const proxies: string[] = []
+      for (const entry of entries) {
+        const parsed = parseTrustedProxy(entry)
+        if (!parsed.ok) {
+          context.addIssue({
+            code: 'custom',
+            message: `ORCA_PUSH_TRUSTED_PROXY_ADDRESSES entry "${entry}": ${parsed.reason}`
+          })
+        } else {
+          proxies.push(
+            parsed.proxy.kind === 'address' ? parsed.proxy.address : parsed.proxy.range.text
+          )
+        }
       }
-      return addresses
+      return proxies
     })
 })
 

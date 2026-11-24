@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { clientIpFromForwardedFor, clientIpPolicy } from './client-ip-rate-limit.js'
 import { resolvePublicUrlProxyAddresses } from './public-url-proxy-addresses.js'
+import { parseTrustedProxy } from './trusted-proxy-addresses.js'
+import { loadPushConfig } from '../config.js'
 
 const LB = '203.0.113.10'
 
@@ -37,6 +39,73 @@ describe('clientIpFromForwardedFor', () => {
     })
     expect(clientIpFromForwardedFor('2001:db8::1, 2001:db8::a', policy)).toBe('2001:db8::1')
     expect(clientIpFromForwardedFor(`198.51.100.1, ${LB}`, policy)).toBe('198.51.100.1')
+  })
+})
+
+describe('trusted proxy ranges', () => {
+  it('skips hops inside a configured IPv4 range', () => {
+    const policy = clientIpPolicy({
+      trustedProxyHops: 0,
+      trustedProxyAddresses: ['203.0.113.0/24']
+    })
+    expect(clientIpFromForwardedFor('198.51.100.1, 203.0.113.77', policy)).toBe('198.51.100.1')
+    expect(clientIpFromForwardedFor('198.51.100.1, ::ffff:203.0.113.5', policy)).toBe(
+      '198.51.100.1'
+    )
+  })
+
+  it("skips any address in an IPv6 forwarding rule's /64 and nothing outside it", () => {
+    const policy = clientIpPolicy({
+      trustedProxyHops: 0,
+      trustedProxyAddresses: ['2600:1901:0:1234::/64', LB]
+    })
+    expect(clientIpFromForwardedFor('2001:db8::1, 2600:1901:0:1234::abcd', policy)).toBe(
+      '2001:db8::1'
+    )
+    expect(
+      clientIpFromForwardedFor('2001:db8::1, 2600:1901:0:1234:ffff:ffff:ffff:ffff', policy)
+    ).toBe('2001:db8::1')
+    expect(clientIpFromForwardedFor('2001:db8::1, 2600:1901:0:1235::1', policy)).toBe(
+      '2600:1901:0:1235::1'
+    )
+    // A single trusted address does not trust its neighbours.
+    expect(clientIpFromForwardedFor('198.51.100.1, 203.0.113.11', policy)).toBe('203.0.113.11')
+  })
+
+  it('refuses malformed or overly broad entries', () => {
+    for (const entry of [
+      'push.example',
+      '203.0.113.0/33',
+      '203.0.113.0/0',
+      '203.0.113.7/24',
+      '2600:1901:0:1234::1/64',
+      '2600:1901::/129',
+      '203.0.113.0/',
+      '203.0.113.0/024',
+      'fe80::1%eth0'
+    ]) {
+      expect(parseTrustedProxy(entry).ok, entry).toBe(false)
+    }
+    expect(parseTrustedProxy('2600:1901:0:1234:0000::/64')).toEqual({
+      ok: true,
+      proxy: {
+        kind: 'range',
+        range: expect.objectContaining({ family: 6, prefix: 64, text: '2600:1901:0:1234::/64' })
+      }
+    })
+  })
+
+  it('rejects a bad ORCA_PUSH_TRUSTED_PROXY_ADDRESSES at startup and names the entry', () => {
+    const env = {
+      ORCA_PUSH_PUBLIC_URL: 'https://push.example',
+      ORCA_PUSH_FCM_PROJECT_ID: 'orca-test',
+      ORCA_PUSH_TRUSTED_PROXY_ADDRESSES: `${LB}, 2600:1901:0:1234::1/64`
+    }
+    expect(() => loadPushConfig(env)).toThrow(/2600:1901:0:1234::1\/64.*host bits are set/)
+    expect(
+      loadPushConfig({ ...env, ORCA_PUSH_TRUSTED_PROXY_ADDRESSES: `${LB}, 2600:1901:0:1234::/64` })
+        .trustedProxyAddresses
+    ).toEqual([LB, '2600:1901:0:1234::/64'])
   })
 })
 
