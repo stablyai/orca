@@ -27,4 +27,8 @@ export function registerRateLimitHandlers(
     rateLimits.fetchInactiveCodexAccountsOnOpen()
   )
   ipcMain.handle('rateLimits:refreshGrok', () => rateLimits.refreshGrok())
+  // Why: a focused WSL host's distro usage is read without switching the desktop's own target.
+  ipcMain.handle('rateLimits:readUsageForRuntimeTarget', (_event, target: RateLimitRuntimeTarget) =>
+    rateLimits.readUsageForRuntimeTarget(target)
+  )
 }

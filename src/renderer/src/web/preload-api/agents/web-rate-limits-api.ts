@@ -161,6 +161,8 @@ export function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimi
     fetchInactiveClaudeAccounts: refreshInactive,
     fetchInactiveCodexAccounts: refreshInactive,
     refreshGrok: refresh,
+    // Why: a web client has no WSL host of its own; the server's snapshot is the only reading.
+    readUsageForRuntimeTarget: async () => readRateLimits(false),
     onUpdate: (callback) => {
       listeners.add(callback)
       startStream()

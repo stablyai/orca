@@ -6123,7 +6123,6 @@
             "gotIt": "Got it"
           },
           "UsageRosterPanel": {
-            "wslUsageNotShown": "WSL usage isn't shown yet",
             "title": "Usage",
             "openDetails": "Open usage details",
             "notSignedIn": "not signed in",

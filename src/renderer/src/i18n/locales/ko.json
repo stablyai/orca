@@ -5161,7 +5161,6 @@
             "gotIt": "확인"
           },
           "UsageRosterPanel": {
-            "wslUsageNotShown": "WSL 사용량은 아직 표시되지 않습니다",
             "title": "사용량",
             "openDetails": "사용량 세부 정보 열기",
             "notSignedIn": "로그인하지 않음",

@@ -29,6 +29,16 @@ const usage: ProviderRateLimits = {
     resetDescription: null
   }
 }
+/** A distro read: the focused WSL host's own selected-account reading, not the host runtime's. */
+const wslUsage: ProviderRateLimits = {
+  ...usage,
+  session: {
+    usedPercent: 62,
+    windowMinutes: 300,
+    resetsAt: Date.now() + 3600000,
+    resetDescription: null
+  }
+}
 type FixtureOptions = {
   /** The selected account still lists a login, but its usage read reports it signed out. */
   signInAgain?: boolean
@@ -89,7 +99,7 @@ function fixture(
         activeClaudeManagedAccountIdsByRuntime: state.activeAccountIdsByRuntime!
       },
       rateLimits: createEmptyRateLimitState({
-        claude,
+        claude: wsl ? wslUsage : claude,
         claudeTarget: wsl
           ? { runtime: 'wsl', wslDistro: 'Ubuntu' }
           : { runtime: 'host', wslDistro: null },
@@ -108,15 +118,18 @@ function fixture(
     render: () => (
       <div className="flex h-[720px] items-end bg-background p-3">
         <ClaudeSwitcherForOwner
-          claude={claude}
+          claude={wsl ? wslUsage : claude}
           iconOnly={false}
           owner={{ target: { kind: 'local' }, wslHostDistro: wsl ? 'Ubuntu' : null }}
           ownerUsage={{
             owner: { target: { kind: 'local' }, wslHostDistro: wsl ? 'Ubuntu' : null },
             rateLimits: useAppStore.getState().rateLimits,
             accounts: null,
-            remoteOwner: null,
-            refreshRemote: null
+            // Why: the hook reports a WSL owner as this desktop standing in for the distro.
+            remoteOwner: wsl
+              ? { environmentId: null, wslDistro: 'Ubuntu', label: 'WSL Ubuntu' }
+              : null,
+            refreshRemote: wsl ? async () => {} : null
           }}
         />
       </div>

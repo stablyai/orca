@@ -101,7 +101,8 @@ export function ClaudeSwitcherForOwner({
       runtimeTarget,
       claudeAccountSyncKey,
       EMPTY_CLAUDE_ACCOUNTS,
-      !ownerUsage.remoteOwner
+      // Why: a WSL host's distro accounts are this desktop's, so its local list applies too.
+      !ownerUsage.remoteOwner || wslHostDistro !== null
     )
   const { signingInId, handleSignIn } = useClaudeAccountSignIn(loadAccounts, mountedRef)
   const {
@@ -169,6 +170,10 @@ export function ClaudeSwitcherForOwner({
       // Why: remote selections live on the server; local GlobalSettings are untouched, so refetching is pure churn.
       if (!hasActiveRuntimeEnvironment) {
         await fetchSettings()
+      }
+      // Why: a distro selection changes its own reading, which no stream pushes to the footer.
+      if (wslHostDistro) {
+        void ownerUsage.refreshRemote?.()
       }
       const nextActiveAccountId = getClaudeStatusActiveId(next, target)
       if (runningSessions || (!chatAction && previousActiveAccountId !== nextActiveAccountId)) {

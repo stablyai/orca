@@ -74,5 +74,6 @@ export type RateLimitsApi = {
   fetchInactiveClaudeAccounts: () => Promise<void>
   fetchInactiveCodexAccounts: () => Promise<void>
   refreshGrok: () => Promise<RateLimitState>
+  readUsageForRuntimeTarget: (target: RateLimitRuntimeTarget) => Promise<RateLimitState>
   onUpdate: (callback: (state: RateLimitState) => void) => () => void
 }
