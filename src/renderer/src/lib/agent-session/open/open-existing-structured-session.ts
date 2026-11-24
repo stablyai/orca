@@ -28,6 +28,7 @@ import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/sessio
 import type { OrchestrationPartyLocationResult } from '../../../../../shared/orchestration/orchestration-caller-status'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 
 const STRUCTURED_SESSION_RESTORE_TIMEOUT_MS = 5_000
 
@@ -45,12 +46,13 @@ export type StructuredSessionOpenAdapterDeps = {
     target: { sessionId: string; worktreeId: string },
     owner: RuntimeClientTarget
   ) => readonly StructuredSessionOpenTab[]
-  refresh: (worktreeId: string, target?: RuntimeClientTarget) => Promise<void>
+  refresh: (target: StructuredSessionOpenTarget, owner: RuntimeClientTarget) => Promise<void>
   reveal: (target: {
     worktreeId: string
     sessionId: string
     target?: RuntimeClientTarget
   }) => Promise<StructuredSessionRevealOutcome>
+  current?: () => boolean
 }
 
 const defaultDeps: StructuredSessionOpenAdapterDeps = {
@@ -63,16 +65,47 @@ const defaultDeps: StructuredSessionOpenAdapterDeps = {
     })
     return tab ? [{ id: tab.id, sessionId: tab.entityId, agent: tab.agentSessionAgent }] : []
   },
-  refresh: refreshStructuredSessionTabs,
+  refresh: async (target, owner) => {
+    await refreshStructuredSessionTabs(target.worktreeId, owner)
+  },
   reveal: revealStructuredSession
 }
 
 export function structuredSessionOpenDepsWaitingForPairedTab(
-  sessionId: string
+  stillShowingWorkspace: () => boolean
 ): StructuredSessionOpenAdapterDeps {
+  let superseded = false
+  let mirrorDeadline: number | undefined
+  const current = (): boolean => {
+    superseded ||= !stillShowingWorkspace()
+    return !superseded
+  }
   return {
     ...defaultDeps,
-    refresh: (worktreeId, owner) => refreshStructuredSessionTabs(worktreeId, owner, sessionId)
+    current,
+    refresh: async ({ worktreeId, sessionId }, owner) => {
+      if (!current()) {
+        return
+      }
+      const deadline = performance.now() + STRUCTURED_SESSION_RESTORE_TIMEOUT_MS
+      const snapshot = await refreshStructuredSessionTabs(worktreeId, owner)
+      if (
+        !snapshot ||
+        typeof snapshot.worktree !== 'string' ||
+        !worktreeIdsEqual(snapshot.worktree, worktreeId) ||
+        !Array.isArray(snapshot.tabs) ||
+        !snapshot.tabs.some((tab) => tab.type === 'agent-session' && tab.sessionId === sessionId)
+      ) {
+        return
+      }
+      // The reply can beat the mirror. A retry within this open shares the first wait's budget.
+      mirrorDeadline ??= deadline
+      await waitForPairedStructuredSessionTab(
+        { workspaceId: worktreeId, sessionId, target: owner },
+        mirrorDeadline - performance.now(),
+        current
+      )
+    }
   }
 }
 
@@ -204,6 +237,7 @@ async function executeDesktopStructuredSession(
       }
     }
   return openStructuredAgentSession(source, {
+    current: deps.current,
     locate: locate ?? party('orchestration.partyLocation'),
     ...(locate ? {} : { open: party('orchestration.partyOpen') }),
     tabs: (target) => deps.tabs(target, owner),
@@ -212,7 +246,7 @@ async function executeDesktopStructuredSession(
         .tabs(target, owner)
         .some((row) => row.id === tab.id && row.sessionId === target.sessionId) &&
       deps.activate({ ...target, target: owner }),
-    refresh: (target) => deps.refresh(target.worktreeId, owner),
+    refresh: (target) => deps.refresh(target, owner),
     reveal: async (target) => {
       const outcome = await deps.reveal({ ...target, target: owner })
       return typeof outcome === 'object'
@@ -291,19 +325,13 @@ type AgentSessionRevealReply =
 
 async function refreshStructuredSessionTabs(
   worktreeId: string,
-  target?: RuntimeClientTarget,
-  waitForSessionId?: string
-): Promise<void> {
-  const state = useAppStore.getState()
-  const host =
-    target ??
-    runtimeTargetForOwnerEnvironment(runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId))
+  host: RuntimeClientTarget
+): Promise<RuntimeMobileSessionTabsResult | undefined> {
   if (host.kind === 'local') {
     await withStructuredSessionRestoreTimeout(refreshLocalStructuredSessionWorktreeTabs(worktreeId))
-    return
+    return undefined
   }
-  const deadline = performance.now() + STRUCTURED_SESSION_RESTORE_TIMEOUT_MS
-  const snapshot = await withStructuredSessionRestoreTimeout(
+  return withStructuredSessionRestoreTimeout(
     callRuntimeRpc<RuntimeMobileSessionTabsResult>(
       host,
       'session.tabs.list',
@@ -311,25 +339,16 @@ async function refreshStructuredSessionTabs(
       { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS }
     )
   )
-  if (
-    waitForSessionId &&
-    Array.isArray(snapshot?.tabs) &&
-    snapshot.tabs.some((tab) => tab.type === 'agent-session' && tab.sessionId === waitForSessionId)
-  ) {
-    // The host answered that the tab exists, but this window activates it from the paired mirror.
-    await waitForPairedStructuredSessionTab(
-      { workspaceId: worktreeId, sessionId: waitForSessionId, target: host },
-      deadline - performance.now()
-    )
-  }
 }
 
 function waitForPairedStructuredSessionTab(
   tab: Parameters<typeof findStructuredAgentSessionTab>[1],
-  timeoutMs: number
+  timeoutMs: number,
+  current: () => boolean
 ): Promise<void> {
   if (
     timeoutMs <= 0 ||
+    !current() ||
     findStructuredAgentSessionTab(useAppStore.getState().unifiedTabsByWorktree, tab)
   ) {
     return Promise.resolve()
@@ -343,9 +362,10 @@ function waitForPairedStructuredSessionTab(
     const timer = setTimeout(finish, timeoutMs)
     const unsubscribe = useAppStore.subscribe((state, previous) => {
       if (
-        state.unifiedTabsByWorktree[tab.workspaceId] !==
+        !current() ||
+        (state.unifiedTabsByWorktree[tab.workspaceId] !==
           previous.unifiedTabsByWorktree[tab.workspaceId] &&
-        findStructuredAgentSessionTab(state.unifiedTabsByWorktree, tab)
+          findStructuredAgentSessionTab(state.unifiedTabsByWorktree, tab))
       ) {
         finish()
       }

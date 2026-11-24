@@ -122,13 +122,24 @@ export async function openBotLinkHome(
       if (!openBotHome(bot)) {
         return
       }
+      const workspaceId = folderWorkspaceKey(bot.folderWorkspaceId)
+      const stillShowingHome = (): boolean => {
+        const { activeWorktreeId, activeWorkspaceExecutionHostId, activeView } =
+          useAppStore.getState()
+        return (
+          activeWorktreeId === workspaceId &&
+          activeWorkspaceExecutionHostId === hostId &&
+          activeView === 'terminal'
+        )
+      }
       await activateAiVaultStructuredSession(
+        { structuredSession: { workspaceId, sessionId } },
         {
-          structuredSession: { workspaceId: folderWorkspaceKey(bot.folderWorkspaceId), sessionId }
-        },
-        {
-          ...structuredSessionOpenFeedback,
-          ...structuredSessionOpenDepsWaitingForPairedTab(sessionId)
+          deps: {
+            ...structuredSessionOpenFeedback,
+            ...structuredSessionOpenDepsWaitingForPairedTab(stillShowingHome)
+          },
+          retry: () => openBotLinkHome(botId, conversation)
         },
         botTarget(bot)
       )
