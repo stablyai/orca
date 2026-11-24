@@ -372,8 +372,8 @@ const styles = themedStyleSheet(() => ({
   },
   main: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  title: { flex: 1, fontSize: 15, color: colors.textSecondary, fontWeight: '500' },
-  unread: { color: colors.textPrimary, fontWeight: '700' },
+  title: { flex: 1, fontSize: 15, color: colors.textPrimary, fontWeight: '500' },
+  unread: { fontWeight: '700' },
   fold: {
     minWidth: 44,
     minHeight: 44,

@@ -830,7 +830,17 @@
       "offOneBody": "To turn them on, open Orca on {{host}} and go to Settings › Bots › Enable bots.",
       "offServerBody": "To turn them on, open Orca on {{desktop}} and go to Settings › Bots › Enable bots on {{host}}.",
       "offManyTitle": "Bots are off on your computers",
-      "offManyBody": "To turn them on, open Orca on each computer and go to Settings › Bots › Enable bots."
+      "offManyBody": "To turn them on, open Orca on each computer and go to Settings › Bots › Enable bots.",
+      "waits": {
+        "questions_one": "question",
+        "questions_other": "{{count}} questions",
+        "access_one": "access request",
+        "access_other": "{{count}} access requests",
+        "workers_one": "worker",
+        "workers_other": "{{count}} workers",
+        "items_one": "item",
+        "items_other": "{{count}} items"
+      }
     }
   },
   "hooks": {
@@ -5806,7 +5816,10 @@
       "needsLocalBot": "This group needs at least one bot on this computer.",
       "remoteOnComputer": "Add or remove bots from other computers in Orca on {{host}}.",
       "stopCouldNotBeConfirmed": "Stop could not be confirmed.",
-      "notStarted": "Not started"
+      "notStarted": "Not started",
+      "memberCount_one": "{{count}} bot",
+      "memberCount_other": "{{count}} bots",
+      "memberCount": "{{count}} bots"
     },
     "templates": {
       "title": "Bot templates",
@@ -6269,8 +6282,7 @@
       "noBotsYet": "No bots yet.",
       "offline": "Offline",
       "updateToSee": "Update Orca on {{host}} to see its bots.",
-      "offEnd": "Bots are off on {{host}}.",
-      "updateToCreate": "Update Orca on {{host}} to make bots from your phone."
+      "offEnd": "Bots are off on {{host}}."
     },
     "chats": {
       "replying": "Replying…",

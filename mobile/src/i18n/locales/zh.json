@@ -6610,8 +6610,7 @@
       "noBotsYet": "还没有 bots",
       "offline": "离线",
       "updateToSee": "更新 {{host}} 上的 Orca 以查看它的 bots",
-      "offEnd": "{{host}} 上的 Bots 已关闭",
-      "updateToCreate": "更新 {{host}} 上的 Orca，即可从手机创建 bots"
+      "offEnd": "{{host}} 上的 Bots 已关闭"
     },
     "items": {
       "chat": {
