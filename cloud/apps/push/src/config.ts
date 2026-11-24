@@ -1,4 +1,5 @@
 import { PUSH_DEFAULTS } from '@orca-cloud/push-contract/push-limits'
+import { isIP } from 'node:net'
 import { z } from 'zod'
 
 export const PUSH_DATABASE_POOL_MAX = 10
@@ -34,7 +35,24 @@ const EnvSchema = z.object({
   ORCA_PUSH_FCM_PROJECT_ID: z.string().regex(/^[a-z0-9-]{4,64}$/),
   // How many proxies append to x-forwarded-for after the client. 0 is Cloud Run
   // alone; raise it to 1 when a load balancer fronts the service.
-  ORCA_PUSH_TRUSTED_PROXY_HOPS: z.coerce.number().int().nonnegative().max(8).default(0)
+  ORCA_PUSH_TRUSTED_PROXY_HOPS: z.coerce.number().int().nonnegative().max(8).default(0),
+  // Comma-separated proxy addresses skipped at the end of x-forwarded-for, on top of
+  // the addresses ORCA_PUSH_PUBLIC_URL resolves to at startup.
+  ORCA_PUSH_TRUSTED_PROXY_ADDRESSES: z
+    .string()
+    .optional()
+    .transform((value, context) => {
+      const addresses = (value ?? '')
+        .split(',')
+        .map((address) => address.trim())
+        .filter((address) => address.length > 0)
+      const invalid = addresses.filter((address) => isIP(address) === 0)
+      if (invalid.length > 0) {
+        context.addIssue({ code: 'custom', message: 'must list IP addresses' })
+        return z.NEVER
+      }
+      return addresses
+    })
 })
 
 export type ApnsCredentials = { keyPem: string; keyId: string; teamId: string }
@@ -50,6 +68,7 @@ export type PushConfig = {
   apnsTopic: string
   fcmProjectId: string
   trustedProxyHops: number
+  trustedProxyAddresses: readonly string[]
 }
 
 function canonicalOrigin(value: string, name: string): string {
@@ -103,6 +122,7 @@ export function loadPushConfig(env: NodeJS.ProcessEnv = process.env): PushConfig
     apns: readApnsCredentials(parsed),
     apnsTopic: parsed.ORCA_PUSH_APNS_TOPIC,
     fcmProjectId: parsed.ORCA_PUSH_FCM_PROJECT_ID,
-    trustedProxyHops: parsed.ORCA_PUSH_TRUSTED_PROXY_HOPS
+    trustedProxyHops: parsed.ORCA_PUSH_TRUSTED_PROXY_HOPS,
+    trustedProxyAddresses: parsed.ORCA_PUSH_TRUSTED_PROXY_ADDRESSES
   }
 }

@@ -2,15 +2,32 @@ import { startPushBackground } from './push-background.js'
 import { loadPushConfig } from './config.js'
 import { openPushDatabase } from './database/push-database.js'
 import { createPushServer } from './push-server.js'
+import { resolvePublicUrlProxyAddresses } from './http/public-url-proxy-addresses.js'
 
-const config = loadPushConfig()
-const database = await openPushDatabase({
-  ...(config.databaseUrl === undefined ? {} : { databaseUrl: config.databaseUrl }),
-  dataDir: config.dataDir,
-  poolMax: config.databasePoolMax,
-  applicationName: 'orca-push',
-  readOnly: config.mode === 'validation'
-})
+const loadedConfig = loadPushConfig()
+const [database, publicUrlProxyAddresses] = await Promise.all([
+  openPushDatabase({
+    ...(loadedConfig.databaseUrl === undefined ? {} : { databaseUrl: loadedConfig.databaseUrl }),
+    dataDir: loadedConfig.dataDir,
+    poolMax: loadedConfig.databasePoolMax,
+    applicationName: 'orca-push',
+    readOnly: loadedConfig.mode === 'validation'
+  }),
+  resolvePublicUrlProxyAddresses(loadedConfig.publicUrl)
+])
+const config = {
+  ...loadedConfig,
+  trustedProxyAddresses: [
+    ...new Set([...loadedConfig.trustedProxyAddresses, ...publicUrlProxyAddresses])
+  ]
+}
+console.log(
+  JSON.stringify({
+    event: 'orca_push_client_ip_policy',
+    trustedProxyHops: config.trustedProxyHops,
+    trustedProxyAddresses: config.trustedProxyAddresses
+  })
+)
 const {
   server,
   challenges,

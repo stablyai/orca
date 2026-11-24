@@ -14,16 +14,46 @@ export type ClientIpRateLimiterOptions = {
 
 type Bucket = { tokens: number; updatedAt: number }
 
-// Read from the right: Cloud Run appends the peer, while callers can forge earlier entries. Skip trusted proxy hops (0 direct, 1 behind LB); short chains share the throttled fallback bucket.
-export function readClientIp(context: Context, trustedProxyHops = 0): string {
+export type ClientIpPolicy = {
+  trustedProxyHops: number
+  /** Lowercase addresses only a proxy in front of this service appends, such as the load balancer's own address. */
+  trustedProxyAddresses: ReadonlySet<string>
+}
+
+export function clientIpPolicy(config: {
+  trustedProxyHops: number
+  trustedProxyAddresses: readonly string[]
+}): ClientIpPolicy {
+  return {
+    trustedProxyHops: config.trustedProxyHops,
+    trustedProxyAddresses: new Set(
+      config.trustedProxyAddresses.map((address) => address.toLowerCase())
+    )
+  }
+}
+
+// Read from the right: Google's front end appends the peer, while callers can forge earlier entries. Skip the trusted hop count and any trailing hop that is a trusted proxy's own address, so a load balancer's address never becomes everyone's shared bucket; short chains share the throttled fallback bucket.
+export function clientIpFromForwardedFor(
+  header: string | undefined,
+  policy: ClientIpPolicy
+): string {
   const hops =
-    context.req
-      .header('x-forwarded-for')
+    header
       ?.split(',')
       .map((hop) => hop.trim())
       .filter((hop) => hop.length > 0) ?? []
-  const client = hops[hops.length - 1 - trustedProxyHops]
-  return client ?? UNKNOWN_CLIENT_IP
+  let index = hops.length - 1
+  for (let skipped = 0; index >= 0; index--, skipped++) {
+    const trusted =
+      skipped < policy.trustedProxyHops ||
+      policy.trustedProxyAddresses.has(hops[index]!.toLowerCase())
+    if (!trusted) break
+  }
+  return hops[index] ?? UNKNOWN_CLIENT_IP
+}
+
+export function readClientIp(context: Context, policy: ClientIpPolicy): string {
+  return clientIpFromForwardedFor(context.req.header('x-forwarded-for'), policy)
 }
 
 // Per-instance admission avoids a database round trip; capacity scales with instance count.
@@ -69,17 +99,16 @@ export class ClientIpRateLimiter {
 }
 
 export type ClientIpRateLimitOptions = {
-  trustedProxyHops?: number
+  policy: ClientIpPolicy
   onLimited?: () => void
 }
 
 export function clientIpRateLimit(
   limiter: ClientIpRateLimiter,
-  options: ClientIpRateLimitOptions = {}
+  options: ClientIpRateLimitOptions
 ): MiddlewareHandler {
-  const trustedProxyHops = options.trustedProxyHops ?? 0
   return async (context, next) => {
-    if (!limiter.allow(readClientIp(context, trustedProxyHops))) {
+    if (!limiter.allow(readClientIp(context, options.policy))) {
       options.onLimited?.()
       return context.json({ error: 'rate_limited' }, 429)
     }
