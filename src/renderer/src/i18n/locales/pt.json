@@ -8258,7 +8258,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "Perfil \"{{value0}}\" removido.",
-          "2d4bea7f35": "Cookies padrão limpos.",
           "796d846483": "Nenhum cookie importado",
           "c29648fe5b": "Ativo",
           "b4c167764d": "{{value0}} cookies importados do arquivo para {{value1}}.",
@@ -8266,10 +8265,7 @@
           "b4e9d3f2a1c5": "{{value0}} cookies importados de {{value1}} para {{value2}}.",
           "c5a273a809": "De {{value0}}",
           "80bffd32bf": "Importar Cookies",
-          "bd7d68f138": "De um Arquivo…",
-          "4054c458e1": "Limpar cookies padrão",
-          "3b662becd5": "Limpar os cookies do perfil padrão?",
-          "f159cf5a3e": "Isso pode desconectar você de sites neste perfil."
+          "bd7d68f138": "De um Arquivo…"
         },
         "GhosttyImportModal": {
           "f96688b6bc": "Cancelar",

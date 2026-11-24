@@ -7960,7 +7960,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "\"{{value0}}\" profili kaldırıldı.",
-          "2d4bea7f35": "Varsayılan çerezler temizlendi.",
           "796d846483": "Çerez içe aktarılmadı",
           "c29648fe5b": "Etkin",
           "b4c167764d": "Dosyadan {{value0}} çerez, {{value1}} içine aktarıldı.",
@@ -7968,10 +7967,7 @@
           "b4e9d3f2a1c5": "{{value1}} kaynağından {{value0}} çerez, {{value2}} içine aktarıldı.",
           "c5a273a809": "{{value0}} kaynağından",
           "80bffd32bf": "Çerezleri İçe Aktar",
-          "bd7d68f138": "Dosyadan…",
-          "4054c458e1": "Varsayılan çerezleri temizle",
-          "3b662becd5": "Varsayılan profildeki çerezler temizlensin mi?",
-          "f159cf5a3e": "Bu profildeki sitelerden çıkış yapmanıza neden olabilir."
+          "bd7d68f138": "Dosyadan…"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Çerez içe aktarma uygun değilse Computer Use, yerel uygulamaları kontrol edebilir ve uygun olduğunda mevcut oturum açılmış tarayıcı oturumlarını kullanabilir. Orca Computer Use becerisini yükleyin; macOS ayrıca gizlilik izinleri gerektirir.",
