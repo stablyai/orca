@@ -930,6 +930,25 @@
       "info": "자동 업데이트 안내",
       "saveFailed": "자동 업데이트 설정을 저장하지 못했습니다."
     },
+    "cloudConsole": {
+      "manageInBrowser": "브라우저에서 관리",
+      "openFailed": "브라우저를 열 수 없습니다. 다시 시도하세요.",
+      "teamAdmin": {
+        "title": "팀 및 관리자",
+        "description": "브라우저에서 팀을 관리하세요."
+      },
+      "signInFailed": "콘솔에 로그인하지 못했습니다",
+      "signInFailedDetail": "그래도 브라우저에서 콘솔을 열었습니다. 계속하려면 브라우저에서 로그인하세요."
+    },
+    "mobile": {
+      "teamDisabledRelay": "팀에서 Orca Relay를 꺼 두었습니다. LAN을 사용하세요."
+    },
+    "computerUse": {
+      "teamDisabled": "팀에서 컴퓨터 사용을 꺼 두었습니다."
+    },
+    "artifacts": {
+      "teamDisabled": "팀에서 아티팩트 공유를 꺼 두었습니다."
+    },
     "general": {
       "openInMenu": {
         "keyword": {
@@ -1056,6 +1075,7 @@
       "1b4d825e0e": "업데이트 지연",
       "ab7e864374": "업데이트 지연 안내",
       "ee1d96f74a": "이번만 지연 건너뛰기",
+      "teamManaged": "팀에서 설정함",
       "description": "새 버전이 게시된 후 설정한 일수만큼 기다렸다가 Orca에서 업데이트를 제공합니다.",
       "none": "없음",
       "availableSoon": "{{relative}} 이용 가능",
@@ -12363,6 +12383,7 @@
           "pathLabel": "개발 플러그인 폴더 경로",
           "placeholder": "플러그인 폴더 경로",
           "add": "경로 추가",
+          "teamDisabled": "팀에서 개발 폴더를 꺼 두었습니다.",
           "reviewHelp": "한 번만 검토합니다. 이후 코드 변경은 묻지 않고 실행됩니다.",
           "dialogTitle": "개발 폴더"
         },
@@ -12701,6 +12722,11 @@
           "title": "Orca 계정",
           "description": "작업을 즉시 공유하고 어디서나 Orca Mobile로 데스크톱에 연결하세요.",
           "searchDescription": "아티팩트 및 Orca Relay에서 사용하는 계정에 로그인하거나 로그아웃합니다.",
+          "managed": "팀에서 일부 Orca 설정을 관리합니다.",
+          "deviceReportNamedViewers": "{{teams}}의 소유자와 관리자가 이 기기의 보고서를 볼 수 있습니다.",
+          "deviceReportViewers": "팀 소유자와 관리자가 이 기기의 보고서를 볼 수 있습니다.",
+          "reportingDetails": "기기 보고 세부 정보",
+          "reportingDisclosure": "기기 화면에는 Orca 버전, 출시 채널, 기기 이름, 플랫폼, 업데이트 상태, Orca가 설치하지 못한 필수 플러그인, 기기가 마지막으로 보고한 시각이 표시됩니다.",
           "benefitsTitle": "계정에 포함된 기능",
           "artifactsTitle": "아티팩트 공유",
           "artifactsDescription": "HTML 및 Markdown 파일을 게시하고 Orca에서 모든 공유 링크를 관리합니다.",
@@ -13599,6 +13625,7 @@
           "customEditor": "편집기"
         },
         "PluginManagerRows": {
+          "requiredByTeam": "팀에서 필수로 지정함",
           "reinstall": "다시 설치",
           "crashedCount": "{{value0}}번 연속 충돌함",
           "crashed": "시작 중 충돌함",
@@ -25474,6 +25501,12 @@
     }
   },
   "updates": {
+    "installOnQuit": {
+      "title": "업데이트 설치 준비 완료",
+      "summary": "Orca를 종료하세요. 설치가 끝나면 다시 여세요.",
+      "quit": "Orca 종료",
+      "later": "나중에"
+    },
     "installBlock": {
       "instancesLabel": "Orca를 사용 중인 인스턴스",
       "browserLabel": "백그라운드 브라우저",
@@ -25536,6 +25569,7 @@
       "rateLimitedInMinutes_other": "GitHub 속도 제한에 도달했습니다. 약 {{count}}분 후 다시 시도하세요.",
       "rateLimitedInMinutesSignedOut_one": "GitHub 요청 한도에 도달했습니다. 약 {{count}}분 뒤에 다시 시도하거나, `gh auth login`을 실행해 Orca가 계정의 더 높은 한도를 사용하게 하세요.",
       "rateLimitedInMinutesSignedOut_other": "GitHub 속도 제한에 도달했습니다. 약 {{count}}분 후 다시 시도하거나 `gh auth login`을 실행하여 Orca가 계정의 더 높은 한도를 사용할 수 있도록 하세요.",
+      "teamUpdatePolicy": "팀에서 Orca 업데이트를 관리합니다.",
       "automaticInstallCheckpointFailed": "Orca가 다시 시작하기 전에 현재 창을 저장하지 못했습니다. 업데이트를 다시 설치해 보세요.",
       "automaticInstallTerminalBusy": "다시 시작하면 일부 터미널이 종료됩니다. Orca가 이후 업데이트 확인에서 다시 시도합니다.",
       "macStagingTimeout": "macOS에서 아직 업데이트를 준비하고 있습니다. 이 상태가 계속되면 Orca를 종료한 뒤 다시 여세요."
@@ -25544,6 +25578,21 @@
       "downloading": "Orca {{version}} 다운로드 중…",
       "installing": "Orca {{version}} 설치 중…",
       "restarting": "Orca가 자동으로 다시 시작됩니다."
+    },
+    "emergencyRequired": {
+      "title": "Orca {{version}}이(가) 필요합니다",
+      "summary": "Orca {{version}}이(가) 필요합니다. 다시 시작하여 업데이트하세요."
+    },
+    "teamRequired": {
+      "summary": "팀에서 Orca {{version}}을(를) 요구합니다. 다시 시작하여 업데이트하세요.",
+      "title": "팀에서 Orca {{version}}을(를) 요구합니다",
+      "restartNow": "지금 재시작",
+      "countdown": "카운트다운이 끝나면 Orca가 세션을 저장하고 다시 시작합니다. 실행 중인 에이전트가 있으면 다시 시작이 늦어질 수 있습니다.",
+      "waiting": "다시 시작하기 전에 Orca가 실행 중인 에이전트를 기다리고 있습니다.",
+      "retry": "다음에 Orca를 시작할 때 이 업데이트를 다시 시도합니다.",
+      "manual": "자동 설치에 실패했습니다. 이 업데이트를 직접 설치하세요.",
+      "deadline": "{{deadline}}까지 다시 시작하세요. Orca는 다시 시작하기 전에 세션을 저장합니다.",
+      "download": "다운로드 페이지 열기"
     },
     "remoteUpdateBusy": "이 서버는 이미 업데이트 중입니다. 끝난 뒤 다시 확인하세요."
   },
@@ -26505,6 +26554,7 @@
       },
       "botProviderErrorNotSaved": "봇의 턴이 실패했지만 이번 실행에는 제공자의 오류가 저장되지 않았습니다. 원래 채팅에 더 자세한 내용이 있을 수 있습니다.",
       "botsOff": "설정에서 봇이 꺼져 있어 Orca가 이 실행을 건너뛰었습니다.",
+      "botsOffByTeam": "팀에서 봇을 꺼 두어 Orca가 이 실행을 건너뛰었습니다.",
       "botMissing": "이 자동화를 실행하는 봇이 더 이상 존재하지 않습니다.",
       "botFolderMissing": "봇의 폴더를 더 이상 사용할 수 없습니다.",
       "botPaused": "{{bot}}이(가) 일시 중지되어 Orca가 이 실행을 건너뛰었습니다."
@@ -27964,6 +28014,13 @@
     }
   },
   "plugins": {
+    "blockedByTeam": "팀에서 차단했습니다.",
+    "requiredFailures": {
+      "toast": "필수 플러그인을 설치하지 못했습니다",
+      "open": "플러그인 열기",
+      "label": "팀에서 필수로 지정함",
+      "body": "Orca가 {{plugin}}을(를) 설치하지 못했습니다."
+    },
     "frameSaveAs": {
       "title": "파일 저장",
       "allFiles": "모든 파일"
@@ -27987,6 +28044,19 @@
       "unknownProject": "알 수 없는 프로젝트",
       "automationNewWorkspaces": "자동화 {{id}}: 실행할 때마다 {{project}}의 새 워크스페이스에서, {{schedule}}.",
       "automationInWorkspace": "자동화 {{id}}: {{project}} / {{workspace}}에서, {{schedule}}."
+    },
+    "catalog": {
+      "managedByTeam": "팀에서 관리함",
+      "managedByNamedTeams": "{{teams}}에서 관리함",
+      "teamPublisher": "내 팀"
+    },
+    "displayText": {
+      "tb0b38488": "Orca를 위한 GitHub 테마",
+      "tb8aa98fc": "Orca를 위한 VS Code 기본 테마",
+      "tfc425a57": "Multipass VM 레시피",
+      "t0f9f5503": "GitHub의 공식 VS Code 테마: Light Default, Dark Default, Dark Dimmed 및 고대비 변형.",
+      "t0b4f7e19": "VS Code 기본 색 테마의 비공식 포팅 버전: Dark Modern, Light Modern, Dark+, Light+.",
+      "tc86eed7d": "일회용 Multipass 워크스페이스를 위한 검토된 기본 수명 주기."
     }
   },
   "checks": {
