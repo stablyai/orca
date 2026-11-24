@@ -1750,6 +1750,7 @@
         "exitPlanMode": "退出计划模式",
         "pastedTextLabel": "粘贴的文本",
         "botChats": "聊天",
+        "botFor": "用途：{{detail}}",
         "backToBots": "返回 bots 列表",
         "loadingBotChats": "正在加载 {{name}} 的聊天…",
         "noOtherChats": "没有其他聊天",
@@ -1814,9 +1815,9 @@
       }
     },
     "hostOfflineBanner": {
-      "offline": "{{host}} 已离线",
+      "offline": "无法连接 {{host}}",
       "reconnecting": "正在重新连接 {{host}}…",
-      "asOf": "显示截至 {{time}} 的内容"
+      "asOf": "截至 {{time}}"
     },
     "offlineAsOfTime": {
       "yesterday": "昨天 {{time}}"
@@ -7687,9 +7688,6 @@
         "full": "完全访问权限",
         "fullDetail": "直接运行命令，无需询问",
         "chatsDetail": "初始采用你的聊天权限设置",
-        "askLine": "运行命令前会请求批准。你自己的允许规则仍然适用",
-        "fullLine": "运行命令时不询问",
-        "chatsLine": "按你的聊天设置请求批准",
         "origin": "来自 {{who}} 的链接",
         "originAnonymous": "来自分享链接",
         "back": "返回",
@@ -8071,7 +8069,8 @@
       "fix": {
         "turnOn": "启用",
         "copyForAdmin": "复制给管理员",
-        "checkAgain": "重新检查"
+        "checkAgain": "重新检查",
+        "allowAgain": "再次允许"
       },
       "adminRequest": "请在 Google 管理控制台（安全性 › API 控件 › 管理第三方应用访问权限）中将此 Google 应用标记为“可信”：{{clientId}}",
       "copied": "已复制。请发送给你的 Google 管理员",
@@ -8079,12 +8078,14 @@
         "ready": "就绪",
         "apiOff": "已在 Google Cloud 中停用",
         "adminBlocked": "已被你公司的 Google 管理员阻止",
-        "error": "无法检查"
+        "error": "无法检查",
+        "notAllowed": "你没有允许"
       },
       "headline": {
         "connected": "Google 已连接",
         "toFixOne": "快完成了：还有 1 个问题需要解决",
-        "toFix": "快完成了：还有 {{count}} 个问题需要处理"
+        "toFix": "快完成了：还有 {{count}} 个问题需要处理",
+        "ended": "Google 访问已结束。"
       },
       "defaultBadge": "默认",
       "setDefault": "设为默认",
@@ -8101,7 +8102,11 @@
         "confirm": "断开连接",
         "removeFromHost": "从 {{host}} 移除",
         "revoke": "移除并在 Google 撤销授权"
-      }
+      },
+      "reconnect": "重新连接",
+      "addAccount": "添加另一个账号",
+      "signIn": "登录 Google",
+      "handoff": "选择你的账号，然后选择“允许”。"
     },
     "saveFailed": "无法保存",
     "sheet": {
@@ -8221,9 +8226,6 @@
       "continuesAt": "将于 {{time}} 继续",
       "continues": "将于 {{time}} 继续",
       "hitLimit": "已达上限 · {{time}} 重置"
-    },
-    "page": {
-      "serverDownTitle": "无法连接 {{host}}"
     },
     "memoryHistory": {
       "tidyUp": "整理"

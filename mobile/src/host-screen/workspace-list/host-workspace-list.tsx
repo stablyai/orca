@@ -288,14 +288,12 @@ export function HostWorkspaceList({
             <>
               {pageTitle?.element}
               {offlineBanner ? (
-                <View style={styles.offlineBanner}>
-                  <HostOfflineBanner
-                    hostName={hostDisplay.title}
-                    offline={offlineBanner.offline}
-                    asOf={offlineBanner.asOf}
-                    onRetry={offlineBanner.retry}
-                  />
-                </View>
+                <HostOfflineBanner
+                  hostName={hostDisplay.title}
+                  offline={offlineBanner.offline}
+                  asOf={offlineBanner.asOf}
+                  onRetry={offlineBanner.retry}
+                />
               ) : null}
             </>
           }

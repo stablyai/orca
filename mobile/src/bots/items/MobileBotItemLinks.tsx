@@ -35,7 +35,7 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { prStateColor } from '../../worktree/row-presentation/WorktreeMetaGlyphs'
 import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
-import { MobileBotWorkerRow } from '../MobileBotChatTree'
+import { MobileBotWorkerRow } from '../MobileBotWorkerRow'
 
 const ICON = 15
 

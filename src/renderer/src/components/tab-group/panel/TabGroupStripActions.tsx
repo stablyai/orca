@@ -4,6 +4,8 @@ import type { TitlebarChromeFoldLevel } from '@/app-shell/chrome/titlebar-chrome
 import { TabBarQuickCommandsButton } from '../../tab-bar/quick-commands/TabBarQuickCommandsButton'
 import { TabGroupPaneActionsMenu } from './TabGroupPaneActionsMenu'
 import { useNativeChatQuickCommandsMenu } from '../../native-chat/pane/actions/use-native-chat-quick-commands-menu'
+import { isGroupFocusedInStore } from '../../tab-bar/strip/use-tab-strip-unmount-focus-restore'
+import { focusStripActionsReturnTarget } from './strip-actions-return-focus'
 
 /** Quick commands and the pane ⋯ at the strip's right end. */
 export function TabGroupStripActions({
@@ -27,13 +29,26 @@ export function TabGroupStripActions({
   if (!isFocused && paneActionsOpen) {
     setPaneActionsOpen(false)
   }
+  const actionsRef = useRef<HTMLDivElement>(null)
   // Why: an unsplit ⋯ unmounts once the pane unfolds to level 0; the editor its Add opens, and any draft, must outlive it.
-  const quickCommands = useNativeChatQuickCommandsMenu({ worktreeId, groupId }, () =>
-    setPaneActionsOpen(false)
+  const quickCommands = useNativeChatQuickCommandsMenu(
+    { worktreeId, groupId },
+    () => setPaneActionsOpen(false),
+    (event) => {
+      // The menu row that opened the editor is gone, so Radix would drop focus on body.
+      event.preventDefault()
+      requestAnimationFrame(() =>
+        focusStripActionsReturnTarget({
+          actions: actionsRef.current,
+          stillOwned: () => isGroupFocusedInStore(worktreeId, groupId)
+        })
+      )
+    }
   )
   return (
     // Why: actions hide before the tab bar's floor is reached; min-w-0 + clipping is only a backstop so reserved spacers stay clear.
     <div
+      ref={actionsRef}
       className={cn(
         'flex min-w-0 items-center gap-0.5 overflow-hidden pl-1.5 pr-0.5 transition-opacity duration-150',
         !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'

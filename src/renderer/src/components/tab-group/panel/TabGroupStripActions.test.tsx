@@ -21,6 +21,13 @@ beforeEach(() => {
   const style = document.createElement('style')
   style.textContent = '.invisible { visibility: hidden; }'
   document.head.append(style)
+  // happy-dom has no layout; treat connected elements as shown.
+  Object.defineProperty(HTMLElement.prototype, 'offsetParent', {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.isConnected ? document.body : null
+    }
+  })
   saved = []
   useAppStore.setState({
     settings: {
@@ -38,6 +45,9 @@ beforeEach(() => {
     repos: [
       { id: repoId, path: '/demo/project', displayName: 'Orchid', badgeColor: '', addedAt: 1 }
     ],
+    // This pane owns focus, so a closing editor may hand focus back into it.
+    activeWorktreeId: worktreeId,
+    activeGroupIdByWorktree: { [worktreeId]: 'demo-group' },
     upsertTerminalQuickCommand: async (_hostId, command) => {
       saved.push(command)
       return true
@@ -47,6 +57,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  Reflect.deleteProperty(HTMLElement.prototype, 'offsetParent')
   document.head.innerHTML = ''
   useAppStore.setState(initial, true)
   vi.unstubAllGlobals()
@@ -56,14 +67,19 @@ function Strip({ fold, split }: { fold: TitlebarChromeFoldLevel; split: boolean 
   return (
     <TooltipProvider>
       <ConfirmationDialogProvider>
-        <TabGroupStripActions
-          isFocused
-          worktreeId={worktreeId}
-          groupId="demo-group"
-          onCloseGroup={split ? () => undefined : undefined}
-          foldLevel={fold}
-          onNewTab={() => undefined}
-        />
+        <div data-tab-group-strip-id="demo-group">
+          <div data-tab-strip-slot="demo-tab">
+            <div tabIndex={0} data-active="true" aria-label="Active tab" />
+          </div>
+          <TabGroupStripActions
+            isFocused
+            worktreeId={worktreeId}
+            groupId="demo-group"
+            onCloseGroup={split ? () => undefined : undefined}
+            foldLevel={fold}
+            onNewTab={() => undefined}
+          />
+        </div>
       </ConfirmationDialogProvider>
     </TooltipProvider>
   )
@@ -151,5 +167,59 @@ describe('TabGroupStripActions quick-command editor custody', () => {
       expect(screen.queryByRole('dialog', { name: 'Add Quick Command' })).toBeNull()
       expect(saved).toEqual([])
     })
+  }
+})
+
+/** Radix returns close focus in a timeout after unmount; the strip then defers one frame. */
+async function settleCloseFocus(): Promise<void> {
+  await act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)))
+  await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+  await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+}
+
+async function closeEditor(how: 'Save' | 'Cancel' | 'Escape'): Promise<void> {
+  const dialog = screen.getByRole('dialog', { name: 'Add Quick Command' })
+  if (how === 'Save') {
+    await fillAndSave('Lint the repo')
+  } else if (how === 'Cancel') {
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    })
+  } else {
+    await act(async () => {
+      fireEvent.keyDown(editorLabel(), { key: 'Escape' })
+    })
+  }
+  expect(screen.queryByRole('dialog', { name: 'Add Quick Command' })).toBeNull()
+  await settleCloseFocus()
+}
+
+describe('TabGroupStripActions focus after the Add Quick Command editor closes', () => {
+  for (const split of [false, true]) {
+    const pane = split ? 'split' : 'unsplit'
+    for (const how of ['Save', 'Cancel', 'Escape'] as const) {
+      it(`lands on the pane's ⋯ after ${how} (${pane}, still folded)`, async () => {
+        render(<Strip fold={1} split={split} />)
+        await openPaneActions()
+        await chooseAddQuickCommand()
+        await closeEditor(how)
+        expect(document.activeElement).toBe(paneActionsTrigger())
+      })
+
+      it(`lands on a shown control after ${how} once the pane unfolds to 0 (${pane})`, async () => {
+        const { rerender } = render(<Strip fold={1} split={split} />)
+        await openPaneActions()
+        await chooseAddQuickCommand()
+        await act(async () => {
+          fireEvent.change(editorLabel(), { target: { value: 'Draft label' } })
+        })
+        rerender(<Strip fold={0} split={split} />)
+        await closeEditor(how)
+        // Unsplit at fold 0 has no ⋯, so the active tab takes focus; split keeps its ⋯.
+        expect(document.activeElement).toBe(
+          split ? paneActionsTrigger() : screen.getByLabelText('Active tab')
+        )
+      })
+    }
   }
 })

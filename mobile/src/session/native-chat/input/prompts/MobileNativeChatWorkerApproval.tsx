@@ -98,14 +98,18 @@ export function workerOpener(
   openSender: React.ContextType<typeof MobileAgentMessageOpenContext>,
   entry: MobileWorkerApproval
 ): (() => void) | null {
-  // Addressed by its Dispatch, as the desktop's Open worker finds it on its host.
+  return dispatchOpener(openSender, entry.approval.worker.dispatchId, entry.worker.label)
+}
+
+/** Opens a worker by its Dispatch, as the desktop's Open worker finds it on its host. */
+export function dispatchOpener(
+  openSender: React.ContextType<typeof MobileAgentMessageOpenContext>,
+  dispatchId: string,
+  name: string
+): (() => void) | null {
   const worker = {
-    party: {
-      address: `dispatch:${entry.approval.worker.dispatchId}`,
-      terminalHandle: null,
-      orcaSessionId: null
-    },
-    name: entry.worker.label
+    party: { address: `dispatch:${dispatchId}`, terminalHandle: null, orcaSessionId: null },
+    name
   }
   return openSender
     ? () => openSender({ kind: 'agent', senders: [worker], orchestration: null }, worker)

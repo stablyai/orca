@@ -216,6 +216,9 @@ export const EXECUTION_HOST_METHODS = [
   'orchestration.workerApprovalsSubscribe',
   'orchestration.workerApprovalsUnsubscribe',
   'orchestration.approvalAnswer',
+  // Read-only: the chat's worker strip. Stop and Clear stay on the desktop (the host refuses a phone).
+  'orchestration.workerDockRead',
+  'orchestration.workerDockSubscribe',
   // Asks from agents on paired servers wait on this computer for its person, as on its phone. The phone
   // reads and removes Always allow choices; adding one without a card stays on the desktop.
   'pairedServerAsks.list',
