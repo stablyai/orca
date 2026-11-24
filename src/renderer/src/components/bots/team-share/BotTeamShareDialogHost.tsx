@@ -1,5 +1,6 @@
 // The Share dialog on the bot's own share list: adds, removes and re-sends through its host, which
 // emails each invite as its signed-in account (the owner row) and keeps whether the email went out.
+// Slack- and GitHub-only people come from, and are edited through, each connector's Who can ask.
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
@@ -8,7 +9,16 @@ import type { Bot } from '../../../../../shared/bot-types'
 import { botErrorMessage } from '../bot-presentation'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { BotTeamShareDialog } from './BotTeamShareDialog'
-import { teamSharePeople, teamShareSuggestions } from './bot-team-share-people'
+import {
+  teamSharePeople,
+  teamShareSuggestions,
+  type TeamShareSuggestion
+} from './bot-team-share-people'
+import {
+  TeamShareConnectorPeople,
+  useTeamShareConnectors,
+  type TeamShareFoundByConnector
+} from './BotTeamShareConnectorPeople'
 import { addBotTeamShare, removeBotTeamShare, resendBotTeamShare } from './bot-team-share-rpc'
 
 export function BotTeamShareDialogHost({
@@ -20,6 +30,8 @@ export function BotTeamShareDialogHost({
 }): React.JSX.Element {
   const t = useTranslate()
   const [query, setQuery] = useState('')
+  const [found, setFound] = useState<TeamShareFoundByConnector>({})
+  const connectors = useTeamShareConnectors(bot)
   const account = useBotHostOrcaAccount(bot.hostId)
   const hostLabel = useBotHostLabel(bot.hostId)
   const owner =
@@ -27,6 +39,19 @@ export function BotTeamShareDialogHost({
       ? { name: account.displayName ?? account.email, email: account.email, links: [] }
       : null
   const failed = (error: unknown) => toast.error(botErrorMessage(error))
+  const invite = teamShareSuggestions(query, bot.shares)
+  const searches = Object.values(found)
+  // Nothing shows while a connector still searches and none has found anyone yet.
+  const fromConnectors = searches.flatMap((search) =>
+    search.status === 'ready' ? search.suggestions : []
+  )
+  const suggestions: TeamShareSuggestion[] | null =
+    invite === null
+      ? null
+      : [...invite, ...fromConnectors].length === 0 &&
+          searches.some((search) => search.status === 'searching')
+        ? null
+        : [...invite, ...fromConnectors]
   return (
     <BotTeamShareDialog
       bot={bot}
@@ -35,12 +60,18 @@ export function BotTeamShareDialogHost({
       people={teamSharePeople(bot.shares)}
       query={query}
       onQueryChange={setQuery}
-      suggestions={teamShareSuggestions(query, bot.shares)}
+      suggestions={suggestions}
       onAdd={(suggestion) => {
-        // Only an email adds here; Slack and GitHub people are added from Who can ask.
+        setQuery('')
         if (suggestion.kind === 'invite') {
-          setQuery('')
           void addBotTeamShare(bot, suggestion.email).catch(failed)
+          return
+        }
+        // A Slack or GitHub person is confirmed and saved by their connector's Who can ask.
+        for (const search of searches) {
+          if (search.status === 'ready') {
+            search.pick(suggestion.key)
+          }
         }
       }}
       onRemove={(person) => void removeBotTeamShare(bot, person.key).catch(failed)}
@@ -54,6 +85,16 @@ export function BotTeamShareDialogHost({
           .catch(failed)
       }
       onClose={onClose}
-    />
+    >
+      {connectors.map((entry) => (
+        <TeamShareConnectorPeople
+          key={entry.key}
+          bot={bot}
+          entry={entry}
+          query={query}
+          report={setFound}
+        />
+      ))}
+    </BotTeamShareDialog>
   )
 }

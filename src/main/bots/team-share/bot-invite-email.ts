@@ -2,14 +2,17 @@
 // this host's signed-in account (the bot's owner). Only the email: the share stands either way.
 import { randomUUID } from 'node:crypto'
 import * as z from 'zod'
-import { getOrcaCloudAuthConfig } from '../../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import { OrcaCloudRequestError } from '../../orca-profiles/cloud-auth/profile-cloud-client'
-import type { BotCloudAuth } from '../sharing/bot-share-client'
 
 const INVITE_TIMEOUT_MS = 15_000
 const InviteAnswer = z.object({ sent: z.boolean() })
 
 export type BotInviteEmail = { to: string; agentName: string }
+
+/** A call as the host's signed-in account, with its access token and the sign-in service's address. */
+export type BotInviteCloudCall = <T>(
+  operation: (accessToken: string, apiBaseUrl: string) => Promise<T>
+) => Promise<{ status: 'ok'; value: T } | { status: 'reconnect-required' }>
 
 /** One invite request; a rejected access token throws so the session refreshes and retries once. */
 export async function postBotInvite(
@@ -40,16 +43,11 @@ export async function postBotInvite(
 
 /** Whether the email went out; never throws, since a share is never refused for its email. */
 export async function sendBotInviteEmail(
-  auth: BotCloudAuth,
+  call: BotInviteCloudCall,
   invite: BotInviteEmail
 ): Promise<boolean> {
   try {
-    const config = getOrcaCloudAuthConfig()
-    if (!config.configured) {
-      return false
-    }
-    // The same signed-in session as the bot's other cloud calls, on the sign-in service's address.
-    const result = await auth((token) => postBotInvite(config.config.apiBaseUrl, token, invite))
+    const result = await call((token, apiBaseUrl) => postBotInvite(apiBaseUrl, token, invite))
     return result.status === 'ok' && result.value
   } catch (error) {
     console.warn('[bots] invite email not sent:', error instanceof Error ? error.message : error)

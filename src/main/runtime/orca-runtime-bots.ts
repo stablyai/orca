@@ -24,7 +24,11 @@ import { journaledItemsNotice } from '../bots/bot-memory-journal-runtime'
 import { BotSharePicksStore } from '../bots/sharing/bot-share-picks-store'
 import { BotShareCandidates } from '../bots/sharing/bot-package-export'
 import type { BotShareClient } from '../bots/sharing/bot-share-client'
-import { sendBotInviteEmail, type BotInviteEmail } from '../bots/team-share/bot-invite-email'
+import {
+  sendBotInviteEmail,
+  type BotInviteCloudCall,
+  type BotInviteEmail
+} from '../bots/team-share/bot-invite-email'
 import type { BotShareDownloadPolicy } from '../bots/sharing/bot-share-receive'
 import { BotShareService } from '../bots/sharing/bot-share-service'
 import { readBotShareable } from '../bots/sharing/bot-share-sources'
@@ -153,10 +157,14 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     this.botShareService = null
   }
 
-  /** Emails someone a bot was shared with; false (Email not sent yet) on a runtime with no client. */
+  /** This host's signed-in Orca Cloud calls, set where its connector installs (desktop, serve, orcad). */
+  botCloudAuth: BotInviteCloudCall | null = null
+
+  /** Emails someone a bot was shared with; false (Email not sent yet) on a host with no Orca Cloud. */
   emailBotInvite(invite: BotInviteEmail): Promise<boolean> {
-    const client = this.botShareClient?.client
-    return client ? sendBotInviteEmail(client.options.auth, invite) : Promise.resolve(false)
+    return this.botCloudAuth
+      ? sendBotInviteEmail(this.botCloudAuth, invite)
+      : Promise.resolve(false)
   }
 
   /** Sharing bots by link, made on first use (it needs the app's data folder). */

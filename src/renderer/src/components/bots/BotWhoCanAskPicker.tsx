@@ -23,7 +23,8 @@ type Search =
 
 type Found = BotWhoCanAskFound['members'][number]
 
-function useMemberSearch(
+/** One connector's people for `query`, debounced; the Share dialog's Add field searches with it too. */
+export function useMemberSearch(
   service: BotWhoCanAskService,
   query: string
 ): { search: Search; retry: () => void } {
@@ -57,7 +58,7 @@ const matches = (name: string, needle: string): boolean =>
 
 // Saved as the chips draw it: a found person's picture is kept, their handle isn't; an app is
 // marked so, so it draws as one.
-const asMember = (found: Found, service: BotWhoCanAskService): BotMember => ({
+export const asMember = (found: Found, service: BotWhoCanAskService): BotMember => ({
   id: found.id,
   name: found.name,
   ...(found.avatarUrl ? { avatarUrl: found.avatarUrl } : {}),

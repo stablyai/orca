@@ -30669,6 +30669,7 @@
       "share": "Share…",
       "slackLine": "{{handle}} on Slack · {{workspace}}",
       "slackOnly": "Slack only",
+      "slackPlace": "Slack · {{workspace}}",
       "suggestions": "Suggestions",
       "thisComputer": "this computer",
       "title": "Share {{name}}",

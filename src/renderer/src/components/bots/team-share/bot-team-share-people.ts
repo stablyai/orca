@@ -24,7 +24,14 @@ export type TeamSharePerson =
       /** False while the invite email waits on its hourly limit. */
       emailSent: boolean
     }
-  | { kind: 'slack'; key: string; name: string; handle: string; workspace: string }
+  | {
+      kind: 'slack'
+      key: string
+      name: string
+      /** Their @name, when the row knows it; saved people keep only their name. */
+      handle?: string
+      workspace: string
+    }
   | {
       kind: 'github'
       key: string

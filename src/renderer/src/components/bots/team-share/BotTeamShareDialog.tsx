@@ -29,7 +29,8 @@ export function BotTeamShareDialog({
   onAdd,
   onRemove,
   onResend,
-  onClose
+  onClose,
+  children
 }: {
   bot: Bot
   /** The computer the agent runs on, named in the footer warning. */
@@ -45,6 +46,8 @@ export function BotTeamShareDialog({
   onRemove: (person: TeamSharePerson) => void
   onResend: (person: Extract<TeamSharePerson, { kind: 'invite' }>) => void
   onClose: () => void
+  /** Rows the caller draws itself after `people`: Slack- and GitHub-only people, from Who can ask. */
+  children?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const listId = useId()
@@ -174,6 +177,7 @@ export function BotTeamShareDialog({
                 onResend={onResend}
               />
             ))}
+            {children}
           </ul>
         </div>
         <div className="flex items-center gap-2 border-t border-border px-6 py-4">
