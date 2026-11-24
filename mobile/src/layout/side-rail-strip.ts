@@ -50,13 +50,20 @@ export function getSideRailStrip(args: {
     if (!statusColumn) {
       continue
     }
+    const usableBottom = windowHeight - insets.bottom
+    // Clipped to the space between the insets: a cutout the window partly covers reaches past it,
+    // and whole would win as the longest free run.
     const occluded = inStrip
-      .map((region) => ({ from: region.y, to: region.y + region.height }))
+      .map((region) => ({
+        from: Math.max(region.y, insets.top),
+        to: Math.min(region.y + region.height, usableBottom)
+      }))
+      .filter((span) => span.from < span.to)
       .sort((a, b) => a.from - b.from)
     // The longest run of the strip nothing occludes, between the top and bottom insets.
     let best = { from: 0, to: 0 }
     let cursor = insets.top
-    for (const span of [...occluded, { from: windowHeight - insets.bottom, to: windowHeight }]) {
+    for (const span of [...occluded, { from: usableBottom, to: windowHeight }]) {
       if (span.from - cursor > best.to - best.from) {
         best = { from: cursor, to: span.from }
       }
