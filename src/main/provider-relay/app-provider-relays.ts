@@ -91,7 +91,8 @@ function policyFor(
 ): ProviderRelayDetachPolicy {
   return {
     idleStopMs: route?.idleStopMs() ?? null,
-    markers: [...markers],
+    markers: [...markers.markers],
+    ...(markers.requests ? { workRequests: [...markers.requests] } : {}),
     ...(open ? { open } : {})
   }
 }
