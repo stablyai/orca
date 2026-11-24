@@ -2,6 +2,7 @@ import {
   registerReattachableProviderRelayAgent,
   type ProviderRelayWorkMarkers
 } from '../../provider-relay/app-provider-relays'
+import { claudeRelayAckFloor } from './claude-relay-ack-floor'
 
 /** Recorded with each Claude relay; this build reattaches it. */
 export const CLAUDE_RELAY_AGENT = 'claude-code'
@@ -21,6 +22,7 @@ const TERMINAL_STATUSES = ['completed', 'failed', 'killed', 'stopped']
  */
 export const CLAUDE_RELAY_WORK_MARKERS: ProviderRelayWorkMarkers = {
   agent: CLAUDE_RELAY_AGENT,
+  ackFloor: claudeRelayAckFloor,
   markers: [
     {
       group: 'turn',

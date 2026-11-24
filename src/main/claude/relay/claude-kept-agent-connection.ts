@@ -9,7 +9,6 @@ import {
 } from '../claude-stream-json-connection'
 import { launchRelayedProviderProcess } from '../../provider-relay/app-provider-relays'
 import { CLAUDE_RELAY_WORK_MARKERS } from './claude-relay-markers'
-import { claudeRelayAckFloor } from './claude-relay-ack-floor'
 import { ClaudeKeptAgentResponder } from './claude-kept-agent-responder'
 import { ClaudeKeptAgentQuery } from './claude-kept-agent-query'
 import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
@@ -129,7 +128,6 @@ export async function openKeptClaudeAgentConnection(
     only: 'reattach',
     chatKey,
     markers: CLAUDE_RELAY_WORK_MARKERS,
-    ackFloor: claudeRelayAckFloor,
     // Answers to this app's own requests pass; everything else waits for the chat to open.
     passWhileHeld: (line) => query?.answers(line) === true
   })

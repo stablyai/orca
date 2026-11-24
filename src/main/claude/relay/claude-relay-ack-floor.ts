@@ -47,6 +47,6 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
         open.set(scopeOf(frame), seq)
       }
     },
-    ceiling: () => (open.size === 0 ? null : Math.min(...open.values()) - 1)
+    floor: () => (open.size === 0 ? null : Math.min(...open.values()))
   }
 }
