@@ -47,3 +47,33 @@ export function trackCommitCompare(
   )
   return completion.promise
 }
+
+// Latest Open diff per owner and commit across mounts, so a reopened view's open is not overwritten by an older one.
+const latestCommitDiffOpens = new Map<string, object>()
+
+/** Runs one Open diff; only the newest open for `openKey` that its caller still wants reaches a callback. */
+export async function runLatestCommitDiffOpen<T>(
+  openKey: string,
+  load: () => Promise<T | null>,
+  stillWanted: () => boolean,
+  onReady: (value: T) => void,
+  onError: (error: unknown) => void
+): Promise<void> {
+  const open = {}
+  latestCommitDiffOpens.set(openKey, open)
+  const current = (): boolean => latestCommitDiffOpens.get(openKey) === open && stillWanted()
+  try {
+    const value = await load()
+    if (value && current()) {
+      onReady(value)
+    }
+  } catch (error) {
+    if (current()) {
+      onError(error)
+    }
+  } finally {
+    if (latestCommitDiffOpens.get(openKey) === open) {
+      latestCommitDiffOpens.delete(openKey)
+    }
+  }
+}
