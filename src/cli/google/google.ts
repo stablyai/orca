@@ -77,7 +77,9 @@ function clientLine(client: GoogleClientView | null): string {
 }
 
 export function formatGoogleStatus(view: GoogleStatusView): string {
-  const bots = view.bots.map((bot) => bot.name)
+  const bots = view.bots.map(
+    (bot) => `${bot.name} (${bot.accounts ? bot.accounts.join(', ') : 'every account'})`
+  )
   return [
     clientLine(view.client),
     view.accounts.length > 0
@@ -109,6 +111,22 @@ export function readServices(value: string | undefined): GoogleServiceChoice[] |
     )
   }
   return GOOGLE_SERVICE_CHOICES.filter((choice) => names.includes(choice))
+}
+
+/** `--accounts a@x.com,b@y.com`, each once and lowercased; undefined when not given. */
+export function readAccounts(value: string | undefined): string[] | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  const emails = [...new Set(value.split(',').map((email) => email.trim().toLowerCase()))]
+  const invalid = emails.filter((email) => !/^[^\s@]+@[^\s@]+$/.test(email))
+  if (invalid.length > 0) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `--accounts takes Google account emails, comma-separated, not ${invalid.join(', ') || 'an empty one'}. \`orca google status\` lists the accounts here.`
+    )
+  }
+  return emails
 }
 
 /** Relays each pasted line until one is taken; a refused paste prints why and keeps listening. */
@@ -267,19 +285,25 @@ export const GOOGLE_HANDLERS: Record<string, CommandHandler> = {
   },
   'google bot': async (ctx) => {
     prepare(ctx, 'orca google bot')
-    const on = ctx.flags.get('on') === true
-    if (on === (ctx.flags.get('off') === true)) {
-      throw new RuntimeClientError('invalid_argument', 'Pass one of --on or --off.')
+    const accounts = readAccounts(getOptionalStringFlag(ctx.flags, 'accounts'))
+    const picked = [
+      ctx.flags.get('on') === true,
+      ctx.flags.get('off') === true,
+      accounts !== undefined
+    ]
+    if (picked.filter(Boolean).length !== 1) {
+      throw new RuntimeClientError('invalid_argument', 'Pass one of --on, --off or --accounts.')
     }
+    const on = ctx.flags.get('off') !== true
     const bot = await findBot(ctx.client, getRequiredStringFlag(ctx.flags, 'bot'))
     const result = await ctx.client.call<{
-      bot: { name: string; google: boolean }
+      bot: { name: string; google: boolean; accounts?: string[] }
       warning?: string
-    }>('google.bot.set', { ...caller(), botId: bot.id, on })
+    }>('google.bot.set', { ...caller(), botId: bot.id, on, ...(accounts ? { accounts } : {}) })
     printResult(result, ctx.json, ({ bot: saved, warning }) =>
       saved.google
         ? [
-            `${saved.name} may now use Google as you, for whoever can ask it and its automations.`,
+            `${saved.name} may now use ${saved.accounts ? `Google as ${saved.accounts.join(', ')}` : 'Google as you, with every account on this computer'}, for whoever can ask it and its automations.`,
             ...(warning ? [`Note: ${warning} Change that in its Who can ask.`] : [])
           ].join('\n')
         : `${saved.name} can no longer use Google.`

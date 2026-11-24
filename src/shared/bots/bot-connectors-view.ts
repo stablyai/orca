@@ -5,6 +5,11 @@ import { CONNECTOR_OFFER_NAMES, type ConnectorOfferSource } from './bot-connecto
 import type { GoogleAccountView, GoogleServiceReadiness } from '../google/google-connect-types'
 import { GOOGLE_SERVICE_INFO } from '../google/google-scopes'
 import { googleBotConnectState, type GoogleHostConnect } from '../google/google-bot-connect-state'
+import {
+  botDefaultGoogleAccount,
+  botGoogleAccess,
+  botMayUseGoogleAccount
+} from '../google/google-bot-accounts'
 
 export type BotConnectorService = {
   source: ConnectorOfferSource
@@ -67,11 +72,15 @@ const GOOGLE_STATES: Record<GoogleServiceReadiness['state'], string> = {
 
 /** Google's row: the owner's accounts on this computer, if the owner turned Google on for this bot. */
 function googleService(
-  bot: Pick<Bot, 'google'>,
-  accounts: readonly GoogleAccountView[],
+  bot: Pick<Bot, 'google' | 'googleAccounts'>,
+  hostAccounts: readonly GoogleAccountView[],
   app: boolean,
-  defaultAccount: string | null
+  computerDefault: string | null
 ): BotConnectorService {
+  // Only the accounts the bot may use, and the default its calls without --account go to.
+  const access = botGoogleAccess(bot)
+  const accounts = hostAccounts.filter((account) => botMayUseGoogleAccount(access, account.email))
+  const defaultAccount = botDefaultGoogleAccount(access, computerDefault) ?? computerDefault
   const connected = accounts.filter((account) => account.status === 'connected')
   const { allowed, host } = googleBotConnectState({
     allowed: bot.google === true,
@@ -124,7 +133,10 @@ export type CloudSource = { source: string; approveUrl?: string }
  * Cloud's sources, when it answered; without them, the Slack app this computer set up stands.
  */
 export function botConnectorServices(
-  bot: Pick<Bot, 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github' | 'google'>,
+  bot: Pick<
+    Bot,
+    'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github' | 'google' | 'googleAccounts'
+  >,
   local: LocalSignIns,
   cloud?: readonly CloudSource[]
 ): BotConnectorService[] {

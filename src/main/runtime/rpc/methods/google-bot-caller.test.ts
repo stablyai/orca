@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { GOOGLE_OWNER_ONLY } from '../../../bots/bot-google-access'
+import { googleCallerAccount } from '../google-caller-api'
 import { GOOGLE_METHODS } from './google'
 
 const BOT_TOKEN = 'scout-token'
@@ -8,6 +9,10 @@ const disconnect = vi.fn()
 
 vi.mock('../../../bots/tool-relay/bot-tool-relay', () => ({
   botToolRelay: { botOf: (token: string) => (token === BOT_TOKEN ? 'scout' : null) }
+}))
+vi.mock('../../../google/google-credential-store', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readGoogleDefaultAccount: async () => ({ email: 'me@work.com' })
 }))
 vi.mock('../../../google/google-connect', () => ({
   getGoogleConnect: () => ({
@@ -19,18 +24,29 @@ vi.mock('../../../google/google-connect', () => ({
   })
 }))
 
-function call(name: string, params: Record<string, unknown>, google: boolean) {
-  const method = GOOGLE_METHODS.find((entry) => entry.name === name)!
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers read only these runtime fields.
-  const ctx = {
-    runtime: {
-      bots: {
-        enabled: () => true,
-        list: () => [{ id: 'scout', name: 'Scout', google }],
-        assertEnabled: () => {}
+function runtime(bot: { google: boolean; googleAccounts?: string[] }) {
+  let saved = { id: 'scout', name: 'Scout', members: [], ...bot }
+  return {
+    bots: {
+      enabled: () => true,
+      list: () => [saved],
+      assertEnabled: () => {},
+      update: async (_id: string, edit: (current: typeof saved) => Partial<typeof saved>) => {
+        saved = { ...saved, ...edit(saved) }
+        return saved
       }
     }
-  } as never
+  }
+}
+
+function call(
+  name: string,
+  params: Record<string, unknown>,
+  google: boolean | { google: boolean; googleAccounts?: string[] }
+) {
+  const method = GOOGLE_METHODS.find((entry) => entry.name === name)!
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers read only these runtime fields.
+  const ctx = { runtime: runtime(typeof google === 'boolean' ? { google } : google) } as never
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each call passes that method's own params.
   return (method.handler as (params: unknown, ctx: unknown) => Promise<unknown>)(params, ctx)
 }
@@ -63,5 +79,47 @@ describe('google methods from a bot run', () => {
       await expect(attempt).rejects.toThrow(GOOGLE_OWNER_ONLY)
     }
     expect(disconnect).not.toHaveBeenCalled()
+  })
+
+  it('keeps a bot with chosen accounts to them, and its default to its own', async () => {
+    const scout = { google: true, googleAccounts: ['me@gmail.com'] }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: googleCallerAccount reads only these runtime fields.
+    const ctx = { runtime: runtime(scout) } as never
+    await expect(
+      googleCallerAccount({ botToken: BOT_TOKEN, account: 'me@work.com' }, ctx)
+    ).rejects.toThrow("Scout can't use me@work.com")
+    await expect(
+      googleCallerAccount({ botToken: BOT_TOKEN, account: 'ME@gmail.com' }, ctx)
+    ).resolves.toBe('ME@gmail.com')
+    // The computer default (me@work.com) isn't Scout's, so its first account is.
+    await expect(googleCallerAccount({ botToken: BOT_TOKEN }, ctx)).resolves.toBe('me@gmail.com')
+    await expect(
+      call('google.default.set', { botToken: BOT_TOKEN, account: 'me@work.com' }, scout)
+    ).rejects.toThrow("Scout can't use me@work.com")
+
+    // Google on with no list is every account: the owner's choice passes through unchanged.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
+    const every = { runtime: runtime({ google: true }) } as never
+    await expect(
+      googleCallerAccount({ botToken: BOT_TOKEN, account: 'me@work.com' }, every)
+    ).resolves.toBe('me@work.com')
+    await expect(googleCallerAccount({ botToken: BOT_TOKEN }, every)).resolves.toBeUndefined()
+  })
+})
+
+describe('google.bot.set from the owner', () => {
+  it('saves chosen accounts, and clears them for --on (every account) and --off', async () => {
+    const method = GOOGLE_METHODS.find((entry) => entry.name === 'google.bot.set')!
+    const ctx = { runtime: runtime({ google: false }) }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these runtime fields.
+    const handler = method.handler as (params: unknown, ctx: unknown) => Promise<{ bot: unknown }>
+    const set = (params: Record<string, unknown>) => handler({ botId: 'scout', ...params }, ctx)
+    await expect(set({ on: true, accounts: ['me@gmail.com'] })).resolves.toMatchObject({
+      bot: { google: true, accounts: ['me@gmail.com'] }
+    })
+    expect((await set({ on: true })).bot).toEqual({ id: 'scout', name: 'Scout', google: true })
+    await set({ on: true, accounts: ['me@gmail.com'] })
+    expect((await set({ on: false })).bot).toEqual({ id: 'scout', name: 'Scout', google: false })
+    expect(ctx.runtime.bots.list()[0]?.googleAccounts).toBeUndefined()
   })
 })

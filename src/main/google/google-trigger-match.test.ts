@@ -118,4 +118,16 @@ describe('a rule without an account listens on the default', () => {
   it('listens nowhere while the default is signed out, rather than on another account', () => {
     expect(listens(undefined, ['a@x.com'], 'b@x.com')).toEqual([])
   })
+
+  it('listens only on accounts chosen for the bot, its default first chosen', () => {
+    const limited = (account: string | undefined) =>
+      googleRuleTargets(
+        [automation(account)],
+        [{ id: 'b1', google: true, googleAccounts: ['a@x.com'] }],
+        ['a@x.com', 'b@x.com'],
+        'b@x.com'
+      ).map((target) => target.account)
+    expect(limited('b@x.com')).toEqual([])
+    expect(limited(undefined)).toEqual(['a@x.com'])
+  })
 })

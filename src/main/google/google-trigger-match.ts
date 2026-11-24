@@ -8,6 +8,11 @@ import {
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { Bot } from '../../shared/bot-types'
 import { mailboxAddresses } from '../../shared/google/email-address-list'
+import {
+  botDefaultGoogleAccount,
+  botGoogleAccess,
+  botMayUseGoogleAccount
+} from '../../shared/google/google-bot-accounts'
 import type { UpcomingEvent } from './google-calendar-changes'
 import type { GoogleDefaultAccount } from './google-credential-store'
 import { senderAddress, type NewMail } from './google-gmail-changes'
@@ -25,29 +30,30 @@ export type GoogleRuleTarget<Rule extends AutomationGoogleTrigger = AutomationGo
 export type GoogleRunEvent = { automationId: string; event: AutomationRunEvent }
 
 /**
- * The enabled bot automations' Google rules on accounts connected here, for bots whose owner turned
- * Google on. A rule without an account listens on this computer's default, while it is connected.
+ * The enabled bot automations' Google rules on accounts connected here that the bot may use, for bots
+ * whose owner turned Google on. A rule without an account listens on the bot's default, while connected.
  */
 export function googleRuleTargets(
   automations: readonly Pick<Automation, 'id' | 'enabled' | 'bot' | 'on'>[],
-  bots: readonly Pick<Bot, 'id' | 'google'>[],
+  bots: readonly Pick<Bot, 'id' | 'google' | 'googleAccounts'>[],
   accounts: readonly string[],
   defaultAccount: string | null
 ): GoogleRuleTarget[] {
   const connected = new Set(accounts.map((email) => email.toLowerCase()))
-  const fallback = defaultAccount?.toLowerCase()
   return automations.flatMap((automation) => {
     const botId = automation.bot?.botId
     const bot = bots.find((entry) => entry.id === botId)
     if (!automation.enabled || !botId || bot?.google !== true) {
       return []
     }
+    const access = botGoogleAccess(bot)
+    const fallback = botDefaultGoogleAccount(access, defaultAccount)
     return (automation.on ?? []).flatMap((rule) => {
       if (!isGoogleTrigger(rule)) {
         return []
       }
       const account = rule.account?.toLowerCase() ?? fallback
-      return account && connected.has(account)
+      return account && connected.has(account) && botMayUseGoogleAccount(access, account)
         ? [{ automationId: automation.id, botId, account, rule }]
         : []
     })
