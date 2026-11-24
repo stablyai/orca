@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { nativeChatTranscriptRange } from '../../viewport/virtualization/native-chat-pinned-rows'
 import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
 
@@ -120,7 +120,7 @@ export function useNativeChatToolRunPins({
   )
 
   // An end outside the run (or on a spacer) reaches the run's matching edge.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!tracksSelection) {
       return
     }
@@ -128,7 +128,7 @@ export function useNativeChatToolRunPins({
       const members = membersRef.current
       const selection = document.getSelection()
       const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
-      if (!members || !range || !range.intersectsNode(members)) {
+      if (!members || !range || range.collapsed || !range.intersectsNode(members)) {
         setSelectionSpan((current) => (current === null ? current : null))
         return
       }
@@ -145,11 +145,11 @@ export function useNativeChatToolRunPins({
         current && current[0] === start && current[1] === end ? current : [start, end]
       )
     }
-    // Re-derive on (re)registration: the selection may have changed while this run was hidden.
+    // The browser may still owe us a selectionchange when the run first starts windowing.
     onSelectionChange()
     document.addEventListener('selectionchange', onSelectionChange)
     return () => document.removeEventListener('selectionchange', onSelectionChange)
-  }, [membersRef, tracksSelection])
+  }, [drawsEveryRow, membersRef, tracksSelection])
 
   const retainInteractedRow = useCallback((event: React.SyntheticEvent) => {
     const key = rowKeyOf(event.target)

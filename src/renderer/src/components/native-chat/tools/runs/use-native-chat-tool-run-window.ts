@@ -62,13 +62,16 @@ export function useNativeChatToolRunWindow({
   const measurements = virtualizer.measurementsCache
   // Nothing measurable (a hidden pane): keep what was drawn rather than unmounting the window.
   const lastDrawnRef = useRef<readonly NativeChatToolRunDrawnRow[]>([])
+  const drewEveryRowRef = useRef(false)
+  // Keep keyed rows mounted until a growing list has its first measured window.
+  const drawsAll = drawsEveryRow || (virtualItems.length === 0 && drewEveryRowRef.current)
   // Every row drawn: the same array while only the scroll position moves, so the rows are not rebuilt.
   const everyRow = useMemo<readonly NativeChatToolRunDrawnRow[] | null>(
     () =>
-      drawsEveryRow
+      drawsAll
         ? Array.from({ length: rows.length }, (_, index) => ({ index, start: 0, end: 0 }))
         : null,
-    [drawsEveryRow, rows.length]
+    [drawsAll, rows.length]
   )
   // The window's rows keep their identity while the virtualizer's items and sizes do, so an
   // unchanged window (a large selection span, say) re-renders no rows.
@@ -84,11 +87,18 @@ export function useNativeChatToolRunWindow({
     [everyRow, measurements, virtualItems]
   )
   useLayoutEffect(() => {
+    drewEveryRowRef.current = drawsAll
     if (windowRows) {
       lastDrawnRef.current = windowRows
     }
   })
   const drawn: readonly NativeChatToolRunDrawnRow[] =
     everyRow ?? windowRows ?? lastDrawnRef.current.filter((row) => row.index < rows.length)
-  return { virtualizer, measureRow: virtualizer.measureElement, totalSize, drawn }
+  return {
+    virtualizer,
+    measureRow: virtualizer.measureElement,
+    totalSize,
+    drawn,
+    drawsEveryRow: drawsAll
+  }
 }

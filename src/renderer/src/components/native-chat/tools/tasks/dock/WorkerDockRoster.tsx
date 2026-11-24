@@ -105,7 +105,7 @@ export function WorkerDockRoster(props: {
       })),
     [identities]
   )
-  const small = items.length <= 30
+  const smallRoster = items.length <= 30
   const activeIndex = useMemo(
     () => items.findIndex((row) => row.id === (focused ?? active)),
     [items, active, focused]
@@ -129,11 +129,12 @@ export function WorkerDockRoster(props: {
     rows: rowKeys,
     getScrollElement: () => viewport.current,
     isVisible: props.visible,
-    drawsEveryRow: small,
+    drawsEveryRow: smallRoster,
     estimateSize,
     rangeExtractor: extractRange,
-    enabled: props.expanded && !small
+    enabled: props.expanded && !smallRoster
   })
+  const small = rowWindow.drawsEveryRow
   const virtual = rowWindow.virtualizer
   const visibleItems = rowWindow.drawn
   const modelColumn =

@@ -74,10 +74,15 @@ export function NativeChatToolRunMembers({
       rowIndexByKey,
       revealRowKey,
       drawsEveryRow,
-      tracksSelection: isVisible && canWindow,
+      tracksSelection: isVisible && inTranscript,
       membersRef
     })
-  const { measureRow, totalSize, drawn } = useNativeChatToolRunWindow({
+  const {
+    measureRow,
+    totalSize,
+    drawn,
+    drawsEveryRow: drawsAll
+  } = useNativeChatToolRunWindow({
     rows,
     // The transcript DOM is already available when a run opens on the same commit.
     getScrollElement: () =>
@@ -89,7 +94,7 @@ export function NativeChatToolRunMembers({
     rangeExtractor,
     enabled: canWindow
   })
-  const trailing = drawsEveryRow ? 0 : totalSize - (drawn.at(-1)?.end ?? 0)
+  const trailing = drawsAll ? 0 : totalSize - (drawn.at(-1)?.end ?? 0)
 
   return (
     <div
