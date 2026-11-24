@@ -116,6 +116,7 @@
       ],
       "expo-notifications",
       "./plugins/android-respect-rotation-lock.js",
+      "./plugins/android-optional-hardware-features.js",
       "./plugins/android-window-density.js",
       "./plugins/android-release-signing.js",
       "./plugins/android-navigation-bar-theme.js",
