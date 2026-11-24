@@ -392,7 +392,12 @@
     },
     "serverPage": {
       "download": {
-        "started": "Downloading to {{path}} on {{host}}"
+        "started": "Downloading to {{path}} on {{host}}",
+        "saveHere": "Save to this computer",
+        "copying": "Downloading {{filename}} to this computer…",
+        "copied": "Saved to {{path}}",
+        "copyFailed": "Couldn't save {{filename}} to this computer.",
+        "showInFolder": "Show in Folder"
       },
       "print": {
         "failed": "Couldn't save the page as a PDF"
@@ -432,6 +437,12 @@
       "pending": "Reopening…",
       "caveat": "This opens a new page on the remote host at this page’s last address. Signed-in and other transient page state may differ, and a page that came from a form submission opens blank.",
       "failed": "Couldn't open this page on the remote host. Check the connection and try again."
+    },
+    "deviceMove": {
+      "toThisComputer": "Open on this computer",
+      "toHost": "Open on {{host}}",
+      "tooltip": "Opens this address in a new tab on the other side and closes this one. You may need to sign in again.",
+      "failedToThisComputer": "Couldn't open this page on this computer."
     },
     "sshRoute": {
       "preparingTitle": "Connecting through the SSH host",
@@ -583,6 +594,13 @@
       "sshPage": {
         "stored": "Stored in the browser for {{host}}.",
         "googleCookiesSkipped": "Google cookies were not imported. Open a page that browses through {{host}}, then sign into Google."
+      },
+      "picker": {
+        "menuItem": "Import Cookies…",
+        "search": "Search profiles",
+        "lastUsed": "Last used",
+        "noMatches": "No matches",
+        "googleNote": "Google logins aren’t imported"
       }
     },
     "passwords": {
@@ -656,6 +674,25 @@
       "clearNotes": "Clear notes",
       "waitingForPage": "Waiting for page…",
       "pageDidNotLoad": "Page didn't load"
+    },
+    "profileCookieClear": {
+      "label": "Cookies",
+      "action": "Clear cookies…",
+      "rowLocal": "Signs you out of every site in {{profile}} on this computer.",
+      "rowServer": "Signs you out of every site in {{profile}} on {{host}}, both in pages on this computer and in streamed pages.",
+      "rowSsh": "Signs you out of every site in {{profile}} for {{host}}.",
+      "unavailable": "Unavailable for this profile on the selected host.",
+      "confirmTitle": "Clear cookies in {{profile}} on {{host}}?",
+      "confirmTitleLocal": "Clear cookies in {{profile}} on this computer?",
+      "confirmDescriptionServer": "This signs you out of every site in this profile, both in pages on this computer and in streamed pages. Other profiles and hosts keep their cookies.",
+      "confirmDescription": "This signs you out of every site in this profile. Other profiles and hosts keep their cookies.",
+      "clear": "Clear",
+      "cancel": "Cancel",
+      "cleared": "Cleared cookies in {{profile}} on {{host}}.",
+      "clearedLocal": "Cleared cookies in {{profile}} on this computer.",
+      "failed": "Couldn't clear cookies in {{profile}} on {{host}}. Try again.",
+      "failedLocal": "Couldn't clear cookies in {{profile}} on this computer. Try again.",
+      "sshHostOption": "{{host}} (SSH)"
     }
   },
   "editor": {
@@ -1144,6 +1181,9 @@
           "sleep": "sleep",
           "performance": "performance"
         }
+      },
+      "sessionHost": {
+        "sshDetail": "Pages for this SSH host open on this computer."
       }
     },
     "agents": {
@@ -2710,8 +2750,24 @@
           "tab": {
             "open": {
               "urlFailed": "Unable to open URL.",
-              "searchFailed": "Unable to search with {{value0}}."
+              "searchFailed": "Unable to search with {{value0}}.",
+              "failure": {
+                "stageError": "Error · {{value0}} · {{value1}}",
+                "hostNotFound": "Workspace's computer wasn't found.",
+                "linkBlocked": "Link open was blocked.",
+                "notWebLink": "Not a web link."
+              }
             }
+          }
+        },
+        "ports": {
+          "serverPortForward": {
+            "updateServer": "Couldn't forward port {{port}} from {{host}}. Update Orca on {{host}} and try again.",
+            "failed": "Couldn't forward port {{port}} from {{host}}. Check the connection and try again.",
+            "forwarded": "Forwarded port {{port}} from {{host}}",
+            "opened": "Opened {{address}} in your default browser.",
+            "otherMachine": "Couldn't forward port {{port}}: this workspace doesn't run on {{host}} itself.",
+            "useSshPorts": "Couldn't forward port {{port}} from {{host}}. Forward it in Ports, then try again."
           }
         }
       },
@@ -3024,7 +3080,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "Project location not set",
         "hostLocalGitProject": "No matched Git remote for this project",
-        "hostLocalFolderProject": "Folder projects can't link to other hosts"
+        "hostLocalFolderProject": "Folder projects can't link to other hosts",
+        "pendingNotSetUp": "Project tracked on this host but not set up",
+        "pendingSettingUp": "Project setup is in progress",
+        "pendingError": "Project setup needs attention",
+        "pendingUnsupported": "Project is unsupported on this host"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+click checks the latest RC; {{perfKey}}+click checks the latest perf build.",
@@ -5244,6 +5304,7 @@
             "downloadAlreadyLocal": "'{{value0}}' is already on this computer.",
             "downloadFolderUnsupported": "Folder '{{value0}}' can't be downloaded from this host.",
             "downloadOpenFailed": "Failed to download '{{value0}}'.",
+            "openLinkInThisGroupRefused": "Couldn't open the link in this group",
             "openInThisGroupRefused": "Couldn't open {{value0}} in this group",
             "openInNewTab": "Open in new tab"
           },
@@ -9053,18 +9114,14 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "Profile \"{{value0}}\" removed.",
-          "2d4bea7f35": "Default cookies cleared.",
           "796d846483": "No cookies imported",
           "c29648fe5b": "Active",
           "b4c167764d": "Imported {{value0}} cookies from file into {{value1}}.",
           "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
           "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}.",
           "c5a273a809": "From {{value0}}",
-          "4054c458e1": "Clear default cookies",
           "80bffd32bf": "Import cookies",
-          "bd7d68f138": "From file…",
-          "3b662becd5": "Clear cookies in the Default profile?",
-          "f159cf5a3e": "This may sign you out of sites in this profile."
+          "bd7d68f138": "From file…"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Orca Computer Use skill; macOS also requires privacy permissions.",
@@ -19018,8 +19075,6 @@
             "ed8f54509d": "Default",
             "e5d31de1a9": "Viewport Size",
             "56f94f4ffa": "From File…",
-            "eb280bfb11": "From {{value0}}",
-            "2293adf620": "Import Cookies",
             "cf7cdc67ef": "New Profile…",
             "7b838540c7": "Browser menu",
             "a7a86702b3": "Created and switched to {{value0}} profile",
@@ -21860,7 +21915,8 @@
           "handedOff": "Handed off to",
           "task": "Task from",
           "update": "Update from",
-          "message": "Message from"
+          "message": "Message from",
+          "notSentYet": "not sent yet"
         },
         "kind": {
           "started": "Started",
@@ -22187,7 +22243,8 @@
         "oneComment": "1 comment",
         "comments": "{{count}} comments",
         "unavailable": "Preview unavailable.",
-        "retry": "Retry"
+        "retry": "Retry",
+        "retryKeyHint": "Preview unavailable. Press {{key}} to retry."
       },
       "webPeek": {
         "unavailable": "No preview for this page."
@@ -22787,6 +22844,8 @@
         "remoteOwner": "Stop or clear this from the computer it runs on",
         "restore": "Show in dock again",
         "unavailable": "Worker status unavailable",
+        "alreadyStopped": "Already stopped",
+        "cantStop": "Can't stop now",
         "empty": "0 workers",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
@@ -26839,6 +26898,7 @@
     "waitForImageUploads": "Wait for images to finish uploading, then retry Create PR."
   },
   "agentPicker": {
+    "refreshModels": "Refresh models",
     "catalogUnsupportedLaunch": "{{agent}} models are unavailable on this host. Your current choices still apply.",
     "catalogLoadFailed": "Could not load {{agent}} models.",
     "catalogLoading": "Loading models…",
@@ -28542,23 +28602,12 @@
       "newThreadHint": "starts fresh",
       "newThreadTab": "New thread",
       "items": {
-        "thisGroup": "This group",
-        "thread": "Thread",
-        "all": "All their work",
         "orNames": "{{names}} or {{last}}",
         "emptyBotsNeedsYou": "Nothing from {{names}} needs you",
         "emptyBots": "No items from {{names}}",
         "emptyTitle": "No items from this group yet",
-        "emptyBody": "When {{names}} take something on in this group, it shows up here.",
-        "showAll": "Show all their work",
         "filterNamed": "Filter items, filtered by {{filter}}",
-        "filterBot": "Bot",
-        "outside_one": "{{count}} more outside this group",
-        "outside_other": "{{count}} more outside this group",
-        "outsideRoom_one": "{{count}} more outside this room",
-        "outsideRoom_other": "{{count}} more outside this room",
-        "outsideThread_one": "{{count}} more outside this thread",
-        "outsideThread_other": "{{count}} more outside this thread"
+        "filterBot": "Bot"
       },
       "panel": {
         "membersMore": "Members: {{names}} and {{count}} more",
@@ -28678,13 +28727,10 @@
       "hostChoice": {
         "description": "Choose how {{bot}} signs in to your Gmail, Calendar and Drive.",
         "orca": "Orca hosted",
-        "comingSoon": "Coming soon",
-        "orcaNote": "Sign in with Google. Nothing to set up.",
+        "soon": "Soon",
+        "orcaNote": "Sign in with Google.",
         "self": "Self hosted",
-        "selfNote": "You make your own Google Cloud app, so your sign-in stays on your computer. Nothing goes through Orca’s servers.",
-        "stepApp": "{{bot}} opens Google Cloud and sets up the app",
-        "stepSignIn": "You tick Google’s terms box and sign in",
-        "stepCheck": "{{bot}} checks that Gmail, Calendar and Drive work",
+        "selfNote": "Your own Google app.",
         "continue": "Continue"
       },
       "connectDescription": "Give your bots access to Gmail, Calendar and Drive. Your sign-in stays on {{host}}.",
@@ -30201,7 +30247,6 @@
         "title": "title"
       },
       "filter": {
-        "chat": "Chat",
         "clearAll": "Clear filters",
         "label": "Filter items",
         "needsYou": "Needs you only",

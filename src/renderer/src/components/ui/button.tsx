@@ -10,6 +10,10 @@ const outlineButtonClasses =
 const disabledOnAccentButtonClasses =
   'disabled:bg-accent disabled:text-muted-foreground disabled:opacity-100 disabled:hover:bg-accent disabled:hover:text-muted-foreground'
 
+// A focus ring drawn inside the button, for controls at the edge of a clipped list or pane.
+const insetFocusRingClasses =
+  'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
+
 const buttonVariants = cva(
   "inline-flex shrink-0 items-center justify-center gap-2 rounded-md cursor-pointer text-sm font-medium whitespace-nowrap transition-[color,background-color,opacity] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
@@ -32,12 +36,13 @@ const buttonVariants = cva(
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         // A row action over its hovered row's accent fill, where ghost's accent hover would not show.
         'ghost-on-accent': `text-accent-foreground hover:bg-foreground/10 ${disabledOnAccentButtonClasses}`,
+        // `ghost-on-accent` at a clipped list's edge, where an outset ring would lose a side.
+        'ghost-on-accent-inset': `text-accent-foreground hover:bg-foreground/10 ${disabledOnAccentButtonClasses} ${insetFocusRingClasses}`,
         // `ghost-on-accent`'s outlined partner: outline's accent hover would not show on the accent fill.
         'outline-on-accent': `${outlineButtonClasses} hover:bg-foreground/5 ${disabledOnAccentButtonClasses} disabled:border-border disabled:shadow-none disabled:hover:border-border dark:disabled:border-border dark:disabled:bg-accent dark:disabled:hover:bg-accent`,
         disclosure:
           'text-xs focus-visible:ring-inset hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
-        'ghost-inset':
-          'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+        'ghost-inset': `hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 transition-colors ${insetFocusRingClasses}`,
         // Keep icon states visible on muted fields, which share accent's light-theme fill.
         'muted-field-icon':
           'text-muted-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:bg-foreground/[0.08] focus-visible:text-foreground aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground',

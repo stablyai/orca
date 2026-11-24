@@ -393,6 +393,12 @@
       "caveat": "Dies öffnet auf dem Remote-Host eine neue Seite mit der zuletzt verwendeten Adresse dieser Seite. Der Anmeldestatus und andere vorübergehende Seitenzustände können abweichen. Eine durch Formularübermittlung entstandene Seite wird leer geöffnet.",
       "failed": "Diese Seite konnte auf dem Remote-Host nicht geöffnet werden. Die Verbindung prüfen und erneut versuchen."
     },
+    "deviceMove": {
+      "toThisComputer": "Auf diesem Computer öffnen",
+      "toHost": "Auf {{host}} öffnen",
+      "tooltip": "Öffnet diese Adresse in einem neuen Tab auf der anderen Seite und schließt diesen. Eventuell musst du dich erneut anmelden.",
+      "failedToThisComputer": "Diese Seite konnte auf diesem Computer nicht geöffnet werden."
+    },
     "sshRoute": {
       "preparingTitle": "Verbindung über den SSH-Host wird hergestellt",
       "errorTitle": "SSH-Routing für den Browser nicht verfügbar",
@@ -543,6 +549,13 @@
       "sshPage": {
         "stored": "Im Browser für {{host}} gespeichert.",
         "googleCookiesSkipped": "Google-Cookies wurden nicht importiert. Öffne eine Seite, die über {{host}} surft, und melde dich dann bei Google an."
+      },
+      "picker": {
+        "menuItem": "Cookies importieren…",
+        "search": "Profile suchen",
+        "lastUsed": "Zuletzt verwendet",
+        "noMatches": "Keine Treffer",
+        "googleNote": "Kein Import von Google-Logins"
       }
     },
     "passwords": {
@@ -2099,7 +2112,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "Projektverzeichnis nicht festgelegt",
         "hostLocalGitProject": "Kein passendes Git-Remote für dieses Projekt",
-        "hostLocalFolderProject": "Ordnerprojekte lassen sich nicht mit anderen Hosts verknüpfen"
+        "hostLocalFolderProject": "Ordnerprojekte lassen sich nicht mit anderen Hosts verknüpfen",
+        "pendingNotSetUp": "Projekt auf diesem Host erfasst, aber nicht eingerichtet",
+        "pendingSettingUp": "Projekteinrichtung läuft",
+        "pendingError": "Projekteinrichtung erfordert Aufmerksamkeit",
+        "pendingUnsupported": "Projekt wird auf diesem Host nicht unterstützt"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Aktualisieren Sie den Server, um Ports auf seinen SSH-Hosts anzuzeigen.",
@@ -7873,7 +7890,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "Profil „{{value0}}“ entfernt.",
-          "2d4bea7f35": "Cookies des Standardprofils gelöscht.",
           "796d846483": "Keine Cookies importiert",
           "c29648fe5b": "Aktiv",
           "b4c167764d": "{{value0}} Cookies aus einer Datei in {{value1}} importiert.",
@@ -7881,10 +7897,7 @@
           "b4e9d3f2a1c5": "{{value0}} Cookies aus {{value1}} in {{value2}} importiert.",
           "c5a273a809": "Aus {{value0}}",
           "80bffd32bf": "Cookies importieren",
-          "bd7d68f138": "Aus Datei…",
-          "4054c458e1": "Cookies des Standardprofils löschen",
-          "3b662becd5": "Cookies im Standardprofil löschen?",
-          "f159cf5a3e": "Dadurch wirst du möglicherweise auf Websites in diesem Profil abgemeldet."
+          "bd7d68f138": "Aus Datei…"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Orca Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
@@ -17512,8 +17525,6 @@
             "ed8f54509d": "Standard",
             "e5d31de1a9": "Größe des Anzeigebereichs",
             "56f94f4ffa": "Aus Datei…",
-            "eb280bfb11": "Aus {{value0}}",
-            "2293adf620": "Cookies importieren",
             "cf7cdc67ef": "Profil erstellen…",
             "7b838540c7": "Browsermenü",
             "a7a86702b3": "Profil {{value0}} erstellt und aktiviert",
@@ -24596,6 +24607,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "Modelle aktualisieren",
     "catalogUnsupportedLaunch": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Deine aktuelle Auswahl gilt weiterhin.",
     "catalogEmpty": "Für {{agent}} sind keine Modelle verfügbar.",
     "setByArguments": "Durch Argumente festgelegt",

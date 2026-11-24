@@ -1315,6 +1315,12 @@
       "caveat": "Isso abre uma nova página no host remoto no último endereço desta página. O login e outros estados temporários da página podem ser diferentes, e uma página originada de um envio de formulário abre em branco.",
       "failed": "Não foi possível abrir esta página no host remoto. Verifique a conexão e tente novamente."
     },
+    "deviceMove": {
+      "toThisComputer": "Abrir neste computador",
+      "toHost": "Abrir em {{host}}",
+      "tooltip": "Abre este endereço em uma nova aba do outro lado e fecha esta. Talvez seja necessário entrar novamente.",
+      "failedToThisComputer": "Não foi possível abrir esta página neste computador."
+    },
     "sshRoute": {
       "preparingTitle": "Conectando através do host SSH",
       "errorTitle": "Roteamento de navegador via SSH indisponível",
@@ -1446,6 +1452,13 @@
       "sshPage": {
         "stored": "Salvo no navegador de {{host}}.",
         "googleCookiesSkipped": "Os cookies do Google não foram importados. Abra uma página que navegue por {{host}} e entre no Google."
+      },
+      "picker": {
+        "menuItem": "Importar Cookies…",
+        "search": "Pesquisar perfis",
+        "lastUsed": "Usado por último",
+        "noMatches": "Nenhum resultado",
+        "googleNote": "Logins do Google ficam de fora"
       }
     },
     "googleCookieClear": {
@@ -3290,7 +3303,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "Local do projeto não definido",
         "hostLocalGitProject": "Este projeto não tem um remoto Git correspondente",
-        "hostLocalFolderProject": "Projetos de pasta não podem ser vinculados a outros hosts"
+        "hostLocalFolderProject": "Projetos de pasta não podem ser vinculados a outros hosts",
+        "pendingNotSetUp": "Projeto rastreado neste host, mas não configurado",
+        "pendingSettingUp": "Configuração do projeto em andamento",
+        "pendingError": "A configuração do projeto precisa de atenção",
+        "pendingUnsupported": "Projeto não suportado neste host"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Atualize o servidor para ver as portas nos hosts SSH dele.",
@@ -8258,7 +8275,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "Perfil \"{{value0}}\" removido.",
-          "2d4bea7f35": "Cookies padrão limpos.",
           "796d846483": "Nenhum cookie importado",
           "c29648fe5b": "Ativo",
           "b4c167764d": "{{value0}} cookies importados do arquivo para {{value1}}.",
@@ -8266,10 +8282,7 @@
           "b4e9d3f2a1c5": "{{value0}} cookies importados de {{value1}} para {{value2}}.",
           "c5a273a809": "De {{value0}}",
           "80bffd32bf": "Importar Cookies",
-          "bd7d68f138": "De um Arquivo…",
-          "4054c458e1": "Limpar cookies padrão",
-          "3b662becd5": "Limpar os cookies do perfil padrão?",
-          "f159cf5a3e": "Isso pode desconectar você de sites neste perfil."
+          "bd7d68f138": "De um Arquivo…"
         },
         "GhosttyImportModal": {
           "f96688b6bc": "Cancelar",
@@ -18006,8 +18019,6 @@
             "ed8f54509d": "Padrão",
             "e5d31de1a9": "Tamanho da Viewport",
             "56f94f4ffa": "De Arquivo…",
-            "eb280bfb11": "De {{value0}}",
-            "2293adf620": "Importar Cookies",
             "cf7cdc67ef": "Novo Perfil…",
             "7b838540c7": "Menu do navegador",
             "a7a86702b3": "Perfil {{value0}} criado e ativado",
@@ -24451,6 +24462,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "Atualizar modelos",
     "catalogUnsupportedLaunch": "Os modelos de {{agent}} não estão disponíveis neste host. Suas escolhas atuais continuam valendo.",
     "catalogEmpty": "{{agent}} não tem modelos disponíveis.",
     "search": "Pesquisar, por exemplo, Opus 5.5…",
@@ -25155,8 +25167,8 @@
       "weekdays": "dias úteis, {{schedule}}"
     },
     "palette": {
-      "placeholder": "Buscar bots, chats, terminais, worktrees, configurações e ações...",
-      "description": "Buscar bots, chats, terminais, worktrees, configurações e ações",
+      "placeholder": "Buscar bots, chats, terminais, espaços de trabalho, tarefas, configurações e ações...",
+      "description": "Buscar bots, chats, terminais, espaços de trabalho, tarefas, configurações e ações",
       "scopedPlaceholder": "Buscar bots...",
       "scopedLabel": "Buscar bots",
       "scopeHint": "Digite @ para mostrar só bots",
@@ -25165,14 +25177,14 @@
       "searchEverything": "Buscar em tudo por \"{{text}}\"",
       "noMatch": "Nenhum bot corresponde a \"{{text}}\"",
       "noBotsYet": "Ainda não há bots",
-      "filtersPaused": "Os filtros se aplicam a worktrees, não a bots",
+      "filtersPaused": "Os filtros se aplicam a espaços de trabalho, não a bots",
       "showEverything": "Mostrar tudo",
       "footerBots": "Bots",
       "matchesPurpose": "Corresponde ao propósito.",
       "scopedStatus_one": "Mostrando só bots. {{count}} resultado encontrado.",
       "scopedStatus_other": "Mostrando só bots. {{count}} resultados encontrados.",
       "scopedStatus_many": "Mostrando só bots. {{count}} resultados encontrados.",
-      "sidebarSearchLabel": "Buscar bots, worktrees e abas do navegador",
+      "sidebarSearchLabel": "Buscar bots, espaços de trabalho e abas do navegador",
       "section": "Bots"
     },
     "templates": {

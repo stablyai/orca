@@ -42,7 +42,9 @@ export function mobileNativeChatChordHeadId(
     steerHeld,
     agentWorking,
     editor
-  }: Pick<MobileNativeChatQueuedMessagesProps, 'cards' | 'steerHeld' | 'agentWorking' | 'editor'>,
+  }: Pick<MobileNativeChatQueuedMessagesProps, 'steerHeld' | 'agentWorking' | 'editor'> & {
+    cards?: readonly MobileQueuedMessageCard[]
+  },
   alternateSteers: boolean
 ): string | null {
   // Mid-turn only where the chord's other way is steer, or a second press would steer the card
@@ -59,6 +61,8 @@ export type MobileNativeChatQueuedMessagesProps = {
   onSend?: (messageId: string) => Promise<boolean>
   onDelete?: (messageId: string) => Promise<boolean>
   onClearAll?: (messageIds: string[]) => Promise<boolean>
+  /** What Delete all deletes and holds, waiting agent mail included; the cards when omitted. */
+  clearIds?: readonly string[]
   /** Offers Clear all while the queue still sends on its own; otherwise only a paused queue does. */
   clearable?: boolean
   // Older hosts cannot edit inline; copy their draft to the composer.
@@ -72,6 +76,8 @@ export type MobileNativeChatQueuedMessagesProps = {
   headLight?: MobileQueuedHeadLight
   /** The agent is working: a steerable card's action reads Steer, otherwise Send. */
   agentWorking?: boolean
+  /** The queue the steer shortcut presses the head of; the cards unless waiting mail leads. */
+  steerOrder?: readonly MobileQueuedMessageCard[]
 }
 
 export function MobileNativeChatQueuedMessages({
@@ -80,6 +86,7 @@ export function MobileNativeChatQueuedMessages({
   onSend,
   onDelete,
   onClearAll,
+  clearIds: heldIds,
   clearable = false,
   onEdit,
   editor,
@@ -88,7 +95,8 @@ export function MobileNativeChatQueuedMessages({
   onResume,
   steerHeld = false,
   headLight,
-  agentWorking = false
+  agentWorking = false,
+  steerOrder
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
   useMobileColorScheme()
   const lowerRegion = useMobileNativeChatLowerRegion()
@@ -146,7 +154,8 @@ export function MobileNativeChatQueuedMessages({
       setExpandedIds(new Set([...expandedIds].filter((messageId) => liveIds.includes(messageId))))
     }
   }
-  if (!cards || cards.length === 0) {
+  // A paused queue holding only agent mail, which the transcript draws, still offers Resume.
+  if (!cards || (cards.length === 0 && !pause)) {
     if (openChoice !== null) {
       setOpenChoice(null)
     }
@@ -165,17 +174,20 @@ export function MobileNativeChatQueuedMessages({
   const open =
     openChoice?.abovePrompt === abovePrompt ? openChoice.open : !abovePrompt || attentionHidden
   // An inline editor on a folded-away card keeps the list open so the edit stays in view.
-  const editingHidden = editor !== undefined && editor.messageId !== cards[0]!.messageId
+  const editingHidden =
+    editor !== undefined && cards.length > 0 && editor.messageId !== cards[0]!.messageId
   const showAll = open || cards.length === 1 || editingHidden
   const shownCards = showAll ? cards : cards.slice(0, 1)
   const queueBusy = busyIds.has(QUEUE_KEY)
-  const headId = headSteerableQueuedMessageCard(cards)?.messageId
+  // The shortcut's own head, which is waiting agent mail (no card) when that is first in line.
+  const headId = headSteerableQueuedMessageCard(steerOrder ?? cards)?.messageId
   const messageIds = cards.map((card) => card.messageId)
-  // Clear all takes every card, so it waits for any card's own action rather than skip that card.
-  const clearBusy = queueBusy || messageIds.some((messageId) => busyIds.has(messageId))
+  const clearIds = heldIds ? [...heldIds] : messageIds
+  // Clear all takes every held message, so it waits for any one's own action rather than skip it.
+  const clearBusy = queueBusy || clearIds.some((messageId) => busyIds.has(messageId))
   const clearAll = () => {
     if (onClearAll) {
-      void run(QUEUE_KEY, () => onClearAll(messageIds), messageIds, 'deleteAll')
+      void run(QUEUE_KEY, () => onClearAll(clearIds), clearIds, 'deleteAll')
     }
   }
   // Forget closed menu identity so a Stop-requeued draft with the same id cannot reopen it.
@@ -283,14 +295,18 @@ export function MobileNativeChatQueuedMessages({
                 <Text style={[styles.headerLabel, styles.headerLabelPaused]}>
                   {t('chat.queuedMessages.pausedState', 'Paused')}
                 </Text>
-                <Text
-                  style={styles.headerLabel}
-                  importantForAccessibility="no"
-                  accessibilityElementsHidden
-                >
-                  ·
-                </Text>
-                <Text style={styles.headerCount}>{cards.length}</Text>
+                {cards.length > 0 ? (
+                  <>
+                    <Text
+                      style={styles.headerLabel}
+                      importantForAccessibility="no"
+                      accessibilityElementsHidden
+                    >
+                      ·
+                    </Text>
+                    <Text style={styles.headerCount}>{cards.length}</Text>
+                  </>
+                ) : null}
               </View>
               {largeText ? null : headerActions}
             </View>
@@ -392,7 +408,7 @@ export function MobileNativeChatQueuedMessages({
               }
             }
           },
-          ...(clearable && !pause && onClearAll && cards.length > 1
+          ...(clearable && !pause && onClearAll && clearIds.length > 1
             ? [
                 {
                   id: 'clearAll',

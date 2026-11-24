@@ -5038,7 +5038,7 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "JQL do Jira, ex.: project = ABC AND statusCategory != Done",
+        "99c2755218": "Buscar issues ou inserir JQL, ex.: project = ABC",
         "jiraTextMatchesNotice": "Mostrando correspondências de texto. O Jira não conseguiu executar esta busca como JQL."
       },
       "editor": {
@@ -5251,31 +5251,14 @@
       "peerTold": "{{from}} avisou {{to}}",
       "startAConversationWithThisGroupMentionBots": "Comece uma conversa com este grupo. Mencione bots com @Nome ou @everyone.",
       "items": {
-        "thisGroup": "Este grupo",
-        "thread": "Thread",
-        "all": "Todo o trabalho deles",
-        "orNames": "{{names}} ou {{last}}",
-        "outsideRoom_one": "Mais {{count}} fora desta sala",
-        "outsideRoom_other": "Mais {{count}} fora desta sala",
-        "outsideThread_one": "Mais {{count}} fora desta thread",
-        "outsideThread_other": "Mais {{count}} fora desta thread",
-        "outside_one": "Mais {{count}} fora deste grupo",
-        "outside_other": "Mais {{count}} fora deste grupo",
         "emptyTitle": "Ainda não há itens deste grupo",
-        "emptyBody": "Quando {{names}} assumirem algo neste grupo, aparecerá aqui.",
         "needsYouCount_one": "{{count}} precisa de você",
         "needsYouCount_other": "{{count}} precisam de você",
         "workingCount_one": "{{count}} trabalhando",
         "workingCount_other": "{{count}} trabalhando",
         "filterBot": "Bot",
-        "outsideRoom": "Mais {{count}} fora desta sala",
-        "outsideThread": "Mais {{count}} fora desta thread",
-        "outside": "Mais {{count}} fora deste grupo",
         "needsYouCount": "{{count}} precisa de você",
         "workingCount": "{{count}} trabalhando",
-        "outsideRoom_many": "Mais {{count}} fora desta sala",
-        "outsideThread_many": "Mais {{count}} fora desta thread",
-        "outside_many": "Mais {{count}} fora deste grupo",
         "needsYouCount_many": "{{count}} precisam de você",
         "workingCount_many": "{{count}} trabalhando"
       },
@@ -5313,8 +5296,7 @@
     },
     "items": {
       "filter": {
-        "clearAll": "Limpar filtros",
-        "chat": "Chat"
+        "clearAll": "Limpar filtros"
       },
       "tab": "Itens",
       "activity": {

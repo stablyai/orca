@@ -1751,14 +1751,7 @@
     "groups": {
       "allBotsCount": "All bots · {{count}}",
       "correctMention": "Correct mention",
-      "items": {
-        "outsideRoom_one": "{{count}} more outside this room",
-        "outsideRoom_other": "{{count}} more outside this room",
-        "outsideThread_one": "{{count}} more outside this thread",
-        "outsideThread_other": "{{count}} more outside this thread",
-        "outside_one": "{{count}} more outside this group",
-        "outside_other": "{{count}} more outside this group"
-      },
+      "items": {},
       "mentionedCount": "{{count}} mentioned",
       "remoteAsked": "Asked on {{computer}}",
       "remoteMayAnswer": "May still answer on {{computer}}.",

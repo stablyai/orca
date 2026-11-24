@@ -3780,7 +3780,8 @@
         "handedOff": "Handed off to",
         "task": "Task from",
         "update": "Update from",
-        "message": "Message from"
+        "message": "Message from",
+        "notSentYet": "not sent yet"
       },
       "kind": {
         "started": "Started",
@@ -5766,26 +5767,12 @@
       "needsTwoBots": "Needs 2 bots on {{host}}",
       "startAConversationWithThisGroupMentionBots": "Start a conversation with this group. Mention bots with @Name or @everyone.",
       "items": {
-        "thisGroup": "This group",
-        "thread": "Thread",
-        "all": "All their work",
-        "orNames": "{{names}} or {{last}}",
-        "outsideRoom_one": "{{count}} more outside this room",
-        "outsideRoom_other": "{{count}} more outside this room",
-        "outsideThread_one": "{{count}} more outside this thread",
-        "outsideThread_other": "{{count}} more outside this thread",
-        "outside_one": "{{count}} more outside this group",
-        "outside_other": "{{count}} more outside this group",
         "emptyTitle": "No items from this group yet",
-        "emptyBody": "When {{names}} take something on in this group, it shows up here.",
         "needsYouCount_one": "{{count}} needs you",
         "needsYouCount_other": "{{count}} needs you",
         "workingCount_one": "{{count}} working",
         "workingCount_other": "{{count}} working",
         "filterBot": "Bot",
-        "outsideRoom": "{{count}} more outside this room",
-        "outsideThread": "{{count}} more outside this thread",
-        "outside": "{{count}} more outside this group",
         "needsYouCount": "{{count}} needs you",
         "workingCount": "{{count}} working"
       },
@@ -6403,8 +6390,7 @@
         "label": "Filter items",
         "remove": "Remove filter {{name}}",
         "clear": "Clear filter",
-        "clearAll": "Clear filters",
-        "chat": "Chat"
+        "clearAll": "Clear filters"
       },
       "tab": "Items",
       "field": {
@@ -7792,14 +7778,10 @@
         "continue": "Continue",
         "description": "Choose how {{bot}} signs in to your Gmail, Calendar and Drive.",
         "self": "Self hosted",
-        "selfNote": "You make your own Google Cloud app, so your sign-in stays on your computer. About 10 minutes.",
+        "selfNote": "Your own Google app.",
         "orca": "Orca hosted",
-        "orcaNote": "Sign in with Google. Nothing to set up.",
-        "comingSoon": "Coming soon",
-        "steps": "Steps",
-        "stepApp": "{{bot}} opens Google Cloud and sets up the app",
-        "stepSignIn": "You tick Google’s terms box and sign in",
-        "stepCheck": "{{bot}} checks that Gmail, Calendar and Drive work"
+        "orcaNote": "Sign in with Google.",
+        "soon": "Soon"
       },
       "importFromTeam": "Import a setup file from your team",
       "service": {

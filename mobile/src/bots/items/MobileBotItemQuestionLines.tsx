@@ -19,6 +19,7 @@ import type { BotItemEvent } from '../../../../src/shared/bots/bot-items'
 import type { BotItemQuickReplyActions } from '../../../../src/shared/bots/use-bot-item-question-steps'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
 import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import {
@@ -127,7 +128,11 @@ export function MobileBotItemQuestionLines({
         return (
           // A decision's question is unique within its ask.
           <View key={decision.question}>
-            <MobileMarkdown content={decision.question} tone={open ? 'strong' : 'muted'} />
+            <MobileMarkdown
+              content={decision.question}
+              tone={open ? 'strong' : 'muted'}
+              rangeSelectable={INLINE_TEXT_SELECTION}
+            />
             {open && actions && decision.replies.length > 0 ? (
               <View style={styles.chips}>
                 {decision.replies.map((reply) => (

@@ -4418,7 +4418,7 @@
             "remoteOwnerNotConfigured": "{{server}}에 구성되지 않음",
             "claudeUnknownOnHost": "{{server}}에서 Claude 사용량을 가져올 수 없습니다. 그곳에서 로그인하지 않았거나 API 키 결제를 사용 중일 수 있습니다.",
             "remoteOwnerSignInSavedHere": "로그인 정보는 이 컴퓨터에만 저장되어 있습니다.",
-            "f8b8dbed85": "사용량 사용할 수 없음",
+            "f8b8dbed85": "사용량을 확인할 수 없음",
             "e2c6a4f917": "Grok을 실행하여 새로 고침",
             "f90b3d7a16": "새로고침하려면 Kimi를 실행하세요.",
             "0d8d7cfe15": "Claude 세션 대기 중",
@@ -4429,7 +4429,7 @@
               }
             },
             "1804cd8c3f": "로그인 새로 고치는 중",
-            "bf2e739f18": "로그인 사용할 수 없음",
+            "bf2e739f18": "로그인할 수 없음",
             "f8f0f9d8cc": "네트워크 문제",
             "minimax": {
               "expired": {
@@ -4566,26 +4566,12 @@
       "peerTold": "{{from}}이(가) {{to}}에게 알림",
       "startAConversationWithThisGroupMentionBots": "이 그룹과 대화를 시작하세요. @이름 또는 @everyone으로 봇을 멘션하세요.",
       "items": {
-        "thisGroup": "이 그룹",
-        "thread": "스레드",
-        "all": "모든 작업",
-        "orNames": "{{names}} 또는 {{last}}",
-        "outsideRoom_one": "이 방 밖에 {{count}}개 더",
-        "outsideRoom_other": "이 방 밖에 {{count}}개 더",
-        "outsideThread_one": "이 스레드 밖에 {{count}}개 더",
-        "outsideThread_other": "이 스레드 밖에 {{count}}개 더",
-        "outside_one": "이 그룹 밖에 {{count}}개 더",
-        "outside_other": "이 그룹 밖에 {{count}}개 더",
         "emptyTitle": "이 그룹의 항목이 아직 없음",
-        "emptyBody": "{{names}}이(가) 이 그룹에서 무언가를 맡으면 여기에 표시됩니다.",
         "needsYouCount_one": "확인 필요 {{count}}개",
         "needsYouCount_other": "확인 필요 {{count}}개",
         "workingCount_one": "{{count}}개 작업 중",
         "workingCount_other": "{{count}}개 작업 중",
         "filterBot": "봇",
-        "outsideRoom": "이 방 밖에 {{count}}개 더",
-        "outsideThread": "이 스레드 밖에 {{count}}개 더",
-        "outside": "이 그룹 밖에 {{count}}개 더",
         "needsYouCount": "확인 필요 {{count}}개",
         "workingCount": "{{count}}개 작업 중"
       },
@@ -5014,8 +5000,7 @@
     },
     "items": {
       "filter": {
-        "clearAll": "필터 지우기",
-        "chat": "채팅"
+        "clearAll": "필터 지우기"
       },
       "tab": "항목",
       "activity": {

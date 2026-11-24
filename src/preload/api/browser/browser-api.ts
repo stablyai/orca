@@ -1,3 +1,4 @@
+import type { BrowserServerDownloadCopyArgs } from '../../../shared/browser/downloads/browser-server-download-copy'
 import type { BrowserGuestMetadata } from '../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { BrowserSessionCookieApi } from './browser-session-cookie-api'
 import type { BrowserGuestDiscardApi } from '../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
@@ -195,6 +196,9 @@ export type BrowserApi = {
     callback: (event: { browserPageId: string; url: string; activate?: boolean }) => void
   ) => () => void
   cancelDownload: (args: { downloadId: string }) => Promise<boolean>
+  /** Copies a download a paired server saved into this computer's Downloads; rejects on failure or Cancel. */
+  copyServerDownload: (args: BrowserServerDownloadCopyArgs) => Promise<{ destinationPath: string }>
+  cancelServerDownloadCopy: (args: { copyId: string }) => Promise<boolean>
   /** Escape pressed in a focused page; the page also receives it unless a grab pick is running. */
   onGuestEscape: (callback: (args: { browserPageId: string }) => void) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>
@@ -230,10 +234,10 @@ export type BrowserApi = {
   sessionImportFromBrowserForClientHost: (
     args: BrowserClientHostCookieImportArgs & { browserFamily: string; browserProfile?: string }
   ) => Promise<BrowserCookieImportResult | null>
-  /** Import sources keyed by browser profile ID. */
-  sessionClientRouteImportSources: (args: {
-    environmentId: string
-  }) => Promise<Record<string, BrowserSessionProfileSource>>
+  /** Import sources of a paired server's or SSH host's jars on this desktop, keyed by browser profile ID. */
+  sessionClientRouteImportSources: (
+    args: { environmentId: string } | { sshTargetId: string }
+  ) => Promise<Record<string, BrowserSessionProfileSource>>
   /** Site permissions are local to this computer and browser profile. */
   sitePermissionsList: (args: { profileId: string }) => Promise<BrowserSitePermissionEntry[]>
   /** Null forgets the answer so the site is asked again. */

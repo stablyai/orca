@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { translate } from '@/i18n/i18n'
@@ -12,7 +13,8 @@ import {
 import {
   agentMessageHeading,
   agentMessagePrimarySender,
-  agentMessageCanCopy
+  agentMessageCanCopy,
+  agentMessageWaitingQueuedId
 } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/view/messages/agent-message-display-text'
 import { agentMessagePreviewLine } from '../../../../../../shared/agent-session/view/messages/agent-message-preview-line'
@@ -40,6 +42,7 @@ import type { NativeChatEventBadge } from '../events/NativeChatEventRow'
 import { NativeChatAgentMessageRow } from './NativeChatAgentMessageRow'
 import { ItemChip } from '../../bot-items/NativeChatBotItemNoteRow'
 import { agentMessageRowLead } from './agent-message-row-lead'
+import { NativeChatWaitingAgentMailActions } from '../../queue/NativeChatWaitingAgentMailActions'
 
 /** The one word drawn before the name for a start, a hand-off or a task; a plain message draws none. */
 function kindWord(
@@ -87,7 +90,11 @@ export function NativeChatAgentMessageCard({
   const owner = useNativeChatVisualOwner()
   const worktreeId = owner?.worktreeId ?? runtimeContext?.worktreeId ?? null
   const target = owner?.target ?? runtimeContext?.target
-  const text = agentMessageTranscriptText(message.blocks, from, message.shortened)
+  // A sender's status change redraws the row; the body's text and first line are read once per body.
+  const text = useMemo(
+    () => agentMessageTranscriptText(message.blocks, from, message.shortened),
+    [message.blocks, from, message.shortened]
+  )
   const worker = agentMessageSessionWorker(message, useNativeChatWorkers())
   const sender = agentMessagePrimarySender(from)
   const dispatchId = message.agentStartDispatchId ?? worker?.dispatchId
@@ -101,7 +108,7 @@ export function NativeChatAgentMessageCard({
   const words = agentMessageRowLead(from, message, t)
   const items = message.agentStartItems ?? []
   const forItems = t('components.native-chat.agentMessage.row.forItems', 'for')
-  const preview = agentMessagePreviewLine(text)
+  const preview = useMemo(() => agentMessagePreviewLine(text), [text])
   const senderName = useAgentMessageSenderLabel(
     sender ?? NO_SENDER,
     worktreeId,
@@ -109,9 +116,12 @@ export function NativeChatAgentMessageCard({
     senderDispatchId
   )
   const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
+  // Not taken by the agent yet: dimmed, with no time, until its delivered row replaces it in place.
+  const waiting = message.queued === true
+  const waitingId = agentMessageWaitingQueuedId(message)
   return (
     <NativeChatAgentMessageRow
-      className="w-full"
+      className={waiting ? 'w-full opacity-70' : 'w-full'}
       icon={
         <AgentMessageAvatar
           sender={sender}
@@ -157,8 +167,16 @@ export function NativeChatAgentMessageCard({
         textAttachmentContent !== undefined ||
         message.shortened === true
       }
-      timestamp={message.timestamp}
-      disclosureKey={`agent-message:${message.id}`}
+      timestamp={waiting ? null : message.timestamp}
+      spokenState={
+        waiting
+          ? t('components.native-chat.agentMessage.row.notSentYet', 'not sent yet')
+          : undefined
+      }
+      action={
+        waitingId ? <NativeChatWaitingAgentMailActions queuedMessageId={waitingId} /> : undefined
+      }
+      disclosureKey={`agent-message:${message.queuedMessageId ?? message.id}`}
       onOpenChange={(open) => {
         if (!open) {
           requestAnimationFrame(onRefolded)
