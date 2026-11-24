@@ -28,6 +28,7 @@ it("reports the host's refusal and its stage, not the cleanup error that followe
 
   expect(() =>
     finishWebRuntimeBrowserCreationFailure(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the failure path reads only the fields set above.
       context as never,
       {
         cleanupPageId: 'page-1',

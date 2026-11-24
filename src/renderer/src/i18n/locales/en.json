@@ -2670,7 +2670,12 @@
             "open": {
               "urlFailed": "Unable to open URL.",
               "searchFailed": "Unable to search with {{value0}}.",
-              "failureReason": "Reason: {{value0}}"
+              "failure": {
+                "hostError": "Host error · {{value0}} · {{value1}}",
+                "hostUnavailable": "Workspace's computer isn't connected.",
+                "linkBlocked": "Link open was blocked.",
+                "notWebLink": "Not a web link."
+              }
             }
           }
         }

@@ -17,7 +17,8 @@ it('a clicked link that fails keeps its reason for the toast', async () => {
     () => null,
     (reason: unknown) => reason
   )
-  expect(openFailureDetail(error)).toContain('target is not an http(s) URL')
+  expect(error).toMatchObject({ display: { kind: 'not-web-link' } })
+  expect(openFailureDetail(error)).not.toBeNull()
 })
 
 it('a click superseded while its open was failing stays silent', async () => {

@@ -11,7 +11,6 @@ import {
   materializedBrowserLinkOutcome
 } from './workspace-browser-link-open'
 import { createWebRuntimeSessionBrowserTab } from '@/runtime/browser/creation/web-runtime-browser-creation'
-import { browserCreateFailureCode } from '@/runtime/browser/creation/web-runtime-browser-creation-failure'
 import type { WebRuntimeBrowserCreationFailureInfo } from '@/runtime/browser/creation/web-runtime-browser-creation-context'
 import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/browser/creation/web-runtime-browser-client-target-group'
 import { useAppStore } from '@/store/index'
@@ -28,8 +27,12 @@ import {
   resolveWorktreeOperationRoute
 } from '../../workspace/ownership/worktree-operation-route'
 import {
+  hostUnavailableFailure,
   intentPresentation,
+  NOT_WEB_LINK,
   openFailure,
+  remoteOpenFailure,
+  routeFailure,
   validateTarget,
   WorkspaceBrowserOpenError
 } from './workspace-browser-tab-presentation'
@@ -120,7 +123,7 @@ export async function openWorkspaceBrowserTab(
   }
   const presentation = intentPresentation(request.intent, request.url)
   if (!validateTarget(request.url)) {
-    throw openFailure(presentation.error, 'target is not an http(s) URL')
+    throw openFailure(presentation.error, 'target is not an http(s) URL', undefined, NOT_WEB_LINK)
   }
   const state = useAppStore.getState()
   const availability = getClientCreationActionPolicy(state, request.workspaceId)['managed-browser']
@@ -129,7 +132,7 @@ export async function openWorkspaceBrowserTab(
     getFloatingWorkspaceOperationRoute(request.workspaceId) ??
     resolveWorktreeOperationRoute(state, request.workspaceId)
   if (!route) {
-    throw openFailure(presentation.error, 'no active worktree route')
+    throw hostUnavailableFailure(presentation.error, 'no active worktree route')
   }
   const capturedHost = request.linkContext?.linkIntent?.hostId
   if (
@@ -152,7 +155,11 @@ export async function openWorkspaceBrowserTab(
   const expectedSshConnectionId =
     request.expectedSshConnectionId === undefined ? null : request.expectedSshConnectionId.trim()
   if (expectedEnvironmentId !== null && expectedSshConnectionId !== null) {
-    throw openFailure(presentation.error, 'browser owner assertion is ambiguous')
+    throw routeFailure(
+      presentation.error,
+      'browser owner assertion is ambiguous',
+      'owner_ambiguous'
+    )
   }
   const runtimeOwnerRoute =
     expectedEnvironmentId !== null &&
@@ -176,7 +183,11 @@ export async function openWorkspaceBrowserTab(
       request.allowSshDeviceBrowser
     )
   if (expectedEnvironmentId !== null && !runtimeOwnerRoute && !sshDeploymentClientRoute) {
-    throw openFailure(presentation.error, 'asserted runtime cannot provide this managed browser')
+    throw routeFailure(
+      presentation.error,
+      'asserted runtime cannot provide this managed browser',
+      'browser_unavailable'
+    )
   }
   if (
     expectedSshConnectionId !== null &&
@@ -189,12 +200,16 @@ export async function openWorkspaceBrowserTab(
       request.allowClientBrowserFallback || request.allowSshDeviceBrowser
     )
   ) {
-    throw openFailure(presentation.error, 'asserted SSH connection cannot provide this browser')
+    throw routeFailure(
+      presentation.error,
+      'asserted SSH connection cannot provide this browser',
+      'ssh_browser_unavailable'
+    )
   }
   const host = parseExecutionHostId(route.executionHostId)
   if (!environmentId) {
     if (!host || host.kind === 'runtime') {
-      throw openFailure(presentation.error, 'workspace host is unresolved')
+      throw hostUnavailableFailure(presentation.error, 'workspace host is unresolved')
     }
     return createClientBrowserTab(state, request, host.id, presentation)
   }
@@ -202,7 +217,7 @@ export async function openWorkspaceBrowserTab(
     route.executionHostId &&
     (!host || (host.kind === 'runtime' && host.environmentId !== environmentId))
   ) {
-    throw openFailure(presentation.error, 'workspace host does not own its runtime')
+    throw hostUnavailableFailure(presentation.error, 'workspace host does not own its runtime')
   }
   // Preserve desktop-provider behavior only for opted-in sources and SSH-deployed servers.
   if (
@@ -268,23 +283,12 @@ export async function openWorkspaceBrowserTab(
       onFailure: (info) => (failure = info)
     })
   } catch (error) {
-    throw openFailure(presentation.error, remoteOpenFailureReason(failure, error), error)
+    throw remoteOpenFailure(presentation.error, failure, error)
   }
   if (!created) {
-    throw openFailure(presentation.error, remoteOpenFailureReason(failure, null))
+    throw remoteOpenFailure(presentation.error, failure, null)
   }
   return null
-}
-
-// The first error's stage and code (cleanup can throw its own); unknown stage stays generic.
-function remoteOpenFailureReason(
-  failure: WebRuntimeBrowserCreationFailureInfo | null,
-  error: unknown
-): string {
-  const code = failure?.code ?? browserCreateFailureCode(error) ?? 'no code'
-  return failure
-    ? `remote browser open failed at ${failure.stage} (${code})`
-    : `remote browser open failed (${code})`
 }
 
 /** Detailed link results are additive to the generic page-id contract. */

@@ -211,7 +211,9 @@ registerWorkspaceHttpLinkBrowserOpener(async (request) => {
         await import('@/lib/browser/workspace/workspace-browser-tab-presentation')
       throw openFailure(
         intentPresentation(request.intent, request.url).error,
-        `link open ${outcome.status}`
+        `link open ${outcome.status}`,
+        undefined,
+        outcome.status === 'refused' ? { kind: 'link-blocked' } : null
       )
     }
     if (

@@ -64,18 +64,18 @@ function structuredErrorCodes(error: unknown): string[] {
   let current = error
   while (current && typeof current === 'object' && !seen.has(current)) {
     seen.add(current)
-    const candidate = current as {
-      cause?: unknown
-      code?: unknown
-      error?: { code?: unknown }
-      response?: { error?: { code?: unknown } }
-    }
-    for (const code of [candidate.code, candidate.error?.code, candidate.response?.error?.code]) {
+    const nested: unknown = Reflect.get(current, 'error')
+    const response: unknown = Reflect.get(current, 'response')
+    const responseError: unknown =
+      response && typeof response === 'object' ? Reflect.get(response, 'error') : undefined
+    for (const holder of [current, nested, responseError]) {
+      const code: unknown =
+        holder && typeof holder === 'object' ? Reflect.get(holder, 'code') : undefined
       if (typeof code === 'string') {
         codes.push(code)
       }
     }
-    current = candidate.cause
+    current = Reflect.get(current, 'cause')
   }
   return codes
 }
