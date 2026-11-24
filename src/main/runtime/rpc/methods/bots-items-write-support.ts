@@ -52,8 +52,8 @@ export function writerOf(params: { callerSessionId?: string }, context: RpcConte
 }
 
 /** Whom the writer's chat acts for, kept on a close so the journal says whose work it was: its
- *  record, else the first message of a conversation already open (its root, else the writer's own),
- *  never opening one; unknown, never the owner, when neither says. Only who, not where they asked. */
+ *  record, else its /clear root's first message when that conversation is already open (never
+ *  opening one); unknown, never the owner, when neither says. Only who, not where they asked. */
 export async function closingChatActsFor(
   context: RpcContext,
   writer: BotItemWriter
@@ -61,12 +61,11 @@ export async function closingChatActsFor(
   try {
     const db = context.runtime.getOrchestrationDb()
     const root = writer.actor.chatId
-    const open = [root, writer.sessionId].find((id) =>
-      getStructuredAgentSessionHost()?.hasSession(id)
-    )
-    const askers =
-      db.getBotConversationActsFor(root)?.actsFor ??
-      (open ? await readFirstMessageActsFor(context.runtime, db, open, null) : null)
+    const recorded = db.getBotConversationActsFor(root)?.actsFor
+    const host = getStructuredAgentSessionHost()
+    // Started in the same tick as the check, so it takes the open handle and can't reopen one.
+    const reads = !recorded && host?.hasSession(root) ? host.journalReads(root) : null
+    const askers = recorded ?? (reads ? await readFirstMessageActsFor(db, reads, null) : null)
     return (askers ?? [{ kind: 'unknown' }]).map((asker): BotRequestAsker =>
       asker.kind === 'person'
         ? {

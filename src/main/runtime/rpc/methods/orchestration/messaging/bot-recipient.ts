@@ -294,7 +294,7 @@ export async function readBotTurn(
   if (!recorded) {
     // Conversations from before Orca recorded this, and ones a person opened: their first message
     // says, and is kept as the record.
-    const first = await readFirstMessageActsFor(runtime, db, root, workspaceId)
+    const first = await readFirstMessageActsFor(db, host.journalReads(root), workspaceId)
     if (first) {
       db.recordBotConversationActsFor(root, { actsFor: first })
       recorded = { actsFor: first }
