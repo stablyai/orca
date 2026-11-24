@@ -26,7 +26,7 @@ import type { BotChatTree } from './use-bot-chat-tree'
 import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChatRowMenu'
 import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
-import { botSidebarWorkerLines } from './bot-sidebar-worker-lines'
+import { botSidebarStepReadsMore, botSidebarWorkerLines } from './bot-sidebar-worker-lines'
 import type { WorktreeCardLineWorker } from '@/components/sidebar/workspace-card/controller/worktree-card-model'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
 
@@ -103,7 +103,13 @@ export function BotSidebarChats({
     }
     return labels
   }, [view.notes, t])
-  const lineWorkerOf = useMemo(() => botSidebarWorkerLines(bot, view.workers), [bot, view.workers])
+  // Keyed on the chats alone, so a selection, fold or step keeps every line's worker and its card's memo.
+  const ownerHostId = bot.hostId
+  const lineWorkerOf = useMemo(
+    () => botSidebarWorkerLines({ hostId: ownerHostId }, chats),
+    [ownerHostId, chats]
+  )
+  const { loadMore } = tree
 
   return (
     <>
@@ -115,7 +121,12 @@ export function BotSidebarChats({
           notes={notes}
           lineWorkerOf={lineWorkerOf}
           lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
-          onStep={(next) => onStep(chatView.chat.chatId, next)}
+          onStep={(next) => {
+            if (botSidebarStepReadsMore(chatView.chat, next)) {
+              loadMore(chatView.chat.chatId)
+            }
+            onStep(chatView.chat.chatId, next)
+          }}
           onOpen={onOpen}
         />
       ))}

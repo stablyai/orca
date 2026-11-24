@@ -6,19 +6,16 @@ import {
   type BotChatFold,
   type BotChatTranslate,
   type BotChatTreeChat,
-  type BotChatTreeWorker,
   type ChatFoldCounts
 } from './bot-chat-tree'
 import {
   botLiveWorkspaceIds,
   botSidebarLineNotes,
-  botSidebarLineWorkers,
   groupBotWorkspacesByChat,
   pageChatLines,
   rankBotWorkspacesByLive,
   type BotSidebarLineNote
 } from './bot-sidebar-chat-groups'
-import type { HostScopedWorktreeKey } from '../worktree/host-qualified-identity'
 
 /** What a chat row's right edge says: a folded chat's live counts, else its time; nothing while it replies. */
 export type BotSidebarChatTrailing =
@@ -60,8 +57,6 @@ export type BotSidebarTree<T> = {
   stray: T[]
   /** Each workspace's note: handed over, or from a closed chat. */
   notes: ReadonlyMap<string, BotSidebarLineNote>
-  /** Each workspace's newest loaded worker by `botLineWorkspaceKey`, which its line shows and opens. */
-  workers: ReadonlyMap<HostScopedWorktreeKey, BotChatTreeWorker>
 }
 
 /** Whether a bot's chats and workspaces list under its row. Nothing does while its host is down: no
@@ -109,14 +104,12 @@ export function buildBotSidebarTree<T extends { id: string }>(input: {
     }
   })
   const listed = new Set(groups.flatMap((group) => group.workspaces.map((line) => line.id)))
-  const workers = botSidebarLineWorkers(input.chats)
   return {
     chats,
     stray: rankBotWorkspacesByLive(input.chats, input.workspaces).filter(
       (line) => !listed.has(line.id) && (liveIds.has(line.id) || line.id === input.activeLineId)
     ),
-    notes: botSidebarLineNotes(workers),
-    workers
+    notes: botSidebarLineNotes(input.chats)
   }
 }
 

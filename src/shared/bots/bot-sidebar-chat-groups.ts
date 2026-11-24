@@ -1,5 +1,9 @@
 import { CHAT_TREE_CAPS, type BotChatTreeChat, type BotChatTreeWorker } from './bot-chat-tree'
-import { parseExecutionHostId, type ExecutionHostId } from '../execution-host/execution-host'
+import {
+  canonicalExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../execution-host/execution-host'
 import {
   composeWorktreeHostIdentity,
   type HostScopedWorktreeKey
@@ -77,28 +81,60 @@ export function pageChatLines(
 
 export type BotSidebarLineNote = 'handed-over' | 'from-closed-chat'
 
-/** A workspace's key relative to the host that answered: a paired computer's id is kept, the
- *  answering host's own (or an unstated one) is left out, so the same id on two hosts stays two. */
-export function botLineWorkspaceKey(
-  hostId: string | undefined,
-  worktreeId: string
-): HostScopedWorktreeKey {
-  const parsed = parseExecutionHostId(hostId)
-  const host: ExecutionHostId | undefined = parsed?.kind === 'runtime' ? parsed.id : undefined
-  return composeWorktreeHostIdentity(host, worktreeId)
+/** Each workspace's note from its newest loaded worker: a hand-over or a closed chat's still-running worker. */
+export function botSidebarLineNotes(
+  chats: readonly BotChatTreeChat[]
+): Map<string, BotSidebarLineNote> {
+  const newest = new Map<string, BotChatTreeWorker>()
+  for (const chat of chats) {
+    for (const worker of [...chat.running, ...chat.finished]) {
+      const seen = worker.worktreeId ? newest.get(worker.worktreeId) : undefined
+      if (worker.worktreeId && (!seen || worker.startedAt > seen.startedAt)) {
+        newest.set(worker.worktreeId, worker)
+      }
+    }
+  }
+  const notes = new Map<string, BotSidebarLineNote>()
+  for (const [worktreeId, worker] of newest) {
+    if (worker.note === 'handed-over' || worker.note === 'from-closed-chat') {
+      notes.set(worktreeId, worker.note)
+    }
+  }
+  return notes
 }
 
-/** Each workspace's newest loaded worker, by host and worktree id; one none of them has is absent. */
+/** A paired computer's canonical id, or null for this computer's own (local, SSH, or unstated). */
+function pairedRuntimeHost(hostId: string | undefined): ExecutionHostId | null {
+  const host = canonicalExecutionHostId(hostId)
+  return host?.startsWith('runtime:') ? host : null
+}
+
+/** A sidebar line's workspace key in this client's terms: a paired computer's, else this computer,
+ *  which runs its local and SSH workspaces alike. */
+export function botLineWorkspaceKey(line: { id: string; hostId?: string }): HostScopedWorktreeKey {
+  return composeWorktreeHostIdentity(
+    pairedRuntimeHost(line.hostId) ?? LOCAL_EXECUTION_HOST_ID,
+    line.id
+  )
+}
+
+/** Each workspace's newest loaded worker, by the same key its line has. A worker names a host only for
+ *  a paired computer; with none it is on the computer that answered, `ownerHostId` in this client's terms. */
 export function botSidebarLineWorkers(
-  chats: readonly BotChatTreeChat[]
+  chats: readonly BotChatTreeChat[],
+  ownerHostId: string
 ): Map<HostScopedWorktreeKey, BotChatTreeWorker> {
+  const owner = pairedRuntimeHost(ownerHostId) ?? LOCAL_EXECUTION_HOST_ID
   const newest = new Map<HostScopedWorktreeKey, BotChatTreeWorker>()
   for (const chat of chats) {
     for (const worker of [...chat.running, ...chat.finished]) {
       if (!worker.worktreeId) {
         continue
       }
-      const key = botLineWorkspaceKey(worker.hostId, worker.worktreeId)
+      const key = composeWorktreeHostIdentity(
+        pairedRuntimeHost(worker.hostId) ?? owner,
+        worker.worktreeId
+      )
       const seen = newest.get(key)
       if (!seen || worker.startedAt > seen.startedAt) {
         newest.set(key, worker)
@@ -106,22 +142,6 @@ export function botSidebarLineWorkers(
     }
   }
   return newest
-}
-
-/** Each workspace's note from its newest loaded worker: a hand-over or a closed chat's still-running worker. */
-export function botSidebarLineNotes(
-  workers: ReadonlyMap<HostScopedWorktreeKey, BotChatTreeWorker>
-): Map<string, BotSidebarLineNote> {
-  const notes = new Map<string, BotSidebarLineNote>()
-  for (const worker of workers.values()) {
-    if (
-      worker.worktreeId &&
-      (worker.note === 'handed-over' || worker.note === 'from-closed-chat')
-    ) {
-      notes.set(worker.worktreeId, worker.note)
-    }
-  }
-  return notes
 }
 
 /** How many of a capped list show after `steps` reveals of 8, and how many stay hidden. */
