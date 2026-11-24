@@ -19,14 +19,13 @@ async function emailInvites(
   bot: Bot,
   invites: readonly { shareId: string; email: string }[]
 ): Promise<{ bot: Bot; emailed: string[] }> {
-  const sent = await Promise.all(
-    invites.map(async (invite) =>
-      (await context.runtime.emailBotInvite({ to: invite.email, agentName: bot.name }))
-        ? invite.shareId
-        : null
-    )
-  )
-  const emailed = sent.filter((shareId): shareId is string => shareId !== null)
+  // One at a time: the cloud sends one invite per sharer at once and answers a second with 429.
+  const emailed: string[] = []
+  for (const invite of invites) {
+    if (await context.runtime.emailBotInvite({ to: invite.email, agentName: bot.name })) {
+      emailed.push(invite.shareId)
+    }
+  }
   if (emailed.length === 0) {
     return { bot, emailed }
   }

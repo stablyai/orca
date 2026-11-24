@@ -28398,7 +28398,6 @@
       "matchCount_other": "{{count}} 个匹配项"
     },
     "share": {
-      "shareBot": "分享 bot…",
       "none": "无",
       "noPurpose": "还没有用途说明",
       "updatedAt": "更新于 {{date}}",

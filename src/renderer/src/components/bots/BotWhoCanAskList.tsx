@@ -3,6 +3,7 @@ import { Loader2, Plus, TriangleAlert, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { refreshAccessRequests, type HostAccessRequest } from '@/lib/bot-access-requests'
 import type { Bot, BotMember } from '../../../../shared/bot-types'
 import type { BotSlackResult } from '../../../../shared/connector-bot-slack-contract'
@@ -93,6 +94,34 @@ function AccessRequestRows({
         ))}
       </ul>
     </BotConnectorSection>
+  )
+}
+
+/** A save that failed, with Try again; every view of a Who can ask list says it this way. */
+export function BotWhoCanAskSaveFailed({
+  message,
+  retry,
+  className
+}: {
+  message: string
+  retry: () => void
+  className?: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div
+      role="alert"
+      className={cn(
+        'flex items-center gap-2 rounded-md border border-destructive/40 px-2.5 py-1.5 text-xs',
+        className
+      )}
+    >
+      <TriangleAlert className="size-3.5 shrink-0 text-destructive" aria-hidden />
+      <span className="min-w-0 flex-1">{message}</span>
+      <Button size="xs" variant="outline" onClick={retry}>
+        {t('bots.whoCanAsk.retry', 'Try again')}
+      </Button>
+    </div>
   )
 }
 
@@ -196,16 +225,7 @@ export function BotWhoCanAskList({
             {t('bots.whoCanAsk.saving', 'Saving…')}
           </p>
         ) : save.kind === 'failed' ? (
-          <div
-            role="alert"
-            className="mt-2 flex items-center gap-2 rounded-md border border-destructive/40 px-2.5 py-1.5 text-xs"
-          >
-            <TriangleAlert className="size-3.5 shrink-0 text-destructive" aria-hidden />
-            <span className="min-w-0 flex-1">{save.message}</span>
-            <Button size="xs" variant="outline" onClick={save.retry}>
-              {t('bots.whoCanAsk.retry', 'Try again')}
-            </Button>
-          </div>
+          <BotWhoCanAskSaveFailed className="mt-2" message={save.message} retry={save.retry} />
         ) : capped && listed.length > 0 ? (
           <p className="mt-2 text-xs text-muted-foreground">
             {t('bots.whoCanAsk.cap', '{{count}} people is the most here.', { count: cap })}

@@ -258,6 +258,10 @@ export function BotPanelHeader({
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => setSharing('people')}>
+              <UserPlus />
+              {t('bots.teamShare.share', 'Share…')}
+            </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={() =>
                 void updateBot(bot, { paused: !bot.paused }).catch((error: unknown) =>
@@ -267,10 +271,6 @@ export function BotPanelHeader({
             >
               {bot.paused ? <Play /> : <Pause />}
               {bot.paused ? t('bots.row.resume', 'Resume bot') : t('bots.row.pause', 'Pause bot')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setSharing('people')}>
-              <UserPlus />
-              {t('bots.teamShare.share', 'Share…')}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setSharing('copy')}>
               <Share2 />

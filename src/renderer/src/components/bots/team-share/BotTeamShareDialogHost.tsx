@@ -41,17 +41,18 @@ export function BotTeamShareDialogHost({
   const failed = (error: unknown) => toast.error(botErrorMessage(error))
   const invite = teamShareSuggestions(query, bot.shares)
   const searches = Object.values(found)
-  // Nothing shows while a connector still searches and none has found anyone yet.
+  const typed = query.trim()
+  // Only what was found for this very query; a connector yet to answer it (just typed) still searches.
   const fromConnectors = searches.flatMap((search) =>
-    search.status === 'ready' ? search.suggestions : []
+    search.status === 'ready' && search.query === typed ? search.suggestions : []
   )
+  const stillSearching = searches.some(
+    (search) => search.status !== 'off' && !(search.status === 'ready' && search.query === typed)
+  )
+  const offered = invite === null ? null : [...invite, ...fromConnectors]
+  // Nothing shows while a connector still searches and nobody is found yet, so No match never flashes.
   const suggestions: TeamShareSuggestion[] | null =
-    invite === null
-      ? null
-      : [...invite, ...fromConnectors].length === 0 &&
-          searches.some((search) => search.status === 'searching')
-        ? null
-        : [...invite, ...fromConnectors]
+    offered !== null && offered.length === 0 && stillSearching ? null : offered
   return (
     <BotTeamShareDialog
       bot={bot}

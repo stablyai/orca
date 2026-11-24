@@ -4,8 +4,8 @@ import { useEffect, useEffectEvent } from 'react'
 import { botMemberSource, type Bot, type BotMember } from '../../../../../shared/bot-types'
 import type { BotConnectorEntry } from '../../../../../shared/bots/bot-connector-entries'
 import { useBotConnectorEntries } from '../bot-connector-entries'
-import type { BotWhoCanAskService } from '../BotWhoCanAskList'
-import { asMember, useMemberSearch } from '../BotWhoCanAskPicker'
+import { BotWhoCanAskSaveFailed, type BotWhoCanAskService } from '../BotWhoCanAskList'
+import { asMember, memberSearchText, useMemberSearch } from '../BotWhoCanAskPicker'
 import { useGitHubCard } from '../github/BotGitHubCard'
 import { useSlackWhoCanAsk } from '../slack/use-slack-who-can-ask'
 import { useBotWhoCanAsk } from '../use-bot-who-can-ask'
@@ -14,10 +14,20 @@ import { TeamSharePersonRow } from './BotTeamShareRows'
 
 type PeopleEntry = Extract<BotConnectorEntry, { kind: 'slack' | 'github' }>
 
-/** What one connector found for the Add field: still searching, or its suggestions and how to add one. */
+/**
+ * One connector's part in the Add field: not searchable (not set up yet, or full), waiting for a query,
+ * searching, or what it found for `query` and how to add one.
+ */
 export type TeamShareConnectorFound =
+  | { status: 'off' }
+  | { status: 'idle' }
   | { status: 'searching' }
-  | { status: 'ready'; suggestions: TeamShareSuggestion[]; pick: (key: string) => void }
+  | {
+      status: 'ready'
+      query: string
+      suggestions: TeamShareSuggestion[]
+      pick: (key: string) => void
+    }
 
 export type TeamShareFoundByConnector = Readonly<Record<string, TeamShareConnectorFound>>
 
@@ -60,7 +70,7 @@ function ConnectorSearch({
 }): null {
   const { search } = useMemberSearch(service, query)
   const publish = useEffectEvent(() => {
-    const needle = query.trim().toLowerCase()
+    const needle = memberSearchText(query).toLowerCase()
     const found =
       search.status === 'ready'
         ? search.found.members.filter(
@@ -78,6 +88,7 @@ function ConnectorSearch({
         ? { status: 'searching' }
         : {
             status: 'ready',
+            query: query.trim(),
             suggestions: found.map((person) => ({
               kind,
               key: keyOf(person.id),
@@ -98,7 +109,6 @@ function ConnectorSearch({
   useEffect(() => {
     publish()
   }, [search, listedKey])
-  useEffect(() => () => report((all) => withoutKey(all, entryKey)), [report, entryKey])
   return null
 }
 
@@ -115,8 +125,17 @@ function ConnectorPeople({
   query: string
   report: Report
 }): React.JSX.Element {
-  const { listed, add, remove } = useBotWhoCanAsk(bot, service)
+  const { listed, add, remove, save, capped } = useBotWhoCanAsk(bot, service)
   const place = entry.title.name ?? entry.title.service
+  // As the picker's Add button: only a connector that is set up and has room is searched.
+  const searchable = service.outsiders !== null && !capped
+  const searching = searchable && query.trim() !== ''
+  useEffect(() => {
+    if (!searching) {
+      report((all) => ({ ...all, [entry.key]: { status: searchable ? 'idle' : 'off' } }))
+    }
+  }, [report, entry.key, searchable, searching])
+  useEffect(() => () => report((all) => withoutKey(all, entry.key)), [report, entry.key])
   return (
     <>
       {listed.map((member) => (
@@ -126,7 +145,12 @@ function ConnectorPeople({
           onRemove={() => remove(member)}
         />
       ))}
-      {query.trim() !== '' ? (
+      {save.kind === 'failed' ? (
+        <li className="px-6 py-1.5">
+          <BotWhoCanAskSaveFailed message={save.message} retry={save.retry} />
+        </li>
+      ) : null}
+      {searching ? (
         <ConnectorSearch
           entryKey={entry.key}
           kind={entry.kind}
