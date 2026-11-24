@@ -122,8 +122,8 @@ export type BotItemPendingCommentDelivery = {
   /** A replaced question's reply, dropped: what `botItemRefusedReplyText` gives back of it goes to
    *  the comment box. */
   returnText: (text: string, entry: BotItemPendingComment) => void
-  /** Re-reads the item after a replaced question's refusal, so the box names the ask that replaced it
-   *  even when the view missed the change. */
+  /** Re-reads the item after a replaced question's refusal, so the box names the ask the host waits
+   *  on (its read's `waitingAsk`) even when the loaded events missed the change. */
   refresh: () => void
   /** The host dedupes comments by request id, so a Retry never posts twice. */
   requestIds: boolean
@@ -164,10 +164,6 @@ const pendingByItem = new Map<string, readonly BotItemPendingComment[]>()
 const listeners = new Map<string, Set<() => void>>()
 // One queue per item, so its comments reach the host in the order they were sent.
 const queues = new Map<string, Promise<void>>()
-// Per item, the ask the host last refused a reply to as replaced. While this device still names it
-// after the re-read, the host and the device disagree on which ask waits: a reply naming it goes
-// unbound, and the host gives it to the ask it has waiting.
-const refusedAsks = new Map<string, string>()
 let sent = 0
 
 function nextPendingId(): string {
@@ -224,11 +220,9 @@ function deliver(
         update(key, id, eventId ? { eventId, failed: false } : null)
       },
       (error: unknown) => {
-        const refusedAsk = hostCode(error) === 'item_changed' ? entry.questionId : null
-        const replaced = refusedAsk !== null
+        const replaced = entry.questionId !== null && hostCode(error) === 'item_changed'
         delivery.failed(error, replaced)
         if (replaced) {
-          refusedAsks.set(key, refusedAsk)
           update(key, id, null)
           delivery.returnText(botItemPendingCommentText(entry), entry)
           delivery.refresh()
@@ -296,10 +290,6 @@ export function createBotItemPendingCommentsHook({
     return {
       shown: done.size > 0 ? entries.filter((entry) => !done.has(entry.event.id)) : entries,
       send: (text, paths, after, questionId, plain = false, skills = [], skipped = [], intent) => {
-        const boundTo =
-          questionId && delivery.questionIds && questionId !== refusedAsks.get(key)
-            ? questionId
-            : null
         const entry: BotItemPendingComment = {
           event: {
             id: nextPendingId(),
@@ -319,11 +309,13 @@ export function createBotItemPendingCommentsHook({
           after: after ? (parseBotItemEventId(after) ?? 0) : 0,
           eventId: null,
           requestId: delivery.requestIds ? createNonSecureContextUuid() : null,
-          questionId: boundTo,
+          questionId: questionId && delivery.questionIds ? questionId : null,
           plain: plain && delivery.plain,
           ...(delivery.skills && skills.length > 0 ? { skills } : {}),
           // Only with the ask it answers named: skipped lines are that ask's.
-          ...(delivery.skipped && boundTo && skipped.length > 0 ? { skipped } : {}),
+          ...(delivery.skipped && delivery.questionIds && questionId && skipped.length > 0
+            ? { skipped }
+            : {}),
           ...(intent ? { intent } : {}),
           failed: false
         }

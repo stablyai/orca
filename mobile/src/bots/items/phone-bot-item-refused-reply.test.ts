@@ -83,3 +83,10 @@ it('puts a refused answer after words typed in the box since', async () => {
     await refusedCardAnswer('typed', 'Yes', { askId: 'e2', shape: one, answers: ['Yes'] })
   ).toBe('also check staging\nYes')
 })
+
+it('keeps a short refused answer that typed words only contain inside a line', async () => {
+  botItemCommentDrafts.set('inside', 'Not yet')
+  expect(
+    await refusedCardAnswer('inside', 'No', { askId: 'e2', shape: one, answers: ['No'] })
+  ).toBe('Not yet\nNo')
+})

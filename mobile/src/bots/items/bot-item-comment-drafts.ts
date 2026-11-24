@@ -26,7 +26,8 @@ function setBotItemCommentDraft(key: string, text: string): void {
 /** Puts a dropped comment's words back in the box, after anything the owner has typed since. */
 export function returnBotItemCommentDraft(key: string, text: string): void {
   const draft = botItemCommentDrafts.get(key) ?? ''
-  if (text.trim() && !draft.includes(text)) {
+  // Whole lines only: a typed "Not yet" doesn't hold a refused "No".
+  if (text.trim() && !`\n${draft}\n`.includes(`\n${text}\n`)) {
     setBotItemCommentDraft(key, draft.trim() ? `${draft}\n${text}` : text)
   }
 }
