@@ -32,7 +32,7 @@ function OpenHomeNewBotSheet(props: {
   onClose: () => void
   onAfterClose: () => void
 }) {
-  const openBotHome = useOpenBotHome()
+  const openBotHome = useOpenBotHome({ standalone: true })
   const { bots, clientOf } = props
   const computers = useMemo(() => homeNewBotComputers(bots), [bots])
   const byId = useMemo(
