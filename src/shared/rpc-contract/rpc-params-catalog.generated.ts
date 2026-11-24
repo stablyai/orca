@@ -138,6 +138,7 @@ import {
   AutomationRuns,
   AutomationUpdate
 } from './automations/automation-params'
+import { BotAvatarRead, BotAvatarUpload } from './bot-avatar-params'
 import {
   ComposioApp,
   ComposioApps,
@@ -205,8 +206,6 @@ import {
   BotAccessDecide,
   BotAccessRedeem,
   BotActivityRead,
-  BotAvatarRead,
-  BotAvatarUpload,
   BotChat,
   BotChatReset,
   BotChatSearch,
