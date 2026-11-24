@@ -26,6 +26,8 @@ export class AcpTurnMessages {
   private readonly turns = new Map<string, MessagePosition>()
   /** Turns an earlier app began: its saved messages hold the first ordinals, so these never reuse them. */
   private readonly carried = new Map<string, string>()
+  /** The numbered message the last keyed update ended, until taken. */
+  private ended: string | undefined
 
   constructor(private readonly owners: AcpItemOwnership) {}
 
@@ -101,26 +103,36 @@ export class AcpTurnMessages {
     }
     const state = this.turns.get(turn) ?? { ordinal: 0 }
     this.turns.set(turn, state)
-    if (
-      update.sessionUpdate !== 'agent_message_chunk' &&
-      update.sessionUpdate !== 'agent_thought_chunk'
-    ) {
-      if (
-        ['user_message_chunk', 'tool_call', 'tool_call_update', 'plan'].includes(
-          update.sessionUpdate
-        )
-      ) {
-        state.channel = undefined
-      }
+    const chunk =
+      update.sessionUpdate === 'agent_message_chunk' ||
+      update.sessionUpdate === 'agent_thought_chunk'
+    const resets =
+      chunk ||
+      ['user_message_chunk', 'tool_call', 'tool_call_update', 'plan'].includes(update.sessionUpdate)
+    if (resets && state.channel !== undefined && state.channel !== update.sessionUpdate) {
+      this.ended = this.position(turn, state.ordinal)
+      state.channel = undefined
+    }
+    if (!chunk) {
       return undefined
     }
     if (state.channel !== update.sessionUpdate) {
       state.ordinal += 1
       state.channel = update.sessionUpdate
     }
+    return this.position(turn, state.ordinal)
+  }
+
+  /** The numbered message the last keyed update ended: its stream can close now. */
+  takeEnded(): string | undefined {
+    const ended = this.ended
+    this.ended = undefined
+    return ended
+  }
+
+  private position(turn: string, ordinal: number): string {
     const carried = this.carried.get(turn)
-    const position = carried ? [turn, state.ordinal, carried] : [turn, state.ordinal]
-    return `turn-message:${JSON.stringify(position)}`
+    return `turn-message:${JSON.stringify(carried ? [turn, ordinal, carried] : [turn, ordinal])}`
   }
 
   carry(turn: string): void {

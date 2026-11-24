@@ -129,8 +129,10 @@ export function acpKeptAgent(child: RelayedProviderChild): AcpKeptAgent {
         ? initialize.data
         : null,
     sessionStart: sessionStart && { method: sessionStart.method, result: sessionStart.result },
+    // An update naming its session may come while the agent answers the start (Grok's commands);
+    // only one that doesn't (a config answer) must follow the start to be its state.
     updates: updates
-      .filter((entry) => entry.seq > startSeq)
+      .filter((entry) => entry.seq > startSeq || entry.update.sessionId !== undefined)
       .sort((a, b) => a.seq - b.seq)
       .map((entry) => entry.update),
     earlierPromptId: typeof prompt?.id === 'number' ? prompt.id : null,
