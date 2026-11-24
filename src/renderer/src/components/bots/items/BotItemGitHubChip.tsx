@@ -12,10 +12,12 @@ import {
   GITHUB_RETRY_KEY,
   useGitHubLinkPeekFallback
 } from './bot-item-github-peek-content'
+import { useBotItemLivePr } from './use-bot-item-live-pr'
 
 /** A PR or issue chip: the GitHub card a chat's link shows when Orca can look the item up, opening
  *  below the chip so a second line's card leaves the first line in view; the tooltip otherwise. */
-export function BotItemGitHubChip({ row }: { row: BotItemGitHubRow }): React.JSX.Element {
+export function BotItemGitHubChip({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Element {
+  const row = useBotItemLivePr(hostRow)
   const t = useTranslate()
   const openWeb = useOpenWeb()
   const card = hasGitHubLinkPeek(useContext(NativeChatLinkPeekContext), row.url)

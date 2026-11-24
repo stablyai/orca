@@ -32,6 +32,7 @@ import {
   useLinearTitle,
   useOpenWeb
 } from './BotItemLinks'
+import { useBotItemPrWorkspacesVisible } from './use-bot-item-live-pr'
 
 export function BotItemLinkChips({
   bot,
@@ -58,6 +59,7 @@ function LinkChips({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const rows = useMemo(() => botItemLinkChipOrder(botItemLinkRows(links)), [links])
+  useBotItemPrWorkspacesVisible(rows)
   const fileContext = useBotItemFileContext(bot)
   const list = useRef<HTMLUListElement | null>(null)
   const overflow = useRef<HTMLDivElement | null>(null)
