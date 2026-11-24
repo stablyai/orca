@@ -1,5 +1,9 @@
 import { DEFAULT_CODEX_REQUEST_TIMEOUT_MS } from '../../app-server/codex-app-server-connection'
-import { seedKeptCodexTurnOrdinals } from '../threads/codex-kept-turn-ordinals'
+import {
+  restateKeptCodexBackgroundWork,
+  seedKeptCodexTurnOrdinals,
+  type KeptCodexTurn
+} from '../threads/codex-kept-turn-ordinals'
 import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import {
@@ -162,8 +166,9 @@ export async function openCodexStructuredSession(
     )
     current()
   }
+  let keptTurns: readonly KeptCodexTurn[] = []
   if (keptRunning && translator) {
-    await waitForPromiseWithSignal(
+    keptTurns = await waitForPromiseWithSignal(
       seedKeptCodexTurnOrdinals({
         connection,
         translator,
@@ -245,6 +250,7 @@ export async function openCodexStructuredSession(
   for (const event of attempt.window.drain()) {
     event()
   }
+  restateKeptCodexBackgroundWork(session.backgroundTasks, keptTurns)
   connection.relay?.releaseOutput()
   current()
   acquisitions.deleteIfCurrent(sessionId, attempt)

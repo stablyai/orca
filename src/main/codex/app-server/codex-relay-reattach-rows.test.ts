@@ -2,7 +2,11 @@ import { Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import { RelayedProviderOutput } from '../../provider-relay/relayed-provider-output'
 import { createCodexRelayAckFloor } from './codex-relay-ack-floor'
-import { seedKeptCodexTurnOrdinals } from '../structured/threads/codex-kept-turn-ordinals'
+import {
+  restateKeptCodexBackgroundWork,
+  seedKeptCodexTurnOrdinals
+} from '../structured/threads/codex-kept-turn-ordinals'
+import { CodexBackgroundTaskTracker } from '../structured/background-work/codex-background-task-tracker'
 import { CodexTurnOrdinals } from '../structured/journal/codex-turn-ordinals'
 
 const item = (method: string, id: string, status = 'inProgress') =>
@@ -69,5 +73,21 @@ describe('codex rows across a reattach', () => {
     expect(ordinals.ordinalFor('main', 'turn-1', 'm1')).toBe(1)
     expect(ordinals.ordinalFor('main', 'turn-1', 'm2')).toBe(2)
     expect(ordinals.ordinalFor('sub', 'turn-s', 's2')).toBe(1)
+  })
+
+  it('restates a background command that outlived its turn before the reattach, so it reads live', () => {
+    const tracker = new CodexBackgroundTaskTracker('main')
+    restateKeptCodexBackgroundWork(tracker, [
+      {
+        threadId: 'main',
+        turnId: 'turn-1',
+        status: 'completed',
+        items: [
+          { type: 'commandExecution', id: 'c1', status: 'inProgress', command: 'npm run dev' }
+        ]
+      }
+    ])
+    expect(tracker.relayOpenWork(false).command).toEqual([['main', 'c1']])
+    expect(tracker.state?.tasks.map((task) => task.kind)).toEqual(['command'])
   })
 })
