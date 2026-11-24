@@ -18,10 +18,12 @@ export type FetchDeferredAssets = (
   missing: readonly MobileWebBundleAssetRead[]
 ) => Promise<ReadonlyMap<string, Uint8Array>>
 
+// Callers passing the same scope share one fill (pages of one credential, not a retired one).
 export type DeferredAssetsFiller = (
   hostKey: string,
   buildId: string,
-  fetch: FetchDeferredAssets
+  fetch: FetchDeferredAssets,
+  scope?: string
 ) => Promise<void>
 
 // Write the active build's missing deferred code into its own tree, where the native view already maps
@@ -68,8 +70,8 @@ export function deferredAssetsFiller(
       }
     })
   }
-  return (hostKey, buildId, fetch) => {
-    const key = `${hostKey}/${buildId}`
+  return (hostKey, buildId, fetch, scope = '') => {
+    const key = `${hostKey}/${buildId}/${scope}`
     const running =
       filling.get(key) ??
       fill(hostKey, buildId, fetch).finally(() => {
