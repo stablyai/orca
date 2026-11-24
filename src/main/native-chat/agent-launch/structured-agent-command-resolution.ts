@@ -49,7 +49,10 @@ export function assertStructuredAgentResolutionCurrent(
 }
 
 export type StructuredAgentCommandSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv' | 'antigravityManagedAgyEnabled'>
+  Pick<
+    GlobalSettings,
+    'agentCmdOverrides' | 'agentDefaultArgs' | 'agentDefaultEnv' | 'antigravityManagedAgyEnabled'
+  >
 >
 type CommandSettings = StructuredAgentCommandSettings
 type CommandOptions = NonNullable<Parameters<typeof resolveExecutableCommand>[1]>

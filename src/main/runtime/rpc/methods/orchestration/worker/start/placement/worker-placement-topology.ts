@@ -96,6 +96,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   dispatchId: string
   /** `--model`/`--effort`, laid over the saved selection; a leveled Antigravity `--model` replaces it. */
   launchPreferences?: AgentLaunchPreferences
+  additionalDirectories?: readonly string[]
   effects: WorkerEffect[]
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
   const options = narrowStructuredLaunchSeedOptions(args.launchPreferences)
@@ -104,7 +105,10 @@ export async function createStructuredWorkerSessionForWorktree(args: {
     worktreeId: args.worktreeId,
     agent: args.agent,
     dispatchId: args.dispatchId,
-    ...(options ? { options } : {})
+    ...(options ? { options } : {}),
+    ...(args.additionalDirectories?.length
+      ? { additionalDirectories: args.additionalDirectories }
+      : {})
   })
   args.effects.push({
     kind: 'terminal',

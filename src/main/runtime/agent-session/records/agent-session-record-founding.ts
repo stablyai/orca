@@ -15,6 +15,7 @@ export type AgentSessionRecordIdentity = Pick<
   | 'options'
   | 'launchArgs'
   | 'launchDirectory'
+  | 'additionalDirectories'
   | 'forkedFrom'
   | 'conversationName'
 >
@@ -39,6 +40,9 @@ export function agentSessionRecordIdentityFields(
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),
     // /clear retains its tab and launch directory.
     ...(identity.launchDirectory ? { launchDirectory: identity.launchDirectory } : {}),
+    ...(identity.additionalDirectories?.length
+      ? { additionalDirectories: [...identity.additionalDirectories] }
+      : {}),
     ...(conversationName ? { conversationName } : {}),
     createdAt: now,
     updatedAt: now

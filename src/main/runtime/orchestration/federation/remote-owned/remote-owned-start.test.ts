@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import { ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { startsInChatLineage } from '../../../rpc/methods/orchestration/worker/start/worker-chat-lineage'
-import { forwardedChatLineage, serverStartOptions } from './remote-owned-start'
+import {
+  forwardedChatLineage,
+  serverStartOptions,
+  startRemoteOwnedWorker
+} from './remote-owned-start'
 
 type Runtime = Parameters<typeof forwardedChatLineage>[0]
 type Params = Parameters<typeof forwardedChatLineage>[2]
@@ -59,5 +63,43 @@ describe('a chat-lineage start on a paired server', () => {
     expect(startsInChatLineage(runtime, db, claim, peer)).toBe(true)
     expect(startsInChatLineage(runtime, db, claim, session('folder:elsewhere'))).toBe(false)
     expect(startsInChatLineage(runtime, db, {}, peer)).toBe(false)
+  })
+
+  it('rejects additionalDirectories when the paired server lacks the capability', async () => {
+    const runtime = {
+      getOrchestrationDb: () => db,
+      getTerminalPaneKey: () => 'pane-1',
+      getTerminalProcessIncarnation: () => undefined,
+      getTerminalLookupScope: () => undefined,
+      getOrchestrationDispatchAuthority: () => undefined,
+      resolveOrchestrationWorkerServer: async () => server,
+      callOrchestrationWorkerServer: async () => ({
+        runtimeId: 'server-runtime',
+        capabilities: []
+      })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: startRemoteOwnedWorker only reaches capability probing with these members.
+    } as unknown as Runtime
+    const ctx = {
+      runtime,
+      orchestrationCaller: undefined
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: startRemoteOwnedWorker only reads runtime and orchestrationCaller.
+    } as unknown as Parameters<typeof startRemoteOwnedWorker>[2]
+
+    await expect(
+      startRemoteOwnedWorker(
+        runtime,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: minimal start params for capability check.
+        {
+          spec: 'work',
+          on: 'server',
+          from: 'term_coord',
+          additionalDirectories: ['/tmp/extra']
+        } as Params,
+        ctx,
+        'req-1'
+      )
+    ).rejects.toMatchObject({
+      code: 'capability_unsupported'
+    })
   })
 })

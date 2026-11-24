@@ -21,7 +21,7 @@ import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/a
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { prepareAntigravityAcpProxyEnvironment } from '../../antigravity/antigravity-acp-proxy-environment'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
-import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { buildAcpLaunchResume } from './acp-launch-resume'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { resolveCliCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
@@ -34,10 +34,7 @@ import {
 } from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecForAccount, resolveAcpLaunchCommand } from './acp-launch-command'
-import {
-  nothingExchangedOn,
-  type SavedProviderTurnReads
-} from '../../native-chat/agent-session-journal/journal-provider-turn-saved'
+import type { SavedProviderTurnReads } from '../../native-chat/agent-session-journal/journal-provider-turn-saved'
 import {
   childEnvironmentView,
   loadAcpSkillRoots,
@@ -48,6 +45,7 @@ import { noteManagedServerUse } from '../../node-runtime/managed-runtime-release
 import type { AcpInstructionsLaunch } from './acp-instructions'
 import { acpInstructionsWithVisuals, visualsByInstructions } from './acp-visuals-instructions'
 import { withoutCallerIdentity } from '../../runtime/agent-session/environment/structured-session-child-env'
+import { resolveAdditionalDirectoriesFromLaunch } from '../../../shared/agent-session/lifecycle/records/agent-session-additional-directories'
 
 /** The environment a launch's process gets; see `AcpLaunchSpec.sharedToolProcess`. */
 export function acpProcessEnvironment(
@@ -78,6 +76,8 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   mcpServers?: McpServer[]
   /** The saved model the launch line carries. */
   launchModel?: string
+  /** Extra workspace directories passed through ACP session start/load/resume. */
+  additionalDirectories?: string[]
   /** The launched program's version, when its check or managed release names it. */
   version?: string
   resume: {
@@ -270,6 +270,12 @@ export function acpStructuredLaunchPart(
     // A load restores the conversation's own model, and a stale role there would stop the agent
     // before it opens; resumed chats apply their model through the session instead.
     const model = spec.launchesWithModel && !head ? record.options?.model : undefined
+    const additionalDirectories = resolveAdditionalDirectoriesFromLaunch(
+      record.additionalDirectories,
+      spec.agent === 'antigravity'
+        ? basis.commandSettings().agentDefaultArgs?.antigravity
+        : undefined
+    )
     const args = [
       ...spec.args({ fullAccess, pluginDirs: skill?.pluginDirs ?? [], model }),
       ...(skill?.args ?? []),
@@ -297,23 +303,14 @@ export function acpStructuredLaunchPart(
         ...(instructions?.release ? { release: instructions.release } : {}),
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
         ...(model ? { launchModel: model } : {}),
+        ...(additionalDirectories ? { additionalDirectories } : {}),
         ...(launchedVersion ? { version: launchedVersion } : {}),
-        resume: head
-          ? {
-              sessionId: head.handle.nativeId,
-              key: agentSessionProviderHandleKey(head.handle),
-              mayBeUnsaved: async () =>
-                head.origin === 'created' &&
-                (await nothingExchangedOn(
-                  deps.savedSession,
-                  identity.sessionId,
-                  head.handle.nativeId
-                )),
-              lossKeys: record.providerHandleChain.flatMap((link) =>
-                link.replaces?.reason === 'restore-failed' ? [link.replaces.key] : []
-              )
-            }
-          : null
+        resume: buildAcpLaunchResume(
+          head,
+          record.providerHandleChain,
+          deps.savedSession,
+          identity.sessionId
+        )
       },
       env: withNativeChatVisualsEnv(
         withBotLaunchToolsEnv({ ...env, ...skill?.env, ...instructions?.env }, tools),

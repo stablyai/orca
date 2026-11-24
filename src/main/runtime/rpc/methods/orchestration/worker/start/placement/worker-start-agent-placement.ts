@@ -263,6 +263,9 @@ function workerSurfaceFactory(
         agent,
         dispatchId: args.dispatchId,
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
+        ...(args.params.additionalDirectories?.length
+          ? { additionalDirectories: args.params.additionalDirectories }
+          : {}),
         effects: args.effects
       })
       onStructuredSession(session)

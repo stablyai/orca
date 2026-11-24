@@ -29,6 +29,7 @@ import type { AcpStructuredLaunch } from '../../launch/acp-structured-launch-res
 import type { AcpStructuredOptions } from '../../options/acp-structured-options'
 import type { AcpStructuredPrompts } from '../../requests/acp-structured-prompts'
 import { acpSessionStartMeta } from '../../launch/acp-session-meta'
+import { buildAcpStartupSetup, resolveAcpSessionMeta } from './acp-handshake-setup'
 import type { AcpStructuredSessionAdapterDeps } from '../acp-structured-session-adapter-deps'
 import { AcpStructuredTurns } from '../../turns/acp-structured-turns'
 import type { AcpStructuredTurnsDeps } from '../../turns/acp-turn-dispatch-contract'
@@ -73,16 +74,7 @@ export async function initializeAcpStructuredSession(
   const initialized = await connection.initialize()
   assertStarting()
   observeAcpForkSupport(spec.agent, initialized)
-  const sessionMetaRefused = Boolean(
-    launch.sessionMeta && launch.takesSessionMeta && !launch.takesSessionMeta(initialized)
-  )
-  if (sessionMetaRefused && !launch.sessionMetaOptional) {
-    const version = initialized.agentInfo?.version
-    throw new Error(
-      `${agentName}${version ? ` ${version}` : ''} cannot take this chat's standing instructions, so it did not start`
-    )
-  }
-  const sessionMeta = sessionMetaRefused ? undefined : launch.sessionMeta
+  const sessionMeta = resolveAcpSessionMeta(launch, initialized, agentName)
   options.adoptInitialize(initialized)
   const meta = await spec.resolveSessionMeta?.({
     initialized,
@@ -91,17 +83,7 @@ export async function initializeAcpStructuredSession(
     signal: input.signal
   })
   assertStarting()
-  // Choose authentication using the execution host's launch environment.
-  const authMethodId = spec.authMethod?.({
-    advertised: (initialized.authMethods ?? []).map((method) => method.id),
-    env: launch.env,
-    antigravityChatAuth: launch.antigravityChatAuth
-  })
-  const setup = {
-    authMethodId,
-    authMethodUnavailableMessage: spec.authMethodUnavailableMessage,
-    resumePreference: spec.resumePreference
-  }
+  const setup = buildAcpStartupSetup(spec, launch, initialized)
   const resume = launch.resume
   let started: Awaited<ReturnType<AcpStructuredConnection['start']>> | null = null
   let liveLane: AcpStructuredLane | null = null

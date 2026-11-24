@@ -3,6 +3,7 @@ import type { AgentSessionDeathEvidence } from './leases/agent-session-death-evi
 import { isAgentSessionRewindRecord } from './rewind/agent-session-rewind'
 import type { AgentSessionRewindRecord } from './rewind/agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './records/agent-session-launch-args'
+import { isAgentSessionAdditionalDirectories } from './records/agent-session-additional-directories'
 import { isAgentSessionConversationName } from '../conversation-naming/agent-session-conversation-name'
 import {
   isPersistedAgentSessionHandoffStage,
@@ -120,6 +121,8 @@ export type AgentSessionRecord = {
   acquiredAccount?: unknown
   /** Initial launch directory in host path syntax. Floating sessions resume here; worktree/folder IDs resolve their durable location. */
   launchDirectory?: string
+  /** Extra workspace directories passed to sessions that support them. */
+  additionalDirectories?: string[]
   /** Provider options the user chose, replayed whenever a new owner starts the session. */
   options?: Record<string, string>
   /** The permission mode the user chose; Orca's, so a provider's options answer never replaces it. */
@@ -316,6 +319,8 @@ export function isPersistedAgentSessionObservationRecord(
       isOptionalAgentSessionLaunchedAccount(record.launchedAccount) &&
       (record.launchDirectory === undefined ||
         isBoundedString(record.launchDirectory, MAX_PATH_LENGTH)) &&
+      (record.additionalDirectories === undefined ||
+        isAgentSessionAdditionalDirectories(record.additionalDirectories)) &&
       (record.options === undefined || isAgentSessionOptions(record.options)) &&
       (record.permissionMode === undefined ||
         isBoundedString(record.permissionMode, MAX_ID_LENGTH)) &&
