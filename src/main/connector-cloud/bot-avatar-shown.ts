@@ -10,6 +10,8 @@ export class BotAvatarShown {
   // Writes go one at a time, each writing the bot's record as it stands when its turn comes, so an older
   // retry never lands after a newer record.
   private writes: Promise<void> = Promise.resolve()
+  // Per bot, its write waiting for its turn: asking again joins it, so the queue holds at most one per bot.
+  private readonly waiting = new Map<string, Promise<void>>()
 
   constructor(
     private readonly store: Pick<BotSlackIcons, 'shown' | 'markShown'>,
@@ -55,7 +57,12 @@ export class BotAvatarShown {
   }
 
   private write(botId: string): Promise<void> {
+    const queued = this.waiting.get(botId)
+    if (queued) {
+      return queued
+    }
     const run = this.writes.then(async () => {
+      this.waiting.delete(botId)
       const shown = this.byBot.get(botId)
       if (!this.exists(botId) || shown === undefined || !this.unsaved.has(botId)) {
         this.unsaved.delete(botId)
@@ -67,6 +74,7 @@ export class BotAvatarShown {
         this.unsaved.delete(botId)
       }
     })
+    this.waiting.set(botId, run)
     this.writes = run.catch(() => {})
     return run
   }
