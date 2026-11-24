@@ -13,6 +13,7 @@ import {
 import { BotLookAroundRunner } from './bot-look-around-runner'
 import { watchContinuedLooks } from './bot-look-around-continued'
 import { runtimeTidyUpRunner } from './bot-memory-tidy-up-runtime'
+import { runtimeBotChatTabTidy } from './bot-chat-tab-tidy-runtime'
 
 const LOOK_TURNED_OFF = `Look around turned off: the last ${LOOK_FAILURES_TO_TURN_OFF} looks failed. Turn it back on in Settings.`
 import { watchBotTurnEnds } from './bot-run-turn-watch'
@@ -94,5 +95,9 @@ export function bindLookAroundToAutomations(
     void Promise.resolve()
       .then(() => runtime.botItems.usageLimitTick(Date.now()))
       .catch((error: unknown) => console.warn('[bots] usage-limit tick failed', error))
+    // Settled chats' tabs a day untouched close, as a person's "x" does; at most hourly.
+    void Promise.resolve()
+      .then(() => runtimeBotChatTabTidy(runtime).tick(Date.now()))
+      .catch((error: unknown) => console.warn('[bots] chat tab tidy failed', error))
   }
 }

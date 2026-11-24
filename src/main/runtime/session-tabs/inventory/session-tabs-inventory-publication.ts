@@ -10,10 +10,19 @@ import { OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees } from './sess
 // shows up within this long, while a burst of reads still shares one census.
 const LOCAL_TERMINAL_CENSUS_REUSE_MS = 1_000
 
+/** A chat tab in a workspace: its session, title, and where it sits (front of its group, pinned). */
+export type ChatSessionTabRow = {
+  sessionId: string
+  title: string
+  tabId: string
+  isActive: boolean
+  isPinned?: true
+}
+
 export abstract class RuntimeSessionTabsInventoryPublication extends OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees {
   /** A workspace's chat tabs, from the tab state alone: no PTY inventory, which only terminal tabs need.
    *  Bot reads (chats tree, Activity, Look around) ask this for a bot home, which has no terminals. */
-  async listChatSessionTabs(worktreeId: string): Promise<{ sessionId: string; title: string }[]> {
+  async listChatSessionTabs(worktreeId: string): Promise<ChatSessionTabRow[]> {
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
       allowAttachedWindow: true,
       onlyRuntimeOwnedTerminals: true
@@ -23,7 +32,17 @@ export abstract class RuntimeSessionTabsInventoryPublication extends OrcaRuntime
       includeAgentSenders: false
     })
     return snapshot.tabs.flatMap((tab) =>
-      tab.type === 'agent-session' ? [{ sessionId: tab.sessionId, title: tab.title }] : []
+      tab.type === 'agent-session'
+        ? [
+            {
+              sessionId: tab.sessionId,
+              title: tab.title,
+              tabId: tab.id,
+              isActive: tab.isActive,
+              ...(tab.isPinned ? { isPinned: true as const } : {})
+            }
+          ]
+        : []
     )
   }
 
