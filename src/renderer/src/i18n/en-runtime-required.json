@@ -1752,7 +1752,6 @@
     "groups": {
       "allBotsCount": "All bots · {{count}}",
       "correctMention": "Correct mention",
-      "items": {},
       "mentionedCount": "{{count}} mentioned",
       "remoteAsked": "Asked on {{computer}}",
       "remoteMayAnswer": "May still answer on {{computer}}.",

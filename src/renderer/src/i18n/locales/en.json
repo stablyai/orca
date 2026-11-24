@@ -6039,7 +6039,6 @@
             "2c35eca8d4": "Unable to fetch usage",
             "1292d4f2ee": "Unavailable",
             "a9a318b7a3": "Refresh failed — showing cached data",
-            "7ad719c4bf": "Limited",
             "e740f92596": "Refresh failed",
             "8418ec448d": "{{value0}} usage could not be refreshed. Agent sessions may still be signed in.",
             "7ec6e030a0": "Next expires now",
@@ -6106,7 +6105,13 @@
             "notYetUpdated": "Not yet updated",
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
             "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
-            "unsupportedOwner": "Usage unavailable for {{server}}"
+            "unsupportedOwner": "Usage unavailable for {{server}}",
+            "usageCheckRateLimited": {
+              "label": "Usage check limited"
+            },
+            "usageCheckRateLimitedRetry": {
+              "label": "Usage check limited, retry in {{count}}m"
+            }
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
