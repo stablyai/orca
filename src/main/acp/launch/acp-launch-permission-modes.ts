@@ -2,6 +2,7 @@ import type {
   AgentChatPermissionChoice,
   AgentChatPermissionMode
 } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import type { RequestPermissionRequest } from '../generated/acp-protocol.generated'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 
 /** The session modes a launch reports as Orca's: a full-access launch holds only that mode. */
@@ -32,7 +33,17 @@ export function acpLaunchPermission(
   }
 }
 
-/** Whether Orca answers the agent's permission requests itself under full access. */
-export function acpAnswersRequests(spec: Pick<AcpLaunchSpec, 'permissionModeConfig'>) {
-  return !spec.permissionModeConfig || spec.permissionModeConfig.fullAccessAnswersRequests === true
+/** Whether Orca answers this permission request itself under full access. */
+export function acpAnswersRequests(
+  spec: Pick<AcpLaunchSpec, 'permissionModeConfig'>,
+  request?: RequestPermissionRequest
+) {
+  if (!spec.permissionModeConfig) {
+    return true
+  }
+  const rule = spec.permissionModeConfig.fullAccessAnswersRequests
+  if (rule === true) {
+    return true
+  }
+  return typeof rule === 'function' && request !== undefined ? rule(request) : false
 }

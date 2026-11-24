@@ -153,6 +153,18 @@ function scrubAgyHostApiKeys(env: Record<string, string>, inherited: NodeJS.Proc
   return removed
 }
 
+// Tool/file/command permission kinds that `--dangerously-skip-permissions` may still prompt for
+// (e.g. out-of-workspace file access), while keeping plan/mode/other approvals with the user.
+const AGY_FULL_ACCESS_TOOL_KINDS = new Set([
+  'read',
+  'edit',
+  'delete',
+  'move',
+  'search',
+  'execute',
+  'fetch'
+])
+
 // The host's `agy acp` uses agy's own sign-in and history; Orca neither signs it in nor out.
 const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   ...ANTIGRAVITY_MANAGED_LAUNCH_SPEC,
@@ -198,10 +210,14 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   managedRuntime: undefined,
   managedRuntimeUpdatesAllowed: undefined,
   resolveSessionMeta: undefined,
-  // agy has no full-access mode, so its launch flag grants it; plan approvals still reach the chat.
+  // agy has no full-access mode, so its launch flag grants it; Orca auto-answers only concrete
+  // tool/command permission requests under full access so plan approvals still reach the chat.
   permissionModeConfig: {
     values: { ask: 'default', 'accept-edits': 'accept-edits', 'full-access': 'default' },
-    fullAccessAtLaunch: true
+    fullAccessAtLaunch: true,
+    fullAccessAnswersRequests: (request) =>
+      typeof request.toolCall.kind === 'string' &&
+      AGY_FULL_ACCESS_TOOL_KINDS.has(request.toolCall.kind)
   },
   keepsEverySession: true,
   sessionMeta: undefined
