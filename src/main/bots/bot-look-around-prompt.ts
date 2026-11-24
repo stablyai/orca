@@ -23,8 +23,8 @@ export function lookAroundPrompt(input: {
     `${LOOK_AROUND_PROMPT_OPENING} and suggest up to ${SUGGESTION_LIMITS.perRun} next steps for their Suggestions list.`,
     '',
     'This run only reads. Read files, run read-only commands (`gh pr view|list|checks|diff`, `gh issue|run view|list`, `git log|show|diff|status|rev-parse|ls-files`, ' +
-      `\`${cli} bot connectors|list\`, \`${cli} slack find|read|check\`, \`${cli} linear issue|search|list-issues\`, \`${cli} automations list|show\`, \`${cli} repo list\`, \`${cli} worktree ps\`), and suggest. ` +
-      'Anything else is refused; do not retry it, suggest it instead. Do not edit MEMORY.md or any other file.',
+      `\`${cli} bot connectors|list|chats\`, \`${cli} bot item list|show\`, \`${cli} bot work list\`, \`${cli} slack find|read|check\`, \`${cli} linear issue|search|list-issues\`, \`${cli} automations list|show\`, \`${cli} repo list\`, \`${cli} worktree ps\`), and suggest. ` +
+      'Run each alone, with no pipe, `;`, `&&` or redirect such as `2>&1`. Anything else is refused; do not retry it, suggest it instead. Do not edit MEMORY.md or any other file.',
     '',
     `Look for: ${input.focus.trim() || DEFAULT_FOCUS}`,
     '',

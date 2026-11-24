@@ -99,6 +99,23 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           compareBaseRef={compareBaseRef}
           headDisplay={gitIdentityDisplay}
           manualReviewUrl={manualReviewUrl}
+          rebase={
+            model.baseRebaseState.kind === 'none'
+              ? null
+              : {
+                  state: model.baseRebaseState,
+                  isRebasing:
+                    model.isRemoteOperationActive && model.inFlightRemoteOpKind === 'rebase',
+                  isAbortingRebase: model.isAbortingOperation,
+                  isContinuingRebase: model.isContinuingRebase,
+                  isRetryingRebaseInspect: model.isRetryingRebaseInspect,
+                  hasGitOwner: !!model.activeRepoTarget,
+                  onRebase: () => model.handleActionInvoke('rebase_base'),
+                  onAbortRebase: () => void model.handleAbortRebase(),
+                  onContinueRebase: () => void model.handleContinueRebase(),
+                  onRetryRebaseInspect: model.handleRetryRebaseInspect
+                }
+          }
         />
 
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (

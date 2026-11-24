@@ -14201,7 +14201,32 @@
             "markResolved": "Çözüldü olarak işaretle",
             "keepFile": "Dosyayı koru",
             "keepDeletion": "Silmeyi koru",
-            "refreshAll": "Tümünü yenile"
+            "refreshAll": "Tümünü yenile",
+            "baseUpToDate": "Güncel",
+            "rebaseOperationInProgress": "Geçerli Git işleminin bitmesini bekleyin",
+            "rebaseButton": "Rebase",
+            "rebaseConflictCount_one": "{{count}} çakışma",
+            "rebaseConflictCount_other": "{{count}} çakışma",
+            "rebasePaused": "Rebase duraklatıldı",
+            "rebaseResolveConflictsFirst": "Önce çakışmaları çözün",
+            "rebaseAbort": "İptal et",
+            "rebaseContinue": "Devam et",
+            "continueRebasePausedAgain": "Rebase sonraki çakışmada duraklatıldı",
+            "continueRebaseFailed": "Rebase sürdürülemedi",
+            "rebaseAutostashConflict": "Rebase tamamlandı. Commit edilmemiş değişiklikleriniz temiz biçimde yeniden uygulanamadı; stash içinde saklandı.",
+            "rebaseStoppedByGit": "Git rebase’i duraklattı",
+            "continueRebaseUnconfirmed": "Sonuç doğrulanamadı. Kaynak denetimi güncel durumu göstermek için yenilendi.",
+            "noRebaseInProgress": "Devam eden rebase yok",
+            "rebaseStopMovedOn": "Rebase zaten ilerledi. Paneli kontrol edip yeniden deneyin.",
+            "rebaseEmptyStep": "Bu adımda commit edilecek bir şey yok. Rebase’i iptal edin veya bir terminalde tamamlayın.",
+            "rebaseStepUnreadableShort": "Kontrol başarısız",
+            "rebaseCheckAgain": "Tekrar kontrol et",
+            "rebaseRetryInspect": "Yeniden dene",
+            "rebaseRetryInspectLabel": "Rebase adımını yeniden denetle",
+            "rebaseStoppedFinishInTerminal": "Git bu adımda durakladı. Bir terminalde tamamla veya iptal et.",
+            "rebaseCheckingStep": "Rebase adımı denetleniyor",
+            "rebaseEmptyStepShort": "Boş adım",
+            "rebaseAbortLabel": "Rebase işlemini iptal et"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Seçilen ajan başlatılamadı.",
@@ -14635,10 +14660,8 @@
                   "titlePublishBranchFirst": "Commit'leri senkronize etmek için önce branch'i yayımlayın",
                   "titleUseForcePush": "Commit ve force push seçeneğini kullanın — remote'da yalnızca yerel commit'lerin eski kopyaları var",
                   "titleCommitThenPullPush": "Commit'leyin, ardından pull ve push yapın",
-                  "rebaseFromNamedBase": "{{baseRef}} üzerinden rebase et",
                   "rebaseFromBase": "Temel branch'ten rebase et",
                   "rebaseChooseRemoteBase": "Rebase için remote'daki bir temel branch'i seçin",
-                  "rebaseDirtyHint": "Rebase etmeyi deneyin; git önce yerel değişiklikleri commit'lemenizi veya stash etmenizi gerektirebilir",
                   "rebaseWithLatestFrom": "Mevcut branch'i {{baseRef}} üzerindeki en son commit'lerle rebase edin",
                   "blockedCommitFirst": "Önce değişiklikleri commit'leyin",
                   "blockedCheckOutBranchFirst": "Önce bir branch'i checkout edin",
@@ -14660,7 +14683,6 @@
                   "titleCommitAndPush": "Stage edilen değişiklikleri commit'leyin ve push edin",
                   "commitForcePush": "Commit'le ve force push et",
                   "commitPush": "Commit'le ve push et",
-                  "titleOperationInProgress": "İşlem devam ediyor…",
                   "titleAbortRebaseInProgress": "Devam eden rebase işlemini iptal edin",
                   "titleAbortMergeInProgress": "Devam eden merge işlemini iptal edin",
                   "titleNothingToPushTo": "{{upstreamName}} hedefine push edilecek bir şey yok",
@@ -14711,7 +14733,13 @@
                   "titleManualForcePush_other": "{{upstreamName}} hedefini güncellemek için {{count}} yerel commit'i lease korumasıyla force push edin.",
                   "titleUnpublishedForcePushBranch": "Bu branch'i lease korumasıyla force push edin ve gerekirse bir upstream ayarlayın.",
                   "titleUnpublishedForcePushCount_one": "Branch'teki {{count}} commit'i lease korumasıyla force push edin ve gerekirse bir upstream ayarlayın.",
-                  "titleUnpublishedForcePushCount_other": "Branch'teki {{count}} commit'i lease korumasıyla force push edin ve gerekirse bir upstream ayarlayın."
+                  "titleUnpublishedForcePushCount_other": "Branch'teki {{count}} commit'i lease korumasıyla force push edin ve gerekirse bir upstream ayarlayın.",
+                  "rebaseOntoNamedBase": "{{base}} üzerine rebase",
+                  "rebaseCommitOrStashFirst": "Önce değişiklikleri commit edin veya stash’leyin",
+                  "continueRebase": "Rebase’e devam et",
+                  "titleContinueRebase": "Duraklatılmış rebase’e devam et",
+                  "rebaseFromNamedBase": "{{baseRef}} üzerinden rebase et",
+                  "rebaseDirtyHint": "Rebase etmeyi deneyin; git önce yerel değişiklikleri commit'lemenizi veya stash etmenizi gerektirebilir"
                 }
               },
               "primary": {
@@ -14754,7 +14782,8 @@
                   "e9b5d1f470": "Bir {{value0}} oluşturmadan önce bir branch'e geçiş yapın (checkout).",
                   "f0c6e2a581": "Bu branch henüz bir {{value0}} için hazır değil.",
                   "8f9a0b1c2d": "Commit edilecek bir şey yok. Branch güncel.",
-                  "h3i4j5k607": "Bu branch'in bir {{value0}} oluşturup oluşturamayacağı kontrol ediliyor…"
+                  "h3i4j5k607": "Bu branch'in bir {{value0}} oluşturup oluşturamayacağı kontrol ediliyor…",
+                  "nothingToCommit": "Commit edilecek bir şey yok"
                 }
               },
               "branch": {
@@ -19263,7 +19292,8 @@
         "thisComputer": "bu bilgisayar"
       },
       "runtimeGitSyncClient": {
-        "completeMergeNeedsNewerHost": "Birleştirmeyi tamamlamak için bu ana makinede daha yeni bir Orca sürümü gerekir. Bu ana makinedeki Orca’yı güncelleyin."
+        "completeMergeNeedsNewerHost": "Birleştirmeyi tamamlamak için bu ana makinede daha yeni bir Orca sürümü gerekir. Bu ana makinedeki Orca’yı güncelleyin.",
+        "continueRebaseNeedsNewerHost": "Rebase’e devam etmek için bu ana bilgisayarda daha yeni bir Orca gerekir. O ana bilgisayarda Orca’yı güncelleyin."
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "Çakışmaları çözmek için bu ana makinede daha yeni bir Orca sürümü gerekir. Bu ana makinedeki Orca’yı güncelleyin."
@@ -19808,7 +19838,6 @@
         "exitPlanMode": "Plan modundan çık",
         "moreControls": "Diğer sohbet kontrolleri",
         "permissionAppliesNextMessage": "{{saved}} sonraki mesajınızda geçerli olur; şu anda {{active}} kullanılıyor",
-        "botFor": "Amaç: {{detail}}",
         "bots": "Botlar"
       },
       "tool": {

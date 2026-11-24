@@ -121,6 +121,9 @@ export type BotItemPendingCommentDelivery = {
   failed: (error: unknown, replaced: boolean) => void
   /** A replaced question's reply, dropped: its words go back to the comment box if it is empty. */
   returnText: (text: string, entry: BotItemPendingComment) => void
+  /** Re-reads the item after a replaced question's refusal, so the box names the ask that replaced it
+   *  even when the view missed the change. */
+  refresh: () => void
   /** The host dedupes comments by request id, so a Retry never posts twice. */
   requestIds: boolean
   /** The host binds a quick reply to its question. */
@@ -221,6 +224,7 @@ function deliver(
         if (replaced) {
           update(key, id, null)
           delivery.returnText(botItemPendingCommentText(entry), entry)
+          delivery.refresh()
           return
         }
         update(key, id, {
