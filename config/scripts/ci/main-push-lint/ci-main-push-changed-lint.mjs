@@ -38,6 +38,7 @@ const SUMMARY_CAUSE_BUDGET = 440
 const LOG_CAUSE_BUDGET = 800
 const MAX_WHY_CHARS = 120
 const MAX_COMMIT_CHARS = 150
+const MAX_PATH_CHARS = 100
 
 export function createReporter(env) {
   let logBytes = 0
@@ -186,7 +187,7 @@ export function explainPolicies(policies, describe, noun, budget = SUMMARY_CAUSE
     const [first] = policy.paths
     const inputs = `${policy.paths.length} changed input(s)${policy.unreadable?.length > 0 ? ', some unreadable' : ''}`
     const source = first
-      ? `${first} changed by ${truncate(describe(first), MAX_COMMIT_CHARS)}`
+      ? `${truncate(first, MAX_PATH_CHARS)} changed by ${truncate(describe(first), MAX_COMMIT_CHARS)}`
       : `no changed input in ${noun} can be named: its inputs cannot be read`
     return `${truncate(policy.why, MAX_WHY_CHARS)} [${inputs}] (${source})`
   }

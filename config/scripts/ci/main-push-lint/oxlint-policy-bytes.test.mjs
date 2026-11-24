@@ -27,9 +27,16 @@ describe('main-push lint policy bytes', { timeout: GIT_TEST_TIMEOUT_MS }, () => 
       const run = (args, input) =>
         execFileSync('git', args, { cwd: origin, env, input }).toString().trim()
       run(['read-tree', parent])
-      for (const { path, content, mode = '100644' } of entries) {
-        const blob = run(['hash-object', '-w', '--stdin'], content)
+      for (const { path, content, mode = '100644', remove = false } of entries) {
         const name = Buffer.isBuffer(path) ? path : Buffer.from(path)
+        if (remove) {
+          run(
+            ['update-index', '--index-info'],
+            Buffer.concat([Buffer.from(`0 ${'0'.repeat(40)}\t`), name, Buffer.from('\n')])
+          )
+          continue
+        }
+        const blob = run(['hash-object', '-w', '--stdin'], content)
         run(
           ['update-index', '--index-info'],
           Buffer.concat([Buffer.from(`${mode} ${blob}\t`), name, Buffer.from('\n')])
@@ -122,6 +129,25 @@ describe('main-push lint policy bytes', { timeout: GIT_TEST_TIMEOUT_MS }, () => 
           { why: '1 config path(s) are not valid UTF-8, so the whole tree is linted on every push' }
         ]
       })
+    })
+
+    it('walks the whole tree when a config at a path that is not valid UTF-8 is deleted', async () => {
+      const origin = makeOrigin()
+      const clean = commit(origin, { '.oxlintrc.json': CONFIG, 'a.ts': CLEAN }, 'clean')
+      const base = plumbCommit(origin, clean, [
+        { path: FF('d', '/.oxlintrc.json'), content: LENIENT },
+        { path: FF('d', '/x.ts'), content: DEBUGGER }
+      ])
+      const head = plumbCommit(origin, base, [{ path: FF('d', '/.oxlintrc.json'), remove: true }])
+      expect(await planPlumbed(origin, base, head)).toMatchObject({
+        dirs: ['.'],
+        policies: [
+          { why: '1 changed config path(s) are not valid UTF-8, so the whole tree is linted' }
+        ]
+      })
+      // Control: deleting an ordinary file at such a path changes no policy.
+      const sourceOnly = plumbCommit(origin, head, [{ path: FF('d', '/x.ts'), remove: true }])
+      expect(await planPlumbed(origin, head, sourceOnly)).toMatchObject({ dirs: [], files: [] })
     })
   })
 })

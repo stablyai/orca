@@ -333,6 +333,14 @@ if (paths.includes('big.ts')) { process.stdout.write('x'.repeat(100_000)) } else
       expect(shown).toBeGreaterThanOrEqual(1)
       expect(cell).toContain(`${'w'.repeat(120)}… (`)
       expect(cell).toContain(`[1 changed input(s)] (a.json changed by ${describe()})`)
+      // A very long first input path is cut too, so its commit still fits.
+      const longPath = explainPolicies(
+        [{ dir: '.', paths: [`${'p'.repeat(450)}.json`], unreadable: [], why: 'w' }],
+        describe,
+        'this push'
+      )
+      expect(longPath.length).toBeLessThanOrEqual(440)
+      expect(longPath).toContain(` changed by ${describe()}`)
       // Sized for a log line: more changes fit, still with their counts and unreadable markers.
       const line = explainPolicies(policies, describe, 'this push', 800)
       expect(line.length).toBeLessThanOrEqual(800)

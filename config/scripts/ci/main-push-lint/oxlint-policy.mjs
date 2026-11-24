@@ -278,7 +278,7 @@ async function show(rev, file, cwd) {
 }
 
 // Each changed policy input: the directory it governs, the changed files behind it (for attribution) and why.
-export async function policyChanges(changes, { base, head, cwd }) {
+export async function policyChanges(changes, { base, head, cwd, unrepresentable = [] }) {
   const changed = new Set(changes.map((change) => change.path))
   const policies = []
   const direct = new Map()
@@ -329,6 +329,19 @@ export async function policyChanges(changes, { base, head, cwd }) {
   }
   // oxlint finds a config in a directory whose name is not valid UTF-8; its scope cannot be named as a path,
   // so the whole tree is walked.
+  // A config added, changed or deleted at such a path changes policy for a scope that cannot be named either.
+  const changedUndecodable = unrepresentable.filter((change) =>
+    CONFIG_NAMES.includes(change.path.split('/').pop())
+  )
+  if (changedUndecodable.length > 0) {
+    const reason = `${changedUndecodable.length} changed config path(s) are not valid UTF-8`
+    policies.push({
+      dir: ROOT,
+      paths: [],
+      unreadable: [reason],
+      why: `${reason}, so the whole tree is linted`
+    })
+  }
   if (graph.undecodableConfigs.length > 0) {
     const reason = `${graph.undecodableConfigs.length} config path(s) are not valid UTF-8`
     policies.push({

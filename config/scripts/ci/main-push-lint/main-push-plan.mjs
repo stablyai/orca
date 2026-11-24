@@ -19,7 +19,7 @@ function outermost(dirs) {
 
 export async function planLint({ base, head, cwd }) {
   const { changes, unrepresentable } = await changedPaths(base, head, cwd)
-  const policies = await policyChanges(changes, { base, head, cwd })
+  const policies = await policyChanges(changes, { base, head, cwd, unrepresentable })
   const dirs = outermost(policies.map((policy) => policy.dir))
   const touched = changes
     .filter((change) => change.status !== 'D' && isLintable(change.path))
