@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { DialogCancel } from '@/components/ui/dialog-parts'
 import { useTranslate } from '@/i18n/use-translate'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { useAppStore } from '@/store'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
@@ -26,12 +27,13 @@ export function WorkspaceCleanupRetryButton({
   onConfirm: (candidate: WorkspaceCleanupCandidate) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const [open, setOpen] = React.useState(false)
   const title = t('components.workspace.cleanup.browse.deleteAnyway', 'Delete anyway')
   const busy = useAppStore((state) =>
     isWorkspaceCleanupRemovalBusy(candidate, state.deleteStateByWorktreeId)
   )
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button
           variant="destructive-chip"
@@ -42,7 +44,22 @@ export function WorkspaceCleanupRetryButton({
           {title}
         </Button>
       </DialogTrigger>
-      <DialogContent size="confirm" surface="security" initialFocus="cancel">
+      <DialogContent
+        size="confirm"
+        surface="security"
+        initialFocus="cancel"
+        onKeyDown={(event) => {
+          if (
+            event.key === 'Escape' &&
+            !event.defaultPrevented &&
+            !isImeCompositionKeyDown(event)
+          ) {
+            event.preventDefault()
+            event.stopPropagation()
+            setOpen(false)
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
