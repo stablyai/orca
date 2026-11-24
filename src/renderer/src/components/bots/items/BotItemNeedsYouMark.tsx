@@ -39,7 +39,7 @@ export function BotItemNeedsYouMarkBox({
       ref={setNode}
       id={id}
       data-bot-item-needs-you=""
-      className="relative -mx-2 scroll-mt-3 rounded-[10px] px-2 before:pointer-events-none before:absolute before:inset-y-1 before:-left-0.5 before:w-0.5 before:rounded-full before:bg-item-ask-open"
+      className="relative -mx-2 scroll-mt-3 rounded-[10px] px-2 before:pointer-events-none before:absolute before:inset-y-1 before:-left-0.5 before:w-0.5 before:rounded-full before:bg-agent-question"
     >
       <span
         aria-hidden

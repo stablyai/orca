@@ -51,7 +51,7 @@ export function useBotItemNeedsYouJump({
     // The scroller's scroll padding is the header's height, so it lands just under the header.
     node.scrollIntoView({ block: 'start', behavior: still ? 'auto' : 'smooth' })
     // Keyframes take a color, not a variable: the theme's amber, read on the click.
-    const amber = getComputedStyle(node).getPropertyValue('--item-ask-open').trim()
+    const amber = getComputedStyle(node).getPropertyValue('--agent-question').trim()
     const ring = `0 0 0 2px ${amber || 'currentColor'}`
     node.animate?.(
       [

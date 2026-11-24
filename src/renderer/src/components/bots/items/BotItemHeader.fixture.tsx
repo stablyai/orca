@@ -180,7 +180,7 @@ export const [afterJump260, afterJump340] = both(
     await clickReply(frame, 1200)
     const node = frame.querySelector<HTMLElement>('[data-bot-item-needs-you]')
     if (node) {
-      const amber = getComputedStyle(node).getPropertyValue('--item-ask-open').trim()
+      const amber = getComputedStyle(node).getPropertyValue('--agent-question').trim()
       node.style.boxShadow = `0 0 0 2px ${amber}`
     }
   }
@@ -215,10 +215,11 @@ function DelayedQuestion(): React.JSX.Element {
   const [loaded, setLoaded] = useState(false)
   const loadEarlier = useCallback(() => setRequested(true), [])
   useEffect(() => {
-    if (requested) {
-      const timer = setTimeout(() => setLoaded(true), 1200)
-      return () => clearTimeout(timer)
+    if (!requested) {
+      return undefined
     }
+    const timer = setTimeout(() => setLoaded(true), 1200)
+    return () => clearTimeout(timer)
   }, [requested])
   const events = loaded ? questionEvents : questionEvents.slice(11)
   const view = read(olderHost, events, { hasEarlier: !loaded, loadEarlier })

@@ -41,7 +41,7 @@ import { BotItemHeader } from './BotItemHeader'
 import { useBotItemNeedsYouJump } from './BotItemReplyJump'
 import { setBotItemsStatus } from './use-bot-items'
 import { useBotItemSnoozing } from './BotItemSnooze'
-import { useBotItemView, type BotItemViewRead } from './use-bot-item-view'
+import { useBotItemView, useWaitingQuestionPage, type BotItemViewRead } from './use-bot-item-view'
 import { useBotItemPendingComments } from './use-bot-item-pending-comments'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 import { BotItemNavRow } from './BotItemStepper'
@@ -203,6 +203,7 @@ export function BotItemBody({
   const pending = useBotItemPendingComments(bot, item.uid, view.events)
   // The header and comment box paint first; the Activity, the costly part, renders right after.
   const activityMounted = useDeferredValue(true, false)
+  const activityShown = view.eventsRead && activityMounted
   const { scrollRef, contentRef, scrollerProps, showJump, jumpToLatest } = useBotTranscriptFollow({
     itemCount: view.events.length + pending.shown.length,
     isWorking: false,
@@ -265,27 +266,14 @@ export function BotItemBody({
           },
     [deleted, comment, quick, steps, sent]
   )
-  // The waiting question's comment, with its words and quick replies, is read even when it is older
-  // than the loaded page (later comments can push it back): earlier pages load until it shows.
-  const questionId = item.waitingAsk ?? item.question?.eventId
-  const questionUnread =
-    view.eventsRead &&
-    questionId !== undefined &&
-    !view.events.some((event) => event.id === questionId)
-  const { hasEarlier, loadEarlier } = view
-  const earliest = view.events[0]?.id
-  useEffect(() => {
-    if (questionUnread && hasEarlier) {
-      loadEarlier()
-    }
-  }, [questionUnread, hasEarlier, earliest, loadEarlier])
+  const loadingTarget = useWaitingQuestionPage(item.waitingAsk ?? item.question?.eventId, view)
   const answering = pending.shown.some(({ failed }) => !failed)
   const waitingOn =
     waitingLine && !answering ? { ...waitingLine, asker: item.owner.name ?? bot.name } : null
   const needsYou = useBotItemNeedsYouJump({
     eligible: item.status === 'needs_you' && !deleted && !answering,
-    activityShown: view.eventsRead && activityMounted,
-    loadingTarget: questionUnread && hasEarlier && !view.failed,
+    activityShown,
+    loadingTarget,
     scrollRef,
     comment
   })
