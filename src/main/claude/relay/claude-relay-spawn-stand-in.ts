@@ -109,6 +109,8 @@ export class ClaudeRelaySpawnStandIn extends EventEmitter implements ProviderChi
     this.stdin.attach(real.stdin)
     real.stdout.pipe(this.stdout)
     real.stderr.pipe(this.stderr)
+    // The SDK reads stderr only from a child it spawned itself; unread, the pipe would stall the agent.
+    this.stderr.resume()
     for (const event of FORWARDED_EVENTS) {
       real.on(event, (...args: unknown[]) => notifyProviderChild(this, event, ...args))
     }

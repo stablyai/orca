@@ -1,7 +1,12 @@
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { StructuredAgentSessionHistoryJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
-import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  parseAgentJournalItemKey
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   claudeTurnLifecycleIdentity,
   type ClaudeCurrentTurn
@@ -14,7 +19,11 @@ import {
 export async function keptClaudeTurn(
   journal: StructuredAgentSessionHistoryJournal | null | undefined,
   providerSessionId: string
-): Promise<ClaudeCurrentTurn | null> {
+): Promise<
+  | { kind: 'turn'; turn: ClaudeCurrentTurn }
+  | { kind: 'command'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
+  | null
+> {
   const items = (await journal?.reads.generation())?.items ?? []
   const running = items.findLast(
     (item) => isRootAgentJournalItem(item) && readAgentJournalTurn(item.body)?.state === 'running'
@@ -23,18 +32,33 @@ export async function keptClaudeTurn(
   if (!running || !turn?.turnId || turn.startedAt === undefined) {
     return null
   }
-  // A command's own row (a slash command) ends through its command, not a turn record.
   if (
     running.itemId !==
     agentJournalItemKey(claudeTurnLifecycleIdentity(providerSessionId, turn.turnId))
   ) {
-    return null
+    // A slash command's row ends only through the command this app never started, so it is
+    // settled as a relaunch settles it (a running row would hold back every later message).
+    const identity = parseAgentJournalItemKey(running.itemId)
+    const body = unverifiedTurnBody(running.body)
+    return identity && body ? { kind: 'command', identity, body } : null
   }
   return {
-    sessionId: providerSessionId,
-    turnId: turn.turnId,
-    startedAt: turn.startedAt,
-    ...(turn.requestedAt !== undefined ? { requestedAt: turn.requestedAt } : {}),
-    userItemId: turn.userItemId ?? running.itemId
+    kind: 'turn',
+    turn: {
+      sessionId: providerSessionId,
+      turnId: turn.turnId,
+      startedAt: turn.startedAt,
+      ...(turn.requestedAt !== undefined ? { requestedAt: turn.requestedAt } : {}),
+      userItemId: turn.userItemId ?? running.itemId
+    }
   }
+}
+
+function unverifiedTurnBody(body: AgentJournalItemBody): AgentJournalItemBody | null {
+  if (body.kind === 'turn') {
+    return { ...body, state: 'unverifiable' }
+  }
+  return body.kind === 'status' && body.turnLifecycle
+    ? { ...body, turnLifecycle: { ...body.turnLifecycle, state: 'unverifiable' } }
+    : null
 }

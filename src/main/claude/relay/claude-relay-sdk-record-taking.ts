@@ -11,7 +11,8 @@ function lineUuid(line: string): string | null {
   }
   const start = at + UUID_KEY.length
   const end = line.indexOf('"', start)
-  return end === -1 ? null : line.slice(start, end)
+  // Parsed, not sliced: a slice would keep the whole line alive for as long as its id is held.
+  return end === -1 ? null : (JSON.parse(line.slice(at + UUID_KEY.length - 1, end + 1)) as string)
 }
 
 /**
@@ -49,6 +50,7 @@ export function claudeRelaySdkRecordTaking(records: ProviderRelayRecordTaking): 
         return
       }
       while (head <= at) {
+        ids[head] = null
         head += 1
         records.taken()
       }

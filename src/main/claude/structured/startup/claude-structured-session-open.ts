@@ -110,8 +110,10 @@ async function openStartingClaudeSession(
     // rest, so its turn ends may move the resume point (or the next cold resume re-imports them).
     history.covered = true
     const keptTurn = await keptClaudeTurn(events?.journalHistory?.(), session.providerSessionId)
-    if (keptTurn) {
-      session.translator?.adoptKeptTurn(keptTurn)
+    if (keptTurn?.kind === 'turn') {
+      session.translator?.adoptKeptTurn(keptTurn.turn)
+    } else if (keptTurn?.kind === 'command') {
+      events?.appendItem(keptTurn.identity, keptTurn.body, { turnScope: { kind: 'thread' } })
     }
     restateKeptClaudeBackgroundTasks(session, kept.openTaskIds)
     input.publishChildWork?.(request.sessionId, session)

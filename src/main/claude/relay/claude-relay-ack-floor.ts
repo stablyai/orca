@@ -21,6 +21,18 @@ function contentIds(frame: Record<string, unknown>, type: string, key: string): 
  * so a later attach must replay from the `message_start`: acks stop just before the oldest message
  * whose final hasn't landed or whose tool calls haven't returned.
  */
+const TYPE_PREFIX = '{"type":"'
+/** What a line of each type must contain to matter; null parses it, a type not listed is skipped. */
+const NEEDLES: Readonly<Record<string, string | null>> = {
+  stream_event: '"message_st',
+  assistant: '"tool_use"',
+  user: '"tool_result"',
+  system: '"task_',
+  result: null
+}
+/** A line that doesn't start with its type (no CLI writes one) is checked the slow way. */
+const UNORDERED_NEEDLES = ['"message_st', '"assistant"', '"result"', '"tool_result"', '"task_']
+
 export function claudeRelayAckFloor(): ProviderRelayAckFloor {
   /** Each stream scope's open message, by the seq of its `message_start`. */
   const open = new Map<string, number>()
@@ -28,6 +40,8 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
   const starts = new Map<string, number>()
   /** Unreturned tool calls, by the seq of their message's `message_start`, and their scope. */
   const tools = new Map<string, { seq: number; scope: string }>()
+  /** Tool calls that launched a background task; their subagent outlives the call's result. */
+  const backgroundLaunches = new Set<string>()
   const closeScope = (scope: string): void => {
     open.delete(scope)
     starts.delete(scope)
@@ -39,15 +53,16 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
   }
   return {
     observe: (seq, line) => {
-      // Cheap tests first: only stream starts, final assistant frames and results matter.
-      if (
-        !line.includes('"message_start"') &&
-        !line.includes('"message_stop"') &&
-        !line.includes('"assistant"') &&
-        !line.includes('"result"') &&
-        !line.includes('"tool_result"') &&
-        !line.includes('"task_notification"')
-      ) {
+      // One prefix read and at most one scan per line: the CLI writes `type` first. Only stream
+      // starts and stops, tool calls, tool results, task ends and results matter.
+      const type = line.startsWith(TYPE_PREFIX)
+        ? line.slice(TYPE_PREFIX.length, line.indexOf('"', TYPE_PREFIX.length))
+        : null
+      const needle = type === null ? null : NEEDLES[type]
+      if (needle === undefined || (needle !== null && !line.includes(needle))) {
+        return
+      }
+      if (type === null && !UNORDERED_NEEDLES.some((key) => line.includes(key))) {
         return
       }
       let frame: unknown
@@ -65,14 +80,25 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
         closeScope(scopeOf(frame))
       } else if (frame.type === 'system' && frame.subtype === 'task_notification') {
         // A subagent's end closes what it left open under its launching tool call.
+        backgroundLaunches.delete(String(frame.tool_use_id ?? ''))
         closeScope(`${String(frame.session_id ?? '')}/${String(frame.tool_use_id ?? '')}`)
+      } else if (frame.type === 'system' && frame.subtype === 'task_started') {
+        if (frame.is_backgrounded === true && typeof frame.tool_use_id === 'string') {
+          backgroundLaunches.add(frame.tool_use_id)
+        }
       } else if (frame.type === 'assistant') {
         const scope = scopeOf(frame)
         const start = starts.get(scope) ?? seq
         // The CLI sends one final frame per block, before the message's stop.
         contentIds(frame, 'tool_use', 'id').forEach((id) => tools.set(id, { seq: start, scope }))
       } else if (frame.type === 'user') {
-        contentIds(frame, 'tool_result', 'tool_use_id').forEach((id) => tools.delete(id))
+        for (const id of contentIds(frame, 'tool_result', 'tool_use_id')) {
+          tools.delete(id)
+          // A foreground subagent ends with its launching call's result.
+          if (!backgroundLaunches.has(id)) {
+            closeScope(`${String(frame.session_id ?? '')}/${id}`)
+          }
+        }
       } else if (
         frame.type === 'stream_event' &&
         isRecord(frame.event) &&
