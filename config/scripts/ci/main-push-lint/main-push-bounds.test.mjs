@@ -113,6 +113,26 @@ if (paths.includes('slow.ts')) { setTimeout(() => {}, 60_000) } else {
     )
   })
 
+  it('bounds the policy and directory lists, so they cannot push the summary past its limit', () => {
+    const policies = Array.from({ length: 500 }, (_, index) => ({
+      dir: `d${index}`,
+      path: `d${index}/.oxlintrc.json`,
+      why: `${'!'.repeat(450)}${index}`
+    }))
+    const summary = renderLintSummary({
+      range: 'a..b',
+      scope: 's',
+      candidates: 0,
+      dirs: policies.map((policy) => `${'!'.repeat(450)}${policy.dir}`),
+      policies,
+      linted: 0,
+      diagnostics: [],
+      incomplete: []
+    })
+    expect(Buffer.byteLength(summary)).toBeLessThan(128 * 1024)
+    expect(summary.match(/; and 490 more/g)).toHaveLength(2)
+  })
+
   it('labels attribution partial when GitHub returns a full page of push commits or PRs', async () => {
     const pushSize = 150
     const api = async (path) => {

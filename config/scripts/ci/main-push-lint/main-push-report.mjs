@@ -7,6 +7,7 @@ const MAX_EXCERPT_CHARS = 2_000
 export const MAX_LOG_LINE_CHARS = 1_000
 const MAX_INCOMPLETE_SHOWN = 5
 const MAX_PATHS_SHOWN = 10
+const MAX_LISTED = 10
 
 export function truncate(value, maxChars) {
   return value.length > maxChars
@@ -90,9 +91,15 @@ function logNote(total, logged, noun) {
     : `the step log lists the first ${logged} of ${total}`
 }
 
+// At most MAX_LISTED items, then a count of the rest, so a long list cannot crowd out the result tables.
+function listed(items, render) {
+  const shown = items.slice(0, MAX_LISTED).map(render).join('; ')
+  return items.length > MAX_LISTED ? `${shown}; and ${items.length - MAX_LISTED} more` : shown
+}
+
 function coverageLine({ candidates, dirs, linted, incomplete }) {
   const walked =
-    dirs.length > 0 ? `, plus every lintable file under ${dirs.map(markdownCode).join(', ')}` : ''
+    dirs.length > 0 ? `, plus every lintable file under ${listed(dirs, markdownCode)}` : ''
   const unfinished = incomplete.reduce((total, batch) => total + batch.files.length, 0)
   const partial =
     unfinished > 0
@@ -108,7 +115,7 @@ function coverageLine({ candidates, dirs, linted, incomplete }) {
 
 function policyLine(policies) {
   return policies.length > 0
-    ? `Lint policy changed, so the whole scope it governs is linted: ${policies.map((policy) => markdownText(policy.why)).join('; ')}.`
+    ? `Lint policy changed, so the whole scope it governs is linted: ${listed(policies, (policy) => markdownText(policy.why))}.`
     : ''
 }
 

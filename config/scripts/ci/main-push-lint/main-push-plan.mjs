@@ -35,37 +35,42 @@ async function show(rev, file, cwd) {
   }
 }
 
-async function extendsByConfig(head, cwd) {
+// What each config, and each file a config extends, itself extends. oxlint resolves `extends` recursively and
+// any file can be extended, whatever its name, so every referenced file is read too. Each file is read once.
+async function extendsGraph(head, cwd) {
   const files = (await git(['ls-tree', '-r', '-z', '--name-only', head], cwd)).split('\0')
-  const result = new Map()
-  for (const config of files.filter(isConfig)) {
+  const configs = files.filter(isConfig)
+  const graph = new Map()
+  const queue = [...configs]
+  while (queue.length > 0) {
+    const file = queue.shift()
+    if (graph.has(file)) {
+      continue
+    }
     let entries = []
     try {
-      entries = JSON.parse(await show(head, config, cwd)).extends ?? []
+      entries = JSON.parse(await show(head, file, cwd))?.extends ?? []
     } catch {
-      // An unreadable config still has its own scope linted if it changed; oxlint reports the parse error.
+      // A missing or unreadable file extends nothing here; oxlint reports it when it loads the config.
     }
-    result.set(
-      config,
-      (Array.isArray(entries) ? entries : []).map((entry) =>
-        path.posix.normalize(path.posix.join(configDir(config), String(entry)))
-      )
+    const targets = (Array.isArray(entries) ? entries : []).map((entry) =>
+      path.posix.normalize(path.posix.join(configDir(file), String(entry)))
     )
+    graph.set(file, targets)
+    queue.push(...targets)
   }
-  return result
+  return { configs, graph }
 }
 
 // Each changed policy input and the directory whose files it governs. A config that extends a changed file,
-// directly or through another config, governs its own directory too.
+// directly or through any chain of extended files, governs its own directory too.
 const VERB = { A: 'was added', D: 'was deleted' }
 
 async function policyChanges(changes, { base, head, cwd }) {
   const changed = new Set(changes.map((change) => change.path))
   const policies = []
-  const origin = new Map()
   for (const { status, path: file } of changes) {
     if (isConfig(file)) {
-      origin.set(file, file)
       policies.push({
         dir: configDir(file),
         path: file,
@@ -73,21 +78,31 @@ async function policyChanges(changes, { base, head, cwd }) {
       })
     }
   }
-  const extendsOf = await extendsByConfig(head, cwd)
+  // Spread "depends on a changed file" up the extends graph; the fixed point also ends any cycle.
+  const { configs, graph } = await extendsGraph(head, cwd)
+  /** @type {Map<string, { root: string, via: string | null }>} */
+  const cause = new Map([...changed].map((file) => [file, { root: file, via: null }]))
   for (let grew = true; grew;) {
     grew = false
-    for (const [config, targets] of extendsOf) {
-      const hit = targets.find((target) => changed.has(target) || origin.has(target))
-      if (hit && !origin.has(config)) {
-        const cause = origin.get(hit) ?? hit
-        origin.set(config, cause)
-        policies.push({
-          dir: configDir(config),
-          path: cause,
-          why: `${config} extends ${hit}, which changed`
-        })
+    for (const [file, targets] of graph) {
+      const hit = cause.has(file) ? undefined : targets.find((target) => cause.has(target))
+      if (hit) {
+        cause.set(file, { root: cause.get(hit).root, via: hit })
         grew = true
       }
+    }
+  }
+  for (const config of configs) {
+    const { root, via } = cause.get(config) ?? {}
+    if (via) {
+      policies.push({
+        dir: configDir(config),
+        path: root,
+        why:
+          via === root
+            ? `${config} extends ${via}, which changed`
+            : `${config} extends ${via}, which depends on ${root}, which changed`
+      })
     }
   }
   if (changed.has(LOCKFILE)) {
@@ -123,7 +138,10 @@ export async function planLint({ base, head, cwd }) {
     files: touched.filter((file) => !dirs.some((dir) => isUnder(file, dir))),
     dirs,
     policies,
-    unrepresentable: unrepresentable.filter(isLintable)
+    // A deleted path has nothing to lint, whatever its bytes.
+    unrepresentable: unrepresentable
+      .filter((change) => change.status !== 'D' && isLintable(change.path))
+      .map((change) => change.path)
   }
 }
 

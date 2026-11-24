@@ -7,7 +7,8 @@ const MAX_BUFFER_BYTES = 64 * 1024 * 1024
 export const EMPTY_TREE_SHA = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 // The extensions oxlint 1.x lints; oxlint can still exclude an explicit path (ignorePatterns, minified files).
 const OXLINT_EXTENSION = /\.(?:[jt]sx?|[cm][jt]s|vue|astro|svelte)$/
-const STRICT_UTF8 = new TextDecoder('utf-8', { fatal: true })
+// ignoreBOM keeps a leading U+FEFF in a name instead of stripping it as a byte-order mark.
+const STRICT_UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 
 export async function git(args, cwd) {
   const { stdout } = await execFileAsync('git', args, { cwd, maxBuffer: MAX_BUFFER_BYTES })
@@ -111,11 +112,12 @@ export async function changedPaths(base, head, cwd) {
       changes.push({ status, path: STRICT_UTF8.decode(fields[index + 1]) })
     } catch {
       // Show the bytes as written, with each invalid byte as \xNN, so the file can still be found.
-      unrepresentable.push(
-        [...fields[index + 1]]
+      unrepresentable.push({
+        status,
+        path: [...fields[index + 1]]
           .map((byte) => (byte < 0x80 ? String.fromCharCode(byte) : `\\x${byte.toString(16)}`))
           .join('')
-      )
+      })
     }
   }
   return { changes, unrepresentable }

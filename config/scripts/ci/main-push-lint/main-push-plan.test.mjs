@@ -11,7 +11,7 @@ import {
   LENIENT,
   REPO_ROOT
 } from './main-push-git-test-fixture.mjs'
-import { oxlintVersionFromLockfile, planLint } from './main-push-plan.mjs'
+import { isEmptyPlan, oxlintVersionFromLockfile, planLint } from './main-push-plan.mjs'
 import { main as plan } from './plan-main-push-lint.mjs'
 
 const { git, commit, makeOrigin, shallowCheckout, scratchFile, cleanup } = createGitFixture()
@@ -163,6 +163,50 @@ describe('main-push lint plan', () => {
     expect((await runWorkflow(pushed)).lintExit).toBe(1)
   })
 
+  it('follows extends through files of any name, and stops on a cycle', async () => {
+    const extend = (target) => JSON.stringify({ extends: [target] })
+    const chain = push(
+      {
+        '.oxlintrc.json': LENIENT,
+        'm/.oxlintrc.json': extend('../base.json'),
+        'base.json': extend('./rules.json'),
+        'rules.json': LENIENT,
+        // A cycle that the changed file does not reach.
+        'a.json': extend('./b.json'),
+        'b.json': extend('./a.json'),
+        'm/x.ts': DEBUGGER
+      },
+      { 'rules.json': CONFIG }
+    )
+    expect(await planFor(chain)).toMatchObject({
+      dirs: ['m'],
+      policies: [
+        {
+          dir: 'm',
+          path: 'rules.json',
+          why: 'm/.oxlintrc.json extends base.json, which depends on rules.json, which changed'
+        }
+      ]
+    })
+    expect((await runWorkflow(chain)).lintExit).toBe(1)
+    const cycle = push(
+      {
+        '.oxlintrc.json': extend('./a.json'),
+        'a.json': extend('./b.json'),
+        'b.json': extend('./a.json')
+      },
+      { 'b.json': extend('./a.json').replace('}', ', "rules": {}}') }
+    )
+    expect(await planFor(cycle)).toMatchObject({ dirs: ['.'] })
+  })
+
+  it('keeps a leading U+FEFF in a changed name instead of linting a different file', async () => {
+    const bom = '\uFEFFa.ts'
+    const pushed = push({ '.oxlintrc.json': CONFIG, 'a.ts': CLEAN }, { [bom]: DEBUGGER })
+    expect(await planFor(pushed)).toMatchObject({ files: [bom] })
+    expect((await runWorkflow(pushed)).lintExit).toBe(1)
+  })
+
   it('treats a new locked oxlint version as a root policy change, and other lockfile edits as none', async () => {
     expect(oxlintVersionFromLockfile(lock('1.94.0'))).toBe('1.94.0')
     const bumped = push({ 'pnpm-lock.yaml': lock('1.94.0') }, { 'pnpm-lock.yaml': lock('1.95.0') })
@@ -263,5 +307,35 @@ describe('main-push lint plan', () => {
     expect(exit).toBe(1)
     expect(out.join('')).toContain('the path is not valid UTF-8')
     expect(out.join('')).toContain('Not linted: bad\\\\xff.ts')
+
+    // Deleting that path leaves nothing to lint.
+    plumbing(['read-tree', after])
+    plumbing(
+      ['update-index', '--index-info'],
+      Buffer.concat([
+        Buffer.from(`0 ${'0'.repeat(40)}\tbad`),
+        Buffer.from([0xff]),
+        Buffer.from('.ts\n')
+      ])
+    )
+    const removed = plumbing(
+      [
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@example.com',
+        'commit-tree',
+        plumbing(['write-tree']),
+        '-p',
+        after,
+        '-m',
+        'drop odd byte'
+      ],
+      ''
+    )
+    git(cwd, 'fetch', '-q', '--depth=1', 'origin', removed)
+    const deletion = await planLint({ base: after, head: removed, cwd })
+    expect(deletion).toMatchObject({ files: [], dirs: [], unrepresentable: [] })
+    expect(isEmptyPlan(deletion)).toBe(true)
   })
 })

@@ -34,7 +34,7 @@ export function batchPaths(files, maxChars = MAX_PATH_CHARS_PER_RUN) {
 function runOnce(command, args, options) {
   return new Promise((resolve) => {
     execFile(command, args, options, (error, stdout, stderr) => {
-      resolve({ error, output: `${stdout ?? ''}${stderr ?? ''}` })
+      resolve({ error, output: `${String(stdout ?? '')}${String(stderr ?? '')}` })
     })
   })
 }
