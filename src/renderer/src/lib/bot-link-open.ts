@@ -31,13 +31,12 @@ import {
   activateAiVaultStructuredSession,
   structuredSessionOpenFeedback
 } from './agent-session/open/activate-ai-vault-structured-session'
-import { structuredSessionOpenDepsWaitingForPairedTab } from './agent-session/open/open-existing-structured-session'
+import { pairedBotThreadOpenDeps } from './agent-session/open/open-existing-structured-session'
 import { isHome } from '../../../shared/bots/bot-homes'
 import type { BotDeepLink } from '../../../shared/bot-deep-link'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
-import { lastUserWorkspaceSwitchAt } from './workspace/activation/workspace-switch-user-act'
 
 type LinkConversation = NonNullable<BotDeepLink['conversation']>
 
@@ -123,27 +122,11 @@ export async function openBotLinkHome(
       if (!openBotHome(bot)) {
         return
       }
-      const workspaceId = folderWorkspaceKey(bot.folderWorkspaceId)
-      const openedAfterUserSwitchAt = lastUserWorkspaceSwitchAt(workspaceId)
-      const stillShowingHome = (): boolean => {
-        const { activeWorktreeId, activeWorkspaceExecutionHostId, activeView } =
-          useAppStore.getState()
-        return (
-          activeWorktreeId === workspaceId &&
-          activeWorkspaceExecutionHostId === hostId &&
-          activeView === 'terminal' &&
-          lastUserWorkspaceSwitchAt(workspaceId) === openedAfterUserSwitchAt
-        )
-      }
       await activateAiVaultStructuredSession(
-        { structuredSession: { workspaceId, sessionId } },
         {
-          deps: {
-            ...structuredSessionOpenFeedback,
-            ...structuredSessionOpenDepsWaitingForPairedTab(stillShowingHome)
-          },
-          retry: () => openBotLinkHome(botId, conversation)
+          structuredSession: { workspaceId: folderWorkspaceKey(bot.folderWorkspaceId), sessionId }
         },
+        { ...structuredSessionOpenFeedback, ...pairedBotThreadOpenDeps },
         botTarget(bot)
       )
       return

@@ -47,6 +47,7 @@ function loadSessionTabsApplyModules(): ReturnType<typeof importSessionTabsApply
 }
 
 type SnapshotRefreshOptions = {
+  listTimeoutMs?: number
   expectedEnvironmentPairingRevision?: number
   acceptCurrentSnapshot?: boolean
   confirmAgentSessionHandoff?: {
@@ -128,7 +129,7 @@ async function reconcileWebRuntimeSessionTabs(
             params: {
               worktree: toRuntimeWorktreeSelector(worktreeId)
             },
-            timeoutMs: 15_000
+            timeoutMs: options.listTimeoutMs ?? 15_000
           })
           return {
             snapshot: unwrapRuntimeRpcResult(

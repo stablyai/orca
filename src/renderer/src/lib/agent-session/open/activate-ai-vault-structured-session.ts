@@ -74,7 +74,7 @@ export const structuredSessionOpenFeedback: StructuredSessionOpenFeedback = {
 /** Read only structuredSession so history clicks and drag payloads follow the same reveal path. */
 export async function activateAiVaultStructuredSession(
   session: Pick<AiVaultSession, 'structuredSession'> & { agent?: string },
-  options?: { deps: StructuredSessionActivationDeps; retry: () => Promise<unknown> },
+  deps?: StructuredSessionActivationDeps,
   target?: RuntimeClientTarget
 ): Promise<boolean> {
   if (!session.structuredSession) {
@@ -88,11 +88,7 @@ export async function activateAiVaultStructuredSession(
   }
   await openDesktopStructuredSession(
     { kind: 'history', structuredSession: session.structuredSession, agent: session.agent },
-    {
-      target,
-      deps: options?.deps,
-      retry: options?.retry ?? (() => activateAiVaultStructuredSession(session, undefined, target))
-    }
+    { target, deps, retry: () => activateAiVaultStructuredSession(session, deps, target) }
   )
   return true
 }
