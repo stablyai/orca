@@ -83,6 +83,36 @@ const AGENT_REQUIRED_VALUE_OPTIONS: Partial<Record<AgentType, readonly string[]>
     '--add-dir',
     '--plugin-dir',
     '--worktree-base'
+  ],
+  // Go flags accept single- and double-dash spellings and always consume the next token for non-bool flags.
+  antigravity: [
+    '-add-dir',
+    '--add-dir',
+    '-agent',
+    '--agent',
+    '-conversation',
+    '--conversation',
+    '-effort',
+    '--effort',
+    '-i',
+    '-input-format',
+    '--input-format',
+    '-json-schema',
+    '--json-schema',
+    '-log-file',
+    '--log-file',
+    '-mode',
+    '--mode',
+    '-model',
+    '--model',
+    '-output-format',
+    '--output-format',
+    '-print-timeout',
+    '--print-timeout',
+    '-project',
+    '--project',
+    '-prompt-interactive',
+    '--prompt-interactive'
   ]
 }
 
