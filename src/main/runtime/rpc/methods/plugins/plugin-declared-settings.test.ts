@@ -1,6 +1,6 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { PluginService } from '../../../../plugins/plugin-service'
 import { OrcaRuntimeService } from '../../../orca-runtime'
@@ -150,3 +150,30 @@ it('refuses mobile, invalid values and undeclared keys before changing persisten
   ).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
   expect(await readFile(settingsPath, 'utf8')).toBe('{"privateKey":"not-declared"}')
 })
+
+it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+  'refuses resets and writes against unreadable settings without losing existing overrides',
+  async () => {
+    await writeFile(settingsPath, '{"label":"OVERRIDE","limit":7}')
+    await chmod(settingsPath, 0o000)
+    try {
+      expect(await set('label', null)).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_argument' }
+      })
+    } finally {
+      await chmod(settingsPath, 0o600)
+    }
+    expect(await readFile(settingsPath, 'utf8')).toBe('{"label":"OVERRIDE","limit":7}')
+    await chmod(dirname(settingsPath), 0o000)
+    try {
+      expect(await set('label', 'NEW')).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_argument' }
+      })
+    } finally {
+      await chmod(dirname(settingsPath), 0o700)
+    }
+    expect(await readFile(settingsPath, 'utf8')).toBe('{"label":"OVERRIDE","limit":7}')
+  }
+)

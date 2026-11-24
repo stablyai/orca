@@ -61,7 +61,10 @@ export function writePluginDeclaredSetting(
   }
   const settings = store(host, pluginKey)
   if (value === null) {
-    settings.delete(key)
+    const deleted = settings.delete(key)
+    if (!deleted.ok) {
+      return deleted
+    }
   } else {
     const issue = pluginSettingValueIssue(setting, value)
     if (issue) {

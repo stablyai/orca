@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { isUnreadableError, writeSecureFile } from '../../../shared/secure-storage/secure-file'
 import { isQualifiedPluginKey } from '../../../shared/plugins/frames/plugin-tab-key'
@@ -36,9 +36,6 @@ export class PluginKvStore {
   /** Null means unreadable, never empty. */
   private read(): Record<string, PluginJsonValue> | null {
     try {
-      if (!existsSync(this.filePath)) {
-        return {}
-      }
       if (statSync(this.filePath).size > PLUGIN_STORAGE_TOTAL_MAX_BYTES) {
         return {}
       }
@@ -97,15 +94,16 @@ export class PluginKvStore {
     return { ok: true }
   }
 
-  delete(key: string): void {
+  delete(key: string): PluginKvWriteResult {
     const settings = this.read()
     if (!settings) {
       // Rewriting what we could not read would drop every other key in the store.
-      return
+      return { ok: false, error: UNREADABLE_STORE_ERROR }
     }
     if (Object.hasOwn(settings, key)) {
       delete settings[key]
       writeSecureFile(this.filePath, JSON.stringify(settings, null, 2))
     }
+    return { ok: true }
   }
 }
