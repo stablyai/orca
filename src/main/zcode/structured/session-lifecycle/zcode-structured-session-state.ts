@@ -12,6 +12,8 @@ import type {
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { StructuredLaunchRequest } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { StructuredAgentCommandSettings } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
+import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
+import type { ZcodeSessionMcpServer } from '../../../bots/bot-tools-zcode'
 import type { ZcodeChatCredentials } from '../credentials/zcode-chat-credentials'
 import type { ZcodeNamingRuns } from '../naming/zcode-naming-run'
 import type { ZcodeSendSettlement } from '../turns/zcode-structured-turns'
@@ -42,6 +44,14 @@ export type ZcodeStructuredLaunch = {
   forkedFromKey?: string
   /** Provider tables and app-version env the spawn must carry (agent env additions). */
   providerEnv: Record<string, string>
+  /** A bot's standing instructions for this chat, written where ZCode reads them before it opens;
+   *  null for any other chat. */
+  instructions: string | null
+  /** A bot's own tools, as the servers of the session ZCode opens; empty for any other chat and
+   *  for one that may only read. */
+  mcpServers: readonly ZcodeSessionMcpServer[]
+  /** How the session may only read (a bot's look-around or tidy-up); null: it isn't read-only. */
+  readOnly: ReadOnlySessionMode | null
 }
 
 /** One zcode app-server frame bound to the Orca session it belongs to. */

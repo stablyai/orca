@@ -13,7 +13,8 @@ import { installComposioUpkeep } from '../runtime/rpc/methods/bots-composio-upke
 import { refreshDueLinearLogins } from '../linear/accounts/linear-login-refresh'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence/loading-store/store'
-import { splitBotsByOlderBuildSupport, withGitHubMembersTagged } from '../../shared/bot-types'
+import { withGitHubMembersTagged } from '../../shared/bot-types'
+import { splitBotsByOlderBuildSupport } from '../../shared/bots/bot-older-build-support'
 import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../shared/orca-profiles/orca-cloud-team-policy'
 import { onTeamFeatureBlockChanged } from '../orca-profiles/cloud-auth/active-team-capabilities'
 

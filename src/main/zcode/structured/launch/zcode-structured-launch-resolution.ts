@@ -10,6 +10,9 @@ import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
 } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
+import { linkedSkillsSection } from '../../../native-chat/native-chat-skill-roots'
+import { withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
+import { zcodeBotMcpServers } from '../../../bots/bot-tools-zcode'
 import { zcodeStructuredLaunchArgs } from './zcode-structured-launch-args'
 import {
   readBundledZcodeAppVersion,
@@ -128,6 +131,12 @@ export function zcodeStructuredLaunchPart(
         providerEnv.ZCODE_APP_VERSION = version
       }
     }
+    // ZCode loads no linked skills folder, so every linked project's skills reach it as a list.
+    const linkedSkills = await basis.linkedSkills()
+    const instructions = await basis.instructions(
+      linkedSkillsSection(linkedSkills.projects, linkedSkills.projects)
+    )
+    const tools = await basis.toolServers()
     const model = parseZcodeModelOption(record.options?.model ?? '')
     const desktopEnvKeys = zcodeDesktopEnvKeys(environment)
     const env = { ...environment }
@@ -163,9 +172,12 @@ export function zcodeStructuredLaunchPart(
         ...(head && pendingAgentSessionRewindFork(record.rewind, head.handle.nativeId)
           ? { forkedFromKey: agentSessionProviderHandleKey(head.handle) }
           : {}),
-        providerEnv
+        providerEnv,
+        instructions,
+        mcpServers: zcodeBotMcpServers(tools),
+        readOnly: basis.readOnly
       },
-      env,
+      env: withBotLaunchToolsEnv(env, tools),
       // Clear the enclosing desktop's runtime env plus inherited scratch paths.
       inheritedEnvToDelete: [
         ...desktopEnvKeys,

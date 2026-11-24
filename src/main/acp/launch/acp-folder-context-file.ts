@@ -32,20 +32,21 @@ function withOrcaText(existing: string | null, rawText: string, agentName: strin
 /** Writes Orca's text into `cwd`'s `path` whole, so the agent never reads a half-written file.
  *  A symlink on the way, or a file that cannot be read, stays untouched. The result is readable
  *  only by this host's user, a file the user wrote included, since it now carries the bot's
- *  instructions. An inheritable ACL the user set on the folder still applies on top of that. */
+ *  instructions. An inheritable ACL the user set on the folder still applies on top of that.
+ *  Returns the file's size in bytes; null when a link or an unreadable file left it as it was. */
 export async function writeFolderContextFile(
   cwd: string,
   path: string,
   agentName: string,
   text: string
-): Promise<void> {
+): Promise<number | null> {
   const realCwd = await realpath(cwd).catch(() => cwd)
   const folders = dirname(path)
     .split(/[\\/]/)
     .filter((segment) => segment && segment !== '.')
   // A linked folder on the way would carry the bot's instructions somewhere else.
   if ((await realFolderUnderRoot(cwd, realCwd, folders)) === 'other') {
-    return
+    return null
   }
   const target = join(realCwd, path)
   let existing: string | null = null
@@ -53,22 +54,24 @@ export async function writeFolderContextFile(
   if (info) {
     // A link may point outside the folder or into a tracked file, so it is left as the user's.
     if (info.isSymbolicLink()) {
-      return
+      return null
     }
     try {
       existing = await readFile(target, 'utf8')
     } catch {
-      return
+      return null
     }
   } else {
     await mkdir(dirname(target), { recursive: true })
   }
+  const content = withOrcaText(existing, text, agentName)
   const staged = `${target}.${randomUUID()}`
   try {
-    await writeFile(staged, withOrcaText(existing, text, agentName), { mode: 0o600 })
+    await writeFile(staged, content, { mode: 0o600 })
     await rename(staged, target)
   } catch (error) {
     await rm(staged, { force: true }).catch(() => undefined)
     throw error
   }
+  return Buffer.byteLength(content)
 }

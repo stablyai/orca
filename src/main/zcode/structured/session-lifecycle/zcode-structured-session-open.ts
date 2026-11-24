@@ -7,6 +7,8 @@ import {
   readZcodeBuiltinTable
 } from '../credentials/zcode-account-config-push'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { writeZcodeInstructions } from '../launch/zcode-structured-instructions'
+import { zcodeReadOnlyToolAllowlist } from '../prompts/zcode-structured-read-only'
 import type { ZcodeStructuredSession } from './zcode-structured-session'
 
 // The open handshake: push the account snapshot, create or resume the provider session,
@@ -29,6 +31,11 @@ export async function openZcodeSession(
     signal.throwIfAborted()
   }
   throwIfAborted()
+  // Written before ZCode builds this session's prompt from the folder.
+  if (session.deps.launch.instructions !== null) {
+    await writeZcodeInstructions(session.deps.launch.cwd, session.deps.launch.instructions)
+    throwIfAborted()
+  }
   const table = readZcodeBuiltinTable(
     session.deps.launch.providerEnv.ZCODE_BUILTIN_PROVIDER_CONFIG_FILE ?? null
   )
@@ -63,7 +70,8 @@ export async function openZcodeSession(
       'session/create',
       {
         workspace: { ...workspaceParams(session) },
-        ...(mode ? { mode } : {})
+        ...(mode ? { mode } : {}),
+        ...sessionTools(session)
       },
       { timeoutMs: timeout, onReply: throwIfAborted }
     )) as { session?: unknown } | null
@@ -179,7 +187,11 @@ async function resumeSession(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: zcode app-server frames and provider responses own these payload shapes.
     const resumed = (await session.connection.request(
       'session/resume',
-      { sessionId: resumeSessionId, workspace: { ...workspaceParams(session) } },
+      {
+        sessionId: resumeSessionId,
+        workspace: { ...workspaceParams(session) },
+        ...sessionTools(session)
+      },
       { timeoutMs: session.deps.requestTimeoutMs, onReply: () => signal.throwIfAborted() }
     )) as { session?: unknown } | null
     return readString(readRecord(readRecord(resumed)?.session)?.sessionId)
@@ -192,6 +204,15 @@ async function resumeSession(
       return null
     }
     throw error
+  }
+}
+
+/** What a session takes as it opens, a new one or a resumed one: how it may only read, and a bot's own servers. */
+function sessionTools(session: ZcodeStructuredSession): Record<string, unknown> {
+  const { mcpServers, readOnly } = session.deps.launch
+  return {
+    ...(readOnly ? { toolAllowlist: zcodeReadOnlyToolAllowlist(readOnly) } : {}),
+    ...(mcpServers.length > 0 ? { mcpServers } : {})
   }
 }
 

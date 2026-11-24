@@ -12,6 +12,7 @@ import { ZcodeStructuredOptions } from '../options/zcode-structured-options'
 import { ZcodeStructuredPrompts } from '../prompts/zcode-structured-prompts'
 import { ZcodeStructuredTurns } from '../turns/zcode-structured-turns'
 import { openZcodeSession } from './zcode-structured-session-open'
+import { answerZcodeServerRequest } from './zcode-structured-session-server-request'
 import { ZcodeRuntimeHeadersAsks } from './zcode-runtime-headers-ask'
 import type { ZcodeStructuredSessionDeps } from './zcode-structured-session-state'
 
@@ -143,53 +144,9 @@ export class ZcodeStructuredSession {
     }
   }
 
-  /** Routes one server→client request and answers bookkeeping asks directly. */
+  /** Routes one server→client request; its answers live in zcode-structured-session-server-request.ts. */
   onServerRequest(method: string, params: unknown, id: number | string): void {
-    if (method === 'session/requestRuntimePreferences') {
-      this.connection.respond(id, {
-        nativeSearchEnhancementsEnabled: false,
-        memoryEnabled: false,
-        askUserQuestionAutoResolutionEnabled: false
-      })
-      return
-    }
-    if (method === 'interaction/requestProviderRuntimeHeaders') {
-      this.headersAsks.answer({
-        connection: this.connection,
-        params,
-        id,
-        credentials: this.deps.credentials,
-        options: this.options,
-        lane: this.lane,
-        providerSessionId: this.providerSessionId,
-        now: this.deps.now
-      })
-      return
-    }
-    if (method === 'interaction/requestOfficialMcpAuthHeaders') {
-      this.connection.respondWithError(id, -32000, 'official MCP auth is unavailable in Orca chats')
-      return
-    }
-    if (method === 'interaction/requestPermission' || method === 'interaction/requestUserInput') {
-      // handle can throw synchronously (unsupported shape); deferring keeps that throw inside
-      // the promise so the provider still receives the error reply.
-      void Promise.resolve()
-        .then(() => this.prompts.handle(method, params, id))
-        .catch((error: unknown) => {
-          this.deps.logger?.warn('zcode interaction could not be answered', {
-            scope: 'zcode-interaction',
-            method,
-            error
-          })
-          this.connection.respondWithError(id, -32603, String(error))
-        })
-      return
-    }
-    this.deps.logger?.warn('zcode app-server sent an unknown request', {
-      scope: 'zcode-request-unknown',
-      method
-    })
-    this.connection.respondWithError(id, -32601, `Orca does not answer ${method}`)
+    answerZcodeServerRequest(this, this.headersAsks, method, params, id)
   }
 
   /** The open handshake lives in zcode-structured-session-open.ts. */
