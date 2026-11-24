@@ -10,7 +10,7 @@ import { getPublishTargetStatus } from '../../../../shared/git/remotes/git-publi
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { validateGitPushTarget } from '../../remotes/push-target-validation'
 import { nativeAndWslGitUpstreamStatusReadOwner } from './git-upstream-status-read-owner'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 type GitExecOptions = {
   wslDistro?: string

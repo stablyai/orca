@@ -4,7 +4,7 @@ import {
   orchestrationMutationRecoveryError,
   renderCommand
 } from './orchestration-mutation-recovery'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 
 describe('orchestration mutation recovery', () => {
   it.runIf(process.platform !== 'win32')(
@@ -83,5 +83,62 @@ describe('orchestration mutation recovery', () => {
     })
     expect(result.data).not.toHaveProperty('originalCommand')
     expect((result.data as { recovery: object }).recovery).not.toHaveProperty('retryCommand')
+  })
+
+  it('answers mail still being delivered on a paired server with a retry of the same request', () => {
+    const result = orchestrationMutationRecoveryError(
+      new RuntimeClientError(
+        'delivery_in_progress',
+        'This mail is still being delivered on devB; nothing more was applied.',
+        {
+          orchestrationRequestId: 'request_slow',
+          originalCommand: ['orca', 'orchestration', 'send', '--on', 'devB', '--subject', 'hi']
+        }
+      )
+    )
+
+    if (!(result instanceof RuntimeClientError)) {
+      throw new Error('expected a recovery error')
+    }
+    expect(result.data).toMatchObject({
+      recovery: {
+        retryCommand: [
+          'orca',
+          'orchestration',
+          'send',
+          '--on',
+          'devB',
+          '--subject',
+          'hi',
+          '--retry-request',
+          'request_slow'
+        ],
+        disposition: 'in_progress'
+      }
+    })
+    expect(result.message).toContain('--retry-request request_slow')
+  })
+
+  it('keeps plain Windows cmd tokens unquoted while still quoting spaces, =, and percent signs', () => {
+    const rendered = renderCommand(
+      [
+        'orca-dev',
+        'orchestration',
+        'send',
+        '--on',
+        'devB',
+        '--subject',
+        'two words',
+        '--note=100% safe',
+        '--retry-request',
+        'request_slow'
+      ],
+      'win32',
+      { ComSpec: 'C:\\Windows\\System32\\cmd.exe' }
+    )
+
+    expect(rendered).toBe(
+      'orca-dev orchestration send --on devB --subject "two words" "--note=100"^%" safe" --retry-request request_slow'
+    )
   })
 })

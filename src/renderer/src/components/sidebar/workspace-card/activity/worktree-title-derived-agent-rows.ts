@@ -1,5 +1,5 @@
 import type { TitleDerivedAgentRowsInput } from './title-derived-agent-row-input'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import {
   isClaudeManagementTitle,
@@ -9,19 +9,19 @@ import {
 import { detectAgentStatusFromTitle } from '../../../../../../shared/agent-status/title/agent-title-status'
 import { getAgentLabel } from '../../../../../../shared/agent-status/title/agent-title-identity'
 import { jcodePaneTitleStatus } from '../../../../../../shared/agent-status/title/providers/jcode-terminal-title'
-import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
   AgentStatusState,
   AgentType
 } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { FIRST_PANE_ID } from '../../../../../../shared/pane-key'
+import { FIRST_PANE_ID } from '../../../../../../shared/workspace-layout/pane-key'
 import {
   resolveRuntimePaneTitleLeafIdFromRoot,
   resolveRuntimePaneTitleLeafIdFromSparseSlots,
   collectRuntimePaneLeafIds
-} from '../../../../../../shared/runtime-pane-title-leaf-id'
+} from '../../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import {
   isTerminalLeafId,
   makePaneKey

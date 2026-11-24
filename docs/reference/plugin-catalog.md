@@ -126,6 +126,13 @@ One thing the release adds to Orca.
 - **Trust comes from the catalog's address.** Orca labels a plugin with where it came from: the Official mark for Orca's catalog, otherwise the catalog's name and the owner in its Git URL (`github.com/acme`, `gitlab.com/acme/tools`), never the manifest's text. Development folders show `Dev · unverified`, Git URL installs `Unverified`.
 - **An install stays with its catalog.** Orca records the catalog each plugin was installed from and updates it only from there. When another catalog lists the same id, the plugin page says so, and switching means removing the plugin and installing it again.
 
+## Categories
+
+Orca's plugin browser folds related `categories` slugs into one filter and shows an unknown slug as its own. Pick the slug for what the plugin adds:
+
+- **Languages:** `languages`, `syntaxes`, `syntax`. Syntax highlighting and grammars for programming languages.
+- **Translations:** `language-packs`, `localization`, `i18n`, `translations`. Language packs that show Orca's interface in another language.
+
 ## One repository can hold many plugins
 
 Give each plugin its own directory and set `source.path` to it. Orca downloads the pinned commit but installs only that directory, and `contentHash` covers only its files, so a commit that changes a sibling plugin leaves this plugin's hash, and its users, untouched. Moving a plugin to another directory counts as moving repositories: users review the update before it installs.

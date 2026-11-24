@@ -7,10 +7,13 @@ import { PaneTopWarningBanner } from './PaneTopWarningBanner'
 // Mocks for the temporary-worker strip; copy is the owner's, the countdown is frozen at 1:42.
 function WorkerPane({
   title,
+  action,
   countingDown,
   terminalTheme
 }: {
   title: string
+  /** A handed-off workspace's strip: neutral, with this action instead of Keep open. */
+  action?: string
   countingDown?: boolean
   terminalTheme?: keyof typeof DEFAULT_TERMINAL_THEMES
 }): React.JSX.Element {
@@ -24,13 +27,12 @@ function WorkerPane({
       }
     >
       <PaneTopWarningBanner
-        tone={countingDown ? 'warning' : 'accent'}
-        icon={Timer}
-        badge="Temporary"
+        tone={action ? 'neutral' : countingDown ? 'warning' : 'accent'}
+        icon={action ? undefined : Timer}
         title={title}
         primaryAction={
-          <Button type="button" variant="default" size="xs">
-            Keep open
+          <Button type="button" variant={action ? 'outline' : 'default'} size="xs">
+            {action ?? 'Keep open'}
           </Button>
         }
       />
@@ -71,5 +73,14 @@ export const workerDarkTerminal = defineFixture({
       <WorkerPane title={running} terminalTheme="Ghostty Default Style Dark" />
       <WorkerPane title={finished} countingDown terminalTheme="Ghostty Default Style Dark" />
     </>
+  )
+})
+export const handedOffToBot = defineFixture({
+  width: 960,
+  render: () => (
+    <WorkerPane
+      title="Handed to Atlas · Stays open · You can still type here"
+      action="Remove from Atlas"
+    />
   )
 })

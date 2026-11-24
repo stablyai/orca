@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
@@ -161,13 +161,7 @@ export function PluginManager({
   // Why: dev folders, local installs and bundled plugins have no catalog card to carry their switch.
   const uncataloged = catalog.loading ? [] : installed.filter((entry) => !listedInCatalog(entry))
   const catalogInstalled = filter === 'available' ? [] : entries.installed
-  const updateDialog = usePluginUpdateDialog({
-    ready: !pluginsLoading && !catalog.loading,
-    updates,
-    page,
-    showUpdates: () => setTab('updates'),
-    reloadCatalogs: catalog.loadMarketplaceData
-  })
+  const updateDialog = usePluginUpdateDialog()
   const rowHandlers: InstalledRowHandlers = {
     ...handlers,
     onOpen: openEntry,

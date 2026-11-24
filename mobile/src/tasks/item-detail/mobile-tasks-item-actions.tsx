@@ -12,14 +12,14 @@ import {
   MoreHorizontal
 } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
-import { openExternalLink } from '../../platform/external-link'
+import { openExternalLink } from '../../platform/external-links/external-link'
 import { styles } from '../mobile-tasks-legacy-styles'
 import {
   taskExternalOpenLabel,
   taskStatusActionLabel,
   isGitHubPrMergeBlocked
 } from './mobile-tasks-item-comments'
-import type { ActionSheetAction } from '../../components/ActionSheetModal'
+import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 
 /** The detail sheet's status and merge actions, which live behind its "…" button. */

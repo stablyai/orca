@@ -1,5 +1,5 @@
 // Stop waking a managed orcad that keeps dying; an explicit Connect re-arms automatic starts.
-import { OrcadUnexpectedExitSchema } from '../../../shared/orcad-unexpected-exit'
+import { OrcadUnexpectedExitSchema } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-unexpected-exit'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import type { OrcadHealth } from '../../orcad/diagnostics/orcad-health'
 import {

@@ -28,14 +28,17 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { FilterToggleRow } from './FilterToggleRow'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import {
+  clearSidebarFiltersKeepingActiveRow,
+  setShowSleepingWorkspacesKeepingActiveRow
+} from './sleeping-workspaces-visibility'
+import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
 import { searchRepos } from '@/lib/workspace/catalog/repo-search'
-import { clearSidebarFilters, selectSidebarFilterState } from './sidebar-filter-actions'
 import { useWorkspaceOptionsFilterBadge } from './workspace-options-menu-items'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { withoutHiddenRepos } from '../../../../../../shared/hidden-projects'
+import { withoutHiddenRepos } from '../../../../../../shared/project/catalog/hidden-projects'
 
 type SidebarFilterProps = {
   preserveWorkspaceBoardOpen?: boolean
@@ -53,7 +56,6 @@ const SidebarFilter = React.memo(function SidebarFilter({
   const t = useTranslate()
   useUiLanguageRevision()
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
-  const setShowSleepingWorkspaces = useAppStore((s) => s.setShowSleepingWorkspaces)
   // Expose user bindings here so the filter menu also teaches the sleeping-workspace shortcut.
   const sleepingShortcut = useShortcutLabel('sidebar.sleepingWorkspaces.toggle')
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
@@ -124,11 +126,6 @@ const SidebarFilter = React.memo(function SidebarFilter({
       : (filteredRepos[0]?.id ?? '')
   const allSelected = canFilterRepos && selectedCount === repos.length
 
-  const clearAll = useCallback(() => {
-    const store = useAppStore.getState()
-    clearSidebarFilters(selectSidebarFilterState(store), store)
-  }, [])
-
   // Use current repos so Select All includes projects added while the popover stays open.
   const selectAllRepos = useCallback(() => {
     setFilterRepoIds(repos.map((r) => r.id))
@@ -187,7 +184,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
           icon={<Moon className="size-3.5" />}
           label={t('auto.components.sidebar.SidebarFilter.638a2d221d', 'Hide sleeping')}
           checked={!showSleepingWorkspaces}
-          onChange={(hideSleeping) => setShowSleepingWorkspaces(!hideSleeping)}
+          onChange={(hideSleeping) => setShowSleepingWorkspacesKeepingActiveRow(!hideSleeping)}
           shortcutLabel={isUnassignedShortcutLabel(sleepingShortcut) ? undefined : sleepingShortcut}
         />
         {/* Show the exemption only while its parent sleeping-workspace filter can use it. */}
@@ -333,7 +330,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
           {hasAnyFilter ? (
             <button
               type="button"
-              onClick={clearAll}
+              onClick={clearSidebarFiltersKeepingActiveRow}
               className="rounded-[5px] px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               {t('auto.components.sidebar.SidebarFilter.92a23e6d07', 'Reset filters')}

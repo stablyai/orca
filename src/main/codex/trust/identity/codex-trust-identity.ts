@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import { basename, dirname, join, posix as pathPosix, win32 as pathWin32 } from 'node:path'
-import { foldWslUncPathCaseInsensitiveParts } from '../../../../shared/wsl-paths'
+import { foldWslUncPathCaseInsensitiveParts } from '../../../../shared/file-access/wsl-paths'
 import type { CodexEventLabel, CodexTrustEntry } from '../toml/config-toml-trust'
+import { observeResolvedFilePath } from '../../../filesystem/file-content-observation'
 
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -33,6 +34,7 @@ function matcherPatternForEvent(
     case 'pre_compact':
     case 'post_compact':
     case 'session_start':
+    case 'session_end':
     case 'subagent_start':
     case 'subagent_stop':
       return matcher
@@ -44,7 +46,7 @@ export function normalizeCodexHookTimeoutSec(
   eventLabel: CodexEventLabel,
   timeoutSec: number | undefined
 ): number {
-  if (eventLabel === 'interrupt') {
+  if (eventLabel === 'interrupt' || eventLabel === 'session_end') {
     return Math.min(3, Math.max(1, timeoutSec ?? 1))
   }
   return Math.max(1, timeoutSec ?? 600)
@@ -78,11 +80,19 @@ export function computeCodexTrustKey(entry: CodexTrustEntry): string {
 
 export function getExplicitHomeCodexHookSourcePath(sourcePath: string): string {
   if (process.platform !== 'win32' && isUnambiguousWindowsPath(sourcePath)) {
-    return normalizeCodexTrustSourcePath(sourcePath)
+    return observeResolvedFilePath(
+      'trust-source',
+      sourcePath,
+      normalizeCodexTrustSourcePath(sourcePath)
+    )
   }
   // Match discovery: resolve the home while keeping the hooks.json leaf logical.
-  return normalizeCodexTrustSourcePath(
-    join(resolveThroughExistingAncestor(dirname(sourcePath)), basename(sourcePath))
+  return observeResolvedFilePath(
+    'trust-source',
+    sourcePath,
+    normalizeCodexTrustSourcePath(
+      join(resolveThroughExistingAncestor(dirname(sourcePath)), basename(sourcePath))
+    )
   )
 }
 
@@ -228,6 +238,7 @@ function isCodexEventLabel(value: string): value is CodexEventLabel {
     value === 'pre_compact' ||
     value === 'post_compact' ||
     value === 'session_start' ||
+    value === 'session_end' ||
     value === 'user_prompt_submit' ||
     value === 'subagent_start' ||
     value === 'subagent_stop' ||

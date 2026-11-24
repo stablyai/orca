@@ -1,6 +1,6 @@
 import { stripCredentialsFromMessage } from '../../../../../shared/git/remotes/git-remote-error'
-import type { Project } from '../../../../../shared/project-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Project } from '../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 /** Seed from the project remote after stripping embedded credentials: target-host clone persists URLs to .git/config and must not receive an unentered PAT. Match getProvisionedRootRecipeRepoUrl. */
 export function resolveProjectCloneUrlPrefill(

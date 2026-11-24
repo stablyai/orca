@@ -1,4 +1,4 @@
-import { buildNativeChatUnsubscribe } from '../../../../src/shared/native-chat/native-chat-stream-unsubscribe'
+import { buildNativeChatUnsubscribe } from '../../../../src/shared/native-chat/transcript/streaming/native-chat-stream-unsubscribe'
 
 type TerminalStreamParams = {
   terminal?: unknown
@@ -57,6 +57,15 @@ export function buildStreamUnsubscribe(
     // session on this socket would end.
     return typeof sessionId === 'string' && requestId
       ? { method: 'agentSession.unsubscribe', params: { sessionId, subscriptionId: requestId } }
+      : null
+  }
+  if (method === 'orchestration.workerApprovalsSubscribe') {
+    // The host names each approvals stream by the request that opened it.
+    return requestId
+      ? {
+          method: 'orchestration.workerApprovalsUnsubscribe',
+          params: { subscriptionId: requestId }
+        }
       : null
   }
   if (method === 'nativeChat.subscribe') {

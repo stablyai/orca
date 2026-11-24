@@ -23,8 +23,16 @@ import {
   StorageKey,
   StorageKeyValue,
   Viewport
-} from '../../../../../shared/rpc-contract/browser-params'
-import { MouseClick } from '../../../../../shared/rpc-contract/browser-extras-params'
+} from '../../../../../shared/rpc-contract/browser/browser-params'
+import {
+  DropFiles,
+  MouseClick
+} from '../../../../../shared/rpc-contract/browser/browser-extras-params'
+import {
+  AudioMuted,
+  PageZoom,
+  SiteColorScheme
+} from '../../../../../shared/rpc-contract/browser/browser-core-params'
 
 export const BROWSER_EXTRA_METHODS = [
   defineMethod({
@@ -94,10 +102,40 @@ export const BROWSER_EXTRA_METHODS = [
     handler: async (params, { runtime }) => runtime.browserMouseClick(params)
   }),
   defineMethod({
+    name: 'browser.dropFiles',
+    permission: 'workspace',
+    params: DropFiles,
+    handler: async (params, { runtime }) => runtime.browserDropFiles(params)
+  }),
+  defineMethod({
     name: 'browser.mouseUp',
     permission: 'workspace',
     params: MouseButton,
     handler: async (params, { runtime }) => runtime.browserMouseUp(params)
+  }),
+  defineMethod({
+    name: 'browser.zoom',
+    permission: 'workspace',
+    params: PageZoom,
+    handler: async (params, { runtime }) => runtime.browserZoom(params)
+  }),
+  defineMethod({
+    name: 'browser.siteDisplay',
+    permission: 'workspace',
+    params: BrowserTarget,
+    handler: async (params, { runtime }) => runtime.browserSiteDisplay(params)
+  }),
+  defineMethod({
+    name: 'browser.setSiteColorScheme',
+    permission: 'workspace',
+    params: SiteColorScheme,
+    handler: async (params, { runtime }) => runtime.browserSetSiteColorScheme(params)
+  }),
+  defineMethod({
+    name: 'browser.setAudioMuted',
+    permission: 'workspace',
+    params: AudioMuted,
+    handler: async (params, { runtime }) => runtime.browserSetAudioMuted(params)
   }),
   defineMethod({
     name: 'browser.mouseWheel',

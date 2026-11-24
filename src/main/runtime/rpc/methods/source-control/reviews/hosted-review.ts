@@ -5,7 +5,7 @@ import {
   HostedReviewCreate,
   HostedReviewCreationEligibility,
   HostedReviewForBranch
-} from '../../../../../../shared/rpc-contract/hosted-review-params'
+} from '../../../../../../shared/rpc-contract/source-control/hosted-review-params'
 
 export const HOSTED_REVIEW_METHODS = [
   defineMethod({
@@ -55,6 +55,7 @@ export const HOSTED_REVIEW_METHODS = [
         linkedBitbucketPR: params.linkedBitbucketPR ?? null,
         linkedAzureDevOpsPR: params.linkedAzureDevOpsPR ?? null,
         linkedGiteaPR: params.linkedGiteaPR ?? null,
+        currentHeadOid: params.currentHeadOid ?? null,
         wakeWslDistro: params.wakeWslDistro
       })
     }

@@ -1,7 +1,7 @@
 import { formatMessageBannerWithContent } from './formatting/message-formatting'
 import type { MessageRow } from '../db/orchestration-records'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../shared/agent-session/journal/agent-session-message-source'
 
 export function orchestrationMailFixture(overrides: Partial<MessageRow> = {}): NativeChatMessage & {
   from: AgentMessageSource

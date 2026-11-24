@@ -6,8 +6,8 @@ import { captureDictationContext } from '@/components/dictation/dictation-contex
 import {
   isDictationCleanupOn,
   type DictationCleanupResult
-} from '../../../../../shared/dictation-cleanup'
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+} from '../../../../../shared/speech/dictation/dictation-cleanup'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { Button } from '../../ui/button'
 
 /** The microphone test's one way to try cleanup on what the model heard, with the real wait. */

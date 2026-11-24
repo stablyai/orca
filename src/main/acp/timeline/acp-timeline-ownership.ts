@@ -1,5 +1,4 @@
 import { AcpItemOwnership } from './acp-item-ownership'
-import type { AcpOwnershipReader } from '../journal/acp-ownership-reader'
 import { AcpToolTimeline } from './acp-tool-timeline'
 import { AcpTurnMessages } from './acp-turn-messages'
 
@@ -9,25 +8,13 @@ export class AcpTimelineOwnership {
   readonly messages: AcpTurnMessages
   disposed = false
 
-  constructor(private readonly read?: AcpOwnershipReader) {
-    this.tools = new AcpToolTimeline(this.items, read)
-    this.messages = new AcpTurnMessages(this.items, read)
+  constructor() {
+    this.tools = new AcpToolTimeline(this.items)
+    this.messages = new AcpTurnMessages(this.items)
   }
 
   operation(): { settled: (turn: string) => boolean; open: (turn: string) => void } {
-    const durable = new Map<string, boolean>()
-    const settled = (turn: string): boolean => {
-      if (this.items.settled(turn)) {
-        return true
-      }
-      const known = durable.get(turn)
-      if (known !== undefined) {
-        return known
-      }
-      const value = this.read?.settled(turn) === true
-      durable.set(turn, value)
-      return value
-    }
+    const settled = (turn: string): boolean => this.items.settled(turn)
     return {
       settled,
       open: (turn) => {

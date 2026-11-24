@@ -1,4 +1,4 @@
-import { addWslEnvKeys } from '../../shared/wsl-env'
+import { addWslEnvKeys } from '../../shared/shell/wsl/wsl-env'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { randomUUID, createHash } from 'node:crypto'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'

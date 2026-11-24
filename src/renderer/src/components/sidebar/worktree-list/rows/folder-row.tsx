@@ -1,20 +1,19 @@
 import React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type {
-  WorkspaceLineage,
-  WorktreeLineage
-} from '../../../../../../shared/worktree/lineage-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/active-workspace'
+import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/selection/active-workspace'
 
 import {
   type FolderWorkspacePathStatus,
   isConfirmedStaleFolderPathStatus
 } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
-import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import {
+  folderWorkspaceToWorktree,
+  getFolderWorkspaceHostIdentity
+} from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
@@ -28,6 +27,7 @@ import { getFolderWorkspaceCardPrDisplay } from '../../workspace-card/review/fol
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
 import type { WorktreeItemRowContext } from './item-row'
 import type { FolderWorkspaceItemRow } from '../listing/renderable-rows'
+import type { LineageRowFrame } from '../listing/lineage-row-projection'
 import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-dom'
 
 export type FolderWorkspaceRowContext = {
@@ -40,9 +40,8 @@ export type FolderWorkspaceRowContext = {
   selectedWorktreeIds: ReadonlySet<string>
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
-  worktreeLineageById: Record<string, WorktreeLineage>
-  workspaceLineageByChildKey: Record<string, WorkspaceLineage>
-  crossStoreChildrenByFolderId: ReadonlyMap<string, readonly Worktree[]>
+  /** selectSidebarChildrenByParentIdentity */
+  childrenByParentIdentity: ReadonlyMap<string, readonly Worktree[]>
   prCache: AppState['prCache'] | null
   hostedReviewCache: AppState['hostedReviewCache'] | null
   getCachedFolderWorkspacePathStatus: (request: {
@@ -85,10 +84,11 @@ export function renderFolderWorkspaceOption(args: {
   ctx: FolderWorkspaceRowContext
   row: FolderWorkspaceItemRow
   vItem?: VirtualItem
+  frame?: LineageRowFrame
   measureVirtualRowElement?: (element: HTMLDivElement | null) => void
   lineage?: FolderRowLineage
 }): React.JSX.Element {
-  const { ctx, row, vItem, lineage } = args
+  const { ctx, row, vItem, lineage, frame } = args
   const folderWorktree = folderWorkspaceToWorktree(row.folderWorkspace)
   const folderWorktreeIdentity = getWorktreeHostIdentity(folderWorktree)
   const isActiveWorktree = isActiveSidebarWorkspace(folderWorktree, {
@@ -103,17 +103,14 @@ export function renderFolderWorkspaceOption(args: {
     pathStatus?.exists === false &&
     (isConfirmedStaleFolderPathStatus(pathStatus) || pathStatus.reason === 'ambiguous-connection')
   const folderPrDisplay = getFolderWorkspaceCardPrDisplay({
-    folderWorkspaceId: row.folderWorkspace.id,
-    workspaceLineageByChildKey: ctx.workspaceLineageByChildKey,
-    crossStoreChildren: ctx.crossStoreChildrenByFolderId.get(row.folderWorkspace.id) ?? [],
-    worktreeLineageById: ctx.worktreeLineageById,
-    worktreeMap: ctx.worktreeMap,
+    folderIdentity: getFolderWorkspaceHostIdentity(row.folderWorkspace),
+    childrenByParentIdentity: ctx.childrenByParentIdentity,
     repoMap: ctx.repoMap,
     hostedReviewCache: ctx.hostedReviewCache,
     prCache: ctx.prCache,
     settings: ctx.settings
   })
-  const { surfaceInset, cardContentIndent } = getFolderWorkspaceRowGeometry({
+  const geometry = getFolderWorkspaceRowGeometry({
     experimentalNewWorktreeCardStyle: ctx.newCardStyle,
     isFolderBackedWorkspaceChild:
       ctx.groupBy === 'repo' && row.projectGroup.createdFrom === 'folder-scan',
@@ -121,6 +118,8 @@ export function renderFolderWorkspaceOption(args: {
     groupDepth: row.groupDepth,
     lineageDepth: row.depth
   })
+  const surfaceInset = frame?.left ?? geometry.surfaceInset
+  const cardContentIndent = frame?.contentIndent ?? geometry.cardContentIndent
   return (
     <div
       key={vItem?.key ?? row.key}
@@ -147,10 +146,7 @@ export function renderFolderWorkspaceOption(args: {
       onClickCapture={ctx.onRowClickCapture}
       onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, folderWorktreeIdentity)}
     >
-      <div
-        className="relative"
-        style={surfaceInset > 0 ? { paddingLeft: surfaceInset } : undefined}
-      >
+      <div className="relative" style={{ paddingLeft: surfaceInset, paddingRight: frame?.right }}>
         <WorktreeCard
           worktree={folderWorktree}
           repo={undefined}
@@ -170,6 +166,7 @@ export function renderFolderWorkspaceOption(args: {
           hostContextLabel={row.hostContextLabel}
           lineageChildCount={row.lineageChildCount}
           lineageChildWorktreeIds={row.lineageChildWorktreeIds}
+          lineageDescendantIdentities={row.lineageDescendantIdentities}
           lineageCollapsed={row.lineageCollapsed}
           lineageChildren={lineage?.children}
           lineageChildrenStyle={
@@ -184,7 +181,10 @@ export function renderFolderWorkspaceOption(args: {
               ctx.nativeLineageDropTargetIdentity === folderWorktreeIdentity)
           )}
         />
-        <div className="pointer-events-auto absolute right-3 top-1.5">
+        <div
+          className="pointer-events-auto absolute right-3 top-1.5"
+          style={frame ? { right: frame.right + 12 } : undefined}
+        >
           <FolderPathStatusIndicator status={pathStatus} />
         </div>
       </div>

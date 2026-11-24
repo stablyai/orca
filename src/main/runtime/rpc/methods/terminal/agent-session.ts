@@ -4,12 +4,12 @@ import {
   type RuntimeAgentSessionRpcCaller,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
-} from '../../../../../shared/agent-session/agent-session-host-authority'
+} from '../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { defineMethod, type RpcContext } from '../../core'
 import {
   CreateAgentSessionParams,
   EnsureAgentSessionParams
-} from '../../../../../shared/rpc-contract/agent-session-params'
+} from '../../../../../shared/rpc-contract/terminal/agent-session-params'
 
 function callerContext(context: RpcContext): RuntimeAgentSessionRpcCaller {
   const { pairedDeviceId, clientId, clientKind, signal } = context

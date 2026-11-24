@@ -10,7 +10,7 @@ import {
   type ActiveRateLimitProvider,
   type ActiveWindowRefreshPlan
 } from './service-types'
-import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue {
   setPollingInterval(ms: number): void {
@@ -87,6 +87,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     const museEnabled = this.museUsageEnabledResolver?.() ?? true
     return Object.entries(byProvider)
       .filter(([provider]) => provider !== 'muse' || museEnabled)
+      .filter(([provider]) => provider !== 'claude' || this.isClaudeOAuthUsageEnabled())
       .map(([provider, limits]) => ({
         provider: provider as ActiveRateLimitProvider,
         limits

@@ -6,7 +6,7 @@ import {
   type OpenCodeGoUsageWindows
 } from './opencode-go-status-parsing'
 import { classifyThrownUsageRequestError } from '../usage-request-failure-kind'
-import type { UsageRateLimitFailureKind } from '../../../../shared/rate-limit-types'
+import type { UsageRateLimitFailureKind } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export const OPENCODE_GO_USAGE_API_URL = 'https://opencode.ai/zen/go/v1/usage'
 const API_TIMEOUT_MS = 15_000
@@ -41,8 +41,8 @@ function readErrorType(body: string): string | null {
 
 function classifyFailure(status: number, body: string): OpenCodeGoUsageApiOutcome {
   const errorType = readErrorType(body)
-  // Migrated requests reach a new console with different status codes; error names remain stable.
-  if (errorType === 'EntitlementError' || status === 403) {
+  // Error names stay stable across consoles; a bare 403 can be an edge block, not an entitlement verdict.
+  if (errorType === 'EntitlementError') {
     return { kind: 'no-subscription' }
   }
   if (errorType === 'AuthError' || status === 401) {

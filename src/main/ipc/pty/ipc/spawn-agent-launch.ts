@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { AgentLaunch } from '../../../../shared/rpc-contract/agent-launch-params'
+import { AgentLaunch } from '../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch/choices/agent-launch-preferences'
 import { hasClosedTerminalTabRecord } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'

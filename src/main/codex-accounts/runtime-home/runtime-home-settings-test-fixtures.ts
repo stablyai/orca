@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { createCodexAccountSettings } from '../account-management/codex-account-settings-fixture'
 import { setRealHomeRoutableForTest, testState } from './runtime-home-service-test-harness'
 

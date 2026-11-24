@@ -6,7 +6,7 @@ import {
   setPendingPRCommentAiAck,
   type PendingPRCommentAiAckGithubTarget
 } from '../comments/pr-comments-ai-launch-ack'
-import type { ChecksAgentComposerState } from '../panel-state-types'
+import type { ChecksAgentComposerState } from '../panel/panel-state-types'
 import type { ChecksPanelAiAcknowledgementState } from './use-checks-panel-ai-acknowledgement'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { toast } from 'sonner'
@@ -16,11 +16,11 @@ import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/reposi
 import type { PRCommentGroup } from '../../../../../../shared/source-control/review-comments/pr-comment-groups'
 import { useTranslate } from '@/i18n/use-translate'
 
-import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
+import type { ChecksPanelContextState } from '../review-state/use-checks-panel-context-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
 import type { ChecksPanelCommentResolutionState } from '../comments/use-checks-panel-comment-resolution'
-import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
-import type { ChecksPanelComposerState } from '../use-checks-panel-composer-state'
+import type { ChecksPanelReviewState } from '../review-state/use-checks-panel-review-state'
+import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
 
 type ChecksPanelAiQueueInput = Pick<
   ChecksPanelContextState,

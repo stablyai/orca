@@ -9,10 +9,7 @@ import type {
   AgentLaunchPrompt,
   AgentLaunchResult
 } from '../../../../src/shared/agent-launch/contracts/agent-launch-intent'
-import { isStructuredAgentId } from '../../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../src/shared/agent-launch/contracts/agent-launch-tab-closed'
-import { makePaneKey } from '../../../../src/shared/workspace-layout/stable-pane-id'
-import { createStructuredAgentSessionId } from '../../../../src/shared/agent-session/structured-agent-session-create'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { agentLaunchReplayRun } from '../../new-workspace/creation/mobile-workspace-create-operations'
@@ -23,15 +20,18 @@ import {
 } from '../../../../src/shared/agent-launch/contracts/agent-launch-replay-refusal'
 import { sendReplayingAmbiguousDelivery } from '../../new-workspace/creation/replay-on-ambiguous-delivery'
 import { structuredSessionOperationId } from '../native-chat/agent-session/structured-session-operation-id'
-import { randomV4Uuid } from '../../platform/random-v4-uuid'
 import { rememberMobileCreatedStructuredSession } from '../native-chat/agent-session/mobile-created-structured-sessions'
+import {
+  reservedAgentLaunchFields,
+  type MobileAgentLaunchReservation
+} from './mobile-agent-launch-reservation'
 
 // Why: the host waits up to 60s for a terminal agent to become ready before pasting the prompt,
 // so a prompted launch must outlive that wait or the phone reports a launch that is still running.
 export const PROMPTED_AGENT_LAUNCH_TIMEOUT_MS = 90_000
 
 export const AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE =
-  'Update Orca on your computer to start an agent from your phone.'
+  'Update Orca on this host to start an agent from your phone.'
 
 // host-status-gates keeps re-reading a failed status in the background, so the user need not act.
 export const AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE = "Could not read this host's status. Retrying…"
@@ -42,22 +42,6 @@ export const AGENT_LAUNCH_UNCONFIRMED_MESSAGE =
 export const AGENT_LAUNCH_RESERVATION_TAKEN_MESSAGE = "Couldn't start the agent. Try again."
 export const AGENT_LAUNCH_TAB_CLOSED_MESSAGE =
   "The agent's tab was closed, so the agent was stopped."
-
-// Reserve ids once so snapshots can select the new tab before prompt delivery replies; replays must reuse both ids covered by the host fingerprint.
-export type MobileAgentLaunchReservation = {
-  pane: { tabId: string; leafId: string }
-  sessionId: string | null
-}
-
-export function reserveMobileAgentLaunch(
-  agent: TuiAgent,
-  randomUuid: () => string = randomV4Uuid
-): MobileAgentLaunchReservation {
-  return {
-    pane: { tabId: randomUuid(), leafId: randomUuid() },
-    sessionId: isStructuredAgentId(agent) ? createStructuredAgentSessionId(agent, randomUuid) : null
-  }
-}
 
 export type MobileExistingAgentLaunch =
   | { kind: 'launched'; result: AgentLaunchResult; promptDelivered: boolean | null }
@@ -81,6 +65,8 @@ export async function launchAgentInExistingWorkspace(args: {
   agent: TuiAgent
   agentArgs?: string
   surface?: 'chat' | 'terminal'
+  /** The phone user's chat preference; the host still opens a chat only where one can run. */
+  nativeChatDefault?: boolean
   prompt?: AgentLaunchPrompt
   /** Model and effort the host applies on whichever route it picks. */
   sessionOptions?: Readonly<Record<string, string>>
@@ -88,6 +74,8 @@ export async function launchAgentInExistingWorkspace(args: {
   launchSource?: string
   reservation?: MobileAgentLaunchReservation
   placement?: AgentLaunchPlacement
+  /** The host starts a terminal when this falls outside the workspace. */
+  cwd?: string
   mintOperationId?: () => string
 }): Promise<MobileExistingAgentLaunch> {
   if (!supportsMobileExistingAgentLaunch(args.hostCapabilities)) {
@@ -99,6 +87,7 @@ export async function launchAgentInExistingWorkspace(args: {
     ...(args.surface && args.hostCapabilities?.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY)
       ? { surface: args.surface }
       : {}),
+    nativeChatDefault: args.nativeChatDefault,
     worktreeId: args.worktreeId,
     operationId: (args.mintOperationId ?? structuredSessionOperationId)(),
     ...(args.prompt ? { prompt: args.prompt } : {}),
@@ -109,12 +98,8 @@ export async function launchAgentInExistingWorkspace(args: {
       : {}),
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),
     ...(args.placement ? { placement: args.placement } : {}),
-    ...(args.reservation
-      ? {
-          paneKey: makePaneKey(args.reservation.pane.tabId, args.reservation.pane.leafId),
-          ...(args.reservation.sessionId ? { sessionId: args.reservation.sessionId } : {})
-        }
-      : {})
+    ...(args.cwd ? { cwd: args.cwd } : {}),
+    ...(args.reservation ? reservedAgentLaunchFields(args.reservation) : {})
   })
   if (args.reservation?.sessionId) {
     rememberMobileCreatedStructuredSession(args.reservation.sessionId, `id:${args.worktreeId}`)
@@ -161,8 +146,15 @@ function classifyLaunchRefusal(
   switch (classifyAgentLaunchReplayRefusal(error, replayed)) {
     case 'unsupported':
       return { kind: 'unsupported' }
-    case 'unknown':
-      return { kind: 'unknown', message: AGENT_LAUNCH_UNCONFIRMED_MESSAGE }
+    case 'unknown': {
+      const refusal = error.code === 'invalid_argument' ? error.message?.trim() : undefined
+      return {
+        kind: 'unknown',
+        message: refusal
+          ? `${AGENT_LAUNCH_UNCONFIRMED_MESSAGE} ${refusal}`
+          : AGENT_LAUNCH_UNCONFIRMED_MESSAGE
+      }
+    }
     case 'failed': {
       if (isAgentLaunchReservationTakenRefusal(error)) {
         return { kind: 'failed', message: AGENT_LAUNCH_RESERVATION_TAKEN_MESSAGE }

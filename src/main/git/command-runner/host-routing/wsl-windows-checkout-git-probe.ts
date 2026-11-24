@@ -3,10 +3,11 @@ import { win32 } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-path-resolver'
 import { runWslProcess, type WslResult, type WslSpec } from '../../../wsl/execution/wsl-runner'
-import { translateArgForWsl } from './wsl-path-translation'
+import { translateUncArgForWsl } from './wsl-path-translation'
+import { wslGuestShellPaths } from '../../../wsl/filesystem/wsl-guest-drive-path'
 import { acquireGitAdmission } from '../admission/git-subprocess-admission'
 import { nonInteractiveGitEnv } from '../git-environment/git-process-env'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { isWslDirectGitReadCommand } from '../../../../shared/git/commands/git-command-classification'
 import {
   classifyLineEndingSample,
@@ -36,6 +37,12 @@ export const SAMPLE_SCRIPT = [
   "tab=$(printf '\\t')",
   'git -C "$1" ls-files --eol | head -n "$3" | grep "^i/lf  *w/[a-z]*  *attr/ *$tab" | head -n "$2"'
 ].join('\n')
+
+/** The checkout becomes `$1` in the guest, ahead of the two limits, so a drive resolves under its own mount. */
+function sampleScript(cwd: string): string {
+  const { prelude, words } = wslGuestShellPaths([translateUncArgForWsl(cwd)], 1)
+  return `${prelude}set -- ${words[0]} "$@"\n${SAMPLE_SCRIPT}`
+}
 
 export type HostGitResult = {
   code: number | null
@@ -159,12 +166,8 @@ async function probeSample(
     () =>
       (deps.runWsl ?? runWslProcess)({
         distro: options.wslDistro,
-        script: SAMPLE_SCRIPT,
-        args: [
-          translateArgForWsl(options.cwd),
-          String(LINE_ENDING_SAMPLE_LIMIT),
-          String(LINE_ENDING_SCAN_LIMIT)
-        ],
+        script: sampleScript(options.cwd),
+        args: [String(LINE_ENDING_SAMPLE_LIMIT), String(LINE_ENDING_SCAN_LIMIT)],
         loginPath: 'preferred',
         timeoutMs: SAMPLE_PROBE_TIMEOUT_MS,
         maxOutputBytes: 1024 * 1024
@@ -298,9 +301,4 @@ export function pendingWslWindowsCheckoutGitConfig(
     options.signal,
     deps
   )
-}
-
-export function resetWslWindowsCheckoutProbesForTests(): void {
-  pending.clear()
-  failures.clear()
 }

@@ -7,33 +7,23 @@ import { callerScopeOf, devicePrincipalOf } from './pairing/device-principal'
 import { registerSocketDeviceKey } from './runtime-rpc-device-key-registration'
 import { exchangeSocketPairingTicket } from './runtime-rpc-pairing-ticket-exchange'
 import type { AuthenticatedMobileSocket } from '../mobile/mobile-socket-wiring'
-import type { RpcRequest, RpcResponse } from '../core'
+import type { RpcRequest } from '../core'
 import type { WebSocketTransport } from '../transports/websocket/ws-transport'
-import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
 import { RuntimeRpcMobileDevices } from './runtime-rpc-mobile-devices'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
 import type { RpcBinarySender } from '../transports/rpc-binary-sender'
 import { limitRuntimeRpcReplySize } from './runtime-rpc-reply-size-limit'
+import { injectDeviceScope } from './runtime-rpc-device-scope-stamp'
+import { RuntimeRpcStagedReplies } from './runtime-rpc-staged-replies'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
 import { MOBILE_RPC_METHOD_ROUTES } from './runtime-rpc-mobile-method-routing'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { WorktreeRemove } from '../../../../shared/rpc-contract/worktree-params'
-
-// Stamp proven scope at transport boundary; status.get has no connection context.
-function injectDeviceScope(response: string, scope: DeviceScope): string {
-  try {
-    const parsed = JSON.parse(response) as RpcResponse
-    if (parsed.ok !== true || typeof parsed.result !== 'object' || parsed.result === null) {
-      return response
-    }
-    ;(parsed.result as Record<string, unknown>).deviceScope = scope
-    return JSON.stringify(parsed)
-  } catch {
-    return response
-  }
-}
+import { isUntaggedTrackerCall, withDefaultScopeServer } from './runtime-rpc-mobile-tracker-methods'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { WorktreeRemove } from '../../../../shared/rpc-contract/workspaces/worktree-params'
 
 export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
+  private readonly stagedReplies = new RuntimeRpcStagedReplies(() => this.runtime.getRuntimeId())
+
   // Relay only to configured execution hosts; unreachable targets fail, never run locally. Return null after relay/reply.
   private relayMobileRequest(
     request: RpcRequest,
@@ -74,7 +64,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
       }
     }
     // Phone workspace tags cannot choose routing; only this Mac's table does.
-    if (target && MOBILE_RPC_METHOD_ROUTES.get(request.method) !== 'execution-host') {
+    if (target && MOBILE_RPC_METHOD_ROUTES.get(request.method) === 'paired-desktop') {
       return request
     }
     const local = target && this.mobileDesktopRelay?.localRequestFor(request, target.environmentId)
@@ -179,6 +169,9 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
       return
     }
     const principal = devicePrincipalOf(device)
+    if (this.stagedReplies.answerRead(request, device.deviceId, reply)) {
+      return
+    }
     // Use authenticated scope for dispatcher permissions, never request scope.
     const callerScope = callerScopeOf(device)
 
@@ -190,6 +183,10 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
           authenticatedSocket.connectionId,
           rawMessage
         )
+      }
+      // A phone relayed in from another desktop already got that desktop's default host.
+      if (isUntaggedTrackerCall(request) && authenticatedSocket && !device.parentDeviceId) {
+        request = await withDefaultScopeServer(request, this.runtime, this.mobileRelayHostCatalog)
       }
       const localRequest = this.relayMobileRequest(
         request,
@@ -219,8 +216,16 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
     const abortRegistration = ws ? this.registerWebSocketDispatchAbort(ws) : null
 
     // Older pairings lack scope metadata; stamp authenticated scope on status.get.
-    const boundedReply = limitRuntimeRpcReplySize(request.id, reply, (id, code, message) =>
-      this.buildError(id, code, message)
+    const boundedReply = limitRuntimeRpcReplySize(
+      request.id,
+      reply,
+      (id, code, message) => this.buildError(id, code, message),
+      this.stagedReplies.stagerFor(
+        authenticatedSocket?.clientCapabilities,
+        request.id,
+        device.deviceId,
+        abortRegistration?.signal
+      )
     )
     const replyForRequest =
       request.method === 'status.get'
@@ -278,7 +283,8 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
                 registerDeviceKey: (params) =>
                   registerSocketDeviceKey(this.deviceRegistry!, authenticatedSocket, params),
                 exchangePairingTicket: (params) =>
-                  exchangeSocketPairingTicket(this.deviceRegistry!, authenticatedSocket, params)
+                  exchangeSocketPairingTicket(this.deviceRegistry!, authenticatedSocket, params),
+                ...this.desktopAccountSelf(device, authenticatedSocket.connectionId)
               }
             : undefined,
         mobileRelayHosts: this.mobileRelayHostCatalog ?? undefined,
@@ -301,7 +307,10 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
             : undefined,
         delegatedMobileDevices:
           device.scope === 'runtime'
-            ? { sync: (phones) => this.syncDelegatedMobileDevices(device.deviceId, phones) }
+            ? {
+                sync: (phones) =>
+                  this.syncDelegatedMobileDevices(device.deviceId, phones, connectionId)
+              }
             : undefined,
         signal: abortRegistration?.signal,
         sendBinary,

@@ -12,7 +12,7 @@ import {
   AttachmentUploadAppendParams,
   AttachmentUploadIdParams,
   AttachmentUploadStartParams
-} from '../../../../../../shared/rpc-contract/agent-session-attachment-params'
+} from '../../../../../../shared/rpc-contract/structured-agent-session/agent-session-attachment-params'
 import { remoteFileContentBudget } from '../../files/files-remote-content-budget'
 import type { AgentSessionAttachmentStore } from '../../../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { getAgentSessionAttachmentStore } from '../../../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'

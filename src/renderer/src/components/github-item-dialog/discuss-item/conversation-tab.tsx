@@ -11,7 +11,7 @@ import { groupPRComments } from '../../../../../shared/source-control/review-com
 import {
   getCommentReplyTargetCandidates,
   resolveCommentReplyTarget
-} from '@/components/comment-reply-target-state'
+} from '@/components/github/comment-reply-target-state'
 import {
   attachPRReviewReplyParent,
   canPostPRReviewThreadReply
@@ -25,7 +25,7 @@ import { githubCommentImageUploadAddress } from '@/components/github/github-comm
 import {
   resolveGitHubBodyDraft,
   shouldSyncGitHubBodyDraft
-} from '@/components/github-body-draft-state'
+} from '@/components/github/github-body-draft-state'
 import type {
   GitHubIssueTimelineItem,
   PRComment

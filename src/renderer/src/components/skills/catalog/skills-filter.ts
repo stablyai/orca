@@ -1,5 +1,8 @@
-import type { DiscoveredSkill, SkillSourceKind } from '../../../../../shared/skills'
-import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
+import type {
+  DiscoveredSkill,
+  SkillSourceKind
+} from '../../../../../shared/skills/discovery/skills'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
 import { skillMatchesAgent } from './skill-agent-filter'
 
 export type SkillsFilterState = {

@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
-import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
+import type { ConfirmationDialogContextValue } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { requestEditorFileSave, type EditorSaveFileTarget } from '../../autosave/editor-autosave'
 import {
   EDITOR_NOT_UTF8_SAVE_MESSAGE,

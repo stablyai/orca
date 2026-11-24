@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { useAppStore } from '@/store/index'
 import { latestLookupGeneration } from '@/store/slices/hosted-review/refresh/lookup-generation-sequence'
@@ -91,7 +91,7 @@ export async function refreshChecksPanelHostedReview(
   provider: HostedReviewProvider,
   isCurrentRequest: () => boolean
 ): Promise<'review' | 'no-review' | 'superseded'> {
-  const { repo, branch, activeGitLabReview, fetchGitLabDetails, setChecks, setComments } = model
+  const { repo, branch, activeGitLabReview, fetchGitLabDetails } = model
   if (!repo || !branch) {
     return 'superseded'
   }
@@ -107,8 +107,19 @@ export async function refreshChecksPanelHostedReview(
   if (provider !== 'gitlab') {
     return 'review'
   }
-  const refreshedGitLabReview =
-    refreshedReview?.provider === 'gitlab' ? refreshedReview : activeGitLabReview
+  // The published card is the panel's selection. A newer lookup (a title save, say) can publish a
+  // replacement while this click waits; a late click must not claim details for the review it
+  // replaced. Its own card and the captured review are only the fallback when nothing is published.
+  const published = model.hostedReviewCacheKey
+    ? useAppStore.getState().hostedReviewCache[model.hostedReviewCacheKey]
+    : undefined
+  const refreshedGitLabReview = published
+    ? published.data?.provider === 'gitlab'
+      ? published.data
+      : null
+    : refreshedReview?.provider === 'gitlab'
+      ? refreshedReview
+      : activeGitLabReview
   if (refreshedGitLabReview) {
     await fetchGitLabDetails({
       mrNumberOverride: refreshedGitLabReview.number,
@@ -118,7 +129,7 @@ export async function refreshChecksPanelHostedReview(
     })
     return 'review'
   }
-  setChecks([])
-  setComments([])
+  // A lookup that finds no review keeps the current results: if the review is really gone, the
+  // panel's review identity changes and the section owners reset and re-read.
   return 'no-review'
 }

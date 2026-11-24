@@ -1,5 +1,5 @@
 import type { KeyHandlerContext } from '../commands/rich-markdown-key-handler-context'
-import { editorShortcutMatches } from '../../editor-shortcuts'
+import { editorShortcutMatches } from '../../commands/editor-shortcuts'
 
 export function handleRichMarkdownAddReviewNoteShortcut(
   ctx: KeyHandlerContext,

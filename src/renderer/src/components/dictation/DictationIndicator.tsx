@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyDetails } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import { ArrowUp, Check, CornerDownLeft, Loader2 } from 'lucide-react'
-import { isDictationPillShown } from '../../../../shared/dictation-session-machine'
-import { dictationSeparators } from '../../../../shared/dictation-transcript-spacing'
-import { CLOUD_DICTATION_MAX_SECONDS } from '../../../../shared/rpc-contract/speech-params'
+import { isDictationPillShown } from './dictation-session-machine'
+import { dictationSeparators } from '../../../../shared/speech/dictation/dictation-transcript-spacing'
+import { CLOUD_DICTATION_MAX_SECONDS } from '../../../../shared/rpc-contract/speech/speech-params'
 import { dispatchDictationControl } from './dictation-control-events'
 import { DictationGrapes } from './DictationGrapes'
 import { useDictationMeter } from './dictation-meter-store'
@@ -70,6 +70,26 @@ export function DictationIndicator({
 
 function formatElapsed(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+}
+
+export function DictationPillElapsed({
+  seconds,
+  warning = false
+}: {
+  seconds: number
+  warning?: boolean
+}) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground',
+        warning && 'text-status-warning'
+      )}
+    >
+      {formatElapsed(seconds)}
+    </span>
+  )
 }
 
 /** Seconds since `running` first turned on; holds still once it turns off. */
@@ -160,12 +180,77 @@ function DictationPendingDots() {
   )
 }
 
+/** Words heard so far, right-aligned so the newest stay in view; older ones fade off the left edge. */
+export function DictationPillWords({
+  committed,
+  tentative,
+  speechPending
+}: {
+  committed: string
+  tentative: string
+  speechPending: boolean
+}) {
+  return (
+    <span
+      aria-hidden
+      className="flex h-6 min-w-0 flex-1 items-center justify-end overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_right,transparent,black_24px)]"
+    >
+      <span className="shrink-0">
+        {committed}
+        {dictationSeparators(committed, tentative, '').leading}
+        <span className="text-muted-foreground">{tentative}</span>
+        {speechPending ? <DictationPendingDots /> : null}
+      </span>
+    </span>
+  )
+}
+
+export function DictationPillStatus({ label }: { label: string }) {
+  return (
+    <span aria-hidden className="min-w-0 flex-1 truncate text-muted-foreground">
+      {label}
+    </span>
+  )
+}
+
+export function DictationPillFinishButton({
+  label,
+  showShortcut = true
+}: {
+  label: string
+  /** Hold mode finishes on release, so the toggle shortcut does not apply. */
+  showShortcut?: boolean
+}) {
+  const shortcut = useShortcutKeyDetails('voice.dictation')
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          size="icon-xs-round"
+          aria-label={label}
+          onClick={() => dispatchDictationControl('stop')}
+        >
+          <Check className="size-3.5" strokeWidth={2.5} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        <span className="flex items-center gap-1.5">
+          {label}
+          {showShortcut && shortcut.keys.length > 0 ? (
+            <ShortcutKeyCombo keys={shortcut.keys} doubleTap={shortcut.doubleTap} />
+          ) : null}
+        </span>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 function DictationPill({ captureLive, anchor, failure, queued, cleanup }: DictationIndicatorProps) {
   const t = useTranslate()
   const dictationState = useAppStore((state) => state.dictationState)
   const liveText = useAppStore((state) => state.liveText)
   const isHoldMode = useAppStore((state) => state.settings?.voice?.dictationMode === 'hold')
-  const shortcut = useShortcutKeyDetails('voice.dictation')
   const cloudModel = useIsCloudModel()
 
   const finishing = dictationState === 'stopping'
@@ -201,7 +286,7 @@ function DictationPill({ captureLive, anchor, failure, queued, cleanup }: Dictat
     ? `${status} ${t('auto.components.dictation.DictationIndicator.oneMinuteLeft', 'One minute left.')}`
     : (queuedStatus ?? status)
   const cancelLabel = cleaning
-    ? t('components.dictation.DictationIndicator.skipCleanup', 'Skip cleanup and insert as heard')
+    ? t('components.dictation.DictationIndicator.skipCleanup', 'Skip cleanup')
     : t('auto.components.dictation.DictationIndicator.cancel', 'Cancel')
   const finishLabel = t('auto.components.dictation.DictationIndicator.finish', 'Finish')
 
@@ -230,32 +315,15 @@ function DictationPill({ captureLive, anchor, failure, queued, cleanup }: Dictat
               <span className="truncate">{queuedStatus}</span>
             </span>
           ) : !cleaning && (committed || tentative || speechPending) ? (
-            // Right-aligned so the newest words stay in view; older ones fade off the left edge.
-            <span
-              aria-hidden
-              className="flex h-6 min-w-0 flex-1 items-center justify-end overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_right,transparent,black_24px)]"
-            >
-              <span className="shrink-0">
-                {committed}
-                {dictationSeparators(committed, tentative, '').leading}
-                <span className="text-muted-foreground">{tentative}</span>
-                {speechPending ? <DictationPendingDots /> : null}
-              </span>
-            </span>
+            <DictationPillWords
+              committed={committed}
+              tentative={tentative}
+              speechPending={speechPending}
+            />
           ) : (
-            <span aria-hidden className="min-w-0 flex-1 truncate text-muted-foreground">
-              {status}
-            </span>
+            <DictationPillStatus label={status} />
           )}
-          <span
-            aria-hidden
-            className={cn(
-              'w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground',
-              nearCloudLimit && 'text-status-warning'
-            )}
-          >
-            {formatElapsed(seconds)}
-          </span>
+          <DictationPillElapsed seconds={seconds} warning={nearCloudLimit} />
           {finishing ? (
             <span
               aria-hidden
@@ -268,26 +336,7 @@ function DictationPill({ captureLive, anchor, failure, queued, cleanup }: Dictat
               )}
             </span>
           ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  size="icon-xs-round"
-                  aria-label={finishLabel}
-                  onClick={() => dispatchDictationControl('stop')}
-                >
-                  <Check className="size-3.5" strokeWidth={2.5} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                <span className="flex items-center gap-1.5">
-                  {finishLabel}
-                  {!isHoldMode && shortcut.keys.length > 0 ? (
-                    <ShortcutKeyCombo keys={shortcut.keys} doubleTap={shortcut.doubleTap} />
-                  ) : null}
-                </span>
-              </TooltipContent>
-            </Tooltip>
+            <DictationPillFinishButton label={finishLabel} showShortcut={!isHoldMode} />
           )}
         </>
       )}

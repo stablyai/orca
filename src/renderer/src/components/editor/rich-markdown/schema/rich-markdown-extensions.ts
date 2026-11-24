@@ -17,7 +17,6 @@ import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
 import { createRichMarkdownExtension } from './rich-markdown-extension'
 import { RichMarkdownClipboardLinkOrigin } from '../clipboard/rich-markdown-clipboard-link-origin'
-import { createLowlight, common } from 'lowlight'
 import {
   acquireLocalImageSrcLease,
   loadLocalImageSrc
@@ -46,15 +45,13 @@ import { RichMarkdownOrderedList } from '../lists/rich-markdown-ordered-list'
 import { RichMarkdownParagraph } from './rich-markdown-paragraph'
 import { RichMarkdownCodeBlockLowlight } from '../code-blocks/rich-markdown-lowlight'
 import { RichMarkdownTaskList } from '../lists/rich-markdown-task-list'
-import { createCachedLowlight } from '../code-blocks/rich-markdown-lowlight-cache'
+import { richMarkdownLowlight } from '../code-blocks/rich-markdown-lowlight-instance'
 import { documentResourceAccess } from '@/lib/files/access/local-file-access'
 import { attachRichMarkdownImageErrorLink } from '../images/rich-markdown-image-error-link'
 import {
   readRichMarkdownImageRuntimeContext,
   resolveRichMarkdownImageUrl
 } from '../images/rich-markdown-image-context'
-
-const lowlight = createCachedLowlight(createLowlight(common))
 
 const RichMarkdownCode = Code.extend({
   // Permit linked code labels while keeping emphasis marks excluded.
@@ -100,7 +97,7 @@ export function createRichMarkdownExtensions({
         })
       }
     }).configure({
-      lowlight,
+      lowlight: richMarkdownLowlight,
       defaultLanguage: null
     }),
     RichMarkdownLink.configure({

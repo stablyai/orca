@@ -2,20 +2,20 @@ import {
   parseNativeChatApprovalEnvelope,
   parseNativeChatFolderTrustEnvelope,
   parseNativeChatStartupMenuEnvelope
-} from './native-chat-approval-envelope'
+} from './approvals/native-chat-approval-envelope'
 import { formatAgentTypeLabel } from '../../agent-status/presentation/agent-type-label'
-import type {
-  AgentJournalApprovalItem,
-  AgentJournalApprovalSubject
-} from '../../agent-session/journal/agent-session-journal-types'
+import type { AgentJournalApprovalItem } from '../../agent-session/journal/agent-session-journal-types'
+import type { AgentJournalApprovalSubject } from '../../agent-session/journal/agent-session-journal-approval-subject'
 import { parseAskFromStatus, resolveNativeChatAsk } from './native-chat-ask'
-import type { AskPrompt } from './native-chat-ask-types'
+import type { AskPrompt } from './questions/native-chat-ask-types'
 import type { NativeChatMessage } from '../native-chat-types'
-import { parseOmpPlanReviewPrompt } from '../../omp-plan-review-prompt'
+import { parseOmpPlanReviewPrompt } from './questions/omp-plan-review-prompt'
 
 export type ChatApproval = {
   title: string
   displayName?: string
+  /** The tool the agent asks to run, when its provider names it. */
+  toolName?: string
   description?: string
   decisionReason?: string
   blockedPath?: string
@@ -36,6 +36,7 @@ export function chatApprovalFromJournal(body: AgentJournalApprovalItem): ChatApp
   return {
     title: body.title,
     ...(body.displayName ? { displayName: body.displayName } : {}),
+    ...(body.toolName ? { toolName: body.toolName } : {}),
     ...(body.description ? { description: body.description } : {}),
     ...(body.decisionReason ? { decisionReason: body.decisionReason } : {}),
     ...(body.blockedPath ? { blockedPath: body.blockedPath } : {}),

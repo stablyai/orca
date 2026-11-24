@@ -2,7 +2,7 @@ import React from 'react'
 import { ExternalLink, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import type * as GitHubChecks from '../../../../../../shared/github/checks/check-types'
 import { SourceControlFixSplitButton } from '@/components/right-sidebar/source-control/panel/source-control-fix-split-button'
 import { getIntlLocale, translate } from '@/i18n/i18n'
@@ -11,8 +11,8 @@ import { useCheckRunDetailsFixWithAI } from '../actions/check-run-details-fix-wi
 import { formatCheckRunOutputForClipboard } from '../actions/check-run-clipboard-text'
 import { CheckRunAnnotations } from './CheckRunAnnotations'
 import { CheckRunJobs } from './CheckRunJobs'
-import { CheckRunCopyButton } from './CheckRunCopyButton'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { CopyTextButton } from '@/components/clipboard/CopyTextButton'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useCheckDetailsReadingPosition } from '../reading/use-check-details-reading-position'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
@@ -344,7 +344,7 @@ export function CheckRunDetailsPanel({
                     <div className="text-sm font-medium">
                       {t('auto.components.editor.CheckRunDetailsPanel.d098e5529a', 'Output')}
                     </div>
-                    <CheckRunCopyButton
+                    <CopyTextButton
                       text={outputClipboardText}
                       label={t(
                         'auto.components.editor.CheckRunDetailsPanel.copyOutput',

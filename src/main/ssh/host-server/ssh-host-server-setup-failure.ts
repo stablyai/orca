@@ -1,5 +1,5 @@
-import type { SshManagedServerNodeDownloadBlocked } from '../../../shared/ssh-types'
-import { isNodeDistMirrorAttempt } from '../../../shared/node-dist-mirror'
+import type { SshManagedServerNodeDownloadBlocked } from '../../../shared/remote-runtime/ssh/ssh-types'
+import { isNodeDistMirrorAttempt } from '../../../shared/node-runtime/node-dist-mirror'
 import { isSftpSessionClosedError } from '../file-transfer/ssh-file-transfer-abort'
 
 // Bounds a failure's detail; the host log tail inside it is already capped.

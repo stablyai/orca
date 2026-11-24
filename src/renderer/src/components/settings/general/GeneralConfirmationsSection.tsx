@@ -1,6 +1,6 @@
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { getGeneralConfirmationSearchEntries } from './general-confirmations-search'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
@@ -45,6 +45,11 @@ export function GeneralConfirmationsSection({
       checked: !settings.skipDeleteAutomationConfirm,
       onChange: () =>
         updateSettings({ skipDeleteAutomationConfirm: !settings.skipDeleteAutomationConfirm })
+    },
+    {
+      ...entries.chat,
+      checked: !settings.skipDeleteChatConfirm,
+      onChange: () => updateSettings({ skipDeleteChatConfirm: !settings.skipDeleteChatConfirm })
     },
     {
       ...entries.artifact,

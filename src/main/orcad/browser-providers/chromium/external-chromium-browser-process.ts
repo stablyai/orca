@@ -8,7 +8,7 @@ import {
   ExternalChromiumBrowserSession,
   type ExternalChromiumLaunch
 } from './external-chromium-browser-session'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
 import {
   externalChromiumCommandArguments,
   externalChromiumWaitCommand,
@@ -19,9 +19,11 @@ import {
   type ExternalChromiumPageRecord as PageRecord
 } from './external-chromium-tab-projection'
 import { ExternalChromiumTabRegistry } from './external-chromium-tab-registry'
+import { withExternalChromiumPageCdp } from './external-chromium-page-cdp'
+import { deleteCookieByName } from '../../../browser/cookies/browser-cookie-delete-by-name'
 import { runExternalChromiumPageInput, type PageInputSession } from './external-chromium-page-input'
 import { agentBrowserSnapshotArgs } from '../../../browser/agent-browser/protocol/agent-browser-snapshot-arguments'
-import { Snapshot } from '../../../../shared/rpc-contract/browser-observation-params'
+import { Snapshot } from '../../../../shared/rpc-contract/browser/browser-observation-params'
 import { ExpectedPageUrlGuard } from '../../../browser/cdp/input/browser-expected-page-url'
 
 const AgentBrowserCurrentUrl = z.object({ url: z.string() })
@@ -111,6 +113,11 @@ export class ExternalChromiumBrowserProcess {
     }
     if (method === 'browserTabClose') {
       return this.tabs.closeTab(host, params)
+    }
+    // Every page here is on the one default profile, so switching to it is a no-op as on the desktop.
+    if (method === 'browserTabSetProfile' && params.profileId === 'default') {
+      const tab = await this.tabs.describeTab(host, params)
+      return { browserPageId: tab.browserPageId, profileId: 'default', profileLabel: 'Default' }
     }
     if (
       method.startsWith('browserProfile') ||
@@ -222,6 +229,22 @@ export class ExternalChromiumBrowserProcess {
     const input = await runExternalChromiumPageInput(session, method, params)
     if (input !== null) {
       return input
+    }
+    if (method === 'browserReload' && params.ignoreCache === true) {
+      throw new BrowserError(
+        'browser_command_unavailable',
+        'This browser provider cannot reload without the cache.'
+      )
+    }
+    if (method === 'browserCookieDelete') {
+      // agent-browser's `cookies clear` ignores filters and wipes the whole jar, as on the desktop.
+      return withExternalChromiumPageCdp(session, this.session, page.agentPageId, (send, tab) =>
+        deleteCookieByName(send, String(params.name ?? ''), {
+          domain: typeof params.domain === 'string' ? params.domain : undefined,
+          url: typeof params.url === 'string' ? params.url : undefined,
+          pageUrl: tab.url
+        })
+      )
     }
     if (method === 'browserBack' || method === 'browserForward' || method === 'browserReload') {
       await session.run([method.slice('browser'.length).toLowerCase()])

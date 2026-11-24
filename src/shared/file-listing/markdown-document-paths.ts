@@ -2,7 +2,7 @@ import {
   createMarkdownDocumentListingBudget,
   retainMarkdownDocument
 } from './markdown-document-listing-limits'
-import { isWindowsAbsolutePathLike } from '../cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../file-access/cross-platform-path'
 import { normalizeRelativePath } from '../file-search/text-search-paths'
 import { basename as pathBasename, extname, isAbsolute, posix, relative, resolve } from 'node:path'
 import type { FileDocument, MarkdownDocument } from './file-document'

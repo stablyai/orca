@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { MemorySnapshot } from '../../../../../shared/process-stats-types'
+import type { MemorySnapshot } from '../../../../../shared/diagnostics/process-stats-types'
 
 export type MemorySlice = {
   memorySnapshot: MemorySnapshot | null

@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react'
 import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
 import {

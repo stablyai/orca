@@ -1,4 +1,4 @@
-import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting/crash-reporting'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 
 export function recordUpdaterLifecycle(

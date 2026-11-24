@@ -6,7 +6,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 
 import { useAppStore } from '@/store/index'
-import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
+import { useRepoAssignees } from '@/lib/work-items/github/useGitHubRepoMetadata'
 import {
   canUseGitHubRepoContext,
   getGitHubRepoRoutingTarget
@@ -18,14 +18,14 @@ import {
   type PRCommentAudienceFilter
 } from '../../../../../shared/source-control/review-comments/pr-comment-audience'
 import { groupPRComments } from '../../../../../shared/source-control/review-comments/pr-comment-groups'
-import { resolveCommentReplyTarget } from '@/components/comment-reply-target-state'
+import { resolveCommentReplyTarget } from '@/components/github/comment-reply-target-state'
 import { runWorkItemBodyUpdate } from '@/components/github/github-work-item-edit-mutations'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import { parseGitHubItemRepository as parseOwnerRepoFromItemUrl } from '../../../../../shared/github/work-items/work-item-target'
 import {
   resolveGitHubBodyDraft,
   shouldSyncGitHubBodyDraft
-} from '@/components/github-body-draft-state'
+} from '@/components/github/github-body-draft-state'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type {
   GitHubAssignableUser,
@@ -240,6 +240,7 @@ export function ConversationTab({
       <div className="flex h-fit flex-col gap-5 xl:sticky xl:top-4">
         <PRActionsPanel
           item={item}
+          headSha={headSha}
           repoPath={repoPath}
           repoId={item.repoId}
           sourceContext={sourceContext}

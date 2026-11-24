@@ -1,13 +1,13 @@
 import { constants } from 'node:fs'
 import { lstat, open, realpath } from 'node:fs/promises'
 import { isAbsolute, win32 } from 'node:path'
-import { isDescendantOrEqual } from '../../../ipc/filesystem/access/filesystem-path-containment'
+import { isDescendantOrEqual } from '../../../filesystem/local-file-io/filesystem-path-containment'
 import {
   parseWslUncPath,
   toLinuxPath,
   toWindowsWslPath,
   toWindowsWslUncPath
-} from '../../../../shared/wsl-paths'
+} from '../../../../shared/file-access/wsl-paths'
 import { readNodeFileHandleWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
 import {
   TERMINAL_KITTY_FILE_MAX_BYTES,

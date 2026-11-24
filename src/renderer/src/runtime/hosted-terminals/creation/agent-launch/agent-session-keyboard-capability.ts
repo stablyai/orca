@@ -1,4 +1,4 @@
-import { AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { runtimeEnvironmentSupportsCapability } from '../../../rpc/compatibility/runtime-capability-proof'
 import { isRuntimeCompatBlockError } from '../../../rpc/compatibility/runtime-protocol-compat'
 

@@ -5,8 +5,8 @@ import type { BrowserWindow } from 'electron'
 import type {
   SessionTabCloseRequest,
   SessionTabCloseResponse
-} from '../../../shared/session-tab-close'
-import { SESSION_TAB_CLOSE_TIMEOUT_ERROR } from '../../../shared/session-tab-close'
+} from '../../../shared/workspace-layout/client-views/session-tab-close'
+import { SESSION_TAB_CLOSE_TIMEOUT_ERROR } from '../../../shared/workspace-layout/client-views/session-tab-close'
 import { addFanoutListener, addFanoutListeners } from '../../runtime/events/event-listener-fanout'
 
 const SESSION_TAB_CLOSE_CONFIRMATION_MS = 5 * 60_000

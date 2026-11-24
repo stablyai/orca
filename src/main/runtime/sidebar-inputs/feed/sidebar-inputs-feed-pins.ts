@@ -1,4 +1,4 @@
-import type { SidebarInputsReadResult } from '../../../../shared/sidebar-list/sidebar-inputs-feed-contract'
+import type { SidebarInputsReadResult } from '../../../../shared/sidebar-list/feed/sidebar-inputs-feed-contract'
 
 /** A multi-page batch stays readable this long after its last page read. */
 export const FEED_PIN_IDLE_MS = 30_000

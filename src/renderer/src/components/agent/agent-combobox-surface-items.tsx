@@ -1,4 +1,4 @@
-import { terminalPendingLabel, terminalPendingReason } from '../tab-bar/new-tab-agent-menu-model'
+import { terminalPendingLabel, terminalPendingReason } from './launch-menu/new-tab-agent-menu-model'
 import React, { useState } from 'react'
 import { CommandItem, CommandSeparator } from '@/components/ui/command'
 import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
@@ -6,13 +6,13 @@ import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { searchAgentPickerEntries } from '@/lib/agent-catalog/agent-picker-search'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
-import type { NewTabAgentMenuModel } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import type { NewTabAgentMenuModel } from '@/components/agent/launch-menu/new-tab-agent-menu-model'
 import {
-  chatUnavailableLabel,
+  rowStatusLabel,
   rowId,
   rowLabel,
   rowTitle
-} from '@/components/tab-bar/tab-agent-row-presentation'
+} from '@/components/agent/launch-menu/agent-menu-row-presentation'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -209,30 +209,29 @@ export function SurfaceAgentItems({
             : row.kind === 'chat'
               ? rowTitle(row, agentLabel, t)
               : terminalPickTitle(agentLabel, t),
-          trailing: unavailable ? (
-            <span className="shrink-0 text-muted-foreground">
-              {row.kind === 'chat-unavailable'
-                ? chatUnavailableLabel(row.reason, t)
-                : pendingReason}
-            </span>
-          ) : rowOffersTerminal(model, row) ? (
-            <AgentSurfaceLaunchButton
-              surface="terminal"
-              reason={model.terminalPending ? terminalPendingLabel(t) : undefined}
-              title={terminalPickTitle(agentLabel, t)}
-              aria-pressed={pressed}
-              className={cn(
-                'hover:bg-background [[data-selected=true]_&]:opacity-100',
-                (pressed || armedValue === id) && 'bg-background opacity-100'
-              )}
-              // Keeps focus in the search box; the click picks the CLI, not the row.
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={(event) => {
-                event.stopPropagation()
-                onPick(row.agent, 'terminal')
-              }}
-            />
-          ) : null
+          trailing:
+            unavailable || rowStatusLabel(row, t) ? (
+              <span className="shrink-0 text-muted-foreground">
+                {rowStatusLabel(row, t) ?? pendingReason}
+              </span>
+            ) : rowOffersTerminal(model, row) ? (
+              <AgentSurfaceLaunchButton
+                surface="terminal"
+                reason={model.terminalPending ? terminalPendingLabel(t) : undefined}
+                title={terminalPickTitle(agentLabel, t)}
+                aria-pressed={pressed}
+                className={cn(
+                  'hover:bg-background [[data-selected=true]_&]:opacity-100',
+                  (pressed || armedValue === id) && 'bg-background opacity-100'
+                )}
+                // Keeps focus in the search box; the click picks the CLI, not the row.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onPick(row.agent, 'terminal')
+                }}
+              />
+            ) : null
         })}
       </React.Fragment>
     )

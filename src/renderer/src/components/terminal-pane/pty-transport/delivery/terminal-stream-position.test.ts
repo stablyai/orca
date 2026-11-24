@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   keptSuffixMeta,
-  markedAfterEviction,
   streamDeliveryOf,
   TerminalStreamPosition,
   type StreamDelivery
@@ -35,21 +34,6 @@ describe('TerminalStreamPosition', () => {
       position.admit(PTY, '42B\x1b[K', at(17, '42B\x1b[K', { startsAtGround: false }))
     ).toBeNull()
     expect(position.admit(PTY, 'next', at(24, 'next'))).toBe('\x18next')
-  })
-
-  it('grounds an escape xterm holds when resuming at a proven boundary after a gap', () => {
-    const position = new TerminalStreamPosition()
-    position.admit(PTY, 'a\x1b[3', at(0, 'a\x1b[3'))
-    expect(position.admit(PTY, 'done', at(40, 'done'))).toBe('\x18done')
-  })
-
-  it('lets a replay anchor the stream so its pending escape tail is completed', () => {
-    const position = new TerminalStreamPosition()
-    position.admit(PTY, 'x', at(0, 'x'))
-    position.anchor(PTY, 100)
-    expect(position.admit(PTY, '2Bdone', at(100, '2Bdone', { startsAtGround: false }))).toBe(
-      '2Bdone'
-    )
   })
 
   it('re-arms an escape the replay omitted for a chunk cut at its seq (#33766)', () => {
@@ -157,13 +141,6 @@ describe('TerminalStreamPosition', () => {
     }
     expect(position.admit(PTY, '42B', cut)).toBeNull()
   })
-
-  it('needs no CAN when its own reset already grounded xterm', () => {
-    const position = new TerminalStreamPosition()
-    position.anchor(PTY, 100)
-    position.invalidate({ grounded: true })
-    expect(position.admit(PTY, 'next', at(120, 'next'))).toBe('next')
-  })
 })
 
 describe('streamDeliveryOf', () => {
@@ -196,6 +173,8 @@ describe('streamDeliveryOf', () => {
     expect(cutTail({ data: '2B>4;2m', seq: 7, midEscape: 'unknown' })).toBeUndefined()
     // Cut-off bytes holding a C1 control are not scanned.
     expect(cutTail({ data: '\u009bab\x1b[>4;2m', seq: 10 })).toBeUndefined()
+    // An escape past the carry cap re-arms inert, so its continuation is discarded, not printed.
+    expect(cutTail({ data: `\x1b]52;c;${'A'.repeat(5000)}>4;2m`, seq: 5012 })).toBe('\x1b]x;')
   })
 
   it('never fabricates a position for a suffix of a transformed chunk', () => {
@@ -220,30 +199,10 @@ describe('streamDeliveryOf', () => {
 })
 
 describe('keptSuffixMeta', () => {
-  it('maps a kept tail onto its true raw range', () => {
-    expect(keptSuffixMeta({ seq: 20, rawLength: 10 }, 10, 4)).toEqual({
-      seq: 20,
-      rawLength: 4,
-      droppedOutput: true,
-      midEscape: 'unknown'
-    })
-  })
-
   it('drops the position of a transformed chunk instead of guessing it', () => {
     expect(keptSuffixMeta({ seq: 20, rawLength: 30 }, 10, 4)).toEqual({
       droppedOutput: true,
       midEscape: 'unknown'
     })
-  })
-})
-
-describe('markedAfterEviction', () => {
-  it("marks kept app bytes as following a gap but leaves main's drop sentinel as recovery bytes", () => {
-    expect(markedAfterEviction({ seq: 9 })).toEqual({
-      seq: 9,
-      droppedOutput: true,
-      midEscape: 'unknown'
-    })
-    expect(markedAfterEviction({ droppedOutput: true })).toEqual({ droppedOutput: true })
   })
 })

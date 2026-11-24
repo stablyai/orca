@@ -1,17 +1,20 @@
-import { useLinearCommittedState } from '@/hooks/linear-issue-committed-state'
+import { useLinearCommittedState } from '@/lib/work-items/linear/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import {
   projectLinearIssue,
   registerLinearIssueConsumer
 } from '@/store/slices/linear/linear-issue-write-publication'
 import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
-import type { TaskPageGitHubIssueDraftModel } from './github/use-task-page-github-issue-draft'
+import type { TaskPageGitHubIssueDraftModel } from './github/issue-creation/use-task-page-github-issue-draft'
 import { useState, useMemo, useCallback, useLayoutEffect, useRef } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import { findTaskPageJiraIssue } from '@/components/task-page/jira/task-page-jira-cache-selectors'
+import {
+  findTaskPageJiraIssue,
+  pickNewerJiraIssue
+} from '@/components/task-page/jira/listing/task-page-jira-cache-selectors'
 export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
   const {
     pageData,
@@ -198,17 +201,28 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
       searchCache: s.jiraSearchCache
     }))
   )
-  const cachedSelectedJiraIssue = findTaskPageJiraIssue(
-    jiraCacheSnapshot.issueCache,
-    jiraCacheSnapshot.searchCache,
-    selectedJiraIssueKey,
-    {
-      sourceContext: jiraTaskSourceContext,
-      siteId: selectedJiraIssueFallback?.siteId ?? pageData.openJiraIssue?.siteId ?? null
-    }
+  const selectedJiraSiteId =
+    selectedJiraIssueFallback?.siteId ?? pageData.openJiraIssue?.siteId ?? null
+  const cachedSelectedJiraIssue = useMemo(
+    () =>
+      findTaskPageJiraIssue(
+        jiraCacheSnapshot.issueCache,
+        jiraCacheSnapshot.searchCache,
+        selectedJiraIssueKey,
+        { sourceContext: jiraTaskSourceContext, siteId: selectedJiraSiteId }
+      ),
+    [
+      jiraCacheSnapshot.issueCache,
+      jiraCacheSnapshot.searchCache,
+      selectedJiraIssueKey,
+      jiraTaskSourceContext,
+      selectedJiraSiteId
+    ]
   )
   const selectedJiraIssue = selectedJiraIssueKey
-    ? (cachedSelectedJiraIssue ?? selectedJiraIssueFallback)
+    ? cachedSelectedJiraIssue && selectedJiraIssueFallback
+      ? pickNewerJiraIssue(selectedJiraIssueFallback, cachedSelectedJiraIssue)
+      : (cachedSelectedJiraIssue ?? selectedJiraIssueFallback)
     : null
   const jiraDetailSourceContext = useMemo(() => {
     if (

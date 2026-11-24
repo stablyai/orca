@@ -7,12 +7,13 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
-import type { WorktreeStatus } from '../../../../../../shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import '../activity/worktree-card-empty-inputs'
 import { FilledBellIcon } from '../identity/worktree-card-glyphs'
 import { checksLabel } from '../review/workspace-review-check-label'
 import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from '../activity/use-worktree-activity-status'
+import { laneStatusWithLineage } from './worktree-card-lineage-lane-status'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import {
@@ -23,8 +24,13 @@ import { selectIsSleepingWorktree } from '../../workspace-actions/sleep/use-work
 import { getEphemeralVmHostState } from '../../../../../../shared/execution-host/execution-host-health'
 import { getVmStateLabel, VmStateIcon, WorktreeCardVmStateBadge } from './WorktreeCardVmStateBadge'
 import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
-import { getReviewLabel, ReviewIcon } from '../review/worktree-review-presentation'
-import type { WorkspaceReviewChecksSummary } from '../../../../../../shared/workspace-review-checks'
+import {
+  getReviewLabel,
+  ReviewIcon,
+  STALE_REVIEW_SHIMMER
+} from '../review/worktree-review-presentation'
+import { handleShimmerAnimationStart } from '@/components/ui/shared-animation-clock'
+import type { WorkspaceReviewChecksSummary } from '../../../../../../shared/workspace-attachments/workspace-review-checks'
 import {
   WorkspaceReviewChecksIndicator,
   workspaceReviewChecksLabel
@@ -32,9 +38,13 @@ import {
 
 type WorktreeCardStatusSlotProps = {
   worktreeId: string
+  /** Replaces the live activity status, for rows that fold it (bots). */
+  status?: WorktreeStatus
   showStatus: boolean
   showUnreadAction: boolean
   isUnread: boolean
+  /** A collapsed descendant's needs-you, failed or working state; replaces a quieter own status. */
+  lineageStatus?: WorktreeStatus | null
   unreadTooltip: string
   onToggleUnread: React.MouseEventHandler<HTMLButtonElement>
   onPointerDown: React.PointerEventHandler<HTMLButtonElement>
@@ -58,14 +68,21 @@ function getSleepingStatusLabel(t: Translate = translate): string {
 }
 // Offset optically left-heavy branch glyphs to align with centered activity dots.
 const compactReviewAndBranchStatusIconClassName = 'size-[13px] translate-x-px'
-const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} text-muted-foreground/70`
+export const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} text-muted-foreground/70`
 // The whole sleeping row is dimmed; extra glyph tint would double-dim it.
 const sleepingStatusIconClassName = 'size-[13px] text-muted-foreground'
-// Overlay unread without widening the status lane; ring-sidebar separates the dot from busy glyphs.
-const newCardUnreadAlertClassName =
-  'pointer-events-none absolute left-0 top-1/2 size-[6px] -translate-y-1/2 rounded-full bg-amber-500 ring-2 ring-sidebar'
+// Overlay unread on the glyph's corner without widening the lane; the ring separates it from busy glyphs.
+// Blue, not amber: the lane already spends yellow and orange on working, pending checks and needs-you.
+export const unreadAlertDotClassName =
+  'pointer-events-none absolute right-0 bottom-0 size-[6px] rounded-full bg-unread ring-2 ring-worktree-sidebar'
 
-function overlayNewCardUnreadStatus(
+export function getUnreadToggleTooltip(isUnread: boolean): string {
+  return isUnread
+    ? translate('auto.components.sidebar.useWorktreeCardWorkspaceActions.markRead', 'Mark read')
+    : translate('auto.components.sidebar.useWorktreeCardWorkspaceActions.markUnread', 'Mark unread')
+}
+
+export function overlayNewCardUnreadStatus(
   status: React.JSX.Element,
   showUnreadAlert: boolean
 ): React.JSX.Element {
@@ -79,11 +96,7 @@ function overlayNewCardUnreadStatus(
       className="relative inline-flex size-5 shrink-0 items-center justify-center"
     >
       {status}
-      <span
-        data-worktree-unread-alert=""
-        className={newCardUnreadAlertClassName}
-        aria-hidden="true"
-      />
+      <span data-worktree-unread-alert="" className={unreadAlertDotClassName} aria-hidden="true" />
     </span>
   )
 }
@@ -114,17 +127,16 @@ function getReviewStatusLabel(review: WorktreeCardPrDisplay, t: Translate = tran
   if (outcome === 'success') {
     return t('workspace.reviewStatus.checksPassing', '{{review}} checks: Passing', values)
   }
-  if (!review.state && !outcome) {
-    return getReviewLabel(review)
-  }
   return t('workspace.reviewStatus.open', '{{review}}: Open', values)
 }
 
 export function WorktreeCardStatusSlot({
   worktreeId,
+  status: statusOverride,
   showStatus,
   showUnreadAction,
   isUnread,
+  lineageStatus = null,
   unreadTooltip,
   onToggleUnread,
   onPointerDown,
@@ -139,7 +151,8 @@ export function WorktreeCardStatusSlot({
   const t = useTranslate()
   const collectionChecks = reviewChecks && reviewChecks.total > 1 ? reviewChecks : undefined
   const isReviewStale = reviewStale || Boolean(collectionChecks?.stale)
-  const status = useWorktreeActivityStatus(worktreeId)
+  const liveStatus = laneStatusWithLineage(useWorktreeActivityStatus(worktreeId), lineageStatus)
+  const status = statusOverride ?? liveStatus
   // One subscription per card: rows mount by the hundreds, and every listener runs on each store write.
   const { isSleeping, vmRuntime, vmWaking } = useAppStore(
     useShallow((state) => ({
@@ -151,17 +164,14 @@ export function WorktreeCardStatusSlot({
   const vmState = vmRuntime ? getEphemeralVmHostState(vmRuntime.status, vmWaking) : null
   const vmFailure = vmRuntime?.failure ?? null
   const statusLabel = getWorktreeStatusLabel(status) || status
+  // Sleeping remains distinct from quiet done/branch/review states; attention keeps its own glyph.
+  const canShowSleepingStatus =
+    newCardStyle && showStatus && isSleeping && QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const canShowReviewStatus =
     newCardStyle &&
     showStatus &&
     (prDisplay !== null || Boolean(collectionChecks)) &&
-    QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
-  // Review outranks sleep: the dimmed row already shows sleep, only the glyph can show the PR.
-  const canShowSleepingStatus =
-    newCardStyle &&
-    showStatus &&
-    isSleeping &&
-    !canShowReviewStatus &&
+    !canShowSleepingStatus &&
     QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const canShowBranchStatus =
     newCardStyle &&
@@ -184,22 +194,20 @@ export function WorktreeCardStatusSlot({
     isReviewStale && canShowReviewStatus && (collectionChecks || prDisplay)
       ? `${passiveStatusLabel} · ${t('workspace.links.lastKnownStatus', 'Last known status')}`
       : passiveStatusLabel
-  const laneLabel =
-    canShowReviewStatus && isSleeping
-      ? `${reviewLabel} · ${getSleepingStatusLabel(t)}`
-      : reviewLabel
   const passiveStatusAnnouncement =
     newCardStyle && isUnread
-      ? t('workspace.activity.unreadLabel', '{{status}} · Unread', { status: laneLabel })
-      : laneLabel
-  // Working/permission own the lane; retain unread in accessible copy and restore its dot afterward.
-  const showNewCardUnreadAlert =
-    newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'
-  const reviewStaleRef = isReviewStale ? observeOffscreenAnimation : undefined
+      ? t('workspace.activity.unreadLabel', '{{status}} · Unread', { status: reviewLabel })
+      : reviewLabel
+  // The lane holds the card's only unread dot (agent rows and the folded pill draw none), so it
+  // stays on over working/permission glyphs; the corner ring keeps it legible against them.
+  const showNewCardUnreadAlert = newCardStyle && isUnread && showStatus
+  const reviewStaleProps = isReviewStale
+    ? { ref: observeOffscreenAnimation, onAnimationStart: handleShimmerAnimationStart }
+    : undefined
   const reviewStatusIconClassName = cn(
     compactReviewAndBranchStatusIconClassName,
     // Same last-known treatment as the hover card's reference rows.
-    isReviewStale && 'shimmer shimmer-duration-2400 shimmer-steps-30'
+    isReviewStale && STALE_REVIEW_SHIMMER
   )
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const sleepingStatusIcon = <Moon className={sleepingStatusIconClassName} aria-hidden="true" />
@@ -210,7 +218,7 @@ export function WorktreeCardStatusSlot({
     </span>
   ) : canShowReviewStatus && (collectionChecks || prDisplay) ? (
     <span
-      ref={reviewStaleRef}
+      {...reviewStaleProps}
       className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}
     >
       {collectionChecks ? (
@@ -299,7 +307,7 @@ export function WorktreeCardStatusSlot({
             {newCardStyle ? (
               showStatus && canShowReviewStatus && prDisplay ? (
                 <span
-                  ref={reviewStaleRef}
+                  {...reviewStaleProps}
                   className="inline-flex size-5 items-center justify-center p-0.5"
                 >
                   <ReviewIcon

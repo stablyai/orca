@@ -1,8 +1,12 @@
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 type RuntimeBrowserDriverControllerDeps = {
   notifyChanged: (browserPageId: string, next: RuntimeTerminalDriverState) => void
-  cancelScreencast: (browserPageId: string) => void
+  /** The page's screencasts: their viewers hear who drives it, and a reclaim ends the phone's. */
+  screencasts: {
+    publishBrowserDriver: (browserPageId: string, driver: RuntimeTerminalDriverState) => void
+    cancelScreencast: (browserPageId: string) => void
+  }
 }
 
 export class RuntimeBrowserDriverController {
@@ -34,11 +38,12 @@ export class RuntimeBrowserDriverController {
       this.drivers.set(browserPageId, next)
     }
     this.deps.notifyChanged(browserPageId, next)
+    this.deps.screencasts.publishBrowserDriver(browserPageId, next)
   }
 
   reclaimForDesktop(browserPageId: string): boolean {
     this.set(browserPageId, { kind: 'desktop' })
-    this.deps.cancelScreencast(browserPageId)
+    this.deps.screencasts.cancelScreencast(browserPageId)
     return true
   }
 }

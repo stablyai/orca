@@ -3,9 +3,9 @@ import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktre
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
-} from '../../../../../../shared/cross-platform-path'
+} from '../../../../../../shared/file-access/cross-platform-path'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
@@ -13,7 +13,7 @@ import {
 import {
   toWorktreeRemovalTarget,
   type WorktreeRemovalTarget
-} from '../../../../../../shared/worktree/removal'
+} from '../../../../../../shared/worktree/removal/removal'
 import { showWorkspaceListChangedToast } from '../../worktree-list/listing/stale-workspace-list-toast'
 import { showPreservedBranchBatchToast } from './preserved-branch-batch-toast'
 import type { PreservedBranchCleanup } from '../../../../../../shared/git/branches/preserved-branch-cleanup'

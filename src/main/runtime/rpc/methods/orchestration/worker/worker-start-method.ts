@@ -7,10 +7,6 @@ import { startFederatedWorker } from '../../../../orchestration/legacy-remote-ho
 import { startLocalWorker } from './start/local-worker-start'
 import type { WorkerFollowUp } from './follow-up/worker-follow-up-placement'
 import { withWorkerStartNext } from '../receipt-next'
-import {
-  decideWorkerStartMode,
-  readWorkerStartModeSettings
-} from '../structured-workers/orchestration-worker-start-mode'
 import { resolveOrchestrationCaller } from '../runs/run-scope'
 import {
   assertHelperStartScope,
@@ -18,16 +14,26 @@ import {
   qualifyLiveWorkerFollowUp
 } from './start/admission/worker-start-authority'
 import { parseTaskDeps } from './start/admission/task-deps-argument'
-import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
+import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
 } from '../../../../../../shared/orchestration/orchestration-timing-budgets'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../../../../shared/orchestration/orchestration-task-display'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './start/admission/worker-start-prompt-budget'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address-prefix'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
+import { checkedWorkerOrigin } from '../../bots-items-worker-origin'
+import { decideStartMode, noteTerminalFallbackOnItem } from './start/worker-chat-lineage'
+import { withKeepOpenDefault } from './start/worker-keep-open-default'
+import { withTerminalUsage } from './start/worker-start-terminal-usage'
+import {
+  linkWorkerToQuestion,
+  openQuestionReminder,
+  withOpenQuestion,
+  withQuestionLink
+} from './start/worker-question-link'
 
 type WorkerStartContext = Pick<
   RpcContext,
@@ -65,18 +71,40 @@ export async function startWorker(
   startFollowUp?: WorkerFollowUp
 ): Promise<unknown> {
   const { runtime, orchestrationMutation, orchestrationCaller } = ctx
-  const prepared = await prepareWorkerStart(startParams, ctx, startFollowUp)
+  if (startParams.origin !== undefined && startParams.on) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      'worker-start --item starts workers on this computer, where the item is. No effects were applied.',
+      { effectsApplied: false }
+    )
+  }
+  const checked =
+    startParams.origin !== undefined
+      ? await checkedWorkerOrigin(startParams.origin, ctx)
+      : undefined
+  const prepared = await prepareWorkerStart(
+    checked ? { ...startParams, origin: checked.origin } : startParams,
+    ctx,
+    startFollowUp
+  )
   const { params, followUp, coordinator, bindRun, helperCreator, taskDeps, existingTask, withRun } =
     prepared
   const db = runtime.getOrchestrationDb()
-  const mode = decideWorkerStartMode({
-    params,
-    settings: readWorkerStartModeSettings(runtime)
-  })
+  const questionLink =
+    params.forQuestion !== undefined
+      ? linkWorkerToQuestion(db, params.forQuestion, coordinator, params.on !== undefined)
+      : undefined
+  const linkedParams =
+    questionLink && !questionLink.linked ? { ...params, forQuestion: undefined } : params
+  const reminder =
+    params.forQuestion === undefined ? openQuestionReminder(db, coordinator) : undefined
+  const withLink = <T>(started: T): T =>
+    withOpenQuestion(reminder, withQuestionLink(questionLink, started))
+  const { mode, chatLineage } = decideStartMode(runtime, db, params, orchestrationCaller, followUp)
   if (params.on) {
     // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
     const receipt = await startFederatedWorker({
-      params,
+      params: linkedParams,
       runtime,
       db,
       bindRunId: () => bindRun().run.id,
@@ -86,10 +114,14 @@ export async function startWorker(
       callerSession: orchestrationCaller
     })
     await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
-    return withRun(receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt)
+    const placed = receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt
+    return withLink(withRun(withKeepOpenDefault(runtime, params.worktree, placed)))
   }
   const receipt = await startLocalWorker({
-    params: { ...params, timeoutMs: resolveWorkerStartReadinessTimeoutMs(params.timeoutMs) },
+    params: {
+      ...linkedParams,
+      timeoutMs: resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
+    },
     runtime,
     db,
     bindRun: () => bindRun().run,
@@ -99,11 +131,18 @@ export async function startWorker(
     existingTask,
     orchestrationMutation,
     mode,
+    chatLineage,
     helperCreator,
     followUp
   })
   await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
-  return withRun(withWorkerStartNext(receipt))
+  const note = { itemUid: checked?.itemUid, chatLineage, terminal: params.terminal }
+  void noteTerminalFallbackOnItem(runtime, note, receipt).catch(warnItemNote)
+  const next = withKeepOpenDefault(runtime, params.worktree, withWorkerStartNext(receipt))
+  const started = withTerminalUsage(runtime, withLink(withRun(next)))
+  return checked && started && typeof started === 'object'
+    ? { ...started, linkedItem: checked.linkedItem }
+    : started
 }
 
 /** What every start checks and binds before it is placed, here or on a paired server. */
@@ -139,9 +178,21 @@ export async function prepareWorkerStart(
   }
   const placement = params.worktree ?? 'current'
   if (
+    params.crossStoreParent &&
+    (orchestrationCaller?.kind !== 'peer' || placement !== 'new-child')
+  ) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      "Only the paired Orca coordinating a Run names its own workspace as a new-child's parent. No effects were applied.",
+      { effectsApplied: false }
+    )
+  }
+  // A paired Orca's new-child nests under its own workspace, named by the parent it sends.
+  if (
     orchestrationCaller?.kind === 'peer' &&
     !followUp &&
     !params.terminal &&
+    !params.crossStoreParent &&
     /^(current|new-child)$/.test(placement)
   ) {
     throw new OrchestrationError(
@@ -256,4 +307,8 @@ export async function prepareWorkerStart(
     existingTask,
     withRun
   }
+}
+
+function warnItemNote(error: unknown): void {
+  console.warn('[orchestration] item fallback note failed', error)
 }

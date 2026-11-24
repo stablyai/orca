@@ -5,10 +5,10 @@ import { Moon, Sun } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
-import { buildFontFamily } from '../../../../../../shared/monospace-font-family'
+import { buildFontFamily } from '../../../../../../shared/styles/monospace-font-family'
 import {
   pluginFontFamilyWhenLoaded,
-  usePluginFontReady
+  usePluginFontLoadKey
 } from '@/store/plugins/appearance/plugin-fonts'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
 import {
@@ -22,7 +22,7 @@ import { normalizeTerminalLineHeight } from '../../../../../../shared/terminal/a
 import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { Switch } from '@/components/ui/switch'
 import { useTranslate } from '@/i18n/use-translate'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 // Pin 36 columns for the 32-character sample plus margin; large fonts clip instead of wrapping.
 const PREVIEW_COLS = 36
@@ -73,7 +73,7 @@ export function TerminalSettingsPreview({
   const skipInitialThemeRewriteRef = useRef(false)
 
   const effectiveFontFamily = previewFontFamily || settings.terminalFontFamily
-  const fontReady = usePluginFontReady(effectiveFontFamily)
+  const fontLoadKey = usePluginFontLoadKey(effectiveFontFamily)
   const terminalLineHeight = normalizeTerminalLineHeight(settings.terminalLineHeight)
 
   // Seed from app theme once; preview toggles remain independent afterward.
@@ -194,7 +194,7 @@ export function TerminalSettingsPreview({
     settings.terminalFontSize,
     settings.terminalFontWeightBold,
     effectiveFontFamily,
-    fontReady,
+    fontLoadKey,
     settings.terminalFontWeight,
     terminalLineHeight,
     settings.terminalCursorStyle,

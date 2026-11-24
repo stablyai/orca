@@ -1,6 +1,6 @@
 // Restart only proven-stopped slots; unverifiable serving state never proves terminal exit.
 import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { orcadBoundPort } from './orcad-managed-bound-port'
 import { managedOrcadSlot } from './orcad-managed-runtime-context'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
@@ -104,10 +104,6 @@ export function ensureManagedOrcadServing(
 /** An explicit Connect must not reuse a cached verdict from before it. */
 export function forgetManagedOrcadServingVerdict(environmentId: string): void {
   checks.delete(environmentId)
-}
-
-export function resetManagedOrcadServingForTests(): void {
-  checks.clear()
 }
 
 async function checkAndStart(input: OrcadManagedServingInput): Promise<OrcadManagedServing> {

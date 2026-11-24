@@ -1,5 +1,6 @@
+import { pluginBlockCopy } from '../presentation/plugin-block-copy'
 import { ArrowUpCircle, Copy, FileText, Hash, Loader2, RotateCcw, Trash2 } from 'lucide-react'
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
@@ -70,11 +71,7 @@ export function installedPluginControls(
   let tone: 'default' | 'destructive' = 'default'
   if (plugin.blockedByKillList) {
     tone = 'destructive'
-    description = t(
-      'auto.components.settings.PluginSettingsRow.killListMessage',
-      "Orca's safety list disabled this plugin: {{value0}}",
-      { value0: plugin.blockedByKillList.reason }
-    )
+    description = pluginBlockCopy(plugin.blockedByKillList, t, true)
   } else if (kind === 'invalid' && plugin.error) {
     tone = 'destructive'
     description = invalidPluginErrorMessage(plugin.error, !plugin.isDev, t)
@@ -160,13 +157,16 @@ export function installedPluginControls(
     )
   }
 
+  const requiredByTeam = plugin.requiredByTeam
+    ? t('auto.components.settings.PluginManagerRows.requiredByTeam', 'Required by your team')
+    : null
   return {
     kind,
-    statusText,
+    statusText: requiredByTeam ? `${statusText}, ${requiredByTeam}` : statusText,
     description,
     tone,
     // Why none for review: the Review button and the off switch already say it.
-    status: kind === 'review' ? null : <StatusWord kind={kind} />,
+    status: requiredByTeam ?? (kind === 'review' ? null : <StatusWord kind={kind} />),
     action,
     toggle: (
       <span className="relative inline-flex">
@@ -218,7 +218,7 @@ export function installedPluginControls(
             {t('auto.components.settings.PluginManagerRows.checkUpdate', 'Check for update')}
           </DropdownMenuItem>
         ) : null}
-        {plugin.source?.kind === 'marketplace' || removable || plugin.bundled ? (
+        {plugin.source?.kind === 'marketplace' || removable || plugin.bundled || requiredByTeam ? (
           <DropdownMenuSeparator />
         ) : null}
         {plugin.source?.kind === 'marketplace' ? (
@@ -235,6 +235,8 @@ export function installedPluginControls(
             <Trash2 />
             {t('auto.components.settings.PluginManagerRows.remove', 'Remove…')}
           </DropdownMenuItem>
+        ) : requiredByTeam ? (
+          <DropdownMenuItem disabled>{requiredByTeam}</DropdownMenuItem>
         ) : plugin.bundled ? (
           <DropdownMenuItem disabled>
             <Trash2 />

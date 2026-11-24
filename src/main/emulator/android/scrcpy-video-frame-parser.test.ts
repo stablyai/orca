@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RelayFrameBuffer } from '../../../shared/relay-frame-buffer'
+import { RelayFrameBuffer } from '../../../shared/remote-runtime/relay/relay-frame-buffer'
 import { parseScrcpyVideoFrames } from './scrcpy-video-frame-parser'
 
 const CONFIG = 1n << 63n

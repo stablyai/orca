@@ -1,4 +1,5 @@
 import { spawnProcess } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { relayBundleCandidates } from '../../../wsl/execution/relay-bundle-paths'
@@ -11,7 +12,7 @@ import {
   WSL_BROWSER_NETWORK_RELAY_SENTINEL,
   WSL_BROWSER_NETWORK_RELAY_STALE_EXIT_CODE,
   WSL_BROWSER_NETWORK_RELAY_VERSION_FILE
-} from '../../../../shared/wsl-browser-network-relay-contract'
+} from '../../../../shared/browser/network/tunnels/wsl-browser-network-relay-contract'
 
 const STARTUP_TIMEOUT_MS = 10_000
 const INSTALL_TIMEOUT_MS = 30_000
@@ -132,11 +133,12 @@ async function startWslBrowserNetworkRelay(
   signal: AbortSignal
 ): Promise<{ child?: WslBrowserNetworkRelayChild; code?: number | null }> {
   const command = `exec sh "${guestRelayDir(version)}/launch.sh"`
-  const child = spawnProcess({
-    program: 'wsl.exe',
+  const child: WslBrowserNetworkRelayChild = spawnProcess({
+    program: windowsSystem32Binary('wsl.exe'),
     args: ['-d', distro, '--exec', 'sh', '-c', command],
+    stdio: 'pipe',
     env: { ...process.env, WSL_UTF8: '1' }
-  }) as WslBrowserNetworkRelayChild
+  })
   return new Promise((resolve) => {
     let settled = false
     let stderr = ''
@@ -171,11 +173,12 @@ function installWslBrowserNetworkRelay(
   bundle: WslBrowserNetworkRelayBundle,
   signal: AbortSignal
 ): Promise<boolean> {
-  const child = spawnProcess({
-    program: 'wsl.exe',
+  const child: WslBrowserNetworkRelayChild = spawnProcess({
+    program: windowsSystem32Binary('wsl.exe'),
     args: ['-d', distro, '--exec', 'sh', '-s'],
+    stdio: 'pipe',
     env: { ...process.env, WSL_UTF8: '1' }
-  }) as WslBrowserNetworkRelayChild
+  })
   return new Promise((resolve) => {
     let settled = false
     const settle = (installed: boolean): void => {

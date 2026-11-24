@@ -3,22 +3,27 @@ import type {
   RuntimeVisibleTerminalState
 } from '../records/runtime-terminal-state-records'
 import { OrcaRuntimeWithSerializeTerminalBufferFromAvailableState } from './terminal-buffer-selection'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
+import type {
+  PtyProviderBufferSnapshot,
+  PtyProviderBufferSnapshotOptions
+} from '../../../providers/pty/provider-contract'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
-import type { RuntimeTerminalRead } from '../../../../shared/runtime-terminal-contracts'
+import type {
+  RuntimeTerminalProjection,
+  RuntimeTerminalRead
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeProviderSnapshotReadOptions } from './provider-snapshot-read-options'
 import {
   buildVisibleSnapshotReadFallback,
   shouldFallbackToVisibleTerminalSnapshot,
   terminalReadLimit
 } from './tail/terminal-tail-read'
-import type { RuntimeTerminalProjection } from './terminal-projection'
 import { DEFAULT_TERMINAL_READ_LIMIT } from './tail/terminal-tail-limits'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import {
   projectTerminalTailLines,
   projectTerminalVisibleLines
-} from '../view/orca-runtime-terminal-projection'
+} from '../../../daemon/emulation/terminal-screen-projection'
 import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 
@@ -40,16 +45,17 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
 
   protected async captureProviderTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number },
+    opts: PtyProviderBufferSnapshotOptions,
     generation: number
   ): Promise<PtyProviderBufferSnapshot | null> {
-    const liveModeTracker = new TerminalKittyKeyboardModeTracker()
-    let liveModeTrackers = this.providerModeSnapshotScansByPtyId.get(ptyId)
-    if (!liveModeTrackers) {
-      liveModeTrackers = new Set()
-      this.providerModeSnapshotScansByPtyId.set(ptyId, liveModeTrackers)
+    let liveModeScan = this.providerModeSnapshotScansByPtyId.get(ptyId)
+    if (!liveModeScan) {
+      liveModeScan = { tracker: new TerminalKittyKeyboardModeTracker(), pendingCaptures: 0 }
+      this.providerModeSnapshotScansByPtyId.set(ptyId, liveModeScan)
     }
-    liveModeTrackers.add(liveModeTracker)
+    liveModeScan.pendingCaptures++
+    const liveModeTracker = liveModeScan.tracker
+    const captureStart = liveModeTracker.scanPosition
     try {
       // Why: daemon PTYs survive an app relaunch before any renderer mounts.
       // Mobile still needs their retained history without navigating desktop.
@@ -66,15 +72,16 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         snapshotModeTracker.scanReplay(snapshot.data)
       }
       const observedSnapshotMode = snapshotModeTracker.hasObservedAlternateScreenSwitch
+      const observedLiveMode = liveModeTracker.hasObservedAlternateScreenSwitchSince(captureStart)
       let effectiveAlternateScreen: boolean | undefined
-      if (observedSnapshotMode || liveModeTracker.hasObservedAlternateScreenSwitch) {
+      if (observedSnapshotMode || observedLiveMode) {
         const modeTracker = new TerminalKittyKeyboardModeTracker()
         if (observedSnapshotMode) {
           modeTracker.scan(snapshotModeTracker.isAlternateScreen ? '\x1b[?1049h' : '\x1b[?1049l')
         }
         // Why: stream bytes received after the request began can be newer
         // than snapshot metadata, so an observed live transition wins.
-        if (liveModeTracker.hasObservedAlternateScreenSwitch) {
+        if (observedLiveMode) {
           modeTracker.scan(liveModeTracker.isAlternateScreen ? '\x1b[?1049h' : '\x1b[?1049l')
         }
         this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
@@ -88,17 +95,17 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
           ? { alternateScreen: effectiveAlternateScreen }
           : {})
       })
-      if (liveModeTracker.hasObservedAlternateScreenSwitch) {
+      if (observedLiveMode) {
         this.providerSnapshotsWithLiveModeTransition.add(reconciledSnapshot)
       }
       return reconciledSnapshot
     } catch {
       return null
     } finally {
-      liveModeTrackers.delete(liveModeTracker)
+      liveModeScan.pendingCaptures--
       if (
-        liveModeTrackers.size === 0 &&
-        this.providerModeSnapshotScansByPtyId.get(ptyId) === liveModeTrackers
+        liveModeScan.pendingCaptures === 0 &&
+        this.providerModeSnapshotScansByPtyId.get(ptyId) === liveModeScan
       ) {
         this.providerModeSnapshotScansByPtyId.delete(ptyId)
       }
@@ -237,15 +244,16 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
     const snapshot = await this.serializeProviderTerminalBuffer(
       ptyId,
-      { scrollbackRows: snapshotOptions.visibleScreenOnly ? 0 : lineLimit },
+      snapshotOptions.visibleScreenOnly
+        ? { scrollbackRows: 0, visibleProjection: true }
+        : { scrollbackRows: lineLimit },
       snapshotOptions
     )
     if (!snapshot) {
       return { lines: [] }
     }
-    // Cached acquisitions can include unrequested scrollback; visible-only reads must parse the grid.
     if (snapshotOptions.visibleScreenOnly) {
-      const projection = await this.parseVisibleSnapshot(snapshot)
+      const projection = snapshot.visibleProjection ?? (await this.parseVisibleSnapshot(snapshot))
       // Live bytes ordered after the provider frame make that frame stale.
       return this.ptyLifecycleGenerationById.get(ptyId) === generation &&
         this.getPtyOutputSequence(ptyId) <= snapshot.seq

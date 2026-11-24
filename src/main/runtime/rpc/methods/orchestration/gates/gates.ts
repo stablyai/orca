@@ -8,7 +8,7 @@ import {
   GateResolveParams,
   RunParams,
   RunStopParams
-} from '../../../../../../shared/rpc-contract/orchestration-gates-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-gates-params'
 
 // Keep one coordinator reference for runStop; the DB allows only one active run.
 let activeCoordinator: Coordinator | null = null

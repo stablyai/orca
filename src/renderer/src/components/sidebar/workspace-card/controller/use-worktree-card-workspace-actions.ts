@@ -12,6 +12,7 @@ import { writeWorkspaceDragData } from '../../workspace-status/presentation/work
 import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
 import type { useWorktreeCardLinkedDetails } from '../details/use-worktree-card-linked-details'
 import type { useWorktreeCardReviewDetails } from '../details/use-worktree-card-review-details'
+import { getUnreadToggleTooltip } from '../surface/WorktreeCardStatusSlot'
 
 type Foundation = ReturnType<typeof useWorktreeCardFoundation>
 type LinkedDetails = ReturnType<typeof useWorktreeCardLinkedDetails>
@@ -76,9 +77,7 @@ export function useWorktreeCardWorkspaceActions({
     },
     [setShowRenameErrorDialog]
   )
-  const unreadTooltip = worktree.isUnread
-    ? t('auto.components.sidebar.useWorktreeCardWorkspaceActions.markRead', 'Mark read')
-    : t('auto.components.sidebar.useWorktreeCardWorkspaceActions.markUnread', 'Mark unread')
+  const unreadTooltip = getUnreadToggleTooltip(worktree.isUnread)
   const lineageChildAriaLabel = lineageCollapsed
     ? t(
         'auto.components.sidebar.WorktreeList.showChildWorkspaces',

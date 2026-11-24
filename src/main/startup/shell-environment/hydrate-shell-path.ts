@@ -1,9 +1,9 @@
 import type { ChildProcess } from 'node:child_process'
 import { delimiter, win32 as pathWin32 } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
-import { stripAnsiEscapeSequences } from '../../../shared/ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import type { ShellHydrationFailureReason } from '../../../shared/shell/launch/shell-path-hydration-types'
-import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
+import { resolveWindowsShellStartupFamily } from '../../../shared/shell/launch/windows-terminal-shell'
 import { SHELL_PATH_DELIMITER as DELIMITER, shellPathProbe } from './shell-path-probe'
 import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell-path-ownership'
 import { bindShellProbeLifetime } from './shell-probe-lifetime'
@@ -92,11 +92,6 @@ function parseCapturedPath(stdout: string, pathDelimiter: string = delimiter): s
         .filter(Boolean)
     )
   ]
-}
-
-/** @internal - tests need a launch PATH the runner's own environment cannot supply. */
-export function _setLaunchPathForTests(value: string, key = 'PATH'): void {
-  launchPathOverride = { key, value }
 }
 
 function isLaunchPathKey(name: string, key: string): boolean {

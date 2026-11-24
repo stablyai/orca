@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import {
   getProcessOutputFields,
   iterateProcessOutputLines
-} from '../../../../shared/process-output-field-scanner'
+} from '../../../../shared/process-observation/process-output-field-scanner'
 import { getPsProcessIdentity } from './daemon-process-identity-query'
 
 export const START_TIME_TOLERANCE_MS = 1_500

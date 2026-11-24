@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import {
   GenerateIssueSummary,
   CancelGenerateIssueSummary
-} from '../../../shared/rpc-contract/jira-params'
+} from '../../../shared/rpc-contract/jira/jira-params'
 import type { Store } from '../../persistence/loading-store/store'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
 import {

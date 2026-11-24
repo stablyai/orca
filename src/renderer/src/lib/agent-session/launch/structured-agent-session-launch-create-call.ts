@@ -2,8 +2,8 @@ import { structuredAgentSessionSettledSends } from '../../../../../shared/agent-
 import {
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
-} from '../../../../../shared/agent-session/agent-session-create-capabilities'
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
+} from '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import {
   isAgentSessionCreateAdmissionRefusal,
   isAgentSessionForkSourceAdmissionRefusal,
@@ -12,6 +12,8 @@ import {
 import { readAgentSessionRefusalReference } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { useAppStore } from '@/store/index'
+import { isAgentCliUpdateAgent } from '../../../../../shared/agent-launch/installation/agent-cli-update'
 import {
   supportsStructuredAgentSessionCreateOptionsMode,
   structuredAgentSessionHostSupports,
@@ -41,7 +43,7 @@ import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
 } from '../../../../../shared/agent-session/agent-session-wire'
-import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 
@@ -193,6 +195,13 @@ export async function launchStructuredAgentSession(
     )
   }
   delete intent.beforeCreate
+  if (isAgentCliUpdateAgent(params.agent)) {
+    // A chat start is when the host's own CLI matters; the check never holds up or fails the start.
+    const { target } = intent
+    void Promise.resolve()
+      .then(() => useAppStore.getState().checkAgentCliUpdates(target))
+      .catch(() => {})
+  }
   try {
     result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
       intent.target,

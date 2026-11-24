@@ -1,5 +1,6 @@
 import { lstatSync } from 'node:fs'
 import { join } from 'node:path'
+import { BrowserError } from '../../browser-error'
 
 // Match agent-browser session names and reject path traversal.
 const SAFE_SESSION_NAME = /^[A-Za-z0-9_-]+$/
@@ -10,8 +11,15 @@ export function canSkipAgentBrowserSessionReset(options: {
   socketDirectory: string | undefined
   sessionName: string
 }): boolean {
+  return options.ownsSocketDirectory && isSessionSocketAbsent(options)
+}
+
+function isSessionSocketAbsent(options: {
+  socketDirectory: string | undefined
+  sessionName: string
+}): boolean {
   const { socketDirectory, sessionName } = options
-  if (!options.ownsSocketDirectory || !socketDirectory || !SAFE_SESSION_NAME.test(sessionName)) {
+  if (!socketDirectory || !SAFE_SESSION_NAME.test(sessionName)) {
     return false
   }
   try {
@@ -32,11 +40,21 @@ export async function waitForAgentBrowserSessionExit(options: {
   socketDirectory: string | undefined
   sessionName: string
 }): Promise<void> {
-  if (!options.ownsSocketDirectory) {
+  if (
+    process.platform === 'win32' ||
+    !options.socketDirectory ||
+    !SAFE_SESSION_NAME.test(options.sessionName)
+  ) {
     return
   }
   const deadline = Date.now() + DAEMON_EXIT_WAIT_MS
-  while (!canSkipAgentBrowserSessionReset(options) && Date.now() < deadline) {
+  while (!isSessionSocketAbsent(options)) {
+    if (Date.now() >= deadline) {
+      throw new BrowserError(
+        'browser_owner_unavailable',
+        `Helper session ${options.sessionName} has not exited; retry after agent-browser exits`
+      )
+    }
     await new Promise((resolve) => setTimeout(resolve, DAEMON_EXIT_POLL_MS))
   }
 }

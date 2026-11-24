@@ -10,6 +10,7 @@ export type GitOperationCause = {
     | 'worktree-scan'
     | 'creation-base-refresh'
     | 'branch-search'
+    | 'branch-snapshot'
     | 'status-read'
     | 'remote-fetch'
     | 'base-refresh'

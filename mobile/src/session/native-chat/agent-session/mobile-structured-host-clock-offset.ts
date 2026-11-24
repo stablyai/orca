@@ -1,4 +1,4 @@
-import type { StructuredAgentHostClock } from '../../../../../src/shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentHostClock } from '../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 
 // Ignore delivery jitter below the precision of displayed clocks.
 const OFFSET_GRAIN_MS = 1_000

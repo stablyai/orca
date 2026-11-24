@@ -2,7 +2,7 @@ import type {
   AgentChildWorkEvidence,
   AgentChildWorkEvidenceHandle
 } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
-import { isSettledBackgroundTaskState } from '../../../shared/native-chat/input/native-chat-background-task-row'
+import { isSettledBackgroundTaskState } from '../../../shared/native-chat/input/task-lists/native-chat-background-task-row'
 import { isBackgroundTaskBlock } from '../../../shared/native-chat/native-chat-types'
 import { AGENT_CHILD_WORK_ID_MAX_LENGTH } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import type { ProviderTimelineEvent } from '../../native-chat/agent-session-timeline/provider-timeline-event'
@@ -31,11 +31,13 @@ export function isAcpBackgroundTaskChildWorkEvent(event: ProviderTimelineEvent):
 export function acpBackgroundTaskChildWork(
   event: ProviderTimelineEvent,
   observedAt: number,
-  stoppable: boolean
+  stoppable: boolean,
+  /** Tasks Orca inferred and cannot stop must not hold the session busy. */
+  inferred: (taskId: string) => boolean = () => false
 ): AgentChildWorkEvidence[] {
   return backgroundTaskBlocks(event).flatMap((block): AgentChildWorkEvidence[] => {
     const handle = acpBackgroundTaskHandle(block.taskId)
-    if (handle.id.length > AGENT_CHILD_WORK_ID_MAX_LENGTH) {
+    if (handle.id.length > AGENT_CHILD_WORK_ID_MAX_LENGTH || inferred(block.taskId)) {
       return []
     }
     if (isSettledBackgroundTaskState(block.state)) {

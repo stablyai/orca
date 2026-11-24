@@ -2,7 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import type { WebContents } from 'electron'
 import type { BrowserActionEffects } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { isRecord } from '../../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import type { BrowserPageEvent } from '../../guest-lifecycle/page-activity/browser-page-events'
 import { readRemoteCliAdmittedPage } from '../../routing/input-ownership/remote-cli-page-admission'
 import { readPageChange } from './agent-browser-snapshot-delta'
@@ -28,6 +28,8 @@ export type ActionEffectsHost = {
   /** The page's workspace tabs by page id, with each url, or null when the caller may not read it. */
   tabUrls: () => Map<string, string | null>
   loadError: () => string | null
+  /** True while the page may show text the agent must never read; effects then carry no `page`. */
+  withholdsPageText: () => boolean
   /** False until this helper session has a `snapshot --delta` baseline to diff against. */
   hasDeltaBaseline: () => boolean
   forgetDeltaBaseline: () => void
@@ -151,7 +153,7 @@ async function settle(
     const replaced = current.id !== start.guestId
     const stillLoading = loading || (replaced && isLoadingMainFrame(current))
     // A replacement guest was never admitted for this caller, so only the original is read.
-    if (!replaced) {
+    if (!replaced && !host.withholdsPageText()) {
       try {
         const reply = await host.snapshotDelta()
         host.admit(current.id)
@@ -190,6 +192,10 @@ async function settle(
         : []
     )
   )
+  const print = events.find((event) => event.kind === 'print')
+  if (print) {
+    effects.blockedPrint = { origin: clip(print.origin) }
+  }
   effects.consoleErrors = firstItems(watch.consoleErrors.map((error) => clip(error)))
   return effects
 }

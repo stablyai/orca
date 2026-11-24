@@ -1,5 +1,5 @@
 import { GENERAL_SETTING_ANCHORS } from '../general/general-setting-anchors'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { Label } from '../../ui/label'

@@ -1,4 +1,4 @@
-import { projectSessionTabsForClient } from './session-tabs-client-projection'
+import { projectSessionTabsForInventoryStream } from './session-tabs-client-projection'
 export { projectSessionTabsForClient } from './session-tabs-client-projection'
 import {
   collectSessionTabsInventory,
@@ -6,12 +6,12 @@ import {
 } from './session-tabs-inventory-collection'
 export { listSessionTabsInventory } from './session-tabs-inventory-collection'
 import { isDeepStrictEqual } from 'node:util'
-import '../../../../../shared/protocol-version'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RpcContext } from '../../core'
 import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
-import { createSessionTabsTabDeltaEncoder } from '../../../../../shared/session-tabs-tab-delta'
+import { createSessionTabsTabDeltaEncoder } from '../../../../../shared/remote-runtime/session-graph/session-tabs-tab-delta'
 
 type SessionTabsChange = RuntimeMobileSessionTabsResult & { removed?: true }
 
@@ -53,10 +53,11 @@ export async function subscribeSessionTabsInventory(
   const canonicalSnapshotsByWorktree = new Map<string, SessionTabsChange>()
   const projectChange = (snapshot: SessionTabsChange): SessionTabsChange =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: projection rewrites only tabs and groups; the change fields it was handed pass through.
-    projectSessionTabsForClient(
+    projectSessionTabsForInventoryStream(
       snapshot,
       context.clientKind,
-      context.capabilitySource?.current ?? context.clientCapabilities
+      context.capabilitySource?.current ?? context.clientCapabilities,
+      context.runtime
     ) as SessionTabsChange
   const withoutNavigationIntent = (snapshot: SessionTabsChange): SessionTabsChange => {
     if (snapshot.navigationIntent === undefined) {

@@ -1,13 +1,13 @@
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
-import type { NestedWorktreeRemovalApproval } from '../../../../shared/worktree/nested-removal'
+import type { NestedWorktreeRemovalApproval } from '../../../../shared/worktree/removal/nested-removal'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+} from '../../../../shared/execution-host/execution-host'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
 import { resolveWorktreeRemovalRepoOwner } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import {

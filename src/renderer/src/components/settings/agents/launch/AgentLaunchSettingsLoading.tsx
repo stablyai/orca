@@ -5,7 +5,7 @@ import { AllAgentsPermissionSetting } from '../permissions/AllAgentsPermissionSe
 export function AgentLaunchSettingsLoading(): React.JSX.Element {
   const t = useTranslate()
   return (
-    <fieldset disabled className="min-w-0 space-y-8">
+    <fieldset data-agent-settings-state="pending" disabled className="min-w-0 space-y-8">
       <AgentLaunchDefaultsGroup
         description={t(
           'settings.agents.hostDefaults',

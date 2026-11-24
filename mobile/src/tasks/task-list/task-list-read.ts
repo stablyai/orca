@@ -1,5 +1,7 @@
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { fetchJiraTaskIssues } from '../providers/jira/mobile-jira-task-source'
+import { joinSentences } from '../../../../src/shared/text/sentence-joining'
+import { translate } from '../../i18n/mobile-i18n'
 import { gitlabTodoListRead } from './mobile-task-list-operations'
 import {
   gitlabWorkItemSearchRead,
@@ -49,12 +51,36 @@ export async function readTaskListRows(
   const { appliedQuery, client, provider, repos } = input
   const live = () => !signal.aborted
   if (provider === 'jira') {
-    const issues = await fetchJiraTaskIssues(client, {
-      jql: appliedQuery,
+    const { issues, jqlRejection } = await fetchJiraTaskIssues(client, {
+      query: appliedQuery,
       filter: input.jiraFilter,
       siteId: input.jiraConnection.selection
     })
-    return { items: issues.map(createJiraTask) }
+    const reason = jqlRejection?.reason ? [jqlRejection.reason] : []
+    if (jqlRejection && issues.length === 0) {
+      // Why: nothing matched as text either, so Jira's JQL error is the answer, not an empty list.
+      throw new Error(
+        joinSentences([
+          translate(
+            'auto.components.taskPageJiraLoadState.jqlFailed',
+            "Jira couldn't run this JQL query. Check the syntax and try again."
+          ),
+          ...reason
+        ])
+      )
+    }
+    return {
+      items: issues.map(createJiraTask),
+      notice: jqlRejection
+        ? joinSentences([
+            translate(
+              'auto.components.TaskPage.jiraTextMatchesNotice',
+              "Showing text matches. Jira couldn't run this search as JQL."
+            ),
+            ...reason
+          ])
+        : ''
+    }
   }
   if (provider === 'linear') {
     const normalizedQuery = appliedQuery.trim()

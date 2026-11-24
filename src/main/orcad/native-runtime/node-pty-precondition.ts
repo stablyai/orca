@@ -4,8 +4,8 @@ import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { runProcessSync } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
-import { usesNodePtySpawnHelper } from '../../../shared/node-pty-spawn-helper'
-import type { RuntimeTerminalUnavailableReason } from '../../../shared/runtime-capability-degradation'
+import { usesNodePtySpawnHelper } from './node-pty-spawn-helper'
+import type { RuntimeTerminalUnavailableReason } from '../../../shared/remote-runtime/protocol/runtime-capability-degradation'
 import {
   buildToolchainProbeCommand,
   parseBuildToolchainProbe,

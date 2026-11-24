@@ -1,5 +1,8 @@
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import type { LocalProjectGhExecOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { OrcaRuntimeWithPreservedBranchCleanup } from './runtime-host-services'
 import { createRuntimeFileWatcherRemoval } from '../workspaces/removal/runtime-file-watcher-removal'
@@ -9,7 +12,7 @@ import {
 } from '../files/chat-scratch-file-root'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'

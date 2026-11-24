@@ -1,6 +1,6 @@
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { SessionNotFoundError } from '../../../daemon/protocol/daemon-errors'
-import { PANE_NOT_LIVE_ERROR } from '../../../../shared/pane-attach-only-view'
+import { PANE_NOT_LIVE_ERROR } from '../../../../shared/terminal/pty/lifecycle/pane-attach-only-view'
 import {
   consumeHiddenRendererPtyDropMemory,
   hiddenRendererPtyDropEpisode,

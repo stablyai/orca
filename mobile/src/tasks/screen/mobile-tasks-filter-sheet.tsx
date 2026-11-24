@@ -2,9 +2,9 @@ import type { ReactNode } from 'react'
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { translate as t } from '../../i18n/mobile-i18n'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
-import { openExternalLink } from '../../platform/external-link'
+import { openExternalLink } from '../../platform/external-links/external-link'
 import { Text, View } from 'react-native'
-import type { PickerOption } from '../../components/PickerModal'
+import type { PickerOption } from '../../components/sheets/PickerModal'
 import { styles } from '../mobile-tasks-legacy-styles'
 import {
   LINEAR_GROUP_OPTIONS,
@@ -170,7 +170,8 @@ function renderLinearSections(model: ConnectionPresentationModel) {
     linearWorkspaceLabel,
     linearWorkspaces,
     setShowLinearDisplayPicker,
-    setShowLinearWorkspacePicker
+    setShowLinearWorkspacePicker,
+    bindLinearAccountHost
   } = model
   return (
     <>
@@ -180,7 +181,12 @@ function renderLinearSections(model: ConnectionPresentationModel) {
             title={t('tasks.filterSheet.linearWorkspace', 'Linear workspace')}
             value={linearWorkspaceLabel}
             navigates
-            onPress={() => openFromFilterSheet(model, () => setShowLinearWorkspacePicker(true))}
+            onPress={() =>
+              openFromFilterSheet(model, () => {
+                bindLinearAccountHost()
+                setShowLinearWorkspacePicker(true)
+              })
+            }
           />
         </Section>
       ) : null}

@@ -3,7 +3,7 @@ import type {
   OrchestrationWorkerReadResult,
   OrchestrationWorkerReadSource
 } from '../../../../../../../shared/orchestration/workers/orchestration-worker-output'
-import type { RuntimeTerminalState } from '../../../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalState } from '../../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import { OrchestrationError } from '../../../../../orchestration/orchestration-error'
 import {
@@ -17,7 +17,7 @@ import {
   type WorkerTranscriptReadSuccess
 } from '../../../../../orchestration/workers/transcripts/worker-transcript-read'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
-import { isWslHookRelayConnectionId } from '../../../../../../../shared/wsl-hook-relay-contract'
+import { isWslHookRelayConnectionId } from '../../../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 export async function readExactWorkerOutput(args: {
   runtime: OrcaRuntimeService

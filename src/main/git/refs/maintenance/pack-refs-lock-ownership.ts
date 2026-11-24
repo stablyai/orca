@@ -1,10 +1,10 @@
 import { readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import {
   PACK_REFS_TIMEOUT_MS,
   PACKED_REFS_LOCK_POLL_MS
-} from '../../../../shared/repo-ref-maintenance-policy'
+} from '../../../../shared/git/maintenance/repo-ref-maintenance-policy'
 
 // Minimum lock age before recovery considers an attributed pack abandoned.
 const ABANDONED_LOCK_AGE_MS = PACK_REFS_TIMEOUT_MS

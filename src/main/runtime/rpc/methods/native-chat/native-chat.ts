@@ -3,7 +3,7 @@ import { recordMobileViewOpened } from '../../../../telemetry/mobile-client-tele
 import type {
   NativeChatTranscriptFrame,
   NativeChatTranscriptPage
-} from '../../../../../shared/native-chat/native-chat-transcript-frames'
+} from '../../../../../shared/native-chat/transcript/streaming/native-chat-transcript-frames'
 import { resolveNativeChatTranscriptAgent } from '../../../../../shared/native-chat/native-chat-agent-support'
 import { subscribeNativeChatTranscript } from '../../../../native-chat/transcript-watch'
 import { readNativeChatTranscriptTail } from '../../../../native-chat/transcript-tail-reader'
@@ -23,7 +23,7 @@ import {
   NativeChatSession,
   NativeChatUnsubscribe,
   type NativeChatResumePoint
-} from '../../../../../shared/rpc-contract/native-chat-params'
+} from '../../../../../shared/rpc-contract/native-chat/native-chat-params'
 
 // Default to a small transcript tail for fast paired-client paint; clients page older history, while local IPC stays virtualized.
 const MOBILE_NATIVE_CHAT_DEFAULT_WINDOW = 40

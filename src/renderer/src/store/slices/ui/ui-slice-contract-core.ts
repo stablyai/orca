@@ -5,15 +5,31 @@ import type {
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
-import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
+import type { GitLabWorkItem } from '../../../../../shared/gitlab/gitlab-types'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { TaskProvider } from '../../../../../shared/work-items/task-providers'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { LaunchSource } from '../../../../../shared/telemetry-events'
+import type { LaunchSource } from '../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome/ui-chrome-types'
+import type {
+  AutomationRunPageOrigin,
+  AutomationsPageLocation,
+  AutomationsPageVisitMode
+} from './automations-page-location'
+
+/** Open an automation (runId null) or one of its runs once its host's list has loaded. */
+export type PendingAutomationRunNavigation = {
+  automationId: string
+  runId: string | null
+  hostId?: ExecutionHostId
+  /** With runId null: open the automation's run history instead of its detail. */
+  paneTab?: 'overview' | 'runs'
+  /** With a runId: where Escape returns; defaults to the automation detail. */
+  origin?: AutomationRunPageOrigin
+}
 
 export type PendingSidebarWorktreeReveal = {
   rowKey?: string
@@ -181,20 +197,30 @@ export type UISliceCore = {
   closeActivityPage: () => void
   selectedAutomationId: string | null
   setSelectedAutomationId: (id: string | null) => void
-  pendingAutomationRunNavigation: {
-    automationId: string
-    runId: string | null
-    hostId?: ExecutionHostId
-  } | null
-  setPendingAutomationRunNavigation: (
-    navigation: { automationId: string; runId: string | null; hostId?: ExecutionHostId } | null
-  ) => void
+  pendingAutomationRunNavigation: PendingAutomationRunNavigation | null
+  setPendingAutomationRunNavigation: (navigation: PendingAutomationRunNavigation | null) => void
+  /** A history replay's target sub-page; the Automations page applies it and clears it. */
+  automationsPageLocationRequest: AutomationsPageLocation | null
+  setAutomationsPageLocationRequest: (location: AutomationsPageLocation | null) => void
+  /** Record a settled Automations sub-page in back/forward history. */
+  /** Record a settled Automations sub-page in back/forward history. */
+  recordAutomationsPageVisit: (location: AutomationsPageLocation) => void
+  /** How the next recorded sub-page enters history; consumed by the next record. */
+  /** Set when the user opens Automations (sidebar, deep link, Back/Forward); the page then
+   *  focuses its title once. A page restored at launch or on reload leaves focus alone. */
+  automationsPageFocusTitleOnOpen: boolean
+  setAutomationsPageFocusTitleOnOpen: (value: boolean) => void
+  automationsPageNextVisitMode: AutomationsPageVisitMode
+  setAutomationsPageNextVisitMode: (mode: AutomationsPageVisitMode) => void
   openAutomationsPage: () => void
   closeAutomationsPage: () => void
   openSpacePage: () => void
   closeSpacePage: () => void
   openSkillsPage: () => void
   closeSkillsPage: () => void
+  /** The template Bot templates last showed; it reopens on it. Null shows the first. */
+  botTemplateSelected: string | null
+  selectBotTemplate: (templateId: string) => void
   pendingSkillShareId: string | null
   openSkillShare: (shareId: string) => void
   clearPendingSkillShare: () => void

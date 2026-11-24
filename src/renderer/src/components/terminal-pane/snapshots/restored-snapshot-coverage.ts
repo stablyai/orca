@@ -1,7 +1,7 @@
 import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN
-} from '../../../../../shared/ansi-escape-sequences'
+} from '../../../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 
 /** Only printable snapshot content can authorize permanent baseline dedup; imageless coverage claims must preserve redelivery as the remaining copy of those bytes (STA-5179). */
 export function restoredSnapshotPaintsPrintableContent(snapshot: {

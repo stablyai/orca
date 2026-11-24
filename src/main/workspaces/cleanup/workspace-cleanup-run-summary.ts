@@ -1,6 +1,12 @@
-import type { WorkspaceCleanupEvaluation } from '../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
+import type {
+  WorkspaceCleanupEvaluation,
+  WorkspaceCleanupEvaluationInput
+} from '../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
+import { hasWorktreeAtRiskLocalFiles } from '../../../shared/worktree/removal/at-risk-local-files'
 import {
   WORKSPACE_CLEANUP_REPORT_ROW_LIMIT,
+  WORKSPACE_CLEANUP_ROW_IGNORED_FILE_LIMIT,
+  type WorkspaceCleanupRowDetails,
   WORKSPACE_CLEANUP_UNWATCHED_CAUSES,
   type WorkspaceCleanupRun,
   type WorkspaceCleanupRunOutcome,
@@ -11,6 +17,26 @@ export type WorkspaceCleanupKeptOutcome = Pick<
   WorkspaceCleanupRunRow,
   'outcome' | 'reason' | 'keepCause' | 'waiting'
 >
+
+/** What the evidence already says about a row, for its label; no new Git reads. */
+export function workspaceCleanupRowDetails(
+  input: Pick<WorkspaceCleanupEvaluationInput, 'git'>
+): WorkspaceCleanupRowDetails {
+  const review = input.git.merge?.mergedReview
+  const files = input.git.atRiskLocalFiles
+  return {
+    ...(review?.containsHead ? { prNumber: review.number } : {}),
+    ...(files && hasWorktreeAtRiskLocalFiles(files)
+      ? {
+          ignoredFiles: {
+            count: files.count,
+            samplePaths: files.samplePaths.slice(0, WORKSPACE_CLEANUP_ROW_IGNORED_FILE_LIMIT),
+            complete: files.complete
+          }
+        }
+      : {})
+  }
+}
 
 export function keptRunOutcome(
   evaluation: WorkspaceCleanupEvaluation
@@ -44,6 +70,7 @@ export function summarizeWorkspaceCleanupRun(args: {
   startedAt: number
   finishedAt: number
   rows: WorkspaceCleanupRunRow[]
+  chatHistory?: WorkspaceCleanupRun['chatHistory']
   error?: string
 }): WorkspaceCleanupRun {
   const rows = args.rows.filter(
@@ -74,6 +101,7 @@ export function summarizeWorkspaceCleanupRun(args: {
       .sort((a, b) => rowRank(a.row) - rowRank(b.row) || a.index - b.index)
       .slice(0, WORKSPACE_CLEANUP_REPORT_ROW_LIMIT)
       .map(({ row }) => row),
+    ...(args.chatHistory ? { chatHistory: args.chatHistory } : {}),
     ...(args.error ? { error: args.error } : {})
   }
 }

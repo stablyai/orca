@@ -1,11 +1,11 @@
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { filterEnabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import * as contextEviction from './local-agent-context-eviction'
 import { getLegacyLoadingPatch, getSupersededDetectPatch } from './local-agent-legacy-loading'
-import { isWslDistroNotRunningRefusal } from '../../../../../shared/wsl-distro-not-running-refusal'
+import { isWslDistroNotRunningRefusal } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '../../types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
@@ -16,6 +16,7 @@ export type LocalAgentInventoryLifecycle = {
   refreshPromises: Map<string, Promise<TuiAgent[]>>
   /** Refreshes sent as a user act; a background one may be refused for a stopped WSL distro. */
   wakeRefreshes: WeakSet<Promise<TuiAgent[]>>
+  explicitRefreshes: WeakSet<Promise<TuiAgent[]>>
   wakeDetects: WeakSet<Promise<TuiAgent[]>>
   /** Contexts whose last probe the E9 gate refused (distro not running), not a real failure. */
   refusedContextKeys: Set<string>
@@ -68,7 +69,11 @@ export function refreshLocalAgentInventory(
   }
   const inflight = lifecycle.refreshPromises.get(contextKey)
   // A refresh click must reach main as a wake, not ride a background refresh it would refuse.
-  if (inflight && (!options.wakeWslDistro || lifecycle.wakeRefreshes.has(inflight))) {
+  if (
+    inflight &&
+    (!options.wakeWslDistro || lifecycle.wakeRefreshes.has(inflight)) &&
+    (!options.userInitiated || lifecycle.explicitRefreshes.has(inflight))
+  ) {
     exposeInflightToLegacy()
     return inflight
   }
@@ -103,7 +108,7 @@ export function refreshLocalAgentInventory(
   }))
   const refreshArgs = includeDisabled ? context : { ...context, enabledOnly: true }
   const pending = window.api.preflight
-    .refreshAgents(options.wakeWslDistro ? { ...refreshArgs, wakeWslDistro: true } : refreshArgs)
+    .refreshAgents({ ...refreshArgs, ...options })
     .then((result) => {
       const typed = result.agents.filter(isTuiAgent)
       const published = includeDisabled
@@ -113,12 +118,16 @@ export function refreshLocalAgentInventory(
         requestGeneration === lifecycle.localDetectionGeneration &&
         lifecycle.refreshPromises.get(contextKey) === pending
       ) {
+        const ownsPublished = ownsPublishedRefresh()
+        const settledKeys = ownsPublished ? refreshContextKeys : new Set([contextKey])
         lifecycle.failedDetectContextKeys.delete(contextKey)
         lifecycle.refusedContextKeys.delete(contextKey)
-        lifecycle.failedDetectContextKeys.delete(publishedContextKey)
+        if (ownsPublished) {
+          lifecycle.failedDetectContextKeys.delete(publishedContextKey)
+        }
         const exposeToLegacy =
           lifecycle.legacyRefreshContextKey !== null &&
-          refreshContextKeys.has(lifecycle.legacyRefreshContextKey)
+          settledKeys.has(lifecycle.legacyRefreshContextKey)
         if (exposeToLegacy) {
           lifecycle.legacyRefreshContextKey = null
           lifecycle.detectedContextKey = publishedContextKey
@@ -134,12 +143,12 @@ export function refreshLocalAgentInventory(
             : {}),
           localDetectedAgentIdsByContext: {
             ...state.localDetectedAgentIdsByContext,
-            [contextKey]: typed,
-            [publishedContextKey]: published
+            ...(ownsPublished ? { [publishedContextKey]: published } : {}),
+            [contextKey]: typed
           },
           isRefreshingLocalAgentsByContext: contextEviction.removeLocalAgentContextEntries(
             state.isRefreshingLocalAgentsByContext,
-            refreshContextKeys
+            settledKeys
           )
         }))
       }
@@ -151,35 +160,44 @@ export function refreshLocalAgentInventory(
         requestGeneration === lifecycle.localDetectionGeneration &&
         lifecycle.refreshPromises.get(contextKey) === pending
       ) {
+        const ownsPublished = ownsPublishedRefresh()
+        const settledKeys = ownsPublished ? refreshContextKeys : new Set([contextKey])
         markLocalAgentRefusal(lifecycle, contextKey, error)
         lifecycle.keptThroughFailure.add(fallback)
         const publishedFallback = get().localDetectedAgentIdsByContext[publishedContextKey] ?? []
-        lifecycle.keptThroughFailure.add(publishedFallback)
-        if (!publishedHadUsableCache) {
-          lifecycle.failedDetectContextKeys.add(publishedContextKey)
+        if (ownsPublished) {
+          lifecycle.keptThroughFailure.add(publishedFallback)
+          if (!publishedHadUsableCache) {
+            lifecycle.failedDetectContextKeys.add(publishedContextKey)
+          }
         }
         if (!hadUsableCache) {
           lifecycle.failedDetectContextKeys.add(contextKey)
         }
         const exposeToLegacy =
           lifecycle.legacyRefreshContextKey !== null &&
-          refreshContextKeys.has(lifecycle.legacyRefreshContextKey)
+          settledKeys.has(lifecycle.legacyRefreshContextKey)
         if (exposeToLegacy) {
           lifecycle.legacyRefreshContextKey = null
-          lifecycle.detectedContextKey = publishedContextKey
+          if (ownsPublished) {
+            lifecycle.detectedContextKey = publishedContextKey
+          }
         }
         set((state) => ({
           ...(exposeToLegacy
-            ? { detectedAgentIds: publishedFallback, isRefreshingAgents: false }
+            ? {
+                ...(ownsPublished ? { detectedAgentIds: publishedFallback } : {}),
+                isRefreshingAgents: false
+              }
             : {}),
           localDetectedAgentIdsByContext: {
             ...state.localDetectedAgentIdsByContext,
-            [contextKey]: fallback,
-            [publishedContextKey]: publishedFallback
+            ...(ownsPublished ? { [publishedContextKey]: publishedFallback } : {}),
+            [contextKey]: fallback
           },
           isRefreshingLocalAgentsByContext: contextEviction.removeLocalAgentContextEntries(
             state.isRefreshingLocalAgentsByContext,
-            refreshContextKeys
+            settledKeys
           )
         }))
       }
@@ -193,6 +211,9 @@ export function refreshLocalAgentInventory(
   const publishedPending = includeDisabled
     ? pending.then(() => get().localDetectedAgentIdsByContext[publishedContextKey] ?? [])
     : pending
+  // A dropped or superseded enabled half belongs to someone else; this refresh must not write it.
+  const ownsPublishedRefresh = (): boolean =>
+    lifecycle.refreshPromises.get(publishedContextKey) === publishedPending
   if (includeDisabled) {
     lifecycle.refreshPromises.set(publishedContextKey, publishedPending)
     void publishedPending.finally(() => {
@@ -204,6 +225,10 @@ export function refreshLocalAgentInventory(
   if (options.wakeWslDistro) {
     lifecycle.wakeRefreshes.add(pending)
     lifecycle.wakeRefreshes.add(publishedPending)
+  }
+  if (options.userInitiated) {
+    lifecycle.explicitRefreshes.add(pending)
+    lifecycle.explicitRefreshes.add(publishedPending)
   }
   lifecycle.refreshPromises.set(contextKey, pending)
   return pending

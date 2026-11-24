@@ -1,7 +1,10 @@
 import { usageFailureMessage } from './usage-failure-message'
 import { useUsageObservation } from '../../store/slices/usage/use-usage-observation'
 import { Activity, Brain, DatabaseZap, FolderKanban, Sigma, Sparkles } from 'lucide-react'
-import type { MuseUsageRange, MuseUsageScope } from '../../../../shared/muse-usage-types'
+import type {
+  MuseUsageRange,
+  MuseUsageScope
+} from '../../../../shared/agent-usage/analytics/muse-usage-types'
 import { useAppStore } from '../../store'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
 import { MuseUsageDetails } from './MuseUsageDetails'

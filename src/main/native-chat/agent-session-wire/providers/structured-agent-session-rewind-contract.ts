@@ -1,7 +1,5 @@
-import type {
-  AgentSessionRewindRecord,
-  AgentSessionRewindReason
-} from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
+import type { AgentSessionRewindReason } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind-reasons'
 
 export type PrepareStructuredRewind = (input: {
   sessionId: string

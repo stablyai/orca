@@ -30,6 +30,7 @@ export function renderGitSettingsSection(
             updateSettings={model.updateSettings}
             writeSourceControlAiSettings={interactions.writeSourceControlAiSettings}
             displayedGitUsername={navigation.displayedGitUsername}
+            hostScope={model.settingsHostScope}
             hasUnsavedBranchPromptChanges={model.hasUnsavedBranchPromptChanges}
             onBranchPromptDirtyChange={model.setHasUnsavedBranchPromptChanges}
             branchPromptDiscardSignal={model.sourceControlAiPromptDiscardSignal}
@@ -45,7 +46,9 @@ export function renderGitSettingsSection(
           />
           <GitProviderApiBudgetPane
             settingsSearchQuery={model.settingsSearchQuery}
-            target={model.settingsHostScope.target}
+            hostScope={model.settingsHostScope}
+            settings={model.settings}
+            updateSettings={model.updateSettings}
           />
         </>
       ) : null}

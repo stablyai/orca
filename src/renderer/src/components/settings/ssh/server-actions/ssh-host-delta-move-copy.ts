@@ -1,4 +1,4 @@
-import type { OrcadDeltaMoveRow } from '../../../../../../shared/orcad-managed-runtime'
+import type { OrcadDeltaMoveRow } from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

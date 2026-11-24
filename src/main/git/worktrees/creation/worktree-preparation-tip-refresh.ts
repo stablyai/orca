@@ -1,5 +1,5 @@
 import type { WorktreePreparationOperation } from './worktree-preparation-operation'
-import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
+import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/windows-long-path-git-args'
 import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { withRepoRefMaintenancePaused } from '../../refs/maintenance/local-repo-ref-maintenance'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
@@ -66,7 +66,7 @@ export async function refreshPreparedWorktreeTip(
             '--hard',
             targetHead
           ],
-          gitExecOptions(preparedPath, refreshOptions)
+          { ...gitExecOptions(preparedPath, refreshOptions), admissionClass: 'checkout' }
         )
       )
       await verifyWorktreePreparationLockAtPath(lockPath, lockReason, refreshOptions.signal)

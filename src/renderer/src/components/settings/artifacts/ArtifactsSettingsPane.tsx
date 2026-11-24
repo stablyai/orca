@@ -1,13 +1,15 @@
 import { ArrowRight, Files } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { Button } from '@/components/ui/button'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
-import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
+import { useOrcaProfileAuthStatusRefresh } from '@/components/orca-profiles/use-orca-profile-auth-status-refresh'
 import { useAppStore } from '@/store/index'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useTranslate } from '@/i18n/use-translate'
-import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../OrcaSignInProgress'
+import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../orca-profiles/OrcaSignInProgress'
+import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../../../shared/orca-profiles/orca-cloud-team-policy'
 
 type HowToStep = { key: string; title: string; description: string }
 
@@ -24,7 +26,8 @@ export function ArtifactsSettingsPane({
   const signedIn = authStatus?.state === 'connected'
   // Only the desktop host can grant sharing; web clients mirror it because settings.update excludes this capability.
   const isWebClient = isWebClientLocation()
-  const sharingEnabled = settings.artifactSharingEnabled === true
+  const teamBlocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.artifactSharing)
+  const sharingEnabled = !teamBlocked && settings.artifactSharingEnabled === true
 
   useOrcaProfileAuthStatusRefresh()
 
@@ -84,18 +87,20 @@ export function ArtifactsSettingsPane({
             'Allow publishing public artifact links'
           )}
           description={
-            isWebClient
-              ? t(
-                  'auto.components.settings.artifacts.allowPublishingWebDescription',
-                  'Desktop only. Open Settings → Artifacts on the host device to change this setting.'
-                )
-              : t(
-                  'auto.components.settings.artifacts.allowPublishingDescription',
-                  'Publish HTML and Markdown files as links anyone with the URL can open. Existing links remain until you delete them from Artifacts.'
-                )
+            teamBlocked
+              ? t('settings.artifacts.teamDisabled', 'Artifact sharing is turned off by your team.')
+              : isWebClient
+                ? t(
+                    'auto.components.settings.artifacts.allowPublishingWebDescription',
+                    'Desktop only. Open Settings → Artifacts on the host device to change this setting.'
+                  )
+                : t(
+                    'auto.components.settings.artifacts.allowPublishingDescription',
+                    'Publish HTML and Markdown files as links anyone with the URL can open. Existing links remain until you delete them from Artifacts.'
+                  )
           }
           checked={sharingEnabled}
-          disabled={isWebClient}
+          disabled={isWebClient || teamBlocked}
           onChange={() => void updateSettings({ artifactSharingEnabled: !sharingEnabled })}
         />
         <SettingsSwitchRow
@@ -109,7 +114,7 @@ export function ArtifactsSettingsPane({
             void updateSettings({ showArtifactsButton: !settings.showArtifactsButton })
           }
         />
-        {!signedIn ? (
+        {!signedIn && !teamBlocked ? (
           <section data-settings-row="" className="flex flex-wrap items-center gap-4 py-3">
             <div className="min-w-0 flex-1 space-y-1">
               <h3 className="text-sm font-medium">
@@ -134,34 +139,38 @@ export function ArtifactsSettingsPane({
       <SettingsGroup
         title={t('auto.components.settings.artifacts.howToTitle', 'How to use Artifacts')}
         description={
-          sharingEnabled
-            ? t(
-                'auto.components.settings.artifacts.howToDescription',
-                'Publish HTML or Markdown files as public links, then share them with your team.'
-              )
-            : t(
-                'auto.components.settings.artifacts.howToDescriptionDisabled',
-                'Enable artifact sharing above to publish HTML or Markdown files as public links.'
-              )
+          teamBlocked
+            ? undefined
+            : sharingEnabled
+              ? t(
+                  'auto.components.settings.artifacts.howToDescription',
+                  'Publish HTML or Markdown files as public links, then share them with your team.'
+                )
+              : t(
+                  'auto.components.settings.artifacts.howToDescriptionDisabled',
+                  'Enable artifact sharing above to publish HTML or Markdown files as public links.'
+                )
         }
         bodyClassName="py-4"
       >
         <div className="space-y-4">
-          <ol className="space-y-3">
-            {howToSteps.map((step, index) => (
-              <li key={step.key} className="flex items-start gap-3">
-                <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/30 text-[11px] font-semibold text-muted-foreground">
-                  {index + 1}
-                </span>
-                <div className="min-w-0 flex-1 space-y-0.5">
-                  <p className="text-sm font-medium">{step.title}</p>
-                  <p className="text-xs leading-relaxed text-muted-foreground">
-                    {step.description}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ol>
+          {!teamBlocked && (
+            <ol className="space-y-3">
+              {howToSteps.map((step, index) => (
+                <li key={step.key} className="flex items-start gap-3">
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/30 text-[11px] font-semibold text-muted-foreground">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <p className="text-sm font-medium">{step.title}</p>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      {step.description}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
 
           <Button
             type="button"

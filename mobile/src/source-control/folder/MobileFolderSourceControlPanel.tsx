@@ -7,7 +7,7 @@ import {
   MobileLoadErrorState,
   MobileOfflineState,
   MobileStateView
-} from '../../components/MobileStateView'
+} from '../../components/feedback/MobileStateView'
 import { connectionRetryAction } from '../../transport/connection/connection-retry-action'
 import { useForceReconnect } from '../../transport/connection/host-client-hooks'
 import { OptionPager, useOptionPager } from '../../components/bottom-drawer/BottomDrawer'
@@ -20,14 +20,14 @@ import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { FolderListRow } from './mobile-folder-attached-worktrees'
-import { getWorktreeRowIdentity } from '../../worktree/worktree-host-row-identity'
-import { MobileSourceControlHeader } from '../MobileSourceControlHeader'
+import { getWorktreeRowIdentity } from '../../worktree/row-presentation/worktree-host-row-identity'
+import { MobileSourceControlHeader } from '../panel/MobileSourceControlHeader'
 import { MobileSourceControlPanel } from '../MobileSourceControlPanel'
 import { styles as sourceControlStyles } from '../mobile-source-control-styles'
 import { MobileFolderEmptyState } from './MobileFolderEmptyState'
 import { useFolderCreateFlow } from './use-folder-create-flow'
 import { MobileFolderWorktreeRow } from './MobileFolderWorktreeRow'
-import { useOptionalHostProtocolGates } from '../../components/host-protocol-gates-context'
+import { useOptionalHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import { useMobileFolderAttachedWorktrees } from './use-mobile-folder-attached-worktrees'
 
 const NO_CAPABILITIES: readonly string[] = []

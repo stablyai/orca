@@ -1,6 +1,6 @@
 import { commandWithNodePath } from '../../remote-exec/ssh-remote-commands'
 import type { RemoteHostPlatform } from '../../remote-host/ssh-remote-platform'
-import { quotePowerShellLiteral as powerShellLiteral } from '../../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../../../shared/shell/launch/powershell-native-argument'
 
 export function windowsRelayConnectCommand(
   hostPlatform: RemoteHostPlatform,

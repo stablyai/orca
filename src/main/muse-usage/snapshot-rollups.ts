@@ -7,7 +7,7 @@ import type {
   MuseUsageScope,
   MuseUsageSessionRow,
   MuseUsageSummary
-} from '../../shared/muse-usage-types'
+} from '../../shared/agent-usage/analytics/muse-usage-types'
 import type { MuseUsageDailyAggregate, MuseUsageSession } from './types'
 
 type TokenTotals = Pick<

@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { TabsContent } from '@/components/ui/tabs'
 import { useTranslate } from '@/i18n/use-translate'
 import { hasBoundedCommentBodyText } from '@/lib/source-control/review/comments/comment-body-submit-state'
-import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
 import type { GitLabReviewActions } from './use-gitlab-review-actions'
 

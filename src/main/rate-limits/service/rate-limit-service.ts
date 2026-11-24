@@ -1,7 +1,7 @@
 import {
   localAccountRuntimeTargetKey,
   type LocalAccountRuntimeTarget
-} from '../../../shared/local-account-runtime'
+} from '../../../shared/agent-accounts/local-account-runtime'
 import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
@@ -11,28 +11,43 @@ import type { AntigravityAccountUsageRecorder } from '../providers/antigravity/a
 import {
   type CodexAccountSelectionTarget,
   normalizeCodexAccountSelectionTarget
-} from '../../../shared/codex-selection-lane'
-import type {
-  CodexHomePathResolver,
-  KimiHomeResolver,
-  ClaudeAuthPreparationResolver,
-  OpenCodeGoRateLimitConfig,
-  MiniMaxRateLimitConfig,
-  AntigravityUsageEnabledResolver,
-  MuseUsageEnabledResolver,
-  ZcodePlanRateLimitConfig,
-  GeminiCliOAuthEnabledResolver,
-  InactiveCodexAccountInfo
+} from '../../../shared/agent-accounts/codex/codex-selection-lane'
+import {
+  MIN_REFETCH_MS,
+  type CodexHomePathResolver,
+  type KimiHomeResolver,
+  type ClaudeAuthPreparationResolver,
+  type OpenCodeGoRateLimitConfig,
+  type MiniMaxRateLimitConfig,
+  type AntigravityUsageEnabledResolver,
+  type ClaudeOAuthUsageEnabledResolver,
+  type MuseUsageEnabledResolver,
+  type ZcodePlanRateLimitConfig,
+  type GeminiCliOAuthEnabledResolver,
+  type InactiveCodexAccountInfo
 } from './service-types'
 import {
   type ClaudeAccountSelectionTarget,
   normalizeClaudeAccountSelectionTarget
 } from '../../claude-accounts/selection/runtime-selection'
 import type { InactiveClaudeAccount } from '../providers/claude/claude-managed-account-usage'
-import type { RateLimitState } from '../../../shared/rate-limit-types'
-import type { NetworkProxySettings } from '../../../shared/network-proxy'
+import type { RateLimitState } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { NetworkProxySettings } from '../../../shared/network/network-proxy'
 
 export class RateLimitService extends RateLimitServiceAccountRefresh {
+  private lastOwnerReturnAt = Number.NEGATIVE_INFINITY
+
+  refreshOnOwnerReturn(): Promise<void> {
+    const now = Date.now()
+    const elapsed = now - this.lastOwnerReturnAt
+    // Admit and restamp after a backward clock change.
+    if (elapsed >= 0 && elapsed < MIN_REFETCH_MS) {
+      return Promise.resolve()
+    }
+    this.lastOwnerReturnAt = now
+    return this.refreshIfWatched()
+  }
+
   setCodexHomePathResolver(resolver: CodexHomePathResolver): void {
     this.codexHomePathResolver = resolver
   }
@@ -55,22 +70,47 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
 
   setOpenCodeGoConfigResolver(
     resolver: () => OpenCodeGoRateLimitConfig,
-    apiKeyResolver?: () => string | null
+    apiKeyResolver?: () => string | null | Promise<string | null>
   ): void {
     this.openCodeGoConfigResolver = resolver
     this.openCodeGoApiKeyResolver = apiKeyResolver ?? null
   }
 
-  setMiniMaxConfigResolver(resolver: () => MiniMaxRateLimitConfig): void {
+  setMiniMaxConfigResolver(
+    resolver: () => MiniMaxRateLimitConfig | Promise<MiniMaxRateLimitConfig>
+  ): void {
     this.miniMaxConfigResolver = resolver
   }
 
-  setZcodePlanConfigResolver(resolver: () => ZcodePlanRateLimitConfig): void {
+  setZcodePlanConfigResolver(
+    resolver: () => ZcodePlanRateLimitConfig | Promise<ZcodePlanRateLimitConfig>
+  ): void {
     this.zcodePlanConfigResolver = resolver
   }
 
   setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {
     this.geminiCliOAuthEnabledResolver = resolver
+  }
+
+  setClaudeOAuthUsageEnabledResolver(resolver: ClaudeOAuthUsageEnabledResolver): void {
+    this.claudeOAuthUsageEnabledResolver = resolver
+  }
+
+  // Retain only readings actually received from the terminal feed.
+  discardClaudeOAuthUsage(): void {
+    this.claudeUsageAbortController.abort()
+    this.claudeUsageAbortController = new AbortController()
+    this.claudeFetchGeneration += 1
+    this.inactiveClaudeAccountsGeneration += 1
+    this.inactiveClaudeCache.clear()
+    this.inactiveClaudeFetching.clear()
+    this.lastInactiveClaudeFetchAt = 0
+    this.lastClaudeCheckCompletedAt = null
+    this.activeFailureStreakByProvider.claude = 0
+    this.updateState({ ...this.state, claude: this.claudeUsageWithoutOAuth() })
+    if (!this.lastClaudeAuthSnapshot) {
+      void this.fetchClaudeOnly({ force: true })
+    }
   }
 
   setAntigravityUsageEnabledResolver(resolver: AntigravityUsageEnabledResolver): void {
@@ -157,16 +197,22 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
   }
 
   start(options: { fetchImmediately?: boolean } = {}): void {
+    this.publicationStopped = false
     if (options.fetchImmediately !== false) {
       this.clearDeferredStartupRefresh()
       void this.fetchAll()
     } else {
       this.scheduleDeferredStartupRefresh()
+      // Passive terminal usage needs account attribution even without a usage viewer.
+      if (!this.isClaudeOAuthUsageEnabled()) {
+        void this.fetchClaudeOnly({ force: true })
+      }
     }
     this.startTimer()
   }
 
   stop(): void {
+    this.publicationStopped = true
     this.abortActiveFetchCycle()
     this.clearQueuedFetches()
     this.inactiveClaudeFetching.clear()
@@ -179,15 +225,17 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
     this.mainWindow = null
   }
 
-  getState(): RateLimitState {
+  async getState(): Promise<RateLimitState> {
+    const [minimaxCookieConfigured, minimaxApiKeyConfigured, zcodePlanApiKeyConfigured] =
+      await Promise.all([hasMiniMaxSessionCookie(), hasMiniMaxApiKey(), hasZcodePlanApiKey()])
     this.pruneInactiveClaudeState()
     this.pruneInactiveCodexState()
     return {
       ...this.state,
       // Filesystem-stored cookie presence keeps MiniMax visible across renderer reloads.
-      minimaxCookieConfigured: hasMiniMaxSessionCookie(),
-      minimaxApiKeyConfigured: hasMiniMaxApiKey(),
-      zcodePlanApiKeyConfigured: hasZcodePlanApiKey(),
+      minimaxCookieConfigured,
+      minimaxApiKeyConfigured,
+      zcodePlanApiKeyConfigured,
       opencodeGoApiKeyConfigured: this.openCodeGoApiKeyConfigured,
       grokAuthConfigured: this.grokAuthConfigured,
       cursorAuthConfigured: this.cursorAuthConfigured,

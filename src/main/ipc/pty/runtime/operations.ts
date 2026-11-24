@@ -1,5 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { ptyOwnership } from '../provider/ownership-state'
@@ -47,6 +47,7 @@ export function writePtyFromRuntimeController(
   const observeAcceptedInput = (): void => {
     if (isDrivingInputKind(inputKind) && ptyOwnership.get(ptyId) === LOCAL_EXECUTION_HOST_ID) {
       deps.runtime?.observeClaudeTerminalEvidence?.(ptyId, { kind: 'input', data })
+      deps.runtime?.noteRuntimeTerminalInput?.(ptyId)
     }
   }
   let provider: IPtyProvider
@@ -320,16 +321,4 @@ export function waitForRendererSerializerFromRuntimeController(
 
 export function getSizeFromRuntimeController(ptyId: string) {
   return ptySizes.get(ptyId) ?? null
-}
-
-export async function serializeProviderBufferFromRuntimeController(
-  ptyId: string,
-  opts?: { scrollbackRows?: number }
-) {
-  try {
-    // Unmounted restored daemon PTYs still need provider snapshots for phone navigation.
-    return (await getProviderForPty(ptyId).getBufferSnapshot?.(ptyId, opts)) ?? null
-  } catch {
-    return null
-  }
 }

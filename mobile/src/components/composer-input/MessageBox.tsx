@@ -9,7 +9,7 @@ import {
 } from 'react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { useTextInputContentHeight } from '../../platform/text-input-content-height'
+import { useTextInputContentHeight } from '../../platform/text-input/text-input-content-height'
 import { ComposerSendButton } from './ComposerSendButton'
 import {
   composerInputStyles as styles,

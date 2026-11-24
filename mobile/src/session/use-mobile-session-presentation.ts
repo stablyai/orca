@@ -6,15 +6,22 @@ import {
   verdictDisplayLabel
 } from '../transport/connection/connection-health'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useInitialSessionTerminalAutoCreate } from '../terminal/session/use-initial-session-terminal-autocreate'
+import { useInitialSessionTerminalAutoCreate } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
 import { MOBILE_SESSION_STATUS_LABELS } from '../transport/connection/mobile-session-connection-copy'
 import type { MobileSessionBulkCloseModel } from './tabs/use-mobile-session-bulk-close'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { useDirectionPadAvailable, useShellSideRail } from '../layout/use-shell-side-rail'
 import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
 
 // The toast rises this far as it fades in; Reduce Motion keeps the fade alone.
 const TOAST_RISE_PX = 8
+
+function sessionPlaceLabel(name: string, branch: string | null, repo: string | null) {
+  if (branch && branch !== name) {
+    return branch
+  }
+  return repo && repo !== name ? repo : branch
+}
 
 export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel) {
   const t = useMobileTranslation()
@@ -77,8 +84,9 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     presentedConnState === 'connected'
       ? showLoadingState && visibleTabs.length === 0
         ? t('session.presentation.loadingTabs', 'Loading tabs')
-        : // The tab count lives in the tab bar, so the header names the branch instead.
-          (scope.worktreeBranch ?? MOBILE_SESSION_STATUS_LABELS.connected)
+        : // The tab count lives in the tab bar, so the header names the branch, or the project when the branch repeats the title.
+          (sessionPlaceLabel(scope.worktreeName, scope.worktreeBranch, scope.worktreeRepo) ??
+          MOBILE_SESSION_STATUS_LABELS.connected)
       : showConnectionRetry
         ? t('session.presentation.tapToRetry', '{{status}} — tap to retry', {
             status: verdictDisplayLabel(connectionVerdict)

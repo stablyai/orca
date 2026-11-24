@@ -6,7 +6,7 @@ import type {
 } from '../../../../orchestration/db/orchestration-records'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
-import type { ReplyParams } from '../../../../../../shared/rpc-contract/orchestration-params'
+import type { ReplyParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { resolveRunScope } from '../runs/run-scope'
 import type { OrchestrationAccessRuleInput } from '../access/orchestration-method-access'
 import { helperQuestionAnswerer } from './helper-question-answerer'

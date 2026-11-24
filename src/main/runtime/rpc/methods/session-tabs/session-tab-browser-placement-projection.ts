@@ -1,13 +1,17 @@
-import type { RuntimeCapability } from '../../../../../shared/protocol-version'
-import '../../../../../shared/protocol-version'
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
-import type { TabGroupLayoutNode } from '../../../../../shared/tab-types'
-import type { RuntimeMobileSessionClientTab } from '../../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
+import {
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_PAGE_ROWS_CLIENT_CAPABILITY
+} from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
+import type { ClientHostedBrowserRow } from '../../../../../shared/browser/client-hosting/client-hosted-browser-rows'
+import type { TabGroupLayoutNode } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { RuntimeMobileSessionClientTab } from '../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsResult
-} from '../../../../../shared/runtime-session-contracts'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export function clientCanObserveClientHostedBrowserPages(
   clientCapabilities: readonly RuntimeCapability[] | undefined
@@ -15,22 +19,48 @@ export function clientCanObserveClientHostedBrowserPages(
   return clientCapabilities?.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY) === true
 }
 
+export type ClientHostedPageHosts = {
+  /** The row this server's own window shows for a client-placed page. */
+  describeClientHostedBrowserPage(browserPageId: string): ClientHostedBrowserRow | undefined
+}
+
 export function projectSessionTabBrowserPlacements(
   payload: RuntimeMobileSessionTabsResult,
-  clientCapabilities: readonly RuntimeCapability[] | undefined
+  clientCapabilities: readonly RuntimeCapability[] | undefined,
+  hosts: ClientHostedPageHosts
 ): RuntimeMobileSessionTabsResult {
   if (clientCanObserveClientHostedBrowserPages(clientCapabilities)) {
     return payload
   }
-  const removedIds = new Set(
+  const clientPlacedIds = new Set(
     payload.tabs
       .filter((tab) => tab.type === 'browser' && tab.placement?.kind === 'client')
       .map((tab) => tab.id)
   )
-  if (removedIds.size === 0) {
+  if (clientPlacedIds.size === 0) {
     return payload
   }
-  return withoutSessionTabs(payload, removedIds)
+  if (!clientCapabilities?.includes(BROWSER_CLIENT_PAGE_ROWS_CLIENT_CAPABILITY)) {
+    return withoutSessionTabs(payload, clientPlacedIds)
+  }
+  return {
+    ...payload,
+    tabs: payload.tabs.map((tab) => {
+      if (tab.type !== 'browser' || !clientPlacedIds.has(tab.id)) {
+        return tab
+      }
+      const row = tab.browserPageId
+        ? hosts.describeClientHostedBrowserPage(tab.browserPageId)
+        : undefined
+      return {
+        ...tab,
+        clientHost: {
+          deviceName: row?.hostDeviceName ?? null,
+          ...(row?.hostAbsent ? { offline: true as const } : {})
+        }
+      }
+    })
+  }
 }
 
 /** Hides tabs from a client, keeping its groups, layout and active tab consistent. */

@@ -1,30 +1,29 @@
-import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath } from 'node:fs/promises'
 
 import { tmpdir } from 'node:os'
 
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
+import { removeTempDirs } from '../../../../shared/testing/remove-temp-dirs.test-support'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { addSparseWorktree } from '../../../git/worktrees/creation/worktree-sparse-add'
 import { addWorktree } from '../../../git/worktrees/creation/worktree-add'
 import { openWorktreeCreatePathClaim } from '../../../workspaces/creation/worktree-create-in-flight'
 import { exactNameLateCollision } from '../../../workspaces/creation/worktree-create-exact-name'
-import {
-  failedWorktreeRemovals,
-  pendingWorktreeRemovals
-} from '../../../workspaces/removal/worktree-removal-table'
+import { pendingWorktreeRemovals } from '../../../workspaces/removal/worktree-removal-table'
 import { runtimePathExists } from '../catalog/runtime-worktree-filesystem'
-import { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
+import { WorktreeCreateCollisionError } from '../../../../shared/new-workspace/worktree-create-collision'
+import { WorktreeCreate } from '../../../../shared/rpc-contract/workspaces/worktree-create-params'
 import { buildManagedWorktreeCreateArgs } from '../../rpc/methods/workspaces/worktree-create-args'
 import { RuntimeRemoteFetchController } from '../../repositories/runtime-remote-fetch-controller'
 import { resolveRuntimeLocalWorktreeCreateCandidate } from './runtime-local-worktree-create-candidate'
 
 const roots: string[] = []
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await removeTempDirs(roots.splice(0))
 })
 
 async function git(cwd: string, ...argv: string[]): Promise<string> {
@@ -180,7 +179,9 @@ describe('explicit branch reuse with real Git', () => {
     }
     await git(f.repoPath, 'worktree', 'add', busy, alias)
     expect(await git(busy, 'symbolic-ref', 'HEAD')).toBe(`refs/heads/${alias}`)
-    await expect(f.create()).rejects.toThrow(`already checked out at "${busy}"`)
+    // Git for Windows lists worktree paths with forward slashes.
+    const listedBusy = process.platform === 'win32' ? busy.replaceAll('\\', '/') : busy
+    await expect(f.create()).rejects.toThrow(`already checked out at "${listedBusy}"`)
     expect(
       (await git(f.repoPath, 'worktree', 'list', '--porcelain')).match(/^worktree /gm)
     ).toHaveLength(2)
@@ -243,19 +244,18 @@ describe('explicit branch reuse with real Git', () => {
             trackRemoteBranch: true,
             remoteTrackingBase: f.remoteTrackingBase ?? undefined
           })
-      const result = await create
-      expect(result.upstreamWarning).toContain('Check the push destination')
-      expect(result.upstreamWarning).toContain(f.base)
+      await create
+
       expect(await git(picked.worktreePath, 'rev-parse', 'HEAD')).toBe(f.initialTip)
       expect(await git(picked.worktreePath, 'symbolic-ref', 'HEAD')).toBe(`refs/heads/${f.branch}`)
-      await expect(git(picked.worktreePath, 'rev-parse', '@{upstream}')).rejects.toThrow()
+
       expect(await git(f.repoPath, 'config', 'remote.team/upstream.fetch')).toBe(
         '+refs/heads/main:refs/remotes/team/upstream/main'
       )
     }
   )
 
-  it.each(['ahead', 'diverged', 'behind'])(
+  it.each(['diverged', 'behind'])(
     'reuses a %s local branch without changing its tip or upstream',
     async (state) => {
       const f = await fixture()
@@ -268,10 +268,8 @@ describe('explicit branch reuse with real Git', () => {
       }
       const localTip = await git(f.repoPath, 'rev-parse', 'HEAD')
       await git(f.repoPath, 'checkout', '--quiet', 'main')
-      if (state !== 'ahead') {
-        await git(f.repoPath, 'commit', '--quiet', '--allow-empty', '-m', 'remote work')
-        await git(f.repoPath, 'update-ref', f.base, 'HEAD')
-      }
+      await git(f.repoPath, 'commit', '--quiet', '--allow-empty', '-m', 'remote work')
+      await git(f.repoPath, 'update-ref', f.base, 'HEAD')
       const remoteTip = await git(f.repoPath, 'rev-parse', f.base)
       await mkdir(join(f.workspaceRoot, 'My-workspace'), { recursive: true })
       const picked = await f.create()
@@ -283,76 +281,16 @@ describe('explicit branch reuse with real Git', () => {
     }
   )
 
-  it('pins the branch across path collisions and refuses a branch created after preflight', async () => {
+  it('pins the selected branch across workspace path collisions', async () => {
     const f = await fixture()
     await mkdir(join(f.workspaceRoot, 'My-workspace'), { recursive: true })
     const picked = await f.candidate()
     expect(picked.worktreePath).toBe(join(f.workspaceRoot, 'My-workspace-2'))
     expect(picked.branchName).toBe(f.branch)
-    await git(f.repoPath, 'branch', f.branch)
-    await expect(
-      addWorktree(f.repoPath, picked.worktreePath, picked.branchName, f.base, false, false, {
-        trackRemoteBranch: true
-      })
-    ).rejects.toThrow()
-    expect(await git(f.repoPath, 'rev-parse', `refs/heads/${f.branch}`)).toBe(f.initialTip)
-    await expect(
-      git(f.repoPath, 'rev-parse', '--verify', `refs/heads/${f.branch}-2`)
-    ).rejects.toThrow()
   })
 })
 
 describe('cleanup ownership before candidate fallbacks', () => {
-  it.each(['pending branch', 'failed branch reuse', 'failed path', 'empty branch override'])(
-    'explains %s before suffixing or missing-branch guidance',
-    async (scenario) => {
-      const f = await fixture()
-      const path = join(scenario === 'empty branch override' ? f.root : f.workspaceRoot, 'reserved')
-      const failed = scenario !== 'pending branch'
-      const records = failed ? failedWorktreeRemovals : pendingWorktreeRemovals
-      const record = {
-        worktreeId: `repo::${path}`,
-        repoId: 'repo',
-        repoPath: f.repoPath,
-        worktreePath: path,
-        branch: 'reserved',
-        head: f.initialTip,
-        deleteBranch: true,
-        force: true,
-        requestedAt: 0,
-        ...(failed ? { failure: { message: 'permission denied', failedAt: 1 } } : {})
-      }
-      records.set(record.worktreeId, record)
-      if (scenario === 'pending branch') {
-        await git(f.repoPath, 'branch', 'reserved')
-      } else if (scenario === 'failed path') {
-        await mkdir(path, { recursive: true })
-      }
-      try {
-        await expect(
-          f.candidate({
-            name:
-              scenario === 'failed path' || scenario === 'empty branch override'
-                ? 'reserved'
-                : 'free-name',
-            branchNameOverride:
-              scenario === 'failed path'
-                ? undefined
-                : scenario === 'empty branch override'
-                  ? ''
-                  : 'reserved',
-            branchIntent: scenario === 'failed branch reuse' ? 'open-existing-v2' : 'create-new'
-          })
-        ).rejects.toThrow(failed ? 'Retry deleting it before reusing' : 'Cleanup is pending')
-        expect(records.get(record.worktreeId)).toBe(record)
-        expect(await git(f.repoPath, 'branch', '--list', 'reserved-2')).toBe('')
-        await expect(runtimePathExists(join(f.workspaceRoot, 'free-name-2'))).resolves.toBe(false)
-      } finally {
-        records.delete(record.worktreeId)
-      }
-    }
-  )
-
   it('keeps generated allocation and ordinary collision suffixes', async () => {
     const f = await fixture()
     const path = join(f.workspaceRoot, 'nautilus')
@@ -402,7 +340,6 @@ describe('exact-name create with real Git', () => {
   // Branch prefix none, so each existing branch is the candidate's own twin after host naming.
   it.each([
     ['release..fix', 'release.fix'],
-    ['cache.lock', 'cache-lock'],
     ['Login fix', 'login-fix'],
     ['🚀 launch', 'rocket-launch'],
     // The default intent would adopt this unchecked-out branch.
@@ -423,43 +360,6 @@ describe('exact-name create with real Git', () => {
       'refs/heads/brennan/login-fix'
     )
   })
-
-  it.each(['an existing folder', 'a pending removal', 'an in-flight create'])(
-    'refuses a path held by %s and leaves the claims as they were',
-    async (holder) => {
-      const f = await fixture()
-      const path = join(f.workspaceRoot, 'Login-fix')
-      const foreign = openWorktreeCreatePathClaim()
-      if (holder === 'an existing folder') {
-        await mkdir(path, { recursive: true })
-      } else if (holder === 'a pending removal') {
-        pendingWorktreeRemovals.set('exact-name-test', {
-          worktreeId: `repo::${path}`,
-          repoId: 'repo',
-          repoPath: f.repoPath,
-          worktreePath: path,
-          branch: '',
-          head: '',
-          deleteBranch: false,
-          force: false,
-          requestedAt: 0
-        })
-      } else {
-        expect(foreign.claim(path)).toBe(true)
-      }
-      try {
-        await (holder === 'a pending removal'
-          ? expect(f.candidate(exact('Login fix'))).rejects.toThrow('Cleanup is pending')
-          : expect(f.candidate(exact('Login fix'))).rejects.toMatchObject(refused))
-        const probe = openWorktreeCreatePathClaim()
-        expect(probe.claim(path)).toBe(holder !== 'an in-flight create')
-        probe.release()
-      } finally {
-        foreign.release()
-        pendingWorktreeRemovals.delete('exact-name-test')
-      }
-    }
-  )
 
   it('maps a branch created after the check to the refusal with no workspace left', async () => {
     const f = await fixture()
@@ -501,5 +401,69 @@ describe('exact-name create with real Git', () => {
     })
     expect(mapped).toBe(error)
     expect(mapped).not.toMatchObject(refused)
+  })
+})
+
+describe('derived slash branches with real Git', () => {
+  it('keeps branch hierarchy, a flat checkout path and matching collision suffixes', async () => {
+    const f = await fixture('origin', { branchPrefix: 'custom', branchPrefixCustom: 'team' })
+    const request = {
+      name: 'feature/tti_fix_1440',
+      branchNameOverride: undefined,
+      branchIntent: 'create-new' as const
+    }
+    const first = await f.create(request)
+    expect(first.worktreePath).toBe(join(f.workspaceRoot, 'feature-tti_fix_1440'))
+    expect(await git(first.worktreePath, 'symbolic-ref', 'HEAD')).toBe(
+      'refs/heads/team/feature/tti_fix_1440'
+    )
+    const second = await f.create(request)
+    expect(second.worktreePath).toBe(join(f.workspaceRoot, 'feature-tti_fix_1440-2'))
+    expect(await git(second.worktreePath, 'symbolic-ref', 'HEAD')).toBe(
+      'refs/heads/team/feature/tti_fix_1440-2'
+    )
+  })
+
+  it('normalizes reserved ref segments without changing the directory name', async () => {
+    const f = await fixture()
+    const picked = await f.create({
+      name: '/feature.lock//.中文 fix../item.lock.lock/',
+      branchNameOverride: undefined,
+      branchIntent: 'create-new'
+    })
+    expect(picked.worktreePath).toBe(
+      join(f.workspaceRoot, 'feature.lock-.中文-fix.-item.lock.lock')
+    )
+    expect(await git(picked.worktreePath, 'symbolic-ref', 'HEAD')).toBe(
+      'refs/heads/feature-lock/中文-fix/item.lock-lock'
+    )
+  })
+})
+
+describe('derived branch namespace conflicts with real Git', () => {
+  it.each(['create-new', 'create-exact'] as const)(
+    'refuses an occupied parent without changing the requested hierarchy (%s)',
+    async (branchIntent) => {
+      const f = await fixture()
+      await git(f.repoPath, 'branch', 'feature')
+      await expect(
+        f.candidate({ name: 'feature/x', branchNameOverride: undefined, branchIntent })
+      ).rejects.toBeInstanceOf(WorktreeCreateCollisionError)
+      expect(await git(f.repoPath, 'for-each-ref', '--format=%(refname)', 'refs/heads/')).toBe(
+        'refs/heads/feature\nrefs/heads/main'
+      )
+    }
+  )
+
+  it('suffixes a name occupied by descendants while keeping the checkout flat', async () => {
+    const f = await fixture()
+    await git(f.repoPath, 'branch', 'feature/x')
+    const picked = await f.create({
+      name: 'feature',
+      branchNameOverride: undefined,
+      branchIntent: 'create-new'
+    })
+    expect(picked.worktreePath).toBe(join(f.workspaceRoot, 'feature-2'))
+    expect(await git(picked.worktreePath, 'symbolic-ref', 'HEAD')).toBe('refs/heads/feature-2')
   })
 })

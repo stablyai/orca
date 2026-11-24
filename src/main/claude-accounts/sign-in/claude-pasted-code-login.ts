@@ -1,5 +1,5 @@
-import { stripAnsiEscapeSequences } from '../../../shared/ansi-escape-sequences'
-import type { HostAccountSignInChannel } from '../../../shared/host-account-sign-in-types'
+import { stripAnsiEscapeSequences } from '../../../shared/terminal/protocol/escape/ansi-escape-sequences'
+import type { HostAccountSignInChannel } from '../../../shared/agent-accounts/host-account-sign-in-types'
 import type { ClaudeCommandConfig, ClaudeCommandOptions } from './claude-command-process'
 import { isClaudeLocalSignInLink, prepareClaudeSignInBrowser } from './claude-sign-in-browser'
 

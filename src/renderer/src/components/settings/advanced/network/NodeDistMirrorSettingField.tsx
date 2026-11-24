@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useState } from 'react'
-import { normalizeNodeDistMirrorUrl } from '../../../../../../shared/node-dist-mirror'
+import { normalizeNodeDistMirrorUrl } from '../../../../../../shared/node-runtime/node-dist-mirror'
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
 import { useTranslate } from '@/i18n/use-translate'

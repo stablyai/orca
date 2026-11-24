@@ -25,6 +25,7 @@ export function projectJournalBatch(input: {
   canonicalItemId?: (itemId: string) => string
   hasSubmission?: (id: string) => boolean
   queueSourceIds?: (messageId: string) => readonly string[]
+  stopNoteIds?: (turnItemIds: ReadonlySet<string>) => readonly string[]
   readSnapshot?: (touched: Set<string>) => AgentJournalSnapshot
 }): JournalBatchProjection {
   if (
@@ -94,10 +95,16 @@ export function projectJournalBatch(input: {
     }
   }
 
-  const notes = stopNotesByTurn(input.snapshot.items)
-  for (const itemId of touchedItemIds) {
-    for (const noteId of notes.get(itemId) ?? []) {
+  if (input.stopNoteIds) {
+    for (const noteId of input.stopNoteIds(touchedItemIds)) {
       touchedItemIds.add(noteId)
+    }
+  } else {
+    const notes = stopNotesByTurn(input.snapshot.items)
+    for (const itemId of touchedItemIds) {
+      for (const noteId of notes.get(itemId) ?? []) {
+        touchedItemIds.add(noteId)
+      }
     }
   }
   const snapshot = input.readSnapshot?.(touchedItemIds) ?? input.snapshot

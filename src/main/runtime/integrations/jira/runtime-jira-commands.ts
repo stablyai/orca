@@ -35,7 +35,7 @@ import { listProjects } from '../../../jira/jira-project-queries'
 export class RuntimeJiraCommands {
   constructor(private readonly host: JiraIssueSummaryGenerationHost) {}
 
-  jiraGenerateIssueSummary(
+  async jiraGenerateIssueSummary(
     args: JiraIssueSummaryGenerationRequest,
     owner: string,
     signal?: AbortSignal
@@ -51,32 +51,32 @@ export class RuntimeJiraCommands {
     return { ok: true }
   }
 
-  jiraConnect(args: JiraConnectArgs): ReturnType<typeof connect> {
+  async jiraConnect(args: JiraConnectArgs): ReturnType<typeof connect> {
     return connect(args)
   }
 
-  jiraDisconnect(siteId?: string): { ok: true } {
-    disconnect(siteId)
+  async jiraDisconnect(siteId?: string): Promise<{ ok: true }> {
+    await disconnect(siteId)
     return { ok: true }
   }
 
-  jiraSelectSite(siteId: JiraSiteSelection): ReturnType<typeof getStatus> {
+  async jiraSelectSite(siteId: JiraSiteSelection): ReturnType<typeof getStatus> {
     return selectSite(siteId)
   }
 
-  jiraStatus(): ReturnType<typeof getStatus> {
+  async jiraStatus(): ReturnType<typeof getStatus> {
     return getStatus()
   }
 
-  jiraReadStatus(): ReturnType<typeof getStatus> {
+  async jiraReadStatus(): ReturnType<typeof getStatus> {
     return getStatus()
   }
 
-  jiraTestConnection(siteId?: string): ReturnType<typeof testConnection> {
+  async jiraTestConnection(siteId?: string): ReturnType<typeof testConnection> {
     return testConnection(siteId)
   }
 
-  jiraSearchIssues(
+  async jiraSearchIssues(
     jql: string,
     limit = 30,
     siteId?: JiraSiteSelection,
@@ -86,7 +86,7 @@ export class RuntimeJiraCommands {
     return searchIssues(jql, Math.min(Math.max(1, limit), 100), siteId, signal, strict)
   }
 
-  jiraListIssues(
+  async jiraListIssues(
     filter?: JiraIssueFilter,
     limit = 30,
     siteId?: JiraSiteSelection,
@@ -96,11 +96,11 @@ export class RuntimeJiraCommands {
     return listIssues(filter, Math.min(Math.max(1, limit), 100), siteId, strict, filters)
   }
 
-  jiraCreateIssue(args: JiraCreateIssueArgs): ReturnType<typeof createIssue> {
+  async jiraCreateIssue(args: JiraCreateIssueArgs): ReturnType<typeof createIssue> {
     return createIssue(args)
   }
 
-  jiraGetIssue(
+  async jiraGetIssue(
     key: string,
     siteId?: string,
     strict = false,
@@ -109,7 +109,7 @@ export class RuntimeJiraCommands {
     return getIssue(key, siteId, strict, mediaFormat)
   }
 
-  jiraLookupIssueSummary(
+  async jiraLookupIssueSummary(
     key: string,
     siteId: string,
     signal?: AbortSignal
@@ -117,7 +117,7 @@ export class RuntimeJiraCommands {
     return getIssueSummary(key, siteId, signal)
   }
 
-  jiraUpdateIssue(
+  async jiraUpdateIssue(
     key: string,
     updates: JiraIssueUpdate,
     siteId?: string
@@ -125,7 +125,7 @@ export class RuntimeJiraCommands {
     return updateIssue(key, updates, siteId)
   }
 
-  jiraAddIssueComment(
+  async jiraAddIssueComment(
     key: string,
     body: string,
     siteId?: string
@@ -133,7 +133,7 @@ export class RuntimeJiraCommands {
     return addIssueComment(key, body, siteId)
   }
 
-  jiraIssueComments(
+  async jiraIssueComments(
     key: string,
     siteId?: string,
     strict = false,
@@ -142,18 +142,21 @@ export class RuntimeJiraCommands {
     return getIssueComments(key, siteId, strict, mediaFormat)
   }
 
-  jiraListProjects(siteId?: JiraSiteSelection, strict = false): ReturnType<typeof listProjects> {
+  async jiraListProjects(
+    siteId?: JiraSiteSelection,
+    strict = false
+  ): ReturnType<typeof listProjects> {
     return listProjects(siteId, strict)
   }
 
-  jiraListFavouriteFilters(
+  async jiraListFavouriteFilters(
     siteId: string,
     signal?: AbortSignal
   ): ReturnType<typeof listFavouriteFilters> {
     return listFavouriteFilters(siteId, signal)
   }
 
-  jiraListIssueTypes(
+  async jiraListIssueTypes(
     projectIdOrKey: string,
     siteId?: string,
     strict = false
@@ -161,7 +164,7 @@ export class RuntimeJiraCommands {
     return listIssueTypes(projectIdOrKey, siteId, strict)
   }
 
-  jiraListCreateFields(
+  async jiraListCreateFields(
     projectIdOrKey: string,
     issueTypeId: string,
     siteId?: string,
@@ -170,11 +173,11 @@ export class RuntimeJiraCommands {
     return listCreateFields(projectIdOrKey, issueTypeId, siteId, strict)
   }
 
-  jiraListPriorities(siteId?: string, strict = false): ReturnType<typeof listPriorities> {
+  async jiraListPriorities(siteId?: string, strict = false): ReturnType<typeof listPriorities> {
     return listPriorities(siteId, strict)
   }
 
-  jiraListAssignableUsers(
+  async jiraListAssignableUsers(
     key: string,
     query?: string,
     siteId?: string,
@@ -184,11 +187,11 @@ export class RuntimeJiraCommands {
   }
 
   /** Searches all users on the site, for reporter and user-picker create fields. */
-  jiraSearchUsers(query?: string, siteId?: string): ReturnType<typeof searchUsers> {
+  async jiraSearchUsers(query?: string, siteId?: string): ReturnType<typeof searchUsers> {
     return searchUsers(query, siteId)
   }
 
-  jiraListTransitions(
+  async jiraListTransitions(
     key: string,
     siteId?: string,
     strict = false
@@ -196,7 +199,7 @@ export class RuntimeJiraCommands {
     return listTransitions(key, siteId, strict)
   }
 
-  jiraGetProjectStatusOrder(
+  async jiraGetProjectStatusOrder(
     projectKey: string,
     siteId?: string
   ): ReturnType<typeof getProjectStatusOrder> {

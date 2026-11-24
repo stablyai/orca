@@ -9,12 +9,12 @@ import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../.
 import { githubPRStackExecutionScope, type GhExecOptions } from './../github-exec-scope'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
 import { getRestPRByNumber } from './../lookup/pr-number-lookup'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import {
   classifiedFailure,
   codeHostFailure,
   type CodeHostFailure
-} from '../../../../shared/code-host-failure-copy'
+} from '../../../../shared/source-control/code-host-failure-copy'
 export const PR_AUTO_MERGE_IDENTITY_JSON_FIELDS = 'id,headRefOid,baseRefName'
 
 export const GITHUB_AUTO_MERGE_METHODS: Record<GitHubPRMergeMethod, 'MERGE' | 'SQUASH' | 'REBASE'> =

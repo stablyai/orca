@@ -7,7 +7,7 @@ import {
   selectExistingMcpConfigCandidates,
   type McpConfigDirectoryEntry,
   type McpConfigInspection
-} from '../../../../../shared/mcp-config'
+} from '../../../../../shared/mcp/configuration/mcp-config'
 import { joinPath } from '../../../lib/path'
 import { extractIpcErrorMessage } from '../../errors/ipc-error'
 

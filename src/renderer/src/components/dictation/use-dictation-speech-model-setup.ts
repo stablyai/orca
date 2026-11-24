@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import type { VoiceSettings } from '../../../../shared/speech-types'
+import type { VoiceSettings } from '../../../../shared/speech/speech-types'
 import { captureInsertionTarget } from './dictation-insertion-target'
 import { dictationPillAnchorFor, type DictationPillAnchor } from './dictation-pill-anchor'
 import { checkSpeechModelUpdate, isSpeechModelKnownReady } from './speech-model-update-check'

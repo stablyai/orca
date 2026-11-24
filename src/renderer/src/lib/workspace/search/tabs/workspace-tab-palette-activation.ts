@@ -4,7 +4,7 @@ import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/ac
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { activateAndRevealWorkspace } from '../../activation/worktree-activation'
 import { activateStructuredAgentSessionTab } from '../../../agent-session/structured-agent-session-tab-activation'
 import { clearClientHostedBrowserRowSelection } from '../../../../runtime/browser/client-hosting/client-hosted-browser-row-state'

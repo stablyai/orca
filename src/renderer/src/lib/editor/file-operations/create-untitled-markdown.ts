@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   createRuntimePath,
   deleteRuntimePath,
@@ -31,8 +31,8 @@ export type UntitledMarkdownFileInfo = {
 
 type CreateUntitledMarkdownOptions = {
   template?: MarkdownDocumentTemplate
-  /** Recovered text goes into a new `<name> (recovered)<ext>` file, never the original path. */
-  recoveredDocument?: { originalPath: string; content: string }
+  /** Recovered text goes into a new `<name> (recovered)<ext>` file, never the original path; without content the file starts empty for a caller-held draft. */
+  recoveredDocument?: { originalPath: string; content?: string }
   /** A plugin's new-file type: `untitled<extension>` seeded with its template text, unchanged. */
   newFile?: { extension: string; content: string }
   now?: Date
@@ -126,7 +126,9 @@ export async function createUntitledMarkdownFile(
         language: detectLanguage(fileName),
         isUntitled: true,
         deleteUntouchedOnClose:
-          recovered || templateContent !== null || newFile?.content ? false : undefined,
+          recovered?.content !== undefined || templateContent !== null || newFile?.content
+            ? false
+            : undefined,
         operationProvenance: options.operationProvenance,
         mode: 'edit'
       }

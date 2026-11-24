@@ -11,7 +11,7 @@ import { getStructuredAgentSessionLaunchLifecycle } from './structured-agent-ses
 import { getStructuredLaunchStateBySessionId } from './structured-agent-session-launch-state-store'
 import { retryStructuredAgentSessionLaunch } from './structured-agent-session-launch'
 
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { trackStructuredLaunchPromptOutcome } from './structured-agent-session-launch-prompt-outcome'
 import { structuredAgentSessionLaunchHasRetainedInput } from './structured-agent-session-launch-input'
 import { structuredAgentSessionSendOut } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'

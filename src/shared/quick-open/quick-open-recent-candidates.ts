@@ -1,5 +1,5 @@
-import { isWindowsAbsolutePathLike } from '../cross-platform-path'
-import { isClipboardTextByteLengthOverLimit } from '../clipboard-text'
+import { isWindowsAbsolutePathLike } from '../file-access/cross-platform-path'
+import { isClipboardTextByteLengthOverLimit } from '../clipboard/clipboard-text'
 
 export const QUICK_OPEN_RECENT_CANDIDATE_LIMIT = 100
 const MAX_CANDIDATE_BYTES = 64 * 1024

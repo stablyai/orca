@@ -1,6 +1,14 @@
 import { z } from 'zod'
-import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalSubmissionKey,
+  parseAgentJournalItemKey
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import {
+  captureHistoryCatchUpView,
+  type HistoryCatchUpJournalView
+} from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 
 /** Pi entries through entry are accounted for through this journal epoch/sequence; encoded in the Pi resume cursor. */
@@ -32,6 +40,7 @@ export function decodePiHistoryClaim(value: string | undefined): PiHistoryClaim 
 export type PiHistoryJournalView = {
   epoch: string
   sequence: number
+  physicalCursor?: AgentJournalCursor
   hasRows: boolean
   /** Include entries from every file in the conversation lineage. */
   accounted: ReadonlySet<string>
@@ -39,40 +48,46 @@ export type PiHistoryJournalView = {
   ownWorkSequence: number
 }
 
-export function readPiHistoryJournalView(
+export async function readPiHistoryJournalView(
   journal: StructuredAgentSessionHistoryJournal,
   lineage: ReadonlySet<string>
-): PiHistoryJournalView {
-  const accounted = new Set<string>()
-  let hasRows = false
-  let ownWorkSequence = 0
-  journal.visitItems((itemId, sequence, body) => {
-    hasRows = true
-    const identity = parseAgentJournalItemKey(itemId)
-    if (
-      identity?.provider === 'legacy' &&
-      identity.agent === 'pi' &&
-      lineage.has(identity.sessionId)
-    ) {
-      accounted.add(identity.recordId)
-      return
-    }
-    if (
-      body.kind === 'turn' ||
-      (identity?.provider === 'orca' &&
-        body.kind === 'message' &&
-        !(
-          journal.inputOrder.inputForItem(itemId) &&
-          isQueuedAgentJournalSubmission(journal.inputOrder.inputForItem(itemId)!)
-        ))
-    ) {
-      ownWorkSequence = Math.max(ownWorkSequence, sequence)
-    }
+): Promise<PiHistoryJournalView & HistoryCatchUpJournalView> {
+  return captureHistoryCatchUpView(journal, async () => {
+    const [cursor, hasRows, accepted] = await Promise.all([
+      journal.reads.cursor(),
+      journal.reads.hasItems(),
+      journal.reads.input({ kind: 'accepted-submissions' })
+    ])
+    const queued = new Set(
+      accepted.submissions
+        .filter(isQueuedAgentJournalSubmission)
+        .map((send) => agentJournalSubmissionKey(send.clientMessageId))
+    )
+    const accounted = new Set<string>()
+    // A prompt accepted before its turn row landed still counts from its acceptance.
+    let ownWorkSequence = accepted.latestReceiptSequence
+    await journal.reads.visitItems(
+      { kinds: ['message', 'tool-call', 'diff', 'approval', 'question', 'status', 'turn'] },
+      (itemId, sequence, body) => {
+        const identity = parseAgentJournalItemKey(itemId)
+        if (
+          identity?.provider === 'legacy' &&
+          identity.agent === 'pi' &&
+          lineage.has(identity.sessionId)
+        ) {
+          accounted.add(identity.recordId)
+          return
+        }
+        if (
+          body.kind === 'turn' ||
+          (identity?.provider === 'orca' && body.kind === 'message' && !queued.has(itemId))
+        ) {
+          ownWorkSequence = Math.max(ownWorkSequence, sequence)
+        }
+      }
+    )
+    return { epoch: cursor.epoch, sequence: cursor.sequence, hasRows, accounted, ownWorkSequence }
   })
-  // A prompt Pi accepted before its turn row landed still counts from its acceptance.
-  ownWorkSequence = Math.max(ownWorkSequence, journal.inputOrder.latestReceiptSequence())
-  const cursor = journal.cursor()
-  return { epoch: cursor.epoch, sequence: cursor.sequence, hasRows, accounted, ownWorkSequence }
 }
 
 /** Usable only in the journal it describes, and never past what that journal holds. */
@@ -89,6 +104,8 @@ export function samePiHistoryJournalView(
 ): boolean {
   return (
     a.epoch === b.epoch &&
+    a.physicalCursor?.epoch === b.physicalCursor?.epoch &&
+    a.physicalCursor?.sequence === b.physicalCursor?.sequence &&
     a.hasRows === b.hasRows &&
     a.ownWorkSequence === b.ownWorkSequence &&
     a.accounted.size === b.accounted.size &&

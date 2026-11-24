@@ -3,12 +3,13 @@ import { translate } from '../../i18n/mobile-i18n'
 import { View, ActivityIndicator, Text, FlatList, Pressable } from 'react-native'
 import { colors, spacing, type MobileColorScheme, pressedStyle } from '../../theme/mobile-theme'
 import { ChevronLeft, ChevronRight, ExternalLink, GitBranch } from 'lucide-react-native'
-import { openExternalLink } from '../../platform/external-link'
+import { openExternalLink } from '../../platform/external-links/external-link'
 import {
   getHostedReviewSignalTone,
   getHostedReviewLabel,
   getHostedChecksLabel,
-  getHostedMergeLabel
+  getGitHubMergeChip,
+  getGitLabMergeChip
 } from '../hosted-review/mobile-hosted-check-status'
 import { ignoreKeptRowPress, renderMobileTasksListState } from './mobile-tasks-list-state'
 import { styles, getPrSignalToneStyle } from '../mobile-tasks-legacy-styles'
@@ -16,8 +17,7 @@ import { taskRepositoryMeta } from '../repositories/mobile-tasks-repository-pres
 import {
   formatGitHubPRDelta,
   hostedBranchSummary,
-  getGitHubReviewSummary,
-  getGitHubMergeLabel
+  getGitHubReviewSummary
 } from '../hosted-review/mobile-tasks-hosted-review'
 import { formatUpdatedAt } from '../item-detail/mobile-tasks-item-mapping'
 import { taskKindLabel } from '../item-detail/mobile-tasks-item-comments'
@@ -185,10 +185,10 @@ export function renderMobileTasksProviderItemList(
         const isGitLabMr = item.provider === 'gitlab' && item.source.type === 'mr'
         const githubPrDelta = isGitHubPr ? formatGitHubPRDelta(item.source) : null
         const branchSummary = hostedBranchSummary(item)
-        const mergeLabel = isGitHubPr
-          ? getGitHubMergeLabel(item.source)
+        const mergeChip = isGitHubPr
+          ? getGitHubMergeChip(item.source)
           : isGitLabMr
-            ? getHostedMergeLabel(item.source)
+            ? getGitLabMergeChip(item.source)
             : null
         return (
           <Pressable
@@ -262,15 +262,10 @@ export function renderMobileTasksProviderItemList(
                       {getHostedChecksLabel(item.source)}
                     </Text>
                   </View>
-                  {mergeLabel ? (
-                    <View
-                      style={[
-                        styles.prSignalChip,
-                        getPrSignalToneStyle(getHostedReviewSignalTone(item.source, 'merge'))
-                      ]}
-                    >
+                  {mergeChip ? (
+                    <View style={[styles.prSignalChip, getPrSignalToneStyle(mergeChip.tone)]}>
                       <Text style={styles.prSignalText} numberOfLines={1}>
-                        {mergeLabel}
+                        {mergeChip.label}
                       </Text>
                     </View>
                   ) : null}

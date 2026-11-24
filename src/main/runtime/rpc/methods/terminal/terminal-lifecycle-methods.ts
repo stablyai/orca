@@ -1,12 +1,13 @@
+import { bindTerminalToCallingWorker } from '../../../orchestration/workers/lifecycle/worker-created-terminal-owner'
 import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { TERMINAL_WORKSPACE_STOP_METHODS } from './terminal-workspace-stop-methods'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { defineMethod } from '../../core'
 import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
-} from '../../../../../shared/runtime-navigation'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { withTerminalCloseAttribution } from '../../terminal/terminal-close-attribution'
 import {
   AgentTeamsPrepareLaunch,
@@ -15,10 +16,10 @@ import {
   TerminalFocus,
   TerminalHandle,
   TerminalReveal,
-  TerminalSplit,
   TerminalWait
-} from '../../../../../shared/rpc-contract/terminal-unary-params'
-import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal-stream-params'
+} from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
+import { TerminalSplit } from '../../../../../shared/rpc-contract/terminal/terminal-split-params'
+import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal/terminal-stream-params'
 
 export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({
@@ -136,6 +137,9 @@ export const TERMINAL_LIFECYCLE_METHODS = [
           terminal.executionHostId
         )
       }
+      if (!terminal.isReattach) {
+        bindCreatedTerminal(runtime, context, terminal.handle, params.keepOpen === true)
+      }
       const publicTerminal = { ...terminal }
       delete publicTerminal.savedStartupCwd
       return { terminal: publicTerminal }
@@ -145,31 +149,41 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     name: 'terminal.split',
     permission: 'workspace',
     params: TerminalSplit,
-    handler: async (params, { runtime, caller }) => ({
-      split:
-        params.pane && !params.terminal
-          ? await runtime.splitTerminalPane(params.pane, {
-              direction: params.direction ?? 'horizontal',
-              newLeafId: params.newLeafId,
-              cwd: params.cwd,
-              initialSize: params.initialSize,
-              command: params.command,
-              env: params.env,
-              // The window's split shows why its start failed, as its own spawn did.
-              keepPaneOnStartFailure: true,
-              wslUserAct: true
-            })
-          : // The schema requires a handle when no pane is named.
-            await runtime.splitTerminal(params.terminal ?? '', {
-              direction: params.direction,
-              command: params.command,
-              env: params.env,
-              telemetrySource: params.telemetrySource,
-              retrySplit: params.retrySplit,
-              ...(caller?.kind === 'local-cli' ? { activate: false } : {}),
-              wslUserAct: true
-            })
-    })
+    handler: async (params, context) => {
+      const { runtime, caller } = context
+      const viewerSupported = terminalImageViewerSupported(context)
+      const viewer =
+        viewerSupported === undefined ? {} : { terminalImageViewerSupported: viewerSupported }
+      if (params.pane && !params.terminal) {
+        return {
+          split: await runtime.splitTerminalPane(params.pane, {
+            direction: params.direction ?? 'horizontal',
+            newLeafId: params.newLeafId,
+            cwd: params.cwd,
+            initialSize: params.initialSize,
+            command: params.command,
+            env: params.env,
+            ...viewer,
+            // The window's split shows why its start failed, as its own spawn did.
+            keepPaneOnStartFailure: true,
+            wslUserAct: true
+          })
+        }
+      }
+      // The schema requires a handle when no pane is named.
+      const split = await runtime.splitTerminal(params.terminal ?? '', {
+        direction: params.direction,
+        command: params.command,
+        env: params.env,
+        ...viewer,
+        telemetrySource: params.telemetrySource,
+        retrySplit: params.retrySplit,
+        ...(caller?.kind === 'local-cli' ? { activate: false } : {}),
+        wslUserAct: true
+      })
+      bindCreatedTerminal(runtime, context, split.handle, params.keepOpen === true)
+      return { split }
+    }
   }),
   ...TERMINAL_WORKSPACE_STOP_METHODS,
   defineMethod({
@@ -281,3 +295,12 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     })
   })
 ]
+
+// Binding is best effort: a terminal that could not be bound still opens, as it always has.
+function bindCreatedTerminal(...args: Parameters<typeof bindTerminalToCallingWorker>): void {
+  try {
+    bindTerminalToCallingWorker(...args)
+  } catch (error) {
+    console.warn('[terminal] could not bind a worker-created terminal', args[2], error)
+  }
+}

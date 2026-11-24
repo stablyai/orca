@@ -1,11 +1,12 @@
-import { isPathInsideOrEqual } from '../../../src/shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../../src/shared/file-access/cross-platform-path'
 import { latestSessionConversationTurn } from '../../../src/shared/ai-vault/session-display/ai-vault-session-display'
 import {
   aiVaultAgentLabel,
   type AiVaultSession
 } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 
-import { formatTimeAgo } from '../worktree/agent-row-display'
+import { aiVaultSessionMessageCountKnown } from '../../../src/shared/ai-vault/session-display/cursor-acp-session-path'
+import { formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
 import { translate } from '../i18n/mobile-i18n'
 
 export type MobileAgentHistoryCard = {
@@ -13,8 +14,11 @@ export type MobileAgentHistoryCard = {
   agent: AiVaultSession['agent']
   agentLabel: string
   title: string
+  /** The session is a forked chat, so its title follows the fork mark. */
+  forked: boolean
   lastMessage: string
-  messageCount: number
+  /** Null when the host cannot count this conversation. */
+  messageCount: number | null
   timeAgo: string
   isCurrentWorktree: boolean
 }
@@ -36,7 +40,7 @@ export function isSessionInActiveWorktree(
 }
 
 export function buildMobileAgentHistoryCard(
-  session: AiVaultSession,
+  session: AiVaultSession & { forked?: true },
   activeWorktreePath: string | null,
   now: number
 ): MobileAgentHistoryCard {
@@ -48,8 +52,9 @@ export function buildMobileAgentHistoryCard(
     agentLabel: aiVaultAgentLabel(session.agent),
     title:
       session.title || translate('agentHistory.sessionCard.untitledSession', 'Untitled session'),
+    forked: session.forked === true,
     lastMessage: latestTurn?.text.trim() ?? '',
-    messageCount: session.messageCount,
+    messageCount: aiVaultSessionMessageCountKnown(session) ? session.messageCount : null,
     timeAgo: Number.isFinite(updatedAtMs) ? formatTimeAgo(updatedAtMs, now) : '',
     isCurrentWorktree: isSessionInActiveWorktree(session, activeWorktreePath)
   }

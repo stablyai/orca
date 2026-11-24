@@ -3,7 +3,7 @@ import { displayIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import {
   DIAGNOSTICS_BUNDLE_FAILURE_COPY as EN,
   type DiagnosticsBundleFailureCode
-} from '../../../../../shared/diagnostics-bundle-failure-copy'
+} from '../../../../../shared/diagnostics/bundles/diagnostics-bundle-failure-copy'
 
 const COPY: Record<DiagnosticsBundleFailureCode, () => string> = {
   creatingDisabled: () =>

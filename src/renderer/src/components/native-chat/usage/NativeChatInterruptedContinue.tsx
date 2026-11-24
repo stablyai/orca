@@ -8,7 +8,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { wslHostDistroForTarget } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { useAppStore } from '@/store/index'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import { AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-create-capabilities'
+import { AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import { completeNativeChatStructuredUserAction } from '@/components/native-chat/composer/submit/native-chat-structured-user-action'
 import {
   getStructuredAgentSessionPendingSends,
@@ -17,23 +17,21 @@ import {
 } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { latestNativeChatOrcaStopCut } from '../../../../../shared/native-chat/native-chat-orca-stop-cut'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCardSubmission } from '../../../../../shared/agent-session/requests/agent-session-queued-submission'
+import { latestNativeChatOrcaStopCut } from '../../../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
 import {
   latestNativeChatUsageLimitCut,
   NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE
-} from '../../../../../shared/native-chat/native-chat-usage-limit-cut'
-import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-continue-interrupted-capability'
+} from '../../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
+import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-continue-interrupted-capability'
 import {
   failNativeChatInterruptedContinue,
   nativeChatInterruptedContinueState,
   NO_NATIVE_CHAT_INTERRUPTED_CONTINUE_ATTEMPT,
   nativeChatInterruptedContinueAccepted
-} from '../../../../../shared/native-chat/native-chat-interrupted-continue'
+} from '../../../../../shared/native-chat/transcript/continuation/native-chat-interrupted-continue'
 import type { NativeChatOrcaStopView } from '@/components/native-chat/messages/notices/native-chat-orca-stop-context'
 import { useStructuredAgentSessionHostLabel } from '@/components/native-chat/pane/ownership/use-structured-agent-session-host-label'
 import { useNativeChatTargetRestartResuming } from '@/components/native-chat-recovery/offers/native-chat-restart-runtimes'
@@ -54,7 +52,7 @@ export function useNativeChatInterruptedContinuation(input: {
   agent: AgentType
   sessionId: string
   journalItems: readonly AgentJournalRenderItem[]
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+  submissions: readonly AgentJournalCardSubmission[]
   /** Also true while the host may take no turn: Continue starts one. */
   isWorking: boolean
   /** Stable; a Continue click is the user's newer action, so it clears the composer's error. */
@@ -93,8 +91,11 @@ export function useNativeChatInterruptedContinuation(input: {
     () => latestNativeChatUsageLimitCut(input.journalItems, input.submissions),
     [input.journalItems, input.submissions]
   )
-  const { auto: usageLimitAutoContinue, continueAt: usageLimitContinueAt } =
-    useNativeChatUsageLimitAutoContinue(target, sessionId, usageLimitCut)
+  const {
+    auto: usageLimitAutoContinue,
+    unavailable: usageLimitAutoContinueUnavailable,
+    continueAt: usageLimitContinueAt
+  } = useNativeChatUsageLimitAutoContinue(target, sessionId, usageLimitCut)
   const [attempt, setAttempt] = useState(NO_NATIVE_CHAT_INTERRUPTED_CONTINUE_ATTEMPT)
   const [usageFailure, setUsageFailure] = useState<string | null>(null)
   if (usageFailure !== null && input.pending.some((entry) => entry.phase === 'sending')) {
@@ -190,6 +191,7 @@ export function useNativeChatInterruptedContinuation(input: {
       continueNow,
       usageLimitTurnItemId,
       usageLimitAutoContinue,
+      usageLimitAutoContinueUnavailable,
       usageLimitContinueAt,
       onUsageLimitHandOffStarted:
         usageLimitAutoContinue?.kind === 'scheduled' ? usageLimitAutoContinue.cancel : undefined,
@@ -205,6 +207,7 @@ export function useNativeChatInterruptedContinuation(input: {
       continueNow,
       usageLimitTurnItemId,
       usageLimitAutoContinue,
+      usageLimitAutoContinueUnavailable,
       usageLimitContinueAt,
       usageCapability,
       continueUsageLimit

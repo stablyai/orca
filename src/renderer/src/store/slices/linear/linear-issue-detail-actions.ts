@@ -3,7 +3,7 @@ import type { LinearSlice, LinearSliceGet, LinearSliceSet } from './linear-slice
 import {
   credentialDecryptionMessage,
   isIntegrationCredentialDecryptionError
-} from '../../../../../shared/integration-credential-errors'
+} from '../../../../../shared/secure-storage/integration-credential-errors'
 import { linearGetIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { inflightIssueRequests } from './linear-slice-request-state'
 import {

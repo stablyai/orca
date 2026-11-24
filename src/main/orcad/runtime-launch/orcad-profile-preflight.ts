@@ -9,14 +9,14 @@ import {
   parseOrcadProfilePreflight,
   orcadProfilePreflightResponseSchema,
   type OrcadProfilePreflightResponse
-} from '../../../shared/orcad-profile-preflight'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-profile-preflight'
 import { readOrcadArtifactIdentity } from '../artifact-slots/orcad-artifact-identity'
 import { ORCAD_EXIT_CONFIGURATION } from '../serve-startup/orcad-configuration-exit'
 import {
   ORCAD_SERVER_ENTRY_FILENAME,
   ORCAD_VERSION_FILENAME
-} from '../../../shared/orcad-artifacts'
-import { ORCAD_NODE_RUNTIME_IDENTITY } from '../../../shared/orcad-node-runtime-identity'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
+import { ORCAD_NODE_RUNTIME_IDENTITY } from '../../../shared/remote-runtime/orcad-distribution/orcad-node-runtime-identity'
 import { runProcess } from '@orca/process-host'
 import { preflightOrcadNativeRuntime } from '../native-runtime/orcad-runtime-native-preflight'
 import { orcadCompileCacheEnv } from './orcad-compile-cache'

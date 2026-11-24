@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
-import { resolveOpenCodeConfigDirectory } from '../../../shared/opencode-config-directory'
-import { isInstalledOpenCodePluginCurrent } from '../../../shared/opencode-installed-plugin'
-import { writeCanonicalOpenCodePluginAtomically } from '../../../shared/opencode-plugin-atomic-write'
-import { writeOpenCodeTuiPlugin } from '../../../shared/opencode-tui-plugin-install'
+import { resolveOpenCodeConfigDirectory } from '../../../shared/agent-launch/plugins/opencode/opencode-config-directory'
+import { isInstalledOpenCodePluginCurrent } from '../../../shared/agent-launch/plugins/opencode/opencode-installed-plugin'
+import { writeCanonicalOpenCodePluginAtomically } from '../../../shared/agent-launch/plugins/opencode/opencode-plugin-atomic-write'
+import { writeOpenCodeTuiPlugin } from '../../../shared/agent-launch/plugins/opencode/opencode-tui-plugin-install'
 
 const RELAY_HOOKS_DIR = '.orca-relay'
 

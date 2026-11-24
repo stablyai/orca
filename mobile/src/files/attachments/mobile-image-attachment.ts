@@ -1,9 +1,12 @@
-import { separateImagePasteFromFollowingText } from '../../../../src/shared/image-paste-following-text'
+import { separateImagePasteFromFollowingText } from '../../../../src/shared/terminal/input/image-paste-following-text'
 import {
   buildMobileTerminalImagePastePayload,
   saveMobileClipboardImageAsTempFile
 } from './mobile-clipboard-image'
-import type { MobileImageSource, PickedMobileImage } from '../../platform/media-picker-contract'
+import type {
+  MobileImageSource,
+  PickedMobileImage
+} from '../../platform/media-picking/media-picker-contract'
 import { nativeChatTerminalWrite } from '../../terminal/session/mobile-session-terminal-operations'
 import type { MobileClipboardImageRpcSender } from './mobile-clipboard-image-operations'
 

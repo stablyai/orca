@@ -4,7 +4,7 @@ import {
   PRIMARY_AGENT_DIR_ENV_BY_KIND,
   SOURCE_AGENT_DIR_ENV_BY_KIND,
   type PiAgentKind
-} from '../../../shared/pi-agent-kind'
+} from '../../../shared/agent-launch/catalog/pi-agent-kind'
 
 function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
   return values.find((value) => typeof value === 'string' && value.length > 0)

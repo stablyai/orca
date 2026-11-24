@@ -1,7 +1,7 @@
 import type { CommandHandler } from '../../dispatch/dispatch'
 import { printOrchestrationReceipt } from '../agent-view'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../arguments/flags'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import type { OrchestrationMutationRequestShowResult } from '../../../shared/orchestration/orchestration-mutation-request'
 
 export const ORCHESTRATION_REQUEST_SHOW_HANDLER: Record<string, CommandHandler> = {

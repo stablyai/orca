@@ -1,4 +1,4 @@
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 // Local-only command families reject explicit runtime selectors rather than silently ignoring them.
 export const REMOTE_SELECTION_FLAGS = ['environment', 'pairing-code'] as const

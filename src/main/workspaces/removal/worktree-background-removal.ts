@@ -5,12 +5,16 @@ import {
   waitForPendingWorktreeRemoval,
   type RemovalSettlement
 } from './worktree-removal-settlement'
+export { readCheckoutMarkerIdentity as markerIdentity } from './worktree-removal-gitdir-identity'
 export {
   waitForPendingWorktreeRemoval,
   waitForWorktreeRemovalAcceptance,
   finishAcceptedWorktreeRemoval
 } from './worktree-removal-settlement'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { normalizeLocalBranchRef } from '../../git/worktrees/worktree-operation-options'
@@ -21,6 +25,7 @@ import { readWorktreeRemovalRecords, type WorktreeRemovalRecord } from './worktr
 import { failureLeftByGit } from './worktree-removal-failure'
 import { differentCheckoutAtPathError, isCheckoutRegistered } from './worktree-removal-leftover'
 import {
+  closeWorktreeRemovalRecords,
   failedWorktreeRemovals,
   finishedWorktreeRemovals,
   pendingWorktreeRemovals,
@@ -29,20 +34,18 @@ import {
   recordWorktreeRemoval,
   setWorktreeRemovalRecordsDirectory
 } from './worktree-removal-table'
+import { worktreeRemovalLifetime } from './worktree-removal-lifetime'
 
 export type BackgroundWorktreeRemovalJob = {
   /** Abort only the checkout delete on orderly quit. */
   run: (stopSignal: AbortSignal) => Promise<RemoveWorktreeResult>
   /** Publish on acceptance and after removing the pending entry. */
   publish: () => void
-  /** Clean the push-target remote even when Git partially fails. */
-  cleanupPushTargetRemote?: () => Promise<void>
   /** Release teardown fences when durable admission fails before run can take ownership. */
   admissionFailed?: () => Promise<void>
 }
 
 const jobsByWorktreeId = new Map<string, Promise<void>>()
-const stopControllers = new Set<AbortController>()
 // Loaded removals' terminal/watcher fences, held until the resumed job takes its own gate.
 const startupFencesByWorktreeId = new Map<string, WatcherRemovalGate>()
 
@@ -99,7 +102,7 @@ export function startBackgroundWorktreeRemoval(
   args: {
     removal: Pick<
       WorktreeRemovalRecord,
-      'worktreeId' | 'repoId' | 'repoPath' | 'deleteBranch' | 'force'
+      'worktreeId' | 'repoId' | 'repoPath' | 'deleteBranch' | 'force' | 'gitdir'
     > & { worktree: Pick<GitWorktreeInfo, 'path' | 'branch' | 'head'> }
   } & BackgroundWorktreeRemovalJob
 ): Promise<RemoveWorktreeResult> {
@@ -144,27 +147,35 @@ export function retryFailedWorktreeRemoval(
     return waitForPendingWorktreeRemoval(worktreeId, hostId, deleteBranch)
   }
   assertAcceptedBranchChoice(failed, deleteBranch)
-  const { failure: _failure, ...original } = failed
-  const record = { ...original, force: force ?? original.force }
-  const settlement = addPendingRemoval(record)
-  const job = jobFor(record)
-  const leftoverOnly: BackgroundWorktreeRemovalJob = {
-    ...job,
-    run: async (stopSignal) => {
-      // A newly registered checkout at this path needs a fresh delete, not the leftover's recorded choices.
-      if (await isCheckoutRegistered(record)) {
-        throw differentCheckoutAtPathError(record.worktreePath)
+  const release = worktreeRemovalLifetime.acquirePreparation()
+  try {
+    const { failure: _failure, ...original } = failed
+    const record = { ...original, force: force ?? original.force }
+    const settlement = addPendingRemoval(record)
+    const job = jobFor(record)
+    const leftoverOnly: BackgroundWorktreeRemovalJob = {
+      ...job,
+      run: async (stopSignal) => {
+        // A newly registered checkout at this path needs a fresh delete, not the leftover's recorded choices.
+        if (await isCheckoutRegistered(record, { signal: stopSignal })) {
+          throw differentCheckoutAtPathError(record.worktreePath)
+        }
+        return job.run(stopSignal)
       }
-      return job.run(stopSignal)
     }
+    runBackgroundWorktreeRemoval(record, leftoverOnly, recordWorktreeRemoval(record))
+    return settlement.result
+  } finally {
+    release()
   }
-  runBackgroundWorktreeRemoval(record, leftoverOnly, recordWorktreeRemoval(record))
-  return settlement.result
 }
 
 export function resumeInterruptedWorktreeRemovals(
   jobFor: (record: WorktreeRemovalRecord) => BackgroundWorktreeRemovalJob
 ): void {
+  if (worktreeRemovalLifetime.closing) {
+    return
+  }
   for (const record of pendingWorktreeRemovals.values()) {
     if (!jobsByWorktreeId.has(record.worktreeId)) {
       runBackgroundWorktreeRemoval(record, jobFor(record), Promise.resolve())
@@ -174,9 +185,7 @@ export function resumeInterruptedWorktreeRemovals(
 
 /** Abort checkout deletes on quit without waiting for Git to exit. */
 export function stopBackgroundWorktreeRemovals(): void {
-  for (const controller of stopControllers) {
-    controller.abort()
-  }
+  worktreeRemovalLifetime.abortCleanup()
 }
 
 function runBackgroundWorktreeRemoval(
@@ -184,16 +193,14 @@ function runBackgroundWorktreeRemoval(
   job: BackgroundWorktreeRemovalJob,
   recorded: Promise<void>
 ): void {
-  const controller = new AbortController()
-  stopControllers.add(controller)
+  const signal = worktreeRemovalLifetime.signal
   const settled: Promise<void> = settleBackgroundWorktreeRemoval(
     record,
     settlementsByWorktreeId.get(record.worktreeId),
     job,
     recorded,
-    controller.signal
+    signal
   ).finally(() => {
-    stopControllers.delete(controller)
     if (jobsByWorktreeId.get(record.worktreeId) === settled) {
       jobsByWorktreeId.delete(record.worktreeId)
     }
@@ -250,7 +257,7 @@ async function settleBackgroundWorktreeRemoval(
     console.warn(`[worktrees] background removal of ${record.worktreePath} failed`, error)
     settle = (settlement) => settlement.reject(error)
     // Git may drop registration before file deletion fails; keep the leftover listed for an explicit retry.
-    failure = await failureLeftByGit(record, error, job.cleanupPushTargetRemote)
+    failure = await failureLeftByGit(record, error)
   } finally {
     // A resumed job that ended before taking its own gate still holds the fence loading gave it.
     releaseStartupRemovalFence(record.worktreeId)
@@ -285,21 +292,11 @@ function publishSafely(publish: () => void): void {
   }
 }
 
-export async function _settlePendingWorktreeRemovalsForTests(): Promise<void> {
-  while (jobsByWorktreeId.size > 0) {
-    await Promise.all(jobsByWorktreeId.values())
+export async function drainBackgroundWorktreeRemovals(): Promise<void> {
+  const results = await Promise.allSettled(jobsByWorktreeId.values())
+  await closeWorktreeRemovalRecords()
+  const errors = results.flatMap((result) => (result.status === 'rejected' ? [result.reason] : []))
+  if (errors.length > 0) {
+    throw new AggregateError(errors, 'Could not finish stopping workspace deletion.')
   }
-}
-
-export function _resetPendingWorktreeRemovalsForTests(): void {
-  pendingWorktreeRemovals.clear()
-  failedWorktreeRemovals.clear()
-  jobsByWorktreeId.clear()
-  settlementsByWorktreeId.clear()
-  stopControllers.clear()
-  for (const fence of startupFencesByWorktreeId.values()) {
-    fence.release()
-  }
-  startupFencesByWorktreeId.clear()
-  setWorktreeRemovalRecordsDirectory(null)
 }

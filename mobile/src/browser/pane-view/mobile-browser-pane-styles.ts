@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
+import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input/text-input-font-size'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
@@ -76,6 +76,31 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
     textAlign: 'center',
     overflow: 'hidden'
   },
+  // One line like desktop's stream toast: the reason, then Reconnect.
+  streamStopped: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.bgPanel,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.surface,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs,
+    paddingVertical: spacing.xs,
+    maxWidth: '100%'
+  },
+  streamStoppedText: {
+    flexShrink: 1,
+    color: colors.textPrimary,
+    fontSize: 13
+  },
+  streamStoppedButton: {
+    minHeight: 30
+  },
+  streamStoppedButtonText: {
+    fontSize: 13
+  },
   dialogOverlay: {
     ...StyleSheet.absoluteFill,
     zIndex: 30,
@@ -103,6 +128,12 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
     fontSize: typography.bodySize,
     lineHeight: 20,
     marginTop: spacing.sm
+  },
+  dialogInput: {
+    height: 36,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    fontSize: TEXT_INPUT_FONT_SIZE
   },
   dialogButtonDisabled: {
     opacity: 0.5

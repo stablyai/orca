@@ -1,6 +1,7 @@
 import { defineMethod } from '../../core'
 import { projectRepoVisibilityForClient } from '../../workspace-client-views/repo-visibility-projection'
 import {
+  ProjectGroupHooksCheck,
   ProjectGroupCreate,
   ProjectGroupImportNested,
   ProjectGroupMoveProject,
@@ -8,9 +9,16 @@ import {
   ProjectGroupSelector,
   ProjectGroupUpdate,
   ProjectGroupUpdateMany
-} from '../../../../../shared/rpc-contract/repo-params'
+} from '../../../../../shared/rpc-contract/projects/repo-params'
 
 export const PROJECT_GROUP_METHODS = [
+  defineMethod({
+    name: 'projectGroup.checkHooks',
+    permission: 'workspace',
+    params: ProjectGroupHooksCheck,
+    handler: (params, { runtime }) =>
+      runtime.checkProjectGroupHooks(params.groupId, { background: params.background })
+  }),
   defineMethod({
     name: 'projectGroup.list',
     permission: 'workspace',

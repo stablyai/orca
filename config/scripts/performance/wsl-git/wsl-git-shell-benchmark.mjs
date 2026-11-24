@@ -129,7 +129,7 @@ async function main() {
   const distro = await resolveDistro(options.distro)
   const jiti = createJiti(import.meta.url)
   const { buildWslLoginShellCommand } = await jiti.import(
-    '../../../../src/shared/wsl-login-shell-command.ts'
+    '../../../../src/shared/shell/wsl/wsl-login-shell-command.ts'
   )
   const { quotePosixShell } = await jiti.import(
     '../../../../src/shared/shell/launch/shell-argument-quoting.ts'

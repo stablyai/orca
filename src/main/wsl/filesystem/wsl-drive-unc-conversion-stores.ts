@@ -4,9 +4,10 @@
  * that crashed before its ledger entry finds its own earlier work and changes nothing.
  */
 import { existsSync, readdirSync, readFileSync, renameSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { isRecord } from '../../../shared/orcad-migration/orcad-migration-manifest-fields'
+import { JournalSqlOwner } from '../../native-chat/agent-session-journal/journal-sql-owner'
 import { getHistorySessionDirName } from '../../daemon/history/storage/history-paths'
 import {
   durableWriteTempPath,
@@ -14,7 +15,6 @@ import {
   writeFileDurableSync
 } from '../../filesystem/durable-file-write'
 import { rewriteWslMoveOrchestrationHistoryFile } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-orchestration-history-rewrite'
-import Database from '../../sqlite/sync-database'
 import { hashWorktreeId } from '../../pty/history/terminal-history-id'
 
 export type WslDriveUncConversionStorePaths = {
@@ -29,11 +29,8 @@ export type WslDriveUncConversionStorePaths = {
 export type WslDriveUncConversionStore = {
   id: string
   /** Durable when it returns. */
-  run: (worktreeIds: ReadonlyMap<string, string>) => void
+  run: (worktreeIds: ReadonlyMap<string, string>) => void | Promise<void>
 }
-
-// The lock wait blocks the main thread (synchronous SQLite); a busy database retries next start.
-const BUSY_TIMEOUT_MS = 2_000
 
 export const WSL_DRIVE_UNC_MAIN_STORE_IDS = [
   'terminal-history',
@@ -136,75 +133,26 @@ function rewriteShellHistoryMeta(dir: string, oldId: string, newId: string): voi
   }
 }
 
-/**
- * A chat's workspace is its record's `location.workspaceId` and its journal session's
- * `workspace_id`; its provider still runs in the same distro, at the same folder. One transaction.
- */
-function rewriteChatJournal(databasePath: string, ids: ReadonlyMap<string, string>): void {
-  if (!existsSync(databasePath) || ids.size === 0) {
+/** Startup hands the database to the runtime only after this owner has physically exited. */
+async function rewriteChatJournal(
+  databasePath: string,
+  ids: ReadonlyMap<string, string>
+): Promise<void> {
+  if (ids.size === 0) {
     return
   }
-  const db = new Database(databasePath, { fileMustExist: true, timeout: BUSY_TIMEOUT_MS })
+  const owner = new JournalSqlOwner(databasePath, dirname(databasePath))
   try {
-    db.pragma('synchronous = FULL')
-    db.exec('BEGIN IMMEDIATE')
-    try {
-      if (hasTable(db, 'journal_sessions')) {
-        const update = db.prepare(
-          'UPDATE journal_sessions SET workspace_id = ? WHERE workspace_id = ?'
-        )
-        for (const [oldId, newId] of ids) {
-          update.run(newId, oldId)
-        }
-      }
-      if (hasTable(db, 'agent_session_records')) {
-        const update = db.prepare(
-          'UPDATE agent_session_records SET record_json = ? WHERE session_id = ?'
-        )
-        for (const row of db
-          .prepare('SELECT session_id, record_json FROM agent_session_records')
-          .all()) {
-          const next =
-            typeof row.record_json === 'string' ? rekeyChatRecord(row.record_json, ids) : null
-          if (next !== null) {
-            update.run(next, row.session_id)
-          }
-        }
-      }
-      db.exec('COMMIT')
-    } catch (error) {
-      db.exec('ROLLBACK')
-      throw error
+    if (await owner.opened()) {
+      throw new Error('chat workspace conversion requires a writable journal')
+    }
+    const result = await owner.maintain({ kind: 'wsl-workspace-rekey', worktreeIds: [...ids] })
+    if (result !== true) {
+      throw new Error('chat workspace conversion did not complete')
     }
   } finally {
-    db.close()
+    await owner.close()
   }
-}
-
-/** The record with its workspace re-keyed; null when it names none of `ids` or can't be read. */
-function rekeyChatRecord(json: string, ids: ReadonlyMap<string, string>): string | null {
-  let record: unknown
-  try {
-    record = JSON.parse(json)
-  } catch {
-    // A row this build can't read stays byte-identical, as the journal promises.
-    return null
-  }
-  if (!isRecord(record) || !isRecord(record.location)) {
-    return null
-  }
-  const workspaceId = record.location.workspaceId
-  const next = typeof workspaceId === 'string' ? ids.get(workspaceId) : undefined
-  return next
-    ? JSON.stringify({ ...record, location: { ...record.location, workspaceId: next } })
-    : null
-}
-
-function hasTable(db: Database, table: string): boolean {
-  return (
-    db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`).get(table) !==
-    undefined
-  )
 }
 
 function safeDecode(value: string): string | null {

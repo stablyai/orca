@@ -91,7 +91,7 @@ async function gitPullRebaseFromBaseUnlocked(
         operationOptions
       )
     } catch (error) {
-      throw new Error(normalizeGitErrorMessage(error, 'pull'))
+      throw new Error(normalizeGitErrorMessage(error, 'pull'), { cause: error })
     } finally {
       if (rebaseRef) {
         try {

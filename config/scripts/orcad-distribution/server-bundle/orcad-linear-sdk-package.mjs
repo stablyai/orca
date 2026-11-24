@@ -1,6 +1,6 @@
 import { build } from 'esbuild'
 import { join } from 'node:path'
-import { ORCAD_LINEAR_SDK_ENTRY } from '../../../../src/shared/orcad-artifacts.ts'
+import { ORCAD_LINEAR_SDK_ENTRY } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 import { ORCAD_SERVER_BUILD_TARGET } from './orcad-entry-build.mjs'
 
 // Bundle @linear/sdk into one CJS file for lazy require: copying would expose chunk names that change each release.

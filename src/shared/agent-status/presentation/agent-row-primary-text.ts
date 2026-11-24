@@ -1,10 +1,10 @@
 import type { AgentStatusEntry } from '../contracts/agent-status-types'
-import { getRuntimePathBasename } from '../../cross-platform-path'
+import { getRuntimePathBasename } from '../../file-access/cross-platform-path'
 import {
   findOrcaDispatchPreambleStart,
   findOrcaDispatchTaskMarkerIndex,
   ORCA_DISPATCH_STATUS_TASK_MARKER
-} from '../../orca-dispatch-status-prompt'
+} from '../../orchestration/workers/orca-dispatch-status-prompt'
 
 const ORCA_DISPATCH_TASK_MARKER = ORCA_DISPATCH_STATUS_TASK_MARKER
 const ORCA_DISPATCH_TASK_ID_MARKER = 'Your task ID is:'

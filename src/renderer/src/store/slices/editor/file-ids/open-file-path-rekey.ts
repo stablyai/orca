@@ -1,5 +1,5 @@
 import type { AppState } from '../../../types'
-import type { TabGroup } from '../../../../../../shared/tab-types'
+import type { TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { pruneTabGroupLayoutForGroups } from '../../tabs/tabs-hydration'
 import { sanitizeRecentTabIds } from '../../tabs/tab-selection-history'
 

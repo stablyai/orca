@@ -1,8 +1,8 @@
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../src/shared/abort-signal-reason'
-import { sharedPromiseSettlementWaiters } from '../../../../src/shared/promise-settlement-waiters'
+} from '../../../../src/shared/concurrency/abort-signal-reason'
+import { sharedPromiseSettlementWaiters } from '../../../../src/shared/concurrency/promise-settlement-waiters'
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import type { SendRequestOptions } from './unvalidated-rpc-request-port'

@@ -1,4 +1,4 @@
-import { isClipboardTextByteLengthOverLimit } from '../../clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../clipboard/clipboard-text'
 
 export const GITHUB_PROJECT_REF_INPUT_MAX_BYTES = 2 * 1024
 export const GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR = 'Project reference is too large to resolve.'

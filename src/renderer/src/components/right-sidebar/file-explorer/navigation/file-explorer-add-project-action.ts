@@ -1,9 +1,9 @@
-import { isFolderRepo } from '../../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
-import type { Repo } from '../../../../../../shared/repo-types'
+} from '../../../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { TreeNode } from '../tree/file-explorer-types'
 
 export type AddProjectFromFolderModalData = {

@@ -32,6 +32,7 @@ export function parseWarpThemeYamlWithTimeout(
 ): Promise<ParsedWarpThemeResult> {
   return new Promise((resolve) => {
     const worker = spawnWorkerThread(getParserWorkerPath(), {
+      name: 'orca-warp-theme-parser',
       workerData: { content, fileLabel, options }
     })
     let settled = false

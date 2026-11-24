@@ -20,6 +20,22 @@ const PROBE_INTERVAL_MS = 8_000
 // so middleboxes dropping control frames cannot alone force reconnect loops.
 const PROBE_MISS_LIMIT = 3
 
+// The keepalive is answered at once (the edge auto-acks it). A reply 10s overdue only starts the
+// probe above, so one lost frame still cannot tear the control down; it cuts stall detection ~17s.
+const KEEPALIVE_ACK_OVERDUE_MS = 10_000
+
+// Path-stall detector, armed only when the origin has an alternate path to resume on (client
+// two-path failover). A failover resume is free while the edge still lists this control (it closes
+// a control after 75s without a pong) and for its 30s orphan grace after, so detection must land
+// well inside 75s. Protocol pings every 10s (±20%) are answered without waking the edge object.
+// The stall is two unanswered pings in a row AND nothing at all inbound for 30s: the edge's own
+// application ping comes every 25s, so a middlebox that drops protocol pongs cannot alone trip it.
+// A path that goes dark is detected after 30-36s, leaving ~40s of the edge's 75s for the resume.
+const STALL_PING_INTERVAL_MS = 10_000
+const STALL_PING_JITTER_RATIO = 0.2
+const STALL_PING_MISS_LIMIT = 2
+const STALL_SILENCE_MIN_MS = 30_000
+
 type TeardownReason = 'probe-unanswered' | 'silence-limit'
 
 export type RelayControlLivenessOptions = {
@@ -29,6 +45,8 @@ export type RelayControlLivenessOptions = {
   isLive: () => boolean
   terminate: () => void
   random?: () => number
+  /** Arms the path-stall detector; called at most once, and the control is left as it is. */
+  onStall?: () => void
 }
 
 export class RelayControlLiveness {
@@ -36,9 +54,17 @@ export class RelayControlLiveness {
   private probe: { timer: ReturnType<typeof setInterval>; misses: number } | null = null
   private silenceTimer: ReturnType<typeof setInterval> | null = null
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null
+  private keepaliveAckTimer: ReturnType<typeof setTimeout> | null = null
   private keepaliveSentAt = 0
   private openedAt = 0
   private lastInboundAt = 0
+  private stall: {
+    timer: ReturnType<typeof setTimeout> | null
+    misses: number
+    pingedAt: number
+  } | null = null
+  // Inbound frames and pongs: either proves the path, which is all the stall detector judges.
+  private lastPathEvidenceAt = 0
 
   constructor(private readonly options: RelayControlLivenessOptions) {
     this.random = options.random ?? Math.random
@@ -59,15 +85,22 @@ export class RelayControlLiveness {
       }
     }, SILENCE_CHECK_INTERVAL_MS)
     this.silenceTimer.unref?.()
+    if (this.options.onStall) {
+      this.lastPathEvidenceAt = this.openedAt
+      this.stall = { timer: null, misses: 0, pingedAt: 0 }
+      this.scheduleStallCheck(this.stallPingIntervalMs())
+    }
   }
 
   noteInbound(): void {
     this.lastInboundAt = Date.now()
+    this.lastPathEvidenceAt = this.lastInboundAt
     this.clearProbe()
   }
 
   // Pong proves transport only; do not extend application liveness for a server-unindexed socket.
   notePong(): void {
+    this.lastPathEvidenceAt = Date.now()
     this.clearProbe()
   }
 
@@ -99,9 +132,27 @@ export class RelayControlLiveness {
 
   private sendKeepalive(): void {
     if (this.options.isLive()) {
-      this.keepaliveSentAt = Date.now()
+      const sentAt = Date.now()
+      this.keepaliveSentAt = sentAt
       this.options.send?.(RELAY_CLIENT_KEEPALIVE_FRAME)
+      this.watchKeepaliveAck(sentAt)
     }
+  }
+
+  private watchKeepaliveAck(sentAt: number): void {
+    if (this.keepaliveAckTimer) {
+      return
+    }
+    this.keepaliveAckTimer = setTimeout(() => {
+      this.keepaliveAckTimer = null
+      if (this.lastInboundAt < sentAt && this.options.isLive()) {
+        const sinceInboundMs = Date.now() - this.lastInboundAt
+        console.warn(
+          `[relay] control keepalive overdue cell=${this.options.cellUrl} sinceInboundMs=${sinceInboundMs} ${this.armProbe()}`
+        )
+      }
+    }, KEEPALIVE_ACK_OVERDUE_MS)
+    this.keepaliveAckTimer.unref?.()
   }
 
   stop(): void {
@@ -113,7 +164,12 @@ export class RelayControlLiveness {
       clearInterval(this.keepaliveTimer)
       this.keepaliveTimer = null
     }
+    if (this.keepaliveAckTimer) {
+      clearTimeout(this.keepaliveAckTimer)
+      this.keepaliveAckTimer = null
+    }
     this.clearProbe()
+    this.clearStall()
   }
 
   /** Probe only if no inbound frame arrived since send; otherwise a late reply can be ordinary relay load. */
@@ -178,6 +234,61 @@ export class RelayControlLiveness {
       clearInterval(this.probe.timer)
       this.probe = null
     }
+  }
+
+  private stallPingIntervalMs(): number {
+    const spread = (this.random() * 2 - 1) * STALL_PING_JITTER_RATIO
+    return Math.max(1, Math.floor(STALL_PING_INTERVAL_MS * (1 + spread)))
+  }
+
+  private scheduleStallCheck(delayMs: number): void {
+    if (!this.stall) {
+      return
+    }
+    this.stall.timer = setTimeout(() => this.checkStall(), delayMs)
+    this.stall.timer.unref?.()
+  }
+
+  private checkStall(): void {
+    const stall = this.stall
+    if (!stall) {
+      return
+    }
+    stall.timer = null
+    const now = Date.now()
+    stall.misses =
+      stall.pingedAt > 0 && this.lastPathEvidenceAt < stall.pingedAt ? stall.misses + 1 : 0
+    const silentMs = now - this.lastPathEvidenceAt
+    if (stall.misses >= STALL_PING_MISS_LIMIT && silentMs >= STALL_SILENCE_MIN_MS) {
+      this.stall = null
+      console.warn(
+        `[relay] control path stalled cell=${this.options.cellUrl} silentMs=${silentMs} misses=${stall.misses}`
+      )
+      this.options.onStall?.()
+      return
+    }
+    if (this.options.isLive()) {
+      stall.pingedAt = now
+      try {
+        this.options.ping()
+      } catch {
+        // A ping that cannot be sent is a miss on the next check; the socket's close reports itself.
+      }
+    }
+    const next = this.stallPingIntervalMs()
+    // Two misses already: judge again as soon as the silence bound is met, not a full tick later.
+    this.scheduleStallCheck(
+      stall.misses >= STALL_PING_MISS_LIMIT
+        ? Math.max(1, Math.min(next, STALL_SILENCE_MIN_MS - silentMs))
+        : next
+    )
+  }
+
+  private clearStall(): void {
+    if (this.stall?.timer) {
+      clearTimeout(this.stall.timer)
+    }
+    this.stall = null
   }
 
   // Name teardown causes locally: origin sees only 1006, hiding fleet-wide false-positive probes.

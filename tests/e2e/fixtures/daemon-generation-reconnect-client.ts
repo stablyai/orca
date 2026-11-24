@@ -6,7 +6,7 @@ import type { DaemonPtyRouter } from '../../../src/main/daemon/providers/routing
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
 import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs/session-tabs'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../src/shared/runtime-types'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import { createDesktopDiscoveredDaemonRouter } from './daemon-generation-desktop-discovery'
 import { dispatchFixtureCloseBursts } from './daemon-generation-runtime-close'
 import { DAEMON_GENERATION_WORKTREE_ID } from './daemon-generation-fixture-contract'

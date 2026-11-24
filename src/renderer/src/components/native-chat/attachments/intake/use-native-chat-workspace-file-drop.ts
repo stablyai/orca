@@ -14,7 +14,7 @@ import {
 } from '../uploads/native-chat-attachment-owner'
 import { nativeChatWorktreeNotReadyNotice } from './native-chat-attachment-notices'
 import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../../../lib/agent-session/tab-identity/structured-chat-tab-index'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   nativeChatAttachmentOwnerUnchanged,
   nativeChatWorkspaceAttachmentMismatchNotice

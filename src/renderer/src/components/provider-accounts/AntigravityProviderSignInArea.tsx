@@ -1,7 +1,7 @@
 import { AntigravityChatAuthForm } from './AntigravityChatAuthForm'
 import { useTranslate } from '@/i18n/use-translate'
 import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   AntigravityChatSignInAction,
   AntigravityChatSignInBadge

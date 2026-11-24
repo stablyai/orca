@@ -2,6 +2,7 @@ import { browserGuestRegistrationAndDownloadsApi } from './browser-bridge-guest-
 import { browserPageInteractionAndSessionsApi } from './browser-bridge-page-interaction-and-sessions'
 import { browserExtensionsApi } from './browser-bridge-extensions'
 import { browserExtensionToolbarApi } from './browser-bridge-extension-toolbar'
+import { browserExtensionSidePanelApi } from './browser-bridge-extension-side-panels'
 import { browserExtensionWebStoreApi } from './browser-bridge-extension-webstore'
 import { browserExtensionContextMenuApi } from './browser-bridge-extension-context-menu'
 import { browserRemoteHostControlApi } from './browser-bridge-remote-host-control'
@@ -12,6 +13,7 @@ export const browserApi = {
   ...browserPageInteractionAndSessionsApi,
   ...browserExtensionsApi,
   ...browserExtensionToolbarApi,
+  ...browserExtensionSidePanelApi,
   ...browserExtensionWebStoreApi,
   ...browserExtensionContextMenuApi,
   ...browserRemoteHostControlApi

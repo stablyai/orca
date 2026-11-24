@@ -7,7 +7,7 @@ import { linearPriorityLabel } from '../../../../shared/linear/priority-label'
 
 export type RawIssueResponse = {
   issue?: RawIssue | null
-  searchIssues?: { nodes?: RawIssue[] }
+  searchIssues?: { nodes?: RawIssue[]; totalCount?: number }
 }
 
 export type RawIssue = {
@@ -175,6 +175,7 @@ export const SEARCH_QUERY = `
       nodes {
         ${ISSUE_FIELDS}
       }
+      totalCount
     }
   }
 `

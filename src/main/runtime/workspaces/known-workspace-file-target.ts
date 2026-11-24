@@ -1,4 +1,4 @@
-import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../shared/repository/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import type { RuntimeWorkspaceCatalog } from './catalog/workspace-catalog'
 import type { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'
@@ -7,7 +7,7 @@ import {
   getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'
 import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
 import { findRuntimeWorkspaceFileOwner } from '../../../shared/file-access/runtime-workspace-file-owner'

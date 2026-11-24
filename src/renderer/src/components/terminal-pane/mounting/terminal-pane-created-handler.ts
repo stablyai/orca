@@ -3,7 +3,7 @@ import type { ManagedPane, PaneSpawnHints } from '@/lib/pane-manager/pane-manage
 import { useAppStore } from '@/store/index'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { createOsc52OscHandler } from '../../../../../shared/osc52-clipboard'
+import { createOsc52OscHandler } from '../../../../../shared/terminal/clipboard/osc52-clipboard'
 import {
   showOsc52ClipboardBlockedToast,
   showOsc52ClipboardCopyRetryToast,

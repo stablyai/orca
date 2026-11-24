@@ -2,13 +2,17 @@ import { join } from 'node:path'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
 import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
-import { getDefaultUserDataPath } from '../runtime/metadata'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../shared/orca-profiles'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { getDefaultUserDataPath } from '../runtime/profile/metadata'
+import { ensureCliAppEnvironment } from '../runtime/profile/cli-app-environment'
+import {
+  getAgentHookConfigPaths,
+  type AgentHookInstallStatus
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../shared/orca-profiles/orca-profiles'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import type { ProfileStateOfflineLocation } from '../../main/persistence/profile-state/offline-access/profile-state-offline-settings'
 
 type AgentHookCommandResult = {
@@ -155,7 +159,8 @@ function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
   const statusSummary = result.statuses
     .map((status) => {
       const showDetail = status.detail && (status.state === 'partial' || status.state === 'error')
-      const path = status.configPath ? ` (${status.configPath})` : ''
+      const paths = getAgentHookConfigPaths(status)
+      const path = paths.length > 0 ? ` (${paths.join(', ')})` : ''
       return `${status.agent}: ${status.state}${path}${showDetail ? ` - ${status.detail}` : ''}`
     })
     .join('\n')
@@ -212,6 +217,7 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
   },
   'agent hooks status': async ({ client, json, flags }) => {
     rejectRemoteHookSelection(flags)
+    ensureCliAppEnvironment()
     const { getManagedAgentHookStatuses } =
       await import('../../main/agent-hooks/installation/managed-agent-hook-controls.js')
     const runtimeEnabled = await readRunningRuntimeHooksEnabled(client)
@@ -225,11 +231,13 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
   },
   'agent hooks off': async ({ client, json, flags }) => {
     rejectRemoteHookSelection(flags)
+    ensureCliAppEnvironment()
     const result = await setAgentHooksEnabled(client, false)
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   },
   'agent hooks on': async ({ client, json, flags }) => {
     rejectRemoteHookSelection(flags)
+    ensureCliAppEnvironment()
     const result = await setAgentHooksEnabled(client, true)
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   }

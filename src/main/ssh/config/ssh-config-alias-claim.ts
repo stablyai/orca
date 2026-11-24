@@ -1,7 +1,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { normalizeSshConfigAlias } from '../../../shared/ssh-config-alias'
+import { normalizeSshConfigAlias } from '../../../shared/remote-runtime/ssh/ssh-config-alias'
 import { expandSshConfigIncludes } from './ssh-config-include-expander'
 import { parseSshConfigAliasClaims, type SshConfigAliasClaims } from './ssh-config-parser'
 

@@ -5,8 +5,8 @@ import {
   type GitWorktreeExecOptions
 } from '../worktree-operation-options'
 
-// Git checks out with one worker by default; 0 means one per core (Git 2.32+; older Git ignores the key).
-const PARALLEL_CHECKOUT_GIT_ARGS = ['-c', 'checkout.workers=0'] as const
+// Bound default fan-out across simultaneous creates; older Git ignores the key (2.32+).
+const PARALLEL_CHECKOUT_GIT_ARGS = ['-c', 'checkout.workers=4'] as const
 
 /** Parallel checkout args unless checkout.workers is configured at any scope for this repo and host. */
 export async function checkoutWorkersGitArgs(

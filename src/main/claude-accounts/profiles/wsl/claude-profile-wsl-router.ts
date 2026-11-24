@@ -1,18 +1,15 @@
-import { existsSync } from 'node:fs'
 import { lstat, readFile } from 'node:fs/promises'
-import { join, posix } from 'node:path'
-import { getAppEnvironment } from '../../../../shared/app-environment'
+import { posix } from 'node:path'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_POINTER_ENV,
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
-} from '../../../../shared/claude-profile-routing'
-import { WSL_CLAUDE_PROFILE_HELPER_FILENAME } from '../../../../shared/remote-bundle-artifacts'
-import { parseWslUncPath, toWindowsWslPath } from '../../../../shared/wsl-paths'
+} from '../../../../shared/agent-accounts/claude/claude-profile-routing'
+import { WSL_CLAUDE_PROFILE_HELPER_FILENAME } from '../../../../shared/remote-runtime/orcad-distribution/remote-bundle-artifacts'
+import { parseWslUncPath, toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
 import { getWslHomeAsync, listRunningWslDistrosAsync } from '../../../wsl/discovery/distro-catalog'
-import { ensureWslPinnedRuntime } from '../../../wsl/execution/wsl-pinned-runtime'
-import { relayBundleCandidates } from '../../../wsl/execution/relay-bundle-paths'
 import { runWslProcess, type WslSpec } from '../../../wsl/execution/wsl-runner'
+import { runWslGuestNodeHelper } from '../../../wsl/execution/wsl-guest-node-helper'
 import { describeWslProcessFailure } from '../../../wsl/execution/wsl-process-failure'
 import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import { claudeProfileMarkerPath, type ClaudeProfileDescriptor } from '../claude-profile-paths'
@@ -61,6 +58,12 @@ export class ClaudeWslProfileRouter {
 
   /** Startup must not boot stopped distros, nor one a list still names while it stops (E9). */
   async runningDistros(): Promise<string[]> {
+    // No WSL account means nothing to publish: skip the `wsl.exe` list (#28000).
+    if (
+      !this.args.getSettings().claudeManagedAccounts.some((a) => a.managedAuthRuntime === 'wsl')
+    ) {
+      return []
+    }
     const running = await listRunningWslDistrosAsync({ requireConfirmed: true })
     const withAccounts = running.filter((distro) => this.accountIn(distro))
     const settled = await Promise.all(
@@ -221,7 +224,10 @@ export class ClaudeWslProfileRouter {
           ? { CLAUDE_CONFIG_DIR: profile.home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: profile.home }
           : {})
       },
-      provenance: profile ? `profile:${profile.accountId}:wsl:${distro}` : `wsl:${distro}:system`
+      provenance: profile ? `profile:${profile.accountId}:wsl:${distro}` : `wsl:${distro}:system`,
+      ...(profile
+        ? { readingAccount: { accountId: profile.accountId, runtime: 'wsl', wslDistro: distro } }
+        : {})
     }
   }
 
@@ -262,10 +268,11 @@ async function writePointer(distro: string, pointer: string, home: string): Prom
   if (current === home) {
     return
   }
+  // wsl.exe --exec rejects an empty argument (E_INVALIDARG), and System default writes ''; pass content on stdin.
   await runGuest(distro, {
-    script:
-      'umask 077; mkdir -p -- "${1%/*}" && printf %s "$2" > "$1.tmp" && mv -f -- "$1.tmp" "$1"',
-    args: [pointer, home],
+    script: 'umask 077; mkdir -p -- "${1%/*}" && cat > "$1.tmp" && mv -f -- "$1.tmp" "$1"',
+    args: [pointer],
+    input: home,
     loginPath: 'none'
   })
 }
@@ -280,32 +287,14 @@ async function runGuest(distro: string, spec: WslSpec, timeoutMs = 15_000): Prom
 
 /** Run guest setup with the pinned Node runtime. */
 const runWslSetup: WslSetup = async (distro, home, accountId) => {
-  const helper = relayBundleCandidates('wsl')
-    .map((dir) => join(dir, WSL_CLAUDE_PROFILE_HELPER_FILENAME))
-    .find(existsSync)
-  if (!helper) {
-    throw new Error('The bundled WSL Claude account helper is missing. Reinstall Orca.')
-  }
-  const run = (spec: WslSpec, timeoutMs?: number) => runGuest(distro, spec, timeoutMs)
-  const node = await ensureWslPinnedRuntime(
-    run,
-    join(getAppEnvironment().getPath('userData'), 'orcad-artifacts'),
-    AbortSignal.timeout(180_000)
-  )
-  const guestHelper = await run({
-    program: 'wslpath',
-    args: ['-a', '-u', helper],
-    loginPath: 'none'
-  })
   // Successful setup is silent; warnings produce a report and refusal exits nonzero.
-  const report = await run(
-    {
-      program: '/usr/bin/env',
-      args: ['-u', 'NODE_OPTIONS', node, guestHelper, home, distro, accountId],
-      loginPath: 'none'
-    },
-    120_000
-  )
+  const report = await runWslGuestNodeHelper({
+    distro,
+    helperFilename: WSL_CLAUDE_PROFILE_HELPER_FILENAME,
+    helperLabel: 'Claude account',
+    helperArgs: [home, distro, accountId],
+    timeoutMs: 120_000
+  })
   if (report) {
     console.warn('[claude-profile] WSL account setup was incomplete:', report)
   }

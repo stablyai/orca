@@ -17,7 +17,7 @@ import { colors, spacing, radii, typography, pressedStyle } from '../src/theme/m
 import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
-import { ConnectionLog } from '../src/components/ConnectionLog'
+import { ConnectionLog } from '../src/components/host-connection/ConnectionLog'
 import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
@@ -27,7 +27,7 @@ import {
   PairingProgress,
   waitForBeat
 } from '../src/pairing/pairing-visuals'
-import { triggerSuccess } from '../src/platform/haptics'
+import { triggerSuccess } from '../src/platform/haptics/haptics'
 import { getPairingFailureMessage } from '../src/pairing/pairing-failure-message'
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'

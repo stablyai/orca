@@ -1,7 +1,5 @@
 import type { HostOs } from './host-os'
 
-export type { HostOs } from './host-os'
-
 // Platform.OS is web here: read the phone OS for keyboard/inset arithmetic (iPadOS needs the Mac-plus-touch heuristic) and a desktop Mac for Cmd chords.
 export function hostOs(): HostOs {
   const agent = globalThis.navigator?.userAgent ?? ''

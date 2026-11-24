@@ -16,7 +16,7 @@ import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { retainClaudeSettledRequests } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 import { reduceHostTurnEnd } from '../../../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
-import { previousCodexTurnContext } from '../../../shared/agent-hook-listener/providers/codex-session-start'
+import { previousCodexTurnContext } from '../../../shared/agent-hook-listener/providers/codex/codex-session-start'
 import { buildRelayHookEnvelope } from '../publication/agent-hook-envelope-build'
 import type { RelayHookForward } from '../server/agent-hook-server-contract'
 import { MAX_CACHED_PANES, type CachedPaneEnvelopeMeta } from './agent-hook-cached-pane-status'

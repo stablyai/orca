@@ -1,11 +1,11 @@
 import type {
   OrcadManagedPendingMigrationRow,
   OrcadManagedRuntimeStatus
-} from '../../../../../../shared/orcad-managed-runtime'
+} from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { OrcadMigrationBlocker } from '../../../../../../shared/orcad-migration/orcad-migration-preflight'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE } from '../../../../../../shared/wsl-host-types'
+import { ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { dependencyKindLabel } from './managed-server-dependency-kinds'
 
 export function migrationPhaseLabel(
@@ -66,10 +66,21 @@ export function terminalCensusLabel(
 }
 
 /** Copy for Update anyway; it states only what the forced update was verified to keep. */
-export function forceUpdateMessage(t: Translate = translate): string {
+export function forceUpdateMessage(t: Translate = translate, uncounted = false): string {
+  if (uncounted) {
+    return uncountedForceUpdateMessage(t)
+  }
   return t(
     'auto.components.settings.managedServers.row.forceUpdate',
     'Terminals are running on this host. They keep running through the update, and their panes reconnect when Orca’s server restarts.'
+  )
+}
+
+/** Copy for forcing past a terminal count nobody answered: in-process terminals end with the restart. */
+export function uncountedForceUpdateMessage(t: Translate = translate): string {
+  return t(
+    'auto.components.settings.managedServers.row.forceUpdateUncounted',
+    'Orca couldn’t count the terminals on this host. The update goes ahead only if no terminal daemon is running there, and any terminals Orca’s server runs itself will end.'
   )
 }
 

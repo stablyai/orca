@@ -1,5 +1,5 @@
 import { StringDecoder } from 'node:string_decoder'
-import { createIncrementalNdjsonFramer } from '../../../shared/main-process-ndjson-framer'
+import { createIncrementalNdjsonFramer } from '../../../shared/json-stream/main-process-ndjson-framer'
 
 // Unescaped quotes occur only as JSON structure, so other records skip this second parse.
 const FAILED_RESULT_TOKENS = [/"type"\s*:\s*"result"/, /"is_error"\s*:\s*true/]

@@ -1,13 +1,13 @@
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import { createFolderWorktree } from '../../workspaces/catalog/repo-worktrees'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   getRepoMainWorktreeId
 } from '../../../shared/worktree/id'
-import { mergeWorktree } from '../worktree-metadata-merge'
+import { mergeWorktree } from '../worktrees/metadata/worktree-metadata-merge'
 import { getRepoOwnedWorktreeMeta } from '../../workspaces/catalog/worktree-metadata-ownership'
 
 export function listWorkspaceCleanupFolderWorkspaces(

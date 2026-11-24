@@ -1,63 +1,114 @@
 // @vitest-environment happy-dom
-
 import '@testing-library/jest-dom/vitest'
-
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionCancelResult } from '../../../../../../shared/agent-session/agent-session-wire'
-import type { AgentChildWorkView } from '../../../../../../shared/agent-status/child-work/agent-status-child-work-view'
-import { structuredSessionBackgroundTasksView } from '../../../../../../shared/structured-session-background-tasks-view'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { StructuredSessionBackgroundTasksView } from '../../../../../../shared/agent-session/view/structured-session-background-tasks-view'
+import type { WorkerDockRowView } from './dock/WorkerDockRow'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
 
-vi.mock('./use-structured-session-child-row-context', () => ({
-  useStructuredSessionChildRowContext: () => undefined
+const hoisted = vi.hoisted(() => {
+  const workers: WorkerDockRowView[] = []
+  return {
+    rpc: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
+    workers
+  }
+})
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: hoisted.rpc }))
+vi.mock('../../worker-approvals/native-chat-worker-approval-feed', () => ({
+  useNativeChatPinnedWorkerApprovals: () => []
+}))
+vi.mock('./dock/worker-dock-feed', () => ({
+  useWorkerDockFeed: () => {
+    const rows = hoisted.workers
+    return {
+      party: 'party-synthetic',
+      available: true,
+      rows: new Map(rows.map((row) => [row.id, row])),
+      snapshot: { identities: rows },
+      loadWindow: async () => {},
+      readLosses: () => 0
+    }
+  }
 }))
 
-afterEach(cleanup)
+const REMOTE: RuntimeClientTarget = { kind: 'environment', environmentId: 'env-paired-synthetic' }
+const LOCAL: RuntimeClientTarget = { kind: 'local' }
 
-function helper(invocation: AgentChildWorkView['invocation']): AgentChildWorkView {
-  return {
-    id: 'helper',
-    providerId: 'thread-helper',
-    kind: 'agent',
-    description: 'audit_build',
-    state: 'working',
-    membership: 'live',
-    firstObservedAt: Date.now() - 65_000,
-    observedAt: Date.now() - 1_000,
-    stoppable: true,
-    invocation
-  }
+const worker: WorkerDockRowView = {
+  id: 'home/source/worker/attempt-1',
+  dispatchId: 'attempt-1',
+  source: 'source',
+  kind: 'worker',
+  name: 'Verifier',
+  title: 'Review journal',
+  model: null,
+  state: 'running',
+  changedAt: null,
+  startedAt: null,
+  reason: null,
+  settlement: null,
+  resultId: null,
+  stoppable: true,
+  ownerActionsAvailable: true
 }
 
-describe('NativeChatStructuredSessionStatus', () => {
-  it("offers Stop again on a helper's next run, which reuses the stopped run's row id", async () => {
-    let finish: (result: AgentSessionCancelResult) => void = () => {}
-    const stopBackgroundTask = vi.fn(
-      () => new Promise<AgentSessionCancelResult>((resolve) => (finish = resolve))
-    )
-    const strip = (children: AgentChildWorkView[]) => (
-      <NativeChatStructuredSessionStatus
-        sessionId="session-1"
-        paneKey="pane-1"
-        isVisible
-        tasks={{
-          backgroundTasks: structuredSessionBackgroundTasksView(
-            { state: 'monitoring', supportsTaskStop: true, children },
-            null
-          ),
-          stopBackgroundTask
-        }}
-      />
-    )
-    const { rerender } = render(strip([helper({ invocationId: 'turn-1', generation: 1 })]))
-    fireEvent.click(screen.getByRole('button', { expanded: false }))
-    fireEvent.click(screen.getByLabelText('Stop audit_build'))
-    await act(async () => finish({ cancelled: true }))
-    expect(screen.getByLabelText('Stop audit_build')).toBeDisabled()
+const commandTasks: StructuredSessionBackgroundTasksView = {
+  show: true,
+  isMonitoring: true,
+  tasks: [{ id: 'shell-7', kind: 'command', description: 'Run the build', state: 'working' }],
+  settledTasks: [],
+  supportsStop: true,
+  offersStopAll: false,
+  incomplete: false
+}
 
-    // The helper's next run, with no render between: same provider id, a new invocation.
-    rerender(strip([helper({ invocationId: 'turn-2', generation: 2 })]))
-    expect(screen.getByLabelText('Stop audit_build')).toBeEnabled()
-  })
+function renderStrip(target: RuntimeClientTarget, onStop = vi.fn()) {
+  render(
+    <TooltipProvider>
+      <NativeChatStructuredSessionStatus
+        sessionId="session-synthetic"
+        target={target}
+        paneKey="pane-synthetic"
+        isVisible
+        backgroundTasks={commandTasks}
+        stop={{ stoppingTaskIds: new Set(), stoppingAll: false, onStop }}
+      />
+    </TooltipProvider>
+  )
+  fireEvent.click(screen.getByRole('button', { expanded: false }))
+  return onStop
+}
+
+beforeEach(() => {
+  hoisted.rpc.mockReset()
+  hoisted.rpc.mockResolvedValue({})
+  hoisted.workers = []
+})
+afterEach(cleanup)
+
+it.each([
+  ['remote', REMOTE],
+  ['local', LOCAL]
+])("sends a %s chat's background-command Stop to the chat's own session", (_name, target) => {
+  const onStop = renderStrip(target)
+  const button = screen.getByRole('button', { name: /^Stop Command · Run the build$/ })
+  expect(button).not.toHaveAttribute('aria-disabled', 'true')
+  fireEvent.click(button)
+  expect(onStop).toHaveBeenCalledWith('shell-7')
+})
+
+it("keeps a remote chat's orchestration worker Open-only: no Stop that would do nothing", () => {
+  hoisted.workers = [worker]
+  const onStop = renderStrip(REMOTE)
+  expect(screen.queryByRole('button', { name: /^Stop Verifier/ })).toBeNull()
+  const open = screen.getByRole('button', { name: /^Worker · Review journal/ })
+  expect(open).toHaveAccessibleName(/from the computer it runs on/)
+  expect(onStop).not.toHaveBeenCalled()
+  expect(hoisted.rpc).not.toHaveBeenCalledWith(
+    expect.anything(),
+    'orchestration.workerDockStop',
+    expect.anything()
+  )
 })

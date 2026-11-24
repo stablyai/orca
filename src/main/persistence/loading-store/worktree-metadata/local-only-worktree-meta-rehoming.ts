@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { canonicalWorktreeIdentity } from '../../../../shared/worktree/identity'
 import {
@@ -8,7 +8,7 @@ import {
   getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity
 } from '../../../../shared/worktree/host-qualified-identity'
-import { isLocalOnlyWorktreeMetaId } from '../../../../shared/worktree/local-only-worktree-meta-ids'
+import { isLocalOnlyWorktreeMetaId } from '../../../../shared/worktree/metadata/local-only-worktree-meta-ids'
 import {
   pruneUnreferencedWorktreeIdentityMeta,
   resolveAliasIdentityKey

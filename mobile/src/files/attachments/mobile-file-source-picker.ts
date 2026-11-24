@@ -3,7 +3,7 @@ import {
   MOBILE_PICKED_FILE_MAX_BYTES,
   MobileFileTooLargeError,
   type PickedMobileFile
-} from '../../platform/media-picker-contract'
+} from '../../platform/media-picking/media-picker-contract'
 import {
   defaultMobileImageFileFactory,
   readUriAsBase64,

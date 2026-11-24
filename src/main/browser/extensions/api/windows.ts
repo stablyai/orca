@@ -9,19 +9,19 @@ import {
 import {
   describeBrowserExtensionTab,
   listBrowserExtensionTabs,
-  resolveCallerWindowId
+  requireCallerWindow
 } from '../tabs-and-windows/browser-extension-tab-model'
 import {
   WINDOW_ID_CURRENT,
   createBrowserExtensionPopout,
   describeBrowserExtensionWindow,
-  getBrowserExtensionWindow,
   getLastFocusedBrowserExtensionWindowId,
   listBrowserExtensionWindows,
   presentBrowserExtensionWindow,
   type BrowserExtensionWindowEntry
 } from '../tabs-and-windows/browser-extension-window-model'
 import { requireOpenableUrl } from '../tabs-and-windows/browser-extension-requested-navigation'
+import { findBrowserExtensionCallerAgentPage } from '../tabs-and-windows/browser-extension-agent-caller'
 
 const windowIdSchema = z.number().int()
 const queryOptionsSchema = z
@@ -73,35 +73,34 @@ function describe(
   return describeBrowserExtensionWindow(entry, tabs)
 }
 
-function requireWindow(
-  caller: BrowserExtensionCaller,
-  windowId: number
-): BrowserExtensionWindowEntry {
-  const resolvedId = windowId === WINDOW_ID_CURRENT ? resolveCallerWindowId(caller) : windowId
-  const entry = resolvedId === null ? null : getBrowserExtensionWindow(resolvedId, caller.session)
-  if (!entry) {
-    throw new BrowserExtensionApiError(`No window with id: ${windowId}.`)
+function applyWindowState(
+  window: Electron.BrowserWindow,
+  state: z.infer<typeof updateInfoSchema>['state']
+): void {
+  if (state === 'minimized') {
+    window.minimize()
+  } else if (state === 'maximized') {
+    window.maximize()
+  } else if (state === 'fullscreen') {
+    window.setFullScreen(true)
+  } else if (state === 'normal') {
+    window.setFullScreen(false)
+    window.unmaximize()
+    window.restore()
   }
-  return entry
 }
 
 function applyWindowUpdate(
   entry: BrowserExtensionWindowEntry,
-  info: z.infer<typeof updateInfoSchema>
+  info: z.infer<typeof updateInfoSchema>,
+  byAgent: boolean
 ): void {
   const { window } = entry
   // Why: extensions may focus Orca's main window but never move, resize or minimize it.
   if (!entry.isMain) {
-    if (info.state === 'minimized') {
-      window.minimize()
-    } else if (info.state === 'maximized') {
-      window.maximize()
-    } else if (info.state === 'fullscreen') {
-      window.setFullScreen(true)
-    } else if (info.state === 'normal') {
-      window.setFullScreen(false)
-      window.unmaximize()
-      window.restore()
+    // Why not for an agent: restoring, maximizing or fullscreen can show or raise the window.
+    if (!byAgent || info.state === 'minimized') {
+      applyWindowState(window, info.state)
     }
     const bounds = window.getBounds()
     window.setBounds({
@@ -114,8 +113,8 @@ function applyWindowUpdate(
   if (info.drawAttention !== undefined) {
     window.flashFrame(info.drawAttention)
   }
-  if (info.focused) {
-    presentBrowserExtensionWindow(window, true)
+  if (info.focused && !byAgent) {
+    presentBrowserExtensionWindow(window, 'focused')
   }
 }
 
@@ -131,17 +130,23 @@ export function registerWindowsNamespace(): void {
       ),
       get: defineBrowserExtensionMethod(
         z.tuple([windowIdSchema, queryOptionsSchema.optional()]),
-        (caller, windowId, options) => describe(caller, requireWindow(caller, windowId), options)
+        (caller, windowId, options) =>
+          describe(caller, requireCallerWindow(caller, windowId), options)
       ),
       getCurrent: defineBrowserExtensionMethod(
         z.tuple([queryOptionsSchema.optional()]),
-        (caller, options) => describe(caller, requireWindow(caller, WINDOW_ID_CURRENT), options)
+        (caller, options) =>
+          describe(caller, requireCallerWindow(caller, WINDOW_ID_CURRENT), options)
       ),
       getLastFocused: defineBrowserExtensionMethod(
         z.tuple([queryOptionsSchema.optional()]),
         (caller, options) => {
           const windowId = getLastFocusedBrowserExtensionWindowId(caller.session)
-          return describe(caller, requireWindow(caller, windowId ?? WINDOW_ID_CURRENT), options)
+          return describe(
+            caller,
+            requireCallerWindow(caller, windowId ?? WINDOW_ID_CURRENT),
+            options
+          )
         }
       ),
       create: defineBrowserExtensionMethod(
@@ -161,22 +166,26 @@ export function registerWindowsNamespace(): void {
             top: data?.top,
             width: data?.width,
             height: data?.height,
-            focused: data?.focused !== false,
+            presentation: findBrowserExtensionCallerAgentPage(caller)
+              ? 'whenAppActive'
+              : data?.focused === false
+                ? 'unfocused'
+                : 'focused',
             state: data?.state
           })
-          return describe(caller, requireWindow(caller, window.id), { populate: true })
+          return describe(caller, requireCallerWindow(caller, window.id), { populate: true })
         }
       ),
       update: defineBrowserExtensionMethod(
         z.tuple([windowIdSchema, updateInfoSchema]),
         (caller, windowId, info) => {
-          const entry = requireWindow(caller, windowId)
-          applyWindowUpdate(entry, info)
+          const entry = requireCallerWindow(caller, windowId)
+          applyWindowUpdate(entry, info, findBrowserExtensionCallerAgentPage(caller) !== null)
           return describe(caller, entry, undefined)
         }
       ),
       remove: defineBrowserExtensionMethod(z.tuple([windowIdSchema]), (caller, windowId) => {
-        const entry = requireWindow(caller, windowId)
+        const entry = requireCallerWindow(caller, windowId)
         if (entry.isMain) {
           throw new BrowserExtensionApiError("Extensions cannot close Orca's main window")
         }

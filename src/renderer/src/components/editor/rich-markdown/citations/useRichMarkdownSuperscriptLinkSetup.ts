@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { getIndexedWorktreeById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { createConnectionIdForFileSelector } from '@/lib/workspace/ownership/connection-owner-resolution'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'

@@ -1,7 +1,7 @@
 import type * as pty from 'node-pty'
 import { statSync } from 'node:fs'
 import { release } from 'node:os'
-import { getCmdExePath } from '../../../shared/windows-batch-spawn'
+import { getCmdExePath } from '../../../shared/shell/launch/windows-batch-spawn'
 import {
   ensureNodePtySpawnHelperExecutable,
   getNodePtySpawnHelperCandidates

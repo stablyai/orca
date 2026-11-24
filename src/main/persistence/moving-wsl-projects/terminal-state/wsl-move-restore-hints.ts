@@ -1,6 +1,9 @@
 // Restore the last checkpointed cwd after Sleep instead of silently reopening at the worktree root.
 import type { ColdRestoreDetection } from '../../../daemon/history/restoration/terminal-history-cold-restore-info'
-import { wslUncPathToLinux } from '../../../../shared/wsl-paths'
+import {
+  wslMoveSourcePathToLinux,
+  type WslMappedDrive
+} from '../../../../shared/wsl-move/wsl-mapped-drive-paths'
 
 export type WslMoveRestoreHint = { paneKey: string; cwd: string }
 
@@ -36,7 +39,8 @@ export type ColdRestoreReader = {
 export async function captureWslMoveRestoreHints(
   reader: ColdRestoreReader,
   panes: readonly WslMoveRestoreHintPane[],
-  distro: string
+  distro: string,
+  mappedDrives: readonly WslMappedDrive[] = []
 ): Promise<WslMoveRestoreHintCapture> {
   const capture: WslMoveRestoreHintCapture = {
     hints: [],
@@ -69,7 +73,7 @@ export async function captureWslMoveRestoreHints(
       capture.noCwdPaneKeys.push(pane.paneKey)
       continue
     }
-    const linux = wslMoveHostLinuxCwd(detection.restoreInfo.cwd, pane, distro)
+    const linux = wslMoveHostLinuxCwd(detection.restoreInfo.cwd, pane, distro, mappedDrives)
     if (!linux) {
       capture.noCwdPaneKeys.push(pane.paneKey)
       continue
@@ -87,9 +91,10 @@ export async function captureWslMoveRestoreHints(
 export function wslMoveHostLinuxCwd(
   cwd: string,
   pane: WslMoveRestoreHintPane,
-  distro: string
+  distro: string,
+  mappedDrives: readonly WslMappedDrive[] = []
 ): string | null {
-  const fromUnc = wslUncPathToLinux(cwd, distro)
+  const fromUnc = wslMoveSourcePathToLinux(cwd, distro, mappedDrives)
   if (fromUnc) {
     return fromUnc
   }

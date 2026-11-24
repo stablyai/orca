@@ -6,9 +6,9 @@ import {
   normalizeHostedReviewHeadRef
 } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import { hostedReviewProviderSupportsDraft } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
-import type { ChecksPanelComposerState } from '../use-checks-panel-composer-state'
+import type { ChecksPanelReviewState } from '../review-state/use-checks-panel-review-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
+import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
 import type { ChecksPanelBranchActionsState } from './use-checks-panel-branch-actions'
 import { clearPullRequestGenerationRequiresPushBeforeCreate } from '@/store/slices/hosted-review/generation/pull-request-generation'
 import { translate } from '@/i18n/i18n'

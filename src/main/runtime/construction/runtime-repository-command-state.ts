@@ -1,4 +1,4 @@
-import type { RuntimeTerminalAgentStatus } from '../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalAgentStatus } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
 import { RuntimeGitHubRepositoryQueryCommands } from '../integrations/github/runtime-github-repository-query-commands'
@@ -21,6 +21,8 @@ import {
   storeBackedBranchSwitchSources
 } from '../integrations/git/runtime-branch-switch-host'
 import { OrcaRuntimeWithFileCommands } from './runtime-file-command-state'
+import { readCreateSourceSetupHooks } from '../../workspace-hooks/create-source-setup-hooks'
+import { getWorktreeCreatePrefetchGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 
 export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithFileCommands {
   protected readonly gitCommands = new RuntimeGitCommands({
@@ -156,7 +158,14 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
   protected readonly gitHubProjectCommands = new RuntimeGitHubProjectCommands()
 
   protected readonly repositoryHooks = new RuntimeRepositoryHooksCommands({
-    resolveRepo: (selector) => this.resolveRepoSelector(selector)
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    readCreateSourceHooks: (repo, source) =>
+      readCreateSourceSetupHooks({
+        repo,
+        source,
+        runtime: this.remoteFetches,
+        gitOptions: getWorktreeCreatePrefetchGitOptions(this.requireStore(), repo)
+      })
   })
 
   protected readonly repositoryIssueCommand = new RuntimeRepositoryIssueCommand({
@@ -167,6 +176,7 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
 
   protected readonly clientHostedBrowserRows = new ClientHostedBrowserRowPublisher({
     listClientPages: (worktreeId) => getRuntimeBrowserPageRegistry(this).listPages(worktreeId),
+    getClientPage: (browserPageId) => getRuntimeBrowserPageRegistry(this).getPage(browserPageId),
     hasLivePlacement: (browserPageId) =>
       getBrowserHostLeaseRegistry(this).getPlacement(browserPageId) !== undefined,
     resolveDeviceName: (pairedDeviceId) => this.getPairedDeviceNameFn(pairedDeviceId),

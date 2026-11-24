@@ -32,7 +32,7 @@ import {
   injectWslFishHistoryEnv,
   logHistoryInjection
 } from '../../../pty/history/terminal-history'
-import { addWslEnvKeys } from '../../../../shared/wsl-env'
+import { addWslEnvKeys } from '../../../../shared/shell/wsl/wsl-env'
 import { holdPassiveRestoreOfStoppedWslDistro } from '../wsl/daemon-wsl-passive-restore-hold'
 
 export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {

@@ -1,12 +1,9 @@
 import { screen } from 'electron'
-import {
-  normalizeBrowserNavigationUrl,
-  normalizeExternalBrowserUrl,
-  redactKagiSessionToken
-} from '../../../../shared/browser-url'
 import type { BrowserContextMenuRequestedEvent } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
-import { readContextMenuSpelling } from '../../../window/editing/editable-context-menu'
-import { readGuestNavigationState } from '../navigation/browser-guest-navigation-state'
+import {
+  isContextMenuFromInjectedPress,
+  readGuestContextMenuTarget
+} from './browser-guest-context-menu-target'
 import type { ResolveRenderer } from '../browser-guest-renderer-target'
 // oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { buildBrowserExtensionPageContextMenu } from '../../extensions/context-menus/browser-extension-context-menu-host'
@@ -22,43 +19,13 @@ export function setupGuestContextMenu(args: {
     if (!renderer) {
       return
     }
-    // The renderer may copy or open this URL externally; remove the Kagi token first.
-    const pageUrl = redactKagiSessionToken(guest.getURL())
-    // Normalizing an empty link creates a truthy blank-page URL and a spurious Open Link item.
-    const rawLinkUrl = params.linkURL || ''
-    const linkUrl =
-      rawLinkUrl.length > 0
-        ? (normalizeExternalBrowserUrl(rawLinkUrl) ?? normalizeBrowserNavigationUrl(rawLinkUrl))
-        : null
     // Prefer screen coordinates to avoid viewport mismatches; retain guest coordinates as fallback.
     const cursor = screen.getCursorScreenPoint()
-    const navigationState = readGuestNavigationState(guest)
     renderer.send('browser:context-menu-requested', {
+      ...readGuestContextMenuTarget(guest, params),
       browserPageId: browserTabId,
-      x: params.x,
-      y: params.y,
       screenX: cursor.x,
       screenY: cursor.y,
-      pageUrl,
-      linkUrl,
-      // Native selection lets Copy bypass page oncopy handlers.
-      selectionText: params.selectionText ?? '',
-      ...navigationState,
-      editable: params.isEditable
-        ? {
-            canUndo: params.editFlags.canUndo,
-            canRedo: params.editFlags.canRedo,
-            canCut: params.editFlags.canCut,
-            canCopy: params.editFlags.canCopy,
-            canPaste: params.editFlags.canPaste,
-            canSelectAll: params.editFlags.canSelectAll,
-            spelling: readContextMenuSpelling(params)
-          }
-        : null,
-      image:
-        params.mediaType === 'image' && params.srcURL
-          ? { url: params.srcURL, canCopy: params.hasImageContents }
-          : null,
       extensionMenu: buildBrowserExtensionPageContextMenu(guest, params) ?? undefined
     } satisfies BrowserContextMenuRequestedEvent)
   }
@@ -79,6 +46,10 @@ export function setupGuestContextMenu(args: {
   }
 
   const contextMenuHandler = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
+    // An agent's or remote viewer's right-click must not open a menu over this desktop's user.
+    if (isContextMenuFromInjectedPress(guest)) {
+      return
+    }
     handler(_event, params)
 
     removeDismissListener()

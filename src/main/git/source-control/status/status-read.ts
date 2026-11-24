@@ -5,7 +5,7 @@ import type {
   GitUpstreamStatus
 } from '../../../../shared/git/status/git-status-types'
 import { resolveGitStatusLimit } from '../../../../shared/git/status/git-status-limit'
-import { stableInFlightKey } from '../../../../shared/in-flight-promise-dedupe'
+import { stableInFlightKey } from '../../../../shared/concurrency/in-flight-promise-dedupe'
 import { beginGitStatusLineStatsCacheWrite } from '../../../../shared/git/status/git-status-line-stats-write-token'
 import {
   clearGitStatusLineStatsCacheKey,

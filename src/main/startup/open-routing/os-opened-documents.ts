@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { FileDocument } from '../../../shared/file-listing/file-document'
-import { ensureDefaultFloatingWorkspacePath } from '../../ipc/floating-workspace-directory'
+import { ensureDefaultFloatingWorkspacePath } from '../../ipc/worktrees/floating-workspace-directory'
 import {
   fileDocumentFromFilePath,
   isMarkdownDocumentName

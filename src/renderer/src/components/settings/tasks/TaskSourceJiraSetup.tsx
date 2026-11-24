@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { JiraConnectDialog } from '@/components/jira-connect-dialog'
+import { JiraConnectDialog } from '@/components/integrations/task-trackers/jira-connect-dialog'
 import { Button } from '@/components/ui/button'
 import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
 import { TaskSourceStepRow } from './TaskSourceStepRow'

@@ -1,7 +1,7 @@
 import { readLocalGitConfigSignature } from '../../github/repositories/local-git-config-signature'
 import { runCoalescedProbe, type CoalescedProbes } from './coalesced-probe'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
-import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-url-probe'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-git-probe-timeout'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 
 export type RemoteNameListingGitOptions = {
@@ -10,7 +10,7 @@ export type RemoteNameListingGitOptions = {
 }
 
 const SIGNED_REMOTE_NAME_LISTING_TTL_MS = 5 * 60_000
-const UNSIGNED_REMOTE_NAME_LISTING_TTL_MS = 30_000
+export const UNSIGNED_REMOTE_NAME_LISTING_TTL_MS = 30_000
 const REMOTE_NAME_LISTING_CACHE_MAX_ENTRIES = 512
 
 type CachedRemoteNames = {
@@ -149,4 +149,29 @@ export async function shouldProbeGitRemote(
 ): Promise<boolean> {
   const remotes = await listCachedRemoteNames(repoPath, connectionId, localGitOptions)
   return remotes === null || remotes.includes(remoteName)
+}
+
+/** True only when this repo's fresh, config-signed listing lacks the remote; reads no Git and spawns
+ *  nothing, so a cold or unsigned listing (WSL, unreadable config) or an SSH repo says false. */
+export async function isRemoteListedAbsent(
+  repoPath: string,
+  remoteName: string,
+  connectionId?: string | null,
+  localGitOptions: RemoteNameListingGitOptions = {}
+): Promise<boolean> {
+  if (connectionId) {
+    return false
+  }
+  const cached = remoteNameListingCache.get(remoteNameListingCacheKey(repoPath, localGitOptions))
+  if (
+    cached?.configSignature === undefined ||
+    cached.expiresAt <= Date.now() ||
+    cached.remotes.includes(remoteName)
+  ) {
+    return false
+  }
+  const current = await readLocalGitConfigSignature(
+    listingGitConfigContext(repoPath, localGitOptions)
+  )
+  return current === cached.configSignature
 }

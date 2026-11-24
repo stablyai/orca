@@ -5,7 +5,7 @@ import {
   CLAUDE_AGENT_VIEW_COMMAND,
   CLAUDE_AGENT_VIEW_SHORTCUTS,
   normalizeClaudeAgentViewChord
-} from '../../../shared/claude-agent-view'
+} from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
 export function withClaudeAgentViewShortcut(config: HooksConfig): HooksConfig | null {
   const bindings = config.bindings ?? []

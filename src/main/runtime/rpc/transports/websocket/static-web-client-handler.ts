@@ -2,7 +2,7 @@ import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http'
 import { basename, extname, isAbsolute, posix, relative, resolve } from 'node:path'
-import { readBundledWebClientFiles } from '../../../../../shared/bundled-web-client-manifest'
+import { readBundledWebClientFiles } from '../../../../../shared/web-client/bundled-web-client-manifest'
 
 const STATIC_WEB_ALLOWED_PATHS = new Set(['/web-index.html'])
 const STATIC_WEB_ALLOWED_PREFIXES = ['/assets/', '/cmaps/', '/standard_fonts/', '/wasm/']

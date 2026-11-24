@@ -1,7 +1,7 @@
 import {
   remoteRpcContentBudget,
   remoteRpcResultExceedsContentBudget
-} from '../../../../../shared/remote-rpc-content-budget'
+} from '../../../../../shared/remote-runtime/rpc/remote-rpc-content-budget'
 import type { DirEntry } from '../../../../../shared/file-listing/directory-entry'
 import { dirListingTooLargeForRemoteMessage } from '../../../../../shared/file-listing/file-dir-page'
 

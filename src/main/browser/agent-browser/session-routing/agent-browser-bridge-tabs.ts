@@ -5,12 +5,11 @@ import type {
 import { BrowserError } from '../../browser-error'
 import type { ResolvedBrowserCommandTarget } from './agent-browser-command-target'
 import { AgentBrowserBridgeState } from './agent-browser-bridge-state'
-import { isAgentRpcCaller } from '../../../runtime/rpc/callers/rpc-caller-identity'
-import { getActiveRpcCaller } from '../../../runtime/rpc/callers/active-call'
+import { activeRpcBrowserPagePicker, personPickWaits } from './person-pick-hold'
 
 export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   setActiveTab(webContentsId: number, worktreeId?: string): void {
-    if (isAgentRpcCaller(getActiveRpcCaller())) {
+    if (activeRpcBrowserPagePicker() === 'agent') {
       this.pointAgentAt(webContentsId, worktreeId)
     } else {
       this.selectForPerson(webContentsId, worktreeId)
@@ -19,28 +18,42 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   }
 
   protected pointAgentAt(webContentsId: number, worktreeId?: string): void {
+    const browserPageId = this.resolveTabIdSafe(webContentsId)
+    if (!browserPageId) {
+      return
+    }
     for (const key of routingKeys(worktreeId)) {
-      this.setRoutedWebContentsId(key, webContentsId)
+      this.setRoutedPageId(key, browserPageId)
     }
     // Mark the new tab now, or a person's pick before the agent's next command would take it.
-    const browserPageId = this.resolveTabIdSafe(webContentsId)
-    if (browserPageId) {
-      this.browserManager.beginAgentCommand(browserPageId).end()
-    }
+    this.browserManager.beginAgentCommand(browserPageId).end()
     this.watchPopupClose(webContentsId)
   }
 
   protected abstract watchPopupClose(webContentsId: number): void
 
+  /** Page-less commands route to this page now, or will once a person's held pick applies; never picks a fallback. */
+  isRoutedPage(browserPageId: string): boolean {
+    return (
+      this.routedPageId === browserPageId ||
+      [...this.routedPagePerWorktree.values(), ...this.heldPersonSelections.values()].includes(
+        browserPageId
+      )
+    )
+  }
+
   // A person's pick never pulls an agent off the tab it is driving; it applies once that tab goes idle.
   private selectForPerson(webContentsId: number, worktreeId?: string): void {
+    const browserPageId = this.resolveTabIdSafe(webContentsId)
+    if (!browserPageId) {
+      return
+    }
     for (const key of routingKeys(worktreeId)) {
-      const current = this.routedWebContentsId(key)
-      if (current !== null && current !== webContentsId && this.isAgentUsingTab(current)) {
-        this.heldPersonSelections.set(key, webContentsId)
+      if (personPickWaits(this.routedPage(key), browserPageId, this.isAgentUsingPage)) {
+        this.setHeldPersonSelection(key, browserPageId)
       } else {
-        this.setRoutedWebContentsId(key, webContentsId)
-        this.heldPersonSelections.delete(key)
+        this.setRoutedPageId(key, browserPageId)
+        this.setHeldPersonSelection(key, null)
       }
     }
   }
@@ -48,56 +61,48 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   protected applyHeldPersonSelections(worktreeId?: string): void {
     for (const key of routingKeys(worktreeId)) {
       const held = this.heldPersonSelections.get(key)
-      const current = this.routedWebContentsId(key)
-      if (held === undefined || (current !== null && this.isAgentUsingTab(current))) {
+      if (
+        held === undefined ||
+        personPickWaits(this.routedPage(key), held, this.isAgentUsingPage)
+      ) {
         continue
       }
-      this.heldPersonSelections.delete(key)
-      if (this.getWebContents(held)) {
-        this.setRoutedWebContentsId(key, held)
-      }
+      this.setHeldPersonSelection(key, null)
+      this.setRoutedPageId(key, held)
     }
   }
 
-  private isAgentUsingTab(webContentsId: number): boolean {
-    const browserPageId = this.resolveTabIdSafe(webContentsId)
-    return browserPageId !== null && this.browserManager.isAgentUsingPage(browserPageId)
+  readonly isAgentUsingPage = (browserPageId: string): boolean =>
+    this.browserManager.isAgentUsingPage(browserPageId)
+
+  private routedPage(key: string | undefined): string | null {
+    return key === undefined ? this.routedPageId : (this.routedPagePerWorktree.get(key) ?? null)
   }
 
-  private routedWebContentsId(key: string | undefined): number | null {
-    return key === undefined
-      ? this.activeWebContentsId
-      : (this.activeWebContentsPerWorktree.get(key) ?? null)
-  }
-
-  private setRoutedWebContentsId(key: string | undefined, webContentsId: number): void {
-    if (key === undefined) {
-      this.activeWebContentsId = webContentsId
-    } else {
-      this.activeWebContentsPerWorktree.set(key, webContentsId)
-    }
-  }
-
-  protected selectFallbackActiveWebContents(
-    worktreeId: string,
-    excludedWebContentsId?: number
-  ): number | null {
+  protected selectFallbackRoutedPage(worktreeId: string, excludedPageId: string): string | null {
     // A closing tab's popups close with it, so only tabs can take over.
-    for (const [, wcId] of this.registeredTabsWithoutPopups(worktreeId)) {
-      if (wcId === excludedWebContentsId) {
-        continue
-      }
-      if (this.getWebContents(wcId)) {
-        this.activeWebContentsPerWorktree.set(worktreeId, wcId)
-        return wcId
+    for (const [tabId, wcId] of this.registeredTabsWithoutPopups(worktreeId)) {
+      if (tabId !== excludedPageId && this.getWebContents(wcId)) {
+        this.setRoutedPageId(worktreeId, tabId)
+        return tabId
       }
     }
-    this.activeWebContentsPerWorktree.delete(worktreeId)
+    this.setRoutedPageId(worktreeId, null)
     return null
   }
 
   getActiveWebContentsId(): number | null {
-    return this.activeWebContentsId
+    return this.routedPageId === null
+      ? null
+      : (this.getRegisteredPageWebContentsId(this.routedPageId) ?? null)
+  }
+
+  /** The page pageless commands target, which may be freed and need restoring before use. */
+  getRoutedPageId(worktreeId?: string): string | null {
+    this.applyHeldPersonSelections(worktreeId)
+    return (
+      (worktreeId ? this.routedPagePerWorktree.get(worktreeId) : undefined) ?? this.routedPageId
+    )
   }
 
   getPageInfo(
@@ -121,6 +126,22 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   }
   getRemoteTabFaviconUrl(browserPageId: string): string | null {
     return this.browserManager.getBrowserPageRemoteTabFaviconUrl(browserPageId)
+  }
+  getPageNavigationState(
+    browserPageId: string
+  ): { loading: boolean; canGoBack: boolean; canGoForward: boolean } | null {
+    return this.browserManager.getBrowserPageNavigationState(browserPageId)
+  }
+  /** A server page's sound and agent flags, which its session row carries only when set. */
+  getPageRowFields(browserPageId: string): {
+    audible?: true
+    audioMuted?: true
+    agentDriving?: true
+  } {
+    return {
+      ...this.browserManager.getBrowserPageAudioRowFields(browserPageId),
+      ...(this.isAgentUsingPage(browserPageId) && { agentDriving: true as const })
+    }
   }
   onTabChanged(webContentsId: number, worktreeId?: string): void {
     this.selectForPerson(webContentsId, worktreeId)
@@ -155,8 +176,8 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       popupPages.map((popup) => [popup.browserPageId, popup.openerBrowserPageId])
     )
     // Match command routing without changing active-tab selection during discovery.
-    let activeWcId =
-      (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId)) ?? this.activeWebContentsId
+    const routedPageId =
+      (worktreeId ? this.routedPagePerWorktree.get(worktreeId) : undefined) ?? this.routedPageId
     const result: BrowserTabInfo[] = []
     let index = 0
     let firstLiveWcId: number | null = null
@@ -179,18 +200,15 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
         // Failed pages report chrome-error:// instead of the requested URL.
         url: loadError?.validatedUrl ?? wc.getURL() ?? '',
         title: wc.getTitle() ?? '',
-        active: wcId === activeWcId,
+        active: tabId === routedPageId,
         loadError,
         certificateFailure,
         ...(openerBrowserPageId ? { openerBrowserPageId } : {})
       })
     }
     // Infer an active tab for display without changing command routing.
-    if (activeWcId == null && firstLiveWcId !== null) {
-      activeWcId = firstLiveWcId
-      if (result.length > 0) {
-        result[0].active = true
-      }
+    if (routedPageId === null && firstLiveWcId !== null && result.length > 0) {
+      result[0].active = true
     }
     return { tabs: result }
   }
@@ -213,8 +231,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
         : this.resolveActiveTab(worktreeId)
     }
 
-    const tabs = this.getRegisteredTabs(worktreeId)
-    const webContentsId = tabs.get(browserPageId)
+    const webContentsId = this.getRegisteredPageWebContentsId(browserPageId, worktreeId)
     if (webContentsId == null) {
       const scope = worktreeId ? ' in this worktree' : ''
       throw new BrowserError(
@@ -235,39 +252,44 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   }
 
   protected resolveActiveTab(worktreeId?: string): ResolvedBrowserCommandTarget {
-    this.applyHeldPersonSelections(worktreeId)
+    const preferredPageId = this.getRoutedPageId(worktreeId)
+    const preferredWcId =
+      preferredPageId === null
+        ? undefined
+        : this.getRegisteredPageWebContentsId(preferredPageId, worktreeId)
+    if (preferredPageId !== null && preferredWcId !== undefined) {
+      if (this.getWebContents(preferredWcId)) {
+        return { browserPageId: preferredPageId, webContentsId: preferredWcId }
+      }
+      this.browserManager.unregisterGuest(preferredPageId)
+      if (this.routedPageId === preferredPageId) {
+        this.setRoutedPageId(undefined, null)
+      }
+      if (worktreeId && this.routedPagePerWorktree.get(worktreeId) === preferredPageId) {
+        this.setRoutedPageId(worktreeId, null)
+      }
+    }
     const tabs = this.getRegisteredTabs(worktreeId)
-
     if (tabs.size === 0) {
       throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
     }
-
-    const preferredWcId =
-      (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId)) ?? this.activeWebContentsId
-
-    if (preferredWcId != null) {
-      for (const [tabId, wcId] of tabs) {
-        if (wcId === preferredWcId && this.getWebContents(wcId)) {
-          return { browserPageId: tabId, webContentsId: wcId }
-        }
-        if (wcId === preferredWcId) {
-          this.browserManager.unregisterGuest(tabId)
-          if (this.activeWebContentsId === wcId) {
-            this.activeWebContentsId = null
-          }
-          if (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId) === wcId) {
-            this.activeWebContentsPerWorktree.delete(worktreeId)
-          }
-        }
-      }
-    }
+    // A routed page freed while hidden stays the route; page operations restore it before running.
+    const ownRoute = worktreeId
+      ? (this.routedPagePerWorktree.get(worktreeId) ?? null)
+      : this.routedPageId
+    const keepRoute =
+      ownRoute !== null &&
+      ownRoute === preferredPageId &&
+      this.getRegisteredPageWebContentsId(ownRoute) === undefined
 
     // Persisted registrations can outlive their WebContents.
     for (const [tabId, wcId] of tabs) {
       if (this.getWebContents(wcId)) {
-        this.activeWebContentsId = wcId
-        if (worktreeId) {
-          this.activeWebContentsPerWorktree.set(worktreeId, wcId)
+        if (!keepRoute) {
+          this.setRoutedPageId(undefined, tabId)
+          if (worktreeId) {
+            this.setRoutedPageId(worktreeId, tabId)
+          }
         }
         return { browserPageId: tabId, webContentsId: wcId }
       }

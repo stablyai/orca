@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { Project, ProjectUpdateArgs } from '../../../../../../shared/project-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import type { Project, ProjectUpdateArgs } from '../../../../../../shared/project/project-types'
 
 import {
   type LocalWindowsRuntimePreference,
@@ -13,7 +13,7 @@ import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/Setti
 import type { ProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { projectRuntimeRepairSentence } from '../../../../../../shared/project-runtime-repair-message'
+import { projectRuntimeRepairSentence } from '../../../../../../shared/execution-host/project-runtime-repair-message'
 
 type ProjectRuntimeSegment = LocalWindowsRuntimePreference['kind']
 

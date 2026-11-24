@@ -1,4 +1,4 @@
-import '../../protocol-version'
+import '../../remote-runtime/protocol/protocol-version'
 import {
   BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -36,7 +36,7 @@ export function expectsBrowserClientHosting(input: {
   // Why: a server that cannot stream can't honor the server-render setting; its pages would become unregistered desktop tabs.
   const serverCanStream = input.capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY)
   return (
-    (input.enabled || !serverCanStream) &&
+    (input.enabled || input.preference === 'client' || !serverCanStream) &&
     (input.preference ?? 'auto') !== 'server' &&
     input.deviceScope !== 'mobile' &&
     runtimeAdvertisesBrowserClientHosting(input.capabilities)

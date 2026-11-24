@@ -1,4 +1,7 @@
-import { isUnresolvedOwnerHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  isUnresolvedOwnerHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import {
   AI_VAULT_SESSION_HANDOFF_TIMEOUT_MS,
   readAiVaultSessionHandoffResult,
@@ -6,8 +9,8 @@ import {
   type AiVaultSessionHandoffResult
 } from '../../../shared/ai-vault/contracts/ai-vault-session-handoff'
 import { writeAiVaultSessionHandoffSnapshot } from '../../ai-vault/session-handoff-snapshot'
-import { callRuntimeEnvironment } from '../runtime-environments/runtime-environment-transport-routing'
-import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/runtime-environment-registry-root'
+import { callRuntimeEnvironment } from '../runtime-environments/requests/runtime-environment-transport-routing'
+import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/catalog/runtime-environment-registry-root'
 
 /** The snapshot is written on the session's own host, where the hand-off agent starts. */
 export async function prepareAiVaultSessionHandoff(

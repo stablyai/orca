@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
 import type { TerminalPaneLayoutNode } from '../terminal-tab-types'
 

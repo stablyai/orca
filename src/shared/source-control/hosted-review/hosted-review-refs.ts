@@ -1,4 +1,4 @@
-import type { BaseRefSearchResult } from '../../repo-types'
+import type { BaseRefSearchResult } from '../../repository/repo-types'
 
 export function normalizeHostedReviewHeadRef(ref: string): string {
   return ref

@@ -1,5 +1,6 @@
-import { isProjectOrPinnedSectionGroupKey } from '../../../../../../shared/sidebar-list/group-keys'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import { recordCollapsedGroupChanges } from '@/store/slices/ui/collapsed-group-toggle'
+import { isProjectOrPinnedSectionGroupKey } from '../../../../../../shared/sidebar-list/sections/group-keys'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 
 export function getRenderedProjectCollapseKeys(rows: readonly HostSectionRow[]): string[] {
   const keys = new Set<string>()
@@ -28,7 +29,16 @@ export function setAllProjectsCollapsed(
   projectKeys: readonly string[],
   collapsed: boolean
 ): Set<string> {
-  return collapsed
-    ? new Set([...collapsedGroups, ...projectKeys])
-    : new Set([...collapsedGroups].filter((key) => !isProjectOrPinnedSectionGroupKey(key)))
+  const keys = collapsed
+    ? projectKeys
+    : [...collapsedGroups].filter(isProjectOrPinnedSectionGroupKey)
+  const next = new Set(collapsedGroups)
+  for (const key of keys) {
+    if (collapsed) {
+      next.add(key)
+    } else {
+      next.delete(key)
+    }
+  }
+  return recordCollapsedGroupChanges(collapsedGroups, next, keys)
 }

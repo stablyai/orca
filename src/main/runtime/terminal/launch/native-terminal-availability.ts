@@ -4,7 +4,7 @@ import {
   TERMINAL_PTY_DEGRADATION_CAPABILITY,
   TERMINAL_UNAVAILABLE_ERROR_CODE,
   type RuntimeDegradation
-} from '../../../../shared/runtime-capability-degradation'
+} from '../../../../shared/remote-runtime/protocol/runtime-capability-degradation'
 
 /** Entry-point PTY probes run before node-pty imports and runtime construction, so retain failures at module scope.
  * Silence means no failure proved, never proof of working PTYs; unprobed hosts report no degradation. */

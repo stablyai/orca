@@ -1,3 +1,5 @@
+// @protected-copy scope=file
+// What a permission choice does: a language pack must never misstate it.
 import { useTranslate } from '../../../i18n/use-translate'
 import { cn } from '../../../lib/class-names'
 import { ChevronDown } from 'lucide-react'
@@ -81,7 +83,11 @@ export function AgentPermissionMenu({
             <ChevronDown className="size-3 shrink-0" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" collisionPadding={8} className="w-80">
+        <DropdownMenuContent
+          align="start"
+          collisionPadding={8}
+          className="w-80 max-w-(--radix-dropdown-menu-content-available-width)"
+        >
           <AgentPermissionMenuOptions
             agentId={agentId}
             permission={permission}
@@ -99,6 +105,21 @@ export function AgentPermissionMenu({
             'settings.agents.permissionSurfaceDifference',
             'Terminals use the agent’s own settings; new chats use {{mode}}.',
             { mode: nativeChatPermissionModeLabel(permission.chatChoice, t) }
+          )}
+        </span>
+      ) : !permission.argsSetPermission &&
+        permission.terminalChoice &&
+        permission.terminalChoice !== 'own' &&
+        permission.chatChoice &&
+        permission.terminalChoice !== permission.chatChoice ? (
+        <span className="text-xs text-muted-foreground">
+          {t(
+            'settings.agents.permissionModeSurfaceDifference',
+            'Terminals use {{terminal}}; new chats use {{mode}}.',
+            {
+              terminal: nativeChatPermissionModeLabel(permission.terminalChoice, t),
+              mode: nativeChatPermissionModeLabel(permission.chatChoice, t)
+            }
           )}
         </span>
       ) : null}

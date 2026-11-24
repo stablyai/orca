@@ -1,6 +1,6 @@
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { AppState } from '../../types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { getIndexedWorktreesById as getCachedWorktreesById } from '../../slices/worktrees/listing/worktree-catalog-index'
 import { selectWorktreesByRepo } from '../catalog/workspace-record-fields'
 import { worktreeCopyOwnerKey } from '../../slices/worktrees/metadata/worktree-copy-review-clear'

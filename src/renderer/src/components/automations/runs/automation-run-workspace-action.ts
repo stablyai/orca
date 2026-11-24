@@ -1,6 +1,4 @@
 import { openExistingStructuredSession } from '@/lib/agent-session/open/open-existing-structured-session'
-import { ALL_TUI_AGENTS } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
-import { isStructuredAgentSessionIdFor } from '../../../../../shared/agent-session/structured-agent-session-create'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
@@ -13,7 +11,7 @@ import { activateTerminalTabOnOwner } from '@/lib/workspace/tabs/terminal-tab-ow
 import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { buildAutomationRunOpenLayout } from './automation-run-pane-layout'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
@@ -128,13 +126,6 @@ export function createAutomationRunWorkspaceAction({
         : activateAndRevealWorktree(workspaceId, options)
     }
     if (runViewState.availability === 'chat' && run.chatSessionId) {
-      const agent = ALL_TUI_AGENTS.find((entry) =>
-        isStructuredAgentSessionIdFor(entry, run.chatSessionId!)
-      )
-      if (!agent) {
-        toast.error(workspaceUnavailableMessage())
-        return
-      }
       void openRunChat(run.workspaceId, run.chatSessionId, ownerEnvironmentId, reveal)
       return
     }

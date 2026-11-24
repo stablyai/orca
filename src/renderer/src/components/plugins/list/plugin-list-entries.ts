@@ -1,14 +1,14 @@
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import type {
-  PluginHostListEntry,
   PluginMarketplaceHostListing,
   PluginMarketplaceHostSourceState
-} from '../../../../../preload/api-types'
+} from '../../../../../preload/api/plugins/plugin-host-api'
 import { satisfiesOrcaEngineRange } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import {
   pluginCatalogReleaseTypes,
   type PluginCatalogType
 } from '../../../../../shared/plugins/catalog/plugin-catalog-release'
-import { compareAppVersions } from '../../../../../shared/app-version'
+import { compareAppVersions } from '../../../../../shared/app-lifecycle/identity/app-version'
 import {
   gitRepositoryOwnerLabel,
   splitQualifiedPluginKey
@@ -59,6 +59,10 @@ export type PluginListEntry = {
 export type PluginVerifiedSource =
   | { kind: 'official' | 'bundled' | 'dev' | 'unverified' }
   | { kind: 'catalog'; catalog: string | null; owner: string | null }
+
+export function pluginEntryManagingTeams(entry: PluginListEntry): string[] | undefined {
+  return entry.installed ? entry.installed.managedByTeams : entry.listing?.managedByTeams
+}
 
 function installedVerifiedSource(
   plugin: PluginHostListEntry,

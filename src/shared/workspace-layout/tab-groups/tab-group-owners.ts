@@ -1,4 +1,4 @@
-import type { TabGroup } from '../../tab-types'
+import type { TabGroup } from './tab-types'
 
 /** Prefer the tab-bar entry’s stored group, else its first listed group; one tab must not appear in several groups. */
 export function resolveTabGroupOwners(

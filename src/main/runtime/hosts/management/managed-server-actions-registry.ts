@@ -8,14 +8,16 @@ import type {
   OrcadManagedRollbackResult,
   OrcadManagedRuntimeStatus,
   OrcadManagedStopResult
-} from '../../../../shared/orcad-managed-runtime'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 
 export type ManagedServerActions = {
   status: (selector: string) => Promise<OrcadManagedRuntimeStatus>
   update: (
     selector: string,
     force: boolean,
-    pastLiveTerminals?: OrcadManagedPastLiveTerminals
+    pastLiveTerminals?: OrcadManagedPastLiveTerminals,
+    /** With force, accepts that terminals orcad runs itself end when the census cannot count them. */
+    endInProcessTerminals?: boolean
   ) => Promise<OrcadManagedDeployResult>
   rollback: (selector: string) => Promise<OrcadManagedRollbackResult>
   /** `acceptChangedState` restores the snapshot over state a rejected build changed. */

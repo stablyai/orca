@@ -1,9 +1,43 @@
 import { holdPaneResumeInPlace } from '@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry'
+import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
-/** While `attempt` runs and `isLive`, the pane owns the resume record `startup` came from. */
+function holdSessionResume(session: ConnectPanePtySession, paneKey: string): () => void {
+  const releaseHold = holdPaneResumeInPlace(paneKey, () => !session.disposed)
+  const release = (): void => {
+    releaseHold()
+    const index = session.waitTeardowns.indexOf(release)
+    if (index !== -1) {
+      session.waitTeardowns.splice(index, 1)
+    }
+  }
+  session.waitTeardowns.push(release)
+  return release
+}
+
+/** Each concrete attempt owns any retained conversation, including retries after a refusal. */
+export function runPaneResumeAttempt<T>(
+  session: ConnectPanePtySession,
+  start: () => Promise<T>
+): Promise<T> {
+  const releaseHold = holdSessionResume(session, session.cacheKey)
+  const release = (): void => {
+    releaseHold()
+    session.deps.releaseResumeInPlace?.()
+  }
+  try {
+    const attempt = start()
+    void attempt.then(release, release)
+    return attempt
+  } catch (error) {
+    release()
+    throw error
+  }
+}
+
+/** Reattach also owns the record while deciding whether it needs a fresh spawn. */
 export function holdInPlaceResumeUntilSettled(
-  isLive: () => boolean,
+  session: ConnectPanePtySession,
   startup: ColdRestoreAgentResumeStartup | null | undefined,
   attempt: Promise<unknown>
 ): void {
@@ -11,6 +45,6 @@ export function holdInPlaceResumeUntilSettled(
   if (!recordEntry) {
     return
   }
-  const release = holdPaneResumeInPlace(recordEntry.paneKey, isLive)
+  const release = holdSessionResume(session, recordEntry.paneKey)
   void attempt.then(release, release)
 }

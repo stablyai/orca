@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
-import { pluginTreeHashMatches } from '../../plugin-content-integrity'
-import { hashPluginTree } from '../../plugin-content-hash'
-import type { ValidDiscoveredPlugin } from '../../plugin-discovery'
+import { pluginTreeHashMatches } from '../../artifacts/plugin-content-integrity'
+import { hashPluginTree } from '../../artifacts/plugin-content-hash'
+import type { ValidDiscoveredPlugin } from '../../discovery/plugin-discovery'
 
 /** How long one tree verification vouches for the sub-resources a document loads. */
 const ASSET_VERIFICATION_REUSE_MS = 10_000

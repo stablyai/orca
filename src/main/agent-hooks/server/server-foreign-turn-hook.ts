@@ -1,5 +1,5 @@
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import { rowHoldsOtherCodexThread } from '../../../shared/agent-hook-listener/providers/codex-ephemeral-threads'
+import { rowHoldsOtherCodexThread } from '../../../shared/agent-hook-listener/providers/codex/codex-ephemeral-threads'
 import { isStaleGrokTurnEnd } from './server-grok-status-rules'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
