@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
 import { BOT_TEAM_SHARES_METHODS } from './bots-team-shares'
 
@@ -37,5 +37,58 @@ describe('bots.teamShares.add', () => {
     expect(added.every((share) => share.kind === 'invite' && share.emailedAt !== undefined)).toBe(
       true
     )
+  })
+})
+
+describe('bots.teamShares.resend', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("posts the bot's mascot and services with the invite", async () => {
+    const bodies: unknown[] = []
+    vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)))
+      return new Response(JSON.stringify({ sent: true }), { status: 200 })
+    })
+    const bot: Partial<Bot> = {
+      id: 'b1',
+      name: 'Ivy',
+      avatar: 'mascot:G1',
+      slack: null,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the link's presence is read.
+      slackApps: [{ appId: 'A1', teamId: 'T1' }] as Bot['slackApps'],
+      linear: null,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the link's presence is read.
+      github: {} as Bot['github'],
+      shares: [{ kind: 'invite', shareId: 's1', email: 'dana@acme.co', addedAt: 1 }]
+    }
+    const resend = BOT_TEAM_SHARES_METHODS.find(
+      (method) => method.name === 'bots.teamShares.resend'
+    )!
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these runtime fields.
+    const context = {
+      runtime: {
+        bots: {
+          list: () => [bot],
+          update: async (_id: string, edit: (saved: Partial<Bot>) => Partial<Bot>) => ({
+            ...bot,
+            ...edit(bot)
+          })
+        },
+        botCloudAuth: async (
+          operation: (token: string, apiBaseUrl: string) => Promise<boolean>
+        ) => ({ status: 'ok', value: await operation('token', 'https://auth.example') })
+      }
+    } as unknown as Parameters<typeof resend.handler>[1]
+    await resend.handler({ botId: 'b1', shareId: 's1' }, context)
+    expect(bodies).toEqual([
+      expect.objectContaining({
+        to: 'dana@acme.co',
+        agentName: 'Ivy',
+        avatar: 'mascot:G1',
+        connectors: ['slack', 'github']
+      })
+    ])
   })
 })

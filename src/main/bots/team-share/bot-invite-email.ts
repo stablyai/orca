@@ -2,12 +2,46 @@
 // this host's signed-in account (the bot's owner). Only the email: the share stands either way.
 import { randomUUID } from 'node:crypto'
 import * as z from 'zod'
+import { mascotAvatar, parseBotAvatar } from '../../../shared/bot-avatar'
+import { botLinearWorkspaces, botSlackApps, type Bot } from '../../../shared/bot-types'
 import { OrcaCloudRequestError } from '../../orca-profiles/cloud-auth/profile-cloud-client'
 
 const INVITE_TIMEOUT_MS = 15_000
 const InviteAnswer = z.object({ sent: z.boolean() })
 
-export type BotInviteEmail = { to: string; agentName: string }
+/** The services an invite email says the bot can be asked on, besides Orca. */
+export type BotInviteConnector = 'slack' | 'github' | 'linear'
+
+export type BotInviteEmail = {
+  to: string
+  agentName: string
+  /** `mascot:<id>`, shown as that mascot; an uploaded picture stays on this computer, so the email
+   *  shows the bot's initial. */
+  avatar?: string
+  connectors: BotInviteConnector[]
+}
+
+/** The invite email for one address: the bot's name, its mascot, and where it answers. */
+export function botInviteEmail(
+  bot: Pick<
+    Bot,
+    'name' | 'avatar' | 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github'
+  >,
+  to: string
+): BotInviteEmail {
+  const picture = parseBotAvatar(bot.avatar)
+  const connected: [boolean, BotInviteConnector][] = [
+    [botSlackApps(bot).length > 0, 'slack'],
+    [bot.github !== null, 'github'],
+    [botLinearWorkspaces(bot).length > 0, 'linear']
+  ]
+  return {
+    to,
+    agentName: bot.name,
+    ...(picture?.kind === 'mascot' ? { avatar: mascotAvatar(picture.id) } : {}),
+    connectors: connected.filter(([on]) => on).map(([, connector]) => connector)
+  }
+}
 
 /** A call as the host's signed-in account, with its access token and the sign-in service's address. */
 export type BotInviteCloudCall = <T>(
