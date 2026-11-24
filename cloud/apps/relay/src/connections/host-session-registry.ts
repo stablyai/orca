@@ -1,7 +1,7 @@
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract/assignment-invariants'
 import { RELAY_DEFAULT_REGION, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
-import { AuthRefreshSchema, DeviceRevokeSchema, HostChallengeAckSchema, HostHelloSchema, InviteCreateSchema, RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS, RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME } from '@orca-cloud/relay-contract/control-messages'
+import { AuthRefreshSchema, DeviceRevokeSchema, HostChallengeAckSchema, HostHelloSchema, InviteCreateSchema, RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS, RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME, relayHostConnectionLimit } from '@orca-cloud/relay-contract/control-messages'
 import { buildHostChallengePlaintext, buildHostProofMacInput, buildHostProofTranscript } from '@orca-cloud/relay-contract/host-proof-transcript'
 import { CONTROL_CONTINUITY_LIMITS } from '@orca-cloud/relay-contract/control-continuity'
 import { DeviceCredentialInstallSchema, DeviceCredentialInstallStatusSchema, DeviceResumeConfirmSchema } from '@orca-cloud/relay-contract/credential-messages'
@@ -920,7 +920,10 @@ export class HostSessionRegistry {
       )
       return
     }
-    if (session.activeConnIds.size + session.pendingConns.size >= 8) {
+    if (
+      session.activeConnIds.size + session.pendingConns.size >=
+      relayHostConnectionLimit(this.hostCapabilities.get(session.socket))
+    ) {
       capacityReservation?.release()
       await this.store.failReservation(reservation)
       this.rejectClient(socket, RELAY_CLOSE_CODE.LIMIT_EXCEEDED)
@@ -2371,16 +2374,16 @@ export class HostSessionRegistry {
   private sendHelloAck(session: HostSession): void {
     if (!session.socket) return
     // Capability-gate pairing/device details: hosts missing conn-open otherwise cannot dial pending connections, while legacy decoders reject new fields.
-    const details = this.hostCapabilities
-      .get(session.socket)
-      ?.has(RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS)
+    const capabilities = this.hostCapabilities.get(session.socket)
+    const details = capabilities?.has(RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS)
+    const limit = relayHostConnectionLimit(capabilities)
     send(session.socket, 'host-hello-ack', {
       v: 1,
       generation: session.generation,
       controlResumeSecret: session.controlResumeSecret,
       leaseExpiresAt: session.leaseExpiresAt,
-      activeConnIds: [...session.activeConnIds],
-      pendingConns: [...session.pendingConns.values()].map((pending) => ({
+      activeConnIds: [...session.activeConnIds].slice(0, limit),
+      pendingConns: [...session.pendingConns.values()].slice(0, limit).map((pending) => ({
         connId: pending.connId,
         connTicket: pending.connTicket,
         ...(details

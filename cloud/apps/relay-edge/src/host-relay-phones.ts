@@ -3,6 +3,7 @@
 import nacl from 'tweetnacl'
 import type { RelayHello } from '../../../packages/relay-contract/src/credential-messages'
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
+import { relayHostConnectionLimit } from '../../../packages/relay-contract/src/control-messages'
 import { RELAY_PROTOCOL_LIMITS } from '../../../packages/relay-contract/src/protocol-limits'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import type { CredentialReservation } from './edge-backend'
@@ -15,7 +16,7 @@ export abstract class HostRelayPhones extends HostRelayControl {
 
   // Picks the least-busy slot of this host's splice pool for a new phone connection, so concurrent
   // phones land in different objects. Ties go to a random slot. Not a reservation: a slot can still
-  // hold several splices, and the 8-connection budget is enforced in authorizePhone.
+  // hold several splices, and the per-host connection budget is enforced in authorizePhone.
   // Object backend: null for a host the director has not pushed (never, or wiped since), so the
   // Worker answers the phone without this object or a splice object writing any storage.
   async allocateConnId(relayHostId: string): Promise<string | null> {
@@ -75,9 +76,10 @@ export abstract class HostRelayPhones extends HostRelayControl {
       return this.missedSeat(reservation)
     }
     const conns = await this.conns()
-    if (Object.keys(conns).length >= RELAY_PROTOCOL_LIMITS.maxConnectionsPerHost) {
+    const limit = relayHostConnectionLimit(control.a.caps)
+    if (Object.keys(conns).length >= limit) {
       await this.pruneDeadConns(conns)
-      if (Object.keys(conns).length >= RELAY_PROTOCOL_LIMITS.maxConnectionsPerHost) {
+      if (Object.keys(conns).length >= limit) {
         await this.backend.failReservation(reservation).catch(() => {})
         return { ok: false, code: RELAY_CLOSE_CODE.LIMIT_EXCEEDED }
       }
