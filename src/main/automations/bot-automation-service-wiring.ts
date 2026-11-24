@@ -7,6 +7,7 @@ import { bindLookAroundToAutomations } from '../bots/bot-look-around-runtime'
 import { bindGoogleTriggersToAutomations } from '../google/google-trigger-runtime'
 import { runtimeBotRunRefusals, runtimeBotRunResults } from '../bots/bot-run-results'
 import { runtimeBotWaits } from '../bots/bot-waits'
+import { bindRunChatChecks } from '../bots/bot-run-chat-closer'
 import { runtimeChatHost } from '../external-conversations/external-conversation-chat'
 
 /** The scheduler's bot side: runs that open in a bot's chat, and the alert when one cannot. */
@@ -40,7 +41,7 @@ export function botAutomationServiceOptions(runtime: OrcaRuntimeService) {
   }
 }
 
-/** Bots' waits, Look around and Google triggers, on the runtime's scheduler. */
+/** Bots' waits, Look around, Google triggers and the ended-run chat checks, on the runtime's scheduler. */
 export function bindBotAutomations(
   service: AutomationService,
   store: Store,
@@ -51,4 +52,5 @@ export function bindBotAutomations(
     service.runInAutomationLane(automationId, operation)
   bindLookAroundToAutomations(service, runtime)
   bindGoogleTriggersToAutomations(service, store, runtime)
+  bindRunChatChecks(runtime)
 }

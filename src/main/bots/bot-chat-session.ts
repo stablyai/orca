@@ -148,6 +148,13 @@ export function botChatSessions(deps: BotChatDependencies) {
   const withChat = <T>(botId: string, work: (sessionId: string) => Promise<T> | T): Promise<T> =>
     underLock(botId, async (host, bot) => work(await shown(bot, await open(host, bot))))
 
+  /** Holds the bot's lock through `work`, as a reset does, with the Chat (made if gone) on demand and
+   *  its tab left as it is. */
+  const underChatLock = <T>(
+    botId: string,
+    work: (host: BotChatHost, bot: Bot, chat: () => Promise<string>) => Promise<T>
+  ): Promise<T> => underLock(botId, (host, bot) => work(host, bot, async () => open(host, bot)))
+
   /** Starts a new Chat; the old conversation stops and leaves the tab bar but stays in history. */
   const reset = (botId: string): Promise<string> =>
     underLock(botId, async (host, bot) => shown(bot, await replace(host, bot)))
@@ -234,7 +241,7 @@ export function botChatSessions(deps: BotChatDependencies) {
       deliver(host, admitting, botId, sessionId, text, from, run)
     )
 
-  return { ensure, reset, withChat, sendToChat: send, sendToSession }
+  return { ensure, reset, withChat, underChatLock, sendToChat: send, sendToSession }
 }
 
 /** The selector native chat resolves a bot's home folder workspace by. */

@@ -21,6 +21,7 @@ import { botChatGone } from '../runtime/integrations/automations/runtime-automat
 import { isBotGroupMemberSession } from '../../shared/bots/bot-group'
 import { sendBotGroupAutomationRun } from './bot-group-automation-run'
 import { runtimeBotGroups } from './bot-group-runtime'
+import { scheduleRunChatCheck } from './bot-run-chat-closer'
 
 export type BotAutomationSessionDependencies = {
   chats: Pick<ReturnType<typeof botChatSessions>, 'sendToChat' | 'sendToSession'>
@@ -150,6 +151,7 @@ export function runtimeBotAutomationSessions(runtime: OrcaRuntimeService): BotAu
       await getStructuredAgentSessionHost()
         ?.releaseIdleSession(sessionId)
         .catch((error: unknown) => console.warn('[bots] could not release a finished run', error))
+      scheduleRunChatCheck(runtime, sessionId)
     }
   }
 }
