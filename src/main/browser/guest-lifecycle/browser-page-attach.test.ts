@@ -109,7 +109,7 @@ describe('claimBrowserPageFirstLoad', () => {
     }
   })
 
-  it("loads the first tab after launch once, its page created after the profile's extensions", async () => {
+  it('loads the first tab after launch once when its page waited for the extensions', async () => {
     let finishLoad = (): void => {}
     profileLoad.loading = new Promise<void>((resolve) => {
       finishLoad = () => {
