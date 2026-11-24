@@ -29091,13 +29091,11 @@
         "refresh": "刷新"
       },
       "setup": {
-        "install": "安装 Orca 应用",
         "close": "关闭",
         "checking": "正在检查 GitHub…",
         "retry": "重试",
         "installing": "正在等待安装完成或组织所有者批准…",
         "finish": "完成",
-        "title": "将 {{name}} 添加到 GitHub",
         "pushesAsYou": "{{name}} 会使用你自己的 git 凭据从此电脑推送代码",
         "addMore": "添加仓库或组织",
         "checkingInstalls": "正在检查 GitHub 上的更改…",
@@ -29106,7 +29104,6 @@
         "repositories": "仓库",
         "isOn": "{{name}} 已接入 GitHub",
         "new": "新增",
-        "finishInBrowser": "请在浏览器中的 GitHub 页面上完成…",
         "openAgain": "再次打开",
         "added": "已从 GitHub 添加：{{names}}",
         "pushesOnHost": "{{name}} 会在 {{host}} 上使用该电脑的 git 凭据推送代码",
@@ -29154,7 +29151,6 @@
         "waiting": "请在浏览器中完成 GitHub 登录…",
         "requested": "已请求组织所有者批准 Orca 应用",
         "notInstalled": "Orca 应用尚未安装在你的任何仓库上",
-        "turnOn": "启用 {{name}}",
         "connected": "已连接 GitHub",
         "pickRepositories": "登录并选择 {{name}} 可以在哪些仓库中工作",
         "readsOnly": "Orca 只会读取你的 GitHub 用户名和 ID"
