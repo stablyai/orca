@@ -1,6 +1,5 @@
 import { Server } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/class-names'
 import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 
 /** The paired server an `@` row's bot runs on, as the sidebar's bot row shows it; the list resolves the label once (useBotHostLabels). */
@@ -17,8 +16,7 @@ export function BotMentionHostBadge({
     return null
   }
   return inline ? (
-    // Lowercase-heavy labels read low beside the icon when cap-centered, so the picker lifts them.
-    <BotMentionHostText label={label} offline={offline} labelClassName="-translate-y-px" />
+    <BotMentionHostText label={label} offline={offline} />
   ) : (
     <WorktreeHostContextBadge label={label} />
   )
@@ -26,12 +24,10 @@ export function BotMentionHostBadge({
 
 export function BotMentionHostText({
   label,
-  offline,
-  labelClassName
+  offline
 }: {
   label: string
   offline?: boolean
-  labelClassName?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const title = offline
@@ -40,10 +36,7 @@ export function BotMentionHostText({
   return (
     <span title={title} className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
       <Server className="size-3 shrink-0" aria-hidden />
-      <span
-        className={cn('min-w-0 truncate py-0.5 leading-none', labelClassName)}
-        aria-hidden={offline || undefined}
-      >
+      <span className="min-w-0 truncate" aria-hidden={offline || undefined}>
         {label}
       </span>
       {offline && <span className="sr-only">{title}</span>}
