@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { PreservedBranchCleanup } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
 import { useAppStore } from '@/store'
 import { Button } from '../../../ui/button'
@@ -39,6 +39,7 @@ export function PreservedBranchBatchReviewDialog({
   onOpenChange: (open: boolean) => void
   onForceDelete: (branches: readonly ActionablePreservedBranch[]) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const actionableBranches = useMemo(
     () =>
       branches.filter((branch): branch is ActionablePreservedBranch =>
@@ -73,16 +74,11 @@ export function PreservedBranchBatchReviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent surface="security" className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-sm">
-            {translate(
-              'auto.components.sidebar.PreservedBranchBatchReviewDialog.c4bf8e7eaf',
-              'Review kept branches'
-            )}
-          </DialogTitle>
+          <DialogTitle size="compact">{t('common.delete', 'Delete')}</DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.sidebar.PreservedBranchBatchReviewDialog.f21976c9a8',
               'Select the local branches you want to force delete. Unselected branches stay in their repositories.'
             )}
@@ -99,13 +95,13 @@ export function PreservedBranchBatchReviewDialog({
                   setSelectedKeys(checked === true ? new Set(actionableKeys) : new Set())
                 }
               />
-              {translate(
+              {t(
                 'auto.components.sidebar.PreservedBranchBatchReviewDialog.38c947f7c5',
                 'Select all'
               )}
             </Label>
             <span className="text-[11px] tabular-nums text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.sidebar.PreservedBranchBatchReviewDialog.9602129d38',
                 '{{value0}} of {{value1}} selected',
                 { value0: selectedBranches.length, value1: actionableBranches.length }
@@ -146,11 +142,11 @@ export function PreservedBranchBatchReviewDialog({
                   </Label>
                   <span className="text-[11px] whitespace-nowrap text-muted-foreground">
                     {actionableBranch
-                      ? translate(
+                      ? t(
                           'auto.components.sidebar.PreservedBranchBatchReviewDialog.ee39e872d5',
                           'May be unmerged'
                         )
-                      : translate(
+                      : t(
                           'auto.components.sidebar.PreservedBranchBatchReviewDialog.676db406fd',
                           'Head unavailable'
                         )}
@@ -163,10 +159,7 @@ export function PreservedBranchBatchReviewDialog({
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            {translate(
-              'auto.components.sidebar.PreservedBranchBatchReviewDialog.285e1e4882',
-              'Cancel'
-            )}
+            {t('auto.components.sidebar.PreservedBranchBatchReviewDialog.285e1e4882', 'Cancel')}
           </Button>
           <Button
             type="button"
@@ -175,11 +168,7 @@ export function PreservedBranchBatchReviewDialog({
             onClick={() => onForceDelete(selectedBranches)}
           >
             <Trash2 />
-            {translate(
-              'auto.components.sidebar.PreservedBranchBatchReviewDialog.a0f9863597',
-              'Force Delete {{count}} Branches',
-              { count: selectedBranches.length, defaultValue_one: 'Force Delete {{count}} Branch' }
-            )}
+            {t('common.delete', 'Delete')}
           </Button>
         </DialogFooter>
       </DialogContent>

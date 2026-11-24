@@ -1,15 +1,15 @@
 // Stage pinned Node and a content-addressed host script so Windows operations share verified bytes without replacing running clients' code.
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
-import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import type { NodeRuntimeTarget } from '../../../shared/node-runtime/node-runtime-pin'
 import { ensureRemoteOrcadNodeRuntime } from '../install/orcad-remote-node-runtime'
 import {
   installOrcadWindowsHostScript,
   orcadRemoteBaseDir
 } from '../install/orcad-remote-windows-node'
 import { materializeNodeRuntimeArchive } from '../../node-runtime/pinned-runtime-materializer'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import type { OrcadHostTransport } from '../install/orcad-host-transport'
+import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 export async function prepareWindowsOrcadHost(options: {
   conn: OrcadHostTransport

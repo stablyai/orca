@@ -1,0 +1,35 @@
+import type { OrcaAccountService } from '../../orca-profiles/orca-account-service'
+import type {
+  AiVaultPrepareSessionResumeArgs,
+  AiVaultPrepareSessionResumeResult
+} from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import type { RendererShutdownCheckpointService } from '../../core-desktop/renderer-shutdown-checkpoint-service'
+import { settleWithinMs } from '../../startup/quit/quit-teardown-deadline'
+
+const RELAUNCH_DISMISSAL_CLOSE_TIMEOUT_MS = 2_000
+
+export async function closeNotificationDismissalsBeforeRelaunch(
+  runtime: OrcaRuntimeService
+): Promise<void> {
+  const result = await settleWithinMs(
+    runtime.closeNotificationDismissals(),
+    RELAUNCH_DISMISSAL_CLOSE_TIMEOUT_MS
+  )
+  if (result.outcome === 'timed-out') {
+    console.warn('[notifications] Relaunching before dismissal recovery state finished saving')
+  }
+}
+
+export type CoreHandlerLifecycleOptions = {
+  deferHostInitialization?: boolean
+  hostInitialization?: Promise<void>
+  onBeforeRelaunch?: () => void | Promise<void>
+  onQuit?: () => void
+  orcaAccount?: OrcaAccountService
+  rendererCheckpoint?: RendererShutdownCheckpointService
+  getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
+  prepareAiVaultSessionResume?: (
+    args: AiVaultPrepareSessionResumeArgs
+  ) => Promise<AiVaultPrepareSessionResumeResult>
+}

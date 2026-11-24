@@ -7,11 +7,8 @@ import {
   agentPickerPermissionValue
 } from './agent-launch-picker-permission'
 import { agentPickerArgumentsText } from './agent-launch-picker-authority'
-import {
-  agentPickerEffectiveChoices,
-  type AgentPickerDraft,
-  type AgentPickerEntry
-} from './agent-launch-picker'
+import { agentPickerEffectiveChoices } from './agent-launch-picker-effective-choices'
+import type { AgentPickerDraft, AgentPickerEntry } from './agent-launch-picker'
 
 export type AgentArgsProjectionContext = {
   readonly agent: TuiAgent

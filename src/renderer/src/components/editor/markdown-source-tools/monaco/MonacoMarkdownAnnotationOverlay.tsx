@@ -1,7 +1,7 @@
 import React, { type Dispatch, type SetStateAction } from 'react'
 import { Plus } from 'lucide-react'
 import { DiffCommentPopover } from '../../../diff-comments/DiffCommentPopover'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { MonacoMarkdownSelectionAnnotationTarget } from './monaco-markdown-selection-annotation'
 import type { MarkdownCommentPopoverState } from './use-monaco-markdown-annotations'
 
@@ -24,6 +24,7 @@ export function MonacoMarkdownAnnotationOverlay({
   setSelectionAnnotationTarget,
   onSubmitMarkdownComment
 }: MonacoMarkdownAnnotationOverlayProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       {commentPopover && shouldShowMarkdownAnnotations && (
@@ -46,11 +47,8 @@ export function MonacoMarkdownAnnotationOverlay({
             top: Math.max(4, selectionAnnotationTarget.top - 22),
             left: selectionAnnotationTarget.left ?? 4
           }}
-          title={translate(
-            'auto.components.editor.MonacoEditor.68cb83f4a7',
-            'Add note on selected text'
-          )}
-          aria-label={translate(
+          title={t('auto.components.editor.MonacoEditor.68cb83f4a7', 'Add note on selected text')}
+          aria-label={t(
             'auto.components.editor.MonacoEditor.68cb83f4a7',
             'Add note on selected text'
           )}

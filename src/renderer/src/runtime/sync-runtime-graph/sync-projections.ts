@@ -1,5 +1,6 @@
 import type { AppState } from '@/store/types'
-import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
+import { resolveTerminalTabTitle } from '../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
+import { remoteTabFaviconUrl } from '../../../../shared/browser/browser-favicon-url'
 import { stableHashString } from './editor-draft-hash'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { getOpenFileIndexes } from './mobile-session-inputs'
@@ -35,54 +36,6 @@ export function resolveRuntimeTerminalTitle(
   liveTitle = tab.title
 ): string {
   return resolveTerminalTabTitle({ ...tab, title: liveTitle }, generatedTitlesEnabled, liveTitle)
-}
-
-export function buildRuntimeMobileTabsProjection(
-  tabsByWorktree: AppState['tabsByWorktree']
-): string {
-  if (graphState.cachedTabsProjection?.source === tabsByWorktree) {
-    return graphState.cachedTabsProjection.projection
-  }
-
-  const previousEntries = graphState.cachedTabsProjection?.entries
-  const entries = new Map<
-    string,
-    {
-      tabs: NonNullable<AppState['tabsByWorktree'][string]>
-      worktreeIdJson: string
-      projection: string
-    }
-  >()
-  const parts: string[] = []
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    const previous = previousEntries?.get(worktreeId)
-    const entry =
-      previous?.tabs === tabs
-        ? previous
-        : {
-            tabs,
-            worktreeIdJson: previous?.worktreeIdJson ?? JSON.stringify(worktreeId),
-            projection: JSON.stringify(
-              tabs.map((tab) => ({
-                id: tab.id,
-                title: tab.title,
-                quickCommandLabel: tab.quickCommandLabel,
-                aiVaultTitle: tab.aiVaultTitle,
-                generatedTitle: tab.generatedTitle,
-                customTitle: tab.customTitle,
-                launchAgent: tab.launchAgent
-              }))
-            )
-          }
-    entries.set(worktreeId, entry)
-    parts.push(`${entry.worktreeIdJson}:${entry.projection}`)
-  }
-  graphState.cachedTabsProjection = {
-    source: tabsByWorktree,
-    entries,
-    projection: `{${parts.join(',')}}`
-  }
-  return graphState.cachedTabsProjection.projection
 }
 
 export function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openFiles']): string {
@@ -198,7 +151,9 @@ function buildBrowserPagesProjection(
                 url: page.url,
                 loading: page.loading,
                 canGoBack: page.canGoBack,
-                canGoForward: page.canGoForward
+                canGoForward: page.canGoForward,
+                // An icon arriving resyncs; later swaps (animated icons) ride the next sync.
+                hasRemoteFavicon: remoteTabFaviconUrl(page.faviconUrl) !== null
               }))
             )
           }
@@ -306,13 +261,4 @@ export function getEditorDraftVersionByFileId(
   openFiles: AppState['openFiles']
 ): ReadonlyMap<string, string> {
   return getEditorDraftHashCache(editorDrafts, openFiles).hashByFileId
-}
-
-export function resetRuntimeMobileSyncProjectionCachesForTests(): void {
-  graphState.cachedTabsProjection = null
-  graphState.cachedOpenFilesProjection = null
-  graphState.cachedBrowserWorkspacesProjection = null
-  graphState.cachedBrowserPagesProjection = null
-  graphState.cachedEditorDraftHashes = null
-  cachedDraftSourceFileIds = null
 }

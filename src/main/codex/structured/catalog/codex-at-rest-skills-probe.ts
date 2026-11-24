@@ -1,20 +1,19 @@
-import { delayUnlessAborted } from '../../../../shared/abort-aware-delay'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
-import { createHash } from 'node:crypto'
+import { delayUnlessAborted } from '../../../../shared/concurrency/abort-aware-delay'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import * as Pools from './codex-at-rest-skills-probe-pools'
 import {
   isLegacyAgentSessionAccountHome,
   requireLegacyAgentSessionAccountHome
-} from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-args'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
-} from '../../../native-chat/native-chat-visuals-delivery'
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import {
   AtRestCommandCatalog,
   type AtRestCommandScan
-} from '../../../native-chat/agent-session-wire/at-rest-command-catalog'
+} from '../../../native-chat/agent-session-wire/options/at-rest-command-catalog'
 import {
   runCodexAppServerSession,
   type CodexAppServerRpc
@@ -26,8 +25,10 @@ import {
   codexReportCommandRows,
   isCodexSkillsListUnsupported
 } from './codex-skill-list'
-import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
-import { resolveHiddenProbeCwd } from '../../../rate-limits/hidden-probe-cwd'
+import { createCodexSkillSourcesStamp } from './codex-skill-sources-stamp'
+import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host/execution-host'
+import { resolveHiddenProbeCwd } from '../../../lib/hidden-probe-cwd'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   resolveCodexStructuredInvocation,
   type CodexStructuredInvocationDeps
@@ -42,7 +43,9 @@ export type CodexAtRestSkillsDeps = CodexStructuredInvocationDeps & {
   resolveLaunchArgs: () => Promise<string[]> | string[]
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   /** Apply launch-time home sync so the probe sees the same configuration. */
-  prepareHome?: (home: string) => void
+  prepareHome?: (home: string) => void | Promise<void>
+  /** The skill roots a chat's launch would give Codex (`codexSkillRoots`); none for most chats. */
+  skillRoots?: (record: AgentSessionRecord) => Promise<string[]>
   now?: () => number
   runSession?: typeof runCodexAppServerSession
   sleep?: (ms: number) => Promise<void>
@@ -64,6 +67,7 @@ function definedEnv(env: NodeJS.ProcessEnv | undefined): Record<string, string> 
 export function createCodexAtRestSkillCatalog(deps: CodexAtRestSkillsDeps): AtRestCommandCatalog {
   const now = deps.now ?? Date.now
   const { pools, start, expire, dispose } = Pools.createCodexSkillsProbePools(deps, probe)
+  const stampSources = createCodexSkillSourcesStamp(deps.now ? { now: deps.now } : {})
 
   return new AtRestCommandCatalog({
     label: 'codex',
@@ -73,8 +77,14 @@ export function createCodexAtRestSkillCatalog(deps: CodexAtRestSkillsDeps): AtRe
       isLegacyAgentSessionAccountHome(record.accountHome),
     resolveWorkspacePath: deps.resolveWorkspacePath,
     dispose,
-    scan: async (record, cwd, isCurrent, generation, signal, admitted) => {
+    stamp: (record, cwd, signal) =>
+      stampSources(requireLegacyAgentSessionAccountHome(record.accountHome).path, cwd, signal),
+    scan: async (record, cwd, isCurrent, generation, signal, admitted, demand) => {
       const accountHomePath = requireLegacyAgentSessionAccountHome(record.accountHome).path
+      // Codex takes skill roots per process, so each root list gets its own probe process.
+      const roots = deps.skillRoots
+        ? await waitForPromiseWithSignal(deps.skillRoots(record), signal)
+        : []
       const { command, prefixArgs, environment } = await resolveCodexStructuredInvocation({
         ...deps,
         signal,
@@ -90,14 +100,10 @@ export function createCodexAtRestSkillCatalog(deps: CodexAtRestSkillsDeps): AtRe
         return NO_SCAN
       }
       const env = definedEnv(environment)
-      const key = JSON.stringify([
-        accountHomePath,
-        command,
-        args,
-        createHash('sha256')
-          .update(JSON.stringify(Object.entries(env).sort()))
-          .digest('hex')
-      ])
+      // Not the env itself: the shell capture refreshes every 10 s with volatile values (prompt
+      // session keys), which would start a second probe. Settings and account env changes retire
+      // the generation; a running probe keeps the env it started with for its ~70 s life.
+      const key = JSON.stringify([accountHomePath, command, args, generation, roots])
       const pool = pools.get(key) ?? { failedStarts: 0, retryAt: 0, lastDemandAt: now() }
       pools.set(key, pool)
       pool.lastDemandAt = now()
@@ -110,18 +116,23 @@ export function createCodexAtRestSkillCatalog(deps: CodexAtRestSkillsDeps): AtRe
         command,
         args,
         environment: env,
+        roots,
+        demanded: false,
         pending: new Set<Pools.FolderRequest>(),
         active: new Set<Pools.FolderRequest>(),
         controller: new AbortController(),
         started: false
       }
+      const stopPromoting = Pools.promoteOnDemand(demand, () => pool.owner ?? owner)
       const request: Pools.FolderRequest = {
         cwd,
-        generation,
         isCurrent,
         admitted,
         answer: Promise.withResolvers<AtRestCommandScan>(),
-        cancel: () => signal.removeEventListener('abort', onAbort),
+        cancel: () => {
+          signal.removeEventListener('abort', onAbort)
+          stopPromoting()
+        },
         done: false
       }
       const onAbort = (): void => {
@@ -161,7 +172,6 @@ export async function probe(
   onStarted: () => void
 ): Promise<void> {
   const now = deps.now ?? Date.now
-  let reloaded = Math.max(...[...pool.pending].map((request) => request.generation))
   await (deps.runSession ?? runCodexAppServerSession)(
     {
       command: pool.command,
@@ -183,6 +193,9 @@ export async function probe(
       signal.throwIfAborted()
       const sleep = deps.sleep ?? ((ms: number) => delayUnlessAborted(Math.max(0, ms), signal))
       onStarted()
+      // Set once, before any list: every request waits for it, and a failed set lists nothing.
+      const rootsFailure = await Pools.setProbeRoots(rpc, pool.roots)
+      signal.throwIfAborted()
       const graceEnded = sleep(spawnedAt + CODEX_SKILLS_PROBE_SETTLE_MS - now()).then(() => false)
       let answered = false
       for (;;) {
@@ -209,13 +222,20 @@ export async function probe(
         if (pool.pending.size === 0) {
           pool.cursor = undefined
         }
+        if (batch.length > 0 && rootsFailure) {
+          batch.forEach((request) => pool.active.delete(request))
+          batch.forEach((request) => Pools.settle(request, rootsFailure))
+          answered = true
+          continue
+        }
         if (batch.length > 0) {
-          const forceReload = batch.some((request) => request.generation > reloaded)
           try {
-            deps.prepareHome?.(pool.accountHomePath)
-            batch.forEach((request) => request.admitted())
-            if (await answer(rpc, batch, forceReload, signal)) {
-              reloaded = Math.max(reloaded, ...batch.map((request) => request.generation))
+            await deps.prepareHome?.(pool.accountHomePath)
+            // A request cancelled while the home was prepared left the active set.
+            const live = batch.filter((request) => pool.active.has(request))
+            live.forEach((request) => request.admitted())
+            if (live.length > 0) {
+              await answer(rpc, live, signal)
             }
           } catch (error) {
             batch.forEach((request) =>
@@ -249,27 +269,27 @@ export async function probe(
 async function answer(
   rpc: CodexAppServerRpc,
   batch: Pools.FolderRequest[],
-  forceReload: boolean,
   signal: AbortSignal
-): Promise<boolean> {
+): Promise<void> {
   let reply: unknown
   try {
     reply = await rpc.request(
       CODEX_SKILLS_LIST_METHOD,
-      { cwds: batch.map((request) => request.cwd), ...(forceReload ? { forceReload: true } : {}) },
+      // A probe answers several menus in its lifetime; without this Codex can repeat its cached list.
+      { cwds: batch.map((request) => request.cwd), forceReload: true },
       { timeoutMs: ANSWER_TIMEOUT_MS }
     )
   } catch (error) {
     if (isCodexSkillsListUnsupported(error)) {
       // An older Codex has no list to give; the client keeps its folder scan.
       batch.forEach((request) => Pools.settle(request, { commands: undefined, fromAgent: true }))
-      return false
+      return
     }
     // The process still settles: ending it early would interrupt plugin sync, including after a list failure.
     batch.forEach((request) =>
       Pools.settle(request, error instanceof Error ? error : new Error(String(error)))
     )
-    return false
+    return
   }
   signal.throwIfAborted()
   for (const request of batch) {
@@ -290,5 +310,4 @@ async function answer(
         : new Error(`codex listed no skills entry for ${request.cwd}`)
     )
   }
-  return true
 }

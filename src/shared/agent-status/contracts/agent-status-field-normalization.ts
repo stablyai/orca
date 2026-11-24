@@ -1,6 +1,8 @@
 // Share single-line previews and multiline bodies with surrogate-safe cuts; agent-status-types.ts owns payload shapes and caps.
 
-import { compactDispatchPromptForStatus } from '../../orca-dispatch-status-prompt'
+import { compactDispatchPromptForStatus } from '../../orchestration/workers/orca-dispatch-status-prompt'
+import { BOT_CREATED_STATUS_LABEL, isBotCreatedKickoff } from '../../bot-created-kickoff'
+import { tookOverStatusLabel } from '../../native-chat/took-over-notice'
 
 /** Maximum character length for the prompt field. Truncated on parse. */
 export const AGENT_STATUS_MAX_FIELD_LENGTH = 200
@@ -38,6 +40,13 @@ function normalizeField(value: unknown, maxLength: number = AGENT_STATUS_MAX_FIE
 export function normalizePromptField(value: unknown): string {
   if (typeof value !== 'string') {
     return ''
+  }
+  if (isBotCreatedKickoff(value)) {
+    return BOT_CREATED_STATUS_LABEL
+  }
+  const tookOver = tookOverStatusLabel(value)
+  if (tookOver !== null) {
+    return normalizeSingleLinePreview(tookOver, AGENT_STATUS_MAX_FIELD_LENGTH)
   }
   return (
     compactDispatchPromptForStatus(
@@ -154,7 +163,7 @@ function isEcmaTrimWhitespace(code: number): boolean {
   )
 }
 
-// Only provided strings update optional fields; absence must not erase cached state. Preserve option labels and shorten presentation fields only.
+// Only provided strings update optional fields; absence must not erase cached state. Preserve option labels and shorten presentation fields (and previews) only.
 const COMPACTABLE_INTERACTIVE_PROMPT_FIELDS = new Set([
   'description',
   'detail',
@@ -162,6 +171,14 @@ const COMPACTABLE_INTERACTIVE_PROMPT_FIELDS = new Set([
   'question',
   'summary'
 ])
+
+// A cut preview stays non-blank: whether Claude drew its preview layout decides the answer keystrokes.
+function compactPreview(preview: string, maxLength: number): string {
+  if (preview.length <= maxLength || !/\S/.test(preview)) {
+    return truncatePreservingSurrogates(preview, maxLength)
+  }
+  return `${truncatePreservingSurrogates(preview, Math.max(maxLength - 1, 0))}…`
+}
 
 function compactInteractivePromptValue(value: unknown, maxStringLength: number): unknown {
   if (Array.isArray(value)) {
@@ -173,9 +190,13 @@ function compactInteractivePromptValue(value: unknown, maxStringLength: number):
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [
       key,
-      typeof item === 'string' && COMPACTABLE_INTERACTIVE_PROMPT_FIELDS.has(key)
-        ? truncatePreservingSurrogates(item, maxStringLength)
-        : compactInteractivePromptValue(item, maxStringLength)
+      typeof item !== 'string'
+        ? compactInteractivePromptValue(item, maxStringLength)
+        : key === 'preview'
+          ? compactPreview(item, maxStringLength)
+          : COMPACTABLE_INTERACTIVE_PROMPT_FIELDS.has(key)
+            ? truncatePreservingSurrogates(item, maxStringLength)
+            : item
     ])
   )
 }
@@ -253,6 +274,23 @@ export function normalizeOptionalMultilineField(
 }
 
 /** Keep a lead turn's end time only on the gated `working` row and that turn's later all-clear `done`. */
+/** A held turn names at most this many of its background commands, each a one-line preview. */
+export const AGENT_STATUS_BACKGROUND_COMMANDS_MAX = 4
+
+/** The commands of a turn held open by its background shells, as one-line previews; only a working row has any. */
+export function normalizeBackgroundCommandsField(
+  value: unknown,
+  state: string
+): string[] | undefined {
+  if (state !== 'working' || !Array.isArray(value)) {
+    return undefined
+  }
+  const commands = value
+    .slice(0, AGENT_STATUS_BACKGROUND_COMMANDS_MAX)
+    .flatMap((command) => normalizeOptionalField(command, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH) ?? [])
+  return commands.length > 0 ? commands : undefined
+}
+
 export function normalizeTurnCompletedAtField(value: unknown, state: string): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return undefined

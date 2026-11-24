@@ -42,7 +42,7 @@ export function DocsFooter() {
               </li>
               <li>
                 <a
-                  href="https://www.onorca.dev"
+                  href="https://orca.dev"
                   className="rounded-md px-1 py-0.5 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                 >
                   Home

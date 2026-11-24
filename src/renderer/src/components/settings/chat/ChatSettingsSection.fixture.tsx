@@ -2,6 +2,7 @@ import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { useAppStore } from '@/store/index'
 import { ChatSettingsSection } from './ChatSettingsSection'
 import { ActiveSettingsSectionProvider } from '../section-layout/SettingsSection'
+import { LOCAL_SETTINGS_HOST_SCOPE } from '../host-scope/settings-host-scope'
 
 function ChatSettingsPreview(): React.JSX.Element | null {
   const settings = useAppStore((state) => state.settings)
@@ -14,6 +15,7 @@ function ChatSettingsPreview(): React.JSX.Element | null {
         writeSourceControlAiSettings={async () => {}}
         searchEntries={[]}
         showDesktopOnlySettings
+        hostScope={LOCAL_SETTINGS_HOST_SCOPE}
         isMounted
       />
     </ActiveSettingsSectionProvider>

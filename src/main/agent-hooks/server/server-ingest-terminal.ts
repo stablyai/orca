@@ -1,4 +1,3 @@
-import type { LaunchResumeIdentityEvent } from './launch-resume-identity-event'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-limits'
 import {
@@ -7,55 +6,20 @@ import {
 } from '../../../shared/workspace-layout/stable-pane-id'
 import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-status/lifecycle/agent-terminal-status-equivalence'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
-import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { EnrichedAgentHookEventPayload } from './server-types'
-import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { agentSubagentsEqual } from '../../../shared/agent-status/contracts/agent-status-subagent-snapshot'
 import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-status/lifecycle/agent-lead-status-fold'
-import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
-import { programStatusHookYieldEndsAt } from './program-status/hook-precedence'
+import { AgentHookServerIngestLaunch } from './server-ingest-launch'
+import {
+  antigravityRefusedDoneRetryMs,
+  programStatusHookYieldEndsAt
+} from './program-status/hook-precedence'
+import { deferProgramStatusRecheck } from './program-status/program-status-recheck'
 import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
 
 const PROGRAM_STATUS_FACET_REPUBLISH_MS = 250
 
-export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestNormalization {
-  /** Seed resume identity before the first hook; Codex SessionStart waits for the first turn (#10923). */
-  recordLaunchResumeIdentity(event: LaunchResumeIdentityEvent): void {
-    const paneKey = this.resolvePaneKeyAlias(event.paneKey.trim())
-    const parsedPaneKey = parsePaneKey(paneKey)
-    if (!parsedPaneKey || paneKey.length > MAX_PANE_KEY_LEN) {
-      return
-    }
-    const previous = this.state.lastStatusByPaneKey.get(paneKey)
-    if (
-      previous &&
-      (previous.providerSessionOnly === true
-        ? agentProviderSessionsEqual(
-            event.agentType,
-            previous.providerSession,
-            event.providerSession
-          )
-        : 'receivedAt' in previous &&
-          typeof previous.receivedAt === 'number' &&
-          previous.receivedAt >= event.launchedAt)
-    ) {
-      return
-    }
-    const identity: AgentHookEventPayload &
-      Pick<EnrichedAgentHookEventPayload, 'retainedForLiveness'> = {
-      paneKey,
-      tabId: parsedPaneKey.tabId,
-      ...(event.worktreeId?.trim() ? { worktreeId: event.worktreeId.trim() } : {}),
-      connectionId: null,
-      providerSession: event.providerSession,
-      providerSessionOnly: true,
-      // Hydration must retain this identity even if no first turn occurs before restart.
-      retainedForLiveness: true,
-      payload: { state: 'done', prompt: '', agentType: event.agentType }
-    }
-    this.applyNormalizedStatus(identity, undefined, 'launch')
-  }
-
+export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestLaunch {
   ingestProgramStatusFacet(event: { paneKey: string; facet: ProgramStatusFacet | null }): void {
     const paneKey = this.resolvePaneKeyAlias(event.paneKey.trim())
     if (
@@ -180,6 +144,13 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     const previous = this.state.lastStatusByPaneKey.get(paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+    // OSC 7501 names OpenCode 2 `opencode`; the row its hook or launch named keeps the generation.
+    const payload: ParsedAgentStatusPayload =
+      event.fromProgramStatus === true &&
+      event.payload.agentType === 'opencode' &&
+      previous?.payload.agentType === 'opencode2'
+        ? { ...event.payload, agentType: 'opencode2' }
+        : event.payload
     // OpenCode 1 run loads hooks in-process; a hook during the command owns its status.
     const hookOwnsCommand =
       event.yieldsToHookSince !== undefined &&
@@ -189,9 +160,12 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     // Record ordering before removal, which also marks a program turn boundary.
     const workingSince =
       event.fromProgramStatus === true
-        ? this.programStatusFacets.noteState(paneKey, event.payload, now)
+        ? this.programStatusFacets.noteState(paneKey, payload, now)
         : undefined
     if (event.removesProgramStatusRow === true) {
+      if (this.preservesStoppingAgent(paneKey)) {
+        return
+      }
       this.hookSilenceRechecks.cancel(paneKey)
       if (previous?.observation?.origin === 'osc') {
         // The program row ended; the pane, aliases and caches remain live.
@@ -203,31 +177,26 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       }
       return
     }
+    const helpersIdleAt = this.state.antigravityChildWorkByPaneKey.get(paneKey)?.helpersIdleAt
     const yieldEndsAt =
       event.fromProgramStatus === true
-        ? programStatusHookYieldEndsAt(previous, event.payload, workingSince)
+        ? programStatusHookYieldEndsAt(previous, payload, workingSince, helpersIdleAt)
         : undefined
     const hookOwnsAgent = yieldEndsAt !== undefined && now < yieldEndsAt
     if (event.fromProgramStatus === true) {
-      if (hookOwnsAgent && previous && Number.isFinite(yieldEndsAt)) {
-        const yieldedTo = previous.receivedAt
-        const delayMs = yieldEndsAt - now
-        this.hookSilenceRechecks.defer(paneKey, delayMs + 1, (currentPaneKey) => {
-          const row = this.state.lastStatusByPaneKey.get(currentPaneKey)
-          // Re-offer only against the hook observation this report yielded to.
-          if (
-            row &&
-            row.providerSessionOnly !== true &&
-            'receivedAt' in row &&
-            row.receivedAt === yieldedTo
-          ) {
-            const tabId = parsePaneKey(currentPaneKey)?.tabId ?? event.tabId
-            this.ingestTerminalStatus({ ...event, paneKey: currentPaneKey, tabId })
-          }
-        })
-      } else {
-        this.hookSilenceRechecks.cancel(paneKey)
-      }
+      const delayMs =
+        hookOwnsAgent && Number.isFinite(yieldEndsAt)
+          ? yieldEndsAt - now
+          : antigravityRefusedDoneRetryMs(previous, payload, yieldEndsAt, event)
+      deferProgramStatusRecheck({
+        rechecks: this.hookSilenceRechecks,
+        rows: this.state.lastStatusByPaneKey,
+        paneKey,
+        yieldedTo: previous?.receivedAt,
+        delayMs,
+        event,
+        reoffer: (retried) => this.ingestTerminalStatus(retried)
+      })
     }
     if (
       hookOwnsCommand ||
@@ -235,7 +204,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       // OSC 7501 uses the hook precedence above; other terminal reports cannot settle child-held work.
       (event.fromProgramStatus !== true &&
         previous?.payload.agentType === 'claude' &&
-        event.payload.agentType === 'claude' &&
+        payload.agentType === 'claude' &&
         isAgentStatusHeldOpenByChildWork(previous.payload) &&
         previous.payload.subagents?.some((subagent) => subagent.state === 'working') === true)
     ) {
@@ -258,10 +227,10 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       previous.worktreeId === worktreeId &&
       // A terminal handle joins row identity; acquiring or replacing it requires publication.
       previous.terminalHandle === (terminalHandle ?? previous.terminalHandle) &&
-      terminalStatusPayloadMatchesHook(previous.payload, event.payload, preserveActiveTurnStamp) &&
+      terminalStatusPayloadMatchesHook(previous.payload, payload, preserveActiveTurnStamp) &&
       // OSC 7501 child-only changes still require publication; absent children means none remain.
       (event.fromProgramStatus !== true ||
-        agentSubagentsEqual(previous.payload.subagents, event.payload.subagents))
+        agentSubagentsEqual(previous.payload.subagents, payload.subagents))
     ) {
       // An authority transfer must refresh enriched subscribers even for an identical payload.
       this.refreshTerminalStatusEvidence(
@@ -274,24 +243,22 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     }
     // Terminal status carries no provider session; retain eligible cached identity without treating unknown as a mismatch (#10630).
     const claimedAgentType =
-      event.payload.agentType && event.payload.agentType !== 'unknown'
-        ? event.payload.agentType
-        : undefined
+      payload.agentType && payload.agentType !== 'unknown' ? payload.agentType : undefined
     // A live agent's turn after `done` keeps its session (OSC 7501 reports hookless slash commands); a new run or an exited agent's resume-only row does not. Launch seeds are not completed turns.
     const preservedProviderSession =
       previous?.providerSession &&
       (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType) &&
       (previous.payload.state !== 'done' ||
-        event.payload.state === 'done' ||
+        payload.state === 'done' ||
         previous.observation?.origin === 'launch' ||
         (!newRun && previous.providerSessionOnly !== true))
         ? previous.providerSession
         : undefined
     // Without a new main-agent fact, preserve it only while the row's state and agent still match.
     const preservedMainAgent =
-      event.payload.mainAgent ??
+      payload.mainAgent ??
       (previous?.payload.mainAgent &&
-      previous.payload.state === event.payload.state &&
+      previous.payload.state === payload.state &&
       (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType)
         ? previous.payload.mainAgent
         : undefined)
@@ -304,9 +271,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         connectionId,
         ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
         ...(terminalHandle ? { terminalHandle } : {}),
-        payload: preservedMainAgent
-          ? { ...event.payload, mainAgent: preservedMainAgent }
-          : event.payload
+        payload: preservedMainAgent ? { ...payload, mainAgent: preservedMainAgent } : payload
       },
       undefined,
       event.origin ?? 'osc',

@@ -1,8 +1,14 @@
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
-import type { HostStatusReply } from '../host-status-reply-schema'
+import type { HostStatusReply } from '../hosts/host-status-reply-schema'
 
 // Keep this shell’s page floor explicit; older pages require updating the desktop.
 export const MOBILE_WEB_PAGE_VERSION_FLOOR = 1
+
+// The first page that opens a shell's `open` target inside its own document, applies its pane, and reports the session it shows.
+export const MOBILE_WEB_PAGE_VERSION_OPENS_TARGETS = 3
+
+// The first page that draws a desktop's This-device browser tabs instead of streaming them.
+export const MOBILE_WEB_PAGE_VERSION_SHOWS_CLIENT_HOST_ROWS = 4
 
 // Widen supported schemas only with a shell release; the writer’s current schema may be newer than this shell.
 export const SUPPORTED_MOBILE_WEB_BUNDLE_SCHEMA_VERSIONS = [1] as const

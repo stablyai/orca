@@ -5,6 +5,9 @@ enum MobileWebShellBridge {
   /// Use the same injected global/handler name on Android and iOS.
   static let handlerName = "orcaBridge"
 
+  /// Tells a page booted ahead of its screen to stop asking for init; the screen that adopts it answers.
+  static let parkedFrame = #"{"v":1,"type":"parked"}"#
+
   /// Enforce the shared UTF-8 JSON byte ceiling natively, before parsing.
   static let maxMessageByteCount = 640 * 1024
 
@@ -69,15 +72,8 @@ struct MobileWebShellBridgeSource {
   var originHost: String
 }
 
-/// Silently count refusals for tests without revealing the cap to the page.
 final class MobileWebShellBridgeGate {
-  private(set) var refusedCount = 0
-
   func accepts(byteCount: Int) -> Bool {
-    guard MobileWebShellBridge.acceptsByteCount(byteCount) else {
-      refusedCount += 1
-      return false
-    }
-    return true
+    MobileWebShellBridge.acceptsByteCount(byteCount)
   }
 }

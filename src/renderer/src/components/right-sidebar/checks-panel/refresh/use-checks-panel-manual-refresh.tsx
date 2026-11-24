@@ -1,10 +1,10 @@
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store/index'
-import { buildGitHubPRRefreshStateClearToken } from '@/store/github/pr-refresh-state'
-import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
-import { getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-sync-client'
-import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
+import { buildGitHubPRRefreshStateClearToken } from '@/store/github/refresh/pr-refresh-state'
+import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
+import { getRuntimeGitUpstreamStatus } from '@/runtime/source-control/git/runtime-git-sync-client'
+import { resolveWorktreeGitCopyNow } from '@/lib/workspace/ownership/worktree-git-copy'
 import {
   hasChecksPanelGitStatusBranchChanged,
   readChecksPanelRefreshGitIdentitySnapshot,
@@ -12,9 +12,10 @@ import {
 } from './checks-panel-git-status-snapshot'
 
 import { checksPanelAsyncResultKey } from './checks-panel-async-result-key'
+import { checksPanelLoadErrorMessage } from '../review-data/checks-panel-forge-owner'
 import { recordChecksPanelPRRefreshBreadcrumb } from './checks-panel-pr-refresh-breadcrumb'
 import { getHostedReviewManualRefreshError } from '../../hosted-review/provider-actions/github-refresh-error-copy'
-import type { PRInfo } from '../../../../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import {
   checksPanelManualRefreshProvider,
   refreshChecksPanelHostedReview,
@@ -57,6 +58,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     refreshRequestKeyRef,
     repo,
     setChecks,
+    setChecksError,
     setChecksLoading,
     setComments,
     setCommentsLoading,
@@ -256,7 +258,13 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           branch,
           refreshedPR.headSha,
           refreshedPR.prRepo,
-          { force: true, ...repoOptions, wakeWslDistro: true, userRefresh: true }
+          {
+            force: true,
+            ...repoOptions,
+            throwOnError: true,
+            wakeWslDistro: true,
+            userRefresh: true
+          }
         ).then(
           (result) => {
             if (!isCurrentRequest() || !isCurrentAsyncResult(prRequestKey)) {
@@ -277,7 +285,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
               return
             }
             console.warn('Failed to fetch PR checks:', err)
-            setChecks([])
+            setChecksError(checksPanelLoadErrorMessage(err, repoOptions.repoOwnerExecutionHostId))
           }
         )
         setChecksLoading(true)
@@ -298,7 +306,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
               return
             }
             console.warn('Failed to fetch PR comments:', err)
-            setComments([])
+            setComments(null)
           }
         )
         await Promise.all([
@@ -314,8 +322,8 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           })
         ])
       } else if (isCurrentRequest()) {
-        setChecks([])
-        setComments([])
+        // A superseded or inconclusive lookup must not clear results no read will settle. A PR
+        // that is really gone changes the read identity, and the section owners reset and re-read.
         refreshOutcome = 'no-pr'
       }
     } catch {
@@ -387,6 +395,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     setChecksLoading,
     refreshRequestKeyRef,
     setChecks,
+    setChecksError,
     setComments,
     setGitStatusSnapshot,
     setManualFailure,

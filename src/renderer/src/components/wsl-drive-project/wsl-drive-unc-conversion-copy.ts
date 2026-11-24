@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import type {
   WslDriveUncConversionBlocker,
   WslDriveUncConversionResult
-} from '../../../../shared/wsl-drive-unc-conversion-types'
+} from '../../../../shared/wsl-move/wsl-drive-unc-conversion-types'
 import { wslDriveProjectBlockerMessage } from './wsl-drive-project-copy'
 
 export function wslDriveUncConversionMessages(

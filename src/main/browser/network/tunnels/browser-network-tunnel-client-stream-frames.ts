@@ -3,14 +3,13 @@ import {
   decodeBrowserNetworkTunnelWindowUpdate,
   encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import { dispatchBrowserNetworkTunnelClientFrame } from './browser-network-tunnel-client-frame-dispatch'
 import type { BrowserNetworkTunnelClientStream } from './browser-network-tunnel-client-stream'
 import {
   finishBrowserNetworkSourceData,
   queueBrowserNetworkSourceData
 } from './browser-network-tunnel-source-receive-flow'
-import { BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES } from './browser-network-tunnel-stream-state'
 
 type BrowserNetworkTunnelClientStreamFrameActions = {
   send: (
@@ -56,7 +55,7 @@ function openedStream(
     !actions.send(
       BrowserNetworkTunnelOpcode.WindowUpdate,
       stream.id,
-      encodeBrowserNetworkTunnelWindowUpdate(BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES)
+      encodeBrowserNetworkTunnelWindowUpdate(stream.receiveWindowBytes)
     )
   ) {
     actions.closeTunnel(new Error('Browser tunnel transport rejected initial credit'))
@@ -71,11 +70,7 @@ function grantStreamCredit(
   actions: BrowserNetworkTunnelClientStreamFrameActions
 ): void {
   const credit = decodeBrowserNetworkTunnelWindowUpdate(payload)
-  if (
-    !stream.opened ||
-    !credit ||
-    stream.sendCredit + credit > BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
-  ) {
+  if (!stream.opened || !credit || stream.sendCredit + credit > stream.windowBytes) {
     actions.closeTunnel(new Error('Browser tunnel received invalid stream credit'))
     return
   }

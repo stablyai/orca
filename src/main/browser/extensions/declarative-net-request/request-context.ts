@@ -1,9 +1,9 @@
-import { hostLabelSuffixes, sameDomainOrHost } from './domain-matching'
-import { dnrNgramDictionary } from './ngram-dictionary'
-import { ELEMENT_TYPE, requestMethodBit, resourceTypeBit } from './rule-flags'
-import type { DnrResourceType } from './rule-types'
-import type { DnrUrlText } from './url-pattern'
-import { dnrUrlHost, dnrUrlText, toLowerAscii } from './url-text'
+import { hostLabelSuffixes, sameDomainOrHost } from './matching/domain-matching'
+import { dnrNgramDictionary } from './indexing/ngram-dictionary'
+import { ELEMENT_TYPE, requestMethodBit, resourceTypeBit } from './rule-compilation/rule-flags'
+import type { DnrResourceType } from './rule-compilation/rule-types'
+import type { DnrUrlText } from './matching/url-pattern'
+import { dnrUrlHost, dnrUrlText, toLowerAscii } from './matching/url-text'
 
 // Everything a rule looks at for one request, computed once and shared by every ruleset
 // (request_params.cc RequestParams).

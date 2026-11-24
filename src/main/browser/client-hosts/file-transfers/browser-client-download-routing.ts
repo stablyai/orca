@@ -1,10 +1,36 @@
-import type {
-  BrowserClientDownloadRoute,
-  BrowserClientDownloadRouteOutcome
-} from './browser-client-download-relay'
+import type { BrowserDownloadFinishedEvent } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
+
+export type BrowserClientDownloadRoute = {
+  transferId: string
+  browserPageId: string
+  /** Temp file main hands to Chromium; never the user's Downloads folder. */
+  stagingPath: string
+  complete(
+    filename: string
+  ): Promise<NonNullable<BrowserDownloadFinishedEvent['remoteDestination']>>
+  abort(): Promise<void>
+}
+
+export type BrowserClientDownloadRouteOutcome =
+  /** Another composition may own this WebContents. */
+  | { kind: 'unowned' }
+  | { kind: 'remote'; route: BrowserClientDownloadRoute }
+  /** A legacy host without the file channel permits a local save. */
+  | { kind: 'local-fallback' }
+  /** The owning page has no usable channel; refuse the download. */
+  | { kind: 'unavailable' }
+
+/** `filename` and `documentUrl` describe the download as it starts, for the page's host to claim it. */
+export type BrowserClientDownloadRouteInput = {
+  guestWebContentsId: number
+  filename?: string
+  documentUrl?: string
+  /** An agent's `download` on this page is waiting for it. */
+  agentDownload?: boolean
+}
 
 export type BrowserClientDownloadRouter = {
-  route(input: { guestWebContentsId: number }): BrowserClientDownloadRouteOutcome
+  route(input: BrowserClientDownloadRouteInput): BrowserClientDownloadRouteOutcome
 }
 
 export type BrowserClientDownloadDecision =
@@ -32,6 +58,38 @@ export function registerBrowserClientDownloadRouter(
   }
 }
 
+// An agent's `download` claimed at a staging path whose file another host saves (an SSH host's command).
+const claimedRoutesBySavePath = new Map<string, BrowserClientDownloadRoute>()
+
+/** The download claimed at `route.stagingPath` goes through `route`. The returned unregistration
+ *  says whether no download ever took it. */
+export function registerClaimedBrowserDownloadRoute(
+  route: BrowserClientDownloadRoute
+): () => boolean {
+  claimedRoutesBySavePath.set(route.stagingPath, route)
+  return () => {
+    if (claimedRoutesBySavePath.get(route.stagingPath) !== route) {
+      return false
+    }
+    claimedRoutesBySavePath.delete(route.stagingPath)
+    return true
+  }
+}
+
+export function hasClaimedBrowserDownloadRoute(savePath: string): boolean {
+  return claimedRoutesBySavePath.has(savePath)
+}
+
+export function takeClaimedBrowserDownloadRoute(
+  savePath: string | null | undefined
+): BrowserClientDownloadRoute | null {
+  const route = (savePath && claimedRoutesBySavePath.get(savePath)) || null
+  if (route) {
+    claimedRoutesBySavePath.delete(route.stagingPath)
+  }
+  return route
+}
+
 export function setBrowserClientRouteWebContentsProbe(
   probe: ((webContentsId: number) => boolean) | null
 ): void {
@@ -43,9 +101,9 @@ export function resetBrowserClientDownloadRouting(): void {
   isClientRouteWebContents = null
 }
 
-export function routeBrowserClientDownload(input: {
-  guestWebContentsId: number
-}): BrowserClientDownloadDecision {
+export function routeBrowserClientDownload(
+  input: BrowserClientDownloadRouteInput
+): BrowserClientDownloadDecision {
   for (const router of routersByEnvironmentId.values()) {
     let outcome: BrowserClientDownloadRouteOutcome
     try {

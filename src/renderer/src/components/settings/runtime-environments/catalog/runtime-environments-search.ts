@@ -7,8 +7,8 @@ import { getMachineNameSearchKeywords } from '../../machine-identity/machine-nam
 export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate(
-      'auto.components.settings.runtime.environments.search.3517fb2ec0',
-      'Remote Orca Servers'
+      'auto.components.settings.runtime.environments.search.24cc0a2244',
+      'Remote Orca servers'
     ),
     description: translate(
       'auto.components.settings.runtime.environments.search.addShareDefault',
@@ -103,8 +103,8 @@ export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
 export const getWebRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate(
-      'auto.components.settings.runtime.environments.search.3517fb2ec0',
-      'Remote Orca Servers'
+      'auto.components.settings.runtime.environments.search.24cc0a2244',
+      'Remote Orca servers'
     ),
     description: translate(
       'auto.components.settings.runtime.environments.search.baec27aa8f',

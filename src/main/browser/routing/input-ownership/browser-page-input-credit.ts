@@ -1,19 +1,32 @@
 import { isRecentBrowserGuestInput } from '../../guest-lifecycle/input/browser-guest-input-gesture'
-import type { RpcCallerIdentity } from '../../../runtime/rpc/rpc-caller-identity'
+import {
+  isAgentRpcCaller,
+  type RpcCallerIdentity
+} from '../../../runtime/rpc/callers/rpc-caller-identity'
 
-type Runner = { pairedDeviceId: string | null }
+type Runner = {
+  pairedDeviceId: string | null
+  /** A person sent it: a viewer's relayed click or key press, not an agent's CLI. */
+  person: boolean
+}
 
 /** The paired client whose click or key press reached a tab last, so a tab it opens follows that client. */
 export class BrowserPageInputCredit {
   // The command each page is running; queued commands run one at a time per page.
   private readonly runnerByPageId = new Map<string, Runner>()
   private readonly creditByTabId = new Map<string, { pairedDeviceId: string; at: number }>()
+  // The same input, for what the page prints; opening a tab doesn't spend it.
+  private readonly printCreditByTabId = new Map<string, { pairedDeviceId: string; at: number }>()
 
   constructor(private readonly now: () => number = Date.now) {}
 
   /** Nothing to credit or clear: no command is running and no credit is held. */
   get idle(): boolean {
-    return this.runnerByPageId.size === 0 && this.creditByTabId.size === 0
+    return (
+      this.runnerByPageId.size === 0 &&
+      this.creditByTabId.size === 0 &&
+      this.printCreditByTabId.size === 0
+    )
   }
 
   /** Runs one queued command on the page, so input it delivers is credited to its caller. */
@@ -23,7 +36,10 @@ export class BrowserPageInputCredit {
     execute: () => Promise<T>
   ): Promise<T> {
     const runner: Runner = {
-      pairedDeviceId: caller?.kind === 'paired-device' ? caller.deviceId : null
+      // An agent's CLI moves no one's view, even when it calls with a device's pairing.
+      pairedDeviceId:
+        caller?.kind === 'paired-device' && !isAgentRpcCaller(caller) ? caller.deviceId : null,
+      person: caller !== undefined && !isAgentRpcCaller(caller)
     }
     this.runnerByPageId.set(browserPageId, runner)
     try {
@@ -35,21 +51,45 @@ export class BrowserPageInputCredit {
     }
   }
 
+  /** The command running on the page now is a person's, so input reaching it is theirs. */
+  isRunningPersonCommand(browserPageId: string): boolean {
+    return this.runnerByPageId.get(browserPageId)?.person === true
+  }
+
   /** Activating input reached the page; the running command's paired client, if any, owns what it opens. */
-  creditInput(browserTabId: string, browserPageId: string): void {
+  creditInput(browserTabId: string, browserPageId: string, { printable = true } = {}): void {
     const pairedDeviceId = this.runnerByPageId.get(browserPageId)?.pairedDeviceId ?? null
     if (!pairedDeviceId) {
-      this.creditByTabId.delete(browserTabId)
+      this.withdraw(browserTabId)
       return
     }
     const now = this.now()
     // Unconsumed credits for tabs that opened nothing would otherwise pile up.
-    for (const [tabId, credit] of this.creditByTabId) {
-      if (!isRecentBrowserGuestInput(credit.at, now)) {
-        this.creditByTabId.delete(tabId)
+    for (const credits of [this.creditByTabId, this.printCreditByTabId]) {
+      for (const [tabId, credit] of credits) {
+        if (!isRecentBrowserGuestInput(credit.at, now)) {
+          credits.delete(tabId)
+        }
       }
     }
     this.creditByTabId.set(browserTabId, { pairedDeviceId, at: now })
+    if (printable) {
+      this.printCreditByTabId.set(browserTabId, { pairedDeviceId, at: now })
+    } else {
+      this.printCreditByTabId.delete(browserTabId)
+    }
+  }
+
+  /** An agent acts on the tab now: what the page does next is not the earlier input's. */
+  withdraw(browserTabId: string): void {
+    this.creditByTabId.delete(browserTabId)
+    this.printCreditByTabId.delete(browserTabId)
+  }
+
+  /** Whose input just reached the tab, for a print it makes; a tab that input opened doesn't spend it. */
+  printer(browserTabId: string): string | null {
+    const credit = this.printCreditByTabId.get(browserTabId)
+    return credit && isRecentBrowserGuestInput(credit.at, this.now()) ? credit.pairedDeviceId : null
   }
 
   /** Single-use, like the input gesture it accompanies: one click cannot steer a second tab. */

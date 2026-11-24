@@ -1,6 +1,9 @@
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
-import { getSshHostServerStatus, isSshHostServed } from '../../ssh/ssh-host-server-status'
-import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
+import {
+  getSshHostServerStatus,
+  isSshHostServed
+} from '../../ssh/host-server/ssh-host-server-status'
+import { connectionManager } from './ssh-ipc-context'
 import { restorePortForwards, savedPortForwardsAllLive } from './ssh-port-forward-persistence'
 import { forgetForwardFailures } from './ssh-port-forward-unrestored'
 import { connectInFlight } from './ssh-connect-attempt-registry'
@@ -62,7 +65,7 @@ export function restoreManagedHostPortForwards(
     if (last && (last.conn !== conn || last.generation !== generation)) {
       forgetForwardFailures(targetId)
     }
-    await restorePortForwards(targetId, getCurrentMainWindow)
+    await restorePortForwards(targetId)
     if (conn && generation !== undefined && connectionManager?.getConnection(targetId) === conn) {
       restoredOn.set(targetId, { conn, generation, at: Date.now() })
     }

@@ -1,6 +1,6 @@
 // Preserve unknown journal union tags so newer bodies/blocks/goals/approval subjects remain readable.
 
-import { z } from 'zod'
+import * as z from 'zod'
 
 /** A tag a newer build could have written: a string with something other than whitespace in it. */
 export function isJournalTag(value: unknown): value is string {

@@ -11,12 +11,12 @@ import {
 } from '@/components/editor/diff/large-files/large-diff-section-content'
 import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import type { GitDiffResult } from '../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
 import type {
-  GitHubOwnerRepo,
   GitHubPRFile,
   GitHubPRFileContents
-} from '../../../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+} from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { evictPRFileContentRequest, loadPRFileContents } from '../cache/file-content'
 
 // Bound timeout-free local loads above the remote 30s deadline so wedged sections offer Retry while remote errors keep their own messages.

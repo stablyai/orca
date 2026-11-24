@@ -17,8 +17,7 @@ export const TYPECHECK_PROJECTS = [
   { config: 'config/tsconfig.node.json', heapGib: 7 },
   { config: 'config/tsconfig.tc.web.json', heapGib: 6 },
   { config: 'config/tsconfig.tc.cli.json', heapGib: 2 },
-  // This typed IPC integration follows both main and renderer imports with their ambient inputs.
-  { config: 'config/tsconfig.test.pane-launch.json', heapGib: 7 },
+  { config: 'config/tsconfig.tc.bot-evals.json', heapGib: 2 },
   // Root projects exclude workspace package tests; each runs with its package's compiler.
   { config: 'src/packages/process-host/tsconfig.test.json', heapGib: 1 }
 ]

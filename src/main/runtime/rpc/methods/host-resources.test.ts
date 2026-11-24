@@ -1,7 +1,7 @@
 import os from 'node:os'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { HOST_RESOURCES_RUNTIME_CAPABILITY } from '../../../../shared/host-resources'
-import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
+import { RUNTIME_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/protocol-version'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { MOBILE_RPC_METHOD_ROUTES } from '../server/runtime-rpc-mobile-method-routing'
 import { HOST_RESOURCES_METHODS } from './host-resources'
