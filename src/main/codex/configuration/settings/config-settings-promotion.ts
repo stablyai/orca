@@ -30,8 +30,8 @@ import {
 import { hasCodexRegistrationEntries } from '../toml/config-toml-plugin-registration-tables'
 import {
   EMPTY_GUEST_CARRY_FORWARD,
-  planGuestRegenerationCarryForward,
-  type CodexGuestCarryForward
+  type CodexGuestCarryForward,
+  type CodexGuestRegeneration
 } from './codex-config-guest-carry-forward'
 
 export type CodexSettingsBaselineSnapshotOptions = {
@@ -97,7 +97,9 @@ export type CodexSettingsPromotionPlan = {
   /** MCP names the previous mirror copied from the canonical source. */
   mirroredMcpServers: ReadonlySet<string>
   mirroredMcpServerRoot: boolean
-  /** Set when a WSL distro config regenerates the managed copy. */
+  /** Set when a WSL distro config regenerates the managed copy; the mirror plans the carry from its own read. */
+  guestRegeneration?: CodexGuestRegeneration
+  /** The mirror replaces this with its plan; empty until then, which a starter baseline records. */
   guestCarryForward?: CodexGuestCarryForward
 }
 
@@ -154,9 +156,9 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     (writeTarget !== null && 'path' in writeTarget && resolvesIntoWslShare(writeTarget.path))
   const runtimeTomlObservation = observeAgentStateFile(runtimeTomlPath)
   if (runtimeTomlObservation.kind === 'absent') {
-    // A fresh guest copy has no tab edits to carry, now or on later passes.
+    // A fresh guest copy has no tab edits of its own, but values kept earlier still apply.
     return guestSource
-      ? { ...emptyPromotionPlan(), guestCarryForward: EMPTY_GUEST_CARRY_FORWARD }
+      ? regenerateFromGuestPlan(observeCodexSettingsBaseline(runtimeHomePath), '')
       : emptyPromotionPlan()
   }
   if (runtimeTomlObservation.kind === 'indeterminate') {
@@ -166,8 +168,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   if (guestSource) {
     return regenerateFromGuestPlan(
       observeCodexSettingsBaseline(runtimeHomePath),
-      runtimeTomlObservation.value,
-      systemTomlPath
+      runtimeTomlObservation.value
     )
   }
   // Scalars need a baseline to distinguish stale copies from new Codex edits.
@@ -252,8 +253,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
  */
 function regenerateFromGuestPlan(
   baselineObservation: ReturnType<typeof observeCodexSettingsBaseline>,
-  runtimeConfig: string,
-  systemTomlPath: string
+  runtimeConfig: string
 ): CodexSettingsPromotionPlan {
   if (baselineObservation.kind === 'indeterminate') {
     throw new Error('Codex settings baseline could not be read')
@@ -263,7 +263,8 @@ function regenerateFromGuestPlan(
     ...emptyPromotionPlan(),
     mirroredMcpServers: baseline?.mcpServers ?? new Set(),
     mirroredMcpServerRoot: baseline?.mcpServerRoot ?? false,
-    guestCarryForward: planGuestRegenerationCarryForward(baseline, runtimeConfig, systemTomlPath)
+    guestRegeneration: { baseline, runtimeConfig },
+    guestCarryForward: EMPTY_GUEST_CARRY_FORWARD
   }
 }
 

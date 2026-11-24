@@ -257,7 +257,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
         }
   }
 
-  const guestConfig = applyGuestCarryForward(rawSystemConfig, promotionPlan.guestCarryForward)
+  const guestConfig = applyGuestCarryForward(rawSystemConfig, promotionPlan)
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath, systemConfigDir)
   if (!runtimeConfigExists) {
     const freshRuntimeConfig = applyRuntimeOwnedConfig(

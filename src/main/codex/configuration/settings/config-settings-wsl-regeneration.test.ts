@@ -15,7 +15,9 @@ import type * as NodeFs from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
+import { parse as parseToml } from 'smol-toml'
 import type * as WslPaths from '../../../../shared/file-access/wsl-paths'
+import type * as Promotion from './config-settings-promotion'
 
 const { homedirMock, wslTestState } = vi.hoisted(() => {
   const state: {
@@ -24,12 +26,14 @@ const { homedirMock, wslTestState } = vi.hoisted(() => {
     failTempWrite: boolean
     failTempWriteMatch: string | null
     unresolvablePath: string | null
+    afterPromotion: (() => void) | null
   } = {
     wslPath: null,
     daemonGuard: false,
     failTempWrite: false,
     failTempWriteMatch: null,
-    unresolvablePath: null
+    unresolvablePath: null,
+    afterPromotion: null
   }
   return { homedirMock: vi.fn<() => string>(), wslTestState: state }
 })
@@ -83,6 +87,21 @@ vi.mock('node:fs', async (importOriginal) => {
   }
 })
 
+vi.mock('./config-settings-promotion', async (importOriginal) => {
+  const actual = await importOriginal<typeof Promotion>()
+  return {
+    ...actual,
+    promoteCodexRuntimeSettingsToSystem: (
+      ...args: Parameters<typeof actual.promoteCodexRuntimeSettingsToSystem>
+    ) => {
+      const plan = actual.promoteCodexRuntimeSettingsToSystem(...args)
+      // A save in the distro that lands after promotion and before the mirror's read.
+      wslTestState.afterPromotion?.()
+      return plan
+    }
+  }
+})
+
 vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<typeof Os>()),
   homedir: homedirMock
@@ -109,6 +128,7 @@ beforeEach(() => {
   wslTestState.failTempWrite = false
   wslTestState.failTempWriteMatch = null
   wslTestState.unresolvablePath = null
+  wslTestState.afterPromotion = null
   if (homedir() !== tmpHome) {
     throw new Error('node:os homedir mock is not active; refusing to touch the real ~/.codex')
   }
@@ -269,6 +289,41 @@ describe('managed Codex config for a WSL distro config', () => {
       /^model = "o4" # orca: tab edit kept from before the update$/m
     )
     expect(readFileSync(systemConfigPath(), 'utf-8')).toBe('model = "gpt-5"\n')
+  })
+
+  it('lets a distro save made during a pass win over a kept value', () => {
+    writeSystemConfig('model = "gpt-5"\n')
+    syncSystemConfigIntoManagedCodexHome()
+    simulateCodexSettingWrite('model', '"o4"')
+    wslTestState.wslPath = systemConfigPath()
+    syncSystemConfigIntoManagedCodexHome()
+    wslTestState.afterPromotion = () => writeSystemConfig('model = "gpt-6"\n')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readRuntimeConfig()).toMatch(/^model = "gpt-6"$/m)
+  })
+
+  it.each([
+    'model = "gpt-5"\nplugins = { "docs@market" = { enabled = true } }\n',
+    'model = "gpt-5"\nplugins."docs@market".enabled = true\n',
+    'model = "gpt-5"\n\n[plugins]\n"docs@market" = { enabled = true }\n'
+  ])('never redefines a plugin the distro defines inline: %j', (distro) => {
+    writeSystemConfig(distro)
+    syncSystemConfigIntoManagedCodexHome()
+    // Codex writes a toggle as its own table.
+    writeFileSync(
+      runtimeConfigPath(),
+      `${readRuntimeConfig()}\n[plugins."docs@market"]\nenabled = false\n\n[plugins."new@market"]\nenabled = true\n`,
+      'utf-8'
+    )
+    wslTestState.wslPath = systemConfigPath()
+
+    syncSystemConfigIntoManagedCodexHome()
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(() => parseToml(readRuntimeConfig())).not.toThrow()
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toBe(distro)
   })
 
   it('keeps a first plugin added in a tab before the update', () => {

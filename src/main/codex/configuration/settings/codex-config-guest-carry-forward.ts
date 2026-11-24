@@ -1,4 +1,3 @@
-import { observeAgentStateFile } from '../codex-path-observation'
 import type { CodexSettingsBaseline } from './config-settings-baseline'
 import { collectPromotionChanges } from './config-settings-promotion-changes'
 import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
@@ -10,7 +9,8 @@ import {
 } from './config-plugin-registration-promotion'
 import {
   normalizeCodexRegistrationValue,
-  readCodexRegistrationEntries
+  readCodexRegistrationEntries,
+  readCodexRegistrationRootsDefinedOutsideTables
 } from '../toml/config-toml-plugin-registration-tables'
 import { readPromotedSettingValuesFromContent } from '../toml/config-toml-promoted-setting-values'
 
@@ -117,11 +117,12 @@ function retainCarriedRegistrations(
   systemConfig: string
 ): CodexGuestCarriedRegistration[] {
   const systemEntries = readCodexRegistrationEntries(systemConfig)
+  const inlineRoots = readCodexRegistrationRootsDefinedOutsideTables(systemConfig)
   const droppedKeys = new Set<string>()
   for (const { promotion, system, identity } of carried) {
     const entry = systemEntries.get(promotion.key)
     if (promotion.kind === 'append') {
-      if (entry) {
+      if (entry || !canAppendRegistration(promotion.key, inlineRoots)) {
         droppedKeys.add(promotion.key)
       }
       continue
@@ -140,12 +141,26 @@ function retainCarriedRegistrations(
   return carried.filter(({ promotion }) => !droppedKeys.has(promotion.key))
 }
 
-/** Apply kept values to the distro config in memory, before it is merged into the managed copy. */
+export type CodexGuestRegeneration = {
+  baseline: CodexSettingsBaseline | null
+  /** Empty when the managed copy has no config yet. */
+  runtimeConfig: string
+}
+
+/**
+ * Plan from the mirror's own read of the distro config and apply the kept values to it in memory,
+ * before it is merged into the managed copy. Records the plan for the pass's baseline snapshot.
+ */
 export function applyGuestCarryForward(
   systemConfig: string,
-  carry: CodexGuestCarryForward | undefined
+  plan: { guestRegeneration?: CodexGuestRegeneration; guestCarryForward?: CodexGuestCarryForward }
 ): string {
-  if (!carry || isGuestCarryForwardEmpty(carry)) {
+  if (!plan.guestRegeneration) {
+    return systemConfig
+  }
+  const carry = planGuestRegenerationCarryForward(plan.guestRegeneration, systemConfig)
+  plan.guestCarryForward = carry
+  if (isGuestCarryForwardEmpty(carry)) {
     return systemConfig
   }
   const withSettings = upsertPromotedSettingsInContent(
@@ -179,19 +194,10 @@ function readNormalizedField(
 }
 
 /** An older Orca promoted tab edits on its next pass; keep the ones still pending at the update. */
-export function planGuestRegenerationCarryForward(
-  baseline: CodexSettingsBaseline | null,
-  runtimeConfig: string,
-  systemTomlPath: string
+function planGuestRegenerationCarryForward(
+  { baseline, runtimeConfig }: CodexGuestRegeneration,
+  systemConfig: string
 ): CodexGuestCarryForward {
-  if (baseline?.guestCarryForward && isGuestCarryForwardEmpty(baseline.guestCarryForward)) {
-    return EMPTY_GUEST_CARRY_FORWARD
-  }
-  const systemObservation = observeAgentStateFile(systemTomlPath)
-  if (systemObservation.kind === 'indeterminate') {
-    throw systemObservation.error
-  }
-  const systemConfig = systemObservation.kind === 'present' ? systemObservation.value : ''
   if (baseline?.guestCarryForward) {
     return retainGuestCarryForward(baseline.guestCarryForward, systemConfig)
   }
@@ -210,10 +216,20 @@ export function planGuestRegenerationCarryForward(
   // dropped, so only registrations the distro still has carry.
   const trackedRegistrations = baseline?.registrations ?? new Map()
   const tracksRegistrations = baseline?.tracksRegistrations === true
+  const inlineRoots = readCodexRegistrationRootsDefinedOutsideTables(systemConfig)
   const registrations = planCodexRegistrationPromotion(
     runtimeConfig,
     upsertPromotedSettingsInContent(systemConfig, updates),
     trackedRegistrations
-  ).filter((promotion) => promotion.kind !== 'append' || tracksRegistrations)
+  ).filter(
+    (promotion) =>
+      promotion.kind !== 'append' ||
+      (tracksRegistrations && canAppendRegistration(promotion.key, inlineRoots))
+  )
   return planGuestCarryForward(updates, registrations, systemConfig)
+}
+
+// A `[root.name]` table beside an inline or dotted definition of that root would redefine a key.
+function canAppendRegistration(key: string, inlineRoots: ReadonlySet<string>): boolean {
+  return !inlineRoots.has(key.slice(0, key.indexOf(':')))
 }
