@@ -34,27 +34,33 @@ export function useChangeScopeSync({
     loader: typeof loadCommitFiles
     onLoaded: () => void
   } | null>(null)
+  // Why: a second Retry before the busy row renders would restart the load and drop a read that was about to succeed.
+  const retryInFlight = useRef(false)
 
   useEffect(() => {
     const retry = retryRequest.current
     retryRequest.current = null
     if (!commit) {
+      retryInFlight.current = false
       setCommitScopeFiles(null)
       return
     }
     const onLoaded =
       retry?.commit === commit && retry.loader === loadCommitFiles ? retry.onLoaded : undefined
+    retryInFlight.current = onLoaded !== undefined
     let live = true
     setCommitScopeFiles({ commitId: commit.id, status: onLoaded ? 'retrying' : 'loading' })
     loadCommitFiles(commit)
       .then((entries) => {
         if (live) {
+          retryInFlight.current = false
           onLoaded?.()
           setCommitScopeFiles({ commitId: commit.id, status: 'ready', entries })
         }
       })
       .catch((error: unknown) => {
         if (live) {
+          retryInFlight.current = false
           setCommitScopeFiles({
             commitId: commit.id,
             status: 'error',
@@ -81,7 +87,8 @@ export function useChangeScopeSync({
   }, [commitScope, result, setChangeScope, statusHead])
 
   return (onLoaded) => {
-    if (commit) {
+    if (commit && !retryInFlight.current) {
+      retryInFlight.current = true
       retryRequest.current = { commit, loader: loadCommitFiles, onLoaded }
       requestRetry()
     }
