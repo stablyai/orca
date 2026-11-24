@@ -53,6 +53,8 @@ export type PluginRuntimeDelegate = {
   listAgentTaskTitles?(): ReadonlyMap<string, string>
   /** The runtime RPC the `orca` CLI calls, in process; absent where none is bound. */
   callRuntime?: PluginRuntimeRpc
+  /** Per-worktree notification mute map from persisted UI state. */
+  getNotificationsMutedByWorktree?(): Readonly<Record<string, boolean>> | undefined
 }
 
 export function bindPluginHostServices(input: {
@@ -82,6 +84,7 @@ export function bindPluginHostServices(input: {
       ? statusBarServices(input.statusBar, input.declaredStatusBarItemIds, input.statusBarRevision)
       : null,
     runtimeRpc: delegate.callRuntime ?? null,
+    getNotificationsMutedByWorktree: delegate.getNotificationsMutedByWorktree,
     renderer: input.renderer ?? null,
     resolveActiveWorktreeContext: async () => {
       const context = await delegate.resolveActiveWorktreeContext()

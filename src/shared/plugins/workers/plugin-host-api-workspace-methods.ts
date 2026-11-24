@@ -46,10 +46,20 @@ const workspaceListParams = z
     includeStatus: z.boolean().optional()
   })
   .optional()
-const workspaceStatus = z.object({
+export const workspaceStatus = z.object({
   /** `working`: an agent works; `permission`: one waits for input; `done`: an agent finished;
    *  `active`: a live terminal and no agent working; `inactive`: no live terminal. */
   state: z.enum(['working', 'permission', 'done', 'active', 'inactive']),
+  /** Present when `state` is `working` and the agent is waiting in background monitoring mode. */
+  workingMode: z.enum(['monitoring']).optional(),
+  /** The workspace's board/workflow status label (e.g. `in-progress`, `in-review`). */
+  workspaceStatus: z.string().optional(),
+  /** Whether the workspace is pinned in Orca's sidebar. */
+  isPinned: z.boolean().optional(),
+  /** Whether the workspace is sleeping (idle activity and not active). */
+  isSleeping: z.boolean().optional(),
+  /** Whether notifications are muted for this workspace. */
+  muteNotifications: z.boolean().optional(),
   /** Output arrived since the person last looked, as the sidebar's dot shows. */
   unread: z.boolean(),
   /** Live terminals. */

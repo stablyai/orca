@@ -34,8 +34,8 @@ import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import {
   bindPluginRuntime,
-  createPluginAgentStatusForwarder,
-  watchPluginWorkspaceContext
+  bindPluginWorkspaceWatchers,
+  createPluginAgentStatusForwarder
 } from '../../plugins/runtime/plugin-runtime-binding'
 import { emitPluginWorktreeLifecycle } from '../pty-startup/main-process-pty-startup'
 import { mainProcessState as state } from '../main-process-state'
@@ -261,7 +261,13 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     }
   })
   // Bound here, not in the IPC handlers: a headless serve never opens a window to register them.
-  const pluginDelegate = bindPluginRuntime(pluginService, runtime, agentHookServer, ALL_RPC_METHODS)
+  const pluginDelegate = bindPluginRuntime(
+    pluginService,
+    runtime,
+    agentHookServer,
+    ALL_RPC_METHODS,
+    () => store.getUI()?.notificationsMutedByWorktree
+  )
   bindPluginRpcServices(store, pluginService, {
     marketplace: core.pluginMarketplaceService,
     installer: core.pluginMarketplaceInstaller
@@ -302,11 +308,6 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
       forwardAgentStatus(payload, enriched.terminalHandle)
     }
   })
-  watchPluginWorkspaceContext({
-    delegate: pluginDelegate,
-    events: pluginService,
-    onSessionWritten: (listener) => store.onWorkspaceSessionWritten(listener),
-    onStateWritten: (listener) => store.onStateWritten(listener)
-  })
+  bindPluginWorkspaceWatchers(pluginDelegate, pluginService, store, runtime, agentHookServer)
   runtime.onWorktreeLifecycle(emitPluginWorktreeLifecycle)
 }

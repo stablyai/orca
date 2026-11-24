@@ -62,6 +62,11 @@ const worktreePsAnswer = z.object({
       worktreeId: z.string(),
       identity: z.object({ key: z.string() }).optional(),
       status: z.enum(['working', 'permission', 'done', 'active', 'inactive']),
+      workingMode: z.enum(['monitoring']).optional(),
+      workspaceStatus: z.string().optional(),
+      isPinned: z.boolean().optional(),
+      isActive: z.boolean().optional(),
+      hasHostSidebarActivity: z.boolean().optional(),
       unread: z.boolean(),
       liveTerminalCount: z.number().int().nonnegative(),
       lastOutputAt: z.number().finite().nullable().optional(),
@@ -78,25 +83,41 @@ function branchName(branch: string | undefined): string | null {
   return name || null
 }
 
-type WorkspaceStatuses = { byId: Map<string, WorkspaceStatus>; truncated: boolean }
+export type PluginWorkspaceStatuses = { byId: Map<string, WorkspaceStatus>; truncated: boolean }
+export type NotificationsMutedByWorktreeGetter = () => Readonly<Record<string, boolean>> | undefined
 
 /** Each workspace's status by the id `workspace.list` gives it. */
-async function readWorkspaceStatuses(call: PluginRuntimeRpc): Promise<WorkspaceStatuses> {
+export async function readPluginWorkspaceStatuses(
+  call: PluginRuntimeRpc,
+  getMutedByWorktree?: NotificationsMutedByWorktreeGetter
+): Promise<PluginWorkspaceStatuses> {
   const { worktrees, totalCount, truncated } = worktreePsAnswer.parse(
     await call('worktree.ps', { limit: PLUGIN_WORKSPACE_LIST_LIMIT })
   )
+  const mutedByWorktree = getMutedByWorktree?.()
   return {
     byId: new Map(
-      worktrees.map((row) => [
-        // Folder workspace rows carry their `folder:` key as worktreeId, as list rows do.
-        pluginWorkspaceId({ id: row.worktreeId, identityKey: row.identity?.key }),
-        {
-          state: row.status,
-          unread: row.unread,
-          terminalCount: row.liveTerminalCount,
-          lastActivityAt: row.lastOutputAt ?? row.lastActivityAt ?? null
-        }
-      ])
+      worktrees.map((row) => {
+        const hasActivity =
+          row.hasHostSidebarActivity ?? (row.liveTerminalCount > 0 || row.status !== 'inactive')
+        return [
+          // Folder workspace rows carry their `folder:` key as worktreeId, as list rows do.
+          pluginWorkspaceId({ id: row.worktreeId, identityKey: row.identity?.key }),
+          {
+            state: row.status,
+            ...(row.status === 'working' && row.workingMode === 'monitoring'
+              ? { workingMode: 'monitoring' as const }
+              : {}),
+            ...(row.workspaceStatus !== undefined ? { workspaceStatus: row.workspaceStatus } : {}),
+            isPinned: row.isPinned === true,
+            isSleeping: !hasActivity && row.isActive !== true,
+            muteNotifications: mutedByWorktree?.[row.worktreeId] === true,
+            unread: row.unread,
+            terminalCount: row.liveTerminalCount,
+            lastActivityAt: row.lastOutputAt ?? row.lastActivityAt ?? null
+          }
+        ]
+      })
     ),
     truncated: truncated === true || (totalCount ?? worktrees.length) > worktrees.length
   }
@@ -106,7 +127,7 @@ export const PLUGIN_WORKSPACE_STATUS_TTL_MS = 1000
 // Why shared: `worktree.ps` refreshes every terminal host, so plugins polling together share one
 // listing in flight, however long it takes, and its answer for a second after it lands. Keyed by
 // the runtime RPC it came from.
-type StatusRead = { read: Promise<WorkspaceStatuses>; settledAt: number | null }
+type StatusRead = { read: Promise<PluginWorkspaceStatuses>; settledAt: number | null }
 /** What the shared status listing is keyed by: the runtime RPC, or the services without one. */
 export type PluginStatusListingOwner =
   | NonNullable<PluginHostServices['runtimeRpc']>
@@ -116,8 +137,9 @@ const statusReads = new WeakMap<PluginStatusListingOwner, StatusRead>()
 
 function workspaceStatuses(
   call: PluginRuntimeRpc,
-  source: PluginStatusListingOwner
-): Promise<WorkspaceStatuses> {
+  source: PluginStatusListingOwner,
+  getMutedByWorktree?: NotificationsMutedByWorktreeGetter
+): Promise<PluginWorkspaceStatuses> {
   const cached = statusReads.get(source)
   if (
     cached &&
@@ -125,7 +147,10 @@ function workspaceStatuses(
   ) {
     return cached.read
   }
-  const entry: StatusRead = { read: readWorkspaceStatuses(call), settledAt: null }
+  const entry: StatusRead = {
+    read: readPluginWorkspaceStatuses(call, getMutedByWorktree),
+    settledAt: null
+  }
   statusReads.set(source, entry)
   entry.read.then(
     () => {
@@ -171,13 +196,14 @@ function fitsBounds(row: {
 export async function listPluginWorkspaces(
   call: PluginRuntimeRpc,
   includeStatus: boolean,
-  statusSource: PluginStatusListingOwner = call
+  statusSource: PluginStatusListingOwner = call,
+  getMutedByWorktree?: NotificationsMutedByWorktreeGetter
 ): Promise<WorkspaceList> {
   const [listed, repos, folderList, statuses] = await Promise.all([
     call('worktree.list', { limit: PLUGIN_WORKSPACE_LIST_LIMIT }),
     call('repo.list', {}),
     call('folderWorkspace.list', undefined),
-    includeStatus ? workspaceStatuses(call, statusSource) : null
+    includeStatus ? workspaceStatuses(call, statusSource, getMutedByWorktree) : null
   ])
   const { worktrees, totalCount, truncated } = worktreeListAnswer.parse(listed)
   const repoRows = repoListAnswer.parse(repos).repos

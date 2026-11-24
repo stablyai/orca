@@ -118,6 +118,8 @@ export type PluginHostServices = {
   statusBar?: PluginStatusBarServices | null
   /** The runtime methods the `orca` CLI calls, for workspace actions; absent without a runtime. */
   runtimeRpc?: PluginRuntimeRpc | null
+  /** Per-worktree notification mute map from persisted UI state. */
+  getNotificationsMutedByWorktree?(): Readonly<Record<string, boolean>> | undefined
   /** Orca's window, for actions only it can take; absent in headless serve. */
   renderer?: PluginHostRendererActions | null
   /** Asks the person before the plugin acts; absent where nobody can be asked (headless serve).

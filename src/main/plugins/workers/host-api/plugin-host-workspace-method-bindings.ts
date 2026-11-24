@@ -46,7 +46,8 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
     listPluginWorkspaces(
       rpc(services),
       params?.includeStatus === true,
-      services.runtimeRpc ?? services
+      services.runtimeRpc ?? services,
+      services.getNotificationsMutedByWorktree
     )
   ),
   'project.list': bind(api['project.list'], async (_params, { services }) =>

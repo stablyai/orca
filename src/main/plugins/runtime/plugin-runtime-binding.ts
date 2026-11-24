@@ -13,6 +13,10 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { pluginRuntimeRpc } from './plugin-runtime-rpc'
 import type { DispatcherOptions } from '../../runtime/rpc/dispatcher'
 import type { PluginRuntimeRpc } from '../workers/host-api/plugin-host-runtime-call'
+import type { NotificationsMutedByWorktreeGetter } from '../workers/host-api/plugin-host-workspace-list'
+import { watchPluginWorkspaceStatus } from './plugin-workspace-status-watcher'
+
+export { watchPluginWorkspaceStatus }
 import {
   pluginTerminalTitle,
   projectPluginWorkspaceContext,
@@ -75,10 +79,12 @@ const WORKSPACE_CHANGE_DEBOUNCE_MS = 150
 export function pluginRuntimeDelegate(
   runtime: RuntimeDelegateSource,
   agentStatuses: () => readonly PluginAgentStatusRow[],
-  callRuntime?: PluginRuntimeRpc
+  callRuntime?: PluginRuntimeRpc,
+  getNotificationsMutedByWorktree?: NotificationsMutedByWorktreeGetter
 ): PluginRuntimeDelegate {
   return {
     ...(callRuntime ? { callRuntime } : {}),
+    ...(getNotificationsMutedByWorktree ? { getNotificationsMutedByWorktree } : {}),
     resolveActiveWorktreeContext: () => runtime.resolveActiveWorktreeContext(),
     listTerminals: (...args) => runtime.listTerminals(...args),
     sendTerminal: (...args) => runtime.sendTerminal(...args),
@@ -93,10 +99,16 @@ export function bindPluginRuntime(
   service: PluginService,
   runtime: OrcaRuntimeService,
   hookServer: { getStatusSnapshot(): readonly PluginAgentStatusRow[] },
-  methods: DispatcherOptions['methods']
+  methods: DispatcherOptions['methods'],
+  getNotificationsMutedByWorktree?: NotificationsMutedByWorktreeGetter
 ): PluginRuntimeDelegate {
   const statuses = () => hookServer.getStatusSnapshot()
-  const delegate = pluginRuntimeDelegate(runtime, statuses, pluginRuntimeRpc(runtime, methods))
+  const delegate = pluginRuntimeDelegate(
+    runtime,
+    statuses,
+    pluginRuntimeRpc(runtime, methods),
+    getNotificationsMutedByWorktree
+  )
   service.setRuntimeDelegate(delegate)
   installPluginHookRunner(service, runtime)
   installPluginOpenedTerminalPruning(service)
@@ -246,5 +258,39 @@ export function watchPluginWorkspaceContext(input: {
     if (timer) {
       clearTimeout(timer)
     }
+  }
+}
+
+/** Wires both `workspace.changed` and `workspace.status.changed` watchers to main's store and runtime. */
+export function bindPluginWorkspaceWatchers(
+  delegate: PluginRuntimeDelegate,
+  events: PluginEvents,
+  store: {
+    onWorkspaceSessionWritten(listener: () => void): () => void
+    onStateWritten(listener: (domains: readonly string[] | undefined) => void): () => void
+  },
+  runtime: { onWorktreeLifecycle(listener: () => void): () => void },
+  agentHookServer: { subscribeEnrichedStatus(listener: () => void): () => void }
+): () => void {
+  const onSessionWritten = (listener: () => void) => store.onWorkspaceSessionWritten(listener)
+  const onStateWritten = (listener: (domains: readonly string[] | undefined) => void) =>
+    store.onStateWritten(listener)
+  const stopContext = watchPluginWorkspaceContext({
+    delegate,
+    events,
+    onSessionWritten,
+    onStateWritten
+  })
+  const stopStatus = watchPluginWorkspaceStatus({
+    delegate,
+    events,
+    onAgentStatus: (listener) => agentHookServer.subscribeEnrichedStatus(() => listener()),
+    onSessionWritten,
+    onStateWritten,
+    onWorktreeLifecycle: (listener) => runtime.onWorktreeLifecycle(() => listener())
+  })
+  return () => {
+    stopContext()
+    stopStatus()
   }
 }

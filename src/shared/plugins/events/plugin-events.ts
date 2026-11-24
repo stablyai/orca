@@ -8,7 +8,10 @@ import {
   pluginWorkspaceContextSchema
 } from '../workers/plugin-host-api'
 import { pluginEditorTypographySchema } from '../workers/plugin-host-api-editor-typography'
-import { pluginWorkspaceIdSchema } from '../workers/plugin-host-api-workspace-methods'
+import {
+  pluginWorkspaceIdSchema,
+  workspaceStatus
+} from '../workers/plugin-host-api-workspace-methods'
 import { pluginAgentSessionIdSchema } from '../workers/plugin-host-api-panel-methods'
 
 /**
@@ -87,11 +90,19 @@ export const workspaceChangedPayloadSchema = z.object({
   context: pluginWorkspaceContextSchema
 })
 
+export const workspaceStatusChangedPayloadSchema = z.object({
+  /** The id `workspace.list` gives this workspace. */
+  workspaceId: pluginWorkspaceIdSchema,
+  /** The workspace's current status, matching `workspace.list({ includeStatus: true })`. */
+  status: workspaceStatus
+})
+
 export const PLUGIN_EVENT_PAYLOAD_SCHEMAS = {
   'workspace.created': workspaceCreatedPayloadSchema,
   'workspace.removed': workspaceRemovedPayloadSchema,
   'agent.status.changed': agentStatusChangedPayloadSchema,
   'workspace.changed': workspaceChangedPayloadSchema,
+  'workspace.status.changed': workspaceStatusChangedPayloadSchema,
   'editor.typography.changed': pluginEditorTypographySchema
 } satisfies Record<PluginEventName, z.ZodType>
 
@@ -105,6 +116,8 @@ export const PLUGIN_EVENT_SUMMARIES: Record<PluginEventName, string> = {
     'An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, `workspaceListId` (host API 1.7) is the id `workspace.list` gives that workspace, `terminalId` names its terminal when Orca lists it, and `sessionId` (host API 1.8) is what `agent.resume` takes.',
   'workspace.changed':
     'The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers, its `workspaceId` included. Each new subscriber first gets the current context.',
+  'workspace.status.changed':
+    "A workspace's status changed (agent state, monitoring mode, board status, pin, sleep, notification mute, unread dot, or terminal count); `workspaceId` matches `workspace.list` and `status` matches `workspace.list({ includeStatus: true })`.",
   'editor.typography.changed':
     "What Orca's file editor uses changed (a setting or the editor zoom); the payload is what `editor.readTypography` now answers. Needs no capability."
 }
@@ -114,3 +127,6 @@ export type PluginEventPayload<E extends PluginEventName> = z.infer<
 >
 
 export type PluginAgentStatusChangedPayload = z.infer<typeof agentStatusChangedPayloadSchema>
+export type PluginWorkspaceStatusChangedPayload = z.infer<
+  typeof workspaceStatusChangedPayloadSchema
+>

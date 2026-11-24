@@ -138,7 +138,7 @@ declare module 'orca/host' {
     }
     /** Delivers a workspace, agent or editor event to this panel as `orca.on(event)`; needs the event's read capability, when it has one. The frame APIs call it for you. Since host API 1.2. */
     "events.subscribe": {
-      params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" | "editor.typography.changed" }
+      params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" | "workspace.status.changed" | "editor.typography.changed" }
       result: { ok: true }
       surfaces: "panel" | "editor"
     }
@@ -163,7 +163,7 @@ declare module 'orca/host' {
     /** Lists every workspace, Git worktrees and folders, on every host Orca reaches; `includeStatus` (host API 1.7) adds each one's agent status. `hostId` is the host a row records (`local`, `ssh:…`, `runtime:…`), or null when it records none, as for a project-group folder on this machine. Since host API 1.3. */
     "workspace.list": {
       params: { includeStatus?: boolean } | undefined
-      result: { workspaces: { id: string; kind: "worktree" | "folder"; name: string; project?: string | null; projectId?: string | null; path: string; branch: string | null; hostId: string | null; status?: { state: "working" | "permission" | "done" | "active" | "inactive"; unread: boolean; terminalCount: number; lastActivityAt: number | null } }[]; truncated: boolean; statusTruncated?: boolean }
+      result: { workspaces: { id: string; kind: "worktree" | "folder"; name: string; project?: string | null; projectId?: string | null; path: string; branch: string | null; hostId: string | null; status?: { state: "working" | "permission" | "done" | "active" | "inactive"; workingMode?: "monitoring"; workspaceStatus?: string; isPinned?: boolean; isSleeping?: boolean; muteNotifications?: boolean; unread: boolean; terminalCount: number; lastActivityAt: number | null } }[]; truncated: boolean; statusTruncated?: boolean }
       surfaces: "worker"
     }
     /** Lists your projects (repositories and folders) on every host; `id` is what `workspace.list` rows name as `projectId`. `hostId` is always named: `local`, `ssh:…` or `runtime:…`. Since host API 1.7. */
@@ -314,6 +314,8 @@ declare module 'orca/host' {
     "agent.status.changed": { workspaceId: string | null; workspaceListId?: string; paneKey: string; terminalId?: string; title?: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number }; sessionId?: string }
     /** The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers, its `workspaceId` included. Each new subscriber first gets the current context. */
     "workspace.changed": { context: { workspaceId?: string; branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }
+    /** A workspace's status changed (agent state, monitoring mode, board status, pin, sleep, notification mute, unread dot, or terminal count); `workspaceId` matches `workspace.list` and `status` matches `workspace.list({ includeStatus: true })`. */
+    "workspace.status.changed": { workspaceId: string; status: { state: "working" | "permission" | "done" | "active" | "inactive"; workingMode?: "monitoring"; workspaceStatus?: string; isPinned?: boolean; isSleeping?: boolean; muteNotifications?: boolean; unread: boolean; terminalCount: number; lastActivityAt: number | null } }
     /** What Orca's file editor uses changed (a setting or the editor zoom); the payload is what `editor.readTypography` now answers. Needs no capability. */
     "editor.typography.changed": { fontFamily: string; cssFontFamily: string; fontSize: number; fontWeight: string; lineHeight: number; fontLigatures: boolean; wordWrap: "on" | "off"; minimap: boolean }
   }
@@ -329,7 +331,7 @@ declare module 'orca/host' {
     "workspace.create.after": { event: { workspaceId: string; kind: "worktree" | "folder"; path: string; branch: string }; result: never }
     /** Orca is about to start an agent CLI in a terminal, from any launcher (new tab, workspace create, CLI, automation, orchestration). Change `command` or add `env` with `next`, or return `{ deny }` to refuse the launch. Restores of saved sessions are not hooked. */
     "agent.launch.before": { event: { agent: string; workspaceId: string | null; workspaceKind: "worktree" | "folder" | null; terminalId?: string; command: string; env: Record<string, string> }; result: { deny: string } }
-    /** Orca is about to submit a prompt to an agent in a terminal: a launch prompt, an orchestration dispatch, an issue or task prompt, or `orca terminal send` to an agent. A prompt a person submits is never hooked, and writes to one terminal stay in order while it decides. Rewrite `prompt` with `next`, or return `{ deny }` to refuse it. */
+    /** Orca is about to submit a prompt to an agent in a terminal: a launch prompt, an orchestration dispatch, an issue or task prompt, or a prompt sent with `orca terminal send`. A prompt a person submits is never hooked, and writes to one terminal stay in order while it decides. Rewrite `prompt` with `next`, or return `{ deny }` to refuse it. */
     "agent.prompt.before": { event: { agent: string | null; terminalId: string; prompt: string; inputKind: "driving" | "orchestration" | "launch" }; result: { deny: string } }
     /** An agent in an Orca terminal is about to run a tool. Claude Code waits for the answer: return `{ deny }` to refuse the call (the agent sees the reason) or change `input` with `next`; the person is still asked as usual. Other agents only report the call, so their results are ignored. Agents on SSH or WSL hosts are not hooked yet. */
     "agent.tool.before": { event: { agent: string; workspaceId: string | null; terminalId?: string; tool: string; input: JsonValue; callId?: string }; result: { deny: string } }
