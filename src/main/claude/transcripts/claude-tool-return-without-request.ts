@@ -104,17 +104,20 @@ export type ClaudeToolReturnCheck = {
   now?: number
 }
 
-/** The tool's return time, only if it returned at least `quietMs` ago with no request since. */
+/** The tool's return time, only if it returned at least `quietMs` ago with no request since.
+ *  Settles within CHECK_DEADLINE_MS of the call, queue wait included: it only labels a notice that
+ *  must not wait on it. */
 export function readClaudeToolReturnWithoutRequest(
   input: ClaudeToolReturnCheck
 ): Promise<number | null> {
   const now = input.now ?? Date.now()
-  const check = checks.then(() => withDeadline(checkToolReturn(input, now)))
+  const giveUpAt = Date.now() + CHECK_DEADLINE_MS
+  const check = withDeadline(checks.then(() => checkToolReturn(input, now, giveUpAt)))
   checks = check.catch(() => {})
   return check
 }
 
-// A read that never returns (a stale network mount) must not hold every later worker's notice.
+// A read that never returns (a stale network mount) must not hold any notice past this.
 const CHECK_DEADLINE_MS = 5_000
 
 function withDeadline(check: Promise<number | null>): Promise<number | null> {
@@ -129,21 +132,42 @@ function withDeadline(check: Promise<number | null>): Promise<number | null> {
 // main one parse at a time (about 1 ms per 512 KB), not all of them back to back (1,000 at once
 // held the event loop 596 ms).
 let checks: Promise<unknown> = Promise.resolve()
+// Reads still out past the deadline: while one is, no check reads, so a hung mount holds at most
+// one filesystem thread.
+let stuckReads = 0
 
-async function checkToolReturn(input: ClaudeToolReturnCheck, now: number): Promise<number | null> {
-  if (!input.stillWanted()) {
+async function checkToolReturn(
+  input: ClaudeToolReturnCheck,
+  now: number,
+  giveUpAt: number
+): Promise<number | null> {
+  if (stuckReads > 0 || Date.now() >= giveUpAt || !input.stillWanted()) {
     return null
   }
-  const text = await readClaudeTranscriptTailText(input.transcriptPath, TAIL_BYTES)
+  const text = await readTail(input.transcriptPath)
   if (text === null) {
     return null
   }
   await new Promise((resolve) => setImmediate(resolve))
-  if (!input.stillWanted()) {
+  if (Date.now() >= giveUpAt || !input.stillWanted()) {
     return null
   }
   const at = claudeToolReturnWithoutRequest(text)
   return at !== null && now - at >= input.quietMs ? at : null
+}
+
+function readTail(transcriptPath: string): Promise<string | null> {
+  let stuck = false
+  const timer = setTimeout(() => {
+    stuck = true
+    stuckReads += 1
+  }, CHECK_DEADLINE_MS)
+  return readClaudeTranscriptTailText(transcriptPath, TAIL_BYTES).finally(() => {
+    clearTimeout(timer)
+    if (stuck) {
+      stuckReads -= 1
+    }
+  })
 }
 
 const CONVERSATION_ROWS = new Set(['user', 'assistant', 'system'])
