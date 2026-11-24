@@ -12,6 +12,8 @@ const repoRoot = path.resolve(scriptDir, '..', '..', '..', '..')
 const cliEntry =
   process.env.ORCA_DEV_CLI_ENTRY_PATH ?? path.join(repoRoot, 'out', 'cli', 'index.js')
 
+handOffToSessionCli()
+
 if (!existsSync(cliEntry)) {
   console.error("orca-dev: CLI not built yet. Run 'pnpm run build:cli' first.")
   process.exit(1)
@@ -66,4 +68,30 @@ function isRunnableFile(candidate) {
   } catch {
     return false
   }
+}
+
+// A login shell can put this launcher ahead of the session's own CLI on PATH; run the one the session
+// names. ORCA_CLI_HANDOFF marks the hop so the named CLI never hands back. Windows shells keep the
+// session's directory first, and a .cmd target would need cmd.exe.
+function handOffToSessionCli() {
+  const sessionCli = process.env.ORCA_CLI_COMMAND
+  const handOff =
+    process.platform !== 'win32' &&
+    sessionCli &&
+    path.isAbsolute(sessionCli) &&
+    process.env.ORCA_CLI_HANDOFF !== sessionCli &&
+    isRunnableFile(sessionCli) &&
+    realpathSync(sessionCli) !== scriptPath
+  delete process.env.ORCA_CLI_HANDOFF
+  if (!handOff) {
+    return
+  }
+  const result = spawnSync(sessionCli, process.argv.slice(2), {
+    stdio: 'inherit',
+    env: { ...process.env, ORCA_CLI_HANDOFF: sessionCli }
+  })
+  if (result.signal) {
+    process.kill(process.pid, result.signal)
+  }
+  process.exit(result.status ?? (result.error ? 1 : 0))
 }

@@ -2,7 +2,9 @@ import {
   compareAppVersions,
   isValidAppVersion
 } from '../../../shared/app-lifecycle/identity/app-version'
+import type { OrcadManagedPastLiveTerminals } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
+import type { OrcadUpdateForce } from '../activation/orcad-update-plan'
 import {
   refuseOrcadHostDowngrade,
   type OrcadHostVersionRefusal
@@ -62,6 +64,22 @@ export function planOrcadUpdateForIntent(
   }
   const { rolledBackFrom: _retried, ...record } = input.record
   return planManagedOrcadAutoUpdate({ ...input, record, failedBefore: false })
+}
+
+/** Full force over an uncounted census ends terminals orcad runs itself, so it needs a confirmation, never a bare force. */
+export function managedOrcadUpdateForce(input: {
+  force?: boolean
+  pastLiveTerminals?: OrcadManagedPastLiveTerminals
+  /** The caller confirmed terminals orcad runs itself end, as CLI `--force --yes` does. */
+  endInProcessTerminals?: boolean
+}): OrcadUpdateForce | undefined {
+  if (input.pastLiveTerminals) {
+    return input.pastLiveTerminals.uncounted ? true : 'live-terminals'
+  }
+  if (!input.force) {
+    return input.force
+  }
+  return input.endInProcessTerminals === true ? true : 'live-terminals'
 }
 
 export function admitOrcadRecordForIntent(
@@ -125,4 +143,15 @@ export function availableManagedOrcadUpdate(input: {
     failedBefore: false
   })
   return plan.action === 'update' ? candidateVersion : null
+}
+
+/** Update anyway was confirmed over one incumbent build; a build activated since then voids it. */
+export function admitConfirmedIncumbent(
+  admit: (record: OrcadActivationRecord, candidateVersion: string) => string | null,
+  incumbentVersion: string | null
+): (record: OrcadActivationRecord, candidateVersion: string) => string | null {
+  return (record, candidateVersion) =>
+    record.active !== incumbentVersion
+      ? "This host's server changed since the update was confirmed. Review it and update again."
+      : admit(record, candidateVersion)
 }

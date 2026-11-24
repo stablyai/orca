@@ -57,7 +57,8 @@ export async function inspectSpawnFileWindowsChildProcesses(
   shellPath: string,
   fresh = true,
   /** Adoption only: may fork the console-list helper to set aside detached daemons. */
-  ignoreDetached = false
+  ignoreDetached = false,
+  jobMembershipOnly = false
 ): Promise<PtyChildProcessVerdict> {
   try {
     const members = readWindowsPtyJobProcessIds(proc)
@@ -73,12 +74,15 @@ export async function inspectSpawnFileWindowsChildProcesses(
         const rows = await (fresh
           ? readWindowsProcessIdentityTableFresh()
           : readWindowsProcessIdentityTable())
-        if ([...members].some((pid) => !rows.some((row) => row.pid === pid && row.name))) {
+        // Panes polling one shared snapshot share its index instead of each rescanning the table.
+        const byPid = getProcessTableIndex(rows).byPid
+        if ([...members].some((pid) => !byPid.get(pid)?.name)) {
           throw new Error('Incomplete shell job identity')
         }
         return rows
       },
-      ignoreDetached ? () => readWindowsConsoleAttachedProcessIds(shellPid) : undefined
+      ignoreDetached ? () => readWindowsConsoleAttachedProcessIds(shellPid) : undefined,
+      jobMembershipOnly
     )
     return alone ? 'no-children' : 'children'
   } catch {

@@ -1,17 +1,26 @@
 import { useRef, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
-import { isNativeChatShellEnvironmentName } from '../../../../../shared/native-chat/native-chat-shell-environment'
+import { isNativeChatShellEnvironmentName } from '../../../../../shared/native-chat/settings/native-chat-shell-environment'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { getChatBehaviorEntriesByKey } from './chat-behavior-search'
+import type { SettingsHostScope } from '../host-scope/settings-host-scope'
+import {
+  getHostSettingUnsupportedNote,
+  getHostSettingUpdateFailedMessage,
+  useHostSetting,
+  useSettingsHostLabel
+} from '../host-scope/use-host-setting'
 
 type NativeChatShellEnvironmentSettingProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  /** The host whose chat agents inherit its login-shell environment. */
+  hostScope: SettingsHostScope
 }
 
 const NAME_INPUT_ID = 'settings-native-chat-shell-environment-name'
@@ -127,30 +136,45 @@ function ShellEnvironmentNamesField({
 
 export function NativeChatShellEnvironmentSetting({
   settings,
-  updateSettings
+  updateSettings,
+  hostScope
 }: NativeChatShellEnvironmentSettingProps): React.JSX.Element {
   const t = useTranslate()
-  const inheritAll = settings.nativeChatInheritShellEnvironment !== false
-  const savedNames = settings.nativeChatShellEnvironmentVariables ?? []
   const entry = getChatBehaviorEntriesByKey().shellEnvironment
+  const hostLabel = useSettingsHostLabel(hostScope.target)
+  const hostArgs = {
+    owner: hostScope.target,
+    localSettings: settings,
+    updateLocalSettings: updateSettings,
+    updateFailedMessage: getHostSettingUpdateFailedMessage(hostLabel, t)
+  }
+  const inherit = useHostSetting({ ...hostArgs, settingKey: 'nativeChatInheritShellEnvironment' })
+  const names = useHostSetting({ ...hostArgs, settingKey: 'nativeChatShellEnvironmentVariables' })
+  const ready =
+    hostScope.available && inherit.setting.state === 'ready' && names.setting.state === 'ready'
+  const unsupported =
+    inherit.setting.state === 'unsupported' || names.setting.state === 'unsupported'
+  const inheritAll = inherit.setting.state !== 'ready' || inherit.setting.value
+  const savedNames = names.setting.state === 'ready' ? names.setting.value : []
 
   return (
     <div className="space-y-3 pb-3">
       <SettingsSwitchRow
         className="pb-0"
         label={entry.title}
-        description={entry.description}
+        description={unsupported ? getHostSettingUnsupportedNote(hostLabel, t) : entry.description}
         checked={inheritAll}
+        disabled={!ready}
         ariaLabel={t(
           'auto.components.settings.ExperimentalPane.nativeChat.shellEnvToggleLabel',
           'Toggle using your shell environment'
         )}
-        onChange={() => updateSettings({ nativeChatInheritShellEnvironment: !inheritAll })}
+        onChange={() => void inherit.update(!inheritAll)}
       />
-      {inheritAll ? null : (
+      {inheritAll || !ready ? null : (
         <ShellEnvironmentNamesField
           savedNames={savedNames}
-          onChange={(names) => updateSettings({ nativeChatShellEnvironmentVariables: names })}
+          onChange={(next) => void names.update(next)}
         />
       )}
     </div>

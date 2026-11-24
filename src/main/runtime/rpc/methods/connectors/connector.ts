@@ -1,27 +1,19 @@
-/** Gate every connector.* conversation handler on this host's experimentalConnectors setting, regardless of caller. */
+/** connector.* conversation handlers act on this host's seam, regardless of caller. */
 
-import { delayUnlessAborted } from '../../../../../shared/concurrency/abort-aware-delay'
-import { cloudConversation } from '../../../../../shared/connectors/connector-cloud-contract'
 import {
-  ConnectorAnswer,
-  ConnectorCancel,
-  ConnectorPendingPrompt,
-  ConnectorReply,
-  ConnectorSend,
-  ConnectorStart,
-  ConnectorWatch
-} from '../../../../../shared/rpc-contract/connectors/connector-params'
-import type {
-  ConversationEvent,
-  ConversationSnapshot
-} from '../../../../external-conversations/external-conversation-events'
-import {
-  runtimeConversationHost,
-  type ExternalConversationSeam
-} from '../../../../external-conversations/external-conversation-seam'
+  cloudConversation,
+  CONNECTOR_REPLIES_OUTBOX_FEATURE
+} from '../../../../../shared/connectors/connector-cloud-contract'
+import { botReplyRefusal } from '../../../../external-conversations/external-conversation-bots'
+import { ConnectorReply } from '../../../../../shared/rpc-contract/connectors/connector-params'
+import type { ExternalConversationSeam } from '../../../../external-conversations/external-conversation-seam'
+import { chatPaneKey } from '../../../../external-conversations/external-conversation-chat'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { defineMethod } from '../../core'
-import { assertAgentLaunchTargetAuthorized } from '../agent-launch/agent-launch-target-authorization'
+import { botTurnFor } from '../../../../bots/bot-turn-for'
+import { sessionCallerOf } from '../../../orchestration/addressing/orchestration-caller-identity'
+import { CONNECTOR_ACT_METHOD } from '../connector-act'
+import { CONNECTOR_REACT_METHOD } from '../connector-react'
 
 export function requireSeam(
   runtime: Pick<OrcaRuntimeService, 'getExternalConversationSeam'>
@@ -34,84 +26,59 @@ export function requireSeam(
 }
 
 export const CONNECTOR_METHODS = [
-  defineMethod({
-    name: 'connector.start',
-    permission: 'workspace',
-    params: ConnectorStart,
-    handler: async ({ source, externalId, deliveryId, ...input }, context) => {
-      const seam = requireSeam(context.runtime)
-      assertAgentLaunchTargetAuthorized(input.target, context)
-      return seam.start(
-        runtimeConversationHost(context.runtime),
-        { source, externalId },
-        deliveryId,
-        input
-      )
-    }
-  }),
-  defineMethod({
-    name: 'connector.send',
-    permission: 'workspace',
-    params: ConnectorSend,
-    handler: async ({ source, externalId, deliveryId, text }, context) =>
-      requireSeam(context.runtime).send(
-        runtimeConversationHost(context.runtime),
-        { source, externalId },
-        deliveryId,
-        text
-      )
-  }),
-  defineMethod({
-    name: 'connector.pendingPrompt',
-    permission: 'workspace',
-    params: ConnectorPendingPrompt,
-    handler: async ({ source, externalId }, context) => ({
-      prompt: requireSeam(context.runtime).pendingPrompt(runtimeConversationHost(context.runtime), {
-        source,
-        externalId
-      })
-    })
-  }),
-  defineMethod({
-    name: 'connector.answer',
-    permission: 'workspace',
-    params: ConnectorAnswer,
-    handler: async ({ source, externalId, promptId, optionId }, context) =>
-      requireSeam(context.runtime).answer(
-        runtimeConversationHost(context.runtime),
-        { source, externalId },
-        promptId,
-        optionId
-      )
-  }),
-  defineMethod({
-    name: 'connector.cancel',
-    permission: 'workspace',
-    params: ConnectorCancel,
-    handler: async ({ source, externalId, deliveryId }, context) =>
-      requireSeam(context.runtime).cancel(
-        runtimeConversationHost(context.runtime),
-        { source, externalId },
-        deliveryId
-      )
-  }),
-  // `orca connector reply`: the calling pane names its cloud conversation and turn; Orca Cloud posts it.
+  // `orca bot reply`: the calling pane names its cloud conversation and turn; Orca Cloud posts it.
   defineMethod({
     name: 'connector.reply',
     permission: 'workspace',
     params: ConnectorReply,
-    handler: async ({ paneKey, replyId, text }, context) => {
-      const target = requireSeam(context.runtime).replyTarget(paneKey)
-      const conversation = target && cloudConversation(target.key)
-      if (!target || !conversation) {
+    handler: async (params, context) => {
+      const { replyId, text, review } = params
+      const target = requireSeam(context.runtime).replyTarget(
+        'paneKey' in params ? params.paneKey : chatPaneKey(params.sessionId)
+      )
+      if (!target) {
+        throw new Error('not_a_cloud_conversation')
+      }
+      // A bot posts only into the conversation its chat is bound to, as that bot.
+      const botRefusal = botReplyRefusal(
+        target,
+        context.runtime.bots.enabled() ? context.runtime.bots.list() : []
+      )
+      if (botRefusal) {
+        throw new Error(botRefusal)
+      }
+      const conversation = cloudConversation(target.key)
+      if (!conversation) {
         throw new Error('not_a_cloud_conversation')
       }
       if (target.turnId === null) {
         throw new Error('no_current_turn')
       }
-      const sent = await context.runtime
-        .getConnectorCloud()
-        ?.reply({ replyId, conversation, turnId: target.turnId, text })
+      const turnFor =
+        'sessionId' in params
+          ? await botTurnFor(
+              context.runtime,
+              params.sessionId,
+              sessionCallerOf(context.orchestrationCaller)?.sessionId
+            )
+          : // A terminal pane's reply names no chat whose turn Orca can read.
+            'someone_else'
+      const cloud = context.runtime.getConnectorCloud()
+      // Under replies.outbox a reply naming its turn's request takes that request's answer key.
+      const keyed =
+        target.answerDeliveryId &&
+        cloud?.cloudFeatures()?.has(CONNECTOR_REPLIES_OUTBOX_FEATURE) === true
+          ? { answerDeliveryId: target.answerDeliveryId }
+          : {}
+      const sent = await cloud?.reply({
+        replyId,
+        conversation,
+        turnId: target.turnId,
+        text,
+        turnFor,
+        ...(review ? { review } : {}),
+        ...keyed
+      })
       if (!sent) {
         throw new Error('connector_not_connected')
       }
@@ -120,33 +87,9 @@ export const CONNECTOR_METHODS = [
           sent.error === 'not_this_hosts_thread' ? 'not_this_hosts_thread' : 'connector_unavailable'
         )
       }
-      return sent.value
+      return { ...sent.value, place: target.place }
     }
   }),
-  // Development only: the CLI has no stream transport, so a dev watch collects one window.
-  defineMethod({
-    name: 'connector.watch',
-    permission: 'workspace',
-    params: ConnectorWatch,
-    handler: async ({ forMs }, context) => {
-      const seam = requireSeam(context.runtime)
-      let snapshot: ConversationSnapshot | null = null
-      const events: ConversationEvent[] = []
-      const release = seam.watch(runtimeConversationHost(context.runtime), (event) => {
-        if (event.kind === 'snapshot') {
-          snapshot = event
-        } else {
-          events.push(event)
-        }
-      })
-      // A closed connection or a disable ends the window early.
-      const ended = AbortSignal.any([seam.signal, ...(context.signal ? [context.signal] : [])])
-      try {
-        await delayUnlessAborted(forMs, ended)
-      } finally {
-        release()
-      }
-      return { snapshot, events }
-    }
-  })
+  CONNECTOR_ACT_METHOD,
+  CONNECTOR_REACT_METHOD
 ]

@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import { showMobileEmulatorHiddenToast } from './mobile-emulator-hidden-toast'
-import { CREATE_ROW_MOBILE_EMULATOR_ID } from '../../tab-bar/tab-bar-create-row-item'
+import { CREATE_ROW_MOBILE_EMULATOR_ID } from '../../tab-bar/create-menu/tab-bar-create-row-item'
 import { withNewTabMenuItemHidden } from '../../../../../shared/new-tab-menu/new-tab-menu-layout'
 
 /** Saves the + menu visibility; reports a failed write instead of pretending it stuck. */

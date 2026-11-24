@@ -261,7 +261,7 @@ function renderHostApi(sources, { frame, worker }) {
       [
         '## Theme variables in frames',
         '',
-        "HTML panels and custom editors get these CSS variables from Orca's active theme, plus a `light` or `dark` class on `<html>`. A theme change updates them in place and emits `theme` (`orca.on('theme', ...)`); the frame is not reloaded. Style from them, not fixed colours.",
+        "HTML panels and custom editors get these CSS variables from Orca's active theme and fonts, plus a `light` or `dark` class on `<html>`. A theme or font change updates them in place and emits `theme` (`orca.on('theme', ...)`); the frame is not reloaded. Style from them, not fixed colours.",
         '',
         ...sources.themeTokens.pluginFrameThemeVariables().map(({ variable, paints }) => {
           // Name the frame's own variables, not the app theme tokens behind them.

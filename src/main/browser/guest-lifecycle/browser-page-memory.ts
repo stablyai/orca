@@ -13,6 +13,7 @@ import {
   type Claim
 } from './browser-page-memory-state'
 import { forgetBrowserPageAttach, guestLoads } from './browser-page-attach'
+import { browserGuestShowsFormPost, canFreeBrowserGuest } from './browser-guest-freeing'
 export {
   prepareBrowserPageAttach,
   admitBrowserPageAttach,
@@ -21,6 +22,7 @@ export {
   startBrowserPageAttach,
   hasPendingBrowserPageAttach
 } from './browser-page-attach'
+import { noteBrowserPageClosed } from './browser-page-partition-presence'
 
 export function bindBrowserPageMemoryInvalidation(
   pageId: string,
@@ -53,20 +55,22 @@ export function clearBrowserPageMemoryInvalidation(pageId: string, guestId: numb
   }
 }
 
+/** `freedByOwner`: a This-device guest, which its executor frees without a page-memory entry. */
 export function readBrowserMemoryPageDiscardProtection(
   pageId: string,
   guest: Electron.WebContents,
-  rendererId: number | undefined
+  rendererId: number | undefined,
+  freedByOwner = false
 ): ReturnType<typeof readBrowserGuestDiscardProtection> {
   const protection = readBrowserGuestDiscardProtection(guest)
   if (protection.protection !== 'discardable') {
     return protection
   }
   const page = pages.get(pageId)
-  if (!page || page.guest !== guest || page.rendererId !== rendererId) {
+  if (!freedByOwner && (!page || page.guest !== guest || page.rendererId !== rendererId)) {
     return { ...protection, protection: 'unknown', reason: 'observer' }
   }
-  if (page.claim.held) {
+  if (page?.claim.held) {
     return { ...protection, protection: 'protected', reason: 'held' }
   }
   try {
@@ -125,17 +129,18 @@ export function claimBrowserMemoryPage(
   }
 }
 
+/** `creatorRendererId` null means the creating renderer is already gone, so nothing is retained. */
 export function retainBrowserMemoryPageForAgent(
   pageId: string,
-  creator?: Electron.WebContents
+  creatorRendererId?: number | null
 ): void {
-  if (!isAgentRpcCaller(getActiveRpcCaller()) || creator?.isDestroyed()) {
+  if (!isAgentRpcCaller(getActiveRpcCaller()) || creatorRendererId === null) {
     return
   }
   const claim: Claim = claims.get(pageId) ?? { held: false, operations: 0 }
   const wasHeld = claim.held
-  if (creator && !pages.has(pageId)) {
-    claim.pendingRendererId = creator.id
+  if (creatorRendererId !== undefined && !pages.has(pageId)) {
+    claim.pendingRendererId = creatorRendererId
   }
   claim.held = true
   claims.set(pageId, claim)
@@ -165,25 +170,30 @@ export function isRetiredBrowserGuest(pageId: string, guestId: number): boolean 
   return pages.get(pageId)?.retired.has(guestId) === true
 }
 
-export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebContents): boolean {
+/** Whether a discard reservation would be granted right now, without taking one. */
+export function canReserveBrowserPageDiscard(pageId: string, guest: Electron.WebContents): boolean {
   const page = pages.get(pageId)
-  if (
+  return !(
     !page ||
     page.guest !== guest ||
     page.claim.held ||
     page.claim.operations ||
     page.restoring ||
     page.retired.size ||
-    guest.isDestroyed() ||
-    guest.isLoading() ||
-    guest.isDevToolsOpened() ||
-    guest.debugger.isAttached() ||
-    readBrowserGuestDiscardProtection(guest).protection !== 'discardable'
-  ) {
+    !canFreeBrowserGuest(guest)
+  )
+}
+
+export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebContents): boolean {
+  const page = pages.get(pageId)
+  if (!page || !canReserveBrowserPageDiscard(pageId, guest)) {
     return false
   }
   let history: History
   try {
+    if (browserGuestShowsFormPost(guest)) {
+      return false
+    }
     // pageState restores scroll and form contents; it can hold typed secrets, so it stays in memory only.
     const entries = guest.navigationHistory
       .getAllEntries()
@@ -258,6 +268,7 @@ export function closeBrowserMemoryPage(pageId: string): void {
   forgetBrowserPageAttach(page)
   page.history = null
   pages.delete(pageId)
+  noteBrowserPageClosed(page.partition)
   for (const retired of page.retired.values()) {
     if (!retired.guest.isDestroyed()) {
       retired.guest.close({ waitForBeforeUnload: false })
@@ -292,7 +303,7 @@ export async function waitForBrowserPageReady(
       'browser_navigation_failed',
       'The browser page could not be restored. Try reloading it.'
     )
-  } else if (guest.isLoading()) {
+  } else if (guest.isLoadingMainFrame()) {
     await waitForBrowserGuestLoad(guest)
   }
 }

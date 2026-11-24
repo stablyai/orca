@@ -5,7 +5,7 @@ import type { KeyedJsonRow } from '../../../sqlite/row-cache/keyed-json-row-cach
 import {
   isStructuredAttentionOrigin,
   type StructuredAttentionOrigin
-} from '../../../../shared/agent-session/agent-session-attention'
+} from '../../../../shared/agent-session/view/agent-session-attention'
 
 export type DeliveredNotificationRecord = DeliveredNotificationIdentity & {
   structuredOrigin?: StructuredAttentionOrigin

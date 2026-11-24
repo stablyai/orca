@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { translateWorkspaceBoardStatusLabel } from '@/components/sidebar/workspace-board-status-label'
+import { translateWorkspaceBoardStatusLabel } from '@/components/sidebar/workspace-status/presentation/workspace-board-status-label'
 import type {
   DashboardCard,
   DashboardFilterOption
@@ -23,7 +23,8 @@ function countBy(
 
 export function workspaceStatusOptions(
   cards: DashboardCard[],
-  configured: DashboardFilterOption[] | undefined
+  configured: DashboardFilterOption[] | undefined,
+  t: Translate = translate
 ): FilterOption[] {
   const counts = countBy(cards, (card) => card.workspaceStatusId ?? '')
   if (configured) {
@@ -39,7 +40,7 @@ export function workspaceStatusOptions(
     }
     options.set(card.workspaceStatusId, {
       id: card.workspaceStatusId,
-      label: dashboardWorkspaceStatusLabel(card),
+      label: dashboardWorkspaceStatusLabel(card, t),
       color: card.workspaceStatusColor,
       count: counts.get(card.workspaceStatusId) ?? 0
     })
@@ -48,10 +49,11 @@ export function workspaceStatusOptions(
 }
 
 export function dashboardWorkspaceStatusLabel(
-  card: Pick<DashboardCard, 'workspaceStatusId' | 'workspaceStatusLabel'>
+  card: Pick<DashboardCard, 'workspaceStatusId' | 'workspaceStatusLabel'>,
+  t: Translate = translate
 ): string {
   const id = card.workspaceStatusId ?? ''
-  return translateWorkspaceBoardStatusLabel({ id, label: card.workspaceStatusLabel ?? id })
+  return translateWorkspaceBoardStatusLabel({ id, label: card.workspaceStatusLabel ?? id }, t)
 }
 
 export function projectOptions(

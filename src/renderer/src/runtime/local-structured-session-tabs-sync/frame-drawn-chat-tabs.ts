@@ -2,7 +2,7 @@
 
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
-import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 
 export type DrawnChatLabel = { tabId: string; label: string }
 

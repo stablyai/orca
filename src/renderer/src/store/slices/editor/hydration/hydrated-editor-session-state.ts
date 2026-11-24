@@ -2,6 +2,10 @@ import { detectLanguage } from '../../../../../../shared/editor-language/editor-
 import type { WorkspaceVisibleTabType } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import type { AppState } from '../../../types'
+import {
+  strandedDraftFiles,
+  type StrandedEditorDrafts
+} from '@/lib/workspace/persistence/stranded-editor-drafts'
 import type { OpenFile } from '../types/open-file'
 import { reconcileEditorBufferMembership } from '../buffers/editor-buffer-record'
 import { buildEditorBufferViewIndex } from '../buffers/editor-buffer-views'
@@ -27,13 +31,16 @@ export type HydratedEditorSessionState = Pick<
   | 'activeFileIdByWorktree'
   | 'activeTabType'
   | 'activeTabTypeByWorktree'
+  | 'strandedEditorDrafts'
 >
 
 /** Restore editor state with per-workspace file rekeys; use current activeWorktreeId because workspace hydration may already have invalidated it. */
 export function buildHydratedEditorSessionState(
   session: WorkspaceSessionState,
   validWorktreeIds: ReadonlySet<string>,
-  activeWorktreeId: string | null
+  activeWorktreeId: string | null,
+  /** Owners whose editors moved to another host: not stranded here. */
+  movedOwnerKeys: ReadonlySet<string> = new Set()
 ): {
   state: HydratedEditorSessionState
   editorFileIdMigrationsByWorktree: Record<string, Map<string, string>>
@@ -45,6 +52,7 @@ export function buildHydratedEditorSessionState(
 
   const openFiles: OpenFile[] = []
   const editorDrafts: Record<string, string> = {}
+  const strandedEditorDrafts: StrandedEditorDrafts = {}
   const usedOpenFileIds = new Set<string>()
   const legacyFileIndex = new LegacyHydratedEditorFileIndex()
   const editorFileIdMigrationsByWorktree: Record<string, Map<string, string>> = {}
@@ -59,6 +67,11 @@ export function buildHydratedEditorSessionState(
   }
   for (const [worktreeId, files] of Object.entries(openFilesByWorktree)) {
     if (!validWorktreeIds.has(worktreeId)) {
+      // Why: unsaved text is never dropped automatically; keep it for recovery and later saves.
+      const drafts = movedOwnerKeys.has(worktreeId) ? [] : strandedDraftFiles(files)
+      if (drafts.length > 0) {
+        strandedEditorDrafts[worktreeId] = drafts
+      }
       continue
     }
     for (const pf of files) {
@@ -163,7 +176,8 @@ export function buildHydratedEditorSessionState(
       activeFileId: nextActiveFileId,
       activeFileIdByWorktree: filteredActiveFileIdByWorktree,
       activeTabType: nextActiveTabType,
-      activeTabTypeByWorktree: filteredActiveTabTypeByWorktree
+      activeTabTypeByWorktree: filteredActiveTabTypeByWorktree,
+      strandedEditorDrafts
     },
     editorFileIdMigrationsByWorktree
   }

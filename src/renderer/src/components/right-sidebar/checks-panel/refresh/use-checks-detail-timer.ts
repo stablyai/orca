@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import {
   REVIEW_REFRESH_COOLDOWN_MS,
   subscribePRAutoRefreshCadence,
@@ -31,13 +31,27 @@ export function useChecksDetailTimer({
     prNumber,
     isPanelVisible,
     setChecks,
+    setChecksLoading,
     setComments,
+    setCommentsLoading,
     pollIntervalRef,
     prevChecksRef
   } = model
+  const isGitLabReview = activeGitLabReview !== null
+  // A new identity always schedules this timer's wake read, which settles what it resets. GitHub
+  // comments have their own read (review data), so only a GitLab read owns comments here.
+  const [readIdentity, setReadIdentity] = useState(requestIdentity)
+  if (readIdentity !== requestIdentity) {
+    setReadIdentity(requestIdentity)
+    setChecks(null)
+    setChecksLoading(false)
+    if (isGitLabReview) {
+      setComments(undefined)
+      setCommentsLoading(false)
+    }
+  }
   const refreshRef = useRef<(() => void) | null>(null)
   const forceNextFetchRef = useRef(false)
-  const isGitLabReview = activeGitLabReview !== null
   const lastIdentityRef = useRef<string | null>(null)
   const lastAttemptAtRef = useRef(-Infinity)
   const nextAttemptAtRef = useRef(-Infinity)
@@ -54,8 +68,6 @@ export function useChecksDetailTimer({
       policyRef.current.reset()
       pollIntervalRef.current = 60_000
       prevChecksRef.current = ''
-      setChecks([])
-      setComments([])
     }
     if (!isPanelVisible || (!isGitLabReview && !prNumber)) {
       wakeNextReadRef.current = true
@@ -81,8 +93,13 @@ export function useChecksDetailTimer({
       )
     }
     // Under a stretched or stopped cadence the window coming back still reads checks older than
-    // Default's delay, never sooner: the cadence slows the timer, not the user's return.
+    // Default's delay, never sooner: the cadence slows the timer, not the user's return. While
+    // GitHub checks are running a return pulls the poll forward (past the cooldown): GitHub shows
+    // a finish at once.
     const returnReadDue = (now: number): boolean => {
+      if (!isGitLabReview && policyRef.current.checksRunning()) {
+        return true
+      }
       const defaultDelay = ownerCadence() === 'default' ? null : policyDelay('default')
       return defaultDelay !== null && now - lastAttemptAtRef.current >= defaultDelay
     }
@@ -202,9 +219,7 @@ export function useChecksDetailTimer({
     isGitLabReview,
     prNumber,
     pollIntervalRef,
-    prevChecksRef,
-    setChecks,
-    setComments
+    prevChecksRef
   ])
 
   const aggregatePending = (activeGitLabReview?.status ?? pr?.checksStatus) === 'pending'

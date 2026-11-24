@@ -6,7 +6,6 @@ import {
   ptyStatusEvidenceAt
 } from './runtime-mobile-agent-status-evidence'
 import {
-  AGENT_STATUS_HYDRATE_MAX_AGE_MS,
   AGENT_STATUS_STALE_AFTER_MS,
   agentStatusAuthorityObservedAt
 } from '../../../../shared/agent-status/contracts/agent-status-freshness'
@@ -45,10 +44,15 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
   ) {
     return status
   }
+  const titleConfirmsWait =
+    pty.lastAgentStatus === 'permission' &&
+    (status.state === 'waiting' || status.state === 'blocked')
   const richStatusCanOwnTitleInterval =
     codexHookReportsRunningTurn(status, agentStatusAuthorityObservedAt(status), pty) ||
     pty.lastAgentStatusRichInvalidatedAtEpochMs === null ||
-    agentStatusAuthorityObservedAt(status) > pty.lastAgentStatusRichInvalidatedAtEpochMs
+    agentStatusAuthorityObservedAt(status) > pty.lastAgentStatusRichInvalidatedAtEpochMs ||
+    (titleConfirmsWait &&
+      agentStatusAuthorityObservedAt(status) > (pty.permissionWaitHookedAfterEpochMs ?? Infinity))
   const titleEvidenceAt = pty.lastOscTitleEpochMs
   // Idle/shutdown titles describe presence, not a second end of an already completed turn.
   if (
@@ -78,6 +82,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     stateHistory: [],
     ...(status.agentType ? { agentType: status.agentType } : {}),
     ...(status.terminalHandle ? { terminalHandle: status.terminalHandle } : {}),
+    ...(status.orchestration ? { orchestration: status.orchestration } : {}),
     ...(status.worktreeId ? { worktreeId: status.worktreeId } : {}),
     ...(status.tabId ? { tabId: status.tabId } : {}),
     ...(status.terminalTitle ? { terminalTitle: status.terminalTitle } : {}),
@@ -86,9 +91,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     ...(state === 'done' ? completedTurnFields(status) : {})
   })
   const titleConfirmsState =
-    (pty.lastAgentStatus === 'working' && status.state === 'working') ||
-    (pty.lastAgentStatus === 'permission' &&
-      (status.state === 'blocked' || status.state === 'waiting'))
+    (pty.lastAgentStatus === 'working' && status.state === 'working') || titleConfirmsWait
   if (!titleConfirmsState) {
     // A repaint of the idle interval preceding this hook is not a new turn boundary.
     if (workingHookOwnsIdleTitleInterval(status, agentStatusAuthorityObservedAt(status), pty)) {
@@ -165,8 +168,6 @@ export function selectRuntimeHookAgentRowForPane(
   let confirmedReceivedAt = -Infinity
   const now = Date.now()
   const freshAfter = now - AGENT_STATUS_STALE_AFTER_MS
-  // Unverifiable lasts as long as hydration keeps the row; going quiet is not exit evidence.
-  const restoredAfter = now - AGENT_STATUS_HYDRATE_MAX_AGE_MS
   for (const entry of rows) {
     if (entry.providerSession && (!session || entry.receivedAt > session.receivedAt)) {
       session = entry
@@ -196,7 +197,7 @@ export function selectRuntimeHookAgentRowForPane(
       entry.providerSessionOnly !== true &&
       entry.restoredUnconfirmed === true &&
       entry.state !== 'done' &&
-      (entry.evidenceObservedAt ?? entry.receivedAt) >= restoredAfter &&
+      // Unverifiable lasts as long as hydration keeps the row; going quiet is not exit evidence.
       (!restored || entry.receivedAt > restored.receivedAt)
     ) {
       restored = entry

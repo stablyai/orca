@@ -2,10 +2,12 @@ import type {
   MobileWebShellReportedFailure,
   MobileWebShellGates,
   MobileWebShellSession,
+  MobileWebShellSessionEffect,
   MobileWebShellSessionState,
   MobileWebShellStep
 } from '../session/mobile-web-shell-session-contract'
 import { step } from '../session/mobile-web-shell-session-step'
+import { CHECKING } from '../host-gates/mobile-web-shell-gates'
 
 const REMOUNT = { kind: 'remount' } as const
 
@@ -45,9 +47,20 @@ export function reduceShellFailed(
         : step(session, { remountedOnce: true }, [remount])
     }
     case 'document-load-failed':
-      return session.pageRemountedOnce
-        ? step(session, { state: failedState(session, reason) })
-        : step(session, { pageRemountedOnce: true }, [REMOUNT])
+    case 'page-fault': {
+      if (!session.pageRemountedOnce) {
+        return step(session, { pageRemountedOnce: true }, [REMOUNT])
+      }
+      // Only a painted page proves its bytes render, and only once: an earlier or repeat fault may be a damaged chunk.
+      const buildId = session.state.buildId
+      if (reason === 'page-fault' && session.pagePainted && session.pageFaultBuildId !== buildId) {
+        return step(session, {
+          state: failedState(session, reason),
+          pageFaultBuildId: buildId
+        })
+      }
+      return step(session, { state: failedState(session, 'document-load-failed') })
+    }
     case 'generation-unreadable':
       return session.retriedOnce || session.gates === null
         ? step(session, { state: failedState(session, reason) })
@@ -55,8 +68,46 @@ export function reduceShellFailed(
   }
 }
 
+type StartFlow = (
+  session: MobileWebShellSession,
+  gates: MobileWebShellGates,
+  patch: Partial<MobileWebShellSession>,
+  before: readonly MobileWebShellSessionEffect[]
+) => MobileWebShellStep
+
+export function reduceRetryPressed(
+  session: MobileWebShellSession,
+  startFlow: StartFlow
+): MobileWebShellStep {
+  // Only explicit retry resets recovery latches; reconnect must not grant another remount.
+  const reset = {
+    retriedOnce: false,
+    remountedOnce: false,
+    reclaimedOnce: false,
+    pageRemountedOnce: false,
+    manifestFirst: session.state.kind === 'failed' && session.state.reason === 'page-fault'
+  }
+  const fresh: MobileWebShellSessionEffect[] = retryDeletesCache(session.state)
+    ? [{ kind: 'delete-cache' }]
+    : []
+  return session.gates === null
+    ? step(
+        session,
+        {
+          ...reset,
+          updateNotice: null,
+          requestedBuildId: null,
+          requestedCompat: null,
+          state: CHECKING,
+          flow: session.flow + 1
+        },
+        fresh
+      )
+    : startFlow(session, session.gates, { ...reset, cached: null }, fresh)
+}
+
 // Try again after these must not reopen the files that just failed: a damaged tree would fail again on every tap.
-export function retryDeletesCache(state: MobileWebShellSessionState): boolean {
+function retryDeletesCache(state: MobileWebShellSessionState): boolean {
   return (
     state.kind === 'failed' &&
     (state.reason === 'document-load-failed' || state.reason === 'generation-unreadable')

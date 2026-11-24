@@ -1,5 +1,5 @@
 import type { RefObject, UIEventHandler } from 'react'
-import type { ReaderGesture } from './native-chat-autoscroll'
+import type { ReaderGesture, ScrollGeometry } from './native-chat-autoscroll'
 import type { NativeChatAlignEdge } from '../virtualization/use-native-chat-viewport-align'
 
 export type NativeChatTranscriptScrollOptions = {
@@ -14,7 +14,7 @@ export type NativeChatTranscriptScrollOptions = {
   isAlignPending: () => boolean
   scrollToEnd: () => void
   restoreScrollOffset: (offset: number) => void
-  consumeProgrammaticScroll: (event: Event) => boolean
+  consumeProgrammaticScroll: (event: Event, previousGeometry: ScrollGeometry | null) => boolean
   reconcileReaderScroll: (isTakingOver: boolean) => void
   onLeaveEnd?: () => void
   onReturnToEnd?: (reason?: 'send') => void

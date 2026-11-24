@@ -12,6 +12,14 @@ export function toRuntimeWorktreeSelector(worktreeId: string): string {
   return `${RUNTIME_WORKTREE_ID_SELECTOR_PREFIX}${trimmed}`
 }
 
+/** The raw worktree id an `id:` selector addresses; null for any other selector. */
+export function worktreeIdFromRuntimeSelector(selector: string): string | null {
+  const trimmed = selector.trim()
+  return trimmed.startsWith(RUNTIME_WORKTREE_ID_SELECTOR_PREFIX)
+    ? trimmed.slice(RUNTIME_WORKTREE_ID_SELECTOR_PREFIX.length) || null
+    : null
+}
+
 /**
  * Runtime selector for a terminal's worktree id. Ephemeral setup terminals have no
  * worktree on the runtime, so resolve them to the floating-terminal scope (home dir)

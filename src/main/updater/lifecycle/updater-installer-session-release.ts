@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron'
-import { killAllPty } from '../../ipc/pty/kill-all'
+import { killAllPty } from '../../ipc/pty/provider/kill-all'
 
 /** Past the install commit: end local PTYs and let windows close without their close guards. */
 export function releaseSessionsForInstaller(): number {

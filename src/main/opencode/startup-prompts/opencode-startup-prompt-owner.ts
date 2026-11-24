@@ -1,4 +1,4 @@
-import type { PtySpawnOutcome } from '../../ipc/pty/spawn-outcome'
+import type { PtySpawnOutcome } from '../../ipc/pty/spawn/spawn-outcome'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { IPtyProvider } from '../../providers/pty/provider-contract'

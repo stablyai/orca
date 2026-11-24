@@ -1,5 +1,6 @@
 import { useNativeChatPickerContext } from './use-native-chat-picker-context'
 import {
+  applyNativeChatMention as applyMention,
   writeNativeChatComposerText,
   type NativeChatComposerInput
 } from '../editor/native-chat-composer-input'
@@ -10,16 +11,14 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
   type Dispatch,
   type RefObject,
   type SetStateAction
 } from 'react'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/native-chat-agent-profiles'
+import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 
 import {
-  applyMentionSuggestion,
   deriveComposerAutocomplete,
   editReplacesTriggerToken,
   isSkillPickerTriggered,
@@ -36,11 +35,9 @@ import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/
 import { nativeChatPickerCommands } from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
 import { useNativeChatSkills } from './use-native-chat-skills'
 import { useNativeChatPreferredSuggestion } from './use-native-chat-preferred-suggestion'
-import {
-  emitNativeChatPickerItemAccepted,
-  emitNativeChatPickerOpened,
-  emitNativeChatSendClassified
-} from '@/components/native-chat/telemetry/native-chat-telemetry'
+import { useNativeChatPickerDismissal } from './use-native-chat-picker-dismissal'
+import { nativeChatFileMentionToken } from './native-chat-file-mention-token'
+import { emitNativeChatPickerItemAccepted } from '@/components/native-chat/telemetry/native-chat-telemetry'
 
 export type NativeChatPickerState = {
   autocomplete: ComposerAutocomplete
@@ -51,7 +48,9 @@ export type NativeChatPickerState = {
   /** The draft still leads with the skill the user picked from the menu. */
   isPickedSkill: (draft: string) => boolean
   completeItem: (item: NativeChatPickerItem) => void
-  completeMention: (path: string) => void
+  /** `token` replaces the file-reference form, e.g. a room's `@Name`; with `from`, it replaces
+   *  `from` to the caret wherever the menu is (a bot's chats filter on text with spaces). */
+  completeMention: (path: string, token?: Parameters<typeof applyMention>[4], from?: number) => void
   dismiss: (triggerKey: string) => void
   handleDraftOrCaretChange: (value: string, caret: number) => void
   /** Arrow-key highlight moves; a catalog refresh keeps the row they land on until the next edit. */
@@ -74,6 +73,8 @@ export function useNativeChatPickerState(args: {
   /** Skill names the running session reports; undefined keeps the host disk scan. */
   commandAvailable?: (name: string) => boolean
   sessionSkills?: readonly NativeChatSessionSkill[]
+  /** A room's `@` query may hold spaces while this says a pickable member's name still matches. */
+  mentionNameMatches?: (query: string) => boolean
   /** Refresh host catalogs on every / or $ menu opening, even in resting chats. */
   onPickerOpened?: () => void
   onPickerDemand?: (open: boolean) => void
@@ -96,6 +97,7 @@ export function useNativeChatPickerState(args: {
     isComposing,
     sessionSkills,
     commandAvailable,
+    mentionNameMatches,
     onPickerOpened,
     onPickerDemand,
     skillsChecking = false,
@@ -122,41 +124,43 @@ export function useNativeChatPickerState(args: {
   )
   const listboxId = `native-chat-picker-${useId().replaceAll(':', '')}`
   const dismissalContext = `${draftScopeKey}:${agent}`
-  const [dismissed, setDismissed] = useState<{ context: string; triggerKey: string } | null>(null)
+  const {
+    dismissed,
+    dismiss,
+    clear: clearDismissed,
+    handleMentionChange
+  } = useNativeChatPickerDismissal(dismissalContext, textareaRef)
   const skillOriginRef = useRef<string | null>(null)
   useNativeChatPickerContext(dismissalContext, () => {
     skillOriginRef.current = null
-    setDismissed(null)
   })
   const lastOpenKeyRef = useRef<string | null>(null)
+  const derive = useCallback(
+    (value: string, at: number, dismissedTriggerKey: string | null) =>
+      deriveComposerAutocomplete(
+        value,
+        at,
+        pickerCommands,
+        discovery.skills,
+        profile,
+        discovery,
+        dismissedTriggerKey,
+        sessionSkills,
+        commandAvailable,
+        mentionNameMatches
+      ),
+    [discovery, pickerCommands, profile, sessionSkills, commandAvailable, mentionNameMatches]
+  )
   const derivedAutocomplete = useMemo<ComposerAutocomplete>(
     () =>
       recalledFromHistory || disabled
         ? { mode: 'none' }
-        : deriveComposerAutocomplete(
+        : derive(
             draft,
             caret,
-            pickerCommands,
-            discovery.skills,
-            profile,
-            discovery,
-            dismissed?.context === dismissalContext ? dismissed.triggerKey : null,
-            sessionSkills,
-            commandAvailable
+            dismissed?.context === dismissalContext ? dismissed.triggerKey : null
           ),
-    [
-      caret,
-      dismissalContext,
-      dismissed,
-      discovery,
-      disabled,
-      draft,
-      pickerCommands,
-      profile,
-      recalledFromHistory,
-      sessionSkills,
-      commandAvailable
-    ]
+    [caret, derive, dismissalContext, dismissed, disabled, draft, recalledFromHistory]
   )
   const autocomplete = useMemo(
     () =>
@@ -180,7 +184,6 @@ export function useNativeChatPickerState(args: {
     const openKey = `${dismissalContext}:${autocomplete.triggerKey}`
     if (lastOpenKeyRef.current !== openKey) {
       lastOpenKeyRef.current = openKey
-      emitNativeChatPickerOpened({ agent, prefix: autocomplete.prefix })
       onPickerOpened?.()
     }
   }, [agent, autocomplete, dismissalContext, onPickerOpened])
@@ -208,9 +211,9 @@ export function useNativeChatPickerState(args: {
       }
       setCaret(result.caret)
       setActiveSuggestion(0)
-      setDismissed(null)
+      clearDismissed()
     },
-    [isComposing, setActiveSuggestion, setCaret, setDraft, textareaRef]
+    [clearDismissed, isComposing, setActiveSuggestion, setCaret, setDraft, textareaRef]
   )
 
   const completeItem = useCallback(
@@ -232,12 +235,21 @@ export function useNativeChatPickerState(args: {
   )
 
   const completeMention = useCallback(
-    (path: string) => {
-      if (!disabledRef.current && autocomplete.mode === 'mention') {
-        commitCompletion(applyMentionSuggestion(...liveDraft(), path))
+    (path: string, token?: Parameters<typeof applyMention>[4], from?: number) => {
+      if (!disabledRef.current && (from !== undefined || autocomplete.mode === 'mention')) {
+        commitCompletion(
+          applyMention(
+            textareaRef.current,
+            ...liveDraft(),
+            path,
+            token ?? nativeChatFileMentionToken(terminalTabId, path),
+            from,
+            mentionNameMatches
+          )
+        )
       }
     },
-    [autocomplete, commitCompletion, liveDraft]
+    [autocomplete, commitCompletion, liveDraft, mentionNameMatches, terminalTabId, textareaRef]
   )
 
   const handleDraftOrCaretChange = useCallback(
@@ -249,50 +261,32 @@ export function useNativeChatPickerState(args: {
       if (!dismissed || dismissed.context !== dismissalContext) {
         return
       }
-      // Whole-token replacement starts a new trigger even at the same position (select-all/paste).
-      if (editReplacesTriggerToken(draft, value, dismissed.triggerKey)) {
-        setDismissed(null)
+      if (handleMentionChange(value, dismissed.triggerKey)) {
         return
       }
-      const next = deriveComposerAutocomplete(
-        value,
-        nextCaret,
-        pickerCommands,
-        discovery.skills,
-        profile,
-        discovery,
-        null,
-        sessionSkills,
-        commandAvailable
-      )
+      // Whole-token replacement starts a new trigger even at the same position (select-all/paste).
+      if (editReplacesTriggerToken(draft, value, dismissed.triggerKey)) {
+        clearDismissed()
+        return
+      }
+      const next = derive(value, nextCaret, null)
       if (next.mode === 'none' || next.triggerKey !== dismissed.triggerKey) {
-        setDismissed(null)
+        clearDismissed()
       }
     },
-    [
-      dismissalContext,
-      dismissed,
-      discovery,
-      draft,
-      pickerCommands,
-      profile,
-      sessionSkills,
-      commandAvailable
-    ]
+    [clearDismissed, derive, dismissalContext, dismissed, draft, handleMentionChange]
   )
 
   const classifySend = useCallback(
     (value: string) => {
-      const outcome = classifyNativeChatSend(
+      return classifyNativeChatSend(
         value,
         agentCommands,
         skillOriginRef.current,
         profile?.skillPrefix ?? null
       )
-      emitNativeChatSendClassified({ agent, outcome })
-      return outcome
     },
-    [agent, agentCommands, profile]
+    [agentCommands, profile]
   )
   const clearSkillOrigin = useCallback(() => {
     skillOriginRef.current = null
@@ -301,11 +295,6 @@ export function useNativeChatPickerState(args: {
     (value: string) => skillOriginRef.current === (value.split(/\s/, 1)[0] ?? ''),
     []
   )
-  const dismiss = useCallback(
-    (triggerKey: string) => setDismissed({ context: dismissalContext, triggerKey }),
-    [dismissalContext]
-  )
-
   return {
     autocomplete,
     listboxId,

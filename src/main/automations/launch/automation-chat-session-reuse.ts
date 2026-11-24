@@ -12,7 +12,7 @@ import {
   structuredAgentSessionSendBody
 } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { automationRunAcceptedTarget } from './automation-agent-run-result'
-import { publishChatTabInBackground } from '../../runtime/session-tabs/background-chat-tab-publication'
+import { publishChatTabInBackground } from '../../runtime/session-tabs/chat/background-chat-tab-publication'
 
 export async function reuseAutomationChat(
   runtime: OrcaRuntimeService,

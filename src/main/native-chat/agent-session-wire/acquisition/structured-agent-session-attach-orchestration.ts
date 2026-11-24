@@ -257,6 +257,8 @@ async function runAttachUnderAbort(
           journal: attached.journal,
           fence,
           publish: (activity) => context.subscribers.publish(sessionId, attached.journal, activity),
+          publishPromptSuggestion: (suggestion) =>
+            context.subscribers.promptSuggestions.publish(sessionId, suggestion),
           publishLiveText: (items) => {
             if (context.sessions.get(sessionId)?.journal === attached.journal) {
               context.subscribers.publishLiveText(sessionId, attached.journal, fence, items)

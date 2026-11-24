@@ -4,6 +4,7 @@ import {
   TEXT_CONTROL_PASTE_MAX_BYTES
 } from './text-control-paste-model'
 import { measureTextControlPasteByteLength } from './text-control-paste'
+import { INPUT_PROXY_SELECTOR } from '../focus/editable-target'
 
 export type TextControlPastePayloadOwnership =
   | {
@@ -30,8 +31,8 @@ export function findOwnedTextControlPasteTarget(
   if (!(activeElement instanceof Element)) {
     return null
   }
-  // xterm’s hidden helper textarea belongs to terminal input, never native app-menu/large-paste text-control ownership.
-  if (activeElement.closest('.xterm-helper-textarea')) {
+  // Input proxies belong to terminal or emulator input, never native app-menu/large-paste text-control ownership.
+  if (activeElement.closest(INPUT_PROXY_SELECTOR)) {
     return null
   }
   const textControl = activeElement.closest('input, textarea')
@@ -51,7 +52,7 @@ export function findOwnedPasteEventTextControlTarget(
   if (!(eventTarget instanceof Element)) {
     return null
   }
-  if (eventTarget.closest('.xterm-helper-textarea')) {
+  if (eventTarget.closest(INPUT_PROXY_SELECTOR)) {
     return null
   }
   const textControl = eventTarget.closest('input, textarea')

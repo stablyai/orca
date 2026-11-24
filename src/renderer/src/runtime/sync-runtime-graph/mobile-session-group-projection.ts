@@ -12,7 +12,7 @@ import {
   getActiveTabNavOrder,
   getGroupVisibleTabOrder,
   type VisibleTabRef
-} from '../../components/tab-bar/group-tab-order'
+} from '../../lib/workspace/tabs/order/group-tab-order'
 import type { MobileSessionWorktreeInputs } from './types'
 import { isEditorSurfaceTab } from './mobile-session-surfaces'
 

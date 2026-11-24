@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
-import { setTerminalPrewarmWorktrees } from '@/components/terminal/terminal-worktree-prewarm'
+import { setTerminalPrewarmWorktrees } from '@/components/terminal/worktree-prewarm/terminal-worktree-prewarm'
 import {
   getWorktreeExecutionHostId,
   parseExecutionHostId,

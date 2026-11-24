@@ -4,7 +4,7 @@ import type {
   GitLabAssignableUser,
   GitLabWorkItemDetails
 } from '../../../../shared/gitlab/gitlab-types'
-import type { JobTraceState } from '../gitlab-item-dialog-parts'
+import type { JobTraceState } from './gitlab-item-dialog-parts'
 
 export function useGitLabItemDialogState(itemId: string | null, detailsOwner: string | null) {
   const [details, setDetails] = useState<GitLabWorkItemDetails | null>(null)

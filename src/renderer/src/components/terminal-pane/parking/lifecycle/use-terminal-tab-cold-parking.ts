@@ -6,7 +6,7 @@ import { useAppStore } from '../../../../store/index'
 import {
   findActivityTerminalPortal,
   type ActivityTerminalPortalTarget
-} from '../../../activity/activity-terminal-portal'
+} from '../../../activity/terminal-portal/activity-terminal-portal'
 import { getTerminalTabColdParkRecheckDelayMs } from '../retention/terminal-cold-park-recheck-deadlines'
 import {
   clearTerminalTabColdParkRecheckTimers,
@@ -17,7 +17,7 @@ import {
   TERMINAL_TAB_COLD_PARK_DELAY_MS,
   selectColdParkedTerminalTabs
 } from '../retention/terminal-hidden-view-parking'
-import { selectPairedRuntimeParkingEnvironmentIdsFromState } from '../retention/paired-runtime-parking-capabilities'
+import { usePairedRuntimeParkingEnvironmentIds } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import type { ParkVerdictFlipRecord } from '../verdict/terminal-park-verdict-flip-telemetry'
 import {
   haveSameTerminalTabIds,
@@ -96,9 +96,7 @@ export function useTerminalTabColdParking(args: {
     getTerminalPaneSplitMountLeaseTabIds,
     getTerminalPaneSplitMountLeaseTabIds
   )
-  const pairedRuntimeParkingEnvironmentIds = useAppStore(
-    selectPairedRuntimeParkingEnvironmentIdsFromState
-  )
+  const pairedRuntimeParkingEnvironmentIds = usePairedRuntimeParkingEnvironmentIds()
   // Subscribe to worktree-scoped presence; the app-global map rerenders this worktree for unrelated writes.
   const sleepingRecordOwnedTabIds = useAppStore(
     useShallow((state) => selectSleepingRecordParkExemptTabIds(state, worktreeId))

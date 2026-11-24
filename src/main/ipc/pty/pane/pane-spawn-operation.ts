@@ -2,7 +2,7 @@ import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
 import { ptyBindingIsRefused } from '../../../persistence/loading-store/terminal-bindings/pty-binding-refusals'
-import type { PtySpawnOutcome } from '../spawn-outcome'
+import type { PtySpawnOutcome } from '../spawn/spawn-outcome'
 import type { PaneSpawnReservation } from './spawn-reservation'
 
 export class PaneOwnerContentionError extends Error {

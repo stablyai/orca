@@ -15,6 +15,7 @@ export const browserGuestDiscardApi = {
   preparePageAttach: (args) => ipcRenderer.invoke('browser:preparePageAttach', args),
   reserveGuestDiscard: (args) => ipcRenderer.sendSync('browser:reserveGuestDiscard', args) === true,
   acknowledgeGuestRemoval: (args) => ipcRenderer.invoke('browser:acknowledgeGuestRemoval', args),
+  wakeClientPage: (args) => ipcRenderer.invoke('browser:wakeClientPage', args),
   getGuestDiscardProtection: (args) =>
     ipcRenderer.invoke('browser:getGuestDiscardProtection', args),
   onGuestDiscardProtectionChanged: (callback): (() => void) => {
@@ -24,5 +25,13 @@ export const browserGuestDiscardApi = {
     ): void => callback(data)
     ipcRenderer.on('browser:guest-discard-protection-changed', listener)
     return () => ipcRenderer.removeListener('browser:guest-discard-protection-changed', listener)
+  },
+  onLoadStall: (callback): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: Parameters<typeof callback>[0]
+    ): void => callback(data)
+    ipcRenderer.on('browser:load-stall', listener)
+    return () => ipcRenderer.removeListener('browser:load-stall', listener)
   }
 } satisfies Partial<PreloadApi['browser']>

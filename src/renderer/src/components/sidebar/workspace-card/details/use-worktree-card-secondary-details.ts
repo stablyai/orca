@@ -7,13 +7,13 @@ import { getWorkspaceAttachments } from '../../../../../../shared/workspace-atta
 import { toast } from 'sonner'
 
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
-import { translate } from '@/i18n/i18n'
-import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
+import { openLinkedUrlInWorkspaceBrowser } from './worktree-card-linked-url-open'
 import './WorktreeCardMeta'
 import { hasWorktreeCardDetails } from '../metadata/WorktreeCardMetaBadges'
 import { usePromptCacheCountdownStartedAt } from '../activity/CacheTimer'
 import { useWorktreeAgentRows } from '../activity/useWorktreeAgentRows'
 import type { WorktreeCardSecondaryDetailsInputs } from './worktree-card-secondary-details-inputs'
+import { useWorktreeBot } from '@/components/bots/use-worktree-bot'
 
 export function useWorktreeCardSecondaryDetails({
   worktree,
@@ -26,6 +26,7 @@ export function useWorktreeCardSecondaryDetails({
   showPR,
   showAutomation,
   showCli,
+  showBot = true,
   showComment,
   showPorts,
   issueDisplay,
@@ -60,6 +61,7 @@ export function useWorktreeCardSecondaryDetails({
   const metaReview = showPR ? hoverReview : null
   const metaAutomationProvenance = showAutomation ? worktree.automationProvenance : null
   const metaCliProvenance = showCli ? worktree.cliProvenance : null
+  const metaBot = useWorktreeBot(worktree, showBot && settings?.botsEnabled !== false)
   const metaComment = showComment ? hoverComment : null
   const showInlineAgentList = cardDetails.inlineAgents
   const inlineAgentRows = useWorktreeAgentRows(
@@ -117,33 +119,11 @@ export function useWorktreeCardSecondaryDetails({
     [hoverReview, openTaskPage, repo]
   )
   const openLinkedUrlInBrowser = useCallback(
-    (url: string): void => {
-      void openWorkspaceBrowserTab({
-        workspaceId: worktree.id,
-        url,
-        intent: { kind: 'url' }
-      }).catch((error: unknown) => {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.')
-        )
-      })
-    },
+    (url: string): void => void openLinkedUrlInWorkspaceBrowser(worktree.id, url),
     [worktree.id]
   )
-  const handleOpenIssueInBrowser = useCallback(
-    (url: string): void => {
-      openLinkedUrlInBrowser(url)
-    },
-    [openLinkedUrlInBrowser]
-  )
-  const handleOpenReviewInBrowser = useCallback(
-    (url: string): void => {
-      openLinkedUrlInBrowser(url)
-    },
-    [openLinkedUrlInBrowser]
-  )
+  const handleOpenIssueInBrowser = openLinkedUrlInBrowser
+  const handleOpenReviewInBrowser = openLinkedUrlInBrowser
   const hoverReviewProvider = hoverReview?.provider
   const canUnlinkReview =
     hoverReviewProvider === 'github' ||
@@ -235,7 +215,8 @@ export function useWorktreeCardSecondaryDetails({
       review: reviewInStatusLane ? null : metaReview,
       comment: metaComment,
       automationProvenance: metaAutomationProvenance,
-      cliProvenance: metaCliProvenance
+      cliProvenance: metaCliProvenance,
+      bot: metaBot
     })
   const hasPorts = showPorts && workspacePorts.length > 0
   const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id, showAggregateCacheTimer)
@@ -256,6 +237,7 @@ export function useWorktreeCardSecondaryDetails({
     metaReview,
     metaAutomationProvenance,
     metaCliProvenance,
+    metaBot,
     metaComment,
     showInlineAgentList,
     inlineAgentRows,

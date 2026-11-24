@@ -8,7 +8,11 @@ import {
   useHostStructuredAgentsVersion
 } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { recomputeOn } from '@/lib/recompute-on'
-import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import {
+  agentLaunchRouteStoreFor,
+  type ProspectiveWorkspace
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import {
   readChatProgram,
   resolveChatProgramContext
@@ -21,6 +25,8 @@ import type { AgentSurface } from './use-onboarding-flow-types'
 
 type AgentSurfaceArgs = {
   settings: GlobalSettings | null
+  /** A past run already saved a surface; otherwise Chat is the recommended default. */
+  surfaceChosen: boolean
   selectedAgent: TuiAgent | null
   agentInteractedRef: { readonly current: boolean }
   setSelectedAgent: Dispatch<SetStateAction<TuiAgent | null>>
@@ -54,10 +60,11 @@ export function useChatAgentDetection() {
     chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined)
   )
   // Custom commands and downloaded runtimes can run Chat without a CLI on PATH.
-  const chatReady = useAppStore((state) => {
+  const chatReady = useAppStoreWithHostStatuses((appState, statuses) => {
+    const state = agentLaunchRouteStoreFor(appState, statuses)
     const context = resolveChatProgramContext(state, CHAT_HOST)
     return chatAgents
-      .filter((agent) => readChatProgram(state, agent, context, nativeDetected) === 'available')
+      .filter((agent) => readChatProgram(statuses, agent, context, nativeDetected) === 'available')
       .join(',')
   })
   // Chat never runs in WSL, so only native installs count; null while detection is pending.
@@ -72,14 +79,15 @@ export function useChatAgentDetection() {
 
 export function useOnboardingAgentSurface({
   settings,
+  surfaceChosen,
   selectedAgent,
   agentInteractedRef,
   setSelectedAgent
 }: AgentSurfaceArgs) {
-  // Unchosen, the page reflects the saved Chat UI setting, including once settings hydrate.
+  // Unchosen, a first run recommends Chat; a replay reflects the saved Chat UI setting.
   const [choice, setAgentSurface] = useState<AgentSurface | null>(null)
   const agentSurface: AgentSurface =
-    choice ?? (settings?.agentDefaultSurface === 'chat' ? 'chat' : 'terminal')
+    choice ?? (!surfaceChosen || settings?.agentDefaultSurface === 'chat' ? 'chat' : 'terminal')
 
   const { chatAgents, chatDetected, refreshDetectedAgents } = useChatAgentDetection()
   const chatSettings = {
@@ -94,16 +102,24 @@ export function useOnboardingAgentSurface({
     (agent) => chatDetected?.includes(agent) && nativeChatPreferenceFor(chatSettings, agent)
   )
 
+  // A replay's saved agent stays put until the person picks Chat again.
+  const pickChatAgent = choice === 'chat' || (choice === null && !surfaceChosen)
   useEffect(() => {
     if (
-      choice === 'chat' &&
+      pickChatAgent &&
       !agentInteractedRef.current &&
       !selectedAgentOpensAsChat &&
       installedChatAgent
     ) {
       setSelectedAgent(installedChatAgent)
     }
-  }, [choice, agentInteractedRef, installedChatAgent, selectedAgentOpensAsChat, setSelectedAgent])
+  }, [
+    pickChatAgent,
+    agentInteractedRef,
+    installedChatAgent,
+    selectedAgentOpensAsChat,
+    setSelectedAgent
+  ])
 
   return { agentSurface, setAgentSurface, chatAgents, chatDetected, refreshDetectedAgents }
 }

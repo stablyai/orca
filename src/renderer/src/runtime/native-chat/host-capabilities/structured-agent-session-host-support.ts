@@ -1,14 +1,14 @@
-import '../../../../../shared/agent-session/agent-session-attention-capabilities'
+import '../../../../../shared/agent-session/view/agent-session-attention-capabilities'
 import {
   AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY
-} from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
+} from '../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import {
   STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RENAME_RUNTIME_CAPABILITY
-} from '../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+} from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import {
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
@@ -16,7 +16,7 @@ import {
 import {
   AGENT_SESSION_CREATE_OPTIONS_MODE_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
-} from '../../../../../shared/agent-session/agent-session-create-capabilities'
+} from '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import '../../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import {
@@ -27,7 +27,7 @@ import '../../rpc/subscriptions/runtime-rpc-subscribe'
 import '../requests/structured-agent-session-request-timeouts'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
-import type { StructuredAgentSessionHostCapabilityState } from '../../../../../shared/agent-session/structured-agent-session-host-capability'
+import type { StructuredAgentSessionHostCapabilityState } from '../../../../../shared/agent-session/capabilities/structured-agent-session-host-capability'
 
 /** Read a capability through the runtime's existing status cache. A failed/unknown
  *  probe is treated as legacy so a newer call is never made before the host has

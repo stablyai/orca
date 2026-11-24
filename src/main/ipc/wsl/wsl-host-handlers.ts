@@ -1,8 +1,12 @@
 import { canCreateWslHostService } from './wsl-host-service-availability'
+import {
+  isWslHostIdleStopped,
+  withWslHostIdleStop
+} from '../../wsl/host-lifecycle/wsl-host-idle-stop'
 import { WSL_HOST_HANDLER_CHANNELS } from './wsl-host-handler-channels'
 export { WSL_HOST_HANDLER_CHANNELS } from './wsl-host-handler-channels'
 import { ipcMain } from 'electron'
-import { abortWhenRendererGone } from '../renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
 import { noteWslHostUserAction } from '../../wsl/host-lifecycle/wsl-host-user-actions'
 import type {
   WslHostAddResult,
@@ -25,8 +29,8 @@ import type { WslHostAutomationWake } from '../../wsl/host-lifecycle/wsl-host-au
 import { createWslHostAutomationWake } from './wsl-host-automation-wake-wiring'
 import { wslHostsAcceptNewWork } from '../../wsl/host-lifecycle/wsl-host-gate'
 import {
-  publishWslHostStatus,
-  pushWslHostCapabilityOnNewWorkChange
+  pushWslHostCapabilityOnNewWorkChange,
+  wslHostWindowPublishers
 } from './wsl-host-window-broadcast'
 import { wslHostAddRefusal } from '../../wsl/host-lifecycle/wsl-host-add-admission'
 import {
@@ -38,67 +42,17 @@ import { WslHostPhoneGate } from '../../wsl/host-lifecycle/wsl-host-phone-reach'
 import { readWslHostRecordsQuietly } from '../../wsl/host-lifecycle/wsl-host-connection-record'
 import { retireRemovedRuntimeEnvironment } from '../runtime-environments/catalog/runtime-environment-removal-cleanup'
 import { getRuntimeEnvironmentStatus } from '../runtime-environments/status/runtime-environment-status-probe'
-import { callRuntimeEnvironment } from '../runtime-environments/requests/runtime-environment-transport-routing'
-import { isRemoteRuntimeConnectionReady } from '../runtime-environments/connections/runtime-environment-request-connections'
-import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { reconcileWslHostBridgePorts } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { requestOrcadTerminalCensus } from '../../managed-server/lifecycle/orcad-terminal-census-client'
-import type { WslHostRuntimeAccess } from '../../wsl/host-lifecycle/wsl-host-server-stop'
+import { changesWslHostAccounts } from '../../wsl/orcad/wsl-orcad-host-account-push'
 import {
-  changesWslHostAccounts,
-  pushWslOrcadHostAccountEnv
-} from '../../wsl/orcad/wsl-orcad-host-account-push'
-import { wslOrcadHostSupports } from '../../wsl/orcad/wsl-orcad-host-environments'
+  addWslHostThenSeedPermission,
+  pushHostAccounts,
+  pushHostChatAutoName,
+  seedHostPermission
+} from './wsl-host-desktop-settings-push'
 import { wslHostConnectOptions } from '../../wsl/host-lifecycle/wsl-host-connect-request'
 import { wireWslNodeRuntimePrefetch } from '../../wsl/execution/wsl-node-runtime-prefetch'
-
-function wslHostRuntimeAccess(getUserDataPath: () => string): WslHostRuntimeAccess {
-  return {
-    isReady: async (environmentId) =>
-      isRemoteRuntimeConnectionReady(
-        environmentId,
-        getPreferredPairedRuntimeConnection(
-          await resolveEnvironment(getUserDataPath(), environmentId)
-        )
-      ),
-    call: async (environmentId, method, params) => {
-      const response = await callRuntimeEnvironment(
-        getUserDataPath(),
-        environmentId,
-        method,
-        params
-      )
-      if (!response.ok) {
-        throw new Error(response.error.message)
-      }
-      return response.result
-    },
-    census: async (environmentId) =>
-      requestOrcadTerminalCensus(
-        getPreferredPairedRuntimeConnection(
-          await resolveEnvironment(getUserDataPath(), environmentId)
-        ),
-        0
-      )
-  }
-}
-
-function pushHostAccounts(
-  getUserDataPath: () => string,
-  environmentId: string,
-  distro: string
-): void {
-  const call = (method: string, params: unknown) =>
-    callRuntimeEnvironment(getUserDataPath(), environmentId, method, params)
-  void pushWslOrcadHostAccountEnv({
-    environmentId,
-    distro,
-    call,
-    hostSupports: (capability) =>
-      wslOrcadHostSupports(environmentId, capability, () => call('status.get', undefined))
-  })
-}
+import { wslHostRuntimeAccess } from './wsl-host-runtime-access'
 
 type WslHostHandlerArgs = {
   hostInitialization?: Promise<void>
@@ -128,13 +82,14 @@ async function createService(args: WslHostHandlerArgs): Promise<WslHostService |
   const created = new WslHostService({
     userDataPath: args.getUserDataPath,
     ...runGate,
-    publish: publishWslHostStatus,
+    ...wslHostWindowPublishers,
     pairingChanged: (environmentId) => void args.invalidateTransport(environmentId),
     ready: (environmentId, distro) => {
       void getRuntimeEnvironmentStatus(args.getUserDataPath(), environmentId, undefined, {
         reconnect: true
       }).catch(() => {})
       pushHostAccounts(args.getUserDataPath, environmentId, distro)
+      pushHostChatAutoName(args.getUserDataPath, environmentId, args.store)
       void automationWake?.learn(environmentId)
     },
     removed: (environmentId) => {
@@ -147,9 +102,9 @@ async function createService(args: WslHostHandlerArgs): Promise<WslHostService |
       )
     }
   })
-  const onChange: typeof created.handleConnectionChange = (...args) =>
+  const onChange: typeof created.handleConnectionChange = (distro, connection, status) =>
     created
-      .handleConnectionChange(...args)
+      .handleConnectionChange(distro, connection, withWslHostIdleStop(distro, connection, status))
       .catch((error: unknown) =>
         console.warn('[wsl-hosts] Could not publish connection change', error)
       )
@@ -171,6 +126,14 @@ async function createService(args: WslHostHandlerArgs): Promise<WslHostService |
       statuses: () => created.getStatuses(),
       records: async () => await readWslHostRecordsQuietly(args.getUserDataPath()),
       connector,
+      // A phone may wake a host Orca itself stopped idle, never one the user stopped.
+      wakeIdleStopped: async (environmentId) => {
+        if (!isWslHostIdleStopped(environmentId)) {
+          return false
+        }
+        await created.ensureForRuntimeCall(environmentId, () => true, true)
+        return true
+      },
       ...runGate
     })
   )
@@ -196,6 +159,13 @@ async function startService(args: WslHostHandlerArgs): Promise<WslHostService | 
       for (const status of created.getStatuses()) {
         if (status.state === 'ready') {
           pushHostAccounts(args.getUserDataPath, status.environmentId, status.distro)
+        }
+      }
+    }
+    if ('nativeChatAutoName' in updates) {
+      for (const status of created.getStatuses()) {
+        if (status.state === 'ready') {
+          pushHostChatAutoName(args.getUserDataPath, status.environmentId, args.store)
         }
       }
     }
@@ -265,7 +235,11 @@ export async function registerWslHostHandlers(args: WslHostHandlerArgs): Promise
       if (!wslHostsAcceptNewWork()) {
         return wslHostAddRefusal('disabled', 'newWorkPaused')
       }
-      const result = await wsl.add(request)
+      const result = await addWslHostThenSeedPermission(
+        () => wsl.add(request),
+        (environmentId) =>
+          seedHostPermission(args.getUserDataPath(), args.store.getSettings(), environmentId)
+      )
       if (result.ok) {
         noteWslHostUserAction({ kind: 'added', distro: request.distro })
       }
@@ -284,7 +258,12 @@ export async function registerWslHostHandlers(args: WslHostHandlerArgs): Promise
     'wslHosts:connect',
     (
       _event,
-      request: { environmentId: string; intent?: unknown; withdrawPendingRemoval?: unknown }
+      request: {
+        environmentId: string
+        intent?: unknown
+        pastUncountedTerminals?: unknown
+        withdrawPendingRemoval?: unknown
+      }
     ) => wsl.connect(request.environmentId, wslHostConnectOptions(request))
   )
   const capability = (): WslHostCapability => ({

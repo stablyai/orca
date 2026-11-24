@@ -8,7 +8,7 @@ import {
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { AppState } from '../../../types'
-import { replaceTabBuckets } from '../../../keyed-record-transitions'
+import { replaceTabBuckets } from '../../../record-transitions/keyed-record-transitions'
 import {
   adoptTerminalTabOwnerMetadataOnlyBuckets,
   getTerminalTabOwners

@@ -7,8 +7,8 @@ import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item
 import {
   isAgentSessionContextClear,
   isNativeChatContextClear
-} from '../agent-session-context-clear'
-import { isNativeChatProviderRetryRow } from '../../native-chat/native-chat-provider-retry-runs'
+} from '../conversation-context/agent-session-context-clear'
+import { isNativeChatProviderRetryRow } from '../../native-chat/transcript/notices/native-chat-provider-retry-runs'
 import {
   compareNativeChatTranscriptMessages,
   sameNativeChatRowPlacement
@@ -19,6 +19,7 @@ import {
   sameQuestionTurnBoundary
 } from '../../native-chat/transcript/messages/structured-agent-question-projection'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
+import { deliveredAgentMailRow } from './structured-agent-session-echo-rows'
 import {
   projectStructuredAgentSessionMessageRows,
   type StructuredAgentSessionItemProjector,
@@ -109,16 +110,21 @@ function reuseMessages(
       continue
     }
     const at = previous.rowAt.get(old.id)
+    const drawn = at === undefined ? undefined : previous.output[at]
+    // A delivered agent message is drawn with its queued id; it is the same row.
+    const queuedId = drawn !== old ? drawn?.queuedMessageId : undefined
     if (
       at === undefined ||
-      previous.output[at] !== old ||
+      (drawn !== old && (!queuedId || deliveredAgentMailRow(old, queuedId) !== drawn)) ||
       !independentRow(old) ||
       !independentRow(row) ||
       !sameNativeChatRowPlacement(old, row)
     ) {
       return null
     }
-    ;(output ??= previous.output.slice())[at] = row
+    ;(output ??= previous.output.slice())[at] = queuedId
+      ? deliveredAgentMailRow(row, queuedId)
+      : row
   }
   const appended = items.slice(previous.items.length)
   if (appended.length === 0) {

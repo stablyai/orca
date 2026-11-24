@@ -23,7 +23,7 @@ export async function checkAcpLaunchVersion(
   const result = await checkAgentCliVersion(
     {
       program: launch.command,
-      prefixArgs: launch.prefixArgs,
+      prefixArgs: [...launch.prefixArgs, ...(spec.versionArgs ?? [])],
       cwd: launch.cwd,
       env: launch.env,
       operation: launch.operation

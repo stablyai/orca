@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom'
 import { focusTerminalTabSurface } from '../input/focus/focus-terminal-tab-surface'
-import CodexRestartChip from '../../CodexRestartChip'
+import CodexRestartChip from '../account-restart/CodexRestartChip'
 import { CodexSharedServerBanner } from '../provider-notices/codex-server-isolation/CodexSharedServerBanner'
 import { ClaudeOldTerminalBanner } from '../provider-notices/claude-account-shell/ClaudeOldTerminalBanner'
 import { ClaudeDiffPanelNoticeBanner } from '../provider-notices/claude-diff-panel/ClaudeDiffPanelNoticeBanner'

@@ -2,13 +2,6 @@ import React, { useCallback, useMemo, useState } from 'react'
 import { Popover, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import {
-  getProjectHostSetupSelectionKey,
-  type NeedsSetupProjectHostOption,
-  type ProjectHostSetupOption,
-  type ReadyProjectHostSetupOption
-} from '@/lib/workspace/creation/project-host-setup-options'
-import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { isWithinComboboxRoot, useTypeAheadCombobox } from '../type-ahead/use-type-ahead-combobox'
 import { COMBOBOX_POPOVER_SURFACE } from '../type-ahead/type-ahead-combobox-styles'
 import {
@@ -16,7 +9,8 @@ import {
   getEphemeralVmLabel,
   getRecipeDetail,
   RUN_TARGET_ADD_HOST_KEY,
-  type EphemeralVmRecipeOption
+  type EphemeralVmRecipeOption,
+  type RunTargetHostOption
 } from './run-target-options'
 import { AddHostSubmenuRow } from './RunTargetSubmenus'
 import RunTargetRowList from './RunTargetRowList'
@@ -24,39 +18,42 @@ import RunTargetField from './RunTargetField'
 import { HostListOverflowNote } from '@/components/host-picker/HostListOverflowNote'
 
 type RunTargetComboboxProps = {
-  hostOptions: readonly ProjectHostSetupOption[]
-  hostValue: string | null
-  hostExecutionHostId?: ExecutionHostId | null
-  onHostChange?: (setupId: string) => void
-  recipes: EphemeralVmRecipeOption[]
-  recipeValue: string | null
+  hostOptions: readonly RunTargetHostOption[]
+  selectedHostId: string | null
+  recipes?: readonly EphemeralVmRecipeOption[]
+  recipeValue?: string | null
   onRecipeChange?: (recipeId: string | null) => void
   onAddRemoteServer?: () => void
   onAddSshHost?: () => void
-  onConnectHost?: (option: NeedsSetupProjectHostOption) => Promise<void> | void
-  onSetLocation?: (option: NeedsSetupProjectHostOption) => void
+  onOpenChange?: (open: boolean) => void
+  fieldName?: string
+  errorId?: string
+  emptyMessage?: string
+  /** The chosen host's name loses its middle rather than its end when it doesn't fit. */
+  truncateMiddle?: boolean
 }
 
 const ROOT_ATTRIBUTE = 'data-run-target-combobox-root'
+const NO_RECIPES: readonly EphemeralVmRecipeOption[] = []
 
 /** Match project-picker navigation; Connect must not select its host, and recipe/Add host rows open nested lists. */
 export default function RunTargetCombobox({
   hostOptions,
-  hostValue,
-  hostExecutionHostId,
-  onHostChange,
-  recipes,
-  recipeValue,
+  selectedHostId,
+  recipes = NO_RECIPES,
+  recipeValue = null,
   onRecipeChange,
   onAddRemoteServer,
   onAddSshHost,
-  onConnectHost,
-  onSetLocation
+  onOpenChange,
+  fieldName,
+  errorId,
+  emptyMessage,
+  truncateMiddle
 }: RunTargetComboboxProps): React.JSX.Element {
   const t = useTranslate()
-  const [submenu, setSubmenu] = useState<'recipes' | 'add-host' | null>(null)
-  // Track in-flight connects per host so one stalling connect never blocks the others.
-  const [connectingHostIds, setConnectingHostIds] = useState<ReadonlySet<string>>(() => new Set())
+  const [submenu, setSubmenu] = useState<'recipes' | 'add-host' | 'add-host-keyboard' | null>(null)
+  const addHostOpen = submenu === 'add-host' || submenu === 'add-host-keyboard'
 
   const hasAddHost = Boolean(onAddSshHost || onAddRemoteServer)
   const deriveRowKeys = useCallback(
@@ -72,18 +69,7 @@ export default function RunTargetCombobox({
     () => buildRunTargetRows({ hostOptions, recipes, query, hasAddHost }),
     [hasAddHost, hostOptions, query, recipes]
   )
-  const readyHostOptions = useMemo(
-    () => hostOptions.filter((option) => option.kind === 'ready'),
-    [hostOptions]
-  )
-  const isSelected = (candidate: { id: string; hostId: string }): boolean =>
-    candidate.id === hostValue && (!hostExecutionHostId || candidate.hostId === hostExecutionHostId)
-  const selectedHost =
-    readyHostOptions.find(isSelected) ??
-    // Why: a selection on a merged machine's other id still belongs to that machine's one row.
-    readyHostOptions.find((option) => option.aliasSetups?.some(isSelected)) ??
-    // An unlisted target (e.g. a per-workspace VM) shows "Choose target", never another host's name (#38669).
-    null
+  const selectedHost = hostOptions.find((option) => option.id === selectedHostId) ?? null
   const selectedRecipe = recipes.find((recipe) => recipe.id === recipeValue) ?? null
   const armedRow = rows.find((row) => row.key === armedKey) ?? rows[0] ?? null
   const committed = query.length === 0 && (selectedRecipe !== null || selectedHost !== null)
@@ -92,15 +78,32 @@ export default function RunTargetCombobox({
   const close = useCallback((): void => {
     combobox.close()
     setSubmenu(null)
-  }, [combobox])
+    if (open) {
+      onOpenChange?.(false)
+    }
+  }, [combobox, onOpenChange, open])
+
+  const openPicker = useCallback((): void => {
+    if (!open) {
+      setOpen(true)
+      onOpenChange?.(true)
+    }
+  }, [onOpenChange, open, setOpen])
 
   const selectHost = useCallback(
-    (option: ReadyProjectHostSetupOption): void => {
-      onHostChange?.(getProjectHostSetupSelectionKey(option))
-      onRecipeChange?.(null)
-      close()
+    (option: RunTargetHostOption): void => {
+      if (!option.onSelect) {
+        return
+      }
+      if (!option.keepOpen) {
+        close()
+      }
+      option.onSelect()
+      if (option.available) {
+        onRecipeChange?.(null)
+      }
     },
-    [close, onHostChange, onRecipeChange]
+    [close, onRecipeChange]
   )
 
   const selectRecipe = useCallback(
@@ -111,64 +114,26 @@ export default function RunTargetCombobox({
     [close, onRecipeChange]
   )
 
-  const connectHost = useCallback(
-    async (option: NeedsSetupProjectHostOption): Promise<void> => {
-      if (!option.connectAction || !onConnectHost || connectingHostIds.has(option.hostId)) {
-        return
-      }
-      setConnectingHostIds((current) => new Set(current).add(option.hostId))
-      try {
-        await onConnectHost(option)
-      } finally {
-        setConnectingHostIds((current) => {
-          if (!current.has(option.hostId)) {
-            return current
-          }
-          const next = new Set(current)
-          next.delete(option.hostId)
-          return next
-        })
-      }
-    },
-    [connectingHostIds, onConnectHost]
-  )
-
-  // Row clicks, inline actions and Enter must all close the picker before opening the setup dialog.
-  const setLocation = useCallback(
-    (option: NeedsSetupProjectHostOption): void => {
-      if (!option.canSetLocation || !onSetLocation) {
-        return
-      }
-      close()
-      onSetLocation(option)
-    },
-    [close, onSetLocation]
-  )
-
   const activate = useCallback(
     (key: string | null): void => {
       const row = rows.find((candidate) => candidate.key === key)
       if (!row) {
         return
       }
-      if (row.kind === 'ready') {
+      if (row.kind === 'host') {
         selectHost(row.option)
         return
       }
-      if (row.kind === 'needs-setup') {
-        setLocation(row.option)
-        return
-      }
-      setSubmenu(row.kind === 'recipes' ? 'recipes' : 'add-host')
+      setSubmenu(row.kind === 'recipes' ? 'recipes' : 'add-host-keyboard')
     },
-    [rows, selectHost, setLocation]
+    [rows, selectHost]
   )
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>): void => {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
-        setOpen(true)
+        openPicker()
         moveArm(event.key === 'ArrowDown' ? 1 : -1)
         setSubmenu(null)
         return
@@ -188,18 +153,18 @@ export default function RunTargetCombobox({
         close()
       }
     },
-    [activate, armedRow, close, moveArm, open, query, setOpen, submenu]
+    [activate, armedRow, close, moveArm, open, openPicker, query, submenu]
   )
 
   const handleOpenChange = useCallback(
     (next: boolean): void => {
       if (next) {
-        setOpen(true)
+        openPicker()
         return
       }
       close()
     },
-    [close, setOpen]
+    [close, openPicker]
   )
 
   const fieldLabel = selectedRecipe
@@ -207,20 +172,22 @@ export default function RunTargetCombobox({
     : (selectedHost?.label ?? '')
   const fieldDetail = selectedRecipe
     ? getRecipeDetail(selectedRecipe, t)
-    : (selectedHost?.path ?? '')
+    : (selectedHost?.detail ?? '')
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <RunTargetField
+        fieldName={fieldName}
+        errorId={errorId}
         query={query}
         onQueryChange={(value) => {
           setQuery(value)
-          setOpen(true)
+          openPicker()
           setSubmenu(null)
         }}
         open={open}
-        onOpenRequest={() => setOpen(true)}
-        onToggle={() => setOpen(!open)}
+        onOpenRequest={openPicker}
+        onToggle={() => handleOpenChange(!open)}
         committed={committed}
         isRecipe={selectedRecipe !== null}
         hostId={selectedHost?.hostId ?? null}
@@ -230,12 +197,13 @@ export default function RunTargetCombobox({
         hasArmedRow={armedRow !== null}
         inputRef={inputRef}
         onKeyDown={handleKeyDown}
+        truncateMiddle={truncateMiddle}
       />
       <PopoverContent
         align="start"
         sideOffset={4}
         className={cn(
-          'flex w-[var(--radix-popover-trigger-width)] min-w-[18rem] flex-col p-0',
+          'flex w-(--radix-popover-trigger-width) min-w-[min(18rem,var(--radix-popover-content-available-width))] max-w-(--radix-popover-content-available-width) flex-col',
           COMBOBOX_POPOVER_SURFACE
         )}
         onOpenAutoFocus={(event) => event.preventDefault()}
@@ -265,44 +233,47 @@ export default function RunTargetCombobox({
           >
             {rows.filter((row) => row.kind !== 'add-host').length === 0 ? (
               <p className="flex h-8 items-center justify-center px-2 text-sm text-muted-foreground">
-                {t(
-                  'auto.components.NewWorkspaceComposerCard.noRunTargets',
-                  'No run targets are ready for this project.'
-                )}
+                {emptyMessage ??
+                  t(
+                    'auto.components.NewWorkspaceComposerCard.noRunTargets',
+                    'No run targets are ready for this project.'
+                  )}
               </p>
             ) : null}
             <RunTargetRowList
               rows={rows}
               armedKey={armedRow?.key ?? null}
               listId={listId}
-              selectedHost={selectedRecipe === null ? selectedHost : null}
+              selectedHostId={selectedRecipe === null ? selectedHostId : null}
               selectedRecipeId={selectedRecipe?.id ?? null}
               matchedRecipes={matchedRecipes}
               recipesOpen={submenu === 'recipes'}
-              connectingHostIds={connectingHostIds}
-              canConnect={Boolean(onConnectHost)}
-              canSetLocation={Boolean(onSetLocation)}
               onArm={(key, nextSubmenu) => {
                 arm(key)
+                if (submenu === 'add-host-keyboard') {
+                  inputRef.current?.focus()
+                }
                 setSubmenu(nextSubmenu)
               }}
               onRecipesOpenChange={(next) => setSubmenu(next ? 'recipes' : null)}
               onSelectHost={selectHost}
               onSelectRecipe={selectRecipe}
-              onConnectHost={(option) => void connectHost(option)}
-              onSetLocation={setLocation}
             />
           </div>
           <HostListOverflowNote hiddenCount={hiddenHostCount} />
           {hasAddHost ? (
             <AddHostSubmenuRow
-              open={submenu === 'add-host'}
+              open={addHostOpen}
+              focusOnOpen={submenu === 'add-host-keyboard'}
+              onReturnFocus={() => inputRef.current?.focus()}
               onOpenChange={(next) => setSubmenu(next ? 'add-host' : null)}
               armed={armedRow?.key === RUN_TARGET_ADD_HOST_KEY}
               optionId={armedRow?.key === RUN_TARGET_ADD_HOST_KEY ? `${listId}-armed` : undefined}
               onArm={() => {
                 arm(RUN_TARGET_ADD_HOST_KEY)
-                setSubmenu('add-host')
+                if (!addHostOpen) {
+                  setSubmenu('add-host')
+                }
               }}
               {...(onAddSshHost
                 ? {

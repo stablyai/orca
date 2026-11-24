@@ -1,6 +1,6 @@
 import { useAppStore } from '../../../../store/index'
 import { hasActiveBrowserPageDownload } from '../../navigate/browser-page-download-activity'
-import { browserPageNeedsPaintRetention } from './browser-guest-paint-retention'
+import { browserPageNeedsPaintRetention } from './browser-page-paint-retention-terms'
 import { browserGuestActivity } from '../browser-guest-activity'
 import { isBrowserPageRendererRecoveryPending } from '../webview-registry'
 

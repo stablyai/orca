@@ -1,3 +1,4 @@
+import { BotLinkOpenTargetSchema } from '../../bots/bot-link-open-target'
 import { AgentSessionSelectionSchema } from '../../agent-session/options/protocol/agent-session-execution-options'
 import {
   SendBody,
@@ -16,9 +17,9 @@ import * as z from 'zod'
 import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
 import { isStructuredAgentId } from '../../agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../../execution-host/execution-host'
-import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH as MAX_RESPONSE_OPTION_ID_LENGTH } from '../../agent-session/agent-session-question-answer'
+import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH as MAX_RESPONSE_OPTION_ID_LENGTH } from '../../agent-session/requests/prompts/agent-session-question-answer'
 
-import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../../agent-session/agent-session-thread-goal-wire'
+import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../../agent-session/thread-goals/agent-session-thread-goal-wire'
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
 import { SOURCE_FIELDS, ResumeWriterAdmission } from './structured-agent-session-resume-params'
 
@@ -187,6 +188,7 @@ export const SetOptionParams = z.strictObject({
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
 export const RevealParams = OptionsParams.extend({
+  botLinkTarget: BotLinkOpenTargetSchema.optional(),
   navigation: z.literal('caller').optional()
 }).strict()
 export const SwitchToChatParams = OptionsParams.extend({
@@ -231,6 +233,7 @@ export const SwitchToTerminalParams = OptionsParams.extend({
     .optional()
 }).strict()
 export const ItemParams = OptionsParams.extend({ itemId: z.string().min(1) }).strict()
+export const ToolCallerParams = z.object({ token: z.string().min(1).max(256) }).strict()
 // Why optional: only a host advertising the workspace-sleep-mark capability is sent `markAsleep`.
 export const SleepWorkspaceParams = z
   .object({ workspaceId: z.string().min(1), markAsleep: z.literal(true).optional() })
@@ -250,6 +253,8 @@ export const ModelCatalogParams = z.strictObject({
   waitForListing: z.boolean().optional(),
   // Read saved data without starting a listing; gate on saved-only capability because older hosts refuse unknown keys.
   savedOnly: z.boolean().optional(),
+  // Lists the agent's catalog again first; gate on the relist capability for the same reason.
+  relist: z.literal(true).optional(),
   selectedModel: Identifier('Invalid selected model').optional()
 })
 
@@ -301,6 +306,12 @@ export const RestartResumableParams = z
 /** Absent selects the whole offered set; IDs narrow it. Host rechecks eligibility, excluding invented IDs. */
 export const RestartResumeParams = z
   .object({ sessionIds: z.array(SessionId).max(MAX_RESTART_RESUME_SESSIONS).optional() })
+  .strict()
+
+/** Waits for this start's own continuation of what the last run cut off; `taken` answers once it
+ *  has reserved its chats, before any agent starts. */
+export const RestartLaunchSettledParams = z
+  .object({ until: z.literal('taken').optional() })
   .strict()
 
 export const HistoryParams = z

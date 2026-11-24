@@ -133,18 +133,25 @@ async function readWslHostDistros(userDataPath: string): Promise<Map<string, str
   }
 }
 
-/** Reuse a confirmed running list; otherwise one shared probe, and none when no user distro exists. */
+/**
+ * Reuse a confirmed running list; otherwise one shared probe, and none when no user distro exists
+ * or no Orca project uses WSL: telemetry alone shouldn't run `wsl.exe` (#28167). Null: not probed.
+ */
 export async function listRunningDistrosForSnapshot(
   registrations: readonly { distro: string }[] | null,
+  hasWslProjects: boolean,
   peek: () => readonly string[] | null = peekConfirmedRunningWslDistros,
   probe: () => Promise<string[]> = listConfirmedRunningWslDistros
-): Promise<string[]> {
+): Promise<string[] | null> {
   const cached = peek()
   if (cached) {
     return [...cached]
   }
   const userNames = filterUserWslDistros((registrations ?? []).map(({ distro }) => distro))
-  return userNames.length > 0 ? probe() : []
+  if (userNames.length === 0) {
+    return []
+  }
+  return hasWslProjects ? probe() : null
 }
 
 export async function gatherWslUsageSnapshotInput(
@@ -153,16 +160,25 @@ export async function gatherWslUsageSnapshotInput(
 ): Promise<WslUsageSnapshotInput> {
   const gateOpen = wslHostsGateOpen()
   const registrations = await readWslDistroRegistrations()
+  const hostDistros = gateOpen ? await readWslHostDistros(userDataPath) : new Map<string, string>()
+  const projects = collectWslProjects(
+    store,
+    gateOpen,
+    () => hostDistros,
+    getCachedWslDistros()?.[0] ?? null
+  )
+  let distrosRunningKnown = true
   const userDistros = await listWslHostDistros({
     readRegistrations: async () => registrations,
-    readRunning: async () => ({
-      status: 'confirmed',
-      distros: await listRunningDistrosForSnapshot(registrations)
-    })
+    readRunning: async () => {
+      const running = await listRunningDistrosForSnapshot(registrations, projects.length > 0)
+      distrosRunningKnown = running !== null
+      return { status: 'confirmed', distros: running ?? [] }
+    }
   })
-  const hostDistros = gateOpen ? await readWslHostDistros(userDataPath) : new Map<string, string>()
   return {
     registeredDistroCount: registrations?.length ?? null,
+    distrosRunningKnown,
     // A confirmed read never yields 'unverifiable'; the snapshot's schema keeps its two states.
     userDistros: userDistros.map(({ version, state }) => ({
       version,
@@ -170,12 +186,7 @@ export async function gatherWslUsageSnapshotInput(
     })),
     wslPackageVersion: readWslPackageVersion(),
     wslAvailableCached: getCachedWslAvailability(),
-    projects: collectWslProjects(
-      store,
-      gateOpen,
-      () => hostDistros,
-      getCachedWslDistros()?.[0] ?? null
-    ),
+    projects,
     windowsDriveReposWithWslWorktrees: await countWindowsDriveReposWithWslWorktrees(store),
     wslHostsGateOpen: gateOpen,
     wslHostsGateState: wslHostsGateState(),

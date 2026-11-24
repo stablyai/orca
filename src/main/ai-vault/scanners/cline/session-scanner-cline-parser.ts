@@ -16,6 +16,7 @@ import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-ty
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
 import { arrayValue, asRecord } from '../../parsing/session-record-fields'
 import { extractString } from '../../../../shared/text/trimmed-string'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
 import {
   extractContentText,
   normalizeTitleText
@@ -116,7 +117,8 @@ function consumeClineSessionMessage(accumulator: SessionAccumulator, value: unkn
     accumulator.fallbackTitle = normalizeTitleText(extractContentText(content) ?? '')
   }
   if (role === 'assistant' && !accumulator.model) {
-    accumulator.model = extractString(asRecord(message.modelInfo)?.id)
+    const model = extractString(asRecord(message.modelInfo)?.id)
+    accumulator.model = model && ownRetainedString(model)
   }
   addSessionContent(accumulator, role, content, message.ts)
 }

@@ -1,6 +1,6 @@
 import type { TaskPageLinearListSelectionPreludeModel } from './use-task-page-linear-list-selection'
 import { useMemo, useCallback, useEffect } from 'react'
-import { resolveLinearIssueAttributeFilterPrimaryTeam } from '@/components/linear-issue-attribute-filter-primary-team'
+import { resolveLinearIssueAttributeFilterPrimaryTeam } from '@/components/task-page/linear/filters/linear-issue-attribute-filter-primary-team'
 import {
   type LinearIssueAttributeFilter,
   linearIssueAttributeFilterSignature

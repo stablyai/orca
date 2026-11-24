@@ -19,7 +19,7 @@ import { stripInheritedAgentSessionEnv } from '../../../../shared/agent-launch/s
 import {
   nativeChatShellEnvironmentPolicy,
   type NativeChatShellEnvironmentPolicy
-} from '../../../../shared/native-chat/native-chat-shell-environment'
+} from '../../../../shared/native-chat/settings/native-chat-shell-environment'
 
 // Even with shell inheritance off, preserve CLI lookup, locale and agent socket.
 const BASELINE_SHELL_VARIABLES = ['PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'SSH_AUTH_SOCK']

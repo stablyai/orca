@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
+import type { ConfirmationDialogContextValue } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import type { AgentSessionRewindResult } from '../../../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import {
@@ -66,8 +66,7 @@ export function useNativeChatRewind(input: RewindInput) {
           ),
           confirmLabel: translate('components.native-chat.rewind.confirm', 'Rewind'),
           cancelLabel: translate('components.native-chat.rewind.cancel', 'Cancel'),
-          confirmVariant: 'destructive',
-          cancelVariant: 'ghost'
+          confirmVariant: 'destructive'
         })
       ),
     [sharedRequest]

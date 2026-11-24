@@ -2,11 +2,15 @@ import { refreshWslHostPairing } from '../../../shared/remote-runtime/host-store
 import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import { readWslHostDeployments } from '../../../shared/remote-runtime/host-store/runtime-environment-registry'
 import {
+  wslHostInstallLockWaitText,
   wslHostStatusDetailText,
   type WslHostCopyParams,
   type WslHostStatusDetailCode
 } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
-import type { WslHostStatus } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import type {
+  WslHostAddProgress,
+  WslHostStatus
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslOrcadConnection } from '../orcad/wsl-orcad-connection-types'
 import type { WslOrcadConnectionStatus } from '../orcad/wsl-orcad-connection-status'
 import type { WslLivenessUnverifiableReason } from '../orcad/wsl-orcad-liveness-verdict'
@@ -99,8 +103,29 @@ function wslHostStatusDetail(
   if (status.state === 'failed') {
     return codedDetail(status.reason, status.reasonCode, status.reasonParams)
   }
+  if (status.state === 'connecting' && status.installLockWait) {
+    const { text, code, params } = wslHostInstallLockWaitText(status.installLockWait)
+    return codedDetail(text, code, params)
+  }
   const stop = record.pendingStop
   return stop ? codedDetail(stop.reason, stop.reasonCode, stop.reasonParams) : { detail: null }
+}
+
+/** Only a connecting change names what an Add waits for; null for every other state. */
+export function wslHostAddProgress(
+  distro: string,
+  status: WslOrcadConnectionStatus
+): WslHostAddProgress | null {
+  if (status.state !== 'connecting') {
+    return null
+  }
+  const coded = status.installLockWait ? wslHostInstallLockWaitText(status.installLockWait) : null
+  return {
+    distro,
+    detail: coded?.text ?? null,
+    ...(coded ? { detailCode: coded.code } : {}),
+    ...(coded?.params ? { detailParams: coded.params } : {})
+  }
 }
 
 /** The registered WSL hosts; an unreadable store reads as none rather than failing the caller. */

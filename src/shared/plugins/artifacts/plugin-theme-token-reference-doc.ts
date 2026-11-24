@@ -73,6 +73,8 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--chat-selection': 'Selected text in chat; may be translucent, it paints over the chat',
   '--chat-selection-foreground': 'Text inside a chat selection',
   '--text-link': 'Links in Markdown previews, editors and agent chat',
+  '--theme-accent-foreground':
+    "Label on a fill of `--text-link` (the accent). Derived from the accent when omitted: near-black or white, whichever reads better. If no label reads on the accent, that fill uses Orca's accent instead; links keep the theme's",
   '--editor-selection':
     'Selected text in the code editor; keep it translucent so find matches show through. An unfocused editor shows it at half its opacity',
   '--diff-added': 'Added-line hue: Monaco overview ruler and chat diff text',
@@ -95,6 +97,10 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
 // Why: these mix per mode in main.css, come from chat-internal colors that authors cannot set,
 // or fall back differently per surface.
 const OMITTED_DESCRIPTIONS: Partial<Record<PluginAppThemeToken, string>> = {
+  '--tab-active':
+    'light: same as `--tab-bar`; dark: `--foreground` mixed into `--tab-bar`, up to 11%, as deep as keeps the active tab text and line as readable as at 6% (never under 6%)',
+  '--tab-inactive':
+    'light: `--foreground` mixed into `--tab-bar`, up to 8%, as deep as keeps tab text as readable as at 4% (never under 4%); dark: same as `--tab-bar`',
   '--tab-active-indicator':
     'tab line: same as `--tab-active-foreground`; right sidebar tool line: same as `--foreground`',
   '--worktree-sidebar-active-border': 'a mix of `--worktree-sidebar-border`',
@@ -151,7 +157,10 @@ const APP_THEME_TOKENS: ReadonlySet<string> = new Set(PLUGIN_APP_THEME_TOKENS)
 const isAppThemeToken = (token: string): token is PluginAppThemeToken => APP_THEME_TOKENS.has(token)
 // Frame variables that are not colours of an app theme.
 const FRAME_ONLY_ROLES: Record<string, string> = {
-  '--radius': 'Corner radius of cards and controls'
+  '--radius': 'Corner radius of cards and controls',
+  '--font-sans':
+    'Interface font stack. Fonts Orca loads itself (the default Geist, plugin fonts) are not in frames, so the next installed font in the stack is used',
+  '--font-mono': 'Monospace font stack for code'
 }
 
 /** The `--orca-*` CSS variables panel and editor frames get, with what each paints. */
@@ -181,7 +190,7 @@ export function renderPluginThemeTokenReference(): string {
     '',
     '## Frame CSS variables',
     '',
-    "Panel and custom editor frames get these stable variables, set from Orca's active theme and updated in place when it changes. Other tokens are not exposed to frames.",
+    "Panel and custom editor frames get these stable variables, set from Orca's active theme and fonts and updated in place when they change. Other tokens are not exposed to frames.",
     '',
     '| Variable | Orca token |',
     '| --- | --- |',

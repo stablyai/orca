@@ -1,7 +1,7 @@
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import { recordWebSessionCloseIntent } from './web-session-close-intent'
-import { isServerFrameDrawnWorkspace } from '../frame-drawn-server-workspace-set'
+import { isServerFrameDrawnWorkspace } from '../frame-drawn/frame-drawn-server-workspace-set'
 import { toHostSessionTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
@@ -15,7 +15,9 @@ export type MirroredEditorCloseState = WorktreeOperationRouteState & {
 export function notifyHostOfMirroredEditorClose(
   state: MirroredEditorCloseState,
   worktreeId: string | null | undefined,
-  fileId: string
+  fileId: string,
+  /** Limits the close to this one view of the file. */
+  tabId?: string
 ): boolean {
   if (!worktreeId) {
     return false
@@ -39,7 +41,10 @@ export function notifyHostOfMirroredEditorClose(
   }
   // A mirrored unified tab carries the host's tab id as `id` and the local file id as `entityId`; the host close RPC resolves by id.
   const unifiedTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
-    (tab) => tab.contentType === 'editor' && tab.entityId === fileId
+    (tab) =>
+      tab.contentType === 'editor' &&
+      tab.entityId === fileId &&
+      (tabId === undefined || tab.id === tabId)
   )
   if (unifiedTabs.length === 0) {
     return false

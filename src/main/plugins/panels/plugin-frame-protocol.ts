@@ -6,6 +6,7 @@ import {
 } from '../../../shared/plugins/frames/plugin-frame-entry-limits'
 import {
   parsePluginFrameUrl,
+  type PluginFrameUrlTarget,
   PLUGIN_DECLARATIVE_HOST_FILE,
   PLUGIN_DECLARATIVE_RUNTIME_FILE
 } from '../../../shared/plugins/frames/plugin-frame-guest'
@@ -27,6 +28,7 @@ import {
   verifyPluginFrameTree,
   type PluginFrameTreeVerifier
 } from './frame-serving/plugin-frame-integrity'
+import { createPluginFrameAdmission } from './frame-serving/plugin-frame-admission'
 import {
   bufferedResponse,
   busy,
@@ -48,9 +50,6 @@ import {
   pluginSourceModuleDocumentBody,
   PLUGIN_SOURCE_MODULE_QUERY
 } from './frame-serving/plugin-frame-source-serving'
-
-/** Concurrent requests one guest session may hold open; more get 503 until some finish. */
-export const PLUGIN_FRAME_MAX_IN_FLIGHT = 32
 
 export type PluginFrameProtocolDependencies = {
   /** Installed, enabled and consented plugins only. */
@@ -93,6 +92,17 @@ function isDeclaredFrameEntry(plugin: ValidDiscoveredPlugin, relativePath: strin
   )
 }
 
+type FrameAsset = {
+  target: PluginFrameUrlTarget
+  pluginKey: string
+  relativePath: string
+  isSourceModule: boolean
+  isDocument: boolean
+  contentType: string
+  /** Read from disk as the guest consumes it, so it holds its slot until the body ends. */
+  streamed: boolean
+}
+
 /**
  * Serves `orca-plugin-frame://<key>/<path>` from the plugin root with the same containment and
  * content-integrity checks as panel entries. Anything else, including `__orca/`, is 404.
@@ -107,19 +117,15 @@ export function createPluginFrameRequestHandler(
     dependencies.verifyTree ?? verifyPluginFrameTree,
     now
   )
-  let inFlight = 0
-  const serve = async (request: Request, stream: () => () => void): Promise<Response> => {
+  const admit = createPluginFrameAdmission()
+  const classify = (request: Request): FrameAsset | null => {
     const target = parsePluginFrameUrl(request.url)
     if (!target || target.frameKey !== sessionFrameKey) {
-      return notFound()
+      return null
     }
     const plugin = dependencies.findApprovedPluginByFrameKey(target.frameKey)
     if (!plugin) {
-      return notFound()
-    }
-    if (target.reserved) {
-      const body = await readOrcaFile(dependencies, plugin, target.segments, request.url)
-      return body ? bufferedResponse(request, body.contentType, body.bytes) : notFound()
+      return null
     }
     const relativePath = target.segments.join('/')
     const isSourceModule = isPluginSourceModulePath(relativePath)
@@ -132,11 +138,37 @@ export function createPluginFrameRequestHandler(
       : isSourceModule
         ? JAVASCRIPT_CONTENT_TYPE
         : pluginFrameContentType(relativePath)
+    const streamed = !target.reserved && !isDocument && !isCheckedPluginFrameType(contentType)
+    return {
+      target,
+      pluginKey: plugin.pluginKey,
+      relativePath,
+      isSourceModule,
+      isDocument,
+      contentType,
+      streamed
+    }
+  }
+  const serve = async (
+    request: Request,
+    asset: FrameAsset,
+    stream: () => () => void
+  ): Promise<Response> => {
+    const { target, relativePath, isSourceModule, isDocument, contentType } = asset
+    // Why again: the plugin may be updated or its consent revoked while the request waited.
+    const plugin = dependencies.findApprovedPluginByFrameKey(sessionFrameKey)
+    if (!plugin) {
+      return notFound()
+    }
+    if (target.reserved) {
+      const body = await readOrcaFile(dependencies, plugin, target.segments, request.url)
+      return body ? bufferedResponse(request, body.contentType, body.bytes) : notFound()
+    }
     try {
       // Why: a navigation re-verifies like a panel entry; a fetch of an .html file is an asset
       // and rides the last check, so it cannot force a whole-tree re-hash per request.
       const digests = await integrity(plugin, isNavigationRequest(request))
-      if (!isDocument && !isCheckedPluginFrameType(contentType)) {
+      if (asset.streamed) {
         const path = await resolveContainedPluginArtifact(
           plugin.rootDir,
           relativePath,
@@ -195,28 +227,30 @@ export function createPluginFrameRequestHandler(
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return new Response(null, { status: 405 })
     }
-    // Why a cap: each request may hold a file in memory or an open stream until it completes.
-    if (inFlight >= PLUGIN_FRAME_MAX_IN_FLIGHT) {
-      return busy()
+    const asset = classify(request)
+    if (!asset) {
+      return notFound()
     }
-    inFlight += 1
-    let released = false
-    const release = (): void => {
-      if (!released) {
-        released = true
-        inFlight -= 1
+    const admission = await admit(asset.streamed)
+    if ('refused' in admission) {
+      if (admission.firstInBurst) {
+        dependencies.log?.(
+          asset.pluginKey,
+          `frame asset ${asset.relativePath} busy: ${admission.refused}`
+        )
       }
+      return busy()
     }
     // A streamed body releases its slot when it ends; everything else is done once answered.
     let streaming = false
     try {
-      return await serve(request, () => {
+      return await serve(request, asset, () => {
         streaming = true
-        return release
+        return admission.release
       })
     } finally {
       if (!streaming) {
-        release()
+        admission.release()
       }
     }
   }

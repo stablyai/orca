@@ -5,7 +5,7 @@ import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usa
 import { useTranslate } from '@/i18n/use-translate'
 import { getTightestUsageSection, usedSections } from '../usage/usage-headline-sections'
 import { getUsageRosterRowState } from '../usage/usage-roster-row-state'
-import { isClaudeUsageWaitingForClaude } from '../usage/usage-error-copy'
+import { isClaudeUsageWaitingForClaude } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { formatUsagePercentageLabel } from '../usage/usage-percentage-label'
 import { UsageBar, UsageValue } from '../usage/usage-meter'
 

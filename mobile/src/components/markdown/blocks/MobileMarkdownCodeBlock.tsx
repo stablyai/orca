@@ -60,7 +60,7 @@ export const MobileMarkdownCodeBlock = memo(function MobileMarkdownCodeBlock({
     <View style={styles.codeBlock}>
       <View style={styles.codeHeader}>
         <Text numberOfLines={1} style={styles.codeLanguage}>
-          {language}
+          {language || t('components.markdownBlocks.codeLabel', 'Code')}
         </Text>
         <View style={styles.codeActions}>
           {chat && code ? (

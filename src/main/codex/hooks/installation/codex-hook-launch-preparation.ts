@@ -10,8 +10,10 @@ import {
 } from '../../trust/hooks/codex-hook-orca-approvals'
 import { refreshCodexRuntimeUserHooksExclusively } from './codex-hook-local-maintenance'
 import { readCodexHookHomeStatus } from '../reconciliation/codex-hook-status'
+import { finishCodexHookPass, runCodexHookPassEffectsOffMain } from './codex-hook-pass-off-main'
 import {
   CODEX_ANSWER_AWAITED,
+  readEveryKnownCodexHookHashes,
   CODEX_HOOK_LAUNCH_WAIT_MS,
   readKnownCodexHookAnswer,
   resolveCodexHookAnswerForLaunch
@@ -20,10 +22,16 @@ import { runExclusivelyForRuntimeAndSystemTrustConfig } from '../../trust/hooks/
 import { withFileContentObservation } from '../../../filesystem/file-content-observation'
 import { readCodexLaunchPreparationInputs } from './codex-launch-preparation-inputs'
 import type { CodexHookAnswer } from '../../trust/hooks/codex-hook-trust-derivation'
+import type { CodexSettingsPromotionHomes } from '../../configuration/settings/config-settings-promotion'
 
 export type CodexLaunchConfigPreparation = {
+  /** Mirrors now, once; later calls return the first result or rethrow its error. */
   run: () => boolean
   complete: () => void
+  /** The owed mirror as data for the Codex trust worker, or null once it has run. */
+  pendingMirror: () => CodexSettingsPromotionHomes | null
+  /** Records the worker's mirror result as if `run` had produced it. */
+  settle: (result: { value: boolean } | { error: Error }) => void
 }
 
 // Separate hooks-on/off and Codex/terminal runs: their trust outcomes and wait budgets differ.
@@ -38,10 +46,24 @@ export class CodexHookLaunchPreparation {
   private readonly launchPrepInFlight = new Map<string, Promise<AgentHookInstallStatus>>()
   private readonly completedLaunchPrep = new Map<
     string,
-    { digest: string; status: AgentHookInstallStatus }
+    { digest: string; inputs: string; status: AgentHookInstallStatus }
   >()
   clear(): void {
     this.completedLaunchPrep.clear()
+  }
+  /** A completed preparation that ran the config mirror still matches every file it read. */
+  async isConfigPreparationCurrent(runtimeHomePath: string): Promise<boolean> {
+    const keys = (['install', 'codex-launch', 'refresh'] as const).map(
+      (lane) => `${launchPrepKey(lane, runtimeHomePath)}\0config`
+    )
+    if (!keys.some((key) => this.completedLaunchPrep.has(key))) {
+      return false
+    }
+    const inputs = await readCodexLaunchPreparationInputs(runtimeHomePath)
+    return (
+      inputs !== null &&
+      keys.some((key) => this.completedLaunchPrep.get(key)?.inputs === inputs.digest)
+    )
   }
   install(
     runtimeHomePath: string,
@@ -85,14 +107,15 @@ export class CodexHookLaunchPreparation {
     return runExclusivelyForRuntimeAndSystemTrustConfig(runtimeHomePath, () => {
       // Recheck in the queue so an Off that landed during hash lookup wins.
       let enabled = isHooksEnabled()
-      const run = (onComplete?: () => void): Promise<AgentHookInstallStatus> => {
-        const configComplete = configPreparation?.run() ?? true
-        const completed = configComplete ? onComplete : undefined
+      const run = async (onComplete?: () => void): Promise<AgentHookInstallStatus> => {
+        const getStatus = (homePath: string): AgentHookInstallStatus =>
+          readCodexHookHomeStatus(homePath, answer)
         if (!enabled || answer.kind === 'refused') {
           return refreshCodexRuntimeUserHooksExclusively(
             runtimeHomePath,
-            (homePath) => readCodexHookHomeStatus(homePath, answer),
-            completed
+            getStatus,
+            onComplete,
+            configPreparation
           )
         }
         // Pending answers still consult the complete stopgap memo/ledger on every preparation.
@@ -103,11 +126,25 @@ export class CodexHookLaunchPreparation {
                 getManagedCodexHookHome(runtimeHomePath),
                 getManagedCommand(getManagedScriptPath())
               )
-        return installCodexHooksExclusively(
+        const status = await installCodexHooksExclusively(
           runtimeHomePath,
           hashes,
-          (homePath) => readCodexHookHomeStatus(homePath, answer),
-          completed
+          getStatus,
+          onComplete,
+          configPreparation
+        )
+        if (isHooksEnabled()) {
+          return status
+        }
+        // Why: Off landed while the worker installed; take this home's hooks back out before launch.
+        return finishCodexHookPass(
+          runtimeHomePath,
+          await runCodexHookPassEffectsOffMain({
+            mode: 'strip',
+            runtimeHomePath,
+            codexHashes: readEveryKnownCodexHookHashes()
+          }),
+          getStatus
         )
       }
       if (!reuseKey) {
@@ -171,14 +208,13 @@ export class CodexHookLaunchPreparation {
     }
     const run = (): Promise<AgentHookInstallStatus> =>
       runExclusivelyForRuntimeAndSystemTrustConfig(homePath, () => {
-        const refresh = (onComplete?: () => void): Promise<AgentHookInstallStatus> => {
-          const configComplete = configPreparation?.run() ?? true
-          return refreshCodexRuntimeUserHooksExclusively(
+        const refresh = (onComplete?: () => void): Promise<AgentHookInstallStatus> =>
+          refreshCodexRuntimeUserHooksExclusively(
             homePath,
             getStatus,
-            configComplete ? onComplete : undefined
+            onComplete,
+            configPreparation
           )
-        }
         const answer = readKnownCodexHookAnswer()
         if (answer?.kind !== 'hashes') {
           this.completedLaunchPrep.delete(key)
@@ -240,7 +276,11 @@ export class CodexHookLaunchPreparation {
       }
     )
     if (complete && result.matches && result.value.stable && digest !== null) {
-      this.completedLaunchPrep.set(key, { digest, status: { ...result.value.status } })
+      this.completedLaunchPrep.set(key, {
+        digest,
+        inputs: before.digest,
+        status: { ...result.value.status }
+      })
       if (this.completedLaunchPrep.size > 32) {
         this.completedLaunchPrep.delete(this.completedLaunchPrep.keys().next().value!)
       }

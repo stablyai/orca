@@ -13,12 +13,14 @@ import {
 import {
   STATUS_BAR_RESERVE_HEIGHT,
   WORKSPACE_TOP_CHROME_HEIGHT
-} from '../sidebar/workspace-chrome-metrics'
+} from '../../app-shell/chrome/workspace-chrome-metrics'
 import { AgentDashboardSettingsMenu } from './settings/AgentDashboardSettingsMenu'
 import { useLiveDashboardSnapshot } from './snapshot/useLiveDashboardSnapshot'
 import { useAgentDashboardTelemetry } from './board/use-agent-dashboard-telemetry'
 import { useTranslate } from '@/i18n/use-translate'
-import { trackSidebarLiveWidth } from '@/components/sidebar/sidebar-live-width'
+import { trackSidebarLiveWidth } from '@/components/sidebar/chrome/sidebar-live-width'
+import { resolveSidebarDrawerLeftEdge } from '@/components/sidebar/chrome/sidebar-drawer-left-edge'
+import { selectAppRailWidth, selectWorkspaceListOpen } from '@/components/app-rail/app-rail-layout'
 
 // Nested interactive overlays own Escape before the companion sheet; exclude the sheet’s own role=dialog marker.
 const AGENT_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR = [
@@ -97,7 +99,7 @@ export function AgentDashboardDrawer({
   const t = useTranslate()
   const open = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
-  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  const sidebarOpen = useAppStore(selectWorkspaceListOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const [menuOpen, setMenuOpen] = useState(false)
   const boardRef = useRef<HTMLDivElement | null>(null)
@@ -180,10 +182,12 @@ export function AgentDashboardDrawer({
     return () => document.removeEventListener('keydown', handleKeyDown, true)
   }, [close, open])
 
-  const drawerLeft = sidebarOpen ? sidebarWidth : 0
-  const drawerLeftCss = sidebarOpen
-    ? `var(--workspace-sidebar-live-width, ${sidebarWidth}px)`
-    : '0px'
+  const railWidth = useAppStore(selectAppRailWidth)
+  const { left: drawerLeft, leftCss: drawerLeftCss } = resolveSidebarDrawerLeftEdge({
+    sidebarOpen,
+    sidebarWidth,
+    railWidth
+  })
   // Reserve the same status-row space as App so the portal cannot cover its controls.
   const drawerBottom = `${statusBarVisible ? STATUS_BAR_RESERVE_HEIGHT : 0}px`
 

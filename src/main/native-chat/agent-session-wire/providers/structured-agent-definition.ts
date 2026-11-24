@@ -1,9 +1,14 @@
 // Agent modules declare definitions; the runtime registry owns shared lookup instead of agent-name branches.
 
-import type { AgentSessionCapabilities } from '../../../../shared/agent-session/agent-session-capabilities'
+import type { AgentSessionCapabilities } from '../../../../shared/agent-session/capabilities/agent-session-capabilities'
 import type { AgentSessionStoredAgent } from '../../../../shared/agent-session/lifecycle/records/agent-session-stored-agent'
-import type { AgentSessionModelOption } from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+
+export type StructuredAgentListedSelection = (
+  saved: Readonly<Record<string, string>>,
+  listed: readonly Pick<AgentSessionModelOption, 'id' | 'efforts'>[]
+) => Record<string, string> | null
 
 export type StructuredAgentDefinition = AgentSessionStoredAgent & {
   capabilities: AgentSessionCapabilities
@@ -17,6 +22,8 @@ export type StructuredAgentDefinition = AgentSessionStoredAgent & {
     fallbackModels: () => AgentSessionModelOption[] | null
     /** Unpicked effort follows the model default, matching running-child reports. */
     effortDefaultsToModel: boolean
+    /** Saved options as the chat's listing names them; null when it names them as saved. */
+    listedSelection?: StructuredAgentListedSelection
   }
 }
 

@@ -18,4 +18,6 @@ export type TerminalWaiter = {
   launchReadiness?: boolean
   /** Main-only: a recognized agent mid-turn settles it, as mail delivery treats one (`settlesForMidTurnInput`). */
   acceptsMidTurnInput?: boolean
+  /** Input custody for one process: window detachment does not end it, only that process's exit, replacement or prune. */
+  outlivesRenderer?: true
 }

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { onWorkspaceCleanupRunFinished } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
 import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/agent-session/resume/history/ai-vault-resume-target'
 import { useAppStore } from '@/store/index'
+import { findLastVisitedLiveWorkspaceId } from '@/store/slices/ui/workspace-navigation-history'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getExecutionHostLabel,
@@ -13,7 +15,7 @@ import {
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { AiVaultSessionResumeTargetState } from '../session-actions/ai-vault-session-resume'
 
-import { getTranslatedExecutionHostLabel } from '../../../sidebar/execution-host-label'
+import { getTranslatedExecutionHostLabel } from '../../../../runtime/hosts/display/execution-host-label'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -106,8 +108,18 @@ export function useAiVaultPanelHostScope(
     () => runtimeHostOptions.map((option) => option.id),
     [runtimeHostOptions]
   )
+  // Why: closing the last tab leaves no workspace, which says nothing about the host; keep the last one's (#40727).
+  const navHistory = useAppStore((s) => s.worktreeNavHistory)
+  const navHistoryIndex = useAppStore((s) => s.worktreeNavHistoryIndex)
+  const lastVisitedWorkspaceId = useMemo(
+    () =>
+      workspaceId === null
+        ? findLastVisitedLiveWorkspaceId(navHistory, navHistoryIndex, resumeTargetState)
+        : null,
+    [navHistory, navHistoryIndex, resumeTargetState, workspaceId]
+  )
   const hostScope = useAiVaultExecutionHostScope({
-    activeWorktreeId: workspaceId,
+    activeWorktreeId: workspaceId ?? lastVisitedWorkspaceId,
     resumeTargetState,
     availableExecutionHostScopes
   })
@@ -214,4 +226,15 @@ export function useAiVaultSessionHostRefreshEvents(
       document.removeEventListener('visibilitychange', onRefocus)
     }
   }, [refresh])
+
+  // Workspace cleanup can delete transcripts of deleted workspaces while this list is open.
+  useEffect(
+    () =>
+      onWorkspaceCleanupRunFinished(({ run }) => {
+        if ((run.chatHistory?.deleted ?? 0) > 0) {
+          void refresh({ background: true, force: false })
+        }
+      }),
+    [refresh]
+  )
 }

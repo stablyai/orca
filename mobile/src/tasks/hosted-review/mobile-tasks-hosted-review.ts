@@ -1,4 +1,3 @@
-import { getHostedMergeLabel } from './mobile-hosted-check-status'
 import { projectRowType } from '../item-detail/mobile-tasks-item-mapping'
 import type {
   HostedReviewMergeMethod,
@@ -131,10 +130,6 @@ export function hostedBranchSummary(item: TaskItem): { head: string; base: strin
     }
   }
   return null
-}
-
-export function getGitHubMergeLabel(item: GitHubWorkItem): string | null {
-  return getHostedMergeLabel(item)
 }
 
 export function getHostedReviewMergeMethodLabel(method: HostedReviewMergeMethod): string {

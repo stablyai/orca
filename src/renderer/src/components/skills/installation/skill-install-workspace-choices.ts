@@ -20,9 +20,6 @@ function belongsToEnvironment(
       repo?.executionHostId ??
       (repo?.connectionId ? (`ssh:${repo.connectionId}` as const) : undefined))
   const runtimeOwner = folder ? null : value.runtimeOwnerEnvironmentId
-  if (machineId.startsWith('ssh:')) {
-    return hostId === machineId
-  }
   if (machineId !== 'local') {
     return runtimeOwner === machineId || hostId === `runtime:${machineId}`
   }

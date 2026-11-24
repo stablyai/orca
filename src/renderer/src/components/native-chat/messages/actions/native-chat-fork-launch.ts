@@ -18,7 +18,7 @@ import {
   StructuredAgentSessionCreateRefusalError
 } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { StructuredAgentSessionForkSource } from '../../../../../../shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentSessionForkSource } from '../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,

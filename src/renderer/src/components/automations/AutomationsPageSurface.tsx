@@ -1,10 +1,12 @@
+import { useBots } from '@/lib/bot-catalog'
+import { automationTargetLabel } from './authoring/automation-bot-target-label'
 import React, { useMemo, useRef } from 'react'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { resolveAutomationRunTarget } from './runs/automation-run-open-target'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { AutomationsPageEditorDialog } from './AutomationsPageEditorDialog'
 import { AutomationsDetailPane } from './details/AutomationsDetailPane'
 import { AutomationsPageSkeleton } from './AutomationsPageSkeleton'
@@ -34,6 +36,7 @@ export function AutomationsPageSurface({
 }: {
   controller: AutomationsPageController
 }): React.JSX.Element {
+  const bots = useBots()
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const mainRef = useRef<HTMLElement>(null)
@@ -243,8 +246,8 @@ export function AutomationsPageSurface({
           history={local.selectedAutomationRuns}
           relativeNow={relativeNow}
           hostLabel={selectedHostLabel}
-          workspaceDisplay={runPage.selectedAutomationRunPageWorkspaceDisplay}
-          viewState={runPage.selectedAutomationRunPageViewState}
+          workspaceName={runPage.selectedAutomationRunPageWorkspaceName}
+          workspaceActionLabel={runPage.selectedAutomationRunPageWorkspaceActionLabel}
           canRerun={runPage.canRerunSelectedAutomationRunPage}
           isRerunPending={runPage.isSelectedAutomationRunPageRerunPending}
           onRerun={() =>
@@ -303,14 +306,16 @@ export function AutomationsPageSurface({
           relativeNow={relativeNow}
           externalActionKey={externalActionKey}
           selectedRepoDisplayName={
-            (selected &&
-              automationProjectName(
-                selected,
-                presentation.selectedRepo,
-                repoMap,
-                !!selectedRecoveryHost?.servedBy
-              )) ??
-            t('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
+            selected?.bot
+              ? automationTargetLabel(selected, presentation.selectedRepo, bots)
+              : ((selected &&
+                  automationProjectName(
+                    selected,
+                    presentation.selectedRepo,
+                    repoMap,
+                    !!selectedRecoveryHost?.servedBy
+                  )) ??
+                t('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project'))
           }
           selectedRepoDefaultBaseRef={presentation.selectedRepo?.worktreeBaseRef ?? null}
           selectedWorkspaceName={

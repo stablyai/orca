@@ -8,6 +8,9 @@ import {
   type PortScanCommandRequest,
   type PortScanCommandResponse
 } from './port-scan-command-protocol'
+import { installWorkerSendLedger } from '../worker-threads/worker-send-ledger'
+
+installWorkerSendLedger('orca-port-scan')
 
 // Worker-only, Electron-free imports keep inline CreateProcessW stalls off main; the client dispatches serially (#11161).
 
@@ -23,7 +26,8 @@ async function handleRequest(request: PortScanCommandRequest): Promise<PortScanC
     const { stdout, spawnMs } = await runPortScanCommandInProcess(
       request.command,
       request.args,
-      request.darwinOperation
+      request.darwinOperation,
+      request.linuxSocketInodes
     )
     return { id: request.id, ok: true, stdout, spawnMs }
   } catch (err) {

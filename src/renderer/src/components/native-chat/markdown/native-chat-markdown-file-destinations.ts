@@ -1,13 +1,13 @@
 import {
   createNativeChatFileHref,
   routeNativeChatHref
-} from '../../../../../shared/native-chat/native-chat-href-routing'
+} from '../../../../../shared/native-chat/file-access/native-chat-href-routing'
 import { formatFileLinkLocation } from '../../../../../shared/file-links/file-link-location'
 import { filePreviewForPath } from '../../../../../shared/file-preview/file-preview-kind'
 import {
   authoredNativeChatLinkUrl,
   isDetectedNativeChatPathLink
-} from '../../../../../shared/native-chat/native-chat-file-link-tree'
+} from '../../../../../shared/native-chat/file-access/native-chat-file-link-tree'
 
 type MarkdownNode = {
   type: string

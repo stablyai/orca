@@ -2,26 +2,31 @@ import { isGitForWindowsBashLauncherPath } from '../../../pty/shell-startup/git-
 import type { WindowsProcessIdentityRow } from '../../../windows/windows-process-table'
 import {
   buildProcessTableIndex,
-  collectDescendantsFromIndex
+  collectDescendantsFromIndex,
+  getProcessTableIndex
 } from '../../../../shared/process-observation/tables/process-table-index'
 
 const MSYS_BASH_IMAGE = 'bash.exe'
+const WSL_IMAGE = 'wsl.exe'
 
 /** Git Bash launcher/MSYS exec stubs form a live unbranched bash chain; commands add a non-bash leaf or branch.
  * Builtin-only/nested bash remains indistinguishable from idle. Optional console proof excludes detached orphans;
- * ancestry alone cannot distinguish them from live MSYS children with exited Win32 parents. */
+ * ancestry alone cannot distinguish them from live MSYS children with exited Win32 parents.
+ * A shell-only job still needs the parent tree: a Store (MSIX) shell's children start outside its job. */
 export async function isWindowsShellAloneInJob(
   shellPid: number,
   spawnedShellPath: string,
   jobProcessIds: ReadonlySet<number> | null | undefined,
   readIdentityTable: () => Promise<WindowsProcessIdentityRow[]>,
-  readConsoleAttachedProcessIds?: () => Promise<ReadonlySet<number> | null>
+  readConsoleAttachedProcessIds?: () => Promise<ReadonlySet<number> | null>,
+  /** Skips the table read for a shell-only job, missing a Store shell's escaped children. */
+  jobMembershipOnly = false
 ): Promise<boolean> {
   if (!jobProcessIds?.has(shellPid)) {
     return false
   }
   if (jobProcessIds.size === 1) {
-    return true
+    return jobMembershipOnly || !hasLiveDescendant(shellPid, await readIdentityTable())
   }
   const isLauncher = isGitForWindowsBashLauncherPath(spawnedShellPath)
   if (!isLauncher && !readConsoleAttachedProcessIds) {
@@ -56,6 +61,24 @@ export async function isWindowsShellAloneInJob(
     parentPid = child.pid
   }
   return true
+}
+
+/** Fails closed when the table cannot show the shell; a child older than the shell carries a reused ppid.
+ * One live direct child proves work, so the walk stops there. */
+function hasLiveDescendant(shellPid: number, rows: readonly WindowsProcessIdentityRow[]): boolean {
+  const index = getProcessTableIndex(rows)
+  const shell = index.byPid.get(shellPid)
+  const shellName = shell?.name.toLowerCase()
+  if (!shell || !shellName) {
+    return true
+  }
+  // An idle wsl.exe always keeps its own helpers (inner wsl.exe, wslhost.exe, conhost.exe); the guest owns WSL work.
+  if (shellName === WSL_IMAGE) {
+    return false
+  }
+  return (index.childrenByPpid.get(shellPid) ?? []).some(
+    (child) => child.pid !== shellPid && !startedBefore(child.creationTimeMs, shell.creationTimeMs)
+  )
 }
 
 /** Drops members that are neither linked to the shell through live parents nor on its console. */

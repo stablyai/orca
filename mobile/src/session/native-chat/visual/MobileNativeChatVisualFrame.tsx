@@ -4,7 +4,7 @@ import {
   buildNativeChatVisualDocument,
   nativeChatVisualThemeMessage,
   newNativeChatVisualChannel
-} from '../../../../../src/shared/native-chat/native-chat-visual-shell'
+} from '../../../../../src/shared/native-chat/visuals/native-chat-visual-shell'
 import type { MobileNativeChatVisualHostMode } from './mobile-native-chat-visual-host-document'
 import { MOBILE_NATIVE_CHAT_VISUAL_THEME } from './mobile-native-chat-visual-theme'
 import {

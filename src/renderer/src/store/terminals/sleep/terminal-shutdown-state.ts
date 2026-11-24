@@ -1,4 +1,7 @@
-import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
+import {
+  replaceTabBuckets,
+  replaceRecordEntries
+} from '@/store/record-transitions/keyed-record-transitions'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
@@ -11,8 +14,8 @@ import {
   settleDeferredPtyShutdownExits
 } from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral'
 import '../../slices/agent-status/agent-status'
-import { removeSleepingRecordsReplacedByManualWorktreeSleep } from '../../slices/agent-status/agent-status-sleeping-records'
-import type { AgentStatusWorktreeShutdownReason } from '../../slices/agent-status/agent-status-contract'
+import { removeSleepingRecordsReplacedByManualWorktreeSleep } from '../../slices/agent-status/sleep-recovery/agent-status-sleeping-records'
+import type { AgentStatusWorktreeShutdownReason } from '../../slices/agent-status/contracts/agent-status-contract'
 import type { TerminalStoreGet, TerminalStoreSet } from '../terminal-state'
 import { copyOnWriteRecord } from './terminal-shutdown-record'
 import { removeTabsAttention } from '../../slices/workspace-attention/subject-attention-transitions'

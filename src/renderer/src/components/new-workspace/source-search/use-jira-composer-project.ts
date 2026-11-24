@@ -3,7 +3,7 @@ import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { resolveJiraSourceHostId } from '../../../../../shared/jira/jira-source-host'
-import { useJiraProjectInventory } from '../../use-jira-project-inventory'
+import { useJiraProjectInventory } from '../../task-page/jira/project-selection/use-jira-project-inventory'
 import { useComposerSourceScope } from './use-composer-source-scope'
 
 const LOCAL_SOURCE = { kind: 'local' } as const

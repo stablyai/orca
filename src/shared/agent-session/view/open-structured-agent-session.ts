@@ -1,23 +1,16 @@
-import type { AgentMessageSender } from '../agent-session-message-source'
+import type { AgentMessageSender } from '../journal/agent-session-message-source'
 import type { OrchestrationPartyLocationResult } from '../../orchestration/orchestration-caller-status'
 import type { AgentSessionWorkspaceKind } from '../lifecycle/agent-session-record'
 import { workspaceKindForWorktreeId } from '../../agent-launch/contracts/workspace-launch-kind'
+import * as openFailure from './structured-session-open-failure-detail'
 
-export type StructuredSessionWorkspaceRemovedDetails = {
-  workspaceKind: AgentSessionWorkspaceKind
-}
+/** `project`: the repo itself left the catalog, so its files may still be on disk. */
+export type StructuredSessionRemovedWorkspaceKind = AgentSessionWorkspaceKind | 'project'
 
-export function readStructuredSessionWorkspaceRemovedDetails(
-  value: unknown
-): StructuredSessionWorkspaceRemovedDetails | undefined {
-  if (value !== null && typeof value === 'object' && 'workspaceKind' in value) {
-    const { workspaceKind } = value
-    if (workspaceKind === 'folder' || workspaceKind === 'git-worktree') {
-      return { workspaceKind }
-    }
-  }
-  return undefined
-}
+export {
+  readStructuredSessionWorkspaceRemovedDetails,
+  type StructuredSessionWorkspaceRemovedDetails
+} from './structured-session-open-failure-detail'
 
 export type StructuredSessionOpenTarget = { sessionId: string; worktreeId: string; agent?: string }
 export type StructuredSessionOpenSource =
@@ -39,12 +32,14 @@ export type StructuredSessionOpenFailure = {
   beforeEffects: boolean
   code?: string
   surface?: 'terminal'
-  workspaceKind?: AgentSessionWorkspaceKind
+  workspaceKind?: StructuredSessionRemovedWorkspaceKind
+  detail?: string // Raw cause for a details disclosure; never decides a remedy.
 }
 export type StructuredSessionOpenTab = { id: string; sessionId: string; agent?: string }
 export type StructuredSessionOpenResult =
   | { kind: 'opened'; target: StructuredSessionOpenTarget; tab: StructuredSessionOpenTab }
-  | { kind: 'terminal'; handle: string }
+  /** `environmentId`: another paired server's terminal, as the answering host names that server. */
+  | { kind: 'terminal'; handle: string; environmentId?: string }
   | { kind: 'failed'; failure: StructuredSessionOpenFailure }
   | { kind: 'superseded' }
 
@@ -78,7 +73,7 @@ export function structuredSessionOpenFailure(error: unknown): StructuredSessionO
     return { reason: 'unsupported', beforeEffects: true, code }
   }
   if (code === 'agent_session_workspace_removed') {
-    const details = readStructuredSessionWorkspaceRemovedDetails(
+    const details = openFailure.readStructuredSessionWorkspaceRemovedDetails(
       error !== null && typeof error === 'object' && 'details' in error ? error.details : undefined
     )
     return { reason: 'workspace-missing', beforeEffects: true, ...details }
@@ -86,7 +81,7 @@ export function structuredSessionOpenFailure(error: unknown): StructuredSessionO
   if (code === 'agent_session_identity_required') {
     return { reason: 'gone', beforeEffects: true }
   }
-  return { reason: 'unreachable', beforeEffects: false }
+  return openFailure.unreachableOpenFailure(error)
 }
 
 export async function resolveStructuredSessionOpenSource(
@@ -128,7 +123,8 @@ export async function resolveStructuredSessionOpenSource(
     }
   }
   if (found.location.kind === 'terminal') {
-    return { kind: 'terminal', handle: found.location.handle }
+    const { handle, environmentId } = found.location
+    return { kind: 'terminal', handle, ...(environmentId ? { environmentId } : {}) }
   }
   if (found.location.kind !== 'chat') {
     return { kind: 'failed', failure: { reason: 'unsupported', beforeEffects: true } }
@@ -280,7 +276,7 @@ export async function openStructuredAgentSession(
     }
     return tab
       ? { kind: 'opened', target: { ...target, agent: tab.agent ?? target.agent }, tab }
-      : { kind: 'failed', failure: { reason: 'unreachable', beforeEffects: false } }
+      : { kind: 'failed', failure: openFailure.TAB_NEVER_APPEARED }
   } catch (error) {
     return current()
       ? { kind: 'failed', failure: failure(structuredSessionOpenFailure(error)) }

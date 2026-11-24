@@ -1,5 +1,6 @@
 import type {
   ProviderRateLimits,
+  RateLimitBucket,
   RateLimitWindow
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
@@ -19,12 +20,18 @@ import {
   getUsageWindowSections,
   type UsageWindowSection
 } from '../../../../../shared/agent-usage/display/usage-provider-windows'
-import { getProviderUsageErrorMessage, getProviderUsageStatusLabel } from './usage-error-copy'
+import { isCodexUsageSignInRequired } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
+import { isGroupedUsagePool } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
+import {
+  getProviderUsageErrorMessage,
+  getProviderUsageStatusLabel
+} from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
-import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
+import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
 import { recomputeOn } from '@/lib/recompute-on'
 import { ProviderExtraUsageSection } from './provider-extra-usage-section'
 import { formatWindowLabel } from './rate-limit-window-localized-label'
+import { formatPoolCardLabel } from './usage-pool-label'
 import { formatResetsInCaption } from './usage-reset-caption'
 import { UsageBar, UsageValue } from './usage-meter'
 
@@ -103,11 +110,14 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
 function ErrorMessage({
   message,
   label,
+  detail,
   stale = false,
   inverted = false
 }: {
   message: string
   label?: string
+  /** Raw provider error, kept as a hover detail when the message replaces it. */
+  detail?: string
   /** When true, prior data is still visible — show a softer "refresh failed" label. */
   stale?: boolean
   inverted?: boolean
@@ -126,9 +136,9 @@ function ErrorMessage({
       : (label ?? genericRefreshLabel)
 
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-0.5" title={detail}>
       <div className={`text-[11px] font-medium ${labelClass}`}>{resolvedLabel}</div>
-      <div className={detailClass}>{message}</div>
+      {message !== resolvedLabel ? <div className={detailClass}>{message}</div> : null}
     </div>
   )
 }
@@ -137,16 +147,23 @@ export function getWindowSections(
   p: ProviderRateLimits,
   t?: Translate
 ): { label: string; window: RateLimitWindow | null }[] {
+  const buckets = p.buckets ?? []
   return getUsageWindowSections(p).map((section) => ({
-    label: getWindowSectionLabel(section, t),
+    label: getWindowSectionLabel(section, buckets, t),
     window: section.window
   }))
 }
 
-function getWindowSectionLabel(section: UsageWindowSection, t: Translate = translate): string {
+function getWindowSectionLabel(
+  section: UsageWindowSection,
+  buckets: readonly RateLimitBucket[],
+  t: Translate = translate
+): string {
   switch (section.kind) {
     case 'bucket':
-      return section.name
+      return isGroupedUsagePool(section.window)
+        ? formatPoolCardLabel(section.window, buckets, t)
+        : section.name
     case 'session':
       // Why: name the window by its length ("5h") when known, matching the roster and status bar.
       return section.window && section.window.windowMinutes > 0
@@ -223,7 +240,8 @@ export function ProviderPanel({
   showResetCredits = true,
   usagePercentageDisplay = 'used',
   embedded = false,
-  headerAction
+  headerAction,
+  usageSignInHint
 }: {
   p: ProviderRateLimits | null
   inverted?: boolean
@@ -234,9 +252,11 @@ export function ProviderPanel({
   embedded?: boolean
   /** Rendered at the right of the provider name line, e.g. the Used/Left column toggle. */
   headerAction?: React.ReactNode
+  usageSignInHint?: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const windowSections = p ? getWindowSections(p, t) : []
+  const signInRequired = p?.status === 'error' && isCodexUsageSignInRequired(p)
+  const windowSections = p && !signInRequired ? getWindowSections(p, t) : []
   const now = useResetCountdownClock(windowSections.map((section) => section.window?.resetsAt))
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
@@ -270,7 +290,10 @@ export function ProviderPanel({
     )
   }
 
-  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
+  if (
+    p.status === 'error' &&
+    (signInRequired || (!p.session && !p.weekly && !p.fableWeekly && !p.monthly))
+  ) {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
         {embedded ? null : (
@@ -282,7 +305,8 @@ export function ProviderPanel({
         <div className={embedded ? undefined : 'mt-2'}>
           <ErrorMessage
             label={getProviderUsageStatusLabel(p, t)}
-            message={getProviderUsageErrorMessage(p, t)}
+            message={usageSignInHint ?? getProviderUsageErrorMessage(p, t)}
+            detail={signInRequired ? (p.error ?? undefined) : undefined}
             inverted={inverted}
           />
         </div>

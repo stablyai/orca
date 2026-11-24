@@ -1,5 +1,5 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
-import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSpaceWorktree } from '../../../../../../shared/workspace-disk-space/workspace-space-types'
 import type { WorkspaceDecisionInputs } from './workspace-space-decision-details'

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/native-chat-scope-cache'
+import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
 import { MAX_CACHED_TRANSCRIPTS } from '../persistence/mobile-native-chat-transcript-cache'
 import {
   distinctMobileNativeChatRunIdentities,

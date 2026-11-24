@@ -25,7 +25,7 @@ import {
 } from './native-chat-turn-grouping'
 import type { NativeChatRole } from '../../native-chat-types'
 import { dispatchWasWithdrawn } from '../../../agent-session/requests/structured-agent-session-dispatch-rejection'
-import { inSendOrder } from '../../native-chat-send-order'
+import { inSendOrder } from '../pending-sends/native-chat-send-order'
 import { runningStructuredAgentSessionTurnScope } from '../../../agent-session/view/structured-agent-session-live-turn'
 import { nativeChatOpeningTurnKey } from './native-chat-messages-waiting-behind-live-turn'
 import type { AgentSessionLatestTurn } from '../../../agent-session/agent-session-wire'

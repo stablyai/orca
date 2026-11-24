@@ -4,9 +4,9 @@ import {
   resetNativeChatAppearanceSettings,
   resolveNativeChatAppearanceSettings,
   type NativeChatAppearanceSettings
-} from '../../../../../../shared/native-chat/native-chat-appearance-settings'
+} from '../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import { useAppStore } from '../../../../store/index'
-import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { AppearanceChatContrastControls } from './AppearanceChatContrastControls'
 import { ChatFontFamilySetting } from './ChatFontFamilySetting'

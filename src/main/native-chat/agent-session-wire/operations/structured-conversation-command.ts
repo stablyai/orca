@@ -2,7 +2,7 @@ import { neverThrowingStructuredAgentSessionLogger } from '../host/structured-ag
 import type {
   AgentSessionConversationCommand,
   AgentSessionConversationCommandResult
-} from '../../../../shared/agent-session/agent-session-conversation-command'
+} from '../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
@@ -167,6 +167,7 @@ async function clearUnderSerialize(
     }
   })
   if (result.ok && command === 'clear') {
+    context.clearPromptSuggestion?.(sessionId)
     try {
       context.publishConversationName?.(sessionId)
     } catch (error) {

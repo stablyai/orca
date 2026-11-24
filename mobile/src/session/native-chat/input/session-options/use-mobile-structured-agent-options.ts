@@ -1,4 +1,4 @@
-import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import { useMobileStructuredOptionState } from './use-mobile-structured-option-state'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { isAgentSessionHandleProvider } from '../../../../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
@@ -274,6 +274,9 @@ export function useMobileStructuredAgentOptions(args: {
       conversationSupport?.sessionId === sessionId ? conversationSupport.forkSupport : undefined,
     contextUsageSupport:
       conversationSupport?.sessionId === sessionId ? conversationSupport.contextUsage : undefined,
+    /** The options read says `/usage` can show this chat's account. */
+    accountUsageReported:
+      conversationSupport?.sessionId === sessionId && conversationSupport.accountUsage,
     threadGoalSupport: threadGoalSupport?.sessionId === sessionId ? threadGoalSupport : null,
     acceptsImages:
       (imageSupport?.sessionId === sessionId ? imageSupport.acceptsImages : undefined) ??

@@ -19,11 +19,11 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import type {
   AgentMenuRowsTarget,
   NewTabAgentMenuModel
-} from '@/components/tab-bar/new-tab-agent-menu-model'
+} from '@/components/agent/launch-menu/new-tab-agent-menu-model'
 import type { resolveAgentMenuSelection } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import type { AgentPickerEntry } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'

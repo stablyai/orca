@@ -3,6 +3,7 @@ import type Database from '../../sqlite/sync-database'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { AGENT_SESSION_ITEM_WIRE_VERSION } from '../agent-session-wire/publication/history/agent-session-item-presentation-contract'
 import { projectJournalStopNoteForTurnState } from './context-epochs/journal-stop-note-projection'
+import { hydrateJournalStoredItem } from './journal-stored-output-rows'
 
 export type JournalDomainItemTarget = { sessionId: string; epoch: string }
 
@@ -83,7 +84,14 @@ export function readJournalDomainDisplayedRow(
   row: SqliteRow,
   stopStates?: ReadonlyMap<string, unknown>
 ): { item: AgentJournalRenderItem; payload: string } {
-  const source: AgentJournalRenderItem = JSON.parse(String(row.payload_json))
+  const parsed: AgentJournalRenderItem = JSON.parse(String(row.payload_json))
+  // A row that did not select `output_blob` has it read by key.
+  const source = hydrateJournalStoredItem(
+    db,
+    [target.sessionId, target.epoch],
+    parsed,
+    row.output_blob
+  )
   const states =
     row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION
       ? undefined
@@ -96,6 +104,7 @@ export function readJournalDomainDisplayedRow(
   )
   return {
     item,
-    payload: item === source ? String(row.payload_json) : JSON.stringify(item)
+    // The row text is the item only when nothing was read back from its stored output.
+    payload: item === parsed ? String(row.payload_json) : JSON.stringify(item)
   }
 }

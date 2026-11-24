@@ -2,7 +2,7 @@ import type React from 'react'
 import { useId, useState } from 'react'
 import { CircleCheck, Clock, Info, Loader2 } from 'lucide-react'
 import { useAppStore } from '../../../store/index'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
 import { Progress } from '../../ui/progress'
@@ -16,6 +16,7 @@ import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import type { DelayedUpdate, UpdateStatus } from '../../../../../shared/updater/update-status-types'
 import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
+import { getOrcaCloudTeamCapabilities } from '../../../../../shared/orca-profiles/orca-cloud-team-policy'
 import {
   isDelayedUpdatePending,
   normalizeUpdateDelayDays,
@@ -60,6 +61,9 @@ export function UpdateDelaySetting(): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const delayDays = useAppStore((s) => normalizeUpdateDelayDays(s.settings?.updateDelayDays))
+  const teamDelayDays = useAppStore(
+    (s) => getOrcaCloudTeamCapabilities(s.orcaProfileAuthStatus)?.teamPolicy?.updateDelayDays
+  )
   const updateSettings = useAppStore((s) => s.updateSettings)
   const updateStatus = useAppStore((s) => s.updateStatus)
   const [lastDelayedUpdate, setLastDelayedUpdate] = useState<DelayedUpdate | undefined>()
@@ -132,25 +136,37 @@ export function UpdateDelaySetting(): React.JSX.Element {
             {description}
           </span>
         </div>
-        <SettingsSegmentedControl
-          value={delayDays}
-          onChange={setDelayDays}
-          ariaLabelledBy={labelId}
-          ariaDescribedBy={descriptionId}
-          size="sm"
-          wrap
-          options={options.map((days) => ({
-            value: days,
-            label: formatDelayDays(days, t, intlLocale)
-          }))}
-        />
+        {teamDelayDays === undefined ? (
+          <SettingsSegmentedControl
+            value={delayDays}
+            onChange={setDelayDays}
+            ariaLabelledBy={labelId}
+            ariaDescribedBy={descriptionId}
+            size="sm"
+            wrap
+            options={options.map((days) => ({
+              value: days,
+              label: formatDelayDays(days, t, intlLocale)
+            }))}
+          />
+        ) : (
+          <p className="text-settings-detail text-muted-foreground">
+            {t('settings.updateDelay.teamManaged', 'Set by your team')}
+            {' · '}
+            {formatDelayDays(teamDelayDays, t, intlLocale)}
+          </p>
+        )}
       </div>
       {delayedUpdate ? (
         <DelayedUpdatePanel
           delayedUpdate={delayedUpdate}
           now={now}
           checking={checking}
-          onSkipDelayOnce={() => void window.api.updater.check({ ignoreUpdateDelay: true })}
+          onSkipDelayOnce={
+            teamDelayDays === undefined
+              ? () => void window.api.updater.check({ ignoreUpdateDelay: true })
+              : undefined
+          }
         />
       ) : null}
     </SearchableSetting>
@@ -161,7 +177,7 @@ type DelayedUpdatePanelProps = {
   delayedUpdate: DelayedUpdate
   now: number
   checking: boolean
-  onSkipDelayOnce: () => void
+  onSkipDelayOnce?: () => void
 }
 
 export function DelayedUpdatePanel({
@@ -222,7 +238,7 @@ export function DelayedUpdatePanel({
           />
         )}
         <div className="flex items-center gap-3">
-          {cleared ? null : (
+          {!cleared && onSkipDelayOnce ? (
             <Button
               variant="outline"
               size="xs"
@@ -236,7 +252,7 @@ export function DelayedUpdatePanel({
               {checking ? <Loader2 className="animate-spin" /> : null}
               {t('settings.updateDelay.ee1d96f74a', 'Skip delay once')}
             </Button>
-          )}
+          ) : null}
           <a
             href={getReleaseNotesUrlForVersion(delayedUpdate.version)}
             target="_blank"
