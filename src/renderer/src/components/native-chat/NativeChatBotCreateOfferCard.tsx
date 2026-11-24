@@ -223,10 +223,10 @@ function OfferCard({
         label={view.title}
         title={
           created ? (
-            <span className="inline-flex min-w-0 items-baseline gap-1">
+            <span className="inline-flex min-w-0 items-baseline gap-1 [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ring">
               <button
                 type="button"
-                className="min-w-0 text-left [overflow-wrap:anywhere] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="min-w-0 rounded-sm text-left [overflow-wrap:anywhere] hover:underline focus-visible:outline-none"
                 onClick={openCreatedBot}
               >
                 {view.title}
@@ -278,9 +278,7 @@ function OfferCard({
         >
           <span className="min-w-0">
             <span className="block">{view.purpose}</span>
-            {view.takeover ? (
-              <span className="block text-chat-foreground-faint">{view.takeover}</span>
-            ) : null}
+            {view.takeover ? <span className="block">{view.takeover}</span> : null}
             {view.open?.note ? <span className="block">{view.open.note}</span> : null}
           </span>
           <Chevron className="mt-0.5 size-4 shrink-0" aria-hidden />
