@@ -10,6 +10,7 @@ import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-s
 import { catchUpClaudeTranscript } from '../../transcripts/claude-transcript-catch-up'
 import { readyClaudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
 import { keptClaudeAgentRelay } from '../../relay/claude-kept-agent-connection'
+import { restateKeptClaudeBackgroundTasks } from '../../relay/claude-kept-background-tasks'
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps
@@ -24,6 +25,7 @@ type ClaudeOpenInput = {
   emit: (session: ClaudeSession, event: ClaudeStructuredSessionEvent) => void
   /** Whether a reader shows the session's prompt suggestions right now. */
   promptSuggestionsWanted?: (sessionId: string) => boolean
+  publishChildWork?: (sessionId: string, session: ClaudeSession) => void
 }
 
 export async function openClaudeStructuredSession(
@@ -106,6 +108,8 @@ async function openStartingClaudeSession(
     // The journal holds the kept agent's output through the last ack and the replay brings the
     // rest, so its turn ends may move the resume point (or the next cold resume re-imports them).
     history.covered = true
+    restateKeptClaudeBackgroundTasks(session, kept.openTaskIds)
+    input.publishChildWork?.(request.sessionId, session)
   }
   if (!kept && resumesTranscript && (leafUuid || origin?.kind === 'native_copy') && events) {
     const catchUp = withStructuredHistoryInvocation(

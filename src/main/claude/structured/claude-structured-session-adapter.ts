@@ -37,10 +37,7 @@ import {
   type ClaudeExitLifecycle
 } from './lifecycle/claude-structured-session-exit-lifecycle'
 import { drainClaudeChildWork } from '../child-work/claude-child-work-evidence'
-import {
-  deliverClaudeConnectionEvent,
-  emitClaudeStructuredSessionEvent
-} from './lifecycle/claude-structured-event-delivery'
+import * as eventDelivery from './lifecycle/claude-structured-event-delivery'
 import {
   answerClaudeStructuredPrompt,
   cancelClaudeStructuredTurn,
@@ -96,7 +93,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       callbacks: {
         publish: start.publish,
         deliver: (attempt, sessionId, event, payload) =>
-          deliverClaudeConnectionEvent(
+          eventDelivery.deliverClaudeConnectionEvent(
             this.sessions,
             this.exits,
             attempt,
@@ -143,7 +140,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   drainObservedExits = (): Promise<void> => drainClaudeObservedExits(this.exits)
 
   private emit(session: ClaudeSession | null, event: ClaudeStructuredSessionEvent): void {
-    emitClaudeStructuredSessionEvent({
+    eventDelivery.emitClaudeStructuredSessionEvent({
       session,
       event,
       deps: this.deps,
@@ -246,7 +243,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       endings: this.endings,
       deps: this.deps,
       emit: (session, event) => this.emit(session, event),
-      promptSuggestionsWanted: (sessionId) => this.suggestionReaders.has(sessionId)
+      promptSuggestionsWanted: (sessionId) => this.suggestionReaders.has(sessionId),
+      publishChildWork: this.publishChildWork.bind(this)
     })
   noteModelPick = (input: { sessionId: string; fence: number }) =>
     claudeOptions.noteClaudeModelPick(this.sessions, input, this.emit.bind(this))
