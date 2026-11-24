@@ -1,7 +1,4 @@
 import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
-import { findRegisteredTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
-import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
-import { useAppStore } from '@/store/index'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
@@ -10,7 +7,6 @@ import {
   type NativeChatStatusReportMemory
 } from '../../../../../../../shared/native-chat/input/session-options/native-chat-status-session-options'
 import type { SessionOptionDescriptor } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
-import { nextAppliedSessionOptionsAfterPick } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-cache'
 import { sayNativeChatSessionOptionTranslated } from '../controls/native-chat-session-option-labels-text'
 import {
   createNativeChatPtySessionOptions,
@@ -72,7 +68,7 @@ export function useNativeChatSessionOptions(args: {
     const discoveredModels = discoveryContext
       ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
       : null
-    const created = createNativeChatPtySessionOptions({
+    return createNativeChatPtySessionOptions({
       agent,
       scopeKey,
       ...(targetPtyId ? { fallbackScopeKey: terminalTabId } : {}),
@@ -91,46 +87,12 @@ export function useNativeChatSessionOptions(args: {
           picks: [{ modelId, optionId, value, adoptModelAsLaunchDefault }]
         })
     })
-    if (!created) {
-      return null
-    }
-    return {
-      ...created,
-      setOption: async (id, value) => {
-        const result = await created.setOption(id, value)
-        const state = useAppStore.getState()
-        const applied = state.nativeChatAppliedSessionOptionsByTabId[terminalTabId]
-        if (applied?.agent !== agent || !paneKey) {
-          return result
-        }
-        const mounted = findRegisteredTerminalTab(terminalTabId)?.tab
-        const manager = mounted?.getManager()
-        if (!mounted || !manager) {
-          return result
-        }
-        const pane = resolvePaneKeyForManager(terminalTabId, paneKey, manager)
-        const tab = state.tabsByWorktree[mounted.worktreeId]?.find(({ id }) => id === terminalTabId)
-        if (
-          pane.status === 'resolved' &&
-          pane.leafId === mounted.getTabWideAgentHintLeafId() &&
-          mounted.getPtyIdForPane(pane.numericPaneId) === targetPtyId &&
-          tab?.launchAgent === agent
-        ) {
-          state.setNativeChatAppliedSessionOptions(terminalTabId, {
-            agent: applied.agent,
-            values: nextAppliedSessionOptionsAfterPick(applied.values, id, value)
-          })
-        }
-        return result
-      }
-    }
   }, [
     agent,
     canSwitchOmpModel,
     dispatchCommand,
     discoveryContext,
     onAgentPicker,
-    paneKey,
     targetPtyId,
     terminalTabId
   ])

@@ -50,9 +50,9 @@ type SessionOptionApplyContext = {
 }
 
 /** Serialize absolute targets so they observe prior flips instead of stale baselines. */
-export function createSerializedApplyQueue(): <T>(fn: () => T | Promise<T>) => Promise<T> {
+function createSerializedApplyQueue(): <T>(fn: () => Promise<T>) => Promise<T> {
   let tail: Promise<unknown> = Promise.resolve()
-  return <T>(fn: () => T | Promise<T>): Promise<T> => {
+  return <T>(fn: () => Promise<T>): Promise<T> => {
     const run = tail.then(fn, fn)
     tail = run.then(
       () => undefined,
@@ -294,13 +294,11 @@ async function applyInvokeAction(
   return finish(ctx)
 }
 
-export function createSessionOptionAppliers(
-  ctx: SessionOptionApplyContext,
-  serialize: ReturnType<typeof createSerializedApplyQueue>
-): {
+export function createSessionOptionAppliers(ctx: SessionOptionApplyContext): {
   setOption: (id: string, value: SessionOptionValue) => Promise<SessionOptionSetResult>
   invokeAction: (id: string) => Promise<SessionOptionSetResult>
 } {
+  const serialize = createSerializedApplyQueue()
   return {
     setOption: (id, value) => serialize(() => applySetOption(ctx, id, value)),
     invokeAction: (id) => serialize(() => applyInvokeAction(ctx, id))

@@ -2,11 +2,6 @@ import { expect, it, vi } from 'vitest'
 import { getAgentSessionOptionCatalog } from '../../../agent-session/options/agent-session-option-catalog'
 import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
 import {
-  readNativeChatSessionOptionCache,
-  writeNativeChatSessionOptionCache
-} from './native-chat-session-option-cache'
-import { createNativeChatSessionOptionRecord } from './native-chat-session-option-state'
-import {
   takeNativeChatStatusReport,
   type NativeChatStatusReportMemory
 } from './native-chat-status-session-options'
@@ -22,7 +17,7 @@ function chip(scopeKey: string, dispatchCommand: () => Promise<void> = async () 
     modelLabel: 'Model',
     dispatchCommand
   })!
-  const report = (model: string, effort?: string, sessionId = 'session-a') => {
+  const report = (model: string, effort: string, sessionId = 'session-a') => {
     const reported = takeNativeChatStatusReport(memory, scopeKey, 'claude', claude, claude.models, {
       model,
       providerSession: { id: sessionId, effort }
@@ -31,10 +26,11 @@ function chip(scopeKey: string, dispatchCommand: () => Promise<void> = async () 
       surface.reportSessionOptions(reported.values, reported.forNewModel)
     }
   }
-  const shown = (id: string) =>
-    surface.getSnapshot().find((row) => row.id === id)?.kind.currentValue
-  const source = (id: string) => surface.getSnapshot().find((row) => row.id === id)?.valueSource
-  return { surface, report, shown, source }
+  const shown = (id: string) => {
+    const kind = surface.getSnapshot().find((row) => row.id === id)?.kind
+    return kind?.type === 'select' ? kind.currentValue : undefined
+  }
+  return { surface, report, shown }
 }
 
 it('shows the live Claude effort with its model and follows an /effort change', () => {
@@ -102,67 +98,4 @@ it('keeps an effort the session reports while a chip model pick is still being s
   sent!()
   await pick
   expect([shown('model'), shown('effort')]).toEqual(['sonnet', 'max'])
-})
-
-it('merges changed host options while preserving phone picks and session reports', async () => {
-  const scope = 'applied-seed'
-  const launch = { model: 'opus', effort: 'high', fastMode: true }
-  const initial = chip(scope)
-  const sibling = chip(scope)
-  await initial.surface.mergeAppliedSessionOptions(launch)
-  await sibling.surface.mergeAppliedSessionOptions(launch)
-  expect([initial.shown('effort'), sibling.shown('effort')]).toEqual(['high', 'high'])
-  await initial.surface.setOption('fastMode', false)
-
-  let finishDispatch: (() => void) | undefined
-  const { surface, report, shown, source } = chip(
-    scope,
-    () => new Promise<void>((resolve) => (finishDispatch = resolve))
-  )
-  const fast = () => [shown('fastMode'), source('fastMode')]
-  const effort = () => [shown('effort'), source('effort')]
-  await surface.mergeAppliedSessionOptions(launch)
-  expect(fast()).toEqual([false, 'applied'])
-  report('opus')
-  expect(effort()).toEqual(['high', 'applied'])
-  await surface.mergeAppliedSessionOptions({ ...launch, effort: 'low' })
-  expect(effort()).toEqual(['low', 'applied'])
-  expect(fast()).toEqual([false, 'applied'])
-
-  const pick = surface.setOption('effort', 'medium')
-  await vi.waitFor(() => expect(finishDispatch).toBeDefined())
-  const merge = surface.mergeAppliedSessionOptions(launch)
-  finishDispatch!()
-  await pick
-  await merge
-  expect(effort()).toEqual(['medium', 'dispatched'])
-
-  report('opus', 'low')
-  await surface.mergeAppliedSessionOptions({ ...launch, effort: 'medium' })
-  expect(effort()).toEqual(['low', 'reported'])
-})
-
-it('leaves the cache to the new agent when a queued host merge finishes after the scope switched', async () => {
-  const scope = 'switched-scope'
-  let retire: (() => void) | undefined
-  const { surface } = chip(
-    scope,
-    () => new Promise<void>((_, reject) => (retire = () => reject(new Error('retired'))))
-  )
-  await surface.mergeAppliedSessionOptions({ model: 'opus', effort: 'high' })
-  const pick = surface.setOption('effort', 'low').catch(() => null)
-  await vi.waitFor(() => expect(retire).toBeDefined())
-  const merge = surface.mergeAppliedSessionOptions({ model: 'opus', effort: 'max' })
-  writeNativeChatSessionOptionCache(scope, createNativeChatSessionOptionRecord('codex'))
-  retire!()
-  await pick
-  await merge
-  expect(readNativeChatSessionOptionCache(scope)?.agent).toBe('codex')
-})
-
-it('keeps the launch effort when the host moves to another model with the same effort', async () => {
-  const { surface, shown, source } = chip('host-model-change')
-  await surface.mergeAppliedSessionOptions({ model: 'opus', effort: 'high' })
-  await surface.mergeAppliedSessionOptions({ model: 'sonnet', effort: 'high' })
-  expect([shown('model'), shown('effort'), source('effort')]).toEqual(['sonnet', 'high', 'applied'])
 })

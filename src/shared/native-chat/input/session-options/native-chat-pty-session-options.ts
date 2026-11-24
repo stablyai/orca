@@ -16,14 +16,10 @@ import {
   type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
 import {
-  mergeNativeChatAppliedSessionOptions,
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
 } from './native-chat-session-option-cache'
-import {
-  createSerializedApplyQueue,
-  createSessionOptionAppliers
-} from './native-chat-session-option-apply'
+import { createSessionOptionAppliers } from './native-chat-session-option-apply'
 import {
   buildNativeChatSessionOptionSnapshot,
   resolveEffectiveNativeChatModelId,
@@ -42,7 +38,6 @@ type PersistSelection = (args: {
 
 export type NativeChatPtySessionOptionsSurface = SessionOptionsSurface & {
   recordOutgoingCommand(command: string): void
-  mergeAppliedSessionOptions(values: Record<string, SessionOptionValue>): Promise<void>
   /** Applies what the running agent reports. `forNewModel` holds values that are not news on their
    *  own (an unchanged effort) but describe a model the session switches to. */
   reportSessionOptions(
@@ -83,9 +78,12 @@ export function createNativeChatPtySessionOptions(
   let models = [...(args.initialModels ?? catalog.models)]
   // Cached enrichment contains probe results, so its default is authoritative rather than a seed guess.
   let modelsAreDiscovered = args.initialModels !== undefined
-  const cached = readNativeChatSessionOptionCache(args.scopeKey, args.fallbackScopeKey)
-  const record =
-    cached?.agent === args.agent ? cached : createNativeChatSessionOptionRecord(args.agent)
+  let record =
+    readNativeChatSessionOptionCache(args.scopeKey, args.fallbackScopeKey) ??
+    createNativeChatSessionOptionRecord(args.agent)
+  if (record.agent !== args.agent) {
+    record = createNativeChatSessionOptionRecord(args.agent)
+  }
 
   const activeModels = (): CatalogModel[] => withTrackedNativeChatModel(catalog, models, record)
   let snapshot = buildNativeChatSessionOptionSnapshot({
@@ -99,7 +97,8 @@ export function createNativeChatPtySessionOptions(
   })
   const listeners = new Set<(value: SessionOptionDescriptor[]) => void>()
 
-  const publishSnapshot = (): SessionOptionDescriptor[] => {
+  const publish = (): SessionOptionDescriptor[] => {
+    writeNativeChatSessionOptionCache(args.scopeKey, record)
     snapshot = buildNativeChatSessionOptionSnapshot({
       catalog,
       models: activeModels(),
@@ -113,11 +112,6 @@ export function createNativeChatPtySessionOptions(
       listener(snapshot)
     }
     return snapshot
-  }
-
-  const publish = (): SessionOptionDescriptor[] => {
-    writeNativeChatSessionOptionCache(args.scopeKey, record)
-    return publishSnapshot()
   }
 
   const clearModelTruth = (): void => {
@@ -161,33 +155,23 @@ export function createNativeChatPtySessionOptions(
     }
   }
 
-  const serialize = createSerializedApplyQueue()
-  const appliers = createSessionOptionAppliers(
-    {
-      mode: args.mode,
-      catalog,
-      getModels: activeModels,
-      getRecord: () => record,
-      dispatchCommand: args.dispatchCommand,
-      onAgentPicker: args.onAgentPicker,
-      persist,
-      onDraftValuesChanged: args.onDraftValuesChanged,
-      publish,
-      clearModelTruth,
-      setTrackedValue
-    },
-    serialize
-  )
+  const appliers = createSessionOptionAppliers({
+    mode: args.mode,
+    catalog,
+    getModels: activeModels,
+    getRecord: () => record,
+    dispatchCommand: args.dispatchCommand,
+    onAgentPicker: args.onAgentPicker,
+    persist,
+    onDraftValuesChanged: args.onDraftValuesChanged,
+    publish,
+    clearModelTruth,
+    setTrackedValue
+  })
 
   return {
     getSnapshot: () => snapshot,
     setOption: appliers.setOption,
-    mergeAppliedSessionOptions: (values) =>
-      serialize(() => {
-        if (mergeNativeChatAppliedSessionOptions(args.scopeKey, values, record)) {
-          publishSnapshot()
-        }
-      }),
     invokeAction: appliers.invokeAction,
     subscribe: (listener) => {
       listeners.add(listener)
