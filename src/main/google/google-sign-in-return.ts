@@ -22,7 +22,12 @@ export const GOOGLE_RETURN_PAGES = {
   }),
   /** Says why, in the same words Orca and the CLI show. */
   notSignedIn: (reason: string) =>
-    orcaCallbackOutcome({ ok: false, heading: 'Couldn’t sign in to Google', line: reason })
+    orcaCallbackOutcome({ ok: false, heading: 'Couldn’t sign in to Google', line: reason }),
+  cancelled: orcaCallbackOutcome({
+    ok: null,
+    heading: 'Google sign-in was cancelled',
+    line: 'Orca stopped waiting for this sign-in. Return to Orca to sign in again.'
+  })
 } as const
 export const GOOGLE_RETURN_HOLD: LoopbackCallbackHold = {
   received: orcaCallbackReceivedPage(),

@@ -269,9 +269,11 @@ export async function runGoogleSignIn(
     return record
   } catch (error) {
     tab.held?.answer(
-      GOOGLE_RETURN_PAGES.notSignedIn(
-        error instanceof Error ? error.message : 'Return to Orca and try again.'
-      )
+      channel.signal.aborted
+        ? GOOGLE_RETURN_PAGES.cancelled
+        : GOOGLE_RETURN_PAGES.notSignedIn(
+            error instanceof Error ? error.message : 'Return to Orca and try again.'
+          )
     )
     throw error
   }
