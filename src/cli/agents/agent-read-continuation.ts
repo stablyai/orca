@@ -1,5 +1,6 @@
 import type { AgentReadResult } from '../../shared/agent-conversations/agent-conversation-contracts'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../shared/agent-session/identity/orca-session-address-prefix'
+import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
 import {
   quoteCliCommandArgument,
   quoteCliCommandArgumentForEveryShell
@@ -66,8 +67,10 @@ export function agentReadClosingLine(
       ...(call.connection ?? [])
     ].map(quoteCliCommandArgumentForEveryShell)
   ]
-  // A value no quoting keeps inert in every shell: print the cursor alone, never a command.
-  return call.connection && parts.every((part) => part !== null)
+  // A value no quoting keeps inert in every shell, or a host's ID that isn't one: cursor only.
+  return call.connection &&
+    isOrcaSessionId(result.orcaSessionId) &&
+    parts.every((part) => part !== null)
     ? `${lead} ${parts.join(' ')}`
     : `${lead} --cursor ${nextCursor} (repeat your last command with this --cursor)`
 }

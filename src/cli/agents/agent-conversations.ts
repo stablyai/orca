@@ -75,6 +75,9 @@ export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
     }
     // An empty value (an unset variable) must not silently read the newest page instead.
     const cursor = getPresentStringFlag(flags, 'cursor')
+    // Resolved before the read, so a store failure can't discard a page already read; --json
+    // prints no continuation command, so it never needs the saved servers.
+    const connection = json ? [] : await agentReadConnectionArgs(flags).catch(() => null)
     const result = await callAgentMethod<AgentReadResult>(client, 'agent.read', {
       id: getRequiredStringFlag(flags, 'id'),
       ...(limit !== undefined ? { limit } : {}),
@@ -87,8 +90,6 @@ export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
         'Update Orca on that host to page agent reads.'
       )
     }
-    // Only text output prints a continuation command; --json never needs the saved servers.
-    const connection = !json && result.result.nextCursor ? await agentReadConnectionArgs(flags) : []
     printResult(result, json, (read) =>
       formatAgentRead(read, { limit, connection, cursorRead: cursor !== undefined })
     )
@@ -203,7 +204,8 @@ function formatAgentRead(
       lines.push(closing)
     }
   }
-  if (result.state) {
+  // Only a known state is printed: a host's text never reaches a line of its own.
+  if (AGENT_STATUS_STATES.some((known) => known === result.state)) {
     lines.unshift(`state: ${result.state}`)
   }
   return lines.join('\n')
