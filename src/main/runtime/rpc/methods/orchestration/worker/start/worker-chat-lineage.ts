@@ -1,4 +1,8 @@
 import { z } from 'zod'
+import { botOfSession } from '../../../../../../bots/bot-session-tabs'
+import { getRemoteDispatch } from '../../../../../orchestration/db/remote-owned/remote-dispatch-records'
+import { getLiveRemotePlacement } from '../../../../../orchestration/db/remote-owned/remote-placement-hold'
+import { currentRunCoordinatorOrcaSessionId } from '../../../../../orchestration/db/runs/run-coordinator-orca-session'
 import { isInBotHome } from '../../../../../../bots/bot-home-membership'
 import {
   sessionCallerOf,
@@ -30,10 +34,33 @@ export function startsInChatLineage(
   }
   // A retry or follow-up of a lineage worker stays in it, whoever sends it.
   const earlier = [params.retryOf, followUpOf].filter((id): id is string => Boolean(id))
-  if (earlier.some((id) => db.getDispatchContextById(id)?.chat_lineage === 1)) {
+  if (earlier.some((id) => earlierStartsChatWorkers(runtime.bots, db, id))) {
     return true
   }
   return db.creatorStartsChatWorkers(resolveDispatchCreator(runtime, params.from, caller))
+}
+
+function earlierStartsChatWorkers(
+  bots: OrcaRuntimeService['bots'],
+  db: OrchestrationDb,
+  dispatchId: string
+): boolean {
+  const local = db.getDispatchContextById(dispatchId)
+  if (local) {
+    return local.chat_lineage === 1
+  }
+  const remote = getRemoteDispatch(db, dispatchId)
+  const placement = remote && getLiveRemotePlacement(db, remote.task_id)
+  if (!placement || placement.dispatch_id !== dispatchId) {
+    return false
+  }
+  if (placement.chat_lineage !== null) {
+    return placement.chat_lineage === 1
+  }
+  // Older placements have no stamp; use the home Run's known coordinator where available.
+  const run = db.getRun(placement.run_id)
+  const coordinator = run && currentRunCoordinatorOrcaSessionId(run)
+  return Boolean(coordinator && bots && botOfSession(bots, coordinator))
 }
 
 /** The start's mode: the host's settings, unless the caller's lineage starts its workers as chats. */

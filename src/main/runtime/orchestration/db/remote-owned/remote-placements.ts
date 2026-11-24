@@ -102,13 +102,14 @@ export function reserveRemotePlacement(
       .prepare(
         `INSERT INTO remote_placements (
            task_id, run_id, environment_id, conversation_id, state, request_key, prior_task_status,
-           dispatch_id
-         ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, ?)
+           dispatch_id, chat_lineage
+         ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, ?, ?)
          ON CONFLICT(task_id) DO UPDATE SET
            run_id = excluded.run_id, environment_id = excluded.environment_id,
            conversation_id = excluded.conversation_id, state = 'reserved',
            request_key = excluded.request_key, prior_task_status = excluded.prior_task_status,
-           dispatch_id = excluded.dispatch_id, never_sent_at = NULL`
+           dispatch_id = excluded.dispatch_id, never_sent_at = NULL,
+           chat_lineage = excluded.chat_lineage`
       )
       .run(
         task.id,
@@ -117,7 +118,8 @@ export function reserveRemotePlacement(
         link.conversation_id,
         params.requestKey,
         task.status,
-        params.retryOf ?? null
+        params.retryOf ?? null,
+        params.enforceBotRunCapacity ? 1 : 0
       )
     transitionLifecycleWithDb(db.db, {
       entity: 'task',
@@ -282,10 +284,9 @@ export function currentRemoteAttempt(
   taskId: string
 ): RemoteDispatchRow | undefined {
   const placement = getLiveRemotePlacement(db, taskId)
-  return placement?.state === 'accepted' &&
-    placement.dispatch_id &&
-    !getActiveDispatchForTask(db, taskId)
-    ? getRemoteDispatch(db, placement.dispatch_id)
+  const dispatchId = placement?.state === 'accepted' ? placement.dispatch_id : null
+  return dispatchId && !getActiveDispatchForTask(db, taskId)
+    ? getRemoteDispatch(db, dispatchId)
     : undefined
 }
 

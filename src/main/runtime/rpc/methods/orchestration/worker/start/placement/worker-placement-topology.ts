@@ -119,13 +119,16 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   const homeCaller = args.caller?.workspaceId === args.worktreeId ? args.caller : undefined
   const caller = homeCaller && readAgentSessionRecordStore()?.getRecord(homeCaller.sessionId)
   const ownChoice =
-    caller && caller.location.workspaceId === args.worktreeId && caller.provider === args.agent
+    bot &&
+    caller &&
+    caller.location.workspaceId === args.worktreeId &&
+    caller.provider === args.agent
       ? caller.permissionMode
       : undefined
+  const botChoice = bot?.agent === args.agent ? bot.permissionMode : undefined
   // A different workspace may use the destination bot home without borrowing its approval grants.
-  const savedMode = homeCaller ? (ownChoice ?? bot?.permissionMode) : bot?.permissionMode && 'ask'
-  const permissionMode =
-    savedMode && bot?.agent === args.agent ? newChatPermissionMode(args.agent, savedMode) : null
+  const savedMode = homeCaller ? (ownChoice ?? botChoice) : botChoice && 'ask'
+  const permissionMode = savedMode ? newChatPermissionMode(args.agent, savedMode) : null
   const launchOptions = narrowStructuredLaunchSeedOptions(args.launchPreferences)
   const options = permissionMode
     ? { ...launchOptions, [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode }

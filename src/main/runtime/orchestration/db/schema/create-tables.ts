@@ -33,6 +33,9 @@ export function createTables(this: OrchestrationDb): void {
   if (!this.hasColumn('remote_placements', 'never_sent_at')) {
     this.db.exec('ALTER TABLE remote_placements ADD COLUMN never_sent_at TEXT')
   }
+  if (!this.hasColumn('remote_placements', 'chat_lineage')) {
+    this.db.exec('ALTER TABLE remote_placements ADD COLUMN chat_lineage INTEGER')
+  }
   if (!this.hasColumn('remote_dispatches', 'task_settled_here')) {
     this.db.exec(
       'ALTER TABLE remote_dispatches ADD COLUMN task_settled_here INTEGER NOT NULL DEFAULT 0'

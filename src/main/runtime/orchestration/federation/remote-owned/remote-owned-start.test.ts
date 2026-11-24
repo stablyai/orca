@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import { ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { startsInChatLineage } from '../../../rpc/methods/orchestration/worker/start/worker-chat-lineage'
+import { openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
+import { recordRemoteStart, reserveRemotePlacement } from '../../db/remote-owned/remote-placements'
 import { forwardedChatLineage, serverStartOptions } from './remote-owned-start'
 
 type Runtime = Parameters<typeof forwardedChatLineage>[0]
@@ -54,6 +56,40 @@ describe('a chat-lineage start on a paired server', () => {
     })
     expect(serverStartOptions(params)).not.toHaveProperty('chatLineage')
     expect(serverStartOptions(params)).toMatchObject({ spec: 'work' })
+  })
+
+  it('keeps a bot retry in the same lineage after the paired worker is recorded', async () => {
+    const run = db.createRun({
+      objective: 'Paired work',
+      coordinatorHandle: null,
+      coordinatorPaneKey: null
+    })
+    const link = openRemoteRunLink(db, run.id, server)
+    const taskId = 'task_000000000001'
+    const dispatchId = 'ctx_000000000001'
+    reserveRemotePlacement(db, {
+      link,
+      taskId,
+      requestKey: 'start-key',
+      create: { spec: 'Work' },
+      enforceBotRunCapacity: true
+    })
+    recordRemoteStart(db, {
+      conversationId: link.conversation_id,
+      taskId,
+      requestKey: 'start-key',
+      dispatchId
+    })
+    const retry = { ...params, retryOf: dispatchId }
+    const elsewhere = session('folder:elsewhere')
+    const takes = runtimeWith([ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY])
+    expect(await forwardedChatLineage(takes, db, retry, elsewhere, server)).toEqual({
+      chatLineage: true,
+      enforceBotRunCapacity: true
+    })
+    expect(await forwardedChatLineage(runtimeWith([]), db, retry, elsewhere, server)).toEqual({
+      enforceBotRunCapacity: true
+    })
   })
 
   it('is honoured on the server only from the paired Orca coordinating the Run', () => {
