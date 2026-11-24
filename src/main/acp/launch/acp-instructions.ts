@@ -214,6 +214,8 @@ export const deliverCopilotInstructions: AcpInstructionsDelivery = async ({
 }
 
 const cleared = new Map<string, Promise<void>>()
+/** Removals run this many at a time, so a large leftover folder doesn't hold the launch long. */
+const REMOVE_BATCH = 16
 
 /** An earlier run's leftovers go on first use in a run, except those of chats whose agent the
  *  terminal host kept running: that agent still reads them. One host holds a profile. */
@@ -223,13 +225,14 @@ async function clearEarlierRuns(root: string, remove: (path: string) => Promise<
   if (!keptProviderRelaysComplete()) {
     return
   }
-  const kept = [...liveProviderRelayChats()].map(nativeChatScratchFolderName)
+  // Every chat's folder name has the same length; its entries are it, `<it>.md` or `<it>-<uuid>`.
+  const kept = new Set([...liveProviderRelayChats()].map(nativeChatScratchFolderName))
+  const length = nativeChatScratchFolderName('').length
   const keptBy = (name: string): boolean =>
-    kept.some((chat) => name === chat || name.startsWith(`${chat}.`) || name.startsWith(`${chat}-`))
-  for (const name of await readdir(root).catch(() => [])) {
-    if (!keptBy(name)) {
-      await remove(join(root, name))
-    }
+    kept.has(name.slice(0, length)) && ['', '.', '-'].includes(name.charAt(length))
+  const gone = (await readdir(root).catch(() => [])).filter((name) => !keptBy(name))
+  for (let at = 0; at < gone.length; at += REMOVE_BATCH) {
+    await Promise.all(gone.slice(at, at + REMOVE_BATCH).map((name) => remove(join(root, name))))
   }
 }
 

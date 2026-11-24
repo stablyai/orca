@@ -107,7 +107,6 @@ export class ProviderRelayPendingRequests {
     this.working.clear()
     this.pending.clear()
     this.pendingChars = 0
-    this.kept.clear()
   }
 
   private hold(key: string, record: ProviderRelayRecord): void {
