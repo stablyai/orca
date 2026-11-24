@@ -20,7 +20,7 @@ const MAX_CHAT_KEY_CHARS = 1024
 const ENDED_RELAY_RETENTION_MS = 24 * 60 * 60 * 1000
 /** Relay cleanup is disk work; shutdown waits for it only this long. */
 const DISPOSE_WAIT_MS = 3000
-const RELAY_SPOOL_NAME = /^r-(\d+)-[0-9a-f-]{36}\.ndjson(?:\.line)?$/
+const RELAY_SPOOL_NAME = /^r-(\d+)-[0-9a-f-]{36}\.ndjson(?:\.line|\.compact)?$/
 
 type RelayHostOptions = {
   /** `<daemon runtime dir>`; spools and the ownership journal live under its `chat-relay/`. */

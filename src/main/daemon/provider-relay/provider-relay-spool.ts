@@ -58,7 +58,8 @@ export class ProviderRelaySpool {
       restore: (records) => {
         this.memory.merge(records)
         this.updatePressure()
-      }
+      },
+      pendingChanged: () => this.updatePressure()
     })
     this.fileCap = options.fileCapBytes ?? RELAY_SPOOL_FILE_CAP_BYTES
   }
@@ -124,6 +125,7 @@ export class ProviderRelaySpool {
     if (this.keepingLive) {
       this.spillMemory()
     }
+    this.file.compactIfWasteful(this.fileCap)
     // An answer to the last ask that leaves half the cap held asks again, so the client never stalls.
     this.ackAsked = this.ackAsked && this.clientAcked < this.ackAskedSeq
     this.updatePressure()
@@ -155,8 +157,6 @@ export class ProviderRelaySpool {
     this.file.index.ackThrough(this.acked)
     if (this.file.index.lastSeq > 0 && this.acked >= this.file.index.lastSeq) {
       this.file.remove()
-    } else if (this.keeping) {
-      this.file.compactIfWasteful(this.fileCap)
     }
   }
 
@@ -249,36 +249,46 @@ export class ProviderRelaySpool {
 
   /** Pause at the cap, resume below half of it, so acks near the cap don't flap the agent's stdout. */
   private updatePressure(): void {
-    let [held, cap] = this.pressure()
-    if (this.keeping && this.mode === 'attached' && held >= cap && this.clientAcked > this.acked) {
+    const [kept, keptCap] = this.pressure(false)
+    if (
+      this.keeping &&
+      this.mode === 'attached' &&
+      kept >= keptCap &&
+      this.clientAcked > this.acked
+    ) {
       // A kept span reaching the cap can't be kept whole; holding it would stall the agent. Only the
-      // live client's own acks count, so a takeover never loses lines its new client hasn't had.
+      // live client's own acks count, so a takeover never loses lines its new client hasn't had, and
+      // only kept bytes count, since releasing them can't shrink writes still queued.
       this.releaseThrough(this.clientAcked)
-      ;[held, cap] = this.pressure()
     }
+    const [held, cap] = this.pressure(true)
     const paused = !this.disposed && (this.paused ? held >= cap / 2 : held >= cap)
     // Asked once per crossing and again once answered if still crossed, so a client can ack rarely.
     // Only while streaming live: during a replay the client has nothing new to ack yet. While
     // keeping, lines are on disk, so the ask comes near the file cap rather than the memory cap.
+    // An ask with nothing new since the last one is skipped, and asked again once output arrives.
     const ackWanted = this.mode === 'attached' && held >= cap / 2
-    if (ackWanted && !this.ackAsked) {
+    if (!ackWanted) {
+      this.ackAsked = false
+    } else if (!this.ackAsked && this.nextSeqValue - 1 > this.ackAskedSeq) {
+      this.ackAsked = true
       this.ackAskedSeq = this.nextSeqValue - 1
       this.options.onAckWanted?.(this.ackAskedSeq)
     }
-    this.ackAsked = ackWanted
     if (paused !== this.paused) {
       this.paused = paused
       this.options.onPressureChanged(paused)
     }
   }
 
-  private pressure(): [held: number, cap: number] {
-    return this.mode === 'detached' || this.keepingLive
-      ? [
-          Math.max(this.file.index.unackedBytes, this.file.pendingBytes) + this.memory.bytes,
-          this.fileCap
-        ]
-      : [this.memory.bytes, this.memoryCap]
+  /** `withQueued` adds writes not yet started: they hold memory an ack can't free. */
+  private pressure(withQueued: boolean): [held: number, cap: number] {
+    if (this.mode !== 'detached' && !this.keepingLive) {
+      return [this.memory.bytes, this.memoryCap]
+    }
+    const unacked = this.file.index.unackedBytes
+    const onDisk = withQueued ? Math.max(unacked, this.file.pendingBytes) : unacked
+    return [onDisk + this.memory.bytes, this.fileCap]
   }
 
   private writeToFile(record: HeldRecord): void {

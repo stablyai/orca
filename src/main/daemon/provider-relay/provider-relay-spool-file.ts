@@ -13,6 +13,8 @@ type SpoolFileHooks = {
   acked: () => number
   /** Records a failed write didn't land; the spool keeps them in memory, in seq order. */
   restore: (records: HeldRecord[]) => void
+  /** Pending bytes fell as a write started, so a pause they caused can lift. */
+  pendingChanged: () => void
 }
 
 /** The spool's private append-only file: one write in flight, the rest coalesced behind it. */
@@ -71,6 +73,7 @@ export class SpoolFile {
         }
         // Once started, a write is the one in flight; only those still queued count as pending.
         this.pendingBytes -= write.bytes
+        this.hooks.pendingChanged()
         if (epoch !== this.epoch) {
           return
         }
@@ -111,7 +114,10 @@ export class SpoolFile {
         await this.closeOpenHandle()
         try {
           const { before, after } = await compactSpoolFile(this.path, this.hooks.acked())
-          this.writtenBytes -= before - after
+          // A removal while this ran started a new file; the savings were in the old one.
+          if (epoch === this.epoch) {
+            this.writtenBytes -= before - after
+          }
         } catch {
           // The file is still whole, only larger; later lines stay in memory so it stops growing.
           this.failed = true
