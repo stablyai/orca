@@ -1,4 +1,5 @@
 import type { RunRow } from '../orchestration-records'
+import { coordinatorCustodyHandle, guardChatCustody } from '../chat-custody-guard'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import type { OrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
@@ -36,6 +37,7 @@ export function insertRunRow(
     paneKey: params.coordinatorPaneKey,
     orcaSessionId: params.coordinatorOrcaSessionId ?? null
   }
+  guardChatCustody(this, coordinatorCustodyHandle(coordinator), 'custody')
   this.db
     .prepare(
       `INSERT INTO runs (

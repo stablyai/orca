@@ -7,6 +7,11 @@ export const BOT_HANDLER_GROUPS: HandlerGroup[] = [
     load: async () => (await import('./bot.js')).BOT_HANDLERS
   },
   {
+    name: 'bot-end-chat',
+    keys: ['bot end-chat'],
+    load: async () => ({ 'bot end-chat': (await import('./bot-end-chat.js')).BOT_END_CHAT_HANDLER })
+  },
+  {
     name: 'bot-create',
     keys: ['bot create'],
     load: async () => (await import('./bot-create.js')).BOT_CREATE_HANDLERS

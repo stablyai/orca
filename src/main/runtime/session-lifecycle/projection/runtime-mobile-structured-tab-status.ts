@@ -4,6 +4,7 @@ import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionAgentTabStatus
 } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
@@ -42,4 +43,12 @@ export function withStructuredChatStatus(
     ...(row.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {})
   }
   return { ...tab, chatStatus }
+}
+
+/** A chat tab with the host's name for its current showing, read when the snapshot is sent. */
+export function withChatTabShowing(
+  tab: RuntimeMobileSessionAgentTab
+): RuntimeMobileSessionAgentTab {
+  const showing = getStructuredAgentSessionHost()?.deps.store.getSessionTabShowing(tab.sessionId)
+  return showing ? { ...tab, showing } : tab
 }

@@ -58,6 +58,10 @@ export const BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY = 'bots.group-attachments
 // leaves pins to each client, so a client shows the Home rule only where this is advertised.
 export const BOTS_HOME_PIN_RUNTIME_CAPABILITY = 'bots.home-pin.v1' as const
 
+// Host ends a bot's side chat (bots.endChat) for its window, CLI and paired clients; an older host has
+// no such method, so a client keeps a closed bot chat in the background and offers no End chat.
+export const BOTS_END_CHAT_RUNTIME_CAPABILITY = 'bots.end-chat.v1' as const
+
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
   BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
@@ -74,5 +78,6 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY,
   BOTS_SESSION_LINKS_RUNTIME_CAPABILITY,
   BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
-  BOTS_HOME_PIN_RUNTIME_CAPABILITY
+  BOTS_HOME_PIN_RUNTIME_CAPABILITY,
+  BOTS_END_CHAT_RUNTIME_CAPABILITY
 ] as const

@@ -1,3 +1,4 @@
+import { botSideChatTab, closeBotSideChatTab } from './bot-side-chat-tab-close'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
@@ -29,6 +30,22 @@ export function retireStructuredAgentSessionTab(args: {
   if (existing) {
     return existing
   }
+  const plainClose = () => closeThroughHost(args)
+  const botTab = botSideChatTab(args)
+  const promise = (botTab ? closeBotSideChatTab(args, botTab, plainClose) : plainClose()).finally(
+    () => inFlightRetirements.delete(key)
+  )
+  inFlightRetirements.set(key, promise)
+  return promise
+}
+
+/** The chat's close and its host tab's close, as for any chat. */
+function closeThroughHost(args: {
+  target: RuntimeClientTarget
+  worktreeId: string
+  sessionId: string
+  onError?: (error: unknown) => void
+}): Promise<boolean> {
   const hostTabId = `agent-session:${args.sessionId}`
   // Why: main echoes the host tab id it was asked to close, never this window's tab id.
   const closeHostTab = () =>
@@ -39,11 +56,10 @@ export function retireStructuredAgentSessionTab(args: {
         reason: 'user'
       })
     )
-  const promise = Promise.allSettled([
+  return Promise.allSettled([
     closeStructuredAgentSession(args.target, args.sessionId),
     closeHostTab()
   ]).then((results) => {
-    inFlightRetirements.delete(key)
     for (const result of results) {
       if (result.status === 'rejected') {
         if (args.onError) {
@@ -56,6 +72,4 @@ export function retireStructuredAgentSessionTab(args: {
     const [, hostTabClose] = results
     return hostTabClose.status === 'fulfilled'
   })
-  inFlightRetirements.set(key, promise)
-  return promise
 }
