@@ -17,6 +17,7 @@ import {
   type BotShareDevice
 } from '../../runtime/rpc/server/pairing/bot-share-device-store'
 import { deliverBotShareHeldMessage, type BotShareHeldMessageDeps } from './bot-share-held-messages'
+import { botSharedWithAccount } from './bot-share-access'
 import { openBotShareNewChat } from './bot-share-new-chats'
 
 // The real seal, device store and receipt ledger; only the RPC calls the message runs as are faked,
@@ -53,7 +54,10 @@ let chats: number
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'orca-held-'))
   db = new OrchestrationDb(join(dir, 'orchestration.db'))
-  store = new BotShareDeviceStore(dir)
+  // As the server makes it: rows stand on the bot's share list.
+  store = new BotShareDeviceStore(dir, (grant) =>
+    botSharedWithAccount([{ id: 'bot-1', shares }], grant)
+  )
   aliceKeys = nacl.sign.keyPair()
   aliceDevice = await store.add({
     botId: 'bot-1',
