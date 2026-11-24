@@ -958,6 +958,10 @@
       "queuedCount_one": "{{count}} queued message",
       "queuedCount_other": "{{count}} queued messages"
     },
+    "receipt": {
+      "answeredCount_one": "You answered <answer>{{count}} question</answer>",
+      "answeredCount_other": "You answered <answer>{{count}} questions</answer>"
+    },
     "restartNote": {
       "continued": "Orca asked this agent to continue after a restart. Your own prompt was not re-sent.",
       "notConnected": "Orca couldn't reconnect this chat after the restart, so it didn't ask the agent to continue.",

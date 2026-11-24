@@ -1186,7 +1186,6 @@
         "deniedInTerminal": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的终端中拒绝",
         "allowedInChat": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的聊天中允许",
         "deniedInChat": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的聊天中拒绝",
-        "autoDenied": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在 2:00 后自动拒绝",
         "waitsInTerminal": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 正在工作者的终端中等待回答",
         "workerEnded": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已关闭：工作者已结束",
         "closedUnnamed": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已关闭，未记录回答",
