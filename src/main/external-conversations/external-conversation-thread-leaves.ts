@@ -14,18 +14,16 @@ export function withThreadLeftLine(words: string | undefined): string {
   return said ? `${said}\n\n${THREAD_LEFT_LINE}` : THREAD_LEFT_LINE
 }
 
-/** How a turn's end confirms a leave made in it: the line rides on a successful turn's words, and
- *  `settle` posts it alone when they didn't carry it (a failed turn, or one whose end said nothing
- *  there). Owed only while the thread is still left: an @mention since drops it. */
+/** How a turn's end confirms a leave made in it: the line rides on a successful turn's outbox
+ *  answer, and `settle` posts it on its own otherwise (a failed turn, a long answer, an end that
+ *  reaches its thread another way), kept owed until it posts. */
 export type TurnLeave = {
   /** The outbox prose, as the fill is about to write it, with the line after it while still owed. */
   prose: (prose: string | undefined) => string | undefined
-  /** The end's final message, as it goes out, with the line after it while still owed. */
-  words: (words: string | null | undefined) => string | undefined
   /** The fill wrote the turn's prose, and so the line, into an answer. */
   filled: (answered: boolean) => void
-  /** `carried`: the end went out with the turn's words. */
-  settle: (carried?: boolean) => void
+  /** The end is over: a line no answer took posts on its own, kept owed until it does. */
+  settle: () => void
 }
 
 type Lines = Pick<LeaveLines, 'owed' | 'carried' | 'post' | 'ending'>
@@ -46,9 +44,8 @@ export function turnLeave(
     // Held from a watch's resume while this end decides, so the line never posts twice.
     left.lines.ending(link, left.turnId)
   }
-  // Which of the turn's words were given the line (its outbox prose, its final message); only
-  // those can carry it.
-  const appended = { prose: false, message: false }
+  // Whether the outbox prose was given the line; only then can its answer carry it.
+  const appended = { prose: false }
   let rode = false
   const said = (words: string | undefined, part: keyof typeof appended) => {
     const spoken = words && !isQuietBotResult(words) ? words : undefined
@@ -62,7 +59,6 @@ export function turnLeave(
   const still = () => left !== null && outcome === 'success' && left.lines.owed(link, left.turnId)
   return {
     prose: (prose) => (still() ? said(prose, 'prose') : prose),
-    words: (words) => (still() ? said(words ?? undefined, 'message') : (words ?? undefined)),
     // The outbox has the line now: it owes nothing more.
     filled: (answered) => {
       rode ||= answered && appended.prose
@@ -70,16 +66,12 @@ export function turnLeave(
         left.lines.carried(link, left.turnId)
       }
     },
-    settle: (carried) => {
+    settle: () => {
       // An answer the fill wrote already took it over.
       if (!left || rode || !live()) {
         return
       }
-      if (carried && appended.message) {
-        left.lines.carried(link, left.turnId)
-      } else {
-        left.lines.post(link, left.turnId)
-      }
+      left.lines.post(link, left.turnId)
     }
   }
 }

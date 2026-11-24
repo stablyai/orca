@@ -73,19 +73,19 @@ export function endMirroredTurn(end: ChatTurnEnd, mirrored: SlackMirrorTurn): vo
     if (!end.current()) {
       return
     }
-    const said = read.lastAssistantMessage
-    const message = end.leave.words(said && !isQuietBotResult(said) ? said : undefined)
+    const message = read.lastAssistantMessage
     mirrored.release({
       ...end.ended,
       ...end.turnFor(read),
       origin: 'local',
       mirror: true,
-      ...(message ? { lastAssistantMessage: message } : {}),
+      ...(message && !isQuietBotResult(message) ? { lastAssistantMessage: message } : {}),
       ...(end.news.outcome === 'failure'
         ? { failure: connectorFailure(read.failure, end.agent) }
         : {})
     })
-    end.leave.settle(true)
+    // Its line posts on its own, kept owed until it does: this end may reach no one.
+    end.leave.settle()
   })
 }
 

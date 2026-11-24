@@ -292,17 +292,16 @@ export class ChatTurns {
       if (generation !== this.generation) {
         return
       }
-      const said = end.leave.words(words)
       // Owner words steered in and posted to the thread go before the answer.
       ;(mirrored ? mirrored.release : this.deps.emit)({
         ...ended,
         ...end.turnFor(turn),
         origin: reported ? 'delivery' : origin,
-        ...(said ? { lastAssistantMessage: said } : {}),
+        ...(words ? { lastAssistantMessage: words } : {}),
         ...turnFailure(end, turn),
         ...(workLinks.length > 0 ? { links: workLinks } : {})
       })
-      end.leave.settle(true)
+      end.leave.settle()
     })
   }
 

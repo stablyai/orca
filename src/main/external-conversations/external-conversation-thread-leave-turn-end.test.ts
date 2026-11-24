@@ -95,15 +95,13 @@ async function endLeftTurn(
 }
 
 it('confirms a leave once, after the answer, and only while the thread is still left', async () => {
-  // The answer carries the line; nothing posts on its own.
+  // An end outside the reply outbox may reach no one: the line posts on its own, kept owed.
   expect(await endLeftTurn({ lastAssistantMessage: 'Noted #123.' })).toEqual({
-    said: `Noted #123.\n\n${THREAD_LEFT_LINE}`,
+    said: 'Noted #123.',
     prose: [],
-    posted: 0,
-    carried: 1
+    posted: 1,
+    carried: 0
   })
-  // A turn that said nothing there: the line alone.
-  expect((await endLeftTurn({ lastAssistantMessage: 'NO_REPLY' })).said).toBe(THREAD_LEFT_LINE)
   // Through the reply outbox: the answer's prose carries it.
   const outboxed = await endLeftTurn(
     {
@@ -120,22 +118,46 @@ it('confirms a leave once, after the answer, and only while the thread is still 
     posted: 0,
     carried: 1
   })
+  // A quiet answer through the outbox: the line is the answer.
+  const quiet = await endLeftTurn(
+    {
+      lastAssistantMessage: 'NO_REPLY',
+      turnProse: 'NO_REPLY',
+      turnItemId: 'turn-1',
+      stamps: [{ account: 'acct', conversation: thread, deliveryId: 'd1' }]
+    },
+    { outbox: true }
+  )
+  expect(quiet.prose).toEqual([THREAD_LEFT_LINE])
+  // Too long to keep the line whole: it posts on its own.
+  const long = 'a'.repeat(8_000)
+  expect(
+    await endLeftTurn(
+      {
+        lastAssistantMessage: long,
+        turnProse: long,
+        turnItemId: 'turn-1',
+        stamps: [{ account: 'acct', conversation: thread, deliveryId: 'd1' }]
+      },
+      { outbox: true }
+    )
+  ).toMatchObject({ prose: [long], posted: 1, carried: 0 })
   // A failed turn: its end says only what it said, and the line posts on its own once.
   expect(
     await endLeftTurn({ lastAssistantMessage: 'Partial.' }, { outcome: 'failure' })
   ).toMatchObject({ said: 'Partial.', posted: 1, carried: 0 })
-  // An answer too long to keep the line whole: the line posts on its own.
-  const long = 'a'.repeat(8_000)
-  expect(await endLeftTurn({ lastAssistantMessage: long })).toEqual({
-    said: long,
-    prose: [],
-    posted: 1,
-    carried: 0
-  })
-  // An @mention while the turn was being read: its answer goes out without the line.
+  // An @mention while the turn was being read: no line at all.
   expect(
-    (await endLeftTurn({ lastAssistantMessage: 'Ok.' }, { undoneWhileReading: true })).said
-  ).toBe('Ok.')
+    await endLeftTurn(
+      {
+        lastAssistantMessage: 'Ok.',
+        turnProse: 'Ok.',
+        turnItemId: 'turn-1',
+        stamps: [{ account: 'acct', conversation: thread, deliveryId: 'd1' }]
+      },
+      { outbox: true, undoneWhileReading: true }
+    )
+  ).toMatchObject({ prose: ['Ok.'], posted: 0 })
   // An @mention brought it back first: no line at all.
   expect(await endLeftTurn({ lastAssistantMessage: 'Ok.' }, { undone: true })).toEqual({
     said: 'Ok.',

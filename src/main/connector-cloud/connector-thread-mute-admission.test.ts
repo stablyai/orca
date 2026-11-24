@@ -466,6 +466,29 @@ describe('a bot that leaves its thread', () => {
     expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
   })
 
+  it('never saves after a Stop that landed while it read its turn', async () => {
+    const store = await botHome({})
+    const chain = new ConversationChain(new AbortController().signal)
+    let read = (): void => {}
+    journal.reading.held = new Promise<void>((resolve) => (read = resolve))
+    let began = (): void => {}
+    const running = new Promise<void>((resolve) => (began = resolve))
+    const { leave } = leaver(store, undefined, (_key, work) =>
+      chain.after('thread', async () => {
+        began()
+        return await work()
+      })
+    )
+
+    const leaving = leave()
+    await running
+    await chain.cancel('thread', 'conversation_cancelled')
+    read()
+    await expect(leaving).rejects.toMatchObject({ code: 'thread_mute_not_saved' })
+    journal.reading.held = Promise.resolve()
+    expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
+  })
+
   it('never leaves on a cloud that can\u2019t say a reply @mentioned it', async () => {
     const store = await botHome({})
     const { leave, features } = leaver(store)

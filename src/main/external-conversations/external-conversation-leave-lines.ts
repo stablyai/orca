@@ -2,6 +2,7 @@
 // the thread's link with its mute, so it posts once however the turn ends, after a restart too,
 // and is dropped once an @mention brings the bot back.
 import { createHash } from 'node:crypto'
+import { CONNECTOR_CLOUD_MENTIONED_FEATURE } from '../../shared/connector-cloud-features'
 import { cloudConversation } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorReplyBody } from '../connector-cloud/connector-replies'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
@@ -23,6 +24,8 @@ const NEVER_ERRORS = new Set(['reply_not_accepted', 'not_this_hosts_thread'])
 type Thread = Pick<ExternalConversationLink, 'source' | 'externalId'>
 
 export type LeaveLinesCloud = {
+  /** What the cloud takes, once its hello was answered. */
+  cloudFeatures?: () => ReadonlySet<string> | null
   /** Null while no client runs. */
   reply: (
     body: ConnectorReplyBody
@@ -121,6 +124,13 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
     const attempt = async (retry: number): Promise<void> => {
       if (!owed(link, turnId)) {
         posting.delete(id)
+        return
+      }
+      // A cloud known not to mark mentions lets every reply wake the bot: the line would be false.
+      const features = deps.cloud()?.cloudFeatures?.()
+      if (features && !features.has(CONNECTOR_CLOUD_MENTIONED_FEATURE)) {
+        posting.delete(id)
+        settle(link, turnId)
         return
       }
       const replying = deps.cloud()?.reply({
