@@ -197,7 +197,7 @@ it('resumes on fresh quota after a relaunch and delivers the mail held behind th
 
 it('discards stale quota when the chat relaunches while its account is being resolved', async () => {
   const { host, pass, relaunch } = await relaunchedChat()
-  const stale = reading(0, NOW + 5_000)
+  const stale = reading(0, NOW - 1)
   expect(await pass(5_000, stale)).toEqual([])
   const resolve = host.deps.launchAccountHome!
   host.deps.launchAccountHome = async (...args) => {
@@ -304,7 +304,7 @@ it('reads the switched account once and requires fresh room before a resetless r
   ).toEqual([])
   expect(await pass(35_000, reading(0, NOW - 1))).toEqual([])
   expect(await pass(50_000, { ...reading(0, NOW + 50_000), weekly: null })).toEqual([])
-  expect(requested).toEqual([{}])
+  expect(requested).toEqual([{}, {}])
   const sent = await pass(65_000, reading(0, NOW + 65_000))
   expect(sent).toHaveLength(1)
   await eventually(async () =>
@@ -315,8 +315,7 @@ it('reads the switched account once and requires fresh room before a resetless r
 it('continues a resetless relaunched cut when fresh room arrives after a day held', async () => {
   const { current, pass } = await relaunchedChat(null)
   const roomAt = NOW + NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 5_000
-  expect(await pass(NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 5_000, reading(0, roomAt))).toEqual([])
-  const sent = await pass(NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 20_000, reading(0, roomAt))
+  const sent = await pass(NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 5_000, reading(0, roomAt))
   expect(sent).toHaveLength(1)
   await eventually(async () =>
     expect((await current.submission(sent[0]!.clientMessageId))?.handedOverAt).toBeDefined()
@@ -332,10 +331,7 @@ it('continues a resetless relaunched cut when room follows a day-old unknown spe
     })
   ).toEqual([])
   const roomAt = NOW + NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 10_000
-  expect(await pass(NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 10_000, reading(0, roomAt))).toEqual(
-    []
-  )
-  const sent = await pass(NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 25_000, reading(0, roomAt))
+  const sent = await pass(NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 10_000, reading(0, roomAt))
   expect(sent).toHaveLength(1)
   await eventually(async () =>
     expect((await current.submission(sent[0]!.clientMessageId))?.handedOverAt).toBeDefined()

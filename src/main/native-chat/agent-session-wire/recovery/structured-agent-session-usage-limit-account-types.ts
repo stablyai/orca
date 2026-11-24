@@ -17,4 +17,6 @@ export type UsageLimitAccountVerdict = {
   unknownReset: boolean
   awaitingReading: boolean
   awaitingRoom: boolean
+  /** A room reading, rather than a reset time, made this cut eligible. */
+  releasedByRoom: boolean
 }

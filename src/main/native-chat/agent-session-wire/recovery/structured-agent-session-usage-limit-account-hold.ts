@@ -195,7 +195,13 @@ export class UsageLimitAccountHolds {
       limited.resetFromSwitch === true &&
       this.relaunched.at(id, switchFreeIdentity(limited)) !== undefined
     if (!hold && !scope) {
-      return { resetsAt: cut.resetsAt, unknownReset: false, awaitingReading: false, awaitingRoom }
+      return {
+        resetsAt: cut.resetsAt,
+        unknownReset: false,
+        awaitingReading: false,
+        awaitingRoom,
+        releasedByRoom: false
+      }
     }
     if (
       hold?.cut !== identity(cut) ||
@@ -242,7 +248,7 @@ export class UsageLimitAccountHolds {
       scope?.account?.refresh(UNKNOWN_RESET_ASK_MS)
       return false
     }
-    if (now < Math.max(hold.resetsAt + GRACE_MS, notBefore)) {
+    if (now < Math.max(hold.resetsAt + (hold.releasedByRoom ? 0 : GRACE_MS), notBefore)) {
       return false
     }
     const refresh = scope?.account?.refresh ?? scope?.bootstrap

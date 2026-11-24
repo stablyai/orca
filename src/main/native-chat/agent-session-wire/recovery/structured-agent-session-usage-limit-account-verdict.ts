@@ -108,8 +108,9 @@ export function accountHoldVerdict({
     hold.heldUntil ?? cut.resetsAt,
     (hold.unknownReset && hold.spentSeenAt) || cut.resetsAt
   )
-  const resetsAt =
-    room !== undefined && !hold.unknownReset && (awaitingRoom || room < heldTo) ? room : heldTo
+  const roomReleases = room !== undefined && !hold.unknownReset && (awaitingRoom || room < heldTo)
+  const releasedByRoom = roomReleases && awaitingRoom
+  const resetsAt = roomReleases ? room : heldTo
   let waitFrom = resetsAt + GRACE_MS
   if (!account && scope?.bootstrap && now >= waitFrom) {
     if (hold.bootstrapSince?.reset !== resetsAt) {
@@ -124,6 +125,7 @@ export function accountHoldVerdict({
       (account ? !fresh(resetsAt) : scope?.bootstrap !== undefined) &&
       now >= waitFrom &&
       now < waitFrom + READING_WAIT_MS,
-    awaitingRoom: awaitingRoom && room === undefined
+    awaitingRoom: awaitingRoom && room === undefined,
+    releasedByRoom
   }
 }
