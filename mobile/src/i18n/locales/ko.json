@@ -4418,7 +4418,7 @@
             "remoteOwnerNotConfigured": "{{server}}에 구성되지 않음",
             "claudeUnknownOnHost": "{{server}}에서 Claude 사용량을 가져올 수 없습니다. 그곳에서 로그인하지 않았거나 API 키 결제를 사용 중일 수 있습니다.",
             "remoteOwnerSignInSavedHere": "로그인 정보는 이 컴퓨터에만 저장되어 있습니다.",
-            "f8b8dbed85": "사용량 사용할 수 없음",
+            "f8b8dbed85": "사용량을 확인할 수 없음",
             "e2c6a4f917": "Grok을 실행하여 새로 고침",
             "f90b3d7a16": "새로고침하려면 Kimi를 실행하세요.",
             "0d8d7cfe15": "Claude 세션 대기 중",
@@ -4429,7 +4429,7 @@
               }
             },
             "1804cd8c3f": "로그인 새로 고치는 중",
-            "bf2e739f18": "로그인 사용할 수 없음",
+            "bf2e739f18": "로그인할 수 없음",
             "f8f0f9d8cc": "네트워크 문제",
             "minimax": {
               "expired": {
