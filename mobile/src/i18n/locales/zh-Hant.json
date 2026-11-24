@@ -737,6 +737,14 @@
         "followedUp": "後續訊息",
         "handedOff": "已交接",
         "task": "任務"
+      },
+      "unnamedRecipient": "一個代理程式",
+      "event": {
+        "followedUp": "已傳送後續訊息",
+        "update": "更新",
+        "message": "訊息",
+        "handedOff": "已交接",
+        "task": "任務"
       }
     },
     "hostOutage": {

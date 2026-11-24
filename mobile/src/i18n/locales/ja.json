@@ -744,6 +744,14 @@
         "followedUp": "フォローアップ",
         "handedOff": "引き継ぎ",
         "task": "タスク"
+      },
+      "unnamedRecipient": "Agent",
+      "event": {
+        "followedUp": "フォローアップ送信済み",
+        "update": "更新",
+        "message": "メッセージ",
+        "handedOff": "引き継ぎ済み",
+        "task": "タスク"
       }
     },
     "hostOutage": {

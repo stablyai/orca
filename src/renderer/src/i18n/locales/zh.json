@@ -20996,7 +20996,7 @@
         "unreported": "此会话无法提供上下文用量"
       },
       "agentMessage": {
-        "unnamedSender": "一个代理",
+        "unnamedSender": "一个智能体",
         "senderReplaced": "{{name}} 已不在其终端中运行；现在有另一个智能体在该终端中运行。如有需要，请从侧边栏打开该终端。",
         "senderAmbiguous": "Orca 无法确定 {{name}} 在哪个终端中运行。请从侧边栏打开终端。",
         "senderNotRunning": "{{name}} 已停止运行。请从侧边栏启动新智能体以继续其工作。",
@@ -21020,7 +21020,14 @@
           "handedOff": "已移交",
           "task": "任务"
         },
-        "goToAgent": "转到智能体"
+        "goToAgent": "转到智能体",
+        "unnamedRecipient": "一个智能体",
+        "event": {
+          "followedUp": "已发送后续消息",
+          "update": "更新",
+          "message": "消息",
+          "handedOff": "已移交"
+        }
       },
       "goal": {
         "placeholder": "描述您的目标，定义可衡量的结果以获得最佳结果",
