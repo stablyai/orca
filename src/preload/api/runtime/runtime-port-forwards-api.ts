@@ -3,6 +3,7 @@ import { ipcRenderer } from 'electron'
 import type { PortForwardEntry } from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   RUNTIME_ENVIRONMENT_PORT_FORWARDS_CHANGED_CHANNEL,
+  type RestoredPortForwardMove,
   type RuntimeEnvironmentPortForwardsChanged
 } from '../../../shared/remote-runtime/host-catalog/runtime-environment-port-forward-channel'
 
@@ -26,6 +27,8 @@ export type RuntimePortForwardsPreloadApi = {
     remotePort: number
     label?: string
   }) => Promise<{ entry: PortForwardEntry; created: boolean }>
+  /** Restored forwards that moved off a busy port here; each is returned to one caller, once. */
+  takeRestoredMoves: () => Promise<RestoredPortForwardMove[]>
   onChanged: (callback: (event: RuntimeEnvironmentPortForwardsChanged) => void) => () => void
 }
 
@@ -35,6 +38,7 @@ export const runtimePortForwardsApi: RuntimePortForwardsPreloadApi = {
   update: (args) => ipcRenderer.invoke('runtimeEnvironments:updatePortForward', args),
   remove: (args) => ipcRenderer.invoke('runtimeEnvironments:removePortForward', args),
   ensure: (args) => ipcRenderer.invoke('runtimeEnvironments:ensurePortForward', args),
+  takeRestoredMoves: () => ipcRenderer.invoke('runtimeEnvironments:takeRestoredPortForwardMoves'),
   onChanged: (callback) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
