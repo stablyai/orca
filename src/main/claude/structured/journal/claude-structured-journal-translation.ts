@@ -95,9 +95,7 @@ export function createClaudeJournalTranslator(
     openOutputTurn: (frame, observedAt) =>
       turn.ensureOpen(frame, claudeStreamTurnSource(frame), observedAt),
     turnScope,
-    ...(deps.onBackgroundTaskJournalFailure
-      ? { onPersistenceFailure: deps.onBackgroundTaskJournalFailure }
-      : {})
+    onPersistenceFailure: deps.onBackgroundTaskJournalFailure
   })
   const streamedText = createClaudeStreamedTextCheckpoints({
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
@@ -139,7 +137,6 @@ export function createClaudeJournalTranslator(
     usageLimits: new ClaudeUsageLimits(),
     threadGoal: new ClaudeThreadGoal(() => deps.sink.journalSnapshot?.()?.threadGoal)
   }
-
   const resultContext: ClaudeResultJournalContext = {
     ...messageContext,
     prompts,
@@ -294,6 +291,8 @@ export function createClaudeJournalTranslator(
     recordContextReport: (target, report, askedAt) => context.recordReport(target, report, askedAt),
     modelMayHaveChanged: () => context.modelMayHaveChanged(),
     modelWritten: (model) => context.modelWritten(model),
+    handOff: () => backgroundTasks.handOff(),
+    adoptKeptTurn: (kept) => turn.adoptKept(kept),
     dispose: () => {
       delivery.dispose()
       flush()

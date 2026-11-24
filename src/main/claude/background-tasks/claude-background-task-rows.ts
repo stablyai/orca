@@ -53,6 +53,8 @@ export type ClaudeBackgroundTaskRowsDeps = {
 
 export class ClaudeBackgroundTaskRows {
   private readonly rows = new Map<string, ClaudeBackgroundTaskRow>()
+  /** Handed to the terminal host at quit, where its open tasks keep running. */
+  private handedOff = false
   private readonly writer: ClaudeBackgroundTaskRowWriter
   private readonly openTurn: ReturnType<typeof createClaudeBackgroundTaskTurnOpener>
   private readonly overflowTerminalRows: ClaudeOverflowTerminalRows
@@ -206,8 +208,10 @@ export class ClaudeBackgroundTaskRows {
     })
   }
 
+  readonly handOff = (): boolean => (this.handedOff = true)
+
   settleSession(): void {
-    for (const [id, row] of this.rows) {
+    for (const [id, row] of this.handedOff ? [] : this.rows) {
       if (!isSettledBackgroundTaskState(row.block.state)) {
         this.revise(id, { state: 'unverifiable' }, true)
       }

@@ -12,6 +12,8 @@ export type ClaudeFullAccessPolicy = {
   allows: (requestId: string) => boolean
   /** Claude's latest reported mode in wire order, decoded; undefined before its first report. */
   mode: () => string | null | undefined
+  /** An agent kept from before this app: its mode since its launch is unknown until it reports. */
+  reattached: () => void
   close: () => void
   retained: () => { partialChars: number; requests: number }
 }
@@ -30,6 +32,7 @@ export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeF
   // reaches the callback as an abort, so dropping its entry early would apply a later mode.
   const modeAtRequest = new Map<string, boolean>()
   let mode: string | null | undefined
+  let reattached = false
   let closed = false
   let partial = ''
 
@@ -45,7 +48,7 @@ export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeF
     const requestId = readClaudeFrameString(request, 'request_id')
     // A redelivered id keeps its first position.
     if (requestId && !modeAtRequest.has(requestId)) {
-      modeAtRequest.set(requestId, mode === undefined || mode === 'full-access')
+      modeAtRequest.set(requestId, mode === undefined ? !reattached : mode === 'full-access')
     }
   }
 
@@ -110,6 +113,9 @@ export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeF
       return atRequest ?? false
     },
     mode: () => mode,
+    reattached: () => {
+      reattached = true
+    },
     close: () => {
       closed = true
       partial = ''

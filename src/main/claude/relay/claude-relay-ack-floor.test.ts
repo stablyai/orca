@@ -20,29 +20,31 @@ describe('Claude relay ack floor', () => {
     output.line('relayData', 1, frame({ type: 'system', subtype: 'init', session_id: 's' }))
     output.line('relayData', 2, stream('message_start'))
     output.line('relayData', 3, stream('content_block_delta'))
-    output.line('relayData', 4, stream('message_stop'))
+    // The CLI sends each block's final frame before the message ends (thinking, then text).
+    output.line(
+      'relayData',
+      4,
+      frame({ type: 'assistant', session_id: 's', parent_tool_use_id: null })
+    )
+    output.line('relayData', 5, stream('content_block_delta'))
     await output.settle()
     // A later attach replays from the message's start, so the new app rebuilds the same row.
     expect(acks).toEqual([1])
-    output.line(
-      'relayData',
-      5,
-      frame({ type: 'assistant', session_id: 's', parent_tool_use_id: null })
-    )
+    output.line('relayData', 6, stream('message_stop'))
     await output.settle()
-    expect(acks).toEqual([1, 5])
+    expect(acks).toEqual([1, 6])
     // The daemon asking for an ack (its spool is full) lets go of the floor.
-    output.line('relayData', 6, stream('message_start'))
-    output.line('relayData', 7, stream('content_block_delta'))
+    output.line('relayData', 7, stream('message_start'))
+    output.line('relayData', 8, stream('content_block_delta'))
     await output.settle()
-    expect(acks).toEqual([1, 5])
+    expect(acks).toEqual([1, 6])
     await output.settle(true)
-    expect(acks).toEqual([1, 5, 7])
+    expect(acks).toEqual([1, 6, 8])
     // A tool call holds its message until the tool's result lands, so its row keeps its name.
-    output.line('relayData', 8, stream('message_start'))
+    output.line('relayData', 9, stream('message_start'))
     output.line(
       'relayData',
-      9,
+      10,
       frame({
         type: 'assistant',
         session_id: 's',
@@ -50,11 +52,12 @@ describe('Claude relay ack floor', () => {
         message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash' }] }
       })
     )
+    output.line('relayData', 11, stream('message_stop'))
     await output.settle()
-    expect(acks).toEqual([1, 5, 7])
+    expect(acks).toEqual([1, 6, 8])
     output.line(
       'relayData',
-      10,
+      12,
       frame({
         type: 'user',
         session_id: 's',
@@ -62,6 +65,6 @@ describe('Claude relay ack floor', () => {
       })
     )
     await output.settle()
-    expect(acks).toEqual([1, 5, 7, 10])
+    expect(acks).toEqual([1, 6, 8, 12])
   })
 })

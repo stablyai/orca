@@ -16,6 +16,7 @@ import type { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 import type { ClaudeCommandStart } from '../turns/claude-command-turn'
 import type { ClaudeOpenTurn } from '../turns/claude-open-turn'
+import type { ClaudeCurrentTurn } from '../turns/claude-turn-lifecycle-item'
 
 import type { AgentSessionDeltaCoalescerDeps } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import type { ClaudeGoalBackgroundWork } from '../../background-tasks/claude-background-task-tracker'
@@ -83,5 +84,9 @@ export type ClaudeJournalTranslator = {
   modelMayHaveChanged: () => void
   /** Size interim estimates with the applied model until its window is measured. */
   modelWritten: (model: string) => void
+  /** The agent was handed to the terminal host at quit: its open tasks aren't settled. */
+  handOff: () => void
+  /** Continue the turn a kept agent was running when the last app quit. */
+  adoptKeptTurn: (turn: ClaudeCurrentTurn) => void
   dispose: () => void
 }

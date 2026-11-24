@@ -59,6 +59,8 @@ export type ClaudeStreamJsonConnectionHandlers = {
   onMessage?: (message: Record<string, unknown>) => void
   /** Raw stdout before the SDK reads it, for state that must keep wire order with permission requests. */
   onStdout?: (chunk: Buffer | string) => void
+  /** The connection is to an agent kept from before this app, ahead of any of its output. */
+  onReattach?: () => void
   /** The SDK handles request IDs, aborts and deduplication; cannot combine with permissionPromptToolName. */
   canUseTool?: CanUseTool
   /** `request_user_dialog` control; the CLI only emits kinds declared in `supportedDialogKinds`. */
@@ -85,6 +87,8 @@ export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
   /** What the ladder has observed so far; read after a `close()` that returned false. */
   readonly exitVerdict: ClaudeChildExitVerdict
   readonly executableMissing?: boolean
+  /** Handed to the terminal host at quit, where the agent keeps running. */
+  readonly handedOff?: boolean
   exited?: Promise<Error>
   startupFailure?: () => Error | undefined
   pauseReading?: () => void
@@ -142,9 +146,7 @@ export async function openClaudeStreamJsonConnection(
     if (closing || managed.rootVerdict === 'exited' || terminalError || readingBarrier) {
       return
     }
-    readingBarrier = new Promise<void>((resolve) => {
-      releaseReadingBarrier = resolve
-    })
+    ;({ promise: readingBarrier, resolve: releaseReadingBarrier } = Promise.withResolvers<void>())
   }
   const resumeReading = (): void => {
     const release = releaseReadingBarrier
@@ -320,6 +322,9 @@ export async function openClaudeStreamJsonConnection(
     },
     get executableMissing() {
       return managed.executableMissing
+    },
+    get handedOff() {
+      return 'handedOff' in managed.child && managed.child.handedOff === true
     },
     get exitVerdict() {
       return {

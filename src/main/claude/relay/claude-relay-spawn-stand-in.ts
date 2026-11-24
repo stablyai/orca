@@ -1,16 +1,66 @@
 import { EventEmitter } from 'node:events'
-import { PassThrough } from 'node:stream'
+import { PassThrough, Writable } from 'node:stream'
 import { finished } from 'node:stream/promises'
 import { notifyProviderChild, type ProviderChild } from '../../provider-process/provider-child'
 
 const FORWARDED_EVENTS = ['spawn', 'exit', 'error'] as const
+
+/** Holds writes until the real child exists, then hands each one over with its own callback, so a
+ *  write that never reached the agent still fails (a pipe would report it written). */
+class StandInInput extends Writable {
+  private target: Writable | null = null
+  private refused: Error | null = null
+  private readonly waiting: (() => void)[] = []
+
+  constructor() {
+    super({ decodeStrings: false })
+  }
+
+  attach(target: Writable): void {
+    this.target = target
+    target.on('error', (error) => this.destroy(error))
+    this.waiting.splice(0).forEach((run) => run())
+  }
+
+  refuse(error: Error): void {
+    this.refused = error
+    this.waiting.splice(0).forEach((run) => run())
+  }
+
+  private whenBound(run: () => void): void {
+    if (this.target || this.refused) {
+      run()
+    } else {
+      this.waiting.push(run)
+    }
+  }
+
+  override _write(
+    chunk: unknown,
+    encoding: BufferEncoding,
+    callback: (error?: Error | null) => void
+  ): void {
+    this.whenBound(() =>
+      this.target ? this.target.write(chunk, encoding, callback) : callback(this.refused)
+    )
+  }
+
+  override _final(callback: (error?: Error | null) => void): void {
+    this.whenBound(() => (this.target ? this.target.end(() => callback()) : callback()))
+  }
+
+  override _destroy(error: Error | null, callback: (error?: Error | null) => void): void {
+    this.target?.destroy()
+    callback(error)
+  }
+}
 
 /**
  * What the SDK's synchronous spawn hook returns while the agent starts under the terminal daemon
  * (or, if it can't, directly): input waits in `stdin` and the real child's output flows through.
  */
 export class ClaudeRelaySpawnStandIn extends EventEmitter implements ProviderChild {
-  readonly stdin = new PassThrough()
+  readonly stdin = new StandInInput()
   readonly stdout = new PassThrough()
   readonly stderr = new PassThrough()
   readonly ready: Promise<void>
@@ -56,7 +106,7 @@ export class ClaudeRelaySpawnStandIn extends EventEmitter implements ProviderChi
 
   bind(real: ProviderChild): void {
     this.real = real
-    this.stdin.pipe(real.stdin)
+    this.stdin.attach(real.stdin)
     real.stdout.pipe(this.stdout)
     real.stderr.pipe(this.stderr)
     for (const event of FORWARDED_EVENTS) {
@@ -82,6 +132,7 @@ export class ClaudeRelaySpawnStandIn extends EventEmitter implements ProviderChi
   /** The launch threw before any child existed. */
   fail(error: Error): void {
     this.settleReady(error)
+    this.stdin.refuse(error)
     notifyProviderChild(this, 'error', error)
     this.stdout.end()
     this.stderr.end()

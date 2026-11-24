@@ -176,6 +176,16 @@ export class ClaudeOpenTurn {
     this.deps.sink.setPromptSuggestion?.(null)
   }
 
+  /** The turn a kept agent was running when the last app quit: its row exists, so only its end is
+   *  published, and the replay continues it instead of opening another. */
+  adoptKept(turn: ClaudeCurrentTurn): void {
+    if (!this.current) {
+      this.current = turn
+      this.cycleTurn = turn
+      this.cycleWorkObserved = true
+    }
+  }
+
   /** The host already wrote the command row; only publish its eventual end. */
   beginCommand(turn: ClaudeCurrentTurn): void {
     this.steerHandoffEnd = null

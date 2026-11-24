@@ -33,6 +33,7 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
       // Cheap tests first: only stream starts, final assistant frames and results matter.
       if (
         !line.includes('"message_start"') &&
+        !line.includes('"message_stop"') &&
         !line.includes('"assistant"') &&
         !line.includes('"result"') &&
         !line.includes('"tool_result"')
@@ -56,10 +57,16 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
       } else if (frame.type === 'assistant') {
         const scope = scopeOf(frame)
         const start = starts.get(scope) ?? seq
-        open.delete(scope)
+        // The CLI sends one final frame per block, before the message's stop.
         contentIds(frame, 'tool_use', 'id').forEach((id) => tools.set(id, start))
       } else if (frame.type === 'user') {
         contentIds(frame, 'tool_result', 'tool_use_id').forEach((id) => tools.delete(id))
+      } else if (
+        frame.type === 'stream_event' &&
+        isRecord(frame.event) &&
+        frame.event.type === 'message_stop'
+      ) {
+        open.delete(scopeOf(frame))
       } else if (
         frame.type === 'stream_event' &&
         isRecord(frame.event) &&
@@ -69,6 +76,8 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
         starts.set(scopeOf(frame), seq)
       }
     },
+    // The CLI's keep-alive while a request is open, every 30 s: short, with nothing to save.
+    quiet: (line) => line.length < 256 && line.includes('"type":"keep_alive"'),
     floor: () =>
       open.size === 0 && tools.size === 0 ? null : Math.min(...open.values(), ...tools.values())
   }

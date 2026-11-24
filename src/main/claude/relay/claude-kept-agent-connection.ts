@@ -23,6 +23,8 @@ import { createClaudeControlSurface } from '../sdk-transport/claude-agent-sdk-co
 import { relayedClaudeChildTree } from './claude-relayed-child-tree'
 import { DaemonProtocolError } from '../../daemon/protocol/daemon-errors'
 
+const REPLAY_SLICE_MS = 8
+
 /** Present on a connection to an agent that kept running while Orca was closed. */
 export type ClaudeKeptAgentRelay = {
   /** Lets the kept output through once the chat can route it. */
@@ -137,6 +139,7 @@ export async function openKeptClaudeAgentConnection(
     return null
   }
   const { managed, child } = relayed
+  handlers.onReattach?.()
   const exited = Promise.withResolvers<Error>()
   let closing = false
   let terminalError: Error | null = null
@@ -150,6 +153,8 @@ export async function openKeptClaudeAgentConnection(
       }
       child.stdin.write(line, (error) => (error ? reject(error) : resolve()))
     })
+  // Each write's own callback reports its failure; the stream's error event must not go unheard.
+  child.stdin.on('error', () => {})
   const initialization = keptInitialization(child.initializeLine)
   const keptQuery = new ClaudeKeptAgentQuery(write, initialization)
   query = keptQuery
@@ -163,9 +168,15 @@ export async function openKeptClaudeAgentConnection(
   // One drain at a time, so lines keep their order across a paused read.
   const pump = (): Promise<void> => {
     draining = draining.then(async () => {
+      let sliceStart = performance.now()
       for (let line = lines.shift(); line !== undefined; line = lines.shift()) {
         await readingBarrier?.promise
         deliver(line)
+        // A replay can be thousands of lines; let the app run between slices.
+        if (performance.now() - sliceStart > REPLAY_SLICE_MS) {
+          await new Promise((resolve) => setImmediate(resolve))
+          sliceStart = performance.now()
+        }
       }
     })
     return draining
@@ -271,11 +282,15 @@ export async function openKeptClaudeAgentConnection(
     },
     exited: exited.promise,
     spawned: Promise.resolve(),
+    get handedOff() {
+      return child.handedOff
+    },
     get pid() {
       return child.pid
     },
     get closed() {
-      return closing || managed.rootVerdict === 'exited' || terminalError !== null
+      // An agent that ended while Orca was closed stays open until its last output reaches the chat.
+      return closing || terminalError !== null
     },
     executableMissing: false,
     get exitVerdict() {

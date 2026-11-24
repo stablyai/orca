@@ -108,7 +108,10 @@ export function claudeLaunchPermissions(
   deps: Omit<ClaudePermissionCallbackDeps, 'fullAccessAt'>,
   launch: Pick<ClaudeStructuredLaunch, 'options' | 'providerSessionId'>
 ): {
-  handlers: Pick<ClaudeStreamJsonConnectionHandlers, 'canUseTool' | 'onUserDialog' | 'onStdout'>
+  handlers: Pick<
+    ClaudeStreamJsonConnectionHandlers,
+    'canUseTool' | 'onUserDialog' | 'onStdout' | 'onReattach'
+  >
   /** Claude's mode in wire order; null without Full access, whose launches read no stdout. */
   orderedMode: (() => string | null | undefined) | null
   /** Wraps the connection's exit handler: this process's permission state ends first. */
@@ -122,7 +125,10 @@ export function claudeLaunchPermissions(
     fullAccessAt: (requestId) => policy?.allows(requestId) ?? false
   })
   return {
-    handlers: { ...callbacks, ...(policy ? { onStdout: policy.observe } : {}) },
+    handlers: {
+      ...callbacks,
+      ...(policy ? { onStdout: policy.observe, onReattach: policy.reattached } : {})
+    },
     orderedMode: policy ? policy.mode : null,
     closeThen: (onExit) => (error, exit) => {
       policy?.close()

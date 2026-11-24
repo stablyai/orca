@@ -11,6 +11,7 @@ import { catchUpClaudeTranscript } from '../../transcripts/claude-transcript-cat
 import { readyClaudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
 import { keptClaudeAgentRelay } from '../../relay/claude-kept-agent-connection'
 import { restateKeptClaudeBackgroundTasks } from '../../relay/claude-kept-background-tasks'
+import { keptClaudeTurn } from '../../relay/claude-kept-turn'
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps
@@ -108,6 +109,10 @@ async function openStartingClaudeSession(
     // The journal holds the kept agent's output through the last ack and the replay brings the
     // rest, so its turn ends may move the resume point (or the next cold resume re-imports them).
     history.covered = true
+    const keptTurn = await keptClaudeTurn(events?.journalHistory?.(), session.providerSessionId)
+    if (keptTurn) {
+      session.translator?.adoptKeptTurn(keptTurn)
+    }
     restateKeptClaudeBackgroundTasks(session, kept.openTaskIds)
     input.publishChildWork?.(request.sessionId, session)
   }
