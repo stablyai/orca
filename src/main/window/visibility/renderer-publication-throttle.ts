@@ -8,6 +8,8 @@ export type RendererPublicationThrottleTarget = {
   isDestroyed?: () => boolean
   isFocused?: () => boolean
   setBackgroundThrottling: (allowed: boolean) => void
+  once?: (event: 'destroyed', listener: () => void) => unknown
+  off?: (event: 'destroyed', listener: () => void) => unknown
   capturePage: (
     rect: { x: number; y: number; width: number; height: number },
     opts: { stayHidden: boolean }
@@ -107,19 +109,43 @@ export class RendererPublicationThrottle {
   // One rehide obligation per target: it waits for an in-flight capture, and a new lease cancels it.
   private oweRehide(target: RendererPublicationThrottleTarget): void {
     this.dropRehide(target)
-    const owed = { cancel: () => {} }
+    let cancelWait = (): void => {}
+    let watchingDestroy = false
+    const onDestroyed = (): void => {
+      if (this.owedRehides.get(target) === owed) {
+        this.dropRehide(target)
+      }
+    }
+    const owed = {
+      cancel: (): void => {
+        cancelWait()
+        if (watchingDestroy) {
+          target.off?.('destroyed', onDestroyed)
+        }
+      }
+    }
     this.owedRehides.set(target, owed)
     const submit = (): void => {
       if (this.owedRehides.get(target) !== owed) {
         return
       }
       if (isNativeCaptureBusy(target)) {
-        owed.cancel = whenNativeCaptureLaneFree(target, submit)
+        // A destroyed target withdraws its wait at once instead of holding it until the capture settles.
+        if (!watchingDestroy && target.once) {
+          watchingDestroy = true
+          target.once('destroyed', onDestroyed)
+        }
+        cancelWait = whenNativeCaptureLaneFree(target, submit)
         return
       }
-      this.owedRehides.delete(target)
+      this.dropRehide(target)
       try {
-        if (target.isDestroyed?.() === true || this.leasesByTarget.has(target)) {
+        // Conditions can change while the rehide waits: a lease, destruction or focus each make it moot.
+        if (
+          target.isDestroyed?.() === true ||
+          this.leasesByTarget.has(target) ||
+          target.isFocused?.() === true
+        ) {
           return
         }
         // Re-throttling cannot replay a swallowed hide; stayHidden capture completion can.

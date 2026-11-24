@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { afterEach, expect, it, vi } from 'vitest'
 import { captureCleanGuestPage } from './grab-clean-page-capture'
 import { RendererPublicationThrottle } from '../../window/visibility/renderer-publication-throttle'
@@ -168,6 +169,63 @@ it('owes one rehide per final release, and a lease held when the readback settle
   release()
   await vi.advanceTimersByTimeAsync(0)
   expect(calls).toEqual(['readback', 'restore', 'readback', 'restore'])
+})
+
+it('drops an owed rehide when the guest gains focus or is destroyed before the readback settles', async () => {
+  vi.useFakeTimers()
+  const setup = () => {
+    const throttle = new RendererPublicationThrottle()
+    const calls: string[] = []
+    const readbacks: (() => void)[] = []
+    const guest = Object.assign(new EventEmitter(), {
+      focused: false,
+      isDestroyed: () => false,
+      isFocused: () => guest.focused,
+      setBackgroundThrottling: () => {},
+      capturePage: (rect?: unknown) => {
+        calls.push(rect ? 'restore' : 'readback')
+        return rect
+          ? Promise.resolve(image)
+          : new Promise<typeof image>((resolve) => {
+              readbacks.push(() => resolve(image))
+            })
+      }
+    })
+    void captureCleanGuestPage(
+      guest,
+      new AbortController().signal,
+      () => throttle.acquire(guest),
+      1_000,
+      5_000
+    )
+    return { guest, calls, readbacks }
+  }
+
+  // The rehide is owed behind the abandoned readback; then the pane focuses the guest without a lease.
+  const focused = setup()
+  await vi.advanceTimersByTimeAsync(6_100)
+  focused.guest.focused = true
+  focused.readbacks[0]()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(focused.calls).toEqual(['readback'])
+
+  // Destruction withdraws the owed rehide while the capture is still pending (isDestroyed not yet flipped).
+  const destroyed = setup()
+  await vi.advanceTimersByTimeAsync(6_100)
+  expect(destroyed.guest.listenerCount('destroyed')).toBe(1)
+  destroyed.guest.emit('destroyed')
+  expect(destroyed.guest.listenerCount('destroyed')).toBe(0)
+  destroyed.readbacks[0]()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(destroyed.calls).toEqual(['readback'])
+
+  // Control: a guest that stays unfocused and alive gets exactly one rehide.
+  const control = setup()
+  await vi.advanceTimersByTimeAsync(6_100)
+  control.readbacks[0]()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(control.calls).toEqual(['readback', 'restore'])
+  expect(control.guest.listenerCount('destroyed')).toBe(0)
 })
 
 it('leaves the guest usable for the next Draw when taking the paint lease fails', async () => {
