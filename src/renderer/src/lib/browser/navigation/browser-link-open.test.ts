@@ -13,7 +13,8 @@ vi.mock('@/store/index', () => ({
 vi.mock('@/store', () => ({ useAppStore: { getState: () => state } }))
 vi.mock('./browser-link-destination', async (load) => ({
   ...(await load<object>()),
-  selectBrowserLinkDestination: () => ({ status: 'create', match: null })
+  // What the real selector returns for a workspace with no browser tab or group yet.
+  selectBrowserLinkDestination: () => ({ status: 'ready', match: null })
 }))
 vi.mock('./browser-link-owner', () => ({ createBrowserLinkHostMatcher: () => () => true }))
 vi.mock('./browser-link-reveal', () => ({
