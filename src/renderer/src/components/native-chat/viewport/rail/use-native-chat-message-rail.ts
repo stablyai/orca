@@ -1,6 +1,9 @@
 // Compute the active tick after scrolling settles to avoid expensive, flickering position reports mid-scroll.
 
-import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import {
+  projectionBesideStreamedText,
+  stageBesideStreamedText
+} from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { findActiveNativeChatRailItem } from './native-chat-active-rail-item'
@@ -9,7 +12,8 @@ import {
   buildNativeChatRailItems,
   mergeNativeChatRailOutline,
   NATIVE_CHAT_RAIL_ROOMY_TICKS,
-  nativeChatRailReplyPreview,
+  nativeChatRailPreviewTurn,
+  nativeChatRailTurnReply,
   nativeChatRailTickCapacity,
   selectNativeChatRailTicks,
   type NativeChatRailItem,
@@ -183,10 +187,19 @@ export function useNativeChatMessageRail({
     },
     [scheduleRead]
   )
-  // The preview reads reply text, so it follows the newest; it is built only while a tick is hovered.
+  // The hovered turn is found on the saved rows, then its reply read from the newest rows within it.
+  const savedRows = projectionBesideStreamedText(turnRows.messages)
+  const { turnKeys } = turnRows
+  const previewTurn = useMemo(
+    () =>
+      previewId === null
+        ? null
+        : nativeChatRailPreviewTurn({ messages: savedRows, turnKeys }, items, previewId),
+    [previewId, savedRows, turnKeys, items]
+  )
   const previewReply = useMemo(
-    () => (previewId === null ? '' : nativeChatRailReplyPreview(turnRows, items, previewId)),
-    [previewId, turnRows, items]
+    () => (previewTurn === null ? '' : nativeChatRailTurnReply(turnRows, previewTurn)),
+    [previewTurn, turnRows]
   )
 
   return useMemo(
