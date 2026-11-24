@@ -35,12 +35,19 @@ import { BotGroupNewThreadMenuItems } from '../../bots/BotGroupNewThreadMenuItem
 import type { ClientHostedBrowserRow } from '../../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { advanceAgentSessionsTourPastNewTab } from '@/components/contextual-tours/agent-sessions-tour-new-tab'
 import { activateTabStripEntry } from './tab-strip-entry-activation'
-import { buildTabDropIndicators } from '../model/tab-bar-item-model'
 import type { TabStripCondense } from './use-tab-strip-condense'
 import { TabStripDensityContext } from './tab-strip-density-context'
+import { PinnedHomeTabSlot } from './PinnedHomeTabSlot'
+import {
+  newTabButtonHideClassName,
+  overflowChipActiveId,
+  type RenderedTabStrip,
+  stripSizeClassName
+} from './rendered-tab-strip'
 import { TabStripOverflowChip, type TabStripEntry } from './TabStripOverflowChip'
 
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
+type Segments = readonly TabStripSegment[]
 
 export function renderTabBarSurface(
   {
@@ -48,6 +55,7 @@ export function renderTabBarSurface(
     runtime,
     createMenu,
     itemProjection,
+    strip,
     tabStripNavigation,
     tabStripDragScroll,
     activeClientHostedBrowserRowId,
@@ -63,6 +71,8 @@ export function renderTabBarSurface(
     runtime: TabBarRuntimeModel
     createMenu: TabBarCreateMenuController
     itemProjection: TabBarItemProjection
+    /** What renders: a pinned bot Home in its own slot, then the strip's tabs not behind +N. */
+    strip: RenderedTabStrip
     tabStripNavigation: ReturnType<typeof useTabStripOverflowNavigation>
     tabStripDragScroll: ReturnType<typeof useTabStripDragScrollHandlers>
     activeClientHostedBrowserRowId: string | null
@@ -115,23 +125,12 @@ export function renderTabBarSurface(
     queueFocusAfterNewTabMenuClose,
     showStaticCreateMenuItems
   } = createMenu
-  const { orderedItems: allItems, sortableIds: allSortableIds, activeVisibleTabId } = itemProjection
+  const { orderedItems: allItems, activeVisibleTabId } = itemProjection
   const allClientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_CLIENT_HOSTED_ROWS
   const { plan, hiddenIds, density, stripPointerHandlers } = condense
   const chipOnly = plan.mode === 'condensed' && plan.chipOnly
-  // Hidden tabs are not rendered, so dnd-kit, windowing and the drop bar work over the rendered sequence only.
-  const orderedItems =
-    hiddenIds.size === 0 ? allItems : allItems.filter((item) => !hiddenIds.has(item.id))
-  const sortableIds =
-    hiddenIds.size === 0 ? allSortableIds : allSortableIds.filter((id) => !hiddenIds.has(id))
-  const dropIndicatorByVisibleId =
-    hiddenIds.size === 0
-      ? itemProjection.dropIndicatorByVisibleId
-      : buildTabDropIndicators(orderedItems, itemProjection.hoveredInsertion)
-  const clientHostedBrowserRows =
-    hiddenIds.size === 0
-      ? allClientHostedBrowserRows
-      : allClientHostedBrowserRows.filter((row) => !hiddenIds.has(row.browserPageId))
+  const { orderedItems, sortableIds, dropIndicatorByVisibleId, clientHostedBrowserRows } = strip
+  const { pinnedCount } = strip
   const {
     tabStripRef,
     tabStripOverflowState,
@@ -141,7 +140,7 @@ export function renderTabBarSurface(
   } = tabStripNavigation
   const singleTab = allItems.length + allClientHostedBrowserRows.length === 1
   const includeTopTabBorder = tabStripChrome !== 'floating-panel'
-  const renderItems = (segments: readonly TabStripSegment[]): React.ReactNode[] =>
+  const renderItems = (segments: Segments, itemOffset = pinnedCount): React.ReactNode[] =>
     renderTabBarItems({
       items: orderedItems,
       groupItems: allItems,
@@ -151,13 +150,22 @@ export function renderTabBarSurface(
       dropIndicatorByVisibleId,
       includeTopTabBorder,
       activeClientHostedBrowserRowId,
-      segments
+      segments,
+      itemOffset
     })
 
-  const hasTabs = orderedItems.length + clientHostedBrowserRows.length > 0
   return (
     <TabStripDensityContext value={density}>
       <div ref={surfaceRef} className="flex items-stretch h-full overflow-hidden flex-1 min-w-0">
+        {pinnedCount > 0 ? (
+          <PinnedHomeTabSlot
+            sortableIds={strip.pinnedSortableIds}
+            singleTab={singleTab}
+            withStrip={strip.stripHasTabs}
+          >
+            {renderItems([{ kind: 'tabs', start: 0, end: pinnedCount }], 0)}
+          </PinnedHomeTabSlot>
+        ) : null}
         {condense.showScrollArrows ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -194,9 +202,7 @@ export function renderTabBarSurface(
             <div
               data-single-tab={singleTab ? '' : undefined}
               // Why: tabs are the only drag source, so a narrow pane clips the "+" before the last tab sliver.
-              className={`group/tab-strip relative flex min-h-0 w-max max-w-full shrink ${
-                hasTabs ? 'min-w-10' : 'min-w-0'
-              }`}
+              className={`group/tab-strip relative flex min-h-0 w-max max-w-full ${stripSizeClassName(strip)}`}
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               {...stripPointerHandlers}
             >
@@ -267,7 +273,7 @@ export function renderTabBarSurface(
             entries={stripEntries}
             hiddenIds={hiddenIds}
             chipOnly={chipOnly}
-            activeId={plan.mode === 'condensed' ? plan.activeId : null}
+            activeId={overflowChipActiveId(strip, activeVisibleTabId, plan)}
             attentionIds={attentionIds}
             generatedTabTitlesEnabled={runtime.generatedTabTitlesEnabled}
             isGroupFocused={isGroupFocused}
@@ -293,11 +299,12 @@ export function renderTabBarSurface(
             modal={false}
           >
             <DropdownMenuTrigger asChild>
-              {/* Why: below 86px (40 tab floor + 36 "+" + 8 action padding + 2 sub-pixel slack) "+" would only clip; hide it whole so Tab never lands on it. Empty groups keep it. */}
+              {/* Why: "+" hides whole rather than clip, so Tab never lands on it (rendered-tab-strip.ts). */}
               <button
-                className={`ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground ${
-                  hasTabs || hiddenIds.size > 0 ? '@max-[86px]/tab-strip:hidden' : ''
-                }`}
+                className={`ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground ${newTabButtonHideClassName(
+                  strip,
+                  hiddenIds.size > 0
+                )}`}
                 data-tab-strip-reserve=""
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
                 title={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
