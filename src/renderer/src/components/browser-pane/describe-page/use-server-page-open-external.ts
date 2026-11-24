@@ -16,8 +16,9 @@ export function useServerPageOpenExternal(
   environmentId: string,
   worktreeId: string
 ): (() => void) | null {
+  // Web clients have no loopback of their own to forward to.
   const serverForwards = useRuntimeEnvironmentCapability(
-    environmentId,
+    window.api.runtimeEnvironments.portForwards ? environmentId : null,
     NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY
   )
   const url = normalizeExternalBrowserUrl(redactKagiSessionToken(pageUrl))

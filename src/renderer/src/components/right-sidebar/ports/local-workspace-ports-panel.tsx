@@ -78,9 +78,9 @@ export function LocalWorkspacePortsPanel({
       ? (s.portForwardsByConnection[portForwardOwnerKey(forwardOwner)] ?? NO_FORWARDS)
       : NO_FORWARDS
   )
-  // Older servers have no network.portForward, so their rows keep no Forward button.
+  // Older servers have no network.portForward, and web clients can't listen here, so neither offers Forward.
   const serverForwards = useRuntimeEnvironmentCapability(
-    forwardEnvironmentId,
+    window.api.runtimeEnvironments.portForwards ? forwardEnvironmentId : null,
     NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY
   )
   const sshConnected = useAppStore(
