@@ -19,7 +19,10 @@ import { ConnectorReach } from './connector-reach'
 import type { ConnectorReplyJournal } from './connector-reply-outbox'
 import { connectorRefResolver, type ConnectorRefResolver } from './connector-ref-resolution'
 import { postConnectorOutboxReply } from './connector-replies'
-import type { ConnectorCloudFeature } from '../../shared/connectors/connector-cloud-contract'
+import type {
+  ConnectorCloudFeature,
+  ConnectorConversation
+} from '../../shared/connectors/connector-cloud-contract'
 
 // Past this, a held call goes ahead without the hello and gets the cloud's own refusal.
 const HOLD_HELLO_WAIT_MS = 10_000
@@ -344,6 +347,11 @@ export class ConnectorCloud {
   /** Rows were filled: send them with whatever client runs, or connect for them. */
   repliesFilled(): void {
     void this.events?.drainReplies()
+  }
+
+  /** Whether a turn's end still waits for the cloud to take it, after a restart too. */
+  turnEndPending(conversation: ConnectorConversation, turnId: number): boolean {
+    return this.events?.turnEndPending(conversation, turnId) ?? false
   }
 
   /** Null while no client runs: signed out, no bot the cloud can reach, or Orca quitting. */

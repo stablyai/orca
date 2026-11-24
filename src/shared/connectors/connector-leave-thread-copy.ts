@@ -12,4 +12,8 @@ export const LEAVE_THREAD_REFUSALS = {
     "Nothing changed: Orca couldn't save that you left, so replies here still wake you. Say it didn't work."
 } as const
 
+/** The leave may or may not have taken: a wait ran out, or its save's outcome is unknown. */
+export const LEAVE_THREAD_UNCONFIRMED =
+  "Orca couldn't confirm whether you left; Orca posts a confirmation in the thread if it did."
+
 export type LeaveThreadRefusalCode = keyof typeof LEAVE_THREAD_REFUSALS

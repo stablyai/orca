@@ -13,6 +13,7 @@ import { REPLY_ONLY_REFUSAL, LOOK_AROUND_REFUSAL } from '../../../bots/bot-look-
 import { slackThreadBotUser } from '../../../connector-cloud/connector-thread-mute'
 import {
   reserveThreadMuteSave,
+  ThreadMuteUnconfirmedError,
   threadMuteSaving,
   threadMuteSaves
 } from '../../../connector-cloud/connector-thread-mute-saves'
@@ -21,7 +22,10 @@ import { readThreadMute } from '../../../external-conversations/external-convers
 import { defineMethod } from '../core'
 import { ConnectorActError } from './connector-act'
 import { CONNECTOR_CLOUD_MENTIONED_FEATURE } from '../../../../shared/connector-cloud-features'
-import { LEAVE_THREAD_REFUSALS } from '../../../../shared/connectors/connector-leave-thread-copy'
+import {
+  LEAVE_THREAD_REFUSALS,
+  LEAVE_THREAD_UNCONFIRMED
+} from '../../../../shared/connectors/connector-leave-thread-copy'
 
 const {
   not_a_thread: NOT_A_THREAD,
@@ -152,6 +156,9 @@ function leaveFrom(
       await save.saving
     } catch (error) {
       console.warn('[connectors] could not save that a bot left its thread', error)
+      if (error instanceof ThreadMuteUnconfirmedError) {
+        throw new ConnectorActError('leave_unconfirmed', LEAVE_THREAD_UNCONFIRMED)
+      }
       throw new ConnectorActError('thread_mute_not_saved', NOT_SAVED)
     }
   })()

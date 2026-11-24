@@ -4,6 +4,7 @@ import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle
 import type { HandlerContext } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
+import { LEAVE_THREAD_UNCONFIRMED } from '../../shared/connectors/connector-leave-thread-copy'
 
 const LEAVE_TIMEOUT_MS = 60_000
 const REPLY_FLAGS = ['text', 'text-file', 'note', 'file', 'choice', 'react']
@@ -32,10 +33,7 @@ export async function leaveThread({
     .catch((error: unknown) => {
       // The host may have left after the wait ran out; its line in the thread says so if it did.
       if (error instanceof RuntimeClientError && error.code === 'runtime_timeout') {
-        throw new RuntimeClientError(
-          'leave_unconfirmed',
-          "Orca couldn't confirm whether you left; Orca posts a confirmation in the thread if it did."
-        )
+        throw new RuntimeClientError('leave_unconfirmed', LEAVE_THREAD_UNCONFIRMED)
       }
       throw error
     })

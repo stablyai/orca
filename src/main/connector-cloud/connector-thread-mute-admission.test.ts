@@ -39,6 +39,7 @@ import { ConversationChain } from '../external-conversations/external-conversati
 import { dispatchDelivery } from './connector-deliveries'
 import { handleThreadMute, type ThreadMuteDeps } from './connector-thread-mute'
 import { threadMuteSaves, threadMuteSaving } from './connector-thread-mute-saves'
+import { ProfileStateIndeterminateWriteError } from '../persistence/profile-state/database/profile-state-write-transaction'
 import { CONNECTOR_LEAVE_THREAD_METHOD } from '../runtime/rpc/methods/connector-leave-thread'
 import {
   leaveLines,
@@ -203,10 +204,13 @@ function leaver(
   ]
   const posted: unknown[] = []
   const features = ['sends.mentioned']
+  // The cloud's hello answered (else its features are unknown), and the turn end still queued for it.
+  const cloudState = { answered: true, endPending: false }
   // What the cloud answers each post, in turn; it posts while it answers ok.
   const answers: ({ ok: true } | { ok: false; status: number | null; error: string | null })[] = []
   const cloud = {
-    cloudFeatures: () => new Set(features),
+    cloudFeatures: () => (cloudState.answered ? new Set(features) : null),
+    turnEndPending: () => cloudState.endPending,
     reply: async (reply: unknown) => {
       const answer = answers.shift() ?? { ok: true as const }
       if (answer.ok) {
@@ -253,7 +257,7 @@ function leaver(
       flush: () => on.flushPendingOrThrowAsync({ drainToStableGeneration: false })
     })
   const link = () => findLink(store, FIRST)!.link
-  return { leave, posted, lines, link, answers, timers, features }
+  return { leave, posted, lines, link, answers, timers, features, cloudState }
 }
 
 describe('a muted bot thread', () => {
@@ -418,11 +422,23 @@ describe('a bot that leaves its thread', () => {
 
   it('posts a line once the cloud took its turn end, and keeps it owed where mentions go unmarked', async () => {
     const store = await botHome({})
-    const { leave, posted, lines, link, features } = leaver(store)
+    const { leave, posted, lines, link, features, cloudState, timers } = leaver(store)
     await leave()
     const own = lines()
+    // Its answer's end is still queued for the cloud (after a restart too): nothing posts, even when
+    // a watch or the fallback tries.
+    cloudState.endPending = true
     own.afterTurnEnd(link(), TURN_ID, true)
+    timers.shift()!()
+    own.post(link(), TURN_ID)
+    // A hello not answered yet: whether mentions are marked is unknown, so it waits and tries again.
+    cloudState.endPending = false
+    cloudState.answered = false
+    own.post(link(), TURN_ID)
+    await expect.poll(() => timers.length).toBe(1)
     expect(posted).toEqual([])
+    cloudState.answered = true
+    timers.length = 0
     // A cloud that stopped marking mentions: saying so would be false, so it waits, still owed.
     features.length = 0
     own.turnEndsTaken([{ conversation: FIRST, turnId: TURN_ID }])
@@ -432,6 +448,18 @@ describe('a bot that leaves its thread', () => {
     own.post(link(), TURN_ID)
     await expect.poll(() => posted.length).toBe(1)
     expect(own.owed(link(), TURN_ID)).toBe(false)
+  })
+
+  it('keeps a leave whose save may have reached disk, and says it is unconfirmed', async () => {
+    const store = await botHome({})
+    const { leave } = leaver(store)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(store, 'flushPendingOrThrowAsync').mockRejectedValueOnce(
+      new ProfileStateIndeterminateWriteError(new Error('commit unacknowledged'), undefined)
+    )
+    await expect(leave()).rejects.toMatchObject({ code: 'leave_unconfirmed' })
+    // As disk may hold it: a restart can't bring back a mute memory had dropped.
+    expect(readThreadMute(store, FIRST)).toMatchObject({ muted: true })
   })
 
   it('drops a line the cloud refuses for good', async () => {
@@ -537,6 +565,7 @@ describe('a bot that leaves its thread', () => {
       leaveLines({
         store: reopened,
         cloud: () => ({
+          cloudFeatures: () => new Set(['sends.mentioned']),
           reply: async (reply: unknown) => {
             posted.push(reply)
             return { ok: true as const }

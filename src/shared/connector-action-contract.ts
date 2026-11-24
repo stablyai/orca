@@ -179,6 +179,8 @@ export const CONNECTOR_ACT_ERROR_CODES = [
   'leave_refused_stale',
   'leave_refused_mixed',
   'leave_unavailable',
-  'thread_mute_not_saved'
+  'thread_mute_not_saved',
+  // A leave whose save's outcome is unknown: it may have taken.
+  'leave_unconfirmed'
 ] as const
 export type ConnectorActErrorCode = (typeof CONNECTOR_ACT_ERROR_CODES)[number]

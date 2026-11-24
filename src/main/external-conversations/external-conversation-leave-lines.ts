@@ -7,7 +7,11 @@ import { cloudConversation } from '../../shared/connectors/connector-cloud-contr
 import type { ConnectorReplyBody } from '../connector-cloud/connector-replies'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import { readThreadMute, writeLinkFact } from './external-conversation-link-writes'
-import { allLinks, type ExternalConversationLinkStore } from './external-conversation-links'
+import {
+  allLinks,
+  findLink,
+  type ExternalConversationLinkStore
+} from './external-conversation-links'
 
 /** The line Orca posts as the bot once it has left; never the agent's words. */
 export const THREAD_LEFT_LINE =
@@ -24,8 +28,10 @@ const NEVER_ERRORS = new Set(['reply_not_accepted', 'not_this_hosts_thread'])
 type Thread = Pick<ExternalConversationLink, 'source' | 'externalId'>
 
 export type LeaveLinesCloud = {
-  /** What the cloud takes, once its hello was answered. */
-  cloudFeatures?: () => ReadonlySet<string> | null
+  /** What the cloud takes; null until its hello was answered. */
+  cloudFeatures: () => ReadonlySet<string> | null
+  /** Whether `turnId`'s end in the thread still waits for the cloud to take it. */
+  turnEndPending?: (conversation: Thread, turnId: number) => boolean
   /** Null while no client runs. */
   reply: (
     body: ConnectorReplyBody
@@ -60,7 +66,7 @@ export type LeaveLines = {
   /** A turn end is deciding `turnId`'s line (on its answer or alone): a resume leaves it alone. */
   ending: (link: Thread, turnId: number) => void
   /** Posts the line once the cloud took `turnId`'s end, so it lands after the answer. `fallback`:
-   *  posts anyway that long after, for an end the cloud never takes; else the next watch does. */
+   *  tries again later for an end the cloud dropped; else the next watch does. */
   afterTurnEnd: (
     link: Pick<ExternalConversationLink, 'source' | 'externalId' | 'sessionId'>,
     turnId: number,
@@ -89,6 +95,14 @@ export function leaveLineReplyId(link: Thread, turnId: number): string {
   return `leave-${createHash('sha256').update(id).digest('base64url')}`
 }
 
+// A mirrored turn's end the owner's failed post still holds, kept on the link across a restart.
+function heldByMirror(store: ExternalConversationLinkStore, link: Thread, turnId: number): boolean {
+  return (findLink(store, link)?.link.mirrorHeld ?? []).some(
+    ({ event }) =>
+      typeof event === 'object' && event !== null && 'turnId' in event && event.turnId === turnId
+  )
+}
+
 export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
   const timer =
     deps.setTimer ??
@@ -99,11 +113,6 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
   const posting = new Map<string, () => void>()
   // Turn ends deciding their line, by when they began; a watch's resume leaves these alone.
   const ending = new Map<string, number>()
-  // Lines waiting for the cloud to take their turn's end.
-  const afterEnds = new Map<
-    string,
-    Pick<ExternalConversationLink, 'source' | 'externalId' | 'sessionId'>
-  >()
   const idOf = (link: Thread, turnId: number) =>
     JSON.stringify([link.source, link.externalId, turnId])
   const owed: LeaveLines['owed'] = (link, turnId) => {
@@ -140,22 +149,35 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
         posting.delete(id)
         return
       }
-      // A cloud known not to mark mentions lets every reply wake the bot: the line would be false
-      // there, so it stays owed for a cloud that does.
-      const features = deps.cloud()?.cloudFeatures?.()
+      const cloud = deps.cloud()
+      // Its answer goes first: the end that carries it (or holds it, behind an owner's failed post)
+      // posts the line once the cloud took it.
+      if (cloud?.turnEndPending?.(link, turnId) || heldByMirror(deps.store, link, turnId)) {
+        posting.delete(id)
+        return
+      }
+      // No client runs (signed out, quitting): the next watch starts the line again.
+      if (!cloud) {
+        posting.delete(id)
+        return
+      }
+      // A cloud that may let every reply wake the bot would make the line false: one known to lack
+      // mentions keeps it owed for one that has them; one not yet answered is tried again.
+      const features = cloud.cloudFeatures()
       if (features && !features.has(CONNECTOR_CLOUD_MENTIONED_FEATURE)) {
         posting.delete(id)
         return
       }
-      const replying = deps.cloud()?.reply({
-        replyId: leaveLineReplyId(link, turnId),
-        conversation,
-        turnId,
-        text: THREAD_LEFT_LINE,
-        // Orca's own line, on no one's behalf: no bot hears it as a person's request.
-        turnFor: 'none'
-      })
-      // No client runs (signed out, quitting): the next watch starts the line again.
+      const replying = features
+        ? cloud.reply({
+            replyId: leaveLineReplyId(link, turnId),
+            conversation,
+            turnId,
+            text: THREAD_LEFT_LINE,
+            // Orca's own line, on no one's behalf: no bot hears it as a person's request.
+            turnFor: 'none'
+          })
+        : Promise.resolve({ ok: false as const, status: null, error: null })
       if (!replying) {
         posting.delete(id)
         return
@@ -204,18 +226,16 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
       ending.set(idOf(link, turnId), Date.now())
     },
     afterTurnEnd: (link, turnId, fallback) => {
-      const id = idOf(link, turnId)
-      afterEnds.set(id, link)
-      ending.set(id, Date.now())
+      ending.set(idOf(link, turnId), Date.now())
       if (fallback) {
-        timer(() => afterEnds.delete(id) && post(link, turnId), ENDING_MS)
+        // Still waiting then means the end is still queued; this only catches one the cloud dropped.
+        timer(() => post(link, turnId), ENDING_MS)
       }
     },
     turnEndsTaken: (ends) => {
       for (const end of ends) {
-        const id = idOf(end.conversation, end.turnId)
-        const link = afterEnds.get(id)
-        if (link && afterEnds.delete(id)) {
+        const link = findLink(deps.store, end.conversation)?.link
+        if (link && owed(link, end.turnId)) {
           post(link, end.turnId)
         }
       }
@@ -225,7 +245,6 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
       for (const [id, at] of ending) {
         if (now - at > ENDING_MS) {
           ending.delete(id)
-          afterEnds.delete(id)
         }
       }
       for (const { link } of allLinks(deps.store)) {

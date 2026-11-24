@@ -5,6 +5,7 @@ import {
   CONNECTOR_AUDIENCE_EVENTS_VERSION,
   CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE,
   CONNECTOR_REPLIES_OUTBOX_FEATURE,
+  type ConnectorConversation,
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
 import type {
@@ -337,6 +338,17 @@ export class ConnectorTurnEvents {
 
   accepted(stamp: ConnectorStamp): void {
     this.outbox.accepted(stamp)
+  }
+
+  /** Whether `turnId`'s end in `conversation` still waits for the cloud to take it. */
+  turnEndPending(conversation: ConnectorConversation, turnId: number): boolean {
+    return this.outbox.holds(
+      (event) =>
+        isTurnEnded(event) &&
+        event.turnId === turnId &&
+        event.conversation.source === conversation.source &&
+        event.conversation.externalId === conversation.externalId
+    )
   }
 
   refused(stamp: ConnectorStamp, failure?: ConnectorFailure): ConnectorEvent | null {
