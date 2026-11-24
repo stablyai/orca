@@ -3804,7 +3804,7 @@
     "ko": "재설정 사용 중…"
   },
   "auto.components.status.bar.StatusBar.6d1042aa6f": {
-    "ko": "활성 계정의 Codex 사용량 한도 재설정 크레딧 1회를 사용해 재설정 가능한 사용량 창을 즉시 초기화합니다."
+    "ko": "활성 계정의 Codex 사용량 한도 재설정 크레딧 1회를 사용해 재설정 가능한 사용량 구간을 즉시 초기화합니다."
   },
   "auto.components.status.bar.StatusBar.972a1ff497": {
     "ko": "Codex 한도를 재설정할까요?"
