@@ -23724,8 +23724,8 @@
           "inactiveDescription_other": "No activity for {{count}} days.",
           "matchesCount_one": "Matches 1 workspace now",
           "matchesCount_other": "Matches {{count}} workspaces now",
-          "checking": "Checking which workspaces match…",
-          "checkFailed": "Couldn't check which workspaces match."
+          "checking": "Checking matches…",
+          "checkFailed": "Couldn't check matches."
         },
         "protection": {
           "title": "Protection",
@@ -23857,7 +23857,7 @@
           "saveFailed": "Couldn't save. Rule not changed.",
           "conflict": "The cleanup rules changed elsewhere. Review the change again.",
           "checkingSaved": "Checking saved rules…",
-          "previewFailed": "Couldn't check which workspaces match.",
+          "previewFailed": "Couldn't check matches.",
           "pinFailed": "Couldn't keep {{name}}. Rule not changed.",
           "inheritTitle": "Use global rules for {{project}}?",
           "projectEnableTitle": "Turn on {{rule}} for {{project}}?",
@@ -23869,11 +23869,11 @@
           "keptDeleted": "{{name}} was already deleted.",
           "keptDeletedCount_one": "1 kept workspace was already deleted.",
           "keptDeletedCount_other": "{{count}} kept workspaces were already deleted.",
-          "moreMatches_one": "1 more workspace matches now. Review and confirm again.",
-          "moreMatches_other": "{{count}} more workspaces match now. Review and confirm again.",
+          "moreMatches_one": "1 more matches now. Review again.",
+          "moreMatches_other": "{{count}} more match now. Review again.",
           "new": "New",
           "alreadySet": "Rows without New are already set to be deleted.",
-          "cancelCurrent": "Cancel won't stop current rules from deleting some of these.",
+          "cancelCurrent": "Current rules may still delete these.",
           "keepTooLate": "Couldn't keep {{name}} because deletion has already started. Rule not changed.",
           "proposalChanged": "Cleanup rules changed elsewhere. Review the updated rules: {{rules}}"
         },

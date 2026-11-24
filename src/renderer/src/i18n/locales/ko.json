@@ -22777,8 +22777,8 @@
           "inactiveDescription_other": "{{count}}일 동안 활동이 없습니다.",
           "matchesCount_one": "현재 워크스페이스 1개 해당",
           "matchesCount_other": "현재 워크스페이스 {{count}}개 해당",
-          "checking": "해당하는 워크스페이스 확인 중…",
-          "checkFailed": "해당하는 워크스페이스를 확인할 수 없습니다."
+          "checking": "일치 항목 확인 중…",
+          "checkFailed": "일치 항목을 확인할 수 없습니다."
         },
         "protection": {
           "title": "보호",

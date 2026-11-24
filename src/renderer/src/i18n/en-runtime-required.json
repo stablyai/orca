@@ -3254,8 +3254,8 @@
           "inheritDescription_other": "{{count}} workspaces match the global rules now.",
           "keptDeletedCount_one": "1 kept workspace was already deleted.",
           "keptDeletedCount_other": "{{count}} kept workspaces were already deleted.",
-          "moreMatches_one": "1 more workspace matches now. Review and confirm again.",
-          "moreMatches_other": "{{count}} more workspaces match now. Review and confirm again."
+          "moreMatches_one": "1 more matches now. Review again.",
+          "moreMatches_other": "{{count}} more match now. Review again."
         },
         "enable": {
           "description_one": "1 workspace matches right now.",

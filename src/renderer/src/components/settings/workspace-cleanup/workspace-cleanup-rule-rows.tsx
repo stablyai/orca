@@ -135,16 +135,13 @@ export function WorkspaceCleanupRuleRows({
               {phase === 'checking' ? (
                 <span role="status" className="mt-1 flex items-center gap-1.5 text-foreground">
                   <Loader2 className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
-                  {t(
-                    'components.settings.workspaceCleanup.rules.checking',
-                    'Checking which workspaces match…'
-                  )}
+                  {t('components.settings.workspaceCleanup.rules.checking', 'Checking matches…')}
                 </span>
               ) : failed ? (
                 <span id={errorId} role="alert" className="mt-1 block text-destructive">
                   {t(
                     'components.settings.workspaceCleanup.rules.checkFailed',
-                    "Couldn't check which workspaces match."
+                    "Couldn't check matches."
                   )}{' '}
                   <button
                     type="button"

@@ -268,10 +268,10 @@ export function WorkspaceCleanupRuleChangeDialog({
               <p>
                 {t(
                   'components.settings.workspaceCleanup.change.moreMatches',
-                  '{{count}} more workspaces match now. Review and confirm again.',
+                  '{{count}} more match now. Review again.',
                   {
                     count: request.status.added,
-                    defaultValue_one: '1 more workspace matches now. Review and confirm again.'
+                    defaultValue_one: '1 more matches now. Review again.'
                   }
                 )}
               </p>
@@ -362,7 +362,7 @@ export function WorkspaceCleanupRuleChangeDialog({
               <p>
                 {t(
                   'components.settings.workspaceCleanup.change.cancelCurrent',
-                  "Cancel won't stop current rules from deleting some of these."
+                  'Current rules may still delete these.'
                 )}
               </p>
             ) : null}

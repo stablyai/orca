@@ -20,7 +20,7 @@ export function workspaceCleanupChangeMessage(
     case 'preview':
       return t(
         'components.settings.workspaceCleanup.change.previewFailed',
-        "Couldn't check which workspaces match."
+        "Couldn't check matches."
       )
     case 'checking':
       return t('components.settings.workspaceCleanup.change.checkingSaved', 'Checking saved rules…')

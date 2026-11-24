@@ -115,10 +115,7 @@ export function RepositoryWorkspaceCleanupSection({
               <p className="text-sm font-semibold">{entry.title}</p>
               <p className="text-xs text-muted-foreground" aria-live="polite">
                 {change.checking === 'mode'
-                  ? t(
-                      'components.settings.workspaceCleanup.rules.checking',
-                      'Checking which workspaces match…'
-                    )
+                  ? t('components.settings.workspaceCleanup.rules.checking', 'Checking matches…')
                   : choice === 'global'
                     ? t(
                         'components.settings.repository.workspaceCleanup.usingGlobal',
