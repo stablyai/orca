@@ -55,8 +55,14 @@ export function threadMuteSaves(
   return async (key, muted, leaveLine) => {
     const before = readThreadMute(store, key)
     const previous = typeof before === 'object' && before !== null ? before : null
-    // Already so: a resend after a crash past its save, or a mute repeated, has nothing to save.
+    // Already so (a resend after a crash past its save, a mute repeated, or one an unknown save left
+    // in memory): nothing new to write, but it is answered only once a flush says it is on disk.
     if (!writeLinkFact(store, key, { muted: muted ? true : undefined, leaveLine })) {
+      try {
+        await store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
+      } catch (error) {
+        throw new ThreadMuteUnconfirmedError(error)
+      }
       return
     }
     const id = idOf(key)

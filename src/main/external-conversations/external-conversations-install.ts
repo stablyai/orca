@@ -118,16 +118,14 @@ export function installExternalConversations(
         ? { flush: () => store.flushPendingOrThrowAsync!({ drainToStableGeneration: false }) }
         : {}),
       answerPending: (link, turnId) =>
-        // At startup the chat host may not be in yet: read the outbox only once it is. One that
-        // can't be read never holds the line back for good.
-        Promise.resolve(runtime.ensureStructuredAgentSessionHost?.())
-          .then(
-            async () =>
-              (await getStructuredAgentSessionHost()
-                ?.deps.store.connectorReplies()
-                ?.unsentAnswer(link.sessionId, link, turnId)) === true
-          )
-          .catch(() => false)
+        // At startup the chat host may not be in yet: read the outbox only once it is. A read that
+        // fails rejects, so the line tries again rather than going before an answer.
+        Promise.resolve(runtime.ensureStructuredAgentSessionHost?.()).then(
+          async () =>
+            (await getStructuredAgentSessionHost()
+              ?.deps.store.connectorReplies()
+              ?.unsentAnswer(link.sessionId, link, turnId)) === true
+        )
     })
     installLeaveLines(lines)
     const restartCuts = heldTurnEnds(() => seam)

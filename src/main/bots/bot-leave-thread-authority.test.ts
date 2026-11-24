@@ -76,6 +76,11 @@ const cases: [string, ReturnType<typeof running>, ReturnType<typeof leaveThreadR
     running(typedInOrca, [], { origin: 'host', queuedMessageId: 'q1' }),
     'leave_refused_mixed'
   ],
+  [
+    'a queued message handed over as a client send',
+    running(typedInOrca, [], { origin: 'client', queuedMessageId: 'q1' }),
+    'leave_refused_mixed'
+  ],
   // Orca's continue opens the next turn: it never inherits the cut turn's request, or its refusal.
   ['Orca continuing a cut-short turn', running(typedInOrca, [], ORCA), 'leave_refused_mixed'],
   ['a message Orca has no send for', running(typedInOrca), 'leave_refused_mixed'],

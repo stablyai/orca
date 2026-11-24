@@ -50,7 +50,7 @@ type LeaveLinesDeps = {
   /** Saves pending store writes to disk. */
   flush?: () => Promise<void>
   /** Whether the reply outbox still holds `turnId`'s answer in the thread, not yet taken by the
-   *  cloud: the line waits for it, after a restart too. */
+   *  cloud: the line waits for it, after a restart too. Rejects when it can't tell. */
   answerPending?: (
     link: Pick<ExternalConversationLink, 'source' | 'externalId' | 'sessionId'>,
     turnId: number
@@ -179,14 +179,21 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
           return
         }
       }
-      const cloud = deps.cloud()
-      // Its answer goes first: the end or reply that carries it (or the end an owner's failed post
-      // holds). Its acceptance wakes this; the waits cover a route that doesn't (Orca's /replies).
-      const pending =
+      // Its answer goes first: the reply that carries it (looked up first, and a lookup that fails
+      // is tried again), then the end that carries it or the end an owner's failed post holds, read
+      // after that lookup so one that arrived meanwhile counts. Its acceptance wakes this; the waits
+      // cover a route that doesn't (Orca's /replies).
+      const answering =
         owed(link, turnId) &&
-        (cloud?.turnEndPending?.(link, turnId) ||
-          heldByMirror(deps.store, link, turnId) ||
-          (await Promise.resolve(deps.answerPending?.(link, turnId)).catch(() => false)) === true)
+        (await Promise.resolve(deps.answerPending?.(link, turnId)).then(
+          (unsent) => unsent === true,
+          () => true
+        ))
+      const cloud = deps.cloud()
+      const pending =
+        answering ||
+        cloud?.turnEndPending?.(link, turnId) === true ||
+        heldByMirror(deps.store, link, turnId)
       // Read after any wait: an @mention meanwhile means it is no longer left.
       if (!owed(link, turnId)) {
         posting.delete(id)

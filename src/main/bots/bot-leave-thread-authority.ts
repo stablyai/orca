@@ -47,6 +47,7 @@ function typedByPerson(
   // A queued card handed over says nothing of who queued it here, so it is refused: they ask again.
   return (
     sent !== undefined &&
+    sent.queuedMessageId === undefined &&
     (sent.source?.kind === 'user' || (sent.source === undefined && sent.origin === 'client'))
   )
 }
