@@ -14,6 +14,7 @@ import type {
   BrowserSelectAllResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { BrowserCommandTargetParams } from './browser-command-contracts'
+import type { AgentBrowserPassthroughCaller } from '../../../browser/agent-browser/protocol/agent-browser-passthrough-paths'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 
 export class RuntimeBrowserElementActions {
@@ -228,10 +229,12 @@ export class RuntimeBrowserElementActions {
       .highlight(params.selector, target.worktreeId, target.browserPageId)
   }
 
-  async browserExec(params: { command: string } & BrowserCommandTargetParams): Promise<unknown> {
+  async browserExec(
+    params: { command: string } & AgentBrowserPassthroughCaller & BrowserCommandTargetParams
+  ): Promise<unknown> {
     const target = await this.targets.resolveBrowserCommandTarget(params)
     return this.targets
       .requireAgentBrowserBridge()
-      .exec(params.command, target.worktreeId, target.browserPageId)
+      .exec(params.command, target.worktreeId, target.browserPageId, params)
   }
 }

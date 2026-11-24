@@ -59,6 +59,8 @@ export function structuredStatusSummariesEqual(
     a.asyncQuestionsSkippedThrough === b.asyncQuestionsSkippedThrough &&
     a.awaitsApproval?.tool === b.awaitsApproval?.tool &&
     a.awaitsApproval?.input === b.awaitsApproval?.input &&
+    a.awaitsBlockingQuestion?.text === b.awaitsBlockingQuestion?.text &&
+    a.attentionAsksOnlyQuestions === b.attentionAsksOnlyQuestions &&
     agentSessionBackgroundTasksEqual(a.backgroundTasks, b.backgroundTasks) &&
     structuredStatusChildrenEqual(a.children, b.children) &&
     agentProviderSessionsEqual(undefined, a.providerSession, b.providerSession)

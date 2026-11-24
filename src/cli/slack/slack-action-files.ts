@@ -3,8 +3,8 @@
 // Cloud's stream to disk. Neither passes through the host as bytes, and Orca sets no size cap.
 import { randomUUID } from 'node:crypto'
 import { openAsBlob } from 'node:fs'
-import { open, stat, unlink, writeFile } from 'node:fs/promises'
-import { basename, resolve } from 'node:path'
+import { open, stat, unlink, type FileHandle } from 'node:fs/promises'
+import { basename, extname, resolve } from 'node:path'
 import type { ConnectorActionArgs } from '../../shared/connector-action-contract'
 import { RuntimeClientError } from '../runtime/connection/types'
 
@@ -89,13 +89,36 @@ export async function uploadFile(
   }
 }
 
-/** The path a download is saved to: where the bot asked, or beside it under its own name. */
-function downloadPath(cwd: string, out: string | undefined, file: DownloadedFile): string {
-  // No control characters, and none Windows refuses in a name.
-  const name = basename(
-    [...file.name].map((char) => (char < ' ' || '<>:"|?*'.includes(char) ? '_' : char)).join('')
-  )
-  return resolve(cwd, out ?? (name === '.' || name === '..' ? file.id : name))
+/** A new file for a download: at --out, never over what is there, or else under its own name here,
+ *  numbered past any older file of that name (a stale image.png must not pass for a new one). */
+async function openDownload(
+  cwd: string,
+  out: string | undefined,
+  file: DownloadedFile
+): Promise<{ path: string; handle: FileHandle }> {
+  if (out !== undefined) {
+    const path = resolve(cwd, out)
+    return { path, handle: await open(path, 'wx').catch(refuseExisting(path)) }
+  }
+  // The last segment of either separator, with no control characters or any Windows refuses in a
+  // name, and no trailing dots or spaces, which Windows drops (so the printed path is the real one).
+  const safe = [...(file.name.split(/[/\\]/).pop() ?? '')]
+    .map((char) => (char < ' ' || '<>:"|?*'.includes(char) ? '_' : char))
+    .join('')
+    .replace(/[. ]+$/, '')
+  const name = safe || file.id
+  const ext = extname(name)
+  const stem = name.slice(0, name.length - ext.length)
+  for (let n = 1; ; n++) {
+    const path = resolve(cwd, n === 1 ? name : `${stem}-${n}${ext}`)
+    try {
+      return { path, handle: await open(path, 'wx') }
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) {
+        throw error
+      }
+    }
+  }
 }
 
 // Orca Cloud's own answers when it can't stream the file, as `{ error, message }`.
@@ -133,66 +156,20 @@ export async function saveDownload(
   file: DownloadedFile,
   request: Fetch = (input, init) => fetch(input, init)
 ): Promise<string> {
-  if (file.data !== undefined) {
-    return await saveInline(downloadPath(cwd, out, file), file.data)
-  }
-  if (!file.url || !file.ticket) {
+  const link = file.url && file.ticket ? { url: file.url, ticket: file.ticket } : undefined
+  if (file.data === undefined && !link) {
     throw new RuntimeClientError(
       'cloud_lacks_direct_files',
       "Orca Cloud didn't send a link to the file; update Orca and try again."
     )
   }
-  const path = downloadPath(cwd, out, file)
-  const handle = await open(path, 'wx').catch(refuseExisting(path))
+  const { path, handle } = await openDownload(cwd, out, file)
   let saved = false
   try {
-    let written = 0
-    let expected: number | undefined = file.size
-    for (;;) {
-      const response = await request(file.url, {
-        headers: {
-          authorization: `Bearer ${file.ticket}`,
-          ...(written > 0 ? { range: `bytes=${written}-` } : {})
-        }
-      }).catch(() => null)
-      if (!response) {
-        if (written > 0) {
-          throw brokeOff(file.name, written)
-        }
-        throw new RuntimeClientError(
-          'unavailable',
-          "Orca Cloud didn't answer; nothing was saved. Try again in a moment."
-        )
-      }
-      if (!response.ok || !response.body) {
-        throw await downloadRefusal(response, file.name)
-      }
-      // A resumed try must start where the last stopped; a whole file again can't be appended.
-      if (written > 0 && response.status !== 206) {
-        await response.body.cancel().catch(() => {})
-        throw brokeOff(file.name, written)
-      }
-      const total = Number(response.headers.get('x-orca-file-size') ?? Number.NaN)
-      if (Number.isSafeInteger(total)) {
-        expected = total
-      }
-      const before = written
-      let ended = false
-      try {
-        for await (const chunk of response.body) {
-          await handle.write(chunk)
-          written += chunk.length
-        }
-        ended = true
-      } catch {
-        // Broken off; asked again from here below, if this try brought anything.
-      }
-      if (ended && (expected === undefined || written >= expected)) {
-        break
-      }
-      if (written === before) {
-        throw brokeOff(file.name, written)
-      }
+    if (file.data !== undefined) {
+      await handle.writeFile(Buffer.from(file.data, 'base64'))
+    } else if (link) {
+      await streamDownload(handle, file, link, request)
     }
     saved = true
     return path
@@ -204,6 +181,62 @@ export async function saveDownload(
   }
 }
 
+async function streamDownload(
+  handle: FileHandle,
+  file: DownloadedFile,
+  link: { url: string; ticket: string },
+  request: Fetch
+): Promise<void> {
+  let written = 0
+  let expected: number | undefined = file.size
+  for (;;) {
+    const response = await request(link.url, {
+      headers: {
+        authorization: `Bearer ${link.ticket}`,
+        ...(written > 0 ? { range: `bytes=${written}-` } : {})
+      }
+    }).catch(() => null)
+    if (!response) {
+      if (written > 0) {
+        throw brokeOff(file.name, written)
+      }
+      throw new RuntimeClientError(
+        'unavailable',
+        "Orca Cloud didn't answer; nothing was saved. Try again in a moment."
+      )
+    }
+    if (!response.ok || !response.body) {
+      throw await downloadRefusal(response, file.name)
+    }
+    // A resumed try must start where the last stopped; a whole file again can't be appended.
+    if (written > 0 && response.status !== 206) {
+      await response.body.cancel().catch(() => {})
+      throw brokeOff(file.name, written)
+    }
+    const total = Number(response.headers.get('x-orca-file-size') ?? Number.NaN)
+    if (Number.isSafeInteger(total)) {
+      expected = total
+    }
+    const before = written
+    let ended = false
+    try {
+      for await (const chunk of response.body) {
+        await handle.write(chunk)
+        written += chunk.length
+      }
+      ended = true
+    } catch {
+      // Broken off; asked again from here below, if this try brought anything.
+    }
+    if (ended && (expected === undefined || written >= expected)) {
+      break
+    }
+    if (written === before) {
+      throw brokeOff(file.name, written)
+    }
+  }
+}
+
 const refuseExisting = (path: string) => (error: unknown) => {
   throw error instanceof Error && 'code' in error && error.code === 'EEXIST'
     ? new RuntimeClientError(
@@ -211,11 +244,6 @@ const refuseExisting = (path: string) => (error: unknown) => {
         `${path} already exists; pass --out with a new path.`
       )
     : error
-}
-
-async function saveInline(path: string, data: string): Promise<string> {
-  await writeFile(path, Buffer.from(data, 'base64'), { flag: 'wx' }).catch(refuseExisting(path))
-  return path
 }
 
 /** A file read whole into one host request as base64 (Google's uploads and draft attachments, which

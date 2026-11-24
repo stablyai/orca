@@ -1,7 +1,7 @@
 // One Slack workspace's page in Connectors: the desktop's BotSlackCard and BotSlackSection. How to ask, its
-// waiting requests and people, who replies post as (changed on the computer: bots.slack.setPostAs isn't on
-// the phone's allowlist), and the card's menu and Remove.
+// waiting requests and people, who replies post as, and the card's menu and Remove.
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
+import { BOTS_SLACK_POST_AS_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Ellipsis, ExternalLink, Plus, RefreshCw } from 'lucide-react-native'
 import { botMembersFrom, slackMembersOf, type BotMember } from '../../../../src/shared/bot-types'
@@ -12,6 +12,7 @@ import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
+import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -23,6 +24,7 @@ import { slackErrorMessage, slackRowFace } from './mobile-slack-copy'
 import { slackTeamState } from '../../../../src/shared/connector-bot-slack-contract'
 import type { PhoneSlackView } from './use-phone-bot-slack'
 import { useConnectorPeople } from './MobileConnectorAccountParts'
+import { MobileSlackPostAsPage, slackPosterNames } from './MobileSlackPostAsPage'
 
 export function MobileBotSlackPage(props: {
   client: RpcClient | null
@@ -47,6 +49,9 @@ export function MobileBotSlackPage(props: {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuAnchor = useRef(null)
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const [postAsOpen, setPostAsOpen] = useState(false)
+  // An older host keeps Post as read-only: it refuses bots.slack.setPostAs from a phone.
+  const canPostAs = useRouteCapability(BOTS_SLACK_POST_AS_RUNTIME_CAPABILITY)
   const [busy, setBusy] = useState(false)
   const alive = useRef(true)
   useEffect(() => {
@@ -58,6 +63,7 @@ export function MobileBotSlackPage(props: {
   const face = slackRowFace(slack.view, teamId, props.hostName, t)
   const team = slack.view.status === 'ready' ? slackTeamState(slack.view.slack, teamId) : null
   const installed = team?.state === 'installed' ? team : null
+  const postAs = installed?.postAs
   // A workspace's page can also remove an app that was never installed.
   const removable = installed ?? (teamId !== undefined && team && 'teamId' in team ? team : null)
   const place = face.workspace ?? BOT_CONNECTOR_NAMES.slack
@@ -86,6 +92,21 @@ export function MobileBotSlackPage(props: {
 
   if (people.overlay) {
     return people.overlay
+  }
+  if (postAsOpen && canPostAs && installed && postAs) {
+    return (
+      <MobileSlackPostAsPage
+        client={props.client}
+        botId={bot.id}
+        installed={{ ...installed, postAs }}
+        hostName={props.hostName}
+        online={props.online}
+        banner={props.banner}
+        showToast={props.showToast}
+        refresh={slack.refresh}
+        onBack={() => setPostAsOpen(false)}
+      />
+    )
   }
   if (confirmRemove) {
     return (
@@ -172,12 +193,8 @@ export function MobileBotSlackPage(props: {
         ]
       : [])
   ]
-  const poster =
-    installed?.postAs === 'computer'
-      ? (installed.computerName ?? props.hostName)
-      : installed?.postAs === 'person'
-        ? installed.poster?.name
-        : undefined
+  const posters = installed ? slackPosterNames(installed, props.hostName, t) : null
+  const pendingPostAs = installed?.postAsPending !== undefined && installed.postAsPending !== postAs
   return (
     <>
       <SheetHeader
@@ -219,14 +236,20 @@ export function MobileBotSlackPage(props: {
         </SettingsSection>
       ) : null}
       {people.section}
-      {poster ? (
+      {posters && postAs ? (
         <SettingsSection title={t('bots.slack.replies', 'Replies')}>
           <ListRow
             title={t('bots.slack.postAs.title', 'Post as')}
-            subtitle={t('bots.slack.postAs.changeOn', 'Change it on {{host}}', {
-              host: props.hostName
-            })}
-            value={poster}
+            subtitle={
+              !canPostAs
+                ? t('bots.slack.postAs.changeOn', 'Change it on {{host}}', { host: props.hostName })
+                : pendingPostAs
+                  ? t('bots.slack.setup.waiting', 'Waiting for Slack…')
+                  : undefined
+            }
+            value={posters[postAs]}
+            navigates={canPostAs}
+            onPress={canPostAs ? () => setPostAsOpen(true) : undefined}
           />
         </SettingsSection>
       ) : null}

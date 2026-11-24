@@ -110,6 +110,8 @@ describe('bot folder names', () => {
     ['Reviewer', 'reviewer'],
     ['PR Reviewer (Jane)', 'pr-reviewer-jane'],
     ['Café bot', 'cafe-bot'],
+    ['João', 'joao'],
+    ['Revisão de PRs', 'revisao-de-prs'],
     ['日本語', 'bot'],
     ['con', 'con-bot'],
     ['LPT1', 'lpt1-bot']

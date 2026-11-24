@@ -2,6 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
 import { BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { Globe, Loader2 } from 'lucide-react'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import {
+  ComposingKeyboardProxy,
+  recordComposingKeyboardProxyAnchor
+} from '@/lib/text-input/ime/composing-keyboard-proxy'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -34,6 +39,7 @@ import {
 } from './remote-browser-stream-status'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RemoteBrowserRuntimeTarget } from './remote-browser-page-input-model'
+import type { RemoteBrowserKeyboardProxyHandlers } from './remote-browser-page-input-params'
 import { useWorkspaceDocPageFileDrop } from '../navigate/browser-page-workspace-file-drop'
 import {
   BrowserPageFeedbackBadge,
@@ -47,6 +53,7 @@ export function RemoteBrowserPageViewport({
   remoteViewportRef,
   attachFileDrop,
   imageRef,
+  keyboardProxyRef,
   feedbackBadgeRef,
   find,
   frameUrl,
@@ -72,8 +79,7 @@ export function RemoteBrowserPageViewport({
   handleRemotePointerDown,
   handleRemotePointerUp,
   handleRemoteContextMenu,
-  handleRemoteScreenshotKeyDown,
-  handleRemoteScreenshotPaste,
+  keyboardProxyHandlers,
   handleRemotePointerMove,
   annotateOverlays
 }: {
@@ -81,6 +87,8 @@ export function RemoteBrowserPageViewport({
   /** Sets remoteViewportRef too; takes files dragged in from this computer. */
   attachFileDrop: (root: HTMLElement | null) => void
   imageRef: React.RefObject<HTMLImageElement | null>
+  /** Holds the page's keyboard focus, so host input methods compose. */
+  keyboardProxyRef: React.RefObject<HTMLTextAreaElement | null>
   feedbackBadgeRef: React.RefObject<BrowserPageFeedbackBadgeHandle | null>
   find: RemoteBrowserPageFind
   frameUrl: string | null
@@ -109,8 +117,7 @@ export function RemoteBrowserPageViewport({
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemoteContextMenu: (event: React.MouseEvent<HTMLImageElement>) => void
-  handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
-  handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
+  keyboardProxyHandlers: RemoteBrowserKeyboardProxyHandlers
   /** Takes pointer leaves too, which move the page's pointer off it. */
   handleRemotePointerMove: (event: React.PointerEvent<HTMLImageElement>) => void
   annotateOverlays: React.ReactNode
@@ -125,14 +132,14 @@ export function RemoteBrowserPageViewport({
   useBrowserAgentCursor(browserTab.id, imageRef, getAgentCursorHost)
   const fileDrop = useWorkspaceDocPageFileDrop(browserTab.id, worktreeId, remoteViewportRef)
 
-  // Transfer viewport focus to the first image, which owns remote key input.
+  // Transfer viewport focus to the first frame's keyboard proxy, which owns remote key input.
   const hasStreamFrame = frameUrl !== null
   useEffect(() => {
     if (!hasStreamFrame || document.activeElement !== remoteViewportRef.current) {
       return
     }
-    imageRef.current?.focus()
-  }, [hasStreamFrame, imageRef, remoteViewportRef])
+    keyboardProxyRef.current?.focus({ preventScroll: true })
+  }, [hasStreamFrame, keyboardProxyRef, remoteViewportRef])
 
   const hasViewportPreset = Boolean(browserTab.viewportPresetId)
   const remoteFrameStyle = useMemo(
@@ -169,6 +176,7 @@ export function RemoteBrowserPageViewport({
         // The phone has the page; only the overlay's Take back stays clickable.
         phoneDriven && 'pointer-events-none'
       )}
+      onPointerDownCapture={recordComposingKeyboardProxyAnchor}
       {...fileDrop}
     >
       {pageDriver ? (
@@ -193,28 +201,43 @@ export function RemoteBrowserPageViewport({
         </div>
       ) : null}
       {frameUrl ? (
-        <img
-          data-testid="remote-browser-frame"
-          ref={imageRef}
-          src={frameUrl}
-          alt=""
-          tabIndex={0}
-          // Keys and paste reach the page from the frame, so the phone's lock takes its focus too.
-          inert={phoneDriven}
-          style={remoteImageStyle}
-          className="absolute top-0 left-0 max-w-none bg-white outline-none"
-          onPointerDown={handleRemotePointerDown}
-          onPointerMove={handleRemotePointerMove}
-          onPointerLeave={handleRemotePointerMove}
-          onPointerUp={handleRemotePointerUp}
-          onContextMenu={handleRemoteContextMenu}
-          onKeyDown={(event) => {
-            find.closeFindOnPageEscape(event)
-            handleRemoteScreenshotKeyDown(event)
-          }}
-          onPaste={handleRemoteScreenshotPaste}
-          draggable={false}
-        />
+        <>
+          <img
+            data-testid="remote-browser-frame"
+            ref={imageRef}
+            src={frameUrl}
+            alt=""
+            tabIndex={0}
+            // Keys and paste reach the page through the proxy, so the phone's lock takes its focus too.
+            inert={phoneDriven}
+            style={remoteImageStyle}
+            className="absolute top-0 left-0 max-w-none bg-white outline-none"
+            onPointerDown={handleRemotePointerDown}
+            onPointerMove={handleRemotePointerMove}
+            onPointerLeave={handleRemotePointerMove}
+            onPointerUp={handleRemotePointerUp}
+            onContextMenu={handleRemoteContextMenu}
+            // Keyboard focus belongs to the proxy, so a Tab or a focus call on the frame lands there.
+            onFocus={() => keyboardProxyRef.current?.focus({ preventScroll: true })}
+            draggable={false}
+          />
+          <ComposingKeyboardProxy
+            ref={keyboardProxyRef}
+            data-browser-keyboard-proxy=""
+            inert={phoneDriven}
+            aria-label={t('auto.components.browser.pane.BrowserPane.572046436a', 'Remote browser')}
+            onKeyDown={(event) => {
+              // An Escape that cancels a composition belongs to the input method.
+              if (!isImeOwnedKeyboardEvent(event)) {
+                find.closeFindOnPageEscape(event)
+              }
+              keyboardProxyHandlers.onKeyDown(event)
+            }}
+            onPaste={keyboardProxyHandlers.onPaste}
+            onCompositionEnd={keyboardProxyHandlers.onText}
+            onInput={keyboardProxyHandlers.onText}
+          />
+        </>
       ) : (
         <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
           <div className="flex max-w-sm flex-col items-center gap-2">
@@ -299,6 +322,7 @@ export function RemoteBrowserPageViewport({
           {/* Client-placed pages refuse server screencasts; only a new server-placed page can render here. */}
           {remotePageHandle?.placement?.kind === 'client' ? (
             <ReopenBrowserPageOnServerButton
+              browserPageId={browserTab.id}
               environmentId={remotePageHandle.environmentId}
               worktreeId={worktreeId}
               reopenUrl={browserTab.url}

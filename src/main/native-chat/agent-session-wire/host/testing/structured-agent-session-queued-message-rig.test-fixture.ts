@@ -300,6 +300,7 @@ export async function createQueuedMessageTestRig(
     setOption,
     cancelTurn,
     closeSession,
+    releaseAcquisition: provider.releaseAcquisition,
     compact,
     starts: provider.starts,
     holdNextStart: provider.holdNextStart,

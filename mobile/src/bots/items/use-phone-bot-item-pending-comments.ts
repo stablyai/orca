@@ -3,6 +3,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import {
   BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY
@@ -27,7 +28,8 @@ export function usePhoneBotItemPendingComments({
   uid,
   events,
   hostName,
-  showToast
+  showToast,
+  returnText
 }: {
   client: RpcClient | null
   /** One item on one host. */
@@ -36,12 +38,15 @@ export function usePhoneBotItemPendingComments({
   events: readonly BotItemEvent[]
   hostName: string
   showToast: (message: string) => void
+  /** A replaced question's reply, dropped: its words back to the comment box if it is empty. */
+  returnText: (text: string) => void
 }) {
   const t = useMobileTranslation()
   const requestIds = useRouteCapability(BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY)
   const skills = useRouteCapability(BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY)
   const questionIds = useRouteCapability(BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY)
   const plain = useRouteCapability(BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY)
+  const skipped = useRouteCapability(BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY)
   return usePendingComments(key, events, {
     post: async (entry) => {
       const outcome = client
@@ -50,7 +55,8 @@ export function usePhoneBotItemPendingComments({
             requestId: entry.requestId ?? undefined,
             skills: entry.skills,
             questionId: entry.questionId ?? undefined,
-            plain: entry.plain
+            plain: entry.plain,
+            skipped: entry.skipped
           })
         : ({ kind: 'not-sent' } as const)
       if (outcome.kind !== 'done') {
@@ -73,9 +79,11 @@ export function usePhoneBotItemPendingComments({
             ? error.message
             : String(error)
       ),
+    returnText,
     requestIds,
     questionIds,
     plain,
-    skills
+    skills,
+    skipped
   })
 }
