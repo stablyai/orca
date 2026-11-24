@@ -3,7 +3,7 @@ import type { PRCommentPresentationClasses } from './pr-comment-presentation'
 
 const bar = 'block rounded bg-muted-foreground/15'
 const cardBar = 'block rounded bg-muted-foreground/20 dark:bg-muted-foreground/15'
-const fade = 'animate-in fade-in-0 fill-mode-backwards delay-150 motion-reduce:duration-0'
+const fade = 'animate-in fade-in-0 fill-mode-backwards delay-150 motion-reduce:animate-none'
 
 export function CommentsAudienceLoading({
   presentation

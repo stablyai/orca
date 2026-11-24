@@ -12,7 +12,7 @@ export function ChecksListLoading({
   return (
     <div
       aria-hidden="true"
-      className="animate-in fade-in-0 fill-mode-backwards delay-150 motion-reduce:duration-0"
+      className="animate-in fade-in-0 fill-mode-backwards delay-150 motion-reduce:animate-none"
     >
       <div className="flex h-8 items-center gap-3 border-b border-border px-3">
         <span className={cn(bar, 'size-3')} />
