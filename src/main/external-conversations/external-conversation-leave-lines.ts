@@ -12,12 +12,21 @@ import { allLinks, type ExternalConversationLinkStore } from './external-convers
 export const THREAD_LEFT_LINE =
   "I've left this thread. New replies here won't reach me unless someone @mentions me."
 
-// Retries of a line that couldn't post, then it waits for the next watch or restart.
-const RETRY_MS = [15_000, 60_000, 5 * 60_000, 15 * 60_000]
+// Waits between tries of a line that couldn't post; the last repeats while it is owed.
+const RETRY_MS = [15_000, 60_000, 5 * 60_000, 15 * 60_000, 30 * 60_000, 60 * 60_000]
+// A turn end still deciding its line holds it from a watch's resume this long at most.
+const ENDING_MS = 10 * 60_000
+// Refusals no retry lifts: the line is dropped, never owed again.
+const NEVER_STATUS = new Set([400, 403, 404, 413, 422])
+const NEVER_ERRORS = new Set(['reply_not_accepted', 'not_this_hosts_thread'])
+
+type Thread = Pick<ExternalConversationLink, 'source' | 'externalId'>
 
 export type LeaveLinesCloud = {
   /** Null while no client runs. */
-  reply: (body: ConnectorReplyBody) => Promise<{ ok: boolean }> | null
+  reply: (
+    body: ConnectorReplyBody
+  ) => Promise<{ ok: true } | { ok: false; status: number | null; error: string | null }> | null
 }
 
 type LeaveLinesDeps = {
@@ -37,6 +46,8 @@ export type LeaveLines = {
     link: Pick<ExternalConversationLink, 'source' | 'externalId' | 'sessionId'>,
     turnId: number
   ) => void
+  /** A turn end is deciding `turnId`'s line (on its answer or alone): a resume leaves it alone. */
+  ending: (link: Thread, turnId: number) => void
   /** Posts every line still owed for a turn that isn't running (cut short by a quit or a reset). */
   resume: (running: (link: ExternalConversationLink) => number | null) => void
 }
@@ -52,9 +63,10 @@ export function installedLeaveLines(): LeaveLines | null {
   return installed
 }
 
-/** One post per turn, however often it is retried or resumed. */
-export function leaveLineReplyId(sessionId: string, turnId: number): string {
-  return `leave-${createHash('sha256').update(`${sessionId}:${turnId}`).digest('base64url')}`
+/** One post per thread and turn, however often it is retried or resumed, whichever chat it is in. */
+export function leaveLineReplyId(link: Thread, turnId: number): string {
+  const id = `${link.source}:${link.externalId}:${turnId}`
+  return `leave-${createHash('sha256').update(id).digest('base64url')}`
 }
 
 export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
@@ -64,22 +76,25 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
       setTimeout(run, ms).unref?.()
     })
   const posting = new Set<string>()
+  // Turn ends deciding their line, by when they began; a watch's resume leaves these alone.
+  const ending = new Map<string, number>()
+  const idOf = (link: Thread, turnId: number) =>
+    JSON.stringify([link.source, link.externalId, turnId])
   const owed: LeaveLines['owed'] = (link, turnId) => {
     const thread = readThreadMute(deps.store, link)
     return (
       typeof thread === 'object' && thread !== null && thread.muted && thread.leaveLine === turnId
     )
   }
-  const settle = (
-    link: Pick<ExternalConversationLink, 'source' | 'externalId'>,
-    turnId: number
-  ) => {
+  const settle = (link: Thread, turnId: number) => {
+    ending.delete(idOf(link, turnId))
     if (owed(link, turnId)) {
       writeLinkFact(deps.store, link, { leaveLine: undefined })
     }
   }
   const post: LeaveLines['post'] = (link, turnId) => {
-    const id = JSON.stringify([link.source, link.externalId, turnId])
+    const id = idOf(link, turnId)
+    ending.delete(id)
     const conversation = cloudConversation(link)
     if (!conversation || posting.has(id)) {
       return
@@ -92,7 +107,7 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
       }
       const sent = await Promise.resolve(
         deps.cloud()?.reply({
-          replyId: leaveLineReplyId(link.sessionId, turnId),
+          replyId: leaveLineReplyId(link, turnId),
           conversation,
           turnId,
           text: THREAD_LEFT_LINE,
@@ -100,20 +115,22 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
           turnFor: 'none'
         }) ?? null
       ).catch(() => null)
-      if (sent?.ok) {
+      // Posted, or refused for good (another account's thread, a body the cloud won't take).
+      const never =
+        sent !== null &&
+        !sent.ok &&
+        ((sent.status !== null && NEVER_STATUS.has(sent.status)) ||
+          (sent.error !== null && NEVER_ERRORS.has(sent.error)))
+      if (sent?.ok || never) {
+        if (never) {
+          console.warn('[connectors] dropped a "left this thread" line the cloud refused')
+        }
         posting.delete(id)
         settle(link, turnId)
         return
       }
-      const wait = RETRY_MS[retry]
-      if (wait === undefined) {
-        console.warn(
-          '[connectors] could not post that a bot left its thread; it posts on reconnect'
-        )
-        posting.delete(id)
-        return
-      }
-      timer(() => void attempt(retry + 1), wait)
+      // While owed it keeps trying, at the longest wait once the shorter ones are spent.
+      timer(() => void attempt(retry + 1), RETRY_MS[Math.min(retry, RETRY_MS.length - 1)]!)
     }
     void attempt(0)
   }
@@ -121,10 +138,25 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
     owed,
     carried: settle,
     post,
+    ending: (link, turnId) => {
+      ending.set(idOf(link, turnId), Date.now())
+    },
     resume: (running) => {
+      const now = Date.now()
+      for (const [id, at] of ending) {
+        if (now - at > ENDING_MS) {
+          ending.delete(id)
+        }
+      }
       for (const { link } of allLinks(deps.store)) {
-        if (link.muted && link.leaveLine !== undefined && running(link) !== link.leaveLine) {
-          post(link, link.leaveLine)
+        const turnId = link.leaveLine
+        if (
+          link.muted &&
+          turnId !== undefined &&
+          running(link) !== turnId &&
+          !ending.has(idOf(link, turnId))
+        ) {
+          post(link, turnId)
         }
       }
     }

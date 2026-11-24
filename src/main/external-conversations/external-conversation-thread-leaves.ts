@@ -26,7 +26,10 @@ export type TurnLeave = {
   settle: (carried?: boolean) => void
 }
 
-type Lines = Pick<LeaveLines, 'owed' | 'carried' | 'post'>
+type Lines = Pick<LeaveLines, 'owed' | 'carried' | 'post' | 'ending'>
+
+// The line rides only on an answer every cloud keeps whole (the smallest takes 8 KB).
+const RIDE_MAX_BYTES = 7 * 1024
 
 export function turnLeave(
   link: Pick<ExternalConversationLink, 'source' | 'externalId' | 'sessionId'>,
@@ -37,27 +40,39 @@ export function turnLeave(
 ): TurnLeave {
   const lines = given ?? installedLeaveLines()
   const left = lines && turnId !== null && lines.owed(link, turnId) ? { lines, turnId } : null
-  const rides = left !== null && outcome === 'success'
+  if (left && live()) {
+    // Held from a watch's resume while this end decides, so the line never posts twice.
+    left.lines.ending(link, left.turnId)
+  }
+  // Which of the turn's words were given the line (its outbox prose, its final message); only
+  // those can carry it.
+  const appended = { prose: false, message: false }
   let rode = false
-  const said = (words: string | undefined) =>
-    withThreadLeftLine(words && !isQuietBotResult(words) ? words : undefined)
+  const said = (words: string | undefined, part: keyof typeof appended) => {
+    const spoken = words && !isQuietBotResult(words) ? words : undefined
+    if (spoken && Buffer.byteLength(spoken) > RIDE_MAX_BYTES) {
+      return words
+    }
+    appended[part] = true
+    return withThreadLeftLine(spoken)
+  }
   return {
     turn: (turn) =>
-      rides
+      left && outcome === 'success'
         ? {
             ...turn,
-            turnProse: said(turn.turnProse),
-            lastAssistantMessage: said(turn.lastAssistantMessage)
+            turnProse: said(turn.turnProse, 'prose'),
+            lastAssistantMessage: said(turn.lastAssistantMessage, 'message')
           }
         : turn,
     answered: () => {
-      rode ||= rides
+      rode ||= appended.prose
     },
     settle: (carried) => {
       if (!left || !live()) {
         return
       }
-      if (rode || (carried && rides)) {
+      if (rode || (carried && appended.message)) {
         left.lines.carried(link, left.turnId)
       } else {
         left.lines.post(link, left.turnId)

@@ -185,10 +185,15 @@ function leaver(store: ReturnType<typeof createStore>) {
     }
   ]
   const posted: unknown[] = []
+  // What the cloud answers each post, in turn; it posts while it answers ok.
+  const answers: ({ ok: true } | { ok: false; status: number | null; error: string | null })[] = []
   const cloud = {
     reply: async (reply: unknown) => {
-      posted.push(reply)
-      return { ok: true }
+      const answer = answers.shift() ?? { ok: true as const }
+      if (answer.ok) {
+        posted.push(reply)
+      }
+      return answer
     }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: leaving reads only these runtime fields.
@@ -208,9 +213,11 @@ function leaver(store: ReturnType<typeof createStore>) {
   } as unknown as Parameters<typeof CONNECTOR_LEAVE_THREAD_METHOD.handler>[1]
   const leave = () => CONNECTOR_LEAVE_THREAD_METHOD.handler({ sessionId: 'session-bot1' }, context)
   // What the turn's end, or a restart, posts with.
-  const lines = (on = store) => leaveLines({ store: on, cloud: () => cloud })
+  const timers: (() => void)[] = []
+  const lines = (on = store) =>
+    leaveLines({ store: on, cloud: () => cloud, setTimer: (run) => timers.push(run) })
   const link = () => findLink(store, FIRST)!.link
-  return { leave, posted, lines, link }
+  return { leave, posted, lines, link, answers, timers }
 }
 
 describe('a muted bot thread', () => {
@@ -338,6 +345,42 @@ describe('a bot that leaves its thread', () => {
     expect(lines().owed(link(), TURN_ID)).toBe(false)
     expect(posted).toEqual([])
     expect(turns).toEqual(['still there?'])
+  })
+
+  it('keeps a line that couldn\u2019t post owed until it posts, and drops one refused for good', async () => {
+    const store = await botHome({})
+    const { leave, posted, lines, link, answers, timers } = leaver(store)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await leave()
+    const own = lines()
+    // A turn end deciding its line holds it from a reconnect's resume.
+    own.ending(link(), TURN_ID)
+    own.resume(() => null)
+    expect(posted).toEqual([])
+    // Unreachable for longer than every listed wait: it keeps trying, then posts once.
+    answers.push(
+      ...Array.from({ length: 8 }, () => ({ ok: false as const, status: null, error: null }))
+    )
+    own.post(link(), TURN_ID)
+    for (let tries = 0; tries < 8; tries++) {
+      await expect.poll(() => timers.length).toBe(1)
+      timers.shift()!()
+    }
+    await expect.poll(() => posted.length).toBe(1)
+    expect(own.owed(link(), TURN_ID)).toBe(false)
+  })
+
+  it('drops a line the cloud refuses for good', async () => {
+    const store = await botHome({})
+    const { leave, posted, lines, link, answers, timers } = leaver(store)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await leave()
+    answers.push({ ok: false, status: 404, error: 'not_this_hosts_thread' })
+    lines().post(link(), TURN_ID)
+    await expect.poll(() => lines().owed(link(), TURN_ID)).toBe(false)
+    expect(posted).toEqual([])
+    expect(timers).toEqual([])
+    expect(readThreadMute(store, FIRST)).toMatchObject({ muted: true })
   })
 
   it('changes nothing when no request of the thread is running', async () => {

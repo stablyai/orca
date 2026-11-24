@@ -40,7 +40,7 @@ const fromThread = (asker: unknown, extra: Record<string, unknown> = {}) => ({
 })
 const typedInOrca = { kind: 'message', role: 'user', text: 'leave this thread' }
 
-type Sent = Pick<AgentJournalSubmission, 'origin' | 'source'>
+type Sent = Pick<AgentJournalSubmission, 'origin' | 'source' | 'queuedMessageId'>
 // The owner's send from Orca, and Orca's own continue after a restart or a usage limit.
 const PERSON: Sent = { origin: 'client', source: { kind: 'user' } }
 const ORCA: Sent = { origin: 'host' }
@@ -70,6 +70,12 @@ const cases: [string, ReturnType<typeof running>, ReturnType<typeof leaveThreadR
   ['a member asking in this thread', running(fromThread(person())), null],
   ['the owner asking in this thread', running(fromThread(person('owner'))), null],
   ['the owner typing in Orca', running(typedInOrca, [], PERSON), null],
+  // Typed while the bot worked, then handed over from the queue.
+  [
+    'the owner\u2019s queued message',
+    running(typedInOrca, [], { origin: 'host', queuedMessageId: 'q1' }),
+    null
+  ],
   // Orca's continue opens the next turn: it never inherits the cut turn's request, or its refusal.
   ['Orca continuing a cut-short turn', running(typedInOrca, [], ORCA), 'leave_refused_mixed'],
   ['a message Orca has no send for', running(typedInOrca), 'leave_refused_mixed'],

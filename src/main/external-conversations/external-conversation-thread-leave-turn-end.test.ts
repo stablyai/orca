@@ -34,7 +34,8 @@ async function endLeftTurn(
     },
     post: () => {
       posted += 1
-    }
+    },
+    ending: () => {}
   }
   const events: ConversationEvent[] = []
   const prose: string[] = []
@@ -107,6 +108,14 @@ it('confirms a leave once, after the answer, and only while the thread is still 
   expect(
     await endLeftTurn({ lastAssistantMessage: 'Partial.' }, { outcome: 'failure' })
   ).toMatchObject({ said: 'Partial.', posted: 1, carried: 0 })
+  // An answer too long to keep the line whole: the line posts on its own.
+  const long = 'a'.repeat(8_000)
+  expect(await endLeftTurn({ lastAssistantMessage: long })).toEqual({
+    said: long,
+    prose: [],
+    posted: 1,
+    carried: 0
+  })
   // An @mention brought it back first: no line at all.
   expect(await endLeftTurn({ lastAssistantMessage: 'Ok.' }, { undone: true })).toEqual({
     said: 'Ok.',
