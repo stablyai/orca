@@ -120,7 +120,10 @@ function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }
 const unifiedDialogSizeClass: Record<UnifiedDialogSize, string> = {
   confirm: 'sm:max-w-[420px]',
   form: 'sm:max-w-[480px]',
-  list: 'sm:max-w-[520px]'
+  list: 'sm:max-w-[520px]',
+  // The review keeps its final bounds while the panes fill and the dialog fades in.
+  review:
+    'flex h-[min(28rem,calc(100dvh-3rem))] flex-col sm:max-w-[680px] data-[state=open]:[--tw-enter-scale:1]! data-[state=closed]:[--tw-exit-scale:1]!'
 }
 
 function DialogContent({
@@ -257,12 +260,15 @@ function DialogFooter({
   className,
   showCloseButton = false,
   start,
+  variant = 'default',
   children,
   ...props
 }: React.ComponentProps<'div'> & {
   showCloseButton?: boolean
   /** Unified layout only: one extra on the left (a link, a ghost action or "Don't ask again"). */
   start?: React.ReactNode
+  /** `bar`: a full-width footer strip with a top divider, for edge-to-edge dialogs (p-0). */
+  variant?: 'default' | 'bar'
 }) {
   const t = useTranslate()
   const { unified } = useDialogLayout()
@@ -279,7 +285,11 @@ function DialogFooter({
     return (
       <div
         data-slot="dialog-footer"
-        className={cn('mt-2 flex flex-wrap items-center gap-2', className)}
+        className={cn(
+          'mt-2 flex flex-wrap items-center gap-2',
+          variant === 'bar' && 'mt-0 border-t border-border px-4 py-3',
+          className
+        )}
         {...props}
       >
         {start ? (
@@ -310,7 +320,11 @@ function DialogFooter({
   return (
     <div
       data-slot="dialog-footer"
-      className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)}
+      className={cn(
+        'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end',
+        variant === 'bar' && 'border-t border-border px-4 py-3',
+        className
+      )}
       {...props}
     >
       {children}

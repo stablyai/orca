@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "Yeniden oturum aç",
-      "usageSignInMessage": "Seçili Claude hesabında yeniden oturum açmanız gerekiyor. Ayarlar > Yapay Zeka Sağlayıcı Hesapları bölümünü açın veya Sistem varsayılanı seçeneğini seçin."
+      "usageSignInMessage": "Bu hesapta yeniden oturum açmanız gerekiyor."
     }
   },
   "agentHistory": {
@@ -392,6 +392,13 @@
     "queuedMessages": {
       "deleteAll": "Tümünü sil",
       "editMessage": "Mesajı düzenle",
+      "showLess": "Daha az göster",
+      "moreCount_one": "{{count}} tane daha",
+      "moreCount_other": "{{count}} tane daha",
+      "deleteMessage": "Mesajı sil",
+      "queuedCount_one": "Kuyrukta {{count}} mesaj",
+      "queuedCount_other": "Kuyrukta {{count}} mesaj",
+      "foldNeedsAttention": "{{more}}, bir mesaj ilginizi bekliyor",
       "pausedState": "Duraklatıldı",
       "queuedState": "Sıraya alındı",
       "resume": "Devam ettir",
@@ -2429,6 +2436,7 @@
       "images_one": "{{count}} görsel",
       "images_other": "{{count}} görsel",
       "moreActions": "Diğer işlemler",
+      "you": "Siz",
       "send": "Gönder",
       "sendAgainHint": "Bu mesajı yeniden gönder",
       "sendHint": "Bu mesajı gönder",
@@ -2538,6 +2546,7 @@
       "unsavedMarkdown": "Kaydedilmemiş Markdown değişiklikleri",
       "urlPrompt": "Bir URL girin veya yeni sekme için boş bırakın.",
       "allowAutoClose": "Otomatik kapatmaya izin ver",
+      "agents": "Ajanlar",
       "renameTerminalFailed": "Terminal yeniden adlandırılamadı. {{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -2858,11 +2867,29 @@
     "nativeChatView": {
       "linkedMessageMissing": "Bu mesaj bulunamadı."
     },
+    "tabsSheet": {
+      "needsYou": "İlginizi bekliyor",
+      "working": "Çalışıyor",
+      "everythingElse": "Diğerleri",
+      "closeTab": "{{title}} sekmesini kapat"
+    },
+    "tabRows": {
+      "browser": "Tarayıcı",
+      "markdown": "Markdown notu",
+      "file": "Dosya",
+      "chat": "Sohbet",
+      "terminal": "Terminal"
+    },
     "browserProfile": {
       "default": "Varsayılan"
     },
     "tabBar": {
+      "oneTab": "1 sekme",
       "tabCount": "{{count}} sekme",
+      "anotherNeedsYou": "başka bir sekme ilginizi bekliyor",
+      "actionsHint": "Bu sekmenin işlemlerini gösterir",
+      "next": "Sonraki sekme",
+      "previous": "Önceki sekme",
       "hint": "Tüm sekmeleri gösterir"
     }
   },
@@ -3442,6 +3469,9 @@
       "planModelUnavailable": "“{{model}}” modeli {{label}} için kullanılamıyor.",
       "planModelWithoutThinking": "“{{model}}” modeli düşünme çabası düzeyini desteklemiyor.",
       "planThinkingLevelInvalid": "“{{level}}” düşünme düzeyi {{model}} için geçerli değil.",
+      "commandTemplateEmptyDictationCleanup": "Dikte düzeltmesi için komut şablonu boş.",
+      "dictationCleanupAgentUnsupported": "Yapay zekâ ile düzeltme için Ayarlar -> Ses -> Düzeltme bölümünde desteklenen bir ajan seçin. Desteklenen ajanlar: {{agents}} veya Özel komut.",
+      "agentCannotGenerateDictationCleanup": "“{{agent}}” ajanı dikte düzeltmesini desteklemiyor. Desteklenen ajanlar: {{agents}} veya Özel komut.",
       "promptTooLargeForArgument": "{{label}} istemi tek bir komut satırı argümanı olarak iletilemeyecek kadar büyük. Daha az değişikliği stage'e ekleyip yeniden deneyin.",
       "promptTooLargeForWindows": "{{label}} istemi Windows komut satırı için çok büyük. Daha az değişikliği stage'e ekleyip yeniden deneyin.",
       "pullRequestDetailsUnparseable": "Oluşturulan pull request ayrıntıları ayrıştırılamadı.",
@@ -4440,6 +4470,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "Sola kaydır · {{amount}} gizli",
+      "scrollRight": "Sağa kaydır · {{amount}} gizli"
+    },
     "link": {
       "pairTitle": "Bilgisayar eşleyin",
       "pairRequired": "Bu bağlantıyı açmak için bu telefonu bir bilgisayarla eşleyin, ardından bağlantıyı yeniden açın.",
@@ -4536,26 +4570,12 @@
       "peerTold": "{{from}}, {{to}} botuna bildirdi",
       "startAConversationWithThisGroupMentionBots": "Bu grupla bir konuşma başlatın. Botları @Ad veya @everyone ile anın.",
       "items": {
-        "thisGroup": "Bu grup",
-        "thread": "İleti dizisi",
-        "all": "Tüm işleri",
-        "orNames": "{{names}} veya {{last}}",
-        "outsideRoom_one": "Bu odanın dışında {{count}} tane daha",
-        "outsideRoom_other": "Bu odanın dışında {{count}} tane daha",
-        "outsideThread_one": "Bu ileti dizisinin dışında {{count}} tane daha",
-        "outsideThread_other": "Bu ileti dizisinin dışında {{count}} tane daha",
-        "outside_one": "Bu grubun dışında {{count}} tane daha",
-        "outside_other": "Bu grubun dışında {{count}} tane daha",
         "emptyTitle": "Bu gruptan henüz öğe yok",
-        "emptyBody": "{{names}} bu grupta bir iş üstlendiğinde burada görünür.",
         "needsYouCount_one": "{{count}} sizi bekliyor",
         "needsYouCount_other": "{{count}} sizi bekliyor",
         "workingCount_one": "{{count}} çalışıyor",
         "workingCount_other": "{{count}} çalışıyor",
         "filterBot": "Bot",
-        "outsideRoom": "Bu odanın dışında {{count}} tane daha",
-        "outsideThread": "Bu ileti dizisinin dışında {{count}} tane daha",
-        "outside": "Bu grubun dışında {{count}} tane daha",
         "needsYouCount": "{{count}} sizi bekliyor",
         "workingCount": "{{count}} çalışıyor"
       },
@@ -4593,8 +4613,7 @@
     },
     "items": {
       "filter": {
-        "clearAll": "Filtreleri temizle",
-        "chat": "Sohbet"
+        "clearAll": "Filtreleri temizle"
       },
       "tab": "Öğeler",
       "activity": {
@@ -4621,7 +4640,9 @@
       "skillLimit": "Mesaj gönderilmedi. En fazla {{limit}} beceri dosyası seçip yeniden deneyin.",
       "ask": {
         "notSentYet": "henüz gönderilmedi",
-        "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın."
+        "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın.",
+        "replacedByNewer": "Daha yeni bir soruyla değiştirildi",
+        "skipped": "Atlandı"
       }
     },
     "needs": {

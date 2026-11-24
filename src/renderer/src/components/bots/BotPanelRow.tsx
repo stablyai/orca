@@ -15,6 +15,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { upcomingAt, upcomingShort } from './bot-upcoming-copy'
 import { BOT_ITEM_ROW_HOVER_ACTIONS } from './items/bot-item-row-hover-actions'
 import { useBotRowCardPlacement } from './use-bot-row-card-placement'
 
@@ -97,6 +98,7 @@ export function BotPanelRow({
   dimmed = false,
   card,
   onOpen,
+  next = null,
   actions,
   actionsShown = false
 }: {
@@ -114,8 +116,21 @@ export function BotPanelRow({
   actions?: React.ReactNode
   /** Keeps the actions shown, such as while one is busy. */
   actionsShown?: boolean
+  /** Its next run, said short at the row's end ("6:30 PM"), read against the panel's clock so it
+   *  rolls on with it; null when it has none to say. */
+  next?: { at: number; now: number } | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const descriptionId = useId()
+  const label = [
+    title,
+    state,
+    next
+      ? t('bots.automations.nextAt', 'next {{time}}', { time: upcomingAt(next.at, next.now) })
+      : null
+  ]
+    .filter(Boolean)
+    .join(', ')
   return (
     <div className="group/item relative flex min-w-0 items-center gap-2 rounded-sm px-2 py-1 hover:bg-accent has-[:focus-visible]:bg-accent has-[[data-state=open]]:bg-accent">
       <span
@@ -126,7 +141,7 @@ export function BotPanelRow({
       <BotRowHoverCard card={card ? <BotRowCardBody card={card} /> : null}>
         <button
           type="button"
-          aria-label={state ? `${title}, ${state}` : undefined}
+          aria-label={label === title ? undefined : label}
           aria-describedby={card ? descriptionId : undefined}
           aria-disabled={onOpen ? undefined : true}
           className={cn(
@@ -139,6 +154,20 @@ export function BotPanelRow({
           {title}
         </button>
       </BotRowHoverCard>
+      {next ? (
+        // The actions lay over it on hover or focus; invisible, it keeps the name's cut where it was.
+        <span
+          aria-hidden
+          className={cn(
+            'shrink-0 whitespace-nowrap text-xs leading-5 tabular-nums text-muted-foreground',
+            actionsShown
+              ? 'invisible'
+              : 'group-has-[:focus-visible]/item:invisible group-hover/item:invisible group-has-[[aria-expanded=true]]/item:invisible'
+          )}
+        >
+          {upcomingShort(next.at, next.now)}
+        </span>
+      ) : null}
       {card ? (
         <span id={descriptionId} hidden>
           {botRowCardText(card)}

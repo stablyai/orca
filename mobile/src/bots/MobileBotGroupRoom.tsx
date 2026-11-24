@@ -41,6 +41,7 @@ import { MobileBotGroupPost } from './MobileBotGroupPost'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { ModelPill } from '../session/native-chat/input/session-options/MobileNativeChatSessionOptionRows'
 import { MobileNativeChatComposer } from '../session/native-chat/composer/MobileNativeChatComposer'
+import { MobileNativeChatComposerMenuHost } from '../session/native-chat/composer/menus/MobileNativeChatComposerMenuHost'
 import { structuredAgentSessionHostSupport } from '../session/native-chat/agent-session/mobile-structured-agent-session-host-support'
 import type { MobileBotGroupSession } from './MobileBotGroupTurns'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
@@ -108,7 +109,6 @@ export function MobileBotGroupRoom({
     group: anyRoomGroup,
     apply,
     bots,
-    needsYou,
     itemReads,
     itemMemberIds,
     loadEarlier
@@ -236,91 +236,98 @@ export function MobileBotGroupRoom({
           onNewThread={() => void startThread()}
         />
       ) : null}
-      <MobileBotGroupTranscript client={client} roomId={roomId} data={data}>
-        {data?.hasEarlier ? (
-          <Pressable accessibilityRole="button" onPress={() => void loadEarlier()}>
-            <Text style={styles.notice}>
-              {t('bots.groups.loadEarlierMessages', 'Load earlier messages')}
-            </Text>
-          </Pressable>
+      <MobileNativeChatComposerMenuHost style={styles.grow}>
+        <MobileBotGroupTranscript client={client} roomId={roomId} data={data}>
+          {data?.hasEarlier ? (
+            <Pressable accessibilityRole="button" onPress={() => void loadEarlier()}>
+              <Text style={styles.notice}>
+                {t('bots.groups.loadEarlierMessages', 'Load earlier messages')}
+              </Text>
+            </Pressable>
+          ) : null}
+          {botGroupRoomOrder(data?.messages ?? []).map((message) => (
+            <MobileBotGroupPost
+              key={message.id}
+              message={message}
+              client={client}
+              bots={bots}
+              sessions={sessions}
+              onStop={(botId) => void stop(botId)}
+              onReply={(botId) => group && setDraft(botGroupReplyDraft(botId, draft, group, bots))}
+            />
+          ))}
+        </MobileBotGroupTranscript>
+        {group ? (
+          <MobileBotGroupApprovalDock group={group} bots={bots} sessions={sessions} />
         ) : null}
-        {botGroupRoomOrder(data?.messages ?? []).map((message) => (
-          <MobileBotGroupPost
-            key={message.id}
-            message={message}
-            client={client}
-            bots={bots}
-            sessions={sessions}
-            onStop={(botId) => void stop(botId)}
-            onReply={(botId) => group && setDraft(botGroupReplyDraft(botId, draft, group, bots))}
-          />
-        ))}
-      </MobileBotGroupTranscript>
-      {group ? <MobileBotGroupApprovalDock group={group} bots={bots} sessions={sessions} /> : null}
-      <MobileNativeChatInputLockStatus
-        lockReason="disconnected"
-        waitingText=""
-        hostOutage={outage}
-      />
-      <MobileNativeChatSendErrorBanner message={error} onDismiss={() => setError(null)} />
-      <MobileNativeChatComposer
-        value={draft}
-        onChangeText={setDraft}
-        draftScopeKey={composerDraft.key}
-        sendSurfaceId={`group:${roomId}`}
-        getSendCompletionGeneration={() => 0}
-        getComposerEditGeneration={composerDraft.getEditGeneration}
-        agent={readers.find((turn) => turn.sessionId === selectedMember?.sessionId)?.agent}
-        placeholder={t('bots.groups.composerPlaceholder', 'Message the group, @ to mention a bot')}
-        disabled={!connected}
-        onAttachImage={attachPhotos}
-        attachments={[...photos.images]}
-        onRemoveAttachment={photos.remove}
-        isAttaching={photos.uploading}
-        roomMentions={roomMentions}
-        roomReplies={
-          <ModelPill
-            primary={t('bots.groups.repliesValue', 'Replies: {{value0}}', { value0: audience })}
-            secondary={null}
-            warning={false}
-            accessibleName={t('bots.groups.repliesValue', 'Replies: {{value0}}', {
-              value0: audience
-            })}
-            disabled={!group || !connected}
-            onPress={() => setMenu('replies')}
-          />
-        }
-        sessionOptions={mobileBotGroupSessionOptions(chosen)}
-        stop={working ? { held: false, onStop: () => void stop() } : null}
-        onSend={async (text) => {
-          if (!group) {
-            return false
+        <MobileNativeChatInputLockStatus
+          lockReason="disconnected"
+          waitingText=""
+          hostOutage={outage}
+        />
+        <MobileNativeChatSendErrorBanner message={error} onDismiss={() => setError(null)} />
+        <MobileNativeChatComposer
+          value={draft}
+          onChangeText={setDraft}
+          draftScopeKey={composerDraft.key}
+          sendSurfaceId={`group:${roomId}`}
+          getSendCompletionGeneration={() => 0}
+          getComposerEditGeneration={composerDraft.getEditGeneration}
+          agent={readers.find((turn) => turn.sessionId === selectedMember?.sessionId)?.agent}
+          placeholder={t(
+            'bots.groups.composerPlaceholder',
+            'Message the group, @ to mention a bot'
+          )}
+          disabled={!connected}
+          onAttachImage={attachPhotos}
+          attachments={[...photos.images]}
+          onRemoveAttachment={photos.remove}
+          isAttaching={photos.uploading}
+          roomMentions={roomMentions}
+          roomReplies={
+            <ModelPill
+              primary={t('bots.groups.repliesValue', 'Replies: {{value0}}', { value0: audience })}
+              secondary={null}
+              warning={false}
+              accessibleName={t('bots.groups.repliesValue', 'Replies: {{value0}}', {
+                value0: audience
+              })}
+              disabled={!group || !connected}
+              onPress={() => setMenu('replies')}
+            />
           }
-          composerDraft.clearForSend(text)
-          const sent = photos.images
-          photos.clearSent(sent.map((image) => image.id))
-          try {
-            const result = groupSend.interpret(
-              await groupSend.request(client, {
-                groupId,
-                revision: group.revision,
-                threadId,
-                messageId: randomV4Uuid(),
-                text,
-                ...(sent.length > 0 ? { images: sent.map((image) => image.path) } : {})
-              })
-            )
-            apply({ kind: 'sent', message: result.message })
-            setError(null)
-            return true
-          } catch (error) {
-            composerDraft.restoreRefused(text)
-            photos.returnRefused(sent)
-            setError(botFailureMessage(error) ?? String(error))
-            return false
-          }
-        }}
-      />
+          sessionOptions={mobileBotGroupSessionOptions(chosen)}
+          stop={working ? { held: false, onStop: () => void stop() } : null}
+          onSend={async (text) => {
+            if (!group) {
+              return false
+            }
+            composerDraft.clearForSend(text)
+            const sent = photos.images
+            photos.clearSent(sent.map((image) => image.id))
+            try {
+              const result = groupSend.interpret(
+                await groupSend.request(client, {
+                  groupId,
+                  revision: group.revision,
+                  threadId,
+                  messageId: randomV4Uuid(),
+                  text,
+                  ...(sent.length > 0 ? { images: sent.map((image) => image.path) } : {})
+                })
+              )
+              apply({ kind: 'sent', message: result.message })
+              setError(null)
+              return true
+            } catch (error) {
+              composerDraft.restoreRefused(text)
+              photos.returnRefused(sent)
+              setError(botFailureMessage(error) ?? String(error))
+              return false
+            }
+          }}
+        />
+      </MobileNativeChatComposerMenuHost>
       <ActionSheetModal
         visible={menu === 'actions'}
         title={group?.name}
@@ -366,7 +373,6 @@ export function MobileBotGroupRoom({
           groupId={groupId}
           hostId={hostId}
           bots={bots}
-          needsYou={needsYou}
           reads={itemReads}
           memberIds={itemMemberIds}
           online={connected}
