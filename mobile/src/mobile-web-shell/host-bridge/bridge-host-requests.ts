@@ -41,6 +41,10 @@ export class BridgeHostRequests {
     return this.pending.has(id)
   }
 
+  hasPending(): boolean {
+    return this.pending.size > 0
+  }
+
   // sendRequest cannot cancel desktop execution; only suppress its now-unwanted reply.
   cancel(id: string): void {
     const record = this.pending.get(id)

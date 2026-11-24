@@ -99,8 +99,22 @@ export function createDeferredCommits(): DeferredCommits {
       }
     },
     defer: (staged) => {
-      const replaced = drop(staged.hostKey)
-      waiting.set(staged.hostKey, staged)
+      const { hostKey } = staged
+      const replaced = drop(hostKey)
+      waiting.set(hostKey, staged)
+      const held = readers.get(hostKey)
+      const current = rounds.get(hostKey)
+      const [first] = held ?? []
+      // Pages may answer a resume round before the background fetch finishes staging.
+      if (
+        first !== undefined &&
+        held !== undefined &&
+        current?.open === true &&
+        current.confirming !== current.round &&
+        [...held].every((each) => each.answered === current.round)
+      ) {
+        current.confirming = first.askAgain()
+      }
       return replaced?.directory === staged.directory ? null : replaced
     },
     claim: async (hostKey, buildId) => {

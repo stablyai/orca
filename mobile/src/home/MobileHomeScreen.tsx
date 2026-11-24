@@ -23,7 +23,10 @@ import {
 } from '../transport/connection/host-client-hooks'
 import { hostEndpointLabel } from '../transport/hosts/host-endpoint-label'
 import { resolveHomeHostConnectionState } from '../transport/hosts/home-host-auto-connect'
-import { removeHostAndCloseClient } from '../host-catalog/host-removal-lifecycle'
+import {
+  refreshHostCacheAndReconnect,
+  removeHostAndCloseClient
+} from '../host-catalog/host-removal-lifecycle'
 import { loadHostCatalog } from '../host-catalog/host-store'
 import type { HostCatalogEntry, HostProfile } from '../host-catalog/host-profile'
 import { useOpenMobileHostEdit } from '../host-screen/identity/use-open-mobile-host-edit'
@@ -319,7 +322,8 @@ export function MobileHomeScreen() {
               ? (data.hostLastConnected[actionTarget.id] ?? null) != null
               : false,
             onDismiss: () => setActionTarget(null),
-            onReconnect: (hostId) => void forceReconnectHost?.(hostId),
+            onReconnect: (hostId) =>
+              refreshHostCacheAndReconnect(hostId, forceReconnectHost, queryClient),
             onDisconnect: disconnectHostClient,
             onDiagnostics: (hostId) =>
               data.router.push({ pathname: '/connection-log', params: { hostId } }),

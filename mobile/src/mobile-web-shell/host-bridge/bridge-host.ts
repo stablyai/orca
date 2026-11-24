@@ -331,14 +331,11 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     publishColorScheme: (next) => {
       routes.publishColorScheme(next, deliverable())
     },
-    publishUiLocale: (next) => {
-      routes.publishUiLocale(next, deliverable())
-    },
-    sendAppFrame: (frame) => {
-      if (pageReaders.reads(frame.type) && deliverable()) {
-        send({ v: BRIDGE_PROTOCOL_VERSION, ...frame })
-      }
-    },
+    publishUiLocale: (next) => routes.publishUiLocale(next, deliverable()),
+    sendAppFrame: (frame) =>
+      pageReaders.deliverAppFrame(frame, deliverable(), send, (round) =>
+        options.onPageSwapSafe?.(!requests.hasPending(), round)
+      ),
     sendBack: back.send,
     readSessionBack: () => ({
       ...back.read(),
