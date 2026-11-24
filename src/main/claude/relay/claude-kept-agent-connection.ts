@@ -153,13 +153,20 @@ export async function openKeptClaudeAgentConnection(
       }
       child.stdin.write(line, (error) => (error ? reject(error) : resolve()))
     })
-  // Each write's own callback reports its failure; the stream's error event must not go unheard.
-  child.stdin.on('error', () => {})
+  // A broken input leaves the agent waiting on answers it will never get: end it, so the chat's
+  // next message starts a new one, rather than leave a turn stuck.
+  const inputBroke = (error: unknown): void => {
+    if (!closing && terminalError === null) {
+      handlers.onFault?.(error instanceof Error ? error : new Error(String(error)))
+      void close().catch(() => false)
+    }
+  }
+  child.stdin.on('error', inputBroke)
   const initialization = keptInitialization(child.initializeLine)
   const keptQuery = new ClaudeKeptAgentQuery(write, initialization)
   query = keptQuery
   const responder = new ClaudeKeptAgentResponder(handlers, launch.options.hooks, (line) => {
-    void write(line).catch(() => {})
+    void write(line).catch(inputBroke)
   })
   const inbox = createClaudeUserMessageQueue()
   // A head index, not shift(): a replay can be tens of thousands of lines.

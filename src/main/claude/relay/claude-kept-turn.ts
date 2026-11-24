@@ -1,11 +1,15 @@
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
-import type { StructuredAgentSessionHistoryJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalRenderItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { ClaudeToolUse } from '../structured/journal/claude-structured-item-translation'
+import type { ClaudeOpenTurn } from '../structured/turns/claude-open-turn'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   claudeTurnLifecycleIdentity,
@@ -16,15 +20,13 @@ import {
  * The root turn the last app left running for a kept agent. Its output since then replays into this
  * record, so the turn ends once, where it began, rather than staying open beside a second one.
  */
-export async function keptClaudeTurn(
-  journal: StructuredAgentSessionHistoryJournal | null | undefined,
+export function keptClaudeTurn(
+  items: readonly AgentJournalRenderItem[],
   providerSessionId: string
-): Promise<
+):
   | { kind: 'turn'; turn: ClaudeCurrentTurn }
   | { kind: 'command'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
-  | null
-> {
-  const items = (await journal?.reads.generation())?.items ?? []
+  | null {
   const running = items.findLast(
     (item) => isRootAgentJournalItem(item) && readAgentJournalTurn(item.body)?.state === 'running'
   )
@@ -61,4 +63,31 @@ function unverifiedTurnBody(body: AgentJournalItemBody): AgentJournalItemBody | 
   return body.kind === 'status' && body.turnLifecycle
     ? { ...body, turnLifecycle: { ...body.turnLifecycle, state: 'unverifiable' } }
     : null
+}
+
+/**
+ * Tool calls still running when the last app quit, from their saved rows: a replay that no longer
+ * reaches back to a call's start (the host let it go at its cap) still ends it under its own name.
+ */
+export function keptClaudeToolCalls(items: readonly AgentJournalRenderItem[]): ClaudeToolUse[] {
+  return items.flatMap((item) =>
+    item.body.kind === 'tool-call' && item.body.state === 'running' && item.body.callId
+      ? [{ id: item.body.callId, name: item.body.name, input: item.body.input }]
+      : []
+  )
+}
+
+export function adoptKeptClaudeWork(
+  open: Pick<ClaudeOpenTurn, 'adoptKept'>,
+  tools: Map<string, ClaudeToolUse>,
+  kept: { turn: ClaudeCurrentTurn | null; tools: readonly ClaudeToolUse[] }
+): void {
+  if (kept.turn) {
+    open.adoptKept(kept.turn)
+  }
+  for (const tool of kept.tools) {
+    if (!tools.has(tool.id)) {
+      tools.set(tool.id, tool)
+    }
+  }
 }

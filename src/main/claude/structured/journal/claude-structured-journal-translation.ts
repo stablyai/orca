@@ -1,4 +1,5 @@
 import * as correctionRows from '../../subagents/claude-provisional-row-corrections'
+import { adoptKeptClaudeWork } from '../../relay/claude-kept-turn'
 import { ClaudeTaskInvocations } from '../../background-tasks/claude-task-invocations'
 import { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type * as contract from './claude-journal-translator-contract'
@@ -41,10 +42,7 @@ import { ClaudeThreadGoal } from './claude-thread-goal'
 import { createClaudeFinalOutputCoverage } from './claude-final-output-coverage'
 import { withClaudeConversationContent } from './claude-internal-message-content'
 import { journalClaudeFullAccessRefusal } from '../permissions/claude-full-access-refusal-notice'
-import {
-  journalClaudePluginInputFailure,
-  settleClaudeInterruptedTurn
-} from './claude-plugin-input-failure-journal'
+import * as pluginInput from './claude-plugin-input-failure-journal'
 
 export function createClaudeJournalTranslator(
   deps: contract.ClaudeJournalTranslatorDeps
@@ -156,11 +154,11 @@ export function createClaudeJournalTranslator(
     flush()
     corrections.abandon()
     backgroundTasks.settleSession()
-    settleClaudeInterruptedTurn(turn, observedAt, failed, stopCheck)
+    pluginInput.settleClaudeInterruptedTurn(turn, observedAt, failed, stopCheck)
   }
   const handle = withClaudeConversationContent((event) => {
     if (event.type === 'retiring') {
-      journalClaudePluginInputFailure({ event, turn, sink: deps.sink, finish })
+      pluginInput.journalClaudePluginInputFailure({ event, turn, sink: deps.sink, finish })
       return
     }
     if (event.type === 'ended') {
@@ -292,7 +290,7 @@ export function createClaudeJournalTranslator(
     recordContextReport: (target, report, askedAt) => context.recordReport(target, report, askedAt),
     modelMayHaveChanged: () => context.modelMayHaveChanged(),
     modelWritten: (model) => context.modelWritten(model),
-    adoptKeptTurn: (kept) => turn.adoptKept(kept),
+    adoptKept: (kept) => adoptKeptClaudeWork(turn, tools, kept),
     dispose: () => {
       delivery.dispose()
       flush()

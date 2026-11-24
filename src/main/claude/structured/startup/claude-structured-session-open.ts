@@ -11,7 +11,7 @@ import { catchUpClaudeTranscript } from '../../transcripts/claude-transcript-cat
 import { readyClaudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
 import { keptClaudeAgentRelay } from '../../relay/claude-kept-agent-connection'
 import { restateKeptClaudeBackgroundTasks } from '../../relay/claude-kept-background-tasks'
-import { keptClaudeTurn } from '../../relay/claude-kept-turn'
+import { keptClaudeToolCalls, keptClaudeTurn } from '../../relay/claude-kept-turn'
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps
@@ -109,10 +109,13 @@ async function openStartingClaudeSession(
     // The journal holds the kept agent's output through the last ack and the replay brings the
     // rest, so its turn ends may move the resume point (or the next cold resume re-imports them).
     history.covered = true
-    const keptTurn = await keptClaudeTurn(events?.journalHistory?.(), session.providerSessionId)
-    if (keptTurn?.kind === 'turn') {
-      session.translator?.adoptKeptTurn(keptTurn.turn)
-    } else if (keptTurn?.kind === 'command') {
+    const items = (await events?.journalHistory?.()?.reads.generation())?.items ?? []
+    const keptTurn = keptClaudeTurn(items, session.providerSessionId)
+    session.translator?.adoptKept({
+      turn: keptTurn?.kind === 'turn' ? keptTurn.turn : null,
+      tools: keptClaudeToolCalls(items)
+    })
+    if (keptTurn?.kind === 'command') {
       events?.appendItem(keptTurn.identity, keptTurn.body, { turnScope: { kind: 'thread' } })
     }
     restateKeptClaudeBackgroundTasks(session, kept.openTaskIds, keptTurn !== null)

@@ -11,16 +11,17 @@ export function restateKeptClaudeBackgroundTasks(
   /** The last app left a turn running; with none, every open task is background work. */
   turnRunning: boolean
 ): void {
-  for (const task_id of taskIds) {
-    const frame = {
-      type: 'system',
-      subtype: 'task_started',
-      task_id,
-      // Foreground work ends with its turn; mid-turn, only the journal knows which ran in the background.
-      is_backgrounded: !turnRunning || session.childWork.taskInvocations.savedAsBackground(task_id),
-      status: 'running'
-    }
-    session.childWork.observe(frame, session.translator?.childToolOwner)
-    session.backgroundTasks.observe(frame)
+  const starts = taskIds.map((task_id) => ({
+    type: 'system',
+    subtype: 'task_started',
+    task_id,
+    // Foreground work ends with its turn; mid-turn, only the journal knows which ran in the background.
+    is_backgrounded: !turnRunning || session.childWork.taskInvocations.savedAsBackground(task_id),
+    status: 'running'
+  }))
+  for (const start of starts) {
+    session.childWork.observe(start, session.translator?.childToolOwner)
   }
+  // One roster rebuild for all of them, not one per task.
+  session.backgroundTasks.restate(starts)
 }
