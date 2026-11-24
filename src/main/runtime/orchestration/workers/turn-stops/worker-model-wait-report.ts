@@ -46,9 +46,7 @@ export function reportWorkerModelWait(
   }
   const id = stopReportId(dispatchId, `model-${notice.kind}:${notice.stretchKey}`)
   const subject =
-    notice.kind === 'retrying'
-      ? 'Worker is retrying the model API'
-      : 'Worker is waiting on the model'
+    notice.kind === 'retrying' ? 'Worker is retrying the model API' : 'Worker has shown no activity'
   const payload = {
     dispatchId,
     handle: notice.from,
@@ -104,7 +102,8 @@ function describeModelWait(notice: WorkerModelWaitNotice, task: string): string 
     return `Worker ${notice.from} is retrying a model API error on task ${task}.${seen} It is still working; nothing was stopped.`
   }
   const minutes = Math.round((notice.waitedMs ?? WORKER_MODEL_WAIT_MS) / 60_000)
-  return `Worker ${notice.from} has been waiting on the model for ${minutes} min with no reply on task ${task}.${seen} It is still running; nothing was stopped.`
+  // Inferred from silence, so it names no cause.
+  return `Worker ${notice.from} has shown no activity on task ${task} for ${minutes} min. It may be waiting on a slow reply, stuck on a tool, or the machine may be busy.${seen} It is still running; nothing was stopped.`
 }
 
 /** The screen line as mail carries it: one line, capped, with no capability or credential it showed. */
