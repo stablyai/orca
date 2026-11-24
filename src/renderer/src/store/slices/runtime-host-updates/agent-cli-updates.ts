@@ -17,8 +17,9 @@ import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-sub
 const RUN_TIMEOUT_MS = 12 * 60_000
 // Chat starts come in bursts; one ask per host in this window is enough.
 const CHECK_INTERVAL_MS = 10 * 60_000
-// The host runs a few --version probes at a time; a dozen slow CLIs outlast the 15s default.
-const CHECK_TIMEOUT_MS = 60_000
+// The host runs three --version probes (5s cap each, some read twice) at a time; 17 agents plus
+// release lookups can approach a minute.
+const CHECK_TIMEOUT_MS = 2 * 60_000
 
 export type AgentCliUpdateRun =
   | { phase: 'running' }
@@ -151,6 +152,8 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
             }
           })
           .catch((error: unknown) => {
+            // Still asked (so rechecks apply), but a failure must not hold off the next ask for the interval.
+            checkedAt.set(key, 0)
             console.warn('[agent-cli-update] check failed:', error)
           })
           .finally(() => checks.delete(key))
