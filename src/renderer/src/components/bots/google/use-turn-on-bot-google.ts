@@ -4,11 +4,12 @@ import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirm
 import { translate } from '@/i18n/i18n'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
+  botAskerKeys,
   botOtherAskers,
   googleWhoCanAskWarning
 } from '../../../../../shared/google/google-who-can-ask-warning'
 import { botErrorMessage } from '../bot-presentation'
-import { setBotGoogle } from './google-connect-client'
+import { setBotGoogle } from './set-bot-google'
 import type { BotOnHost } from '@/lib/bot-hosts'
 
 /**
@@ -16,12 +17,16 @@ import type { BotOnHost } from '@/lib/bot-hosts'
  * is confirmed first when anyone besides the owner can ask. Resolves whether to go ahead.
  */
 export function useTurnOnBotGoogle(): (
-  bot: Pick<Bot, 'id' | 'name' | 'members'> & BotOnHost
+  bot: Pick<Bot, 'id' | 'name' | 'members'> & BotOnHost,
+  /** Only these accounts; absent is every account. */
+  accounts?: readonly string[]
 ) => Promise<boolean> {
   const confirm = useConfirmationDialog()
   return useCallback(
-    async (bot) => {
+    async (bot, accounts) => {
       const warning = googleWhoCanAskWarning(bot.name, botOtherAskers(bot))
+      // The askers the warning named: the host keeps Google off if Who can ask changed meanwhile.
+      const confirmedAskers = botAskerKeys(bot)
       if (
         warning &&
         !(await confirm({
@@ -37,7 +42,7 @@ export function useTurnOnBotGoogle(): (
         return false
       }
       try {
-        await setBotGoogle(bot, true)
+        await setBotGoogle(bot, true, { ...(accounts ? { accounts } : {}), confirmedAskers })
         return true
       } catch (error) {
         toast.error(botErrorMessage(error))
