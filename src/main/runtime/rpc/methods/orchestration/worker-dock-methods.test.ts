@@ -48,11 +48,19 @@ it('refuses stop or acknowledgment from the CLI, an agent, or a paired client th
   }
 })
 
-const ownerParams = {
+type OwnerParams = {
+  party: string
+  dispatch: string
+  requestId: string
+  settlements: { dispatchId: string; settlement: string }[]
+  acknowledged: boolean
+}
+
+const ownerParams: OwnerParams = {
   party: 'orca_session_id:11111111-1111-4111-8111-111111111111',
   dispatch: 'ctx_unknown',
   requestId: 'stop-request',
-  settlements: [] as { dispatchId: string; settlement: string }[],
+  settlements: [],
   acknowledged: true
 }
 
@@ -60,7 +68,7 @@ const ownerParams = {
 async function ownerAction(
   name: 'orchestration.workerDockAcknowledge' | 'orchestration.workerDockStop',
   ctx: RpcContext,
-  params = ownerParams
+  params: OwnerParams = ownerParams
 ): Promise<unknown> {
   for (const method of ORCHESTRATION_WORKER_DOCK_METHODS) {
     if (method.name === 'orchestration.workerDockAcknowledge' && method.name === name) {
@@ -138,8 +146,8 @@ it('tells paired clients it takes Clear and Stop from a person on them', () => {
 it("refuses a paired person's Clear and Stop of a worker that runs on another computer", async () => {
   const db = new OrchestrationDb(':memory:')
   databases.push(db)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers only test that a row exists.
   vi.spyOn(db, 'getFederatedDispatch').mockReturnValue(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers only test that a row exists.
     {} as ReturnType<OrchestrationDb['getFederatedDispatch']>
   )
   const ctx = ownerContext(db, {
