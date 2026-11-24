@@ -1,6 +1,6 @@
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
-import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
+import { dispatchAssigneeOrcaSessionId } from '../../addressing/session-lineage/dispatch-assignee-orca-session-id'
 
 export function prepareStartingWorkerAuthority(
   this: OrchestrationDb,
@@ -28,6 +28,18 @@ export function prepareStartingWorkerAuthority(
       throw new OrchestrationError(
         'dispatch_inactive',
         `Dispatch ${params.dispatchId} is not starting.`
+      )
+    }
+    // A terminal this start created binds only the process its custody recorded, never a replacement.
+    const custody = this.getWorkerTerminalResourceByOwner(params.dispatchId)
+    if (
+      params.terminalOwnership === 'created' &&
+      custody?.process_incarnation &&
+      custody.process_incarnation !== params.processIncarnation
+    ) {
+      throw new OrchestrationError(
+        'worker_identity_changed',
+        `Terminal ${params.handle} no longer runs the process Dispatch ${params.dispatchId} started.`
       )
     }
     if (

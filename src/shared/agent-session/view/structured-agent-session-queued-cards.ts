@@ -1,6 +1,9 @@
 // Derive hold labels on the client; the wire carries queue state, not presentation wording.
 
-import { agentMessageDisplayText } from '../agent-message-display-text'
+import { otherPersonTypistOf, type OtherPersonTypist } from '../journal/agent-journal-typed-by'
+import { agentMessageDisplayText } from './messages/agent-message-display-text'
+import { readAutomationRunMessage } from '../../automations/automation-run-message'
+import { queuedMessageEditableText } from '../../native-chat/input/queued-messages/queued-message-edit'
 import {
   readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact,
@@ -15,20 +18,24 @@ import type {
   AgentJournalItemBody,
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
-import { pendingPromptsAllUnanswerableHere } from '../agent-session-approval-subject'
+import { pendingPromptsAllUnanswerableHere } from '../requests/prompts/agent-session-approval-subject'
 import type { NativeChatImageRefBlock } from '../../native-chat/native-chat-types'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage,
   type AgentSessionQueuePause
 } from '../requests/agent-session-queued-message-wire'
-import { readAgentMessageSource, type AgentMessageSource } from '../agent-session-message-source'
+import {
+  readAgentMessageSource,
+  type AgentMessageSource
+} from '../journal/agent-session-message-source'
 import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
+import { queuedMessageIsWaitingAgentMail } from './structured-agent-session-waiting-agent-mail'
 import {
   NATIVE_CHAT_IMAGE_LABEL_ENGLISH,
   nativeChatImageLabel,
   type NativeChatImageLabelCopy
-} from '../../native-chat/native-chat-image-label'
+} from '../../native-chat/attachments/native-chat-image-label'
 
 export type QueuedMessageCardHold =
   /** Plainly queued, also behind an open question: the question already says the agent waits. */
@@ -36,7 +43,6 @@ export type QueuedMessageCardHold =
   /** The header owns queue-wide pause wording; answering a prompt does not resume draining. */
   | 'queue-paused'
   | 'paused'
-  | 'behind-returned'
   | 'returned'
   /** Disable actions until the host replaces this sending card under the same id. */
   | 'sending'
@@ -50,10 +56,12 @@ export type QueuedMessageCard = {
   images?: readonly NativeChatImageRefBlock[]
   state: 'waiting' | 'returned'
   hold: QueuedMessageCardHold
-  /** Visible unheld waiting work before an ordinary returned barrier in published order. */
+  /** Visible unheld waiting work. */
   resumeEligible?: true
   /** A conversation command such as /compact: it never steers into a running turn. */
   command?: true
+  /** The host refuses an edit (a command, an automation's run), so no Edit is offered. */
+  notEditable?: true
   /** A command card while the agent works: it offers no send until the agent is idle. */
   waitsForAgent?: true
   pausedReason?: string
@@ -61,6 +69,8 @@ export type QueuedMessageCard = {
   /** The typed fact the returned card's submission settled with; read like its `rejection`. */
   returnedRejection?: UnreadAgentSessionFailureFact
   from?: AgentMessageSource
+  /** Typed by someone other than the host's owner, on their paired computer. */
+  typedByOther?: OtherPersonTypist
 }
 
 export function queuedMessageCardText(body: AgentSessionQueuedMessage['body']): string {
@@ -74,47 +84,84 @@ export function queuedMessageCardImages(
   return images.length > 0 ? { images } : {}
 }
 
+type QueuedMessageCardSession = {
+  queuePaused?: boolean
+  agentWorking?: boolean
+  /** Draw a steer on its way into the running turn as the person's message, not as a card. */
+  steersInTranscript?: true
+}
+
+/** A person's steer the running turn will take in: never a card where the transcript draws it. */
+export function queuedMessageSteersIn(
+  message: AgentSessionQueuedMessage,
+  session: Pick<QueuedMessageCardSession, 'queuePaused' | 'agentWorking'>
+): boolean {
+  return (
+    message.steers === true &&
+    !queuedMessageIsWaitingAgentMail(message) &&
+    message.state === 'waiting' &&
+    !message.paused &&
+    session.agentWorking === true &&
+    !session.queuePaused
+  )
+}
+
 /** Hide waiting cards after live submission hand-off to avoid catch-up duplicates; rejected hand-offs restore cards, and returned cards never hide. */
 export function projectQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
   submissions: readonly AgentJournalSubmission[],
-  session: { queuePaused?: boolean; agentWorking?: boolean }
+  session: QueuedMessageCardSession
 ): QueuedMessageCard[] {
   const handedOff = handedOffQueuedMessageIds(
     submissions.filter((submission) => submission.dispatchState !== 'rejected')
   )
-  const ordered = [...(queuedMessages ?? [])].sort((left, right) => left.position - right.position)
-  let behindReturned = false
+  const ordered = [...(queuedMessages ?? [])]
+    .filter((message) => !session.steersInTranscript || !queuedMessageSteersIn(message, session))
+    // Orca's own sends draw nothing in the chat, so they wait unseen; one on hold needs the person, so it shows.
+    .filter(
+      (message) =>
+        message.state === 'returned' ||
+        message.paused === true ||
+        session.queuePaused === true ||
+        !isOrcaNoticeSend(message.body)
+    )
+    .sort((left, right) => left.position - right.position)
   // Establish semantic membership before handoff filtering, including during catch-up.
   const cards = ordered.map((message) => {
-    const resumeEligible = message.state === 'waiting' && !message.paused && !behindReturned
+    const resumeEligible = message.state === 'waiting' && !message.paused
     const hold: QueuedMessageCardHold =
       message.state === 'returned'
         ? 'returned'
         : message.paused
           ? 'paused'
-          : behindReturned
-            ? 'behind-returned'
-            : session.queuePaused
-              ? 'queue-paused'
-              : 'turn'
-    behindReturned = behindReturned || message.state === 'returned'
+          : session.queuePaused
+            ? 'queue-paused'
+            : 'turn'
     const from = readAgentMessageSource(message.body.from)
+    const typedByOther = from ? undefined : otherPersonTypistOf(message.body.typedBy)
+    // A queued automation run reads as its automation, never as the owner's prompt.
+    const run =
+      message.body.origin === 'automation-run'
+        ? readAutomationRunMessage(message.body.automationRun)
+        : undefined
     return {
       messageId: message.messageId,
       position: message.position,
       text: queuedMessageCardText(message.body),
-      ...(from
-        ? {
-            displayText:
-              agentMessageDisplayText(message.body.blocks, from) ??
-              queuedMessageCardText(message.body)
-          }
-        : {}),
+      ...(run
+        ? { displayText: run.automation.name }
+        : from
+          ? {
+              displayText:
+                agentMessageDisplayText(message.body.blocks, from) ??
+                queuedMessageCardText(message.body)
+            }
+          : {}),
       ...queuedMessageCardImages(message.body),
       state: message.state,
       hold,
       ...(resumeEligible ? { resumeEligible: true as const } : {}),
+      ...(queuedMessageEditableText(message.body) === null ? { notEditable: true as const } : {}),
       ...(message.body.command !== undefined
         ? {
             command: true as const,
@@ -126,10 +173,17 @@ export function projectQueuedMessageCards(
       ...(message.returnedRejection !== undefined
         ? { returnedRejection: message.returnedRejection }
         : {}),
-      ...(from ? { from } : {})
+      ...(from ? { from } : {}),
+      ...(typedByOther ? { typedByOther } : {})
     }
   })
   return cards.filter((card) => card.state === 'returned' || !handedOff.has(card.messageId))
+}
+
+function isOrcaNoticeSend(body: AgentSessionQueuedMessage['body']): boolean {
+  return (
+    body.origin === 'bot-created' || body.origin === 'card-answer' || body.origin === 'took-over'
+  )
 }
 
 /** Later sends queue behind commands even with follow-ups off; individually held cards do not block them. */
@@ -169,16 +223,20 @@ export function queuedMessageCardNeedsAttention(
   return card.state === 'returned' || card.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED
 }
 
-/** Offer Resume only while the queue pause holds a card it could actually send. */
+/** Offer Resume only while the queue pause holds a card it could actually send, or another agent's
+ *  waiting mail the transcript draws instead of a card. */
 export function queuedMessagesQueuePause(
   cards: readonly QueuedMessageCard[],
-  queuePause: AgentSessionQueuePause | null
+  queuePause: AgentSessionQueuePause | null,
+  agentMailWaiting = false
 ): AgentSessionQueuePause | null {
-  return cards.some((card) => card.resumeEligible) ? queuePause : null
+  return agentMailWaiting || cards.some((card) => card.resumeEligible) ? queuePause : null
 }
 
 /** Steer moves turn-waiting cards mid-turn, even during queue pause; returned/individually held cards use Send, commands never steer. */
-export function queuedMessageCardSteers(card: QueuedMessageCard): boolean {
+export function queuedMessageCardSteers(
+  card: Pick<QueuedMessageCard, 'hold' | 'command'>
+): boolean {
   return card.hold !== 'paused' && card.hold !== 'returned' && !card.command
 }
 

@@ -2,7 +2,7 @@ import {
   ownOptionsInclude,
   resumeInvocationFromOptions,
   type StructuredAgentSessionHistory
-} from '../native-chat/structured-agent-cli-conversations'
+} from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 

@@ -1,4 +1,4 @@
-import { highestUsageKey } from '../usage/highest-usage-key'
+import { highestUsageKey } from '../usage/rollups/highest-usage-key'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -6,7 +6,7 @@ import type {
   CodexUsageRange,
   CodexUsageScope,
   CodexUsageSummary
-} from '../../shared/codex-usage-types'
+} from '../../shared/agent-usage/analytics/codex-usage-types'
 import type { CodexLongContextTokens, CodexUsagePersistedState } from './types'
 import { estimateCostUsd } from './codex-usage-cost-estimate'
 import {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decodeGrokTranscriptLine } from './transcript-line-decoders'
+import { decodeGrokTranscriptLine } from './transcript-decoding/transcript-line-decoders-grok'
 
 describe('decodeGrokTranscriptLine', () => {
   it('decodes assistant tool calls on empty content rows', () => {

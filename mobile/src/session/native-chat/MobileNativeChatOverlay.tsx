@@ -1,30 +1,35 @@
-import { MobileQueuedMessageComposerContext } from '../mobile-queued-message-composer-context'
-import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { slackPeopleOf } from '../../../../src/shared/connectors/slack-mention-tokens'
+import { MobileQueuedMessageComposerContext } from './input/queued-messages/mobile-queued-message-composer-context'
+import { MobileMarkdownSlackPeopleContext } from '../../components/markdown/parsing/mobile-markdown-mentions'
+import { Activity, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
-import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
-import { nativeChatDockedTaskList } from '../../../../src/shared/native-chat/input/native-chat-task-list-state'
-import type { MobileNativeChatImageAttachments } from './composer/use-mobile-native-chat-image-attachments'
+import { useMobileNativeChatProjection } from './transcript/projection/use-mobile-native-chat-projection'
+import { nativeChatDockedTaskList } from '../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-state'
+
+const docked = nativeChatDockedTaskList
+import type { MobileNativeChatImageAttachments } from './composer/attachments/use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
-import type { MobileNativeChatStructuredComposer } from './composer/MobileNativeChatComposer'
-import { useMobileNativeChatComposerTray } from './composer/use-mobile-native-chat-composer-tray'
+import { useMobileNativeChatFiles } from './links/use-mobile-native-chat-files'
+import type { MobileNativeChatStructuredComposer } from './composer/commands/mobile-native-chat-structured-composer'
+import { useMobileNativeChatComposerTray } from './composer/menus/use-mobile-native-chat-composer-tray'
 import { useMobileNativeChatVisualRenderer } from './visual/MobileNativeChatVisual'
 import { MobileNativeChatVisualContext } from './visual/mobile-native-chat-visual-context'
-import { MobileNativeChatRootItemSourceContext } from './mobile-native-chat-item-read'
-import { useMobileNativeChatMessageDetail } from './transcript/use-mobile-native-chat-message-detail'
+import { MobileNativeChatRootItemSourceContext } from './transcript/projection/mobile-native-chat-item-read'
+import { useMobileNativeChatMessageDetail } from './transcript/projection/use-mobile-native-chat-message-detail'
 import {
   MobileNativeChatReplyRevealsContext,
   useMobileNativeChatReplyReveals
-} from './transcript/mobile-native-chat-reply-reveals'
-import { MobileNativeChatRowOverlaysHost } from './transcript/MobileNativeChatRowOverlaysHost'
+} from './transcript/tool-results/mobile-native-chat-reply-reveals'
+import { MobileNativeChatRowOverlaysHost } from './transcript/message-actions/MobileNativeChatRowOverlaysHost'
+import type { MobileLinkOpenMode } from '../../storage/preferences'
 import { nativeChatAskRequiresTerminal } from '../../../../src/shared/native-chat/native-chat-agent-support'
 import { tuiAgentDisplayName } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
-import { MobileNativeChatNoticeContext } from '../mobile-native-chat-notice-context'
+import { MobileNativeChatNoticeContext } from './transcript/notices/mobile-native-chat-notice-context'
 import type { MobileNativeChatImageSource } from './visual/mobile-native-chat-image-preview'
-import type { MobileNativeChatHostOutage } from './mobile-native-chat-host-outage'
-import { useMobileNativeChatMarkdownLinks } from './use-mobile-native-chat-markdown-links'
-import { MobileMarkdownLinksContext } from '../../components/mobile-markdown-links-context'
-import type { ConnectionState } from '../../transport/types'
+import type { MobileNativeChatHostOutage } from './status/mobile-native-chat-host-outage'
+import { MobileMarkdownLinksContext } from '../../components/markdown/links/mobile-markdown-links-context'
+import type { ConnectionState } from '../../transport/connection/connection-state'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type Props = {
@@ -34,7 +39,8 @@ type Props = {
   worktreePath: string | null
   connState: ConnectionState
   activeSessionTabId?: string | null
-  onOpenFile: (pathText: string) => void
+  /** `cwd` is the folder the chat runs in when its host pinned a workspace sub-folder. */
+  onOpenFile: (pathText: string, cwd?: string) => void
   images: MobileNativeChatImageAttachments
   structuredComposer?: MobileNativeChatStructuredComposer | null
   onMicPress: (() => void) | undefined
@@ -54,15 +60,37 @@ type Props = {
   keyboardInset: number
   /** The Orca host that runs this chat, named for notices; null when unnamed. */
   hostName: string | null
-  /** Offered for tapped links; absent where the host can't open a browser tab. */
+  /** Opens the accounts of the host that runs this chat; absent when the phone can't reach them. */
+  onOpenAccounts?: () => void
+  /** Opens tapped links in Orca's browser; absent where the host can't open a browser tab. */
   onOpenUrlInOrca?: (url: string) => void
+  linkOpenMode: MobileLinkOpenMode
   /** Opens a host terminal tab in this chat's workspace running `command`. */
   onRunInTerminal: (command: string) => void
   hostOutage?: MobileNativeChatHostOutage | null
 }
 
-// Keep the terminal subscription and streaming gate above view toggles; the chat list unmounts below this boundary.
-export function MobileNativeChatOverlay({
+// Hide the last chat behind its terminal instead of unmounting it, so returning keeps its rows and parsed markdown.
+export function MobileNativeChatOverlay(props: Props): React.JSX.Element | null {
+  const shown = props.controller.showNativeChat
+  // While hidden, the live lane is starved to an empty chat; draw the last shown props so the hidden tree does no work.
+  const [lastShown, setLastShown] = useState<Props | null>(null)
+  if (shown && lastShown !== props) {
+    setLastShown(props)
+  }
+  const drawn = shown ? props : lastShown
+  // The same element while hidden lets React skip the hidden tree.
+  const content = useMemo(
+    () => (drawn ? <MobileNativeChatOverlayContent {...drawn} /> : null),
+    [drawn]
+  )
+  if (!content) {
+    return null
+  }
+  return <Activity mode={shown ? 'visible' : 'hidden'}>{content}</Activity>
+}
+
+function MobileNativeChatOverlayContent({
   controller,
   imageSource,
   worktreePath,
@@ -87,31 +115,40 @@ export function MobileNativeChatOverlay({
   keyboardInset,
   hostName,
   onOpenUrlInOrca,
+  linkOpenMode,
   onRunInTerminal,
-  hostOutage = null
-}: Props): React.JSX.Element | null {
+  hostOutage = null,
+  onOpenAccounts
+}: Props): React.JSX.Element {
   const session = controller.nativeChatSession
   const agent = controller.nativeChatAgent ?? ''
   const fullContent = useMobileNativeChatMessageDetail(
     session.messages,
     controller.nativeChatItemSource
   )
-  const folded = useMemo(
-    () => foldMobileNativeChatMessages(fullContent.messages, agent),
-    [fullContent.messages, agent]
+  const slackPeople = useMemo(() => slackPeopleOf(session.messages), [session.messages])
+  const folded = useMobileNativeChatProjection(
+    fullContent.messages,
+    agent,
+    [
+      sendSurfaceId,
+      sessionId,
+      controller.nativeChatItemSource?.client,
+      controller.nativeChatItemSource?.sessionId
+    ],
+    controller.nativeChatShowsCiResultLines
   )
-  const taskList = useMemo(
-    () => nativeChatDockedTaskList(folded, session.taskList),
-    [folded, session.taskList]
-  )
+  const taskList = useMemo(() => docked(folded, session.taskList), [folded, session.taskList])
   const streaming = controller.nativeChatStreamingText ?? null
   const queued = controller.nativeChatQueued
   const composerTray = useMobileNativeChatComposerTray({
     queued: {
       cards: queued.cards,
+      steerOrder: queued.steerOrder,
       onSend: queued.send,
       onDelete: queued.delete,
       onClearAll: queued.clear,
+      clearIds: queued.clearIds,
       onEdit: queued.edit,
       editor: queued.editor,
       onMove: queued.move,
@@ -120,10 +157,14 @@ export function MobileNativeChatOverlay({
       sessionKey: queued.sessionKey,
       // Hold steering while Stop ends the turn; use the session’s single display-status decision.
       steerHeld: controller.nativeChatTurnIndicator?.stopping === true,
-      agentWorking: controller.nativeChatTurnActive
+      agentWorking: controller.nativeChatTurnActive,
+      agentMail: queued.agentMail,
+      agentMailEditable: queued.agentMailEditable
     },
     taskList,
-    backgroundTasks: controller.nativeChatBackgroundTasks
+    backgroundTasks: controller.nativeChatBackgroundTasks,
+    workerDock: controller.nativeChatWorkerDock,
+    workerApprovals: controller.nativeChatWorkerApprovals.open
   })
   const visuals = useMobileNativeChatVisualRenderer(controller.nativeChatVisualSource)
   const replyReveals = useMobileNativeChatReplyReveals(folded, streaming !== null, sendSurfaceId)
@@ -154,14 +195,23 @@ export function MobileNativeChatOverlay({
         : null,
     [itemSource, fullContent.detail, load]
   )
+  const { mentionFiles, markdownLinks, openFile } = useMobileNativeChatFiles({
+    controller,
+    worktreePath,
+    imageSource,
+    connState,
+    onOpenFile
+  })
   const queuedComposerContext = useMemo(
     () => ({
       agent,
       structured: structuredComposer ?? null,
+      interactionModeSupported: controller.nativeChatSessionOptions?.controller.snapshot.some(
+        (entry) => entry.id === 'interactionMode'
+      ),
       skillDiscovery: controller.nativeChatSkills,
       onNeedSkills: controller.loadNativeChatSkills,
-      filePaths: controller.nativeChatFilePaths,
-      onNeedFiles: controller.loadNativeChatFiles,
+      ...mentionFiles,
       onError: (message: string) => controller.reportQueuedEditError?.(message),
       onMicPress,
       micActive,
@@ -174,10 +224,10 @@ export function MobileNativeChatOverlay({
     [
       agent,
       structuredComposer,
+      controller.nativeChatSessionOptions,
       controller.nativeChatSkills,
       controller.loadNativeChatSkills,
-      controller.nativeChatFilePaths,
-      controller.loadNativeChatFiles,
+      mentionFiles,
       controller.reportQueuedEditError,
       onMicPress,
       micActive,
@@ -201,6 +251,9 @@ export function MobileNativeChatOverlay({
       hostName,
       ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}),
       onRunInTerminal: runInTerminal,
+      usageLimit: controller.nativeChatUsageLimit,
+      unresolvedFailureRows: controller.nativeChatUnresolvedFailureRows,
+      ...(onOpenAccounts ? { openAccounts: onOpenAccounts } : {}),
       ...(continuation
         ? {
             continuation: {
@@ -214,25 +267,24 @@ export function MobileNativeChatOverlay({
           }
         : {})
     }),
-    [hostName, agent, continuation, onClearSendError, runInTerminal]
+    [
+      hostName,
+      agent,
+      continuation,
+      onClearSendError,
+      runInTerminal,
+      controller.nativeChatUsageLimit,
+      controller.nativeChatUnresolvedFailureRows,
+      onOpenAccounts
+    ]
   )
-  const markdownLinks = useMobileNativeChatMarkdownLinks({
-    enabled: controller.showNativeChat,
-    client: imageSource?.client ?? null,
-    connState,
-    worktreeId: imageSource?.worktreeId ?? '',
-    worktreePath,
-    isWorking: controller.nativeChatTurnActive
-  })
   const continueFailed = sendErrorMessage === null && continuation?.failed === true
-  if (!controller.showNativeChat) {
-    return null
-  }
-  return (
+  const chat = (
     <MobileNativeChatRowOverlaysHost
       conversation={{ surfaceId: sendSurfaceId, sessionId }}
       imageSource={imageSource}
       onOpenUrlInOrca={onOpenUrlInOrca}
+      linkOpenMode={linkOpenMode}
       rewind={controller.nativeChatRewind}
     >
       <MobileMarkdownLinksContext.Provider value={markdownLinks}>
@@ -243,11 +295,13 @@ export function MobileNativeChatOverlay({
                 <MobileNativeChatReplyRevealsContext.Provider value={replyReveals}>
                   <MobileNativeChatNoticeContext.Provider value={noticeView}>
                     <MobileNativeChatView
+                      itemNavigation={session.itemNavigation}
                       messages={session.messages}
                       folded={folded}
                       status={session.status}
                       error={session.error}
                       readFailedFinally={session.readFailedFinally === true}
+                      clearing={session.clearing === true}
                       agent={controller.nativeChatAgent}
                       sessionLive={controller.nativeChatSessionLive}
                       agentWorking={controller.nativeChatTurnActive}
@@ -259,6 +313,7 @@ export function MobileNativeChatOverlay({
                       workingStartedAt={controller.nativeChatWorkingStartedAt}
                       settledTurns={controller.nativeChatSettledTurns}
                       turnJournal={controller.nativeChatTurnJournal}
+                      transcriptLoading={session.transcriptLoading}
                       receipts={controller.nativeChatReceipts}
                       actionablePromptIds={controller.nativeChatActionablePromptIds}
                       streaming={streaming}
@@ -286,9 +341,10 @@ export function MobileNativeChatOverlay({
                       question={controller.nativeChatQuestion}
                       onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
                       permission={controller.nativeChatPermission}
+                      workerApprovals={controller.nativeChatWorkerApprovals}
                       onRespondPermission={controller.handleNativeChatRespondPermission}
                       composerTray={composerTray}
-                      onOpenFile={onOpenFile}
+                      onOpenFile={openFile}
                       hasMore={session.hasMore}
                       olderPages={session.olderPages}
                       onLoadEarlier={session.loadEarlier}
@@ -333,8 +389,7 @@ export function MobileNativeChatOverlay({
                       }
                       onDismissSendError={continueFailed ? continuation?.dismissFailure : undefined}
                       onClearSendError={onClearSendError}
-                      filePaths={controller.nativeChatFilePaths}
-                      onNeedFiles={controller.loadNativeChatFiles}
+                      {...mentionFiles}
                       skillDiscovery={controller.nativeChatSkills}
                       onNeedSkills={controller.loadNativeChatSkills}
                       sessionOptions={controller.nativeChatSessionOptions}
@@ -351,8 +406,13 @@ export function MobileNativeChatOverlay({
       </MobileMarkdownLinksContext.Provider>
     </MobileNativeChatRowOverlaysHost>
   )
+  return (
+    <MobileMarkdownSlackPeopleContext.Provider value={slackPeople}>
+      {chat}
+    </MobileMarkdownSlackPeopleContext.Provider>
+  )
 }
 
 const styles = StyleSheet.create({
-  overlay: StyleSheet.absoluteFillObject
+  overlay: StyleSheet.absoluteFill
 })

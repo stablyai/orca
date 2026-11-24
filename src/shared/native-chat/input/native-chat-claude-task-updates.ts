@@ -5,7 +5,7 @@ import {
   nativeChatTaskStatus,
   type NativeChatTask,
   type NativeChatTaskList
-} from './native-chat-task-list'
+} from './task-lists/native-chat-task-list'
 
 type BookEntry = NativeChatTask & { id?: string }
 

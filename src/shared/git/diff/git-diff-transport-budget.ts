@@ -1,5 +1,5 @@
 import type { GitDiffResult } from './git-diff-compare-types'
-import { remoteRpcResultExceedsContentBudget } from '../../remote-rpc-content-budget'
+import { remoteRpcResultExceedsContentBudget } from '../../remote-runtime/rpc/remote-rpc-content-budget'
 
 export const GIT_DIFF_TOO_LARGE_CODE = 'diff_too_large'
 const GIT_DIFF_CONTENT_FIELDS = ['originalContent', 'modifiedContent'] as const

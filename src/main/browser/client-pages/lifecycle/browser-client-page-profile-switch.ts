@@ -59,6 +59,7 @@ export async function switchBrowserClientPageProfile(input: {
     }
   }
   let staged: BrowserClientRetainedPage | undefined
+  let stagedCleanup: (() => Promise<void>) | undefined
   let bindingAttempted = false
   old.reconciling = true
   switches.stagedPages.set(event.browserPageId, null)
@@ -66,6 +67,9 @@ export async function switchBrowserClientPageProfile(input: {
     await createReservedBrowserClientPage(
       {
         ...dependencies,
+        retainFailedCleanup: (cleanup) => {
+          stagedCleanup = cleanup
+        },
         // A profile switch cannot change the execution route or supersede the old guest.
         retireSupersededExecutionHostPages: async () => {},
         guestBinding: { bind: () => {}, release: () => {} }
@@ -128,14 +132,18 @@ export async function switchBrowserClientPageProfile(input: {
         })
       }
       if (staged) {
-        const cleanup = input.cleanup(staged, false)
+        const page = staged
+        const cleanup = () => input.cleanup(page, false)
         switches.retainedCleanups.add(cleanup)
-        await cleanup
+        await cleanup()
         switches.retainedCleanups.delete(cleanup)
+      } else if (stagedCleanup) {
+        switches.retainedCleanups.add(stagedCleanup)
       } else if (isBrowserClientPageCleanupFailure(error)) {
         // Retain staging failures so close() reports unreleased resources.
-        const unresolved = Promise.reject(error)
-        unresolved.catch(() => {})
+        const unresolved = async () => {
+          throw error
+        }
         switches.retainedCleanups.add(unresolved)
       }
     } finally {
@@ -156,7 +164,7 @@ export async function switchBrowserClientPageProfile(input: {
 }
 
 export class BrowserClientProfileSwitches {
-  readonly retainedCleanups = new Set<Promise<void>>()
+  readonly retainedCleanups = new Set<() => Promise<void>>()
   /** Null reserves a switch before its staged guest mounts. */
   readonly stagedPages = new Map<string, BrowserClientRetainedPage | null>()
 
@@ -169,10 +177,10 @@ export class BrowserClientProfileSwitches {
     page: BrowserClientRetainedPage,
     cleanupPage: (page: BrowserClientRetainedPage) => Promise<void>
   ): Promise<void> {
-    const cleanup = cleanupPage(page)
+    const cleanup = () => cleanupPage(page)
     this.retainedCleanups.add(cleanup)
     try {
-      await cleanup
+      await cleanup()
       this.retainedCleanups.delete(cleanup)
     } catch (error) {
       console.warn('[browser-client-page] Replaced guest cleanup remains unresolved', error)

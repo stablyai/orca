@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { BrowserPasswordImportSummary } from '../../shared/browser-passwords-types'
+import type { BrowserPasswordImportSummary } from '../../shared/browser/passwords/browser-passwords-types'
 import { toBrowserPasswordOrigin } from './browser-password-origin'
 import {
   sealBrowserVaultValue,

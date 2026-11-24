@@ -1,21 +1,26 @@
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
+import {
+  discardPreparationEntry,
+  trackPreparationDiscard,
+  releasePreparationObligation
+} from './worktree-preparation-discard-retry'
 import { worktreePreparationGit } from '../../../git/worktrees/creation/worktree-create-git-executor'
 import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import type { ProjectRuntimeResolutionStore } from '../../execution-host/local-project-runtime-resolution'
-import type { Repo } from '../../../../shared/repo-types'
-import { isFolderRepo } from '../../../../shared/repo-kind'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import type {
   PreparedCheckoutMissReason,
   PreparedCheckoutOrigin,
   PreparedCheckoutReset,
   WorktreeCreatePhase
-} from '../../../../shared/worktree/create-timing-vocabulary'
+} from '../../../../shared/worktree/creation/create-timing-vocabulary'
 import type {
   AddWorktreeOptions,
   AddWorktreeResult
 } from '../../../git/worktrees/worktree-operation-options'
-import { WorktreePreparationLockOwnershipError } from '../../../git/worktrees/creation/worktree-preparation-lock'
 import {
   _resetPreparationPoolForTests,
   hasPendingPreparations,
@@ -33,22 +38,25 @@ import {
   type ReservedPreparation
 } from './worktree-create-preparation-reservation'
 import {
-  discardPreparedWorktree,
+  PreparedWorktreeFinalizationPendingError,
   finalizePreparedWorktree
 } from '../../../git/worktrees/creation/worktree-create-preparation'
 import {
   getLocalProjectWorktreeGitOptions,
   getWorktreeMirrorDistro
 } from '../../execution-host/project-runtime-git-options'
-import { computeWorkspaceRootAsync, getWorktreePathSettings } from '../../../ipc/worktree-logic'
+import {
+  computeWorkspaceRootAsync,
+  getWorktreePathSettings
+} from '../../../ipc/worktrees/paths/worktree-logic'
 import {
   recordPreparationConsume,
   resetPreparationConsumeHistoryForTests
 } from './worktree-create-preparation-burst'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
-import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
+import type { ConsumePreparedWorktreeArgs } from './worktree-preparation-consumption'
 
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 
 export function hasPendingWorktreeCreatePreparations(): boolean {
   return hasPendingPreparations()
@@ -70,20 +78,6 @@ export type PreparedWorktreeCreateAttempt =
       rearm: () => void
     }
   | { status: 'miss'; reason: PreparedCheckoutMissReason; rearm?: () => void }
-
-type ConsumePreparedWorktreeArgs = {
-  repoPath: string
-  workspaceRoot: string
-  worktreePath: string
-  branch: string
-  baseBranch: string
-  refreshLocalBaseRef?: boolean
-  options?: AddWorktreeOptions
-  timing?: Pick<
-    WorktreeCreateTimingRecorder,
-    'time' | 'recordPreparedCheckout' | 'recordAdoptedPreparation'
-  >
-}
 
 function timePhase<T>(
   args: ConsumePreparedWorktreeArgs,
@@ -122,8 +116,7 @@ async function prepareWorktreeCreateInBackground(
     return
   }
   const options = getLocalProjectWorktreeGitOptions(store, repo)
-  // Resolve WSL homes asynchronously to avoid freezing the composer while wsl.exe runs.
-  // Match createLocalWorktree's mirror distro so preparation and consume use the same root key.
+  // Resolve WSL homes asynchronously with createLocalWorktree's mirror distro and root key.
   const workspaceRoot = await computeWorkspaceRootAsync(
     repo.path,
     getWorktreePathSettings(repo, store.getSettings(), getWorktreeMirrorDistro(store, repo))
@@ -139,7 +132,8 @@ async function prepareWorktreeCreateInBackground(
     baseBranch,
     canonicalBase,
     options,
-    beforeMaterialization
+    beforeMaterialization,
+    canPrepare: () => !store.getRepo || Boolean(store.getRepo(repo.id))
   })
 }
 
@@ -162,9 +156,18 @@ async function claimPreparedWorktree(
   args.timing?.recordAdoptedPreparation(entry.activity.work)
   const claimedAt = performance.now()
   try {
-    await timePhase(args, 'prepared_checkout_wait', () => entry.ready)
+    await timePhase(args, 'prepared_checkout_wait', () =>
+      waitForPromiseWithSignal(entry.ready, options.signal)
+    )
+    entry.operation.complete()
     return { ...reserved, status: 'claimed', claimedAt }
   } catch {
+    entry.operation.controller.abort()
+    trackPreparationDiscard(worktreePreparationGit.run(() => discardPreparationEntry(entry)))
+    if (options.signal?.aborted) {
+      releaseClaimAfterCreate(reservation)()
+      options.signal.throwIfAborted()
+    }
     return { status: 'miss', reason: 'prepare_failed', rearm: releaseClaimAfterCreate(reservation) }
   }
 }
@@ -236,10 +239,7 @@ export async function consumePreparedWorktreeCreate(
 }
 
 function preparedCheckoutReset(retargeted: boolean, headReset: boolean): PreparedCheckoutReset {
-  if (!headReset) {
-    return 'none'
-  }
-  return retargeted ? 'retargeted' : 'base_moved'
+  return headReset ? (retargeted ? 'retargeted' : 'base_moved') : 'none'
 }
 
 async function attemptPreparedWorktreeCreate(
@@ -269,10 +269,12 @@ async function attemptPreparedWorktreeCreate(
           args.baseBranch,
           args.refreshLocalBaseRef,
           options,
-          entry.lockReason
+          entry.lockReason,
+          entry.operation
         )
       }
     )
+    releasePreparationObligation(entry)
     const rearm = deferRearmPreparation(entry, reservation, args.baseBranch, claim.canonicalBase)
     return {
       status: 'hit',
@@ -284,11 +286,14 @@ async function attemptPreparedWorktreeCreate(
       rearm
     }
   } catch (error) {
-    // Another owner holds the preparation's lock, so it is not ours to remove.
-    if (!(error instanceof WorktreePreparationLockOwnershipError)) {
-      await timePhase(args, 'prepared_checkout_discard', () =>
-        discardPreparedWorktree(args.repoPath, entry.preparedPath, options, entry.lockReason)
-      ).catch(() => {})
+    trackPreparationDiscard(worktreePreparationGit.run(() => discardPreparationEntry(entry)))
+    if (options.signal?.aborted) {
+      releaseClaimAfterCreate(reservation)()
+      options.signal.throwIfAborted()
+    }
+    if (error instanceof PreparedWorktreeFinalizationPendingError) {
+      releaseClaimAfterCreate(reservation)()
+      throw error.originalError
     }
     console.warn(
       '[worktree-create] prepared checkout could not be finalized; using normal add',

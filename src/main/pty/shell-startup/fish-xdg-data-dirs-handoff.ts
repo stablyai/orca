@@ -1,7 +1,8 @@
+import { FISH_CWD_REPORT_BLOCK } from '../../../shared/shell/fish-cwd-report'
 /** Use vendor_conf.d to restore XDG_DATA_DIRS and defer agent hooks until after user config. */
-import { getFishCodexShellLaunchPreflight } from '../../../shared/codex-shell-function'
-import { getFishClaudeShellFunction } from '../../../shared/claude-shell-function'
-import { MANAGED_DATA_ACCOUNT_FISH_RESTORE } from '../../../shared/managed-data-account-shell'
+import { getFishCodexShellLaunchPreflight } from '../../../shared/shell/launch/agents/codex-shell-function'
+import { getFishClaudeShellFunction } from '../../../shared/shell/launch/agents/claude-shell-function'
+import { MANAGED_DATA_ACCOUNT_FISH_RESTORE } from '../../../shared/shell/launch/agents/managed-data-account-shell'
 import type { ShellWrapperFile } from './shell-wrapper-file-writer'
 
 /** Exactly what Orca prepended, so the snippet can remove that and nothing else. */
@@ -62,6 +63,7 @@ function __orca_fish_xdg_handoff
 
 
     status is-interactive; or return 0
+${FISH_CWD_REPORT_BLOCK}
     function __orca_define_codex --on-event fish_prompt
         functions -e __orca_define_codex
 ${MANAGED_DATA_ACCOUNT_FISH_RESTORE}

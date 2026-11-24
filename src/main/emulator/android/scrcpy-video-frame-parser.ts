@@ -1,6 +1,6 @@
 // scrcpy v2.4 with send_codec_meta and send_frame_meta enabled.
 
-import type { RelayFrameBuffer } from '../../../shared/relay-frame-buffer'
+import type { RelayFrameBuffer } from '../../../shared/remote-runtime/relay/relay-frame-buffer'
 
 const FRAME_HEADER_SIZE = 12
 const CODEC_META_SIZE = 12

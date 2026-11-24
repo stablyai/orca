@@ -7,9 +7,8 @@ import { forgetCombinedDiffViewsShowingPath } from './combined-diff-view-cache'
 // Module state retains toolbar choices across viewer unmounts within this session.
 export const combinedDiffViewPreferences: {
   collapsed: boolean | null
-  sideBySide: boolean | null
   fileTreeCollapsed: boolean | null
-} = { collapsed: null, sideBySide: null, fileTreeCollapsed: null }
+} = { collapsed: null, fileTreeCollapsed: null }
 
 function handleCombinedDiffExternalFileChange(event: Event): void {
   const detail = (event as CustomEvent<EditorPathMutationTarget>).detail

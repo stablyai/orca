@@ -50,6 +50,44 @@ export async function scanNativeChatTranscriptTasks(
   return taskList
 }
 
+/** Whole-file tasks for a read, when the client asked. A failed scan omits the field. */
+export async function readSessionTaskList(
+  enabled: boolean,
+  agent: AgentType,
+  sessionId: string,
+  filePath?: string
+): Promise<NativeChatTaskSeedList | null> {
+  if (!enabled) {
+    return null
+  }
+  return scanNativeChatTranscriptTasks(agent, sessionId, filePath).catch(() => null)
+}
+
+/** Republish after each snapshot. A newer scan drops the one already in flight. */
+export function transcriptTaskListPublisher(args: {
+  enabled: boolean
+  agent: AgentType
+  sessionId: string
+  filePath?: string
+  closed: () => boolean
+  emit: (taskList: NativeChatTaskSeedList) => void
+}): () => void {
+  let scan = 0
+  return () => {
+    if (!args.enabled) {
+      return
+    }
+    const current = ++scan
+    publishTranscriptTaskList({
+      agent: args.agent,
+      sessionId: args.sessionId,
+      filePath: args.filePath,
+      stillCurrent: () => !args.closed() && current === scan,
+      emit: args.emit
+    })
+  }
+}
+
 /** Emit after the tail snapshot. An empty scan stays omitted so older clients see the same frames. */
 export function publishTranscriptTaskList(args: {
   agent: AgentType

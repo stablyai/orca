@@ -1,4 +1,4 @@
-import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
+import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeCardJiraIssueDisplay } from '../metadata/worktree-card-meta-types'
 

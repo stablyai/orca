@@ -15,6 +15,8 @@ export type DraftPasteMarkerSignal =
   | 'dsh-composer-prompt'
   | 'claude-composer-prompt'
   | 'zcode-composer-prompt'
+  | 'antigravity-composer-prompt'
+  | 'copilot-composer-prompt'
 
 /** Submit signals may also ask for a grace (`readyAfterMs`); only the paste waiters honour it. */
 export type DraftPasteReadySignal = DraftPasteMarkerSignal | 'opencode-agent-row'
@@ -51,12 +53,14 @@ export type TuiAgentConfig = {
     | 'antigravity'
     | 'qoder'
     | 'qoder-cn'
+    | 'qwen-code'
     | 'kimi'
   /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
   draftPasteReadySignal?: DraftPasteMarkerSignal
   /** Signal before a paste that Enter follows, for agents that show their composer before it can submit; defaults to `draftPasteReadySignal`. */
   submitPasteReadySignal?: DraftPasteReadySignal
-  /** A worker start also answers on the composer marker, for an agent whose rest title the user can turn off. */
+  /** A worker start also answers on the composer marker, for an agent whose rest title the user can turn off.
+   *  The same marker, not any visible byte, then corroborates its name-only idle title (terminal-command-paint.ts). */
   workerStartReadsComposerMarker?: true
   /** Hard deadline for the agent's composer readiness signal. */
   draftPasteReadyTimeoutMs?: number
@@ -64,7 +68,7 @@ export type TuiAgentConfig = {
   composerReadyCaptures?: readonly string[]
   /** Delay before one extra blind submit Enter, for agents that render their composer before Enter is live (codex); a no-op if the first Enter landed. */
   submitRetryDelayMs?: number
-  /** How long an agent-prompt send keeps re-pressing Enter at `submitRetryDelayMs` while its composer holds the prompt, for TUIs that paint it before their session can submit (dsh). */
+  /** How long an agent-prompt send keeps re-pressing Enter at `submitRetryDelayMs` (else each second) while its composer holds the prompt, for TUIs that drop an early Enter (dsh, OpenCode). */
   submitRetryBudgetMs?: number
   /** Extra ms per logical prompt line before Enter, for TUIs that expand multiline paste slowly (antigravity). */
   submitLineSettleMsPerLine?: number

@@ -1,4 +1,4 @@
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { FileExplorerOperationOwner } from '../tree/file-explorer-types'
 
 export const FILE_EXPLORER_LOCAL_REFRESH_CONCURRENCY = 16

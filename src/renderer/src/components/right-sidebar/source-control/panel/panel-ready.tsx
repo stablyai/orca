@@ -1,12 +1,16 @@
+import { SourceControlBranchPicker } from '../branches/SourceControlBranchPicker'
 import { BulkActionBar } from '../commit/bulk-action-bar'
 import { SourceControlHeaderToolbar } from './header-toolbar'
 import { SourceControlNotesShelf } from '../notes/notes-shelf'
 import { SourceControlPanelContent } from './panel-content'
 import { SourceControlPanelDialogs } from './panel-dialogs'
+import { SourceControlChangeScopeBar } from './change-scope-bar'
+import { GitGraphOpenButton, useGitGraphSupport } from '../sync/git-graph-open-button'
+import { openGitGraph } from '@/lib/source-control/graph/git-graph-tab'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
 export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
-  const { model, worktreePath } = props
+  const { currentWorktreeId, model, worktreePath } = props
   const {
     activeGroupId,
     activeWorktreeId,
@@ -39,7 +43,9 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     manualReviewUrl,
     openHostedReviewInChecks,
     prGenerating,
+    isGitHistoryVisible,
     refreshBranchCompare,
+    resolveSplitTargetGroupId,
     selectedKeys,
     setBaseRefDialogOpen,
     setDiffCommentsExpanded,
@@ -53,15 +59,26 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     suppressedGitHubPRState,
     visibleCreatePrHeaderAction
   } = model
+  // One probe per panel: the header Graph button and the scope menu's Graph item share it.
+  const graphSupport = useGitGraphSupport(currentWorktreeId, isGitHistoryVisible)
 
   return (
     <>
       <div
         ref={setSourceControlRoot}
-        className="relative flex h-full flex-col overflow-hidden"
+        className={
+          model.scope
+            ? 'relative flex flex-col overflow-hidden'
+            : 'relative flex h-full flex-col overflow-hidden'
+        }
         onKeyDown={handleSourceControlKeyDown}
       >
         <SourceControlHeaderToolbar
+          headControl={
+            gitIdentityDisplay?.kind === 'branch' ? (
+              <SourceControlBranchPicker model={model} />
+            ) : undefined
+          }
           filterQuery={filterQuery}
           filterExpanded={filterExpanded}
           onFilterQueryChange={setFilterQuery}
@@ -89,7 +106,39 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           compareBaseRef={compareBaseRef}
           headDisplay={gitIdentityDisplay}
           manualReviewUrl={manualReviewUrl}
+          rebase={
+            model.baseRebaseState.kind === 'none'
+              ? null
+              : {
+                  state: model.baseRebaseState,
+                  isRebasing:
+                    model.isRemoteOperationActive && model.inFlightRemoteOpKind === 'rebase',
+                  isAbortingRebase: model.isAbortingOperation,
+                  isContinuingRebase: model.isContinuingRebase,
+                  isRetryingRebaseInspect: model.isRetryingRebaseInspect,
+                  hasGitOwner: !!model.activeRepoTarget,
+                  onRebase: () => model.handleActionInvoke('rebase_base'),
+                  onAbortRebase: () => void model.handleAbortRebase(),
+                  onContinueRebase: () => void model.handleContinueRebase(),
+                  onRetryRebaseInspect: model.handleRetryRebaseInspect
+                }
+          }
+          graphControl={
+            isGitHistoryVisible ? (
+              <GitGraphOpenButton
+                worktreeId={currentWorktreeId}
+                support={graphSupport}
+                onOpen={(event) => {
+                  void openGitGraph(currentWorktreeId, () => resolveSplitTargetGroupId(event))
+                }}
+              />
+            ) : null
+          }
         />
+
+        {isGitHistoryVisible ? (
+          <SourceControlChangeScopeBar {...props} graphSupported={graphSupport.support === true} />
+        ) : null}
 
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
           <SourceControlNotesShelf

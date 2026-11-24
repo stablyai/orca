@@ -1,4 +1,8 @@
-import { wslGatedReaddir } from '../../../native-chat/wsl-transcript-fs-access'
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../../scan-lifecycle/ai-vault-scan-cancellation'
+import { wslGatedReaddir } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { basename, dirname, extname, join } from 'node:path'
 
 export const SUBAGENT_DIR_NAME = 'subagents'
@@ -20,11 +24,18 @@ export function subagentTranscriptsDirFor(transcriptFilePath: string): string {
   return join(dirname(transcriptFilePath), stem, SUBAGENT_DIR_NAME)
 }
 
-export async function countSubagentTranscripts(transcriptFilePath: string): Promise<number> {
+export async function countSubagentTranscripts(
+  transcriptFilePath: string,
+  signal?: AbortSignal
+): Promise<number> {
   let entries
   try {
-    entries = await wslGatedReaddir(subagentTranscriptsDirFor(transcriptFilePath), 'scan')
+    entries = await waitForAiVaultScan(
+      wslGatedReaddir(subagentTranscriptsDirFor(transcriptFilePath), 'scan', signal),
+      signal
+    )
   } catch {
+    throwIfAiVaultScanCancelled(signal)
     return 0
   }
   return entries.filter((entry) => isSubagentTranscriptFileName(entry.name, entry.isFile())).length

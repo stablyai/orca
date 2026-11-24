@@ -1,10 +1,10 @@
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import type { AgentSessionHistoryPage, AgentSessionTurnActivity } from '../agent-session-wire'
-import type { AgentSessionBackgroundTaskState } from '../agent-session-background-task-wire'
+import type { AgentSessionBackgroundTaskState } from '../background-tasks/agent-session-background-task-wire'
 import type {
   StructuredAgentHostClock,
   StructuredAgentSessionState
-} from '../structured-agent-session-reducer'
+} from './live-read/structured-agent-session-reducer'
 import { compareAgentJournalItems } from '../journal/agent-session-journal-position'
 import {
   MAX_RETAINED_ITEMS,
@@ -12,8 +12,8 @@ import {
   ownItemCount
 } from './structured-agent-session-item-retention'
 import { foldStructuredAgentSubagentRosterPage } from './structured-agent-session-subagent-roster'
-import { admitAgentSessionBackgroundTaskState } from '../agent-session-background-task-state-admission'
-import { agentSessionHasOlderTranscript } from '../agent-session-context-clear'
+import { admitAgentSessionBackgroundTaskState } from '../background-tasks/agent-session-background-task-state-admission'
+import { agentSessionHasOlderTranscript } from '../conversation-context/agent-session-context-clear'
 
 /** A frame without `hostNow` (older host) leaves the previous sample in place. */
 export function hostClockField(
@@ -60,10 +60,14 @@ export function replacePage(
 }
 
 export function mergeItems(
-  current: readonly AgentJournalRenderItem[],
+  current: AgentJournalRenderItem[],
   incoming: readonly AgentJournalRenderItem[],
   removedIds: readonly string[]
 ): AgentJournalRenderItem[] {
+  const upserted = removedIds.length === 0 ? upsertItems(current, incoming) : null
+  if (upserted) {
+    return upserted
+  }
   const removed = new Set(removedIds)
   const byId = new Map(
     current.filter((item) => !removed.has(item.itemId)).map((item) => [item.itemId, item])
@@ -75,6 +79,49 @@ export function mergeItems(
     }
   }
   return [...byId.values()].sort(compareAgentJournalItems)
+}
+
+/** Streamed revisions replace their row in place and new rows append past the tail, keeping every other row's
+ * position; anything that would move a row returns null for the full merge. */
+function upsertItems(
+  current: AgentJournalRenderItem[],
+  incoming: readonly AgentJournalRenderItem[]
+): AgentJournalRenderItem[] | null {
+  if (incoming.length === 0) {
+    return current
+  }
+  // One pass copies the rows and finds every incoming id's row.
+  const rowOf = new Map(incoming.map((item) => [item.itemId, -1]))
+  const next: AgentJournalRenderItem[] = []
+  for (const row of current) {
+    if (rowOf.has(row.itemId)) {
+      rowOf.set(row.itemId, next.length)
+    }
+    next.push(row)
+  }
+  let changed = false
+  for (const item of incoming) {
+    const index = rowOf.get(item.itemId)!
+    const prior = next[index]
+    if (prior && item.revision < prior.revision) {
+      continue
+    }
+    const tail = next.at(-1)
+    if (
+      prior
+        ? compareAgentJournalItems(prior, item) !== 0
+        : tail && compareAgentJournalItems(tail, item) >= 0
+    ) {
+      return null
+    }
+    if (prior) {
+      next[index] = item
+    } else {
+      rowOf.set(item.itemId, next.push(item) - 1)
+    }
+    changed = true
+  }
+  return changed ? next : current
 }
 
 /** Keep the contiguous loaded suffix: an older revision retains its sequence and would move the paging anchor past a hole.

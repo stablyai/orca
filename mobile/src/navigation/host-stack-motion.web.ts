@@ -1,4 +1,4 @@
-import { REDUCED_MOTION_FADE_MS } from '../components/sheet-motion-values'
+import { REDUCED_MOTION_FADE_MS } from '../components/motion/sheet-motion-values'
 import { PUSH_EASING_CSS, PUSH_SLIDE_MS, PUSH_UNDER_DIM, PUSH_UNDER_SHIFT } from './push-motion'
 
 // Bound suspended-screen waits so a route with no content can still arrive.

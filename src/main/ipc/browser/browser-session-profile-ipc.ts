@@ -1,38 +1,42 @@
 import { retainLocalGoogleCookieClearTarget } from '../../browser/cookies/browser-google-cookie-clear-target'
-import { browserCookieImportFailure } from '../../../shared/browser-cookie-import-failure-copy'
+import { browserCookieImportFailure } from '../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import { registerGoogleCookieClearHandlers } from './browser-google-cookie-clear-ipc'
 import { registerClientHostCookieImportHandlers } from './browser-client-host-cookie-import-ipc'
+import { registerCookieClearHandlers } from './browser-cookie-clear-ipc'
 import { BrowserWindow, ipcMain } from 'electron'
-import { browserSessionRegistry } from '../../browser/sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
+import { pickCookieFile } from '../../browser/cookies/imports/cookie-file-picker'
+import { detectInstalledBrowsers } from '../../browser/cookies/sources/browser-cookie-detection'
 import {
-  pickCookieFile,
-  importCookiesFromFile,
-  detectInstalledBrowsers,
-  selectBrowserProfile,
-  importCookiesFromBrowser
-} from '../../browser/cookies/browser-cookie-import'
+  browserCookieImportSource,
+  cookieFileImportSource
+} from '../../browser/cookies/route-partition/browser-route-partition-cookie-import'
+import {
+  importCookieFileIntoSshRoutePartition,
+  importCookiesIntoSshRoutePartition
+} from '../../browser/cookies/route-partition/browser-ssh-route-cookie-import'
 import type {
   BrowserCookieImportResult,
   BrowserSessionProfile,
   BrowserSessionProfileScope
-} from '../../../shared/browser-workspace-types'
-import type { ManagedBrowserProfileOwner } from '../../../shared/browser-profile-scope'
-import { ensureManagedBrowserProfile } from '../../browser/sessions/browser-managed-session-profiles'
+} from '../../../shared/browser/workspaces/browser-workspace-types'
+import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
+import { ensureManagedBrowserProfile } from '../../browser/sessions/profiles/browser-managed-session-profiles'
 import {
   getBrowserIdentityModeStatus,
   setBrowserIdentityMode
-} from '../../browser/identity/browser-identity-mode-store'
+} from '../../browser/identity/mode/browser-identity-mode-store'
 import {
   listBrowserSitePermissions,
   setBrowserSitePermissionDecisions
-} from '../../browser/site-settings/browser-site-permission-store'
+} from '../../browser/site-settings/permissions/browser-site-permission-store'
 import {
-  isBrowserSitePermission,
-  isBrowserSitePermissionDecision,
+  isBrowserSitePermissionKey,
+  isValidBrowserSitePermissionDecision,
   type BrowserSitePermissionEntry
-} from '../../../shared/browser-site-permission'
+} from '../../../shared/browser/site-settings/browser-site-permission'
 
 export function registerBrowserSessionProfileHandlers(): void {
   ipcMain.removeHandler('browser:session:listProfiles')
@@ -104,25 +108,38 @@ export function registerBrowserSessionProfileHandlers(): void {
 
   ipcMain.handle(
     'browser:session:importCookies',
-    async (event, args: { profileId: string }): Promise<BrowserCookieImportResult> => {
+    async (
+      event,
+      args: { profileId: string; sshTargetId?: unknown }
+    ): Promise<BrowserCookieImportResult> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return browserCookieImportFailure('notAuthorized')
+      }
+      const parent = BrowserWindow.fromWebContents(event.sender)
+      const sshTargetId = sshRouteTargetId(args)
+      if (sshTargetId) {
+        return importCookieFileIntoSshRoutePartition(
+          {
+            sshTargetId,
+            browserProfileId: args.profileId,
+            targetRegistered: await isRegisteredSshTarget(sshTargetId)
+          },
+          () => pickCookieFile(parent)
+        )
       }
       const profile = browserSessionRegistry.getProfile(args.profileId)
       if (!profile) {
         return browserCookieImportFailure('profileNotFound')
       }
 
-      const parent = BrowserWindow.fromWebContents(event.sender)
-      const filePath = await pickCookieFile(parent)
-      if (!filePath) {
-        return { ok: false, reason: 'canceled' }
+      const source = await cookieFileImportSource(() => pickCookieFile(parent))
+      if ('reason' in source) {
+        return source
       }
-
-      const result = await importCookiesFromFile(filePath, profile.partition)
+      const result = await source.importInto(profile.partition)
       if (result.ok) {
         browserSessionRegistry.updateProfileSource(args.profileId, {
-          browserFamily: 'manual',
+          ...source.badge,
           importedAt: Date.now()
         })
         return retainLocalGoogleCookieClearTarget(result, profile, args.profileId)
@@ -167,8 +184,9 @@ export function registerBrowserSessionProfileHandlers(): void {
         return []
       }
       if (
-        !isBrowserSitePermission(args.permission) ||
-        (args.decision !== null && !isBrowserSitePermissionDecision(args.decision))
+        !isBrowserSitePermissionKey(args.permission) ||
+        (args.decision !== null &&
+          !isValidBrowserSitePermissionDecision(args.permission, args.decision))
       ) {
         throw new Error('Unsupported site permission change')
       }
@@ -184,15 +202,7 @@ export function registerBrowserSessionProfileHandlers(): void {
 
   registerGoogleCookieClearHandlers()
   registerClientHostCookieImportHandlers()
-
-  ipcMain.removeHandler('browser:session:clearDefaultCookies')
-
-  ipcMain.handle('browser:session:clearDefaultCookies', async (event): Promise<boolean> => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return false
-    }
-    return browserSessionRegistry.clearDefaultSessionCookies()
-  })
+  registerCookieClearHandlers()
 
   ipcMain.removeHandler('browser:session:detectBrowsers')
   ipcMain.removeHandler('browser:session:detectBrowsersForClientHost')
@@ -223,48 +233,38 @@ export function registerBrowserSessionProfileHandlers(): void {
     'browser:session:importFromBrowser',
     async (
       event,
-      args: { profileId: string; browserFamily: string; browserProfile?: string }
+      args: {
+        profileId: string
+        browserFamily: string
+        browserProfile?: string
+        sshTargetId?: unknown
+      }
     ): Promise<BrowserCookieImportResult> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return browserCookieImportFailure('notAuthorized')
+      }
+      const sshTargetId = sshRouteTargetId(args)
+      if (sshTargetId) {
+        return importCookiesIntoSshRoutePartition({
+          sshTargetId,
+          browserProfileId: args.profileId,
+          targetRegistered: await isRegisteredSshTarget(sshTargetId),
+          browserFamily: args.browserFamily,
+          browserProfile: args.browserProfile
+        })
       }
       const profile = browserSessionRegistry.getProfile(args.profileId)
       if (!profile) {
         return browserCookieImportFailure('profileNotFound')
       }
-
-      // Renderer profile names become paths; reject traversal before cookie import.
-      if (
-        args.browserProfile &&
-        (/[/\\]/.test(args.browserProfile) || args.browserProfile.includes('..'))
-      ) {
-        return browserCookieImportFailure('invalidBrowserProfile')
+      const source = browserCookieImportSource(args)
+      if ('reason' in source) {
+        return source
       }
-
-      const browsers = detectInstalledBrowsers()
-      let browser = browsers.find((b) => b.family === args.browserFamily)
-      if (!browser) {
-        return browserCookieImportFailure('browserNotFound')
-      }
-
-      if (args.browserProfile && args.browserProfile !== browser.selectedProfile) {
-        const reselected = selectBrowserProfile(browser, args.browserProfile)
-        if (!reselected) {
-          return browserCookieImportFailure('browserProfileDatabaseMissing', {
-            profile: args.browserProfile
-          })
-        }
-        browser = reselected
-      }
-
-      const result = await importCookiesFromBrowser(browser, profile.partition)
+      const result = await source.importInto(profile.partition)
       if (result.ok) {
-        const profileName =
-          browser.profiles.find((p) => p.directory === browser.selectedProfile)?.name ??
-          browser.selectedProfile
         browserSessionRegistry.updateProfileSource(args.profileId, {
-          browserFamily: browser.family,
-          profileName,
+          ...source.badge,
           importedAt: Date.now()
         })
         return retainLocalGoogleCookieClearTarget(result, profile, args.profileId)
@@ -272,6 +272,18 @@ export function registerBrowserSessionProfileHandlers(): void {
       return result
     }
   )
+}
+
+async function isRegisteredSshTarget(targetId: string): Promise<boolean> {
+  const { getSshConnectionStore } = await import('../ssh/ssh')
+  return getSshConnectionStore()?.getTarget(targetId) !== undefined
+}
+
+/** A page routed through an SSH host names its host, so the import lands in that host's jar. */
+function sshRouteTargetId(args: { sshTargetId?: unknown }): string | null {
+  return typeof args.sshTargetId === 'string' && args.sshTargetId.length > 0
+    ? args.sshTargetId
+    : null
 }
 
 type DetectedBrowserPickerEntry = {

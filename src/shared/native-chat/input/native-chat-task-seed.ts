@@ -2,7 +2,7 @@
 // A snapshot replaces the list. Grok merges todo_write by id. Claude's Task* tools edit one row.
 
 import type { NativeChatMessage } from '../native-chat-types'
-import { CODEX_PLAN_UPDATED_FRAME_KIND } from '../native-chat-provider-frame-summary'
+import { CODEX_PLAN_UPDATED_FRAME_KIND } from '../transcript/notices/native-chat-provider-frame-summary'
 import { pairToolBlocks } from '../tools/native-chat-tool-pairs'
 import {
   applyNativeChatTaskListCall,
@@ -11,7 +11,7 @@ import {
   type NativeChatTask,
   type NativeChatTaskList,
   type NativeChatTaskStatus
-} from './native-chat-task-list'
+} from './task-lists/native-chat-task-list'
 import {
   createNativeChatTaskBook,
   type NativeChatTaskBook,

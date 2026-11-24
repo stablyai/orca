@@ -3,8 +3,8 @@ import {
   readNativeChatTaskSeedList,
   type NativeChatTaskSeedList
 } from '../../../../src/shared/native-chat/input/native-chat-claude-task-updates'
-import type { RpcClient } from '../../transport/rpc-client'
-import { nativeChatSessionPageRead } from '../mobile-session-read-operations'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { nativeChatSessionPageRead } from './agent-session/mobile-native-chat-page-read-operations'
 
 function taskListField(value: unknown): unknown {
   if (value === null || typeof value !== 'object' || !('taskList' in value)) {

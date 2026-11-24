@@ -1,11 +1,15 @@
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
-import { getRuntimeTargetHostId } from '../../runtime/runtime-client-target'
-import { adoptFromEndpoint } from '../adopt-from-endpoint'
-import { mergeByIdentity, unchangedMergeSource } from '../catalog-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { catalogOwnsHost } from './project-group-owner-routing'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
+import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
+import {
+  mergeByIdentity,
+  unchangedMergeSource
+} from '../../lib/catalog-reconciliation/catalog-identity'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 export type FetchedProjectGroupCatalog = {
   projectGroups: ProjectGroup[]
@@ -13,7 +17,7 @@ export type FetchedProjectGroupCatalog = {
 }
 
 function getProjectGroupHostIdentity(group: ProjectGroup): string {
-  return JSON.stringify([getProjectGroupHostId(group), group.id])
+  return JSON.stringify([getRepoExecutionHostId(group), group.id])
 }
 
 function mergeFetchedProjectGroupsForHost(
@@ -23,7 +27,7 @@ function mergeFetchedProjectGroupsForHost(
 ): readonly ProjectGroup[] {
   const fetchedIdentities = new Set(fetched.map(getProjectGroupHostIdentity))
   const preserved = previous.filter((group) => {
-    const existingHostId = getProjectGroupHostId(group)
+    const existingHostId = getRepoExecutionHostId(group)
     return (
       !catalogOwnsHost(hostId, existingHostId) ||
       fetchedIdentities.has(getProjectGroupHostIdentity(group))

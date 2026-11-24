@@ -2,8 +2,8 @@ import type { AgentSessionJournalIdentity } from '../../../../shared/agent-sessi
 import {
   agentSessionProviderHandleKey,
   codexProviderHandle
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionProcessIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { readProcessStartTimeMs } from '../../../runtime/agent-session/ownership/agent-session-process-identity-probe'
 
@@ -16,18 +16,25 @@ export function codexSpawnedProcessIdentity(
     spawnToken: string
     onSpawned?: (process: AgentSessionProcessIdentity) => Promise<void>
   },
-  readStartTime?: (pid: number) => Promise<number | null>
+  {
+    readProcessStartTime: readStartTime = readProcessStartTimeMs
+  }: {
+    readProcessStartTime?: (pid: number) => Promise<number | null>
+  },
+  /** A shared server outlives the chat; without a start time recovery never signals it. */
+  sharedServer: () => boolean = () => false
 ): {
   onSpawned: (pid: number) => Promise<void>
   read: (pid: number | undefined) => Promise<AgentSessionProcessIdentity>
 } {
   let spawned: Promise<AgentSessionProcessIdentity> | undefined
+  const startTime = async (pid: number) => (sharedServer() ? null : readStartTime(pid))
   return {
     onSpawned: async (pid) => {
-      spawned = codexProcessIdentity({ ...input, pid }, readStartTime)
+      spawned = codexProcessIdentity({ ...input, pid }, startTime)
       await input.onSpawned?.(await spawned)
     },
-    read: (pid) => spawned ?? codexProcessIdentity({ ...input, pid }, readStartTime)
+    read: (pid) => spawned ?? codexProcessIdentity({ ...input, pid }, startTime)
   }
 }
 

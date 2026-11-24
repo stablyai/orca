@@ -1,5 +1,5 @@
 import React from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 // Hover actions overlay titles; touch keeps them in flow. Pointer/self-stretch prevent action gutters becoming drag handles.
 export const PROJECT_HEADER_ACTIONS_CLASS_NAME = cn(

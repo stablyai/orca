@@ -1,7 +1,7 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { WorkspaceKey } from '../../../../shared/workspace-scope'
+import type { WorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type {
   WorktreeLineage,
   WorktreeLineageWarning
@@ -10,7 +10,9 @@ import { crossStoreCreateLineage } from './runtime-worktree-lineage-recording'
 import type { CrossStoreLineageResolution } from './runtime-worktree-lineage-recording'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
-import { WorktreeIdRequiresFullPathError } from './worktree-id-requires-full-path-error'
+
+import { workerCreatedLineage } from './runtime-worker-created-lineage'
+import { RuntimeLineageError, explicitParentError } from './runtime-lineage-error'
 
 export type WorktreeLineageInput = NonNullable<RuntimeManagedWorktreeCreateArgs['lineage']>
 
@@ -50,18 +52,6 @@ export type WorktreeLineageCandidate = {
   coordinatorHandle?: string
 }
 
-export class RuntimeLineageError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly data?: unknown
-  ) {
-    super(message)
-  }
-}
-
-export const LINEAGE_PARENT_AMBIGUOUS = 'LINEAGE_PARENT_AMBIGUOUS'
-
 export function formatAmbiguousCwdParentMessage(agent?: TuiAgent): string {
   return `Orca did not create the workspace${agent ? ` or start ${agent}` : ''} because more than one workspace matched the current directory when this request was prepared.
 Run \`orca worktree list --limit 10000 --json\` with the same server and host selection. Match path and host; if truncated, repeat with a larger --limit using totalCount. Choose id:<id> (or identity:<identity.key> for a shared ID), then add --parent-worktree <selector> to your original invocation, or deliberately use --no-parent. Pass the selector as one argument quoted for your shell.
@@ -83,14 +73,6 @@ export async function resolveRuntimeWorktreeCreateLineage(
   input: WorktreeLineageInput | undefined,
   deps: LineageResolutionDependencies
 ): Promise<WorktreeLineageResolution> {
-  const nextSteps = [
-    'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
-    'Retry with --no-parent to create without lineage.'
-  ]
-  const notFoundMessage = (error: unknown): string =>
-    error instanceof WorktreeIdRequiresFullPathError
-      ? error.message
-      : 'Parent selector was not found.'
   if (!input) {
     return { kind: 'none', warnings: [] }
   }
@@ -110,7 +92,7 @@ export async function resolveRuntimeWorktreeCreateLineage(
     try {
       const parent = await deps.resolveParent(input.parentWorkspace)
       const manuallySelected = input.parentWorkspaceOrigin === 'manual'
-      return {
+      return workerCreatedLineage(input, {
         kind: 'lineage',
         parent,
         origin: manuallySelected ? 'manual' : 'cli',
@@ -120,25 +102,21 @@ export async function resolveRuntimeWorktreeCreateLineage(
               confidence: 'explicit'
             }
           : { source: 'explicit-cli-flag', confidence: 'explicit' }
-      }
-    } catch (error) {
-      throw new RuntimeLineageError('LINEAGE_PARENT_NOT_FOUND', notFoundMessage(error), {
-        nextSteps
       })
+    } catch (error) {
+      throw explicitParentError(error)
     }
   }
   if (input.parentWorktree) {
     try {
-      return {
+      return workerCreatedLineage(input, {
         kind: 'lineage',
         parent: await deps.resolveWorktreeParent(input.parentWorktree),
         origin: 'cli',
         capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
-      }
-    } catch (error) {
-      throw new RuntimeLineageError('LINEAGE_PARENT_NOT_FOUND', notFoundMessage(error), {
-        nextSteps
       })
+    } catch (error) {
+      throw explicitParentError(error)
     }
   }
   const warnings: WorktreeLineageWarning[] = []

@@ -6,7 +6,7 @@ import type { WorkspaceStatusDefinition } from '../../../../../../shared/worktre
 import SidebarFilter from '../../worktree-list/controls/SidebarFilter'
 import WorkspaceKanbanSearchField from '../search/WorkspaceKanbanSearchField'
 import WorkspaceKanbanSettingsMenu from './WorkspaceKanbanSettingsMenu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type WorkspaceKanbanDrawerHeaderProps = {
   selectedCount: number
@@ -51,6 +51,7 @@ export default function WorkspaceKanbanDrawerHeader({
   onFilterMenuOpenChange,
   onClose
 }: WorkspaceKanbanDrawerHeaderProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <SheetHeader className="border-b border-worktree-sidebar-border px-4 py-3 pr-32">
@@ -58,14 +59,14 @@ export default function WorkspaceKanbanDrawerHeader({
         <div className="flex items-center gap-2">
           <SheetTitle className="flex shrink-0 items-center gap-2 text-sm">
             <span>
-              {translate(
+              {t(
                 'auto.components.sidebar.WorkspaceKanbanDrawerHeader.c6a77ab0f4',
                 'Workspace board'
               )}
             </span>
             {selectedCount > 1 ? (
               <span className="rounded-full bg-worktree-sidebar-accent px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.sidebar.WorkspaceKanbanDrawerHeader.selectedCount',
                   '{{count}} selected',
                   { count: selectedCount, defaultValue_one: '{{count}} selected' }
@@ -85,7 +86,7 @@ export default function WorkspaceKanbanDrawerHeader({
           />
         </div>
         <SheetDescription className="sr-only">
-          {translate(
+          {t(
             'auto.components.sidebar.WorkspaceKanbanDrawerHeader.e1a34450fc',
             'Organize workspaces by status and open workspace cards.'
           )}
@@ -113,10 +114,7 @@ export default function WorkspaceKanbanDrawerHeader({
         <Button
           variant="ghost"
           size="icon-xs"
-          aria-label={translate(
-            'auto.components.sidebar.WorkspaceKanbanDrawerHeader.f369f5c5a3',
-            'Close'
-          )}
+          aria-label={t('auto.components.sidebar.WorkspaceKanbanDrawerHeader.f369f5c5a3', 'Close')}
           onClick={onClose}
         >
           <X className="size-3.5" />

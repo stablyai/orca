@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom'
 import { PluginDeclarativeView } from '../declarative/PluginDeclarativeView'
-import type { PluginShotReplayPreview } from '@/store/plugin-shot-replay'
+import type { PluginShotReplayPreview } from '@/store/plugins/capture/plugin-shot-replay'
 
 const ignoreEvent = (): void => {}
 
