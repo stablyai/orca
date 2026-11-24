@@ -224,9 +224,12 @@ export function createCopilotLanguageServer(deps: CopilotLanguageServerDeps) {
     return signInFlow.signIn()
   }
 
-  async function openDocument(args: CopilotOpenDocumentArgs): Promise<CopilotOpenDocumentResult> {
+  async function openDocument(
+    owner: AbortSignal,
+    args: CopilotOpenDocumentArgs
+  ): Promise<CopilotOpenDocumentResult> {
     const none: CopilotOpenDocumentResult = { fileUri: null }
-    if (authenticated === false || args.text.length > COPILOT_MAX_DOCUMENT_CHARS) {
+    if (owner.aborted || authenticated === false || args.text.length > COPILOT_MAX_DOCUMENT_CHARS) {
       return none
     }
     const connection = await ensureConnection()
@@ -249,30 +252,43 @@ export function createCopilotLanguageServer(deps: CopilotLanguageServerDeps) {
       disposeIfIdle()
       return none
     }
+    if (owner.aborted) {
+      return none
+    }
     clearIdleTimer()
-    return { fileUri: openDocuments.open(connection, args) }
+    return { fileUri: openDocuments.open(connection, args, owner) }
   }
 
-  function changeDocument(fileUri: string, text: string): void {
+  function changeDocument(owner: AbortSignal, fileUri: string, text: string): void {
     if (activeConnection && text.length <= COPILOT_MAX_DOCUMENT_CHARS) {
-      openDocuments.change(activeConnection, fileUri, text)
+      openDocuments.change(activeConnection, fileUri, text, owner)
     }
   }
 
-  function closeDocument(fileUri: string): void {
+  function closeDocument(owner: AbortSignal, fileUri: string): void {
     if (
       activeConnection &&
-      openDocuments.close(activeConnection, fileUri) &&
+      openDocuments.close(activeConnection, fileUri, owner) &&
       openDocuments.count() === 0
     ) {
       scheduleIdleShutdown()
     }
   }
 
+  function releaseOwner(owner: AbortSignal): void {
+    if (activeConnection && openDocuments.count() > 0) {
+      openDocuments.releaseOwner(activeConnection, owner)
+      if (openDocuments.count() === 0) {
+        scheduleIdleShutdown()
+      }
+    }
+  }
+
   async function inlineCompletion(
+    owner: AbortSignal,
     args: CopilotInlineCompletionArgs
   ): Promise<CopilotInlineCompletionResult> {
-    const version = openDocuments.versionOf(args.fileUri)
+    const version = openDocuments.versionOf(args.fileUri, owner)
     if (!activeConnection || version === null) {
       return { opened: false, result: null }
     }
@@ -297,6 +313,7 @@ export function createCopilotLanguageServer(deps: CopilotLanguageServerDeps) {
     openDocument,
     changeDocument,
     closeDocument,
+    releaseOwner,
     inlineCompletion,
     signIn,
     dispose

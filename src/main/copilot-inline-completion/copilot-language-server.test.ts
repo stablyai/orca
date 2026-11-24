@@ -9,6 +9,7 @@ import {
 } from './copilot-protocol'
 import { createFakeCopilotServer } from './fake-copilot-server-fixture'
 
+const owner = new AbortController().signal
 const SIGNED_IN = { checkStatus: { status: 'OK', user: 'octocat' } }
 const SIGNED_OUT = { checkStatus: { status: 'NotSignedIn' } }
 
@@ -82,7 +83,7 @@ describe('createCopilotLanguageServer', () => {
       copyToClipboard: vi.fn(),
       onStatus: vi.fn()
     })
-    await expect(copilot.openDocument(openArgs)).resolves.toEqual({ fileUri: null })
+    await expect(copilot.openDocument(owner, openArgs)).resolves.toEqual({ fileUri: null })
     await expect(copilot.signIn()).resolves.toEqual({ state: 'unavailable' })
     await expect(copilot.getStatus()).resolves.toMatchObject({ installed: false })
     expect(spawnServer).not.toHaveBeenCalled()
@@ -90,7 +91,7 @@ describe('createCopilotLanguageServer', () => {
 
   it('opens documents, announces the workspace root, and pushes initial configuration', async () => {
     const { fake, copilot } = createCopilotWithFakeServer()
-    const opened = await copilot.openDocument(openArgs)
+    const opened = await copilot.openDocument(owner, openArgs)
     expect(opened.fileUri).toBe(fileUri)
     await fake.waitFor((message) => message.method === 'workspace/didChangeConfiguration')
     const folders = await fake.waitFor((m) => m.method === 'workspace/didChangeWorkspaceFolders')
@@ -103,35 +104,35 @@ describe('createCopilotLanguageServer', () => {
 
   it('stays inert when signed out: no documents reach the server and the process is dropped', async () => {
     const { fake, copilot, spawnServer } = createCopilotWithFakeServer(SIGNED_OUT)
-    await expect(copilot.openDocument(openArgs)).resolves.toEqual({ fileUri: null })
+    await expect(copilot.openDocument(owner, openArgs)).resolves.toEqual({ fileUri: null })
     expect(fake.received.some((m) => m.method === 'textDocument/didOpen')).toBe(false)
     expect(fake.child.kill).toHaveBeenCalled()
-    await expect(copilot.openDocument(openArgs)).resolves.toEqual({ fileUri: null })
+    await expect(copilot.openDocument(owner, openArgs)).resolves.toEqual({ fileUri: null })
     expect(spawnServer).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the server and retries when checkStatus fails instead of respawning per open', async () => {
     const { fake, copilot, spawnServer } = createCopilotWithFakeServer({})
-    const first = copilot.openDocument(openArgs)
+    const first = copilot.openDocument(owner, openArgs)
     const firstCheck = await fake.waitFor((m) => m.method === 'checkStatus')
     fake.replyError(firstCheck.id, 'boom')
     await expect(first).resolves.toEqual({ fileUri: null })
     expect(fake.child.kill).not.toHaveBeenCalled()
     fake.setAutoReply('checkStatus', { status: 'OK', user: 'octocat' })
-    await expect(copilot.openDocument(openArgs)).resolves.toEqual({ fileUri })
+    await expect(copilot.openDocument(owner, openArgs)).resolves.toEqual({ fileUri })
     expect(spawnServer).toHaveBeenCalledTimes(1)
   })
 
   it('shares one checkStatus retry between concurrent opens', async () => {
     const { fake, copilot } = createCopilotWithFakeServer({})
-    const first = copilot.openDocument(openArgs)
+    const first = copilot.openDocument(owner, openArgs)
     const startupCheck = await fake.waitFor((m) => m.method === 'checkStatus')
     fake.replyError(startupCheck.id, 'boom')
     await expect(first).resolves.toEqual({ fileUri: null })
     fake.setAutoReply('checkStatus', { status: 'OK', user: 'octocat' })
     const opens = await Promise.all([
-      copilot.openDocument(openArgs),
-      copilot.openDocument(openArgs)
+      copilot.openDocument(owner, openArgs),
+      copilot.openDocument(owner, openArgs)
     ])
     expect(opens).toEqual([{ fileUri }, { fileUri }])
     expect(fake.received.filter((m) => m.method === 'checkStatus')).toHaveLength(2)
@@ -139,16 +140,16 @@ describe('createCopilotLanguageServer', () => {
 
   it('refuses documents over the size limit', async () => {
     const { copilot, spawnServer } = createCopilotWithFakeServer()
-    const result = await copilot.openDocument({ ...openArgs, text: 'x'.repeat(1_000_001) })
+    const result = await copilot.openDocument(owner, { ...openArgs, text: 'x'.repeat(1_000_001) })
     expect(result.fileUri).toBeNull()
     expect(spawnServer).not.toHaveBeenCalled()
   })
 
   it('stamps the synced document version onto inline completion requests', async () => {
     const { fake, copilot } = createCopilotWithFakeServer()
-    await copilot.openDocument(openArgs)
-    copilot.changeDocument(fileUri, 'def f():\n    ')
-    const pending = copilot.inlineCompletion({
+    await copilot.openDocument(owner, openArgs)
+    copilot.changeDocument(owner, fileUri, 'def f():\n    ')
+    const pending = copilot.inlineCompletion(owner, {
       fileUri,
       position: { line: 1, character: 4 },
       trigger: 'automatic',
@@ -169,7 +170,7 @@ describe('createCopilotLanguageServer', () => {
   it('reports an unknown document instead of asking the server', async () => {
     const { copilot } = createCopilotWithFakeServer()
     await expect(
-      copilot.inlineCompletion({
+      copilot.inlineCompletion(owner, {
         fileUri,
         position: { line: 0, character: 0 },
         trigger: 'explicit',
@@ -180,17 +181,17 @@ describe('createCopilotLanguageServer', () => {
 
   it('closes a document only after its last reference', async () => {
     const { fake, copilot } = createCopilotWithFakeServer()
-    await copilot.openDocument(openArgs)
-    await copilot.openDocument(openArgs)
-    copilot.closeDocument(fileUri)
+    await copilot.openDocument(owner, openArgs)
+    await copilot.openDocument(owner, openArgs)
+    copilot.closeDocument(owner, fileUri)
     expect(fake.received.some((m) => m.method === 'textDocument/didClose')).toBe(false)
-    copilot.closeDocument(fileUri)
+    copilot.closeDocument(owner, fileUri)
     await fake.waitFor((m) => m.method === 'textDocument/didClose')
   })
 
   it('forwards didChangeStatus with the signed-in user', async () => {
     const { fake, copilot, statuses } = createCopilotWithFakeServer()
-    await copilot.openDocument(openArgs)
+    await copilot.openDocument(owner, openArgs)
     fake.notify('didChangeStatus', { kind: 'Normal', message: '', busy: false })
     await vi.waitFor(() => {
       expect(statuses.at(-1)).toMatchObject({ kind: 'Normal', user: 'octocat', installed: true })
@@ -276,7 +277,7 @@ describe('createCopilotLanguageServer', () => {
 
   it('ignores window/showDocument when no sign-in is in progress', async () => {
     const { fake, copilot, openExternal } = createCopilotWithFakeServer()
-    await copilot.openDocument(openArgs)
+    await copilot.openDocument(owner, openArgs)
     fake.requestFromServer(92, 'window/showDocument', {
       uri: 'https://example.com',
       external: true
@@ -288,7 +289,7 @@ describe('createCopilotLanguageServer', () => {
 
   it('kills the server on dispose', async () => {
     const { fake, copilot } = createCopilotWithFakeServer()
-    await copilot.openDocument(openArgs)
+    await copilot.openDocument(owner, openArgs)
     copilot.dispose()
     expect(fake.child.kill).toHaveBeenCalled()
   })

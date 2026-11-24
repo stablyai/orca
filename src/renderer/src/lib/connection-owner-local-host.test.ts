@@ -43,6 +43,30 @@ function stateWith(repos: Repo[], worktrees: Worktree[]): State {
 
 const FILE = '/srv/repo/a.ts'
 
+const folder = (executionHostId: FolderWorkspace['executionHostId']): State => ({
+  folderWorkspaces: [
+    {
+      id: 'f1',
+      projectGroupId: 'g1',
+      name: 'Folder',
+      folderPath: '/srv/repo',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 0,
+      updatedAt: 0,
+      executionHostId
+    }
+  ],
+  projectGroups: [],
+  repos: [makeRepo({ id: 'r' })],
+  worktreesByRepo: {}
+})
+
 describe('isFileOnLocalHostFromState', () => {
   it('accepts a local repo worktree', () => {
     const state = stateWith(
@@ -80,31 +104,44 @@ describe('isFileOnLocalHostFromState', () => {
   })
 
   it('accepts a local folder workspace and rejects one pinned to a runtime host', () => {
-    const folder = (executionHostId: FolderWorkspace['executionHostId']): State => ({
-      folderWorkspaces: [
-        {
-          id: 'f1',
-          projectGroupId: 'g1',
-          name: 'Folder',
-          folderPath: '/srv/repo',
-          linkedTask: null,
-          comment: '',
-          isArchived: false,
-          isUnread: false,
-          isPinned: false,
-          sortOrder: 0,
-          lastActivityAt: 0,
-          createdAt: 0,
-          updatedAt: 0,
-          executionHostId
-        }
-      ],
-      projectGroups: [],
-      repos: [makeRepo({ id: 'r' })],
-      worktreesByRepo: {}
-    })
     const key = folderWorkspaceKey('f1')
     expect(isFileOnLocalHostFromState(folder(null), key, FILE)).toBe(true)
     expect(isFileOnLocalHostFromState(folder('runtime:env-a'), key, FILE)).toBe(false)
+  })
+  it.each([
+    ['runtime:env-a', false],
+    ['local', true]
+  ] as const)(
+    'uses the project group host %s for an unpinned folder',
+    (executionHostId, expected) => {
+      const state = folder(null)
+      state.projectGroups = [
+        {
+          id: 'g1',
+          name: 'Group',
+          parentPath: null,
+          parentGroupId: null,
+          createdFrom: 'manual',
+          executionHostId,
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 0,
+          updatedAt: 0
+        }
+      ]
+      expect(isFileOnLocalHostFromState(state, folderWorkspaceKey('f1'), FILE)).toBe(expected)
+    }
+  )
+
+  it('checks the owner of the matching child repo inside a local folder', () => {
+    const state = folder('local')
+    state.repos = [
+      makeRepo({ id: 'remote', path: '/srv/repo/nested', executionHostId: 'runtime:env-a' })
+    ]
+    expect(
+      isFileOnLocalHostFromState(state, folderWorkspaceKey('f1'), '/srv/repo/nested/a.ts')
+    ).toBe(false)
+    expect(isFileOnLocalHostFromState(state, folderWorkspaceKey('f1'), FILE)).toBe(true)
   })
 })

@@ -1,3 +1,5 @@
+import type { IpcMainInvokeEvent, WebContents } from 'electron'
+import { electronDocumentEndpoint } from '../backend-desktop/electron-document-endpoint'
 import { app, clipboard, ipcMain, shell, webContents } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import {
@@ -106,13 +108,38 @@ export function registerCopilotInlineCompletionHandlers(store: Store): void {
   })
   app.on('will-quit', () => copilot.dispose())
 
+  const owners = new WeakMap<WebContents, AbortSignal>()
+  function ownerFor(event: IpcMainInvokeEvent): AbortSignal {
+    const endpoint = electronDocumentEndpoint(event)
+    if (!endpoint.isCurrent()) {
+      return AbortSignal.abort()
+    }
+    const existing = owners.get(event.sender)
+    if (existing) {
+      return existing
+    }
+    const { signal } = endpoint.watchRetirement()
+    const sender = event.sender
+    owners.set(sender, signal)
+    signal.addEventListener(
+      'abort',
+      () => {
+        owners.delete(sender)
+        copilot.releaseOwner(signal)
+      },
+      { once: true }
+    )
+    return signal
+  }
+
   ipcMain.handle(
     'copilotCompletion:openDocument',
-    async (_event, rawArgs: unknown): Promise<CopilotOpenDocumentResult> => {
+    async (event, rawArgs: unknown): Promise<CopilotOpenDocumentResult> => {
       const args = readOpenDocumentArgs(rawArgs)
       if (args.text.length > COPILOT_MAX_DOCUMENT_CHARS) {
         return { fileUri: null }
       }
+      const owner = ownerFor(event)
       const filePath = await resolveAuthorizedPath(args.filePath, store)
       const rootPath = await resolveAuthorizedPath(args.rootPath, store)
       // Why: rootPath becomes a server workspace folder; it must actually contain
@@ -120,23 +147,23 @@ export function registerCopilotInlineCompletionHandlers(store: Store): void {
       if (!isDescendantOrEqual(filePath, rootPath)) {
         throw new Error('Copilot document must be inside its workspace root')
       }
-      return copilot.openDocument({ ...args, filePath, rootPath })
+      return copilot.openDocument(owner, { ...args, filePath, rootPath })
     }
   )
 
-  ipcMain.handle('copilotCompletion:changeDocument', (_event, rawArgs: unknown): void => {
+  ipcMain.handle('copilotCompletion:changeDocument', (event, rawArgs: unknown): void => {
     const args = readChangeDocumentArgs(rawArgs)
-    copilot.changeDocument(args.fileUri, args.text)
+    copilot.changeDocument(ownerFor(event), args.fileUri, args.text)
   })
 
-  ipcMain.handle('copilotCompletion:closeDocument', (_event, rawArgs: unknown): void => {
-    copilot.closeDocument(readCloseDocumentArgs(rawArgs).fileUri)
+  ipcMain.handle('copilotCompletion:closeDocument', (event, rawArgs: unknown): void => {
+    copilot.closeDocument(ownerFor(event), readCloseDocumentArgs(rawArgs).fileUri)
   })
 
   ipcMain.handle(
     'copilotCompletion:inlineCompletion',
-    (_event, rawArgs: unknown): Promise<CopilotInlineCompletionResult> =>
-      copilot.inlineCompletion(readInlineCompletionArgs(rawArgs))
+    (event, rawArgs: unknown): Promise<CopilotInlineCompletionResult> =>
+      copilot.inlineCompletion(ownerFor(event), readInlineCompletionArgs(rawArgs))
   )
 
   ipcMain.handle('copilotCompletion:status', (): Promise<CopilotStatus> => copilot.getStatus())

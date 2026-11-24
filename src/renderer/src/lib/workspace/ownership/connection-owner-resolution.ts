@@ -139,6 +139,16 @@ export function getFolderFileConnectionOwnerFromState(
   folderWorkspaceId: string,
   filePath: string
 ): { connectionId: string | null; repo?: Repo } | undefined {
+  const repo = folderRepoForFile(state, folderWorkspaceId, filePath)
+  return repo ? { connectionId: getRepoSshConnectionId(repo), repo } : undefined
+}
+
+// null means the folder owns this path directly; undefined means its matching repos disagree.
+function folderRepoForFile(
+  state: ConnectionOwnerState,
+  folderWorkspaceId: string,
+  filePath: string
+): Repo | null | undefined {
   const candidateRepos = findFolderWorkspaceCandidateRepos(state, folderWorkspaceId)
   const matchingRepos = candidateRepos
     .filter((repo) => isPathInsideOrEqual(repo.path, filePath))
@@ -146,7 +156,7 @@ export function getFolderFileConnectionOwnerFromState(
     .sort((left, right) => right.normalizedPath.length - left.normalizedPath.length)
   const longestPathLength = matchingRepos[0]?.normalizedPath.length
   if (!longestPathLength) {
-    return undefined
+    return null
   }
   const longest = matchingRepos.filter(
     (candidate) => candidate.normalizedPath.length === longestPathLength
@@ -157,9 +167,7 @@ export function getFolderFileConnectionOwnerFromState(
     )
   )
   const repo = longest[0]?.repo
-  return owners.size === 1 && repo
-    ? { connectionId: getRepoSshConnectionId(repo), repo }
-    : undefined
+  return owners.size === 1 ? repo : undefined
 }
 
 /**
@@ -194,7 +202,17 @@ export function isFileOnLocalHostFromState(
   }
   const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
   if (parsedWorkspaceKey?.type === 'folder') {
-    return resolveFolderWorkspaceHost(state, parsedWorkspaceKey.folderWorkspaceId).kind === 'local'
+    const folderId = parsedWorkspaceKey.folderWorkspaceId
+    if (resolveFolderWorkspaceHost(state, folderId).kind !== 'local') {
+      return false
+    }
+    const repo = folderRepoForFile(state, folderId, filePath)
+    return (
+      repo === null ||
+      (!!repo &&
+        getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
+        !getRepoSshConnectionId(repo))
+    )
   }
   const worktreeResolution = resolveIndexedWorktreeOwner(selectWorktreesByRepo(state), worktreeId)
   if (worktreeResolution.kind === 'ambiguous') {
