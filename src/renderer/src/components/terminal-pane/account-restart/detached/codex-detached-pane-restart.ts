@@ -15,6 +15,7 @@ import { ptyDataHandlers } from '../../pty-transport/shutdown/pty-shutdown-data-
 import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { buildPaneIdentityEnv, getWorkspacePath } from './detached-pane-restart-spawn-context'
 import { restartPaneOwner } from '../pane-ownership/codex-restart-main-pane'
+import { stopCodexPaneForAccountRestart } from '../codex-account-restart-stop'
 import { hasFreeDetachedRestartSlot, holdDetachedRestartSlot } from './detached-pane-restart-slots'
 import {
   reapUnboundCodexPty,
@@ -158,6 +159,21 @@ export async function executeDetachedCodexPaneRestart(
   if (hasRegisteredRuntimeTerminalTab(tab.id, worktreeId) || ptyDataHandlers.has(ptyId)) {
     currentState.queuePaneAccountRestarts([ptyId], agent)
     return
+  }
+  if (agent === 'codex') {
+    // Codex restart only stops the process; the pane's next mount resumes it on the new account.
+    const stopped = await stopCodexPaneForAccountRestart({
+      worktreeId,
+      tabId: tab.id,
+      leafId,
+      ptyId
+    })
+    if (
+      stopped === 'handled' ||
+      !isLocatedCodexPaneCurrent(useAppStore.getState(), located, ptyId)
+    ) {
+      return
+    }
   }
   const paneOwner = restartPaneOwner(currentState, worktreeId, tab.id, leafId)
   if (paneOwner === 'missing') {

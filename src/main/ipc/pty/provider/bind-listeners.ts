@@ -18,6 +18,7 @@ import { markPtyEscapeBoundaryUnknown } from '../delivery/pty-escape-boundary'
 import { discardPendingPtyDataAcrossGap } from '../delivery/accept'
 import type { PtyIpcSession } from '../session'
 import { publishPtyEndpointLoss } from '../../../runtime/terminal/pty-endpoint-loss-signal'
+import { codexAccountRestartStops } from '../account-restart/codex-account-restart-stops'
 
 export function bindProviderListeners(session: PtyIpcSession): void {
   localDataUnsub?.()
@@ -96,14 +97,24 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       // Its distro's hook relay may idle out once no bridge terminal remains.
       wslBridgePtyPresence.noteExited(payload.id)
       const syntheticExit = session.consumeSyntheticKillExit(payload.id, payload.incarnationId)
-      // Daemon restart replaces processes while their panes survive.
-      const settleRestartStop = payload.replacedByRestart
-        ? session.runtime?.intentionalPtyStops?.mark(
-            payload.id,
-            'replaced',
-            payload.incarnationId ?? null
-          )
-        : undefined
+      // Classify before any consumer: an account-restart stop delivers one logical exit per incarnation.
+      const accountRestartExit = codexAccountRestartStops.classifyExit(
+        payload.id,
+        payload.incarnationId,
+        payload.hostLost ? 'host-loss' : 'stream'
+      )
+      if (accountRestartExit === 'duplicate') {
+        return
+      }
+      // Daemon restart replaces processes while their panes survive; so does an account-restart stop.
+      const settleRestartStop =
+        payload.replacedByRestart || accountRestartExit === 'restart'
+          ? session.runtime?.intentionalPtyStops?.mark(
+              payload.id,
+              'replaced',
+              payload.incarnationId ?? null
+            )
+          : undefined
       try {
         if (!payload.runtimeFed) {
           const viewShown = ORCA_LAYOUT_OWNER_IS_MAIN && visibleRendererPtys.has(payload.id)
@@ -116,7 +127,9 @@ export function bindProviderListeners(session: PtyIpcSession): void {
             providerExitObserved: true,
             ...(viewShown ? { viewShown } : {}),
             ...(payload.cause ? { cause: payload.cause } : {}),
-            ...(payload.hostLost ? { hostLost: true } : {})
+            ...(payload.hostLost ? { hostLost: true } : {}),
+            // The pane's normal resume brings this conversation back, so an active Dispatch waits for it.
+            ...(accountRestartExit === 'restart' ? { paneRespawning: true } : {})
           })
         }
         // Control replies may overtake stream data; physical exit must still retire late output.

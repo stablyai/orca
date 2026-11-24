@@ -26,6 +26,10 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     resetInputModes: () => {},
     kill: () => Promise.resolve(),
     killFenced: () => Promise.resolve({ outcome: 'refused', reason: 'unsupported' }),
+    // Web clients own no local daemon PTYs; the pane keeps its replacement restart.
+    stopCodexForAccountRestart: (request) =>
+      Promise.resolve({ outcome: 'not-started', reason: 'unsupported', opIds: [request.opId] }),
+    withdrawCodexAccountRestart: () => Promise.resolve(false),
     ackColdRestore: () => {},
     // Web panes never transit main's hidden-delivery gate, so there is no drop latch.
     ackHiddenOutputRestoreApplied: () => {},

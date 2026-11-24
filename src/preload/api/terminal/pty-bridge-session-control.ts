@@ -7,6 +7,11 @@ import type {
 import type { ResourceViewAdmission } from '../../../shared/diagnostics/resource-view-admission'
 import type { SpawnIntent } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { ipcRenderer } from 'electron'
+import type {
+  CodexAccountRestartStopRequest,
+  CodexAccountRestartStopResult,
+  CodexAccountRestartWithdrawRequest
+} from '../../../shared/agent-accounts/codex/codex-account-restart-stop'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
@@ -187,6 +192,12 @@ export const ptySessionControlApi = {
   },
   killFenced: (request: PtyFencedTerminationRequest): Promise<PtyFencedTerminationOutcome> =>
     ipcRenderer.invoke('pty:killFenced', request),
+  stopCodexForAccountRestart: (
+    request: CodexAccountRestartStopRequest
+  ): Promise<CodexAccountRestartStopResult> =>
+    ipcRenderer.invoke('pty:stopCodexForAccountRestart', request),
+  withdrawCodexAccountRestart: (request: CodexAccountRestartWithdrawRequest): Promise<boolean> =>
+    ipcRenderer.invoke('pty:withdrawCodexAccountRestart', request),
   kill: (id: string, opts?: { keepHistory?: boolean; replaced?: boolean }): Promise<void> =>
     ipcRenderer.invoke('pty:kill', {
       id,

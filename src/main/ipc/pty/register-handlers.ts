@@ -1,3 +1,4 @@
+import { installCodexAccountRestartIpcHandlers } from './account-restart/codex-account-restart-ipc'
 import { createLocalPtyStartupPromises } from './provider/local-startup-promises'
 
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
@@ -302,4 +303,5 @@ export function registerPtyHandlers(
   installPtyClaudeDiffPanelNoticeIpcHandler({ getLocalPtyProviderStartupPromise })
   installPtyNewerDaemonHoldIpcHandlers()
   installPtyKillIpcHandler(killDeps)
+  installCodexAccountRestartIpcHandlers({ ...killDeps, getSettings })
 }

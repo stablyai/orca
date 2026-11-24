@@ -105,6 +105,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     managerRef,
     paneTransportsRef,
     tabId,
+    worktreeId,
     buildAccountRestartStartup,
     handleRestartPane,
     panePtyLayoutBindings
