@@ -1,5 +1,8 @@
 import type { Readable } from 'node:stream'
-import type { ProviderRelayDataEvent } from '../daemon/protocol/daemon-provider-relay-protocol'
+import type {
+  ProviderRelayAttachResult,
+  ProviderRelayDataEvent
+} from '../daemon/protocol/daemon-provider-relay-protocol'
 import { RelayedProviderConsumption } from './relayed-provider-consumption'
 import type { RelayedProviderContinuation } from './relayed-provider-continuation'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
@@ -136,11 +139,11 @@ export class RelayedProviderOutput {
    * reply names is here, or after `timeoutMs` (a stream that dropped reattaches anyway).
    */
   awaitPreamble(
-    initialize: boolean,
-    pendingSeqs: readonly number[],
+    attach: Pick<ProviderRelayAttachResult, 'initializeResultSent' | 'pending'>,
     timeoutMs: number,
     keptSeqs: readonly number[] = []
   ) {
+    const { initializeResultSent: initialize, pending: pendingSeqs } = attach
     const here = (): boolean =>
       (!initialize || this.initializeLine !== null) &&
       pendingSeqs.every((seq) => this.deliveredPending.has(seq)) &&
