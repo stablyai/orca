@@ -171,11 +171,14 @@ export function applyJournalSqlSendAdmission(
     return superseded()
   }
   if (queue) {
+    // Cards this message carries leave the queue with it; its own body already holds their text.
+    const carriedIds = carried.map((row) => row.card.messageId)
     const queuedBytes = Number(
       db
         .prepare(`SELECT COALESCE(SUM(length(CAST(json_extract(payload_json,'$.body') AS BLOB))),0) AS bytes
-      FROM journal_queue_cards WHERE session_id=? AND epoch=? AND state IN ('waiting','returned')`)
-        .get(...scope.prefix)!.bytes
+      FROM journal_queue_cards WHERE session_id=? AND epoch=? AND state IN ('waiting','returned')
+        AND message_id NOT IN (SELECT value FROM json_each(?))`)
+        .get(...scope.prefix, JSON.stringify(carriedIds))!.bytes
     )
     const refusal = queuedMessagePublishedBytesRefusal(
       queuedBytes + publishedQueuedBodyBytes(input.body),
