@@ -1,6 +1,7 @@
-import { createElement, useCallback, useState, type ReactNode } from 'react'
+import { createElement, Profiler, useCallback, useState, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
+import { BotItemsOwnerList } from '../../../src/shared/rpc-contract/bots-items-params'
 import { makeTestBotItem } from '../../../src/shared/bots/bot-item.test-fixture'
 import { createFakeRpcClient } from '../mobile-web-shell/test-support/bridge-host-test-fakes'
 import { MobileBotGroupItems } from './MobileBotGroupItems'
@@ -255,3 +256,106 @@ it('withholds the drawer empty claim until the ask refresh succeeds, and Retry r
   expect(text()).toContain('Example question')
   expect(text()).not.toContain('Nothing needs you.')
 })
+
+it.each([false, true])(
+  'waits for a rejoined member before showing an empty claim (needs you: %s)',
+  async (filter) => {
+    const second = { ...bot, id: 'bot-b', name: 'Example second' }
+    const both = { ...group, members: [...group.members, { botId: 'bot-b', sessionId: 'room-b' }] }
+    let rooms = 0
+    const commits: string[] = []
+    const draw = () =>
+      createElement(
+        Profiler,
+        {
+          id: 'drawer',
+          onRender: () => {
+            if (renderer) {
+              commits.push(text())
+            }
+          }
+        },
+        createElement(MobileBotGroupItems, {
+          ...props(),
+          bots: [bot, second],
+          reads: { ...reads(), rooms }
+        })
+      )
+    const resolveMember = (id: string, chats: unknown[] = []) => {
+      const matching = (method: string) =>
+        client.requests.findLast(
+          (entry) =>
+            entry.method === method &&
+            BotItemsOwnerList.pick({ botId: true }).safeParse(entry.args[1]).data?.botId === id
+        )!
+      matching('bots.items.owner.list').resolve(
+        response({ items: [planned], counts: {}, seenEventId: 'e10' })
+      )
+      matching('bots.chatTree').resolve(response(tree(chats)))
+    }
+    await act(async () => {
+      renderer = create(draw())
+    })
+    await act(async () => {
+      request('bots.groups.list').resolve(response({ groups: [both] }))
+    })
+    await flush()
+    await act(async () => {
+      resolveMember('bot-a')
+      resolveMember('bot-b')
+    })
+    await flush()
+    expect(text()).toContain('Nothing needs you')
+    if (filter) {
+      act(() => renderer.root.findByProps({ accessibilityLabel: 'Filter items' }).props.onPress())
+      act(() =>
+        renderer.root
+          .findByProps({ accessibilityLabel: 'Needs you only' })
+          .props.onValueChange(true)
+      )
+      act(() => renderer.root.findByProps({ label: 'Done' }).props.onPress())
+    }
+    rooms = 1
+    await act(async () => {
+      renderer.update(draw())
+    })
+    await act(async () => {
+      request('bots.groups.list').resolve(
+        response({ groups: [{ ...both, members: [both.members[1]] }] })
+      )
+    })
+    expect(text()).toContain('Nothing needs you')
+    rooms = 2
+    await act(async () => {
+      renderer.update(draw())
+    })
+    commits.length = 0
+    await act(async () => {
+      request('bots.groups.list').resolve(response({ groups: [both] }))
+    })
+    expect(commits.length).toBeGreaterThan(0)
+    expect(commits[0]).not.toContain('Nothing needs you')
+    expect(text()).not.toContain('Nothing needs you')
+    await act(async () => {
+      resolveMember('bot-a', [
+        {
+          chatId: 'example-chat',
+          title: 'Example question',
+          origin: 'side',
+          live: 'needs-you',
+          lastActiveAt: 1,
+          unread: false,
+          closed: false,
+          running: [],
+          runningTotal: 0,
+          finished: [],
+          finishedTotal: 0,
+          failedTotal: 0
+        }
+      ])
+    })
+    await flush()
+    expect(text()).toContain('Example question')
+    expect(text()).not.toContain('Nothing needs you')
+  }
+)

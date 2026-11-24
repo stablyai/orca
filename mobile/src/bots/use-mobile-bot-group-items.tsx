@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject
+} from 'react'
 import {
   botItemStaleDays,
   botItemsClosedInTimeOrder,
@@ -68,13 +76,15 @@ function MemberItemsReader({
   showing,
   reads,
   askReads,
-  report
+  report,
+  forget
 }: {
   client: RpcClient | null
   botId: string
   showing: boolean
   reads: number
   askReads: number
+  forget: (botId: string) => void
   report: (
     botId: string,
     items: PhoneBotItems,
@@ -82,6 +92,7 @@ function MemberItemsReader({
     tree: PhoneBotChatTree
   ) => void
 }) {
+  useLayoutEffect(() => () => forget(botId), [botId, forget])
   const items = usePhoneBotItems({ client, botId, chatIds: null, showing, reads })
   const tree = usePhoneBotChatTree({ client, botId, showing, reads: askReads })
   const workers = useMemberWorkers(client, botId, showing, askReads)
@@ -166,6 +177,11 @@ export function useMobileBotGroupItems({
   const memberAsks = useRef(new Map<string, readonly PhoneAsk[]>())
   const memberTrees = useRef(new Map<string, PhoneBotChatTree>())
   const [version, setVersion] = useState(0)
+  const forget = useRef((botId: string) => {
+    memberReads.current.delete(botId)
+    memberAsks.current.delete(botId)
+    memberTrees.current.delete(botId)
+  }).current
   const report = useRef(
     (botId: string, items: PhoneBotItems, asks: readonly PhoneAsk[], tree: PhoneBotChatTree) => {
       const last = memberReads.current.get(botId)
@@ -285,6 +301,7 @@ export function useMobileBotGroupItems({
       reads={memberItemReads(reads, bot.id)}
       askReads={memberAskReads(reads, bot.id)}
       report={report}
+      forget={forget}
     />
   ))
   return {
