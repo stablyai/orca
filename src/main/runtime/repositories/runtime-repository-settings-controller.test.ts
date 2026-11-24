@@ -3,12 +3,20 @@ import type { Repo } from '../../../shared/repository/repo-types'
 import { RuntimeRepositorySettingsController } from './runtime-repository-settings-controller'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 
-const repo = { id: 'repo-1', path: '/srv/repo', worktreeBaseRef: 'origin/dev' } as Repo
+const repo: Repo = {
+  id: 'repo-1',
+  path: '/srv/repo',
+  worktreeBaseRef: 'origin/dev',
+  displayName: 'repo',
+  badgeColor: '#000',
+  addedAt: 0
+}
 
 function makeController() {
   const updateRepo = vi.fn().mockReturnValue({ ...repo, worktreeBaseRef: undefined })
   const controller = new RuntimeRepositorySettingsController({
-    getStore: () => ({ updateRepo }) as unknown as RuntimeStore,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this settings fixture only persists updates through updateRepo.
+    getStore: () => ({ updateRepo }) as RuntimeStore,
     resolveRepo: async () => repo,
     forgetTerminalTopology: vi.fn(),
     invalidateResolvedWorktrees: vi.fn(),

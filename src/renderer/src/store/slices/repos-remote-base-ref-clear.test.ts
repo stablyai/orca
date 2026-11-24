@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { createTestStore } from '../testing/app-store-test-fixture'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
@@ -17,7 +18,7 @@ const pinnedRepo: Repo = { ...serverRepo, worktreeBaseRef: 'origin/dev' }
 function makeStore() {
   const store = createTestStore()
   store.setState({
-    settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+    settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
     repos: [pinnedRepo]
   })
   return store
