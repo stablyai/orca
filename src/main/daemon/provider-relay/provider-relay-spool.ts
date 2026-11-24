@@ -20,6 +20,8 @@ type SpoolOptions = {
   onFileLost?: () => void
   /** Unacked output reached half the memory cap: a client acking in batches should ack now. */
   onAckWanted?: (throughSeq: number) => void
+  /** A release left nothing held, which can happen without an ack (a kept span let go at the cap). */
+  onDrained?: () => void
   memoryCapBytes?: number
   fileCapBytes?: number
 }
@@ -154,6 +156,9 @@ export class ProviderRelaySpool {
     }
     this.acked = seq
     this.memory.releaseThrough(seq)
+    if (this.drained) {
+      this.options.onDrained?.()
+    }
     this.file.index.ackThrough(this.acked)
     if (this.file.index.lastSeq > 0 && this.acked >= this.file.index.lastSeq) {
       this.file.remove()
@@ -175,13 +180,13 @@ export class ProviderRelaySpool {
     // File work is waited for only when the file holds records this replay reads, so obsolete work
     // (a compaction of a retired file) can't hold a reattach that has nothing to read from it.
     if (this.file.index.lastSeq > Math.max(fromSeq, this.acked)) {
-      await this.file.io
+      await this.file.settledOrRemoved()
     }
     let after = Math.max(fromSeq, this.acked)
     // The highest seq the file should hold whole; a write that failed partway was taken out of it.
     const fileLast = this.file.index.lastSeq
     const file: Awaited<ReturnType<typeof replaySpoolFileRecords>> =
-      fileLast > 0
+      fileLast > after
         ? await replaySpoolFileRecords({
             path: this.options.path,
             after,

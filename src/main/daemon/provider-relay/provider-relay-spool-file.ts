@@ -41,6 +41,8 @@ export class SpoolFile {
   private removalQueued = false
   /** A new file starts empty even if its predecessor's unlink failed and left a torn row behind. */
   private truncateOnOpen = true
+  /** Attaches waiting on file work; a removal frees them, since a retired file has nothing to read. */
+  private readonly removalWaiters = new Set<() => void>()
   private disposed = false
 
   constructor(
@@ -177,6 +179,10 @@ export class SpoolFile {
     this.index.clear()
     this.writtenBytes = 0
     this.truncateOnOpen = true
+    for (const resolve of this.removalWaiters) {
+      resolve()
+    }
+    this.removalWaiters.clear()
     if (this.removalQueued) {
       return
     }
@@ -188,6 +194,16 @@ export class SpoolFile {
         await unlink(this.path).catch(() => {})
       })
       .catch(() => {})
+  }
+
+  /** Resolves once queued file work is done, or once the file is removed, whichever comes first. */
+  settledOrRemoved(): Promise<void> {
+    let removed!: () => void
+    const wait = new Promise<void>((resolve) => {
+      removed = resolve
+      this.removalWaiters.add(resolve)
+    })
+    return Promise.race([this.io, wait]).finally(() => this.removalWaiters.delete(removed))
   }
 
   dispose(): Promise<void> {

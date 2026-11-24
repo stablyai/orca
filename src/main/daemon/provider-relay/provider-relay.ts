@@ -64,7 +64,9 @@ export class ProviderRelay {
       },
       drained: () => this.attachment?.drained() ?? Promise.resolve(),
       onFileLost: () => this.fail('spool-unreadable'),
-      onAckWanted: (seq) => this.attachment?.askForAck(seq)
+      onAckWanted: (seq) => this.attachment?.askForAck(seq),
+      // Deferred, so the host's cleanup never runs inside a spool method.
+      onDrained: () => queueMicrotask(() => options.onSettled())
     })
     this.lines = new ProviderRelayLineReader({
       spillPath: `${options.spoolPath}.line`,
