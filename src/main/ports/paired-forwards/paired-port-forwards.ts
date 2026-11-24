@@ -5,7 +5,7 @@ import { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forwar
 import { assertIpv6LoopbackPortFree } from '../../ssh/port-forwarding/local-forward-ipv6-loopback-probe'
 import { assertPortNotShadowingListener } from '../../runtime/rpc/transports/websocket/shadowed-port-probe'
 import { serializePortForwardChange } from '../../ipc/ssh/ssh-managed-port-forward-restore'
-import { PairedPortForwardProvider } from './paired-port-forward-provider'
+import { holdsIpv6Loopback, PairedPortForwardProvider } from './paired-port-forward-provider'
 import { PairedPortForwardTunnel } from './paired-port-forward-tunnel'
 
 // Loopback answers at once on POSIX; Windows retries a refused SYN for seconds, which also means nothing listens.
@@ -152,13 +152,21 @@ export function ensurePairedPortForward(args: {
   })
 }
 
-/** The OS picks a port free on 127.0.0.1; the listener's [::1] half can still collide, so pick again. */
+/** The OS picks a port free on 127.0.0.1 only. Where the forward holds [::1] too, a collision there
+ *  fails the start; where it doesn't (Windows), [::1] is probed. Either way, pick again. */
 async function addOnFreeOsPort(
   add: (localPort: number) => Promise<PortForwardEntry>
 ): Promise<PortForwardEntry> {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await add(0)
+      const entry = await add(0)
+      if (!holdsIpv6Loopback(process.platform)) {
+        await assertIpv6LoopbackPortFree(entry.localPort).catch(async (error: unknown) => {
+          await manager.removeForwardAndWait(entry.id)
+          throw error
+        })
+      }
+      return entry
     } catch (error) {
       if (attempt >= OS_PORT_ATTEMPTS) {
         throw error
