@@ -41,7 +41,6 @@ import {
   recordWorkerLaunchObservation,
   workerLaunchAgent
 } from '../workers/launch/worker-launch-observation'
-
 export async function startFederatedWorker(args: FederatedWorkerStartRequest): Promise<unknown> {
   const { params, runtime, db, task, orchestrationMutation } = args
   const recordStart = prepareWorkerStartCard(runtime, args.callerSession)
@@ -123,8 +122,10 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       : supportsControlMail
         ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
         : 1
-
   const setupDecision = createsWorktree ? (params.setup ?? 'inherit') : 'not_applicable'
+  const chatLineage = db.creatorStartsChatWorkers(
+    resolveDispatchCreator(runtime, params.from, args.callerSession)
+  )
   const runId = args.bindRunId()
   const started = db.createStartingWorkerDispatch({
     creator: resolveDispatchCreator(runtime, params.from, args.callerSession),
@@ -136,6 +137,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     taskParentId: params.parent,
     taskRunId: runId,
     retryOf: params.retryOf,
+    chatLineage,
     startOptions: {
       on: server.environmentId,
       serverName: server.name,
@@ -163,18 +165,15 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       protocolVersion: federationProtocolVersion
     }
   })
-  // A remote retry can replace a failed local attempt whose terminal is still live here.
   releaseRetriedWorkerTerminal(runtime, db, { retryOf: params.retryOf })
   const createdTask = started.task
   const taskForRemote = task ?? createdTask
-  // An unknown outcome may yet be a running worker: a bot records it, with no card.
   const recordStarted = (ready: boolean) => {
     const agent = workerLaunchAgent(launch) ?? workerLaunchAgent(requestedLaunch)
     if (!params.terminal) {
       recordStart(dispatchWorkerStarted(ready, started.dispatch.id, taskForRemote, agent))
     }
   }
-
   db.recordWorkerStage({ dispatchId: started.dispatch.id, stage: 'remote_attach_requested' })
   let readyResult: unknown
   let launch = requestedLaunch
@@ -188,10 +187,8 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           dispatchId: started.dispatch.id,
           taskId: taskForRemote.id,
           taskSpec: taskForRemote.spec,
-          // Carry home dispatch depth so remote workers cannot re-enter as roots when nesting.
           depth: started.dispatch.depth,
           protocolVersion: federationProtocolVersion,
-          // A server creates new-child as top-level plus this parent, so older servers parse it too.
           worktree: createsWorktree ? 'new-top-level' : worktree,
           ...federatedAttachParent(childParent),
           name: params.name,
@@ -211,7 +208,8 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           model: params.model,
           effort: params.effort,
           timeoutMs: budgets.readinessTimeoutMs,
-          devMode: params.devMode
+          devMode: params.devMode,
+          ...(chatLineage ? { chatLineage: true } : {})
         },
         budgets.attachDeadlineMs,
         { orchestrationRequestId: orchestrationMutation.requestId },

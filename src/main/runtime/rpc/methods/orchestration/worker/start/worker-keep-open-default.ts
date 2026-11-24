@@ -49,6 +49,10 @@ export function workerStartedByBot(
     if (!context) {
       return false
     }
+    // A paired host receives this trusted stamp from a bot home; it has no local bot record to consult.
+    if (context.chat_lineage === 1) {
+      return true
+    }
     const session =
       context.creator_orca_session_id ??
       (context.creator_dispatch_id ? null : db.getRun(context.run_id)?.coordinator_orca_session_id)
