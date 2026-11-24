@@ -1122,12 +1122,32 @@ static int reaper_has_only_watcher(const struct watcher *w) {
 }
 #endif
 
+#if defined(__linux__)
+// The subreaper adopts every orphan, so once the CLI group is gone a child list holding only this
+// watcher proves the tree empty without a host-wide read. New children join the list's tail, so a
+// read showing only this watcher can't have skipped a live one.
+static int tree_proven_empty(const struct watcher *w) {
+    struct pollfd anchor = {.fd = w->reaper_fd, .events = POLLIN};
+    if (w->reaper_fd < 0 || w->reaper_start < 0 || poll(&anchor, 1, 0) != 0 ||
+            procfs_in_own_namespace() != 1 || reaper_has_only_watcher(w) != 1) {
+        return 0;
+    }
+    return poll(&anchor, 1, 0) == 0 && procfs_in_own_namespace() == 1;
+}
+#endif
+
 // /proc is read one row at a time, so on Linux two empty scans in a row, and the subreaper having
 // no child but this watcher, prove the tree gone.
 static int sweep_tree(struct watcher *w, int signal_number) {
+#if defined(__linux__)
+    if (group_absent(w) && tree_proven_empty(w)) {
+        return 0;
+    }
+#endif
     int live = sweep_once(w, signal_number);
 #if defined(__linux__)
-    if (live == 0) {
+    // The second read only serves an absence proof, which needs the CLI group gone.
+    if (live == 0 && group_absent(w)) {
         live = sweep_once(w, signal_number);
     }
     // While the CLI group lives its leader is the subreaper's child too; absence isn't claimed then.
@@ -1188,14 +1208,25 @@ static int tree_absent(struct watcher *w, int signal_number) {
     if (now_ns < w->next_sweep_ns && !first_gone) {
         return 0;
     }
+    // An expired phase is left to its escalation, whose own sweep signals and decides.
+    if (w->phase != WATCH_REAP && now_ns >= w->deadline_ns) {
+        return 0;
+    }
     w->swept_group_gone = group_gone;
     long long tick = (long long)TREE_SWEEP_INTERVAL_MS * 1000000LL;
     long long last_chance = w->deadline_ns - tick;
     // Known members are rechecked every interval; the whole table is read again only on its own
     // backoff, once none of them is left, or in the last interval before the phase deadline.
     int probed = w->known.count > 0;
+#if defined(__linux__)
+    // Probes trust /proc rows too, so an unproven namespace leaves the decision to a full sweep.
+    int unproven = probed && procfs_in_own_namespace() != 1;
+    probed = probed && !unproven;
+#else
+    int unproven = 0;
+#endif
     int live = probed ? probe_known_members(w, signal_number) : 0;
-    int full = (probed && live == 0) || first_gone || now_ns >= w->next_full_ns ||
+    int full = unproven || (probed && live == 0) || first_gone || now_ns >= w->next_full_ns ||
                now_ns >= last_chance;
     if (full) {
         live = sweep_tree(w, signal_number);
