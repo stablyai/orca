@@ -6,8 +6,26 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { startBotSession } from '../bot-chat-session'
 import { openEmptyBotChat, runtimeBotChatTreeHost } from '../bot-chat-tree-host'
 import { botShareAsker, emptyChatReusableBy } from './bot-share-chats'
+import { openBotShareNewChat } from './bot-share-new-chats'
 
 export async function startBotShareSession(
+  runtime: OrcaRuntimeService,
+  bot: Bot,
+  scope: BotShareCallerScope,
+  /** Their device's id for this new chat: one chat per id, whether it comes live or held. */
+  newChatId?: string
+): Promise<string> {
+  if (!newChatId) {
+    return await startNewBotShareSession(runtime, bot, scope)
+  }
+  return await openBotShareNewChat(
+    runtime.getOrchestrationDb(),
+    { botId: bot.id, accountId: scope.accountId, newChatId },
+    () => startNewBotShareSession(runtime, bot, scope)
+  )
+}
+
+async function startNewBotShareSession(
   runtime: OrcaRuntimeService,
   bot: Bot,
   scope: BotShareCallerScope

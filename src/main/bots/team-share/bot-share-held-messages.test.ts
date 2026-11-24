@@ -104,8 +104,7 @@ function deps(): BotShareHeldMessageDeps {
           return {}
       }
     },
-    fence: () => 1,
-    newChat: (key, start) => openBotShareNewChat(db, key, start)
+    fence: () => 1
   }
 }
 
@@ -149,18 +148,16 @@ async function delivery(
 const sends = () => calls.filter((call) => call.method === 'agentSession.send')
 
 describe('a held message on the host', () => {
-  it('opens one new chat per new-chat id and sends each message there as the signing device', async () => {
+  it('starts its new chat by its new-chat id and sends there as the signing device', async () => {
     expect(await deliverBotShareHeldMessage(deps(), await delivery(message()))).toEqual({
       outcome: 'accepted'
     })
-    const next = message({ clientMessageId: 'msg-2', text: 'and the tests' })
-    expect(await deliverBotShareHeldMessage(deps(), await delivery(next))).toEqual({
-      outcome: 'accepted'
+    expect(calls.find((call) => call.method === 'bots.session.start')?.params).toEqual({
+      botId: 'bot-1',
+      newChatId: 'new-1'
     })
-    expect(calls.filter((call) => call.method === 'bots.session.start')).toHaveLength(1)
     expect(sends().map((call) => call.params.envelope)).toEqual([
-      expect.objectContaining({ sessionId: 'chat-1', clientOperationId: 'msg-1' }),
-      expect.objectContaining({ sessionId: 'chat-1', clientOperationId: 'msg-2' })
+      expect.objectContaining({ sessionId: 'chat-1', clientOperationId: 'msg-1' })
     ])
     // Every call runs as Alice's own share device row, never as anyone the payload names.
     expect(new Set(calls.map((call) => call.deviceId))).toEqual(new Set([aliceDevice.deviceId]))
@@ -268,7 +265,7 @@ describe('the new-chat ledger', () => {
   it('starts a chat for an id it has no record of, as on a database from before it kept any', async () => {
     let started = 0
     const start = async () => `chat-${++started}`
-    const key = { shareId: 'share-alice', newChatId: 'new-1' }
+    const key = { botId: 'bot-1', accountId: 'acct-alice', newChatId: 'new-1' }
     expect(await openBotShareNewChat(db, key, start)).toBe('chat-1')
     // Kept across a restart: the same database file, opened again.
     db.close()
@@ -278,7 +275,7 @@ describe('the new-chat ledger', () => {
   })
 
   it('starts again after a start that failed, leaving no record', async () => {
-    const key = { shareId: 'share-alice', newChatId: 'new-1' }
+    const key = { botId: 'bot-1', accountId: 'acct-alice', newChatId: 'new-1' }
     await expect(
       openBotShareNewChat(db, key, async () => {
         throw new Error('bot_not_found')

@@ -288,7 +288,7 @@ export const BOT_METHODS = [
       }
       const share = botShareScopeOf(context)
       if (share) {
-        return { sessionId: await startBotShareSession(runtime, bot, share) }
+        return { sessionId: await startBotShareSession(runtime, bot, share, params.newChatId) }
       }
       const onAgent = botOnAgent(bot, params.agent)
       // Like a blank page: an empty chat already open is the new chat, not one more.

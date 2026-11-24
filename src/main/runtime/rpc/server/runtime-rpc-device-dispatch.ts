@@ -24,7 +24,6 @@ import type {
   ConnectorDeliveryResult
 } from '../../../../shared/connectors/connector-cloud-contract'
 import { deliverBotShareHeldMessage } from '../../../bots/team-share/bot-share-held-messages'
-import { openBotShareNewChat } from '../../../bots/team-share/bot-share-new-chats'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
@@ -224,8 +223,7 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
         call: (device, method, params) => this.callAsBotShareDevice(device, method, params),
         fence: (sessionId) =>
           getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)?.currentFence ??
-          null,
-        newChat: (key, start) => openBotShareNewChat(this.runtime.getOrchestrationDb(), key, start)
+          null
       },
       delivery
     )

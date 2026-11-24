@@ -39,11 +39,6 @@ export type BotShareHeldMessageDeps = {
   call: (device: BotShareDevice, method: string, params: unknown) => Promise<unknown>
   /** The chat's current runtime fence, as a client reads it before sending; null without a record. */
   fence: (sessionId: string) => number | null
-  /** The chat a held new-chat id opened, else `start`'s, recorded so a later message names the same. */
-  newChat: (
-    key: { shareId: string; newChatId: string },
-    start: () => Promise<string>
-  ) => Promise<string>
 }
 
 // The replies this reads, as the handlers answer them.
@@ -96,11 +91,14 @@ export async function deliverBotShareHeldMessage(
   const sessionId =
     'sessionId' in message.chat
       ? message.chat.sessionId
-      : await deps.newChat(
-          { shareId: share.shareId, newChatId: message.chat.newChatId },
-          async () =>
-            (await call('bots.session.start', { botId: device.botId }, SessionReply)).sessionId
-        )
+      : // The same start a live New chat makes, so either one opens the chat the other finds.
+        (
+          await call(
+            'bots.session.start',
+            { botId: device.botId, newChatId: message.chat.newChatId },
+            SessionReply
+          )
+        ).sessionId
   // Before any send: a redelivery, or the relay send it raced, already wrote it.
   const written = await call(
     'agentSession.item',
