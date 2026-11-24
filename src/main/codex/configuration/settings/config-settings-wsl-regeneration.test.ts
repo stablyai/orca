@@ -15,6 +15,7 @@ import type * as NodeFs from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
+import { parse as parseToml } from 'smol-toml'
 import type * as WslPaths from '../../../../shared/file-access/wsl-paths'
 
 const { homedirMock, wslTestState } = vi.hoisted(() => {
@@ -216,6 +217,27 @@ describe('managed Codex config for a WSL distro config', () => {
     syncSystemConfigIntoManagedCodexHome()
 
     expect(readRuntimeConfig()).not.toContain('stale@market')
+  })
+
+  it.each([
+    'model = "gpt-5"\n\n[plugins]\n"local@market" = { enabled = false }\n',
+    'model = "gpt-5"\nplugins = { "local@market" = { enabled = false } }\n'
+  ])('keeps the managed copy valid when the distro adds a held plugin inline: %j', (inline) => {
+    writeSystemConfig('model = "gpt-5"\n')
+    wslTestState.wslPath = systemConfigPath()
+    syncSystemConfigIntoManagedCodexHome()
+    writeFileSync(
+      runtimeConfigPath(),
+      `${readRuntimeConfig()}\n[plugins."local@market"]\nenabled = true\n`,
+      'utf-8'
+    )
+    writeSystemConfig(inline)
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(parseToml(readRuntimeConfig())).toMatchObject({
+      plugins: { 'local@market': { enabled: false } }
+    })
   })
 
   it('leaves an unchanged managed copy untouched on regeneration', () => {

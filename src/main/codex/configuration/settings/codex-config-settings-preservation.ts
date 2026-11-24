@@ -1,3 +1,4 @@
+import { parse } from 'smol-toml'
 import { removePromotedSettingsFromContent } from './codex-config-settings-removal'
 import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
 import {
@@ -26,14 +27,31 @@ export function preservePendingRuntimeEdits(
   }
   if (plan.heldRegistrationBaseline) {
     // A source Orca never writes keeps runtime plugin edits in the managed copy instead.
+    const promotions = planCodexRegistrationPromotion(
+      configs.runtimeConfig,
+      configs.systemConfig,
+      plan.heldRegistrationBaseline
+    )
     result = applyCodexRegistrationPromotions(
       result,
-      planCodexRegistrationPromotion(
-        configs.runtimeConfig,
-        configs.systemConfig,
-        plan.heldRegistrationBaseline
+      promotions.filter(
+        (promotion) =>
+          promotion.kind !== 'append' ||
+          !sourceDefinesRegistration(configs.systemConfig, promotion.key)
       )
     )
   }
   return { content: result, keys }
+}
+
+// Inline and dotted-key spellings escape the table-header scan; appending would define the table twice.
+function sourceDefinesRegistration(systemConfig: string, key: string): boolean {
+  const [root, ...name] = key.split(':')
+  try {
+    const table = parse(systemConfig)[root!]
+    return typeof table === 'object' && table !== null && Object.hasOwn(table, name.join(':'))
+  } catch {
+    // An unparseable source cannot rule out a duplicate definition.
+    return true
+  }
 }
