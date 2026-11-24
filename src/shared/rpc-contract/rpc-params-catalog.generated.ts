@@ -138,7 +138,12 @@ import {
   AutomationRuns,
   AutomationUpdate
 } from './automations/automation-params'
-import { BotAvatarRead, BotAvatarUpload } from './bot-avatar-params'
+import {
+  BotAvatarRead,
+  BotAvatarUpload,
+  BotSlackIconUpload,
+  BotSlackIconWanted
+} from './bot-avatar-params'
 import {
   ComposioApp,
   ComposioApps,
@@ -1243,6 +1248,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.activity': BotActivityRead,
   'bots.agentChoices': null,
   'bots.avatar.read': BotAvatarRead,
+  'bots.avatar.slackIcon.upload': BotSlackIconUpload,
+  'bots.avatar.slackIcon.wanted': BotSlackIconWanted,
   'bots.avatar.upload': BotAvatarUpload,
   'bots.chat.open': BotChat,
   'bots.chat.reset': BotChatReset,
