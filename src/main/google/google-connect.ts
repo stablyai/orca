@@ -3,6 +3,7 @@
 import { googleClientView, type GoogleClientView } from '../../shared/google/google-client-config'
 import { googleClientFile, parseGoogleClientFile } from './google-client-file'
 import {
+  GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY,
   GOOGLE_CONNECT_RUNTIME_CAPABILITY,
   GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
   GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY,
@@ -326,7 +327,8 @@ export function googleRuntimeCapabilities(): string[] {
         GOOGLE_CONNECT_RUNTIME_CAPABILITY,
         GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
         GOOGLE_CONNECTED_ANSWER_RUNTIME_CAPABILITY,
-        GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY
+        GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY,
+        GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY
       ]
     : []
 }
