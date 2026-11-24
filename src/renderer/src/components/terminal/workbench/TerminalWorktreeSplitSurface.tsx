@@ -13,6 +13,7 @@ import {
 import TabGroupSplitLayout from '../../tab-group/TabGroupSplitLayout'
 import { useAppStore } from '../../../store/index'
 import { layoutHoldsOnlyOverlayViews } from './released-layout-eligibility'
+import { useIsQuickCommandEditorOpen } from '../../tab-bar/quick-commands/quick-command-editor-presence'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
 import type { TerminalPrewarmStage } from '../worktree-prewarm/terminal-worktree-prewarm'
 
@@ -59,9 +60,15 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   )
   const releaseGateOpen =
     shouldColdParkTerminalPanes && !isForceParked && browserPageIds.length === 0
+  // Closing the dialog must re-check release; the eligibility read itself is outside React.
+  const quickCommandEditorOpen = useIsQuickCommandEditorOpen(worktreeId)
   const surfaceReleased = useMemo(
-    () => releaseGateOpen && tabCount > 0 && layoutHoldsOnlyOverlayViews(worktreeId, groups ?? []),
-    [releaseGateOpen, tabCount, groups, worktreeId]
+    () =>
+      releaseGateOpen &&
+      !quickCommandEditorOpen &&
+      tabCount > 0 &&
+      layoutHoldsOnlyOverlayViews(worktreeId, groups ?? []),
+    [releaseGateOpen, quickCommandEditorOpen, tabCount, groups, worktreeId]
   )
   const shouldKeepPaintable = shouldKeepHiddenWorktreeSurfacePaintable({
     // A mount-stage prewarm stays display:none so its style/layout cost lands in a later task.
