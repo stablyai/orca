@@ -294,6 +294,7 @@ export async function startGitCommonPolling(
     if (disposed || revealPending || !visibility.isWindowVisible()) {
       return false
     }
+    onDemand.noteRequest()
     // A running scan (possibly stalled on a hung mount) re-arms the retry only when it ends.
     if (ticking) {
       pokeAfterScan = true
@@ -303,10 +304,10 @@ export async function startGitCommonPolling(
       onDemand.retryWhenOpen(poke)
       return false
     }
-    // A full sweep due within the throttle window covers this activity; a check now would only precede it.
+    // A full sweep due within 30 s of the first unserved activity covers it; a check now would only precede it.
     const fullSweepDueSoon =
       timer !== null &&
-      onDemand.withinThrottle(timerDueAt) &&
+      onDemand.coversRequest(timerDueAt) &&
       ((isReconciliation && !entryDirGateTrusted) ||
         (tickCount + 1) % (reconciliationFullScanEveryTicks ?? INDEX_BACKSTOP_TICKS) === 0)
     if (fullSweepDueSoon) {

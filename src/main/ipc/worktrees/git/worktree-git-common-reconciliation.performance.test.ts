@@ -393,3 +393,16 @@ it('keeps the 30 s network-volume cadence at its old cost under constant activit
   // Activity every 100 ms must merge into the timed scans, never add one.
   expect(await networkCadenceStats(true)).toBeLessThanOrEqual(timedOnly)
 })
+
+it('reports activity within 30 s even when a full sweep follows soon after the retry', async () => {
+  const { unsubscribe: stop } = await startReconciliation()
+  await vi.advanceTimersByTimeAsync(240_000)
+  activity?.('repo')
+  await vi.advanceTimersByTimeAsync(1_000)
+  const added = addWorktreeEntry('before-sweep')
+  activity?.('repo')
+  // The retry opens at 270 s; the timed sweep at 300 s would be 59 s after the activity.
+  await vi.advanceTimersByTimeAsync(30_000)
+  expect(events).toContainEqual({ type: 'create', path: added })
+  await stop()
+})

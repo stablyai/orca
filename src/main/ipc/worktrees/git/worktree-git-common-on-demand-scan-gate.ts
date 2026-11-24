@@ -4,7 +4,10 @@ import type { WorktreePollerWindowVisibility } from '../creation/worktree-base-d
 export type OnDemandScanGate = {
   scanStarted: (timedOrForced: boolean) => void
   scannedRecently: () => boolean
-  withinThrottle: (time: number) => boolean
+  /** Remembers the first activity no scan has served yet. */
+  noteRequest: () => void
+  /** A sweep due by then still lands within the throttle window of that first activity. */
+  coversRequest: (sweepDueAt: number) => boolean
   /** The old tick parked when it landed inside a hide and forced a sweep on reveal; mirror exactly that. */
   hideSpannedOldTick: () => boolean
   clearHide: () => void
@@ -22,6 +25,7 @@ export function createOnDemandScanGate(
   let oldCadenceAnchor = lastScanStartedAt
   let hiddenAt: number | null = null
   let retry: ReturnType<typeof setTimeout> | null = null
+  let requestedAt: number | null = null
   const unsubscribeHidden =
     minIntervalMs === undefined
       ? undefined
@@ -36,6 +40,7 @@ export function createOnDemandScanGate(
         retry = null
       }
       hiddenAt = null
+      requestedAt = null
       lastScanStartedAt = performance.now()
       if (timedOrForced) {
         oldCadenceAnchor = lastScanStartedAt
@@ -43,8 +48,12 @@ export function createOnDemandScanGate(
     },
     scannedRecently: () =>
       minIntervalMs !== undefined && performance.now() - lastScanStartedAt < minIntervalMs,
-    withinThrottle: (time) =>
-      minIntervalMs !== undefined && time - performance.now() <= minIntervalMs,
+    noteRequest: () => {
+      requestedAt ??= performance.now()
+    },
+    coversRequest: (sweepDueAt) =>
+      minIntervalMs !== undefined &&
+      sweepDueAt <= (requestedAt ?? performance.now()) + minIntervalMs,
     hideSpannedOldTick: () => {
       if (minIntervalMs === undefined || hiddenAt === null) {
         return false
