@@ -30,8 +30,6 @@ export class SettledDispatchReadCache<T> {
     ReadonlySet<string>,
     { stamp: string; unchanged: boolean }
   >()
-  /** Scopes forgotten by `keepScopes`, so a read begun before cannot bring one back. */
-  private readonly scopeDroppedAt = new Map<string, number>()
   private source: unknown = null
 
   /** `followsInserts`: a new Dispatch can extend a kept read's walk (a follow-up), so inserts are kept
@@ -80,7 +78,7 @@ export class SettledDispatchReadCache<T> {
     if (
       this.clearedAt > started ||
       this.insertedAt > started ||
-      (this.scopeDroppedAt.get(scope) ?? 0) > started ||
+      (this.droppedAt.get(scopeKey(scope)) ?? 0) > started ||
       !this.unchanged(walked, started)
     ) {
       return
@@ -126,8 +124,9 @@ export class SettledDispatchReadCache<T> {
           this.remove(scope, key)
         }
         this.scopes.delete(scope)
+        // A read begun before cannot bring the scope back.
         this.epoch += 1
-        this.scopeDroppedAt.set(scope, this.epoch)
+        this.noteDropped(scopeKey(scope))
       }
     }
   }
@@ -172,7 +171,6 @@ export class SettledDispatchReadCache<T> {
       this.groups.clear()
       this.groupsOf.clear()
       this.droppedAt.clear()
-      this.scopeDroppedAt.clear()
       this.clearedAt = this.epoch
       return
     }
@@ -182,7 +180,11 @@ export class SettledDispatchReadCache<T> {
         this.remove(scope, key)
       }
     }
-    this.droppedAt.set(dispatchId, this.epoch)
+    this.noteDropped(dispatchId)
+  }
+
+  private noteDropped(key: string): void {
+    this.droppedAt.set(key, this.epoch)
     if (this.droppedAt.size > this.max) {
       // Older drops only guard reads that started before them; forgetting them all is as safe as a reset.
       this.droppedAt.clear()
@@ -228,6 +230,11 @@ export class SettledDispatchReadCache<T> {
       }
     }
   }
+}
+
+/** A scope's own drop, kept beside Dispatch ids, which never start with a NUL. */
+function scopeKey(scope: string): string {
+  return `\0${scope}`
 }
 
 function readId(scope: string, key: string): string {

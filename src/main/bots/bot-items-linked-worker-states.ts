@@ -23,14 +23,13 @@ export type LinkedWorkerState = {
 /** Every linked Dispatch of a big profile (thousands) stays kept. */
 const KEPT_WORKERS_MAX = 16_384
 const KEPT_SCOPE = 'items'
-/** A longer report is read again with each pass, so thousands of kept workers never pin their reports. */
-const KEPT_REPORT_MAX_CHARS = 2_000
+/** Kept reports, one per lineage's Task, stay under this many characters in all (about 1 MB); the rest are
+ *  read again with each pass, so thousands of kept workers never pin thousands of reports. */
+const KEPT_REPORTS_MAX_CHARS = 500_000
 
 /** A settled worker's read, kept until a Dispatch its walk read is written. */
 type KeptWorker = {
   worker: BotWorkWorker
-  /** Undefined: too long to keep, read again from its Task. */
-  report: LinkedWorkerState['report'] | undefined
   reason: string | null
   /** The dock's revision `reason` was read at; null: read again. */
   dockRevision: number | null
@@ -40,6 +39,11 @@ type KeptWorker = {
 
 export class LinkedWorkerStates {
   private readonly kept = new SettledDispatchReadCache<KeptWorker>(KEPT_WORKERS_MAX, true)
+  /** Kept workers' reports by Task, oldest first; a Task write drops every read that shows it. */
+  private readonly reports = new Map<string, LinkedWorkerState['report']>()
+  private reportChars = 0
+  /** The database's count of commits by other connections, which no row notice reports. */
+  private dataVersion: number | null = null
 
   constructor(private readonly workRuntime: BotWorkRuntime) {}
 
@@ -72,24 +76,37 @@ export class LinkedWorkerStates {
       this.kept.drop(null)
       throw error
     }
+    // Another connection's write (a WSL move rewrites worktrees on its own) fires no notice here.
+    const version = dataVersion(db)
+    if (version === null || version !== this.dataVersion) {
+      this.kept.drop(null)
+      this.dataVersion = version
+    }
     const started = this.kept.begin(db)
-    // Only a kept read, or a local worker to keep, needs this machine's agent statuses.
-    let evidence: ReturnType<typeof workerStatusEvidence> | null = null
-    const evidenceOf: ReturnType<typeof workerStatusEvidence> = (worker) =>
-      (evidence ??= workerStatusEvidence(this.workRuntime.getAgentStatusSnapshotFn?.() ?? []))(
-        worker
-      )
+    const candidates = unique.map((ref) => [ref, this.kept.get(KEPT_SCOPE, ref)] as const)
+    // One status snapshot for the whole read, taken before it so a kept read's evidence is what it saw;
+    // none when nothing is read and no kept worker has a pane to check.
+    const statusRows = candidates.some(
+      ([, kept]) => !kept || kept.session.paneKey || kept.session.address
+    )
+      ? (this.workRuntime.getAgentStatusSnapshotFn?.() ?? [])
+      : []
+    const evidenceOf = workerStatusEvidence(statusRows)
     const hits = new Map<string, KeptWorker>()
     const missing: string[] = []
-    for (const ref of unique) {
-      const kept = this.kept.get(KEPT_SCOPE, ref)
+    for (const [ref, kept] of candidates) {
       if (kept && evidenceOf(kept.session) === kept.evidence) {
         hits.set(ref, kept)
       } else {
         missing.push(ref)
       }
     }
-    const trace: WorkerReadTrace = { walked: new Map(), latest: new Map(), sessions: new Map() }
+    const trace: WorkerReadTrace = {
+      walked: new Map(),
+      latest: new Map(),
+      sessions: new Map(),
+      statusRows
+    }
     const workers =
       missing.length > 0 ? await readWorkers(this.workRuntime, missing, trace) : new Map()
     // Read together, with no wait between: the reasons are those of this revision.
@@ -106,12 +123,14 @@ export class LinkedWorkerStates {
       kept.dockRevision = revision
     }
     const states = new Map<string, LinkedWorkerState | null>()
-    const longReports = readTaskReports(
+    const unkept = readTaskReports(
       db,
-      [...hits.values()].flatMap((kept) => (kept.report === undefined ? [kept.worker.taskId] : []))
+      [...hits.values()].flatMap((kept) =>
+        this.reports.has(kept.worker.taskId) ? [] : [kept.worker.taskId]
+      )
     )
     for (const [ref, kept] of hits) {
-      const report = kept.report === undefined ? longReports.get(kept.worker.taskId) : kept.report
+      const report = this.reports.get(kept.worker.taskId) ?? unkept.get(kept.worker.taskId)
       states.set(ref, { worker: kept.worker, report: report ?? null, reason: kept.reason })
     }
     // Undefined: the Task couldn't be read, so the read shows no report and isn't kept.
@@ -127,6 +146,9 @@ export class LinkedWorkerStates {
       // A server worker shows no report, even when a local retry of its Task has one.
       const read = worker.host === 'local' ? reports.get(worker.taskId) : null
       const report = read ?? null
+      if (read === undefined) {
+        this.forgetReport(worker.taskId)
+      }
       const reason = reasons.get(worker.dispatchId) ?? null
       states.set(ref, { worker, report, reason })
       const session = trace.sessions.get(worker.dispatchId)
@@ -142,9 +164,9 @@ export class LinkedWorkerStates {
         latest.status !== 'dispatched' &&
         SETTLED_WORKER_STATES.has(worker.state)
       ) {
+        this.keepReport(worker.taskId, report)
         const value: KeptWorker = {
           worker,
-          report: reportLength(report) <= KEPT_REPORT_MAX_CHARS ? report : undefined,
           reason,
           dockRevision: revision,
           session: { paneKey: session.paneKey, address: session.address },
@@ -168,6 +190,31 @@ export class LinkedWorkerStates {
       }
     }
     return states
+  }
+
+  /** Keeps one copy of a Task's report within the budget, dropping the oldest kept ones first. */
+  private keepReport(taskId: string, report: LinkedWorkerState['report']): void {
+    this.forgetReport(taskId)
+    const size = reportLength(report)
+    if (size > KEPT_REPORTS_MAX_CHARS) {
+      return
+    }
+    for (const oldest of this.reports.keys()) {
+      if (this.reportChars + size <= KEPT_REPORTS_MAX_CHARS) {
+        break
+      }
+      this.forgetReport(oldest)
+    }
+    // A copy: a kept substring would otherwise pin the whole Task result it was cut from.
+    this.reports.set(taskId, structuredClone(report))
+    this.reportChars += size
+  }
+
+  private forgetReport(taskId: string): void {
+    if (this.reports.has(taskId)) {
+      this.reportChars -= reportLength(this.reports.get(taskId) ?? null)
+      this.reports.delete(taskId)
+    }
   }
 
   /** The report the worker ended with, as its Task recorded it (what worker cards show). */
@@ -237,6 +284,16 @@ function readTaskReports(
     )
   } catch {
     return new Map()
+  }
+}
+
+/** SQLite's count of commits other connections made to this database; null when unreadable. */
+function dataVersion(db: OrchestrationDb): number | null {
+  try {
+    const row = db.db.prepare('PRAGMA data_version').get()
+    return typeof row?.data_version === 'number' ? row.data_version : null
+  } catch {
+    return null
   }
 }
 

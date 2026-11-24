@@ -69,7 +69,11 @@ export type SessionWorkersRuntime = Pick<
 
 /** For surfaces that only show workers: an open terminal worker whose terminal its host can't find at all reads as
  *  `stopped`, as one that exited without reporting does. Its Dispatch stays open, so a coordinator's read leaves this off. */
-export type DispatchWorkersReadOptions = { lostTerminalsEnded?: boolean }
+export type DispatchWorkersReadOptions = {
+  lostTerminalsEnded?: boolean
+  /** This machine's agent status rows, when the caller already took them for the same read. */
+  statusRows?: ReturnType<NonNullable<SessionWorkersRuntime['getAgentStatusSnapshotFn']>>
+}
 
 /** The workers a chat started, newest first, as its execution host sees them; with `connectorOnly`,
  *  only those a turn its connector conversation woke started. */
@@ -109,7 +113,8 @@ export async function readDispatchWorkers(
       rows.map((row) => row.dispatchId),
       now
     ),
-    now
+    now,
+    options.statusRows ? { evidence: readDispatchFleetEvidence(runtime, options.statusRows) } : {}
   )
   const reads: { read: OrchestrationSessionWorker; candidate: TerminalPresenceCandidate }[] = []
   for (const worker of fleet.workers) {
@@ -174,8 +179,10 @@ export type DispatchFleetEvidence = {
   chatStatusRows: ReturnType<typeof latestLiveAgentStatusRowsByPaneKey>
 }
 
-export function readDispatchFleetEvidence(runtime: SessionWorkersRuntime): DispatchFleetEvidence {
-  const rows = runtime.getAgentStatusSnapshotFn?.() ?? []
+export function readDispatchFleetEvidence(
+  runtime: SessionWorkersRuntime,
+  rows = runtime.getAgentStatusSnapshotFn?.() ?? []
+): DispatchFleetEvidence {
   return {
     statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(undefined, rows),
     chatStatusRows: latestLiveAgentStatusRowsByPaneKey(rows)

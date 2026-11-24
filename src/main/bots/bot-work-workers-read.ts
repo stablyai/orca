@@ -24,6 +24,8 @@ export type WorkerReadTrace = {
   latest: Map<string, DispatchContextRow>
   /** Orchestration's read of each worker, by its newest Dispatch. */
   sessions: Map<string, OrchestrationSessionWorker>
+  /** The agent status rows the caller took for this read, so the read and its evidence agree. */
+  statusRows?: ReturnType<NonNullable<BotWorkRuntime['getAgentStatusSnapshotFn']>>
 }
 
 /** Each Dispatch's worker as its lineage's newest Dispatch, read in one batch; a server-owned one from
@@ -59,7 +61,10 @@ export async function readWorkers(
     })
   )
   const readable = [...new Set([...latestOf.values()].flatMap((latest) => latest?.id ?? []))]
-  const workerReads = await readDispatchWorkers(runtime, readable, { lostTerminalsEnded: true })
+  const workerReads = await readDispatchWorkers(runtime, readable, {
+    lostTerminalsEnded: true,
+    ...(trace?.statusRows ? { statusRows: trace.statusRows } : {})
+  })
   const reads = new Map(workerReads.map((entry) => [entry.dispatchId, entry]))
   for (const read of workerReads) {
     trace?.sessions.set(read.dispatchId, read)
