@@ -24,7 +24,7 @@ describe('desktop link-open mode', () => {
     expect(httpLinkModeFor({ terminalLinkClickBehavior: 'none' })).toBe('open')
   })
 
-  it('opens a reachable localhost link in Orca without asking; other links keep the setting', () => {
+  it('opens a local localhost link in Orca without asking; other links keep the setting', () => {
     const settings = { httpLinkClickBehavior: 'ask', openLinksInApp: false } as const
     const local = { kind: 'local' } as const
     const localhost = 'http://localhost:5173/app'
@@ -43,13 +43,10 @@ describe('desktop link-open mode', () => {
     expect(plainClickDestinationsFor(webDestinations)).toBe(webDestinations)
     expect(httpLinkModeForLink(settings, webDestinations)).toBe('ask')
 
-    // An SSH host's loopback opens directly only when its tab is routed through that host.
+    // Stage 1: an SSH host's loopback keeps its existing rules (under Ask, the chooser), routed or not.
     const ssh = { kind: 'ssh', connectionId: 'c1' } as const
-    const routed = httpLinkActionDestinationsFor(settings, ssh, true, localhost, true)
-    expect(httpLinkModeForLink(settings, routed)).toBe('open')
-    // "This device" browses from here, where the host's localhost is not reachable: keep asking.
-    const thisDevice = httpLinkActionDestinationsFor(settings, ssh, true, localhost, false)
-    expect(httpLinkModeForLink(settings, thisDevice)).toBe('ask')
-    expect(plainClickDestinationsFor(thisDevice)).toBe(thisDevice)
+    const sshDestinations = httpLinkActionDestinationsFor(settings, ssh, true, localhost)
+    expect(httpLinkModeForLink(settings, sshDestinations)).toBe('ask')
+    expect(plainClickDestinationsFor(sshDestinations)).toBe(sshDestinations)
   })
 })

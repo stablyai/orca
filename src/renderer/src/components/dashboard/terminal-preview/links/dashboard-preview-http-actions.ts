@@ -11,10 +11,7 @@ import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { resolveWorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-operation-route'
 import { createBrowserLinkHostMatcher } from '@/lib/browser/navigation/browser-link-owner'
 import { getWorkspaceClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
-import {
-  canOpenRemoteLinkInWorkspaceBrowser,
-  sshLinkRoutesThroughOwnerHost
-} from '@/lib/browser/workspace/workspace-browser-route-eligibility'
+import { canOpenRemoteLinkInWorkspaceBrowser } from '@/lib/browser/workspace/workspace-browser-route-eligibility'
 import {
   buildHttpLinkActions,
   httpLinkActionDestinationsFor,
@@ -107,15 +104,7 @@ export function dashboardPreviewHttpActions(
   )
   // The preview has no middle-click route, so its one order is the plain-click order.
   const destinations = canOpen
-    ? plainClickDestinationsFor(
-        httpLinkActionDestinationsFor(
-          state.settings,
-          owner,
-          true,
-          url,
-          sshLinkRoutesThroughOwnerHost(state, source.worktreeId, owner)
-        )
-      )
+    ? plainClickDestinationsFor(httpLinkActionDestinationsFor(state.settings, owner, true, url))
     : { primary: 'system' as const }
   // Captured when the chooser is built at click; desktop only.
   const actionContext = usesHttpLinkMode()

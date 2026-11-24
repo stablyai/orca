@@ -162,22 +162,3 @@ export function canOpenRemoteLinkInWorkspaceBrowser(
     allowSshDeviceBrowser
   )
 }
-
-/** An SSH link whose browser tab is served through that host (eligible SSH routing), so the
- *  host's own localhost is reachable; the "This device" fallback browses from here and is not. */
-export function sshLinkRoutesThroughOwnerHost(
-  state: AppState,
-  workspaceId: string,
-  owner: HttpLinkSourceOwner
-): boolean {
-  return (
-    owner.kind === 'ssh' &&
-    isExpectedSshBrowserRoute(
-      state,
-      getWorkspaceClientCreationActionPolicy(state, workspaceId)['managed-browser'],
-      resolveWorktreeOperationRoute(state, workspaceId),
-      workspaceId,
-      owner.connectionId
-    )
-  )
-}

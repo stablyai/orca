@@ -32,17 +32,15 @@ type LinkDestinations = {
   plainClick?: { primary: 'orca'; alternate: 'system' }
 }
 
-/** A localhost link whose own host's Orca browser can open it: this machine's, or an SSH host whose
- *  tab is routed through it. A "This device" fallback browses from here, so it is excluded; runtime
- *  owners keep their existing route rules. */
+/** A localhost link from this machine's own process. Stage 1 scope: SSH and runtime localhost links
+ *  keep their existing route rules (under Ask, the chooser); a routed-SSH version is a follow-up. */
 export function isDesktopLocalhostLink(
   url: string | undefined,
-  sourceOwner: { kind: string } | undefined,
-  reachesOwnerHost = false
+  sourceOwner: { kind: string } | undefined
 ): boolean {
   return (
     url !== undefined &&
-    (sourceOwner?.kind === 'local' || (sourceOwner?.kind === 'ssh' && reachesOwnerHost)) &&
+    sourceOwner?.kind === 'local' &&
     usesHttpLinkMode() &&
     isLoopbackHttpUrl(url)
   )

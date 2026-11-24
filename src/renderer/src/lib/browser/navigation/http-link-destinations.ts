@@ -104,9 +104,7 @@ export function httpLinkActionDestinationsFor(
   settings: { openLinksInApp?: boolean } | null | undefined,
   sourceOwner: HttpLinkSourceOwner,
   canOpenOwnedBrowser: boolean,
-  url?: string,
-  /** A remote owner's own host serves the tab (not a "This device" desktop fallback). */
-  reachesOwnerHost = false
+  url?: string
 ): HttpLinkActionDestinations {
   if (!canSourceOwnerOpenInOrca(sourceOwner, canOpenOwnedBrowser)) {
     return { primary: 'system' }
@@ -115,7 +113,7 @@ export function httpLinkActionDestinationsFor(
     settings?.openLinksInApp === true || isRemoteLoopbackHttpLink(url, sourceOwner)
       ? { primary: 'orca', alternate: 'system' }
       : { primary: 'system', alternate: 'orca' }
-  return isDesktopLocalhostLink(url, sourceOwner, reachesOwnerHost)
+  return isDesktopLocalhostLink(url, sourceOwner)
     ? { ...destinations, plainClick: { primary: 'orca', alternate: 'system' } }
     : destinations
 }

@@ -15,10 +15,7 @@ import { useAppStore } from '../../../../store/index'
 import { resolveNativeChatFileLink, type NativeChatResolvedFileLink } from './native-chat-file-link'
 import type { NativeChatFileLinkContext } from './native-chat-file-link-context'
 import { resolveNativeChatHttpLinkSourceOwner } from './native-chat-http-link-source-owner'
-import {
-  canOpenRemoteLinkInWorkspaceBrowser,
-  sshLinkRoutesThroughOwnerHost
-} from '@/lib/browser/workspace/workspace-browser-route-eligibility'
+import { canOpenRemoteLinkInWorkspaceBrowser } from '@/lib/browser/workspace/workspace-browser-route-eligibility'
 import { openNativeChatWebLink } from './native-chat-web-link-actions'
 import { showFileLinkOpenFailureToast } from '@/lib/files/open/file-link-open-failure-toast'
 import type { Translate } from '@/i18n/use-translate'
@@ -35,8 +32,7 @@ export function resolveNativeChatHttpLinkRouting(
       state.settings,
       sourceOwner,
       canOpenRemoteLinkInWorkspaceBrowser(state, worktreeId, sourceOwner),
-      url,
-      sshLinkRoutesThroughOwnerHost(state, worktreeId, sourceOwner)
+      url
     )
   }
 }
