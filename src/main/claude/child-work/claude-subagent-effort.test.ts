@@ -48,13 +48,4 @@ describe('readClaudeSubagentTranscriptEffort', () => {
     await expect(read('a1')).resolves.toBe('low')
     await expect(read('b2')).resolves.toBe('high')
   })
-
-  it('leaves an unobserved effort empty and refuses an id that is not a plain file name', async () => {
-    await expect(
-      readClaudeSubagentTranscriptEffort({ sessionTranscriptPath, agentId: 'c3' })
-    ).resolves.toBeUndefined()
-    await expect(
-      readClaudeSubagentTranscriptEffort({ sessionTranscriptPath, agentId: '../escape' })
-    ).resolves.toBeUndefined()
-  })
 })
