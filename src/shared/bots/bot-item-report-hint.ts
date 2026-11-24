@@ -11,10 +11,19 @@ export type BotItemReportFact = Pick<BotItem, 'number' | 'title' | 'status' | 'd
 
 const oneLine = (text: string): string => text.replace(/\s+/g, ' ').trim()
 
-/** How to post in a Slack thread named by its link, which `slack post` reads only as a ref. */
-export function postedWith(place: string, cli: string): string {
+/** The command that posts in a Slack thread named by its link, which `slack post` reads only as a
+ *  ref; null for any other place. */
+export function slackThreadPostCommand(place: string, cli: string): string | null {
   const ref = slackThreadRefOfLink(place)
-  return ref ? ` (${cli} slack post ${ref})` : ''
+  return ref ? `${cli} slack post ${ref} "<text>"` : null
+}
+
+// A chat that thread woke already answers it with its final message, and `slack post` refuses it.
+function postedIn(place: string, cli: string): string {
+  const command = slackThreadPostCommand(place, cli)
+  return command
+    ? ` (${command}; when Orca's note says your final message goes to that thread, write it there instead)`
+    : ''
 }
 
 export function formatBotItemReportHint(item: BotItemReportFact, cli = 'orca'): string {
@@ -26,7 +35,7 @@ export function formatBotItemReportHint(item: BotItemReportFact, cli = 'orca'): 
     `If this result changes the item, update it with ${cli} bot item <cancel|comment|done|set> ${item.number}.`,
     ...(item.startedIn
       ? [
-          `Its work started in ${item.startedIn}: post what this result settles there${postedWith(item.startedIn, cli)}.`
+          `Its work started in ${item.startedIn}: post what this result settles there${postedIn(item.startedIn, cli)}.`
         ]
       : [])
   ].join(' ')
