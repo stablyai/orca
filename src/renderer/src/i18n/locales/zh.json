@@ -20830,6 +20830,7 @@
         "action": "回溯到此处"
       },
       "visualUnavailable": "可视化不可用",
+      "visualLabel": "可视化",
       "visualLoading": "正在加载可视化",
       "visualOpenInNewTab": "在新标签页中打开",
       "resumeCommand": {
