@@ -5,14 +5,17 @@ type IdleMonitor = {
   getSystemIdleTime(): number
 }
 
-export function readDesktopAwayState(monitor: IdleMonitor): boolean | undefined {
+export function readDesktopAwayState(
+  monitor: IdleMonitor,
+  thresholdSeconds = DESKTOP_AWAY_SECONDS
+): boolean | undefined {
   try {
-    const state = monitor.getSystemIdleState(DESKTOP_AWAY_SECONDS)
+    const state = monitor.getSystemIdleState(thresholdSeconds)
     if (state === 'locked' || state === 'idle') {
       return true
     }
     const idle = monitor.getSystemIdleTime()
-    return Number.isFinite(idle) && idle >= 0 ? idle >= DESKTOP_AWAY_SECONDS : undefined
+    return Number.isFinite(idle) && idle >= 0 ? idle >= thresholdSeconds : undefined
   } catch {
     // Unknown presence must not silence a phone.
     return undefined

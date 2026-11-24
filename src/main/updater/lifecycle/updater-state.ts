@@ -72,6 +72,7 @@ export abstract class UpdaterState {
   protected automaticDownloadOfferVersion: string | null = null
   protected automaticDownloadVersion: string | null = null
   protected getAutomaticUpdates: (() => boolean) | null = null
+  protected automaticInstallMustWait: (() => boolean) | null = null
   protected availableReleaseUrl: string | null = null
   protected pendingCheckFailureKey: string | null = null
   protected pendingCheckFailurePromise: Promise<void> | null = null

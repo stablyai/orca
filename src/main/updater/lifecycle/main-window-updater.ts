@@ -1,4 +1,4 @@
-import { app, ipcMain } from 'electron'
+import { app, ipcMain, powerMonitor } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import { join } from 'node:path'
 import type {
@@ -13,6 +13,8 @@ import { applyProxyToElectronUpdaterSession } from './electron-updater-proxy-ses
 import { updaterErrorMessage } from './updater-coded-error'
 import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import { normalizeUpdateDelayDays } from '../../../shared/updater/update-delay'
+import { readDesktopAwayState } from '../../notifications/desktop-away-state'
+import { AUTOMATIC_INSTALL_AWAY_SECONDS } from './automatic-install-away-wait'
 import {
   getActiveTeamCapabilities,
   getActiveTeamProfileScope,
@@ -33,7 +35,7 @@ import {
   snoozeRequiredUpdate
 } from '../updater-service'
 import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater-state'
-import type { UpdaterSetupOptions } from './updater-setup'
+import type { UpdaterSetupOptions } from './updater-setup-options'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { hasWorkingUpdateAgents } from './update-agent-activity'
 import {
@@ -135,6 +137,9 @@ function buildUpdaterSetupOptions(
     getUpdateDelayDays: () =>
       normalizeUpdateDelayDays(nativeSettings.getSettings().updateDelayDays),
     getAutomaticUpdates: () => nativeSettings.getSettings().automaticUpdates === true,
+    automaticInstallMustWait: () =>
+      nativeSettings.getSettings().automaticUpdatesWaitUntilAway === true &&
+      readDesktopAwayState(powerMonitor, AUTOMATIC_INSTALL_AWAY_SECONDS) !== true,
     onBeforeQuitFailure: options?.onBeforeUpdateQuitFailure,
     installMode: options?.updateInstallMode
   }

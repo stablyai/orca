@@ -1972,7 +1972,11 @@
       "saveFailed": "Could not save automatic updates.",
       "title": "Automatic updates",
       "description": "On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically.",
-      "info": "About automatic updates"
+      "info": "About automatic updates",
+      "waitUntilAway": {
+        "title": "Wait until I'm away",
+        "description": "Restart to install only after your screen locks or your computer has been idle for 10 minutes."
+      }
     },
     "cloudConsole": {
       "manageInBrowser": "Manage in browser",

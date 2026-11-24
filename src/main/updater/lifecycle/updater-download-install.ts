@@ -15,11 +15,38 @@ import {
   QUIT_AND_INSTALL_DELAY_MS
 } from './updater-state'
 import { UpdaterRequiredRestart } from './updater-required-restart'
+import { AutomaticInstallAwayWait } from './automatic-install-away-wait'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'
 import type { UpdateInstallTrigger } from './updater-state'
 
 export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
   private macStagingTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly awayWait = new AutomaticInstallAwayWait({
+    mustWait: () => this.automaticInstallMustWait?.() === true,
+    isPending: (version) =>
+      this.getAutomaticUpdates?.() === true &&
+      this.currentStatus.state === 'downloaded' &&
+      !this.currentStatus.installing &&
+      this.currentStatus.version === version &&
+      this.automaticDownloadVersion === version &&
+      !this.isRequiredTeamUpdate(version),
+    install: () => this.quitAndInstall('automatic')
+  })
+
+  protected override canProceedWithInstall(
+    version: string,
+    trigger: UpdateInstallTrigger
+  ): boolean {
+    if (!super.canProceedWithInstall(version, trigger)) {
+      return false
+    }
+    if (trigger !== 'automatic' || !this.awayWait.holds(version)) {
+      return true
+    }
+    this.cancelAutomaticInstall(version)
+    this.sendToMainWindow('updater:quitAndInstallAborted')
+    return false
+  }
 
   protected quitAndInstall(
     trigger: UpdateInstallTrigger = 'manual',
@@ -152,7 +179,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
     if (this.pendingQuitAndInstallTimer || this.quitAndInstallInProgress) {
       return
     }
-    const automatic = this.getAutomaticUpdates?.() === true
+    const automatic = this.getAutomaticUpdates?.() === true && !this.awayWait.holds(status.version)
     this.sendStatus(automatic ? { ...status, installing: true } : status, { force: true })
     if (automatic) {
       this.quitAndInstall('automatic')

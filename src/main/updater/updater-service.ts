@@ -11,7 +11,8 @@ import type {
 } from '../../shared/remote-runtime/host-catalog/remote-server-update'
 import type { ReleaseBuild, ReleaseChannel } from '../../shared/updater/release-channel'
 import type { ReleaseBuildListOptions } from './releases/updater-release-build-cache'
-import { UpdaterSetup, type UpdaterSetupOptions } from './lifecycle/updater-setup'
+import { UpdaterSetup } from './lifecycle/updater-setup'
+import type { UpdaterSetupOptions } from './lifecycle/updater-setup-options'
 import type { UpdateInstallMode } from './lifecycle/updater-state'
 import { setDesktopReportUpdateStatus } from '../orca-profiles/cloud-auth/desktop-client-report'
 
