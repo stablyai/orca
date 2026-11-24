@@ -12,7 +12,7 @@
       "language": {
         "systemWithCurrent": "System ({{language}})",
         "heading": "Language",
-        "description": "System follows this device’s language. Permission prompts always use the device language."
+        "footer": "Permission prompts use the device language."
       },
       "usage": {
         "used": "Used",
@@ -47,17 +47,15 @@
     },
     "browserSettingsScreen": {
       "askEachTime": "Ask each time",
-      "askEachTimeDescription": "Choose Orca browser, phone browser, or copy the link each time.",
       "desktopBrowser": "Orca browser on desktop",
-      "desktopBrowserDescription": "Open in the streamed browser from your paired desktop.",
       "phoneBrowser": "Phone browser",
-      "phoneBrowserDescription": "Open in Safari, Chrome, or another browser on this phone.",
       "title": "Browser",
-      "linksHeading": "Links",
-      "terminalAndChatLinksDescription": "Choose where web links tapped in terminal output and chat open.",
       "loadFailed": "Could not load browser preferences. Try again.",
       "saveFailed": "Could not save browser preferences. Try again.",
-      "openLinks": "Open links"
+      "openLinks": "Open links",
+      "askHint": "Pick a browser or copy the link",
+      "desktopHint": "Streamed from your computer",
+      "phoneHint": "Safari, Chrome or another app"
     },
     "menuItems": {
       "appearance": "Appearance",
@@ -71,11 +69,8 @@
       "updateAvailable": "Update available"
     },
     "nativeChatSettingsScreen": {
-      "defaultViewHeading": "Default view",
-      "defaultViewDescription": "Choose how supported agent sessions (Claude, Codex, and other chat-capable agents) open on this device. Terminal shows the raw CLI; Chat UI shows a chat interface like the desktop app. You can still switch any individual session from its long-press menu.",
-      "openInChatUi": "Open sessions in Chat UI",
-      "on": "On",
-      "off": "Off"
+      "defaultViewFooter": "Switch one session from its long-press menu.",
+      "openInChat": "Open agent sessions in chat"
     },
     "nativeChatText": {
       "heading": "Text",
@@ -1051,14 +1046,13 @@
   },
   "notifications": {
     "notificationDeliverySection": {
-      "onlyWhenAway": "Only when away from desktop",
-      "onlyWhenAwayHint": "After 3 minutes without keyboard or mouse activity, or when locked.",
       "sound": "Notification sound",
-      "suppressWhileFocused": "Suppress while focused",
-      "suppressWhileFocusedHint": "Skip alerts for the workspace open on this phone.",
-      "footer": "Alert types follow each paired desktop’s notification settings. Notifications pause after 7 days without using this app; open it and reconnect to resume.",
       "onlyWhenAgentNeedsInput": "Only when an agent needs me",
-      "onlyWhenAgentNeedsInputHint": "Permission requests and questions. Skips finished agents."
+      "pauseFooter": "Alerts pause after 7 days without opening this app.",
+      "onlyWhenAwayFromComputer": "Only when I’m away",
+      "awayHint": "Idle for 3 minutes or locked",
+      "needsMeHint": "Permissions and questions only",
+      "notWhileViewing": "Not for the workspace I’m viewing"
     },
     "desktopChannel": {
       "silentName": "Orca silent notifications",

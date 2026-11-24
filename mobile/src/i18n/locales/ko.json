@@ -1810,12 +1810,7 @@
       "silentName": "Orca 무음 알림"
     },
     "notificationDeliverySection": {
-      "footer": "알림 유형은 페어링된 각 데스크톱의 알림 설정을 따릅니다. 이 앱을 7일 동안 사용하지 않으면 알림이 일시 중지됩니다. 다시 받으려면 앱을 열고 다시 연결하세요.",
-      "onlyWhenAway": "데스크톱을 사용하지 않을 때만",
-      "onlyWhenAwayHint": "키보드나 마우스를 3분간 사용하지 않거나 데스크톱이 잠겨 있을 때 알림을 보냅니다.",
-      "sound": "알림음",
-      "suppressWhileFocused": "보고 있는 동안 알림 끄기",
-      "suppressWhileFocusedHint": "이 휴대폰에서 열어 둔 워크스페이스의 알림을 받지 않습니다."
+      "sound": "알림음"
     }
   },
   "onboarding": {
@@ -3013,7 +3008,6 @@
     },
     "appearance": {
       "language": {
-        "description": "시스템을 선택하면 이 기기의 언어를 따릅니다. 권한 요청은 항상 기기 언어로 표시됩니다.",
         "heading": "언어",
         "systemWithCurrent": "시스템 ({{language}})"
       },
@@ -3028,15 +3022,10 @@
     },
     "browserSettingsScreen": {
       "askEachTime": "매번 묻기",
-      "askEachTimeDescription": "Orca 브라우저, 휴대폰 브라우저, 링크 복사 중에서 매번 선택합니다.",
       "desktopBrowser": "데스크톱 Orca 브라우저",
-      "desktopBrowserDescription": "페어링된 데스크톱에서 스트리밍되는 브라우저로 엽니다.",
-      "terminalAndChatLinksDescription": "터미널 출력과 채팅의 웹 링크를 탭했을 때 열 위치를 선택하세요.",
-      "linksHeading": "링크",
       "loadFailed": "브라우저 설정을 불러오지 못했습니다. 다시 시도하세요.",
       "openLinks": "링크 열기",
       "phoneBrowser": "휴대폰 브라우저",
-      "phoneBrowserDescription": "이 휴대폰의 Safari, Chrome 또는 다른 브라우저에서 엽니다.",
       "saveFailed": "브라우저 설정을 저장하지 못했습니다. 다시 시도하세요.",
       "title": "브라우저"
     },
@@ -3052,13 +3041,6 @@
     "menuScreen": {
       "privacyPolicy": "개인정보 처리방침",
       "support": "지원"
-    },
-    "nativeChatSettingsScreen": {
-      "defaultViewDescription": "지원되는 에이전트 세션(Claude, Codex 및 기타 채팅 지원 에이전트)을 이 기기에서 여는 방식을 선택하세요. 터미널은 CLI를 그대로 표시하며, 채팅 UI는 데스크톱 앱과 같은 채팅 인터페이스를 표시합니다. 각 세션의 보기 방식은 길게 눌러 여는 메뉴에서 개별적으로 전환할 수 있습니다.",
-      "defaultViewHeading": "기본 보기",
-      "off": "꺼짐",
-      "on": "켜짐",
-      "openInChatUi": "채팅 UI로 세션 열기"
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "알림 전송 설정을 불러오지 못했습니다. 다시 시도하려면 이 화면을 다시 여세요.",

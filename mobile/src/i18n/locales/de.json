@@ -1814,12 +1814,7 @@
       "silentName": "Lautlose Orca-Benachrichtigungen"
     },
     "notificationDeliverySection": {
-      "footer": "Die Benachrichtigungsarten richten sich nach den Benachrichtigungseinstellungen des jeweiligen gekoppelten Computers. Nach 7 Tagen ohne Nutzung dieser App werden Benachrichtigungen pausiert; zum Fortsetzen die App öffnen und erneut verbinden.",
-      "onlyWhenAway": "Nur bei Abwesenheit vom Computer",
-      "onlyWhenAwayHint": "Nach 3 Minuten ohne Tastatur- oder Mausaktivität oder bei gesperrtem Computer.",
-      "sound": "Benachrichtigungston",
-      "suppressWhileFocused": "Geöffneten Arbeitsbereich ausnehmen",
-      "suppressWhileFocusedHint": "Für den auf diesem Smartphone geöffneten Arbeitsbereich keine Benachrichtigungen senden."
+      "sound": "Benachrichtigungston"
     }
   },
   "onboarding": {
@@ -2911,7 +2906,6 @@
     },
     "appearance": {
       "language": {
-        "description": "„System“ übernimmt die Gerätesprache. Berechtigungsabfragen verwenden immer die Gerätesprache.",
         "heading": "Sprache",
         "systemWithCurrent": "System ({{language}})"
       },
@@ -2926,15 +2920,10 @@
     },
     "browserSettingsScreen": {
       "askEachTime": "Jedes Mal fragen",
-      "askEachTimeDescription": "Jedes Mal zwischen Orca-Browser, Smartphone-Browser und Link kopieren wählen.",
       "desktopBrowser": "Orca-Browser auf dem Desktop",
-      "desktopBrowserDescription": "Im gestreamten Browser des gekoppelten Desktops öffnen.",
-      "terminalAndChatLinksDescription": "Auswählen, wo Weblinks aus der Terminalausgabe und dem Chat beim Antippen geöffnet werden.",
-      "linksHeading": "Links",
       "loadFailed": "Browser-Einstellungen konnten nicht geladen werden. Erneut versuchen.",
       "openLinks": "Links öffnen",
       "phoneBrowser": "Browser auf dem Smartphone",
-      "phoneBrowserDescription": "In Safari, Chrome oder einem anderen Browser auf diesem Smartphone öffnen.",
       "saveFailed": "Browser-Einstellungen konnten nicht gespeichert werden. Erneut versuchen.",
       "title": "Browser"
     },
@@ -2950,13 +2939,6 @@
     "menuScreen": {
       "privacyPolicy": "Datenschutzerklärung",
       "support": "Hilfe"
-    },
-    "nativeChatSettingsScreen": {
-      "defaultViewDescription": "Festlegen, wie Sitzungen unterstützter Agenten (Claude, Codex und anderer chatfähiger Agenten) auf diesem Gerät geöffnet werden. Das Terminal zeigt die CLI direkt an; die Chat-Oberfläche zeigt eine Chatansicht wie in der Desktop-App. Die Ansicht jeder Sitzung lässt sich weiterhin über das Menü wechseln, das durch langes Drücken geöffnet wird.",
-      "defaultViewHeading": "Standardansicht",
-      "off": "Aus",
-      "on": "Ein",
-      "openInChatUi": "Sitzungen in der Chat-Oberfläche öffnen"
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Zustellungseinstellungen konnten nicht geladen werden. Für einen neuen Versuch diese Ansicht erneut öffnen.",

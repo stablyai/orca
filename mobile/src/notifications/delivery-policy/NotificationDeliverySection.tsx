@@ -19,7 +19,6 @@ export function NotificationDeliverySection({ value, disabled, onChange }: Props
       key={key}
       title={label}
       subtitle={hint}
-      disabled={disabled}
       accessory={
         <MobileSwitch
           accessibilityLabel={label}
@@ -34,17 +33,17 @@ export function NotificationDeliverySection({ value, disabled, onChange }: Props
   return (
     <SettingsSection
       footer={t(
-        'notifications.notificationDeliverySection.footer',
-        'Alert types follow each paired desktop’s notification settings. Notifications pause after 7 days without using this app; open it and reconnect to resume.'
+        'notifications.notificationDeliverySection.pauseFooter',
+        'Alerts pause after 7 days without opening this app.'
       )}
     >
       {row(
         'onlyWhenDesktopAway',
-        t('notifications.notificationDeliverySection.onlyWhenAway', 'Only when away from desktop'),
         t(
-          'notifications.notificationDeliverySection.onlyWhenAwayHint',
-          'After 3 minutes without keyboard or mouse activity, or when locked.'
-        )
+          'notifications.notificationDeliverySection.onlyWhenAwayFromComputer',
+          'Only when I’m away'
+        ),
+        t('notifications.notificationDeliverySection.awayHint', 'Idle for 3 minutes or locked')
       )}
       {row(
         'onlyWhenAgentNeedsInput',
@@ -52,21 +51,14 @@ export function NotificationDeliverySection({ value, disabled, onChange }: Props
           'notifications.notificationDeliverySection.onlyWhenAgentNeedsInput',
           'Only when an agent needs me'
         ),
-        t(
-          'notifications.notificationDeliverySection.onlyWhenAgentNeedsInputHint',
-          'Permission requests and questions. Skips finished agents.'
-        )
+        t('notifications.notificationDeliverySection.needsMeHint', 'Permissions and questions only')
       )}
       {row('sound', t('notifications.notificationDeliverySection.sound', 'Notification sound'))}
       {row(
         'suppressWhileViewing',
         t(
-          'notifications.notificationDeliverySection.suppressWhileFocused',
-          'Suppress while focused'
-        ),
-        t(
-          'notifications.notificationDeliverySection.suppressWhileFocusedHint',
-          'Skip alerts for the workspace open on this phone.'
+          'notifications.notificationDeliverySection.notWhileViewing',
+          'Not for the workspace I’m viewing'
         )
       )}
     </SettingsSection>

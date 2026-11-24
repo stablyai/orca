@@ -2655,14 +2655,8 @@
       "silentName": "Orca sessiz bildirimleri"
     },
     "notificationDeliverySection": {
-      "footer": "Uyarı türleri, eşleştirilen her bilgisayarın bildirim ayarlarına göre belirlenir. Bu uygulama 7 gün kullanılmazsa bildirimler duraklatılır; sürdürmek için uygulamayı açıp yeniden bağlanın.",
-      "onlyWhenAway": "Yalnızca bilgisayardan uzaktayken",
-      "onlyWhenAwayHint": "3 dakika boyunca klavye veya fare etkinliği olmadığında ya da bilgisayar kilitliyken.",
       "sound": "Bildirim sesi",
-      "suppressWhileFocused": "Görüntülerken bildirim gönderme",
-      "suppressWhileFocusedHint": "Bu telefonda açık olan çalışma alanı için bildirim gönderilmez.",
-      "onlyWhenAgentNeedsInput": "Yalnızca bir ajan bana ihtiyaç duyduğunda",
-      "onlyWhenAgentNeedsInputHint": "İzin istekleri ve sorular için bildirim gönderir. İşini tamamlayan ajanlar için bildirim göndermez."
+      "onlyWhenAgentNeedsInput": "Yalnızca bir ajan bana ihtiyaç duyduğunda"
     }
   },
   "onboarding": {
@@ -4042,7 +4036,6 @@
     },
     "appearance": {
       "language": {
-        "description": "Sistem seçeneği bu cihazın dilini kullanır. İzin istekleri her zaman cihazın dilinde gösterilir.",
         "heading": "Dil",
         "systemWithCurrent": "Sistem ({{language}})"
       },
@@ -4063,15 +4056,10 @@
     },
     "browserSettingsScreen": {
       "askEachTime": "Her seferinde sor",
-      "askEachTimeDescription": "Her seferinde Orca tarayıcısı, telefon tarayıcısı veya bağlantıyı kopyalama arasında seçim yapın.",
       "desktopBrowser": "Masaüstündeki Orca tarayıcısı",
-      "desktopBrowserDescription": "Eşleştirdiğiniz masaüstü bilgisayardan aktarılan tarayıcıda açın.",
-      "terminalAndChatLinksDescription": "Terminal çıktısında ve sohbette dokunduğunuz web bağlantılarının nerede açılacağını seçin.",
-      "linksHeading": "Bağlantılar",
       "loadFailed": "Tarayıcı tercihleri yüklenemedi. Yeniden deneyin.",
       "openLinks": "Bağlantıları aç",
       "phoneBrowser": "Telefon tarayıcısı",
-      "phoneBrowserDescription": "Bu telefondaki Safari, Chrome veya başka bir tarayıcıda açın.",
       "saveFailed": "Tarayıcı tercihleri kaydedilemedi. Yeniden deneyin.",
       "title": "Tarayıcı"
     },
@@ -4087,13 +4075,6 @@
     "menuScreen": {
       "privacyPolicy": "Gizlilik politikası",
       "support": "Destek"
-    },
-    "nativeChatSettingsScreen": {
-      "defaultViewDescription": "Desteklenen ajan oturumlarının (Claude, Codex ve sohbet destekli diğer ajanlar) bu cihazda nasıl açılacağını seçin. Terminal, CLI'yi olduğu gibi gösterir; Sohbet Arayüzü ise masaüstü uygulamasındaki gibi bir sohbet arayüzü sunar. Her oturumun görünümünü, oturuma uzun basınca açılan menüden ayrıca değiştirebilirsiniz.",
-      "defaultViewHeading": "Varsayılan görünüm",
-      "off": "Kapalı",
-      "on": "Açık",
-      "openInChatUi": "Oturumları Sohbet Arayüzü ile aç"
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "İletim ayarları yüklenemedi. Yeniden denemek için bu ekranı tekrar açın.",

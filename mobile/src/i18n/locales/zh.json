@@ -2526,14 +2526,8 @@
       "silentName": "Orca 静默通知"
     },
     "notificationDeliverySection": {
-      "footer": "提醒类型遵循各个已配对桌面的通知设置。连续 7 天未使用此应用后，通知将暂停；打开应用并重新连接即可恢复",
       "onlyWhenAgentNeedsInput": "仅在智能体需要我时",
-      "onlyWhenAgentNeedsInputHint": "权限请求和提问，不包括已完成的智能体",
-      "onlyWhenAway": "仅在离开桌面时",
-      "onlyWhenAwayHint": "键盘和鼠标均无操作达 3 分钟后，或锁屏时",
-      "sound": "通知声音",
-      "suppressWhileFocused": "查看时不提醒",
-      "suppressWhileFocusedHint": "不发送此手机上当前打开的工作区的提醒"
+      "sound": "通知声音"
     }
   },
   "onboarding": {
@@ -3905,7 +3899,6 @@
     },
     "appearance": {
       "language": {
-        "description": "选择“系统”时，将跟随此设备的语言。权限提示始终使用设备语言",
         "heading": "语言",
         "systemWithCurrent": "系统（{{language}}）"
       },
@@ -3926,15 +3919,10 @@
     },
     "browserSettingsScreen": {
       "askEachTime": "每次询问",
-      "askEachTimeDescription": "每次选择 Orca 浏览器、手机浏览器或复制链接",
       "desktopBrowser": "桌面 Orca 浏览器",
-      "desktopBrowserDescription": "在已配对桌面通过串流提供的浏览器中打开",
-      "terminalAndChatLinksDescription": "选择点按终端输出和聊天中的网页链接时使用的浏览器",
-      "linksHeading": "链接",
       "loadFailed": "无法加载浏览器偏好设置。请重试",
       "openLinks": "打开链接",
       "phoneBrowser": "手机浏览器",
-      "phoneBrowserDescription": "在此手机的 Safari、Chrome 或其他浏览器中打开",
       "saveFailed": "无法保存浏览器偏好设置。请重试",
       "title": "浏览器"
     },
@@ -3950,13 +3938,6 @@
     "menuScreen": {
       "privacyPolicy": "隐私政策",
       "support": "支持"
-    },
-    "nativeChatSettingsScreen": {
-      "defaultViewDescription": "选择受支持的智能体会话（Claude、Codex 及其他支持聊天的智能体）在此设备上的打开方式。终端显示原始 CLI；聊天界面则显示与桌面应用类似的聊天界面。您仍可通过长按菜单切换单个会话的视图",
-      "defaultViewHeading": "默认视图",
-      "off": "关闭",
-      "on": "开启",
-      "openInChatUi": "在聊天界面中打开会话"
     },
     "nativeChatText": {
       "heading": "文字",

@@ -1808,12 +1808,7 @@
       "silentName": "Orca 靜音通知"
     },
     "notificationDeliverySection": {
-      "footer": "通知類型依各台已配對電腦的通知設定而定。若連續 7 天未使用此應用程式，通知將暫停；開啟應用程式並重新連線即可恢復。",
-      "onlyWhenAway": "僅在離開電腦時",
-      "onlyWhenAwayHint": "鍵盤和滑鼠皆無操作達 3 分鐘後，或電腦鎖定時。",
-      "sound": "通知音效",
-      "suppressWhileFocused": "檢視時暫停通知",
-      "suppressWhileFocusedHint": "略過此手機目前開啟的工作區通知。"
+      "sound": "通知音效"
     }
   },
   "onboarding": {
@@ -2905,7 +2900,6 @@
     },
     "appearance": {
       "language": {
-        "description": "「系統」會使用此裝置的語言。權限提示一律使用裝置語言。",
         "heading": "語言",
         "systemWithCurrent": "系統（{{language}}）"
       },
@@ -2920,15 +2914,10 @@
     },
     "browserSettingsScreen": {
       "askEachTime": "每次詢問",
-      "askEachTimeDescription": "每次選擇 Orca 瀏覽器、手機瀏覽器或複製連結。",
       "desktopBrowser": "電腦上的 Orca 瀏覽器",
-      "desktopBrowserDescription": "在已配對電腦的瀏覽器中開啟，並串流至手機。",
-      "terminalAndChatLinksDescription": "選擇點按終端機輸出和聊天中的網頁連結時，要在哪裡開啟。",
-      "linksHeading": "連結",
       "loadFailed": "無法載入瀏覽器偏好設定，請再試一次。",
       "openLinks": "開啟連結",
       "phoneBrowser": "手機瀏覽器",
-      "phoneBrowserDescription": "在此手機上的 Safari、Chrome 或其他瀏覽器中開啟。",
       "saveFailed": "無法儲存瀏覽器偏好設定，請再試一次。",
       "title": "瀏覽器"
     },
@@ -2944,13 +2933,6 @@
     "menuScreen": {
       "privacyPolicy": "隱私權政策",
       "support": "支援"
-    },
-    "nativeChatSettingsScreen": {
-      "defaultViewDescription": "選擇此裝置上受支援的代理程式工作階段（Claude、Codex 及其他支援聊天的代理程式）的開啟方式。「終端機」會顯示原始 CLI；「聊天介面」則提供類似桌面版的聊天介面。您仍可透過長按選單，切換個別工作階段的顯示方式。",
-      "defaultViewHeading": "預設檢視",
-      "off": "關閉",
-      "on": "開啟",
-      "openInChatUi": "以聊天介面開啟工作階段"
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "無法載入通知傳送設定。請重新開啟此畫面再試一次。",

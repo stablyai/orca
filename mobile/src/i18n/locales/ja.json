@@ -1810,12 +1810,7 @@
       "silentName": "Orca のサイレント通知"
     },
     "notificationDeliverySection": {
-      "footer": "通知の種類は、ペアリング済みの各デスクトップの通知設定に従います。このアプリを7日間使用しないと通知が一時停止します。再開するには、アプリを開いて再接続してください。",
-      "onlyWhenAway": "デスクトップから離れているときのみ",
-      "onlyWhenAwayHint": "キーボードやマウスの操作が 3 分間ないとき、またはロック中に通知します。",
-      "sound": "通知音",
-      "suppressWhileFocused": "表示中は通知しない",
-      "suppressWhileFocusedHint": "このスマートフォンで開いているワークスペースの通知を省略します。"
+      "sound": "通知音"
     }
   },
   "onboarding": {
@@ -2908,7 +2903,6 @@
     },
     "appearance": {
       "language": {
-        "description": "「システム」はこのデバイスの言語に従います。権限の確認画面には常にデバイスの言語が使われます。",
         "heading": "言語",
         "systemWithCurrent": "システム（{{language}}）"
       },
@@ -2923,15 +2917,10 @@
     },
     "browserSettingsScreen": {
       "askEachTime": "毎回確認する",
-      "askEachTimeDescription": "Orca ブラウザ、スマートフォンのブラウザ、リンクのコピーから毎回選びます。",
       "desktopBrowser": "デスクトップの Orca ブラウザ",
-      "desktopBrowserDescription": "ペアリング済みのデスクトップからストリーミングされるブラウザで開きます。",
-      "terminalAndChatLinksDescription": "ターミナル出力とチャットでタップした Web リンクを開く場所を選択してください。",
-      "linksHeading": "リンク",
       "loadFailed": "ブラウザ設定を読み込めませんでした。再試行してください。",
       "openLinks": "リンクを開く",
       "phoneBrowser": "スマートフォンのブラウザ",
-      "phoneBrowserDescription": "このスマートフォンの Safari、Chrome などのブラウザで開きます。",
       "saveFailed": "ブラウザ設定を保存できませんでした。再試行してください。",
       "title": "ブラウザ"
     },
@@ -2947,13 +2936,6 @@
     "menuScreen": {
       "privacyPolicy": "プライバシーポリシー",
       "support": "サポート"
-    },
-    "nativeChatSettingsScreen": {
-      "defaultViewDescription": "対応する Agent セッション（Claude、Codex など、チャットに対応した Agent）をこのデバイスで開く際の表示方法を選択してください。「ターミナル」では CLI をそのまま表示し、「Chat UI」ではデスクトップアプリと同様のチャット画面を表示します。各セッションの表示方法は、長押しメニューから個別に切り替えられます。",
-      "defaultViewHeading": "デフォルトの表示",
-      "off": "オフ",
-      "on": "オン",
-      "openInChatUi": "セッションをチャット UI で開く"
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "通知の配信設定を読み込めませんでした。再試行するには、この画面を開き直してください。",

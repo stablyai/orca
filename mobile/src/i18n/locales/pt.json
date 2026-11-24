@@ -2010,14 +2010,8 @@
       "silentName": "Notificações silenciosas do Orca"
     },
     "notificationDeliverySection": {
-      "footer": "Os tipos de alerta seguem as configurações de notificação de cada desktop pareado. As notificações são pausadas após 7 dias sem usar este app; abra-o e reconecte-se para retomá-las.",
-      "onlyWhenAway": "Só quando estiver longe do desktop",
-      "onlyWhenAwayHint": "Após 3 minutos sem atividade do teclado ou mouse, ou quando o desktop estiver bloqueado.",
       "sound": "Som de notificação",
-      "suppressWhileFocused": "Suprimir enquanto em foco",
-      "suppressWhileFocusedHint": "Não enviar alertas do espaço de trabalho aberto neste celular.",
-      "onlyWhenAgentNeedsInput": "Somente quando um agente precisa de mim",
-      "onlyWhenAgentNeedsInputHint": "Solicitações de permissão e perguntas. Ignora agentes finalizados."
+      "onlyWhenAgentNeedsInput": "Somente quando um agente precisa de mim"
     }
   },
   "onboarding": {
@@ -3387,7 +3381,6 @@
     },
     "appearance": {
       "language": {
-        "description": "A opção Sistema segue o idioma deste dispositivo. As solicitações de permissão sempre usam o idioma do dispositivo.",
         "heading": "Idioma",
         "systemWithCurrent": "Sistema ({{language}})"
       },
@@ -3402,15 +3395,10 @@
     },
     "browserSettingsScreen": {
       "askEachTime": "Perguntar sempre",
-      "askEachTimeDescription": "Escolha sempre entre o navegador do Orca, o do celular ou copiar o link.",
       "desktopBrowser": "Navegador do Orca no desktop",
-      "desktopBrowserDescription": "Abrir no navegador transmitido pelo seu desktop pareado.",
-      "terminalAndChatLinksDescription": "Escolha onde abrir os links da web ao tocar neles na saída do terminal e no chat.",
-      "linksHeading": "Links",
       "loadFailed": "Não foi possível carregar as preferências do navegador. Tente novamente.",
       "openLinks": "Abrir links",
       "phoneBrowser": "Navegador do celular",
-      "phoneBrowserDescription": "Abrir no Safari, Chrome ou outro navegador neste celular.",
       "saveFailed": "Não foi possível salvar as preferências do navegador. Tente novamente.",
       "title": "Navegador"
     },
@@ -3426,13 +3414,6 @@
     "menuScreen": {
       "privacyPolicy": "Política de privacidade",
       "support": "Suporte"
-    },
-    "nativeChatSettingsScreen": {
-      "defaultViewDescription": "Escolha como as sessões de agentes compatíveis (Claude, Codex e outros agentes com suporte a chat) são abertas neste dispositivo. O Terminal exibe a CLI diretamente; a Interface de Chat exibe uma interface de chat como a do app desktop. Você ainda pode mudar a visualização de cada sessão pelo menu de toque prolongado.",
-      "defaultViewHeading": "Visualização padrão",
-      "off": "Desativado",
-      "on": "Ativado",
-      "openInChatUi": "Abrir sessões na Interface de Chat"
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Não foi possível carregar as configurações de entrega. Reabra esta tela para tentar novamente.",

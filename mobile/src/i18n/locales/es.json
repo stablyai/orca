@@ -1861,12 +1861,7 @@
       "silentName": "Notificaciones silenciosas de Orca"
     },
     "notificationDeliverySection": {
-      "footer": "Los tipos de alerta dependen de la configuración de notificaciones de cada escritorio emparejado. Las notificaciones se pausan tras 7 días sin usar esta aplicación; ábrela y vuelve a conectarte para reanudarlas.",
-      "onlyWhenAway": "Solo cuando no uses el escritorio",
-      "onlyWhenAwayHint": "Tras 3 minutos sin actividad del teclado o del ratón, o cuando el equipo esté bloqueado.",
-      "sound": "Sonido de notificación",
-      "suppressWhileFocused": "Omitir alertas del espacio de trabajo abierto",
-      "suppressWhileFocusedHint": "Omite las alertas del espacio de trabajo abierto en este teléfono."
+      "sound": "Sonido de notificación"
     }
   },
   "onboarding": {
@@ -2990,7 +2985,6 @@
     },
     "appearance": {
       "language": {
-        "description": "La opción Sistema usa el idioma de este dispositivo. Las solicitudes de permiso siempre usan el idioma del dispositivo.",
         "heading": "Idioma",
         "systemWithCurrent": "Sistema ({{language}})"
       },
@@ -3005,15 +2999,10 @@
     },
     "browserSettingsScreen": {
       "askEachTime": "Preguntar cada vez",
-      "askEachTimeDescription": "Elige cada vez entre el navegador de Orca, el del teléfono o copiar el enlace.",
       "desktopBrowser": "Navegador de Orca en el escritorio",
-      "desktopBrowserDescription": "Abrir en el navegador de tu escritorio emparejado y verlo en el teléfono.",
-      "terminalAndChatLinksDescription": "Elige dónde se abren los enlaces web que tocas en la salida de la terminal y en el chat.",
-      "linksHeading": "Enlaces",
       "loadFailed": "No se pudieron cargar las preferencias del navegador. Vuelve a intentarlo.",
       "openLinks": "Abrir enlaces",
       "phoneBrowser": "Navegador del teléfono",
-      "phoneBrowserDescription": "Abrir en Safari, Chrome u otro navegador de este teléfono.",
       "saveFailed": "No se pudieron guardar las preferencias del navegador. Vuelve a intentarlo.",
       "title": "Navegador"
     },
@@ -3029,13 +3018,6 @@
     "menuScreen": {
       "privacyPolicy": "Política de privacidad",
       "support": "Soporte"
-    },
-    "nativeChatSettingsScreen": {
-      "defaultViewDescription": "Elige cómo se abren en este dispositivo las sesiones de agentes compatibles (Claude, Codex y otros agentes con funciones de chat). La terminal muestra la CLI tal cual; la interfaz de chat ofrece una vista como la de la app de escritorio. También puedes cambiar la vista de cada sesión desde el menú que aparece al mantenerla pulsada.",
-      "defaultViewHeading": "Vista predeterminada",
-      "off": "Desactivado",
-      "on": "Activado",
-      "openInChatUi": "Abrir sesiones en la interfaz de chat"
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "No se pudo cargar la configuración de entrega. Vuelve a abrir esta pantalla para reintentarlo.",
