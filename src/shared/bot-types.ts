@@ -193,7 +193,7 @@ export const BotSchema = z.object({
   launch: BotLaunchSchema.optional().catch(undefined),
   notifications: BotNotificationsSchema,
   members: z.array(BotMemberSchema).max(BOT_MAX_MEMBERS),
-  shares: BotSharesSchema.optional(), // Orca accounts and invites; members: Slack/GitHub/Linear-only
+  shares: BotSharesSchema.optional().catch(undefined), // Orca accounts and invites; members: Slack/GitHub/Linear-only
   /** The first of slackApps, kept for readers that know one workspace (older Orcas, the phone). */
   slack: BotSlackLinkSchema.nullable(),
   /** Every Slack workspace the bot is in, first one first; absent on bots saved before several. */

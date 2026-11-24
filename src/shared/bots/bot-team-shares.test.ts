@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { BotSchema } from '../bot-types'
 import {
   BOT_MAX_SHARES,
   BOT_SHARES_FULL,
@@ -57,7 +58,9 @@ describe('bot share list', () => {
     ])
   })
 
-  it('reads a saved list entry by entry, dropping only what it cannot read', () => {
+  it('reads a saved list entry by entry, and a list that is not one as unset, never losing the bot', () => {
     expect(BotSharesSchema.parse([invite, { kind: 'team', shareId: 'c' }])).toEqual([invite])
+    expect(BotSchema.shape.shares.parse(null)).toBeUndefined()
+    expect(BotSchema.shape.shares.parse({ kind: 'invite' })).toBeUndefined()
   })
 })

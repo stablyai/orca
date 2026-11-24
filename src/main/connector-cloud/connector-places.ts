@@ -18,8 +18,11 @@ import {
 } from '../../shared/bot-types'
 import { GITHUB_ID_PATTERN } from '../../shared/connector-bot-github-contract'
 import type { ExternalConversationBot } from '../../shared/connectors/external-conversation-link'
-import type { BotShare } from '../../shared/bots/bot-team-shares'
-import type { ConnectorBotShare } from '../../shared/connector-share-contract'
+import { BOT_MAX_SHARES, type BotShare } from '../../shared/bots/bot-team-shares'
+import {
+  ConnectorBotShareSchema,
+  type ConnectorBotShare
+} from '../../shared/connector-share-contract'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 
 const Place = z.tuple([z.enum(['bot', 'bot-chat']), z.string().min(1)])
@@ -57,18 +60,18 @@ export const BOT_HELLO_BUDGET_BYTES = Math.floor(
     CONNECTOR_CLIENT_LIMITS.maxHelloBots
 )
 
-// Capped at the contract's maxBotShares where they are saved, so they always fit the bot's share
-// and are never cut; absent when there are none, which the cloud reads as not shared.
+// Each as the contract reads it, at most its maxBotShares, so one bad record never voids the hello.
+// Absent when there are none, which the cloud reads as not shared.
 function sharedWith(shares: readonly BotShare[] | undefined): { sharedWith?: ConnectorBotShare[] } {
-  return shares?.length
-    ? {
-        sharedWith: shares.map((share) =>
-          share.kind === 'account'
-            ? { shareId: share.shareId, accountId: share.accountId }
-            : { shareId: share.shareId, email: share.email }
-        )
-      }
-    : {}
+  const people = (shares ?? [])
+    .map((share) =>
+      share.kind === 'account'
+        ? { shareId: share.shareId, accountId: share.accountId }
+        : { shareId: share.shareId, email: share.email }
+    )
+    .filter((share) => ConnectorBotShareSchema.safeParse(share).success)
+    .slice(0, BOT_MAX_SHARES)
+  return people.length > 0 ? { sharedWith: people } : {}
 }
 
 /** A bot's GitHub people go on each installation, so a bot over its share drops installations from the end. */

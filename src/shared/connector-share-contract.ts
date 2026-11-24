@@ -10,9 +10,11 @@ const Name = z.string().min(1).max(200)
 const PublicKey = z.string().regex(/^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$/)
 
 /** One person in a bot's hello sharedWith: an Orca account, or an email not yet resolved to one. */
-export type ConnectorBotShare =
-  | { shareId: string; accountId: string }
-  | { shareId: string; email: string }
+export const ConnectorBotShareSchema = z.union([
+  z.object({ shareId: BotShareIdSchema, accountId: Id }),
+  z.object({ shareId: BotShareIdSchema, email: BotShareEmailSchema })
+])
+export type ConnectorBotShare = z.infer<typeof ConnectorBotShareSchema>
 
 // Every share delivery is on the share's own conversation, its ordered queue.
 const ShareDeliveryFields = {
