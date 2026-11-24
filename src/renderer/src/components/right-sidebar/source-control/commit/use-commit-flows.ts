@@ -129,7 +129,8 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
       resolveRebaseContinueState(
         foundation.rebaseStop,
         foundation.activeGitStatusHead,
-        foundation.rebaseStopInspectFailure
+        foundation.rebaseStopInspectFailure,
+        foundation.rebaseIndexObservation
       ) === 'unknown',
     refreshActiveGitStatusAfterMutation,
     refreshBranchCompareRef,

@@ -10,6 +10,8 @@ import type {
 import { refreshSourceControlAfterRemoteAction } from './remote-refresh'
 import type { SourceControlStatusRefresh } from './use-status-refresh'
 import { requireGitOwnerTarget } from './worktree-git-owner-target'
+import { useAppStore } from '@/store'
+import { rebaseStopIndexIsStale } from '../panel/base-rebase-state'
 import { inspectRebaseStop, runContinueRequest } from './rebase-step-request'
 
 export function useSourceControlRebaseContinue({
@@ -44,26 +46,36 @@ export function useSourceControlRebaseContinue({
   worktreePath: string | null
 }) {
   const scope = useSourceControlScope()
-  const [isRetryingRebaseInspect, setIsRetryingRebaseInspect] = useState(false)
-  const inspectAttempt = useRef(0)
-  const emptyObservation =
-    rebaseStop?.blocked === 'empty' &&
-    indexObservation &&
-    rebaseStop.indexObservation &&
-    indexObservation !== rebaseStop.indexObservation
+  // Retry belongs to the worktree copy that asked for it; another worktree never shows its progress.
+  const [retry, setRetry] = useState<RetryRequest | null>(null)
+  // Mirrors retry synchronously so a second press before the busy render is refused.
+  const retryRef = useRef<RetryRequest | null>(null)
+  const retryAttempts = useRef(0)
+  const inspectRun = useRef(0)
+  const retryAttempt =
+    retry?.store === operationStore && conflictOperation === 'rebase' ? retry.attempt : null
+  const indexStale = rebaseStopIndexIsStale(rebaseStop, indexObservation)
+  // A step read off the index is re-read against the index status reports now.
+  const recheckIndex =
+    rebaseStop && (indexStale || (retryAttempt !== null && rebaseStopRestsOnIndex(rebaseStop)))
       ? indexObservation
-      : null
+      : undefined
   const shouldInspect =
     conflictOperation === 'rebase' &&
-    !(inspectFailure && inspectFailure.head === statusHead) &&
-    (rebaseStopUnread || !!emptyObservation)
+    (retryAttempt !== null ||
+      (!(inspectFailure && inspectFailure.head === statusHead) && (rebaseStopUnread || indexStale)))
   useEffect(() => {
     // An unresolved owner has no host to ask; requireGitOwnerTarget below would throw out of the effect.
     if (!shouldInspect || !activeRepoTarget || !activeWorktreeId || !worktreePath) {
       return
     }
     let current = true
-    const attempt = ++inspectAttempt.current
+    const run = ++inspectRun.current
+    const stop = operationStore.getState().rebaseStop
+    const recheck =
+      stop && recheckIndex !== undefined && rebaseStopRestsOnIndex(stop)
+        ? { stop, observation: recheckIndex }
+        : null
     void inspectRebaseStop(
       {
         target: requireGitOwnerTarget(activeRepoTarget),
@@ -73,23 +85,48 @@ export function useSourceControlRebaseContinue({
       },
       operationStore,
       statusHead,
-      emptyObservation,
-      emptyObservation ? rebaseStop : null,
+      recheck,
       () => current
-    ).finally(() => {
-      if (inspectAttempt.current === attempt) {
-        setIsRetryingRebaseInspect(false)
-      }
-    })
+    )
+      .then((readHead) => {
+        // The host is at another HEAD than status shows: refresh status once rather than re-read in a
+        // loop. If status still disagrees afterwards, the read counts as failed so Retry is offered.
+        if (!current || !readHead || !statusHead || readHead === statusHead) {
+          return
+        }
+        void refreshActiveGitStatusAfterMutation().then(() => {
+          const state = operationStore.getState()
+          if (
+            state.rebaseStop?.token.head === readHead &&
+            !state.rebaseStopInspectFailure &&
+            readActiveStatusHead(activeWorktreeId) === statusHead
+          ) {
+            operationStore.setState({
+              rebaseStopInspectFailure: { head: statusHead, message: null }
+            })
+          }
+        })
+      })
+      .finally(() => {
+        if (retryAttempt !== null && inspectRun.current === run) {
+          if (retryRef.current?.attempt === retryAttempt) {
+            retryRef.current = null
+          }
+          setRetry((value) => (value?.attempt === retryAttempt ? null : value))
+        }
+      })
     return () => {
       current = false
     }
+    // The stop itself is read from the store: each reading publishes a new object, which must not
+    // restart this read (a HEAD that disagrees with status would otherwise re-read forever).
   }, [
     activeRepoTarget,
     activeWorktreeId,
-    emptyObservation,
     operationStore,
-    rebaseStop,
+    recheckIndex,
+    refreshActiveGitStatusAfterMutation,
+    retryAttempt,
     scope,
     shouldInspect,
     statusHead,
@@ -111,7 +148,9 @@ export function useSourceControlRebaseContinue({
       state.rebaseStop.blocked !== null ||
       !state.rebaseStop.token.head ||
       !state.rebaseStop.token.step ||
-      !state.rebaseStop.token.incarnation
+      !state.rebaseStop.token.incarnation ||
+      // Ready only on staged evidence that no longer matches the index.
+      rebaseStopIndexIsStale(state.rebaseStop, indexObservation)
     ) {
       return
     }
@@ -146,23 +185,46 @@ export function useSourceControlRebaseContinue({
     refreshActiveGitStatusAfterMutation,
     refreshBranchCompareRef,
     refreshGitHistoryRef,
+    indexObservation,
     worktreePath
   ])
   const handleContinueRebase = runRebaseStep
-  // Clearing the failure makes the stop unread again, which re-runs the inspect effect above.
+  // Retry always reads the stop again, including an empty step at an unchanged index.
   const handleRetryRebaseInspect = useCallback((): void => {
-    inspectAttempt.current++
-    setIsRetryingRebaseInspect(true)
+    const state = operationStore.getState()
+    if (
+      !activeRepoTarget ||
+      !activeWorktreeId ||
+      !worktreePath ||
+      !state.rebaseStopInspectFailure ||
+      retryRef.current?.store === operationStore
+    ) {
+      return
+    }
+    const request = { store: operationStore, attempt: ++retryAttempts.current }
+    retryRef.current = request
+    setRetry(request)
     operationStore.setState({
-      ...(operationStore.getState().rebaseStop?.blocked === 'empty' ? {} : { rebaseStop: null }),
+      // An index-bound step keeps its reading so the retry can confirm it against the index.
+      ...(state.rebaseStop && rebaseStopRestsOnIndex(state.rebaseStop) ? {} : { rebaseStop: null }),
       rebaseStopInspectFailure: null
     })
-  }, [operationStore])
+  }, [activeRepoTarget, activeWorktreeId, operationStore, worktreePath])
   return {
     handleContinueRebase,
     handleRetryRebaseInspect,
-    isRetryingRebaseInspect: isRetryingRebaseInspect && shouldInspect && !!activeRepoTarget
+    isRetryingRebaseInspect: retryAttempt !== null && !!activeRepoTarget
   }
+}
+
+type RetryRequest = { store: WorktreeOperationStore; attempt: number }
+
+function rebaseStopRestsOnIndex(stop: RebaseStopReading): boolean {
+  return stop.blocked === 'empty' || stop.stagedReady === true
+}
+
+function readActiveStatusHead(worktreeId: string): string | null {
+  return useAppStore.getState().gitStatusHeadByWorktree?.[worktreeId] ?? null
 }
 
 export type SourceControlRebaseContinue = ReturnType<typeof useSourceControlRebaseContinue>

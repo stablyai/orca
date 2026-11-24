@@ -50,6 +50,8 @@ export type RebaseStopReading = {
   // Git cannot continue this stop. empty: nothing to commit, so Abort or finish in a terminal; stopped: Git paused
   // for its own reason (edit, break, exec), so Abort or finish in a terminal.
   blocked: 'empty' | 'stopped' | null
+  // An empty stop became ready only because something was staged; a changed index re-reads it.
+  stagedReady?: true
 }
 
 /** The automatic stop read failed for this HEAD; the strip says so and offers a retry. */

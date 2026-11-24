@@ -76,51 +76,64 @@ function announceRebaseStep(result: ContinueRebaseResult): void {
   }
 }
 
+/** Re-read a stop whose readiness rests on the index: an empty step, or one ready only because of staging. */
+export type RebaseStopRecheck = {
+  stop: RebaseStopReading
+  // The index status reports now; null when the host reports none, which can never confirm the step.
+  observation: string | null
+}
+
 // Module-level so the hooks stay React Compiler friendly (no try/finally inside them).
+// Returns the head the host read, or null when nothing was accepted.
 export async function inspectRebaseStop(
   context: RuntimeGitContext,
   operationStore: OperationStore,
   statusHead: string | null,
-  emptyObservation: string | null,
-  emptyStop: RebaseStopReading | null,
+  recheck: RebaseStopRecheck | null,
   isCurrent: () => boolean
-) {
+): Promise<string | null> {
   try {
     const result = await continueRuntimeGitRebase(context, 'inspect')
     // A reading superseded by a newer HEAD's inspection must not overwrite that one.
-    if (isCurrent()) {
-      if (result.outcome === 'failed') {
-        operationStore.setState({
-          ...(emptyObservation ? {} : { rebaseStop: null }),
-          rebaseStopInspectFailure: { head: statusHead, message: result.message ?? null }
-        })
-      } else if (emptyObservation && result.outcome === 'inspected') {
-        if (
-          !result.indexObservation ||
-          result.hasStagedChanges === undefined ||
-          result.indexObservation !== emptyObservation
-        ) {
-          operationStore.setState({
-            rebaseStopInspectFailure: { head: statusHead, message: null }
-          })
-        } else {
-          const token = result.stop
-          const previous = emptyStop?.token
-          const sameStop =
-            token &&
-            previous &&
-            token.head === previous.head &&
-            token.step === previous.step &&
-            token.incarnation === previous.incarnation
-          recordRebaseStopReading(
-            operationStore,
-            !sameStop || result.hasStagedChanges ? result : { ...result, outcome: 'empty' }
-          )
-        }
-      } else {
-        recordRebaseStopReading(operationStore, result)
-      }
+    if (!isCurrent()) {
+      return null
     }
+    if (result.outcome === 'failed') {
+      operationStore.setState({
+        ...(recheck ? {} : { rebaseStop: null }),
+        rebaseStopInspectFailure: { head: statusHead, message: result.message ?? null }
+      })
+      return null
+    }
+    if (!recheck || result.outcome !== 'inspected') {
+      recordRebaseStopReading(operationStore, result)
+      return result.stop?.head ?? null
+    }
+    if (
+      !recheck.observation ||
+      !result.indexObservation ||
+      result.hasStagedChanges === undefined ||
+      result.indexObservation !== recheck.observation
+    ) {
+      operationStore.setState({ rebaseStopInspectFailure: { head: statusHead, message: null } })
+      return null
+    }
+    const token = result.stop
+    const previous = recheck.stop.token
+    const sameStop =
+      token &&
+      token.head === previous.head &&
+      token.step === previous.step &&
+      token.incarnation === previous.incarnation
+    if (!sameStop) {
+      recordRebaseStopReading(operationStore, result)
+    } else if (result.hasStagedChanges) {
+      // Ready only while this index stands; a later change (an unstage) reads the step again.
+      recordRebaseStopReading(operationStore, result, true)
+    } else {
+      recordRebaseStopReading(operationStore, { ...result, outcome: 'empty' })
+    }
+    return result.stop?.head ?? null
   } catch (error) {
     // A stopped WSL distro, an RPC blip or an older host: without this, Continue would sit disabled
     // with no reason. The failure is pinned to this HEAD; a HEAD move or Retry reads again.
@@ -132,6 +145,7 @@ export async function inspectRebaseStop(
         }
       })
     }
+    return null
   }
 }
 

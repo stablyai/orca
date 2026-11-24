@@ -37,6 +37,8 @@ export type BaseRebaseInputs = {
   rebaseStop: RebaseStopReading | null
   rebaseStopInspectFailure: RebaseStopInspectFailure | null
   statusHead: string | null
+  // Status's index observation for the paused rebase, when the host reports one.
+  indexObservation?: string | null
   isBusy: boolean
 }
 
@@ -92,12 +94,26 @@ export function resolveSourceControlRebaseModel(inputs: BaseRebaseInputs) {
   }
 }
 
+/** A stop read off staged evidence is stale once the index it was read at has changed. */
+export function rebaseStopIndexIsStale(
+  rebaseStop: RebaseStopReading | null,
+  indexObservation: string | null | undefined
+): boolean {
+  return (
+    !!rebaseStop?.indexObservation &&
+    !!indexObservation &&
+    rebaseStop.indexObservation !== indexObservation &&
+    (rebaseStop.blocked === 'empty' || rebaseStop.stagedReady === true)
+  )
+}
+
 // A reading for another HEAD is stale until re-read, so Continue waits rather than guessing.
 // A failed read only counts for the HEAD it was taken at; a HEAD move reads again on its own.
 export function resolveRebaseContinueState(
   rebaseStop: RebaseStopReading | null,
   statusHead: string | null,
-  inspectFailure: RebaseStopInspectFailure | null = null
+  inspectFailure: RebaseStopInspectFailure | null = null,
+  indexObservation: string | null = null
 ): RebaseContinueState {
   if (inspectFailure && inspectFailure.head === statusHead) {
     return 'unreadable'
@@ -111,6 +127,10 @@ export function resolveRebaseContinueState(
   if (statusHead !== null && rebaseStop.token.head !== statusHead) {
     return 'unknown'
   }
+  // Ready only because of what was staged: unstaging may leave the step empty again.
+  if (rebaseStop.stagedReady && rebaseStopIndexIsStale(rebaseStop, indexObservation)) {
+    return 'unknown'
+  }
   return rebaseStop.blocked === 'empty' ? 'empty' : rebaseStop.blocked ? 'blocked' : 'ready'
 }
 
@@ -119,7 +139,8 @@ export function resolveBaseRebaseState(inputs: BaseRebaseInputs): BaseRebaseStat
     const continueState = resolveRebaseContinueState(
       inputs.rebaseStop,
       inputs.statusHead,
-      inputs.rebaseStopInspectFailure
+      inputs.rebaseStopInspectFailure,
+      inputs.indexObservation ?? null
     )
     return {
       kind: 'rebase_paused',
