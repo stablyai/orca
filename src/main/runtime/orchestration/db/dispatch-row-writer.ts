@@ -40,8 +40,8 @@ const STARTING_DISPATCH_CONTEXT_SQL = `INSERT INTO dispatch_contexts (
    id, run_id, task_id, contract_version, launch_token_hash, retry_of_dispatch_id,
    creator_dispatch_id, creator_handle, creator_pane_key, creator_orca_session_id,
    creator_turn_source, depth, status, failure_count, dispatched_at, follow_up_of_dispatch_id,
-   origin_ref, for_message_id
- ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'), ?, ?, ?)`
+   origin_ref, for_message_id, chat_lineage
+ ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'), ?, ?, ?, ?)`
 
 const REMOTE_DISPATCH_ATTACHMENT_SQL = `INSERT INTO remote_dispatch_attachments (
    dispatch_id, home_run_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch, depth
@@ -125,6 +125,7 @@ export function insertStartingDispatchContextRow(
     followUpOfDispatchId?: string | null
     originRef?: string | null
     forMessageId?: string | null
+    chatLineage?: boolean
   }
 ): void {
   assertStampedDepth(params.depth)
@@ -144,7 +145,8 @@ export function insertStartingDispatchContextRow(
     params.priorFailures,
     params.followUpOfDispatchId ?? null,
     params.originRef ?? null,
-    params.forMessageId ?? null
+    params.forMessageId ?? null,
+    params.chatLineage ? 1 : null
   )
 }
 

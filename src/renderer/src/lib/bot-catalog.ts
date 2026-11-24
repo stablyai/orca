@@ -15,6 +15,10 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import {
+  isOrcaCloudTeamFeatureBlocked,
+  ORCA_CLOUD_TEAM_POLICY_FLAGS
+} from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import { activateAndRevealFolderWorkspace } from './workspace/activation/worktree-activation'
 import {
   activateStructuredAgentSessionById,
@@ -185,12 +189,19 @@ export function useBotHostConnectorStatus(
 
 /** Settings › Bots › Enable bots, on unless turned off. Off hides every bot surface; the bots and their folders stay. */
 export function useBotsEnabled(): boolean {
-  return useAppStore((state) => state.settings?.botsEnabled !== false)
+  return useAppStore(botsEnabled)
 }
 
 /** `useBotsEnabled` for code outside React. */
 export function readBotsEnabled(): boolean {
-  return useAppStore.getState().settings?.botsEnabled !== false
+  return botsEnabled(useAppStore.getState())
+}
+
+function botsEnabled(state: AppState): boolean {
+  return (
+    state.settings?.botsEnabled !== false &&
+    !isOrcaCloudTeamFeatureBlocked(state.orcaProfileAuthStatus, ORCA_CLOUD_TEAM_POLICY_FLAGS.bots)
+  )
 }
 
 /** Makes the bot on `hostId`; it answers stamped with that host, so calls about it go there. */
@@ -291,23 +302,7 @@ export async function takeOverWorkspace(
   return sessionId
 }
 
-/** A square 512 px PNG (base64) becomes the bot's picture, kept in its home. */
-export async function uploadBotAvatar(target: BotRef, png: string): Promise<Bot> {
-  const { bot } = await callBotRpc<{ bot: Bot }>(target, 'bots.avatar.upload', {
-    botId: target.id,
-    png
-  })
-  await refreshBotHost(target.hostId)
-  return stampBotHost(target.hostId, bot)
-}
-
-/** The uploaded picture as base64 PNG, or null when the bot has none. */
-export async function readBotAvatarPng(bot: BotRef): Promise<string | null> {
-  const { png } = await callBotRpc<{ png: string | null }>(bot, 'bots.avatar.read', {
-    botId: bot.id
-  })
-  return png
-}
+export { readBotAvatarPng, readBotGenerationRevision, uploadBotAvatar } from './bot-avatar-rpc'
 
 export async function deleteBot(
   bot: BotRef,

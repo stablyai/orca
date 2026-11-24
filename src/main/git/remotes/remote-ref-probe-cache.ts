@@ -1,6 +1,6 @@
 import { readLocalGitConfigSignature } from '../../github/repositories/local-git-config-signature'
 import { runCoalescedProbe, type CoalescedProbes } from './coalesced-probe'
-import { isTransientGitProbeError, readSignedRemoteUrl } from './remote-url-probe'
+import { isTransientGitProbeError, readRemoteUrl } from './remote-url-probe'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 const REPO_REF_CACHE_MAX_ENTRIES = 512
@@ -61,13 +61,13 @@ export function createRemoteRefProbeCache<Ref>(
     configSignature: string | undefined
   ): Promise<Ref | null> {
     // Stale probes may answer their own callers, but cannot publish over a successor.
-    const publish = (value: Ref | null, signature: string | undefined): void => {
+    const publish = (value: Ref | null): void => {
       if (ownsKey()) {
-        remember(cacheKey, value, signature)
+        remember(cacheKey, value, configSignature)
       }
     }
     try {
-      const read = await readSignedRemoteUrl(
+      const stdout = await readRemoteUrl(
         {
           repoPath,
           connectionId,
@@ -78,19 +78,18 @@ export function createRemoteRefProbeCache<Ref>(
         configSignature
       )
       // null means an SSH repo unavailable to this local reader, not a missing remote.
-      if (read === null) {
+      if (stdout === null) {
         return null
       }
-      const result = parseRemoteUrl(read.url)
-      // A URL shared earlier in the pass may predate our signature.
-      publish(result, read.configSignature)
+      const result = parseRemoteUrl(stdout)
+      publish(result)
       return result
     } catch (error) {
       // Transient probe failure cannot establish a negative cache entry.
       if (isTransientGitProbeError(error)) {
         return null
       }
-      publish(null, configSignature)
+      publish(null)
       return null
     }
   }

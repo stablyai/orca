@@ -15,7 +15,6 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execu
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import type { AgentDetectionHost } from '../../../preflight/workspace-agent-detection'
 import { resolveRuntimeAgentDetectionHost } from '../../workspaces/catalog/runtime-agent-detection-host'
-import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 import { resolveRuntimeTerminalOrchestrationCliCommand } from '../../orchestration/workers/launch/orchestration-cli-command'
 import {
   readAgentOrchestrationProjectionRecords,
@@ -26,10 +25,6 @@ import { matchesProcessIncarnation } from '../../orchestration/terminal-authorit
 import { claimIdleShellPrompt } from '../input/idle-shell-prompt-claim'
 
 export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
-  protected abstract issueHandle(
-    leaf: RuntimeLeafRecord,
-    context?: TerminalIdentityReadContext
-  ): string
   protected abstract getExistingTerminalHandlesForPtyId(ptyId: string): string[]
   getTerminalProcessIncarnation(
     handle: string,
@@ -267,7 +262,10 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     )
   }
 
-  getOrchestrationFleetAgentStatusSnapshot(context?: TerminalIdentityReadContext) {
+  getOrchestrationFleetAgentStatusSnapshot(
+    context?: TerminalIdentityReadContext,
+    rows = this.getAgentStatusSnapshotFn?.() ?? []
+  ) {
     // One facts view per fleet read; per-pane raw lookups refreshed the facts source each pane.
     const dependencies = context
       ? this.agentOrchestrationDependencies({
@@ -283,7 +281,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       : this.agentOrchestrationDependencies()
     return readCapturedOrchestrationFleetAgentStatusSnapshot(
       {
-        getAgentStatusSnapshotFn: this.getAgentStatusSnapshotFn,
+        getAgentStatusSnapshotFn: () => rows,
         readObservedAgentStatusPaneIdentityFn: (pane) =>
           this.readObservedAgentStatusPaneIdentityFn(pane),
         getAgentStatusTerminalHandleForPaneKey: (pane) =>

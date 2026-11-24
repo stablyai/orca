@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { AntigravityChatAccountRow } from './AntigravityChatSignInAction'
 import { useAntigravityChatSignInControls } from './use-antigravity-chat-sign-in'
+import { antigravityServerAccountRowShown } from './antigravity-server-account-row'
 
 /** Settings rows for an execution host's chat sign-in; every client of the host shares its server's sign-in, including running flows. */
 export function AntigravityChatSignInRow(props: {
@@ -16,6 +17,9 @@ export function AntigravityChatSignInRow(props: {
   googleSignIn?: AntigravityGoogleSignInState
   /** After the sign-in method saves; the host's answer about the route is read again. */
   onSaved?: () => void
+  /** Hide the server's account row unless it carries an error, or a sign-in for a picked method
+   *  that signs in: Gemini API key chats run on agy, which Orca doesn't sign in. */
+  noServerAccount?: boolean
 }): React.JSX.Element {
   const signIn = useAntigravityChatSignInControls({
     owner: props.owner,
@@ -32,13 +36,23 @@ export function AntigravityChatSignInRow(props: {
         heading={null}
         googleSignIn={props.googleSignIn}
         onSaved={props.onSaved}
+        noServerAccount={props.noServerAccount}
         fieldsRow={(fields) => (
           <div data-settings-row="" className="py-3">
             {fields}
           </div>
         )}
       >
-        {(auth) => <AntigravityChatAccountRow signIn={signIn} auth={auth} />}
+        {(auth) =>
+          antigravityServerAccountRowShown({
+            noServerAccount: props.noServerAccount === true,
+            alert: auth.alert,
+            reauth: auth.reauth,
+            pickedMethod: auth.pickedMethod
+          }) ? (
+            <AntigravityChatAccountRow signIn={signIn} auth={auth} />
+          ) : null
+        }
       </AntigravityChatAuthForm>
       {props.runtime}
     </>

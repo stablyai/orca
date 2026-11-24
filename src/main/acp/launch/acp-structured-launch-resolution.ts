@@ -1,4 +1,7 @@
-import { antigravityChatAuthEnvironment } from '../../antigravity/antigravity-chat-auth-environment'
+import {
+  antigravityChatAuthEnvironment,
+  launchAntigravityChatAuth
+} from '../../antigravity/antigravity-chat-auth-environment'
 import { checkAcpLaunchVersion } from './acp-launch-version'
 import type { McpServer } from '../generated/acp-protocol.generated'
 import { botToolsOffInstruction, withBotLaunchToolsEnv } from '../../bots/bot-launch-tools'
@@ -14,12 +17,8 @@ import {
 } from '../../native-chat/agent-launch/structured-agent-command-resolution'
 // Launch from durable record values for the working directory, pinned account and resume session.
 
-import {
-  resolveAntigravityChatAuthConfig,
-  type AntigravityChatAuthConfig
-} from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
+import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
-import { assertAntigravityChatAuthPublished } from '../../antigravity/antigravity-chat-auth-publication'
 import { prepareAntigravityAcpProxyEnvironment } from '../../antigravity/antigravity-acp-proxy-environment'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
@@ -45,6 +44,7 @@ import {
   type AcpLaunchVisualsDeps
 } from './acp-structured-launch-skill-roots'
 import { linkedSkillsSection } from '../../native-chat/native-chat-skill-roots'
+import { noteManagedServerUse } from '../../node-runtime/managed-runtime-release'
 import type { AcpInstructionsLaunch } from './acp-instructions'
 import { acpInstructionsWithVisuals, visualsByInstructions } from './acp-visuals-instructions'
 import { withoutCallerIdentity } from '../../runtime/agent-session/environment/structured-session-child-env'
@@ -157,13 +157,7 @@ async function readAcpLaunchInvocation(
   )
   const commandSettings = deps.resolveCommandSettings?.()
   // Orca's account-type setting selects only the managed server's sign-in.
-  const usesChatAuth = spec.agent === 'antigravity' && spec.authMethod !== undefined
-  if (usesChatAuth) {
-    assertAntigravityChatAuthPublished(commandSettings?.antigravityChatAuth)
-  }
-  const antigravityChatAuth = usesChatAuth
-    ? resolveAntigravityChatAuthConfig(commandSettings?.antigravityChatAuth)
-    : undefined
+  const antigravityChatAuth = launchAntigravityChatAuth(spec, commandSettings?.antigravityChatAuth)
   const envToDelete =
     spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env, antigravityChatAuth) ?? []
   if (spec.agent === 'antigravity' && spec.managedRuntime) {
@@ -203,6 +197,7 @@ export function acpStructuredLaunchPart(
         ...(deps.inheritedEnv ? { inheritedEnv: deps.inheritedEnv } : {}),
         dataDirectory: deps.dataDirectory
       })
+    noteManagedServerUse(spec.agent, spec.managedRuntime, version)
     const cwd = await basis.launchDirectory()
     const visuals = spec.skillRoots || visualsByInstructions(spec) ? await basis.visuals() : null
     const linked = await basis.linkedSkills()

@@ -187,7 +187,8 @@ function isDashboardSubagents(value: unknown): boolean {
         isBoundedString(subagent.id, MAX_ID_LENGTH) &&
         isBoundedString(subagent.name, MAX_LABEL_LENGTH, true) &&
         typeof subagent.dotState === 'string' &&
-        DASHBOARD_DOT_STATES.has(subagent.dotState)
+        DASHBOARD_DOT_STATES.has(subagent.dotState) &&
+        (subagent.failed === undefined || subagent.failed === true)
       )
     })
   )

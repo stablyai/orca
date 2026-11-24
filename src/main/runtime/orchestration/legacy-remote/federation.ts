@@ -7,6 +7,10 @@ import { createWorkerBriefWriteGuard } from '../../terminal/wait/launched-agent-
 import { OrchestrationError } from '../orchestration-error'
 import { defineOrchestrationMethod } from '../../rpc/methods/orchestration/access/orchestration-method-access'
 import { assertOrchestrationWorktreeCreationSupported } from '../../rpc/methods/orchestration/worker/start/placement/folder-worktree-placement'
+import {
+  refuseUnmatchedWorkerSelector,
+  workerStartTargetLabel
+} from '../../rpc/methods/orchestration/worker/start/worker-start-selector-refusal'
 import type { FederationEffect } from './federation-effects'
 import { launchFederatedWorkerAgent } from './federated-worker-agent-launch'
 import type { WorkerSetupReceipt } from '../../rpc/methods/orchestration/worker/start/placement/worker-placement-topology'
@@ -62,17 +66,22 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         )
       }
       const createsWorktree = params.worktree === 'new-top-level'
-      const { agent, launch } = await prepareFederationWorkerLaunchOnHost({
-        params,
+      const targetLabel = workerStartTargetLabel({
+        ...params,
         createsWorktree,
-        runtime
+        requestedWorktree: params.worktree
       })
+      const { agent, launch } = await refuseUnmatchedWorkerSelector(targetLabel, () =>
+        prepareFederationWorkerLaunchOnHost({ params, createsWorktree, runtime })
+      )
       if (createsWorktree) {
-        await assertOrchestrationWorktreeCreationSupported({
-          runtime,
-          repoSelector: params.repo as string,
-          existingPlacement: 'an exact existing folder workspace'
-        })
+        await refuseUnmatchedWorkerSelector(targetLabel, () =>
+          assertOrchestrationWorktreeCreationSupported({
+            runtime,
+            repoSelector: params.repo as string,
+            existingPlacement: 'an exact existing folder workspace'
+          })
+        )
       }
 
       const db = runtime.getOrchestrationDb()

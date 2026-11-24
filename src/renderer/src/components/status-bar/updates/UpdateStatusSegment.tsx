@@ -64,7 +64,9 @@ export function UpdateStatusSegment(): React.JSX.Element | null {
       }
     }
     const readyVersion =
-      status.state === 'downloaded' ? status.version : linuxPackageRecovery?.version
+      status.state === 'downloaded' || status.installOnQuit
+        ? status.version
+        : linuxPackageRecovery?.version
     if (readyVersion !== undefined) {
       return {
         icon: <CheckCircle2 className="size-3 text-emerald-500" />,

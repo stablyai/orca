@@ -8,6 +8,7 @@ import { useMobileNativeChatProjection } from './transcript/projection/use-mobil
 import { nativeChatDockedTaskList } from '../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-state'
 import type { MobileNativeChatImageAttachments } from './composer/attachments/use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
+import { useMobileNativeChatFiles } from './links/use-mobile-native-chat-files'
 import type { MobileNativeChatStructuredComposer } from './composer/commands/mobile-native-chat-structured-composer'
 import { useMobileNativeChatComposerTray } from './composer/menus/use-mobile-native-chat-composer-tray'
 import { useMobileNativeChatVisualRenderer } from './visual/MobileNativeChatVisual'
@@ -25,7 +26,6 @@ import { tuiAgentDisplayName } from '../../../../src/shared/agent-launch/catalog
 import { MobileNativeChatNoticeContext } from './transcript/notices/mobile-native-chat-notice-context'
 import type { MobileNativeChatImageSource } from './visual/mobile-native-chat-image-preview'
 import type { MobileNativeChatHostOutage } from './status/mobile-native-chat-host-outage'
-import { useMobileNativeChatMarkdownLinks } from './links/use-mobile-native-chat-markdown-links'
 import { MobileMarkdownLinksContext } from '../../components/markdown/links/mobile-markdown-links-context'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -37,7 +37,8 @@ type Props = {
   worktreePath: string | null
   connState: ConnectionState
   activeSessionTabId?: string | null
-  onOpenFile: (pathText: string) => void
+  /** `cwd` is the folder the chat runs in when its host pinned a workspace sub-folder. */
+  onOpenFile: (pathText: string, cwd?: string) => void
   images: MobileNativeChatImageAttachments
   structuredComposer?: MobileNativeChatStructuredComposer | null
   onMicPress: (() => void) | undefined
@@ -141,9 +142,11 @@ function MobileNativeChatOverlayContent({
   const composerTray = useMobileNativeChatComposerTray({
     queued: {
       cards: queued.cards,
+      steerOrder: queued.steerOrder,
       onSend: queued.send,
       onDelete: queued.delete,
       onClearAll: queued.clear,
+      clearIds: queued.clearIds,
       onEdit: queued.edit,
       editor: queued.editor,
       onMove: queued.move,
@@ -152,10 +155,14 @@ function MobileNativeChatOverlayContent({
       sessionKey: queued.sessionKey,
       // Hold steering while Stop ends the turn; use the session’s single display-status decision.
       steerHeld: controller.nativeChatTurnIndicator?.stopping === true,
-      agentWorking: controller.nativeChatTurnActive
+      agentWorking: controller.nativeChatTurnActive,
+      agentMail: queued.agentMail,
+      agentMailEditable: queued.agentMailEditable
     },
     taskList,
-    backgroundTasks: controller.nativeChatBackgroundTasks
+    backgroundTasks: controller.nativeChatBackgroundTasks,
+    workerDock: controller.nativeChatWorkerDock,
+    workerApprovals: controller.nativeChatWorkerApprovals.open
   })
   const visuals = useMobileNativeChatVisualRenderer(controller.nativeChatVisualSource)
   const replyReveals = useMobileNativeChatReplyReveals(folded, streaming !== null, sendSurfaceId)
@@ -186,6 +193,13 @@ function MobileNativeChatOverlayContent({
         : null,
     [itemSource, fullContent.detail, load]
   )
+  const { mentionFiles, markdownLinks, openFile } = useMobileNativeChatFiles({
+    controller,
+    worktreePath,
+    imageSource,
+    connState,
+    onOpenFile
+  })
   const queuedComposerContext = useMemo(
     () => ({
       agent,
@@ -195,8 +209,7 @@ function MobileNativeChatOverlayContent({
       ),
       skillDiscovery: controller.nativeChatSkills,
       onNeedSkills: controller.loadNativeChatSkills,
-      filePaths: controller.nativeChatFilePaths,
-      onNeedFiles: controller.loadNativeChatFiles,
+      ...mentionFiles,
       onError: (message: string) => controller.reportQueuedEditError?.(message),
       onMicPress,
       micActive,
@@ -212,8 +225,7 @@ function MobileNativeChatOverlayContent({
       controller.nativeChatSessionOptions,
       controller.nativeChatSkills,
       controller.loadNativeChatSkills,
-      controller.nativeChatFilePaths,
-      controller.loadNativeChatFiles,
+      mentionFiles,
       controller.reportQueuedEditError,
       onMicPress,
       micActive,
@@ -264,14 +276,6 @@ function MobileNativeChatOverlayContent({
       onOpenAccounts
     ]
   )
-  const markdownLinks = useMobileNativeChatMarkdownLinks({
-    enabled: controller.showNativeChat,
-    client: imageSource?.client ?? null,
-    connState,
-    worktreeId: imageSource?.worktreeId ?? '',
-    worktreePath,
-    isWorking: controller.nativeChatTurnActive
-  })
   const continueFailed = sendErrorMessage === null && continuation?.failed === true
   const chat = (
     <MobileNativeChatRowOverlaysHost
@@ -338,7 +342,7 @@ function MobileNativeChatOverlayContent({
                       workerApprovals={controller.nativeChatWorkerApprovals}
                       onRespondPermission={controller.handleNativeChatRespondPermission}
                       composerTray={composerTray}
-                      onOpenFile={onOpenFile}
+                      onOpenFile={openFile}
                       hasMore={session.hasMore}
                       olderPages={session.olderPages}
                       onLoadEarlier={session.loadEarlier}
@@ -383,8 +387,7 @@ function MobileNativeChatOverlayContent({
                       }
                       onDismissSendError={continueFailed ? continuation?.dismissFailure : undefined}
                       onClearSendError={onClearSendError}
-                      filePaths={controller.nativeChatFilePaths}
-                      onNeedFiles={controller.loadNativeChatFiles}
+                      {...mentionFiles}
                       skillDiscovery={controller.nativeChatSkills}
                       onNeedSkills={controller.loadNativeChatSkills}
                       sessionOptions={controller.nativeChatSessionOptions}

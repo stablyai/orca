@@ -49,7 +49,11 @@ export function AgentPermissionModeMenu({
           <ChevronDown className="size-3 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" collisionPadding={8} className="w-72">
+      <DropdownMenuContent
+        align="start"
+        collisionPadding={8}
+        className="w-72 max-w-(--radix-dropdown-menu-content-available-width)"
+      >
         <DropdownMenuRadioGroup aria-label={label} value={choice}>
           {autoAvailable ? (
             <AgentPermissionChoiceItems

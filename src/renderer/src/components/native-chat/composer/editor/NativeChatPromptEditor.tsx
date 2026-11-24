@@ -1,5 +1,5 @@
 import { nativeChatCaretOnVisualEdge } from './native-chat-prompt-caret-edge'
-import { insertAgentReferences, NativeChatAgentReference } from './native-chat-agent-reference'
+import { insertAgentReferences } from './native-chat-agent-reference'
 import {
   nativeChatDraftPositions,
   hasUnsavedNativeChatComposerDraftChange
@@ -23,28 +23,32 @@ import {
   NativeChatComposerEditorView,
   useNativeChatComposerEditor
 } from './native-chat-composer-editor-owner'
-import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import {
   fileReferenceContent,
   insertPromptMention,
   NativeChatFileReference,
   NativeChatImageReference,
-  nativeChatPromptPills,
   promptLeafText,
   promptText,
   promptTextOffset,
   promptTextPosition
 } from './native-chat-prompt-document'
 import { openingPromptContent, promptTextContent } from './native-chat-prompt-document-text'
+import { toLfPastedText } from '@/lib/clipboard/clipboard-line-endings'
 import type {
   NativeChatComposerInput,
   NativeChatPromptEditorProps
 } from './native-chat-composer-input'
 import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
+import {
+  pillLeadingSideChatCommand,
+  sideChatEnabled,
+  syncSideChatPill,
+  withSideChatPillsAsText
+} from './native-chat-side-chat-node'
+import { nativeChatPromptExtensions } from './native-chat-prompt-extensions'
 import { focusMountedNativeChatEditor, mountedEditorView } from './native-chat-mounted-editor-view'
-import { NativeChatUnkernedRunDecorations } from './native-chat-unkerned-run-decorations'
-import { NativeChatHardBreakParagraphs } from './native-chat-hard-break-paragraphs'
 
 import { useNativeChatComposerMount } from '../focus/native-chat-composer-mount'
 import { useNativeChatPromptEditorHandle } from '../../native-chat-prompt-editor-handle'
@@ -69,6 +73,7 @@ function NativePromptEditor({
   initialValue,
   disabled,
   placeholder,
+  sideChat = false,
   onChange,
   onSelect,
   className,
@@ -89,28 +94,7 @@ function NativePromptEditor({
   }
   const { editor, historyPaths, selection } = useNativeChatComposerEditor(scopeKey ?? '', {
     extensions: [
-      StarterKit.configure({
-        blockquote: false,
-        bold: false,
-        bulletList: false,
-        code: false,
-        codeBlock: false,
-        dropcursor: false,
-        gapcursor: false,
-        heading: false,
-        horizontalRule: false,
-        italic: false,
-        link: false,
-        listItem: false,
-        orderedList: false,
-        strike: false,
-        underline: false,
-        trailingNode: false
-      }),
-      NativeChatAgentReference,
-      ...nativeChatPromptPills,
-      NativeChatUnkernedRunDecorations,
-      NativeChatHardBreakParagraphs,
+      ...nativeChatPromptExtensions(),
       // A disabled box still says why it is disabled, as the plain text box's placeholder does.
       Placeholder.configure({
         placeholder: ({ editor }) => {
@@ -145,7 +129,7 @@ function NativePromptEditor({
         if (text == null) {
           return false
         }
-        const content = editor?.schema.nodeFromJSON(promptTextContent(text))
+        const content = editor?.schema.nodeFromJSON(promptTextContent(toLfPastedText(text)))
         if (!content) {
           return false
         }
@@ -179,7 +163,7 @@ function NativePromptEditor({
         writeNativeChatDraftDocument(
           scopeKey,
           promptText(current.state.doc),
-          current.getJSON(),
+          withSideChatPillsAsText(current.getJSON()),
           pastedTextFiles
         )
       }
@@ -252,6 +236,7 @@ function NativePromptEditor({
   }, [editor, scopeKey, historyPaths])
 
   useLayoutEffect(() => editor?.setEditable(!disabled, false), [disabled, editor])
+  useLayoutEffect(() => syncSideChatPill(editor, sideChat), [editor, sideChat])
 
   const input = useMemo<NativeChatComposerInput | null>(
     () =>
@@ -284,6 +269,7 @@ function NativePromptEditor({
               const stored = adopted.current?.document
               if (stored || !value) {
                 editor.commands.setContent(openingPromptContent(stored, ''), { emitUpdate: false })
+                syncSideChatPill(editor, sideChatEnabled(editor))
                 applyPosition(previousRange)
                 return
               }
@@ -354,6 +340,12 @@ function NativePromptEditor({
             },
             insertMention: (from, to, token, agent) =>
               insertPromptMention(editor, from, to, token, agent),
+            pillSideChatCommand: () => {
+              const tr = pillLeadingSideChatCommand(editor)
+              if (tr) {
+                editor.view.dispatch(closeHistory(tr))
+              }
+            },
             removeImageReferences: (attachmentId) => {
               const { tr } = editor.state
               editor.state.doc.descendants((node, position) => {

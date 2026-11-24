@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
-import { UserRound, X } from 'lucide-react'
+import { Bot, UserRound, X } from 'lucide-react'
 import { ConnectorAvatar } from '@/components/ConnectorAvatar'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBotConnectorPaged } from './bot-connector-page'
-import { botMemberSource, type BotMember } from '../../../../shared/bot-types'
+import type { BotMember } from '../../../../shared/bot-types'
+import { botMemberAvatarUrl } from '../../../../shared/bots/bot-member-avatar-url'
 
 // Chips past these show as "+N": four people after You when open, three avatars when closed.
 const CHIP_LIMIT = 4
@@ -73,22 +74,23 @@ export function BotOwnerAvatar(): React.JSX.Element {
   )
 }
 
-// GitHub people are saved by numeric user id, which GitHub serves a picture for; Slack's are saved
-// with the URL the cloud sent when they were added, and Linear's people have none.
-function memberAvatarUrl(member: BotMember): string | null {
-  if (botMemberSource(member) === 'github') {
-    return /^\d+$/.test(member.id) ? `https://avatars.githubusercontent.com/u/${member.id}` : null
-  }
-  return member.avatarUrl ?? null
-}
-
-/** A person with access: their picture, else their initials. */
+/** A person with access: their picture, else their initials; an app without one, a bot icon. */
 export function BotMemberAvatar({ member }: { member: BotMember }): React.JSX.Element {
   return (
     <ConnectorAvatar
-      avatarUrl={memberAvatarUrl(member)}
+      avatarUrl={botMemberAvatarUrl(member)}
       name={memberName(member)}
       className="size-full"
+      fallback={
+        member.kind === 'app' ? (
+          <span
+            aria-hidden
+            className="flex size-full items-center justify-center rounded-full bg-muted text-muted-foreground"
+          >
+            <Bot className="size-3" />
+          </span>
+        ) : undefined
+      }
     />
   )
 }
