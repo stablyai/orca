@@ -1393,7 +1393,12 @@
           "custom": "custom",
           "indentation": "indentation",
           "long_lines": "long lines",
-          "about": "about"
+          "about": "about",
+          "width": "width",
+          "reading": "reading",
+          "line_length": "line length",
+          "centered": "centered",
+          "full_width": "full width"
         }
       },
       "cli": {
@@ -1448,7 +1453,11 @@
       "inlineBlameKeywordBlame": "blame",
       "inlineBlameKeywordGit": "git",
       "inlineBlameKeywordAuthor": "author",
-      "inlineBlameKeywordAnnotation": "annotation"
+      "inlineBlameKeywordAnnotation": "annotation",
+      "markdownReadingWidthTitle": "Markdown reading width",
+      "markdownReadingWidthDescription": "How wide Markdown text runs in the editor and preview. Centered caps the column at about 60 characters.",
+      "markdownReadingWidthCentered": "Centered",
+      "markdownReadingWidthFull": "Full width"
     },
     "openInApp": {
       "preset": {

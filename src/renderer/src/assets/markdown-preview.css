@@ -32,6 +32,11 @@
   padding-right: max(var(--md-rail-space), 100% - var(--md-measure) - var(--md-pad-start));
 }
 
+/* Full width: lift the reading cap; the preview already keeps 32px side padding. */
+:root[data-markdown-reading-width='full'] .markdown-preview > .markdown-body {
+  --md-measure: 100%;
+}
+
 .markdown-preview.has-markdown-review-rail > .markdown-body {
   --md-rail-space: calc(32px + var(--md-rail-width));
 }

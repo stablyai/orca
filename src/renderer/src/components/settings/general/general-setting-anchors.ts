@@ -27,6 +27,7 @@ export const GENERAL_SETTING_ANCHORS = {
   diffWrap: 'general-editor-diff-wrap',
   diffTree: 'general-editor-diff-tree',
   markdownView: 'general-editor-markdown-view',
+  markdownReadingWidth: 'general-editor-markdown-reading-width',
   spellcheck: 'general-editor-spellcheck',
   reviewNotes: 'general-editor-review-notes'
 } as const
@@ -63,6 +64,7 @@ export const GENERAL_SETTING_OWNERS: Readonly<Record<string, GeneralSubPage | nu
   [GENERAL_SETTING_ANCHORS.diffWrap]: 'editor',
   [GENERAL_SETTING_ANCHORS.diffTree]: 'editor',
   [GENERAL_SETTING_ANCHORS.markdownView]: 'editor',
+  [GENERAL_SETTING_ANCHORS.markdownReadingWidth]: 'editor',
   [GENERAL_SETTING_ANCHORS.spellcheck]: 'editor',
   [GENERAL_SETTING_ANCHORS.reviewNotes]: 'editor',
   'general-editor-settings': 'editor'
