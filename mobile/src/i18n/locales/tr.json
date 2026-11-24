@@ -1389,8 +1389,8 @@
       "notStaged": "Hazırlama alanına eklenmedi",
       "viewed": "Görüntülendi",
       "renamedFrom": "Önceki adı: {{oldPath}}",
-      "threadsWhenInSync_one": "Bu dal pull request ile eşleştiğinde GitHub yorumu burada görünür.",
-      "threadsWhenInSync_other": "Bu dal pull request ile eşleştiğinde {{count}} GitHub yorumu burada görünür."
+      "threadsWhenInSync_one": "Bu branch pull request ile eşleştiğinde GitHub yorumu burada görünür.",
+      "threadsWhenInSync_other": "Bu branch pull request ile eşleştiğinde {{count}} GitHub yorumu burada görünür."
     },
     "diffReviewFooter": {
       "nextFile": "Sonraki dosya",
@@ -1576,16 +1576,16 @@
       "scriptChangedTitle": "{{repoName}} reposunun kurulum betiği değişti",
       "scriptLabel": "Kurulum betiği",
       "runArchiveTitle": "{{repoName}} arşivleme betiği çalıştırılsın mı?",
-      "archiveScriptChangedTitle": "{{repoName}} deposunun arşivleme betiği değişti",
-      "archiveDescription": "Bu deponun orca.yaml betiği çalışma alanı silinmeden önce çalışır. Yalnızca bu depoya güveniyorsanız çalıştırın.",
+      "archiveScriptChangedTitle": "{{repoName}} için arşivleme betiği değişti",
+      "archiveDescription": "Bu repository'nin orca.yaml betiği çalışma alanı silinmeden önce çalışır. Yalnızca bu repository'ye güveniyorsanız çalıştırın.",
       "archiveScriptLabel": "Arşivleme betiği",
       "newArchiveScriptLabel": "Yeni arşivleme betiği",
       "runOnce": "Bir kez çalıştır",
       "alwaysTrust": "Her zaman güven",
-      "alwaysTrustScope": "Her zaman güven seçeneği, {{repoName}} deposunun orca.yaml dosyasındaki ileride yapılacak değişiklikleri sormadan çalıştırır.",
-      "branchDiffersTitle": "Bu çalışma alanının dalında farklı kurulum komutları var",
-      "branchDiffersDescription": "Çalışma alanı oluşturuldu ancak dalın orca.yaml dosyası onayladığınız dosyadan farklı olduğu için kurulum çalışmadı. Bu çalışma alanında yalnızca depoya güveniyorsanız çalıştırın.",
-      "branchSetupLabel": "Dalın kurulum betiği"
+      "alwaysTrustScope": "Her zaman güven seçeneği, {{repoName}} içindeki orca.yaml dosyasında ileride yapılacak değişiklikleri sormadan çalıştırır.",
+      "branchDiffersTitle": "Bu çalışma alanının branch'inde farklı kurulum komutları var",
+      "branchDiffersDescription": "Çalışma alanı oluşturuldu ancak branch'teki orca.yaml dosyası onayladığınız dosyadan farklı olduğu için kurulum çalışmadı. Bu çalışma alanında yalnızca bu repository'ye güveniyorsanız çalıştırın.",
+      "branchSetupLabel": "Branch'in kurulum betiği"
     },
     "smartWorkspaceAdvancedFields": {
       "branchName": "Branch adı",
@@ -1801,15 +1801,15 @@
     "hostOfflineBanner": {
       "offline": "{{host}} çevrimdışı",
       "reconnecting": "{{host}} cihazına yeniden bağlanılıyor…",
-      "asOf": "{{time}} itibarıyla burada bulunan içerik gösteriliyor"
+      "asOf": "{{time}} itibarıyla"
     },
     "offlineAsOfTime": {
       "yesterday": "dün, {{time}}"
     },
     "newWorkspaceCreateSubmit": {
-      "uncertainFolderCreate": "Bu çalışma ağacı oluşturulmuş olabilir. Yenisini oluşturmadan önce klasörü kontrol edin.",
+      "uncertainFolderCreate": "Bu worktree oluşturulmuş olabilir. Yenisini oluşturmadan önce klasörü kontrol edin.",
       "uncertainCreate": "Bu çalışma alanı oluşturulmuş olabilir. Yenisini oluşturmadan önce çalışma alanlarınızı kontrol edin.",
-      "folderCreateBusy": "Bu depoda bir çalışma ağacının oluşturulması veya denetlenmesi sürüyor. Hazır olduğunda klasörde görünür."
+      "folderCreateBusy": "Bu repository'de bir worktree'nin oluşturulması veya denetlenmesi sürüyor. Hazır olduğunda klasörde görünür."
     },
     "smartRailRow": {
       "title": "Akıllı çubuk",
@@ -2718,7 +2718,7 @@
       "linkExistingPullRequest": "Pull request'i bağla",
       "linkedPrUnavailable": "Bağlı PR #{{number}} kullanılamıyor",
       "refreshOrCreate": "Tekrar kontrol etmek için yenileyin veya bu branch için yeni bir PR oluşturun.",
-      "branchRequired": "Pull request oluşturmadan önce bir dala geçin."
+      "branchRequired": "Pull request oluşturmadan önce bir branch'e geçin."
     },
     "prViewPanel": {
       "branchUnavailable": "Geçerli branch kullanılamıyor.",
@@ -2747,7 +2747,7 @@
       "unlinkConfirmTitle": "Pull request bağlantısı kaldırılsın mı?",
       "unlinkConfirmMessage": "#{{number}} GitHub’da açık kalır. Bu çalışma alanı artık onu takip etmez.",
       "createPullRequest": "Pull request oluştur",
-      "mergedInto": "{{base}} dalına birleştirildi",
+      "mergedInto": "{{base}} içine merge edildi",
       "merged": "Birleştirildi",
       "cantMergeYet": "Henüz birleştirilemiyor:",
       "willMergeWhenReady": "Hazır olduğunda birleştirilecek",
@@ -2773,11 +2773,11 @@
       "close": "Pull request'i kapat"
     },
     "mergeSheet": {
-      "squashDetail": "{{base}} dalında tek commit",
+      "squashDetail": "{{base}} üzerinde tek commit",
       "mergeDetail": "Her commit’i korur",
-      "rebaseDetail": "Her commit’i {{base}} dalına yeniden uygular",
+      "rebaseDetail": "Her commit’i {{base}} üzerine yeniden uygular",
       "title": "#{{number}} birleştir",
-      "subtitle": "Hedef dal: {{base}}"
+      "subtitle": "Hedef branch: {{base}}"
     },
     "editSheet": {
       "title": "Başlığı düzenle",
@@ -2786,8 +2786,8 @@
     "createSheet": {
       "base": "Temel",
       "searchBranches": "Dallarda ara",
-      "branchSearchFailed": "Dal araması başarısız oldu.",
-      "noBranches": "Eşleşen dal yok",
+      "branchSearchFailed": "Branch araması başarısız oldu.",
+      "noBranches": "Eşleşen branch yok",
       "title": "{{reviewLabel}} oluştur",
       "titleLabel": "Başlık",
       "descriptionLabel": "Açıklama",
@@ -2838,7 +2838,7 @@
       "threadSubtitle_other": "{{author}} · {{count}} mesaj",
       "replyPlaceholder": "Yanıtla…",
       "back": "Pull request’e dön",
-      "noPullRequest": "Bu dalın şu anda bir pull request’i yok.",
+      "noPullRequest": "Bu branch'in şu anda bir pull request’i yok.",
       "fixWith": "{{agent}} ile düzelt",
       "live": "Canlı",
       "askToFix": "{{agent}} ajanından düzeltmesini iste",
@@ -2850,8 +2850,8 @@
       "addReviewer": "İnceleyen ekle"
     },
     "emptyState": {
-      "commitsReady_one": "{{branch}} dalındaki {{count}} commit, {{base}} dalına alınmaya hazır.",
-      "commitsReady_other": "{{branch}} dalındaki {{count}} commit, {{base}} dalına alınmaya hazır.",
+      "commitsReady_one": "{{branch}} üzerindeki {{count}} commit, {{base}} içine alınmaya hazır.",
+      "commitsReady_other": "{{branch}} üzerindeki {{count}} commit, {{base}} içine alınmaya hazır.",
       "title": "Henüz pull request yok"
     },
     "gates": {
@@ -2883,12 +2883,12 @@
       "noApprovals": "Henüz onay yok",
       "approvals_one": "{{count}} onay",
       "approvals_other": "{{count}} onay",
-      "conflictsWithBase": "{{base}} dalıyla çakışıyor",
+      "conflictsWithBase": "{{base}} ile çakışıyor",
       "conflicts": "Merge conflict'leri",
       "conflictFiles_one": "{{count}} dosya",
       "conflictFiles_other": "{{count}} dosya",
       "conflictsChecking": "Çakışmalar denetleniyor",
-      "noConflictsWithBase": "{{base}} dalıyla çakışma yok",
+      "noConflictsWithBase": "{{base}} ile çakışma yok",
       "noConflicts": "Çakışma yok"
     },
     "checkStatus": {
@@ -4163,7 +4163,7 @@
       "statusNothingStaged": "Hazırlama alanı boş",
       "statusNeedsMessage": "Mesaj gerekiyor",
       "statusNotPublished": "Yayımlanmadı",
-      "statusNoBranch": "Dal yok"
+      "statusNoBranch": "Branch yok"
     },
     "commitFailurePanel": {
       "fix": "Düzelt",
@@ -4439,7 +4439,7 @@
       "statusUpToDate": "Güncel",
       "statusSetsUpstream": "Upstream ayarlar",
       "statusNotPublished": "Yayımlanmadı",
-      "statusNoBranch": "Dal yok",
+      "statusNoBranch": "Branch yok",
       "statusMayFail": "Başarısız olabilir",
       "statusPublished": "Yayımlandı",
       "statusStashFirst": "Önce stash’e al",
@@ -4561,19 +4561,19 @@
       "emptyCopy": "Bu çalışma alanından oluşturulan worktree'ler burada görünecek.",
       "statusUnavailable": "Kullanılamıyor",
       "backToFolder": "Klasöre dön",
-      "createSection": "Çalışma ağacı oluştur",
-      "createIn": "{{repo}} deposunda çalışma ağacı oluştur",
-      "created": "{{repo}} deposunda {{name}} çalışma ağacı oluşturuldu",
-      "createdNamed": "{{name}} çalışma ağacı oluşturuldu",
-      "createFailed": "{{repo}} deposunda çalışma ağacı oluşturulamadı.",
-      "loadReposRetry": "Depoları yükle",
+      "createSection": "Worktree oluştur",
+      "createIn": "{{repo}} içinde worktree oluştur",
+      "created": "{{repo}} içinde {{name}} worktree'si oluşturuldu",
+      "createdNamed": "{{name}} worktree'si oluşturuldu",
+      "createFailed": "{{repo}} içinde worktree oluşturulamadı.",
+      "loadReposRetry": "Repository'leri yükle",
       "setupChoiceTitle": "Kurulumu atlayarak yeniden denensin mi?",
-      "setupChoiceMessage": "Orca, {{repo}} deposundaki son çalışma ağacının oluşturulduğunu doğrulayamadı. Yeniden denemek için kurulum seçiminizi belirtmeniz gerekiyor. Bu denemede çalışma ağacı, deponun kurulum adımları çalıştırılmadan oluşturulacak.",
+      "setupChoiceMessage": "Orca, {{repo}} içindeki son worktree'nin oluşturulduğunu doğrulayamadı. Yeniden denemek için kurulum seçiminizi belirtmeniz gerekiyor. Bu denemede worktree, repository'nin kurulum adımları çalıştırılmadan oluşturulacak.",
       "setupChoiceSkip": "Kurulum olmadan yeniden dene",
-      "checking": "{{repo}} deposundan bir çalışma ağacı zaten oluşturulmuş olabilir. Klasör kontrol ediliyor…"
+      "checking": "{{repo}} için bir worktree zaten oluşturulmuş olabilir. Klasör kontrol ediliyor…"
     },
     "useMobileCreatePrRunner": {
-      "branchRequired": "Pull request oluşturmadan önce bir dala geçin."
+      "branchRequired": "Pull request oluşturmadan önce bir branch'e geçin."
     },
     "commitDetail": {
       "copySha": "SHA’yı kopyala",
@@ -4586,7 +4586,7 @@
       "date": "Tarih",
       "status": "Durum",
       "onOrigin": "origin üzerinde",
-      "notPushed": "Uzak depoya gönderilmedi",
+      "notPushed": "Push edilmedi",
       "files_one": "{{count}} dosya",
       "files_other": "{{count}} dosya",
       "filesHeader": "Dosyalar",
@@ -4597,7 +4597,7 @@
       "baseUpToDate": "Güncel",
       "baseNewer_one": "1 daha yeni commit",
       "baseNewer_other": "{{count}} daha yeni commit",
-      "updateBranch": "Dalı güncelle",
+      "updateBranch": "Branch'i güncelle",
       "back": "Sürüm denetimine dön",
       "title": "Commit'ler",
       "loadMoreFailed": "Commit’leri yeniden yükle",
@@ -4608,7 +4608,7 @@
       "willMergeWhenReady": "Hazır olduğunda birleştirilecek",
       "cancelAutoMerge": "İptal",
       "cancelAutoMergeLabel": "Otomatik birleştirmeyi iptal et",
-      "mergedInto": "{{base}} dalına birleştirildi",
+      "mergedInto": "{{base}} içine merge edildi",
       "merged": "Birleştirildi",
       "genericAgent": "Yapay zekâ",
       "resolveWithAgent": "{{agent}} ile çöz",
@@ -4636,7 +4636,7 @@
       "notPushed": "{{count}} gönderilmedi",
       "behind": "{{count}} geride",
       "upToDate": "Güncel",
-      "switchBranch": "{{branch}} dalından başka bir dala geç",
+      "switchBranch": "{{branch}} yerine başka bir branch'e geç",
       "mergeInProgress": "Merge devam ediyor",
       "rebaseInProgress": "Rebase devam ediyor",
       "cherryPickInProgress": "Cherry-pick devam ediyor",
@@ -4652,7 +4652,7 @@
       "stageAll": "Tümünü hazırlama alanına ekle",
       "mergedCleanly": "Çakışma olmadan birleştirildi",
       "unstageAll": "Tümünü stage'den çıkar",
-      "onThisBranch": "Bu dalda: {{count}}",
+      "onThisBranch": "Bu branch'te: {{count}}",
       "versusBase": "{{base}} ile karşılaştır"
     }
   },
@@ -5023,7 +5023,7 @@
     "providerControls": {
       "myTodos": "Yapılacaklarım",
       "projectMergeRequests": "Proje MR'ları",
-      "reposLabel": "Depolar: {{repos}}",
+      "reposLabel": "Repository'ler: {{repos}}",
       "filterCount": "Filtrele · {{count}}",
       "filter": "Filtrele",
       "filterLabel": "Filtrele ve göster"
@@ -6064,7 +6064,7 @@
       "addWorkspace": "Çalışma alanı ekle",
       "addAnotherWorkspace": "Başka bir çalışma alanı ekle",
       "backShort": "Geri",
-      "addGitHubAccess": "Depo veya kuruluş ekle",
+      "addGitHubAccess": "Repository veya kuruluş ekle",
       "addBack": "Geri ekle",
       "addBackNamed": "{{name}} öğesini geri ekle"
     },
@@ -6261,19 +6261,19 @@
         "removeConfirm": "Kaldır",
         "finishSetup": "Kurulumu tamamla"
       },
-      "allRepositories": "{{account}} hesabındaki tüm depolar",
+      "allRepositories": "{{account}} hesabındaki tüm repository'ler",
       "account": {
         "unlink": "GitHub hesabının bağlantısını kaldır"
       },
       "howToAskPlain": "Bir iş kaydında veya çekme isteğinde {{mention}} {{handle}} … yazarak bottan bahsedin.",
-      "addMore": "Depo veya kuruluş ekle",
+      "addMore": "Repository veya kuruluş ekle",
       "checkingInstalls": "GitHub’daki değişiklikler kontrol ediliyor…",
       "connect": {
         "readsOnly": "Orca yalnızca GitHub kullanıcı adınızı ve kullanıcı kimliğinizi okur.",
         "requested": "Kuruluş sahiplerinden birine Orca uygulaması için onay isteği gönderildi.",
-        "notInstalled": "Orca uygulaması henüz hiçbir deponuzda kurulu değil."
+        "notInstalled": "Orca uygulaması henüz hiçbir repository'nizde kurulu değil."
       },
-      "allRepositoriesShort": "tüm depolar"
+      "allRepositoriesShort": "tüm repository'ler"
     },
     "connect": {
       "finishOnHost": "{{host}} üzerinde Orca’yı açıp {{service}} bağlantısını tamamlayın.",
@@ -6468,7 +6468,7 @@
       "connected": "Bağlandı",
       "paused": "{{host}} üzerinde Orca oturumu açılana kadar duraklatıldı.",
       "onComputer": "Bağlantıyı kurmak için bilgisayarınızda Orca’yı açıp bu sohbetteki kartı kullanın.",
-      "addGitHubAccess": "Depo veya kuruluş eklemek için bilgisayarınızda Orca’yı açıp bu sohbetteki kartı kullanın.",
+      "addGitHubAccess": "Repository veya kuruluş eklemek için bilgisayarınızda Orca’yı açıp bu sohbetteki kartı kullanın.",
       "addWorkspace": "Başka bir çalışma alanı eklemek için bilgisayarınızda Orca’yı açıp bu sohbetteki kartı kullanın.",
       "connect": "{{service}} hizmetine bağlan"
     },
@@ -6497,7 +6497,7 @@
       "back": "Geri",
       "groupActions": "Grup işlemleri",
       "pendingRequests": "Bekleyen istekler",
-      "needsYou": " · Sizi bekliyor",
+      "needsYou": "· Sizi bekliyor",
       "valuePending": " · {{value0}} beklemede",
       "manageMembersMenu": "Üyeleri yönet…",
       "allBots": "Tüm botlar",
