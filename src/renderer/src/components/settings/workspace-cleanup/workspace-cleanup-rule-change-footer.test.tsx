@@ -68,3 +68,30 @@ it('notes already-set rows only while one of them will still be deleted', () => 
   expect(note()).toBeNull()
   expect(screen.queryByText('Kept workspaces get pinned.')).toBeNull()
 })
+
+it('shows no focusable list when nothing matches', () => {
+  render(
+    <TooltipProvider>
+      <I18nProvider>
+        <WorkspaceCleanupRuleChangeDialog
+          request={{
+            kind: 'disable-ignored-files',
+            setting: 'keepIgnoredFiles',
+            projectName: 'Example project',
+            rows: [],
+            newKeys: new Set(),
+            currentKeys: new Set(),
+            selection: new WorkspaceCleanupKeepSelection([]),
+            status: null
+          }}
+          onCancel={() => {}}
+          onConfirm={async () => {}}
+          onToggleKeep={() => {}}
+        />
+      </I18nProvider>
+    </TooltipProvider>
+  )
+  expect(screen.getByRole('dialog')).toBeTruthy()
+  // An empty list box would still take a Tab stop and be announced as an empty list.
+  expect(screen.queryByRole('list')).toBeNull()
+})

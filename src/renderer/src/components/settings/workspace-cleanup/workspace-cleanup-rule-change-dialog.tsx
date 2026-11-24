@@ -268,63 +268,66 @@ export function WorkspaceCleanupRuleChangeDialog({
             ) : null}
           </div>
         ) : null}
-        <div
-          ref={setScroller}
-          role="list"
-          tabIndex={0}
-          aria-label={title}
-          className="max-h-72 overflow-y-auto rounded-md border border-border bg-muted px-3 scrollbar-sleek"
-          onKeyDown={(event) => {
-            if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || !rows.length) {
-              return
-            }
-            event.preventDefault()
-            const previous = (positions.get(activeKey ?? '') ?? 0) - 1
-            const index =
-              event.key === 'Home'
-                ? 0
-                : event.key === 'End'
-                  ? rows.length - 1
-                  : Math.max(
-                      0,
-                      Math.min(rows.length - 1, previous + (event.key === 'ArrowDown' ? 1 : -1))
-                    )
-            const key = cleanupChangeRowKey(rows[index])
-            setActiveKey(key)
-            requestAnimationFrame(() =>
-              scroller
-                ?.querySelector<HTMLButtonElement>(`[data-keep-key="${CSS.escape(key)}"]`)
-                ?.focus()
-            )
-          }}
-        >
-          <VirtualizedList
-            rows={rows}
-            getRowKey={cleanupChangeRowKey}
-            scrollElement={scroller}
-            activeRowKey={activeKey}
-            activeRowIndex={(positions.get(activeKey ?? '') ?? 0) - 1}
-            estimateRowHeightPx={48}
-            renderRow={(row) => {
-              const key = cleanupChangeRowKey(row)
-              return (
-                <WorkspaceCleanupRuleChangeRow
-                  key={key}
-                  row={row}
-                  keep={selected.has(key)}
-                  isNew={request?.newKeys.has(key) ?? false}
-                  project={Boolean(project)}
-                  position={positions.get(key)}
-                  total={rows.length}
-                  disabled={confirming || settling}
-                  pinLabel={disablingProtection}
-                  onToggleKeep={onToggleKeep}
-                  onFocus={setActiveKey}
-                />
+        {/* Nothing matches: no list box, so Tab and screen readers skip an empty region. */}
+        {rows.length ? (
+          <div
+            ref={setScroller}
+            role="list"
+            tabIndex={0}
+            aria-label={title}
+            className="max-h-72 overflow-y-auto rounded-md border border-border bg-muted px-3 scrollbar-sleek"
+            onKeyDown={(event) => {
+              if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+                return
+              }
+              event.preventDefault()
+              const previous = (positions.get(activeKey ?? '') ?? 0) - 1
+              const index =
+                event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? rows.length - 1
+                    : Math.max(
+                        0,
+                        Math.min(rows.length - 1, previous + (event.key === 'ArrowDown' ? 1 : -1))
+                      )
+              const key = cleanupChangeRowKey(rows[index])
+              setActiveKey(key)
+              requestAnimationFrame(() =>
+                scroller
+                  ?.querySelector<HTMLButtonElement>(`[data-keep-key="${CSS.escape(key)}"]`)
+                  ?.focus()
               )
             }}
-          />
-        </div>
+          >
+            <VirtualizedList
+              rows={rows}
+              getRowKey={cleanupChangeRowKey}
+              scrollElement={scroller}
+              activeRowKey={activeKey}
+              activeRowIndex={(positions.get(activeKey ?? '') ?? 0) - 1}
+              estimateRowHeightPx={48}
+              renderRow={(row) => {
+                const key = cleanupChangeRowKey(row)
+                return (
+                  <WorkspaceCleanupRuleChangeRow
+                    key={key}
+                    row={row}
+                    keep={selected.has(key)}
+                    isNew={request?.newKeys.has(key) ?? false}
+                    project={Boolean(project)}
+                    position={positions.get(key)}
+                    total={rows.length}
+                    disabled={confirming || settling}
+                    pinLabel={disablingProtection}
+                    onToggleKeep={onToggleKeep}
+                    onFocus={setActiveKey}
+                  />
+                )
+              }}
+            />
+          </div>
+        ) : null}
         <DialogFooter className="flex-col items-stretch sm:flex-row sm:items-end">
           <div
             className="mr-auto min-w-0 space-y-1 text-xs text-muted-foreground"
