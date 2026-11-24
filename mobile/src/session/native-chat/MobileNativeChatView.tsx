@@ -341,13 +341,8 @@ export function MobileNativeChatView({
           onChangeText={onComposerTextChange}
           onSend={handleSend}
           sendSurfaceId={sendSurfaceId}
-          {...{
-            getSendCompletionGeneration,
-            getComposerEditGeneration,
-            inputRef,
-            sendFollowUp,
-            steerHead: tray.steerHead
-          }}
+          {...{ getSendCompletionGeneration, getComposerEditGeneration, inputRef, sendFollowUp }}
+          steerHead={tray.steerHead}
           {...{ agent, sessionOptions, contextUsage }}
           {...{ onAttachImage, onPasteImages, attachments, onRemoveAttachment }}
           {...{ isAttaching, onMicPress, micActive, micStarting, micProcessing }}
