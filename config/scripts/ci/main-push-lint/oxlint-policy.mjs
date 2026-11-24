@@ -3,7 +3,7 @@
 // any name, and symlinked files followed to their target. What cannot be read statically (a script config, a
 // config that does not parse, a link out of the repository) counts as changed on every push, so it is linted.
 import path from 'node:path'
-import { EMPTY_TREE_SHA, git } from './main-push-range.mjs'
+import { decodeStrict, EMPTY_TREE_SHA, git, gitBuffer, splitNul } from './main-push-range.mjs'
 
 // The names oxlint 1.94 discovers. The script forms run JavaScript, so their inputs cannot be read here.
 export const CONFIG_NAMES = [
@@ -85,16 +85,28 @@ export function parseJsonc(text) {
   return JSON.parse(withoutTrailingCommas)
 }
 
+// Every tree entry whose path is valid UTF-8, keyed by its exact name. A path that is not is kept out, so a lossy
+// decode can never stand in for, or overwrite, a real name; a config among those is reported separately.
 async function listTree(head, cwd) {
   const entries = new Map()
-  for (const record of (await git(['ls-tree', '-r', '-z', head], cwd)).split('\0')) {
-    const tab = record.indexOf('\t')
-    if (tab !== -1) {
-      const [mode, , sha] = record.slice(0, tab).split(' ')
-      entries.set(record.slice(tab + 1), { mode, sha })
+  const undecodableConfigs = []
+  for (const record of splitNul(await gitBuffer(['ls-tree', '-r', '-z', head], cwd))) {
+    const tab = record.indexOf(0x09)
+    if (tab === -1) {
+      continue
+    }
+    const [mode, , sha] = record.subarray(0, tab).toString('latin1').split(' ')
+    const rawPath = record.subarray(tab + 1)
+    const name = decodeStrict(rawPath)
+    if (name !== null) {
+      entries.set(name, { mode, sha })
+    } else if (
+      CONFIG_NAMES.includes(rawPath.subarray(rawPath.lastIndexOf(0x2f) + 1).toString('latin1'))
+    ) {
+      undecodableConfigs.push(rawPath.toString('latin1'))
     }
   }
-  return entries
+  return { entries, undecodableConfigs }
 }
 
 // A repository path for `target` as written in `from`, or null when it leaves the repository.
@@ -110,7 +122,10 @@ function resolveFrom(from, target) {
 // target is resolved by the file system after following `name`, which may itself be a link, so collapsing it
 // as text could name the wrong file: such a target counts as unreadable.
 async function linkTarget(link, sha, cwd) {
-  const raw = await git(['cat-file', 'blob', sha], cwd)
+  const raw = decodeStrict(await gitBuffer(['cat-file', 'blob', sha], cwd))
+  if (raw === null) {
+    return { unreadable: `${link} points at a path that is not valid UTF-8` }
+  }
   // `.` and empty segments do not move, so `name/./..` and `name//..` are `name/..` too.
   const segments = raw.split('/').filter((segment) => segment !== '' && segment !== '.')
   if (
@@ -180,7 +195,7 @@ async function followLinks(file, tree, cwd) {
 // the files whose inputs cannot be read. Like oxlint, a file's `extends` resolve from where it is opened, not
 // from where a link stores it. Each file is read once, so a cycle ends.
 async function policyGraph(head, cwd) {
-  const tree = await listTree(head, cwd)
+  const { entries: tree, undecodableConfigs } = await listTree(head, cwd)
   const configs = [...tree.keys()].filter(isConfig)
   const edges = new Map()
   const unknown = new Map()
@@ -222,7 +237,7 @@ async function policyGraph(head, cwd) {
     edges.set(file, [...hops, ...targets.filter(Boolean)])
     queue.push(...targets.filter(Boolean))
   }
-  return { configs, edges, unknown }
+  return { configs, edges, unknown, undecodableConfigs }
 }
 
 // The changed files and unreadable files a config reaches through the graph, not counting itself.
@@ -266,15 +281,17 @@ async function show(rev, file, cwd) {
 export async function policyChanges(changes, { base, head, cwd }) {
   const changed = new Set(changes.map((change) => change.path))
   const policies = []
-  const direct = new Set()
+  const direct = new Map()
   for (const { status, path: file } of changes) {
     if (isConfig(file)) {
-      direct.add(file)
-      policies.push({
+      const policy = {
         dir: configDir(file),
         paths: [file],
+        unreadable: [],
         why: bounded(`${file} ${VERB[status] ?? 'changed'}`)
-      })
+      }
+      direct.set(file, policy)
+      policies.push(policy)
     }
   }
   const graph = await policyGraph(head, cwd)
@@ -284,6 +301,12 @@ export async function policyChanges(changes, { base, head, cwd }) {
     const unreadable = opaque.map((file) => graph.unknown.get(file))
     const alsoUnreadable =
       unreadable.length > 0 ? `; ${unreadable.length} of its inputs cannot be read` : ''
+    // A directly edited config keeps its unreadable status too.
+    const edited = direct.get(config)
+    if (edited && unreadable.length > 0) {
+      edited.unreadable = unreadable
+      edited.why = bounded(`${edited.why}${alsoUnreadable}`)
+    }
     if (roots.length > 0) {
       const extended = graph.edges.get(config) ?? []
       const how = roots.every((root) => extended.includes(root)) ? 'extends' : 'depends on'
@@ -304,6 +327,17 @@ export async function policyChanges(changes, { base, head, cwd }) {
       })
     }
   }
+  // oxlint finds a config in a directory whose name is not valid UTF-8; its scope cannot be named as a path,
+  // so the whole tree is walked.
+  if (graph.undecodableConfigs.length > 0) {
+    const reason = `${graph.undecodableConfigs.length} config path(s) are not valid UTF-8`
+    policies.push({
+      dir: ROOT,
+      paths: [],
+      unreadable: [reason],
+      why: `${reason}, so the whole tree is linted on every push`
+    })
+  }
   if (changed.has(LOCKFILE)) {
     const before = oxlintVersionFromLockfile(await show(base, LOCKFILE, cwd))
     const after = oxlintVersionFromLockfile(await show(head, LOCKFILE, cwd))
@@ -311,6 +345,7 @@ export async function policyChanges(changes, { base, head, cwd }) {
       policies.push({
         dir: ROOT,
         paths: [LOCKFILE],
+        unreadable: [],
         why: `the locked oxlint version changed (${before ?? 'none'} to ${after ?? 'none'})`
       })
     }

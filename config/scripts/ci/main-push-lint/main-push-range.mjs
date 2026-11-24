@@ -15,7 +15,7 @@ export async function git(args, cwd) {
   return stdout
 }
 
-async function gitBuffer(args, cwd) {
+export async function gitBuffer(args, cwd) {
   const { stdout } = await execFileAsync('git', args, {
     cwd,
     encoding: 'buffer',
@@ -94,8 +94,8 @@ export async function resolveRange({ event, before, head, cwd }) {
 
 // Every path the two trees differ in, deletions included, with Git's exact bytes checked as UTF-8:
 // oxlint takes paths as strings, so a path that is not valid UTF-8 cannot be passed on exactly.
-export async function changedPaths(base, head, cwd) {
-  const output = await gitBuffer(['diff', '--name-status', '-z', '--no-renames', base, head], cwd)
+// NUL-terminated records from Git, as raw bytes.
+export function splitNul(output) {
   const fields = []
   let start = 0
   for (let index = 0; index < output.length; index += 1) {
@@ -104,6 +104,22 @@ export async function changedPaths(base, head, cwd) {
       start = index + 1
     }
   }
+  return fields
+}
+
+// The bytes as a string when they are valid UTF-8, or null: a lossy decode could make two names one.
+export function decodeStrict(bytes) {
+  try {
+    return STRICT_UTF8.decode(bytes)
+  } catch {
+    return null
+  }
+}
+
+export async function changedPaths(base, head, cwd) {
+  const fields = splitNul(
+    await gitBuffer(['diff', '--name-status', '-z', '--no-renames', base, head], cwd)
+  )
   const changes = []
   const unrepresentable = []
   for (let index = 0; index + 1 < fields.length; index += 2) {

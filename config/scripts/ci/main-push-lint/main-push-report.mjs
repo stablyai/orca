@@ -47,8 +47,12 @@ export function describeLocation(diagnostic) {
   }
   const where = `${diagnostic.file}:${diagnostic.line}:${diagnostic.col}`
   // oxlint printed a name that more than one tracked file could have produced.
-  return diagnostic.ambiguous
-    ? `${where} (path uncertain: ${diagnostic.ambiguous.join(' or ')})`
+  if (diagnostic.ambiguous) {
+    return `${where} (path uncertain: ${diagnostic.ambiguous.join(' or ')})`
+  }
+  // Without the tracked-path index, the printed path is not checked against tracked files.
+  return diagnostic.unverified
+    ? `${where} (path unverified: tracked files could not be read)`
     : where
 }
 

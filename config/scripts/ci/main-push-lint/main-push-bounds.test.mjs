@@ -1,6 +1,6 @@
 // Pin the main-push lint's operational bounds: a stalled oxlint run, the log budget, omission notes and
 // attribution that can only see one page of GitHub results.
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -12,9 +12,10 @@ import {
   reportDiagnostics,
   reportIncomplete
 } from './ci-main-push-changed-lint.mjs'
-import { CONFIG, DEBUGGER, REPO_ROOT } from './main-push-git-test-fixture.mjs'
+import { CONFIG, createGitFixture, DEBUGGER, REPO_ROOT } from './main-push-git-test-fixture.mjs'
 import {
   incompleteHeading,
+  markdownText,
   renderAttributionSummary,
   renderLintSummary
 } from './main-push-report.mjs'
@@ -321,16 +322,25 @@ if (paths.includes('big.ts')) { process.stdout.write('x'.repeat(100_000)) } else
       () => '#7 by @a (aaaaaaaaaa)',
       () => 'unknown (GitHub API request failed (HTTP 503))'
     ]) {
-      const text = explainPolicies(policies, describe, 'this push')
-      expect(text).toMatch(/^7 lint policy changes cover it, the first 5 shown: /)
-      expect(text).toContain(`${'w'.repeat(200)}… (`)
-      expect(text).toContain('; and 1 more changed input(s)')
-      expect(text).toContain('1 of its inputs cannot be read')
-      expect(text).toContain(
-        '(no changed input in this push can be named: its inputs cannot be read)'
+      // Sized for a summary cell: the counts come first, and the first change and its commit always fit.
+      const cell = explainPolicies(policies, describe, 'this push')
+      expect(cell.length).toBeLessThanOrEqual(440)
+      const shown = Number(
+        /^7 lint policy change\(s\) cover it, 2 with unreadable inputs; (\d) shown: /.exec(
+          cell
+        )?.[1]
       )
-      expect(text).toContain(describe())
-      expect(text).not.toContain('s4 changed')
+      expect(shown).toBeGreaterThanOrEqual(1)
+      expect(cell).toContain(`${'w'.repeat(120)}… (`)
+      expect(cell).toContain(`[1 changed input(s)] (a.json changed by ${describe()})`)
+      // Sized for a log line: more changes fit, still with their counts and unreadable markers.
+      const line = explainPolicies(policies, describe, 'this push', 800)
+      expect(line.length).toBeLessThanOrEqual(800)
+      expect(Number(/; (\d) shown: /.exec(line)?.[1])).toBeGreaterThan(shown)
+      expect(line).toContain('[4 changed input(s), some unreadable] (b.json changed by')
+      expect(line).toContain(
+        '[0 changed input(s), some unreadable] (no changed input in this push can be named: its inputs cannot be read)'
+      )
     }
   })
 
@@ -413,17 +423,26 @@ if (paths.includes('big.ts')) { process.stdout.write('x'.repeat(100_000)) } else
       reason: 'not run: the lint time budget ran out',
       output: ''
     }
-    const { incomplete } = collectBatchResults([...enoent, partialCrash, skipped])
+    // Started, printed nothing, stopped: it may have linted some paths, so they are not "not linted".
+    const silent = {
+      files: ['z.ts'],
+      failed: true,
+      reason: 'stopped when the lint time budget ran out',
+      output: ''
+    }
+    const { incomplete } = collectBatchResults([...enoent, partialCrash, skipped, silent])
     expect(incomplete.map((batch) => [incompleteHeading(batch), batch.reason])).toEqual([
       ['1 path(s) were not linted', 'could not run oxlint (ENOENT)'],
       ['oxlint did not finish 2 path(s), after reporting some errors', 'exit code 101'],
-      ['1 path(s) were not linted', 'not run: the lint time budget ran out']
+      ['1 path(s) were not linted', 'not run: the lint time budget ran out'],
+      ['oxlint did not finish 1 path(s)', 'stopped when the lint time budget ran out']
     ])
     let logged
     const out = captureStdout(() => {
       logged = reportIncomplete(incomplete, createReporter({}))
     })
-    expect(logged).toBe(3)
+    expect(logged).toBe(4)
+    expect(out).toContain('Not fully linted: z.ts')
     expect(out).toContain('Not linted: a.ts')
     expect(out).toContain('Not fully linted: p.ts q.ts')
     expect(out).toContain('Not linted: s.ts')
@@ -452,15 +471,139 @@ if (paths.includes('big.ts')) { process.stdout.write('x'.repeat(100_000)) } else
       })
     )
     let exit
+    let apiCalls = 0
+    const countingApi = async () => {
+      apiCalls += 1
+      return []
+    }
     const text = await captureStdoutAsync(async () => {
       exit = await main({
-        env: { MAIN_PUSH_LINT_PLAN: planPath },
+        env: { MAIN_PUSH_LINT_PLAN: planPath, GITHUB_REPOSITORY: 'o/r' },
         root: dir,
-        invocationRoot: REPO_ROOT
+        invocationRoot: REPO_ROOT,
+        api: countingApi
       })
     })
     expect(exit).toBe(1)
-    expect(text).toContain('::error file=x.ts,line=1,col=1,title=eslint(no-debugger)::')
     expect(text).toContain('Could not map reported paths to tracked files (')
+    // The printed path is unverified: no precise location, no PR lookup.
+    expect(text).toContain(
+      '::error title=eslint(no-debugger)::`debugger` statement is not allowed (oxlint reported x.ts; tracked files could not be read to verify it)'
+    )
+    expect(text).not.toContain('::error file=')
+    expect(text).toContain(
+      'x.ts:1:1 (path unverified: tracked files could not be read) eslint(no-debugger)'
+    )
+    expect(text).toContain(
+      'x.ts: not attributed: tracked files could not be read, so this printed path is unverified'
+    )
+    expect(apiCalls).toBe(0)
+  })
+
+  // MP-C5-02: the final log line and summary cell keep every count and the first commit, whatever the causes say.
+  it('keeps policy counts, unreadable markers and the first commit in the final log and summary', async () => {
+    const fixture = createGitFixture()
+    try {
+      const origin = fixture.makeOrigin()
+      const head = fixture.commit(origin, { '.oxlintrc.json': CONFIG, 'x.ts': DEBUGGER }, 'setup')
+      const policies = [
+        {
+          dir: '.',
+          paths: ['a.json', 'b.json'],
+          unreadable: ['u'],
+          why: `${'W'.repeat(300)} depends on a.json, b.json, which changed; 1 of its inputs cannot be read`
+        },
+        {
+          dir: '.',
+          paths: ['cfg.json'],
+          unreadable: ['cfg is a script config'],
+          why: 'cfg.json was added; 1 of its inputs cannot be read'
+        },
+        {
+          dir: '.',
+          paths: [],
+          unreadable: ['x'],
+          why: `${'L'.repeat(200)}/oxlint.config.ts is a script config whose inputs cannot be read, so its scope is linted on every push`
+        },
+        ...Array.from({ length: 4 }, (_, index) => ({
+          dir: '.',
+          paths: [`s${index}.json`],
+          unreadable: [],
+          why: `s${index}.json changed`
+        }))
+      ]
+      const planPath = join(scratch, 'policy-plan.json')
+      writeFileSync(
+        planPath,
+        JSON.stringify({
+          event: 'push',
+          base: head,
+          head,
+          scope: 's',
+          touched: [],
+          files: [],
+          overlap: [],
+          dirs: ['.'],
+          policies,
+          unrepresentable: []
+        })
+      )
+      const succeed = async (path) =>
+        path.startsWith('compare/')
+          ? { total_commits: 1, commits: [{ sha: head }] }
+          : path.startsWith('commits?')
+            ? [{ sha: head, author: { login: 'ann' }, commit: { message: 'x (#7)' } }]
+            : [
+                {
+                  number: 7,
+                  merged_at: 'x',
+                  user: { login: 'ann' },
+                  base: { ref: 'main', repo: { full_name: 'o/r' } }
+                }
+              ]
+      const fail = async () => {
+        throw new Error('HTTP 503')
+      }
+      const counts = '7 lint policy change(s) cover it, 3 with unreadable inputs; '
+      const cases = [
+        { api: succeed, firstCause: '#7 by @ann' },
+        { api: fail, firstCause: 'unknown (HTTP 503)' }
+      ]
+      for (const [index, { api, firstCause }] of cases.entries()) {
+        const summaryPath = join(scratch, `policy-summary-${index}.md`)
+        const log = await captureStdoutAsync(async () => {
+          await main({
+            env: {
+              MAIN_PUSH_LINT_PLAN: planPath,
+              GITHUB_REPOSITORY: 'o/r',
+              GITHUB_STEP_SUMMARY: summaryPath
+            },
+            root: origin,
+            invocationRoot: REPO_ROOT,
+            api
+          })
+        })
+        const line = log
+          .split('\n')
+          .find((text) => text.startsWith('x.ts: not changed in this push'))
+        expect(line.startsWith(`x.ts: not changed in this push; linted because ${counts}`)).toBe(
+          true
+        )
+        expect(line).toContain(
+          `[2 changed input(s), some unreadable] (a.json changed by ${firstCause}`
+        )
+        expect(line).toContain('[1 changed input(s), some unreadable] (cfg.json changed by')
+        const cell = readFileSync(summaryPath, 'utf8')
+          .split('\n')
+          .find((text) => text.startsWith('| <code>x.ts</code> |'))
+        expect(cell).toContain(markdownText(counts))
+        expect(cell).toContain(markdownText(`(a.json changed by ${firstCause}`))
+        // A cut cause carries its own note inside the cell; the cell itself is never cut, so it ends on a source.
+        expect(cell).not.toMatch(/more characters&#41; \|$/)
+        expect(cell).toMatch(/&#41; \|$/)
+      }
+    } finally {
+      fixture.cleanup()
+    }
   })
 })

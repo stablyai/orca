@@ -33,9 +33,11 @@ const MAX_LOGGED_PATHS = 50
 // Each annotation's text is cut before escaping, so every annotation, and so all of them, have a byte bound.
 const MAX_ANNOTATION_CHARS = 2_000
 const MAX_ANNOTATION_PATH_CHARS = 500
-const MAX_POLICIES_NAMED = 5
-const MAX_INPUTS_NAMED = 3
-const MAX_CAUSE_CHARS = 200
+// A summary cell keeps 500 characters and a log line 1,000; explanations stay under both.
+const SUMMARY_CAUSE_BUDGET = 440
+const LOG_CAUSE_BUDGET = 800
+const MAX_WHY_CHARS = 120
+const MAX_COMMIT_CHARS = 150
 
 export function createReporter(env) {
   let logBytes = 0
@@ -100,12 +102,15 @@ export function reportDiagnostics(diagnostics, errorCount, reporter) {
     const location =
       diagnostic.file &&
       !diagnostic.ambiguous &&
+      !diagnostic.unverified &&
       diagnostic.file.length <= MAX_ANNOTATION_PATH_CHARS
         ? `file=${escapeAnnotationProperty(diagnostic.file)},line=${diagnostic.line},col=${diagnostic.col},`
         : ''
     const which = diagnostic.ambiguous
       ? ` (oxlint reported ${diagnostic.file}, which could be any of: ${diagnostic.ambiguous.join(', ')})`
-      : ''
+      : diagnostic.unverified
+        ? ` (oxlint reported ${diagnostic.file}; tracked files could not be read to verify it)`
+        : ''
     reporter.error(diagnostic.rule, `${diagnostic.message}${which}`, location)
   }
   return Math.min(diagnostics.length, MAX_LOG_DIAGNOSTICS)
@@ -125,7 +130,8 @@ export function reportIncomplete(incomplete, reporter) {
         ? ` and ${batch.files.length - MAX_LOGGED_PATHS} more`
         : ''
     // A run that reported some errors before stopping linted part of its paths.
-    const label = batch.ran !== false && batch.partial ? 'Not fully linted' : 'Not linted'
+    // A run that started may have linted some of its paths before it stopped, whatever it printed.
+    const label = batch.ran !== false ? 'Not fully linted' : 'Not linted'
     if (reporter.log(`${label}: ${batch.files.slice(0, MAX_LOGGED_PATHS).join(' ')}${more}`)) {
       logged += 1
     }
@@ -171,35 +177,40 @@ export function resolveReportedPaths(diagnostics, index) {
   }
 }
 
-// Why an untouched file was linted: how many policy changes cover it first, so a cut never hides the count, then
-// up to a few of them, each with the commits behind up to a few of its changed inputs, or that it has none.
-export function explainPolicies(policies, describe, noun) {
-  const shown = policies.slice(0, MAX_POLICIES_NAMED).map((policy) => {
-    const inputs = policy.paths
-      .slice(0, MAX_INPUTS_NAMED)
-      .map((input) => `${input} changed by ${truncate(describe(input), MAX_CAUSE_CHARS)}`)
-    const moreInputs =
-      policy.paths.length > MAX_INPUTS_NAMED
-        ? `; and ${policy.paths.length - MAX_INPUTS_NAMED} more changed input(s)`
-        : ''
-    const source =
-      policy.paths.length > 0
-        ? `${inputs.join('; ')}${moreInputs}`
-        : `no changed input in ${noun} can be named: its inputs cannot be read`
-    return `${truncate(policy.why, MAX_CAUSE_CHARS)} (${source})`
-  })
-  const count =
-    policies.length > shown.length
-      ? `${policies.length} lint policy changes cover it, the first ${shown.length} shown`
-      : `${policies.length} lint policy change(s) cover it`
-  return `${count}: ${shown.join('; ')}`
+// Why an untouched file was linted, within `budget` characters. Every count comes first (policy changes, how
+// many have unreadable inputs, how many are shown), so a later cut can only drop detail. Each shown change gives
+// its cut cause, how many changed inputs it has, and the commits behind the first; the first change always fits.
+export function explainPolicies(policies, describe, noun, budget = SUMMARY_CAUSE_BUDGET) {
+  const unreadable = policies.filter((policy) => policy.unreadable?.length > 0).length
+  const entry = (policy) => {
+    const [first] = policy.paths
+    const inputs = `${policy.paths.length} changed input(s)${policy.unreadable?.length > 0 ? ', some unreadable' : ''}`
+    const source = first
+      ? `${first} changed by ${truncate(describe(first), MAX_COMMIT_CHARS)}`
+      : `no changed input in ${noun} can be named: its inputs cannot be read`
+    return `${truncate(policy.why, MAX_WHY_CHARS)} [${inputs}] (${source})`
+  }
+  const counts = (shown) =>
+    `${policies.length} lint policy change(s) cover it` +
+    `${unreadable > 0 ? `, ${unreadable} with unreadable inputs` : ''}; ${shown} shown: `
+  const entries = []
+  for (const policy of policies) {
+    const used =
+      counts(policies.length).length + entries.reduce((total, text) => total + text.length + 2, 0)
+    const text = entry(policy)
+    if (entries.length > 0 && used + text.length > budget) {
+      break
+    }
+    entries.push(entries.length === 0 ? truncate(text, Math.max(budget - used, 80)) : text)
+  }
+  return `${counts(entries.length)}${entries.join('; ')}`
 }
 
 async function reportAttribution({ diagnostics, plan, env, reporter, api }) {
   const failing = [
     ...new Set(
       diagnostics
-        .filter((diagnostic) => !diagnostic.ambiguous)
+        .filter((diagnostic) => !diagnostic.ambiguous && !diagnostic.unverified)
         .map((diagnostic) => diagnostic.file)
         .filter(Boolean)
     )
@@ -209,7 +220,13 @@ async function reportAttribution({ diagnostics, plan, env, reporter, api }) {
       .filter((diagnostic) => diagnostic.ambiguous)
       .map((diagnostic) => [diagnostic.file, diagnostic.ambiguous])
   )
-  if (failing.length === 0 && ambiguous.size === 0) {
+  // Without the tracked-path index, a printed path may not be the tracked file: no lookup is made for it.
+  const unverified = [
+    ...new Set(
+      diagnostics.filter((diagnostic) => diagnostic.unverified).map((diagnostic) => diagnostic.file)
+    )
+  ]
+  if (failing.length === 0 && ambiguous.size === 0 && unverified.length === 0) {
     return
   }
   const ref = env.GITHUB_REF_NAME || 'main'
@@ -236,26 +253,44 @@ async function reportAttribution({ diagnostics, plan, env, reporter, api }) {
       })
     : new Map()
   const describe = (file) => describeAttribution(attributions.get(file), ref)
-  const becauseOf = (policies) => explainPolicies(policies, describe, noun)
+  // The summary cell and the log line each get an explanation sized for them.
+  const becauseOf = (file, budget) =>
+    `not changed in ${noun}; linted because ${explainPolicies(policiesFor.get(file), describe, noun, budget)}`
+  const unattributed = (description) => ({
+    description,
+    logDescription: description,
+    unclear: true
+  })
   const rows = [
-    ...failing.map((file) => ({
-      file,
-      description: touched.has(file)
-        ? describe(file)
-        : `not changed in ${noun}; linted because ${becauseOf(policiesFor.get(file))}`
-    })),
+    ...failing.map((file) =>
+      touched.has(file)
+        ? { file, description: describe(file), logDescription: describe(file) }
+        : {
+            file,
+            description: becauseOf(file, SUMMARY_CAUSE_BUDGET),
+            logDescription: becauseOf(file, LOG_CAUSE_BUDGET),
+            policyRow: true
+          }
+    ),
     ...[...ambiguous].map(([file, candidates]) => ({
       file,
-      ambiguous: true,
-      description: `not attributed: oxlint reported this path, which could be any of ${candidates.join(', ')}`
+      ...unattributed(
+        `not attributed: oxlint reported this path, which could be any of ${candidates.join(', ')}`
+      )
+    })),
+    ...unverified.map((file) => ({
+      file,
+      ...unattributed(
+        'not attributed: tracked files could not be read, so this printed path is unverified'
+      )
     }))
   ]
   let logged = 0
-  for (const { file, description, ambiguous: unclear } of rows) {
+  for (const { file, logDescription, unclear, policyRow } of rows) {
     const line =
-      touched.has(file) && !unclear
-        ? `${file}: changed in ${noun} by ${description}`
-        : `${file}: ${description}`
+      touched.has(file) && !unclear && !policyRow
+        ? `${file}: changed in ${noun} by ${logDescription}`
+        : `${file}: ${logDescription}`
     if (reporter.log(line)) {
       logged += 1
     }
@@ -339,6 +374,9 @@ export async function main({
   const { diagnostics, errorCount, incomplete, linted } = results
   // Mapping printed paths back to tracked files is best effort; a failure must not cost the verdict.
   if (indexError) {
+    for (const diagnostic of diagnostics) {
+      diagnostic.unverified = Boolean(diagnostic.file)
+    }
     reporter.log(
       `Could not map reported paths to tracked files (${truncate(String(indexError.message), 300)}); paths are shown as oxlint printed them.`
     )

@@ -71,7 +71,13 @@ describe('main-push lint policy', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
       )
       expect(await planFor(added)).toMatchObject({
         dirs: ['t'],
-        policies: [{ why: 't/oxlint.config.ts was added' }]
+        // Directly edited, and still unreadable: both are said.
+        policies: [
+          {
+            why: 't/oxlint.config.ts was added; 1 of its inputs cannot be read',
+            unreadable: ['t/oxlint.config.ts is a script config whose inputs cannot be read']
+          }
+        ]
       })
       const addedRun = await runWorkflow(added)
       expect(addedRun.lintExit).toBe(1)
@@ -237,8 +243,13 @@ describe('main-push lint policy', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
     )
     const plan = await planFor(pushed)
     expect(plan.policies).toEqual([
-      { dir: '.', paths: ['.oxlintrc.json'], why: '.oxlintrc.json changed' },
-      { dir: 'mobile', paths: ['mobile/.oxlintrc.json'], why: 'mobile/.oxlintrc.json changed' },
+      { dir: '.', paths: ['.oxlintrc.json'], unreadable: [], why: '.oxlintrc.json changed' },
+      {
+        dir: 'mobile',
+        paths: ['mobile/.oxlintrc.json'],
+        unreadable: [],
+        why: 'mobile/.oxlintrc.json changed'
+      },
       {
         dir: 'mobile',
         paths: ['.oxlintrc.json', 'extra.json'],
@@ -250,13 +261,16 @@ describe('main-push lint policy', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
     const line = run.log
       .split('\n')
       .find((text) => text.startsWith('mobile/x.ts: not changed in this push'))
-    expect(line).toContain('linted because 3 lint policy change(s) cover it: ')
-    expect(line).toContain('mobile/.oxlintrc.json changed (mobile/.oxlintrc.json changed by')
+    expect(line).toContain('linted because 3 lint policy change(s) cover it; 3 shown: ')
     expect(line).toContain(
-      'mobile/.oxlintrc.json extends .oxlintrc.json, extra.json, which changed (.oxlintrc.json changed by'
+      'mobile/.oxlintrc.json changed [1 changed input(s)] (mobile/.oxlintrc.json changed by'
     )
-    expect(line).toContain('; extra.json changed by')
-    expect(line).toContain('; .oxlintrc.json changed (.oxlintrc.json changed by')
+    expect(line).toContain(
+      'mobile/.oxlintrc.json extends .oxlintrc.json, extra.json, which changed [2 changed input(s)] (.oxlintrc.json changed by'
+    )
+    expect(line).toContain(
+      '; .oxlintrc.json changed [1 changed input(s)] (.oxlintrc.json changed by'
+    )
   })
 
   // POSIX allows a backslash in a name; oxlint 1.94 reports it as a slash.
