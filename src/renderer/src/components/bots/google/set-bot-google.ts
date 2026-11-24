@@ -7,15 +7,25 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY } from '../../../../../shared/google/google-connect-types'
+import {
+  GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY,
+  type GoogleStatusView
+} from '../../../../../shared/google/google-connect-types'
+import { googleEmailKey } from '../../../../../shared/google/google-bot-accounts'
 import { botConnectorRowKey, forgetBotConnectorPage } from '../bot-connector-page'
 import { refreshGoogle } from './google-connect-client'
 
 /** With `on`: only `accounts` (absent is every account), and the askers the owner was shown. */
 type GoogleBotSet = { accounts?: readonly string[]; confirmedAskers?: readonly string[] }
 
-/** An older host drops a list and grants every account, so a list is never sent to one. */
+/** A strict subset of accounts chosen on a host too old to keep a list. */
 export class GoogleAccountsNeedHostUpdate extends Error {}
+
+function hostLabel(bot: BotRef, target: RuntimeClientTarget): string {
+  return target.kind === 'local'
+    ? translate('bots.google.thisServer', 'this server')
+    : selectExecutionHostDisplayLabel(useAppStore.getState(), bot.hostId, { t: translate })
+}
 
 async function hostKeepsAccountLists(target: RuntimeClientTarget): Promise<boolean> {
   if (target.kind === 'environment') {
@@ -32,6 +42,16 @@ async function hostKeepsAccountLists(target: RuntimeClientTarget): Promise<boole
   return status.capabilities?.includes(GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY) === true
 }
 
+/** Whether `accounts` are every account signed in on the host, which plain on grants anyway. */
+async function coversEveryHostAccount(
+  target: RuntimeClientTarget,
+  accounts: readonly string[]
+): Promise<boolean> {
+  const status = await callRuntimeRpc<GoogleStatusView>(target, 'google.status', {})
+  const chosen = new Set(accounts.map(googleEmailKey))
+  return status.accounts.every((account) => chosen.has(googleEmailKey(account.email)))
+}
+
 /** The bot toggle lives with the bot, on its host. */
 export async function setBotGoogle(
   bot: BotRef,
@@ -39,23 +59,30 @@ export async function setBotGoogle(
   set: GoogleBotSet = {}
 ): Promise<void> {
   const target = botTarget(bot)
-  if (on && set.accounts && !(await hostKeepsAccountLists(target))) {
-    const host =
-      target.kind === 'local'
-        ? translate('bots.google.thisServer', 'this server')
-        : selectExecutionHostDisplayLabel(useAppStore.getState(), bot.hostId, { t: translate })
-    throw new GoogleAccountsNeedHostUpdate(
-      translate(
-        'bots.google.updateToChooseAccounts',
-        'Update Orca on {{host}} to choose accounts.',
-        {
-          host
-        }
+  let { accounts } = set
+  // An older host drops a list and grants every account: send it plain on only when that is the choice.
+  if (on && accounts && !(await hostKeepsAccountLists(target))) {
+    if (!(await coversEveryHostAccount(target, accounts))) {
+      throw new GoogleAccountsNeedHostUpdate(
+        translate(
+          'bots.google.updateToChooseAccounts',
+          'Update Orca on {{host}} to choose accounts.',
+          {
+            host: hostLabel(bot, target)
+          }
+        )
       )
-    )
+    }
+    accounts = undefined
   }
   // A plain on means every account: say so, or a host keeps the list the bot already has.
-  const params = on ? (set.accounts ? set : { ...set, allAccounts: true }) : {}
+  const { confirmedAskers } = set
+  const params = on
+    ? {
+        ...(accounts ? { accounts } : { allAccounts: true }),
+        ...(confirmedAskers ? { confirmedAskers } : {})
+      }
+    : {}
   await callBotRpc(bot, 'google.bot.set', { botId: bot.id, on, ...params })
   if (!on) {
     forgetBotConnectorPage(botConnectorRowKey(bot, 'google'))

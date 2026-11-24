@@ -90,7 +90,7 @@ describe('Calendar timers follow their rule', () => {
     checker.stop()
   })
 
-  it('starts no run from a timer once its account is taken off the bot', async () => {
+  it("starts a timer's run only while its account is still on the bot", async () => {
     let bot: { id: string; google: boolean; googleAccounts?: string[] } = {
       id: 'b1',
       google: true,
@@ -127,6 +127,11 @@ describe('Calendar timers follow their rule', () => {
     runs[0]?.()
     await Promise.resolve()
     expect(runForEvent).not.toHaveBeenCalled()
+    // Given back before the timer fires, the account starts its run.
+    bot = { ...bot, googleAccounts: ['A@x.com'] }
+    runs[0]?.()
+    await Promise.resolve()
+    expect(runForEvent).toHaveBeenCalledTimes(1)
     checker.stop()
   })
 

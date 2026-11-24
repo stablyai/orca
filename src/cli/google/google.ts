@@ -44,7 +44,7 @@ async function assertGoogleBotAccounts(ctx: HandlerContext): Promise<void> {
   if (!status.result.capabilities?.includes(GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError(
       'incompatible_runtime',
-      `Update Orca on ${status.result.machineName ?? 'this computer'} to choose accounts.`
+      `Update Orca on ${status.result.machineName?.trim() || 'this computer'} to choose accounts.`
     )
   }
 }
