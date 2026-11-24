@@ -25,13 +25,18 @@ export type CodexAccountRestartIpcDeps = PtyKillIpcDeps & {
   getSettings?: () => GlobalSettings | undefined
 }
 
+// A stop can outlive the window that asked for it; every step reads the deps current at that moment.
+let currentDeps: CodexAccountRestartIpcDeps | null = null
+
 export function installCodexAccountRestartIpcHandlers(deps: CodexAccountRestartIpcDeps): void {
+  currentDeps = deps
+  const current = (): CodexAccountRestartIpcDeps => currentDeps ?? deps
   getPtyIpc().handle(
     'pty:stopCodexForAccountRestart',
     (_event, args: CodexAccountRestartStopRequest) =>
       codexAccountRestartStops.request(args, {
-        resolveOccupant: (request) => resolveCodexRestartOccupant(deps, request),
-        stop: (occupant) => stopCodexRestartOccupant(deps, occupant)
+        resolveOccupant: (request) => resolveCodexRestartOccupant(current(), request),
+        stop: (occupant) => stopCodexRestartOccupant(current, occupant)
       })
   )
   getPtyIpc().handle(
@@ -101,10 +106,10 @@ export function resolveCodexRestartOccupant(
 }
 
 async function stopCodexRestartOccupant(
-  deps: CodexAccountRestartIpcDeps,
+  current: () => CodexAccountRestartIpcDeps,
   occupant: CodexRestartOccupant
 ): Promise<CodexRestartStopOutcome> {
-  await deps.getLocalPtyProviderStartupPromise(LOCAL_EXECUTION_HOST_ID)
+  await current().getLocalPtyProviderStartupPromise(LOCAL_EXECUTION_HOST_ID)
   const provider = tryGetProviderForPty(occupant.ptyId)
   if (!provider?.killFenced) {
     return 'service-outdated'
@@ -121,7 +126,8 @@ async function stopCodexRestartOccupant(
     return 'unknown'
   }
   if (outcome.outcome === 'ended') {
-    deliverRestartReceiptExit(deps, occupant)
+    // Deliver through the window registered now, not the one that asked for the stop.
+    deliverRestartReceiptExit(current(), occupant)
     // The root ended either way; only positive descendant evidence lets another account read the transcript.
     return outcome.writersExited === true ? 'ended' : 'ended-unproven'
   }

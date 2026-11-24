@@ -105,6 +105,7 @@ import { ptyIncarnationById } from '../provider/ownership-state'
 import { TerminalIntentionalStops } from '../../../runtime/terminal/stop/terminal-intentional-stops'
 import { installCodexAccountRestartIpcHandlers } from './codex-account-restart-ipc'
 import { codexAccountRestartStops } from './codex-account-restart-stops'
+import { releaseAbsentPaneOwner } from '../pane/absent-pane-owner'
 import type { PtyIpcSession } from '../session'
 
 let paneCounter = 0
@@ -299,5 +300,49 @@ describe('account restart exits arriving out of order', () => {
       providerSession: { key: 'session_id', id: 'thread-1' }
     })
     expect(decision.kind).toBe('pinned')
+  })
+
+  it('delivers a receipt to the window registered now, not the one that asked', async () => {
+    const t = setup()
+    const result = t.request()
+    await t.stopDispatched()
+    // macOS window reactivation re-registers PTY IPC while the stop is held.
+    const nextWindowSend = vi.fn()
+    installCodexAccountRestartIpcHandlers({
+      store: undefined,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restart path reads only these runtime fields.
+      runtime: t.runtime as never,
+      getLocalPtyProviderStartupPromise: () => undefined,
+      shutdownProviderAndDetectExit: vi.fn(),
+      rememberSyntheticKillExit: vi.fn(),
+      sendPtyExitToRenderer: nextWindowSend,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: staleness is mocked.
+      getSettings: () => ({}) as never
+    })
+    t.release({ outcome: 'ended', writersExited: true })
+    await result
+    expect(nextWindowSend).toHaveBeenCalledTimes(1)
+    expect(t.sendPtyExitToRenderer).not.toHaveBeenCalled()
+  })
+
+  it('does not end the process a second time when an attach miss follows the receipt', async () => {
+    const t = setup()
+    const result = t.request()
+    await t.stopDispatched()
+    t.release({ outcome: 'ended', writersExited: true })
+    await result
+    expect(t.runtime.onPtyExit).toHaveBeenCalledTimes(1)
+    await releaseAbsentPaneOwner(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the release reads only these runtime fields.
+      { runtime: t.runtime as never },
+      {
+        tabId: 'tab',
+        leafId: t.pane.leafId,
+        ptyId: t.pane.ptyId,
+        incarnationId: t.pane.incarnationId,
+        runtimeIncarnationId: t.pane.incarnationId
+      }
+    )
+    expect(t.runtime.onPtyExit).toHaveBeenCalledTimes(1)
   })
 })
