@@ -843,6 +843,7 @@
     "bots.google.step.links",
     "bots.google.step.project",
     "bots.google.step.publish",
+    "bots.google.thisServer",
     "bots.google.title",
     "bots.google.turnOn.confirm",
     "bots.google.turnOn.title",
