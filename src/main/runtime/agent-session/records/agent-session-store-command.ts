@@ -74,6 +74,8 @@ export type AgentSessionStoreCommand =
       legacyTabIds: readonly string[]
       /** Hide the tab but keep the chat open. */
       background?: true
+      /** Hide the tab, drop any background hold, and mark the bot chat ended. */
+      end?: true
     }
   | { kind: 'tabs-background-backfill'; sessionIds: readonly string[] }
   | { kind: 'permission-backfill'; fullAccess: ReadonlyMap<string, boolean> }
@@ -236,7 +238,8 @@ export function applyAgentSessionStoreCommand(
         command.visible,
         command.tabId,
         command.legacyTabIds,
-        command.background === true
+        command.background === true,
+        command.end === true
       )
       return command.visible ? (state.sessionTabs?.tabIdFor(command.sessionId) ?? null) : retired
     }

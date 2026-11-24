@@ -33,6 +33,7 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { OrcaRuntimeWithLinearCommands } from './integrations/linear/linear-commands'
 import { botStructuredSessionWiring, type WiredBot } from '../bots/bot-structured-session-wiring'
 import { botChatJournal } from '../bots/bot-chat-reads'
+import { installBotChatEndGuards } from '../bots/chat-end/bot-chat-end-guards'
 import type { RuntimeStore } from './construction/runtime-store-contract'
 import { watchBotSettingsChangeSources } from '../bots/bot-settings-change-sources'
 import type { BotChangeScope } from '../../shared/bots/bot-change-scope'
@@ -243,6 +244,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   /** The structured host's bot side: their sessions' tools and memory, Look around, and the queued-message gate. */
   protected botStructuredSessionHostDeps(store: () => RuntimeStore) {
+    installBotChatEndGuards()
     return {
       ...botStructuredSessionWiring({
         store,

@@ -70,6 +70,16 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['bot', 'end-chat'],
+    summary: "End one of a bot's side chats that has nothing left to do",
+    usage: 'orca bot end-chat --chat <id> [--bot <name>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'bot', 'chat'],
+    notes: [
+      'Takes the id `orca bot chats` prints. An ended chat leaves the bot’s chats and takes no more mail; it stays in Session History, and reopening it there brings it back.',
+      'A chat still working, waiting on a request or question, posted to by an automation, linked to a Slack, Linear, GitHub or Discord thread, or one that ran workers is not ended; the command says why. The Home Chat and the chat it runs in are never ended.'
+    ]
+  },
+  {
     path: ['bot', 'memory', 'forget'],
     hidden: true,
     summary: 'Take a fact out of MEMORY.md',

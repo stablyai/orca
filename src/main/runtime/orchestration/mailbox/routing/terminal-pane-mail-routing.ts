@@ -1,3 +1,4 @@
+import { isChatEndFenced } from '../../../../bots/chat-end/bot-chat-end-fence'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import type { TerminalIdentityReadContext } from '../../../terminal/query/terminal-identity-read-context'
 import { ptyRecordForPaneKey } from '../../../terminal/query/pty-pane-record'
@@ -238,6 +239,10 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
 
   /** A closed chat ends its workers' Dispatches as a closed terminal does; /clear successors retain their work. */
   onStructuredSessionTabHidden(sessionId: string): void {
+    // An admitted bot chat end proved it has no workers and holds off new ones: nothing to settle.
+    if (isChatEndFenced(sessionId)) {
+      return
+    }
     try {
       const db = this.getExistingOrchestrationDb()
       for (const worker of db ? closedChatWorkersForSession(sessionId, db) : []) {
