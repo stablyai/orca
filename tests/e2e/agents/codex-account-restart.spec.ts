@@ -118,7 +118,9 @@ test('restart only stops Codex; the pane resumes the same conversation on the ne
 
   // Switch to B the way a user does (Settings > Accounts); the pane is now stale and offers the restart.
   await orcaPage.evaluate(() => {
-    window.__store!.getState().openSettingsTarget({ pane: 'accounts', repoId: null })
+    const state = window.__store!.getState()
+    state.openSettingsTarget({ pane: 'accounts', repoId: null })
+    state.openSettingsPage()
   })
   const accountB = orcaPage.getByRole('button', { name: /acct-b@example\.com/ }).first()
   await expect(accountB).toBeVisible({ timeout: 20_000 })
