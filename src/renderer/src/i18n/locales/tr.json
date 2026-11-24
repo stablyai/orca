@@ -24479,7 +24479,6 @@
       "paste": {
         "remoteSignIn": "Uzaktan oturum açma"
       },
-      "allApps": "Tüm uygulamalar",
       "composio": {
         "withComposio": "Composio ile"
       },
@@ -24507,7 +24506,6 @@
           "usWest": "Batı ABD"
         }
       },
-      "onBot": "{{bot}} üzerinde",
       "line": {
         "vercel": "Dağıtımları kontrol edin ve günlüklerini okuyun",
         "sentry": "Hataları ve arkalarındaki olayları inceleyin",

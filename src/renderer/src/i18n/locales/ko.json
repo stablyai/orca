@@ -27670,8 +27670,6 @@
       "composio": {
         "withComposio": "Composio로 연결"
       },
-      "allApps": "모든 앱",
-      "onBot": "{{bot}}에 추가된 앱",
       "mcp": {
         "addTitle": "{{app}} 추가",
         "advanced": "고급",
