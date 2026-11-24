@@ -41,10 +41,19 @@ export class SharedBotHeldSends {
     )
   }
 
-  /** A held message lasts as long as the cloud reports it; one held since `askedAt` the cloud's
-   *  answer may not list yet. */
-  kept(held: SharedBotHeldMessage, askedAt: number): boolean {
-    return this.states.has(held.clientMessageId) || held.sentAt >= askedAt
+  /**
+   * A share's held messages after a cloud read, merged by id: one it lists is marked listed; one it
+   * doesn't list is dropped only once an earlier read listed it. A read that was out while a message
+   * was held can't list it yet, so it is kept, with no clock to compare.
+   */
+  settle(held: readonly SharedBotHeldMessage[]): SharedBotHeldMessage[] {
+    return held.flatMap((message) =>
+      this.states.has(message.clientMessageId)
+        ? [message.listed ? message : { ...message, listed: true as const }]
+        : message.listed
+          ? []
+          : [message]
+    )
   }
 
   isWaiting(held: SharedBotHeldMessage): boolean {

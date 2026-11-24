@@ -254,3 +254,54 @@ describe('the held queue’s order', () => {
     expect(await held.send(waiting, 'live', sendParams('chat-0002', 'm3'))).toBeNull()
   })
 })
+
+describe('a held message and a cloud read that cross', () => {
+  it('keeps a message held while a read was out until a read lists it, then drops it once one doesn’t', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-cross-'))
+    dirs.push(dir)
+    const store = new SharedBotHostStore(dir)
+    await store.load()
+    const device = nacl.sign.keyPair()
+    store.put(
+      entry({
+        hostKey: HOST_KEY,
+        deviceKey: {
+          publicKeyB64: Buffer.from(device.publicKey).toString('base64'),
+          secretKeyB64: Buffer.from(device.secretKey).toString('base64')
+        }
+      })
+    )
+    let accept: () => void = () => {}
+    const held = new SharedBotHeldSends({
+      store,
+      cloud: () => ({
+        mine: async () => UNREADABLE_ANSWER,
+        accept: async () => UNREADABLE_ANSWER,
+        hold: () =>
+          new Promise((resolve) => {
+            accept = () => resolve({ ok: true, value: { status: 'held' } })
+          })
+      }),
+      now: () => 5,
+      changed: () => {}
+    })
+    // A read that doesn't list m1 lands on the share; it either crosses the hold or follows it.
+    const read = (listed: MineShare['held']): void => {
+      held.applyMine([share({ hostKey: HOST_KEY, held: listed })])
+      const current = store.get('share-1')!
+      store.put({ ...current, held: held.settle(current.held) })
+    }
+    const sending = held.send(store.get('share-1')!, 'offline', sendParams('chat-0001', 'm1'))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    read([])
+    accept()
+    await sending
+    read([])
+    const ids = () => store.get('share-1')!.held.map((message) => message.clientMessageId)
+    expect(ids()).toEqual(['m1'])
+    read([{ clientMessageId: 'm1', state: 'waiting' }])
+    expect(store.get('share-1')!.held[0]?.listed).toBe(true)
+    read([])
+    expect(ids()).toEqual([])
+  })
+})

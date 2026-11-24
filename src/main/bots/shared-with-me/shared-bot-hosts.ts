@@ -120,12 +120,11 @@ export class SharedBotHosts {
       this.timer = null
     }
     const cloud = this.deps.cloud()
-    const askedAt = this.now()
     const answer = cloud ? await cloud.mine() : null
     // Signed out: the account's shares, keys and links go with it.
     const shares = answer?.ok ? answer.value.shares : answer?.error === 'signed_out' ? [] : null
     if (shares) {
-      this.applyMine(shares, askedAt)
+      this.applyMine(shares)
       await Promise.all(this.store.list().map((entry) => this.advance(entry)))
     }
     this.publish()
@@ -192,7 +191,7 @@ export class SharedBotHosts {
     })
   }
 
-  private applyMine(shares: readonly MineShare[], askedAt: number): void {
+  private applyMine(shares: readonly MineShare[]): void {
     const current = new Map(shares.map((share) => [share.shareId, share]))
     this.shares = current
     this.held.applyMine(shares)
@@ -228,7 +227,7 @@ export class SharedBotHosts {
         ...(share.avatarUrl ? { avatarUrl: share.avatarUrl } : {}),
         ...(share.hostKey ? { hostKey: share.hostKey } : {}),
         ...(offer ? { offer } : {}),
-        held: entry.held.filter((held) => this.held.kept(held, askedAt))
+        held: this.held.settle(entry.held)
       })
     }
   }
