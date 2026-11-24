@@ -1,4 +1,8 @@
-import { isFinalAutomationRunStatus, type AutomationRun } from './automation-run'
+import {
+  isFinalAutomationRunStatus,
+  isRecoveringAutomationRun,
+  type AutomationRun
+} from './automation-run'
 
 export const MAX_AUTOMATION_RUNS_PER_AUTOMATION = 100
 
@@ -15,7 +19,7 @@ export function pruneAutomationRuns(
     if (automationRuns.length > maxPerAutomation) {
       automationRuns.sort(
         (a, b) =>
-          Number(!!b.missedOccurrenceRecovery) - Number(!!a.missedOccurrenceRecovery) ||
+          Number(isRecoveringAutomationRun(b)) - Number(isRecoveringAutomationRun(a)) ||
           b.createdAt - a.createdAt ||
           b.scheduledFor - a.scheduledFor
       )

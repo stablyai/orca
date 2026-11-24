@@ -1,8 +1,9 @@
 import type { Store } from '../../persistence/loading-store/store'
 import type { PublishAutomationsChanged } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
-import type {
-  AutomationDispatchResult,
-  AutomationRun
+import {
+  isRecoveringAutomationRun,
+  type AutomationDispatchResult,
+  type AutomationRun
 } from '../../../shared/automations/history/automation-run'
 
 type DurableWrite<T extends (...args: never[]) => unknown> = (
@@ -54,9 +55,7 @@ export function createAutomationRunWriter(
   }
   return {
     recoverMissed: async (automation, before) => {
-      const recovering = store
-        .listAutomationRuns(automation.id)
-        .some((run) => run.missedOccurrenceRecovery)
+      const recovering = store.listAutomationRuns(automation.id).some(isRecoveringAutomationRun)
       const complete = store.recordMissedAutomationOccurrences(automation, before)
       await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
       if (automation.nextRunAt < before || recovering) {

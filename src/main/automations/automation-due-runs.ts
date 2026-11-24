@@ -1,5 +1,6 @@
 // One scheduler tick: each automation whose time came, a wait at its deadline or expiry included.
 import type { Automation } from '../../shared/automations/automation-definition'
+import { isRecoveringAutomationRun } from '../../shared/automations/history/automation-run'
 import { onceClaimed, onceDueAt, onceRunFinished } from '../../shared/automation-once'
 import { AutomationDispatchCancelledError } from './dispatch/automation-dispatch-cancelled-error'
 import { recordUnevaluableAutomation } from './dispatch/dispatch-refusal'
@@ -31,7 +32,7 @@ export async function runDueAutomations(input: {
         recoveringIds ??= new Set(
           ctx.store
             .listAutomationRuns()
-            .filter((run) => run.missedOccurrenceRecovery)
+            .filter(isRecoveringAutomationRun)
             .map((run) => run.automationId)
         )
         if (!automation.once && recoveringIds.has(automation.id)) {

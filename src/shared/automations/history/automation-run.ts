@@ -42,6 +42,12 @@ export function isFinalAutomationRunStatus(status: AutomationRunStatus): boolean
   )
 }
 
+export function isRecoveringAutomationRun(
+  run: Pick<AutomationRun, 'missedOccurrenceRecovery'>
+): boolean {
+  return !!run.missedOccurrenceRecovery && run.missedOccurrenceRecovery.failure === undefined
+}
+
 /** Folded runs keep their first occurrence's timestamps, so the latest occurrence is when it last ran. */
 export function getAutomationRunLastRunAt(
   run: Pick<
@@ -160,6 +166,8 @@ export type AutomationRun = {
     timezone: string
     nextAt: number
     before: number
+    /** Quarantined snapshots retain their partial count and diagnostic without retrying. */
+    failure?: string
   }
   /** The latest event folded into it; a manual run of an event automation replays the latest one. */
   event?: AutomationRunEvent
