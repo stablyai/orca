@@ -3,12 +3,15 @@
 const OPEN = String.fromCharCode(1)
 const CLOSE = String.fromCharCode(2)
 const PLACEHOLDER = new RegExp(`${OPEN}(\\d+)${CLOSE}`, 'g')
+const DELIMITERS = new RegExp(`[${OPEN}${CLOSE}]`, 'g')
 
 /** One line of Markdown as plain words: no `**`, `#`, list marks, code ticks or link syntax. Code
  *  spans keep their contents as written. */
 export function markdownPlainLine(line: string): string {
   const spans: string[] = []
+  // The delimiters are dropped from the input first, so only real code spans become placeholders.
   return line
+    .replace(DELIMITERS, '')
     .replace(/`([^`]*)`/g, (_, code: string) => `${OPEN}${spans.push(code) - 1}${CLOSE}`)
     .trim()
     .replace(/^(#{1,6}|>|[-*+]|\d+[.)])(?:\s+|$)/, '')

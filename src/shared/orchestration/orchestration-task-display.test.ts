@@ -13,6 +13,9 @@ describe('buildOrchestrationTaskDisplayMetadata', () => {
     expect(title('**Fix `__init__` handling** and [`a_b`](https://x.test)')).toBe(
       'Fix __init__ handling and a_b'
     )
+    expect(title(`Fix ${String.fromCharCode(1)}0${String.fromCharCode(2)} and \`cache\``)).toBe(
+      'Fix 0 and cache'
+    )
     expect(
       buildOrchestrationTaskDisplayMetadata({ spec: '# x', taskTitle: '# Kept' }).taskTitle
     ).toBe('# Kept')
