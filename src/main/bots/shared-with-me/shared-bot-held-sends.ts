@@ -18,7 +18,12 @@ import {
   type SharedBotHostEntry,
   type SharedBotHostStore
 } from './shared-bot-host-store'
-import { sendsHeld, type MineShare, type SharedBotLink } from './shared-bot-pairing'
+import {
+  sendsHeld,
+  sharedBotHeldChatId,
+  type MineShare,
+  type SharedBotLink
+} from './shared-bot-pairing'
 import {
   SharedBotHeldUploads,
   SHARED_BOT_UPLOAD_METHODS,
@@ -100,7 +105,7 @@ export class SharedBotHeldSends {
   views(entry: SharedBotHostEntry): SharedBotHeldView[] {
     return entry.held.map((held) => ({
       clientMessageId: held.clientMessageId,
-      sessionId: 'sessionId' in held.chat ? held.chat.sessionId : held.chat.newChatId,
+      sessionId: sharedBotHeldChatId(held),
       text: held.text,
       sentAt: held.sentAt,
       state: this.state(held)
@@ -184,6 +189,22 @@ export class SharedBotHeldSends {
     return keeps ? this.uploads.call(method, params, entry.ownerName) : null
   }
 
+  /** The host started the new chat `newChatId` as `sessionId`: its held messages land there, and
+   *  that chat's later messages wait behind them. */
+  started(entry: SharedBotHostEntry, newChatId: string, sessionId: string): void {
+    const current = this.deps.store.get(entry.shareId) ?? entry
+    if (!current.held.some((held) => sharedBotHeldChatId(held) === newChatId)) {
+      return
+    }
+    this.deps.store.put({
+      ...current,
+      held: current.held.map((held) =>
+        sharedBotHeldChatId(held) === newChatId ? { ...held, startedAs: sessionId } : held
+      )
+    })
+    this.deps.changed()
+  }
+
   /** Holds a refused message again under a new id, in place of the refused one. */
   async sendAgain(entry: SharedBotHostEntry, clientMessageId: string): Promise<boolean> {
     const refused = entry.held.find(
@@ -200,7 +221,8 @@ export class SharedBotHeldSends {
         text: refused.text,
         attachments: refused.attachments ?? []
       },
-      clientMessageId
+      clientMessageId,
+      refused.startedAs
     )
     return result?.kind === 'held'
   }
@@ -213,7 +235,8 @@ export class SharedBotHeldSends {
       text: string
       attachments: readonly SharedBotHeldAttachment[]
     },
-    replaces?: string
+    replaces?: string,
+    startedAs?: string
   ): Promise<HandOffResult | null> {
     const hostKey = sharedBotHostKey(entry)
     const cloud = this.deps.cloud()
@@ -228,7 +251,10 @@ export class SharedBotHeldSends {
       const current = this.deps.store.get(entry.shareId) ?? entry
       this.deps.store.put({
         ...current,
-        held: [...current.held.filter((held) => held.clientMessageId !== replaces), result.held]
+        held: [
+          ...current.held.filter((held) => held.clientMessageId !== replaces),
+          startedAs ? { ...result.held, startedAs } : result.held
+        ]
       })
       this.states.set(result.held.clientMessageId, 'waiting')
       this.heldAtRead.set(result.held.clientMessageId, this.reads)

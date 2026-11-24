@@ -593,3 +593,32 @@ describe('a teammate’s messages while the shared agent’s computer is away', 
     ])
   })
 })
+
+describe('a new chat the host started from its placeholder id', () => {
+  it('draws its held messages in the started chat, and keeps that chat’s follow-ups behind them', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-started-'))
+    dirs.push(dir)
+    const store = new SharedBotHostStore(dir)
+    await store.load()
+    const placeholder = entry({
+      hostKey: HOST_KEY,
+      held: [{ clientMessageId: 'm1', chat: { newChatId: 'shared-new-1' }, text: 'hi', sentAt: 0 }]
+    })
+    store.put(placeholder)
+    let changed = 0
+    const held = new SharedBotHeldSends({
+      store,
+      cloud: () => null,
+      now: () => 0,
+      changed: () => {
+        changed += 1
+      }
+    })
+    held.started(placeholder, 'shared-new-1', 'chat-real-01')
+    const started = store.get('share-1')!
+    expect(changed).toBe(1)
+    expect(held.views(started).map((view) => view.sessionId)).toEqual(['chat-real-01'])
+    expect(sendsHeld(started, 'live', { sessionId: 'chat-real-01' }, new Map())).toBe(true)
+    expect(sendsHeld(started, 'live', { sessionId: 'chat-other-1' }, new Map())).toBe(false)
+  })
+})

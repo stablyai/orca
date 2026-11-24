@@ -19,6 +19,8 @@ const KeyPair = z.object({ publicKeyB64: Text, secretKeyB64: Text })
 export const SharedBotHeldMessage = z.object({
   clientMessageId: Text,
   chat: z.union([z.object({ sessionId: Text }), z.object({ newChatId: Text })]),
+  // A new chat's session once the host started it: the chat the message lands in.
+  startedAs: Text.optional(),
   // Kept on this device only, to draw it in its chat and send it again if the host refuses it.
   text: z.string(),
   // Sealed with it, and kept to send it again.

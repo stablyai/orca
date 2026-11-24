@@ -1,5 +1,6 @@
 // The agents shared with this Orca account: found on Orca Cloud, paired over Orca Relay, and reached by
 // the window as hosts of their own. A message to a host that is away is held in Orca Cloud.
+import { z } from 'zod'
 import {
   SHARED_BOT_HOST_ERRORS,
   type SharedBotHostView
@@ -28,6 +29,10 @@ import type { SharedBotHomes } from './shared-bot-home'
 // New shares and invites resolve within this; pairing and held messages are read sooner.
 const IDLE_POLL_MS = 10 * 60 * 1000
 const BUSY_POLL_MS = 30 * 1000
+
+// A new chat started live under the id its held messages name, and the session the host gave it.
+const NewChatParams = z.looseObject({ newChatId: z.string() })
+const StartedSession = z.looseObject({ sessionId: z.string() })
 
 export type SharedBotHostsDeps = {
   userDataPath: string
@@ -186,7 +191,13 @@ export class SharedBotHosts {
       return sharedBotOffline(entry, method)
     }
     try {
-      return this.withMeta(entry, await this.linkFor(entry).request(method, params))
+      const response = await this.linkFor(entry).request(method, params)
+      const newChat = method === 'bots.session.start' ? NewChatParams.safeParse(params).data : null
+      const started = response.ok ? StartedSession.safeParse(response.result).data : undefined
+      if (newChat && started) {
+        this.held.started(entry, newChat.newChatId, started.sessionId)
+      }
+      return this.withMeta(entry, response)
     } catch {
       // The link closed or timed out under the request: an answer the window can read.
       return sharedBotOffline(entry, method)

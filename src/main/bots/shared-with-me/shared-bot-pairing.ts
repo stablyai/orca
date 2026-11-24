@@ -98,10 +98,13 @@ export function withoutRefusedCredential(
 
 type HeldChat = SharedBotHeldMessage['chat']
 
-const sameChat = (a: HeldChat, b: HeldChat): boolean =>
-  'sessionId' in a && 'sessionId' in b
-    ? a.sessionId === b.sessionId
-    : 'newChatId' in a && 'newChatId' in b && a.newChatId === b.newChatId
+/** The chat a held message lands in: its session, a new chat's once the host started it, else its
+ *  placeholder id (the namespaces never meet). */
+export function sharedBotHeldChatId(
+  held: Pick<SharedBotHeldMessage, 'chat' | 'startedAs'>
+): string {
+  return 'sessionId' in held.chat ? held.chat.sessionId : (held.startedAs ?? held.chat.newChatId)
+}
 
 /**
  * Whether a message goes to Orca Cloud's held queue instead of the relay. Only with the host's key
@@ -121,8 +124,10 @@ export function sendsHeld(
   if (link !== 'live' || 'newChatId' in chat) {
     return true
   }
+  const chatId = sharedBotHeldChatId({ chat })
   return entry.held.some(
     (held) =>
-      sameChat(held.chat, chat) && (heldStates.get(held.clientMessageId) ?? 'waiting') === 'waiting'
+      sharedBotHeldChatId(held) === chatId &&
+      (heldStates.get(held.clientMessageId) ?? 'waiting') === 'waiting'
   )
 }
