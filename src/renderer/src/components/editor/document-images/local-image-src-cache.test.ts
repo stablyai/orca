@@ -10,7 +10,7 @@ import {
   resetLocalImageCacheState,
   subscribeToLocalImageCacheInvalidation
 } from './local-image-src-cache'
-import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
+import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/runtime/files/watching/worktree-file-change-event'
 
 describe('local-image-src-cache', () => {
   beforeEach(() => {

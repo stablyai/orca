@@ -5,7 +5,7 @@ import {
   unpinLocalImageCacheKey
 } from './local-image-cache-pinning'
 import { isCommittedAgentSessionAttachmentPath } from '../../../../../shared/agent-session/agent-session-attachments'
-import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
+import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/runtime/files/watching/worktree-file-change-event'
 import { IMAGE_AND_PDF_PREVIEW_MIME_TYPES } from '../../../../../shared/file-preview/file-preview-kind'
 
 const BLOB_URL_CACHE_MAX_SIZE = 100
