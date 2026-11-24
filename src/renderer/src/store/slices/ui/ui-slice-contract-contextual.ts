@@ -75,6 +75,8 @@ export type UISliceContextual = {
   chatUiLaunchTipVariant: ChatUiLaunchTipVariant | null
   setChatUiLaunchTipVariant: (variant: ChatUiLaunchTipVariant) => void
   featureInteractions: FeatureInteractionState
+  /** Whether the profile had opened the workspace board before this launch; null until persisted UI loads. */
+  workspaceBoardUsedBeforeLaunch: boolean | null
   recordFeatureInteraction: (id: FeatureInteractionId) => Promise<void>
   contextualToursSeenIds: ContextualTourId[]
   contextualToursAutoEligible: boolean | null

@@ -35,6 +35,11 @@ import {
   lazyModulesToAnchor,
   sharedModulesToMerge
 } from './mobile-web-app-chunk-grouping.mjs'
+import {
+  deferredOutputs,
+  localeCatalogOutputs,
+  pageScriptCount
+} from './mobile-web-app-asset-kinds.mjs'
 
 const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
 const mobileDir = join(projectDir, 'mobile')
@@ -466,8 +471,6 @@ export async function mobileWebAppModuleClosure(entryModules, { absWorkingDir } 
   }
 }
 
-// One lazily imported chunk per UI language; the page fetches only the active one after init.
-const LOCALE_CATALOG_INPUT = /(^|\/)src\/i18n\/locales\/[^/]+\.json$/
 const localeCatalogDir = join(mobileDir, 'src', 'i18n', 'locales')
 
 // The same catalogs as JSON for the host to serve one at a time, to shells that skip the chunks;
@@ -493,25 +496,6 @@ export async function readLocaleCatalogs(directory = localeCatalogDir) {
       }
     })
   )
-}
-
-function localeCatalogOutputs(metafile) {
-  return new Set(
-    Object.entries(metafile.outputs)
-      .filter(([, output]) => {
-        const inputs = Object.keys(output.inputs ?? {})
-        return inputs.length > 0 && inputs.every((input) => LOCALE_CATALOG_INPUT.test(input))
-      })
-      .map(([output]) => basename(output))
-  )
-}
-
-// The entry and its chunks, without locale catalogs: what the chunk fence and its sweep table count.
-export function pageScriptCount(metafile) {
-  const catalogs = localeCatalogOutputs(metafile)
-  return Object.keys(metafile.outputs).filter(
-    (output) => isScriptOutput(output) && !catalogs.has(basename(output))
-  ).length
 }
 
 // esbuild keeps a whole namespace used as a value: `import { z }` or `z.core` ships ~200 KB of zod locale tables.
@@ -573,11 +557,13 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const images = others.filter(({ emittedName }) => !isScriptOutput(emittedName)).sort(byName)
   const closure = entryStaticClosure(result.metafile, entryOutputPath)
   const catalogOutputs = localeCatalogOutputs(result.metafile)
+  const deferred = deferredOutputs(result.metafile)
   return {
     script: entry.bytes,
     chunks,
     images,
     catalogChunks: chunks.filter(({ emittedName }) => catalogOutputs.has(emittedName)),
+    deferredChunks: chunks.filter(({ emittedName }) => deferred.has(emittedName)),
     // Count final renamed bytes; metafile sizes predate longer hashes but still identify static imports.
     entryStaticBytes: [...closure].reduce(
       (total, path) => total + (renamed.get(basename(path))?.bytes.byteLength ?? 0),
@@ -623,7 +609,17 @@ export async function buildMobileWebAppBundle({
   const [
     desktopVersion,
     protocolWindow,
-    { script, chunks, images, catalogChunks, entryStaticBytes, chunkCount, routeChunks, routeKeys },
+    {
+      script,
+      chunks,
+      images,
+      catalogChunks,
+      deferredChunks,
+      entryStaticBytes,
+      chunkCount,
+      routeChunks,
+      routeKeys
+    },
     catalogs,
     scrollbarStyle
   ] = await Promise.all([
@@ -639,12 +635,14 @@ export async function buildMobileWebAppBundle({
   // Names already hash final bytes, so hashedAsset must reproduce them.
   const scriptAsset = hashedAsset(script, 'js')
   const catalogChunkSet = new Set(catalogChunks)
+  const deferredChunkSet = new Set(deferredChunks)
   const written = [
     scriptAsset,
     ...[...chunks, ...images].map((output) => ({
       ...hashedAsset(output.bytes, extname(output.name).slice(1)),
-      // Shells that read catalogs from the host skip these; older shells download them as before.
-      ...(catalogChunkSet.has(output) ? { kind: 'catalog' } : {})
+      // Newer shells skip these in the download; older shells download them as before.
+      ...(catalogChunkSet.has(output) ? { kind: 'catalog' } : {}),
+      ...(deferredChunkSet.has(output) ? { deferred: true } : {})
     }))
   ]
 
@@ -685,7 +683,8 @@ export async function buildMobileWebAppBundle({
     // Everything the routes import that is not a script, which is the rest of the asset budget.
     imageCount: images.length,
     catalogChunkCount: catalogChunks.length,
-    catalogBytes: catalogChunks.reduce((total, { bytes }) => total + bytes.byteLength, 0)
+    catalogBytes: catalogChunks.reduce((total, { bytes }) => total + bytes.byteLength, 0),
+    deferredBytes: deferredChunks.reduce((total, { bytes }) => total + bytes.byteLength, 0)
   }
 }
 

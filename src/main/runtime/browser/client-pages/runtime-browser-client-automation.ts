@@ -17,6 +17,7 @@ import { isAgentRpcCaller, type RpcCallerIdentity } from '../../rpc/callers/rpc-
 import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import { grantClientPageUploadReads } from './client-page-upload-reads'
 import { downloadClientPageToPath } from './client-page-download-to-path'
+import { browserClientPageDesktopDataRefusal } from '../../../browser/client-pages/execution/browser-client-page-desktop-data-refusal'
 
 export type ClientHostedBrowserRpcRoute = { handled: false } | { handled: true; result: unknown }
 
@@ -41,6 +42,11 @@ export async function routeRuntimeBrowserClientAutomation(
   const page = await resolveTargetPage(options.params, options.pages, options.resolveWorkspace)
   if (!page) {
     return { handled: false }
+  }
+  // Refused here so an older desktop, which would run them, never receives them.
+  const dataRefusal = browserClientPageDesktopDataRefusal(method.data, options.params)
+  if (dataRefusal) {
+    throw new BrowserError(dataRefusal.code, dataRefusal.message)
   }
   const agent = isAgentRpcCaller(options.caller)
   // A person's tab pick waits while the agent drives this page.

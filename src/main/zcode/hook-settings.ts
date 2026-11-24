@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import {
   buildManagedCommandHook,
   type HookDefinition
@@ -44,8 +44,25 @@ export function getZCodeConfigPath(): string {
   return join(homedir(), '.zcode', 'cli', 'config.json')
 }
 
+function getZCodeRemoteCliDir(remoteHome: string): string {
+  return `${remoteHome.replace(/\/$/, '')}/.zcode/cli`
+}
+
 export function getZCodeRemoteConfigPath(remoteHome: string): string {
-  return `${remoteHome.replace(/\/$/, '')}/.zcode/cli/config.json`
+  return `${getZCodeRemoteCliDir(remoteHome)}/config.json`
+}
+
+/** npm zcode-app-cli reads this file instead of config.json. */
+export function getZCodeAppCliSettingsPath(): string {
+  // Relative overrides resolve against the zcode process cwd, which Orca cannot know.
+  const override = process.env.ZCODE_CLI_SETTINGS_FILE?.trim()
+  return override && isAbsolute(override)
+    ? override
+    : join(homedir(), '.zcode', 'cli', 'setting.json')
+}
+
+export function getZCodeRemoteAppCliSettingsPath(remoteHome: string): string {
+  return `${getZCodeRemoteCliDir(remoteHome)}/setting.json`
 }
 
 export function getZCodeManagedScriptFileName(): string {

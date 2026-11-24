@@ -1,5 +1,5 @@
 diff --git a/binding.gyp b/binding.gyp
-index 11a5e71..84f2f29 100644
+index 11a5e71..e201ceb 100644
 --- a/binding.gyp
 +++ b/binding.gyp
 @@ -3,7 +3,6 @@
@@ -10,13 +10,14 @@ index 11a5e71..84f2f29 100644
        ],
        "conditions": [
          ['OS=="win"', {
-@@ -12,15 +11,16 @@
+@@ -12,15 +11,17 @@
              "src/cpu_worker.cc",
              "src/process.cc",
              "src/process_worker.cc",
 -            "src/process_commandline.cc"
 +            "src/process_commandline.cc",
 +            "src/process_launch.cc",
++            "src/process_job.cc",
 +            "src/process_file_users.cc"
            ],
 -          "include_dirs": [],
@@ -33,10 +34,10 @@ index 11a5e71..84f2f29 100644
                  "/guard:cf",
                  "/sdl",
 diff --git a/lib/index.js b/lib/index.js
-index 9747a7402600cd252859144d32580ed45c8c93f7..69cf7fe6d14e52b199ac9ab869567be5d9bb708c 100644
+index e586cd6..fb4ac30 100644
 --- a/lib/index.js
 +++ b/lib/index.js
-@@ -6,12 +6,18 @@
+@@ -6,12 +6,22 @@
  Object.defineProperty(exports, "__esModule", { value: true });
  exports.getAllProcesses = exports.getProcessTree = exports.getProcessCpuUsage = exports.getProcessList = exports.filterProcessList = exports.buildProcessTree = exports.ProcessDataFlag = void 0;
  const util_1 = require("util");
@@ -46,6 +47,10 @@ index 9747a7402600cd252859144d32580ed45c8c93f7..69cf7fe6d14e52b199ac9ab869567be5
 +const native = process.platform === 'win32' ? require(require('fs').existsSync(orcaNativeBuild) ? orcaNativeBuild : '../build/Release/windows_process_tree.node') : undefined;
 +exports.getProcessCreationTime = native === undefined ? undefined : native.getProcessCreationTime;
 +exports.supportedProcessDataFlags = native === undefined ? undefined : native.supportedProcessDataFlags;
++exports.createKillOnCloseJob = native === undefined ? undefined : native.createKillOnCloseJob;
++exports.assignProcessToJob = native === undefined ? undefined : native.assignProcessToJob;
++exports.isProcessInJob = native === undefined ? undefined : native.isProcessInJob;
++exports.terminateJob = native === undefined ? undefined : native.terminateJob;
 +exports.getProcessIdsUsingPaths = native === undefined ? undefined : native.getProcessIdsUsingPaths;
  var ProcessDataFlag;
  (function (ProcessDataFlag) {
@@ -56,7 +61,7 @@ index 9747a7402600cd252859144d32580ed45c8c93f7..69cf7fe6d14e52b199ac9ab869567be5
  })(ProcessDataFlag = exports.ProcessDataFlag || (exports.ProcessDataFlag = {}));
  // requestInProgress is used for any function that uses CreateToolhelp32Snapshot, as multiple calls
  // to this cannot be done at the same time.
-@@ -66,11 +72,12 @@ function buildProcessTree(rootPid, processList, maxDepth = MAX_FILTER_DEPTH) {
+@@ -66,11 +76,12 @@ function buildProcessTree(rootPid, processList, maxDepth = MAX_FILTER_DEPTH) {
      // • the properties are inlined/splatted
      // • the 'ppid' field is omitted
      // • the depth of the tree is limited by `maxDepth`
@@ -71,10 +76,10 @@ index 9747a7402600cd252859144d32580ed45c8c93f7..69cf7fe6d14e52b199ac9ab869567be5
      });
      return buildNode(root, maxDepth);
 diff --git a/lib/index.ts b/lib/index.ts
-index 7b53aad05c3682a5c7d814d81a39c3f391ae97e3..364b384e7d55f3682515431839352b5b4a9ffa93 100644
+index 7b53aad..58d39e5 100644
 --- a/lib/index.ts
 +++ b/lib/index.ts
-@@ -5,13 +5,21 @@
+@@ -5,13 +5,26 @@
  
  import { promisify } from 'util';
  
@@ -85,6 +90,11 @@ index 7b53aad05c3682a5c7d814d81a39c3f391ae97e3..364b384e7d55f3682515431839352b5b
 +export const getProcessCreationTime: ((pid: number) => number | undefined) | undefined = native?.getProcessCreationTime;
 +/** The flag bits this compiled addon reports; undefined off win32. */
 +export const supportedProcessDataFlags: number | undefined = native?.supportedProcessDataFlags;
++/** A kill-on-close job without breakaway; undefined off win32 or in an addon built before it. */
++export const createKillOnCloseJob: (() => unknown) | undefined = native?.createKillOnCloseJob;
++export const assignProcessToJob: ((job: unknown, pid: number) => boolean) | undefined = native?.assignProcessToJob;
++export const isProcessInJob: ((job: unknown, pid: number) => boolean | null) | undefined = native?.isProcessInJob;
++export const terminateJob: ((job: unknown) => boolean) | undefined = native?.terminateJob;
 +/** Pids with a handle open on each path (FileProcessIdsUsingFileInformation); null where a path could not be queried. */
 +export const getProcessIdsUsingPaths: ((paths: string[]) => Promise<(number[] | null)[]>) | undefined = native?.getProcessIdsUsingPaths;
  import { IProcessInfo, IProcessTreeNode, IProcessCpuInfo } from '@vscode/windows-process-tree';
@@ -98,7 +108,7 @@ index 7b53aad05c3682a5c7d814d81a39c3f391ae97e3..364b384e7d55f3682515431839352b5b
  }
  
  type RequestCallback = (processList: IProcessInfo[]) => void;
-@@ -81,11 +89,12 @@ export function buildProcessTree(rootPid: number, processList: Iterable<IProcess
+@@ -81,11 +94,12 @@ export function buildProcessTree(rootPid: number, processList: Iterable<IProcess
    // • the properties are inlined/splatted
    // • the 'ppid' field is omitted
    // • the depth of the tree is limited by `maxDepth`
@@ -113,19 +123,20 @@ index 7b53aad05c3682a5c7d814d81a39c3f391ae97e3..364b384e7d55f3682515431839352b5b
    });
  
 diff --git a/src/addon.cc b/src/addon.cc
-index 5253960..0fc1d7f 100644
+index 5253960..187498e 100644
 --- a/src/addon.cc
 +++ b/src/addon.cc
-@@ -6,6 +6,8 @@
+@@ -6,6 +6,9 @@
  #include <napi.h>
  #include "cpu_worker.h"
  #include "process_worker.h"
 +#include "process_launch.h"
++#include "process_job.h"
 +#include "process_file_users.h"
  
  void GetProcessList(const Napi::CallbackInfo& args) {
    Napi::Env env(args.Env());
-@@ -50,9 +52,34 @@
+@@ -50,9 +53,38 @@ void GetProcessCpuUsage(const Napi::CallbackInfo& args) {
    worker->Queue();
  }
  
@@ -152,6 +163,10 @@ index 5253960..0fc1d7f 100644
    exports.Set("getProcessList", Napi::Function::New(env, GetProcessList));
    exports.Set("getProcessCpuUsage", Napi::Function::New(env, GetProcessCpuUsage));
 +  exports.Set("spawnOutsideJob", Napi::Function::New(env, SpawnOutsideJob));
++  exports.Set("createKillOnCloseJob", Napi::Function::New(env, CreateKillOnCloseJob));
++  exports.Set("assignProcessToJob", Napi::Function::New(env, AssignProcessToJob));
++  exports.Set("isProcessInJob", Napi::Function::New(env, ProcessIsInJob));
++  exports.Set("terminateJob", Napi::Function::New(env, TerminateJob));
 +  exports.Set("getProcessIdsUsingPaths", Napi::Function::New(env, GetProcessIdsUsingPaths));
 +  // Lets a caller prove THIS BINARY understands CREATIONTIME. The JS enum is
 +  // patched source and says nothing about what the .node was compiled from.
@@ -164,7 +179,7 @@ diff --git a/src/process.cc b/src/process.cc
 index ad63727..22a4742 100644
 --- a/src/process.cc
 +++ b/src/process.cc
-@@ -21,7 +21,8 @@
+@@ -21,7 +21,8 @@ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info,
    if (Process32First(snapshot_handle, &process_entry)) {
      do {
        if (process_entry.th32ProcessID != 0) {
@@ -174,7 +189,7 @@ index ad63727..22a4742 100644
          pinfo.pid = process_entry.th32ProcessID;
          pinfo.ppid = process_entry.th32ParentProcessID;
  
-@@ -33,23 +34,51 @@
+@@ -33,23 +34,51 @@ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info,
            GetProcessCommandLine(pinfo);
          }
  
@@ -228,7 +243,7 @@ index ad63727..22a4742 100644
  
    if (hProcess == NULL) {
      return;
-@@ -81,7 +110,8 @@
+@@ -81,7 +110,8 @@ void GetCpuUsage(Cpu& cpu_info, bool first_pass) {
    DWORD pid = cpu_info.pid;
    HANDLE hProcess;
  
@@ -242,7 +257,7 @@ diff --git a/src/process.h b/src/process.h
 index 3c9b852..72e1648 100644
 --- a/src/process.h
 +++ b/src/process.h
-@@ -22,18 +22,22 @@
+@@ -22,18 +22,22 @@ struct ProcessInfo {
    DWORD ppid;
    DWORD memory; // Reported in bytes
    std::string commandLine;
@@ -643,6 +658,149 @@ index 0000000..d55c366
 +Napi::Value GetProcessIdsUsingPaths(const Napi::CallbackInfo& args);
 +
 +#endif  // SRC_PROCESS_FILE_USERS_H_
+diff --git a/src/process_job.cc b/src/process_job.cc
+new file mode 100644
+index 0000000..b9fccc1
+--- /dev/null
++++ b/src/process_job.cc
+@@ -0,0 +1,118 @@
++// Orca: a kill-on-close job object that holds a whole process tree.
++//
++// Job membership survives a parent's exit and jobs nest (Windows 8+), so every
++// process started inside the job stays a member, orphans included, and
++// terminating or closing the job ends all of them. The job has no
++// BREAKAWAY_OK, so nothing inside can leave it. The handle is not inheritable,
++// so a member never keeps the job alive past Orca.
++
++#include "process_job.h"
++
++#include <windows.h>
++
++namespace {
++
++struct JobHandle {
++  HANDLE handle;
++};
++
++void CloseJob(JobHandle* job) {
++  if (job->handle != nullptr) {
++    CloseHandle(job->handle);
++    job->handle = nullptr;
++  }
++}
++
++// A dropped job object closes its handle, which ends its members.
++void FinalizeJob(Napi::Env, JobHandle* job) {
++  CloseJob(job);
++  delete job;
++}
++
++JobHandle* JobArg(const Napi::CallbackInfo& args) {
++  if (args.Length() < 1 || !args[0].IsExternal()) {
++    throw Napi::TypeError::New(args.Env(), "Expected a job from createKillOnCloseJob.");
++  }
++  return args[0].As<Napi::External<JobHandle>>().Data();
++}
++
++DWORD PidArg(const Napi::CallbackInfo& args) {
++  if (args.Length() < 2 || !args[1].IsNumber()) {
++    throw Napi::TypeError::New(args.Env(), "Expected a process id.");
++  }
++  const double pid = args[1].As<Napi::Number>().DoubleValue();
++  if (!(pid >= 1 && pid <= MAXDWORD) || pid != static_cast<DWORD>(pid)) {
++    throw Napi::TypeError::New(args.Env(), "Expected a process id.");
++  }
++  return static_cast<DWORD>(pid);
++}
++
++}  // namespace
++
++// createKillOnCloseJob(): job | null
++Napi::Value CreateKillOnCloseJob(const Napi::CallbackInfo& args) {
++  Napi::Env env(args.Env());
++  HANDLE handle = CreateJobObjectW(nullptr, nullptr);
++  if (handle == nullptr) {
++    return env.Null();
++  }
++  JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
++  limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
++  if (!SetInformationJobObject(handle, JobObjectExtendedLimitInformation, &limits,
++                               sizeof(limits))) {
++    CloseHandle(handle);
++    return env.Null();
++  }
++  return Napi::External<JobHandle>::New(env, new JobHandle{handle}, FinalizeJob);
++}
++
++// assignProcessToJob(job, pid): boolean
++Napi::Value AssignProcessToJob(const Napi::CallbackInfo& args) {
++  Napi::Env env(args.Env());
++  JobHandle* job = JobArg(args);
++  const DWORD pid = PidArg(args);
++  if (job->handle == nullptr) {
++    return Napi::Boolean::New(env, false);
++  }
++  HANDLE process = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, FALSE, pid);
++  if (process == nullptr) {
++    return Napi::Boolean::New(env, false);
++  }
++  const BOOL assigned = AssignProcessToJobObject(job->handle, process);
++  CloseHandle(process);
++  return Napi::Boolean::New(env, assigned != FALSE);
++}
++
++// isProcessInJob(job, pid): boolean | null (null: the process could not be opened)
++Napi::Value ProcessIsInJob(const Napi::CallbackInfo& args) {
++  Napi::Env env(args.Env());
++  JobHandle* job = JobArg(args);
++  const DWORD pid = PidArg(args);
++  if (job->handle == nullptr) {
++    return Napi::Boolean::New(env, false);
++  }
++  HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
++  if (process == nullptr) {
++    return env.Null();
++  }
++  BOOL member = FALSE;
++  const BOOL queried = IsProcessInJob(process, job->handle, &member);
++  CloseHandle(process);
++  if (!queried) {
++    return env.Null();
++  }
++  return Napi::Boolean::New(env, member != FALSE);
++}
++
++// terminateJob(job): boolean. Ends every member, then closes the job.
++Napi::Value TerminateJob(const Napi::CallbackInfo& args) {
++  Napi::Env env(args.Env());
++  JobHandle* job = JobArg(args);
++  if (job->handle == nullptr) {
++    return Napi::Boolean::New(env, false);
++  }
++  const BOOL terminated = TerminateJobObject(job->handle, 1);
++  // Closing a kill-on-close job ends its members even if the terminate failed.
++  CloseJob(job);
++  return Napi::Boolean::New(env, terminated != FALSE);
++}
+diff --git a/src/process_job.h b/src/process_job.h
+new file mode 100644
+index 0000000..458c43d
+--- /dev/null
++++ b/src/process_job.h
+@@ -0,0 +1,13 @@
++// Orca: a kill-on-close job object that holds a whole process tree.
++
++#ifndef SRC_PROCESS_JOB_H_
++#define SRC_PROCESS_JOB_H_
++
++#include <napi.h>
++
++Napi::Value CreateKillOnCloseJob(const Napi::CallbackInfo& args);
++Napi::Value AssignProcessToJob(const Napi::CallbackInfo& args);
++Napi::Value ProcessIsInJob(const Napi::CallbackInfo& args);
++Napi::Value TerminateJob(const Napi::CallbackInfo& args);
++
++#endif  // SRC_PROCESS_JOB_H_
 diff --git a/src/process_launch.cc b/src/process_launch.cc
 new file mode 100644
 index 0000000..e3141c5
@@ -809,7 +967,7 @@ diff --git a/src/process_worker.cc b/src/process_worker.cc
 index f59559d..1d61c87 100644
 --- a/src/process_worker.cc
 +++ b/src/process_worker.cc
-@@ -43,6 +43,11 @@
+@@ -43,6 +43,11 @@ void GetProcessesWorker::OnOK() {
            Napi::String::New(env, pinfo.commandLine));
      }
  
@@ -822,10 +980,10 @@ index f59559d..1d61c87 100644
    }
  
 diff --git a/typings/windows-process-tree.d.ts b/typings/windows-process-tree.d.ts
-index 70e242b..51113d2 100644
+index 70e242b..5b73a61 100644
 --- a/typings/windows-process-tree.d.ts
 +++ b/typings/windows-process-tree.d.ts
-@@ -7,9 +7,24 @@
+@@ -7,9 +7,32 @@ declare module '@vscode/windows-process-tree' {
    export enum ProcessDataFlag {
      None = 0,
      Memory = 1,
@@ -848,10 +1006,18 @@ index 70e242b..51113d2 100644
 +   */
 +  export const getProcessIdsUsingPaths: ((paths: string[]) => Promise<(number[] | null)[]>) | undefined;
 +
++  /** A kill-on-close job without breakaway; null when Windows refused it. */
++  export const createKillOnCloseJob: (() => unknown) | undefined;
++  export const assignProcessToJob: ((job: unknown, pid: number) => boolean) | undefined;
++  /** null when the process could not be opened. */
++  export const isProcessInJob: ((job: unknown, pid: number) => boolean | null) | undefined;
++  /** Ends every member, then closes the job. */
++  export const terminateJob: ((job: unknown) => boolean) | undefined;
++
    export interface IProcessInfo {
      pid: number;
      ppid: number;
-@@ -24,6 +39,9 @@
+@@ -24,6 +47,9 @@ declare module '@vscode/windows-process-tree' {
       * The string returned is at most 512 chars, strings exceeding this length are truncated.
       */
      commandLine?: string;
@@ -861,7 +1027,7 @@ index 70e242b..51113d2 100644
    }
  
    export interface IProcessCpuInfo extends IProcessInfo {
-@@ -35,6 +53,7 @@
+@@ -35,6 +61,7 @@ declare module '@vscode/windows-process-tree' {
      name: string;
      memory?: number;
      commandLine?: string;

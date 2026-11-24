@@ -176,7 +176,7 @@ export function ActivityBarPositionMenu({
             key={item.id}
             onSelect={() => setHidden(hidden.filter((id) => id !== item.id))}
           >
-            {t('activityBar.show', 'Show {{name}}', { name: item.title })}
+            {t('activityBar.show', 'Show {{name}}', { name: item.accessibleTitle ?? item.title })}
           </ContextMenuItem>
         ))}
       <ContextMenuItem

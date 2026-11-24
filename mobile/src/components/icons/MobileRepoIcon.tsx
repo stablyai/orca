@@ -27,6 +27,8 @@ import { useState } from 'react'
 import { Image, StyleSheet, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../../host-screen/host-screen-reply-schema'
 import { PERFORCE_MARK_PATH } from '../../../../src/shared/repository/appearance/perforce-repo-icon'
+import { softMarkColors } from '../../../../src/shared/repository/appearance/repo-badge-color'
+import { monogramFontScale } from '../../../../src/shared/repository/appearance/repo-monogram'
 import { colors, radii } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
@@ -68,7 +70,7 @@ type Props = {
 
 // Render desktop-style custom image/emoji/lucide with Folder fallback, never bare project dot.
 export function MobileRepoIcon({ repoIcon, size = 14, color = colors.textSecondary }: Props) {
-  useMobileColorScheme()
+  const scheme = useMobileColorScheme()
   // Keyed by src so a changed icon gets a fresh try; the page shell refuses every https load.
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   if (repoIcon?.type === 'image' && repoIcon.src !== failedSrc) {
@@ -80,6 +82,31 @@ export function MobileRepoIcon({ repoIcon, size = 14, color = colors.textSeconda
         accessibilityLabel={repoIcon.label}
         onError={() => setFailedSrc(src)}
       />
+    )
+  }
+  if (repoIcon?.type === 'letters') {
+    // Same soft tint as desktop: a wash of the color with same-hue letters.
+    const soft = softMarkColors(color, scheme)
+    return (
+      <View
+        style={[
+          styles.letters,
+          { width: size, height: size, borderRadius: radii.mark, backgroundColor: soft.background }
+        ]}
+      >
+        <Text
+          style={[
+            styles.lettersText,
+            {
+              color: soft.foreground,
+              fontSize: size * monogramFontScale(repoIcon.text)
+            }
+          ]}
+          numberOfLines={1}
+        >
+          {repoIcon.text}
+        </Text>
+      </View>
     )
   }
   if (repoIcon?.type === 'emoji') {
@@ -94,6 +121,13 @@ export function MobileRepoIcon({ repoIcon, size = 14, color = colors.textSeconda
 }
 
 const styles = StyleSheet.create({
+  letters: {
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  lettersText: {
+    fontWeight: '600'
+  },
   emoji: {
     textAlign: 'center'
   },
