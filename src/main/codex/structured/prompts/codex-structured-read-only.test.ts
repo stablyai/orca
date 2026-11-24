@@ -27,7 +27,13 @@ function answer(
   return { disposition, connection }
 }
 
+const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+
 describe('a read-only Codex session', () => {
+  // A POSIX host unless a case says otherwise: Windows also holds commands to PowerShell's rules.
+  beforeEach(() => Object.defineProperty(process, 'platform', { value: 'linux' }))
+  afterEach(() => hostPlatform && Object.defineProperty(process, 'platform', hostPlatform))
+
   it('approves a read on the allow-list without asking anyone', () => {
     const { disposition, connection } = answer(CODEX_COMMAND_APPROVAL_METHOD, {
       command: `/bin/zsh -lc '"\${ORCA_CLI_COMMAND:-orca}" slack read slack:T1:C1'`
@@ -63,9 +69,7 @@ describe('a read-only Codex session', () => {
   })
 
   describe('on Windows, where the command may run in PowerShell', () => {
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     beforeEach(() => Object.defineProperty(process, 'platform', { value: 'win32' }))
-    afterEach(() => platform && Object.defineProperty(process, 'platform', platform))
 
     it.each([
       'git log x,--output=f',
