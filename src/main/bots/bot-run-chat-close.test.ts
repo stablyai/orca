@@ -45,7 +45,9 @@ function closerWith(input: {
       const chat = input.chats[sessionId]
       return chat ? { ...chat, inUse: inUse.has(sessionId) } : null
     },
-    busy: async (_bot, sessionId) => input.busy?.includes(sessionId) === true,
+    automationChats: () => new Set(input.busy?.slice(0, 1)),
+    busy: async (_bot, sessionId, automationChats) =>
+      automationChats.has(sessionId) || input.busy?.includes(sessionId) === true,
     owesReply: (sessionId) => owes.has(sessionId),
     close: async (sessionId, admit) => {
       const late = input.late?.[sessionId]

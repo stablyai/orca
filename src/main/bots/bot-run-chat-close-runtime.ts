@@ -68,12 +68,16 @@ export function startBotRunChatCloser(runtime: OrcaRuntimeService, store: Store)
           host?.isSessionTabVisible(live.sessionId) === true
       }
     },
-    busy: async (bot, sessionId) => {
+    automationChats: () =>
+      new Set(
+        (store.listAutomations?.() ?? []).flatMap((automation) => {
+          const chat = automation.bot?.chat?.sessionId
+          return chat ? [chat] : []
+        })
+      ),
+    busy: async (bot, sessionId, automationChats) => {
       const live = liveSession(sessionId)
-      const targeted = (store.listAutomations?.() ?? []).some((automation) =>
-        [sessionId, live].includes(automation.bot?.chat?.sessionId ?? '')
-      )
-      if (targeted || botTurns.running(live)) {
+      if (automationChats.has(sessionId) || automationChats.has(live) || botTurns.running(live)) {
         return true
       }
       const host = getStructuredAgentSessionHost()

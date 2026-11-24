@@ -1,11 +1,11 @@
 // Closes the chats automation runs open as a new conversation each time, once each has sat idle for
 // its bot's Close after. One timer for the nearest deadline; the list survives a restart.
-import { z } from 'zod'
 import type { Bot } from '../../shared/bot-types'
 import {
   botRunChatCloseAfterMs,
   type BotRunChatCloseAfter
 } from '../../shared/bots/bot-run-chat-close'
+import { lineText, parseLine, type Entry, type Line } from './bot-run-chat-close-lines'
 
 const MAX_TIMER_DELAY_MS = 2_147_483_647
 // The list is rewritten once its lines (changes appended since the last rewrite) pass this many per
@@ -17,19 +17,6 @@ const FAILED_SWEEP_RETRY_MS = 60 * 60 * 1000
 const MAX_FAILED_SWEEP_RETRY_MS = 24 * 60 * 60 * 1000
 // Chats due this close together share one sweep.
 const SWEEP_COALESCE_MS = 10 * 60 * 1000
-
-const EntrySchema = z.object({
-  sessionId: z.string().min(1),
-  botId: z.string().min(1),
-  /** When its countdown last started: the run's end, or the last time it was busy or active. */
-  since: z.number(),
-  /** Held open by something that ends on its own (a tab, an item, an answer): it sets no timer and is
-   *  checked again in the next sweep another chat starts, or once after a restart. */
-  parked: z.literal(true).optional()
-})
-type Entry = z.infer<typeof EntrySchema>
-// A later line that takes a chat off the list.
-const RemovedSchema = z.object({ sessionId: z.string().min(1), removed: z.literal(true) })
 
 /** One of the bot's chats as the closer sees it now; null when it is gone or closed. */
 export type BotRunChatState = {
@@ -53,8 +40,10 @@ export type BotRunChatCloseDeps = {
   ready: () => Promise<void>
   /** Reads this one chat's record. */
   chat: (bot: Bot, sessionId: string) => BotRunChatState | null
+  /** The chats automations run in, read once per sweep. */
+  automationChats: () => ReadonlySet<string>
   /** Busy: a turn or a usage-limit wait, an open item it owns, or an automation that runs in it. */
-  busy: (bot: Bot, sessionId: string) => Promise<boolean>
+  busy: (bot: Bot, sessionId: string, automationChats: ReadonlySet<string>) => Promise<boolean>
   /** It asked another bot, here or on a paired computer, and the answer hasn't come back, or mail
    *  for it is still on its way. Read in the close's own lane too, so none lands on a closed chat. */
   owesReply: (sessionId: string) => boolean
@@ -166,9 +155,10 @@ export class BotRunChatCloser {
       return
     }
     await this.deps.ready()
+    const automationChats = this.deps.automationChats()
     const changes: Line[] = []
     for (const { entry, bot } of due) {
-      const next = await this.settle(entry, bot, now)
+      const next = await this.settle(entry, bot, now, automationChats)
       if (next) {
         byChat.set(entry.sessionId, next)
         changes.push(next)
@@ -181,7 +171,12 @@ export class BotRunChatCloser {
   }
 
   /** What stays of a due entry: null once the chat closed or isn't one to close, else a later start. */
-  private async settle(entry: Entry, bot: Bot, now: number): Promise<Entry | null> {
+  private async settle(
+    entry: Entry,
+    bot: Bot,
+    now: number,
+    automationChats: ReadonlySet<string>
+  ): Promise<Entry | null> {
     const waiting = (): Entry | 'due' | null => {
       const chat = this.deps.chat(bot, entry.sessionId)
       if (!chat || chat.kept) {
@@ -204,7 +199,10 @@ export class BotRunChatCloser {
       return first
     }
     // Each of these can end, so the chat is checked again a whole Close after from now.
-    if (this.deps.owesReply(entry.sessionId) || (await this.deps.busy(bot, entry.sessionId))) {
+    if (
+      this.deps.owesReply(entry.sessionId) ||
+      (await this.deps.busy(bot, entry.sessionId, automationChats))
+    ) {
       return this.parked(entry)
     }
     // A turn, a wake, a question, an open tab or a new Close after may come up to the close itself.
@@ -331,30 +329,5 @@ export class BotRunChatCloser {
     } catch (error) {
       console.warn('[bots] could not save the finished run chat list', error)
     }
-  }
-}
-
-type Line = Entry | z.infer<typeof RemovedSchema>
-
-// Leading newline: a line a crash cut short never swallows the next one.
-function lineText(line: Line): string {
-  return `\n${JSON.stringify(line)}`
-}
-
-// An unreadable line leaves that chat as it was, so at worst it stays open.
-function parseLine(line: string): Line | null {
-  if (!line.trim()) {
-    return null
-  }
-  try {
-    const json: unknown = JSON.parse(line)
-    const removed = RemovedSchema.safeParse(json)
-    if (removed.success) {
-      return removed.data
-    }
-    const entry = EntrySchema.safeParse(json)
-    return entry.success ? entry.data : null
-  } catch {
-    return null
   }
 }

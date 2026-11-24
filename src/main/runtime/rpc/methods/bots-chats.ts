@@ -1,6 +1,6 @@
 // `bots.chats`: a bot's chats that mail can reach, newest first, so a bot can pick one by title and
 // last ask and send it `--chat <id>`.
-import type { Bot } from '../../../../shared/bot-types'
+import { isBotAgent, type Bot } from '../../../../shared/bot-types'
 import { BOT_CHAT_ID_PREFIX, type BotChatRow } from '../../../../shared/bots/bot-chat-row'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { BotRosterEntry } from '../../../../shared/bot-roster'
@@ -98,8 +98,15 @@ const BOT_CHATS_REOPEN_METHOD = defineMethod({
       )
     }
     const store = readAgentSessionRecordStore()
-    const live = (store && lineageLiveSession(store, row.id)?.sessionId) ?? row.id
-    await showBotSessionTab(runtime, bot, live)
+    const live = (store && lineageLiveSession(store, row.id)) || null
+    // The chat keeps the agent it ran on, even after the bot moved to another.
+    const provider = live?.provider
+    const agent = provider && isBotAgent(provider) ? provider : bot.agent
+    await showBotSessionTab(runtime, { ...bot, agent }, live?.sessionId ?? row.id)
+    const after = (await readBotChats(runtime, bot, null, true)).find((chat) => chat.id === row.id)
+    if (!after || after.closed) {
+      throw new InvalidArgumentError('That chat could not be reopened, so it still takes no mail.')
+    }
     return { reopened: true, chatId: row.id }
   }
 })
