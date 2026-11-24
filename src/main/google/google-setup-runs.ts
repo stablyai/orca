@@ -29,7 +29,8 @@ import {
 
 export { GoogleSetupError, isPersonOwnedStep, type GoogleSetupActor }
 
-const FINISHED_OUTSIDE_NOTE = 'Finished outside the card: Google is connected and ready.'
+export const GOOGLE_SETUP_FINISHED_OUTSIDE_NOTE =
+  'Finished outside the card: Google is connected and ready.'
 
 const FileSchema = z.object({ runs: z.record(z.string(), GoogleSetupRunSchema).default({}) })
 
@@ -299,7 +300,7 @@ function applyChange(
       }
       for (const step of change.steps) {
         if (run.steps[step]?.status === 'needs-user') {
-          run.steps[step] = { status: 'done', at: now, note: FINISHED_OUTSIDE_NOTE }
+          run.steps[step] = { status: 'done', at: now, note: GOOGLE_SETUP_FINISHED_OUTSIDE_NOTE }
         }
       }
       return

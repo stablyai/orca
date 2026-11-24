@@ -14,7 +14,7 @@ import {
   type GoogleSetupStep
 } from '../../shared/google/google-setup-run'
 import { writeGoogleSetupCards } from './google-setup-chat-cards'
-import { googleSetupRuns } from './google-setup-runs'
+import { GOOGLE_SETUP_FINISHED_OUTSIDE_NOTE, googleSetupRuns } from './google-setup-runs'
 
 type SetupGoogle = Pick<GoogleStatusView, 'client' | 'accounts' | 'clientKey'>
 
@@ -44,18 +44,20 @@ export function googleSetupStepsFinishedOutside(
   return ready ? BEFORE_KEY.filter((step) => run.steps[step]?.status === 'needs-user') : []
 }
 
-/** Records those steps; the run as saved. */
+/** Records those steps on the run as stored now (a request may have moved it since `run` was read). */
 export function markGoogleSetupFinishedOutside(
   run: GoogleSetupRun,
   google: SetupGoogle
 ): GoogleSetupRun {
-  const steps = googleSetupStepsFinishedOutside(run, google)
+  const stored = googleSetupRuns().get(run.botId) ?? run
+  const steps = googleSetupStepsFinishedOutside(stored, google)
   return steps.length > 0
-    ? googleSetupRuns().apply(run.botId, 'owner', { action: 'finished-outside', steps })
-    : run
+    ? googleSetupRuns().apply(stored.botId, 'owner', { action: 'finished-outside', steps })
+    : stored
 }
 
-/** Records those steps and, when nothing else is left, finishes the run; the run as saved. */
+/** Records those steps and, when nothing else is left, finishes a run that has any; the run as saved.
+ *  Finishing reads the run, not this call's marks, so a failed save retries on the next read. */
 export function reconcileGoogleSetupFinishedOutside(
   run: GoogleSetupRun | null,
   google: SetupGoogle | null,
@@ -65,12 +67,13 @@ export function reconcileGoogleSetupFinishedOutside(
     return run
   }
   const marked = markGoogleSetupFinishedOutside(run, google)
-  if (marked === run) {
-    return run
+  const outside = GOOGLE_SETUP_STEPS.some(
+    (step) => marked.steps[step]?.note === GOOGLE_SETUP_FINISHED_OUTSIDE_NOTE
+  )
+  if (marked.state !== 'running' || !outside || googleSetupDoneRefusal(marked, google)) {
+    return marked
   }
-  const next = googleSetupDoneRefusal(marked, google)
-    ? marked
-    : googleSetupRuns().apply(run.botId, 'owner', { action: 'done' })
+  const next = googleSetupRuns().apply(marked.botId, 'owner', { action: 'done' })
   writeGoogleSetupCards(chatSessionId, run, next)
   return next
 }
