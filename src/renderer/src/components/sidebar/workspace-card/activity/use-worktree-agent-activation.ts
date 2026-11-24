@@ -9,6 +9,7 @@ import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { activateTerminalTabOnOwner } from '@/lib/workspace/tabs/terminal-tab-owner-activation'
+import { structuredAgentSessionAddressTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { getPtyExecutionHost } from '../../../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import { dismissStaleAgentRowByKey } from '../../../terminal-pane/agent-status/stale-agent-row'
@@ -36,7 +37,12 @@ export function activateWorktreeAgentPane(
 ): void {
   const state = useAppStore.getState()
   const nativeTab = getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree).get(paneKey)
-  if (nativeTab?.worktreeId === worktreeId && nativeTab.id === tabId) {
+  // A row may name a minted chat tab by the legacy id its pane key carries.
+  if (
+    nativeTab?.worktreeId === worktreeId &&
+    (nativeTab.id === tabId ||
+      structuredAgentSessionAddressTabId(nativeTab.id, nativeTab.entityId) === tabId)
+  ) {
     const target = structuredAgentSessionTargetForTab(state, nativeTab)
     const owner = structuredAgentSessionOwnerForTab(state, nativeTab)
     if (
@@ -53,7 +59,7 @@ export function activateWorktreeAgentPane(
         executionHostId: executionHostId ?? owner ?? undefined
       }) !== false
     ) {
-      activateStructuredAgentSessionTab({ worktreeId, tabId, target })
+      activateStructuredAgentSessionTab({ worktreeId, tabId: nativeTab.id, target })
     }
     return
   }

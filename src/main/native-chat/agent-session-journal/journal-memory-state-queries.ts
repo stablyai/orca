@@ -3,6 +3,7 @@ import type { JournalStateQueries } from './journal-state-queries'
 import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import { newestStructuredAgentSessionTurnBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { memoryJournalEchoClaimant } from './projection/journal-item-echo'
+import { getJournalInputOrder } from './input-order/journal-input-order-registry'
 import { memoryLatestAcceptedSendUnopened } from './context-epochs/journal-stop-turn-end'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
@@ -27,7 +28,10 @@ function* presentedItems(state: JournalReducerState) {
 export const memoryJournalStateQueries: JournalStateQueries = {
   usageLimitContinueIdentity: readJournalUsageLimitContinueIdentity,
   latestContextClearSequence(state) {
-    return latestAgentSessionContextClearSequence(memoryJournalMap(state.items).values())
+    return (
+      getJournalInputOrder(state)?.echoClaims.latestClearSequence(state) ??
+      latestAgentSessionContextClearSequence(memoryJournalMap(state.items).values())
+    )
   },
   echoClaimant: memoryJournalEchoClaimant,
   *itemsAfterSequence(state, sequence) {

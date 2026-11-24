@@ -3,14 +3,16 @@ import type {
   BotAccessDecision,
   ConnectorAccessRequest
 } from '../../../src/shared/connector-bot-access-contract'
-import { readHostMethodReply } from '../host-screen/sidebar-feed/host-sidebar-feed-operations'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { accessDecideFailureLine } from './bot-access-request-copy'
-import { botAccessRequestsRead, decideBotAccessRequest } from './bot-access-request-operations'
+import { decideBotAccessRequest, readHostAccessRequests } from './bot-access-request-operations'
 import type { RouteBot } from './use-route-bot'
 
 export type BotAccessRequests = {
   requests: readonly ConnectorAccessRequest[]
+  /** How many reads have landed, so a reader can wait for one that started after it asked. */
+  reads: number
   deciding: boolean
   decide: (request: ConnectorAccessRequest, decision: BotAccessDecision) => Promise<void>
 }
@@ -29,8 +31,10 @@ export function useBotAccessRequests({
   visible: boolean
   showToast: (message: string, durationMs?: number) => void
 }): BotAccessRequests | null {
+  const t = useMobileTranslation()
   const [requests, setRequests] = useState<readonly ConnectorAccessRequest[]>(NONE)
   const [deciding, setDeciding] = useState(false)
+  const [reads, setReads] = useState(0)
   // Answered here: a read that started before the host saved it must not bring it back, as on the desktop.
   const answered = useRef(new Set<string>())
   const botId = routeBot?.bot.id ?? null
@@ -44,15 +48,15 @@ export function useBotAccessRequests({
     }
     let current = true
     void (async () => {
-      const reply = await botAccessRequestsRead.request(client).catch(() => null)
-      const read = reply && readHostMethodReply(reply, botAccessRequestsRead.interpret)
+      const read = await readHostAccessRequests(client)
       // A failed read keeps the last rows.
-      if (current && read?.kind === 'answered' && read.value.ok) {
+      if (current && read) {
         setRequests(
-          read.value.value.filter(
+          read.filter(
             (request) => request.botId === botId && !answered.current.has(request.requestId)
           )
         )
+        setReads((count) => count + 1)
       }
     })()
     return () => {
@@ -73,7 +77,7 @@ export function useBotAccessRequests({
           setRequests((rows) => rows.filter((row) => row.requestId !== request.requestId))
         }
         if (!answer.ok) {
-          showToast(accessDecideFailureLine(request, answer.error), 2400)
+          showToast(accessDecideFailureLine(request, answer.error, t), 2400)
         }
         // The host added the person; show them under People with access.
         if (answer.ok && decision === 'granted') {
@@ -83,8 +87,8 @@ export function useBotAccessRequests({
         setDeciding(false)
       }
     },
-    [client, showToast, refreshRoute]
+    [client, showToast, refreshRoute, t]
   )
 
-  return botId ? { requests, deciding, decide } : null
+  return botId ? { requests, reads, deciding, decide } : null
 }

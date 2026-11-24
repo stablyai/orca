@@ -1,4 +1,5 @@
 import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
+import { storageCapacityErrorCode } from '../../../shared/errors/storage-capacity-error'
 import { AgentSessionJournalError, JournalOutcomeDecodeError } from './writing/journal-write-guards'
 import { JournalDamageError, JournalUnreleasedSchemaError } from './replay/journal-open-failure'
 import { CommandReceiptExistsError } from './writing/command-receipt-transaction'
@@ -34,7 +35,7 @@ type JournalSourceContent = 'journalCorrupt' | 'journalWrittenByNewerOrca'
 const SOURCE_CONTENT = Symbol('journal source content diagnosis')
 
 /** Only the original-source preparation transport supplies this marker. */
-function journalSqlSourceContent(error: unknown): JournalSourceContent | undefined {
+export function journalSqlSourceContent(error: unknown): JournalSourceContent | undefined {
   if (error instanceof Error && SOURCE_CONTENT in error) {
     const content = error[SOURCE_CONTENT]
     if (content === 'journalCorrupt' || content === 'journalWrittenByNewerOrca') {
@@ -68,10 +69,11 @@ export function journalSqlFailure(error: unknown): JournalSqlFailure {
   return {
     name: error instanceof Error ? error.name : 'Error',
     message: error instanceof Error ? error.message : String(error),
+    // A wrapped SQLITE_FULL or ENOSPC keeps its code, so the host can tell a full disk.
     code:
       error instanceof Error && 'code' in error && typeof error.code === 'string'
         ? error.code
-        : undefined,
+        : (storageCapacityErrorCode(error) ?? undefined),
     errcode:
       error instanceof Error && 'errcode' in error && typeof error.errcode === 'number'
         ? error.errcode

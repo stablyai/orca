@@ -11,10 +11,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   list: {
     paddingBottom: spacing.lg
   },
-  offlineBanner: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm
-  },
   // The chevron sits in the rows' status-dot column, so the icon and title start at the row text.
   sectionHeader: {
     flexDirection: 'row',
@@ -96,6 +92,16 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     marginTop: spacing.xs,
     lineHeight: 20
+  },
+  // Desktop's amber loss line, as plain text: what deleting throws away.
+  confirmLoss: {
+    color: colors.statusAmber
+  },
+  confirmDetail: {
+    fontSize: typography.metaSize,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+    lineHeight: 16
   },
   confirmButtons: {
     flexDirection: 'row',

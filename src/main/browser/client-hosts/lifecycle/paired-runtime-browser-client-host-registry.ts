@@ -230,8 +230,10 @@ export class PairedRuntimeBrowserClientHostRegistry<
       return
     }
     record.cleanupPending = true
+    // A failed cleanup has nothing left to wait for; keeping the tombstone would refuse new hosts until restart.
     void record.composition
       .whenClosed()
+      .catch(() => undefined)
       .then(() =>
         this.enqueue(environmentId, async () => {
           if (this.hosts.get(environmentId) === record) {
@@ -239,7 +241,6 @@ export class PairedRuntimeBrowserClientHostRegistry<
           }
         })
       )
-      .catch(() => undefined)
   }
 }
 

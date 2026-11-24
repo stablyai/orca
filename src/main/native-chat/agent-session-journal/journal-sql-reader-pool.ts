@@ -1,3 +1,4 @@
+import type { LegacyProofCursor } from './journal-legacy-source-proof'
 import type {
   JournalSqlForkReader,
   JournalSqlConversionReader
@@ -37,6 +38,8 @@ export class JournalSqlReaderPool {
   private closed = false
   private closing?: Promise<void>
   private conversionSlot?: ReaderSlot
+  private sourceLease?: AbortController
+  private sourceRelease?: PromiseWithResolvers<void>
   private forkSlot?: ReaderSlot
   private forkRelease?: PromiseWithResolvers<void>
   private readonly replyCredit = new JournalReaderReplyCredit()
@@ -74,6 +77,7 @@ export class JournalSqlReaderPool {
       total.receivedBytes += stats.receivedBytes
       total.consumedBytes += stats.consumedBytes
       total.creditWaitsExpired += stats.creditWaitsExpired
+      total.outstandingBytes += stats.unreleasedBytes
     }
     return total
   }
@@ -163,19 +167,72 @@ export class JournalSqlReaderPool {
   }
 
   async prepareConversion(sessionId: string): Promise<JournalSqlConversionReader | null> {
-    if (!this.conversionSlot || this.conversionSlot.failed) {
-      this.conversionSlot = this.slot()
-    }
-    return this.conversionSlot.prepareConversion(sessionId)
+    return (await this.conversionReader()).prepareConversion(sessionId)
   }
 
-  /** Null when the original journal is gone. */
+  /** Null when the original journal is gone. Opens the original, so it waits out a retirement. */
   async compareLegacyChat(sessionId: string): Promise<JournalLegacyChatComparison | null> {
+    await this.releaseSourceLease()
     const response = await this.slot().request({ kind: 'legacy-compare', sessionId })
     if (response.type !== 'legacy-compare') {
       throw new Error('journal reader returned no legacy compare')
     }
     return response.result
+  }
+
+  async legacyProof(cursor: LegacyProofCursor) {
+    const response = await (await this.conversionReader()).request({ kind: 'legacy-proof', cursor })
+    if (response.type !== 'legacy-proof') {
+      throw new Error('legacy proof reader returned no page')
+    }
+    return response.page
+  }
+
+  /** Conversions and the proof open the original, so they wait out a retirement's lease. */
+  private async conversionReader(): Promise<ReaderSlot> {
+    await this.releaseSourceLease()
+    if (!this.conversionSlot || this.conversionSlot.failed) {
+      this.conversionSlot = this.slot()
+    }
+    return this.conversionSlot
+  }
+
+  async recycleSourceReaders(): Promise<AbortController | null> {
+    if (
+      this.closed ||
+      this.sourceLease ||
+      this.forkSlot ||
+      this.slots.some((slot) => slot.pendingCount !== 0)
+    ) {
+      return null
+    }
+    const lease = new AbortController()
+    this.sourceLease = lease
+    this.sourceRelease = Promise.withResolvers<void>()
+    const retired = this.slots.splice(0)
+    this.conversionSlot = undefined
+    try {
+      await Promise.all([...this.retiring, ...retired.map((slot) => slot.close())])
+      return lease
+    } catch (error) {
+      this.releaseSourceReaders(lease)
+      throw error
+    }
+  }
+
+  releaseSourceReaders(lease: AbortController): void {
+    if (this.sourceLease === lease) {
+      this.sourceLease = undefined
+      this.sourceRelease?.resolve()
+      this.sourceRelease = undefined
+    }
+  }
+
+  private async releaseSourceLease(): Promise<void> {
+    if (this.sourceLease) {
+      this.sourceLease.abort()
+      await this.sourceRelease?.promise
+    }
   }
 
   async importState(sessionId: string) {
@@ -184,6 +241,15 @@ export class JournalSqlReaderPool {
       throw new Error('journal reader returned no import state')
     }
     return response.state
+  }
+
+  async conversionStorage(sessionId?: string, sizedAt?: string) {
+    const reader = await this.conversionReader()
+    const response = await reader.request({ kind: 'conversion-storage', sessionId, sizedAt })
+    if (response.type !== 'conversion-storage') {
+      throw new Error('journal reader returned no conversion storage')
+    }
+    return response.storage
   }
 
   async database(operation: JournalSqlDatabaseRead): Promise<JournalSqlDatabaseReadResult> {
@@ -242,9 +308,11 @@ export class JournalSqlReaderPool {
   }
 
   close(): Promise<void> {
+    this.sourceLease?.abort()
     this.closed = true
     this.forkRelease?.resolve()
     return (this.closing ??= Promise.all([
+      this.sourceRelease?.promise,
       ...this.retiring,
       ...this.slots.map((slot) => slot.close())
     ]).then(() => {}))

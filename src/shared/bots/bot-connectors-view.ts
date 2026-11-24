@@ -41,11 +41,13 @@ export const LINEAR_NO_KEY =
 // linear: a Linear API key or a Connect Linear login on this computer.
 // google: the Google accounts connected on this computer; absent from hosts that report none.
 // googleApp: whether this computer has a Google app (client) to sign in with.
+// googleDefault: the account a call without --account uses.
 export type LocalSignIns = {
   gh: 'signed-in' | 'signed-out' | 'missing'
   linear: boolean
   google?: readonly GoogleAccountView[]
   googleApp?: boolean
+  googleDefault?: string | null
 }
 
 const OFFER_GOOGLE = '`orca bot connectors --offer google`'
@@ -67,7 +69,8 @@ const GOOGLE_STATES: Record<GoogleServiceReadiness['state'], string> = {
 function googleService(
   bot: Pick<Bot, 'google'>,
   accounts: readonly GoogleAccountView[],
-  app: boolean
+  app: boolean,
+  defaultAccount: string | null
 ): BotConnectorService {
   const connected = accounts.filter((account) => account.status === 'connected')
   const { allowed, host } = googleBotConnectState({
@@ -80,17 +83,24 @@ function googleService(
     : host === 'connected'
       ? undefined
       : GOOGLE_HOST_GAPS[host]
-  const detail = connected
-    .map(
+  // A signed-out default stays listed: calls without --account still go to it, and fail.
+  const signedOutDefault = accounts.find(
+    (account) => account.email === defaultAccount && account.status !== 'connected'
+  )
+  const detail = [
+    ...(signedOutDefault
+      ? [`${signedOutDefault.email} (default): signed out, needs reconnecting`]
+      : []),
+    ...connected.map(
       (account) =>
-        `${account.email}: ${account.services
+        `${account.email}${account.email === defaultAccount ? ' (default)' : ''}: ${account.services
           .map(
             (service) =>
               `${GOOGLE_SERVICE_INFO[service.service].label} ${GOOGLE_STATES[service.state]}`
           )
           .join(', ')}`
     )
-    .join('; ')
+  ].join('; ')
   return {
     source: 'google',
     tool: 'orca gmail|calendar|contacts',
@@ -102,13 +112,26 @@ function googleService(
   }
 }
 
-/** Each service's row, from the bot's links and what this computer is signed in to. */
+const SLACK_NO_APP = 'Run `orca bot connectors --offer slack` to show your owner a Connect card.'
+const SLACK_NOT_INSTALLED =
+  "Your Slack app isn't installed. Ask your owner to finish its setup, or remove it, under Slack on your page in Orca."
+
+/** What Orca Cloud says a bot can act through; Slack is listed once its app is installed. */
+export type CloudSource = { source: string; approveUrl?: string }
+
+/**
+ * Each service's row, from the bot's links and what this computer is signed in to. `cloud`: Orca
+ * Cloud's sources, when it answered; without them, the Slack app this computer set up stands.
+ */
 export function botConnectorServices(
   bot: Pick<Bot, 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github' | 'google'>,
   local: LocalSignIns,
-  slackApproveUrl?: string
+  cloud?: readonly CloudSource[]
 ): BotConnectorService[] {
-  const slack = botSlackApps(bot).length > 0
+  const hasApp = botSlackApps(bot).length > 0
+  const cloudSlack = cloud?.find((entry) => entry.source === 'slack')
+  // A created app whose install Slack refused or nobody finished is not connected.
+  const slack = cloud ? cloudSlack !== undefined : hasApp
   return [
     {
       source: 'github',
@@ -133,13 +156,13 @@ export function botConnectorServices(
       tool: 'orca slack',
       actsAs: 'bot',
       signedIn: slack,
-      ...(slack
-        ? {}
-        : { gap: 'Run `orca bot connectors --offer slack` to show your owner a Connect card.' }),
+      ...(slack ? {} : { gap: hasApp ? SLACK_NOT_INSTALLED : SLACK_NO_APP }),
       wakes: slack,
-      ...(slackApproveUrl ? { approveUrl: slackApproveUrl } : {})
+      ...(cloudSlack?.approveUrl ? { approveUrl: cloudSlack.approveUrl } : {})
     },
-    ...(local.google ? [googleService(bot, local.google, local.googleApp === true)] : [])
+    ...(local.google
+      ? [googleService(bot, local.google, local.googleApp === true, local.googleDefault ?? null)]
+      : [])
   ]
 }
 

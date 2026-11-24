@@ -1,6 +1,7 @@
 // This host's link to the Orca Cloud connector, as whichever Orca account it is signed in to.
 import { connectorAccountName } from './connector-token-mint'
 import type { z } from 'zod'
+import type { ConnectorCloudStatus } from '../../shared/bots/connector-cloud-status'
 import {
   connectorStopNeedsSignIn,
   SIGNED_OUT,
@@ -41,12 +42,6 @@ export type ConnectorCloudOptions = {
   /** The journal's reply outbox (design item 125); null while no journal is open. */
   replyJournal?: () => ConnectorReplyJournal | null
 }
-
-/**
- * What a host's bot list says of its link to Orca Cloud; `refused` comes with the cloud's words, and
- * `needs-sign-in` is a connector that keeps refusing this sign-in while the app stays signed in.
- */
-export type ConnectorCloudStatus = 'signed-out' | 'needs-sign-in' | 'unreachable' | 'refused' | 'ok'
 
 export class ConnectorCloud {
   private connected = false
@@ -94,11 +89,13 @@ export class ConnectorCloud {
       return
     }
     this.connected = true
-    this.options.machine.onHelloInputsChanged(() => {
-      // A running client says the change first, so a last connector's removal reaches the cloud before it stops.
-      this.client?.sayChanged()
-      this.reconcile()
-    })
+    this.options.machine.onHelloInputsChanged(() => this.helloInputsChanged())
+    this.reconcile()
+  }
+
+  helloInputsChanged(): void {
+    // A running client says the change first, so a last connector's removal reaches the cloud before it stops.
+    this.client?.sayChanged()
     this.reconcile()
   }
 
@@ -145,6 +142,7 @@ export class ConnectorCloud {
     threadReplies: boolean
     githubEvents2: boolean
     githubWorkflows: boolean
+    githubCiFinished: boolean
     connectorStatus: ConnectorCloudStatus
     connectorMessage?: string
     connectorNeedsSignIn?: true
@@ -158,6 +156,9 @@ export class ConnectorCloud {
       // Whether it sends github.workflow_finished, so trigger-options offers it only where it does.
       githubWorkflows:
         this.cloudFeatures()?.has('triggers.workflows' satisfies ConnectorCloudFeature) === true,
+      // Whether it sends github.ci_finished, so trigger-options and watch-pr use it only where it does.
+      githubCiFinished:
+        this.cloudFeatures()?.has('triggers.ci_finished' satisfies ConnectorCloudFeature) === true,
       connectorStatus,
       ...((connectorStatus === 'refused' || connectorStatus === 'needs-sign-in') &&
       this.reach.refusal

@@ -1,4 +1,5 @@
-import type { AgentTeam, TeamPane } from './claude-agent-teams-types'
+import type { AgentTeam, AgentTeamsTerminalApi, TeamPane } from './claude-agent-teams-types'
+import type { RuntimeTerminalSplit } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 export type SplitTarget = { pane: TeamPane; direction: 'horizontal' | 'vertical' }
 
@@ -59,5 +60,31 @@ export function formatContext(team: AgentTeam, pane: TeamPane): Record<string, s
     pane_top: '',
     window_width: '',
     window_height: ''
+  }
+}
+
+/** Starts a teammate under a handle the team holds before its process runs, so nothing can take
+ *  it for a lone agent while the split starts; `adopt` records it before that hold ends. */
+export async function splitTeammate<T>(
+  team: AgentTeam,
+  api: AgentTeamsTerminalApi,
+  fromHandle: string,
+  opts: { direction: 'horizontal' | 'vertical'; command?: string; fakePaneId: string },
+  adopt: (split: RuntimeTerminalSplit) => T
+): Promise<T> {
+  const preAllocatedHandle = api.allocateTerminalHandle()
+  team.startingHandles.add(preAllocatedHandle)
+  try {
+    const split = await api.splitTerminal(fromHandle, {
+      direction: opts.direction,
+      command: opts.command,
+      env: paneEnv(team, opts.fakePaneId),
+      envToDelete: ['TERM_PROGRAM'],
+      activate: false,
+      preAllocatedHandle
+    })
+    return adopt(split)
+  } finally {
+    team.startingHandles.delete(preAllocatedHandle)
   }
 }

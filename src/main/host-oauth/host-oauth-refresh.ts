@@ -46,12 +46,12 @@ export type HostOAuthRefresherConfig<TLogin> = {
   endedErrors?: readonly string[]
   /** A provider that rotates refresh tokens must return one; else the old one is kept. */
   rotates: boolean
-  read: (id: string) => TLogin | null
+  read: (id: string) => TLogin | null | Promise<TLogin | null>
   /** Null when the login has nothing to refresh with. */
   grantOf: (login: TLogin) => HostOAuthGrant | null
   /** Gets the login as saved now, never the one read before the request. */
-  save: (id: string, login: TLogin, refreshed: HostOAuthRefreshed) => void
-  ended: (id: string, login: TLogin, error: string) => void
+  save: (id: string, login: TLogin, refreshed: HostOAuthRefreshed) => void | Promise<void>
+  ended: (id: string, login: TLogin, error: string) => void | Promise<void>
 }
 
 const TokenResponse = z.object({
@@ -85,7 +85,7 @@ export function createHostOAuthRefresher<TLogin>(
     deps: HostOAuthRefreshDeps,
     force: boolean
   ): Promise<HostOAuthRefreshOutcome> {
-    const login = config.read(id)
+    const login = await config.read(id)
     const grant = login ? config.grantOf(login) : null
     if (!login || !grant) {
       return 'none'
@@ -111,7 +111,7 @@ export function createHostOAuthRefresher<TLogin>(
     }
     const body: unknown = await response.json().catch(() => null)
     // A disconnect or a new sign-in during the request wins: only the grant this refresh used is written.
-    const current = config.read(id)
+    const current = await config.read(id)
     if (!current || config.grantOf(current)?.refreshToken !== grant.refreshToken) {
       return 'superseded'
     }
@@ -122,7 +122,7 @@ export function createHostOAuthRefresher<TLogin>(
       if (!tokens || !refreshToken) {
         return 'offline'
       }
-      config.save(id, current, {
+      await config.save(id, current, {
         accessToken: tokens.access_token,
         refreshToken,
         expiresAt: deps.now() + tokens.expires_in * 1000,
@@ -137,7 +137,7 @@ export function createHostOAuthRefresher<TLogin>(
       ((response.status === 400 && ended.has(error)) ||
         (response.status === 401 && (config.endedErrors ?? []).includes(error)))
     if (gone) {
-      config.ended(id, current, error)
+      await config.ended(id, current, error)
       return 'ended'
     }
     return 'offline'

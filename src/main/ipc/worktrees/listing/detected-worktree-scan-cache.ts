@@ -17,21 +17,16 @@ import type { NativeLocalWorktreeMetadataScanExpectation } from '../../../persis
 import {
   bumpLocalWorktreeScanGeneration,
   getLocalWorktreeScanGeneration,
-  isLocalWorktreeScanGenerationCurrent,
-  resetLocalWorktreeScanGenerationsForTests
+  isLocalWorktreeScanGenerationCurrent
 } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { pruneLineageForMissingRepoWorktrees } from '../../../workspaces/catalog/worktree-lineage-pruning'
-import {
-  __resetLocalWorktreeMetadataPruneGateForTests,
-  requireLocalWorktreeMetadataPrune
-} from '../../../workspaces/catalog/local-worktree-metadata-prune-gate'
+import { requireLocalWorktreeMetadataPrune } from '../../../workspaces/catalog/local-worktree-metadata-prune-gate'
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from './authoritative-local-worktree-metadata-pruning'
 import {
   assertWslUncPathRunning,
   wslDistroForPath
 } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import {
-  _resetWorktreeCatalogOwnerForTests,
   invalidateWorktreeCatalogForRepo,
   isCurrentWorktreeCatalogObservation,
   readWorktreeCatalog
@@ -43,7 +38,7 @@ import {
   worktreeCatalogHygienePlan
 } from './worktree-catalog-observation-hygiene'
 
-// The sidebar accepts an observation up to this old; fresher demand refreshes the shared owner.
+// The sidebar accepts an observation this long after its scan finished; fresher demand refreshes the shared owner.
 export const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000
 
 export type DetectedWorktreeSideEffectToken = Readonly<{
@@ -76,12 +71,6 @@ export function invalidateDetectedWorktreeScanCache(repoId: string): void {
   bumpLocalWorktreeScanGeneration(repoId)
   requireLocalWorktreeMetadataPrune(repoId)
   invalidateWorktreeCatalogForRepo(repoId)
-}
-
-export function __resetDetectedWorktreeScanCacheForTests(): void {
-  _resetWorktreeCatalogOwnerForTests()
-  resetLocalWorktreeScanGenerationsForTests()
-  __resetLocalWorktreeMetadataPruneGateForTests()
 }
 
 export async function listDetectedGitWorktrees(

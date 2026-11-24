@@ -21,13 +21,8 @@ import { playPageHaptic } from './native-capabilities/page-haptics'
 import { useMobileWebShellBridge } from './page-document/use-mobile-web-shell-bridge'
 import type { MobileWebShellRuntime } from './session/mobile-web-shell-runtime'
 import { useKeyboardOcclusion } from '../platform/keyboard/keyboard-occlusion'
-import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
-import { useNativePdfViewer } from '../platform/pdf-viewing/native-pdf-view'
-import { useNativeImageActions } from '../platform/image-actions/native-image-actions'
-import { processDeviceStore } from '../device-store/device-store'
-import { serveDeviceStoreVerb } from './native-capabilities/device-store-verb-server'
-import { BRIDGE_STORE_VERB } from './bridge/native-capabilities/bridge-store-verb'
 import { useShellPageBack } from './routing/use-shell-page-back'
+import { useShellNativeVerbServer } from './native-capabilities/use-shell-native-verb-server'
 import { useShellStackPop } from './routing/use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-geometry/page-location-on-fold'
 import { usePageOpenTarget } from './routing/page-open-target'
@@ -37,12 +32,8 @@ import { usePageHostSnapshot } from './host-gates/use-page-host-snapshot'
 import { useReportedHostAreaServing } from './host-gates/host-area-serving'
 import { isHostRouteOf } from './routing/page-route-policy'
 import { isStandaloneSessionHref } from '../navigation/host-stack-navigation'
-import { hrefQuery, nativeSessionReturn, nativeStackReturn } from './routing/native-stack-return'
+import { nativeSessionReturn, nativeStackReturn } from './routing/native-stack-return'
 import { useResponsiveLayout } from '../layout/responsive-layout'
-import {
-  storageReadParamsSchema,
-  type BridgeNativeVerb
-} from './bridge/native-capabilities/bridge-native-verbs'
 import { SHELL_OPENING_LABEL, ShellPageCover } from './presentation/ShellWaitingFrame'
 import { ShellStateScreen } from './presentation/ShellStateScreen'
 import {
@@ -123,7 +114,8 @@ export function MobileWebShellScreen({
     pageFrame,
     backClaimed,
     ownsHostArea,
-    hostStatus
+    hostStatus,
+    store
   } = useMobileWebShellSession({
     hostId,
     routePathname: route.pathname,
@@ -162,20 +154,13 @@ export function MobileWebShellScreen({
     readWorkspaceKey
   } = usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
   // Create the media registry before the bridge; staged files belong to this page session.
-  const serveDeviceVerb = useNativeDeviceVerbs(readySessionId)
-  const servePdfView = useNativePdfViewer(hostId, readySessionId)
-  const serveImageAction = useNativeImageActions(readySessionId)
-  // Read the shell's storage for this host.
-  const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
-    verb === 'native.storage.read'
-      ? readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({ value }))
-      : verb === 'native.pdf.view'
-        ? servePdfView(params)
-        : verb === 'native.image.act'
-          ? serveImageAction(params)
-          : verb === BRIDGE_STORE_VERB
-            ? serveDeviceStoreVerb(processDeviceStore(), hostId, params)
-            : serveDeviceVerb(verb, params)
+  const serveNativeVerb = useShellNativeVerbServer({
+    hostId,
+    sessionId: readySessionId,
+    buildId: state.kind === 'ready' ? state.buildId : null,
+    store,
+    readWorkspaceKey
+  })
   // Both externalLink and cancelled navigation use this filtered opener. Report device-handler failure without throwing from a native frame callback; neither path has a reply.
   const openUrlForPage = (url: string) => {
     void Linking.openURL(url).catch((error: unknown) => {
@@ -191,10 +176,9 @@ export function MobileWebShellScreen({
     // Return to an existing screen rather than pushing a duplicate over the live one.
     const rootState = navigationContainer.getRootState()
     // A pane request goes to the session's existing entry, whose spent paneKey no longer equals the href's.
-    const paneKey = hrefQuery(href).get('paneKey')
-    const session = rootState && paneKey ? nativeSessionReturn(rootState, href) : null
-    if (session && paneKey) {
-      const { target, source, count, routeKey } = session
+    const session = rootState ? nativeSessionReturn(rootState, href) : null
+    if (session) {
+      const { target, source, count, routeKey, params } = session
       if (count > 0) {
         navigation.dispatch({ type: 'POP', payload: { count }, target, source })
       }
@@ -202,7 +186,7 @@ export function MobileWebShellScreen({
         type: 'SET_PARAMS',
         target,
         source: routeKey,
-        payload: { params: { paneKey } }
+        payload: { params }
       })
       return
     }
@@ -264,12 +248,12 @@ export function MobileWebShellScreen({
     snapshot,
     readStorage,
     onStorageWrite: writeStorage,
-    // Treat a page that never renders as document-load-failed: remount the same bytes once, then fail visibly; Try again downloads fresh.
+    // Remount the same bytes once, then fail visibly.
     // Never throw from the page error boundary/native frame callback.
     onPageFault: (error) => {
       console.warn('[web-shell] the page faulted', error)
       recordShellLifecycleLine(hostId, pageFaultLine(error))
-      reportShellFailure('document-load-failed')
+      reportShellFailure('page-fault')
     },
     // init already sees app writes in the map; refresh from persisted storage afterward on every ready, including document reloads.
     onPageReady: () => {

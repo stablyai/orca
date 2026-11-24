@@ -43,4 +43,9 @@ CREATE INDEX IF NOT EXISTS push_batches_expiry ON push_delivery_batches(expires_
 CREATE INDEX IF NOT EXISTS push_batches_due ON push_delivery_batches(state, due_at);
 CREATE INDEX IF NOT EXISTS push_batches_registration ON push_delivery_batches(registration_id, state);
 CREATE INDEX IF NOT EXISTS push_batches_pending_device ON push_delivery_batches(registration_id, due_at, created_at, batch_id) WHERE state = 'pending';
+CREATE TABLE IF NOT EXISTS push_badge_counts (
+  registration_id TEXT PRIMARY KEY,
+  badge BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL
+);
 `

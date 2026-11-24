@@ -24,10 +24,8 @@ export type BotAutomationCardRow = BotUpcomingRow & {
   exactNext: boolean
   mark: BotRunMark | null
   /** Its newest run as the switch can't change it (`failed` clears while paused): the card re-ranks
-   *  when a known value changes, never on a flipped switch alone. Null while a host can't say (paused,
-   *  on hosts before `lastRun`): the card keeps what it last knew, and learning it later re-ranks
-   *  nothing. */
-  runFacts: string | null
+   *  when it changes, never on a flipped switch alone. */
+  runFacts: string
 }
 
 type CardActivity = Pick<BotActivity, 'automations' | 'waits' | 'upNext' | 'inProgress'>
@@ -66,14 +64,7 @@ function automationFacts(
     nextAt: hasAutomationSchedule(automation) ? ahead(automation.nextRunAt, now) : null,
     exactNext: true,
     mark,
-    // Hosts before `lastRun` say only whether it fails, and which run failed, only while on. Hosts
-    // before `latestRunId` too give only the boolean, so there a fresh failure after a failure goes
-    // unseen: their order is best-effort.
-    runFacts: row.lastRun
-      ? `${row.lastRun.status}@${row.lastRun.at}`
-      : automation.enabled
-        ? `${failed}@${row.latestRunId ?? ''}`
-        : null
+    runFacts: row.lastRun ? `${row.lastRun.status}@${row.lastRun.at}` : ''
   }
 }
 
@@ -197,51 +188,52 @@ export function botRunningRow(rows: readonly BotAutomationCardRow[]): BotAutomat
   return rankAutomationCardRows(rows).find((row) => row.running) ?? null
 }
 
-type OrderFacts = { runFacts: string | null; running: boolean; nextAt: number | null }
+type OrderFacts = { runFacts: string; running: boolean; nextAt: number | null }
+
+const NO_KEYS: ReadonlySet<string> = new Set()
 
 /**
  * The card's order, re-ranked only when rows come or go or their run facts change: a switch flipped
- * here, and the host's refresh after it, leave its row in place until the panel next opens.
+ * here, and the host's refresh after it, leave its row in place until the panel next opens. Rows that
+ * leave only because they were deleted here (`hiddenKeys`) leave the rest where they are.
  */
 export function useAutomationCardOrder(
-  rows: readonly BotAutomationCardRow[]
+  rows: readonly BotAutomationCardRow[],
+  hiddenKeys: ReadonlySet<string> = NO_KEYS
 ): BotAutomationCardRow[] {
   const [order, setOrder] = useState<{
     keys: string[]
-    /** What each row's ranking last read; run facts as last known. */
+    /** What each row's ranking last read. */
     facts: ReadonlyMap<string, OrderFacts>
   } | null>(null)
   const facts = new Map(
     rows.map((row): [string, OrderFacts] => [
       row.key,
       {
-        runFacts: row.runFacts ?? order?.facts.get(row.key)?.runFacts ?? null,
+        runFacts: row.runFacts,
         running: row.running,
         nextAt: row.nextAt
       }
     ])
   )
-  const rerank =
-    !order ||
-    order.facts.size !== rows.length ||
-    rows.some((row) => {
-      const before = order.facts.get(row.key)
-      return (
-        !before ||
-        before.running !== row.running ||
-        before.nextAt !== row.nextAt ||
-        // Only a known fact replacing another is news; one first learned (a row first seen paused,
-        // then resumed) may be from before.
-        (row.runFacts !== null && before.runFacts !== null && row.runFacts !== before.runFacts)
-      )
-    })
+  const factsChanged = (row: BotAutomationCardRow): boolean => {
+    const before = order?.facts.get(row.key)
+    return (
+      !before ||
+      before.running !== row.running ||
+      before.nextAt !== row.nextAt ||
+      before.runFacts !== row.runFacts
+    )
+  }
+  const left = order ? [...order.facts.keys()].filter((key) => !facts.has(key)) : []
+  const onlyHiddenLeft =
+    left.length > 0 && left.every((key) => hiddenKeys.has(key)) && !rows.some(factsChanged)
   let keys = order?.keys ?? []
-  if (rerank) {
-    keys = rankAutomationCardRows(rows).map((row) => row.key)
+  if (order && onlyHiddenLeft) {
+    keys = order.keys.filter((key) => facts.has(key))
     setOrder({ keys, facts })
-  } else if (
-    rows.some((row) => facts.get(row.key)?.runFacts !== order?.facts.get(row.key)?.runFacts)
-  ) {
+  } else if (!order || order.facts.size !== rows.length || rows.some(factsChanged)) {
+    keys = rankAutomationCardRows(rows).map((row) => row.key)
     setOrder({ keys, facts })
   }
   const byKey = new Map(rows.map((row) => [row.key, row]))

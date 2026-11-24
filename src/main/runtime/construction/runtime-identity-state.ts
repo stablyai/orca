@@ -36,7 +36,7 @@ import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pt
 import type { KeyedTrailingEdgeCoalescer } from '../client/events/keyed-trailing-edge-coalescer'
 import { createMobileSessionTabsNotifyCoalescer } from '../session-lifecycle/publication/mobile-session-tabs-notify-coalescer'
 
-import type { MobileSessionTabsAgentStatusHeartbeat } from '../session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat'
+import { MobileSessionSnapshotsByWorktree } from '../session-tabs/publication/mobile-session-snapshots-by-worktree'
 import { createMobileSessionTabsAgentStatusHeartbeat } from '../session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat'
 import { TerminalFocusNavigationCoalescer } from '../terminal/focus/terminal-focus-navigation-coalescer'
 import type {
@@ -59,7 +59,7 @@ import {
   type TerminalSpawnCommit
 } from '../terminal/lifecycle/terminal-run-facts'
 import type { TuiIdleEvidenceSource } from '../terminal/wait/tui-idle-evidence-source'
-import { hasTerminalCommandPainted } from '../terminal/input/terminal-command-paint'
+import { hasTerminalCommandPainted } from '../terminal/input/terminal-command-paint-record'
 import {
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
   TUI_IDLE_POLL_INTERVAL_MS,
@@ -91,7 +91,6 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
     return `${tabId}::${leafId}`
   }
   protected abstract claimIdleShellPromptForPty(ptyId: string): Promise<boolean>
-  protected abstract isAgentSettledForDelivery(ptyId: string): boolean
   protected abstract terminalHandleAccess(): TerminalHandleAccess
   protected readonly runtimeId = randomUUID()
 
@@ -139,7 +138,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
 
   protected legacyStructuredSessionTabIds: readonly string[] = []
 
-  mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
+  mobileSessionTabsByWorktree = new MobileSessionSnapshotsByWorktree()
 
   abstract storeMobileSessionSnapshot(
     worktreeId: string,
@@ -269,9 +268,9 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
       this.flushScheduledMobileSessionTabsChanged(worktreeId)
     )
 
-  protected readonly mobileSessionTabsAgentStatusHeartbeat: MobileSessionTabsAgentStatusHeartbeat =
+  protected readonly mobileSessionTabsAgentStatusHeartbeat =
     createMobileSessionTabsAgentStatusHeartbeat(
-      (ptyId) => this.getMobileSessionWorktreeIdsForPty(ptyId),
+      (ptyId) => this.mobileSessionTabsByWorktree.worktreeIdsForPty(ptyId),
       (worktreeId) => this.touchMobileSessionTabsForWorktree(worktreeId)
     )
 
@@ -354,17 +353,15 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
     readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
     readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
     getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId),
-    isSettledForDelivery: (ptyId) => this.isAgentSettledForDelivery(ptyId)
+    isSettledForDelivery: (ptyId) => this.isAgentSettledForDelivery(ptyId),
+    readScreenClearingBlockedTail: (ptyId) => this.readScreenClearingBlockedTailForPty(ptyId)
   }
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({
     ...this.tuiIdleEvidenceSource,
     intervalMs: TUI_IDLE_POLL_INTERVAL_MS,
     getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null,
-    hasCommandPainted: (ptyId) => {
-      const pty = this.ptysById.get(ptyId)
-      return pty === undefined || hasTerminalCommandPainted(pty)
-    },
+    hasCommandPainted: (ptyId) => hasTerminalCommandPainted(this.ptysById.get(ptyId) ?? {}),
     // Runtime emulator reads avoid a provider round trip on every poll.
     readVisibleScreen: (ptyId) =>
       this.headlessTerminals.has(ptyId)
@@ -372,7 +369,9 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
             (screen) => screen?.lines.join('\n') ?? null
           )
         : null,
-    resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result)
+    resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result),
+    requestReattachedRepaint: (ptyId) => this.requestReattachedRepaint(ptyId),
+    confirmRestTitle: (ptyId, agent) => this.confirmReattachedRestTitle(ptyId, agent)
   })
 
   protected readonly terminalWait = new RuntimeTerminalWaitController(
@@ -393,6 +392,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
     this.terminalIdlePolls
   )
 
+  protected ptyControllerGeneration = 0
   protected ptyController: RuntimePtyController | null = null
 
   protected readonly ptyLivenessVerdictByPtyId = new Map<

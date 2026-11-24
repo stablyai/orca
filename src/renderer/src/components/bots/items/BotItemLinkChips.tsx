@@ -1,20 +1,17 @@
-// An item's links as one or two lines of chips under its frozen title, so they stay in view while the
-// owner reads and answers lower down. Each chip opens its link as its row in the full list would; the
-// chips with no room go behind "+N", whose popover lists them as full rows.
-import { FileText, GitPullRequest, Link2, Square } from 'lucide-react'
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+/* One link stays a chip. The rest share one count and a popover. */
+import { ChevronDown, FileText, GitPullRequest, Hourglass, Link2, Square } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { getTaskPageGitHubWorkItemStateLabel } from '@/components/task-page/github/listing/task-page-github-work-item-status'
+import { NativeChatLinkPeekProvider } from '@/components/native-chat/links/previews/native-chat-link-peek-context'
 import type { Bot } from '../../../../../shared/bot-types'
-import type { BotItemLinkView, BotItemWorkerState } from '../../../../../shared/bots/bot-items'
+import type { BotItemLinkView } from '../../../../../shared/bots/bot-items'
 import {
   botItemLinkRows,
   botItemWorkerRow,
-  type BotItemGitHubRow,
   type BotItemLinkRow
 } from '../../../../../shared/bots/bot-item-link-rows'
 import { BotAppBrandLogo } from '../apps/BotAppBrandLogo'
@@ -25,14 +22,15 @@ import {
 } from '../BotChatTreeWorkerRow'
 import { useWorkerStop, WorkerActivityDetails } from '../WorkerActivityRow'
 import { openBotItemFile, type BotItemFileContext } from './bot-item-file-open'
+import { BotItemChipButton as ChipButton } from './BotItemChipButton'
+import { BotItemGitHubChip as GitHubChip } from './BotItemGitHubChip'
 import {
   BotItemLinkRowList,
-  checksLabel,
-  gitHubIcon,
   useBotItemFileContext,
   useLinearTitle,
   useOpenWeb
 } from './BotItemLinks'
+import { useBotItemPrWorkspacesVisible } from './use-bot-item-live-pr'
 
 export function BotItemLinkChips({
   bot,
@@ -57,165 +55,83 @@ function LinkChips({
   links: readonly BotItemLinkView[]
   chat: string
 }): React.JSX.Element | null {
-  const t = useTranslate()
-  const rows = useMemo(() => botItemLinkChipOrder(botItemLinkRows(links)), [links])
+  const rows = useMemo(() => botItemLinkRows(links), [links])
+  useBotItemPrWorkspacesVisible(rows)
   const fileContext = useBotItemFileContext(bot)
-  const list = useRef<HTMLUListElement | null>(null)
-  const overflow = useRef<HTMLDivElement | null>(null)
-  const shown = useChipsThatFit(list, rows)
   if (rows.length === 0) {
     return null
   }
-  const rest = rows.slice(shown)
   return (
-    <div className="flex min-w-0 items-end gap-1">
-      {/* Two lines tall, one in a short window; a chip past the last line is clipped, out of Tab and
-          the accessibility tree, and "+N" lists it. Only a resize or a chip's own change measures again, never a scroll. */}
-      <ul
-        ref={list}
-        aria-label={t('bots.items.view.links', 'Links')}
-        className="relative flex max-h-[52px] min-w-0 flex-1 flex-wrap gap-1 overflow-hidden [@media(max-height:620px)]:max-h-6"
-      >
-        {rows.map((row, index) => (
-          <li
-            key={row.key}
-            inert={index >= shown}
-            aria-hidden={index >= shown || undefined}
-            className="flex min-w-0 max-w-full"
-          >
-            <Chip bot={bot} chat={chat} row={row} fileContext={fileContext} />
-          </li>
-        ))}
-      </ul>
-      {rest.length > 0 ? (
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              size="xs"
-              aria-label={t('bots.items.view.moreLinks', '{{count}} more links', {
-                count: rest.length
-              })}
-            >
-              <span className="tabular-nums">+{rest.length}</span>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            className="w-80"
-            wheelScroll
-            // The list takes focus, not its first row: a focused worker row opens its hover card over
-            // the header. Tab goes on to the rows from here.
-            onOpenAutoFocus={(event) => {
-              event.preventDefault()
-              overflow.current?.focus()
-            }}
-          >
-            <div
-              ref={overflow}
-              tabIndex={-1}
-              className="scrollbar-sleek max-h-60 overflow-y-auto p-1 outline-none"
-            >
-              <BotItemLinkRowList bot={bot} rows={rest} chat={chat} />
-            </div>
-          </PopoverContent>
-        </Popover>
-      ) : null}
-    </div>
-  )
-}
-
-/** The list's order, but a worker that has finished goes last: with many links, the ones still
- *  moving and the PRs keep their place in view, and a finished worker is the first behind "+N". */
-export function botItemLinkChipOrder(rows: readonly BotItemLinkRow[]): BotItemLinkRow[] {
-  const settled = (row: BotItemLinkRow): boolean =>
-    row.kind === 'worker' && SETTLED_WORKER.has(row.link.state)
-  return [...rows.filter((row) => !settled(row)), ...rows.filter(settled)]
-}
-
-const SETTLED_WORKER: ReadonlySet<BotItemWorkerState> = new Set([
-  'completed',
-  'failed',
-  'stopped',
-  'missing'
-])
-
-/** How many chips, from the first, sit wholly inside the list's box. Read on mount and when the list or
- *  a chip changes size, never on scroll; a clipped chip has nothing to read later but its own box. */
-function useChipsThatFit(
-  list: React.RefObject<HTMLUListElement | null>,
-  rows: readonly BotItemLinkRow[]
-): number {
-  const count = rows.length
-  // A new set of chips is new elements to watch; a chip that only changes its text keeps its element.
-  const keys = rows.map((row) => row.key).join('\n')
-  const [shown, setShown] = useState(count)
-  useLayoutEffect(() => {
-    const root = list.current
-    if (!root) {
-      return
-    }
-    const measure = (): void => {
-      const height = root.clientHeight
-      const chips = Array.from(root.children).filter(
-        (chip): chip is HTMLElement => chip instanceof HTMLElement
-      )
-      const firstClipped = chips.findIndex(
-        (chip) => chip.offsetTop + chip.offsetHeight > height + 0.5
-      )
-      setShown(firstClipped === -1 ? chips.length : firstClipped)
-    }
-    measure()
-    if (typeof ResizeObserver === 'undefined') {
-      return
-    }
-    const observer = new ResizeObserver(measure)
-    observer.observe(root)
-    for (const chip of Array.from(root.children)) {
-      observer.observe(chip)
-    }
-    return () => observer.disconnect()
-  }, [list, keys])
-  return Math.min(shown, count)
-}
-
-/** One link: an icon and a short name, cut to fit; the whole name and what a row says is on hover. */
-function ChipButton({
-  icon,
-  label,
-  suffix,
-  tip,
-  disabled,
-  onClick
-}: {
-  icon: ReactNode
-  label: string
-  suffix?: string | null
-  tip?: string
-  disabled?: boolean
-  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void
-}): React.JSX.Element {
-  const chip = (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className="flex h-6 min-w-0 max-w-60 items-center gap-1.5 rounded-md border border-border bg-background px-1.5 text-xs text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 disabled:text-muted-foreground disabled:hover:bg-background"
+    <NativeChatLinkPeekProvider
+      fileLinkContext={fileContext?.fileLinkContext ?? null}
+      hostId={bot.hostId}
     >
-      <span className="flex size-3.5 shrink-0 items-center justify-center">{icon}</span>
-      <span className="min-w-0 truncate">{label}</span>
-      {suffix ? (
-        <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">{suffix}</span>
-      ) : null}
-    </button>
+      {rows.length === 1 ? (
+        <div className="flex min-w-0 flex-1 basis-0">
+          <Chip bot={bot} chat={chat} row={rows[0]!} fileContext={fileContext} />
+        </div>
+      ) : (
+        <LinksMenu bot={bot} rows={rows} chat={chat} />
+      )}
+    </NativeChatLinkPeekProvider>
   )
+}
+
+/** Two or more links: their count, whose popover lists them all as full rows. */
+function LinksMenu({
+  bot,
+  rows,
+  chat
+}: {
+  bot: Bot
+  rows: readonly BotItemLinkRow[]
+  chat: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  const list = useRef<HTMLDivElement | null>(null)
+  const trigger = useRef<HTMLButtonElement | null>(null)
+  // The item's pane, read on open: the list stays inside it and is no wider than it.
+  const [pane, setPane] = useState<Element | null>(null)
+  const label = t('bots.items.view.linkCount', '{{count}} links', { count: rows.length })
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>{chip}</TooltipTrigger>
-      <TooltipContent side="bottom" align="start" className="max-w-80">
-        {tip ? `${label} · ${tip}` : label}
-      </TooltipContent>
-    </Tooltip>
+    <Popover
+      onOpenChange={(open) => {
+        if (open) {
+          setPane(trigger.current?.closest('[data-bot-item-focus-home]') ?? null)
+        }
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button ref={trigger} variant="ghost" size="xs" className="shrink-0" aria-label={label}>
+          <Link2 className="size-3 text-muted-foreground" />
+          {/* Only the count in a narrow pane, so the row never cuts its controls. */}
+          <span className="@max-[290px]:hidden">{label}</span>
+          <span className="hidden tabular-nums @max-[290px]:inline">{rows.length}</span>
+          <ChevronDown className="size-3 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        collisionBoundary={pane}
+        collisionPadding={8}
+        className="w-80 max-w-(--radix-popover-content-available-width)"
+        wheelScroll
+        // The list takes focus, not its first row: a focused worker row opens its hover card over
+        // the header. Tab goes on to the rows from here.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          list.current?.focus()
+        }}
+      >
+        <div
+          ref={list}
+          tabIndex={-1}
+          className="scrollbar-sleek max-h-[min(15rem,var(--radix-popover-content-available-height,15rem))] overflow-y-auto p-1 outline-none"
+        >
+          <BotItemLinkRowList bot={bot} rows={rows} chat={chat} />
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -312,37 +228,20 @@ function Chip({
       return <WebChip row={row} />
     case 'file':
       return <FileChip row={row} fileContext={fileContext} />
+    case 'automation':
+      return (
+        <ChipButton
+          icon={<Hourglass className="size-3.5 text-muted-foreground" />}
+          label={row.name ?? t('bots.items.link.automation', 'Automation')}
+          tip={
+            row.active
+              ? t('bots.items.link.automationOn', 'Will wake the agent for this item')
+              : t('bots.items.link.automationEnded', 'Ended')
+          }
+          disabled={!row.active}
+        />
+      )
   }
-}
-
-function GitHubChip({ row }: { row: BotItemGitHubRow }): React.JSX.Element {
-  const t = useTranslate()
-  const openWeb = useOpenWeb()
-  const tip = [
-    row.state
-      ? getTaskPageGitHubWorkItemStateLabel({ type: row.type, state: row.state }, t)
-      : t('bots.items.link.notRead', 'Not read yet'),
-    checksLabel(t, row.checks),
-    row.repo
-  ]
-    .filter(Boolean)
-    .join(' · ')
-  return (
-    <ChipButton
-      icon={gitHubIcon(row)}
-      label={
-        row.title ??
-        (row.type === 'pr'
-          ? t('bots.items.link.pr', 'PR #{{number}}', { number: row.number })
-          : t('bots.items.link.issue', 'Issue #{{number}}', {
-              number: row.number
-            }))
-      }
-      suffix={row.title ? `#${row.number}` : null}
-      tip={tip}
-      onClick={(event) => openWeb(row.url, event)}
-    />
-  )
 }
 
 function WebChip({ row }: { row: Extract<BotItemLinkRow, { kind: 'web' }> }): React.JSX.Element {
