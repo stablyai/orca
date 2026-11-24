@@ -32,7 +32,16 @@ export function createAgentStatusOrchestrationActions(
       set((s, changedPaneKeys) => {
         const previous = s.runtimeAgentOrchestrationByPaneKey
         const reconciled: Record<string, AgentStatusOrchestrationContext> = Object.fromEntries([])
-        let runtimeMapChanged = Object.keys(previous).length !== Object.keys(entries).length
+        // Why: each producer (this window, or a paired host) owns its entries; a reply from one must
+        // not drop the others'.
+        let kept = 0
+        for (const [key, context] of Object.entries(previous)) {
+          if (orchestrationProducer(context) !== producerHost && !(key in entries)) {
+            reconciled[key] = context
+            kept++
+          }
+        }
+        let runtimeMapChanged = Object.keys(previous).length !== kept + Object.keys(entries).length
         for (const [key, context] of Object.entries(entries)) {
           const old = previous[key]
           const value =

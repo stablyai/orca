@@ -2134,6 +2134,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'ssh.removeTarget': SshTarget,
   'ssh.updateTarget': SshTargetUpdate,
   'stats.summary': null,
+  'status.agentOrchestration': null,
   'status.get': StatusGetParams,
   'terminal.ackOutput': TerminalAckOutput,
   'terminal.adoptOrphans': TerminalAdoptOrphans,

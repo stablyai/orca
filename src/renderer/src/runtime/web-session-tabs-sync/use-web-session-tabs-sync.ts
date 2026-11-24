@@ -5,6 +5,7 @@ import {
 } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useRuntimeHostStatusSelector } from '../../store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '../../store'
+import { useRemoteOrchestrationSync } from '../agent-orchestration/remote-orchestration-sync'
 import { useRuntimeSessionMirrorEnvironmentKeys } from './subscriptions/use-runtime-session-mirror-environment-key'
 import { sessionTabsFreshnessKey } from './state'
 import { clearWebSessionTabsTrackingForEnvironment } from './tracking/tracking-lifecycle'
@@ -28,6 +29,7 @@ const selectConnectionGeneration = (entry: RuntimeStatusEntry): number =>
 const selectHostContactEpoch = (entry: RuntimeStatusEntry): number => entry?.hostContactEpoch ?? 0
 
 export function useWebSessionTabsSync(): void {
+  useRemoteOrchestrationSync()
   const activeRuntimeEnvironmentIdRef = useRef<string | null>(null)
   const activeRuntimeWorktreeKeyRef = useRef<string | null>(null)
   const visibilityResumeOmissionsRef = useRef<
