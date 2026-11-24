@@ -1,9 +1,10 @@
+import type * as AiVault from '../../../../../shared/ai-vault/contracts/ai-vault-types'
+import { selectedWslSqliteSessionId } from '../../../session-scanner-selection'
 import { aiVaultScopePathsForWslDistro } from '../../../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import {
   recordSessionScanIssue,
   scanIssueTextFromError
 } from '../../../parsing/session-scan-issues'
-import type * as AiVault from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { throwIfSignalAborted } from '../../../../../shared/concurrency/abort-signal-reason'
 import { openCodeTranscriptPageLimit } from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-transcript-page-limit'
 import type { SessionFileCandidate } from '../../../session-scanner-types'
@@ -149,6 +150,11 @@ async function listCandidatesForHost(
               signal,
               dbPaths: [...paths.keys()],
               scopePaths,
+              selectedSessionId: selectedWslSqliteSessionId(
+                args.selectedSessionId,
+                args.agent ?? 'opencode',
+                paths
+              ),
               issues
             })
           },

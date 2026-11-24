@@ -44,6 +44,7 @@ import {
   DesktopBrowserBridgeResultChunkParams,
   DesktopBrowserBridgeResultParams
 } from '../browser/client-hosting/desktop-browser-bridge-protocol'
+import { SetConversationPreferenceParams } from '../conversation-navigation-preferences'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
 import { MobileWebBundleLocaleCatalogParamsSchema } from '../mobile-web-bundle/locale-catalog-contract'
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
@@ -2206,6 +2207,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'ui.recordFeatureInteraction': FeatureInteractionIdParam,
   'ui.set': UiUpdate,
   'ui.setCollapsed': SetCollapsedParams,
+  'ui.setConversationPreference': SetConversationPreferenceParams,
   'ui.setJiraQuickFilters': JiraQuickFilterStateParam,
   'updater.check': UpdaterCheckParams,
   'updater.download': null,

@@ -1,12 +1,11 @@
+import { AgentHistoryEmptyList, AgentHistoryLoadState } from './AgentHistoryLoadState'
+import { scopeSegments } from './agent-history-scope-segments'
 import { useMemo, useState } from 'react'
 import { View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ChevronLeft, History, MessageSquarePlus, Play, RefreshCw } from 'lucide-react-native'
+import { ChevronLeft, MessageSquarePlus, Play, RefreshCw } from 'lucide-react-native'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import {
-  MobileSegmentedControl,
-  type MobileSegment
-} from '../components/controls/MobileSegmentedControl'
+import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
@@ -22,12 +21,6 @@ import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
 import {
-  MobileLoadErrorState,
-  MobileNoMatchState,
-  MobileOfflineState,
-  MobileStateView
-} from '../components/feedback/MobileStateView'
-import {
   AgentHistoryInterruptedNotice,
   AgentHistoryResumeNotice,
   AgentHistoryScanNotices,
@@ -42,7 +35,7 @@ import { useAgentHistoryRestartOffer } from './use-agent-history-restart-offer'
 import { TransientToast } from '../components/feedback/TransientToast'
 import { useNow } from '../hooks/use-now'
 import { useMobileResumeOperationOwnership } from './use-mobile-resume-operation-ownership'
-import type { Translate } from '../i18n/mobile-i18n'
+import { conversationCopy } from '../host-screen/conversation-copy'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { AgentHistoryHandoffDrawer } from './AgentHistoryHandoffSheet'
@@ -53,16 +46,9 @@ export type MobileAgentSessionHistoryPanelProps = {
   hostId: string
   worktreeId: string
   name?: string
+  conversationId?: string
   /** `handoff`: opened from the workspace menu to pick a session to hand off. */
   origin?: string
-}
-
-function scopeSegments(t: Translate): MobileSegment<AiVault.AiVaultScope>[] {
-  return [
-    { value: 'workspace', label: t('agentHistory.panel.workspace', 'Workspace') },
-    { value: 'project', label: t('agentHistory.panel.project', 'Project') },
-    { value: 'all', label: t('agentHistory.panel.all', 'All') }
-  ]
 }
 
 export function MobileAgentSessionHistoryPanel(props: MobileAgentSessionHistoryPanelProps) {
@@ -73,6 +59,7 @@ function MobileAgentSessionHistoryPanelContent({
   hostId,
   worktreeId,
   name = '',
+  conversationId,
   origin = ''
 }: MobileAgentSessionHistoryPanelProps) {
   useMobileColorScheme()
@@ -90,6 +77,7 @@ function MobileAgentSessionHistoryPanelContent({
     connState
   )
   const [query, setQuery] = useState('')
+  const effectiveQuery = conversationId ? '' : query
   const [agents, setAgents] = useState<readonly AiVault.AiVaultAgent[]>(AiVault.AI_VAULT_AGENTS)
   const [sort, setSort] = useState<AiVault.AiVaultSort>(AGENT_HISTORY_DEFAULT_SORT)
   const [searchBarHeight, setSearchBarHeight] = useState(0)
@@ -109,9 +97,19 @@ function MobileAgentSessionHistoryPanelContent({
     onSelectScope,
     onRefresh,
     retry
-  } = useMobileAgentHistoryState({ hostId, worktreeId, worktrees, worktreesLoaded, projectSetups })
+  } = useMobileAgentHistoryState({
+    hostId,
+    worktreeId,
+    conversationId,
+    worktrees,
+    worktreesLoaded,
+    projectSetups
+  })
 
-  const sessions = screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS
+  const sessions = useMemo(() => {
+    const all = screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS
+    return conversationId ? all.filter((session) => session.id === conversationId) : all
+  }, [screenState, conversationId])
   const issues = screenState.kind === 'ready' ? screenState.issues : EMPTY_ISSUES
   const sessionsById = useMemo(
     () => new Map(sessions.map((session) => [session.id, session])),
@@ -120,15 +118,26 @@ function MobileAgentSessionHistoryPanelContent({
   const sections = useMemo(
     () =>
       buildMobileAgentHistorySections(sessions, {
-        query,
+        query: effectiveQuery,
         agents,
         sort,
-        scope,
+        scope: conversationId ? 'all' : scope,
         scopeFilterPaths,
         activeWorktreePath,
         now
       }),
-    [sessions, query, agents, sort, scope, scopeFilterPaths, activeWorktreePath, now, t]
+    [
+      sessions,
+      effectiveQuery,
+      conversationId,
+      agents,
+      sort,
+      scope,
+      scopeFilterPaths,
+      activeWorktreePath,
+      now,
+      t
+    ]
   )
 
   const showRefreshLine = useRefreshHint(revalidating)
@@ -163,7 +172,9 @@ function MobileAgentSessionHistoryPanelContent({
           title={
             pickingHandoff
               ? t('agentHistory.handoff.title', 'Hand off to agent')
-              : t('agentHistory.panel.title', 'Agent Session History')
+              : conversationId
+                ? conversationCopy().history
+                : t('agentHistory.panel.title', 'Agent Session History')
           }
           subtitle={worktreeLabel}
           refreshing={showRefreshLine}
@@ -175,7 +186,7 @@ function MobileAgentSessionHistoryPanelContent({
             />
           }
           accessory={
-            screenState.kind === 'ready' ? (
+            screenState.kind === 'ready' && !conversationId ? (
               <MobileSegmentedControl
                 segments={scopeSegments(t)}
                 selected={scope}
@@ -188,71 +199,47 @@ function MobileAgentSessionHistoryPanelContent({
         />
       </SafeAreaView>
 
-      {screenState.kind === 'loading' ? (
-        <MobileStateView
-          loading
-          title={t('agentHistory.panel.loading', 'Loading agent sessions…')}
+      <AgentHistoryLoadState
+        state={screenState}
+        connected={connState === 'connected'}
+        onRetry={retry}
+      >
+        {conversationId ? null : <AgentHistoryInterruptedNotice offer={restartOffer} />}
+        <AgentHistoryHandoffNotice notice={handoff.notice} onDismiss={handoff.dismissNotice} />
+        <AgentHistoryScanNotices sessions={sessions} issues={issues} />
+        <AgentHistoryResumeNotice
+          message={resumeMessage}
+          onDismiss={() => setResumeMessage(null)}
         />
-      ) : screenState.kind === 'unsupported' ? (
-        <MobileStateView
-          icon={History}
-          title={t('agentHistory.panel.unavailable', 'Agent Session History Unavailable')}
-          message={t(
-            'agentHistory.panel.updateHost',
-            'Update Orca on this host to browse agent session history.'
-          )}
-        />
-      ) : screenState.kind === 'error' && connState !== 'connected' ? (
-        <MobileOfflineState onReconnect={retry} />
-      ) : screenState.kind === 'error' ? (
-        <MobileLoadErrorState error={screenState.message} onRetry={retry} />
-      ) : (
-        <>
-          <AgentHistoryInterruptedNotice offer={restartOffer} />
-          <AgentHistoryScanNotices sessions={sessions} issues={issues} />
-          <AgentHistoryResumeNotice
-            message={resumeMessage}
-            onDismiss={() => setResumeMessage(null)}
+        {sections.length === 0 ? (
+          <AgentHistoryEmptyList
+            query={effectiveQuery}
+            agentFiltered={!agentHistoryShowsEveryAgent(agents)}
+            conversation={Boolean(conversationId)}
+            bottomInset={searchBarHeight}
+            onClearQuery={() => setQuery('')}
+            onShowAllAgents={() => setAgents(AiVault.AI_VAULT_AGENTS)}
           />
-          <AgentHistoryHandoffNotice notice={handoff.notice} onDismiss={handoff.dismissNotice} />
-          {sections.length === 0 ? (
-            query ? (
-              <MobileNoMatchState
-                message={t('agentHistory.panel.noSearchResults', 'No sessions match your search.')}
-                onClear={() => setQuery('')}
-                bottomInset={searchBarHeight}
-              />
-            ) : !agentHistoryShowsEveryAgent(agents) ? (
-              <MobileNoMatchState
-                onClear={() => setAgents(AiVault.AI_VAULT_AGENTS)}
-                clearLabel={t('agentHistory.panel.showAllAgents', 'Show all agents')}
-                bottomInset={searchBarHeight}
-              />
-            ) : (
-              <MobileStateView
-                icon={History}
-                title={t('agentHistory.panel.noSessions', 'No agent sessions')}
-                message={t(
-                  'agentHistory.panel.emptyScope',
-                  'No past agent sessions in this scope.'
-                )}
-                bottomInset={searchBarHeight}
-              />
-            )
-          ) : (
-            <MobileAgentSessionHistoryList
-              sections={sections}
-              sessionsById={sessionsById}
-              refreshing={refreshing}
-              showCurrentWorktreeBadges={shouldShowMobileCurrentWorktreeBadge(scope)}
-              resumeActionStateBySessionId={resumeActionStateBySessionId}
-              onResume={pickingHandoff ? handoff.open : onResumeSession}
-              primaryAction={pickingHandoff ? 'handoff' : 'resume'}
-              onLongPress={pickingHandoff ? undefined : setActionSession}
-              onRefresh={() => void onRefresh()}
-              bottomPadding={searchBarHeight}
-            />
-          )}
+        ) : (
+          <MobileAgentSessionHistoryList
+            key={conversationId ?? 'history'}
+            sections={sections}
+            sessionsById={sessionsById}
+            refreshing={refreshing}
+            showCurrentWorktreeBadges={
+              !conversationId && shouldShowMobileCurrentWorktreeBadge(scope)
+            }
+            initialExpandedId={conversationId}
+            hideSectionHeaders={Boolean(conversationId)}
+            resumeActionStateBySessionId={resumeActionStateBySessionId}
+            onResume={pickingHandoff ? handoff.open : onResumeSession}
+            primaryAction={pickingHandoff ? 'handoff' : 'resume'}
+            onLongPress={pickingHandoff ? undefined : setActionSession}
+            onRefresh={() => void onRefresh()}
+            bottomPadding={searchBarHeight}
+          />
+        )}
+        {!conversationId && (
           <AgentHistoryBottomBar
             query={query}
             onQueryChange={setQuery}
@@ -264,8 +251,8 @@ function MobileAgentSessionHistoryPanelContent({
             onAgentsChange={setAgents}
             onSortChange={setSort}
           />
-        </>
-      )}
+        )}
+      </AgentHistoryLoadState>
       <TransientToast message={resume.resumeToast} bottomInset={searchBarHeight} />
       <ActionSheetModal
         visible={actionSession !== null}

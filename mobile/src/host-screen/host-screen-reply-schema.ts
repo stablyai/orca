@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { ConversationPreferencesSchema } from '../../../src/shared/conversation-navigation-preferences'
 import type { PersistedUIState } from '../../../src/shared/orca-profiles/persisted-ui-state-types'
 import type { RepoIcon } from '../../../src/shared/repository/appearance/repo-icon'
 import {
@@ -133,6 +134,10 @@ export const hostViewSettingsSchema = z
       hideWorkspacesFromOtherDevices: salvagedOptional(
         'hideWorkspacesFromOtherDevices',
         z.boolean()
+      ),
+      conversationPreferences: salvagedOptional(
+        'conversationPreferences',
+        ConversationPreferencesSchema
       ),
       projectOrderBy: salvagedOptional('projectOrderBy', z.enum(WORKSPACE_PROJECT_ORDER_ARMS)),
       // Kept as strings: a property a newer desktop adds is carried back unchanged on write.

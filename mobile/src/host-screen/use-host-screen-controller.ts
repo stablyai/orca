@@ -85,6 +85,10 @@ export function useHostScreenController({
 
   useHostScreenIdentity({ client, hostId, state })
   const sidebarFeed = useSwitchedHostSidebarFeed(client, hostId)
+  const projectCatalog =
+    sidebarFeed?.feed.kind === 'ready'
+      ? (sidebarFeed.feed.domains.projectCatalog ?? state.servedProjectSections)
+      : state.servedProjectSections
   // The host's botsChanged re-reads its own bots; a reconnect or the foreground, every host's.
   const [botsChangeKeys, noteBotsChanged] = useReducer(
     (keys: Record<BotsChangeScope, number>, scope: BotsChangeScope) => ({
@@ -187,11 +191,13 @@ export function useHostScreenController({
     collapsedGroups,
     feed,
     projectOrderBy,
+    projectCatalog,
     client,
     connectionVerdict,
     connState,
     contentMaxWidth,
     displayWorktrees,
+    hostContextOf,
     embedded,
     existingWorktreePaths,
     floatingWorkspaceEnabled,

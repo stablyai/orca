@@ -37,6 +37,7 @@ export type WorkspaceViewSettings = {
     | (typeof WORKSPACE_VIEW_UI_FIELDS)[number]
     // Written with the card properties only: whether they are a Card layout preset.
     | '_worktreeCardModeDefaulted'
+    | 'conversationPreferences'
   >
 >
 
@@ -47,6 +48,7 @@ export type MobileViewState = {
   collapsedGroups: readonly string[]
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   /** Null until the desktop's value is read; the served project list's order stands in. */
+  conversationPreferences?: PersistedUIState['conversationPreferences']
   projectOrderBy: ProjectOrderBy | null
   /** May hold a property a newer desktop added; it is carried back unchanged. */
   worktreeCardProperties: readonly WorktreeCardProperty[]
@@ -172,6 +174,13 @@ export function applyDesktopViewSettings(
     filters,
     collapsedGroups: settings.collapsedGroups ?? current.collapsedGroups,
     workspaceStatuses,
+    ...(current.conversationPreferences
+      ? { conversationPreferences: current.conversationPreferences }
+      : {}),
+    ...(settings.conversationPreferences &&
+    settings.conversationPreferences.revision >= (current.conversationPreferences?.revision ?? 0)
+      ? { conversationPreferences: settings.conversationPreferences }
+      : {}),
     projectOrderBy: settings.projectOrderBy ?? current.projectOrderBy,
     worktreeCardProperties: settings.worktreeCardProperties ?? current.worktreeCardProperties,
     agentActivityDisplayMode: settings.agentActivityDisplayMode ?? current.agentActivityDisplayMode,

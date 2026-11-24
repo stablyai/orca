@@ -12,6 +12,7 @@ import { wslGatedReaddir } from '../../native-chat/transcript-filesystem/wsl-tra
 import { WslTranscriptFsError } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import { recordSessionScanIssue, scanIssueTextFromError } from '../parsing/session-scan-issues'
 import { aiVaultScanIssueText } from '../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
+import { isSelectedSessionFile } from '../session-scanner-selection'
 import type {
   FileWithMtime,
   SessionFileDiscovery,
@@ -58,10 +59,13 @@ export async function discoverFiles(args: {
   onDirectoryEntries?: (dirPath: string, entries: readonly Dirent[]) => void
   // A scoped scan walks every file this agent has, not only the newest `limit`.
   keepScopeFiles?: boolean
+  selectedSessionId?: string
+  executionHostId?: string
   statCache?: SessionDiscoveryStatCache
   signal?: AbortSignal
 }): Promise<SessionFileDiscovery> {
   const files = new SessionNewestFiles(args.limit)
+  const selectedFiles: FileWithMtime[] = []
   const scopeFiles: FileWithMtime[] | undefined = args.keepScopeFiles ? [] : undefined
   let refusedSidecar = false
   let paths: string[] = []
@@ -91,6 +95,17 @@ export async function discoverFiles(args: {
       }
       try {
         const modifiedAt = new Date(observation.file.mtimeMs)
+        if (
+          selectedFiles.length === 0 &&
+          isSelectedSessionFile(
+            args.selectedSessionId,
+            args.agent,
+            observation.file.path,
+            args.executionHostId
+          )
+        ) {
+          selectedFiles.push({ ...observation.file, modifiedAt: modifiedAt.toISOString() })
+        }
         if (
           Number.isNaN(modifiedAt.getTime()) ||
           files.wouldRetain(observation.file.mtimeMs) ||
@@ -225,7 +240,13 @@ export async function discoverFiles(args: {
   } finally {
     source.close()
   }
-  return { agent: args.agent, rootDir: args.rootDir, files: files.newest(), scopeFiles }
+  return {
+    agent: args.agent,
+    rootDir: args.rootDir,
+    files: files.newest(),
+    scopeFiles,
+    selectedFiles
+  }
 }
 
 /** Collecting form for callers that want every match; bounded scans stream. */
