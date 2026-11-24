@@ -1,21 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { Translate } from '@/i18n/use-translate'
-import type { Bot } from '../../../../../shared/bot-types'
-import {
-  botChatLabelParts,
-  botChatLabelText,
-  nameKeptEnd,
-  resumeRowBotName
-} from './resume-toast-row-label'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { botChatLabelParts, botChatLabelText, resumeRowBotName } from './resume-toast-row-label'
 
-const bots = [
-  { id: 'a', name: 'UX Designer', hostId: 'local', folderWorkspaceId: 'home-1' },
-  { id: 'b', name: 'Server bot', hostId: 'runtime:server-1', folderWorkspaceId: 'home-1' }
-] as unknown as Bot[]
+const bots: { name: string; hostId: ExecutionHostId; folderWorkspaceId: string }[] = [
+  { name: 'UX Designer', hostId: 'local', folderWorkspaceId: 'home-1' },
+  { name: 'Server bot', hostId: 'runtime:server-1', folderWorkspaceId: 'home-1' }
+]
 
 function translation(template: string): Translate {
-  return ((_key: string, _fallback: string, values: Record<string, string>) =>
-    template.replace(/\{\{(\w+)\}\}/g, (_match, slot: string) => values[slot] ?? '')) as Translate
+  return (_key, _fallback, options) =>
+    template.replace(/\{\{(\w+)\}\}/g, (_match, slot: string) => String(options?.[slot] ?? ''))
 }
 
 describe('resume toast row label', () => {
@@ -36,11 +31,13 @@ describe('resume toast row label', () => {
     expect(botChatLabelText(lost, 'UX Designer', 'Home')).toBe('UX Designer · Home')
   })
 
-  it('keeps the end of a long bot name whole', () => {
-    expect(nameKeptEnd('Customer Onboarding Research Assistant 01')).toEqual({
-      head: 'Customer Onboarding Research Assistant',
-      tail: ' 01'
-    })
-    expect(nameKeptEnd('UX Designer')).toEqual({ head: 'UX Designer', tail: '' })
+  it('keeps a long separator as one piece between the names', () => {
+    const separator = ' ———————— a forty-eight character separator ——— '
+    const parts = botChatLabelParts(translation(`{{bot}}${separator}{{chat}}`))
+    expect(parts).toEqual([
+      { key: 'bot', kind: 'bot' },
+      { key: 'text-1', kind: 'text', text: separator },
+      { key: 'chat', kind: 'chat' }
+    ])
   })
 })

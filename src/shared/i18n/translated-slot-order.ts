@@ -5,6 +5,12 @@ export type TranslatedSlotPart<Slot extends string> = { key: string } & (
   | { kind: 'text'; text: string }
 )
 
+/** A slot's marker character, filled in for its placeholder, and the piece it becomes. */
+export type TranslatedSlot<Slot extends string> = {
+  marker: string
+  part: TranslatedSlotPart<Slot>
+}
+
 /**
  * Splits a translation filled with one marker character per slot into its pieces in the locale's
  * order, so a value is never parsed as markup. A translation that lost or doubled a slot falls
@@ -12,22 +18,13 @@ export type TranslatedSlotPart<Slot extends string> = { key: string } & (
  */
 export function translatedSlotParts<Slot extends string>(
   filled: string,
-  markers: Readonly<Record<Slot, string>>,
+  slots: readonly TranslatedSlot<Slot>[],
   english: TranslatedSlotPart<Slot>[]
 ): TranslatedSlotPart<Slot>[] {
-  // The English order holds each slot's part once; its markers find them in the translation.
-  const slotPartByMarker = new Map<string, TranslatedSlotPart<Slot>>()
-  for (const part of english) {
-    if (part.kind !== 'text') {
-      slotPartByMarker.set(markers[part.kind as Slot], part)
-    }
-  }
-  if (
-    Object.values<string>(markers).some((marker) => filled.split(marker).length !== 2) ||
-    slotPartByMarker.size !== Object.keys(markers).length
-  ) {
+  if (slots.some(({ marker }) => filled.split(marker).length !== 2)) {
     return english
   }
+  const partByMarker = new Map(slots.map(({ marker, part }) => [marker, part]))
   const parts: TranslatedSlotPart<Slot>[] = []
   let text = ''
   // Text runs are keyed by how many slots precede them: at most one run per gap.
@@ -38,7 +35,7 @@ export function translatedSlotParts<Slot extends string>(
     }
   }
   for (const char of filled) {
-    const slotPart = slotPartByMarker.get(char)
+    const slotPart = partByMarker.get(char)
     if (!slotPart) {
       text += char
       continue

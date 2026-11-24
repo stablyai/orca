@@ -1,4 +1,5 @@
-import { setRendererUiLanguage } from '@/i18n/i18n'
+import { setRendererUiLanguage, translate } from '@/i18n/i18n'
+import { TranslationScopeContext, type Translate } from '@/i18n/use-translate'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { ResumeCandidate, ResumeFailure } from '../tree/native-chat-resume-on-restart-grouping'
 import type { ResumeRun } from '../runs/native-chat-resume-run'
@@ -189,11 +190,17 @@ export const botChatsResumed = defineFixture({
 })
 
 const LONG_BOT = 'Customer Onboarding Research Assistant'
-/** Narrowest toast: the chat title truncates before a long bot name, whose end survives so two
- *  similar names stay apart; the age and actions stay. */
-export const botChatsLongNames = defineFixture({
-  width: NARROWEST,
-  render: () => (
+const LONG_NAME_CHATS = {
+  'chat-0': {
+    bot: `${LONG_BOT} 01`,
+    chat: 'Summarize every interview from last week and draft the findings deck'
+  },
+  'chat-1': { bot: `${LONG_BOT} 02`, chat: 'Home' },
+  'chat-2': { bot: 'UX Designer', chat: PROMPTS[0] ?? '' }
+}
+
+function LongNamesToast(): React.JSX.Element {
+  return (
     <NativeChatResumeToast
       view={resumeToastView(
         finishedRun(twelve.slice(0, 4), 'launch'),
@@ -203,15 +210,50 @@ export const botChatsLongNames = defineFixture({
       listedAt={NOW}
       defaultExpanded
       {...actions}
-      {...botChats({
-        'chat-0': {
-          bot: `${LONG_BOT} 01`,
-          chat: 'Summarize every interview from last week and draft the findings deck'
-        },
-        'chat-1': { bot: `${LONG_BOT} 02`, chat: 'Home' },
-        'chat-2': { bot: 'UX Designer', chat: PROMPTS[0] ?? '' }
-      })}
+      {...botChats(LONG_NAME_CHATS)}
     />
+  )
+}
+
+/** Narrowest toast: the chat title truncates before a long bot name; the age and actions stay. */
+export const botChatsLongNames = defineFixture({
+  width: NARROWEST,
+  render: () => <LongNamesToast />
+})
+
+/** Two names alike up to the ellipsis: a keyboard focus on the row shows the whole one. */
+export const botChatsLongNamesFocused = defineFixture({
+  width: NARROWEST,
+  render: () => <LongNamesToast />,
+  interact: async (frame) => {
+    const labels = frame.querySelectorAll<HTMLElement>('li [tabindex="0"]')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+    labels[1]?.focus()
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+})
+
+const LONG_SEPARATOR = ' ———————— a forty-eight character separator ——— '
+
+const longSeparatorT: Translate = (key, fallback, options) =>
+  key === 'auto.components.NativeChatResumeToast.botChat'
+    ? `${String(options?.bot)}${LONG_SEPARATOR}${String(options?.chat)}`
+    : translate(key, fallback, options)
+const LONG_SEPARATOR_SCOPE = { intlLocale: 'en', t: longSeparatorT }
+
+/** A language pack's separator is capped, so the bot and chat names stay in view. */
+export const botChatsLongSeparator = defineFixture({
+  width: NARROWEST,
+  render: () => (
+    <TranslationScopeContext.Provider value={LONG_SEPARATOR_SCOPE}>
+      <NativeChatResumeToast
+        view={resumeToastView(finishedRun(twelve.slice(0, 3), 'launch'), [], new Map())}
+        listedAt={NOW}
+        defaultExpanded
+        {...actions}
+        {...botChats(BOT_CHATS)}
+      />
+    </TranslationScopeContext.Provider>
   )
 })
 

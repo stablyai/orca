@@ -12,23 +12,25 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import { botOfHomeWorkspace } from '../../../../shared/bots/bot-homes'
 import { isBotHomeTab } from '../../../../shared/bots/bot-home-tab'
 
+type HomedBot = Pick<Bot, 'folderWorkspaceId'> & { hostId: ExecutionHostId }
+
 // The catalog is a snapshot replaced on change; every row naming a sender looks its bot up again
 // on each redraw, so each snapshot is indexed once rather than searched per lookup.
-const homeIndexes = new WeakMap<readonly Bot[], Map<string, Bot>>()
+const homeIndexes = new WeakMap<readonly HomedBot[], Map<string, number>>()
 
-function homeIndex(bots: readonly Bot[]): Map<string, Bot> {
+function homeIndex(bots: readonly HomedBot[]): Map<string, number> {
   let index = homeIndexes.get(bots)
   if (!index) {
     index = new Map()
-    for (const bot of bots) {
+    for (const [position, bot] of bots.entries()) {
       const home = folderWorkspaceKey(bot.folderWorkspaceId)
       // First wins, as a search from the start would: unqualified, and qualified by host.
       if (!index.has(home)) {
-        index.set(home, bot)
+        index.set(home, position)
       }
       const onHost = `${bot.hostId}\0${home}`
       if (!index.has(onHost)) {
-        index.set(onHost, bot)
+        index.set(onHost, position)
       }
     }
     homeIndexes.set(bots, index)
@@ -37,15 +39,16 @@ function homeIndex(bots: readonly Bot[]): Map<string, Bot> {
 }
 
 /** With `hostId`, only a bot on that host, so the same workspace id on two hosts never names the other's bot. */
-export function findBotByWorkspace(
-  bots: readonly Bot[],
+export function findBotByWorkspace<B extends HomedBot>(
+  bots: readonly B[],
   workspaceId: string | null,
   hostId?: ExecutionHostId
-): Bot | null {
+): B | null {
   if (!workspaceId || bots.length === 0) {
     return null
   }
-  return homeIndex(bots).get(hostId ? `${hostId}\0${workspaceId}` : workspaceId) ?? null
+  const position = homeIndex(bots).get(hostId ? `${hostId}\0${workspaceId}` : workspaceId)
+  return position === undefined ? null : (bots[position] ?? null)
 }
 
 /** With bots off a home is a plain folder. */

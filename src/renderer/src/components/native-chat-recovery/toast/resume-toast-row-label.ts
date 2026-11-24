@@ -8,10 +8,12 @@ import {
 import { findBotByWorkspace } from '../../bots/bot-workspace'
 import type { ResumeCandidate } from '../tree/native-chat-resume-on-restart-grouping'
 
+type ListedBot = Pick<Bot, 'name' | 'folderWorkspaceId'> & { hostId: ExecutionHostId }
+
 /** Every bot's own chat is "Home", so a bot's chats are named with it; a terminal worker started
  *  in a bot's folder is not the bot's chat. Only this host's bots, so another host's never answers. */
 export function resumeRowBotName(
-  bots: readonly Bot[],
+  bots: readonly ListedBot[],
   candidate: Pick<ResumeCandidate, 'workspaceId' | 'surface'>,
   hostId: ExecutionHostId
 ): string | undefined {
@@ -22,21 +24,25 @@ export function resumeRowBotName(
 
 export type BotChatLabelPart = TranslatedSlotPart<'bot' | 'chat'>
 
-const BOT_CHAT_SLOTS = { bot: '\u0001', chat: '\u0002' }
-const ENGLISH_ORDER: BotChatLabelPart[] = [
-  { key: 'bot', kind: 'bot' },
-  { key: 'text-1', kind: 'text', text: ' · ' },
-  { key: 'chat', kind: 'chat' }
+const BOT_MARKER = '\u0001'
+const CHAT_MARKER = '\u0002'
+const BOT: BotChatLabelPart = { key: 'bot', kind: 'bot' }
+const CHAT: BotChatLabelPart = { key: 'chat', kind: 'chat' }
+const SLOTS = [
+  { marker: BOT_MARKER, part: BOT },
+  { marker: CHAT_MARKER, part: CHAT }
 ]
+const ENGLISH_ORDER: BotChatLabelPart[] = [BOT, { key: 'text-1', kind: 'text', text: ' · ' }, CHAT]
 
 /** "<bot> · <chat>" in the locale's order, in pieces so the row can lay out each one. */
 export function botChatLabelParts(t: Translate): BotChatLabelPart[] {
   return translatedSlotParts(
     t('auto.components.NativeChatResumeToast.botChat', '{{bot}} · {{chat}}', {
-      ...BOT_CHAT_SLOTS,
+      bot: BOT_MARKER,
+      chat: CHAT_MARKER,
       interpolation: { escapeValue: false }
     }),
-    BOT_CHAT_SLOTS,
+    SLOTS,
     ENGLISH_ORDER
   )
 }
@@ -45,22 +51,4 @@ export function botChatLabelText(parts: readonly BotChatLabelPart[], bot: string
   return parts
     .map((part) => (part.kind === 'bot' ? bot : part.kind === 'chat' ? chat : part.text))
     .join('')
-}
-
-const KEPT_WORD_LENGTH = 9
-const KEPT_CHARS = 6
-
-/** A long name's end, kept whole while the rest ellipsizes, so "… Assistant 01" and "… 02" stay apart. */
-export function nameKeptEnd(name: string): { head: string; tail: string } {
-  const chars = Array.from(name)
-  if (chars.length <= KEPT_WORD_LENGTH + KEPT_CHARS) {
-    return { head: name, tail: '' }
-  }
-  const lastSpace = name.lastIndexOf(' ')
-  const lastWord = lastSpace > 0 ? name.slice(lastSpace) : ''
-  const tail =
-    lastWord && Array.from(lastWord).length <= KEPT_WORD_LENGTH
-      ? lastWord
-      : chars.slice(-KEPT_CHARS).join('')
-  return { head: name.slice(0, name.length - tail.length), tail }
 }
