@@ -4611,8 +4611,7 @@
         "title": "項目",
         "placeOf": "第 {{index}} 個，共 {{total}} 個",
         "previous": "上一個項目",
-        "next": "下一個項目",
-        "subWhere": "事項 {{number}} · {{chat}}"
+        "next": "下一個項目"
       },
       "write": {
         "offline": "{{host}} 已離線。"
@@ -4621,7 +4620,6 @@
       "readFailedClosedPage": "無法讀取更多已關閉的事項。",
       "skillLimit": "訊息未傳送。請最多選擇 {{limit}} 個技能檔案後再試一次。",
       "ask": {
-        "notSentYet": "尚未傳送",
         "replaced": "代理程式提出了新問題。請先閱讀，再回覆。",
         "replacedByNewer": "已由較新的問題取代",
         "skipped": "已略過"

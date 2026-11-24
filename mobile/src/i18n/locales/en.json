@@ -6453,8 +6453,7 @@
         "retry": "Retry",
         "discard": "Discard",
         "mayHaveArrived": "May have arrived.",
-        "replyingTo": "Replying to: {{question}}. Go to the question",
-        "waitingOn": "Waiting on"
+        "replyingTo": "Replying to: {{question}}. Go to the question"
       },
       "comment": {
         "offline": "{{host}} is offline. Your comment is kept; Comment works again when it’s back.",
@@ -6497,7 +6496,6 @@
       "loading": "Loading items…",
       "view": {
         "title": "Item",
-        "subWhere": "Item {{number}} · {{chat}}",
         "canceledNote": "Canceled:",
         "doneNote": "Done:",
         "links": "Links",
@@ -6594,17 +6592,10 @@
       },
       "readFailedTitle": "Couldn’t load items",
       "ask": {
-        "recommended": "Recommended",
-        "typeAnswer": "Type your answer",
-        "notSentYet": "not sent yet",
-        "previous": "Previous question",
-        "step": "{{n}} of {{total}}",
-        "next": "Next question",
-        "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
-        "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>",
         "replaced": "The agent asked a new question. Read it, then reply.",
         "replacedByNewer": "Replaced by a newer question",
-        "skipped": "Skipped"
+        "skipped": "Skipped",
+        "notNow": "Not now"
       },
       "readFailedClosedPage": "Couldn’t read more closed items.",
       "skillLimit": "Message not sent. Keep at most {{limit}} selected skill files and try again."

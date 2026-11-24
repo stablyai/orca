@@ -5110,8 +5110,7 @@
         "title": "항목",
         "placeOf": "{{total}}개 중 {{index}}번째",
         "previous": "이전 항목",
-        "next": "다음 항목",
-        "subWhere": "항목 {{number}} · {{chat}}"
+        "next": "다음 항목"
       },
       "write": {
         "offline": "{{host}}이(가) 오프라인입니다."
@@ -5120,7 +5119,6 @@
       "readFailedClosedPage": "닫힌 항목을 더 읽지 못했습니다.",
       "skillLimit": "메시지를 보내지 않았습니다. 선택한 스킬 파일을 {{limit}}개 이하로 줄인 뒤 다시 시도하세요.",
       "ask": {
-        "notSentYet": "아직 보내지 않음",
         "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요.",
         "replacedByNewer": "새 질문으로 대체됨",
         "skipped": "건너뜀"
