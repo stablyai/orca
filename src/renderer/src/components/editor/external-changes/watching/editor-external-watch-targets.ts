@@ -191,8 +191,8 @@ export function selectEditorExternalWatchTargets(
   })
   // Key watchers by workspace and execution host, matching reads/saves: same id may be open locally, over SSH and in a runtime.
   for (const file of state.openFiles) {
-    // Why: a virtual tab (CI details, chat visual) has no file in the workspace to watch.
-    if (isVirtualEditorFile(file)) {
+    // Pipeline readiness depends on workspace bytes even though its tab is virtual.
+    if (isVirtualEditorFile(file) && file.mode !== 'pipeline-run') {
       continue
     }
     // Why: background workspaces drop their native watch; switching back re-verifies their tabs against disk.

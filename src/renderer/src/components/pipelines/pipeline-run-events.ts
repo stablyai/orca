@@ -1,5 +1,6 @@
 import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
 import * as z from 'zod'
+import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/runtime/files/watching/worktree-file-change-event'
 
 const PipelineChange = z.discriminatedUnion('type', [
   z.object({
@@ -18,7 +19,10 @@ const PipelineChange = z.discriminatedUnion('type', [
     worktreeIds: z.array(z.string()).optional()
   })
 ])
-type Change = z.infer<typeof PipelineChange> | { type: 'reconnect' }
+type Change =
+  | z.infer<typeof PipelineChange>
+  | { type: 'reconnect' }
+  | { type: 'worktreeFilesChanged'; worktreePath: string }
 const listeners = new Map<(event: Change) => void, (error: unknown) => void>()
 let generation = 0
 let stream: { unsubscribe: () => void } | undefined
@@ -87,6 +91,15 @@ function wake() {
     open()
   }
 }
+function sourceChanged(event: WindowEventMap[typeof ORCA_WORKTREE_FILE_CHANGE_EVENT]) {
+  const { payload, runtimeEnvironmentId } = event.detail
+  if (runtimeEnvironmentId || payload.connectionId) {
+    return
+  }
+  listeners.forEach((_, listener) =>
+    listener({ type: 'worktreeFilesChanged', worktreePath: payload.worktreePath })
+  )
+}
 export function subscribePipelineRunChanges(
   listener: (event: Change) => void,
   onError: (error: unknown) => void
@@ -94,6 +107,7 @@ export function subscribePipelineRunChanges(
   listeners.set(listener, onError)
   if (listeners.size === 1) {
     window.addEventListener('online', wake)
+    window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, sourceChanged)
     open()
   }
   return () => {
@@ -102,6 +116,7 @@ export function subscribePipelineRunChanges(
       close()
       failures = 0
       window.removeEventListener('online', wake)
+      window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, sourceChanged)
     }
   }
 }

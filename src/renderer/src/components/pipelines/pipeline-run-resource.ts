@@ -9,6 +9,7 @@ import { readPipelineRun, type PipelineRunRead, type PipelineRunScope } from './
 import { subscribePipelineRunChanges } from './pipeline-run-events'
 import { applyPipelineRunReceipt } from './pipeline-run-projection'
 import { pipelineRunActionRejected } from './pipeline-run-rejections'
+import { composeWorktreeId, worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { pipelineRunResources as resources } from './pipeline-run-cache'
 import {
   preparePipelineRunAction,
@@ -58,6 +59,12 @@ export class PipelineRunResource {
         (event) => {
           if (
             event.type === 'reconnect' ||
+            (event.type === 'worktreeFilesChanged' &&
+              this.state.read?.status.currentEvidence &&
+              worktreeIdsEqual(
+                composeWorktreeId(this.scope.projectId, event.worktreePath),
+                this.state.read.status.run.workspace.id
+              )) ||
             (event.type === 'gitStatusChanged' &&
               event.repoId === this.scope.projectId &&
               (!event.worktreeIds ||
