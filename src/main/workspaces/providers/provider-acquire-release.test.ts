@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -186,6 +186,63 @@ describe('provider-managed acquire and release', () => {
       '{"token":"abc"}'
     ])
     expect(meta.has(worktreeId)).toBe(false)
+  })
+
+  it('runs a real stub provider executable for claim and release', async () => {
+    const stub = join(dir, 'provider.mjs')
+    const logPath = join(dir, 'release-log.jsonl')
+    writeFileSync(
+      stub,
+      `
+import { appendFileSync } from 'node:fs'
+const args = process.argv.slice(2)
+if (args[0] === 'claim') {
+  process.stdout.write(JSON.stringify({ path: ${JSON.stringify(slot)}, lease_id: 'lease-real', handle: { run: '1' } }))
+} else {
+  appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + '\\n')
+}
+`,
+      'utf8'
+    )
+    const config = join(dir, 'real-providers.yaml')
+    writeFileSync(
+      config,
+      `providers:
+  real:
+    claim: ${JSON.stringify([process.execPath, stub, 'claim'])}
+    release: ${JSON.stringify([process.execPath, stub, 'release'])}
+`
+    )
+    const realCatalog = await readWorktreeProviderCatalog({
+      repo,
+      trust: { repos: {} },
+      userConfigPath: config,
+      repoOrcaYamlPath: join(dir, 'missing-orca.yaml')
+    })
+    const acquired = await acquireProviderWorktree({
+      repo,
+      providerName: 'real',
+      catalog: realCatalog,
+      ports: { ...ports(), runCommand: undefined }
+    })
+    expect(acquired.claim.leaseId).toBe('lease-real')
+    const worktreeId = `${repo.id}::${slot}`
+    await releaseProviderWorktree({
+      repo,
+      worktreeId,
+      worktreePath: slot,
+      meta: meta.get(worktreeId)!,
+      catalog: realCatalog,
+      force: false,
+      forget: false,
+      ports: { ...releasePorts(), runCommand: undefined }
+    })
+    const released = readFileSync(logPath, 'utf8')
+      .trim()
+      .split('\n')
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub writes a JSON string array.
+      .map((line) => JSON.parse(line) as string[])
+    expect(released.some((args) => args.includes(slot) && args.includes('lease-real'))).toBe(true)
   })
 
   it('keeps the workspace when the provider refuses a dirty release', async () => {
