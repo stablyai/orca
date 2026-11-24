@@ -1630,6 +1630,7 @@
         "sentry": "Look into errors and the events behind them",
         "stripe": "Look up payments, customers and subscriptions",
         "supabase": "Query databases and manage projects",
+        "treg": "Live data for AI agents - pay per call",
         "vercel": "Check deployments and read their logs"
       }
     },

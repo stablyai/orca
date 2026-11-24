@@ -246,5 +246,13 @@ export const BOT_MCP_APPS: readonly BotMcpApp[] = [
     signIn: 'browser',
     category: 'sales',
     composio: ['stripe']
+  },
+  {
+    id: 'treg',
+    name: 'Treg',
+    line: 'Live data for AI agents - pay per call',
+    url: 'https://treg.to/mcp/',
+    signIn: 'browser',
+    category: 'sales'
   }
 ]
