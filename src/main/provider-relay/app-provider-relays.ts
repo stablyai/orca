@@ -275,13 +275,8 @@ export async function launchRelayedProviderProcess(
   const channel = providerRelayChannel(client)
   let spawned: Awaited<ReturnType<ProviderRelayChannel['spawn']>>
   try {
-    spawned = await channel.spawn(
-      spec,
-      relay.chatKey,
-      policyFor(relay.markers),
-      relay.markers.agent,
-      relay.keep
-    )
+    const { chatKey, markers, keep } = relay
+    spawned = await channel.spawn(spec, chatKey, policyFor(markers), markers.agent, keep)
   } catch {
     // An unanswered spawn may still have started the agent; the daemon ends it once no one attaches.
     return null

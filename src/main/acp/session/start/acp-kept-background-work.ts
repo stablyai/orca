@@ -13,7 +13,7 @@ const READ_BATCH = 16
 /**
  * Background tasks still running when the earlier app quit: their turns ended, so their starts
  * were acked and won't replay. Before output is let through, each is restated from its saved row,
- * so it reads as running (not unavailable) and a call Orca made it of reports to it again: the
+ * and published as running (not unavailable), and a call Orca made it of reports to it again: the
  * call's final update settles the task instead of replacing the closed call row. No row is written.
  */
 export async function carryKeptAcpBackgroundWork(
@@ -39,10 +39,13 @@ export async function carryKeptAcpBackgroundWork(
   for (let at = 0; at < taskIds.length; at += READ_BATCH) {
     const batch = taskIds.slice(at, at + READ_BATCH)
     for (const row of await Promise.all(batch.map((id) => read(`background-task:${id}`)))) {
-      for (const block of row?.body.kind === 'message'
-        ? backgroundTaskBlocks(row.body.blocks)
-        : []) {
-        translator.backgroundTasks.restate(block)
+      const blocks = row?.body.kind === 'message' ? backgroundTaskBlocks(row.body.blocks) : []
+      for (const live of blocks.map((block) =>
+        translator.backgroundTasks.restate(block, namespace)
+      )) {
+        if (live) {
+          child.lane?.publishChildWork(live)
+        }
       }
     }
   }

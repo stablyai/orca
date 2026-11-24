@@ -240,7 +240,8 @@ export class AcpStructuredLane {
     this.notifyTurnWatchers()
   }
 
-  private publishChildWork(event: ProviderTimelineEvent): void {
+  /** A background task's live state for the host's work view (also a restated one's, rowless). */
+  publishChildWork(event: ProviderTimelineEvent): void {
     const at = this.deps.now?.() ?? Date.now()
     const stoppable = this.deps.childStops?.().backgroundTasks === true
     const synthetic = this.translator.isSyntheticBackgroundTask

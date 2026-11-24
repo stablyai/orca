@@ -181,7 +181,7 @@ export type AcpRelayedProcess = RelayedProviderProcess & { turns: AcpRelayTurns 
  */
 export async function launchRelayedAcpAgent(
   input: {
-    deps: Pick<AcpStructuredSessionAdapterDeps, 'spec'>
+    deps: Pick<AcpStructuredSessionAdapterDeps, 'spec' | 'logger'>
     acquire: Pick<StructuredAgentSessionAcquireInput, 'identity'>
     abandoned: () => boolean
   },
@@ -211,7 +211,17 @@ export async function launchRelayedAcpAgent(
   const relayed = await launchRelayedProviderProcess(processLaunch, relay).catch(refuse)
   floor = relayed?.child.attachResult?.maxClientRequestId ?? 0
   const sessionId = launch.resume?.sessionId
-  if (relayed?.reattached && !restorableAcpSession(acpKeptAgent(relayed.child), sessionId)) {
+  const kept = relayed?.reattached ? acpKeptAgent(relayed.child) : null
+  if (relayed && kept && !restorableAcpSession(kept, sessionId)) {
+    input.deps.logger?.warn('a kept ACP agent cannot carry on its chat', {
+      scope: 'acp-kept-unrestorable',
+      sessionId: input.acquire.identity.sessionId,
+      agent: spec.agent,
+      initialize: kept.initialize !== null,
+      start: kept.sessionStart?.method ?? null,
+      resume: sessionId !== undefined,
+      kept: relayed.child.attachResult?.kept?.map((line) => line.name) ?? null
+    })
     // Ended like any agent the host had to stop: the chat's turn settles and its next message
     // starts the agent again, reopening the session (with catch-up) as today.
     if (relayed.child.exited === null) {
