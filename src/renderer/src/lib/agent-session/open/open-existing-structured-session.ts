@@ -15,22 +15,23 @@ import {
 } from '../structured-agent-session-tab-activation'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../workspace/ownership/worktree-runtime-owner'
-import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import type { OrchestrationPartyLocationResult } from '../../../../../shared/orchestration/orchestration-caller-status'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { throwIfSignalAborted } from '../../../../../shared/concurrency/abort-signal-reason'
 import {
+  callStructuredSessionParty,
   refreshStructuredSessionTabs,
   revealStructuredSession,
   STRUCTURED_SESSION_RESTORE_TIMEOUT_MS,
   type StructuredSessionRevealOutcome,
   withStructuredSessionRestoreTimeout
 } from './structured-session-restore'
+import { pairedBotThreadRecovery } from './paired-bot-thread-recovery'
 
 export type StructuredSessionOpenAdapterDeps = {
   activate: typeof activateStructuredAgentSessionById
+  locate?: StructuredSessionOpenDeps['locate']
   tabs: (
     target: { sessionId: string; worktreeId: string },
     owner: RuntimeClientTarget
@@ -63,17 +64,28 @@ const defaultDeps: StructuredSessionOpenAdapterDeps = {
 
 export function pairedBotThreadOpenDeps(
   linkedWorkspaceId: string,
+  linkedSessionId: string,
+  target: RuntimeClientTarget,
   signal: AbortSignal,
   current: () => boolean,
   activate: StructuredSessionOpenAdapterDeps['activate']
 ): StructuredSessionOpenAdapterDeps {
+  const recovery =
+    target.kind === 'environment'
+      ? pairedBotThreadRecovery(target, linkedWorkspaceId, linkedSessionId, signal)
+      : undefined
   return {
     ...defaultDeps,
     current,
     signal,
     activate,
-    reveal: (target) => revealStructuredSession({ ...target, signal }),
+    locate: recovery?.locate,
+    reveal: recovery?.reveal ?? ((target) => revealStructuredSession({ ...target, signal })),
     refresh: async ({ worktreeId, sessionId }, owner) => {
+      if (recovery?.isLocating()) {
+        return
+      }
+      const minimumReceivedFrame = await recovery?.inventoryAfterReveal()
       if (!current()) {
         return
       }
@@ -88,6 +100,7 @@ export function pairedBotThreadOpenDeps(
                 worktreeId,
                 sessionId,
                 timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS,
+                minimumReceivedFrame,
                 signal: requestSignal,
                 current
               })
@@ -218,14 +231,12 @@ async function executeDesktopStructuredSession(
     async (address: string, messageIds: readonly string[]) => {
       try {
         return await withStructuredSessionRestoreTimeout(
-          callRuntimeRpc<OrchestrationPartyLocationResult>(
+          callStructuredSessionParty(
             owner,
             method,
-            { address, ...(messageIds.length ? { messageIds } : {}) },
-            {
-              timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS,
-              ...(deps.signal ? { beforeSend: () => throwIfSignalAborted(deps.signal) } : {})
-            }
+            address,
+            messageIds,
+            deps.signal ? { beforeSend: () => throwIfSignalAborted(deps.signal) } : undefined
           ),
           { signal: deps.signal }
         )
@@ -235,7 +246,7 @@ async function executeDesktopStructuredSession(
     }
   return openStructuredAgentSession(source, {
     current: deps.current,
-    locate: locate ?? party('orchestration.partyLocation'),
+    locate: locate ?? deps.locate ?? party('orchestration.partyLocation'),
     ...(locate ? {} : { open: party('orchestration.partyOpen') }),
     tabs: (target) => deps.tabs(target, owner),
     activate: (tab, target) =>

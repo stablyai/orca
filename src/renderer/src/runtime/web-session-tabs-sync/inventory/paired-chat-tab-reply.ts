@@ -30,6 +30,7 @@ export async function readPairedChatTab(args: {
   worktreeId: string
   sessionId: string
   timeoutMs: number
+  minimumReceivedFrame?: number
   signal: AbortSignal
   current: () => boolean
 }): Promise<void> {
@@ -46,6 +47,7 @@ export async function readPairedChatTab(args: {
     environmentId,
     worktreeId,
     scope: { registration, connectionGeneration, timeoutMs: args.timeoutMs },
+    minimumReceivedFrame: args.minimumReceivedFrame,
     signal,
     load: async (hasWaiters) => {
       const beforeSend = (): void => {
@@ -128,7 +130,7 @@ export async function readPairedChatTab(args: {
     currentTabs.length,
     currentTabs,
     now,
-    isOwnerTab
+    { mayAdopt: isOwnerTab }
   )
   if (!mirror) {
     return

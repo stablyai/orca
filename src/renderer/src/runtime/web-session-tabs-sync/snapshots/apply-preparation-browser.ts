@@ -29,11 +29,7 @@ import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/agent-session
 import { executionHostIdForSessionTabsOwner } from '../../native-chat/local-sessions/local-structured-session-owner'
 import { isAgentSessionTabOfAnotherHost } from '../identity/mirror-row-ownership'
 import { isUnlistedCreatedChat } from '@/lib/agent-session/launch/pane/structured-agent-session-unlisted-created-chats'
-import {
-  canAdoptInitialHostGroups,
-  directlyOpenedChatPublications,
-  retainDirectlyOpenedChats
-} from '../tracking/directly-opened-chat-tabs'
+import { prepareAgentTabSnapshot } from './agent-tab-snapshot'
 
 export function prepareWebSessionTabsSnapshotBrowser(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBase>
@@ -55,43 +51,20 @@ export function prepareWebSessionTabsSnapshotBrowser(
   const hostGroupIdByTabId = buildHostGroupIdByTabId(snapshot.tabGroups)
   const currentUnifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const snapshotExecutionHostId = executionHostIdForSessionTabsOwner(environmentId)
-  const receivedChats = directlyOpenedChatPublications(environmentId, worktreeId)
-  const directlyOpened = retainDirectlyOpenedChats(
-    environmentId,
+  const {
+    adoptsInitialHostGroups,
+    directlyOpened,
+    publishedAgentSessionIds,
+    claimedAgentSessionIds,
+    projection
+  } = prepareAgentTabSnapshot({
+    state,
     snapshot,
-    currentUnifiedTabs,
+    environmentId,
+    executionHostId: snapshotExecutionHostId,
+    currentTabs: currentUnifiedTabs,
     hostGroupIdByTabId
-  )
-  // A frame that still needs the linked chat's proof cannot own its initial placement.
-  const adoptsInitialHostGroups = Boolean(
-    !directlyOpened &&
-    snapshot.tabGroups?.length &&
-    canAdoptInitialHostGroups(state, worktreeId, snapshotExecutionHostId, receivedChats)
-  )
-  const agentSnapshot = directlyOpened
-    ? {
-        ...snapshot,
-        tabs: snapshot.tabs.filter(
-          (tab) =>
-            tab.type !== 'agent-session' ||
-            (!directlyOpened.has(tab.sessionId) &&
-              (!tab.replacesSessionId || !directlyOpened.has(tab.replacesSessionId)))
-        )
-      }
-    : snapshot
-  const publishedAgentSessionIds = new Set(directlyOpened?.keys())
-  for (const tab of agentSnapshot.tabs) {
-    if (tab.type === 'agent-session') {
-      publishedAgentSessionIds.add(tab.sessionId)
-    }
-  }
-  // A chat this frame publishes or replaces is its to rebuild, whichever host last showed it.
-  const claimedAgentSessionIds = new Set(publishedAgentSessionIds)
-  for (const tab of agentSnapshot.tabs) {
-    if (tab.type === 'agent-session' && tab.replacesSessionId) {
-      claimedAgentSessionIds.add(tab.replacesSessionId)
-    }
-  }
+  })
   const agentSessionsAffirmed = hostSnapshotAffirmsAgentSessions(snapshot)
   const existingTabIndex = buildWebSessionExistingTabIndex({ unifiedTabs: currentUnifiedTabs })
   const reconcilesBrowserTabs =
@@ -171,21 +144,14 @@ export function prepareWebSessionTabsSnapshotBrowser(
     navigationIntentTab?.id ?? resolveWebSessionVisibleTabId(state, worktreeId)
   )
   const mirroredAgentTabs = buildMirroredAgentTabs(
-    agentSnapshot,
-    executionHostIdForSessionTabsOwner(environmentId),
+    snapshot,
+    snapshotExecutionHostId,
     hostGroupIdByTabId,
     targetGroupId,
     mirroredTerminalTabEntries.length + mirroredBrowserTabs.length + mirroredEditorTabs.length,
     currentUnifiedTabs,
     now,
-    receivedChats
-      ? (tab) => {
-          const proof = receivedChats.get(tab.entityId)
-          return (
-            !proof || (tab.id === proof.tabId && tab.executionHostId === snapshotExecutionHostId)
-          )
-        }
-      : undefined
+    projection
   )
   if (directlyOpened) {
     mirroredAgentTabs.push(...directlyOpened.values())

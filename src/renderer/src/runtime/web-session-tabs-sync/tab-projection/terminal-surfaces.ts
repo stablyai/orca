@@ -73,15 +73,21 @@ export function buildMirroredAgentTabs(
   sortOffset: number,
   currentUnifiedTabs: readonly Tab[],
   now: number,
-  mayAdopt: (tab: Tab) => boolean = () => true
+  options: {
+    mayAdopt?: (tab: Tab) => boolean
+    mayProject?: (tab: RuntimeMobileSessionAgentTab) => boolean
+    occupiedIds?: Set<string>
+  } = {}
 ): MirroredAgentTab[] {
+  const { mayAdopt = () => true, mayProject } = options
   const agentTabs = snapshot.tabs
     .filter(isAgentSessionTab)
     .filter(
       (tab) =>
+        (!mayProject || mayProject(tab)) &&
         !hasStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)
     )
-  const occupiedIds = new Set(currentUnifiedTabs.map((tab) => tab.id))
+  const occupiedIds = options.occupiedIds ?? new Set(currentUnifiedTabs.map((tab) => tab.id))
   const assignedIds = new Set<string>()
   const replacementTabs = new Map<string, Tab>()
   const replacementIds = new Set<string>()

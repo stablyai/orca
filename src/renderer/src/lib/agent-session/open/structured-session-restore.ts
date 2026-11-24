@@ -6,6 +6,7 @@ import {
 import { unreachableOpenFailure } from '../../../../../shared/agent-session/view/structured-session-open-failure-detail'
 import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { OrchestrationPartyLocationResult } from '../../../../../shared/orchestration/orchestration-caller-status'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
@@ -29,12 +30,28 @@ export type StructuredSessionRevealOutcome =
   | 'host-cannot-open'
   | 'unreachable'
 
+export function callStructuredSessionParty(
+  owner: RuntimeClientTarget,
+  method: 'orchestration.partyLocation' | 'orchestration.partyOpen',
+  address: string,
+  messageIds: readonly string[],
+  options?: { beforeSend?: () => void }
+): Promise<OrchestrationPartyLocationResult> {
+  return callRuntimeRpc<OrchestrationPartyLocationResult>(
+    owner,
+    method,
+    { address, ...(messageIds.length ? { messageIds } : {}) },
+    { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS, ...options }
+  )
+}
+
 /** Only revealed promises a tab; preserve distinct retry/missing/update outcomes for the other replies. */
 export async function revealStructuredSession(target: {
   worktreeId: string
   sessionId: string
   target?: RuntimeClientTarget
   signal?: AbortSignal
+  beforeSend?: () => void
 }): Promise<StructuredSessionRevealOutcome> {
   const host =
     target.target ??
@@ -45,6 +62,7 @@ export async function revealStructuredSession(target: {
   if (host.kind === 'environment') {
     let supported: boolean
     try {
+      target.beforeSend?.()
       // Race even cached probe promises: an older unbounded probe must not hold the session’s in-flight guard forever.
       supported = await withStructuredSessionRestoreTimeout(
         runtimeEnvironmentSupportsCapability(
@@ -64,18 +82,19 @@ export async function revealStructuredSession(target: {
   }
   let result: AgentSessionRevealReply | undefined
   try {
-    result = await withStructuredSessionRestoreTimeout(
-      callRuntimeRpc<AgentSessionRevealReply>(
-        host,
-        'agentSession.reveal',
-        { sessionId: target.sessionId },
-        {
-          timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS,
-          ...(target.signal ? { beforeSend: () => throwIfSignalAborted(target.signal) } : {})
-        }
-      ),
-      { signal: target.signal }
+    const request = callRuntimeRpc<AgentSessionRevealReply>(
+      host,
+      'agentSession.reveal',
+      { sessionId: target.sessionId },
+      {
+        timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS,
+        beforeSend:
+          target.beforeSend ?? (target.signal ? () => throwIfSignalAborted(target.signal) : undefined)
+      }
     )
+    result = await (target.beforeSend
+      ? request
+      : withStructuredSessionRestoreTimeout(request, { signal: target.signal }))
   } catch (error) {
     return unreachableOpenFailure(error)
   }

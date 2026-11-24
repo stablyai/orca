@@ -23,7 +23,7 @@ type ChatLinkReadScope = {
 
 const inFlightBySession = new Map<
   string,
-  { request: Promise<RemoteRuntimeSessionTabsAnswer>; scope?: ChatLinkReadScope }
+  { request: Promise<RemoteRuntimeSessionTabsAnswer>; receivedFrame: number; scope?: ChatLinkReadScope }
 >()
 
 type RemoteRuntimeSessionTabsLoad = {
@@ -52,6 +52,7 @@ export function waitForChatLinkSessionTabs(args: {
   environmentId: string
   worktreeId: string
   scope: ChatLinkReadScope
+  minimumReceivedFrame?: number
   signal: AbortSignal
   load: (hasWaiters: () => boolean) => ReturnType<RemoteRuntimeSessionTabsLoad['load']>
 }): Promise<RemoteRuntimeSessionTabsAnswer> {
@@ -66,7 +67,8 @@ export function waitForChatLinkSessionTabs(args: {
       await Promise.resolve()
       const answer = await args.load(() => sharedPromiseSettlementWaiters(request).waiterCount > 0)
       return { ...answer, receivedFrame }
-    }
+    },
+    args.minimumReceivedFrame
   )
   return waitForPromiseWithSignal(request, args.signal)
 }
@@ -74,23 +76,26 @@ export function waitForChatLinkSessionTabs(args: {
 function shareSessionTabsRead(
   key: string,
   scope: ChatLinkReadScope | undefined,
-  load: (receivedFrame: number) => Promise<RemoteRuntimeSessionTabsAnswer>
+  load: (receivedFrame: number) => Promise<RemoteRuntimeSessionTabsAnswer>,
+  minimumReceivedFrame = 0
 ): Promise<RemoteRuntimeSessionTabsAnswer> {
   const existing = inFlightBySession.get(key)
   if (
     existing &&
+    existing.receivedFrame >= minimumReceivedFrame &&
     existing.scope?.registration === scope?.registration &&
     existing.scope?.connectionGeneration === scope?.connectionGeneration &&
     existing.scope?.timeoutMs === scope?.timeoutMs
   ) {
     return existing.request
   }
-  const request = load(nextReceivedSessionTabsFrame()).finally(() => {
+  const receivedFrame = nextReceivedSessionTabsFrame()
+  const request = load(receivedFrame).finally(() => {
     if (inFlightBySession.get(key)?.request === request) {
       inFlightBySession.delete(key)
     }
   })
-  inFlightBySession.set(key, { request, scope })
+  inFlightBySession.set(key, { request, receivedFrame, scope })
   return request
 }
 

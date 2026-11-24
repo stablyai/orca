@@ -15,6 +15,7 @@ import {
   sessionTabsEnvironmentsByWorktree,
   lastHostTerminalTabCountByWorktree,
   sessionTabsInventoryOmissionsByWorktree,
+  hostSessionGroupIdByLocalKey,
   hostSessionTabIdByLocalKey,
   hostSessionTabMappingKeysByEnvironmentAndWorktree,
   markHostSessionTabMappingsChanged,
@@ -101,6 +102,7 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   resetReceivedSessionTabsFrameSequence()
   lastHostTerminalTabCountByWorktree.clear()
   sessionTabsInventoryOmissionsByWorktree.clear()
+  hostSessionGroupIdByLocalKey.clear()
   hostSessionTabIdByLocalKey.clear()
   hostSessionTabMappingKeysByEnvironmentAndWorktree.clear()
   markHostSessionTabMappingsChanged()
@@ -195,6 +197,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
     for (const mappingKeys of mappingKeysByWorktree.values()) {
       for (const mappingKey of mappingKeys) {
         hostSessionTabIdByLocalKey.delete(mappingKey)
+        hostSessionGroupIdByLocalKey.delete(mappingKey)
       }
     }
     hostSessionTabMappingKeysByEnvironmentAndWorktree.delete(trimmedEnvironmentId)
