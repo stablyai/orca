@@ -1,4 +1,5 @@
 import { connect } from 'node:net'
+import { networkInterfaces } from 'node:os'
 import { Duplex, PassThrough } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import { browserTunnelTargetBlockReason } from '../../browser/network/tunnels/browser-network-tunnel-destination-policy'
@@ -41,6 +42,12 @@ function replyAfterRequestTunnel(): PairedPortForwardTunnel {
   } as unknown as PairedPortForwardTunnel
 }
 
+function hasIpv6Loopback(): boolean {
+  return Object.values(networkInterfaces()).some((addresses) =>
+    addresses?.some((address) => address.address === '::1')
+  )
+}
+
 function roundTrip(port: number, payload: string, host = '127.0.0.1'): Promise<string> {
   return new Promise((resolve, reject) => {
     const socket = connect({ host, port }, () => socket.write(payload))
@@ -64,18 +71,20 @@ describe('PairedPortForwardProvider', () => {
       remotePort: 5173
     })
     const port = forward.entry.localPort
-
-    expect(await roundTrip(port, 'GET / HTTP/1.1\r\n\r\n')).toBe('GET / HTTP/1.1\r\n\r\n')
-    // A browser tries [::1] first for localhost; that must reach the server too, not a local service.
-    expect(await roundTrip(port, 'ipv6', '::1')).toBe('ipv6')
-    expect(opened).toEqual([
-      { host: 'localhost', port: 5173 },
-      { host: 'localhost', port: 5173 }
-    ])
-    // Another paired client of this desktop must not chain through the forward to the server.
-    expect(browserTunnelTargetBlockReason('127.0.0.1', port)).toBe('orca_listener')
-
-    await forward.close()
+    try {
+      expect(await roundTrip(port, 'GET / HTTP/1.1\r\n\r\n')).toBe('GET / HTTP/1.1\r\n\r\n')
+      // A browser tries [::1] first for localhost; that must reach the server too, not a local service.
+      if (hasIpv6Loopback()) {
+        expect(await roundTrip(port, 'ipv6', '::1')).toBe('ipv6')
+      }
+      expect(opened.every((target) => target.host === 'localhost' && target.port === 5173)).toBe(
+        true
+      )
+      // Another paired client of this desktop must not chain through the forward to the server.
+      expect(browserTunnelTargetBlockReason('127.0.0.1', port)).toBe('orca_listener')
+    } finally {
+      await forward.close()
+    }
     expect(browserTunnelTargetBlockReason('127.0.0.1', port)).toBeNull()
     await expect(roundTrip(port, 'x')).rejects.toMatchObject({ code: 'ECONNREFUSED' })
   })
@@ -115,7 +124,6 @@ describe('PairedPortForwardProvider', () => {
       remotePort: 5173
     })
     try {
-      const { networkInterfaces } = await import('node:os')
       const external = Object.values(networkInterfaces())
         .flat()
         .find((address) => address && address.family === 'IPv4' && !address.internal)

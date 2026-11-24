@@ -77,8 +77,11 @@ export function updatePairedPortForward(
   const remoteHost = requireLoopbackRemoteHost(spec.remoteHost)
   return serializePortForwardChange(forwardChangeKey(spec.environmentId), async () => {
     const current = manager.listForwards(spec.environmentId).find((entry) => entry.id === spec.id)
+    if (!current) {
+      throw new Error(`Port forward "${spec.id}" not found`)
+    }
     // The forward being edited answers on its own port, and rebinds both loopbacks there itself.
-    if (current?.localPort !== spec.localPort) {
+    if (current.localPort !== spec.localPort) {
       await assertLoopbackPortFree(spec.localPort)
     }
     try {

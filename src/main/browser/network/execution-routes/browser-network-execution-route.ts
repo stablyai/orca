@@ -1,3 +1,4 @@
+import type { LookupAddress, LookupOptions } from 'node:dns'
 import { connect } from 'node:net'
 import { browserNetworkExecutionHostKey } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
@@ -76,19 +77,45 @@ export function connectNativeBrowserNetworkTarget(
   )
 }
 
+const LOOPBACK_ANSWERS: readonly LookupAddress[] = [
+  { address: '127.0.0.1', family: 4 },
+  { address: '::1', family: 6 }
+]
+
+// `localhost` answers only with loopback here, whatever the host's resolver or hosts file says.
+function loopbackOnlyLookup(
+  _hostname: string,
+  options: LookupOptions,
+  callback: (
+    error: NodeJS.ErrnoException | null,
+    address: string | LookupAddress[],
+    family?: number
+  ) => void
+): void {
+  const answers = LOOPBACK_ANSWERS.filter(
+    (answer) => !options.family || answer.family === options.family
+  )
+  if (options.all) {
+    callback(null, answers)
+    return
+  }
+  callback(null, answers[0]!.address, answers[0]!.family)
+}
+
 /** Dials this host's own loopback directly: a proxy would carry it to another machine's localhost.
  *  Orca's own listeners stay refused unless the host opts out of the destination policy. */
 export function connectNativeLoopbackTarget(
   target: BrowserNetworkTunnelOpen,
   env: Record<string, string | undefined> = process.env
 ): BrowserNetworkTunnelSocket {
-  const enforced = !isBrowserTunnelPolicyDisabled(env)
-  const reason = enforced ? browserTunnelTargetBlockReason(target.host, target.port) : null
+  const reason = isBrowserTunnelPolicyDisabled(env)
+    ? null
+    : browserTunnelTargetBlockReason(target.host, target.port)
   if (reason) {
     auditBrowserTunnelDestinationBlocked(target.host, target.port, reason)
     throw new BrowserTunnelDestinationBlockedError(reason)
   }
-  return (enforced ? guardedNativeDialer : nativeDialer).connect(target)
+  return connect({ ...target, allowHalfOpen: true, lookup: loopbackOnlyLookup })
 }
 
 /** SSH/WSL routes egress elsewhere; they still must not hand out that machine's metadata. */

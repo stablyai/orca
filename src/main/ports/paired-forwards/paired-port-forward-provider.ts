@@ -79,6 +79,11 @@ export class PairedPortForwardProvider implements SshPortForwardProvider<PairedP
       servers.push(await listen('::1', localPort))
     } catch (error) {
       if (!IPV6_UNAVAILABLE.test(error instanceof Error ? error.message : String(error))) {
+        // A client may already hold the IPv4 half; close() would wait on it forever.
+        closed = true
+        for (const socket of activeSockets) {
+          socket.destroy()
+        }
         await new Promise((resolve) => servers[0]!.close(resolve))
         throw error
       }

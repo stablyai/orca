@@ -8,6 +8,10 @@ export function registerRuntimePortForwardsIpcBridge(unsubs: (() => void)[]): vo
     return
   }
   const pushed = new Set<string>()
+  let stopped = false
+  unsubs.push(() => {
+    stopped = true
+  })
   unsubs.push(
     api.onChanged(({ environmentId, forwards }) => {
       pushed.add(environmentId)
@@ -17,6 +21,9 @@ export function registerRuntimePortForwardsIpcBridge(unsubs: (() => void)[]): vo
   void api
     .list()
     .then((forwards) => {
+      if (stopped) {
+        return
+      }
       const byEnvironment = new Map<string, PortForwardEntry[]>()
       for (const entry of forwards) {
         byEnvironment.set(entry.connectionId, [
