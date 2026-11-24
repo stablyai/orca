@@ -100,13 +100,15 @@ async function openDownload(
     const path = resolve(cwd, out)
     return { path, handle: await open(path, 'wx').catch(refuseExisting(path)) }
   }
-  // No control characters, and none Windows refuses in a name.
-  const safe = basename(
-    [...file.name].map((char) => (char < ' ' || '<>:"|?*'.includes(char) ? '_' : char)).join('')
-  )
-  const name = safe === '.' || safe === '..' ? file.id : safe
+  // The last segment of either separator, with no control characters or any Windows refuses in a
+  // name, and no trailing dots or spaces, which Windows drops (so the printed path is the real one).
+  const safe = [...(file.name.split(/[/\\]/).pop() ?? '')]
+    .map((char) => (char < ' ' || '<>:"|?*'.includes(char) ? '_' : char))
+    .join('')
+    .replace(/[. ]+$/, '')
+  const name = safe || file.id
   const ext = extname(name)
-  const stem = ext === name ? name : name.slice(0, name.length - ext.length)
+  const stem = name.slice(0, name.length - ext.length)
   for (let n = 1; ; n++) {
     const path = resolve(cwd, n === 1 ? name : `${stem}-${n}${ext}`)
     try {

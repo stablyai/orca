@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -97,6 +97,19 @@ describe('Slack reads', () => {
     expect(printed).toContain(`to ${join(cwd, 'image-3.png')}`)
     expect(await readFile(join(cwd, 'image-3.png'), 'utf8')).toBe('fresh')
     expect(await readFile(join(cwd, 'image.png'), 'utf8')).toBe('stale')
+  })
+
+  it('saves a nameless file under its id, never as a bare number in the folder', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'slack-read-'))
+    vi.stubGlobal('fetch', async () => new Response('bytes', { status: 200 }))
+    for (const name of ['', '/', '..\\']) {
+      await runRead(
+        { ref: SLACK_REF, download: 'F3' },
+        { download: { id: 'F3', name, url: 'https://cloud.test/f/F3', ticket: 't3' } },
+        cwd
+      )
+    }
+    expect((await readdir(cwd)).sort()).toEqual(['F3', 'F3-2', 'F3-3'])
   })
 })
 
