@@ -67,7 +67,8 @@ describe('giving an agent an account signed in for it', () => {
       false
     )
     expect(setBotGoogle).toHaveBeenCalledWith(bot, true, {
-      accounts: ['me@work.com', 'me@gmail.com']
+      accounts: ['me@work.com', 'me@gmail.com'],
+      basedOn: { on: true, accounts: ['me@work.com'] }
     })
     expect(toastError).toHaveBeenCalledTimes(1)
   })
@@ -97,7 +98,11 @@ describe('granting after a sign-in', () => {
     await expect(giveBotGoogleAccount(stale, 'b@x.com', vi.fn(), async () => fresh)).resolves.toBe(
       true
     )
-    expect(setBotGoogle).toHaveBeenCalledWith(fresh, true, { accounts: ['c@x.com', 'b@x.com'] })
+    // Based on the fresh read: a change made since then is refused, never undone.
+    expect(setBotGoogle).toHaveBeenCalledWith(fresh, true, {
+      accounts: ['c@x.com', 'b@x.com'],
+      basedOn: { on: true, accounts: ['c@x.com'] }
+    })
   })
 
   it('grants nothing when the host’s current list cannot be confirmed', async () => {

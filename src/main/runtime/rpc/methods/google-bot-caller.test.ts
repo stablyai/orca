@@ -166,6 +166,35 @@ describe('google.bot.set from the owner', () => {
   })
 })
 
+describe('a stale save', () => {
+  it('is refused when the bot changed since the caller read it, and saves nothing', async () => {
+    const method = GOOGLE_METHODS.find((entry) => entry.name === 'google.bot.set')!
+    // Another window took me@work.com off after this one opened the picker on both.
+    const ctx = { runtime: runtime({ google: true, googleAccounts: ['me@gmail.com'] }) }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these runtime fields.
+    const handler = method.handler as (params: unknown, ctx: unknown) => Promise<{ bot: unknown }>
+    const set = (params: Record<string, unknown>) =>
+      handler(method.params!.parse({ botId: 'scout', on: true, ...params }), ctx)
+    const stale = { on: true, accounts: ['me@work.com', 'me@gmail.com'] }
+    await expect(
+      set({ accounts: ['me@work.com', 'me@gmail.com', 'me@home.com'], basedOn: stale })
+    ).rejects.toThrow('changed since you opened them')
+    expect(ctx.runtime.bots.list()[0]?.googleAccounts).toEqual(['me@gmail.com'])
+    // Turned off elsewhere: a stale "every account" read can't turn it back on.
+    await expect(set({ allAccounts: true, basedOn: { on: false } })).rejects.toThrow(
+      'changed since you opened them'
+    )
+    // Read as it is now (any case), or not sent by an older client, it saves.
+    await set({
+      accounts: ['me@gmail.com', 'me@home.com'],
+      basedOn: { on: true, accounts: ['ME@gmail.com'] }
+    })
+    expect(ctx.runtime.bots.list()[0]?.googleAccounts).toEqual(['me@gmail.com', 'me@home.com'])
+    await set({ accounts: ['me@gmail.com'] })
+    expect(ctx.runtime.bots.list()[0]?.googleAccounts).toEqual(['me@gmail.com'])
+  })
+})
+
 describe('Google as a bot limited to some accounts sees it', () => {
   it('shows only its accounts and the default its own calls use', async () => {
     await expect(

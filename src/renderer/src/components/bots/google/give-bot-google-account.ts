@@ -8,7 +8,7 @@ import {
 } from '../../../../../shared/google/google-bot-accounts'
 import { botErrorMessage } from '../bot-presentation'
 import { withGoogleAccount } from './google-account-choice'
-import { setBotGoogle } from './set-bot-google'
+import { googleBotRead, setBotGoogle } from './set-bot-google'
 
 /**
  * An account signed in for the bot becomes the bot's too: Google turns on with it (through
@@ -38,7 +38,10 @@ export async function giveBotGoogleAccount<
   if (access.kind === 'all' || botMayUseGoogleAccount(access, email)) {
     return true
   }
-  return setBotGoogle(bot, true, { accounts: withGoogleAccount(access.accounts, email) }).then(
+  return setBotGoogle(bot, true, {
+    accounts: withGoogleAccount(access.accounts, email),
+    basedOn: googleBotRead(bot)
+  }).then(
     () => true,
     (error: unknown) => {
       toast.error(botErrorMessage(error))

@@ -16,7 +16,7 @@ import { BotAppStepHeader, BotAppStepHeading } from '../apps/BotAppStepParts'
 import { botErrorMessage } from '../bot-presentation'
 import { googleAccountChoiceSave, initialGoogleAccountChoice } from './google-account-choice'
 import { useGoogleHost } from './google-connect-client'
-import { setBotGoogle } from './set-bot-google'
+import { googleBotRead, setBotGoogle, type GoogleBotRead } from './set-bot-google'
 import { GoogleAccountPicker, type GoogleAccountPickerBot } from './GoogleAccountPicker'
 
 export type GoogleAccountChoiceBot = GoogleAccountPickerBot & Pick<Bot, 'google' | 'googleAccounts'>
@@ -34,7 +34,8 @@ export function useGoogleAccountChoice(
   save: () => Promise<boolean>
 } {
   const view = useGoogleHost(botTarget(bot))
-  const [picked, setPicked] = useState<string[] | null>(null)
+  // `basedOn`: the bot's Google when the owner started ticking, so saving can't undo a newer edit.
+  const [picked, setPicked] = useState<{ chosen: string[]; basedOn: GoogleBotRead } | null>(null)
   const [saving, setSaving] = useState(false)
   const initial =
     view.status === 'ready'
@@ -45,9 +46,12 @@ export function useGoogleAccountChoice(
           added
         )
       : []
-  const chosen = picked ?? initial
+  const chosen = picked?.chosen ?? initial
   const setChosen: React.Dispatch<React.SetStateAction<string[]>> = (update) =>
-    setPicked((current) => (typeof update === 'function' ? update(current ?? initial) : update))
+    setPicked((current) => ({
+      chosen: typeof update === 'function' ? update(current?.chosen ?? initial) : update,
+      basedOn: current?.basedOn ?? googleBotRead(bot)
+    }))
   const save = async (): Promise<boolean> => {
     const next = googleAccountChoiceSave(chosen)
     setSaving(true)
@@ -55,7 +59,14 @@ export function useGoogleAccountChoice(
     const saved = await setBotGoogle(
       bot,
       next.on,
-      next.on ? { accounts: next.accounts, confirmedAskers: botAskerKeys(bot) } : {}
+      next.on
+        ? {
+            accounts: next.accounts,
+            confirmedAskers: botAskerKeys(bot),
+            basedOn: picked?.basedOn ?? googleBotRead(bot),
+            shownAccounts: view.status === 'ready' ? view.google.accounts.map((a) => a.email) : []
+          }
+        : {}
     ).then(
       () => true,
       (error: unknown) => {

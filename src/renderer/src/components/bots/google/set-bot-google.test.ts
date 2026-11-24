@@ -51,10 +51,24 @@ describe('setBotGoogle', () => {
     expect(sets()).toEqual([])
   })
 
+  it('refuses an older host when an account the owner saw unticked signed out before Save', async () => {
+    const saving = setBotGoogle(bot('old'), true, {
+      accounts: ['me@work.com', 'me@gmail.com'],
+      shownAccounts: ['me@work.com', 'me@gmail.com', 'me@home.com']
+    })
+    await expect(saving).rejects.toThrow('to choose accounts')
+    expect(sets()).toEqual([])
+  })
+
   it('sends the list to a host that keeps it', async () => {
-    await setBotGoogle(bot('new'), true, { accounts: ['me@gmail.com'], confirmedAskers: [] })
+    const basedOn = { on: true, accounts: ['me@work.com', 'me@gmail.com'] }
+    await setBotGoogle(bot('new'), true, {
+      accounts: ['me@gmail.com'],
+      confirmedAskers: [],
+      basedOn
+    })
     expect(sets()).toEqual([
-      { botId: 'scout', on: true, accounts: ['me@gmail.com'], confirmedAskers: [] }
+      { botId: 'scout', on: true, accounts: ['me@gmail.com'], confirmedAskers: [], basedOn }
     ])
   })
 })
