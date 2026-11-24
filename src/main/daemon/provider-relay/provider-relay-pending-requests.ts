@@ -23,7 +23,7 @@ function parseObject(line: string): JsonObject | null {
 function wholeLineFields(line: string): LeadingProperty[] {
   const message = parseObject(line)
   return Object.entries(message ?? {}).map(([key, value]) =>
-    typeof value === 'object' && value !== null ? { key } : { key, value }
+    typeof value === 'string' || typeof value === 'number' ? { key, value } : { key }
   )
 }
 

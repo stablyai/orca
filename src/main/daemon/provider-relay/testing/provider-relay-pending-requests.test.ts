@@ -181,8 +181,8 @@ describe('provider relay pending requests', () => {
     slow.emit('drain')
     expect(await first).toContain('superseded')
     expect(slowWrites).toBe(1)
-    // 4 held-request pieces plus 4 replayed spool pieces, each once.
-    expect(fastWrites).toBe(8)
+    // 4 held-request pieces plus 4 replayed spool pieces, each once, then one ask to ack the 3 MiB it now holds.
+    expect(fastWrites).toBe(9)
     await relay.dispose()
   })
 
