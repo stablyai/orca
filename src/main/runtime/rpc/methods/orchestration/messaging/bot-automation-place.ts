@@ -27,8 +27,8 @@ export function automationPlace(
   runtime: OrcaRuntimeService,
   sessionId: string,
   recorded: AutomationRunMessage | undefined,
-  /** The chat answers its event's thread, which a run whose results go there runs in. */
-  answersThread: boolean
+  /** The thread conversation this chat answers, if any. */
+  answers: { source: string; externalId: string } | null
 ): BotWakingPlace | null {
   // A scheduled or manual run's prompt names no event, so no run need be read.
   if (recorded && recorded.trigger !== 'event') {
@@ -43,29 +43,19 @@ export function automationPlace(
   if (!event?.subject || !isConnectorSource(event.source)) {
     return null
   }
+  // A run whose results go to its event's thread answers in that thread's own chat; one that only
+  // lands in a chat answering another thread (a "tell me here when…" wait) started nothing there.
+  const same = (key: { source: string; externalId: string } | undefined) =>
+    key !== undefined &&
+    answers !== null &&
+    key.source === answers.source &&
+    key.externalId === answers.externalId
+  const answersThread = same(event.conversation) || same(event.threadOwner?.conversation)
   return {
     source: event.source,
     placeId: event.subject,
     ...(event.url ? { url: event.url } : {}),
-    // Results set to none, the bot's Chat or another channel run outside the thread's chat.
-    ...(answersThread ? {} : { resultsElsewhere: true as const })
-  }
-}
-
-/** Where the running turn's own prompt says its event happened, from its record alone (no run is
- *  read); none for a prompt from a host that recorded no event link. */
-export function recordedAutomationPlace(
-  recorded: AutomationRunMessage | undefined,
-  answersThread: boolean
-): BotWakingPlace | null {
-  const event = recorded?.trigger === 'event' ? recorded.event : undefined
-  if (!event?.url || !isConnectorSource(event.source)) {
-    return null
-  }
-  return {
-    source: event.source,
-    placeId: event.place ?? event.url,
-    url: event.url,
+    // Results set to none, the bot's Chat or another channel run outside the event's thread's chat.
     ...(answersThread ? {} : { resultsElsewhere: true as const })
   }
 }

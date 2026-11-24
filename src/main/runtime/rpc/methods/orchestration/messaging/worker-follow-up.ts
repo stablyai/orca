@@ -5,7 +5,7 @@ import {
 /** A message to a worker that finished becomes its next Task: worker-start run for the sender, on that same worker.
  *  Open workers take it in place, closed ones reopen in their saved conversation, and agents that keep none start fresh. */
 
-import { dispatchItemUid, lineageAncestors } from '../../../../../bots/bot-item-dispatch-facts'
+import { dispatchItemUid } from '../../../../../bots/bot-item-dispatch-facts'
 import { resolveItem } from '../../bots-items-write-support'
 import { BOT_ITEM_ORIGIN_PREFIX } from '../../bots-items-worker-origin'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
@@ -105,21 +105,23 @@ async function assertSameItem(
   const store = ctx.runtime.botItems.store()
   const item = await resolveItem(store, forItem)
   // The worker's steps: the addressed one's, its newest one's and those of every earlier owner of its
-  // terminal, which a handed-over terminal parts. Their starts settle it without a lookup; else two
-  // items linking them are enough to tell.
+  // terminal, which a handed-over terminal parts, each read once and at most 200. Their starts settle
+  // it without a lookup; else two items linking them are enough to tell.
   const priorOwners = parseWorkerTerminalPriorOwnerIds(
     plan.resource?.prior_owner_dispatch_ids ?? '[]'
   )
-  const steps = [
-    ...new Set(
-      [plan.addressed, plan.latest.id, ...(priorOwners ?? [])].flatMap((id) =>
-        lineageAncestors(db, id)
-      )
-    )
-  ]
-  const elsewhere =
-    steps.some((id) => (dispatchItemUid(db, id) ?? item.uid) !== item.uid) ||
-    (await store.itemsLinking('dispatch', steps, 2)).some((uid) => uid !== item.uid)
+  const steps = new Set<string>()
+  let elsewhere = false
+  for (const start of [plan.addressed, plan.latest.id, ...(priorOwners ?? [])]) {
+    for (let id: string | null = start; id && !steps.has(id) && steps.size < 200 && !elsewhere;) {
+      steps.add(id)
+      elsewhere = (dispatchItemUid(db, id) ?? item.uid) !== item.uid
+      id = db.getDispatchContextById(id)?.follow_up_of_dispatch_id ?? null
+    }
+  }
+  elsewhere ||= (await store.itemsLinking('dispatch', [...steps], 2)).some(
+    (uid) => uid !== item.uid
+  )
   if (elsewhere) {
     throw new OrchestrationError(
       'invalid_argument',

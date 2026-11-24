@@ -287,7 +287,7 @@ export async function readBotTurn(
     botRequestActsFor: (messageId: string) => botRequestActsFor(db, messageId),
     conversationActsFor: actsFor,
     automationPlace: (run?: AutomationRunMessage) =>
-      automationPlace(runtime, sessionId, run, conversation !== null),
+      automationPlace(runtime, sessionId, run, conversation),
     conversationWorkspaceId: workspaceId
   }
   const turn = opening
