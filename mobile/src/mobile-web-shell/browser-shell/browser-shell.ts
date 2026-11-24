@@ -17,6 +17,7 @@ import {
   type BridgeNativeVerb
 } from '../bridge/native-capabilities/bridge-native-verbs'
 import { readBrowserShellPairing } from './browser-shell-pairing'
+import { createBrowserShellHistory } from './browser-shell-history'
 import { createBrowserShellStorage } from './browser-shell-storage'
 import { readBrowserSafeAreaInsets, readBrowserKeyboardInset } from './browser-shell-geometry'
 
@@ -45,6 +46,7 @@ const withBrowserGrants = (grants: readonly string[]) =>
  * own bridge host. False when this document has no pairing, so the page shows why it cannot start.
  */
 export async function installBrowserShell(): Promise<boolean> {
+  const openedFromLink = window.location.hash.length > 1
   const offer = readBrowserShellPairing()
   if (offer === null) {
     return false
@@ -65,6 +67,7 @@ export async function installBrowserShell(): Promise<boolean> {
   const storage = createBrowserShellStorage(globalThis.localStorage ?? null)
   let hostStatus: HostStatusReply | null = null
   const colorScheme = window.matchMedia('(prefers-color-scheme: light)')
+  const tabHistory = createBrowserShellHistory(openedFromLink)
 
   const channel: OrcaBridgePageChannel = {
     // Deliver on a later task in both directions, as a WebView does, so neither side re-enters the other.
@@ -102,13 +105,7 @@ export async function installBrowserShell(): Promise<boolean> {
     readStorage: () => storage.readForInit(BROWSER_HOST_ID, route.pathname),
     onStorageWrite: storage.write,
     // A target outside this document opens as a new one; the server serves the page at every /h/ path.
-    onNavigate: (href, replace) => {
-      if (replace) {
-        window.location.replace(href)
-      } else {
-        window.location.assign(href)
-      }
-    },
+    onNavigate: tabHistory.navigate,
     serveNativeVerb: (verb, params) => serveBrowserNativeVerb(verb, params, storage.read),
     onExternalLink: (url) => {
       window.open(url, '_blank', 'noopener,noreferrer')
@@ -116,13 +113,7 @@ export async function installBrowserShell(): Promise<boolean> {
     onHaptic: () => {
       navigator.vibrate?.(10)
     },
-    onNavigateBack: () => {
-      if (window.history.length <= 1) {
-        return 'nothing-to-pop'
-      }
-      window.history.back()
-      return 'popped'
-    },
+    onNavigateBack: tabHistory.back,
     onPageFault: (error) => {
       console.error('[browser-shell] page fault', error)
     },
