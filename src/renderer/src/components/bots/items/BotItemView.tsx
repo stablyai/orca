@@ -195,7 +195,10 @@ export function BotItemBody({
   // goes, and focus it held comes here.
   useEffect(() => {
     if (takeFocus?.()) {
-      pane.current?.focus({ preventScroll: true })
+      const back = pane.current
+        ?.closest('[data-bot-item-pane]')
+        ?.querySelector<HTMLButtonElement>('[data-bot-item-back]')
+      ;(back ?? pane.current)?.focus({ preventScroll: true })
     }
   }, [takeFocus, deleted])
   const chatTitle =
@@ -313,14 +316,14 @@ export function BotItemBody({
               <NativeChatLinkClickContext value={links.onLinkClick}>
                 <div className="relative flex min-h-0 flex-1 flex-col">
                   <BotItemHeader
-                      bot={bot}
-                      item={item}
-                      deleted={deleted}
-                      onStatus={(to) => notes.move([item], to)}
-                      snoozing={snoozing}
-                      reply={needsYou.reply}
-                      statusSlot={statusSlot}
-                    />
+                    bot={bot}
+                    item={item}
+                    deleted={deleted}
+                    onStatus={(to) => notes.move([item], to)}
+                    snoozing={snoozing}
+                    reply={needsYou.reply}
+                    statusSlot={statusSlot}
+                  />
                   <div className="scrollbar-sleek flex max-h-[max(50%,calc(100%_-_140px))] shrink-0 flex-col overflow-y-auto">
                     <div className="flex flex-col gap-4 px-3.5 pt-3.5">
                       {item.description ? (

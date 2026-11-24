@@ -19,7 +19,6 @@ import { Button } from '@/components/ui/button'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
 import { getTaskPageGitHubWorkItemStateLabel } from '@/components/task-page/github/listing/task-page-github-work-item-status'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItemLinkView, BotItemWorkerState } from '../../../../../shared/bots/bot-items'
@@ -73,37 +72,29 @@ function MiddleTruncated({ text }: { text: string }): React.JSX.Element {
 
 type LinearRead = { title: string; state: string | null }
 
-// Each cache the store holds, its issues by upper-cased identifier: built once per cache, shared by
-// every Linear row, so a store write elsewhere costs a row one lookup, not a scan of the cache.
-const linearReadsByCache = new WeakMap<
-  AppState['linearIssueCache'],
-  ReadonlyMap<string, LinearRead>
->()
-
-function linearReads(cache: AppState['linearIssueCache']): ReadonlyMap<string, LinearRead> {
-  let reads = linearReadsByCache.get(cache)
-  if (!reads) {
-    const byIdentifier = new Map<string, LinearRead>()
-    for (const entry of Object.values(cache)) {
-      const identifier = entry?.data?.identifier.toUpperCase()
-      if (identifier && entry?.data && !byIdentifier.has(identifier)) {
-        byIdentifier.set(identifier, {
-          title: entry.data.title,
-          state: entry.data.state?.name ?? null
-        })
-      }
-    }
-    reads = byIdentifier
-    linearReadsByCache.set(cache, reads)
-  }
-  return reads
-}
-
-/** A Linear issue's title and state, when Orca's Linear cache has read it; never a fetch of its own. */
-function useLinearRead(identifier: string | null): LinearRead | null {
-  return useAppStore((state) =>
-    identifier ? (linearReads(state.linearIssueCache).get(identifier) ?? null) : null
+/** Use only an unscoped cache entry whose URL identifies this issue. */
+function useLinearRead(identifier: string | null, url: string): LinearRead | null {
+  const issue = useAppStore((state) =>
+    identifier ? state.linearIssueCache[identifier]?.data : null
   )
+  if (!issue) {
+    return null
+  }
+  try {
+    const identity = (value: string) => {
+      const parsed = new URL(value)
+      return (
+        parsed.hostname.toLowerCase() +
+        parsed.pathname.split('/').slice(0, 4).join('/').toLowerCase()
+      )
+    }
+    if (identity(url) !== identity(issue.url)) {
+      return null
+    }
+  } catch {
+    return null
+  }
+  return { title: issue.title, state: issue.state?.name ?? null }
 }
 
 /** The item view's link handler: the workspace card's popover and destinations, from the bot's folder. A
@@ -184,7 +175,7 @@ function GitHubRow({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Eleme
 }
 
 function WebRow({ row }: { row: Extract<BotItemLinkRow, { kind: 'web' }> }): React.JSX.Element {
-  const linear = useLinearRead(row.linear)
+  const linear = useLinearRead(row.linear, row.url)
   const openWeb = useOpenWeb()
   const name = linear ? `${row.title} ${linear.title}` : row.title
   return (
@@ -197,7 +188,9 @@ function WebRow({ row }: { row: Extract<BotItemLinkRow, { kind: 'web' }> }): Rea
         )
       }
       status={linear?.state}
-      tip={row.linear ? `${name} · ${row.tip}` : row.url}
+      tip={
+        row.linear ? `${name}${linear?.state ? ` · ${linear.state}` : ''} · ${row.tip}` : row.url
+      }
       onClick={(event) => openWeb(row.url, event)}
     />
   )
@@ -333,7 +326,7 @@ function Row({
               ? t('bots.items.link.automationOn', 'Will wake the agent for this item')
               : ended
           }`}
-          disabled={!row.active}
+          disabled
         />
       )
     }

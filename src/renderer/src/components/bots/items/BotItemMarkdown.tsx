@@ -1,5 +1,5 @@
 // An item's description or comment as Markdown, with links and file paths opening as they do in chat.
-import { Children } from 'react'
+import { Children, isValidElement } from 'react'
 import { cn } from '@/lib/class-names'
 import type { Components } from 'react-markdown'
 import CommentMarkdown, {
@@ -40,7 +40,14 @@ export function BotItemMarkdown({
 const ShortFileLink: Components['a'] = function ShortFileLink({ href, children }) {
   const onLinkClick = useNativeChatLinkClick()
   const parts = Children.toArray(children)
-  const text = parts.length === 1 && typeof parts[0] === 'string' ? parts[0] : null
+  const child = parts.length === 1 ? parts[0] : null
+  const text =
+    typeof child === 'string'
+      ? child
+      : isValidElement<{ children?: React.ReactNode }>(child) &&
+          typeof child.props.children === 'string'
+        ? child.props.children
+        : null
   const name = text === null ? null : botItemFileLinkName(href, text)
   return (
     <a

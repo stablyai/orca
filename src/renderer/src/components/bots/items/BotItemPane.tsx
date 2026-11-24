@@ -197,7 +197,7 @@ export function BotItemPaneFrame({
       }}
     >
       <div className="flex min-w-0 items-center gap-1 px-2 pt-2 pb-1 text-xs text-muted-foreground">
-        <Button variant="ghost" size="xs" onClick={onBack}>
+        <Button variant="ghost" size="xs" data-bot-item-back="" onClick={onBack}>
           <ArrowLeft />
           {t('bots.items.tab', 'Home')}
         </Button>

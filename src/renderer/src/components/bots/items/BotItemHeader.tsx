@@ -53,20 +53,18 @@ export function BotItemHeader({
   const snoozed = isBotItemSnoozed(item, now)
   const status = (
     <>
-    {reply}
-    <StatusMenu
-      item={item}
-      waiting={botHostTakes(bot, BOTS_ITEM_WAITING_CAPABILITY)}
-      disabled={deleted}
-      onStatus={onStatus}
-      snoozing={snoozing}
-    />
+      {reply}
+      <StatusMenu
+        item={item}
+        waiting={botHostTakes(bot, BOTS_ITEM_WAITING_CAPABILITY)}
+        disabled={deleted}
+        onStatus={onStatus}
+        snoozing={snoozing}
+      />
     </>
   )
   return (
-    <div
-      className="flex shrink-0 flex-col gap-1.5 border-b border-border/60 bg-sidebar px-3.5 pt-1 pb-3"
-    >
+    <div className="flex shrink-0 flex-col gap-1.5 border-b border-border/60 bg-sidebar px-3.5 pt-1 pb-3">
       {statusSlot ? (
         createPortal(status, statusSlot)
       ) : statusSlot === undefined ? (

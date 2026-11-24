@@ -45,7 +45,7 @@ export function BotItemLinkRowStatus({
   children: ReactNode
 }): React.JSX.Element | null {
   return children ? (
-    <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+    <span className="flex max-w-[45%] min-w-0 shrink items-center gap-1.5 truncate text-xs text-muted-foreground">
       {children}
     </span>
   ) : null
