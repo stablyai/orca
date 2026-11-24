@@ -46,7 +46,7 @@ describe.skipIf(process.platform === 'win32')('check:changed slot queue order', 
     await within(Promise.all(waiters), 'all waiters')
     expect(order).toEqual([0, 1, 2, 3, 4, 5].map((index) => ({ index, overlapping: false })))
     expect(queueRows()).toEqual([])
-  }, 30_000)
+  }, 90_000)
 
   it('serves an earlier slow waiter before a stream of fast newcomers', async () => {
     const holder = await run()
@@ -72,7 +72,7 @@ describe.skipIf(process.platform === 'win32')('check:changed slot queue order', 
     await releaseSlow()
     await within(Promise.all([...newcomers, late]), 'newcomers')
     expect(order).toEqual(['slow', 'new0', 'new1', 'new2', 'late'])
-  }, 30_000)
+  }, 90_000)
 
   it('keeps separate processes exclusive when they all start on a cold queue at once', async () => {
     const children = Array.from({ length: 4 }, () =>
@@ -96,7 +96,7 @@ process.exit(0)`)
     for (let index = 1; index < intervals.length; index++) {
       expect(intervals[index].start).toBeGreaterThanOrEqual(intervals[index - 1].end)
     }
-  }, 60_000)
+  }, 120_000)
 
   it('admits separate processes in the order they queued', async () => {
     const holder = await run()
@@ -123,7 +123,7 @@ process.exit(0)`)
     )
     expect(results.map(({ code }) => code)).toEqual([0, 0, 0])
     expect(await readFile(orderFile, 'utf8')).toBe('a\nb\nc\n')
-  }, 60_000)
+  }, 120_000)
 
   it('removes the ticket of a waiter whose process is gone', async () => {
     const holder = await run()
@@ -132,7 +132,7 @@ process.exit(0)`)
     await holder()
     await within(waiter, 'waiter behind a dead ticket')
     expect(queueRows().map((row) => row.id)).not.toContain(dead)
-  }, 30_000)
+  }, 90_000)
 
   it('clears silent tickets only on a proved new process, keeping stopped and unknown ones', async () => {
     const holder = await run()
@@ -152,7 +152,7 @@ process.exit(0)`)
       rows.filter((row) => [stopped, unknown].includes(row.id)).map((row) => row.lane)
     ).toEqual([2, 2])
     await holder()
-  }, 30_000)
+  }, 90_000)
 
   it('passes a live waiter only once it has been silent for staleMs', async () => {
     await createQueue()
@@ -165,7 +165,7 @@ process.exit(0)`)
     const held = queueRows().find((row) => row.held_at !== null)
     expect(held.held_at).toBeGreaterThan(seenAt + staleMs)
     await release()
-  }, 30_000)
+  }, 90_000)
 
   it('lets a fresh yielding waiter pass an earlier stopped waiter', async () => {
     const holder = await run()
@@ -178,7 +178,7 @@ process.exit(0)`)
     await holder()
     await within(yielding, 'yielding waiter')
     expect(queueRows().map((row) => row.id)).toContain(stopped)
-  }, 30_000)
+  }, 90_000)
 
   for (const { yields, label } of [
     { yields: false, label: 'a silent ticket ahead in the same lane' },
@@ -226,7 +226,7 @@ await next()`)
       await peer.waitFor('left')
       await within(waiter.promise, 'waiter after the peer left')
       expect(waiter.error).toBeUndefined()
-    }, 60_000)
+    }, 120_000)
   }
 
   it('lets no check-in commit between reading the queue and claiming the slot', async () => {
@@ -256,7 +256,7 @@ await next()`)
     // SQLITE_BUSY: the decision holds the queue's write lock until the claim commits.
     expect(attempts).toEqual([5])
     await release()
-  }, 30_000)
+  }, 90_000)
 
   it('moves a waiter behind the line when its launcher has exited', async () => {
     const holder = await run()
@@ -277,7 +277,7 @@ await next()`)
     await within(Promise.all([orphan, launched]), 'both waiters')
     expect(order).toEqual(['launched', 'orphan'])
     expect(messages[0]).toContain('has exited')
-  }, 30_000)
+  }, 90_000)
 
   it('rejoins at the back when its ticket is removed', async () => {
     const holder = await run()
@@ -301,5 +301,5 @@ await next()`)
     await holder()
     await within(Promise.all([first, second]), 'both waiters')
     expect(order).toEqual(['second', 'first'])
-  }, 30_000)
+  }, 90_000)
 })

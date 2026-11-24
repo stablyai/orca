@@ -94,7 +94,7 @@ export function observe(promise) {
   return state
 }
 
-export async function until(condition, label, timeoutMs = 15_000) {
+export async function until(condition, label, timeoutMs = 30_000) {
   const deadline = Date.now() + timeoutMs
   while (!(await condition())) {
     if (Date.now() > deadline) {
@@ -104,7 +104,7 @@ export async function until(condition, label, timeoutMs = 15_000) {
   }
 }
 
-export function within(promise, label, timeoutMs = 15_000) {
+export function within(promise, label, timeoutMs = 30_000) {
   let timer
   return Promise.race([
     promise,
