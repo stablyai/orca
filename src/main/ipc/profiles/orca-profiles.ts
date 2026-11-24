@@ -1,7 +1,7 @@
 import { ipcMain, type WebContents } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import { relaunchApp, type AppRelaunchReason } from '../../startup/quit/app-relaunch'
-import { quitProcess } from '../../startup/process-quit-request'
+import { quitProcess } from '../../startup/quit/process-quit-request'
 import type {
   CreateLocalOrcaProfileArgs,
   CreateLocalOrcaProfileResult,
@@ -21,50 +21,45 @@ import type {
   SelectOrcaProfileOrgArgs,
   SelectOrcaProfileOrgResult,
   SignOutCurrentOrcaProfileResult
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import {
   createLocalOrcaProfile,
   getOrcaProfileListState,
   setActiveOrcaProfile
 } from '../../orca-profiles/profile-index-store'
-import { seedNewOrcaProfileTelemetryConsent } from '../../orca-profiles/profile-telemetry-consent-seed'
+import { initializeNewOrcaProfileState } from '../../orca-profiles/storage/new-profile-state'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { isMultiProfileUiEnabled } from '../../orca-profiles/profile-ui-scope'
-import { transferOrcaProfileProject } from '../../orca-profiles/profile-project-transfer'
-import { transferActiveProfileProject } from '../../orca-profiles/profile-active-transfer'
-import { findOrcaProfileProjectsByPath } from '../../orca-profiles/profile-project-presence'
+import { transferOrcaProfileProject } from '../../orca-profiles/project-transfer/profile-project-transfer'
+import { transferActiveProfileProject } from '../../orca-profiles/project-transfer/profile-active-transfer'
+import { findOrcaProfileProjectsByPath } from '../../orca-profiles/catalog/profile-project-presence'
 import {
   flushActiveProfileBeforeFileMutation,
   flushActiveProfileBeforeRelaunch
-} from '../../orca-profiles/profile-persistence-deadline'
-import { normalizeExecutionHostId } from '../../../shared/execution-host'
-import {
-  createCloudLinkedOrcaProfile,
-  connectCurrentOrcaProfile,
-  getCurrentOrcaProfileAuthStatus,
-  selectCurrentOrcaProfileOrg,
-  signOutCurrentOrcaProfile
-} from '../../orca-profiles/profile-cloud-service'
-import { refreshCurrentOrcaProfileAuth } from '../../orca-profiles/profile-cloud-capability-refresh'
+} from '../../orca-profiles/storage/profile-persistence-deadline'
+import { normalizeExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { OrcaAccountService } from '../../orca-profiles/orca-account-service'
 import { registerOrcaProfileOrgMemberHandlers } from './orca-profile-org-members-handlers'
-import { onOrcaCloudSessionInvalidated } from '../../orca-profiles/profile-cloud-session-invalidation'
+import {
+  isOrcaCloudConsoleSection,
+  type OrcaCloudConsoleOpenResult
+} from '../../../shared/orca-cloud-console'
+import { onOrcaCloudSessionInvalidated } from '../../orca-profiles/cloud-session/profile-cloud-session-invalidation'
 import {
   broadcastOrcaProfileAuthStatusChanged,
-  broadcastOrcaProfileSignInProgressChanged
+  broadcastOrcaProfileSignInProgressChanged,
+  broadcastTeamPolicyChanges
 } from './orca-profile-auth-status-broadcast'
 import {
   cancelOrcaCloudSignIn,
   getOrcaCloudSignInProgress,
   onOrcaCloudSignInProgressChanged
-} from '../../orca-profiles/profile-cloud-sign-in-progress'
+} from '../../orca-profiles/cloud-auth/profile-cloud-sign-in-progress'
 import { profileIdFromArgs } from './orca-profile-id-arg'
 import { transferProjectArgsFromUnknown } from './orca-profile-project-transfer-args'
 
 type RegisterOrcaProfileHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
-  onAuthMutation?: () => void
-  onBeforeSignOut?: () => void
-  onAfterSignOut?: () => void
 }
 
 function findProjectsByPathArgsFromUnknown(args: unknown): FindOrcaProfileProjectsByPathArgs {
@@ -150,6 +145,7 @@ function scheduleProfileRelaunch(reason: ProfileRelaunchReason, sender: WebConte
 
 export function registerOrcaProfileHandlers(
   store: Store,
+  orcaAccount: OrcaAccountService,
   options: RegisterOrcaProfileHandlersOptions = {}
 ): void {
   ipcMain.handle('orcaProfiles:list', (): OrcaProfileListResult => ({
@@ -158,18 +154,19 @@ export function registerOrcaProfileHandlers(
   }))
 
   ipcMain.handle('orcaProfiles:authStatus', (): OrcaProfileAuthStatus =>
-    getCurrentOrcaProfileAuthStatus(getProfileUserDataPath())
+    orcaAccount.getAuthStatus()
   )
 
   // Push background invalidation; re-entering onAuthMutation would loop into the relay coordinator that just failed.
   onOrcaCloudSessionInvalidated(broadcastOrcaProfileAuthStatusChanged)
+  broadcastTeamPolicyChanges()
   onOrcaCloudSignInProgressChanged(broadcastOrcaProfileSignInProgressChanged)
 
   ipcMain.handle(
     'orcaProfiles:createLocal',
     (_event, args?: CreateLocalOrcaProfileArgs): CreateLocalOrcaProfileResult => {
       const result = createLocalOrcaProfile(args)
-      seedNewOrcaProfileTelemetryConsent(result.profile.id, store.getSettings().telemetry)
+      initializeNewOrcaProfileState(result.profile.id, store.getSettings().telemetry)
       return result
     }
   )
@@ -250,15 +247,8 @@ export function registerOrcaProfileHandlers(
       )
   )
 
-  ipcMain.handle(
-    'orcaProfiles:connectCurrent',
-    async (): Promise<ConnectCurrentOrcaProfileResult> => {
-      const result = await connectCurrentOrcaProfile(getProfileUserDataPath())
-      if (result.status === 'connected') {
-        options.onAuthMutation?.()
-      }
-      return result
-    }
+  ipcMain.handle('orcaProfiles:connectCurrent', (): Promise<ConnectCurrentOrcaProfileResult> =>
+    orcaAccount.connect()
   )
 
   ipcMain.handle('orcaProfiles:signInProgress', (): OrcaCloudSignInProgress | null =>
@@ -272,49 +262,37 @@ export function registerOrcaProfileHandlers(
     async (
       _event,
       rawArgs?: CreateCloudLinkedOrcaProfileArgs
-    ): Promise<CreateCloudLinkedOrcaProfileResult> => {
-      const result = await createCloudLinkedOrcaProfile(
-        getProfileUserDataPath(),
-        createCloudLinkedProfileArgsFromUnknown(rawArgs)
+    ): Promise<CreateCloudLinkedOrcaProfileResult> =>
+      orcaAccount.createCloudLinked(createCloudLinkedProfileArgsFromUnknown(rawArgs), (profileId) =>
+        initializeNewOrcaProfileState(profileId, store.getSettings().telemetry)
       )
-      if (result.status === 'created') {
-        seedNewOrcaProfileTelemetryConsent(result.profile.id, store.getSettings().telemetry)
-        options.onAuthMutation?.()
-      }
-      return result
-    }
   )
 
-  ipcMain.handle(
-    'orcaProfiles:refreshAuth',
-    async (): Promise<RefreshCurrentOrcaProfileAuthResult> => {
-      const result = await refreshCurrentOrcaProfileAuth(getProfileUserDataPath())
-      if (result.status === 'refreshed') {
-        options.onAuthMutation?.()
-      }
-      return result
-    }
+  ipcMain.handle('orcaProfiles:refreshAuth', (): Promise<RefreshCurrentOrcaProfileAuthResult> =>
+    orcaAccount.refreshAuth()
   )
 
-  ipcMain.handle(
-    'orcaProfiles:signOutCurrent',
-    async (): Promise<SignOutCurrentOrcaProfileResult> => {
-      options.onBeforeSignOut?.()
-      return signOutCurrentOrcaProfile(getProfileUserDataPath()).finally(options.onAfterSignOut)
-    }
+  ipcMain.handle('orcaProfiles:signOutCurrent', (): Promise<SignOutCurrentOrcaProfileResult> =>
+    orcaAccount.signOut()
   )
 
   ipcMain.handle(
     'orcaProfiles:selectOrg',
-    async (_event, rawArgs: SelectOrcaProfileOrgArgs): Promise<SelectOrcaProfileOrgResult> => {
-      const result = await selectCurrentOrcaProfileOrg(
-        getProfileUserDataPath(),
-        orgIdFromUnknown(rawArgs)
-      )
-      if (result.status === 'selected') {
-        options.onAuthMutation?.()
+    async (_event, rawArgs: SelectOrcaProfileOrgArgs): Promise<SelectOrcaProfileOrgResult> =>
+      orcaAccount.selectOrg(orgIdFromUnknown(rawArgs))
+  )
+
+  ipcMain.handle(
+    'orcaProfiles:openCloudConsole',
+    async (_event, rawArgs: unknown): Promise<OrcaCloudConsoleOpenResult> => {
+      const section =
+        typeof rawArgs === 'object' && rawArgs !== null && 'section' in rawArgs
+          ? rawArgs.section
+          : undefined
+      if (!isOrcaCloudConsoleSection(section)) {
+        return { status: 'failed', error: 'invalid_orca_cloud_console_section' }
       }
-      return result
+      return orcaAccount.openConsole(section)
     }
   )
 

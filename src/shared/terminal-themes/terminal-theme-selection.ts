@@ -1,5 +1,5 @@
 import type { ITheme } from '@xterm/xterm'
-import type { GlobalSettings } from '../global-settings-types'
+import type { GlobalSettings } from '../settings/global-settings-types'
 import { isPluginContentSwitchedOff } from '../plugins/plugin-system-settings'
 import {
   hasTerminalColorOverrides,

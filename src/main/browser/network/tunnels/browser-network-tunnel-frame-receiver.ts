@@ -4,7 +4,7 @@ import {
   decodeBrowserNetworkTunnelWindowUpdate,
   encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelConnectionCredit } from './browser-network-tunnel-connection-credit'
 import type { BrowserNetworkTunnelFrameSender } from './browser-network-tunnel-frame-sender'
 import { handleBrowserNetworkTunnelHeartbeat } from './browser-network-tunnel-heartbeat'

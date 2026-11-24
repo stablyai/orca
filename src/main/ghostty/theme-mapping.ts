@@ -1,6 +1,6 @@
 import { platform } from 'node:os'
 import path from 'node:path'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import type {
   TerminalColorOverrides,
   TerminalThemeSlot

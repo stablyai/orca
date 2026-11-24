@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { forEachWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { PRIMARY_CHECKOUT_METADATA_FILES } from './worktree-git-common-metadata-files'
 import {
   diffGitCommon,

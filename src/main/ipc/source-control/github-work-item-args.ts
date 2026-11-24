@@ -1,5 +1,5 @@
-import type { TaskSourceContext } from '../../../shared/task-source-context'
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 
 export type WorkItemArgs = {
   repoPath: string

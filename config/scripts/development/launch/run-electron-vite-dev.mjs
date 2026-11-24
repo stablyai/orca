@@ -531,7 +531,11 @@ function prepareDevWebClient() {
       '--logLevel',
       'warn'
     ],
-    { cwd: repoRoot, stdio: 'inherit', env: withRolldownThreadLimit(process.env) }
+    {
+      cwd: repoRoot,
+      stdio: 'inherit',
+      env: { ...withRolldownThreadLimit(process.env), VITE_CONFIG_NATIVE_IGNORE_WARNING: 'true' }
+    }
   )
   webClientBuild = build
   try {

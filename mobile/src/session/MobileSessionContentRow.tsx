@@ -1,7 +1,7 @@
 import { View, Text, Pressable } from 'react-native'
 import { AlertTriangle, X } from 'lucide-react-native'
 import { SessionDockColumn } from './SessionDockColumn'
-import { dismissMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
+import { dismissMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -9,12 +9,13 @@ import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { MobileSessionCommandDock } from './MobileSessionCommandDock'
-import { MobileDictationStatusAnnouncement } from './MobileDictationStatusAnnouncement'
+import { MobileDictationLiveContext } from '../dictation/mobile-dictation-live-context'
+import { useMobileDictationLive } from '../dictation/use-mobile-dictation-live'
 import {
   ComposerUsageClientContext,
   ComposerUsageTabAgentContext
 } from '../composer-usage/composer-usage-client-context'
-import { getMobileTerminalTabHostAgentIdentity } from './mobile-terminal-tab-agent'
+import { getMobileTerminalTabHostAgentIdentity } from './tabs/mobile-terminal-tab-agent'
 import {
   sideStripMargin,
   sideStripPadding,
@@ -35,6 +36,7 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
     setCreateWarningState,
     createWarning,
     dictation,
+    cancelDictation,
     handleSessionContentRowLayout,
     client,
     connState
@@ -44,6 +46,7 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
       getMobileTerminalTabHostAgentIdentity(controller.activeSessionTab, controller.terminals)) ??
     null
   const strip = useSessionSideStripInset(canDockPanel && activePanel !== null)
+  const dictationLive = useMobileDictationLive(dictation, cancelDictation, hostId)
   return (
     <View
       style={[styles.sessionContentRow, sideStripPadding(strip.row)]}
@@ -67,16 +70,17 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
             </Pressable>
           </View>
         ) : null}
-        <ComposerUsageClientContext.Provider value={connState === 'connected' ? client : null}>
-          <ComposerUsageTabAgentContext.Provider value={tabAgent}>
-            <MobileSessionActiveContent controller={controller} />
-            {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
-            <View style={sideStripMargin(strip.main)}>
-              <MobileSessionCommandDock controller={controller} />
-            </View>
-          </ComposerUsageTabAgentContext.Provider>
-        </ComposerUsageClientContext.Provider>
-        <MobileDictationStatusAnnouncement dictation={dictation} />
+        <MobileDictationLiveContext.Provider value={dictationLive}>
+          <ComposerUsageClientContext.Provider value={connState === 'connected' ? client : null}>
+            <ComposerUsageTabAgentContext.Provider value={tabAgent}>
+              <MobileSessionActiveContent controller={controller} />
+              {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
+              <View style={sideStripMargin(strip.main)}>
+                <MobileSessionCommandDock controller={controller} />
+              </View>
+            </ComposerUsageTabAgentContext.Provider>
+          </ComposerUsageClientContext.Provider>
+        </MobileDictationLiveContext.Provider>
       </View>
       {canDockPanel && activePanel !== null && (
         <SessionDockColumn

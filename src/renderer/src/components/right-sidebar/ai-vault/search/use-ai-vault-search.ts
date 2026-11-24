@@ -10,7 +10,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostScope
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type {
   AiVaultAgent,
   AiVaultSearchSort,
@@ -18,7 +18,7 @@ import type {
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultSearchScopeIdentity } from '../../../../../../shared/ai-vault/search/ai-vault-search-scope'
 import { resolveAiVaultSearchSettings } from '../../../../../../shared/ai-vault/search/ai-vault-search-settings'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '@/store/index'
 import { useAiVaultAssociationObservation } from '../scanning/ai-vault-association-observation'
 import { aiVaultSearchHitToSession } from './ai-vault-search-session'
@@ -29,6 +29,9 @@ type SearchIdentity = {
   policyKey: string
   revision: number
 }
+
+// One shared empty list, so "no hits" keeps the same identity across renders.
+const NO_HITS: readonly AiVaultSearchHit[] = Object.freeze([])
 
 type SearchPage = {
   identity: SearchIdentity
@@ -41,7 +44,8 @@ type SearchPage = {
 export function useAiVaultSearch(
   request: AiVaultSearchRequest | null,
   scope: ExecutionHostScope | null,
-  policyKey: string
+  policyKey: string,
+  debounceMs = 250
 ) {
   const associations = useAiVaultAssociationObservation(request ? scope : null)
   const [page, setPage] = useState<SearchPage | null>(null)
@@ -61,7 +65,7 @@ export function useAiVaultSearch(
     let pending = false
     let followUp = false
     let started = false
-    async function run(cursor?: string, revalidate = false) {
+    async function run(cursor?: string) {
       if (pending || cancelled || !request || !scope) {
         return
       }
@@ -69,13 +73,10 @@ export function useAiVaultSearch(
       started = true
       const revision = associations.getSnapshot()
       const isCurrent = () => !cancelled && revision === associations.getSnapshot()
-      setPage((previous) => ({
-        identity,
-        hits: (cursor || revalidate) && previous?.identity === identity ? previous.hits : [],
-        response: null,
-        error: false,
-        loading: true
-      }))
+      // Only a rerun of the same request touches its page, keeping its reply so its cursor survives revalidation.
+      setPage((previous) =>
+        previous?.identity === identity ? { ...previous, error: false, loading: true } : previous
+      )
       try {
         let response = await window.api.aiVault.searchSessions({ ...request, cursor }, scope)
         let append = Boolean(cursor)
@@ -104,13 +105,19 @@ export function useAiVaultSearch(
         }))
       } catch {
         if (isCurrent()) {
-          setPage({ identity, hits: [], response: null, error: true, loading: false })
+          setPage((previous) => ({
+            identity,
+            hits: previous?.identity === identity ? previous.hits : [],
+            response: previous?.identity === identity ? previous.response : null,
+            error: true,
+            loading: false
+          }))
         }
       } finally {
         pending = false
         if (followUp && !cancelled) {
           followUp = false
-          void run(undefined, true)
+          void run()
         }
       }
     }
@@ -122,10 +129,10 @@ export function useAiVaultSearch(
       if (pending) {
         followUp = true
       } else {
-        void run(undefined, true)
+        void run()
       }
     })
-    const timer = setTimeout(() => void run(undefined, true), 250)
+    const timer = setTimeout(() => void run(), debounceMs)
     return () => {
       cancelled = true
       followUp = false
@@ -133,19 +140,30 @@ export function useAiVaultSearch(
       loadPage.current = null
       clearTimeout(timer)
     }
-  }, [identity, associations])
+  }, [identity, associations, debounceMs])
 
+  // Leaving search drops its hits so returning cannot revive another request's results or cursor.
+  if (page && !(request && scope)) {
+    setPage(null)
+  }
   const current = page?.identity === identity ? page : null
+  // Same-host hits stay visible while a newer request is debounced or in flight.
+  const shown = current ?? (page?.identity.scope === scope ? page : null)
   return {
-    hits: current?.hits ?? [],
+    hits: shown?.hits ?? NO_HITS,
+    /** The hits answer this request; until then they are an older request's, or none. */
+    answered: current !== null,
+    /** Changes when hits for a different request land, never while one is pending. */
+    resultsKey: JSON.stringify(shown ? [shown.identity.scope, shown.identity.request] : null),
     response: current?.response ?? null,
+    /** The shown reply had no hits; holds while a newer request on this host is pending. */
+    replyEmpty: shown?.response?.kind === 'results' && shown.response.hits.length === 0,
     error: current?.error ?? false,
     loading: Boolean(request && scope && (!current || current.loading)),
     removeHit: (hit: AiVaultSearchHit) =>
-      setPage((previous) =>
-        previous?.identity === identity
-          ? { ...previous, hits: previous.hits.filter((entry) => entry !== hit) }
-          : previous
+      setPage(
+        (previous) =>
+          previous && { ...previous, hits: previous.hits.filter((entry) => entry !== hit) }
       ),
     retry: () => setRevision((value) => value + 1),
     loadMore: () => {
@@ -170,7 +188,7 @@ export function useAiVaultPanelSearch(
   /** Which scope the host resolves; undefined searches everything it has. */
   within: AiVaultSearchScopeIdentity | undefined,
   executionHostScope: ExecutionHostScope,
-  sort: AiVaultSearchSort
+  { sort, submitted }: { sort: AiVaultSearchSort; submitted: boolean }
 ) {
   const settings = useAppStore((state) => state.settings?.aiVaultSearch)
   const policy = resolveAiVaultSearchSettings({ aiVaultSearch: settings })
@@ -181,6 +199,17 @@ export function useAiVaultPanelSearch(
   const hasQuery = trimmed.length > 0
   const needsLocalConsent =
     executionHostScope === 'local' && !isWebClientLocation() && !policy.enabled
+  const policyKey = JSON.stringify(policy)
+  const [undebouncedFor, setUndebouncedFor] = useState(() =>
+    submitted && !needsLocalConsent && scope ? { scope, policyKey } : null
+  )
+  // Edits and policy changes (which can reopen the index) keep the normal debounce.
+  if (
+    undebouncedFor &&
+    (!submitted || undebouncedFor.scope !== scope || undebouncedFor.policyKey !== policyKey)
+  ) {
+    setUndebouncedFor(null)
+  }
   // A client cannot enable another host’s index; fall back to title filtering when it reports search off (#22453).
   const [titleOnlyScope, setTitleOnlyScope] = useState<ExecutionHostScope | null>(null)
   const titleOnly =
@@ -198,15 +227,21 @@ export function useAiVaultPanelSearch(
         : null,
     [searching, scope, agents, trimmed, within, sort]
   )
-  const search = useAiVaultSearch(request, scope, JSON.stringify(policy))
+  const search = useAiVaultSearch(request, scope, policyKey, undebouncedFor ? 0 : undefined)
   const hostSearchOff =
     search.response?.kind === 'unavailable' &&
     TITLE_ONLY_UNAVAILABLE_REASONS.has(search.response.reason)
-  useEffect(() => {
+  // Latch title-only mode during render to skip a second commit per unavailable response.
+  const [titleOnlyCheckedFor, setTitleOnlyCheckedFor] = useState<{
+    hostSearchOff: boolean
+    scope: typeof scope
+  } | null>(null)
+  if (titleOnlyCheckedFor?.hostSearchOff !== hostSearchOff || titleOnlyCheckedFor.scope !== scope) {
+    setTitleOnlyCheckedFor({ hostSearchOff, scope })
     if (hostSearchOff && scope !== ALL_EXECUTION_HOSTS_SCOPE) {
       setTitleOnlyScope(scope)
     }
-  }, [hostSearchOff, scope])
+  }
   const sessions = useMemo(
     () => search.hits.map((hit) => aiVaultSearchHitToSession(hit, hitExecutionHostId(hit, host))),
     [search.hits, host]
@@ -229,7 +264,6 @@ export function useAiVaultPanelSearch(
     hasQuery,
     needsLocalConsent,
     titleOnly: hasQuery && titleOnly,
-    host,
-    resetKey: JSON.stringify([scope, request])
+    host
   }
 }

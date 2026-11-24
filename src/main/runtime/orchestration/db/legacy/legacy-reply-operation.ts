@@ -1,4 +1,4 @@
-import type { MessageRow, LegacyOperationReceiptRow, QuestionRow } from '../../types'
+import type { MessageRow, LegacyOperationReceiptRow, QuestionRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -87,12 +87,12 @@ export function commitLegacyReplyOperation(
         runId: principal.run_id,
         deliveryContract: 'legacy_direct'
       })
-      this.markAsRead([question.message_id])
+      this.markAsRead([question.message_id], { kind: 'reply' })
       this.db
         .prepare(
           `UPDATE question_threads
            SET status = 'answered', answer_message_id = ?, answer_body = ?,
-               answered_at = datetime('now')
+               answered_at = datetime('now'), awaiting = NULL
            WHERE message_id = ? AND status = 'pending'`
         )
         .run(message.id, params.body, question.message_id)

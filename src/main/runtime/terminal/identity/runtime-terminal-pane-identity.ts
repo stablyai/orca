@@ -1,11 +1,11 @@
-import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
+import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import { AgentLaunchPaneAlreadyLiveError } from '../../../../shared/agent-launch/contracts/agent-launch-pane-already-live'
 import {
   isTerminalLeafId,
   makePaneKey,
   parsePaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
-import { isValidHostTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
+import { isValidHostTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import { randomUUID } from 'node:crypto'
 
 export function allocateTerminalPaneIdentity(opts: { tabId?: string; leafId?: string }): {

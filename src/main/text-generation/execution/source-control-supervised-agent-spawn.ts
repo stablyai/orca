@@ -1,0 +1,37 @@
+import {
+  pathEnvRelativeTo,
+  withCliRuntimeOnPath
+} from '../../../shared/shell/command-resolution/node-cli-command-resolution'
+import { resolveGuestNativeAgentCommand } from '../../codex-cli/command'
+import { createProviderSpawnSpec } from '../../provider-process/provider-process-supervisor'
+import { spawnProviderProcess } from '../../provider-process/provider-process-spawn'
+import { guestNativeSpawnEnv } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
+import type {
+  SourceControlAgentSpawnInput,
+  SpawnedSourceControlAgentProcess
+} from '../source-control-text-generation-types'
+
+// Supervisor owns the agent group so parent quit/death still stops generation.
+export function spawnSupervisedAgent(
+  input: SourceControlAgentSpawnInput,
+  spawnEnv: NodeJS.ProcessEnv
+): SpawnedSourceControlAgentProcess {
+  // On a WSL-host orcad, a missing CLI must fail rather than run a Windows shim found via PATH.
+  const env = guestNativeSpawnEnv(spawnEnv)
+  const cwd = input.useCwdForNative ? input.cwd : undefined
+  // Match native chats' install discovery from the agent's cwd, not Orca's.
+  const binary = input.binary.includes('/')
+    ? input.binary
+    : resolveGuestNativeAgentCommand(input.binary, {
+        pathEnv: pathEnvRelativeTo(env.PATH, cwd ?? process.cwd()),
+        homePath: env.HOME
+      })
+  const spec = createProviderSpawnSpec(
+    { command: binary, args: input.args, ...(cwd !== undefined ? { cwd } : {}) },
+    withCliRuntimeOnPath(binary, env),
+    process.platform,
+    { lifetime: 'one-shot' }
+  )
+  const child = spawnProviderProcess(spec)
+  return Object.assign(child, { supervised: spec.supervised })
+}

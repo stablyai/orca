@@ -1,9 +1,10 @@
+import { measureSidebarHeaderDragRect } from './sidebar-header-drag-geometry'
 import {
   computeWorktreeSidebarHeaderDropPreview,
   type WorktreeSidebarHeaderDropPreview
 } from './worktree-sidebar-header-drop-preview'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 
 export type ProjectGroupHeaderDragBucketKey = string
 
@@ -19,12 +20,15 @@ export type ProjectGroupHeaderDragRect = {
 
 export type ProjectGroupHeaderDropPreview = WorktreeSidebarHeaderDropPreview
 
+/** What the drag reads of a header: its bucket and its order. The Bots section's rows reuse it. */
+export type ProjectGroupHeaderDragItem = Pick<ProjectGroup, 'parentGroupId' | 'tabOrder'>
+
 export type ProjectGroupTabOrderUpdate = {
   groupId: string
   tabOrder: number
 }
 
-const ROOT_PROJECT_GROUP_HEADER_BUCKET = 'root'
+export const ROOT_PROJECT_GROUP_HEADER_BUCKET = 'root'
 
 type SidebarProjectGroupHeader = ProjectGroup | { id: null } | undefined
 
@@ -36,7 +40,7 @@ function isConcreteProjectGroup(
 
 export function getProjectGroupHeaderDragBucketKey(
   group: Pick<ProjectGroup, 'parentGroupId'>,
-  projectGroupById?: ReadonlyMap<string, ProjectGroup>
+  projectGroupById?: ReadonlyMap<string, ProjectGroupHeaderDragItem>
 ): ProjectGroupHeaderDragBucketKey {
   const parentGroupId = group.parentGroupId ?? null
   if (!parentGroupId) {
@@ -87,7 +91,7 @@ export function getProjectGroupTabOrderUpdatesForSidebarDrop(args: {
   sidebarProjectGroupHeaderIds: readonly string[]
   draggedGroupId: string
   sidebarDropIndex: number
-  projectGroupById: ReadonlyMap<string, ProjectGroup>
+  projectGroupById: ReadonlyMap<string, ProjectGroupHeaderDragItem>
 }): ProjectGroupTabOrderUpdate[] {
   const sourceIndex = args.sidebarProjectGroupHeaderIds.indexOf(args.draggedGroupId)
   if (sourceIndex === -1) {
@@ -123,27 +127,6 @@ export function getProjectGroupTabOrderUpdatesForSidebarDrop(args: {
   return updates
 }
 
-function getVirtualRowStart(virtualRow: HTMLElement | null): number | null {
-  if (!virtualRow) {
-    return null
-  }
-  const rawStart = virtualRow.getAttribute('data-worktree-virtual-row-start')
-  if (rawStart === null) {
-    return null
-  }
-  const start = Number(rawStart)
-  return Number.isFinite(start) ? start : null
-}
-
-function getOptionalNumberAttribute(element: HTMLElement, attribute: string): number | undefined {
-  const rawValue = element.getAttribute(attribute)
-  if (rawValue === null) {
-    return undefined
-  }
-  const value = Number(rawValue)
-  return Number.isFinite(value) ? value : undefined
-}
-
 export function measureProjectGroupHeaderDragRects(
   container: HTMLElement,
   bucketKey?: ProjectGroupHeaderDragBucketKey
@@ -161,20 +144,16 @@ export function measureProjectGroupHeaderDragRects(
     if (bucketKey !== undefined && elementBucketKey !== bucketKey) {
       return
     }
-    const rect = element.getBoundingClientRect()
-    const virtualRow = element.closest<HTMLElement>('[data-worktree-virtual-row]')
-    const virtualRowStart = getVirtualRowStart(virtualRow)
-    const top =
-      virtualRow && virtualRowStart !== null
-        ? virtualRowStart + rect.top - virtualRow.getBoundingClientRect().top
-        : rect.top - containerRect.top + container.scrollTop
     rects.push({
       groupId,
       bucketKey: elementBucketKey,
       headerIndex,
-      top,
-      bottom: top + rect.height,
-      sectionBottom: getOptionalNumberAttribute(element, 'data-project-group-header-section-end')
+      ...measureSidebarHeaderDragRect(
+        element,
+        container,
+        containerRect,
+        'data-project-group-header-section-end'
+      )
     })
   })
   rects.sort((left, right) => left.top - right.top)

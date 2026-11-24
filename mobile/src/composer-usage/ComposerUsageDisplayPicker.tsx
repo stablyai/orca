@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native'
-import type { UsagePercentageDisplay } from '../../../src/shared/usage-percentage-display'
-import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
+import type { UsagePercentageDisplay } from '../../../src/shared/agent-usage/display/usage-percentage-display'
+import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'

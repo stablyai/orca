@@ -1,8 +1,8 @@
 import { useId, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
-import { translate } from '@/i18n/i18n'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { useTranslate } from '@/i18n/use-translate'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { useAppStore } from '@/store'
 import {
   applyAgentPermissionOverrides,
@@ -17,6 +17,7 @@ export function YoloPermissionsControl({
   yoloPermissions: boolean
   onYoloPermissionsChange?: (enabled: boolean) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const switchId = useId()
   const overrides = useAppStore((s) => s.settings?.agentPermissionOverrides)
   const [saving, setSaving] = useState(false)
@@ -45,10 +46,10 @@ export function YoloPermissionsControl({
       <div className="flex items-center justify-between gap-6">
         <label htmlFor={switchId} className="min-w-0 cursor-pointer space-y-0.5">
           <span className="block text-sm font-medium text-foreground">
-            {translate('auto.components.onboarding.AgentStep.yoloModeLabel', 'Yolo mode')}
+            {t('auto.components.onboarding.AgentStep.yoloModeLabel', 'Yolo mode')}
           </span>
           <span className="block text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.onboarding.AgentStep.yoloPermissionsDescription',
               'Agents run commands and edit files without asking, and some also bypass their sandbox. Use only in projects you trust.'
             )}
@@ -67,7 +68,7 @@ export function YoloPermissionsControl({
           className="scrollbar-sleek max-h-48 space-y-3 overflow-y-auto rounded-lg border border-status-warning-border bg-status-warning-background px-4 py-3 text-xs text-foreground"
         >
           <p>
-            {translate(
+            {t(
               'components.onboarding.yoloPermissions.overrideDescription',
               'These agents can still run commands and edit files without asking. Their individual settings override Yolo mode.'
             )}
@@ -75,7 +76,7 @@ export function YoloPermissionsControl({
           {fullAccessAgents.map((agent) => (
             <div key={agent} className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-medium">
-                {translate(
+                {t(
                   'components.onboarding.yoloPermissions.fullAccessOverride',
                   '{{agent}} still has full access',
                   { agent: getAgentLabel(agent) }
@@ -86,17 +87,14 @@ export function YoloPermissionsControl({
                 variant="outline"
                 size="xs"
                 disabled={saving}
-                aria-label={translate(
+                aria-label={t(
                   'components.onboarding.yoloPermissions.useAgentOwnSettings',
                   'Use {{agent}}’s own settings',
                   { agent: getAgentLabel(agent) }
                 )}
                 onClick={() => void handleUseOwnSettings(agent)}
               >
-                {translate(
-                  'components.onboarding.yoloPermissions.useOwnSettings',
-                  'Use own settings'
-                )}
+                {t('components.onboarding.yoloPermissions.useOwnSettings', 'Use own settings')}
               </Button>
             </div>
           ))}
@@ -104,14 +102,14 @@ export function YoloPermissionsControl({
       )}
       {error && (
         <p role="alert" className="text-xs text-destructive">
-          {translate(
+          {t(
             'components.onboarding.yoloPermissions.saveError',
             'Could not change permissions. Try again.'
           )}
         </p>
       )}
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'components.onboarding.yoloPermissions.ownSettingsDescription',
           'Off uses each agent’s own settings. Individual agent permissions can override this switch.'
         )}

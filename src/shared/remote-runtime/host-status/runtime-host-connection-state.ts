@@ -1,5 +1,5 @@
-import type { RuntimeStatus } from '../../runtime-session-contracts'
-import { isRuntimeWorkspaceWindowClosed } from '../../runtime-workspace-window-availability'
+import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
+import { isRuntimeWorkspaceWindowClosed } from '../session-graph/runtime-workspace-window-availability'
 
 export type RuntimeHostConnectionState =
   | 'connected'

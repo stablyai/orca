@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label'
 import { WorkspaceEmojiPickerButton } from '@/components/workspace-emoji/WorkspaceEmojiPickerButton'
 import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
 import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type WorktreeDisplayNameFieldProps = {
   disabled: boolean
@@ -23,6 +23,7 @@ export function WorktreeDisplayNameField({
   portalContainer,
   value
 }: WorktreeDisplayNameFieldProps): React.JSX.Element {
+  const t = useTranslate()
   const inputId = useId()
   const emojiInput = useWorkspaceEmojiShortcodeInput({
     disabled,
@@ -34,7 +35,7 @@ export function WorktreeDisplayNameField({
   return (
     <div className="space-y-1">
       <Label htmlFor={inputId} className="text-[11px] font-medium text-muted-foreground">
-        {translate('auto.components.sidebar.WorktreeMetaDialog.ad5e4e514f', 'Display Name')}
+        {t('auto.components.sidebar.WorktreeMetaDialog.ad5e4e514f', 'Display Name')}
       </Label>
       <div className="relative">
         <Input
@@ -52,7 +53,7 @@ export function WorktreeDisplayNameField({
             event.preventDefault()
             void onEnter()
           }}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.sidebar.WorktreeMetaDialog.7f21e0464f',
             'Custom display name...'
           )}
@@ -70,7 +71,7 @@ export function WorktreeDisplayNameField({
         anchorRef={inputRef}
         open={emojiInput.open}
         commandValue={emojiInput.commandValue}
-        heading={translate('auto.components.new.workspace.SmartWorkspaceNameField.emoji', 'Emoji')}
+        heading={t('auto.components.new.workspace.SmartWorkspaceNameField.emoji', 'Emoji')}
         suggestions={emojiInput.suggestions}
         onCommandValueChange={emojiInput.onCommandValueChange}
         onSelect={emojiInput.selectSuggestion}
@@ -79,10 +80,7 @@ export function WorktreeDisplayNameField({
         side="bottom"
       />
       <p className="text-xs text-muted-foreground">
-        {translate(
-          'workspace.links.nameHelp',
-          'Shown in the sidebar. The folder name stays the same.'
-        )}
+        {t('workspace.links.nameHelp', 'Shown in the sidebar. The folder name stays the same.')}
       </p>
     </div>
   )

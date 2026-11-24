@@ -5,7 +5,7 @@ import { getWorkspaceAttachments } from '../../../../../../shared/workspace-atta
 import { WorktreeCardLinkedItemsSection } from '../review/WorktreeCardLinkedItemsSection'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { Pencil, StickyNote } from 'lucide-react'
-import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
+import { SelectedTextCopyMenu } from '@/components/clipboard/SelectedTextCopyMenu'
 import '../../workspace-actions/context-menu/WorktreeContextMenu'
 import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from '../../workspace-actions/context-menu/worktree-context-menu-policy'
 import {
@@ -13,25 +13,25 @@ import {
   WorktreeCardDetailSectionContent
 } from './WorktreeCardDetailSection'
 import { DetailHeader, MetadataActionIcon } from '../metadata/WorktreeCardMetadataControls'
-import { hasWorktreeCardDetails } from '../metadata/WorktreeCardMetaBadges'
+import { hasComment, hasWorktreeCardDetails } from '../metadata/WorktreeCardMetaBadges'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import { WorktreeCardLinkedReviewActions } from '../review/WorktreeCardReviewActions'
 import type { WorktreeCardDetailsHoverProps } from '../metadata/worktree-card-meta-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { WorktreeCardReviewDetailSection } from '../review/WorktreeCardReviewDetailSection'
 import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDetailSection'
-import { WorktreeCardCliDetailSection } from './WorktreeCardCliDetailSection'
 import { WorktreeCardTaskDetailSection } from '../review/WorktreeCardTaskDetailSection'
 import { getWorktreeCardTaskActions } from '../review/worktree-card-task-actions'
+import { WorktreeCardOriginDetailSections } from './WorktreeCardBotDetailSection'
 import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHeader'
-import { CommentMarkdownAsync, preloadCommentMarkdown } from '../../comment-markdown-lazy'
+import {
+  CommentMarkdownAsync,
+  preloadCommentMarkdown
+} from '../../../comment-markdown/comment-markdown-lazy'
+import { useActivityThreadHoverCardIntent } from '@/components/activity/thread-preview/activity-thread-hover-card-intent'
 
 const COMMENT_MARKDOWN_CLASS_NAME =
   'text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1'
-
-function hasComment(comment: string | null): boolean {
-  return (comment ?? '').trim().length > 0
-}
 
 export function WorktreeCardDetailsHover({
   workspace,
@@ -44,6 +44,7 @@ export function WorktreeCardDetailsHover({
   comment,
   automationProvenance,
   cliProvenance,
+  bot,
   children,
   branchName,
   workspaceTitle,
@@ -65,10 +66,12 @@ export function WorktreeCardDetailsHover({
   onOpenAutomationRun,
   hoverControl
 }: WorktreeCardDetailsHoverProps): React.JSX.Element {
+  const t = useTranslate()
   const internalHoverControl = useWorktreeCardDetailsHoverControl()
   const detailsHoverControl = hoverControl ?? internalHoverControl
   const {
     hoverOpen,
+    contextMenuOpen,
     reviewMenuOpen,
     handleHoverOpenChange,
     handleIssueMenuOpenChange,
@@ -101,6 +104,12 @@ export function WorktreeCardDetailsHover({
     },
     [handleHoverOpenChange, workspaceTitleEditing]
   )
+  // Same rest-to-peek intent as agent activity rows so passing pointers don't flash the card.
+  const hoverIntent = useActivityThreadHoverCardIntent({
+    open: hoverOpen || workspaceTitleEditing,
+    onOpenChange: handleEffectiveHoverOpenChange,
+    openDelay
+  })
   const dismissAndRun = React.useCallback(
     (handler: ((event: React.MouseEvent) => void) | undefined) => (event: React.MouseEvent) => {
       closeHover()
@@ -131,7 +140,8 @@ export function WorktreeCardDetailsHover({
       review,
       comment,
       automationProvenance,
-      cliProvenance
+      cliProvenance,
+      bot
     }) &&
     !detailsAfter
   ) {
@@ -140,9 +150,9 @@ export function WorktreeCardDetailsHover({
 
   return (
     <HoverCard
-      open={hoverOpen || workspaceTitleEditing}
-      onOpenChange={handleEffectiveHoverOpenChange}
-      openDelay={openDelay}
+      open={workspaceTitleEditing || (!contextMenuOpen && hoverOpen)}
+      onOpenChange={hoverIntent.onOpenChange}
+      openDelay={0}
       closeDelay={closeDelay}
     >
       <span className="contents" onClick={(event) => event.stopPropagation()}>
@@ -150,7 +160,13 @@ export function WorktreeCardDetailsHover({
       </span>
       <HoverCardTrigger
         asChild
-        onPointerEnter={hasComment(comment) ? preloadCommentMarkdown : undefined}
+        {...hoverIntent.triggerHandlers}
+        onPointerEnter={(event) => {
+          hoverIntent.triggerHandlers.onPointerEnter(event)
+          if (hasComment(comment)) {
+            preloadCommentMarkdown()
+          }
+        }}
       >
         {children}
       </HoverCardTrigger>
@@ -233,20 +249,17 @@ export function WorktreeCardDetailsHover({
             />
           )}
 
-          {cliProvenance && <WorktreeCardCliDetailSection provenance={cliProvenance} />}
+          <WorktreeCardOriginDetailSections bot={bot} cliProvenance={cliProvenance} />
 
           {hasComment(comment) && (
             <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<StickyNote className="size-3 text-muted-foreground" />}
-                label={translate('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
+                label={t('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
                 actions={
                   onEditComment ? (
                     <MetadataActionIcon
-                      label={translate(
-                        'auto.components.sidebar.WorktreeCardMeta.c7fa72ead0',
-                        'Edit notes'
-                      )}
+                      label={t('auto.components.sidebar.WorktreeCardMeta.c7fa72ead0', 'Edit notes')}
                       onClick={onEditComment}
                     >
                       <Pencil className="size-3" />

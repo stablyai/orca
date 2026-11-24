@@ -3,7 +3,10 @@ import {
   mergeWorkspaceAttachmentOrigins
 } from './workspace-attachment-origins'
 import type { WorkspaceAttachment, WorkspaceLinkedItem } from '../worktree/types'
-import { getTaskSourceCacheScope, normalizeStoredTaskSourceContext } from '../task-source-context'
+import {
+  getTaskSourceCacheScope,
+  normalizeStoredTaskSourceContext
+} from '../work-items/task-source-context'
 import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
 import { getProvenWorkspaceReferenceIdentity } from './workspace-reference-identity'
 import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'

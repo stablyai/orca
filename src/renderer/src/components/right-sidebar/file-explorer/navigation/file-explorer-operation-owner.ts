@@ -1,28 +1,32 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
-import { getSelectedFolderTwinHostId } from '@/lib/folder-workspace-runtime-owner'
+import { getSelectedFolderTwinHostId } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import type { HostAuthority } from '../../../../../../shared/host-authority'
+} from '../../../../../../shared/execution-host/execution-host'
+import type { HostAuthority } from '../../../../../../shared/execution-host/host-authority'
 import { translate } from '@/i18n/i18n'
-import { resolveOwner, runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
-import { getConnectionIdFromState } from '@/lib/connection-context'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import {
+  resolveOwner,
+  runtimeEnvironmentIdForWorkspaceOwner
+} from '@/lib/workspace/ownership/resolve-owner'
+import '@/lib/workspace/ownership/connection-context'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { FileExplorerOperationOwner } from '../tree/file-explorer-types'
-import type { WorktreeOperationRoute } from '@/lib/worktree-operation-route'
-import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
+import type { WorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-operation-route'
+import { captureWorktreeOperationGenerationGuard } from '@/lib/workspace/ownership/worktree-operation-generation'
 
 const ownerUnresolved = (): Error => new Error(getFileExplorerOwnerUnresolvedMessage())
 

@@ -1,13 +1,13 @@
-import { getUsageWindowSections } from '../../../src/shared/usage-provider-windows'
+import { getUsageWindowSections } from '../../../src/shared/agent-usage/display/usage-provider-windows'
 import {
   getActiveProviderRateLimits,
   getOtherUsageProviders
-} from '../components/account-usage-state'
+} from '../accounts/usage/usage-selectors'
 import type {
   AccountsSnapshot,
   ProviderRateLimits,
   RateLimitWindow
-} from '../components/accounts-snapshot'
+} from '../accounts/accounts-snapshot'
 
 // Only agents that spend the provider plan the desktop polls; others (e.g. aider, openclaude) bring their own keys.
 const AGENT_USAGE_PROVIDERS = new Map<string, string>([

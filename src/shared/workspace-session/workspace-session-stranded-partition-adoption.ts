@@ -3,7 +3,7 @@ import {
   WORKSPACE_SESSION_FIELD_OWNERSHIP,
   type WorkspaceSessionFieldOwnership
 } from './workspace-session-host-field-ownership'
-import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../workspace-scope'
+import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../workspace/identity/workspace-scope'
 import { isWorktreeHostIdentity as isHostQualifiedSessionKey } from '../worktree/host-qualified-identity'
 import {
   buildWorktreeIdByFileId,

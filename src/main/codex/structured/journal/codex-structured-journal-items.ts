@@ -1,7 +1,7 @@
 import { CodexTurnOrdinals } from './codex-turn-ordinals'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalRowAttribution } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { requiresTerminalSettlement } from '../../../native-chat/agent-session-journal/journal-terminal-settlement'
+import { requiresTerminalSettlement } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-terminal-settlement'
 import { codexJournalItem } from '../items/codex-structured-item-translation'
 import {
   codexItemIdentity,
@@ -37,7 +37,7 @@ import {
   endedJournalReasoning,
   withJournalReasoningLifecycle,
   type JournalReasoningLifecycle
-} from '../../../native-chat/agent-session-journal/journal-reasoning-row'
+} from '../../../native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'
 import { codexFileChangeApprovalDetail } from '../prompts/codex-file-change-approval-detail'
 
@@ -238,7 +238,8 @@ export class CodexJournalItems {
       ? JSON.stringify([threadId, turnId, item.id])
       : codexStructuredItemKey(threadId, item.id)
     const existing = this.identities.get(key)
-    if (existing) {
+    // Providers can reuse a message id in a later turn; that message is a new row.
+    if (existing && !(turnId && existing.provider === 'codex' && existing.turnId !== turnId)) {
       return existing
     }
     const identity = codexItemIdentity({

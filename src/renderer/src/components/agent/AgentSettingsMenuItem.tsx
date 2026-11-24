@@ -1,14 +1,22 @@
 import type { JSX } from 'react'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** The new-tab menu's footer. Form pickers use the same row. */
-export function AgentSettingsMenuItem({ onSelect }: { onSelect: () => void }): JSX.Element {
+export function AgentSettingsMenuItem({
+  onSelect,
+  variant = 'launch'
+}: {
+  onSelect: () => void
+  /** `create` where it follows create rows rather than agent rows. */
+  variant?: 'launch' | 'create'
+}): JSX.Element {
+  const t = useTranslate()
   return (
-    <DropdownMenuItem onSelect={onSelect} variant="launch">
+    <DropdownMenuItem onSelect={onSelect} variant={variant}>
       <SettingsIcon className="size-4" />
-      {translate('auto.components.tab.bar.QuickLaunchButton.348a04c1ad', 'Agent settings…')}
+      {t('auto.components.tab.bar.QuickLaunchButton.348a04c1ad', 'Agent settings…')}
     </DropdownMenuItem>
   )
 }

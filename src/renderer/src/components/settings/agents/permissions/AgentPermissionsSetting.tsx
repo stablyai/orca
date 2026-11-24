@@ -1,7 +1,8 @@
 import { Trans } from 'react-i18next'
 import type { AgentPermissionMode } from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
-import { getIntlLocale, i18n, translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { i18n } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { AgentPermissionModeMenu } from './AgentPermissionModeMenu'
 import { agentPermissionModeLabel } from './agent-permission-mode-label'
@@ -28,6 +29,7 @@ function SupportedAgentsTrigger({
   labels: readonly string[]
   children?: React.ReactNode
 }): React.JSX.Element {
+  const intlLocale = useIntlLocale()
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -39,7 +41,7 @@ function SupportedAgentsTrigger({
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" align="start" sideOffset={6}>
-        {new Intl.ListFormat(getIntlLocale(), { type: 'conjunction' }).format(labels)}
+        {new Intl.ListFormat(intlLocale, { type: 'conjunction' }).format(labels)}
       </TooltipContent>
     </Tooltip>
   )
@@ -50,11 +52,12 @@ function AgentPermissionsDescription({
   majorityMode,
   autoAgentLabels
 }: AgentPermissionsSettingProps): React.ReactNode {
+  const t = useTranslate()
   if (mode === 'auto') {
     return (
       <Trans
         i18n={i18n}
-        defaults={translate(
+        defaults={t(
           'settings.agents.permissionsAutoDescription',
           '<agents>Supported agents</agents> approve safe actions on their own.'
         )}
@@ -64,28 +67,26 @@ function AgentPermissionsDescription({
   }
   if (mode === 'mixed') {
     return majorityMode
-      ? translate(
+      ? t(
           'settings.agents.permissionsMixed',
           'Most agents use {{mode}}. Choosing a mode resets the marked exceptions, except custom arguments.',
-          { mode: agentPermissionModeLabel(majorityMode) }
+          { mode: agentPermissionModeLabel(majorityMode, t) }
         )
-      : translate(
+      : t(
           'settings.agents.permissionsMixedNoMajority',
           'Agents use different settings. Choosing a mode applies to all.'
         )
   }
-  return translate(
+  return t(
     'settings.agents.permissionsDescription',
     'How much agents can do without asking you. Agents with custom launch arguments keep them.'
   )
 }
 
 export function AgentPermissionsSetting(props: AgentPermissionsSettingProps): React.JSX.Element {
+  const t = useTranslate()
   const { mode, nonAutoMode, onChange, onChangeNonAuto, autoSupported = true } = props
-  const title = translate(
-    'auto.components.settings.AgentsPane.agentPermissions',
-    'Agent Permissions'
-  )
+  const title = t('auto.components.settings.AgentsPane.9f30095d49', 'Agent permissions')
   const showOthers = mode === 'auto' && onChangeNonAuto !== undefined
   return (
     <section className="flex items-start justify-between gap-3">
@@ -96,7 +97,7 @@ export function AgentPermissionsSetting(props: AgentPermissionsSettingProps): Re
         </p>
         {!autoSupported ? (
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'settings.agents.autoUnsupported',
               'Approve for me needs a newer Orca on this host.'
             )}
@@ -131,7 +132,7 @@ export function AgentPermissionsSetting(props: AgentPermissionsSettingProps): Re
               )}
             >
               <span className="text-xs text-muted-foreground">
-                {translate('settings.agents.otherAgentsPermissions', 'Other agents')}
+                {t('settings.agents.otherAgentsPermissions', 'Other agents')}
               </span>
               <AgentPermissionModeMenu
                 mode={nonAutoMode ?? 'mixed'}
@@ -140,7 +141,7 @@ export function AgentPermissionsSetting(props: AgentPermissionsSettingProps): Re
                     onChangeNonAuto(next)
                   }
                 }}
-                label={translate(
+                label={t(
                   'settings.agents.otherAgentsPermissionsLabel',
                   'Permissions for other agents'
                 )}

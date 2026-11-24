@@ -1,6 +1,6 @@
 import * as path from 'node:path'
 import { readFile, realpath, stat } from 'node:fs/promises'
-import { waitForPromiseWithSignal } from '../../abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../concurrency/abort-signal-reason'
 import { parseGitdirMarkerPayload } from '../metadata/gitdir-marker-payload'
 import { runWithGitOperationLock } from '../commands/git-operation-lock'
 import {
@@ -11,7 +11,7 @@ import {
   foldWslUncPathCaseInsensitiveParts,
   isWslUncPath,
   toWindowsWslDrivePath
-} from '../../wsl-paths'
+} from '../../file-access/wsl-paths'
 
 function abortError(): Error {
   const error = new Error('The operation was aborted.')
@@ -167,8 +167,9 @@ export async function runWithGitFetchHeadLock<T>(
   worktreePath: string,
   signal: AbortSignal | undefined,
   run: () => Promise<T>,
-  explicitGitDir?: string
+  explicitGitDir?: string,
+  releaseAfter?: () => Promise<void> | null
 ): Promise<T> {
   const key = await fetchLockPath(worktreePath, signal, explicitGitDir)
-  return runWithGitOperationLock(key, signal, run)
+  return runWithGitOperationLock(key, signal, run, releaseAfter)
 }

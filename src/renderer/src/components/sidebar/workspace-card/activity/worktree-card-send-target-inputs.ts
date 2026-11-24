@@ -1,5 +1,8 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { AppState } from '@/store/types'
-import type { RunningAgentTargetState } from '@/lib/running-agent-targets'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { selectSendApprovalGuardEnvironmentIds } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
+import type { RunningAgentTargetState } from '@/lib/agent-session/messaging/running-agent-targets'
 
 export type SendTargetInputsState = Pick<
   AppState,
@@ -24,12 +27,13 @@ export type SendTargetControlInputs = {
 
 // Share an inactive-card sentinel so pane-title/status churn cannot wake every idle agent body.
 export const EMPTY_SEND_TARGET_INPUTS: RunningAgentTargetState = Object.freeze({
-  agentStatusByPaneKey: {},
+  agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
   tabsByWorktree: {},
   unifiedTabsByWorktree: {},
   terminalLayoutsByTabId: {},
   ptyIdsByTabId: {},
-  runtimePaneTitlesByTabId: {}
+  runtimePaneTitlesByTabId: {},
+  sendApprovalGuardEnvironmentIds: new Set<string>()
 })
 
 // Inactive cards ignore picker-mode and freshness-epoch changes.
@@ -41,6 +45,7 @@ export const EMPTY_SEND_TARGET_CONTROL_INPUTS: SendTargetControlInputs = Object.
 /** Select live send-target maps only for the targeted card; all others reuse the empty sentinel. */
 export function selectSendTargetInputs(
   s: SendTargetInputsState,
+  statuses: RuntimeStatuses,
   worktreeId: string
 ): RunningAgentTargetState {
   if (s.agentSendPopoverTargetMode?.worktreeId !== worktreeId) {
@@ -52,7 +57,8 @@ export function selectSendTargetInputs(
     unifiedTabsByWorktree: s.unifiedTabsByWorktree,
     terminalLayoutsByTabId: s.terminalLayoutsByTabId,
     ptyIdsByTabId: s.ptyIdsByTabId,
-    runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId
+    runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
+    sendApprovalGuardEnvironmentIds: selectSendApprovalGuardEnvironmentIds(statuses)
   }
 }
 

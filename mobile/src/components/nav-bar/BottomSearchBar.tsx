@@ -4,13 +4,14 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { X } from 'lucide-react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { useKeyboardOcclusion } from '../../platform/keyboard-occlusion'
-import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
+import { useKeyboardOcclusion } from '../../platform/keyboard/keyboard-occlusion'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { BOTTOM_DRAWER_EASING } from '../bottom-drawer/bottom-drawer-constants'
-import { MobileSearchField } from '../MobileSearchField'
+import { MobileSearchField } from '../controls/MobileSearchField'
+import { useMobileDictationClearance } from '../../dictation/mobile-dictation-host-context'
 
 const FADE_ID = 'bottom-search-bar-fade'
 const BUTTON_SIZE = 44
@@ -48,6 +49,8 @@ type BottomSearchBarProps = {
   hasSearch?: boolean
   editable?: boolean
   accessibilityLabel?: string
+  /** Pinned under a sheet's page: the sheet insets its sides and rides the keyboard, and the fade is the sheet's colour. */
+  inSheet?: boolean
 }
 
 // Search lives under the thumb on every list screen: a wide field, with a filter button and the primary action beside it.
@@ -64,18 +67,22 @@ export function BottomSearchBar({
   onClear,
   hasSearch,
   editable,
-  accessibilityLabel
+  accessibilityLabel,
+  inSheet = false
 }: BottomSearchBarProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const keyboardHeight = useKeyboardOcclusion()
   const keyboardUp = keyboardHeight > 0
+  const fadeId = inSheet ? `${FADE_ID}-sheet` : FADE_ID
+  const fadeColor = inSheet ? colors.sheetSurface : colors.bgBase
   const [focused, setFocused] = useState(false)
   const [barHeight, setBarHeight] = useState(0)
-  const coveredHeight = barHeight + keyboardHeight
+  const coveredHeight = barHeight + (inSheet ? 0 : keyboardHeight)
   useEffect(() => {
     onCoveredHeightChange?.(coveredHeight)
   }, [coveredHeight, onCoveredHeightChange])
+  useMobileDictationClearance(coveredHeight)
   // Close stays until the keyboard is down: iOS's late click at the tapped spot would otherwise hit the primary action that replaced it.
   const searching = focused || keyboardUp || (hasSearch ?? value.trim() !== '')
 
@@ -93,21 +100,23 @@ export function BottomSearchBar({
     <View
       style={[
         styles.bar,
-        keyboardUp
-          ? { bottom: keyboardHeight, paddingBottom: spacing.sm }
-          : { paddingBottom: Math.max(bottomInset, spacing.lg) }
+        inSheet
+          ? styles.barInSheet
+          : keyboardUp
+            ? { bottom: keyboardHeight, paddingBottom: spacing.sm }
+            : { paddingBottom: Math.max(bottomInset, spacing.lg) }
       ]}
       onLayout={(event) => setBarHeight(event.nativeEvent.layout.height)}
     >
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         <Svg width="100%" height="100%">
           <Defs>
-            <LinearGradient id={FADE_ID} x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={colors.bgBase} stopOpacity={0} />
-              <Stop offset="0.45" stopColor={colors.bgBase} stopOpacity={1} />
+            <LinearGradient id={fadeId} x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor={fadeColor} stopOpacity={0} />
+              <Stop offset="0.45" stopColor={fadeColor} stopOpacity={1} />
             </LinearGradient>
           </Defs>
-          <Rect width="100%" height="100%" fill={`url(#${FADE_ID})`} />
+          <Rect width="100%" height="100%" fill={`url(#${fadeId})`} />
         </Svg>
       </View>
       <View style={styles.row}>
@@ -193,7 +202,11 @@ function RoundButton({ button, emphasis = false }: { button: BarButton; emphasis
         button.disabled && styles.disabled
       ]}
     >
-      <Icon size={20} color={emphasis ? colors.bgBase : colors.textPrimary} strokeWidth={2.2} />
+      <Icon
+        size={20}
+        color={emphasis ? colors.onCreateActionFill : colors.textPrimary}
+        strokeWidth={2.2}
+      />
       {lit ? (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{badge}</Text>
@@ -212,6 +225,7 @@ const styles = themedStyleSheet(() => ({
     paddingTop: 36,
     paddingHorizontal: spacing.md
   },
+  barInSheet: { paddingHorizontal: 0, paddingBottom: 0 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -250,7 +264,7 @@ const styles = themedStyleSheet(() => ({
     elevation: 6
   },
   buttonEmphasis: {
-    backgroundColor: colors.surfaceBright,
+    backgroundColor: colors.createActionFill,
     borderColor: 'transparent'
   },
   buttonLit: {

@@ -30,6 +30,7 @@ export type GitHistoryItemRef = {
   name: string
   revision?: string
   category?: GitHistoryRefCategory
+  worktreePath?: string
   description?: string
   color?: GitHistoryGraphColorId
 }
@@ -56,11 +57,17 @@ export type GitHistoryItem = {
   pushed?: boolean
 }
 
+export type GitHistoryRefs = 'head' | 'all' | string[]
+
 export type GitHistoryOptions = {
+  refs?: GitHistoryRefs
+  historyToken?: string
   limit?: number
   baseRef?: string | null
   /** List only commits on HEAD that baseRef lacks, with statistics and pushed state. */
   branchOnly?: boolean
+  /** With branchOnly: skip per-row pushed state and statistics; `branch.unpushed` is still exact. */
+  branchListOnly?: boolean
   skip?: number
 }
 
@@ -75,6 +82,10 @@ export type GitHistoryBranchRange = {
 }
 
 export type GitHistoryResult = {
+  refs?: GitHistoryRefs
+  resolvedRefs?: string[]
+  historyToken?: string
+  historyChanged?: boolean
   items: GitHistoryItem[]
   currentRef?: GitHistoryItemRef
   remoteRef?: GitHistoryItemRef
@@ -92,5 +103,6 @@ export type GitHistoryResult = {
 
 export type GitHistoryExecutor = (
   args: string[],
-  cwd: string
+  cwd: string,
+  stdin?: string
 ) => Promise<{ stdout: string; stderr?: string }>

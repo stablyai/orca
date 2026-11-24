@@ -4,7 +4,7 @@ import {
   normalizeProxyBypassRules,
   normalizeProxyUrl,
   type NetworkProxySettings
-} from '../../shared/network-proxy'
+} from '../../shared/network/network-proxy'
 import { separateElectronProxyCredentials } from './electron-proxy-credentials'
 
 export type ProxyApplyResult =

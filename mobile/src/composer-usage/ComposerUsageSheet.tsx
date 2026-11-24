@@ -1,4 +1,4 @@
-import { getProviderDisplayName } from '../../../src/shared/usage-provider-windows'
+import { getProviderDisplayName } from '../../../src/shared/agent-usage/display/usage-provider-windows'
 import { Text, View } from 'react-native'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { useNow } from '../hooks/use-now'

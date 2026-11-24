@@ -2,10 +2,11 @@ import {
   filterAiVaultSessions,
   groupAiVaultSessions
 } from '../../../src/shared/ai-vault/session-display/ai-vault-session-filters'
-import {
-  AI_VAULT_AGENTS,
-  type AiVaultScope,
-  type AiVaultSession
+import type {
+  AiVaultAgent,
+  AiVaultScope,
+  AiVaultSession,
+  AiVaultSort
 } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 
 import {
@@ -21,11 +22,12 @@ export type MobileAgentHistorySection = {
 }
 
 // Host scopePaths only widen discovery, so narrow Workspace/Project by cwd prefix client-side (desktop's scope paths); All stays unfiltered.
-// Mobile lacks project-key metadata; hideEmptySessions matches desktop default.
 export function buildMobileAgentHistorySections(
   sessions: readonly AiVaultSession[],
   options: {
     query: string
+    agents: readonly AiVaultAgent[]
+    sort: AiVaultSort
     scope: AiVaultScope
     scopeFilterPaths: readonly string[]
     activeWorktreePath: string | null
@@ -36,9 +38,9 @@ export function buildMobileAgentHistorySections(
   const narrowByPath = options.scope !== 'all' && options.scopeFilterPaths.length > 0
   const filtered = filterAiVaultSessions(sessions, {
     query: options.query,
-    agents: AI_VAULT_AGENTS,
+    agents: options.agents,
     scope: narrowByPath ? 'workspace' : 'all',
-    sort: 'updated',
+    sort: options.sort,
     activeWorktreePaths: narrowByPath ? options.scopeFilterPaths : [],
     hideEmptySessions: true
   })

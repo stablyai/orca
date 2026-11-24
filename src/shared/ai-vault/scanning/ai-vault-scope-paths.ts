@@ -1,10 +1,15 @@
-import { isRuntimePathAbsolute, normalizeRuntimePathForComparison } from '../../cross-platform-path'
-import type { ProjectHostSetupProjection } from '../../project-host-setup-projection'
-import type { ProjectHostSetup } from '../../project-types'
+import {
+  isRuntimePathAbsolute,
+  normalizeRuntimePathForComparison
+} from '../../file-access/cross-platform-path'
+import type { ProjectHostSetup } from '../../project/project-types'
 import type { AiVaultScope } from '../contracts/ai-vault-types'
 import type { Worktree } from '../../worktree/types'
 import { splitWorktreeIdForFilesystem } from '../../worktree/id'
 import { toAiVaultProjectKey } from './ai-vault-project-key'
+
+/** The setup facts a project scope reads; clients without the full projection pass just these. */
+type ScopeProjectSetup = Pick<ProjectHostSetup, 'projectId' | 'repoId' | 'path'>
 
 export function deriveAiVaultWorkspaceScopePaths(
   activeWorktree: Pick<Worktree, 'id' | 'path' | 'priorWorktreeIds' | 'repoId'> | null,
@@ -53,7 +58,7 @@ export function deriveAiVaultScopeSessionPaths(
   options: {
     scope?: AiVaultScope
     activeProjectKey?: string | null
-    projectHostSetupProjection?: ProjectHostSetupProjection
+    projectHostSetupProjection?: { setups: readonly ScopeProjectSetup[] }
   } = {}
 ): string[] {
   if (!activeWorktree) {
@@ -84,12 +89,12 @@ export function deriveAiVaultScopeSessionPaths(
   return accumulator.paths
 }
 
-function buildProjectSetupsByRepoId(
-  projection?: ProjectHostSetupProjection
-): Map<string, ProjectHostSetup[]> {
-  const setupsByRepoId = new Map<string, ProjectHostSetup[]>()
+function buildProjectSetupsByRepoId(projection?: {
+  setups: readonly ScopeProjectSetup[]
+}): Map<string, ScopeProjectSetup[]> {
+  const setupsByRepoId = new Map<string, ScopeProjectSetup[]>()
   for (const setup of projection?.setups ?? []) {
-    const setups: ProjectHostSetup[] = setupsByRepoId.get(setup.repoId) ?? []
+    const setups: ScopeProjectSetup[] = setupsByRepoId.get(setup.repoId) ?? []
     setups.push(setup)
     setupsByRepoId.set(setup.repoId, setups)
   }

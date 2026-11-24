@@ -1,0 +1,76 @@
+import type Database from '../../../sqlite/sync-database'
+import type { AgentJournalAcceptanceReceipt } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { JournalReducerState } from '../projection/journal-reducer'
+import {
+  journalRowsAfterReader,
+  type JournalReadRow,
+  type JournalRowsRead
+} from '../replay/journal-read-row'
+import { readJournalSince } from '../replay/journal-cursor'
+import { journalContextCursor, journalContextEpoch } from './journal-context-epoch'
+
+export { journalContextCursor, journalContextEpoch } from './journal-context-epoch'
+
+export function projectJournalRows<Row extends JournalReadRow>(
+  state: JournalReducerState,
+  rows: readonly Row[]
+): Row[] {
+  const boundary = Math.max(
+    state.contextBoundary,
+    rows.findLast((row) => row.kind === 'epoch')?.seq ?? 1
+  )
+  const epoch = journalContextEpoch(state.epoch, boundary)
+  return rows.map((row) => ({ ...row, epoch }))
+}
+
+export function journalContextReceipt(
+  state: JournalReducerState,
+  clientMessageId: string
+): AgentJournalAcceptanceReceipt | null {
+  const receipt = state.receipts.get(clientMessageId)
+  return receipt
+    ? { ...receipt, cursor: journalContextCursor(state, receipt.cursor.sequence) }
+    : null
+}
+
+export function readJournalContextSince(
+  state: JournalReducerState,
+  rowsAfter: (sequence: number) => JournalRowsRead,
+  cursor: AgentJournalCursor
+) {
+  return readJournalSince(
+    {
+      state: {
+        epoch: journalContextCursor(state).epoch,
+        lastSequence: state.lastSequence,
+        oldestSequence: state.oldestSequence
+      },
+      rowsAfter: (sequence) => {
+        const read = rowsAfter(sequence)
+        return { ...read, rows: projectJournalRows(state, read.rows) }
+      }
+    },
+    cursor,
+    () => journalContextCursor(state)
+  )
+}
+
+export function readStoredJournalContextSince(
+  db: Database.Database,
+  state: JournalReducerState,
+  cursor: AgentJournalCursor,
+  limit?: number
+) {
+  return readJournalContextSince(
+    state,
+    journalRowsAfterReader(db, state.sessionId, state.epoch, limit),
+    cursor
+  )
+}
+
+export function physicalJournalCursor(
+  state: Pick<JournalReducerState, 'epoch' | 'lastSequence'>
+): AgentJournalCursor {
+  return { epoch: state.epoch, sequence: state.lastSequence }
+}

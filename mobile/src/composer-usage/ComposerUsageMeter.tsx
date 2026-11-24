@@ -1,7 +1,7 @@
-import { getProviderDisplayName } from '../../../src/shared/usage-provider-windows'
+import { getProviderDisplayName } from '../../../src/shared/agent-usage/display/usage-provider-windows'
 import { useContext, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { usageBarFill } from '../components/AccountUsage'
+import { usageBarFill } from '../accounts/usage/UsageBar'
 import { composerInputStyles } from '../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
@@ -94,7 +94,7 @@ export function ComposerUsageMeter({
               styles.fill,
               {
                 width: `${readout.shown}%`,
-                backgroundColor: usageBarFill(readout.used, false).color
+                backgroundColor: usageBarFill(readout.used, false, display).color
               }
             ]}
           />

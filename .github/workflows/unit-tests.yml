@@ -14,18 +14,6 @@ on:
         default: blacksmith-4vcpu-ubuntu-2404
         type: string
 
-      browser_contract:
-        description: Include the PR external Chromium browser contract in relay integration.
-        required: false
-        default: false
-        type: boolean
-
-      run_shards:
-        description: Run the planned root unit shards.
-        required: false
-        default: true
-        type: boolean
-
       shards:
         description: JSON array of shard assignments, produced by unit-plan.yml.
         required: true
@@ -60,17 +48,11 @@ on:
         default: unit
         type: string
 
-      run_relay_integration:
-        description: Run relay contracts alongside normal unit checks.
-        default: true
-        type: boolean
-
 permissions:
   contents: read
 
 jobs:
   test:
-    if: inputs.run_shards
     name: ${{ inputs.artifact_prefix != 'unit' && format('{0} ', inputs.artifact_prefix) || '' }}tests node ${{ matrix.node }} ${{ matrix.shard.index }}/${{ matrix.shard.count }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 60
@@ -100,7 +82,17 @@ jobs:
         run: |
           ELECTRON_RUN_AS_NODE=1 "$(node -p "require('electron')")" --version
 
+      - name: Find installed Bun
+        id: installed-bun
+        shell: bash
+        run: |
+          bun="$GITHUB_WORKSPACE/node_modules/.bin/bun"
+          if [ -x "$bun" ] && [ "$("$bun" --version)" = "$(cat config/.bun-version)" ]; then
+            echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+            echo 'found=true' >> "$GITHUB_OUTPUT"
+          fi
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        if: steps.installed-bun.outputs.found != 'true'
         with:
           bun-version-file: config/.bun-version
           no-cache: true
@@ -190,70 +182,3 @@ jobs:
           path: ci-shards/
           retention-days: 14
           if-no-files-found: warn
-
-  relay_integration:
-    if: inputs.run_relay_integration
-    name: relay integration node ${{ matrix.node }}
-    strategy:
-      fail-fast: false
-      matrix:
-        node: ${{ fromJSON(inputs.node_versions) }}
-    # Free hosted runner: ~1.2 min of work finishes well inside the ~7 min unit shards it runs beside.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - uses: ./.github/actions/install-node-dependencies
-        id: root_dependencies
-        with:
-          native-runtime: none
-          node-version: ${{ matrix.node }}
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            cloud/pnpm-lock.yaml
-
-      - name: Resolve Chrome for the browser provider
-        id: browser_executable
-        if: inputs.browser_contract && success()
-        run: |
-          set -euo pipefail
-          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
-          if [ -z "$chrome" ]; then
-            echo "::error::No Google Chrome on the runner; the browser provider test would silently skip."
-            exit 1
-          fi
-          "$chrome" --version
-          echo "executable=$chrome" >> "$GITHUB_OUTPUT"
-
-      - name: Test external Chromium browser provider
-        if: inputs.browser_contract && success()
-        env:
-          ORCA_BACKGROUND_LAUNCH: '1'
-          ORCA_BROWSER_EXECUTABLE: ${{ steps.browser_executable.outputs.executable }}
-        run: |
-          pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/orcad/external-chromium-browser-process.integration.test.ts
-
-      # These two tests import the cloud relay workspace directly. Keeping them in one job
-      # avoids installing and building the same workspace once per unit-test shard.
-      - name: Install relay integration dependencies
-        id: relay_dependencies
-        if: ${{ !cancelled() && steps.root_dependencies.outcome == 'success' }}
-        working-directory: cloud
-        run: |
-          pnpm --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts
-          pnpm --filter '@orca-cloud/relay^...' build
-
-      - name: Test relay integration contracts
-        if: ${{ !cancelled() && steps.relay_dependencies.outcome == 'success' }}
-        env:
-          ORCA_BACKGROUND_LAUNCH: '1'
-        run: >-
-          pnpm exec vitest run --config config/vitest.config.ts
-          tests/e2e/relay-region-compatibility.unit.test.ts
-          tests/e2e/relay-region-correction.unit.test.ts

@@ -2,7 +2,7 @@ import {
   clampUsedPercent,
   getDisplayedUsagePercentage,
   type UsagePercentageDisplay
-} from '../../../src/shared/usage-percentage-display'
+} from '../../../src/shared/agent-usage/display/usage-percentage-display'
 
 export type ComposerUsageMeterReadout = {
   /** Rounded consumption. Band color follows this so a nearly empty remainder stays red. */

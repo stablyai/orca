@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decodeAccountsSnapshot } from '../components/accounts-snapshot'
+import { decodeAccountsSnapshot } from '../accounts/accounts-snapshot'
 import {
   composerUsageWindowToggleChoices,
   pickComposerUsageWindow,

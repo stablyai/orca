@@ -11,9 +11,8 @@ import {
 export type AgentModelCatalogReadOperation = {
   deadline?: number
   retirement: number
-  workspaceIdentity?: unknown
   signal: AbortSignal
-  current: () => boolean
+  current: (options?: { ignoreDeadline: true }) => boolean
   controller: AbortController
 }
 
@@ -27,7 +26,6 @@ export function captureAgentModelCatalogRead(
     params.deadline ??
     (!params.savedOnly ? Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS : undefined)
   const retirement = deps.store.retirementRevision(params.agent)
-  const workspaceIdentity = params.workspace?.identity()
   const original = { ...params, records: undefined, operation: undefined }
   const identity = agentModelCatalogRequestKey(deps, original)
   const controller = new AbortController()
@@ -35,14 +33,12 @@ export function captureAgentModelCatalogRead(
   return {
     deadline,
     retirement,
-    workspaceIdentity,
     signal,
     controller,
-    current: () =>
+    current: (options) =>
       !signal.aborted &&
-      (deadline === undefined || Date.now() < deadline) &&
+      (options?.ignoreDeadline || deadline === undefined || Date.now() < deadline) &&
       deps.store.retirementRevision(params.agent) === retirement &&
-      (workspaceIdentity === null || params.workspace?.identity() === workspaceIdentity) &&
       agentModelCatalogRequestKey(deps, original) === identity
   }
 }

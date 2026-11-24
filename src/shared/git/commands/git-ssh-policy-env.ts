@@ -1,4 +1,4 @@
-import { isWindowsAbsolutePathLike } from '../../cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../file-access/cross-platform-path'
 import { quotePosixShell } from '../../shell/launch/shell-argument-quoting'
 
 export type GitSshPolicyMode =

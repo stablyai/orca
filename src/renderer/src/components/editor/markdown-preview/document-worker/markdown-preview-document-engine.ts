@@ -1,11 +1,11 @@
 import type { Root } from 'hast'
-import { yieldToEventLoop } from '../../../../../../shared/event-loop-yield'
-import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard-text'
+import { yieldToEventLoop } from '../../../../../../shared/concurrency/event-loop-yield'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard/clipboard-text'
 import '../search/markdown-preview-search'
 import {
   findTextMatchRanges,
   isTextSearchQueryTooLarge as isMarkdownPreviewSearchQueryTooLarge
-} from '../../../../lib/text-match-ranges'
+} from '../../../../lib/text-search/text-match-ranges'
 import {
   markdownPreviewBlockHasMath,
   parseMarkdownPreviewDocument,

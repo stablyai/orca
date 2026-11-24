@@ -10,6 +10,9 @@ export type SecretboxOpen = (
   key: Uint8Array
 ) => Uint8Array | null
 
+/** NaCl secretbox seal: the MAC followed by the ciphertext, as tweetnacl returns it. */
+export type SecretboxSeal = (message: Uint8Array, nonce: Uint8Array, key: Uint8Array) => Uint8Array
+
 const NONCE_LENGTH = 24
 const SESSION_ID_LENGTH = 32
 const HEADER_LENGTH = SESSION_ID_LENGTH + 1 + 1 + 8
@@ -23,12 +26,13 @@ export function sealMobileE2EEV2Frame(args: {
   direction: MobileE2EEDirection
   payloadKind: MobileE2EEPayloadKind
   counter: bigint
+  sealSecretbox?: SecretboxSeal
 }): Uint8Array<ArrayBuffer> {
   validateFrameInputs(args.key, args.sessionId, args.counter)
   const header = encodeHeader(args)
   const nonce = encodeNonce(args)
   const plaintext = concatBytes([header, args.payload])
-  const ciphertext = nacl.secretbox(plaintext, nonce, args.key)
+  const ciphertext = (args.sealSecretbox ?? nacl.secretbox)(plaintext, nonce, args.key)
   return concatBytes([nonce, ciphertext])
 }
 

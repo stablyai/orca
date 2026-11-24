@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   normalizeUsagePercentageDisplay,
   type UsagePercentageDisplay
-} from '../../../src/shared/usage-percentage-display'
+} from '../../../src/shared/agent-usage/display/usage-percentage-display'
 import { persistMirrored } from '../storage/mirrored-storage-keys'
 
 export const COMPOSER_USAGE_DISPLAY_KEY = 'orca:composerUsageDisplay'

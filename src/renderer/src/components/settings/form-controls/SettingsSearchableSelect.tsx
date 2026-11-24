@@ -1,11 +1,19 @@
 import type React from 'react'
-import { useCallback, useRef, useState } from 'react'
+import { Fragment, useCallback, useRef, useState } from 'react'
 import { Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '../../ui/button'
-import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '../../ui/command'
+import {
+  Command,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator
+} from '../../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import { filterSearchableSelectGroups } from './settings-form-option-filter'
 
 export type SettingsSearchableSelectOption = {
@@ -16,12 +24,27 @@ export type SettingsSearchableSelectOption = {
   detail?: React.ReactNode
   keywords?: readonly string[]
   disabled?: boolean
+  /** Language of the label when it differs from the UI's, e.g. a language's native name. */
+  lang?: string
+  action?: Omit<SettingsSearchableSelectAction, 'key'>
 }
 
 export type SettingsSearchableSelectGroup = {
   key: string
   heading?: string
+  /** Draws a divider above this group when another group precedes it. */
+  separated?: boolean
+  /** A quiet link at the right of the heading, e.g. to browse more of this group online. */
+  headingAction?: SettingsSearchableSelectHeadingAction
   options: readonly SettingsSearchableSelectOption[]
+}
+
+type SettingsSearchableSelectHeadingAction = {
+  label: string
+  /** Full name for assistive tech, e.g. where the link goes. */
+  ariaLabel: string
+  icon?: React.ReactNode
+  onSelect: () => void
 }
 
 export type SettingsSearchableSelectAction = {
@@ -37,12 +60,28 @@ type SettingsSearchableSelectProps = {
   groups: readonly SettingsSearchableSelectGroup[]
   onValueChange: (value: string) => void
   searchPlaceholder: string
+  compact?: boolean
+  /** Size the trigger to its value like the plain settings selects, instead of a fixed 220px. */
+  fitValue?: boolean
   emptyText?: string
+  open?: boolean
+  disabled?: boolean
   onOpenChange?: (open: boolean) => void
+  query?: string
+  onQueryChange?: (query: string) => void
+  /** Reapplying a theme can clear its custom color overrides. */
+  allowReselect?: boolean
   /** Non-selectable rows after the options, e.g. a loading indicator. */
   status?: React.ReactNode
   /** Footer rows that run a command instead of picking a value. */
   actions?: readonly SettingsSearchableSelectAction[]
+  /** Footer actions become list items: arrow keys reach them and Enter runs one when nothing matches. */
+  navigableActions?: boolean
+}
+
+// Why a prefix: footer commands share cmdk's value space with option values.
+function actionCommandValue(key: string): string {
+  return `settings-select-action:${key}`
 }
 
 /** A searchable settings dropdown that matches the New Worktree dialog pickers. */
@@ -53,12 +92,39 @@ export function SettingsSearchableSelect({
   onValueChange,
   searchPlaceholder,
   emptyText,
+  compact = false,
+  fitValue = false,
+  open: controlledOpen,
+  disabled = false,
   onOpenChange,
+  query: controlledQuery,
+  onQueryChange,
+  allowReselect = false,
   status,
-  actions
+  actions,
+  navigableActions = false
 }: SettingsSearchableSelectProps): React.JSX.Element {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
+  const t = useTranslate()
+  const [internalOpen, setOpen] = useState(false)
+  const [internalQuery, setInternalQuery] = useState('')
+  // Why reset in render, not remount on `disabled`: a remount drops focus from the trigger.
+  const [wasDisabled, setWasDisabled] = useState(disabled)
+  if (wasDisabled !== disabled) {
+    setWasDisabled(disabled)
+    if (disabled) {
+      setOpen(false)
+      setInternalQuery('')
+    }
+  }
+  const open = controlledOpen ?? internalOpen
+  const query = controlledQuery ?? internalQuery
+  const setQuery = useCallback(
+    (next: string) => {
+      setInternalQuery(next)
+      onQueryChange?.(next)
+    },
+    [onQueryChange]
+  )
   const [commandSelection, setCommandSelection] = useState<{
     value: string
     selectedValue: string
@@ -77,22 +143,25 @@ export function SettingsSearchableSelect({
       ? enabledOptions.find((option) => option.value === value)?.value
       : undefined) ??
     enabledOptions[0]?.value ??
-    ''
+    (navigableActions && actions?.[0] ? actionCommandValue(actions[0].key) : '')
   const commandValue =
     commandSelection.query === query &&
     commandSelection.selectedValue === value &&
-    enabledOptions.some((option) => option.value === commandSelection.value)
+    (enabledOptions.some((option) => option.value === commandSelection.value) ||
+      (navigableActions &&
+        actions?.some((action) => actionCommandValue(action.key) === commandSelection.value)))
       ? commandSelection.value
       : defaultCommandValue
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
-      setOpen(next)
+      const nextOpen = next && !disabled
+      setOpen(nextOpen)
       setQuery('')
       setCommandSelection({ value, selectedValue: value, query: '' })
-      onOpenChange?.(next)
+      onOpenChange?.(nextOpen)
     },
-    [onOpenChange, value]
+    [disabled, onOpenChange, setQuery, value]
   )
 
   const close = (): void => handleOpenChange(false)
@@ -119,17 +188,24 @@ export function SettingsSearchableSelect({
   }
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
+    <Popover open={open && !disabled} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          variant={compact ? 'ghost' : 'outline'}
           size="sm"
           role="combobox"
-          aria-expanded={open}
+          aria-expanded={open && !disabled}
           aria-label={ariaLabel}
+          disabled={disabled}
           onKeyDown={handleTriggerKeyDown}
-          className="min-w-[220px] justify-between"
+          className={
+            compact
+              ? 'w-auto min-w-0 max-w-56 justify-between'
+              : fitValue
+                ? 'min-w-32 justify-between'
+                : 'min-w-[220px] justify-between'
+          }
         >
           <span className="inline-flex min-w-0 flex-1 items-center gap-2">
             {selected?.icon}
@@ -159,7 +235,7 @@ export function SettingsSearchableSelect({
             setCommandSelection({ value: next, selectedValue: value, query })
           }
           className="min-h-0 flex-1"
-          label={ariaLabel}
+          label={searchPlaceholder}
         >
           <CommandInput
             ref={inputRef}
@@ -169,52 +245,129 @@ export function SettingsSearchableSelect({
             placeholder={searchPlaceholder}
             aria-label={searchPlaceholder}
           />
-          <CommandList ref={listRef} className="min-h-0 flex-1">
+          <CommandList
+            ref={listRef}
+            className={navigableActions ? 'min-h-0 flex-1 scroll-pb-12' : 'min-h-0 flex-1'}
+          >
             {visibleGroups.length === 0 && !status ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
                 {emptyText ??
-                  translate(
-                    'auto.components.settings.SettingsSearchableSelect.noMatches',
-                    'No matches.'
-                  )}
+                  t('auto.components.settings.SettingsSearchableSelect.noMatches', 'No matches.')}
               </div>
             ) : null}
-            {visibleGroups.map((group) => (
-              <CommandGroup key={group.key} heading={group.heading}>
-                {group.options.map((option) => (
-                  <CommandItem
-                    key={option.value}
-                    value={option.value}
-                    disabled={option.disabled}
-                    data-checked={option.value === value}
-                    onSelect={() => {
-                      close()
-                      if (option.value !== value) {
-                        onValueChange(option.value)
-                      }
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        'size-4 shrink-0',
-                        option.value === value ? 'opacity-100' : 'opacity-0'
-                      )}
-                    />
-                    {option.icon}
-                    <span className="min-w-0 truncate">{option.label}</span>
-                    {option.detail ? (
-                      <span className="ml-auto flex shrink-0 items-center text-xs text-muted-foreground">
-                        {option.detail}
-                      </span>
-                    ) : null}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
+            {visibleGroups.map((group, groupIndex) => (
+              <Fragment key={group.key}>
+                {group.separated && groupIndex > 0 ? <CommandSeparator /> : null}
+                {/* Why beside, not inside, the heading: cmdk marks headings aria-hidden. */}
+                <div className="relative">
+                  {group.headingAction ? (
+                    <button
+                      type="button"
+                      aria-label={group.headingAction.ariaLabel}
+                      className="absolute top-1 right-2 z-10 flex h-7 items-center gap-1 rounded-sm px-1 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                      onClick={(event) => {
+                        event.preventDefault()
+                        close()
+                        group.headingAction?.onSelect()
+                      }}
+                    >
+                      {group.headingAction.label}
+                      {group.headingAction.icon}
+                    </button>
+                  ) : null}
+                  <CommandGroup heading={group.heading}>
+                    {group.options.map((option) => (
+                      <div key={option.value} className="flex items-center gap-1">
+                        <CommandItem
+                          value={option.value}
+                          disabled={option.disabled}
+                          data-checked={option.value === value}
+                          className="min-w-0 flex-1"
+                          onSelect={() => {
+                            close()
+                            if (allowReselect || option.value !== value) {
+                              onValueChange(option.value)
+                            }
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              'size-4 shrink-0',
+                              option.value === value ? 'opacity-100' : 'opacity-0'
+                            )}
+                          />
+                          {option.icon}
+                          <span lang={option.lang} className="min-w-0 truncate">
+                            {option.label}
+                          </span>
+                          {option.detail ? (
+                            <span className="ml-auto flex shrink-0 items-center text-xs text-muted-foreground">
+                              {option.detail}
+                            </span>
+                          ) : null}
+                        </CommandItem>
+                        {option.action ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-xs"
+                                className="mr-1 shrink-0"
+                                aria-label={option.action.label}
+                                disabled={option.disabled}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.stopPropagation()
+                                  }
+                                }}
+                                onClick={() => {
+                                  option.action?.onSelect()
+                                  inputRef.current?.focus()
+                                }}
+                              >
+                                {option.action.icon}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" sideOffset={4}>
+                              {option.action.label}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : null}
+                      </div>
+                    ))}
+                  </CommandGroup>
+                </div>
+              </Fragment>
             ))}
             {status}
+            {navigableActions && actions && actions.length > 0 ? (
+              // Why sticky inside the list: cmdk only navigates its list, and the footer stays pinned.
+              <div className="sticky bottom-0 border-t border-border bg-popover">
+                <CommandGroup>
+                  {actions.map((action) => (
+                    <CommandItem
+                      key={action.key}
+                      value={actionCommandValue(action.key)}
+                      onSelect={() => {
+                        close()
+                        action.onSelect()
+                      }}
+                    >
+                      <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                        <span className="flex size-4 shrink-0 items-center justify-center">
+                          {action.icon}
+                        </span>
+                        <span className="min-w-0 truncate">{action.label}</span>
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </div>
+            ) : null}
           </CommandList>
         </Command>
-        {actions && actions.length > 0 ? (
+        {!navigableActions && actions && actions.length > 0 ? (
           <div className="shrink-0 border-t border-border">
             {actions.map((action) => (
               <Button

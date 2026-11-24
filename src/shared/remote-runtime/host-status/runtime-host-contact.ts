@@ -1,5 +1,5 @@
 import type { RuntimeHostStatusSnapshot } from './runtime-host-status'
-import type { RuntimeStatus } from '../../runtime-session-contracts'
+import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
 
 /** Separate live answers, unverifiable probes, refusals and retired pairings: nullable store status conflates them.
  * Loss of contact never proves exit; only refusal/retirement positively withdraw prior facts (ssh-execution-boundary.md). */
