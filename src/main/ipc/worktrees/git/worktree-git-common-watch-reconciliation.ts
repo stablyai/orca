@@ -44,17 +44,16 @@ export function createGitCommonWatchReconciliation({
   const worktreesDir = join(commonDirPath, 'worktrees')
   let subscription: GitCommonPollingSubscription | null = null
   let lastFocusReconcileAt = 0
-  const unsubscribeFocus = visibility.onWindowFocused?.(() => {
+  let unsubscribeFocus: (() => void) | undefined
+  const handleFocus = (): void => {
     const now = Date.now()
-    if (
-      !subscription ||
-      now - lastFocusReconcileAt < pollIntervalMs * FOCUS_RECONCILIATION_MIN_TICKS
-    ) {
+    if (now - lastFocusReconcileAt < pollIntervalMs * FOCUS_RECONCILIATION_MIN_TICKS) {
       return
     }
-    lastFocusReconcileAt = now
-    subscription.poke()
-  })
+    if (subscription?.poke()) {
+      lastFocusReconcileAt = now
+    }
+  }
   const starting = createSingleFlight()
   let generation = 0
   const visibilityListeners = new Set<() => void>()
@@ -131,6 +130,8 @@ export function createGitCommonWatchReconciliation({
           await reconciliation.unsubscribe()
         } else {
           subscription = reconciliation
+          // Registered per subscription: a polling-fallback cycle restarts this object after unsubscribe.
+          unsubscribeFocus ??= visibility.onWindowFocused?.(handleFocus)
         }
       })
     },
@@ -141,6 +142,7 @@ export function createGitCommonWatchReconciliation({
     },
     unsubscribe: async () => {
       unsubscribeFocus?.()
+      unsubscribeFocus = undefined
       generation++
       await starting.pending()?.catch(() => {})
       const current = subscription

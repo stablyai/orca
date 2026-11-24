@@ -76,7 +76,9 @@ function removeWorktreeEntry(entry: string): void {
 let focus: (() => void) | null = null
 let events: WorktreeBasePollEvent[] = []
 
-async function startReconciliation(): Promise<() => Promise<void>> {
+async function startReconciliation(): Promise<
+  ReturnType<typeof createGitCommonWatchReconciliation>
+> {
   const reconciliation = createGitCommonWatchReconciliation({
     commonDirPath: COMMON,
     pollIntervalMs: POLL_INTERVAL_MS,
@@ -96,7 +98,7 @@ async function startReconciliation(): Promise<() => Promise<void>> {
     onEvents: (next) => events.push(...next)
   })
   await reconciliation.ensureStarted()
-  return reconciliation.unsubscribe
+  return reconciliation
 }
 
 beforeEach(() => {
@@ -117,7 +119,7 @@ afterEach(() => {
 })
 
 it('leaves the fleet alone between five-minute sweeps while the watcher is primary', async () => {
-  const stop = await startReconciliation()
+  const { unsubscribe: stop } = await startReconciliation()
   fs.stats = 0
   await vi.advanceTimersByTimeAsync(10 * 60_000)
   // Two timed sweeps: 7 stats per entry plus the worktrees directory; the 30 s cadence spent ~129k stats here.
@@ -126,7 +128,7 @@ it('leaves the fleet alone between five-minute sweeps while the watcher is prima
 })
 
 it('still converges on worktrees added or removed outside Orca with no watcher event', async () => {
-  const stop = await startReconciliation()
+  const { unsubscribe: stop } = await startReconciliation()
   const added = addWorktreeEntry('outside-add')
   focus?.()
   await vi.advanceTimersByTimeAsync(0)
@@ -141,4 +143,28 @@ it('still converges on worktrees added or removed outside Orca with no watcher e
   await vi.advanceTimersByTimeAsync(5 * 60_000)
   expect(events).toContainEqual({ type: 'delete', path: removed })
   await stop()
+})
+
+it('keeps the five-minute full sweep when the user refocuses Orca every minute', async () => {
+  const { unsubscribe: stop } = await startReconciliation()
+  // An in-place rewrite that leaves the entry directory's timestamps alone is only seen by a full sweep.
+  fs.nodes.get(join(WORKTREES, 'w3', 'index'))!.mtimeMs = fs.clock++
+  for (let minute = 0; minute < 6; minute += 1) {
+    focus?.()
+    await vi.advanceTimersByTimeAsync(60_000)
+  }
+  expect(events.some((event) => event.path.startsWith(join(WORKTREES, 'w3')))).toBe(true)
+  await stop()
+})
+
+it('reconciles on focus again after a polling-fallback restart', async () => {
+  const reconciliation = await startReconciliation()
+  await reconciliation.unsubscribe()
+  await reconciliation.ensureStarted()
+  await vi.advanceTimersByTimeAsync(60_000)
+  const added = addWorktreeEntry('after-restart')
+  focus?.()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(events).toContainEqual({ type: 'create', path: added })
+  await reconciliation.unsubscribe()
 })

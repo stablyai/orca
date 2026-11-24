@@ -112,8 +112,8 @@ async function snapshotGitCommon(
 }
 
 export type GitCommonPollingSubscription = WorktreeBaseSubscription & {
-  /** Run a gated check now (no forced sweep, not counted toward the full-sweep cadence); then wait a full interval. */
-  poke: () => void
+  /** Run a gated check now without moving the timed sweep; false when a check is already running or hidden. */
+  poke: () => boolean
 }
 
 export type GitCommonPollingOptions = {
@@ -157,19 +157,28 @@ export async function startGitCommonPolling(
   let timer: ReturnType<typeof setTimeout> | null = null
   let parkedWhileHidden = false
 
+  // A poke leaves the timed chain alone; a timed tick that lands mid-poke runs once the poke ends.
+  let deferredTimedTick: { forceFullScan: boolean } | null = null
   const tick = async (forceFullScan = false, poked = false): Promise<void> => {
-    if (timer) {
-      clearTimeout(timer)
+    if (!poked) {
+      if (timer) {
+        clearTimeout(timer)
+      }
+      timer = null
     }
-    timer = null
     if (disposed) {
       return
     }
     if (!visibility.isWindowVisible()) {
-      parkedWhileHidden = true
+      if (!poked) {
+        parkedWhileHidden = true
+      }
       return
     }
     if (ticking) {
+      if (!poked) {
+        deferredTimedTick = { forceFullScan: forceFullScan || !!deferredTimedTick?.forceFullScan }
+      }
       return
     }
     ticking = true
@@ -220,15 +229,25 @@ export async function startGitCommonPolling(
     } finally {
       ticking = false
     }
-    if (!disposed) {
-      // Clamp wall-clock jumps so NTP cannot postpone refreshes beyond one interval.
-      const nextDelay = Math.max(
-        0,
-        Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
-      )
-      timer = setTimeout(() => void tick(), nextDelay)
-      timer.unref?.()
+    if (disposed) {
+      return
     }
+    if (poked) {
+      const deferred = deferredTimedTick
+      deferredTimedTick = null
+      if (deferred && !timer) {
+        void tick(deferred.forceFullScan)
+      }
+      return
+    }
+    deferredTimedTick = null
+    // Clamp wall-clock jumps so NTP cannot postpone refreshes beyond one interval.
+    const nextDelay = Math.max(
+      0,
+      Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
+    )
+    timer = setTimeout(() => void tick(), nextDelay)
+    timer.unref?.()
   }
 
   const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
@@ -245,9 +264,11 @@ export async function startGitCommonPolling(
 
   return {
     poke: () => {
-      if (!disposed && !ticking) {
-        void tick(false, true)
+      if (disposed || ticking || !visibility.isWindowVisible()) {
+        return false
       }
+      void tick(false, true)
+      return true
     },
     unsubscribe: async () => {
       disposed = true
