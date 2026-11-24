@@ -31,15 +31,32 @@ import { SETTINGS_STORAGE_KEY, UI_STORAGE_KEY, readJson, writeJson } from '../we
 export type WebSettingsApi = NonNullable<PreloadApi['settings']>
 type SettingsResult = { settings: Partial<GlobalSettings> }
 
+function isStoredSettingsObject(raw: string | null): boolean {
+  if (!raw) {
+    return false
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+  } catch {
+    return false
+  }
+}
+
 export function getStoredSettings(): GlobalSettings {
   webRuntimeState.activeEnvironment ??= readStoredWebRuntimeEnvironment()
   const defaults = { ...getDefaultSettings('~'), artifactSharingEnabled: false } // Host grants it.
   const rawStoredSettings = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
+  const hasStoredSettings = isStoredSettingsObject(rawStoredSettings)
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
   const migratedStored = migrateStoredWebSettings(stored)
+  if (hasStoredSettings && typeof migratedStored.experimentalAppRail !== 'boolean') {
+    // Existing browser profiles keep the app rail off unless they explicitly chose it.
+    migratedStored.experimentalAppRail = false
+  }
   delete migratedStored.nativeChatAutoContinueAfterUsageLimit
   if (
-    rawStoredSettings &&
+    hasStoredSettings &&
     (stored.autoRenameBranchFromWork !== migratedStored.autoRenameBranchFromWork ||
       stored.autoRenameBranchFromWorkDefaultedOn !==
         migratedStored.autoRenameBranchFromWorkDefaultedOn ||
@@ -55,23 +72,22 @@ export function getStoredSettings(): GlobalSettings {
       stored.uiLanguage !== migratedStored.uiLanguage ||
       stored.pluginAppThemeLight !== migratedStored.pluginAppThemeLight ||
       stored.pluginAppThemeDark !== migratedStored.pluginAppThemeDark ||
+      stored.experimentalAppRail !== migratedStored.experimentalAppRail ||
       needsChatUiChoiceCarry(stored) ||
       stored.uiLanguagePortugueseMigrationApplied !== true)
   ) {
     try {
-      const parsed = JSON.parse(rawStoredSettings) as unknown
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        writeJson(SETTINGS_STORAGE_KEY, retainOriginalWebChatSetting(migratedStored, stored))
-        if (osc52ClipboardDefaultOnOverridesPersistedOff(stored)) {
-          // readLocalWebUIState calls getStoredSettings; raw merge avoids recursive migration writes.
-          writeJson(UI_STORAGE_KEY, {
-            ...readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {}),
-            osc52ClipboardDefaultOnNoticePending: true
-          })
-        }
+      writeJson(SETTINGS_STORAGE_KEY, retainOriginalWebChatSetting(migratedStored, stored))
+      if (osc52ClipboardDefaultOnOverridesPersistedOff(stored)) {
+        // readLocalWebUIState calls getStoredSettings; raw merge avoids recursive migration writes.
+        writeJson(UI_STORAGE_KEY, {
+          ...readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {}),
+          osc52ClipboardDefaultOnNoticePending: true
+        })
       }
     } catch {
-      // Keep readJson's invalid-JSON fallback non-destructive.
+      // Why: startup reads settings while building window.api, so a full or denied
+      // localStorage must not stop the web client. The next settings read retries it.
     }
   }
   const settings = mergeSettings(

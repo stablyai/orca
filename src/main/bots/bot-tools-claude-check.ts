@@ -27,7 +27,8 @@ export async function claudeBotToolProblems(
     options: {
       settingSources: ['user', 'project', 'local'],
       settings: { disableAllHooks: true },
-      mcpServers: claudeLaunchServers(tools)
+      mcpServers: claudeLaunchServers(tools),
+      mcpServersDelivery: 'argv'
     }
   })
   // Aborting closes the CLI at once, failing a status request still under way.

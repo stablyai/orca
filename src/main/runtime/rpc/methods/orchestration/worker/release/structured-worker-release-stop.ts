@@ -4,7 +4,11 @@ import type { OrchestrationDb } from '../../../../../orchestration/db/orchestrat
 import type { WorkerTerminalResourceRow } from '../../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { stopStructuredWorker } from '../../structured-workers/orchestration-structured-worker-lifecycle'
 import type { StructuredWorkerIdentity } from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
-import { archiveSummary } from './worker-terminal-resource-presentation'
+import {
+  archiveSummary,
+  receiptForUnchangedRelease,
+  unknownWriteApplied
+} from './worker-terminal-resource-presentation'
 import type { WorkerReleaseReceipt } from './worker-release-completion'
 import { releaseUnknownRecovery } from './worker-release-unknown-recovery'
 
@@ -52,19 +56,18 @@ export async function stopStructuredWorkerForRelease(args: {
   )
   if (!stop.stopped) {
     const current = db.getWorkerTerminalResource(resource.id)
-    if (current && current.release_state !== 'releasing') {
-      // Refused in the session lane: Keep open, a new turn, or a fall back to manual release.
-      return {
-        dispatchId,
-        state: 'retained',
-        processAction: 'none',
-        archive: archiveSummary(current)
-      }
+    if (current?.owner_dispatch_id !== dispatchId || current.release_state !== 'releasing') {
+      // Refused in the session lane: Keep open, a new turn, a fall back to manual release, or another custody.
+      return receiptForUnchangedRelease(dispatchId, current)
     }
     const unknown = db.markWorkerTerminalReleaseUnknown(
       resource.id,
-      stop.reason ?? 'The structured session close was not proven.'
+      stop.reason ?? 'The structured session close was not proven.',
+      dispatchId
     )
+    if (!unknownWriteApplied(unknown, dispatchId)) {
+      return receiptForUnchangedRelease(dispatchId, unknown)
+    }
     return {
       dispatchId,
       state: 'release_unknown',
@@ -74,7 +77,10 @@ export async function stopStructuredWorkerForRelease(args: {
       recovery: releaseUnknownRecovery(dispatchId)
     }
   }
-  const settled = db.settleWorkerTerminalRelease(resource.id)
+  const settled = db.settleWorkerTerminalRelease(resource.id, dispatchId)
+  if (settled.owner_dispatch_id !== dispatchId || settled.release_state !== 'released') {
+    return receiptForUnchangedRelease(dispatchId, settled, 'closed_agent_terminal')
+  }
   runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
   return {
     dispatchId,

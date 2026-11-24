@@ -15,6 +15,28 @@ export function upstreamOnlyCommitsArePatchEquivalent(cherryMarkOutput: string):
   return hasCommit
 }
 
+export type DivergedUpstreamProbe = {
+  behindCommitsArePatchEquivalent: boolean
+  // The upstream tip, so a marker set at rebase time notices any later fetch that moves it.
+  upstreamOid?: string
+}
+
+/** Reads `%m %H` right-only cherry-mark lines in topo order, where the upstream tip comes first. */
+export function parseDivergedUpstreamProbe(cherryMarkOutput: string): DivergedUpstreamProbe {
+  let upstreamOid: string | undefined
+  for (const rawLine of iterateGitOutputLines(cherryMarkOutput)) {
+    const oid = rawLine.trim().split(/\s+/)[1]
+    if (oid) {
+      upstreamOid = oid
+      break
+    }
+  }
+  return {
+    behindCommitsArePatchEquivalent: upstreamOnlyCommitsArePatchEquivalent(cherryMarkOutput),
+    ...(upstreamOid ? { upstreamOid } : {})
+  }
+}
+
 function* iterateGitOutputLines(output: string): Generator<string> {
   let lineStart = 0
 
