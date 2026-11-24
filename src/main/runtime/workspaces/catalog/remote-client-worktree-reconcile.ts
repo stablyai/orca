@@ -1,4 +1,7 @@
 export const REMOTE_CLIENT_WORKTREE_RECONCILE_INTERVAL_MS = 60_000
+export const REMOTE_CLIENT_WORKTREE_PROBE_TIMEOUT_MS = 5_000
+// A hung mount strands one libuv thread per abandoned probe, so only a bounded number may pile up per repo.
+const MAX_ABANDONED_PROBES_PER_REPO = 2
 
 type RemoteClientWorktreeReconcileDeps<R extends { id: string }> = {
   /** Local Git repos whose admin dir this process can read without waking a distro or a remote host. */
@@ -6,6 +9,7 @@ type RemoteClientWorktreeReconcileDeps<R extends { id: string }> = {
   probe: (repo: R) => Promise<string | null>
   notifyChanged: (repoId: string) => void
   intervalMs?: number
+  probeTimeoutMs?: number
 }
 
 /** Without a live watcher (headless serve, hidden or closed window) a worktree removed in a shell would never reach paired clients; this probes while one is connected. */
@@ -17,6 +21,7 @@ export class RemoteClientWorktreeReconcile<R extends { id: string }> {
   private readonly fingerprints = new Map<string, string>()
   // Own single-flight: timeouts do not cancel readdir/stat, so a wedged mount must not stack probes.
   private readonly inFlight = new Set<string>()
+  private readonly abandoned = new Map<string, number>()
 
   constructor(private readonly deps: RemoteClientWorktreeReconcileDeps<R>) {}
 
@@ -66,13 +71,16 @@ export class RemoteClientWorktreeReconcile<R extends { id: string }> {
   }
 
   private async reconcileRepo(repo: R): Promise<void> {
-    if (this.inFlight.has(repo.id)) {
+    if (
+      this.inFlight.has(repo.id) ||
+      (this.abandoned.get(repo.id) ?? 0) >= MAX_ABANDONED_PROBES_PER_REPO
+    ) {
       return
     }
     const epoch = this.epoch
     this.inFlight.add(repo.id)
     try {
-      const fingerprint = await this.deps.probe(repo)
+      const fingerprint = await this.probeWithTimeout(repo)
       // Unknown means the filesystem could not answer; keep the baseline rather than report a change.
       if (fingerprint === null || epoch !== this.epoch) {
         return
@@ -88,5 +96,52 @@ export class RemoteClientWorktreeReconcile<R extends { id: string }> {
     } finally {
       this.inFlight.delete(repo.id)
     }
+  }
+
+  /** Resolves null after the timeout so the slot frees; the abandoned probe's late answer has no one left to receive it. */
+  private probeWithTimeout(repo: R): Promise<string | null> {
+    let probe: Promise<string | null>
+    try {
+      probe = Promise.resolve(this.deps.probe(repo))
+    } catch (error) {
+      probe = Promise.reject(error)
+    }
+    return new Promise((resolve, reject) => {
+      let settled = false
+      const timer = setTimeout(() => {
+        if (settled) {
+          return
+        }
+        settled = true
+        this.abandoned.set(repo.id, (this.abandoned.get(repo.id) ?? 0) + 1)
+        console.warn('[worktrees] remote-client worktree probe timed out for repo', repo.id)
+        const release = (): void => {
+          const left = (this.abandoned.get(repo.id) ?? 1) - 1
+          if (left <= 0) {
+            this.abandoned.delete(repo.id)
+          } else {
+            this.abandoned.set(repo.id, left)
+          }
+        }
+        probe.then(release, release)
+        resolve(null)
+      }, this.deps.probeTimeoutMs ?? REMOTE_CLIENT_WORKTREE_PROBE_TIMEOUT_MS)
+      probe.then(
+        (value) => {
+          if (!settled) {
+            settled = true
+            clearTimeout(timer)
+            resolve(value)
+          }
+        },
+        (error) => {
+          if (!settled) {
+            settled = true
+            clearTimeout(timer)
+            reject(error)
+          }
+        }
+      )
+    })
   }
 }

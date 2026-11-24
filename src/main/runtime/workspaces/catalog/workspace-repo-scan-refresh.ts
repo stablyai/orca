@@ -10,7 +10,10 @@ import {
   WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
 } from './worktree-scan-admin-budget'
 import { getLocalProjectWorktreeGitOptionsForRuntime } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { readRepoWorktreeAdminFingerprint } from './repo-worktree-admin-fingerprint'
+import {
+  readRepoWorktreeAdminFingerprint,
+  readRepoWorktreeReconcileProbe
+} from './repo-worktree-admin-fingerprint'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { scanLocalRepoWorktreesForResolution } from './repo-worktree-resolution-scan'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
@@ -73,7 +76,7 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
             ).wslDistro
           )
       ),
-    probe: (repo) => readRepoWorktreeAdminFingerprint(repo.path).catch(() => null),
+    probe: (repo) => readRepoWorktreeReconcileProbe(repo.path),
     notifyChanged: (repoId) => this.notifyWorktreeCatalogChangedForRemoteClients(repoId)
   })
 

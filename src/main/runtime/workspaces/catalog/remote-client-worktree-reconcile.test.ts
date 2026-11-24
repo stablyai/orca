@@ -7,13 +7,15 @@ function create(deps: {
   repos: () => Repo[]
   probe: (repo: Repo) => Promise<string | null>
   notifyChanged?: (repoId: string) => void
+  probeTimeoutMs?: number
 }) {
   const notifyChanged = vi.fn(deps.notifyChanged ?? (() => {}))
   const reconcile = new RemoteClientWorktreeReconcile<Repo>({
     listProbeableRepos: deps.repos,
     probe: deps.probe,
     notifyChanged,
-    intervalMs: 1000
+    intervalMs: 1000,
+    probeTimeoutMs: deps.probeTimeoutMs
   })
   return { reconcile, notifyChanged }
 }
@@ -150,5 +152,33 @@ describe('RemoteClientWorktreeReconcile', () => {
     expect(notifyChanged).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1000)
     expect(notifyChanged).toHaveBeenCalledExactlyOnceWith('repo-1')
+  })
+
+  it('frees a wedged repo after the timeout and drops the late answer', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const lateAnswers: ((value: string) => void)[] = []
+    let calls = 0
+    const probe = vi.fn((): Promise<string | null> => {
+      calls++
+      if (calls === 1) {
+        return new Promise((resolve) => lateAnswers.push(resolve))
+      }
+      return Promise.resolve('one')
+    })
+    const { reconcile, notifyChanged } = create({
+      repos: () => [{ id: 'repo-1' }],
+      probe,
+      probeTimeoutMs: 500
+    })
+
+    reconcile.retain()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(probe).toHaveBeenCalledTimes(2)
+
+    lateAnswers[0]('stale-from-hung-mount')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(probe).toHaveBeenCalledTimes(3)
+    expect(notifyChanged).not.toHaveBeenCalled()
   })
 })

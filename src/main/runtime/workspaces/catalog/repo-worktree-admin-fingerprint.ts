@@ -39,6 +39,42 @@ export async function readRepoWorktreeAdminFingerprint(repoPath: string): Promis
   }
 }
 
+/** A worktree added then removed between two probes leaves the fingerprint unchanged, so a stamp that moves on every add or remove is appended.
+ * With no linked worktrees Git deletes the admin dir, so the Git dir's own mtime stands in (it also moves on unrelated Git writes; a spurious refetch is cheap). */
+export async function readRepoWorktreeReconcileProbe(repoPath: string): Promise<string | null> {
+  const [fingerprint, changeStamp] = await Promise.all([
+    readRepoWorktreeAdminFingerprint(repoPath),
+    readRepoWorktreeAdminChangeStamp(repoPath)
+  ])
+  return fingerprint === null || changeStamp === null
+    ? null
+    : [fingerprint, changeStamp].join(FIELD_SEPARATOR)
+}
+
+async function readRepoWorktreeAdminChangeStamp(repoPath: string): Promise<string | null> {
+  try {
+    const commonDir = await resolveGitCommonDirectory(repoPath)
+    if (!commonDir) {
+      return null
+    }
+    const adminStamp = await readDirectoryMtimeStamp(path.join(commonDir, 'worktrees'))
+    return adminStamp ?? `common:${await readDirectoryMtimeStamp(commonDir)}`
+  } catch {
+    return null
+  }
+}
+
+async function readDirectoryMtimeStamp(dirPath: string): Promise<string | null> {
+  try {
+    return String((await stat(dirPath)).mtimeMs)
+  } catch (err) {
+    if (isMissingEntryError(err)) {
+      return null
+    }
+    throw err
+  }
+}
+
 async function readLinkedWorktreeStamp(
   commonDir: string,
   adminDir: string,
