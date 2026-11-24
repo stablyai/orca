@@ -13,7 +13,29 @@ import type { ClaudeSession } from '../structured/claude-structured-session-stat
 /** Effort sits on the last assistant rows, so one tail read finds it. */
 const SUBAGENT_EFFORT_TAIL_BYTES = 1024 * 1024
 
-/** The last effort Claude resolved for the subagent run that wrote these rows. */
+/** A prompt that starts a run, unlike tool results, meta rows and interruption markers. */
+function isRunPrompt(row: Record<string, unknown>): boolean {
+  if (row.type !== 'user' || row.isMeta === true || !isRecord(row.message)) {
+    return false
+  }
+  const content = row.message.content
+  if (typeof content === 'string') {
+    return true
+  }
+  return (
+    Array.isArray(content) &&
+    content.some(
+      (block) =>
+        isRecord(block) &&
+        block.type === 'text' &&
+        typeof block.text === 'string' &&
+        !block.text.startsWith('[Request interrupted')
+    ) &&
+    !content.some((block) => isRecord(block) && block.type === 'tool_result')
+  )
+}
+
+/** The last effort Claude resolved for the latest subagent run that wrote these rows. */
 export function claudeTranscriptEffort(text: string): string | undefined {
   let effort: string | undefined
   for (const line of text.split('\n')) {
@@ -26,6 +48,11 @@ export function claudeTranscriptEffort(text: string): string | undefined {
       row = isRecord(value) ? value : null
     } catch {
       // A tail read can start or end mid-row.
+      continue
+    }
+    if (row && isRunPrompt(row)) {
+      // A resumed run appends to the same file; only rows after its prompt describe it.
+      effort = undefined
       continue
     }
     if (row?.type !== 'assistant') {

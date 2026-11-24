@@ -38,6 +38,31 @@ describe('claudeTranscriptEffort', () => {
       )
     ).toBe('medium')
   })
+
+  it('reads only the run after the latest prompt, past tool results and interruptions', () => {
+    const rows = [
+      '{"type":"user","message":{"role":"user","content":"Read files"}}',
+      '{"type":"assistant","message":{"model":"claude-sonnet-5-5"},"effort":"low"}',
+      '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1"}]}}',
+      '{"type":"assistant","message":{"model":"claude-sonnet-5-5"},"effort":"medium"}',
+      '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]}}'
+    ]
+    expect(claudeTranscriptEffort(rows.join('\n'))).toBe('medium')
+
+    const resumed = [
+      ...rows,
+      '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Continue"}]}}'
+    ]
+    expect(claudeTranscriptEffort(resumed.join('\n'))).toBeUndefined()
+    expect(
+      claudeTranscriptEffort(
+        [
+          ...resumed,
+          '{"type":"assistant","message":{"model":"claude-sonnet-5-5"},"effort":"high"}'
+        ].join('\n')
+      )
+    ).toBe('high')
+  })
 })
 
 describe('readClaudeSubagentTranscriptEffort', () => {
