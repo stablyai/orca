@@ -1,3 +1,4 @@
+import { sharedHostRoute } from '../requests/runtime-environment-shared-hosts'
 import {
   manuallyDisconnectedResponse,
   runtimeEnvironmentCallFailure
@@ -195,6 +196,10 @@ function registerPassiveCallHandler(
         wake?: boolean
       }
     ): Promise<RuntimeRpcResponse<unknown>> => {
+      const sharedHost = await sharedHostRoute(args.selector)
+      if (sharedHost) {
+        return sharedHost.call(args.method, args.params)
+      }
       const environment = await resolveEnvironment(getUserDataPath(), args.selector)
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         return manuallyDisconnectedResponse(environment)

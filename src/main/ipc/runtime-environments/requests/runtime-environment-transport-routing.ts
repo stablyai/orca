@@ -28,6 +28,7 @@ import {
 import { shouldUseSharedControlEnvelope } from '../connections/runtime-environment-shared-control-envelope'
 import { sendEnvelopedOneShotCall } from './runtime-environment-runtime-pinned-send'
 import { resumeAfterIdleStop } from './runtime-environment-idle-stop-resume'
+import { sharedHostRoute } from './runtime-environment-shared-hosts'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
 
@@ -53,6 +54,10 @@ export async function callRuntimeEnvironment(
     wake?: boolean
   }
 ): Promise<Rpc.RuntimeRpcResponse<unknown>> {
+  const sharedHost = await sharedHostRoute(selector)
+  if (sharedHost) {
+    return sharedHost.call(method, params)
+  }
   if (method === 'status.get') {
     let statusOptions = options
     // Why: the status probe dials on its own, so a no-start caller's WSL host is checked first.

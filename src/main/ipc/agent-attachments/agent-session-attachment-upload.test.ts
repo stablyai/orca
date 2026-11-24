@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { SharedBotHosts } from '../../bots/shared-with-me/shared-bot-hosts'
 import { memorySharedBotHomes } from '../../bots/shared-with-me/shared-bot-home.test-fixture'
-import { setSharedBotHostRouting } from '../../bots/shared-with-me/shared-bot-host-routing'
+import { routeSharedHostsThrough } from '../runtime-environments/requests/runtime-environment-shared-hosts'
 import nacl from 'tweetnacl'
 import { openBotTeamShareHeldMessage } from '../../../shared/bots/bot-team-share-seal'
 import { SHARED_BOT_HOST_ERRORS } from '../../../shared/bots/shared-bot-hosts'
@@ -17,17 +17,15 @@ import {
   uploadBufferToAgentSessionAttachments
 } from './agent-session-attachment-upload'
 
-const paired = vi.hoisted(() => ({ call: vi.fn(), resolve: vi.fn() }))
-vi.mock('../runtime-environments/requests/runtime-environment-transport-routing', () => ({
-  callRuntimeEnvironment: paired.call
-}))
+// Every paired-server path starts by resolving its selector in the registry.
+const paired = vi.hoisted(() => ({ resolve: vi.fn() }))
 vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: paired.resolve
 }))
 
 const dirs: string[] = []
 afterEach(() => {
-  setSharedBotHostRouting(null)
+  routeSharedHostsThrough(null)
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -72,14 +70,14 @@ async function awayHost(hostKey?: string) {
     }),
     publish: () => {}
   })
-  setSharedBotHostRouting(hosts)
+  routeSharedHostsThrough(hosts)
   await hosts.refresh()
   hosts.stop()
   return { hosts, userDataPath, holds }
 }
 
 describe('attachment uploads to a shared agent’s host', () => {
-  it('go through its share link, never the paired-server registry', async () => {
+  it('go through runtimeEnvironments to its share link, never the paired-server registry', async () => {
     const { hosts, userDataPath } = await awayHost()
     const environmentId = hosts.views()[0]!.environmentId
     expect(await resolveAttachmentEnvironmentId(userDataPath, environmentId)).toBe(environmentId)
@@ -91,7 +89,6 @@ describe('attachment uploads to a shared agent’s host', () => {
         Buffer.from('png')
       )
     ).rejects.toThrow('Jinwoo Hong’s computer is offline')
-    expect(paired.call).not.toHaveBeenCalled()
     expect(paired.resolve).not.toHaveBeenCalled()
   })
 
@@ -141,6 +138,6 @@ describe('attachment uploads to a shared agent’s host', () => {
     await expect(
       uploadBufferToAgentSessionAttachments(upload, 'big.bin', Buffer.alloc(800 * 1024))
     ).rejects.toThrow('Too large to hold')
-    expect(paired.call).not.toHaveBeenCalled()
+    expect(paired.resolve).not.toHaveBeenCalled()
   })
 })

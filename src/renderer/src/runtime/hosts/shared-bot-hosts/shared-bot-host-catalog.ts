@@ -1,12 +1,10 @@
 // The agents shared with this Orca account, as main publishes them. Each is a host the app reaches by
-// its environment id through main's relay link rather than a paired server's connection.
+// its environment id; main routes its calls over the share link rather than a paired server's connection.
 import { useSyncExternalStore } from 'react'
 import type {
   SharedBotHostsState,
   SharedBotHostView
 } from '../../../../../shared/bots/shared-bot-hosts'
-import { BOT_SHARE_RPC_METHODS } from '../../../../../shared/bots/bot-share-rpc-methods'
-import type { RuntimeRpcFailure } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   parseExecutionHostId,
@@ -65,7 +63,7 @@ export function subscribeSharedBotHosts(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-/** The one routing check: whether a target is a shared agent's host, reached through main's relay link. */
+/** Whether a target is a shared agent's host, which main reaches over its share link. */
 export function sharedBotHostFor(target: RuntimeClientTarget): SharedBotHostView | null {
   return target.kind === 'environment'
     ? (views.find((view) => view.environmentId === target.environmentId) ?? null)
@@ -85,22 +83,6 @@ export function sharedBotHostOf(hostId: ExecutionHostId): SharedBotHostView | nu
 export function sharedBotHomeWorkspaceId(hostId: ExecutionHostId, botId: string): string | null {
   const host = sharedBotHostOf(hostId)
   return host?.botId === botId ? host.homeWorkspaceId : null
-}
-
-/**
- * The one gate on what a teammate's Orca asks a shared host: a method off the share allowlist (the
- * owner's activity, suggestions, paired-server asks, status) is the host's to refuse, so it is
- * refused here with the host's own answer and never sent. Null when the host takes it.
- */
-export function sharedBotHostRefusal(method: string): RuntimeRpcFailure | null {
-  return BOT_SHARE_RPC_METHODS.has(method)
-    ? null
-    : {
-        id: method,
-        ok: false,
-        // Read by its code, as from a host that lacks the method; never shown.
-        error: { code: 'method_not_found', message: method }
-      }
 }
 
 /** The one gate on every sharing entry: true only once this account's Orca Cloud answered its shares

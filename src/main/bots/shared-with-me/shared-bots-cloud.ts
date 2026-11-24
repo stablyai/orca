@@ -49,15 +49,16 @@ export class CloudSharesSupport {
     }
   }
 
-  /** Reads the shares route as the signed-in account. An answer counts only while the account it was
-   *  read as is still signed in. */
+  /** Reads the shares route as the signed-in account; null when there is no cloud, or the answer
+   *  came back after another account (or none) signed in, so it is no one's to apply. */
   async read(cloud: SharedBotsCloud | null, forgot: () => void) {
     this.forgetIfSwitched(forgot)
     const account = this.readAs
     const answer = cloud ? await cloud.mine() : null
-    if (this.account() === account && this.readAs === account) {
-      this.value = sharesSupported(answer, this.value)
+    if (this.account() !== account || this.readAs !== account) {
+      return null
     }
+    this.value = sharesSupported(answer, this.value)
     return answer
   }
 }

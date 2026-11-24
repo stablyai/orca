@@ -14,6 +14,8 @@ import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remo
 import type { DocumentDeliveryEndpoint } from '../../../../shared/backend/document-delivery-endpoint'
 import { getRuntimeEnvironmentTransportGeneration } from '../connections/runtime-environment-transport-generation'
 import { subscribeRuntimeEnvironment } from '../requests/runtime-environment-transport-routing'
+import { sharedHostRoute } from '../requests/runtime-environment-shared-hosts'
+import { subscribeSharedHostForDocument } from './runtime-environment-shared-host-subscription'
 
 /** Opens one runtime subscription owned by `document`; it retires with that document. */
 export async function subscribeRuntimeEnvironmentForDocument(
@@ -32,6 +34,16 @@ export async function subscribeRuntimeEnvironmentForDocument(
   } = deps
   const subscriptionId = runtimeEnvironmentSubscriptionId(args)
   const crewResult = args.setupResult === 'crew'
+  const sharedHost = crewResult ? null : await sharedHostRoute(args.selector)
+  if (sharedHost) {
+    return subscribeSharedHostForDocument(
+      remoteRuntimeSubscriptions,
+      document,
+      sharedHost,
+      subscriptionId,
+      args
+    )
+  }
   let failure: SubscriptionSetup.RuntimeEnvironmentSetupFailure | undefined
   let setupSignal: AbortSignal | undefined
   let operation: 'environment-resolution' | 'subscription' = 'environment-resolution'

@@ -2,7 +2,7 @@ import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rp
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
 import { callRuntimeEnvironmentWithRevision } from '../calls/runtime-rpc-environment-call'
-import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../calls/runtime-rpc-result'
+import { unwrapRuntimeRpcResult } from '../calls/runtime-rpc-result'
 import {
   compatibilityEntry,
   getCachedRuntimeCompatibilityCheck,
@@ -10,10 +10,7 @@ import {
   runtimeCompatibilityChecks
 } from './runtime-compatibility-cache'
 import { RUNTIME_IDLE_STOPPED_ERROR_CODE } from '../../../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-stop-signal'
-import {
-  sharedBotHostFor,
-  sharedBotHostRefusal
-} from '../../hosts/shared-bot-hosts/shared-bot-host-catalog'
+import { sharedBotHostFor } from '../../hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 function isIdleStopRefusal(error: unknown): boolean {
   return (
@@ -95,13 +92,6 @@ export async function getRuntimeEnvironmentStatus(
   timeoutMs?: number
 ): Promise<RuntimeStatus> {
   const trimmed = environmentId.trim()
-  // The share answers no status: refused as the host would, never sent to the paired-server registry.
-  const refusal = sharedBotHostFor({ kind: 'environment', environmentId: trimmed })
-    ? sharedBotHostRefusal('status.get')
-    : null
-  if (refusal) {
-    throw new RuntimeRpcCallError(refusal)
-  }
   const entry = compatibilityEntry()
   // Publish before awaiting so concurrent cold capability reads share this status probe.
   const check = (async () => {

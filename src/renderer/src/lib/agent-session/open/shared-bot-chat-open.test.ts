@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { BOT_SHARE_RPC_METHODS } from '../../../../../shared/bots/bot-share-rpc-methods'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
@@ -83,10 +84,17 @@ function resetStore(): void {
 
 let stopCatalog: () => void = () => {}
 let changed: (state: SharedBotHostsState) => void = () => {}
-// The owner's host as the share reaches it: the window's own share gate refuses what isn't allowed
-// before it is sent; a new chat started while the host is away is a placeholder there.
+// The owner's host as the share reaches it, through runtimeEnvironments: main's share gate refuses
+// what isn't allowed before it is sent; a new chat started while the host is away is a placeholder there.
 const call = vi.fn(
-  async ({ method, params }: { method: string; params: { newChatId?: string } }) => ({
+  async ({
+    method,
+    params
+  }: {
+    environmentId: string
+    method: string
+    params: { newChatId?: string }
+  }) => ({
     id: method,
     ok: true,
     result:
@@ -96,6 +104,18 @@ const call = vi.fn(
     _meta: { runtimeId: SHARED.environmentId }
   })
 )
+const environmentCall = async (request: {
+  selector: string
+  method: string
+  params: { newChatId?: string }
+}) =>
+  BOT_SHARE_RPC_METHODS.has(request.method)
+    ? call({ environmentId: request.selector, method: request.method, params: request.params })
+    : {
+        id: request.method,
+        ok: false,
+        error: { code: 'method_not_found', message: request.method }
+      }
 
 beforeEach(async () => {
   call.mockClear()
@@ -106,9 +126,9 @@ beforeEach(async () => {
       onChanged: (listener: (state: SharedBotHostsState) => void) => {
         changed = listener
         return () => {}
-      },
-      call
-    }
+      }
+    },
+    runtimeEnvironments: { ...window.api?.runtimeEnvironments, call: environmentCall }
   })
   stopCatalog = installSharedBotHostCatalog()
   await Promise.resolve()

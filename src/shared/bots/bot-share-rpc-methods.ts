@@ -39,6 +39,12 @@ export const BOT_SHARE_SCOPED_METHODS = [
 export type BotShareScopedMethod = (typeof BOT_SHARE_SCOPED_METHODS)[number]
 const SELF: BotShareMethodAccess = { kind: 'self' }
 
+/** The shared methods that open a stream; every other one answers once. */
+export const BOT_SHARE_STREAM_METHODS: ReadonlySet<string> = new Set([
+  'agentSession.subscribe',
+  'agentSession.subscribeStatus'
+])
+
 export const BOT_SHARE_RPC_METHODS: ReadonlyMap<string, BotShareMethodAccess> = new Map<
   string,
   BotShareMethodAccess
