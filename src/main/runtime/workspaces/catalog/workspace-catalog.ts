@@ -132,12 +132,14 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
             getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
             !isFolderRepo(repo)
     if (requireComplete) {
-      this.resolvedWorktrees.invalidateResolved()
       for (const repo of this.store.getRepos()) {
         if (requireComplete(repo)) {
           bumpWorktreeScanGeneration(repo.path)
         }
       }
+      // A strict read fails or waits on any selected repo; computed on its own so ordinary catalog
+      // readers neither join it nor lose their per-repo fallback to it.
+      return this.computeResolvedWorktrees(requireComplete)
     }
     return this.resolvedWorktrees.getSnapshot(
       () => this.computeResolvedWorktrees(requireComplete),

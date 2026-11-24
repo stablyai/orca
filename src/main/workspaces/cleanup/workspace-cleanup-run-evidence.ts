@@ -23,6 +23,7 @@ import {
   type PairedFolderChildren
 } from './workspace-cleanup-paired-folder-children'
 import { dirtyEditorWorktreeIds, scanTargets } from './workspace-cleanup-run-git-evidence'
+import { createCleanupRemovalRouteCheck } from './workspace-cleanup-removal-route'
 import { runtimeVisibleRepos } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import type { Repo } from '../../../shared/repository/repo-types'
@@ -58,6 +59,8 @@ export type WorkspaceCleanupWorkspace = {
   input: WorkspaceCleanupEvaluationInput
   paneAgentStates: WorkspaceCleanupPaneAgentStates
   removing: boolean
+  /** Guarded removal would refuse this checkout's route, so it is never offered for deletion. */
+  removalRouteUnverifiable?: true
   /** Its host identity; every workspace here is this host's. */
   identity: string
   /** The host identities of the other worktrees its folder workspace lists, on any host. */
@@ -195,7 +198,16 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
   if (projectId && hasUnlistedFolderSibling(listed, folderSiblingsOf)) {
     // A folder workspace can span projects, and a run judges its worktrees as one group: a project's
     // preview reads the other projects' members too, so it shows what the run would remove.
-    const all = await runtime.getWorktreePs(WORKTREE_PS_LIMIT, true, false)
+    // A consent comparison needs every member's project listed: a sibling project whose listing failed
+    // must fail the preview, not drop out of the group and let the change look harmless.
+    const all = await runtime.getWorktreePs(
+      WORKTREE_PS_LIMIT,
+      true,
+      false,
+      undefined,
+      undefined,
+      Boolean(args.comparison) || args.freshInventory
+    )
     if (all.truncated) {
       throw new Error('Could not list every workspace on this host.')
     }
@@ -270,6 +282,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
   }
   const dirtyEditors = dirtyEditorWorktreeIds(store, runtime)
   const scanned = new Set(gitTargets)
+  const routeUnverifiable = createCleanupRemovalRouteCheck(store)
   return summaries.map((summary) => {
     const repo = repos.get(summary.repoId)!
     const candidate = candidates.get(summary.worktreeId)
@@ -304,6 +317,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
       ),
       paneAgentStates,
       removing: summary.removing === true,
+      ...(routeUnverifiable(repo, summary.path) ? { removalRouteUnverifiable: true as const } : {}),
       identity: summaryIdentity(summary),
       folderSiblings: folderSiblingsOf(summary),
       readPairedFolderChildren

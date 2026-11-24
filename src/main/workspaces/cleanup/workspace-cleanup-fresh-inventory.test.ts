@@ -140,3 +140,35 @@ it.each(['in-flight', 'cached'])(
     expect(preview.next.rows.find((row) => row.worktreeId === id)?.instanceId).toBe('new-instance')
   }
 )
+
+it('keeps an ordinary catalog read on its own fallback while a strict preview of a broken project runs', async () => {
+  const root = join(testState.dir, 'repo')
+  const git = (args: string[]) => {
+    if (runProcessSync({ program: 'git', args, cwd: testState.dir }).code !== 0) {
+      throw new Error(`git ${args.join(' ')} failed`)
+    }
+  }
+  git(['init', '-q', root])
+  git(['-C', root, 'symbolic-ref', 'HEAD', 'refs/heads/main'])
+  git(['-C', root, 'config', 'user.name', 'Fixture'])
+  git(['-C', root, 'config', 'user.email', 'fixture@example.invalid'])
+  writeFileSync(join(root, 'seed'), 'seed')
+  git(['-C', root, 'add', '.'])
+  git(['-C', root, 'commit', '-qm', 'seed'])
+  const store = createStore()
+  store.addRepo({ id: 'repo', path: root, displayName: 'Healthy', badgeColor: 'gray', addedAt: 1 })
+  store.addRepo({
+    id: 'broken',
+    path: join(testState.dir, 'missing'),
+    displayName: 'Broken',
+    badgeColor: 'gray',
+    addedAt: 1
+  })
+  const runtime = new OrcaRuntimeService(store)
+  // The consent preview's strict read of the broken project, and a mobile or CLI catalog read beside it.
+  const strict = runtime.getWorktreePs(100_000, true, false, undefined, 'broken', true)
+  const ordinary = runtime.getWorktreePs(100_000, true, false)
+  await expect(strict).rejects.toThrow()
+  const listed = await ordinary
+  expect(listed.worktrees.some((row) => row.repoId === 'repo' && row.path === root)).toBe(true)
+})

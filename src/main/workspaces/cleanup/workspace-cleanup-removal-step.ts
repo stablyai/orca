@@ -47,6 +47,10 @@ export async function decideWorkspaceCleanup(
     return evaluation
   }
   const { reason } = evaluation
+  // The removal would refuse this route; the preview and the run say so instead of listing a deletion.
+  if (workspace.removalRouteUnverifiable) {
+    return { action: 'keep', cause: 'identity-unverified', reason }
+  }
   // An unattended run never runs repo scripts nobody approved, and never skips the teardown they do.
   // The checkout's own orca.yaml can add one the repo root lacks.
   if (
