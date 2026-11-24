@@ -43,7 +43,7 @@ import { useBotItemPendingComments } from './use-bot-item-pending-comments'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 import { BotItemNavRow } from './BotItemStepper'
 import { BotItemLoading } from './BotItemLoading'
-import { BotItemCloseNote } from './BotItemCloseNote'
+import { BotItemCloseNote, BotItemDoneWhen } from './BotItemCloseNote'
 import { BotItemLinksBlock } from './BotItemLinks'
 import { BotItemMarkdown } from './BotItemMarkdown'
 import { BotItemFrom } from './BotItemFrom'
@@ -290,6 +290,7 @@ export function BotItemBody({
     activityShown,
     loadingTarget,
     scrollRef,
+    paneRef: pane,
     revealRow,
     comment
   })
@@ -315,43 +316,38 @@ export function BotItemBody({
             <NativeChatFileLinkExistenceContext value={fileContext?.existence ?? null}>
               <NativeChatLinkClickContext value={links.onLinkClick}>
                 <div className="relative flex min-h-0 flex-1 flex-col">
-                  <BotItemHeader
-                    bot={bot}
-                    item={item}
-                    deleted={deleted}
-                    onStatus={(to) => notes.move([item], to)}
-                    snoozing={snoozing}
-                    reply={needsYou.reply}
-                    statusSlot={statusSlot}
-                  />
-                  <div className="scrollbar-sleek flex max-h-[max(50%,calc(100%_-_140px))] shrink-0 flex-col overflow-y-auto">
-                    <div className="flex flex-col gap-4 px-3.5 pt-3.5">
-                      {item.description ? (
-                        <BotItemClampedText
-                          text={item.description}
-                          clampClassName="max-h-[57px]"
-                          render={renderDescription}
+                  {/* The pinned title and the details share one cap, so Activity keeps the space it
+                      had when the title scrolled with the details. */}
+                  <div className="flex max-h-[max(50%,calc(100%_-_140px))] min-h-0 shrink-0 flex-col">
+                    <BotItemHeader
+                      bot={bot}
+                      item={item}
+                      deleted={deleted}
+                      onStatus={(to) => notes.move([item], to)}
+                      snoozing={snoozing}
+                      reply={needsYou.reply}
+                      statusSlot={statusSlot}
+                    />
+                    <div className="scrollbar-sleek flex min-h-0 flex-col overflow-y-auto">
+                      <div className="flex flex-col gap-4 px-3.5 pt-3.5">
+                        {item.description ? (
+                          <BotItemClampedText
+                            text={item.description}
+                            clampClassName="max-h-[57px]"
+                            render={renderDescription}
+                          />
+                        ) : null}
+                        {item.status === 'canceled' || item.status === 'done' ? (
+                          <BotItemCloseNote item={item} />
+                        ) : null}
+                        <BotItemDoneWhen item={item} />
+                        <BotItemLinksBlock bot={bot} links={item.links} chat={chatTitle} />
+                        <BotItemFrom
+                          chat={chatTitle}
+                          createdAt={item.createdAt}
+                          onOpen={() => openBotSession(bot, item.chat.id)}
                         />
-                      ) : null}
-                      {item.status === 'canceled' || item.status === 'done' ? (
-                        <BotItemCloseNote item={item} />
-                      ) : null}
-                      {item.doneMeans ? (
-                        <section>
-                          <h3 className="mb-1 text-xs text-muted-foreground">
-                            {t('bots.items.field.doneMeans', 'Done when')}
-                          </h3>
-                          <p className="text-[13px] leading-[19px] break-words text-foreground">
-                            {item.doneMeans}
-                          </p>
-                        </section>
-                      ) : null}
-                      <BotItemLinksBlock bot={bot} links={item.links} chat={chatTitle} />
-                      <BotItemFrom
-                        chat={chatTitle}
-                        createdAt={item.createdAt}
-                        onOpen={() => openBotSession(bot, item.chat.id)}
-                      />
+                      </div>
                     </div>
                   </div>
                   <section className="mt-4 flex min-h-0 flex-1 flex-col">

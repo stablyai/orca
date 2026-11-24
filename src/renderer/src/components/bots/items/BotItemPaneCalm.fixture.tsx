@@ -82,8 +82,8 @@ const LINEAR_ISSUE = (identifier: string, title: string, state: string) => ({
 })
 const calmStore = {
   linearIssueCache: {
-    'OPS-1650': LINEAR_ISSUE('OPS-1650', 'Cloud read-only access', 'In Progress'),
-    'OPS-1702': LINEAR_ISSUE('OPS-1702', 'Launch checklist', 'Todo')
+    'selected::OPS-1650': LINEAR_ISSUE('OPS-1650', 'Cloud read-only access', 'In Progress'),
+    'selected::OPS-1702': LINEAR_ISSUE('OPS-1702', 'Launch checklist', 'Todo')
   }
 }
 const calmThree: BotItemLinkView[] = [

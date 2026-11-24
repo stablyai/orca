@@ -88,7 +88,7 @@ export const mixedLinks = defineFixture({
   width: 400,
   store: {
     linearIssueCache: {
-      'ENG-4120': {
+      'selected::ENG-4120': {
         data: SHARE_DIALOG_ISSUE,
         fetchedAt: now
       }

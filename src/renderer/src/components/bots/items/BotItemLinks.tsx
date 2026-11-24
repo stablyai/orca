@@ -49,6 +49,11 @@ import {
 } from './bot-item-github-peek-content'
 import { useBotItemLivePr, useBotItemPrWorkspacesVisible } from './use-bot-item-live-pr'
 import { botItemLinksOrder } from './bot-item-links-order'
+import { selectBotItemLinearRead, type BotItemLinearRead } from './bot-item-linear-read'
+import {
+  canPublishLinearScopeCache,
+  getLinearReadScope
+} from '@/store/slices/linear/linear-slice-scope'
 
 /** Rows shown before "N more". */
 export const BOT_ITEM_LINKS_SHOWN = 5
@@ -70,31 +75,17 @@ function MiddleTruncated({ text }: { text: string }): React.JSX.Element {
   )
 }
 
-type LinearRead = { title: string; state: string | null }
-
-/** Use only an unscoped cache entry whose URL identifies this issue. */
-function useLinearRead(identifier: string | null, url: string): LinearRead | null {
-  const issue = useAppStore((state) =>
-    identifier ? state.linearIssueCache[identifier]?.data : null
-  )
-  if (!issue) {
-    return null
-  }
-  try {
-    const identity = (value: string) => {
-      const parsed = new URL(value)
-      return (
-        parsed.hostname.toLowerCase() +
-        parsed.pathname.split('/').slice(0, 4).join('/').toLowerCase()
-      )
-    }
-    if (identity(url) !== identity(issue.url)) {
+/** The cached read proven to be this link's issue, from the default Linear scope on this runtime. */
+function useLinearRead(identifier: string | null, url: string): BotItemLinearRead | null {
+  const cache = useAppStore((state) => (identifier ? state.linearIssueCache : null))
+  const settings = useAppStore((state) => state.settings)
+  return useMemo(() => {
+    if (!cache) {
       return null
     }
-  } catch {
-    return null
-  }
-  return { title: issue.title, state: issue.state?.name ?? null }
+    const current = canPublishLinearScopeCache(getLinearReadScope(settings), settings)
+    return selectBotItemLinearRead(cache, identifier, url, current)
+  }, [cache, settings, identifier, url])
 }
 
 /** The item view's link handler: the workspace card's popover and destinations, from the bot's folder. A

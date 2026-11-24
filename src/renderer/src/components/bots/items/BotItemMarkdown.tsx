@@ -48,29 +48,29 @@ const ShortFileLink: Components['a'] = function ShortFileLink({ href, children }
           typeof child.props.children === 'string'
         ? child.props.children
         : null
-  const name = text === null ? null : botItemFileLinkName(href, text)
+  const file = text === null ? null : botItemFileLinkName(href, text)
   return (
     <a
       href={href || undefined}
       target="_blank"
       rel="noreferrer"
-      title={name ? text! : undefined}
+      title={file?.path}
       className={cn(
         'rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-        name
+        file
           ? 'text-foreground underline decoration-muted-foreground/40 underline-offset-[3px] hover:decoration-foreground'
           : 'underline underline-offset-2 text-foreground/80 hover:text-foreground'
       )}
       onClick={(event) => handleMarkdownAnchorClick(event, href, onLinkClick)}
       onAuxClick={(event) => handleMarkdownAnchorAuxClick(event, href, onLinkClick)}
     >
-      {name ?? children}
+      {file?.name ?? children}
     </a>
   )
 }
 
 // Stable: a new extension object would remount the rendered blocks.
-const SHORT_FILE_LINKS: CommentMarkdownExtension = {
+export const SHORT_FILE_LINKS: CommentMarkdownExtension = {
   remarkPlugins: [],
   sanitizeAttributes: {},
   components: { a: ShortFileLink }
