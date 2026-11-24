@@ -37,7 +37,9 @@ type RestartMark = {
   incarnationId: string
   provenance: CodexRestartProvenance
   opIds: Set<string>
-  delivered: boolean
+  /** Which consumers already received this incarnation's one logical exit. */
+  runtimeDelivered: boolean
+  rendererDelivered: boolean
   writerProof: boolean
   withdrawn: boolean
   /** An earlier attempt on this incarnation ended ambiguously and may still end the process. */
@@ -107,7 +109,8 @@ export class CodexAccountRestartStops {
       incarnationId: occupant.incarnationId,
       provenance: occupant.provenance,
       opIds: new Set([request.opId]),
-      delivered: sameProcess?.delivered ?? false,
+      runtimeDelivered: sameProcess?.runtimeDelivered ?? false,
+      rendererDelivered: sameProcess?.rendererDelivered ?? false,
       writerProof: false,
       withdrawn: false,
       earlierEffectPossible: sameProcess?.earlierEffectPossible ?? false,
@@ -146,7 +149,7 @@ export class CodexAccountRestartStops {
   classifyExit(
     ptyId: string,
     incarnationId: string | null | undefined,
-    _observation: CodexRestartExitObservation
+    observation: CodexRestartExitObservation
   ): CodexRestartExitClassification {
     if (!incarnationId) {
       // Unstamped exits keep baseline semantics and carry no account-switch authority.
@@ -156,11 +159,15 @@ export class CodexAccountRestartStops {
     if (!mark || mark.ptyId !== ptyId) {
       return this.retiredIncarnations.has(incarnationId) ? 'duplicate' : 'ordinary'
     }
-    if (mark.delivered) {
-      return 'duplicate'
+    // An attach miss reaches runtime only; stream exits and receipts reach runtime and the renderer.
+    const runtimeOwed = !mark.runtimeDelivered
+    const rendererOwed = observation !== 'attach-miss' && !mark.rendererDelivered
+    mark.runtimeDelivered = true
+    mark.rendererDelivered ||= rendererOwed
+    if (runtimeOwed) {
+      return 'restart'
     }
-    mark.delivered = true
-    return 'restart'
+    return rendererOwed ? 'restart-renderer-only' : 'duplicate'
   }
 
   /** The single gate every fresh local Codex resume passes; waits for the stop to settle. */
@@ -241,7 +248,7 @@ export class CodexAccountRestartStops {
       return { outcome: 'not-started', reason: denial ?? 'superseded', opIds: [...mark.opIds] }
     }
     const opIds = [...mark.opIds]
-    if ((outcome === 'refused' || outcome === 'service-outdated') && !mark.delivered) {
+    if ((outcome === 'refused' || outcome === 'service-outdated') && !isDelivered(mark)) {
       this.retireUnlessEarlierEffect(mark)
       return { outcome: 'not-started', reason: outcome, opIds }
     }
@@ -301,7 +308,7 @@ export class CodexAccountRestartStops {
     if (this.markByIncarnation.get(mark.incarnationId) === mark) {
       this.markByIncarnation.delete(mark.incarnationId)
     }
-    if (!mark.delivered) {
+    if (!isDelivered(mark)) {
       return
     }
     this.retiredIncarnations.add(mark.incarnationId)
@@ -315,3 +322,7 @@ export class CodexAccountRestartStops {
 }
 
 export const codexAccountRestartStops = new CodexAccountRestartStops()
+
+function isDelivered(mark: RestartMark): boolean {
+  return mark.runtimeDelivered || mark.rendererDelivered
+}

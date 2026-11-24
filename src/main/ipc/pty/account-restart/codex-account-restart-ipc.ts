@@ -150,15 +150,17 @@ function deliverRestartReceiptExit(
   deps: CodexAccountRestartIpcDeps,
   occupant: CodexRestartOccupant
 ): void {
+  const liveIncarnationId = ptyIncarnationById.get(occupant.ptyId)
+  if (liveIncarnationId !== undefined && liveIncarnationId !== occupant.incarnationId) {
+    // A newer process owns this id; the stopped one's exit must not touch it.
+    return
+  }
   const classification = codexAccountRestartStops.classifyExit(
     occupant.ptyId,
     occupant.incarnationId,
     'fenced-receipt'
   )
-  if (
-    classification !== 'restart' ||
-    ptyIncarnationById.get(occupant.ptyId) !== occupant.incarnationId
-  ) {
+  if (classification === 'ordinary' || classification === 'duplicate') {
     return
   }
   const settleStop = deps.runtime?.intentionalPtyStops?.mark(
@@ -167,17 +169,20 @@ function deliverRestartReceiptExit(
     occupant.incarnationId
   )
   try {
-    deps.runtime?.markPtyStopRequested?.(occupant.ptyId)
-    finishPtyShutdown(
-      occupant.ptyId,
-      null,
-      deps.store,
-      PtyExitProof.from('shutdown-acknowledged', occupant.incarnationId)
-    )
-    // The pane's normal resume brings this conversation back, so an active Dispatch waits for it.
-    deps.runtime?.onPtyExit(occupant.ptyId, -1, occupant.incarnationId, {
-      paneRespawning: true
-    })
+    if (classification === 'restart') {
+      deps.runtime?.markPtyStopRequested?.(occupant.ptyId)
+      finishPtyShutdown(
+        occupant.ptyId,
+        null,
+        deps.store,
+        PtyExitProof.from('shutdown-acknowledged', occupant.incarnationId)
+      )
+      // The daemon confirmed the root ended; the pane's resume brings it back, so Dispatch waits.
+      deps.runtime?.onPtyExit(occupant.ptyId, -1, occupant.incarnationId, {
+        hostExitConfirmed: true,
+        paneRespawning: true
+      })
+    }
     deps.rememberSyntheticKillExit(occupant.ptyId, occupant.incarnationId)
     deps.sendPtyExitToRenderer({
       id: occupant.ptyId,

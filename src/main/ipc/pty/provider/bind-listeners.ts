@@ -106,9 +106,10 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       if (accountRestartExit === 'duplicate') {
         return
       }
+      const isAccountRestartExit = accountRestartExit !== 'ordinary'
       // Daemon restart replaces processes while their panes survive; so does an account-restart stop.
       const settleRestartStop =
-        payload.replacedByRestart || accountRestartExit === 'restart'
+        payload.replacedByRestart || isAccountRestartExit
           ? session.runtime?.intentionalPtyStops?.mark(
               payload.id,
               'replaced',
@@ -123,14 +124,17 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           if (syntheticExit) {
             session.runtime?.markPtyStopRequested(payload.id)
           }
-          session.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId, {
-            providerExitObserved: true,
-            ...(viewShown ? { viewShown } : {}),
-            ...(payload.cause ? { cause: payload.cause } : {}),
-            ...(payload.hostLost ? { hostLost: true } : {}),
-            // The pane's normal resume brings this conversation back, so an active Dispatch waits for it.
-            ...(accountRestartExit === 'restart' ? { paneRespawning: true } : {})
-          })
+          // An attach miss already told runtime about this restart exit; only the renderer is owed it.
+          if (accountRestartExit !== 'restart-renderer-only') {
+            session.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId, {
+              providerExitObserved: true,
+              ...(viewShown ? { viewShown } : {}),
+              ...(payload.cause ? { cause: payload.cause } : {}),
+              ...(payload.hostLost ? { hostLost: true } : {}),
+              // The pane's normal resume brings this conversation back, so an active Dispatch waits for it.
+              ...(isAccountRestartExit ? { paneRespawning: true } : {})
+            })
+          }
         }
         // Control replies may overtake stream data; physical exit must still retire late output.
         if (syntheticExit) {

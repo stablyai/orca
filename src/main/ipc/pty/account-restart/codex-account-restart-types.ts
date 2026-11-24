@@ -44,7 +44,12 @@ export type CodexAccountRestartStopDeps = {
 
 export type CodexRestartExitObservation = 'stream' | 'host-loss' | 'fenced-receipt' | 'attach-miss'
 /** `restart`: the first logical exit of a restart-stopped incarnation; `duplicate`: drop it. */
-export type CodexRestartExitClassification = 'ordinary' | 'restart' | 'duplicate'
+/** `restart-renderer-only`: runtime already took this exit from an attach miss; only the renderer is owed it. */
+export type CodexRestartExitClassification =
+  | 'ordinary'
+  | 'restart'
+  | 'restart-renderer-only'
+  | 'duplicate'
 
 export type CodexRestartResumeDecision =
   | { kind: 'none' }

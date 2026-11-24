@@ -38,25 +38,22 @@ function releaseAbsentPaneProcess(
   owner: AbsentPaneOwner
 ): void {
   // An account-restart stop may already have delivered this process's one logical exit.
-  if (
+  const exitAlreadyDelivered =
     codexAccountRestartStops.classifyExit(owner.ptyId, owner.incarnationId, 'attach-miss') ===
     'duplicate'
-  ) {
-    clearProviderPtyState(owner.ptyId)
-    ptyOwnership.delete(owner.ptyId)
-    return
+  if (!exitAlreadyDelivered) {
+    const settleStop = runtime?.intentionalPtyStops?.mark(
+      owner.ptyId,
+      'replaced',
+      owner.incarnationId ?? null
+    )
+    runtime?.onPtyExit(owner.ptyId, UNVERIFIED_PROCESS_EXIT_CODE, owner.incarnationId, {
+      hostExitConfirmed: true,
+      cause: HOST_LOST_EXIT_CAUSE,
+      paneRespawning: true
+    })
+    settleStop?.(true)
   }
-  const settleStop = runtime?.intentionalPtyStops?.mark(
-    owner.ptyId,
-    'replaced',
-    owner.incarnationId ?? null
-  )
-  runtime?.onPtyExit(owner.ptyId, UNVERIFIED_PROCESS_EXIT_CODE, owner.incarnationId, {
-    hostExitConfirmed: true,
-    cause: HOST_LOST_EXIT_CAUSE,
-    paneRespawning: true
-  })
-  settleStop?.(true)
   clearProviderPtyState(owner.ptyId)
   ptyOwnership.delete(owner.ptyId)
 }

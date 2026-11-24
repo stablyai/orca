@@ -218,7 +218,10 @@ describe('account restart exits arriving out of order', () => {
     t.release({ outcome: 'ended', writersExited: true })
     await expect(result).resolves.toMatchObject({ outcome: 'stopped' })
     expect(t.runtime.onPtyExit).toHaveBeenCalledTimes(1)
-    expect(t.runtime.onPtyExit.mock.calls[0][3]).toMatchObject({ paneRespawning: true })
+    expect(t.runtime.onPtyExit.mock.calls[0][3]).toMatchObject({
+      paneRespawning: true,
+      hostExitConfirmed: true
+    })
     expect(t.sendPtyExitToRenderer).toHaveBeenCalledTimes(1)
     t.emitExit()
     expect(t.runtime.onPtyExit).toHaveBeenCalledTimes(1)
@@ -387,5 +390,29 @@ describe('account restart exits arriving out of order', () => {
     releaseStartup()
     await expect(result).resolves.toMatchObject({ outcome: 'not-started', reason: 'not-stale' })
     expect(h.killFenced).not.toHaveBeenCalled()
+  })
+
+  it('still gives the renderer its exit when an attach miss told runtime first', async () => {
+    const t = setup()
+    const result = t.request()
+    await t.stopDispatched()
+    await releaseAbsentPaneOwner(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the release reads only these runtime fields.
+      { runtime: t.runtime as never },
+      {
+        tabId: 'tab',
+        leafId: t.pane.leafId,
+        ptyId: t.pane.ptyId,
+        incarnationId: t.pane.incarnationId,
+        runtimeIncarnationId: t.pane.incarnationId
+      }
+    )
+    expect(t.runtime.onPtyExit).toHaveBeenCalledTimes(1)
+    expect(t.sendPtyExitToRenderer).not.toHaveBeenCalled()
+    t.emitExit()
+    t.release({ outcome: 'ended', writersExited: true })
+    await result
+    expect(t.runtime.onPtyExit).toHaveBeenCalledTimes(1)
+    expect(t.sendPtyExitToRenderer).toHaveBeenCalledTimes(1)
   })
 })
