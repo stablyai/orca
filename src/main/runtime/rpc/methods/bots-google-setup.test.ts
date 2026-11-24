@@ -7,6 +7,7 @@ import { googleSetupKeyBlocker } from '../../../../shared/google/google-setup-bl
 import type { GoogleClientView } from '../../../../shared/google/google-client-config'
 import type { GoogleAccountView } from '../../../../shared/google/google-connect-types'
 import type { RpcContext } from '../core'
+import type { GoogleSetupRun } from '../../../../shared/google/google-setup-run'
 import type * as ChatCards from '../../../google/google-setup-chat-cards'
 
 const state = vi.hoisted(
@@ -206,7 +207,10 @@ describe('a step handed to the owner that they finished outside its card', () =>
   })
   // A run saved by an earlier build: publish handed to the owner, who published in Google Cloud and
   // signed in, so only that step's Done holds it.
-  const saveStuckRun = (steps: object = {}, fields: object = {}) =>
+  const saveStuckRun = (
+    steps: GoogleSetupRun['steps'] = {},
+    fields: Partial<GoogleSetupRun> = {}
+  ) =>
     writeFileSync(
       join(dir, 'runs.json'),
       JSON.stringify({
