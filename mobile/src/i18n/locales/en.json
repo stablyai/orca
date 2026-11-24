@@ -1696,6 +1696,7 @@
         "exitPlanMode": "Exit plan mode",
         "pastedTextLabel": "Pasted text",
         "botChats": "Chats",
+        "botFor": "For: {{detail}}",
         "backToBots": "Back to bots",
         "loadingBotChats": "Loading {{name}}'s chats…",
         "noOtherChats": "No other chats",
