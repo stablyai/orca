@@ -301,6 +301,9 @@ function applyChange(
       for (const step of change.steps) {
         if (run.steps[step]?.status === 'needs-user') {
           run.steps[step] = { status: 'done', at: now, note: GOOGLE_SETUP_FINISHED_OUTSIDE_NOTE }
+          if (run.personStep === step) {
+            delete run.personStep
+          }
         }
       }
       return
