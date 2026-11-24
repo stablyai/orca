@@ -18,8 +18,6 @@ export type BotItemNeedsYouJump = {
   mark: BotItemNeedsYouMark | undefined
   /** For the header's status row. */
   reply: React.ReactNode
-  /** The header's height, which the observer leaves out of the scroller's view. */
-  setHeaderHeight: (height: number) => void
   /** For the comment box after a jump: the entry it answers, read with it. */
   describedBy: string | undefined
   /** Reply points down (or waits on a page): Jump to latest would be a second way down. */
@@ -50,7 +48,7 @@ export function useBotItemNeedsYouJump({
   const reveal = (node: HTMLElement): void => {
     watch.revealed()
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    // The scroller's scroll padding is the header's height, so it lands just under the header.
+    // Lands at the top of the Activity's scroller, just under the fixed header.
     revealRow(node, still ? 'auto' : 'smooth')
     // Keyframes take a color, not a variable: the theme's amber, read on the click.
     const amber = getComputedStyle(node).getPropertyValue('--agent-question').trim()
@@ -127,7 +125,6 @@ export function useBotItemNeedsYouJump({
           onJump={jump}
         />
       ) : null,
-    setHeaderHeight: watch.setTop,
     describedBy: eligible && jumped ? id : undefined,
     pointsDown: eligible && activityShown && (below || pending)
   }
