@@ -1,10 +1,5 @@
 import { useMemo } from 'react'
-import {
-  getRepoHostIdentity,
-  getRepoHostIdentityForParts
-} from '../../../../src/shared/repository/repo-host-identity'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { resolveWorktreeHostId } from '../../worktree/row-presentation/worktree-host-context-labels'
 import {
   isLastVisitedWorktreeRow,
   type LastVisitedWorktreeOnHost
@@ -34,21 +29,9 @@ export function useHostChatSections(
     [state.view.collapsedGroups]
   )
   const catalog = useMemo(() => ({ ...NO_PROJECT_SECTION_CATALOG, repos }), [repos])
-  const titledRows = useMemo(() => {
-    const repoByKey = new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo]))
-    return rows.map((row) => {
-      const repo = repoByKey.get(
-        getRepoHostIdentityForParts(
-          row.repoId,
-          resolveWorktreeHostId(row, state.repoHostIdByRepoId)
-        )
-      )
-      return repo && row.path === repo.path ? { ...row, displayName: repo.displayName } : row
-    })
-  }, [rows, repos, state.repoHostIdByRepoId])
   const filters = useMemo(() => rowFiltersForView(state.view), [state.view])
   const plan = useWorkspaceSections({
-    displayWorktrees: titledRows,
+    displayWorktrees: rows,
     hostContextOf: inputs.hostContextOf,
     sortMode: state.view.sortBy,
     filters,
