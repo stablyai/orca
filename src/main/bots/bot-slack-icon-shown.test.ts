@@ -219,3 +219,17 @@ it('waits at quit for a send on its way to answer, then saves the record it mark
   await quit
   expect(onDisk.get('bot-1')).toEqual(G1)
 })
+
+it('gives an earlier failed save its last try at quit even while a send hangs', async () => {
+  const { records, onDisk, fail } = disk()
+  fail(true)
+  records.mark('bot-1', G1)
+  await idle()
+  records.answered()
+  await idle()
+  fail(false)
+  // An upload that never answers before the deadline.
+  records.confirming(new Promise<void>(() => {}))
+  void records.finalSave()
+  await vi.waitFor(() => expect(onDisk.get('bot-1')).toEqual(G1))
+})

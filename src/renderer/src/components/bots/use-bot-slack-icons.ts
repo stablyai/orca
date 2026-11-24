@@ -140,8 +140,9 @@ async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
       clearFailure(bot)
       return
     }
-    // No drawing, or the host's look changed meanwhile: only a drawing that failed waits for a real step.
-    forget(bot, attempt, !png)
+    // No drawing waits for a real step here. A drawing the host didn't take (its bots turned off, or its
+    // look changed meanwhile) waits for the host's settings to change, or a newer record.
+    forget(bot, attempt, true, Boolean(png))
   } catch (error) {
     forget(bot, attempt, true)
     console.warn('[bots] could not draw the Slack icon', error)
@@ -241,8 +242,9 @@ function publishLooks(all = false): void {
     }
   }
   if (seenHosts.size > hostIds.length) {
+    const listed = new Set(hostIds)
     for (const [hostId, before] of seenHosts) {
-      if (!hostIds.includes(hostId)) {
+      if (!listed.has(hostId)) {
         seenHosts.delete(hostId)
         prune(hostId, before, [])
       }

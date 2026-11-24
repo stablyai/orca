@@ -132,8 +132,12 @@ export class BotSlackIconShownRecords {
     this.deadline ??= new Promise<void>((resolve) => {
       setTimeout(resolve, BOT_SLACK_ICON_SHOWN_SETTLE_MS).unref?.()
     })
-    const saved = Promise.allSettled(this.sends).then(() => this.settled())
-    return Promise.race([this.deadline, saved])
+    // Records already unsaved go now, so a slow send never holds their last try back.
+    const saved = Promise.all([
+      this.settled(),
+      Promise.allSettled(this.sends).then(() => this.settled())
+    ])
+    return Promise.race([this.deadline, saved.then(() => undefined)])
   }
 
   /** A deleted bot keeps nothing here; settles once a save of it already on its way has landed. */
