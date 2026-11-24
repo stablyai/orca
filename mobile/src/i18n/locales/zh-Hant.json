@@ -820,25 +820,13 @@
     },
     "customKeyModal": {
       "add": "新增",
-      "addShortcut": "新增快速鍵",
-      "command": "命令",
       "commandPlaceholder": "例如：pnpm build",
       "editing": "編輯",
       "function": "功能鍵",
       "key": "按鍵",
-      "label": "顯示名稱",
-      "labelPlaceholder": "例如：建置",
-      "manageShortcuts": "管理快速鍵",
-      "manageShortcutsHint": "顯示、隱藏或調整快速鍵順序",
-      "modifiers": "修飾鍵",
-      "moreKeys": "更多按鍵",
       "navigation": "導覽",
-      "pickKey": "選擇按鍵",
       "pressEnter": "按下 Enter",
-      "shortcutCombo": "快速鍵組合",
-      "shortcutComboHint": "建立 Ctrl、Alt 和 Shift 組合鍵",
-      "textMacro": "文字巨集",
-      "textMacroHint": "傳送自訂文字命令"
+      "labelPlaceholder": "例如：建置"
     },
     "dictationSetupSheet": {
       "description": "可直接在此下載或選擇模型，並在已配對的電腦上啟用聽寫。",
@@ -2022,12 +2010,7 @@
       "messageModeLabel": "訊息模式：輸入後再傳送。切換至按鍵模式",
       "moreKeys": "更多按鍵與操作",
       "showKeyboard": "顯示鍵盤",
-      "dismissKeyboardHint": "隱藏螢幕鍵盤，並保持目前的終端機工作階段開啟。",
-      "switchToDesktopMode": "切換至桌面模式",
-      "switchToPhoneMode": "切換到手機模式",
-      "pasteFromClipboard": "從剪貼簿貼上",
-      "paste": "貼上",
-      "addCustomShortcut": "新增自訂快速鍵"
+      "pasteFromClipboard": "從剪貼簿貼上"
     },
     "activeContent": {
       "createTab": "建立分頁",
@@ -2556,20 +2539,12 @@
       "switchToDesktop": "切換為桌面模式",
       "switchToPhone": "切換為手機模式"
     },
-    "terminalInputActions": {
-      "attachFileHint": "長按可改為附加檔案",
-      "attachPhoto": "附加照片",
-      "sendingImage": "正在傳送圖片"
-    },
     "terminalLiveInputStatus": {
       "listening": "正在聆聽",
-      "liveInput": "即時輸入",
       "preparingMic": "正在準備麥克風",
       "processing": "處理中",
       "releaseMicHint": "放開按鈕即可停止錄音",
-      "startingMic": "正在啟動麥克風",
-      "uploadingImage": "正在將圖片上傳至主機",
-      "uploadingImageTitle": "正在上傳圖片"
+      "startingMic": "正在啟動麥克風"
     },
     "terminalRecords": {
       "defaultTitle": "終端機"
@@ -2826,17 +2801,14 @@
     "terminalMoreKeys": {
       "sendKey": "傳送 {{label}}",
       "paste": "貼上",
-      "sending": "傳送中…",
       "photo": "照片",
       "file": "檔案",
       "desktopWidth": "桌面寬度",
       "phoneWidth": "手機寬度",
       "keys": "按鍵",
-      "combos": "組合鍵",
       "yourKeys": "你的按鍵",
       "deleteKeyHint": "長按以刪除此按鍵",
-      "addCustomKey": "新增自訂按鍵",
-      "addKey": "新增按鍵"
+      "addCustomKey": "新增自訂按鍵"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}，已聚焦",
@@ -4454,7 +4426,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "配對電腦",
       "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",

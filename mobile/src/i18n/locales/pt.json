@@ -897,25 +897,13 @@
     },
     "customKeyModal": {
       "add": "Adicionar",
-      "addShortcut": "Adicionar atalho",
-      "command": "Comando",
       "commandPlaceholder": "Ex.: pnpm build",
       "editing": "Edição",
       "function": "Função",
       "key": "Tecla",
-      "label": "Rótulo",
-      "labelPlaceholder": "Ex.: Compilar",
-      "manageShortcuts": "Gerenciar atalhos",
-      "manageShortcutsHint": "Mostrar, ocultar ou reordenar teclas de atalho",
-      "modifiers": "Modificadores",
-      "moreKeys": "MAIS TECLAS",
       "navigation": "Navegação",
-      "pickKey": "Selecione uma tecla",
       "pressEnter": "Pressionar Enter",
-      "shortcutCombo": "Combinação de teclas",
-      "shortcutComboHint": "Crie combinações com Ctrl, Alt e Shift",
-      "textMacro": "Macro de texto",
-      "textMacroHint": "Envie um comando de texto personalizado"
+      "labelPlaceholder": "Ex.: Compilar"
     },
     "dictationSetupSheet": {
       "description": "Baixe ou selecione um modelo e ative o ditado no computador pareado — tudo por aqui.",
@@ -2427,12 +2415,7 @@
       "messageModeLabel": "Modo de mensagem: escreva e depois envie. Mudar para o modo de teclas",
       "moreKeys": "Mais teclas e ações",
       "showKeyboard": "Mostrar teclado",
-      "dismissKeyboardHint": "Oculta o teclado virtual e mantém a sessão atual do terminal aberta.",
-      "switchToDesktopMode": "Alternar para o modo desktop",
-      "switchToPhoneMode": "Mudar para o modo celular",
       "pasteFromClipboard": "Colar da área de transferência",
-      "paste": "Colar",
-      "addCustomShortcut": "Adicionar atalho personalizado",
       "control": "Ctrl",
       "alt": "Alt",
       "shift": "Shift"
@@ -2561,8 +2544,7 @@
     },
     "commandDock": {
       "liveInputHint": "O texto digitado é enviado diretamente ao terminal ativo.",
-      "liveInputLabel": "Entrada em tempo real no terminal",
-      "tapToShowKeyboard": "Toque para mostrar o teclado"
+      "liveInputLabel": "Entrada em tempo real no terminal"
     },
     "contentRow": {
       "dismissCreationWarning": "Dispensar aviso de criação do espaço de trabalho"
@@ -3000,20 +2982,12 @@
       "switchToDesktop": "Alternar para o modo desktop",
       "switchToPhone": "Alternar para o modo celular"
     },
-    "terminalInputActions": {
-      "attachFileHint": "Mantenha pressionado para anexar um arquivo em vez de uma foto",
-      "attachPhoto": "Anexar uma foto",
-      "sendingImage": "Enviando imagem"
-    },
     "terminalLiveInputStatus": {
       "listening": "Ouvindo",
-      "liveInput": "Entrada em tempo real",
       "preparingMic": "Preparando microfone",
       "processing": "Processando",
       "releaseMicHint": "Solte o microfone para parar",
-      "startingMic": "Ativando microfone",
-      "uploadingImage": "Enviando imagem para o host",
-      "uploadingImageTitle": "Enviando imagem"
+      "startingMic": "Ativando microfone"
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
@@ -3272,17 +3246,14 @@
     "terminalMoreKeys": {
       "sendKey": "Enviar {{label}}",
       "paste": "Colar",
-      "sending": "Enviando…",
       "photo": "Foto",
       "file": "Arquivo",
       "desktopWidth": "Largura de desktop",
       "phoneWidth": "Largura de celular",
       "keys": "Teclas",
-      "combos": "Combinações",
       "yourKeys": "Suas teclas",
       "deleteKeyHint": "Mantenha pressionado para excluir esta tecla",
-      "addCustomKey": "Adicionar tecla personalizada",
-      "addKey": "Adicionar tecla"
+      "addCustomKey": "Adicionar tecla personalizada"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, em foco",
@@ -5140,7 +5111,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",

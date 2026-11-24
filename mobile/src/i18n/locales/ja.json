@@ -817,25 +817,13 @@
     },
     "customKeyModal": {
       "add": "追加",
-      "addShortcut": "ショートカットを追加",
-      "command": "コマンド",
       "commandPlaceholder": "例：pnpm build",
       "editing": "編集",
       "function": "ファンクションキー",
       "key": "キー",
-      "label": "ラベル",
-      "labelPlaceholder": "例：ビルド",
-      "manageShortcuts": "ショートカットを管理",
-      "manageShortcutsHint": "ショートカットキーの表示・非表示・並べ替え",
-      "modifiers": "修飾キー",
-      "moreKeys": "その他のキー",
       "navigation": "ナビゲーション",
-      "pickKey": "キーを選択",
       "pressEnter": "Enter を押す",
-      "shortcutCombo": "キーの組み合わせ",
-      "shortcutComboHint": "Ctrl、Alt、Shift を使ったキーの組み合わせを作成",
-      "textMacro": "テキストマクロ",
-      "textMacroHint": "カスタムのテキストコマンドを送信"
+      "labelPlaceholder": "例：ビルド"
     },
     "dictationSetupSheet": {
       "description": "ここからモデルをダウンロードまたは選択し、ペアリング済みのコンピュータでディクテーションを有効にできます。",
@@ -2024,12 +2012,7 @@
       "messageModeLabel": "メッセージモード：入力してから送信します。キーモードに切り替える",
       "moreKeys": "その他のキーと操作",
       "showKeyboard": "キーボードを表示",
-      "dismissKeyboardHint": "現在のターミナルセッションを開いたまま、ソフトウェアキーボードを非表示にします。",
-      "switchToDesktopMode": "デスクトップモードに切り替え",
-      "switchToPhoneMode": "スマートフォンモードに切り替え",
-      "pasteFromClipboard": "クリップボードから貼り付け",
-      "paste": "貼り付け",
-      "addCustomShortcut": "カスタムショートカットを追加"
+      "pasteFromClipboard": "クリップボードから貼り付け"
     },
     "activeContent": {
       "createTab": "タブを作成",
@@ -2558,20 +2541,12 @@
       "switchToDesktop": "デスクトップ表示に切り替え",
       "switchToPhone": "スマートフォン表示に切り替え"
     },
-    "terminalInputActions": {
-      "attachFileHint": "長押しすると、写真の代わりにファイルを添付できます。",
-      "attachPhoto": "写真を添付",
-      "sendingImage": "画像を送信中…"
-    },
     "terminalLiveInputStatus": {
       "listening": "聞き取り中",
-      "liveInput": "リアルタイム入力",
       "preparingMic": "マイクを準備中",
       "processing": "処理中",
       "releaseMicHint": "マイクボタンから指を離すと停止",
-      "startingMic": "マイクを起動中",
-      "uploadingImage": "ホストに画像をアップロード中",
-      "uploadingImageTitle": "画像をアップロード中"
+      "startingMic": "マイクを起動中"
     },
     "terminalRecords": {
       "defaultTitle": "ターミナル"
@@ -2828,17 +2803,14 @@
     "terminalMoreKeys": {
       "sendKey": "{{label}}を送信",
       "paste": "貼り付け",
-      "sending": "送信中…",
       "photo": "写真",
       "file": "ファイル",
       "desktopWidth": "デスクトップ幅",
       "phoneWidth": "スマートフォン幅",
       "keys": "キー",
-      "combos": "組み合わせ",
       "yourKeys": "自分のキー",
       "deleteKeyHint": "長押ししてこのキーを削除",
-      "addCustomKey": "カスタムキーを追加",
-      "addKey": "キーを追加"
+      "addCustomKey": "カスタムキーを追加"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}、フォーカス中",
@@ -4541,7 +4513,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",

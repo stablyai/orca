@@ -5,9 +5,17 @@ import { themedStyleSheet } from '../../../theme/themed-styles'
 const KEY_HEIGHT = 32
 const KEY_ROW_HEIGHT = 46
 const KEY_GAP = spacing.sm
+// One key holds all four arrows, so they fit on screen next to Esc, Tab, Ctrl and Alt.
+const ARROW_SEGMENT_WIDTH = 28
 const KEY_RADIUS = radii.control
 // The smart group wraps its keys with this much room on each side, inside the same row.
 const SMART_GROUP_INSET = spacing.xs
+
+/** An arrow segment's touch box: the row's height, and halfway into the gap on the cluster's ends. */
+export const TERMINAL_ARROW_HIT_SLOP = {
+  top: (KEY_ROW_HEIGHT - KEY_HEIGHT) / 2,
+  bottom: (KEY_ROW_HEIGHT - KEY_HEIGHT) / 2
+} as const
 
 /** Grows each 32 pt key to the row's height and halfway into its neighbours' gaps. */
 export const TERMINAL_KEY_HIT_SLOP = {
@@ -66,6 +74,26 @@ export const terminalDockStyles = themedStyleSheet(() => ({
   key: {
     ...key,
     backgroundColor: colors.bgRaised
+  },
+  arrowCluster: {
+    height: KEY_HEIGHT,
+    flexDirection: 'row',
+    borderRadius: KEY_RADIUS,
+    backgroundColor: colors.bgRaised,
+    overflow: 'hidden'
+  },
+  arrowKey: {
+    width: ARROW_SEGMENT_WIDTH,
+    height: KEY_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  arrowKeyDivided: {
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: colors.translucentFill
+  },
+  arrowKeyPressed: {
+    backgroundColor: colors.translucentFill
   },
   // The user's own keys from Settings, told apart from the built-in ones.
   customKey: {
@@ -144,26 +172,7 @@ export const terminalDockStyles = themedStyleSheet(() => ({
     opacity: feedback.disabledOpacity
   },
   sheetContent: {
-    gap: spacing.md,
     paddingBottom: spacing.lg
-  },
-  sheetActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm
-  },
-  sheetAction: {
-    ...key,
-    height: 38,
-    paddingHorizontal: spacing.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.composerBorder,
-    backgroundColor: colors.composerSurface
-  },
-  sheetActionText: {
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '500'
   },
   sheetKey: {
     backgroundColor: colors.sheetGroup
@@ -172,9 +181,5 @@ export const terminalDockStyles = themedStyleSheet(() => ({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: KEY_GAP
-  },
-  sheetEmpty: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
   }
 }))

@@ -863,25 +863,13 @@
     },
     "customKeyModal": {
       "add": "Ajouter",
-      "addShortcut": "Ajouter un raccourci",
-      "command": "Commande",
       "commandPlaceholder": "Ex. : pnpm build",
       "editing": "Édition",
       "function": "Fonction",
       "key": "Touche",
-      "label": "Libellé",
-      "labelPlaceholder": "Ex. : Compilation",
-      "manageShortcuts": "Gérer les raccourcis",
-      "manageShortcutsHint": "Afficher, masquer ou réordonner les touches de raccourci",
-      "modifiers": "Modificateurs",
-      "moreKeys": "PLUS DE TOUCHES",
       "navigation": "Navigation",
-      "pickKey": "Choisir une touche",
       "pressEnter": "Appuyer sur Entrée",
-      "shortcutCombo": "Combinaison de touches",
-      "shortcutComboHint": "Créer des combinaisons avec Ctrl, Alt et Shift",
-      "textMacro": "Macro de texte",
-      "textMacroHint": "Envoyer une commande texte personnalisée"
+      "labelPlaceholder": "Ex. : Compilation"
     },
     "dictationSetupSheet": {
       "description": "Téléchargez ou choisissez un modèle et activez la dictée sur l'ordinateur appairé, le tout depuis cet écran.",
@@ -2086,12 +2074,7 @@
       "messageModeLabel": "Mode message : écrivez, puis envoyez. Passer en mode touches",
       "moreKeys": "Plus de touches et d’actions",
       "showKeyboard": "Afficher le clavier",
-      "dismissKeyboardHint": "Masque le clavier virtuel et garde la session de terminal en cours ouverte.",
-      "switchToDesktopMode": "Passer en mode bureau",
-      "switchToPhoneMode": "Basculer en mode téléphone",
-      "pasteFromClipboard": "Coller depuis le presse-papiers",
-      "paste": "Coller",
-      "addCustomShortcut": "Ajouter un raccourci personnalisé"
+      "pasteFromClipboard": "Coller depuis le presse-papiers"
     },
     "activeContent": {
       "createTab": "Créer un onglet",
@@ -2638,20 +2621,12 @@
       "switchToDesktop": "Passer en mode ordinateur",
       "switchToPhone": "Passer en mode téléphone"
     },
-    "terminalInputActions": {
-      "attachFileHint": "Appuyez longuement pour joindre un fichier à la place.",
-      "attachPhoto": "Joindre une photo",
-      "sendingImage": "Envoi de l'image"
-    },
     "terminalLiveInputStatus": {
       "listening": "Écoute en cours",
-      "liveInput": "Saisie en direct",
       "preparingMic": "Préparation du microphone",
       "processing": "Traitement en cours",
       "releaseMicHint": "Relâchez le micro pour arrêter",
-      "startingMic": "Démarrage du micro",
-      "uploadingImage": "Envoi de l'image à l'hôte",
-      "uploadingImageTitle": "Envoi de l'image"
+      "startingMic": "Démarrage du micro"
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
@@ -2908,17 +2883,14 @@
     "terminalMoreKeys": {
       "sendKey": "Envoyer {{label}}",
       "paste": "Coller",
-      "sending": "Envoi…",
       "photo": "Photo",
       "file": "Fichier",
       "desktopWidth": "Largeur bureau",
       "phoneWidth": "Largeur téléphone",
       "keys": "Touches",
-      "combos": "Combinaisons",
       "yourKeys": "Vos touches",
       "deleteKeyHint": "Appuyez longuement pour supprimer cette touche",
-      "addCustomKey": "Ajouter une touche personnalisée",
-      "addKey": "Ajouter une touche"
+      "addCustomKey": "Ajouter une touche personnalisée"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, actif",
@@ -4566,7 +4538,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",

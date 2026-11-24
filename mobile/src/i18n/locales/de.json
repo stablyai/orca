@@ -823,25 +823,13 @@
     },
     "customKeyModal": {
       "add": "Hinzufügen",
-      "addShortcut": "Tastenkürzel hinzufügen",
-      "command": "Befehl",
       "commandPlaceholder": "z. B. pnpm build",
       "editing": "Bearbeitung",
       "function": "Funktionstasten",
       "key": "Taste",
-      "label": "Bezeichnung",
-      "labelPlaceholder": "z. B. Kompilieren",
-      "manageShortcuts": "Tastenkürzel verwalten",
-      "manageShortcutsHint": "Tastenkürzel einblenden, ausblenden oder neu anordnen",
-      "modifiers": "Modifikatortasten",
-      "moreKeys": "WEITERE TASTEN",
       "navigation": "Navigation",
-      "pickKey": "Taste auswählen",
       "pressEnter": "Enter drücken",
-      "shortcutCombo": "Tastenkombination",
-      "shortcutComboHint": "Tastenkombinationen mit Ctrl, Alt und Shift erstellen",
-      "textMacro": "Textmakro",
-      "textMacroHint": "Benutzerdefinierten Textbefehl senden"
+      "labelPlaceholder": "z. B. Kompilieren"
     },
     "dictationSetupSheet": {
       "description": "Ein Modell herunterladen oder auswählen und das Diktat auf dem gekoppelten Computer aktivieren – alles von hier aus.",
@@ -2028,12 +2016,7 @@
       "messageModeLabel": "Nachrichtenmodus: Schreiben, dann senden. Zum Tastenmodus wechseln",
       "moreKeys": "Weitere Tasten und Aktionen",
       "showKeyboard": "Tastatur anzeigen",
-      "dismissKeyboardHint": "Blendet die Bildschirmtastatur aus und lässt die aktuelle Terminal-Sitzung geöffnet.",
-      "switchToDesktopMode": "In den Desktop-Modus wechseln",
-      "switchToPhoneMode": "In den Smartphone-Modus wechseln",
-      "pasteFromClipboard": "Aus der Zwischenablage einfügen",
-      "paste": "Einfügen",
-      "addCustomShortcut": "Benutzerdefiniertes Tastenkürzel hinzufügen"
+      "pasteFromClipboard": "Aus der Zwischenablage einfügen"
     },
     "activeContent": {
       "createTab": "Tab erstellen",
@@ -2562,20 +2545,12 @@
       "switchToDesktop": "Zum Desktop-Modus wechseln",
       "switchToPhone": "Zum Smartphone-Modus wechseln"
     },
-    "terminalInputActions": {
-      "attachFileHint": "Lange drücken, um stattdessen eine Datei anzuhängen",
-      "attachPhoto": "Foto anhängen",
-      "sendingImage": "Bild wird gesendet"
-    },
     "terminalLiveInputStatus": {
       "listening": "Hört zu",
-      "liveInput": "Direkte Eingabe",
       "preparingMic": "Mikrofon wird vorbereitet",
       "processing": "Wird verarbeitet",
       "releaseMicHint": "Zum Stoppen Mikrofon loslassen",
-      "startingMic": "Mikrofon wird gestartet",
-      "uploadingImage": "Bild wird auf den Host hochgeladen",
-      "uploadingImageTitle": "Bild wird hochgeladen"
+      "startingMic": "Mikrofon wird gestartet"
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
@@ -2832,17 +2807,14 @@
     "terminalMoreKeys": {
       "sendKey": "{{label}} senden",
       "paste": "Einfügen",
-      "sending": "Wird gesendet…",
       "photo": "Foto",
       "file": "Datei",
       "desktopWidth": "Desktopbreite",
       "phoneWidth": "Telefonbreite",
       "keys": "Tasten",
-      "combos": "Kombinationen",
       "yourKeys": "Deine Tasten",
       "deleteKeyHint": "Gedrückt halten, um diese Taste zu löschen",
-      "addCustomKey": "Benutzerdefinierte Taste hinzufügen",
-      "addKey": "Taste hinzufügen"
+      "addCustomKey": "Benutzerdefinierte Taste hinzufügen"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, fokussiert",
@@ -4460,7 +4432,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Computer koppeln",
       "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",

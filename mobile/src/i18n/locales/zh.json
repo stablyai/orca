@@ -1296,25 +1296,13 @@
     },
     "customKeyModal": {
       "add": "添加",
-      "addShortcut": "添加快捷键",
-      "command": "命令",
       "commandPlaceholder": "例如：pnpm build",
       "editing": "编辑键",
       "function": "功能键",
       "key": "按键",
-      "label": "标签",
-      "labelPlaceholder": "例如：构建",
-      "manageShortcuts": "管理快捷键",
-      "manageShortcutsHint": "显示、隐藏快捷键或调整其顺序",
-      "modifiers": "修饰键",
-      "moreKeys": "更多按键",
       "navigation": "导航键",
-      "pickKey": "选择按键",
       "pressEnter": "按下 Enter",
-      "shortcutCombo": "快捷键组合",
-      "shortcutComboHint": "使用 Ctrl、Alt 和 Shift 设置组合键",
-      "textMacro": "文本宏",
-      "textMacroHint": "发送自定义文本命令"
+      "labelPlaceholder": "例如：构建"
     },
     "dictationSetupSheet": {
       "description": "在此即可下载或选择模型，并在已配对的电脑上启用听写",
@@ -2924,12 +2912,7 @@
       "messageModeLabel": "消息模式：输入后发送。切换到按键模式",
       "moreKeys": "更多按键和操作",
       "showKeyboard": "显示键盘",
-      "dismissKeyboardHint": "隐藏软键盘，并保持当前终端会话打开",
-      "switchToDesktopMode": "切换到桌面模式",
-      "switchToPhoneMode": "切换到手机模式",
-      "pasteFromClipboard": "从剪贴板粘贴",
-      "paste": "Paste",
-      "addCustomShortcut": "添加自定义快捷键"
+      "pasteFromClipboard": "从剪贴板粘贴"
     },
     "activeContent": {
       "createTab": "创建标签页",
@@ -3039,7 +3022,6 @@
     },
     "commandDock": {
       "liveInputHint": "输入的文本会直接发送到当前终端",
-      "tapToShowKeyboard": "轻点以显示键盘",
       "liveInputLabel": "终端实时输入"
     },
     "contentRow": {
@@ -3487,20 +3469,12 @@
       "switchToDesktop": "切换到桌面模式",
       "switchToPhone": "切换到手机模式"
     },
-    "terminalInputActions": {
-      "attachFileHint": "长按可改为附加文件",
-      "attachPhoto": "附加照片",
-      "sendingImage": "正在发送图片"
-    },
     "terminalLiveInputStatus": {
       "listening": "正在聆听",
-      "liveInput": "实时输入",
       "preparingMic": "正在准备麦克风",
       "processing": "处理中",
       "releaseMicHint": "松开麦克风按钮即可停止",
-      "startingMic": "正在启动麦克风",
-      "uploadingImage": "正在将图片上传到主机",
-      "uploadingImageTitle": "正在上传图片"
+      "startingMic": "正在启动麦克风"
     },
     "terminalRecords": {
       "defaultTitle": "终端"
@@ -3760,17 +3734,14 @@
     "terminalMoreKeys": {
       "sendKey": "发送 {{label}}",
       "paste": "Paste",
-      "sending": "发送中…",
       "photo": "照片",
       "file": "文件",
       "desktopWidth": "桌面宽度",
       "phoneWidth": "手机宽度",
       "keys": "按键",
-      "combos": "组合键",
       "yourKeys": "你的按键",
       "deleteKeyHint": "长按以删除此按键",
-      "addCustomKey": "添加自定义按键",
-      "addKey": "添加按键"
+      "addCustomKey": "添加自定义按键"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}，已聚焦",

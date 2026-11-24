@@ -1487,25 +1487,13 @@
     },
     "customKeyModal": {
       "add": "Добавить",
-      "addShortcut": "Добавить кнопку",
-      "command": "Команда",
       "commandPlaceholder": "Например, pnpm build",
       "editing": "Редактирование",
       "function": "Функциональные клавиши",
       "key": "Клавиша",
-      "label": "Название",
       "labelPlaceholder": "Например, Сборка",
-      "manageShortcuts": "Управление кнопками",
-      "manageShortcutsHint": "Показывайте, скрывайте и меняйте порядок кнопок",
-      "modifiers": "Модификаторы",
-      "moreKeys": "ДОПОЛНИТЕЛЬНЫЕ КЛАВИШИ",
       "navigation": "Навигация",
-      "pickKey": "Выберите клавишу",
-      "pressEnter": "Нажимать Enter",
-      "shortcutCombo": "Сочетание клавиш",
-      "shortcutComboHint": "Создайте сочетания с Ctrl, Alt и Shift",
-      "textMacro": "Текстовый макрос",
-      "textMacroHint": "Отправка заданной текстовой команды"
+      "pressEnter": "Нажимать Enter"
     },
     "dictationSetupSheet": {
       "description": "Скачайте или выберите модель и включите диктовку на сопряжённом компьютере прямо здесь.",
@@ -3226,12 +3214,7 @@
       "messageModeLabel": "Режим сообщений: напишите, затем отправьте. Переключиться в режим клавиш",
       "moreKeys": "Другие клавиши и действия",
       "showKeyboard": "Показать клавиатуру",
-      "dismissKeyboardHint": "Скрывает экранную клавиатуру и оставляет текущую сессию терминала открытой.",
-      "switchToDesktopMode": "Переключиться в режим компьютера",
-      "switchToPhoneMode": "Переключить в режим телефона",
       "pasteFromClipboard": "Вставить из буфера обмена",
-      "paste": "Вставить",
-      "addCustomShortcut": "Добавить пользовательское сочетание клавиш",
       "control": "Control",
       "alt": "Alt",
       "shift": "Shift"
@@ -3377,8 +3360,7 @@
     },
     "commandDock": {
       "liveInputHint": "Вводимый текст отправляется прямо в активный терминал",
-      "liveInputLabel": "Прямой ввод в терминал",
-      "tapToShowKeyboard": "Нажмите, чтобы показать клавиатуру"
+      "liveInputLabel": "Прямой ввод в терминал"
     },
     "contentRow": {
       "dismissCreationWarning": "Закрыть предупреждение о создании рабочего пространства"
@@ -3835,20 +3817,13 @@
       "switchToDesktop": "Включить режим компьютера",
       "switchToPhone": "Включить режим телефона"
     },
-    "terminalInputActions": {
-      "attachFileHint": "Нажмите и удерживайте, чтобы прикрепить файл вместо фото",
-      "attachPhoto": "Прикрепить фото",
-      "sendingImage": "Отправка изображения"
-    },
+    "terminalInputActions": {},
     "terminalLiveInputStatus": {
       "listening": "Прослушивание",
-      "liveInput": "Прямой ввод",
       "preparingMic": "Подготовка микрофона",
       "processing": "Обработка",
       "releaseMicHint": "Отпустите кнопку микрофона, чтобы остановить запись",
-      "startingMic": "Включение микрофона",
-      "uploadingImage": "Загрузка изображения на сервер",
-      "uploadingImageTitle": "Загрузка изображения"
+      "startingMic": "Включение микрофона"
     },
     "terminalRecords": {
       "defaultTitle": "Терминал"
@@ -4108,17 +4083,14 @@
     "terminalMoreKeys": {
       "sendKey": "Отправить {{label}}",
       "paste": "Вставить",
-      "sending": "Отправка…",
       "photo": "Фото",
       "file": "Файл",
       "desktopWidth": "Ширина компьютера",
       "phoneWidth": "Ширина телефона",
       "keys": "Клавиши",
-      "combos": "Комбинации",
       "yourKeys": "Ваши клавиши",
       "deleteKeyHint": "Удерживайте, чтобы удалить эту клавишу",
-      "addCustomKey": "Добавить свою клавишу",
-      "addKey": "Добавить клавишу"
+      "addCustomKey": "Добавить свою клавишу"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, в фокусе",
