@@ -39,7 +39,8 @@ export async function captureCleanGuestPage(
   signal: AbortSignal,
   holdPaint: () => () => void,
   deadlineMs = CLEAN_CAPTURE_DEADLINE_MS,
-  paintCapMs = ABANDONED_READBACK_PAINT_CAP_MS
+  paintCapMs = ABANDONED_READBACK_PAINT_CAP_MS,
+  canSubmit: () => boolean = () => true
 ): Promise<BrowserCleanPageCapture | null> {
   if (signal.aborted || guest.isDestroyed()) {
     return null
@@ -56,7 +57,8 @@ export async function captureCleanGuestPage(
     signal,
     releasePaint,
     deadlineMs,
-    paintCapMs
+    paintCapMs,
+    canSubmit
   )
   try {
     if (!image || image.isEmpty() || signal.aborted || guest.isDestroyed()) {
@@ -68,18 +70,38 @@ export async function captureCleanGuestPage(
   }
 }
 
+/** Draw's readback of the document its clean ran on: a wait the page navigates away during ends. */
+export function captureCleanDocumentPage(
+  guest: ReadbackGuest,
+  signal: AbortSignal,
+  holdPaint: () => () => void,
+  sameDocument: () => boolean
+): Promise<BrowserCleanPageCapture | null> {
+  return captureCleanGuestPage(
+    guest,
+    signal,
+    holdPaint,
+    CLEAN_CAPTURE_DEADLINE_MS,
+    ABANDONED_READBACK_PAINT_CAP_MS,
+    sameDocument
+  )
+}
+
 /**
  * One native readback through the guest's capture lane, for every grab capture (Draw's page and a
  * selection's crop). The deadline covers both the wait for a capture already in flight and the
  * readback itself; a readback it abandons keeps the lane until Electron settles it. Takes ownership
  * of `releasePaint`: the lease is held until the readback settles, capped by `paintCapMs`.
+ * `canSubmit` is checked right before submitting, so a wait the page navigated away during never
+ * reads back the next document.
  */
 export async function readbackThroughCaptureLane<Image>(
   guest: { isDestroyed: () => boolean; capturePage: () => Promise<Image> },
   signal: AbortSignal,
   releasePaint: () => void,
   deadlineMs: number,
-  paintCapMs = ABANDONED_READBACK_PAINT_CAP_MS
+  paintCapMs = ABANDONED_READBACK_PAINT_CAP_MS,
+  canSubmit: () => boolean = () => true
 ): Promise<Image | null> {
   const release = once(releasePaint)
   // The deadline also withdraws a pending lane wait, so repeated timed-out readbacks leave no registrations.
@@ -105,7 +127,7 @@ export async function readbackThroughCaptureLane<Image>(
         return
       }
       stopWaiting = () => {}
-      if (signal.aborted || guest.isDestroyed()) {
+      if (signal.aborted || guest.isDestroyed() || !canSubmit()) {
         resolve(null)
         return
       }

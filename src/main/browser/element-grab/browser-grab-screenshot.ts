@@ -5,7 +5,10 @@ import type {
 } from '../../../shared/browser/element-grab/browser-grab-types'
 import { GRAB_BUDGET } from '../../../shared/browser/element-grab/browser-grab-types'
 import { grabDocumentScope, requestGrabExecution, restoreGrabCapture } from './grab-guest-execution'
-import { readbackThroughCaptureLane } from './grab-clean-page-capture'
+import {
+  ABANDONED_READBACK_PAINT_CAP_MS,
+  readbackThroughCaptureLane
+} from './grab-clean-page-capture'
 
 type Snapshot = BrowserGrabRect & { viewportWidth: number }
 const capturing = new WeakSet<Electron.WebContents>()
@@ -76,7 +79,9 @@ export async function captureSelectionScreenshot(
       guest,
       new AbortController().signal,
       releasePaint,
-      SELECTION_CAPTURE_DEADLINE_MS
+      SELECTION_CAPTURE_DEADLINE_MS,
+      ABANDONED_READBACK_PAINT_CAP_MS,
+      () => scope.current
     )
     if (!image || image.isEmpty() || !scope.current || guest.isDestroyed()) {
       return null

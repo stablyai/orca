@@ -16,7 +16,7 @@ import {
 import { GRAB_GUEST_ARM_SCRIPT } from '../../../element-grab/grab-guest-script'
 import { clampGrabPayload } from '../../../element-grab/browser-grab-payload'
 import { captureSelectionScreenshot as captureGrabSelectionScreenshot } from '../../../element-grab/browser-grab-screenshot'
-import { captureCleanGuestPage } from '../../../element-grab/grab-clean-page-capture'
+import { captureCleanDocumentPage } from '../../../element-grab/grab-clean-page-capture'
 import type { BrowserCleanPageCapture } from '../../../../../shared/browser/element-grab/browser-grab-clean-capture'
 import {
   getWorkspaceDocPageGuest,
@@ -290,7 +290,11 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     guest: Electron.WebContents,
     signal: AbortSignal
   ): Promise<BrowserCleanPageCapture | null> {
-    return captureCleanGuestPage(guest, signal, () => this.holdPaintForCapture(guest.id))
+    // A readback waiting for the lane must not submit after the page moved on to another document.
+    const scope = grabDocumentScope(guest)
+    const sameDocument = (): boolean => scope.current && grabDocumentScope(guest) === scope
+    const hold = (): (() => void) => this.holdPaintForCapture(guest.id)
+    return captureCleanDocumentPage(guest, signal, hold, sameDocument)
   }
 
   /** Preserve the active selection overlay and awaitClick listener. */
