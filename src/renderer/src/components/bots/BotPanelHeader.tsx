@@ -31,6 +31,7 @@ import { BotPanelHostLine } from './BotPanelHostLine'
 import { BotRowLineText, useBotRowLine } from './BotRowActivityLine'
 import { BotShareFlow } from './sharing/BotShareFlow'
 import { BotTeamShareDialogHost } from './team-share/BotTeamShareDialogHost'
+import { useTeamSharingOffered } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { formatWaitTime } from './bot-wait-copy'
 import { useBotWorkerWorkspaces } from './use-bot-worker-statuses'
 import { useBotUsageLimitStops } from './use-bot-usage-limit-stops'
@@ -180,6 +181,7 @@ export function BotPanelHeader({
     setRightSidebarTab('bot-activity')
   }
   const [sharing, setSharing] = useState<'people' | 'copy' | null>(null)
+  const sharingOffered = useTeamSharingOffered()
   return (
     <div className="flex items-center gap-2.5 px-2 pb-1 pt-1 @max-[284px]:gap-1.5">
       <fieldset disabled={offline} className="contents">
@@ -258,10 +260,12 @@ export function BotPanelHeader({
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => setSharing('people')}>
-              <UserPlus />
-              {t('bots.teamShare.share', 'Share…')}
-            </DropdownMenuItem>
+            {sharingOffered ? (
+              <DropdownMenuItem onSelect={() => setSharing('people')}>
+                <UserPlus />
+                {t('bots.teamShare.share', 'Share…')}
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem
               onSelect={() =>
                 void updateBot(bot, { paused: !bot.paused }).catch((error: unknown) =>
