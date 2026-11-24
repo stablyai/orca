@@ -19,7 +19,7 @@ export function BotItemLoading(): React.JSX.Element {
         <div className="flex flex-1 flex-col gap-4 px-3.5 pt-3.5 pb-2">
           <div>
             <div className="mb-1 text-xs text-muted-foreground">
-              {t('bots.items.field.doneWhen', 'Done when')}
+              {t('bots.items.field.doneMeans', 'Done when')}
             </div>
             <div className="flex h-[19px] items-center">
               <span className={cn(BAR, 'h-2.5 w-full max-w-[420px]')} />

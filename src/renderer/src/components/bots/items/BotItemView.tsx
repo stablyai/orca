@@ -336,7 +336,7 @@ export function BotItemBody({
                       {item.doneMeans ? (
                         <section>
                           <h3 className="mb-1 text-xs text-muted-foreground">
-                            {t('bots.items.field.doneWhen', 'Done when')}
+                            {t('bots.items.field.doneMeans', 'Done when')}
                           </h3>
                           <p className="text-[13px] leading-[19px] break-words text-foreground">
                             {item.doneMeans}

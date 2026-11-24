@@ -392,11 +392,11 @@ function LinksBlock({
       </NativeChatLinkPeekProvider>
       {more > 0 ? (
         <Button
-          variant="ghost"
+          variant="disclosure"
           size="xs"
           aria-expanded={false}
           aria-label={t('bots.items.view.moreLinks', '{{count}} more links', { count: more })}
-          className="-ml-2 text-muted-foreground"
+          className="-ml-2"
           onClick={() => {
             // The button goes once the rest show: focus moves to the first of them that opens, not to the page.
             flushSync(() => setExpanded(true))

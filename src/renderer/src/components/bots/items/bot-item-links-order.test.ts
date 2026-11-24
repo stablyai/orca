@@ -7,10 +7,18 @@ function worker(key: string, state: BotItemWorkerState): BotItemLinkRow {
   return {
     kind: 'worker',
     key,
-    link: { kind: 'dispatch', ref: key, state } as Extract<
-      BotItemLinkRow,
-      { kind: 'worker' }
-    >['link']
+    link: {
+      kind: 'dispatch',
+      ref: key,
+      state,
+      latest: null,
+      title: key,
+      host: null,
+      startedAt: null,
+      settledAt: null,
+      report: null,
+      pr: null
+    }
   }
 }
 

@@ -30261,12 +30261,10 @@
         "short": "No items yet. When {{bot}} takes something on, it shows up here."
       },
       "field": {
-        "chat": "Chat",
         "description": "description",
-        "doneMeans": "Done means",
+        "doneMeans": "Done when",
         "doneMeansLower": "done means",
-        "title": "title",
-        "doneWhen": "Done when"
+        "title": "title"
       },
       "filter": {
         "clearAll": "Clear filters",
