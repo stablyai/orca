@@ -1726,7 +1726,6 @@
       "deleteDestroysEnvironment": "También se destruye el entorno «{{environment}}» que Orca creó para él, con los cambios sin confirmar y los terminales en ejecución que haya en él.",
       "deleteKeepsEnvironment": "El entorno «{{environment}}» que Orca creó para él sigue en ejecución: su receta no tiene un paso de destrucción.",
       "pin": "Fijar",
-      "primaryWorktreeDeleteHint": "El worktree principal no se puede eliminar. Quita el proyecto en su lugar.",
       "removeHost": "Eliminar host",
       "removeHostMessage": "¿Eliminar \"{{name}}\"? Puedes volver a emparejarlo más tarde.",
       "sleep": "Suspender",
@@ -1735,8 +1734,7 @@
       "markRead": "Marcar como leído",
       "markUnread": "Marcar como no leído",
       "muteNotifications": "Silenciar notificaciones",
-      "unmuteNotifications": "Reactivar notificaciones",
-      "moveToStatus": "Mover al estado"
+      "unmuteNotifications": "Reactivar notificaciones"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Checks: fallidos",
@@ -4562,7 +4560,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Vincular un ordenador",
       "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",
@@ -5049,7 +5046,6 @@
       "valueSaved": "Guardado"
     },
     "handToBot": {
-      "menu": "Traspasar a un bot…",
       "title": "Traspasar {{name}} a un bot",
       "noAgents": "No tiene agentes en ejecución.",
       "oneAgent": "Su agente sigue ejecutándose y trabaja para el bot.",

@@ -2478,7 +2478,6 @@
       "deleteDestroysEnvironment": "Orca'nın bunun için oluşturduğu \"{{environment}}\" ortamı da, içindeki commit edilmemiş değişiklikler ve çalışan terminallerle birlikte yok edilir.",
       "deleteKeepsEnvironment": "Orca'nın bunun için oluşturduğu \"{{environment}}\" ortamı çalışmaya devam eder: tarifinde yok etme adımı yok.",
       "pin": "Sabitle",
-      "primaryWorktreeDeleteHint": "Birincil worktree, silinemez. Bunun yerine projeyi kaldırın.",
       "removeHost": "Sunucuyu Kaldır",
       "removeHostMessage": "“{{name}}” kaldırılsın mı? Daha sonra yeniden eşleştirebilirsiniz.",
       "sleep": "Uyut",
@@ -2486,7 +2485,6 @@
       "rename": "Yeniden adlandır",
       "markRead": "Okundu Olarak İşaretle",
       "markUnread": "Okunmadı Olarak İşaretle",
-      "moveToStatus": "Duruma Taşı",
       "deleteFailed": "“{{name}}” silinemedi",
       "muteNotifications": "Bildirimleri sessize al",
       "unmuteNotifications": "Bildirimlerin sesini aç"
@@ -7859,7 +7857,6 @@
       "valueSaved": "Kaydedildi"
     },
     "handToBot": {
-      "menu": "Bota devret…",
       "title": "{{name}} öğesini bir bota devret",
       "noAgents": "Çalışan ajanı yok.",
       "oneAgent": "Ajanı çalışmaya devam eder ve bot için çalışır.",

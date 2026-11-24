@@ -1681,15 +1681,13 @@
       "deleteDestroysEnvironment": "Dadurch wird auch die Umgebung „{{environment}}“ gelöscht, die Orca dafür erstellt hat, samt nicht committeter Änderungen und laufender Terminals.",
       "deleteKeepsEnvironment": "Die Umgebung „{{environment}}“, die Orca dafür erstellt hat, läuft weiter: Ihr Rezept hat keinen Löschschritt.",
       "pin": "Anheften",
-      "primaryWorktreeDeleteHint": "Primärer Worktree — kann nicht gelöscht werden. Stattdessen das Projekt entfernen.",
       "removeHost": "Host entfernen",
       "removeHostMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
       "sleep": "In Ruhezustand versetzen",
       "unpin": "Anheftung aufheben",
       "rename": "Umbenennen",
       "markRead": "Als gelesen markieren",
-      "markUnread": "Als ungelesen markieren",
-      "moveToStatus": "In Status verschieben"
+      "markUnread": "Als ungelesen markieren"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Checks: fehlgeschlagen",
@@ -4456,7 +4454,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Computer koppeln",
       "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",
@@ -4938,7 +4935,6 @@
       "valueSaved": "Gespeichert"
     },
     "handToBot": {
-      "menu": "An Bot übergeben…",
       "title": "{{name}} an einen Bot übergeben",
       "noAgents": "Es laufen keine Agents.",
       "oneAgent": "Sein Agent läuft weiter und arbeitet für den Bot.",

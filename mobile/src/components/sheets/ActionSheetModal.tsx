@@ -19,6 +19,10 @@ export type ActionSheetAction = {
   status?: string
   /** Marks the choice that is current, as a trailing check. */
   checked?: boolean
+  /** Opens another screen or sheet: a trailing chevron. */
+  navigates?: boolean
+  /** Actions sharing a group sit in one rounded group, the groups in order of first use. */
+  group?: string
   loading?: boolean
   skipAutoClose?: boolean
   closeBeforePress?: boolean
@@ -76,12 +80,14 @@ export function ActionSheetContent({
 }: ContentProps) {
   useMobileColorScheme()
   const groups = (
-    groupDestructive
-      ? [
-          { key: 'actions', actions: actions.filter((action) => !action.destructive) },
-          { key: 'destructive', actions: actions.filter((action) => action.destructive) }
-        ]
-      : [{ key: 'actions', actions }]
+    actions.some((action) => action.group !== undefined)
+      ? groupActions(actions)
+      : groupDestructive
+        ? [
+            { key: 'actions', actions: actions.filter((action) => !action.destructive) },
+            { key: 'destructive', actions: actions.filter((action) => action.destructive) }
+          ]
+        : [{ key: 'actions', actions }]
   ).filter((group) => group.actions.length > 0)
   return (
     <>
@@ -153,6 +159,7 @@ export function ActionSheetContent({
                   ) : undefined
                 }
                 selected={action.checked ? true : undefined}
+                navigates={action.navigates}
                 destructive={action.destructive}
                 disabled={action.disabled}
                 busy={action.loading}
@@ -169,6 +176,17 @@ export function ActionSheetContent({
       ))}
     </>
   )
+}
+
+function groupActions(
+  actions: readonly ActionSheetAction[]
+): { key: string; actions: ActionSheetAction[] }[] {
+  const groups = new Map<string, ActionSheetAction[]>()
+  for (const action of actions) {
+    const key = action.group ?? ''
+    groups.set(key, [...(groups.get(key) ?? []), action])
+  }
+  return [...groups].map(([key, grouped]) => ({ key: key || 'actions', actions: grouped }))
 }
 
 export function ActionSheetModal({

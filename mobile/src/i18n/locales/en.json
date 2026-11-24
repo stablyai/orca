@@ -483,8 +483,8 @@
       "loadFailed": "Unable to load agent sessions"
     },
     "worktreeNavigationActions": {
-      "sourceControl": "Source Control",
-      "agentSessionHistory": "Agent Session History"
+      "sourceControl": "Source control",
+      "agentSessionHistory": "Agent history"
     },
     "resume": {
       "hostConnectionChanged": "Host connection changed. Retry resume."
@@ -895,7 +895,7 @@
       "ignoredNamesCount": "{{names}} +{{value0}}",
       "ignoredUnchecked": "Ignored files could not be fully checked",
       "needsUpdate": "Update Orca on your computer to delete this workspace from your phone.",
-      "removeTitle": "Remove Workspace",
+      "removeTitle": "Remove workspace",
       "removeFolderMessage": "Remove \"{{name}}\" from Orca? The folder on disk is kept."
     },
     "hostScreenOverlays": {
@@ -906,15 +906,17 @@
       "unpin": "Unpin",
       "pin": "Pin",
       "rename": "Rename",
-      "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
       "deleteFailed": "Failed to delete \"{{name}}\"",
-      "markRead": "Mark Read",
-      "markUnread": "Mark Unread",
-      "muteNotifications": "Mute Notifications",
-      "unmuteNotifications": "Unmute Notifications",
-      "moveToStatus": "Move to Status"
+      "markRead": "Mark as read",
+      "markUnread": "Mark as unread",
+      "muteNotifications": "Mute notifications",
+      "unmuteNotifications": "Unmute notifications",
+      "status": "Status",
+      "handOff": "Hand off",
+      "handOffToAgent": "To an agent",
+      "handOffToBot": "To a bot"
     },
     "workspaceRenameSheet": {
       "title": "Rename Workspace",
@@ -7119,7 +7121,6 @@
       "valueSaved": "Saved"
     },
     "handToBot": {
-      "menu": "Hand to bot…",
       "title": "Hand {{name}} to a bot",
       "noAgents": "It has no agents running.",
       "oneAgent": "Its agent keeps running and works for the bot.",

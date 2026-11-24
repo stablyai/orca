@@ -1675,7 +1675,6 @@
       "deleteDestroysEnvironment": "Orca가 이 작업 트리용으로 만든 환경 \"{{environment}}\"도 커밋되지 않은 작업과 실행 중인 터미널과 함께 삭제됩니다.",
       "deleteKeepsEnvironment": "Orca가 이 작업 트리용으로 만든 환경 \"{{environment}}\"은(는) 계속 실행됩니다. 레시피에 삭제 단계가 없습니다.",
       "pin": "고정",
-      "primaryWorktreeDeleteHint": "기본 작업 트리는 삭제할 수 없습니다. 대신 프로젝트를 제거하세요.",
       "removeHost": "호스트 제거",
       "removeHostMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
       "sleep": "절전",
@@ -1684,8 +1683,7 @@
       "markRead": "읽음으로 표시",
       "markUnread": "읽지 않은 것으로 표시",
       "muteNotifications": "알림 음소거",
-      "unmuteNotifications": "알림 음소거 해제",
-      "moveToStatus": "상태로 이동"
+      "unmuteNotifications": "알림 음소거 해제"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "체크: 실패",
@@ -4558,7 +4556,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "컴퓨터 페어링",
       "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",
@@ -5462,7 +5459,6 @@
       "valueSaved": "저장됨"
     },
     "handToBot": {
-      "menu": "봇에게 넘기기…",
       "title": "{{name}}을(를) 봇에게 넘기기",
       "noAgents": "실행 중인 에이전트가 없습니다.",
       "oneAgent": "그 에이전트는 계속 실행되며 봇을 위해 일합니다.",

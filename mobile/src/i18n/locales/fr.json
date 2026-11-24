@@ -1726,7 +1726,6 @@
       "deleteDestroysEnvironment": "Cela détruit aussi l’environnement « {{environment}} » qu’Orca a créé pour lui, avec les modifications non validées et les terminaux en cours qui s’y trouvent.",
       "deleteKeepsEnvironment": "L’environnement « {{environment}} » qu’Orca a créé pour lui continue de tourner : sa recette n’a pas d’étape de destruction.",
       "pin": "Épingler",
-      "primaryWorktreeDeleteHint": "Worktree principal — impossible à supprimer. Retirez plutôt le projet.",
       "removeHost": "Supprimer l'hôte",
       "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
       "sleep": "Mettre en veille",
@@ -1735,8 +1734,7 @@
       "markRead": "Marquer comme lu",
       "markUnread": "Marquer comme non lu",
       "muteNotifications": "Désactiver les notifications",
-      "unmuteNotifications": "Réactiver les notifications",
-      "moveToStatus": "Déplacer vers le statut"
+      "unmuteNotifications": "Réactiver les notifications"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Vérifications : en échec",
@@ -4562,7 +4560,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",
@@ -5049,7 +5046,6 @@
       "valueSaved": "Enregistré"
     },
     "handToBot": {
-      "menu": "Transmettre à un bot…",
       "title": "Transmettre {{name}} à un bot",
       "noAgents": "Aucun agent ne s’exécute.",
       "oneAgent": "Son agent continue de s’exécuter et travaille pour le bot.",

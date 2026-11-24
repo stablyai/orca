@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { ChevronDown, ChevronRight, GitMerge } from 'lucide-react-native'
+import { ChevronDown, ChevronRight, Eye, EyeOff, GitMerge, Pin, PinOff } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import { triggerMediumImpact } from '../../platform/haptics/haptics'
 import { colors } from '../../theme/mobile-theme'
@@ -33,6 +33,7 @@ import { worktreeListRowStyles as styles } from './worktree-list-row-styles'
 import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
 import { PrStateIcon } from '../../source-control/review/status/PrStateIcon'
 import { WorktreeUnsavedName } from './WorktreeUnsavedName'
+import { SwipeRowActions } from '../../components/list/SwipeRowActions'
 
 type Props = {
   item: Worktree
@@ -52,6 +53,11 @@ type Props = {
   repoLook?: RepoLook | null
   /** The tablet sidebar marks the workspace its detail pane shows. */
   showSelection?: boolean
+  /** Swipe right marks it read or unread; absent where that can't be written. */
+  onToggleRead?: (item: Worktree) => void
+  /** Swipe left pins or unpins it. */
+  pinned?: boolean
+  onTogglePin?: (item: Worktree) => void
 }
 
 const NEEDS_YOU_RANK = AGENT_LIST_STATUS_RANK.permission
@@ -72,7 +78,10 @@ function WorktreeListRowComponent({
   unsavedName,
   pairedHostId = null,
   repoLook = null,
-  showSelection = false
+  showSelection = false,
+  onToggleRead,
+  pinned = false,
+  onTogglePin
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -138,89 +147,129 @@ function WorktreeListRowComponent({
   const name = item.displayName || item.repo
 
   return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.worktreeRow,
-        indent > 0 && { paddingLeft: WORKTREE_ROW_LAYOUT.indicatorInset + indent },
-        showSelection && item.isActive && styles.worktreeRowSelected,
-        view.dimmed && styles.worktreeRowDimmed,
-        pressed && styles.worktreeRowPressed
-      ]}
-      disabled={isReadOnly}
-      onPress={open}
-      onLongPress={openActions}
-      delayLongPress={400}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: isReadOnly }}
-    >
-      <View style={styles.indicatorCol}>
-        <AgentSpinner status={status} workingMode={item.workingMode} />
-      </View>
-      <View style={styles.worktreeMain}>
-        <View style={styles.worktreeNameRow}>
-          {view.botWorkspace ? <BotWorkspaceLogos item={item} /> : null}
-          {isRemoteExecutionHostId(hostId) && !view.botWorkspace ? (
-            <HostKindIcon hostId={hostId} size={12} />
-          ) : null}
-          {repoLook ? (
-            <View accessibilityLabel={item.repo}>
-              <MobileRepoIcon repoIcon={repoLook.icon} size={14} color={repoLook.color} />
-            </View>
-          ) : null}
-          <Text
-            style={[
-              styles.worktreeName,
-              item.isMainWorktree === true && styles.worktreeNameMain,
-              item.unread && styles.worktreeNameUnread,
-              isReadOnly && styles.textReadOnly
-            ]}
-            numberOfLines={1}
-          >
-            {name}
-          </Text>
-        </View>
-        {unsavedName ? <WorktreeUnsavedName name={unsavedName} /> : null}
-      </View>
-      <View style={styles.trailing}>
-        {/* A row on a computer that is down says so, or nothing on it explains why it won't open. */}
-        {(view.botWorkspace && view.hostContextLabel) || view.hostContextHealthLabel ? (
-          <HostContextPill
-            hostId={hostId}
-            label={view.hostContextLabel}
-            healthLabel={view.hostContextHealthLabel}
-          />
-        ) : null}
-        {view.botWorkspace ? null : agents.length > 0 ? (
-          <WorktreeAgentFacts item={item} agents={agents} />
-        ) : (
-          <PrMark item={item} />
-        )}
-        {count > 0 && onToggleLineage ? (
-          <Pressable
-            style={styles.lineageToggle}
-            hitSlop={LINEAGE_TOGGLE_HIT_SLOP}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: !view.lineageCollapsed }}
-            accessibilityLabel={
-              count === 1
-                ? t('components.worktreeListRow.children_one', '{{count}} child', { count })
-                : t('components.worktreeListRow.children_other', '{{count}} children', { count })
+    <SwipeRowActions
+      enabled={!isReadOnly}
+      leading={
+        onToggleRead
+          ? {
+              label: item.unread
+                ? t('agents.swipe.read', 'Read')
+                : t('agents.swipe.unread', 'Unread'),
+              accessibilityLabel: item.unread
+                ? t('hostScreen.hostScreenOverlays.markRead', 'Mark as read')
+                : t('hostScreen.hostScreenOverlays.markUnread', 'Mark as unread'),
+              icon: item.unread ? Eye : EyeOff,
+              background: colors.accentBlue,
+              foreground: colors.onAccent,
+              onPress: () => onToggleRead(item)
             }
-            onPress={(event) => {
-              event.stopPropagation()
-              onToggleLineage({ row: item, view })
-            }}
-          >
-            <Text style={styles.lineageCount}>{count}</Text>
-            {view.lineageCollapsed ? (
-              <ChevronRight size={16} color={colors.textMuted} />
+          : undefined
+      }
+      trailing={
+        onTogglePin
+          ? {
+              label: pinned
+                ? t('hostScreen.hostScreenOverlays.unpin', 'Unpin')
+                : t('hostScreen.hostScreenOverlays.pin', 'Pin'),
+              accessibilityLabel: pinned
+                ? t('hostScreen.hostScreenOverlays.unpin', 'Unpin')
+                : t('hostScreen.hostScreenOverlays.pin', 'Pin'),
+              icon: pinned ? PinOff : Pin,
+              background: colors.textMuted,
+              foreground: colors.onAccent,
+              onPress: () => onTogglePin(item)
+            }
+          : undefined
+      }
+    >
+      {(guardPress) => (
+        <Pressable
+          style={({ pressed }) => [
+            styles.worktreeRow,
+            indent > 0 && { paddingLeft: WORKTREE_ROW_LAYOUT.indicatorInset + indent },
+            showSelection && item.isActive && styles.worktreeRowSelected,
+            view.dimmed && styles.worktreeRowDimmed,
+            pressed && styles.worktreeRowPressed
+          ]}
+          disabled={isReadOnly}
+          onPress={guardPress(open)}
+          onLongPress={openActions}
+          delayLongPress={400}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: isReadOnly }}
+        >
+          <View style={styles.indicatorCol}>
+            <AgentSpinner status={status} workingMode={item.workingMode} />
+          </View>
+          <View style={styles.worktreeMain}>
+            <View style={styles.worktreeNameRow}>
+              {view.botWorkspace ? <BotWorkspaceLogos item={item} /> : null}
+              {isRemoteExecutionHostId(hostId) && !view.botWorkspace ? (
+                <HostKindIcon hostId={hostId} size={12} />
+              ) : null}
+              {repoLook ? (
+                <View accessibilityLabel={item.repo}>
+                  <MobileRepoIcon repoIcon={repoLook.icon} size={14} color={repoLook.color} />
+                </View>
+              ) : null}
+              <Text
+                style={[
+                  styles.worktreeName,
+                  item.isMainWorktree === true && styles.worktreeNameMain,
+                  item.unread && styles.worktreeNameUnread,
+                  isReadOnly && styles.textReadOnly
+                ]}
+                numberOfLines={1}
+              >
+                {name}
+              </Text>
+            </View>
+            {unsavedName ? <WorktreeUnsavedName name={unsavedName} /> : null}
+          </View>
+          <View style={styles.trailing}>
+            {/* A row on a computer that is down says so, or nothing on it explains why it won't open. */}
+            {(view.botWorkspace && view.hostContextLabel) || view.hostContextHealthLabel ? (
+              <HostContextPill
+                hostId={hostId}
+                label={view.hostContextLabel}
+                healthLabel={view.hostContextHealthLabel}
+              />
+            ) : null}
+            {view.botWorkspace ? null : agents.length > 0 ? (
+              <WorktreeAgentFacts item={item} agents={agents} />
             ) : (
-              <ChevronDown size={16} color={colors.textMuted} />
+              <PrMark item={item} />
             )}
-          </Pressable>
-        ) : null}
-      </View>
-    </Pressable>
+            {count > 0 && onToggleLineage ? (
+              <Pressable
+                style={styles.lineageToggle}
+                hitSlop={LINEAGE_TOGGLE_HIT_SLOP}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: !view.lineageCollapsed }}
+                accessibilityLabel={
+                  count === 1
+                    ? t('components.worktreeListRow.children_one', '{{count}} child', { count })
+                    : t('components.worktreeListRow.children_other', '{{count}} children', {
+                        count
+                      })
+                }
+                onPress={(event) => {
+                  event.stopPropagation()
+                  onToggleLineage({ row: item, view })
+                }}
+              >
+                <Text style={styles.lineageCount}>{count}</Text>
+                {view.lineageCollapsed ? (
+                  <ChevronRight size={16} color={colors.textMuted} />
+                ) : (
+                  <ChevronDown size={16} color={colors.textMuted} />
+                )}
+              </Pressable>
+            ) : null}
+          </View>
+        </Pressable>
+      )}
+    </SwipeRowActions>
   )
 }
 
