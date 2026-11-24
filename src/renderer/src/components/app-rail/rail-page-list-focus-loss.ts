@@ -1,8 +1,7 @@
 import { useLayoutEffect } from 'react'
-import { useAppStore } from '@/store/index'
-import { selectRailPageHidesWorkspaceList, WORKSPACE_LIST_REGION_ID } from './app-rail-layout'
+import { WORKSPACE_LIST_REGION_ID } from './app-rail-layout'
 
-// Set when a rail page removed the list rows while one of them held focus; the shell's focus recovery takes it.
+// Set when a rail page hid the list while focus was inside it; the shell's focus recovery takes it.
 let listFocusLostToRailPage = false
 
 export function takeRailPageListFocusLoss(): boolean {
@@ -12,25 +11,19 @@ export function takeRailPageListFocusLoss(): boolean {
 }
 
 /**
- * Mount as the first child of the list rows. Its layout cleanup runs before the rows' nodes leave the DOM, so it can
- * still see whether focus was inside them when a rail page collapses the list.
+ * When a rail page hides the list (zero width, inert), focus inside it has nowhere to go. Record that for the shell's
+ * focus recovery and release it now, rather than leave it on a node the user can no longer see or reach.
  */
-export function RailPageListFocusProbe(): null {
+export function useRailPageListFocusRelease(hiddenByRailPage: boolean): void {
   useLayoutEffect(() => {
-    return () => {
-      // Why: looked up at cleanup, not captured at mount; on the list's first mount this effect runs before the
-      // shell's ref is attached. The shell outlives its rows, so it is still in the DOM here.
-      const shell = document.getElementById(WORKSPACE_LIST_REGION_ID)
-      const active = document.activeElement
-      if (
-        shell &&
-        active instanceof Node &&
-        shell.contains(active) &&
-        selectRailPageHidesWorkspaceList(useAppStore.getState())
-      ) {
-        listFocusLostToRailPage = true
-      }
+    if (!hiddenByRailPage) {
+      return
     }
-  }, [])
-  return null
+    const shell = document.getElementById(WORKSPACE_LIST_REGION_ID)
+    const active = document.activeElement
+    if (shell && active instanceof HTMLElement && shell.contains(active)) {
+      listFocusLostToRailPage = true
+      active.blur()
+    }
+  }, [hiddenByRailPage])
 }

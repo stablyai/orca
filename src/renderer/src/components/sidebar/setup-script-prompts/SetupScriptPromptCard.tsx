@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
-import { selectWorkspaceListOpen } from '@/components/app-rail/app-rail-layout'
 import { track } from '@/diagnostics/telemetry/telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
@@ -38,7 +37,7 @@ import { useWorktreeById } from '@/store/workspaces/selection/use-selected-workt
 function SetupScriptPromptCard(): React.JSX.Element | null {
   const t = useTranslate()
   useUiLanguageRevision()
-  const sidebarOpen = useAppStore(selectWorkspaceListOpen)
+  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
