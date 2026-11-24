@@ -104,8 +104,7 @@ class BrowserSessionRegistry {
   }
 
   private persistProfiles(): void {
-    const nonDefault = [...this.profiles.values()].filter((p) => p.id !== 'default')
-    this.persistMeta({ profiles: nonDefault })
+    this.persistMeta({ profiles: [...this.profiles.values()].filter((p) => p.id !== 'default') })
   }
 
   private loadPersistedMeta(): BrowserSessionMeta {
