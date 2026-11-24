@@ -2032,6 +2032,22 @@
     },
     "artifacts": {
       "teamDisabled": "Artifact sharing is turned off by your team."
+    },
+    "linkedAccounts": {
+      "unlink": "Unlink",
+      "linkAnother": "Link another",
+      "link": "Link",
+      "waiting": "Waiting for {{service}}…",
+      "cancel": "Cancel",
+      "none": "Not linked",
+      "title": "Linked accounts",
+      "signedOutOnHost": "Sign {{host}} in to Orca again.",
+      "signedOut": "Sign in to Orca again.",
+      "unreachable": "Orca Cloud could not be reached. Check your connection and try again.",
+      "retry": "Try again",
+      "unlinkTitle": "Unlink {{name}} on {{service}}?",
+      "unlinkNoteWorkspace": "Bots shared with you won’t know it’s you in that workspace.",
+      "unlinkNote": "Bots shared with you won’t know it’s you on {{service}}."
     }
   },
   "menu": {

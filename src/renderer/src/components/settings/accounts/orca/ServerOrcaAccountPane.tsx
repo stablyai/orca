@@ -7,6 +7,7 @@ import { useBotHostLabel } from '../../../bots/use-bot-host-label'
 import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { OrcaAccountServerStatus } from '../../../../../../shared/orca-account-server-sign-in'
 import { accountStatusCopy, OrcaAccountHeader } from './OrcaAccountSettingsPane'
+import { LinkedAccountsSettings } from './LinkedAccountsSettings'
 
 const PROFILE_STATE = {
   'signed-in': 'connected',
@@ -51,32 +52,37 @@ export function ServerOrcaAccountPane({
     cantSave === null &&
     (account?.state === 'signed-out' || account?.state === 'reconnect-required')
   return (
-    <OrcaAccountHeader
-      name={account?.displayName}
-      connected={account?.state === 'signed-in'}
-      line={line}
-    >
-      {canSignIn && hasBots ? (
-        <BotHostSignInControl
-          hostId={hostId}
-          host={host}
-          bot={null}
-          label={
-            account.state === 'signed-out'
-              ? t('bots.host.signIn.start', 'Sign in on {{host}}', { host })
-              : t('bots.host.signIn.again', 'Sign {{host}} in again', { host })
-          }
-          firstSignIn={account.state === 'signed-out'}
-        />
-      ) : canSignIn ? (
-        <p className="basis-full text-xs text-muted-foreground">
-          {t(
-            'components.settings.orcaAccount.server.signInThere',
-            'Run `orca auth login` on {{host}} to sign it in.',
-            { host }
-          )}
-        </p>
+    <div className="space-y-6">
+      <OrcaAccountHeader
+        name={account?.displayName}
+        connected={account?.state === 'signed-in'}
+        line={line}
+      >
+        {canSignIn && hasBots ? (
+          <BotHostSignInControl
+            hostId={hostId}
+            host={host}
+            bot={null}
+            label={
+              account.state === 'signed-out'
+                ? t('bots.host.signIn.start', 'Sign in on {{host}}', { host })
+                : t('bots.host.signIn.again', 'Sign {{host}} in again', { host })
+            }
+            firstSignIn={account.state === 'signed-out'}
+          />
+        ) : canSignIn ? (
+          <p className="basis-full text-xs text-muted-foreground">
+            {t(
+              'components.settings.orcaAccount.server.signInThere',
+              'Run `orca auth login` on {{host}} to sign it in.',
+              { host }
+            )}
+          </p>
+        ) : null}
+      </OrcaAccountHeader>
+      {account?.state === 'signed-in' ? (
+        <LinkedAccountsSettings hostId={hostId} hostName={host} />
       ) : null}
-    </OrcaAccountHeader>
+    </div>
   )
 }

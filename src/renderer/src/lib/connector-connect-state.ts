@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import { signedInOrcaAccount } from './signed-in-orca-account'
 import { refreshBotGitHub } from './bot-github-state'
 import { refreshBotLinear } from './bot-linear-state'
+import { refreshConnectorLinks } from './connector-links-state'
 import { connectorTripCalls } from './bot-connector-host-calls'
 import { openBotHostPage } from './bot-host-page'
 import { CONNECT_NOT_ROUTED } from '@/components/bots/bot-host-copy'
@@ -78,11 +79,11 @@ function set(trip: Trip, next: ConnectorConnectView): void {
   listeners.forEach((listener) => listener())
 }
 
-// What a trip's link changes on the host. A Slack sign-in only adds a link, which no host state shows.
+// What a trip's link changes on the host: its linked accounts, and Linear's or GitHub's own state.
 const REFRESH: Record<ConnectorConnectSource, (hostId: ExecutionHostId) => Promise<unknown>> = {
-  linear: refreshBotLinear,
-  github: refreshBotGitHub,
-  slack: () => Promise.resolve()
+  linear: (hostId) => Promise.all([refreshBotLinear(hostId), refreshConnectorLinks(hostId)]),
+  github: (hostId) => Promise.all([refreshBotGitHub(hostId), refreshConnectorLinks(hostId)]),
+  slack: refreshConnectorLinks
 }
 
 async function settle(

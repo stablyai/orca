@@ -39,6 +39,8 @@ import {
   ConnectorConnectStartRequestSchema,
   ConnectorConnectStartSchema
 } from '../../../cloud/packages/connector-contract/src/connect-messages'
+import { botsCloudAnswer as answer, offAnswer } from './bots-cloud-answer'
+import { connectorLinksClient } from './connector-links-cloud-client'
 import type { ConnectorCloud } from './connector-cloud'
 import type { ConnectorResult } from './connector-cloud-request'
 
@@ -51,26 +53,6 @@ const SLACK_HAND_OFF_REDEEM = '/v1/connector/slack/handoffs/redeem'
 // A Slack call's workspace; an older cloud ignores it and means its only one.
 const teamQuery = (teamId: string | undefined, separator: '?' | '&'): string =>
   teamId === undefined ? '' : `${separator}team=${encodeURIComponent(teamId)}`
-
-function answer<T>(result: ConnectorResult<T>): BotSlackResult<T> {
-  if (result.ok) {
-    return result
-  }
-  const error =
-    result.error ??
-    (result.status === null
-      ? BOT_SLACK_DESKTOP_ERRORS.unreachable
-      : BOT_SLACK_DESKTOP_ERRORS.failed)
-  return { ok: false, error }
-}
-
-/** A bare 404 is a cloud without that source's routes; a 404 with a code is that code. */
-const offAnswer =
-  (off: string) =>
-  <T>(result: ConnectorResult<T>): BotSlackResult<T> =>
-    !result.ok && result.status === 404 && result.error === null
-      ? { ok: false, error: off }
-      : answer(result)
 
 // A cloud with Linear or GitHub off ("Coming soon"), or from before Sign in with Slack.
 const linearAnswer = offAnswer(BOT_LINEAR_OFF)
@@ -285,6 +267,8 @@ export function botsCloudClient(cloud: Pick<ConnectorCloud, 'call'>) {
           z.undefined()
         )
       ),
+    /** The account's linked Slack, GitHub and Linear people. */
+    links: connectorLinksClient(cloud),
     githubState: async () =>
       gitHubAnswer(
         await cloud.call(`${CONNECTOR_PATHS.github}/state`, undefined, ConnectorGitHubState, {
