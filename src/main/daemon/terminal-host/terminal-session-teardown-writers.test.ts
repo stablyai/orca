@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { DescendantSnapshot } from '../../pty/process-retirement/pty-descendant-termination'
 
-const { sweep } = vi.hoisted((): { sweep: { snapshot: DescendantSnapshot | null } } => ({
-  sweep: { snapshot: null }
+type Sweep = { snapshot: DescendantSnapshot | null; groupsLive: boolean | 'unknown' }
+
+const { sweep } = vi.hoisted((): { sweep: Sweep } => ({
+  sweep: { snapshot: null, groupsLive: false }
 }))
 vi.mock('../../pty/process-retirement/pty-descendant-termination', () => ({
   killWithDescendantSweep: async (
@@ -15,7 +17,8 @@ vi.mock('../../pty/process-retirement/pty-descendant-termination', () => ({
   }
 }))
 vi.mock('../sessions/terminal-descendant-shutdown', () => ({
-  terminateShutdownDescendants: async () => 'exited'
+  terminateShutdownDescendants: async () => 'exited',
+  shutdownProcessGroupsStillLive: async () => sweep.groupsLive
 }))
 
 import { TerminalSessionTeardown } from './terminal-session-teardown'
@@ -38,8 +41,12 @@ function liveCodexSession(): Session {
   return fields as unknown as Session
 }
 
-async function writersExitedAfterStop(snapshot: DescendantSnapshot): Promise<boolean> {
+async function writersExitedAfterStop(
+  snapshot: DescendantSnapshot,
+  groupsLive: boolean | 'unknown' = false
+): Promise<boolean> {
   sweep.snapshot = snapshot
+  sweep.groupsLive = groupsLive
   const teardown = new TerminalSessionTeardown(new Map([['pty-a', liveCodexSession()]]))
   const killed = teardown.kill('pty-a', true, () => {})
   const writers = teardown.writersExited('pty-a')
@@ -63,5 +70,16 @@ describe('teardown writer evidence', () => {
     await expect(
       writersExitedAfterStop({ rootPgid: null, descendants: [], capturedAtMs: 0 })
     ).resolves.toBe(false)
+  })
+
+  it('withholds proof while a process forked after the scan survives in a captured group', async () => {
+    const liveRoot = {
+      root: { pid: 4242, startedAt: 'Mon Nov 23 22:00:00 2026' },
+      rootPgid: 4242,
+      descendants: [],
+      capturedAtMs: 0
+    }
+    await expect(writersExitedAfterStop(liveRoot, true)).resolves.toBe(false)
+    await expect(writersExitedAfterStop(liveRoot, 'unknown')).resolves.toBe(false)
   })
 })
