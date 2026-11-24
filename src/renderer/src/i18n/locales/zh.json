@@ -9143,7 +9143,9 @@
           "lucideDescription": "使用仓库颜色的{{label}}图标",
           "defaultIcon": "默认",
           "cc76342291": "使用 GitHub 头像",
-          "43bf3709dd": "仓库图标"
+          "43bf3709dd": "仓库图标",
+          "autoColor": "自动颜色（与其他项目保持区分）",
+          "lettersDescription": "文字\"{{text}}\""
         },
         "RepositoryPane": {
           "15a99d9b9f": "相对路径从该项目根解析",
@@ -15768,6 +15770,25 @@
         },
         "forkIndicator": {
           "forkOf": "{{repo}} 的 Fork"
+        },
+        "ProjectPeek": {
+          "openRemote": "在浏览器中打开 {{value0}}",
+          "folderProject": "文件夹 · 不是 Git 仓库",
+          "noRemote": "本地 Git 仓库 · 无远程仓库",
+          "openUpstream": "在浏览器中打开 {{value0}}",
+          "forkOf": "Fork 自 {{value0}}",
+          "openSettingsPage": "打开设置页面",
+          "done": "完成",
+          "resetDone": "已重置图标和颜色",
+          "undo": "撤销",
+          "styleLetters": "文字",
+          "stylePicture": "图片",
+          "resetAppearance": "重置图标和颜色",
+          "faviconPlaceholder": "用于获取网站图标的网址",
+          "lettersInput": "最多 2 个字符",
+          "lettersPlaceholder": "1–2 个字符",
+          "useLetters": "使用\"{{value0}}\"",
+          "usingGitHubAvatar": "正在使用 GitHub 头像"
         }
       },
       "pet": {
@@ -21278,6 +21299,9 @@
         "clearAllLabel_other": "清除全部 {{count}} 个失败的工作者",
         "loadingWorker": "正在加载工作者…",
         "resultUnavailable": "工作者结果不可用",
+        "showDetails": "显示详情",
+        "hideDetails": "隐藏详情",
+        "close": "关闭",
         "workersRegion": "工作者",
         "doneResult": "已完成 · 打开结果",
         "clearName": "清除 {{name}}",
@@ -27750,7 +27774,8 @@
         "signedIn": "✓ 已登录",
         "done": "✓ 已完成",
         "takeOver": "✓ 接下来由 {{bot}} 接手",
-        "chose": "✓ 你选择了\"{{what}}\""
+        "chose": "✓ 你选择了\"{{what}}\"",
+        "stopped": "设置已停止"
       },
       "ended": "此 Google 设置已结束",
       "heading": "连接 Google",
@@ -27794,7 +27819,8 @@
         "waiting": "等待你处理",
         "working": "工作中",
         "heading": "正在设置 Google",
-        "you": "你"
+        "you": "你",
+        "stopped": "已停止"
       },
       "letMe": "这一步我来做",
       "step": {
@@ -27840,7 +27866,8 @@
         "checkFailed": "Orca 无法检查 {{services}}"
       },
       "notNow": "暂不",
-      "importSetupFile": "导入配置文件"
+      "importSetupFile": "导入配置文件",
+      "stop": "停止设置"
     },
     "apps": {
       "paste": {
@@ -28507,7 +28534,8 @@
         "hostDefault": "{{host}} 的默认账户",
         "computerDefault": "此电脑的默认账户",
         "changeInSettings": "在设置中更改",
-        "alsoConnected": "也已连接"
+        "alsoConnected": "也已连接",
+        "settingUp": "正在设置"
       },
       "copied": "已复制。请发送给你的 Google 管理员",
       "share": {
@@ -29059,6 +29087,7 @@
       "sameComputer": "群组中的 bots 必须位于同一台电脑上",
       "pairedComputersOnly": "群组只能添加来自已配对电脑的 bots",
       "needsLocalBot": "此群组至少需要一个位于这台电脑上的 bot",
+      "pickLocalBot": "选择这台电脑上的 bot",
       "thisComputer": "这台电脑",
       "remoteNeedsChat": "请先与 {{name}} 打开一次聊天，然后再将它添加到群组",
       "remoteReplied": "已在 {{computer}} 上回复",

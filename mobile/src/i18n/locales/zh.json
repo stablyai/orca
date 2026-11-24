@@ -1011,7 +1011,8 @@
           "signedInAs": "✓ 已以 {{email}} 身份登录",
           "signedIn": "✓ 已登录",
           "done": "✓ 已完成",
-          "takeOver": "✓ 接下来由 {{bot}} 接手"
+          "takeOver": "✓ 接下来由 {{bot}} 接手",
+          "stopped": "设置已停止"
         },
         "heading": "连接 Google",
         "path": {
@@ -1030,7 +1031,8 @@
           "done": "已完成",
           "waiting": "等待你处理",
           "working": "工作中",
-          "you": "你"
+          "you": "你",
+          "stopped": "已停止"
         },
         "account": {
           "title": "我应该使用哪个 Google 账户？",
