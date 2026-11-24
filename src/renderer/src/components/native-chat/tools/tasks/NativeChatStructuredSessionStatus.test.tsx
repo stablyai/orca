@@ -9,17 +9,22 @@ import type { WorkerDockRowView } from './dock/WorkerDockRow'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
 
 const hoisted = vi.hoisted(() => {
+  const PERSON = 'orchestration.person-approvals.v1'
   const workers: WorkerDockRowView[] = []
   return {
     rpc: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
     workers,
-    pairedDockOwner: false
+    pairedDockOwner: false,
+    clientCapabilities: [PERSON]
   }
 })
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: hoisted.rpc }))
 vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: async (_environmentId: string, capability: string) =>
     capability === 'orchestration.paired-worker-dock-owner.v1' && hoisted.pairedDockOwner
+}))
+vi.mock('@/runtime/rpc/targets/paired-host-client-capabilities', () => ({
+  pairedHostClientCapabilities: () => hoisted.clientCapabilities
 }))
 vi.mock('../../worker-approvals/native-chat-worker-approval-feed', () => ({
   useNativeChatPinnedWorkerApprovals: () => []
@@ -91,6 +96,7 @@ beforeEach(() => {
   hoisted.rpc.mockResolvedValue({})
   hoisted.workers = []
   hoisted.pairedDockOwner = false
+  hoisted.clientCapabilities = ['orchestration.person-approvals.v1']
 })
 afterEach(cleanup)
 
@@ -147,4 +153,23 @@ it("clears a paired host's settled failure from this window once the host takes 
       acknowledged: true
     })
   )
+})
+
+it.each([
+  ['a client the host does not count as a person', [], failed],
+  [
+    'a worker running on another computer',
+    ['orchestration.person-approvals.v1'],
+    { ...failed, ownerActionsAvailable: false }
+  ]
+])("keeps a paired host's failure Open-only for %s", async (_name, capabilities, row) => {
+  hoisted.pairedDockOwner = true
+  hoisted.clientCapabilities = capabilities
+  hoisted.workers = [row]
+  renderStrip(REMOTE)
+  const open = screen.getByRole('button', { name: /^Worker · Clean up journal/ })
+  // Let the host's capability answer arrive before checking the row stayed Open-only.
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(screen.queryByRole('button', { name: /^Clear Cleaner/ })).toBeNull()
+  expect(open).toHaveAccessibleName(/from the computer it runs on/)
 })
