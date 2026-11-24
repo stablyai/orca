@@ -376,6 +376,7 @@ it('walks a family of sends linked by provider id and queued card once, however 
   ])
 })
 
+// Builds twelve chats of up to 500 turns, about 30s on a Windows runner; it counts work, not time.
 it('stops reading a long send family at its first member older than the newest turns', () => {
   // Every send is in one family running back through the chat, from the newest send (unanswered or
   // not): the first older member settles the whole read, so the rest is never walked by index.
@@ -409,7 +410,7 @@ it('stops reading a long send family at its first member older than the newest t
   expect([extra(200, false, 'answered'), extra(500, false, 'answered')]).toEqual([74, 74])
   // Unsettled sends piled up before the newest turns: their lookup stops at the cap too.
   expect([extra(200, false, 'unsettled'), extra(500, false, 'unsettled')]).toEqual([65, 65])
-})
+}, 120_000)
 
 it('takes the whole read for a window crowded with rows rather than listing them to place its sends', () => {
   const lookups = (messages: number) => {

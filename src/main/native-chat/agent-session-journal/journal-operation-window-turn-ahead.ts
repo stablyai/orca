@@ -42,22 +42,27 @@ function newestBefore(
   indexedOnly: boolean
 ): number | null {
   const where = `session_id=? AND epoch=? AND hidden=0 AND ${indexed} AND sequence<?`
-  const found = indexedOnly
-    ? scope.db
-        .prepare(`SELECT MAX(CASE WHEN ${test} THEN sequence END) AS sequence, COUNT(*) AS rows
-        FROM (SELECT sequence, root, kind, message_role FROM journal_items INDEXED BY ${index} WHERE ${where}
-          ORDER BY sequence DESC LIMIT ?)`)
-        .get(...scope.prefix, sequence, INDEXED_ONLY_ROW_CAP + 1)
-    : scope.db
-        .prepare(`SELECT MAX(sequence) AS sequence FROM journal_items INDEXED BY ${index}
-        WHERE ${where} AND ${test}`)
-        .get(...scope.prefix, sequence)
-  const at = found?.sequence
-  if (at === null || at === undefined) {
-    if (indexedOnly && Number(found?.rows) > INDEXED_ONLY_ROW_CAP) {
-      throw new JournalWindowNotIndexed()
-    }
-    return null
+  if (!indexedOnly) {
+    const at = scope.db
+      .prepare(`SELECT MAX(sequence) AS sequence FROM journal_items INDEXED BY ${index}
+      WHERE ${where} AND ${test}`)
+      .get(...scope.prefix, sequence)?.sequence
+    return at === null || at === undefined ? null : Number(at)
   }
-  return Number(at)
+  // Newest first, stopping at the first that holds; only a miss asks whether more lie behind.
+  const at = scope.db
+    .prepare(`SELECT sequence FROM (SELECT sequence, root, kind, message_role FROM journal_items
+      INDEXED BY ${index} WHERE ${where} ORDER BY sequence DESC LIMIT ?) WHERE ${test} LIMIT 1`)
+    .get(...scope.prefix, sequence, INDEXED_ONLY_ROW_CAP + 1)?.sequence
+  if (at !== null && at !== undefined) {
+    return Number(at)
+  }
+  const more = scope.db
+    .prepare(`SELECT 1 FROM journal_items INDEXED BY ${index} WHERE ${where}
+      ORDER BY sequence DESC LIMIT 1 OFFSET ?`)
+    .get(...scope.prefix, sequence, INDEXED_ONLY_ROW_CAP)
+  if (more) {
+    throw new JournalWindowNotIndexed()
+  }
+  return null
 }
