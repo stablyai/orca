@@ -96,9 +96,8 @@ export class LinkedWorkerStates {
     }
     // Row notices, other connections' commits (which fire none here) and the dock's own revision: with
     // none since a kept worker was last checked, its rows are unchanged and no fingerprint is read.
-    const stamp = this.stampOf(db)
     // Another connection's commit fires no notice here, and a fingerprint misses a rewrite inside long text.
-    this.syncVersion(db)
+    const stamp = this.syncStamp(db)
     const states = new Map<string, LinkedWorkerState | null>()
     const candidates = unique.flatMap((ref) => {
       const kept = this.kept.get(ref)
@@ -197,8 +196,8 @@ export class LinkedWorkerStates {
     stamp: string | null,
     hits: readonly (readonly [string, Kept])[]
   ): boolean {
-    const now = this.stampOf(db)
-    this.syncVersion(db)
+    const now = this.syncStamp(db)
+    // Unmoved, nothing invalidated them (one version read; an eviction loses no freshness).
     if (now === stamp || hits.length === 0) {
       return false
     }
@@ -291,16 +290,17 @@ export class LinkedWorkerStates {
 
   /** Another connection's commit fires no notice here, and a fingerprint misses a rewrite inside long
    *  text: it drops every kept worker. */
-  private syncVersion(db: OrchestrationDb): void {
+  /** The stamp as of now, from one `data_version` read, having dropped every kept worker when it moved. */
+  private syncStamp(db: OrchestrationDb): string | null {
     const version = dataVersion(db)
     if (version !== this.version) {
       this.forgetAll()
       this.version = version
     }
+    return this.stampOf(db, version)
   }
 
-  private stampOf(db: OrchestrationDb): string | null {
-    const version = dataVersion(db)
+  private stampOf(db: OrchestrationDb, version = dataVersion(db)): string | null {
     return version === null ? null : `${this.writes}:${version}:${dockRevision(db)}`
   }
 
