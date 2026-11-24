@@ -336,7 +336,7 @@ function Tile({
           {unreadBell ? (
             <Bell size={10} color={colors.statusAmber} fill={colors.statusAmber} />
           ) : dot ? (
-            <AgentStateDot state={dot} />
+            <AgentStateDot state={dot} decorative />
           ) : null}
         </View>
       ) : null}

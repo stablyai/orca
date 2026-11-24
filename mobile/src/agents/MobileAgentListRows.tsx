@@ -4,8 +4,7 @@ import { mobileForkAccessibleName } from '../session/fork/mobile-fork-marked-nam
 import { Fragment, memo, useCallback, useState } from 'react'
 import { Alert, Pressable, Text, View } from 'react-native'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
-import type { WorktreeStatus } from '../../../src/shared/worktree/row-display/worktree-status-rollup'
-import { AgentSpinner } from './presentation/AgentSpinner'
+import { AgentSpinner, type AgentSpinnerStatus } from './presentation/AgentSpinner'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { MobileBotAvatar } from '../bots/MobileBotAvatar'
 import { mobileBotAvatarSource } from '../bots/host-bot-row-facts'
@@ -33,11 +32,11 @@ import { agentStatusGroup, type AgentListRow } from './agent-list-rows'
 import { agentListPreview } from './agent-list-row-text'
 
 // The Home rollup glyph is the list's size; this maps a per-agent state onto its palette.
-const GLYPH_STATUS: Record<AgentDotState, WorktreeStatus> = {
+const GLYPH_STATUS: Record<AgentDotState, AgentSpinnerStatus> = {
   working: 'working',
   monitoring: 'monitoring',
-  blocked: 'permission',
-  waiting: 'permission',
+  blocked: 'blocked',
+  waiting: 'waiting',
   permission: 'permission',
   failed: 'failed',
   done: 'done',
@@ -167,6 +166,7 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
   const preview = agentListPreview(agent, group, title)
   const needsYou = group === 'needs-you'
   const stateWord = needsYou ? agentStateLabel(row.dotState) : ''
+  const spokenState = row.dotState === 'monitoring' ? agentStateLabel(row.dotState) : stateWord
   const place = [
     props.footer === 'agent' ? formatAgentTypeLabel(agent.agentType) : row.entry.workspaceName,
     props.nameDesktop ? desktop : null
@@ -240,7 +240,7 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
           accessibilityLabel={[
             row.forked ? mobileForkAccessibleName(title) : title,
             unread ? t('agents.list.unread', 'Unread') : null,
-            stateWord || null,
+            spokenState || null,
             preview || null,
             place,
             time,
@@ -272,7 +272,13 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
           onLongPress={longPress}
           delayLongPress={400}
         >
-          <View style={[homeListStyles.status, row.stale && homeListStyles.rowDisabled]}>
+          <View
+            style={[homeListStyles.status, row.stale && homeListStyles.rowDisabled]}
+            accessible={false}
+            aria-hidden
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
             <AgentSpinner status={GLYPH_STATUS[row.dotState]} />
           </View>
           <View style={[styles.text, row.stale && homeListStyles.rowDisabled]}>

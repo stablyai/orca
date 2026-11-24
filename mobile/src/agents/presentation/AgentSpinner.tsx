@@ -14,6 +14,8 @@ import { AGENT_FAILURE_COLOR, AgentQuestionIcon, WorkingRing } from './AgentStat
 
 const STATUS_SLOT_SIZE = 12
 
+export type AgentSpinnerStatus = WorktreeStatus | 'blocked' | 'waiting'
+
 // Match desktop sidebar StatusIndicator colors/sizes for the worktree rollup; palette distinguishes moving/alive/completed states.
 const agentStatusColors = (): Record<Exclude<WorktreeStatus, 'permission'>, string> => ({
   working: '#eab308',
@@ -31,7 +33,7 @@ export function AgentSpinner({
   status,
   workingMode
 }: {
-  status: WorktreeStatus | null
+  status: AgentSpinnerStatus | null
   workingMode?: AgentWorkingMode
 }) {
   const [startedEmpty] = useState(status === null)
@@ -50,7 +52,7 @@ function ArrivingAgentStatus({
   status,
   workingMode
 }: {
-  status: WorktreeStatus | null
+  status: AgentSpinnerStatus | null
   workingMode?: AgentWorkingMode
 }) {
   const reducedMotion = useReducedMotionEnabled()
@@ -68,12 +70,12 @@ function AgentStatusGlyph({
   status,
   workingMode
 }: {
-  status: WorktreeStatus
+  status: AgentSpinnerStatus
   workingMode?: AgentWorkingMode
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  if (status === 'permission') {
+  if (status === 'blocked' || status === 'waiting' || status === 'permission') {
     return (
       <View accessible style={styles.wrapper} accessibilityLabel={agentStateLabel(status)}>
         <AgentQuestionIcon size={STATUS_SLOT_SIZE} />

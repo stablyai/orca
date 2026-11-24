@@ -29,7 +29,14 @@ export const AGENT_STATE_DOT_SIZE = 10
 
 export function AgentQuestionIcon({ size }: { size: number }) {
   useMobileColorScheme()
-  return <MessageCircleQuestion size={size} color={colors.agentQuestion} accessible={false} />
+  return (
+    <MessageCircleQuestion
+      size={size}
+      color={colors.agentQuestion}
+      accessible={false}
+      aria-hidden
+    />
+  )
 }
 
 /** Spins only while mounted, so idle rows hold no loop; Reduce Motion closes the gap, as desktop does. */
@@ -52,9 +59,22 @@ export function WorkingRing({ color, style }: { color: string; style: ViewStyle 
 
 /** `unverifiable` is a child row's lost contact: desktop's dashed amber ring, a missing-evidence
  *  mark rather than a state claim. */
-export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable' }) {
+export function AgentStateDot({
+  state,
+  decorative = false
+}: {
+  state: AgentDotState
+  decorative?: boolean
+}) {
   const t = useMobileTranslation()
   useMobileColorScheme()
+  const hidden = decorative
+    ? {
+        'aria-hidden': true,
+        accessibilityElementsHidden: true,
+        importantForAccessibility: 'no-hide-descendants' as const
+      }
+    : undefined
 
   if (state === 'working') {
     return (
@@ -67,9 +87,14 @@ export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable'
   if (state === 'monitoring') {
     return (
       <View
-        accessible
+        {...hidden}
+        accessible={!decorative}
         style={styles.wrapper}
-        accessibilityLabel={t('components.agentStateDot.monitoring', 'Monitoring background tasks')}
+        accessibilityLabel={
+          decorative
+            ? undefined
+            : t('components.agentStateDot.monitoring', 'Monitoring background tasks')
+        }
       >
         <Activity size={10} color={AGENT_WORKING_COLOR} />
       </View>
@@ -79,8 +104,11 @@ export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable'
   if (state === 'unverifiable') {
     return (
       <View
+        {...hidden}
         style={styles.wrapper}
-        accessibilityLabel={t('components.agentStateDot.unverifiable', 'No recent update')}
+        accessibilityLabel={
+          decorative ? undefined : t('components.agentStateDot.unverifiable', 'No recent update')
+        }
       >
         <View style={styles.dashedRing} />
       </View>
@@ -89,7 +117,12 @@ export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable'
 
   if (state === 'blocked' || state === 'waiting' || state === 'permission') {
     return (
-      <View accessible style={styles.wrapper} accessibilityLabel={agentStateLabel(state)}>
+      <View
+        {...hidden}
+        accessible={!decorative}
+        style={styles.wrapper}
+        accessibilityLabel={decorative ? undefined : agentStateLabel(state)}
+      >
         <AgentQuestionIcon size={AGENT_STATE_DOT_SIZE} />
       </View>
     )

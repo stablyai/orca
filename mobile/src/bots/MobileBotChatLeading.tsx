@@ -36,7 +36,7 @@ function ChatStateDot({ chat }: { chat: LeadingChat }) {
   return chat.live === 'replying' ? (
     <AgentStateDot state="working" />
   ) : chat.live === 'needs-you' ? (
-    <AgentStateDot state="permission" />
+    <AgentStateDot state="permission" decorative />
   ) : null
 }
 

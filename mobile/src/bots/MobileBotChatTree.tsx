@@ -85,7 +85,7 @@ function WorkerIcon({ state }: { state: BotChatTreeWorker['state'] }) {
     case 'unreachable':
       return <AgentStateDot state="unverifiable" />
     case 'needs-you':
-      return <AgentStateDot state="permission" />
+      return <AgentStateDot state="permission" decorative />
     case 'done':
       return <AgentStateDot state="done" />
     case 'failed':
