@@ -13,6 +13,7 @@ const held = (clientMessageId: string, state: SharedBotHeldView['state']): Share
   clientMessageId,
   sessionId: 'chat-0001',
   text: `message ${clientMessageId}`,
+  attachments: [],
   sentAt: 5,
   state
 })
@@ -56,6 +57,19 @@ describe('a teammate’s held messages in their chat', () => {
     expect(sendAgain).toHaveBeenCalledWith('m2')
     // Delivered: the host's own row takes over once read; until then it shows as sent.
     expect(notices.has(agentJournalSubmissionKey('m3'))).toBe(false)
+  })
+
+  it('draws a message of files alone, named, with its line', () => {
+    const { messages, notices } = sharedBotHeldMessages(
+      host([{ ...held('m1', 'waiting'), text: '', attachments: ['shot.png'] }]),
+      'chat-0001',
+      WORDS,
+      () => {}
+    )
+    const rows = projectStructuredAgentSessionMessages([], messages, [])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.blocks).toEqual([{ type: 'text', text: 'shot.png' }])
+    expect(notices.get(agentJournalSubmissionKey('m1'))?.waiting).toBe(true)
   })
 
   it('draws nothing for a chat on a host that isn’t shared', () => {

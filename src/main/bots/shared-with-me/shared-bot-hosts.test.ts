@@ -8,6 +8,8 @@ import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay
 import { SharedBotHosts } from './shared-bot-hosts'
 import { UNREADABLE_ANSWER } from '../../connector-cloud/connector-cloud-request'
 import { SharedBotHeldSends } from './shared-bot-held-sends'
+import { SharedBotHeldUploads } from './shared-bot-held-uploads'
+import { SendParams } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import { SHARED_BOT_HOSTS_FILENAME, SharedBotHostStore } from './shared-bot-host-store'
 import {
   isSharedBotNewChatId,
@@ -548,7 +550,14 @@ describe('a teammate’s messages while the shared agent’s computer is away', 
     })
     expect(opened?.chat).toEqual({ newChatId: sessionId })
     expect(service.views()[0]!.held).toEqual([
-      { clientMessageId: 'm1', sessionId, text: 'Hi', sentAt: 1_000, state: 'waiting' }
+      {
+        clientMessageId: 'm1',
+        sessionId,
+        text: 'Hi',
+        attachments: [],
+        sentAt: 1_000,
+        state: 'waiting'
+      }
     ])
   })
 
@@ -587,6 +596,7 @@ describe('a teammate’s messages while the shared agent’s computer is away', 
         clientMessageId: again,
         sessionId: 'chat-0001',
         text: 'Check #40189',
+        attachments: [],
         sentAt: 0,
         state: 'waiting'
       }
@@ -620,5 +630,55 @@ describe('a new chat the host started from its placeholder id', () => {
     expect(held.views(started).map((view) => view.sessionId)).toEqual(['chat-real-01'])
     expect(sendsHeld(started, 'live', { sessionId: 'chat-real-01' }, new Map())).toBe(true)
     expect(sendsHeld(started, 'live', { sessionId: 'chat-other-1' }, new Map())).toBe(false)
+  })
+})
+
+describe('attachments kept while the host was away, sent once it is back', () => {
+  it('go to the host’s store first, and the send names them there', async () => {
+    const uploads = new SharedBotHeldUploads()
+    const ok = (result: unknown) => ({ id: 'x', ok: true as const, result })
+    const started = uploads.call(
+      'agentSessionAttachment.uploadStart',
+      { sessionId: 'chat-0001', name: 'shot.png', byteLength: 3 },
+      'Jinwoo Hong'
+    )
+    const { uploadId } = z.object({ uploadId: z.string() }).parse(started.ok && started.result)
+    uploads.call(
+      'agentSessionAttachment.uploadAppend',
+      { uploadId, offset: 0, contentBase64: Buffer.from('png').toString('base64') },
+      'Jinwoo Hong'
+    )
+    const committed = uploads.call(
+      'agentSessionAttachment.uploadCommit',
+      { uploadId },
+      'Jinwoo Hong'
+    )
+    const keptPath = z.object({ path: z.string() }).parse(committed.ok && committed.result).path
+    const sent: string[] = []
+    const params = await uploads.withKeptUploaded(
+      structuredAgentSessionMessageSendMutation({
+        sessionId: 'chat-0001',
+        clientOperationId: 'm1',
+        expectedRuntimeFence: null,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'image-ref', path: keptPath }] }
+      }),
+      async (method) => {
+        sent.push(method)
+        return method === 'agentSessionAttachment.uploadStart'
+          ? ok({ uploadId: 'host-upload' })
+          : method === 'agentSessionAttachment.uploadCommit'
+            ? ok({ path: '/host/attachments/shot.png', name: 'shot.png', byteLength: 3 })
+            : ok({})
+      }
+    )
+    expect(sent).toEqual([
+      'agentSessionAttachment.uploadStart',
+      'agentSessionAttachment.uploadAppend',
+      'agentSessionAttachment.uploadCommit'
+    ])
+    expect(SendParams.parse(params).body.blocks).toEqual([
+      { type: 'image-ref', path: '/host/attachments/shot.png' }
+    ])
+    expect(uploads.isKept(keptPath)).toBe(false)
   })
 })

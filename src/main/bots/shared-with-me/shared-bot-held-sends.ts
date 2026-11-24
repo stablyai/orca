@@ -10,6 +10,7 @@ import {
   type SharedBotHeldView
 } from '../../../shared/bots/shared-bot-hosts'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
 import { SendParams } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import { handOffSharedBotMessage, type HandOffResult } from './shared-bot-hand-off'
 import {
@@ -37,6 +38,9 @@ export const sharedBotFailure = (
   message: string
 ): RuntimeRpcResponse<unknown> => ({ id, ok: false, error: { code, message } })
 
+// A new chat started live under the id its held messages name, and the session the host gave it.
+const NewChatParams = z.looseObject({ newChatId: z.string() })
+const StartedSession = z.looseObject({ sessionId: z.string() })
 const SessionParams = z.looseObject({ sessionId: z.string() })
 const EnvelopeParams = z.looseObject({ envelope: SessionParams })
 
@@ -107,6 +111,7 @@ export class SharedBotHeldSends {
       clientMessageId: held.clientMessageId,
       sessionId: sharedBotHeldChatId(held),
       text: held.text,
+      attachments: (held.attachments ?? []).map((attachment) => attachment.name),
       sentAt: held.sentAt,
       state: this.state(held)
     }))
@@ -128,12 +133,7 @@ export class SharedBotHeldSends {
       return null
     }
     const chat = sharedBotHeldChat(sessionId)
-    // Attachments kept here for it can only reach the host sealed in a held message.
-    const keptAttachments = send.body.blocks.some(
-      (block) =>
-        block.type === 'image-ref' && block.path !== undefined && this.uploads.isKept(block.path)
-    )
-    if (!keptAttachments && !sendsHeld(entry, link, chat, this.states)) {
+    if (!sendsHeld(entry, link, chat, this.states)) {
       return link === 'live' ? null : sharedBotOffline(entry)
     }
     const content = this.heldContent(send.body.blocks)
@@ -189,6 +189,20 @@ export class SharedBotHeldSends {
     return keeps ? this.uploads.call(method, params, entry.ownerName) : null
   }
 
+  /** A live answer this owner learns from: a new chat started under the id its held messages name. */
+  noteAnswer(
+    entry: SharedBotHostEntry,
+    method: string,
+    params: unknown,
+    response: RpcResponse
+  ): void {
+    const newChat = method === 'bots.session.start' ? NewChatParams.safeParse(params).data : null
+    const started = response.ok ? StartedSession.safeParse(response.result).data : undefined
+    if (newChat && started) {
+      this.started(entry, newChat.newChatId, started.sessionId)
+    }
+  }
+
   /** The host started the new chat `newChatId` as `sessionId`: its held messages land there, and
    *  that chat's later messages wait behind them. */
   started(entry: SharedBotHostEntry, newChatId: string, sessionId: string): void {
@@ -203,6 +217,14 @@ export class SharedBotHeldSends {
       )
     })
     this.deps.changed()
+  }
+
+  /** A live send's attachments kept here while the host was away go to its store first. */
+  withKeptUploaded(
+    params: unknown,
+    request: (method: string, params: unknown) => Promise<RpcResponse>
+  ): Promise<unknown> {
+    return this.uploads.withKeptUploaded(params, request)
   }
 
   /** Holds a refused message again under a new id, in place of the refused one. */

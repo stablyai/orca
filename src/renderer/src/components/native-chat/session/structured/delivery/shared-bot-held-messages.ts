@@ -52,7 +52,17 @@ export function sharedBotHeldMessages(
   return {
     messages: held.map((message) => ({
       clientMessageId: message.clientMessageId,
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: message.text }] },
+      body: {
+        kind: 'message',
+        role: 'user',
+        // Its files are named under its words, so a message of files alone still draws a row.
+        blocks: [
+          {
+            type: 'text',
+            text: [message.text, ...message.attachments].filter(Boolean).join('\n\n')
+          }
+        ]
+      },
       queuedAt: message.sentAt
     })),
     notices

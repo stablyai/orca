@@ -10,7 +10,10 @@ import {
   runtimeCompatibilityChecks
 } from './runtime-compatibility-cache'
 import { RUNTIME_IDLE_STOPPED_ERROR_CODE } from '../../../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-stop-signal'
-import { sharedBotHostFor } from '../../hosts/shared-bot-hosts/shared-bot-host-catalog'
+import {
+  sharedBotHostFor,
+  sharedBotHostRefusal
+} from '../../hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 function isIdleStopRefusal(error: unknown): boolean {
   return (
@@ -93,14 +96,11 @@ export async function getRuntimeEnvironmentStatus(
 ): Promise<RuntimeStatus> {
   const trimmed = environmentId.trim()
   // The share answers no status: refused as the host would, never sent to the paired-server registry.
-  if (sharedBotHostFor({ kind: 'environment', environmentId: trimmed })) {
-    const method = 'status.get'
-    // Read by its code, as from a host that lacks the method; never shown.
-    throw new RuntimeRpcCallError({
-      id: method,
-      ok: false,
-      error: { code: 'method_not_found', message: method }
-    })
+  const refusal = sharedBotHostFor({ kind: 'environment', environmentId: trimmed })
+    ? sharedBotHostRefusal('status.get')
+    : null
+  if (refusal) {
+    throw new RuntimeRpcCallError(refusal)
   }
   const entry = compatibilityEntry()
   // Publish before awaiting so concurrent cold capability reads share this status probe.

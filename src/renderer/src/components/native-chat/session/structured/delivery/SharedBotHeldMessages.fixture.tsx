@@ -17,6 +17,7 @@ const HOST: SharedBotHostView = {
       clientMessageId: 'held-1',
       sessionId: 'chat-ivy-0001',
       text: 'Can you check whether #40189 fixes the dictation retry on Windows?',
+      attachments: [],
       sentAt: 1,
       state: 'not_sent'
     },
@@ -24,6 +25,7 @@ const HOST: SharedBotHostView = {
       clientMessageId: 'held-2',
       sessionId: 'chat-ivy-0001',
       text: 'And run the dictation tests on that branch once it does.',
+      attachments: [],
       sentAt: 2,
       state: 'waiting'
     }

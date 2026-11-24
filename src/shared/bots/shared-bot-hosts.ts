@@ -11,6 +11,8 @@ export type SharedBotHeldView = {
   /** The chat it is for: one of theirs, or a new chat's placeholder id until the host starts it. */
   sessionId: string
   text: string
+  /** The names of the files sealed with it; their bytes stay in main. */
+  attachments: string[]
   sentAt: number
   state: SharedBotHeldState
 }

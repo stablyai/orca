@@ -2,6 +2,13 @@
 // since the host that would store them can't be reached, and sealed into the held message itself.
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
+import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
+import { SendParams } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import {
+  uploadBufferWith,
+  type AgentSessionAttachmentCall
+} from '../../ipc/agent-attachments/agent-session-attachment-upload'
 import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../../../shared/agent-session/agent-session-attachments'
 import { SHARED_BOT_HOST_ERRORS } from '../../../shared/bots/shared-bot-hosts'
 import { MAX_HELD_MESSAGE_CHARS } from '../../../shared/connector-share-contract'
@@ -56,6 +63,57 @@ export class SharedBotHeldUploads {
     for (const path of paths) {
       this.kept.delete(path)
     }
+  }
+
+  /**
+   * A send going live whose attachments were kept here while the host was away (a message too large
+   * to hold, sent again once it is back): they go to the host's store first, and the send names them
+   * there.
+   */
+  async withKeptUploaded(
+    params: unknown,
+    request: (method: string, params: unknown) => Promise<RpcResponse>
+  ): Promise<unknown> {
+    const send = SendParams.safeParse(params).data
+    const kept = send?.body.blocks.flatMap((block) => {
+      const path = block.type === 'image-ref' ? block.path : undefined
+      const attachment = path ? this.read(path) : null
+      return path && attachment ? [{ path, attachment }] : []
+    })
+    if (!send || !kept?.length) {
+      return params
+    }
+    const call: AgentSessionAttachmentCall = async (method, uploadParams) => {
+      const answer = await request(method, uploadParams)
+      if (!answer.ok) {
+        throw new Error(answer.error.message)
+      }
+      return answer.result
+    }
+    const stored = new Map<string, string>()
+    for (const { path, attachment } of kept) {
+      const { path: hostPath } = await uploadBufferWith(
+        call,
+        send.envelope.sessionId,
+        attachment.name,
+        Buffer.from(attachment.contentBase64, 'base64')
+      )
+      stored.set(path, hostPath)
+    }
+    this.release([...stored.keys()])
+    const blocks = send.body.blocks.map((block) => {
+      const hostPath = block.type === 'image-ref' && block.path ? stored.get(block.path) : undefined
+      return hostPath ? { ...block, path: hostPath } : block
+    })
+    // The body's fingerprint covers its paths, so the send is made again around the new ones.
+    const { envelope, body, retryUnknown: _retry, ...control } = send
+    return structuredAgentSessionMessageSendMutation({
+      ...control,
+      sessionId: envelope.sessionId,
+      clientOperationId: envelope.clientOperationId,
+      expectedRuntimeFence: envelope.expectedRuntimeFence,
+      body: { ...body, blocks }
+    })
   }
 
   /** An `agentSessionAttachment.upload*` call, answered here as the host's store would. */
