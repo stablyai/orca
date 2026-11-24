@@ -4,9 +4,8 @@ import { pathToFileURL } from 'node:url'
 import { XTERM_PREFIXES } from './pr-xterm-patch-prefixes.mjs'
 import {
   isCloudTestRunnerInput,
-  isWindowsProcessProbePath,
+  isWindowsBoundaryPath,
   LINUX_PACKAGE_PREFIXES,
-  WINDOWS_BOUNDARY_TESTS,
   WINDOWS_PACKAGE_PREFIXES
 } from './pr-package-test-paths.mjs'
 
@@ -35,6 +34,7 @@ export const PR_CHECK_JOBS = [
   'managed_hook_node18',
   'package',
   'package_windows',
+  'package_windows_tests',
   'dependency_isolation'
 ]
 
@@ -80,10 +80,10 @@ const DEPENDENCY_ISOLATION_PREFIXES = [
 const MOBILE_WEB_APP_PREFIXES = [
   '.github/scripts/prepare-ubuntu-apt.sh',
   'config/scripts/build-mobile-web-app',
-  'config/scripts/build/mobile-web-app/build-mobile-web-app',
+  // Every file here feeds the page build (its plugins, chunking, manifest, verifier), so all of it.
+  'config/scripts/build/mobile-web-app/',
   'src/packages/process-host/',
   'config/scripts/verify-mobile-web-app-bundle',
-  'config/scripts/build/mobile-web-app/verify-mobile-web-app-bundle',
   'config/scripts/mobile-web-app-',
   'config/scripts/mobile-web-app/',
   'config/scripts/mobile-web-app/shell/',
@@ -92,11 +92,9 @@ const MOBILE_WEB_APP_PREFIXES = [
   'config/scripts/mobile-web-app/terminal/',
   'config/scripts/mobile-web-app/workspace/',
   'config/scripts/mobile-web-bundle-',
-  'config/scripts/build/mobile-web-app/mobile-web-bundle-',
   'config/scripts/verify-packaged-mobile-web-bundle',
   'config/scripts/desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle',
   'config/scripts/mobile-web-source-line-endings',
-  'config/scripts/build/mobile-web-app/mobile-web-source-line-endings',
   'config/scripts/script-entry-detection',
   'config/scripts/tool-invocation/script-entry-detection',
   'mobile/web-entry/',
@@ -432,9 +430,11 @@ function jobDetector(job) {
     case 'managed_hook_node18':
       return (files) => files.some((file) => matchesPrefix(file, MANAGED_HOOK_PREFIXES))
     case 'package':
-      return (files) => files.some(isLinuxPackagePath)
+      return (files) => files.some((file) => isPackageInput(file, LINUX_PACKAGE_PREFIXES))
     case 'package_windows':
-      return (files) => files.some(isWindowsPackagePath)
+      return (files) => files.some((file) => isPackageInput(file, WINDOWS_PACKAGE_PREFIXES))
+    case 'package_windows_tests':
+      return (files) => files.some(isWindowsBoundaryPath)
     case 'dependency_isolation':
       return (files) => files.some((file) => matchesPrefix(file, DEPENDENCY_ISOLATION_PREFIXES))
     default:
@@ -442,20 +442,8 @@ function jobDetector(job) {
   }
 }
 
-function isLinuxPackagePath(file) {
-  return isProductBundlePath(file, LINUX_PACKAGE_PREFIXES)
-}
-
-function isWindowsPackagePath(file) {
-  return (
-    WINDOWS_BOUNDARY_TESTS.includes(file) ||
-    isWindowsProcessProbePath(file) ||
-    isProductBundlePath(file, WINDOWS_PACKAGE_PREFIXES)
-  )
-}
-
-function isProductBundlePath(file, extraPrefixes) {
-  return !isTestFile(file) && (file.startsWith('src/') || matchesPrefix(file, extraPrefixes))
+function isPackageInput(file, prefixes) {
+  return !isTestFile(file) && matchesPrefix(file, prefixes)
 }
 
 // These shared fixtures are consumed only by unit tests.

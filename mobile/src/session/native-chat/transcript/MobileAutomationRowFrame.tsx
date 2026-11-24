@@ -12,7 +12,8 @@ export function mobileAutomationRowTime(at: number): string {
 }
 
 /** Every automation row in a phone chat, as a status row: its trigger's mark, "<lead> · <name> · <status>"
- *  (or "<lead> <name>" for a verb such as Couldn't start), then its details when opened. */
+ *  (or "<lead> <name>" for a verb such as Couldn't start), then its details when opened. With a
+ *  subtitle the words are the name alone, the subtitle says what happened. */
 export function MobileAutomationRowFrame({
   mark,
   lead,
@@ -23,6 +24,7 @@ export function MobileAutomationRowFrame({
   timestamp,
   disclosureKey,
   action,
+  subtitle,
   fontScale,
   testID,
   children
@@ -37,14 +39,18 @@ export function MobileAutomationRowFrame({
   timestamp: number | null
   disclosureKey: string
   action?: ReactNode
+  /** The line under the name, such as "Couldn't start · 2:14 AM"; the row then shows no time. */
+  subtitle?: { node: ReactNode; label: string }
   fontScale: number
   testID?: string
   children?: ReactNode
 }): React.JSX.Element {
   const after = status ? [status] : []
-  const label = leadIsVerb
-    ? [`${lead} ${name}`, ...after].join(' · ')
-    : [lead, name, ...after].join(' · ')
+  const label = subtitle
+    ? `${name}, ${subtitle.label}`
+    : leadIsVerb
+      ? [`${lead} ${name}`, ...after].join(' · ')
+      : [lead, name, ...after].join(' · ')
   return (
     <MobileNativeChatEventRow
       testID={testID}
@@ -52,13 +58,19 @@ export function MobileAutomationRowFrame({
       badge={failed ? 'failed' : null}
       label={label}
       action={action}
-      timestamp={timestamp}
+      timestamp={subtitle ? null : timestamp}
       disclosureKey={disclosureKey}
       fontScale={fontScale}
       details={children}
+      subtitle={subtitle?.node}
+      wordsLines={subtitle ? 2 : 1}
     >
-      {lead}
-      {leadIsVerb ? ' ' : ' · '}
+      {subtitle ? null : (
+        <>
+          {lead}
+          {leadIsVerb ? ' ' : ' · '}
+        </>
+      )}
       <MobileNativeChatEventName>{name}</MobileNativeChatEventName>
       {status ? ` · ${status}` : null}
     </MobileNativeChatEventRow>

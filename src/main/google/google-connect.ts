@@ -5,6 +5,8 @@ import { googleClientFile, parseGoogleClientFile } from './google-client-file'
 import {
   GOOGLE_CONNECT_RUNTIME_CAPABILITY,
   GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
+  GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY,
+  GOOGLE_CONNECTED_ANSWER_RUNTIME_CAPABILITY,
   type GoogleAccountView,
   type GoogleClientKeyState,
   type GoogleSignInPrompt,
@@ -24,13 +26,16 @@ import {
   readGoogleAccount,
   removeGoogleAccount,
   resolveGoogleClient,
+  resolveGoogleDefaultAccount,
   saveGoogleAccount,
+  saveGoogleDefaultAccount,
   saveImportedGoogleClient,
   type GoogleAccountRecord
 } from './google-credential-store'
 import { checkGoogleServices } from './google-readiness'
 import { googleCallbackQuery, googlePromptExpectation } from './google-sign-in-return'
 import {
+  GOOGLE_SIGN_IN_TTL_MS,
   runGoogleSignIn,
   type GoogleSignInDeps,
   type GoogleSignInOptions
@@ -50,7 +55,11 @@ export function googleAccountView(record: GoogleAccountRecord): GoogleAccountVie
     ...(record.reason ? { reason: record.reason } : {}),
     services: record.services,
     ...(record.checkedAt ? { checkedAt: record.checkedAt } : {}),
-    connectedAt: record.connectedAt
+    connectedAt: record.connectedAt,
+    app: {
+      clientId: record.client.clientId,
+      ...(record.projectId ? { projectId: record.projectId } : {})
+    }
   }
 }
 
@@ -77,7 +86,10 @@ export class GoogleConnect {
         if (!options) {
           throw new Error('The Google sign-in did not start.')
         }
+        // Kept before a reconnect saves a newer connectedAt, and after a first account is saved.
+        await resolveGoogleDefaultAccount()
         const record = await runGoogleSignIn(this.deps, options, channel)
+        await resolveGoogleDefaultAccount()
         return { account: googleAccountView(record) }
       },
       {
@@ -92,7 +104,10 @@ export class GoogleConnect {
         },
         describeFailure: (message) => ({ error: message.slice(0, 600) }),
         busyMessage:
-          'A Google sign-in is already running on this computer. Finish or cancel it first.'
+          'A Google sign-in is already running on this computer. Finish or cancel it first.',
+        // Google's page is often finished at this computer while the phone that started it sleeps; its
+        // link still ends the flow. The extra minute covers picking the app and the exchange after Allow.
+        ownerSilenceMs: GOOGLE_SIGN_IN_TTL_MS + 60_000
       }
     )
   }
@@ -161,6 +176,15 @@ export class GoogleConnect {
     )
   }
 
+  /** The account calls and triggers without `--account` use. */
+  defaultAccount(): Promise<string | null> {
+    return resolveGoogleDefaultAccount()
+  }
+
+  setDefaultAccount(email: string): Promise<string> {
+    return saveGoogleDefaultAccount(email)
+  }
+
   /** Re-reads every connected account's services; a grant Google ended shows as Reconnect. */
   async checkAccounts(): Promise<GoogleAccountView[]> {
     const deps = { http: this.deps.http, now: this.deps.now }
@@ -209,7 +233,9 @@ export class GoogleConnect {
     const options: GoogleSignInOptions = { ...rest, choices }
     const back =
       options.callerLoopbackPort === undefined ? 'host' : `caller-${options.callerLoopbackPort}`
-    const route: Route = `${back}:${choices.join(',')}`
+    // The account and app pick the client, so a start for another one isn't this flow.
+    const account = options.loginHint?.toLowerCase() ?? 'new'
+    const route: Route = `${back}:${account}:${options.currentApp ? 'current' : 'own'}:${choices.join(',')}`
     return toWire(this.flows.start(owner, route, options))
   }
 
@@ -234,11 +260,14 @@ export class GoogleConnect {
     return toWire(await this.flows.cancel(owner, flowId))
   }
 
-  /** Removes the account from this host; `revoke` also cancels the grant at Google first. */
+  /**
+   * Removes the account from this host; `revoke` also cancels the grant at Google first. Removing the
+   * default promotes the oldest account left.
+   */
   async disconnect(
     email: string,
     revoke: boolean
-  ): Promise<{ removed: string; revoked: boolean | null }> {
+  ): Promise<{ removed: string; revoked: boolean | null; defaultAccount: string | null }> {
     if (!(await hasGoogleAccount(email))) {
       throw new Error(`${email} isn't connected on this computer.`)
     }
@@ -252,7 +281,7 @@ export class GoogleConnect {
         : record !== null
     }
     await removeGoogleAccount(email)
-    return { removed: email.toLowerCase(), revoked }
+    return { removed: email.toLowerCase(), revoked, defaultAccount: await this.defaultAccount() }
   }
 }
 
@@ -290,5 +319,12 @@ export function getGoogleConnect(): GoogleConnect | null {
 }
 
 export function googleRuntimeCapabilities(): string[] {
-  return installed ? [GOOGLE_CONNECT_RUNTIME_CAPABILITY, GOOGLE_TRIGGERS_RUNTIME_CAPABILITY] : []
+  return installed
+    ? [
+        GOOGLE_CONNECT_RUNTIME_CAPABILITY,
+        GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
+        GOOGLE_CONNECTED_ANSWER_RUNTIME_CAPABILITY,
+        GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY
+      ]
+    : []
 }

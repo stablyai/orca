@@ -177,11 +177,12 @@ function onManifestRead(
   }
   if (!rendersRoute(view.pageRoutes, session.routePathname)) {
     // Keep route facts so a later layout flip can restart a newly servable screen.
-    const refusal = session.appNamesRoute
-      ? pageRouteRefusalVerdict(manifest.routes, session.routePathname, session.wide)
-      : null
+    // An unlisted catch-all route may be a stale link, but one the host lists and this shell cannot grant means this app is behind.
+    const refusal = pageRouteRefusalVerdict(manifest.routes, session.routePathname, session.wide)
     const state =
-      refusal === null ? ROUTE_UNAVAILABLE : ({ kind: 'wall', verdict: refusal } as const)
+      refusal !== null && (session.appNamesRoute || refusal.reason === 'page-route-grant-missing')
+        ? ({ kind: 'wall', verdict: refusal } as const)
+        : ROUTE_UNAVAILABLE
     return step(session, { ...view, state })
   }
   // Same build id is the same bytes, so a live generation stays up and a newer one fetches behind it.

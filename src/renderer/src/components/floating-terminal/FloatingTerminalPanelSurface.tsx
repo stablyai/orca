@@ -133,6 +133,7 @@ export function renderFloatingTerminalPanelSurface(
                     activeTab?.contentType === 'agent-session' ? activeTab.id : activeTerminalId
                   }
                   groupId={activeGroup?.id}
+                  isGroupFocused={open}
                   worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
                   expandedPaneByTabId={expandedPaneByTabId}
                   onActivate={model.commands.activateTerminal}

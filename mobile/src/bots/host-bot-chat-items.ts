@@ -1,11 +1,23 @@
-// A bot's chats in the host list, from the model the desktop sidebar draws: each chat with an open
-// tab, then (while it is open) its workers' lines and their paging.
-import { botChatFoldKey, type BotChatFold } from '../../../src/shared/bots/bot-chat-tree'
+// A bot's chats in the host list, from the model the desktop sidebar draws: each chat that replies,
+// waits on the owner or is unread (never Home Chat, which the bot's row opens), then (while it is
+// open) its workers' lines and their paging.
+import {
+  botChatFoldKey,
+  chatIsGoing,
+  type BotChatFold,
+  type BotChatTreeChat
+} from '../../../src/shared/bots/bot-chat-tree'
+import { botLiveWorkspaceIds } from '../../../src/shared/bots/bot-sidebar-chat-groups'
 import { buildBotSidebarTree } from '../../../src/shared/bots/bot-sidebar-tree'
 import type { WorkspaceListItem } from '../worktree/workspace-list/workspace-list-types'
 import type { MobileBotChatLineFacts } from './host-bot-row-facts'
 import type { HostBotWorkerBranch } from './host-bot-worker-lines'
 import type { HostBotChatTree } from './bot-chat-tree-reads'
+
+/** A chat the list shows under its bot: one that needs a look now. */
+function listsUnderBot(chat: BotChatTreeChat): boolean {
+  return chat.origin !== 'home' && (chatIsGoing(chat) || chat.unread || chat.unseen === true)
+}
 
 /** The bot's chat rows and their lines; null while it has no chats read (an older host, or not yet),
  *  so the bot keeps its flat workspace lines. */
@@ -52,8 +64,21 @@ export function hostBotChatItems(args: {
       }
     }))
   const items: WorkspaceListItem[] = []
+  // Lines of the chats left out lead, so none reads as a listed chat's.
+  const leftOut: WorkspaceListItem[] = []
+  const liveIds = botLiveWorkspaceIds(tree.chats)
   for (const chatView of view.chats) {
     const { chat } = chatView
+    if (!listsUnderBot(chat)) {
+      // A chat left out (Home Chat, or a quiet one) still lists its live and open workers, flat
+      // under the bot, so one waiting on you can be reached.
+      for (const branch of chatView.lines) {
+        if (branch.lines.some((line) => liveIds.has(line.row.worktreeId) || line.row.isActive)) {
+          leftOut.push(...lineItems(branch, view.notes.get(branch.id)))
+        }
+      }
+      continue
+    }
     items.push({
       row: home.row,
       view: {
@@ -93,5 +118,5 @@ export function hostBotChatItems(args: {
   for (const branch of view.stray) {
     items.push(...lineItems(branch, view.notes.get(branch.id)))
   }
-  return items
+  return [...leftOut, ...items]
 }

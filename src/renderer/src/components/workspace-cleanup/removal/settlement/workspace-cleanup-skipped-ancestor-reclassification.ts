@@ -48,6 +48,7 @@ export function reclassifySkippedWorkspaceCleanupAncestors({
       if (provisional !== entry.provisional) {
         entry.provisional = provisional
         entry.failure.message = getSkippedAncestorMessage(provisional)
+        entry.failure.provisional = provisional
         if (provisional) {
           provisionallyBlocked.add(entry.candidate)
         } else {

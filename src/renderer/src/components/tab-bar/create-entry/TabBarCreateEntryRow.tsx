@@ -13,6 +13,7 @@ import {
   TerminalSquare
 } from 'lucide-react'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { BotAgentAvatar } from '@/components/bots/BotAgentAvatar'
 import { PluginContributionIcon } from '../../plugins/PluginContributionIcon'
 import { cn } from '@/lib/class-names'
 import {
@@ -322,6 +323,17 @@ function getActionPresentation(
       detail: entry.title ? `${entry.title} · ${url}` : url,
       icon: <BrowserFavicon faviconUrl={entry.faviconUrl} className="size-3.5" />,
       label: t('auto.components.tab.bar.TabBarCreateEntry.openPage', 'Open page'),
+      showDetail: true
+    }
+  }
+  if (option.kind === 'agent' && option.option.botChat) {
+    const { bot, agent, home } = option.option.botChat
+    return {
+      // The bot's name stands in for the list's "Side chats with" heading, which a search hides.
+      detail:
+        option.option.reason ?? (home ? t('bots.newHomeChat.hint', 'starts fresh') : bot.name),
+      icon: <BotAgentAvatar bot={bot} agent={agent} />,
+      label: option.option.label,
       showDetail: true
     }
   }

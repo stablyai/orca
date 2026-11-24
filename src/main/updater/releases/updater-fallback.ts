@@ -1,3 +1,4 @@
+import { parse } from 'semver'
 import type { UpdateStatus } from '../../../shared/updater/update-status-types'
 import {
   compareAppVersions,
@@ -5,12 +6,30 @@ import {
   isValidAppVersion
 } from '../../../shared/app-lifecycle/identity/app-version'
 
-export const compareVersions = compareAppVersions
+function parseComparableSemver(value: string) {
+  const parsed = parse(value.trim().replace(/^V/, 'v'))
+  // Keep numeric identifiers outside the safe integer range exact.
+  return parsed?.prerelease.some((id) => typeof id === 'string' && /^\d+$/.test(id)) ? null : parsed
+}
+
+export function compareVersions(left: string, right: string): number {
+  const leftSemver = parseComparableSemver(left)
+  const rightSemver = parseComparableSemver(right)
+  return leftSemver && rightSemver
+    ? leftSemver.compare(rightSemver)
+    : compareAppVersions(left, right)
+}
 export const isPrereleaseVersion = isPrereleaseAppVersion
 export const isValidVersion = isValidAppVersion
 
 export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean {
-  if (left.source !== right.source || left.automaticDownload !== right.automaticDownload) {
+  if (
+    left.source !== right.source ||
+    left.automaticDownload !== right.automaticDownload ||
+    left.installOnQuit !== right.installOnQuit ||
+    left.requiredByTeam !== right.requiredByTeam ||
+    left.requiredByOrca !== right.requiredByOrca
+  ) {
     return false
   }
   switch (left.state) {
@@ -51,12 +70,18 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
         right.state === 'downloaded' &&
         left.version === right.version &&
         left.activeNudgeId === right.activeNudgeId &&
-        left.releaseUrl === right.releaseUrl
+        left.releaseUrl === right.releaseUrl &&
+        left.teamRestart?.phase === right.teamRestart?.phase &&
+        left.teamRestart?.deadlineAt === right.teamRestart?.deadlineAt &&
+        (left.teamRestart?.phase !== 'countdown' ||
+          (right.teamRestart?.phase === 'countdown' &&
+            left.teamRestart.countdownEndsAt === right.teamRestart.countdownEndsAt))
       )
     case 'error':
       return (
         right.state === 'error' &&
         left.message === right.message &&
+        left.failurePhase === right.failurePhase &&
         left.version === right.version &&
         left.retryable === right.retryable &&
         left.retryAction === right.retryAction &&
