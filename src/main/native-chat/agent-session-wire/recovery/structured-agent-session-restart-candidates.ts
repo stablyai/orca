@@ -9,7 +9,8 @@ import { hostCanStartRecord } from '../providers/structured-agent-session-provid
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import {
   listProviderRelaysAtLaunch,
-  liveProviderRelayChats
+  liveProviderRelayChats,
+  providerRelayReattached
 } from '../../../provider-relay/app-provider-relays'
 import {
   structuredAgentSessionResumableSet,
@@ -58,7 +59,10 @@ async function withoutKeptRunningChats(
   }
   await listProviderRelaysAtLaunch()
   const kept = liveProviderRelayChats()
-  return kept.size === 0 ? markers : markers.filter((marker) => !kept.has(marker.sessionId))
+  // Still held by the daemon, or already reattached: either way its agent never stopped.
+  return markers.filter(
+    (marker) => !kept.has(marker.sessionId) && !providerRelayReattached(marker.sessionId)
+  )
 }
 
 /** Listing skips newer chats; pre-send must retain them so refused sends preserve their offers. */

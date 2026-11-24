@@ -171,6 +171,7 @@ export async function openCodexStructuredSession(
         timeoutMs: deps.requestTimeoutMs ?? DEFAULT_CODEX_REQUEST_TIMEOUT_MS,
         onError: (threadId, error) =>
           deps.logger?.warn('numbering a kept turn from history failed', {
+            scope: 'codex-kept-turn-ordinals',
             sessionId,
             threadId,
             error
