@@ -1656,7 +1656,7 @@
         "a9fb10afca": "Terminal",
         "85f4fd7710": "Fuentes de tareas",
         "ab4b21b58e": "Nombres de rama, refs base y Git AI Author.",
-        "09607cb0fe": "Git y Source Control",
+        "09607cb0fe": "Git y control de código fuente",
         "33a5e1d597": "Conecta GitHub, GitLab, Linear y servicios de hosting de código.",
         "2b043783ef": "Integraciones",
         "2cd4ea75da": "Ajustes predeterminados del espacio de trabajo, configuración de la app y mantenimiento.",
@@ -1809,7 +1809,7 @@
         "90020cc1f3": "Este pull request aún no tiene checks reportados.",
         "ecffebc251": "No se encontraron checks",
         "checkOpenInBrowser": "Abrir en el navegador",
-        "744197c84d": "No hay output inline disponible para este check.",
+        "744197c84d": "No hay salida en línea disponible para este check.",
         "08d072664d": "Jobs",
         "96d8f36798": "Anotaciones",
         "485609c4f2": "check #",
@@ -2015,16 +2015,16 @@
         "ceaf7c30c7": "El ID del revisor no está disponible para este usuario de GitLab.",
         "f7cb495a12": "Se reintentó {{value0}}",
         "98718490e4": "El título del MR es obligatorio.",
-        "d600c2619a": "Cargando log",
+        "d600c2619a": "Cargando registro",
         "028bde664e": "Ocultar",
-        "2f9b27f838": "Log del job",
+        "2f9b27f838": "Registro del job",
         "032ae1312b": "Abrir job en GitLab",
         "fa3e042203": "Reintentar",
         "f23ea85341": "resuelto",
         "6de8ce0cc6": "{{value0}} obligatorias",
         "22511537d2": "Aprobado",
         "3a051b8ade": "Work item",
-        "32f8bef818": "Sin output de log.",
+        "32f8bef818": "Sin salida de registro.",
         "4168eb2c51": "Resolver",
         "commentTooLarge": "El comentario es demasiado grande para enviarlo de forma segura.",
         "gitlabActionFailed": "La acción de GitLab falló.",
@@ -2313,7 +2313,7 @@
         "ddfd42f460": "Revisa el prompt antes de iniciar un agente.",
         "a053bdd082": "Arreglar checks fallidos con IA",
         "1b14d0a69c": "Abrir en GitHub",
-        "1550675e5f": "No hay output inline disponible para este check.",
+        "1550675e5f": "No hay salida en línea disponible para este check.",
         "7720c9c3f5": "Jobs",
         "8432d17901": "Anotaciones",
         "f01bf79a79": "check #",
@@ -3367,7 +3367,7 @@
             "532aea14ce": "Cancelar",
             "767951265d": "Algo salió mal al crear el worktree.",
             "cancelProvisioning": "Cancelar",
-            "vmProvisioningLogEmpty": "Esperando output de la receta..."
+            "vmProvisioningLogEmpty": "Esperando salida de la receta..."
           }
         }
       },
@@ -4910,7 +4910,7 @@
           "2d13e57f72": "Habilitar OpenCode",
           "2f1ee2878b": "Habilitar Codex",
           "0ea0cae435": "Habilitar Claude",
-          "6c00c46815": "Habilita un proveedor para escanear logs locales de agentes y crear el registro combinado de tokens.",
+          "6c00c46815": "Habilita un proveedor para escanear registros locales de agentes y crear el historial combinado de tokens.",
           "49405ccc8d": "Empezar a rastrear tokens",
           "ca6bc5fded": "Actualizar",
           "e06d1baf5c": "Actualizar resumen de uso",
@@ -7153,18 +7153,18 @@
           "3d245ef7d9": "Codex informó que este inicio de sesión no está actualizado",
           "589eba1eee": "Necesita volver a autenticarse",
           "e74831fb6b": "Activo",
-          "b4c9450319": "No hay cuentas de Codex gestionadas para {{value0}}. Orca usará el login predeterminado de Codex del sistema de ese entorno hasta que agregues una aquí.",
+          "b4c9450319": "No hay cuentas de Codex gestionadas para {{value0}}. Orca usará el inicio de sesión predeterminado de Codex del sistema de ese entorno hasta que agregues una aquí.",
           "93c47b333a": "Necesita iniciar sesión",
           "f2a265f8c7": "Predeterminado del sistema",
           "c0a52abfc5": "Mostrando cuentas para {{value0}}. Las nuevas cuentas se agregan allí.",
           "94d351af4a": "Cuentas",
           "d0d53b7eb0": "Administra qué cuenta de Codex usa Orca para obtener rate limits en vivo.",
-          "340d6f7a85": "Cada cuenta mantiene su propio contexto de login local en Orca. La autenticación de la cuenta permanece en este dispositivo.",
-          "cedfab35ab": "Opcional. Orca puede usar tu login normal de Codex; agrega cuentas solo si quieres cambiar rápido en Orca.",
+          "340d6f7a85": "Cada cuenta mantiene su propio contexto de inicio de sesión local en Orca. La autenticación de la cuenta permanece en este dispositivo.",
+          "cedfab35ab": "Opcional. Orca puede usar tu inicio de sesión normal de Codex; agrega cuentas solo si quieres cambiar rápido en Orca.",
           "ef91cfa06b": "Codex",
-          "3fe7862418": "No hay cuentas de Claude gestionadas para {{value0}}. Orca usará el login predeterminado de Claude del sistema de ese entorno hasta que agregues una aquí.",
-          "fcc4093fc1": "Usa tu login actual de Codex de {{value0}}.",
-          "72b36ea174": "Opcional. Orca puede usar tu login normal de Claude; agrega cuentas solo si quieres cambiar rápido sin mover sesiones de chat.",
+          "3fe7862418": "No hay cuentas de Claude gestionadas para {{value0}}. Orca usará el inicio de sesión predeterminado de Claude del sistema de ese entorno hasta que agregues una aquí.",
+          "fcc4093fc1": "Usa tu inicio de sesión actual de Codex de {{value0}}.",
+          "72b36ea174": "Opcional. Orca puede usar tu inicio de sesión normal de Claude; agrega cuentas solo si quieres cambiar rápido sin mover sesiones de chat.",
           "26ef4b55be": "Claude",
           "2743cdc0af": "Error al actualizar la cuenta de Claude.",
           "f921d32606": "Cuenta Claude actualizada.",
@@ -7177,10 +7177,10 @@
           "0b4591ff93": "Elige qué entorno local inspeccionar y dónde se agregan nuevas cuentas gestionadas de Claude y Codex.",
           "0c67a2a1aa": "WSL no está disponible en esta máquina.",
           "2cd197025c": "Elige si las cuentas de proveedor se inspeccionan y agregan en {{value0}} o WSL.",
-          "fd62f37c24": "Codex informó que este login de {{value0}} está desactualizado.",
-          "e4a28e8894": "Codex informó que el login de {{value0}} requiere un inicio de sesión nuevo. Inicia sesión de nuevo antes de iniciar nuevas sesiones de Codex.",
+          "fd62f37c24": "Codex informó que este inicio de sesión de {{value0}} está desactualizado.",
+          "e4a28e8894": "Codex informó que el inicio de sesión de {{value0}} debe renovarse. Inicia sesión de nuevo antes de iniciar nuevas sesiones de Codex.",
           "75ca9b718e": "Codex informó que la cuenta activa requiere un inicio de sesión nuevo. Reautentícala antes de iniciar nuevas sesiones de Codex.",
-          "e05d0ff737": "Usa tu login actual de Claude de {{value0}}.",
+          "e05d0ff737": "Usa tu inicio de sesión actual de Claude de {{value0}}.",
           "2f24f244a4": "La cookie de MiniMax es obligatoria.",
           "8e6f0cb1d8": "La cookie de MiniMax no se guardó.",
           "8d61637a77": "Cookie de MiniMax guardada.",
@@ -7486,10 +7486,10 @@
         "BrowserUsePane": {
           "67d9a53f47": "Gestionar perfiles",
           "112f70adc4": "Última importación desde {{value0}}",
-          "72d4815523": "Trae tus logins existentes a Orca para que los agents puedan acceder a páginas autenticadas. Importa al perfil predeterminado.",
-          "af8c83ed61": "Importa cookies de Chrome, Edge u otros navegadores para que los agents puedan reutilizar tus logins.",
+          "72d4815523": "Trae tus inicios de sesión existentes a Orca para que los agentes puedan acceder a páginas autenticadas. Importa al perfil predeterminado.",
+          "af8c83ed61": "Importa cookies de Chrome, Edge u otros navegadores para que los agentes puedan reutilizar tus inicios de sesión.",
           "68ea76eb71": "Instala el skill Browser Use para que los agents puedan operar el navegador de Orca.",
-          "96b91c6349": "Deja que los coding agents controlen este navegador con tus logins.",
+          "96b91c6349": "Deja que los agentes de programación controlen este navegador con tus inicios de sesión.",
           "2ea4617e3a": "Se importaron {{value0}} cookies de {{value1}}{{value2}}.",
           "2ccfc9cff8": "Importar",
           "0462565413": "Reimportar",
@@ -7508,7 +7508,7 @@
         "CliSection": {
           "8671e406f0": "Cancelar",
           "a4aafe46e3": "Ruta de destino:",
-          "e8012c03a1": "Permite a los agents usar comandos de workspace, terminal y progreso de Orca.",
+          "e8012c03a1": "Permite a los agentes usar comandos de espacio de trabajo, terminal y progreso de Orca.",
           "7f2747f7dd": "no está visible en PATH para este shell.",
           "b0c310ab46": "Destino del launcher existente:",
           "15eaad0d31": "Ruta del comando:",
@@ -7557,7 +7557,7 @@
           "1ef29f8c29": "Línea de comando que Orca ejecuta cuando una receta de texto usa Comando personalizado.",
           "2339a89104": "Agrega botones AI que ejecutan el agente seleccionado con la plantilla de comando para esa acción.",
           "d5b45a3628": "Mostrar acciones de Source Control AI",
-          "7bcad2b200": "Agrega recetas de acción para commit, pull request, nombre de rama y arreglos de Source Control.",
+          "7bcad2b200": "Agrega recetas de acciones para commit, pull request, nombre de rama y correcciones de control de código fuente.",
           "d54c64163d": "activado",
           "4ec89c319e": "agent",
           "34d0348e34": "generar",
@@ -7714,12 +7714,12 @@
         },
         "FloatingWorkspacePane": {
           "3c900e26e5": "El atajo de teclado funciona independientemente de dónde se muestre el botón.",
-          "505001823e": "Elegir directorio del workspace flotante",
-          "81afb79785": "Las nuevas pestañas de terminal flotante comienzan aquí. Las notas Markdown se guardan en el workspace flotante propiedad de la app de Orca.",
-          "41eb95f7f0": "Muestra el botón y el panel del workspace flotante.",
-          "37df688d6f": "Activa el workspace flotante y elige dónde comienzan las nuevas pestañas.",
-          "172d1d75c3": "Activar workspace flotante",
-          "2374e81dd8": "Workspace flotante",
+          "505001823e": "Elegir directorio del espacio de trabajo flotante",
+          "81afb79785": "Las nuevas pestañas de terminal flotante comienzan aquí. Las notas Markdown se guardan en el espacio de trabajo flotante propiedad de la app de Orca.",
+          "41eb95f7f0": "Muestra el botón y el panel del espacio de trabajo flotante.",
+          "37df688d6f": "Activa el espacio de trabajo flotante y elige dónde comienzan las nuevas pestañas.",
+          "172d1d75c3": "Activar espacio de trabajo flotante",
+          "2374e81dd8": "Espacio de trabajo flotante",
           "73ac917638": "Botón flotante",
           "7cedc178d6": "Directorio del terminal",
           "b9c2a85346": "Ubicación del botón de activación",
@@ -7956,7 +7956,7 @@
         },
         "McpConfigSection": {
           "4d16a0d9ac": "Comprobado",
-          "b900cd6282": "No se encontró ninguna configuración de MCP. Agrega una configuración vacía de workspace cuando quieras que este repositorio defina sus propios servidores MCP.",
+          "b900cd6282": "No se encontró ninguna configuración de MCP. Agrega una configuración vacía de espacio de trabajo cuando quieras que este repositorio defina sus propios servidores MCP.",
           "f34c152dc0": "Actualizar configuraciones de MCP",
           "6bac9ddfc6": "Los repositorios SSH se leen a través del sistema de archivos remoto. La creación inicial se limita a la configuración raíz del espacio de trabajo.",
           "96f5609b04": "Inspecciona las definiciones de servidores MCP que los agentes pueden usar mientras trabajan en este repositorio.",
@@ -8103,7 +8103,7 @@
           "03b00b1f64": "Aplicación personalizada",
           "c1d817e027": "Añadida",
           "e4064916aa": "Agregar aplicación",
-          "9d0413817d": "Elige las aplicaciones disponibles en el menú Abrir en de un workspace.",
+          "9d0413817d": "Elige las aplicaciones disponibles en el menú Abrir en de un espacio de trabajo.",
           "eb55b87570": "El comando que escribirías en Terminal para abrir esta aplicación.",
           "ba1422ee07": "Comando de terminal",
           "e1fc0085c6": "Etiqueta de menú",
@@ -8250,7 +8250,7 @@
           "aba825233f": "El archivo contiene claves de configuración que esta versión de Orca no reconoce. Es posible que necesites actualizar Orca o revisar el archivo en busca de errores tipográficos.",
           "8bfe65fc60": "Usar comandos locales",
           "8d6c56bff8": "Ejecutar ambos",
-          "0fa21e19ec": "Nombre del workspace, normalmente basado en el nombre de la rama.",
+          "0fa21e19ec": "Nombre del espacio de trabajo, normalmente basado en el nombre de la rama.",
           "54c73d88d0": "Ruta al worktree que se está creando. Los comandos de configuración se ejecutan desde este directorio.",
           "30952c4aa4": "Ruta al checkout principal del repositorio. Útil para copiar archivos compartidos, como .env, a un worktree.",
           "9b821fa19d": "# p.ej. echo \"Limpiando $ORCA_WORKSPACE_NAME\"",
@@ -8331,7 +8331,7 @@
           "323debba71": "Tipo:",
           "499a437335": "Identidad",
           "availableHostsDescription": "Hosts donde está configurado este proyecto.",
-          "availableHostsHelp": "Las rutas del proyecto y los ajustes de worktree son específicos de cada host; al crear un workspace puedes usar cualquier configuración lista.",
+          "availableHostsHelp": "Las rutas del proyecto y los ajustes de worktree son específicos de cada host; al crear un espacio de trabajo puedes usar cualquier configuración lista.",
           "viewingHost": "Viendo host",
           "currentSetup": "Actual",
           "hostSetupStateReady": "Listo",
@@ -8471,7 +8471,7 @@
           "hostModelCapabilityMissing": "Soporte de modelo de host: actualiza el servidor para {{value0}}",
           "hostModelCapabilityProjectSetup": "configuración del proyecto",
           "hostModelCapabilityTaskSourceContext": "contexto de origen de tareas",
-          "hostModelCapabilityWorkspaceRunContext": "contexto de ejecución del workspace",
+          "hostModelCapabilityWorkspaceRunContext": "contexto de ejecución del espacio de trabajo",
           "serverConnected": "Conectado",
           "serverChecking": "Comprobando…",
           "serverDisconnected": "Desconectado",
@@ -8581,7 +8581,7 @@
           "cfa34f4465": "Nombres de rama, refs base y Git AI Author.",
           "b07041697f": "Conecta GitHub, GitLab, Linear y servicios de alojamiento de código fuente.",
           "c9ca101a3b": "Integraciones",
-          "f9b77539fd": "Valores predeterminados del workspace, configuración de la app y mantenimiento.",
+          "f9b77539fd": "Valores predeterminados del espacio de trabajo, configuración de la app y mantenimiento.",
           "7807c11c4d": "General",
           "6855b0f77d": "Termina los flujos de trabajo principales que hacen que Orca sea útil para el trabajo de agentes en paralelo.",
           "6d119427ef": "Lista de verificación de incorporación",
@@ -9602,7 +9602,7 @@
             "0dbb1eaf4e": "página principal",
             "291f480a5e": "hogar",
             "a942905148": "URL abierta al crear una nueva pestaña del navegador. Déjelo vacío para abrir una pestaña en blanco.",
-            "4e0fdf0a3f": "Abre los puertos del workspace como URL localhost de Orca específicas del worktree para que las pestañas del navegador sean más fáciles de distinguir.",
+            "4e0fdf0a3f": "Abre los puertos del espacio de trabajo como URL localhost de Orca específicas del worktree para que las pestañas del navegador sean más fáciles de distinguir.",
             "terminalLinkActions": {
               "terminal": "Terminal",
               "chat": "chat",
@@ -11316,7 +11316,7 @@
           "2a9588b1c2": "Eliminar esta combinación"
         },
         "BrowserLocalhostWorktreeLabelsSetting": {
-          "1db3c8b983": "Abre los puertos del workspace como URLs localhost de Orca específicas por worktree para que las pestañas del navegador sean más fáciles de distinguir.",
+          "1db3c8b983": "Abre los puertos del espacio de trabajo como URLs localhost de Orca específicas por worktree para que las pestañas del navegador sean más fáciles de distinguir.",
           "1af20fbf51": "Etiquetas de worktree para localhost"
         },
         "AgentRuntimeSetting": {
@@ -13532,7 +13532,7 @@
             "2fe2a67580": "Más acciones de notas",
             "eae2d051af": "Copiar todas las notas",
             "cc474e0b8c": "Notas",
-            "e131cd7128": "Source Control sólo está disponible para repositorios Git",
+            "e131cd7128": "Control de código fuente sólo está disponible para repositorios Git",
             "c07b236287": "Seleccione un espacio de trabajo para ver los cambios",
             "a5e5a11090": "Descartar todo falló: no se pueden eliminar los archivos antes de descartarlos",
             "8a5ba6a988": "No se pudo cargar la diferencia de commit",
@@ -13606,9 +13606,9 @@
             "fda060d6ce": "Revisa el mensaje de commit y vuelve a intentar Crear PR.",
             "b75cb1fd0c": "Confirmando cambios…",
             "995c5e67ec": "La configuración de revisión necesita atención.",
-            "d7492cafce": "No se pudo actualizar Source Control. Vuelve a intentar Crear PR.",
-            "473f18758e": "Configuración de IA de Source Control",
-            "createPrIntentConfigureAi": "Agrega un mensaje de commit o configura la IA de Source Control.",
+            "d7492cafce": "No se pudo actualizar el control de código fuente. Vuelve a intentar Crear PR.",
+            "473f18758e": "Configuración de Source Control AI",
+            "createPrIntentConfigureAi": "Agrega un mensaje de commit o configura Source Control AI.",
             "createPrIntentGenerateFailed": "No se pudo generar un mensaje de commit. Agrega uno y vuelve a intentarlo.",
             "createPrIntentCommitFailed": "No se pudo hacer commit de los cambios. Corrige el issue y vuelve a intentar Crear PR.",
             "createPrIntentNeedsSync": "Sincroniza esta rama antes de crear una revisión.",
@@ -13623,7 +13623,7 @@
             "createPrIntentCreatingReview": "Creando revisión…",
             "a91f8e2b01": "Ver como lista",
             "b82e9f3c12": "Ver como árbol",
-            "f71c4a8d90": "Más acciones de Source Control",
+            "f71c4a8d90": "Más acciones de control de código fuente",
             "c8e4a1f902": "Filtro: {{value0}}",
             "b3c8f1a902": "Filtrar archivos por nombre",
             "d4f8c2a901": "Limpiar y cerrar filtro",
@@ -13645,7 +13645,7 @@
               "834cb3f23d": "Corregir con AI",
               "783a808870": "Cerrar"
             },
-            "97e7124eac": "No se pudo actualizar Source Control. Vuelve a intentarlo.",
+            "97e7124eac": "No se pudo actualizar el control de código fuente. Vuelve a intentarlo.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Rama actual: {{value0}}",
             "c7d4e2f801": "Cambiar ref base: {{value0}}",
@@ -13721,7 +13721,7 @@
             "013c9ac04a": "Guardar para",
             "23280cbab1": "Esta plantilla no incluye {basePrompt}, por lo que el agente no recibirá el prompt predeterminado de Orca.",
             "5421a96acb": "Guardar e iniciar agente",
-            "6cefcdfba1": "Puedes cambiarlo más tarde en la configuración de IA de Source Control.",
+            "6cefcdfba1": "Puedes cambiarlo más tarde en la configuración de Source Control AI.",
             "c29f9cf266": "Guardar este prompt y no mostrar esta revisión la próxima vez",
             "ea4788705e": "Cancelar",
             "7ec6abbf2a": "Reiniciar",
@@ -13781,8 +13781,8 @@
                 "0dca6bfab5": "Abrir detalles del check",
                 "991f50c7e4": "No hay checks configurados",
                 "e15a8b77ef": "No hay detalles en línea disponibles para este check.",
-                "679bf2093c": "Copiar extracto del log",
-                "d713f500b2": "Extracto del log",
+                "679bf2093c": "Copiar extracto del registro",
+                "d713f500b2": "Extracto del registro",
                 "49731703ea": "Jobs",
                 "f2fe8a4e8f": "Anotaciones",
                 "2dd5ddabc4": "flujo de trabajo #",
@@ -14424,7 +14424,7 @@
           "AiVaultPanel": {
             "resumeCommandCopied": "Comando para reanudar copiado",
             "valueCopied": "{{value0}} copiado",
-            "openWorkspaceBeforeResuming": "Abre un workspace antes de reanudar una sesión.",
+            "openWorkspaceBeforeResuming": "Abre un espacio de trabajo antes de reanudar una sesión.",
             "agentSessionQueued": "Sesión de {{value0}} en cola",
             "sessionHistory": "Historial de sesiones de agentes",
             "resumePastSessions": "Reanudar sesiones anteriores",
@@ -14435,11 +14435,11 @@
             "noSessionsMatchFilters": "Ninguna sesión coincide con los filtros actuales",
             "noAgentsSelected": "Ningún agente seleccionado",
             "sessionId": "ID de sesión",
-            "logPath": "Ruta del log",
+            "logPath": "Ruta del registro",
             "agents": "Agentes",
             "originalPaneUnavailable": "El panel original ya no está disponible.",
             "worktreeUnavailable": "El worktree ya no está disponible.",
-            "openSupportedWorkspace": "Abre un workspace antes de reanudar una sesión.",
+            "openSupportedWorkspace": "Abre un espacio de trabajo antes de reanudar una sesión.",
             "sessionHostMismatchUnsupported": "Esta sesión pertenece a un host diferente. Abre un espacio de trabajo en el mismo host para reanudarla.",
             "prepareSessionResumeFailed": "No se pudo preparar esta sesión para reanudarla.",
             "sessionDeleted": "Sesión eliminada",
@@ -14458,7 +14458,7 @@
           "AiVaultPanelControls": {
             "scanningSessions": "Buscando sesiones",
             "scopeAriaLabel": "Ámbito del historial de sesiones: {{value0}}",
-            "currentWorkspaceLower": "workspace actual",
+            "currentWorkspaceLower": "espacio de trabajo actual",
             "allSessionsLower": "todas las sesiones",
             "allScope": "Todo",
             "viewOptionsAriaLabel": "Opciones de vista del historial de sesiones",
@@ -14482,7 +14482,7 @@
           },
           "AiVaultSessionDetails": {
             "resumeInWorktree": "Reanudar en worktree",
-            "viewLog": "Ver log",
+            "viewLog": "Ver registro",
             "unknownTime": "Hora desconocida",
             "justNow": "Ahora mismo",
             "minutesAgo": "hace {{value0}}m",
@@ -15503,11 +15503,11 @@
             "cd8a3a39d7": "3 commits por delante"
           },
           "TasksAnimatedVisual": {
-            "b68c92fbdc": "Iniciar workspace",
+            "b68c92fbdc": "Iniciar espacio de trabajo",
             "4331c4d0f8": "Abierto",
             "b13375617e": "El selector de worktree trunca los nombres",
-            "fe47c9c9e8": "Workspace listo",
-            "61ffda7601": "Creando workspace",
+            "fe47c9c9e8": "Espacio de trabajo listo",
+            "61ffda7601": "Creando espacio de trabajo",
             "readingIssue": "Leyendo issue #{{number}}…"
           },
           "WorkbenchAnimatedVisual": {
@@ -15607,8 +15607,8 @@
           "agents": {
             "orchestration": {
               "OrchestrationPage": {
-                "30b509a467": "2 workspaces secundarios",
-                "862605d066": "2 workspaces secundarios",
+                "30b509a467": "2 secundarios",
+                "862605d066": "2 espacios de trabajo secundarios",
                 "coordinatorName": "rediseñar el flujo de autenticación",
                 "childPr1Name": "PR 1/2: migrar users.sql",
                 "childPr2Name": "PR 2/2: middleware withSession"
@@ -15646,7 +15646,7 @@
           },
           "FeatureWallBrowserAction": {
             "5022c43a88": "El navegador no pudo abrir",
-            "c9eb68b474": "Aún no hay ningún grupo de workspace disponible para este worktree.",
+            "c9eb68b474": "Aún no hay ningún grupo de espacio de trabajo disponible para este worktree.",
             "c9728107c5": "Pruébalo",
             "25dd101f15": "La configuración del navegador necesita atención",
             "e02b11e6b0": "Configuración del navegador lista",
@@ -15655,7 +15655,7 @@
             "5f97caf76b": "Instalando…"
           },
           "ConnectIntegrationsList": {
-            "33b650af52": "Conecta donde tu equipo hace seguimiento del trabajo. Orca inicia workspaces con el título del issue, el enlace y el contexto ya adjuntos.",
+            "33b650af52": "Conecta donde tu equipo hace seguimiento del trabajo. Orca inicia espacios de trabajo con el título del issue, el enlace y el contexto ya adjuntos.",
             "list_end": " y ",
             "list_pair": " y ",
             "list_mid": ", ",
@@ -16497,7 +16497,7 @@
               "fix": {
                 "with": {
                   "ai": {
-                    "1a8c4e2b90": "Selecciona un workspace antes de lanzar una acción de IA.",
+                    "1a8c4e2b90": "Selecciona un espacio de trabajo antes de lanzar una acción de IA.",
                     "4f2d9a8c17": "Selecciona un repositorio antes de lanzar una acción de IA.",
                     "7c3e1b5d42": "Abre un PR o MR antes de lanzar un fix con IA.",
                     "9b2f6d4a81": "Este check no está fallando.",
@@ -16829,7 +16829,7 @@
             "8e24fe4f75": "Informe de fallo enviado.",
             "8b8473c544": "Se copió el informe de fallos.",
             "765591798d": "Comprobando informes de fallos...",
-            "ead6fc0510": "No se capturó ningún informe de fallo automático. Aun así puedes enviar detalles e incluir logs de diagnóstico recientes cuando estén disponibles."
+            "ead6fc0510": "No se capturó ningún informe de fallo automático. Aun así puedes enviar detalles e incluir registros de diagnóstico recientes cuando estén disponibles."
           },
           "submit": {
             "notice": {
@@ -17014,11 +17014,11 @@
               "9537b910fe": "Eliminar worktree",
               "0b1f25f796": "Inicia un nuevo worktree.",
               "52ac9da671": "Crear worktree",
-              "f70812764a": "Abre una pestaña de terminal en el workspace activo.",
+              "f70812764a": "Abre una pestaña de terminal en el espacio de trabajo activo.",
               "34980395d4": "Nueva pestaña de terminal",
-              "f2a1b33f8d": "Crea un archivo Markdown sin título en el workspace activo.",
+              "f2a1b33f8d": "Crea un archivo Markdown sin título en el espacio de trabajo activo.",
               "25349b66fc": "Nuevo archivo Markdown",
-              "784812ca24": "Abre una pestaña del navegador en el workspace activo.",
+              "784812ca24": "Abre una pestaña del navegador en el espacio de trabajo activo.",
               "892bfa9339": "Nueva pestaña del navegador",
               "splitChatRight": "Dividir chat a la derecha",
               "splitChatDown": "Dividir chat abajo",
@@ -17400,9 +17400,9 @@
           "57b722cbba": "Agente",
           "6ff66f9012": "Nueva ejecución",
           "a2e688226d": "Worktree",
-          "6f9610e667": "Worktree se ejecuta en el workspace seleccionado. Nueva ejecución crea un workspace nuevo desde la rama seleccionada cada vez.",
-          "2c3fd9bfa1": "Ayuda del modo workspace",
-          "b28b140eaf": "Workspace",
+          "6f9610e667": "Worktree se ejecuta en el espacio de trabajo seleccionado. Nueva ejecución crea un espacio de trabajo nuevo desde la rama seleccionada cada vez.",
+          "2c3fd9bfa1": "Ayuda del modo de espacio de trabajo",
+          "b28b140eaf": "Espacio de trabajo",
           "0d17f4ca8f": "Seleccionar proyecto",
           "02d351877e": "Proyecto",
           "a4ac8fcc62": "/goal",
@@ -17640,7 +17640,7 @@
         "AutomationSetupDecisionField": {
           "5a7863909c": "Ejecutar la configuración para cada espacio de trabajo nuevo",
           "18f000ad4e": "Avanzado",
-          "874b72195b": "Cuando esta automatización crea un workspace, lo prepara igual que al crear un worktree manualmente: ejecuta la configuración del proyecto y abre sus pestañas de terminal."
+          "874b72195b": "Cuando esta automatización crea un espacio de trabajo, lo prepara igual que al crear un worktree manualmente: ejecuta la configuración del proyecto y abre sus pestañas de terminal."
         },
         "AutomationsPageSkeleton": {
           "55527b7bcf": "Cargando automatizaciones"
@@ -17907,13 +17907,13 @@
           "770d458144": "Agrupar por",
           "groupAgentActivityBy": "Agrupar actividad de agentes por",
           "795cbf26e2": "Filtrar...",
-          "4616ea39fd": "Ir al workspace",
+          "4616ea39fd": "Ir al espacio de trabajo",
           "showSearch": "Mostrar búsqueda",
           "markThreadRead": "Marcar hilo como leído",
           "59b131fbd9": "Marcar hilo como no leído",
           "5651b216c6": "Proyecto desconocido",
           "22b22034bc": "Terminal independiente no disponible en Actividad.",
-          "afdc2139a8": "Terminal de Agent cerrada. Abre una nueva terminal en este workspace para continuar.",
+          "afdc2139a8": "Terminal del agente cerrada. Abre una nueva terminal en este espacio de trabajo para continuar.",
           "clearCompleted": "Borrar completados",
           "none": "Ninguno",
           "search": "Buscar",
@@ -18046,9 +18046,9 @@
       },
       "rightSidebar": {
         "FolderWorkspaceWorktreesPanel": {
-          "unavailable": "Los workspaces solo se muestran para workspaces de carpeta.",
+          "unavailable": "Los espacios de trabajo solo se muestran para espacios de trabajo de carpeta.",
           "emptyTitle": "Aún no hay worktrees adjuntos",
-          "emptyCopy": "Los worktrees creados desde este workspace aparecerán aquí.",
+          "emptyCopy": "Los worktrees creados desde este espacio de trabajo aparecerán aquí.",
           "attachedCount_one": "{{count}} worktree adjunto",
           "attachedCount_other": "{{count}} worktrees adjuntos",
           "attachedCount_many": "{{count}} worktrees adjuntos"
@@ -18057,7 +18057,7 @@
           "unavailable": "Las comprobaciones de PR solo se muestran en espacios de trabajo de carpeta.",
           "refresh": "Actualizar comprobaciones de PR",
           "emptyTitle": "Aún no hay worktrees adjuntos",
-          "emptyCopy": "Los checks de PR aparecerán aquí cuando se adjunten worktrees a este workspace de carpeta.",
+          "emptyCopy": "Los checks de PR aparecerán aquí cuando se adjunten worktrees a este espacio de trabajo de carpeta.",
           "openReviewExternally": "Abrir {{value0}} externamente",
           "showDetails": "Mostrar detalles de checks de PR de {{value0}}",
           "hideDetails": "Ocultar detalles de checks de PR de {{value0}}",
@@ -19852,7 +19852,7 @@
       "resumeCommand": {
         "description": "Abrir el historial de sesiones de agentes",
         "argumentHint": "[búsqueda]",
-        "workspaceUnavailable": "El workspace de este chat aún no se ha cargado. Vuelve a probar /resume en un momento.",
+        "workspaceUnavailable": "El espacio de trabajo de este chat aún no se ha cargado. Vuelve a probar /resume en un momento.",
         "replace": "Reemplazar",
         "replaceDescription": "Reanudar “{{title}}” aquí detendrá lo que {{agent}} está haciendo en este chat.",
         "replaceTitle": "¿Reemplazar este chat?"
@@ -19975,7 +19975,7 @@
       },
       "sessionOption": {
         "noLiveTerminal": "No hay ningún terminal activo disponible.",
-        "commandCanceled": "Se canceló el comando de Chat UI porque se cerró el editor de mensajes.",
+        "commandCanceled": "Se canceló el comando de interfaz de chat porque se cerró el editor de mensajes.",
         "commandRejected": "El terminal no aceptó el comando."
       },
       "sessionOptionErrors": {
@@ -20055,8 +20055,8 @@
       },
       "cardKindHidden": {
         "description": "Puedes cambiar esto en cualquier momento en",
-        "settingsLink": "Ajustes > Chat UI > Actividad de turnos",
-        "failed": "No se pudo guardar. Puedes desactivarlo en Ajustes > Chat UI > Actividad de turnos."
+        "settingsLink": "Ajustes > Interfaz de chat > Actividad de turnos",
+        "failed": "No se pudo guardar. Puedes desactivarlo en Ajustes > Interfaz de chat > Actividad de turnos."
       },
       "openedPullRequests": {
         "one": "Solicitud de extracción creada: {{name}}",
@@ -21584,8 +21584,8 @@
       "demoApp": "App",
       "demoPassword": "contraseña",
       "demoCookie": "cookie",
-      "switchedNoteTitle": "Los agentes nuevos se abrirán en Chat UI",
-      "switchedNoteBody": "¿Prefieres el terminal? Vuelve cuando quieras: busca <term>Chat UI</term> en Ajustes.",
+      "switchedNoteTitle": "Los agentes nuevos se abrirán en la interfaz de chat",
+      "switchedNoteBody": "¿Prefieres el terminal? Vuelve cuando quieras: busca <term>Interfaz de chat</term> en Ajustes.",
       "openSettings": "Abrir ajustes"
     },
     "botsTeammate": {
@@ -24221,9 +24221,9 @@
         "mergeRequestTitleUnreadable": "No se pudo leer el título actual del merge request",
         "rateLimited": "Se alcanzó el límite de velocidad de GitLab. Inténtalo de nuevo en unos minutos.",
         "issuePermissionDenied": "No tienes permiso para editar este issue. Comprueba los alcances de tu token de GitLab.",
-        "jobLogPermissionDenied": "No tienes permiso para leer el log de este job. Comprueba los alcances de tu token de GitLab.",
+        "jobLogPermissionDenied": "No tienes permiso para leer el registro de este job. Comprueba los alcances de tu token de GitLab.",
         "jobProjectNotFound": "No se pudo encontrar el proyecto de GitLab de este job.",
-        "jobLogFailed": "No se pudo cargar el log del job: {{detail}}"
+        "jobLogFailed": "No se pudo cargar el registro del job: {{detail}}"
       }
     },
     "startPoint": {
