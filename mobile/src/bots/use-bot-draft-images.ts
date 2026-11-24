@@ -7,6 +7,7 @@ import { detectImageFileSignature } from '../../../src/shared/file-content/image
 import { imageReferenceInsertion } from '../../../src/shared/native-chat/attachments/native-chat-image-reference'
 import { queuedEditTextForKeptImages } from '../../../src/shared/native-chat/input/queued-messages/queued-message-edit'
 import { imageReferencesToPromptMarkers } from '../../../src/shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
+import { agentSessionAttachmentAppends } from '../../../src/shared/agent-session/agent-session-attachments'
 import { uploadMobileAgentSessionAttachment } from '../files/attachments/mobile-agent-session-attachment-upload'
 import { fitMobileAgentImage } from '../files/attachments/mobile-agent-image-fit'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -127,8 +128,16 @@ export function useBotDraftImages({
     const format = imageFormat(fitted.base64)
     const { path } = await uploadMobileAgentSessionAttachment(target, {
       sessionId: session,
-      name: `image.${format.extension}`,
-      base64: fitted.base64
+      file: {
+        name: `image.${format.extension}`,
+        mime: format.mimeType,
+        byteLength: decodeBase64Bytes(fitted.base64).byteLength,
+        chunks: async function* () {
+          for (const { contentBase64 } of agentSessionAttachmentAppends(fitted.base64)) {
+            yield contentBase64
+          }
+        }
+      }
     })
     // The fitted copy previews too, so the picked original's bytes aren't kept with the draft.
     const previewUri = picked.uri ?? `data:${format.mimeType};base64,${fitted.base64}`

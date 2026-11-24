@@ -342,7 +342,6 @@ export function MobileSessionActiveContent({
                     onOpenFile={handleNativeChatFileTap}
                     images={nativeChatImages}
                     structuredComposer={controller.nativeChatStructuredComposer}
-                    fileAttachments={controller.nativeChatFileAttachments}
                     onMicPress={dictationEnabled ? handleDictationToggle : undefined}
                     micActive={dictation.isStarting || dictation.isRecording}
                     micStarting={dictation.isStarting}

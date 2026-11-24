@@ -134,7 +134,11 @@ export function MobileBotGoogleConnect(props: {
     }
     void (async () => {
       for await (const file of picker.pickFiles()) {
-        const text = new TextDecoder().decode(decodeBase64Bytes(file.base64))
+        let base64 = ''
+        for await (const chunk of file.chunks()) {
+          base64 += chunk
+        }
+        const text = new TextDecoder().decode(decodeBase64Bytes(base64))
         googleClientImport.interpret(
           await googleClientImport.request(client, { file: text }, { failWhenDisconnected: true })
         )

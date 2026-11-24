@@ -24,6 +24,8 @@ import {
 } from '../delivery/mobile-native-chat-send'
 import {
   clearMobileNativeChatInputStale,
+  healMobileNativeChatStaleInput,
+  isMobileNativeChatInputStale,
   markMobileNativeChatInputStale
 } from '../delivery/mobile-native-chat-stale-input'
 import {
