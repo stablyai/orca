@@ -20,13 +20,15 @@ it('a clicked link that fails keeps its reason for the toast', async () => {
   expect(openFailureDetail(error)).toContain('target is not an http(s) URL')
 })
 
-it('a superseded click stays silent', async () => {
+it('a click superseded while its open was failing stays silent', async () => {
+  // Current when the open starts, stale by the time it fails.
+  let checks = 0
   await expect(
     openWorkspaceBrowserTabForLink({
       workspaceId: 'wt',
       url: 'not a url',
       intent: { kind: 'url' },
-      linkContext: { linkIntent: null, isCurrentRequest: () => false }
+      linkContext: { linkIntent: null, isCurrentRequest: () => checks++ === 0 }
     })
   ).resolves.toEqual({ status: 'superseded' })
 })
