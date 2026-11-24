@@ -12,46 +12,54 @@ const TERMINAL_STATUSES = ['completed', 'failed', 'killed', 'stopped']
  * state, closed by its result too) and every background task the agent reports, from its start
  * until its end, also after the turn. Keys: `turn` [session_id], `task` [task_id].
  */
-export const CLAUDE_RELAY_WORK_MARKERS: ProviderRelayWorkMarkers = [
-  {
-    group: 'turn',
-    name: 'system',
-    effect: 'start',
-    when: [subtype('session_state_changed'), state('running')],
-    key: [SESSION]
-  },
-  {
-    group: 'turn',
-    name: 'system',
-    effect: 'end',
-    when: [subtype('session_state_changed'), state('idle')],
-    key: [SESSION]
-  },
-  { group: 'turn', name: 'result', effect: 'end', key: [SESSION] },
-  { group: 'task', name: 'system', effect: 'start', when: [subtype('task_started')], key: [TASK] },
-  {
-    group: 'task',
-    name: 'system',
-    effect: 'end',
-    when: [subtype('task_notification')],
-    key: [TASK]
-  },
-  ...TERMINAL_STATUSES.map((status) => ({
-    group: 'task',
-    name: 'system',
-    effect: 'end' as const,
-    when: [subtype('task_updated'), { path: ['patch', 'status'], is: status }],
-    key: [TASK]
-  })),
-  {
-    group: 'task',
-    name: 'system',
-    effect: 'roster',
-    when: [subtype('background_tasks_changed')],
-    list: ['tasks'],
-    key: [TASK]
-  }
-]
+export const CLAUDE_RELAY_WORK_MARKERS: ProviderRelayWorkMarkers = {
+  markers: [
+    {
+      group: 'turn',
+      name: 'system',
+      effect: 'start',
+      when: [subtype('session_state_changed'), state('running')],
+      key: [SESSION]
+    },
+    {
+      group: 'turn',
+      name: 'system',
+      effect: 'end',
+      when: [subtype('session_state_changed'), state('idle')],
+      key: [SESSION]
+    },
+    { group: 'turn', name: 'result', effect: 'end', key: [SESSION] },
+    {
+      group: 'task',
+      name: 'system',
+      effect: 'start',
+      when: [subtype('task_started')],
+      key: [TASK]
+    },
+    {
+      group: 'task',
+      name: 'system',
+      effect: 'end',
+      when: [subtype('task_notification')],
+      key: [TASK]
+    },
+    ...TERMINAL_STATUSES.map((status) => ({
+      group: 'task',
+      name: 'system',
+      effect: 'end' as const,
+      when: [subtype('task_updated'), { path: ['patch', 'status'], is: status }],
+      key: [TASK]
+    })),
+    {
+      group: 'task',
+      name: 'system',
+      effect: 'roster',
+      when: [subtype('background_tasks_changed')],
+      list: ['tasks'],
+      key: [TASK]
+    }
+  ]
+}
 
 /** The chat's open work for a detached idle stop, keyed as `CLAUDE_RELAY_WORK_MARKERS` key it. */
 export function claudeRelayOpenWork(
