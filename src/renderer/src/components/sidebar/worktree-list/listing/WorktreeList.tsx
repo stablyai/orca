@@ -9,7 +9,8 @@ import {
   useWorktreeMap
 } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
-import { useRepoMap } from '@/store/repos/use-repository-catalog'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { selectSidebarRepos } from '@/store/project-groups/project-group-remote-members'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { openHeaderCreateComposer } from '../rows/header-create-workspace-target'
@@ -85,9 +86,9 @@ const WorktreeList = React.memo(function WorktreeList({
   projectsCollapseTarget
 }: WorktreeListProps) {
   const allWorktrees = useAllWorktrees()
-  const repoMap = useRepoMap()
+  const repoMap = useAppStore((s) => getIndexedRepoMap(selectSidebarRepos(s)))
   const worktreeMap = useWorktreeMap()
-  const repos = useAppStore((s) => s.repos)
+  const repos = useAppStore(selectSidebarRepos)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const childrenByParentIdentity = useAppStoreWithHostStatuses(
     selectSidebarChildrenByParentIdentity

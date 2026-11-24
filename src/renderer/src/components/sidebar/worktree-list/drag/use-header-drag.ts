@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo } from 'react'
 import type React from 'react'
 import { useAppStore } from '@/store'
 import '@/store/project-groups/project-group-owner-routing'
+import { selectSidebarRepos } from '@/store/project-groups/project-group-remote-members'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome/ui-chrome-types'
@@ -33,7 +34,7 @@ import { useProjectGroupHeaderNesting } from './use-project-group-header-nesting
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
-const readLiveRepos = (): readonly Repo[] => useAppStore.getState().repos
+const readLiveRepos = (): readonly Repo[] => selectSidebarRepos(useAppStore.getState())
 
 export type WorktreeSidebarHeaderDrag = ReturnType<typeof useWorktreeSidebarHeaderDrag>
 

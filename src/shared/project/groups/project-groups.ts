@@ -3,6 +3,7 @@ import { normalizeExecutionHostId } from '../../execution-host/execution-host'
 import type { ProjectGroup, ProjectGroupCreatedFrom } from './project-group-types'
 import type { Repo } from '../../repository/repo-types'
 import { createNonSecureContextUuid } from '../../identifiers/non-secure-context-uuid'
+import { normalizeProjectGroupRemoteMembers } from './project-group-remote-members'
 
 export const UNGROUPED_PROJECT_GROUP_KEY = 'project-group:ungrouped'
 
@@ -91,15 +92,23 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
       updatedAt:
         typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
       // Why: runtime-owned groups otherwise look local after persistence reload.
-      ...(executionHostId ? { executionHostId } : {})
+      ...(executionHostId ? { executionHostId } : {}),
+      ...(raw.remoteMembers !== undefined ? { remoteMembers: raw.remoteMembers } : {})
     })
   }
   groups.sort(
     (left, right) => left.tabOrder - right.tabOrder || left.name.localeCompare(right.name)
   )
+  const seenRemoteMembers = new Set<string>()
   for (const group of groups) {
     if (group.parentGroupId === group.id || !seen.has(group.parentGroupId ?? '')) {
       group.parentGroupId = null
+    }
+    const remoteMembers = normalizeProjectGroupRemoteMembers(group.remoteMembers, seenRemoteMembers)
+    if (remoteMembers.length > 0) {
+      group.remoteMembers = remoteMembers
+    } else {
+      delete group.remoteMembers
     }
   }
   return groups

@@ -5,6 +5,7 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { RenderRow } from '../listing/render-row'
 import { getProjectGroupAncestorsByRowIndex } from './project-group-drop-target'
 import type { ProjectHeaderGroupMove } from './project-header-group-move'
+import { canProjectJoinGroupHost } from '@/store/project-groups/project-group-remote-members'
 
 export function useProjectHeaderGroupMove(args: {
   enabled: boolean
@@ -40,9 +41,12 @@ export function useProjectHeaderGroupMove(args: {
       rows: renderRows,
       ancestorsByRowIndex,
       sidebarRepoHeaderIdsByBucket,
-      // Why: groups are host-owned; a project can only join one on its own host.
+      // Why: a project joins its own host's groups, or this client's groups when it lives elsewhere.
       canDropInto: (repo, groupId) =>
-        projectGroupOwnerHostIdByGroupId.get(groupId) === getRepoExecutionHostId(repo),
+        canProjectJoinGroupHost(
+          getRepoExecutionHostId(repo),
+          projectGroupOwnerHostIdByGroupId.get(groupId)
+        ),
       onCommitUngroup: (repo, rootOrder) => {
         onScrollIntent()
         void moveProjectToGroup(repo, null).then((moved) => {

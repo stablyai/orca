@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { useRepoById } from '@/store/repos/use-repository-catalog'
+import { useSidebarRepoById } from '@/store/repos/use-repository-catalog'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useContextWorkspaceStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
 import { useMenuScopedWorktreeCatalog } from './use-menu-scoped-worktree-catalog'
@@ -71,7 +71,7 @@ export function useWorktreeContextMenuModel({
   const projectGroups = useAppStore((s) => s.projectGroups)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
-  const repo = useRepoById(worktree.repoId)
+  const repo = useSidebarRepoById(worktree.repoId)
   const deleteState = useAppStore((s) =>
     getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)
   )

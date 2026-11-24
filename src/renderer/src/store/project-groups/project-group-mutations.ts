@@ -22,6 +22,13 @@ import type { ProjectRemovalFailure, RepoSlice } from '../repos/repo-state'
 import { mergeProjectCompatibilityForHostRepoChange } from '../repos/repo-catalog-identity'
 import { applyProjectGroupDeleteCascade } from './project-group-removal-state'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
+import {
+  findRemoteProjectGroupMembership,
+  isClientProjectGroup,
+  planRemoteProjectGroupMove,
+  selectSidebarRepos
+} from './project-group-remote-members'
+import { getNextProjectGroupOrder } from '../../../../shared/project/groups/project-groups'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
@@ -31,7 +38,7 @@ function notifyProjectGroupOnOtherHost(): void {
     {
       description: translate(
         'auto.store.slices.repos.moveToGroupOtherHostDesc',
-        'The computer this project runs on does not have this group. A project can only join groups saved on its own computer.'
+        'This group is saved on another computer. A project can join groups saved on its own computer or on this one.'
       )
     }
   )
@@ -233,7 +240,30 @@ export function createProjectGroupMutationActions(
         if (!repo || !repoHostId || !target) {
           return false
         }
-        if (groupId && !isProjectGroupJoinableFromCatalog(get().projectGroups, groupId, target)) {
+        const joinsHostGroup =
+          !groupId || isProjectGroupJoinableFromCatalog(get().projectGroups, groupId, target)
+        if (target.kind === 'environment') {
+          // Why: a client group keeps remote members itself; nothing is written to the project's host.
+          const joinsClientGroup =
+            !joinsHostGroup &&
+            get().projectGroups.some((group) => group.id === groupId && isClientProjectGroup(group))
+          const membership = findRemoteProjectGroupMembership(get().projectGroups, repo)
+          if (joinsClientGroup || membership) {
+            const mutations = planRemoteProjectGroupMove(
+              get().projectGroups,
+              repo,
+              joinsClientGroup ? groupId : null,
+              joinsClientGroup
+                ? (order ?? getNextProjectGroupOrder(selectSidebarRepos(get()), groupId))
+                : undefined
+            )
+            const saved = await get().updateProjectGroups(mutations)
+            if (!saved || joinsClientGroup || !groupId) {
+              return saved
+            }
+          }
+        }
+        if (!joinsHostGroup) {
           notifyProjectGroupOnOtherHost()
           return false
         }

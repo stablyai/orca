@@ -2324,7 +2324,7 @@
           "wslFilesystemBoundaryTitle": "This project is stored on a Windows drive",
           "wslFilesystemBoundaryDescription": "Git for this project runs in {{distro}}, which reaches Windows drives over the WSL filesystem bridge. Expect git to be roughly 20x slower than it would be on a copy stored inside {{distro}}.",
           "moveToGroupOtherHost": "Could not move project to group",
-          "moveToGroupOtherHostDesc": "The computer this project runs on does not have this group. A project can only join groups saved on its own computer.",
+          "moveToGroupOtherHostDesc": "This group is saved on another computer. A project can join groups saved on its own computer or on this one.",
           "pendingRemovalRefused": "The server kept a project you removed while it was offline",
           "removeProjectHostUnreachable": "Its server can’t be reached. Remove it from this desktop now, and Orca removes it from the server when it reconnects.",
           "removeProjectLocallyNow": "Remove from this desktop now",

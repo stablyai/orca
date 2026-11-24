@@ -25,6 +25,7 @@ import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project/catalog/project-compatibility-host-merge'
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
 import { noteLiveRepoCatalogApplied } from './saved-host-catalog-rows'
+import { pruneStaleRemoteProjectGroupMembers } from '../project-groups/project-group-remote-members'
 import {
   withWslMovedRepoIds,
   withWslMovedSetupScriptDismissals
@@ -50,6 +51,7 @@ export function createRuntimeRepoCatalogActions(
           return []
         }
         let finalizedHostRepos: Repo[] = []
+        let applied = false
         set((s) => {
           if (!isHostCatalogFenceCurrent(get, fence)) {
             return s
@@ -79,6 +81,7 @@ export function createRuntimeRepoCatalogActions(
           finalizedHostRepos = finalizedRepos.filter(
             (repo) => getRepoExecutionHostId(repo) === result.hostId
           )
+          applied = true
           return {
             repos: finalizedRepos,
             ...(visibilityDefaults === undefined
@@ -137,6 +140,9 @@ export function createRuntimeRepoCatalogActions(
           }
         })
         noteLiveRepoCatalogApplied(get, targetHostId)
+        if (applied) {
+          pruneStaleRemoteProjectGroupMembers(get(), catalog)
+        }
         scheduleSafeAutoForkSync(finalizedHostRepos)
         return finalizedHostRepos
       } catch (err) {

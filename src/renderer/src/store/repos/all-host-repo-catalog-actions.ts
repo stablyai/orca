@@ -34,6 +34,7 @@ import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project/catalog/project-compatibility-host-merge'
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
 import { noteLiveRepoCatalogApplied } from './saved-host-catalog-rows'
+import { pruneStaleRemoteProjectGroupMembers } from '../project-groups/project-group-remote-members'
 import {
   withWslMovedRepoIds,
   withWslMovedSetupScriptDismissals
@@ -63,6 +64,7 @@ export function createAllHostRepoCatalogActions(
           return false
         }
         let hostRepos: Repo[] = []
+        let applied = false
         set((s) => {
           // Why: skip a catalog whose env was tombstoned mid-load (removed), not one merely absent from the not-yet-hydrated saved list (#8881).
           if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
@@ -87,6 +89,7 @@ export function createAllHostRepoCatalogActions(
           hostRepos = finalizedRepos.filter(
             (repo) => getRepoExecutionHostId(repo) === result.hostId
           )
+          applied = true
           return {
             repos: finalizedRepos,
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
@@ -106,6 +109,9 @@ export function createAllHostRepoCatalogActions(
           }
         })
         noteLiveRepoCatalogApplied(get, catalog.hostId)
+        if (applied) {
+          pruneStaleRemoteProjectGroupMembers(get(), catalog)
+        }
         // Why: keep the safe-auto fork sync (as fetchRepos does) so cold-start, which now routes here, still updates safe-auto forks.
         scheduleSafeAutoForkSync(hostRepos)
         if (options?.onHostLoaded) {
