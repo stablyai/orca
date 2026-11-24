@@ -207,8 +207,7 @@
       "next": "다음",
       "other": "기타…",
       "skip": "건너뛰기",
-      "step": "{{step}}단계",
-      "submit": "제출"
+      "step": "{{step}}단계"
     },
     "askRow": {
       "asked": "질문:",
@@ -380,14 +379,6 @@
     },
     "promptStrip": {
       "expand": "펼치기"
-    },
-    "question": {
-      "otherReplyPlaceholder": "또는 답변을 입력하세요…",
-      "replyPlaceholder": "답변을 입력하세요…",
-      "sendReply": "답변 보내기",
-      "submit": "제출",
-      "submitCount": "제출 ({{count}})",
-      "submitSelectedOptions": "선택한 옵션 제출"
     },
     "queuedMessages": {
       "deleteAll": "모두 삭제",

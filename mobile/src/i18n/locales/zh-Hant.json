@@ -207,8 +207,7 @@
       "next": "下一步",
       "other": "其他…",
       "skip": "跳過",
-      "step": "第 {{step}} 步",
-      "submit": "送出"
+      "step": "第 {{step}} 步"
     },
     "askRow": {
       "asked": "已提問：",
@@ -380,14 +379,6 @@
     },
     "promptStrip": {
       "expand": "展開"
-    },
-    "question": {
-      "otherReplyPlaceholder": "或輸入回覆…",
-      "replyPlaceholder": "輸入您的回覆…",
-      "sendReply": "傳送回覆",
-      "submit": "送出",
-      "submitCount": "送出（{{count}}）",
-      "submitSelectedOptions": "送出所選選項"
     },
     "queuedMessages": {
       "deleteAll": "全部刪除",

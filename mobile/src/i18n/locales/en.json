@@ -3352,7 +3352,8 @@
       "attachFailed": "Attach failed"
     },
     "ask": {
-      "submit": "Submit",
+      "send": "Send",
+      "notNow": "Not now",
       "next": "Next",
       "skip": "Skip",
       "step": "Step {{step}}",
@@ -3377,14 +3378,6 @@
     },
     "promptStrip": {
       "expand": "Expand"
-    },
-    "question": {
-      "submitSelectedOptions": "Submit selected options",
-      "submitCount": "Submit ({{count}})",
-      "submit": "Submit",
-      "otherReplyPlaceholder": "Or type a reply…",
-      "replyPlaceholder": "Type your reply…",
-      "sendReply": "Send reply"
     },
     "queuedMessages": {
       "deleteAll": "Delete all",
@@ -4234,6 +4227,7 @@
       "failed": "Failed"
     },
     "workerApproval": {
+      "allowFor": "Allow {{tool}} for {{worker}}?",
       "title": "{{worker}} · {{title}}",
       "allow": "Allow",
       "deny": "Deny",

@@ -227,8 +227,7 @@
       "next": "Próximo",
       "other": "Outro…",
       "skip": "Pular",
-      "step": "Etapa {{step}}",
-      "submit": "Enviar"
+      "step": "Etapa {{step}}"
     },
     "askRow": {
       "asked": "Perguntado:",
@@ -400,14 +399,6 @@
     },
     "promptStrip": {
       "expand": "Expandir"
-    },
-    "question": {
-      "otherReplyPlaceholder": "Ou digite uma resposta…",
-      "replyPlaceholder": "Digite sua resposta…",
-      "sendReply": "Enviar resposta",
-      "submit": "Enviar",
-      "submitCount": "Enviar ({{count}})",
-      "submitSelectedOptions": "Enviar opções selecionadas"
     },
     "queuedMessages": {
       "deleteAll": "Excluir tudo",

@@ -207,8 +207,7 @@
       "next": "Weiter",
       "other": "Sonstiges…",
       "skip": "Überspringen",
-      "step": "Schritt {{step}}",
-      "submit": "Absenden"
+      "step": "Schritt {{step}}"
     },
     "askRow": {
       "asked": "Gefragt:",
@@ -380,14 +379,6 @@
     },
     "promptStrip": {
       "expand": "Ausklappen"
-    },
-    "question": {
-      "otherReplyPlaceholder": "Oder eine Antwort eingeben…",
-      "replyPlaceholder": "Antwort eingeben…",
-      "sendReply": "Antwort senden",
-      "submit": "Absenden",
-      "submitCount": "Absenden ({{count}})",
-      "submitSelectedOptions": "Ausgewählte Optionen absenden"
     },
     "queuedMessages": {
       "deleteAll": "Alle löschen",
