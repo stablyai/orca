@@ -393,6 +393,9 @@
     "serverPage": {
       "download": {
         "started": "Downloading to {{path}} on {{host}}"
+      },
+      "print": {
+        "failed": "Couldn't save the page as a PDF"
       }
     },
     "clientHosted": {
