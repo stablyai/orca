@@ -3,9 +3,9 @@ import { nativeChatAppearanceStyle } from '../../../appearance/native-chat-appea
 import { NativeChatBackgroundTasksStatus } from '../NativeChatBackgroundTasksStatus'
 import { NativeChatWorkerDockFrame } from './NativeChatWorkerDockFrame'
 import type { WorkerDockRowView } from './WorkerDockRow'
-import { WorkerDockFailureStrip } from './WorkerDockFailureStrip'
+import { useWorkerDockFailureFocusHandoff, WorkerDockFailureStrip } from './WorkerDockFailureStrip'
 import type { WorkerDockFailure } from './use-worker-dock-owner-actions'
-import { useRef, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { NativeChatComposerField } from '../../../composer/editor/NativeChatComposerField'
 import { FloatingTerminalToggleButton } from '../../../../floating-terminal/trigger/FloatingTerminalToggleButton'
 import { FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY } from '../../../../floating-terminal/trigger/floating-terminal-trigger-position'
@@ -315,7 +315,7 @@ export const retryAfterSettle360 = defineFixture({
 
 // The real hand-off: Retry is focused and pressed, the line clears, then returns as final.
 function RetryThenSettled() {
-  const handoff = useRef(false)
+  const handoff = useWorkerDockFailureFocusHandoff()
   const [failure, setFailure] = useState<WorkerDockFailure | null>(() => ({
     message: 'Connection dropped',
     retry: () => {

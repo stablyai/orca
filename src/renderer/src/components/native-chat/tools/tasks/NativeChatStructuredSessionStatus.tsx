@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useContext, useMemo, useState } from 'react'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useNativeChatPinnedWorkerApprovals } from '../../worker-approvals/native-chat-worker-approval-feed'
 import { useWorkerDockFeed } from './dock/worker-dock-feed'
@@ -6,7 +6,10 @@ import type { WorkerDockRowView } from './dock/WorkerDockRow'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useWorkerDockOwnerActions } from './dock/use-worker-dock-owner-actions'
 import { WorkerDockFeedLossesContext, workerDockStopBlock } from './dock/worker-dock-stop-check'
-import { WorkerDockFailureStrip } from './dock/WorkerDockFailureStrip'
+import {
+  useWorkerDockFailureFocusHandoff,
+  WorkerDockFailureStrip
+} from './dock/WorkerDockFailureStrip'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import { NativeChatCrewBackgroundTasksStatus } from './NativeChatCrewBackgroundTasksStatus'
@@ -168,7 +171,7 @@ export function NativeChatStructuredSessionStatus(props: {
   )
   // A focused Retry or Dismiss leaves with the failure line; focus then moves to the next line or
   // the dock's toggle instead of the page.
-  const failureFocus = useRef(false)
+  const failureFocus = useWorkerDockFailureFocusHandoff()
   const owner = useWorkerDockOwnerActions(
     target,
     feed.party,

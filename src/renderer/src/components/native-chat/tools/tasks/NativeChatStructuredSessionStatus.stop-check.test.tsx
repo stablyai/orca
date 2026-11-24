@@ -169,7 +169,7 @@ it('retries a failed Stop with the same request id while the worker can still st
 // A ready worker whose activity the host can't verify, and a launch whose outcome was never
 // seen, both read as unavailable with an explicit stoppable detail on a live feed.
 it.each([
-  ['ready with unverified activity', { changedAt: Date.now() - 60_000 }],
+  ['ready with unverified activity', { changedAt: 1_795_000_000_000 }],
   ['start unknown', { changedAt: null }]
 ])('stops a %s worker on a live feed, first press and Retry', async (_name, patch) => {
   hoisted.rows = [{ ...worker, ...patch, state: 'unavailable' }]
