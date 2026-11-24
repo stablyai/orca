@@ -108,7 +108,8 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         if (firstLoad && firstLoad.guest === wc) {
           const deadline = Date.now() + EMBEDDED_NAVIGATION_TIMEOUT_MS
           await firstLoad.load
-          return this.settleNavigation(worktreeId, target, wc, navigationUrl, false, deadline)
+          // Its address committed long ago, so a navigation the page started since still counts.
+          return this.settleNavigation(worktreeId, target, wc, navigationUrl, false, deadline, true)
         }
         // A new tab's profile may still be starting its extensions; its first page waits for them.
         await whenBrowserExtensionsReadyForPage(wc)
@@ -188,7 +189,8 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     wc: Electron.WebContents,
     navigationUrl: string,
     navigationAborted: boolean,
-    navigationDeadline: number
+    navigationDeadline: number,
+    afterCommit = false
   ): Promise<BrowserGotoResult> {
     // A superseding navigation can still be loading when the first load rejects. The outgoing
     // page (its own load ending, a beforeunload replaceState) can also settle loadURL while
@@ -197,7 +199,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     const pendingUrl = this.browserManager.getInFlightNavigationUrl(wc)
     const settledBeforeCommit =
       !navigationAborted &&
-      committedUrl !== navigationUrl &&
+      (afterCommit || committedUrl !== navigationUrl) &&
       (isWaitingForMainFrameResponse(wc) || (pendingUrl !== null && pendingUrl !== committedUrl))
     const navigationInFlight = navigationAborted || settledBeforeCommit
     if (navigationInFlight) {
