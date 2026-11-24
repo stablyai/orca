@@ -108,7 +108,8 @@ export function MobileBotItemPage({
       if (!cardAnswers.current.has(text)) {
         returnBotItemCommentDraft(botItemCommentDraftKey(hostId, uid), text)
       }
-    }
+    },
+    refresh: view.retry
   })
   // From the comment box or the answer card: shown at once, then sent to the host.
   const jump = useBotItemActivityFollow({
