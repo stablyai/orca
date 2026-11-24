@@ -42,6 +42,8 @@ const MAX_PENDING_CHARS = 8 * 1024 * 1024
 /** Codex resolves a server request elsewhere (another client, a timeout) and says so with this. */
 const RESOLVED_METHOD = 'serverRequest/resolved'
 const RESOLVED_METHOD_ESCAPED = 'serverRequest\\/resolved'
+/** The envelope keys that decide how a line is handled; a repeat of any other key is irrelevant. */
+const ROUTING_KEYS = new Set(['id', 'method', 'type', 'request_id', 'result', 'error'])
 
 /** A client line longer than this is forwarded but not classified, so it can't grow without bound. */
 const MAX_CLIENT_LINE_CHARS = 256 * 1024 * 1024
@@ -162,10 +164,10 @@ export class ProviderRelayPendingRequests {
       stopAtContainer: true,
       maxFields: ENVELOPE_MAX_FIELDS
     })
-    const keys = new Set(properties.map((property) => property.key))
-    if (keys.size !== properties.length) {
-      // JSON.parse keeps a repeated key's last value, which the gate must not second-guess.
-      return true
+    const routing = properties.filter((property) => ROUTING_KEYS.has(property.key))
+    if (new Set(routing.map((property) => property.key)).size !== routing.length) {
+      // JSON.parse keeps a repeated key's last value, which the envelope gate must not second-guess.
+      return this.mayClassifyBySubstring(line)
     }
     if (!complete) {
       // Cut by the window or the field limit: undecided, so gated by the substring test the base
