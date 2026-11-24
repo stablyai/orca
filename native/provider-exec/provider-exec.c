@@ -247,6 +247,10 @@ static _Noreturn void fail(int code) {
 enum watcher_phase { WATCH_IDLE, WATCH_STDIN_GRACE, WATCH_TERM_GRACE, WATCH_REAP };
 enum { WATCH_LINE_MAX = 32, WATCH_READ_MAX = 256, WATCH_POLL_MS = 25, WATCH_REAP_MS = 1500 };
 enum { TREE_SWEEP_INTERVAL_MS = 100 };
+// A sweep result: the tree can't be proven empty on this host at all (no pidfd or audit-token
+// signal, a foreign or hidepid /proc), so once the CLI group is gone the stop ends unverified
+// at once rather than waiting out its deadlines.
+enum { TREE_UNPROVABLE = -2 };
 // Inherited by every tool the CLI starts, so one reparented to launchd is still found on macOS.
 #define TREE_TAG_NAME "ORCA_PROVIDER_TREE"
 
@@ -808,13 +812,17 @@ static int sweep_once(struct watcher *w, int signal_number) {
                           (long long)boot.tv_nsec * ticks_per_second / 1000000000LL;
     // /proc can be remounted while the chat runs, so its namespace is proven around every read.
     if (!procfs_in_own_namespace()) {
-        return -1;
+        return TREE_UNPROVABLE;
     }
     int hidden_before = procfs_hides_processes();
     struct pollfd anchor = {.fd = w->reaper_fd, .events = POLLIN};
-    if (w->reaper_fd < 0 || poll(&anchor, 1, 0) != 0) {
+    if (w->reaper_fd < 0 || w->reaper_start < 0 || poll(&anchor, 1, 0) != 0) {
         // The subreaper exited (or its pidfd is unusable), so its PID anchors nothing.
-        return -1;
+        return TREE_UNPROVABLE;
+    }
+#else
+    if (proc_signal_with_audittoken == NULL) {
+        return TREE_UNPROVABLE;
     }
 #endif
     scan.rows = read_table(&scan.n);
@@ -834,6 +842,7 @@ static int sweep_once(struct watcher *w, int signal_number) {
     // Orphans are adopted by this exact subreaper; any other process at its PID anchors nothing.
     const struct proc_row *reaper = find_row(scan.rows, scan.n, w->reaper);
     if (reaper == NULL || reaper->start != w->reaper_start || !same_identity(reaper)) {
+        live = TREE_UNPROVABLE;
         goto done;
     }
 #endif
@@ -843,10 +852,11 @@ static int sweep_once(struct watcher *w, int signal_number) {
     // A hidden row this watcher can signal might be a member, so the scan can't prove absence.
     // Checked around each table read: the mount's options can change while the chat runs.
     if (!procfs_in_own_namespace()) {
-        live = -1;
+        live = TREE_UNPROVABLE;
         goto done;
     }
-    int dropped = table_has_hidden_row || hidden_before || procfs_hides_processes();
+    int hidden = table_has_hidden_row || hidden_before || procfs_hides_processes();
+    int dropped = 0;
 #else
     int dropped = 0;
 #endif
@@ -903,6 +913,11 @@ static int sweep_once(struct watcher *w, int signal_number) {
     if (dropped && live == 0) {
         live = -1;
     }
+#if defined(__linux__)
+    if (hidden && live == 0) {
+        live = TREE_UNPROVABLE;
+    }
+#endif
 done:
     free(scan.rows);
     free(scan.state);
@@ -948,7 +963,11 @@ static int tree_absent(struct watcher *w, int signal_number) {
     }
     w->swept_group_gone = group_gone;
     w->next_sweep_ns = now_ns + (long long)TREE_SWEEP_INTERVAL_MS * 1000000LL;
-    return sweep_tree(w, signal_number) == 0 && group_gone;
+    int live = sweep_tree(w, signal_number);
+    if (!group_gone) {
+        return 0;
+    }
+    return live == 0 ? 1 : live == TREE_UNPROVABLE ? 2 : 0;
 }
 
 static long long monotonic_ns(struct watcher *w) {
@@ -960,16 +979,24 @@ static long long monotonic_ns(struct watcher *w) {
     return (long long)now.tv_sec * 1000000000LL + now.tv_nsec;
 }
 
+// Once the CLI group is gone: a tool the CLI started after the first sweep is found by a second.
+static void complete_if_tree_gone(struct watcher *w, int group_gone, int members, int signal_number) {
+    if (!group_gone || (members != 0 && members != TREE_UNPROVABLE)) {
+        return;
+    }
+    int again = members == 0 ? sweep_tree(w, signal_number) : TREE_UNPROVABLE;
+    if (again == 0 || again == TREE_UNPROVABLE) {
+        watcher_complete(again == 0);
+    }
+}
+
 static void kill_group(struct watcher *w) {
     if (w->phase == WATCH_REAP) {
         return;
     }
     int members = sweep_tree(w, SIGKILL);
-    // A tool the CLI started after that sweep is found by the one after the group is gone.
-    if (kill(-w->group, SIGKILL) < 0 && errno == ESRCH && members == 0 &&
-            sweep_tree(w, SIGKILL) == 0) {
-        watcher_complete(1);
-    }
+    int group_gone = kill(-w->group, SIGKILL) < 0 && errno == ESRCH;
+    complete_if_tree_gone(w, group_gone, members, SIGKILL);
     w->phase = WATCH_REAP;
     w->deadline_ns = monotonic_ns(w) + (long long)WATCH_REAP_MS * 1000000LL;
 }
@@ -980,10 +1007,8 @@ static void watcher_term(struct watcher *w) {
     w->group_term_pending = 1;
     int members = sweep_tree(w, SIGTERM);
     w->group_term_pending = 0;
-    if (kill(-w->group, SIGTERM) < 0 && errno == ESRCH && members == 0 &&
-            sweep_tree(w, SIGTERM) == 0) {
-        watcher_complete(1);
-    }
+    int group_gone = kill(-w->group, SIGTERM) < 0 && errno == ESRCH;
+    complete_if_tree_gone(w, group_gone, members, SIGTERM);
     if (w->sigterm_grace_ms == 0) {
         kill_group(w);
         return;
@@ -1059,8 +1084,9 @@ static _Noreturn void watch_owner(struct watcher *w) {
             int sweep_signal = w->phase == WATCH_REAP         ? SIGKILL
                                : w->phase == WATCH_TERM_GRACE ? SIGTERM
                                                               : 0;
-            if (tree_absent(w, sweep_signal)) {
-                watcher_complete(1);
+            int tree = tree_absent(w, sweep_signal);
+            if (tree != 0) {
+                watcher_complete(tree == 1);
             }
             long long remaining = w->deadline_ns - monotonic_ns(w);
             if (remaining <= 0) {
