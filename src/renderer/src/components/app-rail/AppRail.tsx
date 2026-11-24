@@ -23,6 +23,8 @@ import {
   navigateFromRail
 } from './app-rail-navigation'
 import {
+  APP_RAIL_ICON_SIZE,
+  APP_RAIL_ICON_STROKE_WIDTH,
   APP_RAIL_ITEM_ATTRIBUTE,
   AppRailButton,
   RailItem,
@@ -41,8 +43,6 @@ import {
   type AppRailDestinationId
 } from './app-rail-destinations'
 import { getTitlebarSidebarToggle } from '@/app-shell/chrome/titlebar-sidebar-toggle-ref'
-
-const ICON_SIZE = 18
 
 /** Icon-only app navigation below the left titlebar; one tab stop, arrow keys move within it. */
 export function AppRail({
@@ -193,18 +193,22 @@ export function AppRail({
         return t('auto.components.sidebar.SidebarNav.1b5c41caee', 'Orca Mobile')
     }
   }
-  const destinationIcon = (id: AppRailDestinationId, size: number): React.ReactNode => {
+  const destinationIcon = (
+    id: AppRailDestinationId,
+    size: number,
+    strokeWidth?: number
+  ): React.ReactNode => {
     switch (id) {
       case 'tasks':
-        return <List size={size} aria-hidden />
+        return <List size={size} strokeWidth={strokeWidth} aria-hidden />
       case 'automations':
-        return <CalendarClock size={size} aria-hidden />
+        return <CalendarClock size={size} strokeWidth={strokeWidth} aria-hidden />
       case 'artifacts':
-        return <Files size={size} aria-hidden />
+        return <Files size={size} strokeWidth={strokeWidth} aria-hidden />
       case 'skills':
-        return <BookOpen size={size} aria-hidden />
+        return <BookOpen size={size} strokeWidth={strokeWidth} aria-hidden />
       case 'mobile':
-        return <Smartphone size={size} aria-hidden />
+        return <Smartphone size={size} strokeWidth={strokeWidth} aria-hidden />
     }
   }
   const openSettings = (): void => useAppStore.getState().openSettingsPage()
@@ -253,11 +257,17 @@ export function AppRail({
         onKeyDownCapture={handleKeyDown}
         onFocus={handleFocus}
       >
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex flex-col items-center gap-2.5">
           <RailItem tooltip={workspacesLabel}>
             <AppRailButton
               itemId="workspaces"
-              icon={<Layers size={ICON_SIZE} aria-hidden />}
+              icon={
+                <Layers
+                  size={APP_RAIL_ICON_SIZE}
+                  strokeWidth={APP_RAIL_ICON_STROKE_WIDTH}
+                  aria-hidden
+                />
+              }
               label={workspacesLabel}
               active={workspacesActive}
               // Expansion describes only the content actually in the list column.
@@ -273,7 +283,7 @@ export function AppRail({
             <RailItem key={id} tooltip={destinationLabel(id)}>
               <AppRailButton
                 itemId={id}
-                icon={destinationIcon(id, ICON_SIZE)}
+                icon={destinationIcon(id, APP_RAIL_ICON_SIZE, APP_RAIL_ICON_STROKE_WIDTH)}
                 label={destinationLabel(id)}
                 active={destinationActive(id)}
                 tabStop={tabStopItem === id}
@@ -294,12 +304,14 @@ export function AppRail({
                 label: destinationLabel(id),
                 icon: destinationIcon(id, 14),
                 current: destinationActive(id),
+                // Automations focuses its own title when opened.
+                ownsFocusOnOpen: id === 'automations',
                 onSelect: () => activateRailDestination(id)
               }))}
             />
           ) : null}
         </div>
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex flex-col items-center gap-2.5">
           {partition.helpInMore ? null : (
             <HelpMenuView
               controller={help}
@@ -308,7 +320,13 @@ export function AppRail({
               trigger={
                 <AppRailButton
                   itemId="help"
-                  icon={<CircleHelp size={ICON_SIZE} aria-hidden />}
+                  icon={
+                    <CircleHelp
+                      size={APP_RAIL_ICON_SIZE}
+                      strokeWidth={APP_RAIL_ICON_STROKE_WIDTH}
+                      aria-hidden
+                    />
+                  }
                   label={helpLabel}
                   tabStop={tabStopItem === 'help'}
                 />
@@ -319,7 +337,13 @@ export function AppRail({
             <RailItem tooltip={<SettingsTooltipLabel />}>
               <AppRailButton
                 itemId="settings"
-                icon={<Settings size={ICON_SIZE} aria-hidden />}
+                icon={
+                  <Settings
+                    size={APP_RAIL_ICON_SIZE}
+                    strokeWidth={APP_RAIL_ICON_STROKE_WIDTH}
+                    aria-hidden
+                  />
+                }
                 label={settingsLabel}
                 active={settingsActive}
                 tabStop={tabStopItem === 'settings'}

@@ -13,6 +13,7 @@ import {
   isDroidPermissionNotification
 } from './droid-tool-fields'
 import { droidVerdictFields } from './droid-turn-outcome'
+import { forgetDroidWorkerSessions, isDroidWorkerSession } from './droid-worker-sessions'
 
 export function normalizeDroidEvent(
   state: HookListenerState,
@@ -21,6 +22,11 @@ export function normalizeDroidEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  // Why: a Task worker's turn never starts or ends the pane's; its tool and approval hooks still count.
+  const fromWorker = isDroidWorkerSession(state, paneKey, readString(hookPayload, 'session_id'))
+  if (fromWorker && (eventName === 'SessionStart' || eventName === 'UserPromptSubmit')) {
+    return null
+  }
   if (eventName === 'SessionStart') {
     // Why: Droid's SessionStart fires while idle (TUI open/resume); wait for real activity before a working row.
     clearPaneTurnCacheState(state, paneKey)
@@ -55,6 +61,12 @@ export function normalizeDroidEvent(
   }
   if (!stateName) {
     return null
+  }
+  if (stateName === 'done') {
+    if (fromWorker) {
+      return null
+    }
+    forgetDroidWorkerSessions(state, paneKey)
   }
 
   const snapshot = resolveToolState(

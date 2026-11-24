@@ -28,6 +28,9 @@ import { openBotHomeTab, useBotThreadReplies } from '@/lib/bot-catalog'
 import { isSameBot, type BotRef } from '@/lib/bot-hosts'
 import { botEventsHaveThreads } from '../../../../../shared/automations/bot-automation-target-edit'
 
+const SETTINGS_SIDEBAR_CLASS =
+  'flex w-[320px] shrink-0 flex-col overflow-auto border-l border-border/50 bg-muted/20 px-5 py-5 scrollbar-sleek @max-[35rem]:w-full @max-[35rem]:overflow-visible @max-[35rem]:border-t @max-[35rem]:border-l-0'
+
 type AutomationEditorSettingsSidebarProps = {
   /** The host picker: where a create lands, or the host an edit can move the record to. */
   launchWorkspace?: ProspectiveWorkspace
@@ -170,7 +173,7 @@ export function AutomationEditorSettingsSidebar({
         }
       : null
     return (
-      <aside className="flex w-[320px] shrink-0 flex-col overflow-auto border-l border-border/50 bg-muted/20 px-5 py-5 scrollbar-sleek">
+      <aside className={SETTINGS_SIDEBAR_CLASS}>
         {targetPicker}
         {schedulePicker(
           t('automations.botTarget.when', 'When'),
@@ -222,7 +225,7 @@ export function AutomationEditorSettingsSidebar({
     )
   }
   return (
-    <aside className="flex w-[320px] shrink-0 flex-col overflow-auto border-l border-border/50 bg-muted/20 px-5 py-5 scrollbar-sleek">
+    <aside className={SETTINGS_SIDEBAR_CLASS}>
       <div className="flex flex-col">
         <div className="mb-4 flex flex-col gap-5">
           <Field

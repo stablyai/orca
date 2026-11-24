@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createQueuedMessageTestRig,
   type QueuedMessageTestRig
@@ -12,10 +12,19 @@ import {
 } from '../../../../agent-session/lifecycle/structured-agent-session-close'
 import { observeStructuredSession } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { sendStructuredWorkerPreamble } from './orchestration-structured-worker-session'
+import type * as AwakeClock from '../../../../../power/awake-clock'
+
+// The startup ceiling reads this clock; pinning it keeps a loaded runner from passing the ceiling before the send budget ends.
+let pinnedNow: number | null = null
+vi.mock('../../../../../power/awake-clock', async (importOriginal) => {
+  const actual = await importOriginal<typeof AwakeClock>()
+  return { ...actual, awakeNow: () => pinnedNow ?? actual.awakeNow() }
+})
 
 let rig: QueuedMessageTestRig | null = null
 
 afterEach(async () => {
+  pinnedNow = null
   setStructuredAgentSessionHost(null)
   await rig?.dispose()
   rig = null
@@ -44,6 +53,8 @@ async function workerWithHeldStart(ceilingMs?: number): Promise<{
   rig = current
   await current.crashRestartHostFromDisk()
   setStructuredAgentSessionHost(current.host)
+  // The rig's first host already started an agent; count only the held start's acquire from here.
+  current.starts.mockClear()
   return { current, release: current.holdNextStart() }
 }
 
@@ -102,8 +113,12 @@ describe('a structured worker whose agent is slow to start', () => {
   })
 
   it('stops reading as starting once the ceiling fails a start whose acquire never returns', async () => {
+    pinnedNow = 0
     const { current, release } = await workerWithHeldStart(300)
     expect(await sendBrief(current)).toBe('starting')
+    // Pass the ceiling only once the acquire is held, so it fails a start that is acquiring.
+    await eventually(() => expect(current.starts).toHaveBeenCalled())
+    pinnedNow = 300
     // The ceiling rejects the held brief; the worker must not keep claiming its agent is starting.
     await eventually(async () => {
       const page = await current.host.history({ sessionId: SESSION, direction: 'tail' })

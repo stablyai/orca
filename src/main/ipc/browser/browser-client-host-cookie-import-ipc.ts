@@ -5,8 +5,10 @@ import {
   importCookieFileIntoClientRoutePartition,
   importCookiesIntoClientRoutePartition
 } from '../../browser/cookies/client-route/browser-client-route-cookie-import'
-import { clearClientRouteDefaultCookies } from '../../browser/cookies/client-route/browser-client-route-cookie-clear'
-import { clientRouteCookieImportSources } from '../../browser/cookies/client-route/client-route-cookie-import-source-store'
+import {
+  clientRouteCookieImportSources,
+  sshCookieImportRoute
+} from '../../browser/cookies/client-route/client-route-cookie-import-source-store'
 import { pickCookieFile } from '../../browser/cookies/imports/cookie-file-picker'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
@@ -34,8 +36,7 @@ export function registerClientHostCookieImportHandlers(): void {
   for (const channel of [
     'browser:session:importFromBrowserForClientHost',
     'browser:session:importCookiesForClientHost',
-    'browser:session:clientRouteImportSources',
-    'browser:session:clearDefaultCookiesForClientHost'
+    'browser:session:clientRouteImportSources'
   ]) {
     ipcMain.removeHandler(channel)
   }
@@ -78,25 +79,19 @@ export function registerClientHostCookieImportHandlers(): void {
     }
   )
 
-  // Overlay desktop imports unavailable to the server's profile records.
+  // Overlay desktop imports unavailable to the server's profile records, or to an SSH host's.
   ipcMain.handle(
     'browser:session:clientRouteImportSources',
-    (event, args: { environmentId: string }) => {
-      if (!isTrustedBrowserRenderer(event.sender) || typeof args?.environmentId !== 'string') {
+    (event, args: { environmentId?: unknown; sshTargetId?: unknown }) => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
         return {}
       }
-      return clientRouteCookieImportSources(args.environmentId)
-    }
-  )
-
-  // Clears the jar Settings import fills for this server's This-device pages.
-  ipcMain.handle(
-    'browser:session:clearDefaultCookiesForClientHost',
-    async (event, args: { environmentId: string }): Promise<boolean | null> => {
-      if (!isTrustedBrowserRenderer(event.sender) || typeof args?.environmentId !== 'string') {
-        return false
+      if (typeof args?.environmentId === 'string') {
+        return clientRouteCookieImportSources(args.environmentId)
       }
-      return clearClientRouteDefaultCookies(args.environmentId)
+      return typeof args?.sshTargetId === 'string'
+        ? clientRouteCookieImportSources(sshCookieImportRoute(args.sshTargetId))
+        : {}
     }
   )
 }
