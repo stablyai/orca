@@ -190,7 +190,8 @@ function parseConfigList(
     const key = ownRetainedString(newline === -1 ? field : field.slice(0, newline))
     const value = ownRetainedString(newline === -1 ? 'true' : field.slice(newline + 1))
     values.set(key, value)
-    if (originFile) {
+    // Every field repeats its origin; copy each file path once.
+    if (originFile && !inputFiles.has(originFile)) {
       inputFiles.add(ownRetainedString(originFile))
     }
     // Include targets may be empty or missing now and filled in later.
