@@ -78,4 +78,32 @@ describe('getPairingNetworkInterfaces', () => {
       '100.101.102.103'
     )
   })
+
+  it('advertises a tailnet address on a utun adapter over the LAN', async () => {
+    networkInterfacesMock.mockReturnValue({
+      utun3: [ipv4('100.101.102.103')],
+      en0: [ipv4('192.168.1.20')]
+    })
+
+    expect(isAutoAdvertisablePairingInterface({ name: 'utun3', address: '100.101.102.103' })).toBe(
+      true
+    )
+    await expect(getDefaultPairingAddress('0.0.0.0', noDefaultRoute)).resolves.toBe(
+      '100.101.102.103'
+    )
+  })
+
+  it('still drops a utun adapter that carries a non-tailnet address', async () => {
+    networkInterfacesMock.mockReturnValue({
+      utun3: [ipv4('10.8.0.2')],
+      en0: [ipv4('192.168.1.20')]
+    })
+
+    expect(isAutoAdvertisablePairingInterface({ name: 'utun3', address: '10.8.0.2' })).toBe(false)
+    expect(isAutoAdvertisablePairingInterface({ name: 'wg0', address: '10.8.0.3' })).toBe(false)
+    expect(isAutoAdvertisablePairingInterface({ name: 'singbox_tun', address: '172.18.0.1' })).toBe(
+      false
+    )
+    await expect(getDefaultPairingAddress('0.0.0.0', noDefaultRoute)).resolves.toBe('192.168.1.20')
+  })
 })
