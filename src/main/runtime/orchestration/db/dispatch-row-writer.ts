@@ -9,9 +9,9 @@ export const DISPATCH_CONTEXT_CLAIM_SQL = `INSERT INTO dispatch_contexts (
   id, run_id, task_id, contract_version, launch_token_hash,
   assignee_handle, assignee_pane_key, assignee_orca_session_id, process_incarnation,
   creator_dispatch_id, creator_handle, creator_pane_key, creator_orca_session_id,
-  creator_turn_source, status, failure_count, depth, dispatched_at
+  creator_turn_source, chat_lineage, status, failure_count, depth, dispatched_at
 )
-SELECT ?, run_id, id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, ?, datetime('now')
+SELECT ?, run_id, id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, ?, datetime('now')
 FROM tasks
 WHERE id = ? AND status = 'ready'
   AND NOT EXISTS (
@@ -72,6 +72,7 @@ export function claimDispatchContextRow(
     creatorPaneKey?: string | null
     creatorOrcaSessionId?: OrcaSessionId | null
     creatorTurnSource?: DispatchCreatorTurnSource | null
+    chatLineage?: boolean
     priorFailures: number
     depth: number
     taskId: string
@@ -94,6 +95,7 @@ export function claimDispatchContextRow(
       params.creatorPaneKey ?? null,
       params.creatorOrcaSessionId ?? null,
       params.creatorTurnSource ?? null,
+      params.chatLineage ? 1 : null,
       params.priorFailures,
       params.depth,
       params.taskId,

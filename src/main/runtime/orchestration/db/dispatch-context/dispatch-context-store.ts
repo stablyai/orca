@@ -17,13 +17,11 @@ import { assertTakesNewWork } from '../worker-terminal/worker-terminal-transfer'
 import { exposeUtcTimestamp } from '../utc-timestamp'
 import { retireRemotePlacement } from '../remote-owned/remote-placement-hold'
 import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
-
 export function createDispatchContext(
   this: OrchestrationDb,
   params: {
     taskId: string
     assigneeHandle: string
-    // Pane identity survives handle reissue, preserving worker_done authority.
     assigneePaneKey?: string
     launchTokenHash?: string
     processIncarnation?: string
@@ -47,10 +45,8 @@ export function createDispatchContext(
       task
     )
   }
-
   assertTakesNewWork(this, params, taskId)
 
-  // Accumulate failure_count across task retries.
   const prior = this.db
     .prepare('SELECT MAX(failure_count) as max_failures FROM dispatch_contexts WHERE task_id = ?')
     .get(taskId) as { max_failures: number | null } | undefined
@@ -59,7 +55,6 @@ export function createDispatchContext(
   const paneSuffix =
     assigneePaneKey && parsePaneKey(assigneePaneKey) ? paneKeyMatchSuffix(assigneePaneKey) : null
   const id = generateId('ctx')
-  const creatorDispatchId = this.resolveCreatorDispatchId(params.creator)
   this.db.exec('SAVEPOINT create_dispatch_context')
   try {
     const inserted = claimDispatchContextRow(this.db, {
@@ -73,8 +68,9 @@ export function createDispatchContext(
         processIncarnation
       }),
       processIncarnation: processIncarnation ?? null,
-      creatorDispatchId,
+      creatorDispatchId: this.resolveCreatorDispatchId(params.creator),
       ...recordedCreatorIdentity(params.creator),
+      chatLineage: this.creatorStartsChatWorkers(params.creator),
       priorFailures,
       depth,
       taskId,

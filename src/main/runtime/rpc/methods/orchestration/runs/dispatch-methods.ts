@@ -42,6 +42,8 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
       { task }
     ) => {
       const db = runtime.getOrchestrationDb()
+      const creator = resolveDispatchCreator(runtime, params.from, orchestrationCaller)
+      const chatLineage = db.creatorStartsChatWorkers(creator)
       const assigneeParty = params.to ? resolveDispatchAssigneeParty(params.to, db) : undefined
       const assignee = assigneeParty?.address
       // A chat has no pane, process or agent to probe: it is reached as mail to it is.
@@ -53,10 +55,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
       // Dry-run previews without state changes; skip readiness and use a placeholder Dispatch id.
       if (params.dryRun) {
         const maxDepth = runtime.getNestedWorkerMaxDepth()
-        const previewDepth = db.resolveChildDispatchDepth(
-          resolveDispatchCreator(runtime, params.from, orchestrationCaller),
-          maxDepth
-        )
+        const previewDepth = db.resolveChildDispatchDepth(creator, maxDepth)
         const preamble = buildDispatchPreamble({
           taskId: task.id,
           dispatchId: 'ctx_dryrun',
@@ -65,6 +64,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
           workerHandle: assignee ? orcaSessionIdOrHandle(assignee, db) : 'worker',
           devMode: params.devMode,
+          preserveHumanCommitCredit: chatLineage,
           ...(assignee ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(assignee) } : {})
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
@@ -144,7 +144,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         hostScope: dispatchAuthority?.hostScope
           ? JSON.stringify(dispatchAuthority.hostScope)
           : null,
-        creator: resolveDispatchCreator(runtime, params.from, orchestrationCaller),
+        creator,
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })
 
@@ -157,6 +157,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
         workerHandle: orcaSessionIdOrHandle(to, db),
         devMode: params.devMode,
+        preserveHumanCommitCredit: chatLineage,
         cliCommand: runtime.getTerminalOrchestrationCliCommand(to)
       })
 
@@ -240,6 +241,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           coordinatorHandle,
           workerHandle: orcaSessionIdOrHandle(workerHandle, db),
           devMode: params.devMode,
+          preserveHumanCommitCredit: ctx?.chat_lineage === 1,
           ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})
         })
         return { dispatch: ctx ?? null, preamble }

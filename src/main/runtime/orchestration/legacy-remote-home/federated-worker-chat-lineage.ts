@@ -22,10 +22,10 @@ export function federatedWorkerChatLineage(
   return startsInChatLineage(runtime, db, params, caller)
 }
 
-/** The legacy attach's mutation identity is authenticated by its paired runtime transport. */
+/** Only the paired runtime transport, not a local mutation receipt, may stamp remote bot lineage. */
 export function federatedAttachmentChatLineage(
   chatLineage: true | undefined,
-  authenticatedMutation: boolean
+  authenticatedTransport: boolean
 ): boolean {
-  return authenticatedMutation && chatLineage === true
+  return authenticatedTransport && chatLineage === true
 }

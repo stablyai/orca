@@ -40,7 +40,7 @@ describe('forwardedFederatedChatLineage', () => {
     }
   })
 
-  it('accepts the attached lineage only with an authenticated mutation', () => {
+  it('accepts the attached lineage only from an authenticated paired transport', () => {
     expect(federatedAttachmentChatLineage(true, true)).toBe(true)
     expect(federatedAttachmentChatLineage(true, false)).toBe(false)
     expect(federatedAttachmentChatLineage(undefined, true)).toBe(false)
