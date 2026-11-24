@@ -284,3 +284,17 @@ it('re-checks on agent turns and shell commands in this repo, never above the ol
   expect(fs.stats).toBeLessThanOrEqual(129_220)
   await stop()
 })
+
+it('forces the reveal sweep when a short hide spans where the old 30 s tick would fire', async () => {
+  const { unsubscribe: stop } = await startReconciliation()
+  await vi.advanceTimersByTimeAsync(29_500)
+  hide()
+  const locked = join(WORKTREES, 'w9', 'locked')
+  fs.nodes.set(locked, { dir: false, mtimeMs: fs.clock++, ino: fs.ino++ })
+  await vi.advanceTimersByTimeAsync(1_000)
+  reveal?.()
+  focus?.()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(events.some((event) => event.path.startsWith(join(WORKTREES, 'w9')))).toBe(true)
+  await stop()
+})
