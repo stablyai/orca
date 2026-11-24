@@ -1,59 +1,31 @@
 import { ActivityIndicator, Text, View } from 'react-native'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { SectionPendingCreation } from '../../worktree/workspace-list/workspace-list-types'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { worktreeListRowStyles as styles } from '../../worktree/row-presentation/worktree-list-row-styles'
+import { colors } from '../../theme/mobile-theme'
 
+// On the workspace row's grid, so the row that replaces it lands where it was.
 export function HostPendingCreationRow({ creation }: { creation: SectionPendingCreation }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   return (
-    <View style={styles.row} accessibilityRole="progressbar">
-      <View style={styles.indicator}>
+    <View style={styles.worktreeRow} accessibilityRole="progressbar">
+      <View style={styles.indicatorCol}>
         <ActivityIndicator size="small" color={colors.textMuted} />
       </View>
-      <View style={styles.main}>
-        <Text style={styles.title} numberOfLines={1}>
+      <View style={styles.worktreeMain}>
+        <Text style={[styles.worktreeName, styles.worktreeNameMain]} numberOfLines={1}>
           {t('hostScreen.hostPendingCreationRow.creatingWorkspace', 'Creating workspace…')}
         </Text>
-        {creation.repoName ? (
-          <Text style={styles.meta} numberOfLines={1}>
+      </View>
+      {creation.repoName ? (
+        <View style={styles.trailing}>
+          <Text style={styles.time} numberOfLines={1}>
             {creation.repoName}
           </Text>
-        ) : null}
-      </View>
+        </View>
+      ) : null}
     </View>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  // Match the workspace row’s padding and indicator column so completion does not shift the row.
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm + 2,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.lg,
-    borderLeftWidth: 2,
-    borderLeftColor: 'transparent'
-  },
-  indicator: {
-    width: 20,
-    alignItems: 'center',
-    marginRight: spacing.sm
-  },
-  main: {
-    flex: 1
-  },
-  title: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textSecondary
-  },
-  meta: {
-    marginTop: 2,
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  }
-}))
