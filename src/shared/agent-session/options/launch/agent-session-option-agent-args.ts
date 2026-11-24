@@ -95,6 +95,7 @@ const AGENT_REQUIRED_VALUE_OPTIONS: Partial<Record<AgentType, readonly string[]>
     '-effort',
     '--effort',
     '-i',
+    '--i',
     '-input-format',
     '--input-format',
     '-json-schema',

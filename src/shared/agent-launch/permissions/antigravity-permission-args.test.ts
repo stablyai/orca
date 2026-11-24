@@ -3,6 +3,7 @@ import { findOptionOccurrence } from '../../cli/command-option-occurrence'
 import { agentRequiredValueOptions } from '../../agent-session/options/launch/agent-session-option-agent-args'
 import { sourceControlActionPermissionModeRoute } from '../../source-control/ai/recipes/source-control-action-options'
 import { agentPickerPermissions } from '../picker/agent-launch-picker-catalog'
+import { resolveAgentLaunchCommand } from '../startup/tui-agent-launch-command'
 import { buildAgentStartupPlan } from '../startup/tui-agent-startup'
 import { newChatPermissionModeForSettings } from './agent-chat-permission-mode'
 import { agentPermissionArgsForLaunch, optionName } from './agent-permission-args'
@@ -42,7 +43,7 @@ describe('Antigravity Approve-for-Me permission boundary', () => {
     })
   })
 
-  it('consumes -mode value token in agentRequiredValueOptions', () => {
+  it('consumes -mode and --i value tokens in agentRequiredValueOptions', () => {
     const match = findOptionOccurrence(
       ['-mode', 'auto', '--model', 'pro'],
       ['-mode', '--mode'],
@@ -54,6 +55,23 @@ describe('Antigravity Approve-for-Me permission boundary', () => {
       consumed: 2,
       value: 'auto'
     })
+    expect(agentPermissionArgsForLaunch('antigravity', 'auto', '--i --mode')).toBe('--mode auto')
+  })
+
+  it('retains --mode auto in resumeLaunch configuration', () => {
+    const resolved = resolveAgentLaunchCommand({
+      agent: 'antigravity',
+      cmdOverrides: {},
+      platform: 'darwin',
+      shell: 'posix',
+      agentArgs: null,
+      sessionOptions: { permissionMode: 'auto', model: 'pro' }
+    })
+    expect(resolved.ok).toBe(true)
+    if (resolved.ok) {
+      expect(resolved.command).toBe("agy '--model' 'pro' '--mode' 'auto'")
+      expect(resolved.resumeLaunch.agentCommand).toBe("agy '--model' 'pro' '--mode' 'auto'")
+    }
   })
 
   it('keeps new Antigravity chats on ask when saved terminal permission is auto', () => {
