@@ -21039,7 +21039,7 @@
           "openDirectlyIn": "Ouvrir directement dans",
           "openDirectlyInDescription": "{{modifier}}-clic et le premier choix quand Orca demande.",
           "title": "Ouvrir les liens",
-          "description": "Liens dans le chat, les terminaux et les boutons. Les liens localhost s’ouvrent toujours dans le navigateur Orca."
+          "description": "Liens dans le chat, les terminaux et les boutons. Les liens localhost de cet ordinateur s’ouvrent dans le navigateur Orca."
         },
         "terminalLinkClicks": {
           "plainClickDescription": "Pour les chemins de fichiers dans le terminal. Les liens web suivent « Ouvrir les liens » sauf si les clics sont laissés à l’application du terminal."

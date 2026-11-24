@@ -41,7 +41,7 @@ export function getBrowserOpenLinksCopy(
     // Stage 1 scope: Markdown and comments keep their own routing, so the copy doesn't promise them.
     description: t(
       'components.settings.browser.openLinks.description',
-      'Links in chat, terminals and buttons. Localhost links always open in the Orca browser.'
+      'Links in chat, terminals and buttons. Localhost links on this computer open in the Orca browser.'
     ),
     keywords: [
       ...translateSearchKeyword(

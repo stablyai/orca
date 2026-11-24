@@ -22532,7 +22532,7 @@
           "openDirectlyIn": "Abrir diretamente em",
           "openDirectlyInDescription": "{{modifier}}-clique e a primeira opção quando o Orca pergunta.",
           "title": "Abrir links",
-          "description": "Links no chat, nos terminais e nos botões. Links de localhost sempre abrem no navegador do Orca."
+          "description": "Links no chat, nos terminais e nos botões. Links de localhost deste computador abrem no navegador do Orca."
         },
         "terminalLinkClicks": {
           "plainClickDescription": "Para caminhos de arquivo no terminal. Os links da web seguem “Abrir links”, a menos que os cliques fiquem com o aplicativo de terminal."
