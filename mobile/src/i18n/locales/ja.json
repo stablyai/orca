@@ -259,6 +259,7 @@
       "historyRepaired": "このチャットの履歴の一部を読み込めませんでした。"
     },
     "message": {
+      "sending": "送信中…",
       "copyMessage": "メッセージをコピーする",
       "forkFromResponse": "この応答から分岐",
       "scrollMessageToTop": "このメッセージを一番上までスクロールします",

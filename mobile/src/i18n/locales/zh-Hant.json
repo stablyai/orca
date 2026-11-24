@@ -259,6 +259,7 @@
       "historyRepaired": "此聊天的部分歷史記錄無法載入。"
     },
     "message": {
+      "sending": "正在傳送…",
       "copyMessage": "複製訊息",
       "forkFromResponse": "從此回覆建立分支",
       "scrollMessageToTop": "將此訊息捲動到頂端",

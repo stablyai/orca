@@ -156,7 +156,7 @@ export function MobileNativeChatView({
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
   const { font, lineSpacing } = useNativeChatTextSettings()
 
-  const data = useMobileNativeChatTransientData(
+  const { data, hasDisplayedMessage } = useMobileNativeChatTransientData(
     { folded, streaming, pending, imagePreviewsByMessageId },
     sendSurfaceId
   )
@@ -224,6 +224,7 @@ export function MobileNativeChatView({
   )
   const turns = useMobileNativeChatTurnDisclosure({
     messages: data,
+    hasDisplayedMessage,
     enabled: true,
     isWorking: agentWorking === true,
     workingStartedAt,

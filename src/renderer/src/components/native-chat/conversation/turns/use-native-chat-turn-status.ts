@@ -47,7 +47,7 @@ export function useNativeChatTurnStatus({
     completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
   }
 } {
-  const structured = journalItems !== undefined
+  const structured = subagentId === null && journalItems !== undefined
   const thinking = useMemo(
     () =>
       subagentId === null &&
@@ -55,6 +55,9 @@ export function useNativeChatTurnStatus({
     [journalItems, latestTurn, subagentId]
   )
   const sendPending = useMemo(() => {
+    if (subagentId !== null) {
+      return false
+    }
     if (!structured) {
       return liveTurnKey !== undefined && notices?.get(liveTurnKey)?.sending === true
     }
@@ -64,12 +67,12 @@ export function useNativeChatTurnStatus({
       }
     }
     return false
-  }, [notices, displayedIds, liveTurnKey, structured])
+  }, [notices, displayedIds, liveTurnKey, structured, subagentId])
   const { isWorking, turnWorking } = nativeChatWorkingPresentation(
     working,
     workingStartedAt,
     structured,
-    sendPending || queueSendPending
+    sendPending || (subagentId === null && queueSendPending)
   )
   const activeTurnKey = liveTurnKey ?? NATIVE_CHAT_UNANCHORED_TURN_KEY
   const [timingByTurn, setTimingByTurn] = useState<NativeChatTurnTimingByTurn>({})

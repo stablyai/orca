@@ -27,6 +27,7 @@ export type AgentSessionSubscribeInput = {
   readQueueSourceIds?: HistoryReader['queueSourceIds']
   projectJournalEvent?: SubscriberFieldState['projectJournalEvent']
   readsCurrentRequests?: boolean
+  readsProviderReceipts?: boolean
   /** False for desktops that need exact replay to keep send echoes and current requests. */
   snapshotCatchUp?: boolean
   /** The reader shows prompt suggestions on screen; only these receive them or keep them generated. */
@@ -44,6 +45,7 @@ export type Subscriber = {
   readForkMarker?: () => ForkMarker | undefined
   readHistorySnapshot?: HistoryReader['snapshot']
   readQueueSourceIds?: HistoryReader['queueSourceIds']
+  readsProviderReceipts?: boolean
   snapshotCatchUp?: boolean
   /** The fence of a snapshot whose capture was abandoned; the next delivery sends it, not a batch. */
   owedSnapshotFence?: number

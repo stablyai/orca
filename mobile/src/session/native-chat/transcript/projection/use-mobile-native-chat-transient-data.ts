@@ -13,6 +13,8 @@ export type MobileNativeChatTransientProjection = {
   input: Input
   previews: ReadonlyMap<NativeChatMessage, Preview>
   pending: ReadonlyMap<string, Pending>
+  foldedIds: ReadonlySet<string>
+  hasDisplayedMessage: (id: string) => boolean
   stream: NativeChatMessage | undefined
   data: NativeChatMessage[]
 }
@@ -35,7 +37,9 @@ export function projectMobileNativeChatTransientData(
   before?: MobileNativeChatTransientProjection
 ): MobileNativeChatTransientProjection {
   const previews = new Map<NativeChatMessage, Preview>()
+  const addedFoldedIds = before?.input.folded === input.folded ? undefined : new Set<string>()
   const folded = input.folded.map((source) => {
+    addedFoldedIds?.add(source.id)
     const urls = input.imagePreviewsByMessageId?.[source.id]
     if (source.role !== 'user' || !urls?.length) {
       return source
@@ -89,10 +93,13 @@ export function projectMobileNativeChatTransientData(
     ...folded,
     ...orderNativeChatDisplayMessages([...(stream ? [stream] : []), ...transient])
   ]
+  const foldedIds = addedFoldedIds ?? before!.foldedIds
   return {
     input,
     previews,
     pending,
+    foldedIds,
+    hasDisplayedMessage: (id) => foldedIds.has(id) || pending.has(id) || stream?.id === id,
     stream,
     data:
       before &&
@@ -103,7 +110,7 @@ export function projectMobileNativeChatTransientData(
   }
 }
 
-export function useMobileNativeChatTransientData(input: Input, scope: string): NativeChatMessage[] {
+export function useMobileNativeChatTransientData(input: Input, scope: string) {
   const [state, setState] = useState(() => ({
     scope,
     projection: projectMobileNativeChatTransientData(input)
@@ -116,12 +123,12 @@ export function useMobileNativeChatTransientData(input: Input, scope: string): N
     input.pending === previous.pending &&
     input.imagePreviewsByMessageId === previous.imagePreviewsByMessageId
   ) {
-    return state.projection.data
+    return state.projection
   }
   const projection = projectMobileNativeChatTransientData(
     input,
     state.scope === scope ? state.projection : undefined
   )
   setState({ scope, projection })
-  return projection.data
+  return projection
 }

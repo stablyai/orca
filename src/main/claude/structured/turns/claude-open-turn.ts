@@ -26,7 +26,6 @@ import {
 } from '../../../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type { JournalTimelineItemResolution } from '../../../native-chat/agent-session-journal/writing/journal-timeline-resolution'
 import type { ClaudeUsageLimitEvidence } from '../journal/claude-usage-limits'
-import { claudeDispatchIsSteer } from './claude-command-lifecycle'
 import type { ClaudeDispatchWaiter, ClaudeStartedSend } from '../claude-structured-session-state'
 
 /** The ending a person's Stop at the write position would record instead. */
@@ -160,7 +159,7 @@ export class ClaudeOpenTurn {
   }
 
   /** Supersede the previous turn before opening another; a missing result must not leave old work live. */
-  open(turn: ClaudeCurrentTurn, observedAt: number): void {
+  open(turn: ClaudeCurrentTurn, observedAt: number, reserved = false): void {
     this.steerHandoffEnd = null
     this.usageLimitEvidence = null
     this.deps.onOpen?.()
@@ -175,7 +174,9 @@ export class ClaudeOpenTurn {
     }
     this.current = turn
     this.cycleTurn = turn
-    this.publish(turn)
+    if (!reserved) {
+      this.publish(turn)
+    }
     this.deps.sink.setActivity?.(null)
     // Every open clears, since a relaunch can leave the host holding the last process's guess.
     this.deps.sink.setPromptSuggestion?.(null)
@@ -183,11 +184,11 @@ export class ClaudeOpenTurn {
 
   startDispatch(sessionId: string, waiter: ClaudeDispatchWaiter, observedAt: number): void {
     if (this.current?.command?.sentUuid === waiter.sentUuid) {
-      this.current.startedAt = observedAt
-      this.publish(this.current)
+      this.startCommand(observedAt)
       return
     }
-    if (this.current || claudeDispatchIsSteer(waiter) || waiter.clientMessageId === null) {
+    // A cut-short step still owns its open turn; a fully ended turn leaves the steer free to open.
+    if (this.current || waiter.clientMessageId === null) {
       return
     }
     this.allowReopen()
@@ -203,25 +204,16 @@ export class ClaudeOpenTurn {
     )
   }
 
+  startCommand(observedAt: number): void {
+    if (this.current?.command && this.current.startedAt === undefined) {
+      this.current.startedAt = observedAt
+      this.publish(this.current)
+    }
+  }
+
   /** The host already reserved the command row. */
   beginCommand(turn: ClaudeCurrentTurn): void {
-    this.steerHandoffEnd = null
-    this.usageLimitEvidence = null
-    this.deps.onOpen?.()
-    if (this.current) {
-      this.deps.turnSuperseded()
-      const observedAt = turn.startedAt ?? Date.now()
-      this.deps.endOpenWork(this.current.sessionId, observedAt)
-      this.publish(this.current, {
-        state: 'interrupted',
-        completedAt: observedAt,
-        outcome: 'superseded'
-      })
-    }
-    this.current = turn
-    this.cycleTurn = turn
-    this.deps.sink.setActivity?.(null)
-    this.deps.sink.setPromptSuggestion?.(null)
+    this.open(turn, turn.startedAt ?? Date.now(), true)
   }
 
   commandInterruptRequested(turnId: string): void {

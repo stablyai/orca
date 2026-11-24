@@ -81,7 +81,7 @@ export function deliverClaudeReplayFrame(input: {
         session,
         message,
         (settlement) => settlements.push(settlement),
-        input.current && message.type === 'command_lifecycle' && observedAt !== undefined
+        input.current && observedAt !== undefined
           ? { observedAt, onReceived: (receipt) => input.onReceived?.(receipt) }
           : undefined
       )
@@ -102,9 +102,7 @@ export function deliverClaudeReplayFrame(input: {
         ...(requestedAt == null ? {} : { requestedAt }),
         ...(origin?.clientMessageId ? { clientMessageId: origin.clientMessageId } : {}),
         ...sendFacts,
-        ...((startsTurn || message.type === 'result') && observedAt !== undefined
-          ? { observedAt }
-          : {})
+        ...(observedAt === undefined ? {} : { observedAt })
       })
     },
     (settlement) => input.onSettledLate?.({ sessionId, ...settlement })

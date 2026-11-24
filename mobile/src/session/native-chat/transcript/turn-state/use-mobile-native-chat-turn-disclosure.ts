@@ -35,6 +35,7 @@ const NO_TURN_KEYS: readonly undefined[] = []
 
 export function useMobileNativeChatTurnDisclosure({
   messages,
+  hasDisplayedMessage,
   enabled,
   isWorking,
   workingStartedAt,
@@ -49,6 +50,7 @@ export function useMobileNativeChatTurnDisclosure({
   showsTurnDiffs = true
 }: {
   messages: readonly NativeChatMessage[]
+  hasDisplayedMessage: (id: string) => boolean
   enabled: boolean
   isWorking: boolean
   workingStartedAt?: number | null
@@ -109,7 +111,7 @@ export function useMobileNativeChatTurnDisclosure({
     thinking,
     scopeKey,
     journal: turnJournal,
-    messages
+    hasDisplayedMessage
   })
   const sendingItemIds = turnJournal?.sendingItemIds
   const rows = useMobileNativeChatGeneratedImageAnswers(

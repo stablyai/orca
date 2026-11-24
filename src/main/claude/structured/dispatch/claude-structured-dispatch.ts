@@ -169,7 +169,12 @@ export async function dispatchClaudeTurn(
       input.requestedAt ?? null,
       input.fence ?? session.fence
     )
-    if (input.turnScope?.kind === 'turn') {
+    const liveScope = session.translator?.currentTurnScope()
+    if (
+      input.turnScope?.kind === 'turn' &&
+      liveScope?.kind === 'turn' &&
+      input.turnScope.turnItemId === liveScope.turnItemId
+    ) {
       replay.waiter.turnScoped = true
     }
     if (renamesSession) {

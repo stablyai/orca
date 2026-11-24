@@ -3,7 +3,10 @@ import { expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { selectStructuredAgentSettledTurns } from '../../../../shared/agent-session/view/structured-agent-session-turn-timing'
+import { structuredAgentSessionCommandTurn } from '../../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { createClaudeJournalTranslator } from '../journal/claude-structured-journal-translation'
+import { cancelClaudeStructuredTurn } from '../journal/claude-structured-prompt-ownership'
+import { dispatchClaudeMessage } from '../launch/claude-structured-message-options'
 import { deliverClaudeReplayFrame } from '../lifecycle/claude-structured-event-delivery'
 import { retireWaiter, waitForReplay } from '../dispatch/claude-structured-dispatch-waiters'
 import type {
@@ -15,6 +18,7 @@ import type {
 const SESSION = '00000000-0000-4000-8000-00000000c1a0'
 const SENT = 'ec94ea32-e87c-4cef-9ff1-be319d2e77a5'
 const RESULT = '5bfd911d-c26b-4598-bc75-959a8a2fd86d'
+const FOLLOW_UP = 'f9123a8b-15b2-49f3-a00c-135976b198f7'
 
 const lifecycle = (state: string, uuid = SENT): Record<string, unknown> => ({
   type: 'command_lifecycle',
@@ -48,7 +52,7 @@ const stopFrames: Record<string, unknown>[] = [
   lifecycle('cancelled')
 ]
 
-function fixture() {
+function fixture(connection?: Partial<ClaudeSession['connection']>) {
   const writes: AgentJournalRenderItem[] = []
   const settled: ClaudeLateDispatchOutcome[] = []
   const receipts: { clientMessageId: string; fence: number }[] = []
@@ -80,6 +84,10 @@ function fixture() {
     dispatchSequence: 0,
     dispatchWaiters,
     retiredDispatchWaiters: [],
+    childWork: { live: new Map([['task', { toolUseId: 'tool-1', backgrounded: false }]]) },
+    reportedOptions: {},
+    capabilities: [],
+    connection,
     translator
   } as unknown as ClaudeSession
   const frame = (message: Record<string, unknown>, observedAt: number, current = true) =>
@@ -157,7 +165,7 @@ it.each([true, false])(
   }
 )
 
-it('leaves an echoed fold and a steer after its parent ends on the existing turn', () => {
+it('leaves an echoed fold on the existing turn', () => {
   const f = fixture()
   waitForReplay(f.session, false, SENT, 'key', 'opener', 1000)
   f.frame(lifecycle('started'), 2000)
@@ -168,22 +176,144 @@ it('leaves an echoed fold and a steer after its parent ends on the existing turn
   f.frame(lifecycle('started', folded), 4000)
   expect(f.turns()).toHaveLength(1)
   expect(f.receipts).toEqual([{ clientMessageId: 'opener', fence: 3 }])
+})
 
+it('opens a priority steer at its matched start after the parent ends', () => {
+  const f = fixture()
+  waitForReplay(f.session, false, SENT, 'key', 'opener', 1000)
+  f.frame(lifecycle('started'), 2000)
+  f.frame(echo(SENT), 2500)
+  const { waiter } = waitForReplay(f.session, false, FOLLOW_UP, 'key', 'steer', 4500)
+  waiter.steers = true
+  f.frame(lifecycle('queued', FOLLOW_UP), 4750)
   f.frame({ type: 'result', subtype: 'success', uuid: RESULT, session_id: SESSION }, 5000)
-  const steer = '88d02bf9-b19b-4c28-b0ce-32fe6d206bb7'
-  const { waiter } = waitForReplay(f.session, false, steer, 'key', 'steer', 4500)
-  waiter.turnScoped = true
   f.frame(output, 5500)
-  f.frame(lifecycle('started', steer), 6000)
+  f.frame(lifecycle('started', FOLLOW_UP), 6000)
   f.frame(output, 6500)
-  f.frame(echo(steer), 7000)
+  f.frame(echo(FOLLOW_UP), 7000)
   expect(f.turns().map((item) => item.body)).toMatchObject([
     { turnId: SENT, state: 'running', startedAt: 2000 },
-    { turnId: SENT, state: 'completed', startedAt: 2000 }
+    { turnId: SENT, state: 'completed', startedAt: 2000 },
+    { turnId: FOLLOW_UP, state: 'running', userItemId: 'orca:steer', startedAt: 6000 }
   ])
   expect(f.receipts).toEqual([
     { clientMessageId: 'opener', fence: 3 },
     { clientMessageId: 'steer', fence: 3 }
+  ])
+  expect(f.settled.at(-1)).toEqual({
+    clientMessageId: 'steer',
+    providerIdentity: { provider: 'claude', sessionId: SESSION, uuid: FOLLOW_UP }
+  })
+})
+
+it.each([false, true])('keeps a steer in its open turn (cut-short step %s)', (cutShort) => {
+  const f = fixture()
+  waitForReplay(f.session, false, SENT, 'key', 'opener', 1000)
+  f.frame(lifecycle('started'), 2000)
+  f.frame(echo(SENT), 2500)
+  const { waiter } = waitForReplay(f.session, false, FOLLOW_UP, 'key', 'steer', 3000)
+  waiter.steers = true
+  if (cutShort) {
+    f.frame({ ...stopFrames[3], is_error: false }, 3500)
+  }
+  f.frame(lifecycle('started', FOLLOW_UP), 4000)
+  f.frame(echo(FOLLOW_UP), 4500)
+  expect(f.turns().map((item) => item.body)).toMatchObject([
+    { turnId: SENT, state: 'running', startedAt: 2000 }
+  ])
+  expect(f.settled.at(-1)).toMatchObject({
+    clientMessageId: 'steer',
+    answeredInTurn: { via: 'steer', turn: { recordId: `turn-lifecycle:${SENT}` } }
+  })
+})
+
+it('starts and can stop a plain follow-up when its parent ends during send preparation', async () => {
+  let writtenPriority: unknown
+  let interrupted = false
+  const f = fixture({
+    backgroundTask: async () => {
+      f.frame({ type: 'result', subtype: 'success', uuid: RESULT, session_id: SESSION }, 4000)
+      return true
+    },
+    send: async (message, authorize) => {
+      await authorize?.()
+      writtenPriority = message.priority
+      f.frame(lifecycle('queued', FOLLOW_UP), 4500)
+    },
+    interrupt: async () => {
+      interrupted = true
+      return undefined
+    }
+  })
+  waitForReplay(f.session, false, SENT, 'key', 'opener', 1000)
+  f.frame(lifecycle('started'), 2000)
+  f.frame(echo(SENT), 2500)
+  f.frame(output, 3000)
+  expect(f.session.translator?.openTurnHasInputWork).toBe(true)
+  const parentScope = f.session.translator!.currentTurnScope()
+  expect(parentScope.kind).toBe('turn')
+  await dispatchClaudeMessage(
+    f.session,
+    {
+      sessionId: 'chat',
+      clientMessageId: 'follow-up',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Hello' }] },
+      fence: 3,
+      requestedAt: 3500,
+      turnScope: parentScope
+    },
+    undefined
+  )
+  expect(writtenPriority).toBeUndefined()
+  expect(claudeDispatchIsSteer(f.session.dispatchWaiters[0]!)).toBe(false)
+  f.frame(lifecycle('started', FOLLOW_UP), 5000)
+  f.frame(echo(FOLLOW_UP), 5500)
+  f.frame({ ...output, uuid: '3a020300-f901-4791-930d-483e74e819d6' }, 6000)
+  expect(f.session.dispatchWaiters).toEqual([])
+  expect(f.turns().map((item) => item.body)).toMatchObject([
+    { turnId: SENT, state: 'running', startedAt: 2000 },
+    { turnId: SENT, state: 'completed', startedAt: 2000 },
+    { turnId: FOLLOW_UP, state: 'running', startedAt: 5000 }
+  ])
+  expect(
+    await cancelClaudeStructuredTurn({
+      request: { sessionId: 'chat', fence: 3 },
+      sessions: new Map([['chat', f.session]])
+    })
+  ).toEqual({ cancelled: true })
+  expect(interrupted).toBe(true)
+})
+
+it.each(['started', 'echo', 'output'])('times compaction from provider %s evidence', (evidence) => {
+  const f = fixture()
+  const command = structuredAgentSessionCommandTurn('compact-send')
+  f.session.translator!.beginCommand({
+    ...command,
+    clientMessageId: 'compact-send',
+    providerSessionId: SESSION,
+    sentUuid: SENT,
+    running: { kind: 'turn', turnId: command.turnId, state: 'running', requestedAt: 1000 }
+  })
+  waitForReplay(f.session, true, SENT, 'key', 'compact-send', 1000)
+  if (evidence === 'started') {
+    f.frame(lifecycle('queued'), 1500)
+  }
+  expect(f.turns()).toEqual([])
+  const first = {
+    started: lifecycle('started'),
+    echo: echo(SENT),
+    output
+  }[evidence]!
+  f.frame(first, 2000)
+  f.frame(output, 2500)
+  if (evidence !== 'echo') {
+    f.frame(echo(SENT), 3000)
+  }
+  f.frame({ type: 'system', subtype: 'compact_boundary', session_id: SESSION }, 3500)
+  f.frame({ type: 'result', subtype: 'success', uuid: RESULT, session_id: SESSION }, 4000)
+  expect(f.turns().map((item) => item.body)).toMatchObject([
+    { turnId: 'compact:compact-send', state: 'running', startedAt: 2000 },
+    { turnId: 'compact:compact-send', state: 'completed', startedAt: 2000, completedAt: 4000 }
   ])
 })
 

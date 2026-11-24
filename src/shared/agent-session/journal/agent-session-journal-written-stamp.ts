@@ -1,6 +1,4 @@
-/** Host clock when the agent took a send's write while running no other turn: "Sending…" clears and the
- *  turn's clock starts here. A progress mark only; the provider's echo still settles delivery. Absent
- *  on older hosts. A turn copies its opening send's stamp so forks and reloads keep it. */
+/** Host time when the provider confirmed receipt of a pending send, clearing “Sending…”. */
 export type AgentJournalWrittenStamp = { writtenAt?: number }
 
 /** Only the written stamp changed: views that never read it may keep what they derived. */

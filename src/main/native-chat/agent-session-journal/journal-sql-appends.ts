@@ -190,7 +190,7 @@ export abstract class SqlJournalAppends {
     return this.answerOf(this.write({ kind: 'dispatch', input }, receipted(receipt)))
   }
 
-  /** The provider took a pending send's write while running no other turn; the echo still settles it. */
+  /** Record the provider's receipt of a pending send; the echo still settles delivery. */
   async markDispatchWritten(input: {
     clientMessageId: string
     fence: number

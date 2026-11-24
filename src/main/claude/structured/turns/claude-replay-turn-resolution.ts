@@ -28,7 +28,7 @@ export type ClaudeReplayTurnOrigin = {
   clientMessageId: string | null
 }
 
-export type ClaudeDispatchLifecycle = {
+type ClaudeDispatchFrameEvidence = {
   observedAt: number
   onReceived: (receipt: { clientMessageId: string; fence: number }) => void
 }
@@ -37,15 +37,15 @@ export function resolveClaudeReplayTurn(
   session: ClaudeSession,
   message: Record<string, unknown>,
   onSettledLate?: ClaudeLateDispatchSettlement,
-  lifecycle?: ClaudeDispatchLifecycle
+  frame?: ClaudeDispatchFrameEvidence
 ): ClaudeReplayTurnOrigin | null {
   if (message.type === 'command_lifecycle') {
     observeClaudeCommandLifecycle(session, message, onSettledLate, (waiter, evidence) => {
-      if (!lifecycle || waiter.clientMessageId === null) {
+      if (!frame || waiter.clientMessageId === null) {
         return
       }
       if (evidence.received) {
-        lifecycle.onReceived({
+        frame.onReceived({
           clientMessageId: waiter.clientMessageId,
           fence: waiter.dispatchFence
         })
@@ -54,7 +54,7 @@ export function resolveClaudeReplayTurn(
         session.translator?.turnCycle.startDispatch(
           session.providerSessionId,
           waiter,
-          lifecycle.observedAt
+          frame.observedAt
         )
       }
     })
@@ -79,6 +79,21 @@ export function resolveClaudeReplayTurn(
   const uuid = readClaudeFrameString(message, 'uuid')
   if (!uuid) {
     return null
+  }
+  const settle = (waiter: ClaudeDispatchWaiter) => {
+    if (
+      isUserReplay &&
+      frame &&
+      waiter.dispatchFence === session.fence &&
+      session.translator?.commandTurnId != null
+    ) {
+      session.translator.turnCycle.startDispatch(
+        session.providerSessionId,
+        waiter,
+        frame.observedAt
+      )
+    }
+    return settleLiveDispatch(session, waiter, uuid, isUserReplay, onSettledLate)
   }
 
   // Explicit correlation outranks content and queue order across identical prompts and timeout boundaries.
@@ -114,7 +129,7 @@ export function resolveClaudeReplayTurn(
         settleCancelledClaudeDispatchWaiters(session, [exact.sentUuid], onSettledLate)
         return null
       }
-      return settleLiveDispatch(session, exact, uuid, isUserReplay, onSettledLate)
+      return settle(exact)
     }
     const retired = session.retiredDispatchWaiters.find(
       (candidate) => candidate.sentUuid === userMessageUuid
@@ -133,7 +148,7 @@ export function resolveClaudeReplayTurn(
 
   const exact = session.dispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
   if (exact) {
-    return settleLiveDispatch(session, exact, uuid, isUserReplay, onSettledLate)
+    return settle(exact)
   }
   const retired = session.retiredDispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
   if (retired) {
@@ -151,7 +166,7 @@ export function resolveClaudeReplayTurn(
       )
       if (compatible.length === 1) {
         const [candidate] = compatible
-        return settleLiveDispatch(session, candidate!, uuid, true, onSettledLate)
+        return settle(candidate!)
       }
     } else if (!session.replayContentFallbackBlocked && session.dispatchWaiters.length === 0) {
       const lateCompatible = session.retiredDispatchWaiters.filter(

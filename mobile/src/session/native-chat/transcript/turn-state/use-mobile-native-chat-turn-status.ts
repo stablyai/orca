@@ -1,5 +1,4 @@
 import { nativeChatWorkingPresentation } from '../../../../../../src/shared/agent-session/view/structured-agent-session-sending'
-import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import type { MobileNativeChatTurnJournal } from '../ingestion/use-mobile-structured-agent-turn-timing'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -24,7 +23,7 @@ export function useMobileNativeChatTurnStatus({
   enabled,
   working,
   journal,
-  messages,
+  hasDisplayedMessage,
   workingStartedAt,
   settledTurns,
   thinking = false,
@@ -35,7 +34,7 @@ export function useMobileNativeChatTurnStatus({
   enabled: boolean
   working: boolean
   journal: MobileNativeChatTurnJournal | null
-  messages: readonly NativeChatMessage[]
+  hasDisplayedMessage: (id: string) => boolean
   workingStartedAt?: number | null
   settledTurns?: NativeChatSettledTurns | null
   thinking?: boolean
@@ -46,11 +45,13 @@ export function useMobileNativeChatTurnStatus({
   activeTurnKey: string
   turnWorking: boolean
 } {
-  const sendingItemIds = journal?.sendingItemIds
-  const sendPending = useMemo(
-    () => !!sendingItemIds?.size && messages.some((message) => sendingItemIds.has(message.id)),
-    [messages, sendingItemIds]
-  )
+  let sendPending = false
+  for (const id of journal?.sendingItemIds ?? []) {
+    if (hasDisplayedMessage(id)) {
+      sendPending = true
+      break
+    }
+  }
   const { isWorking, turnWorking } = nativeChatWorkingPresentation(
     working,
     workingStartedAt,

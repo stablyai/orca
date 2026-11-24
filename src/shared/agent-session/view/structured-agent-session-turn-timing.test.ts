@@ -41,7 +41,6 @@ it('anchors work to the turn start even when its opener already has a receipt', 
       turnId: 'turn',
       state: 'running',
       userItemId: 'orca:opener',
-      writtenAt: 1500,
       startedAt: 3500
     }
   }

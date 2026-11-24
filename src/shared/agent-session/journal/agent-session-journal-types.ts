@@ -231,7 +231,7 @@ export const AGENT_JOURNAL_TURN_LIFECYCLE_STATES = [
 ] as const
 export type AgentJournalTurnLifecycleState = (typeof AGENT_JOURNAL_TURN_LIFECYCLE_STATES)[number]
 
-export type AgentJournalTurnLifecycle = AgentJournalWrittenStamp & {
+export type AgentJournalTurnLifecycle = {
   turnId: string
   state: AgentJournalTurnLifecycleState
   /** Absent/unrecognized verdict means unknown, never success. completed alone proves nothing: provider API errors also finish turns. */

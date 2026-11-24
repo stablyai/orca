@@ -178,7 +178,10 @@ export function createClaudeJournalTranslator(
         journalClaudeFullAccessRefusal(deps, turnScope())
       }
     }
-    if (event.type === 'message' && absorbClaudeCommandFrame(messageContext, event.message)) {
+    if (
+      event.type === 'message' &&
+      absorbClaudeCommandFrame(messageContext, event.message, event.observedAt ?? Date.now())
+    ) {
       return
     }
     if (

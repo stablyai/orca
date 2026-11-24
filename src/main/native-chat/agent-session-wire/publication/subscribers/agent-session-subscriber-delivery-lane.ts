@@ -17,7 +17,7 @@ export type SubscriberCatchUp = {
   queuePort: () => SubscriberDeliveryPort
   queueChanged: boolean
   hostNow: number
-  activity?: AgentSessionTurnActivity | null
+  activity?: AgentSessionTurnActivity | null | undefined
 }
 
 export type SubscriberLiveText = {

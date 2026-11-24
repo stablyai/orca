@@ -259,6 +259,7 @@
       "historyRepaired": "Ein Teil des Chatverlaufs konnte nicht geladen werden."
     },
     "message": {
+      "sending": "Wird gesendet…",
       "copyMessage": "Nachricht kopieren",
       "forkFromResponse": "Ab dieser Antwort abzweigen",
       "scrollMessageToTop": "Diese Nachricht ganz nach oben scrollen",

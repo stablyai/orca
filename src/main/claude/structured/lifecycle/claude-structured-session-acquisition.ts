@@ -79,7 +79,10 @@ export async function acquireClaudeSession({
     callbacks.deliver(attempt, sessionId, run, payload)
   const onMessage = (message: Record<string, unknown>): void => {
     const frameObservedAt =
-      message.type === 'command_lifecycle' || message.type === 'user' || message.type === 'result'
+      message.type === 'command_lifecycle' ||
+      message.type === 'user' ||
+      message.type === 'result' ||
+      liveSession?.translator?.commandTurnId != null
         ? (deps.now?.() ?? Date.now())
         : undefined
     if (

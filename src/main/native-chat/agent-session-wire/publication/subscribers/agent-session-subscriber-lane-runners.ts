@@ -14,6 +14,7 @@ import {
   type SubscriberDeliveryRetention
 } from './agent-session-subscriber-delivery-lane'
 import type { Subscriber } from './agent-session-subscribe-input'
+import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 
 type LaneOwner = {
   deliveryPort: () => SubscriberDeliveryPort
@@ -84,6 +85,28 @@ export class SubscriberLanes {
   private readonly lanes = new WeakMap<Subscriber, SubscriberDeliveryLane>()
 
   constructor(private readonly owner: LaneOwner) {}
+
+  catchUp(
+    subscribers: Iterable<Subscriber>,
+    next: SubscriberCatchUp,
+    receiptsAfter?: AgentJournalCursor
+  ): void {
+    for (const subscriber of subscribers) {
+      const catchUpOwed =
+        receiptsAfter !== undefined &&
+        (subscriber.cursor.epoch !== receiptsAfter.epoch ||
+          subscriber.cursor.sequence < receiptsAfter.sequence)
+      // A receipt may supersede a capture that still owes an earlier turn or queue change.
+      if (receiptsAfter && !subscriber.readsProviderReceipts && !catchUpOwed) {
+        continue
+      }
+      this.of(subscriber).catchUp(
+        catchUpOwed && !next.queueChanged
+          ? { ...next, port: next.queuePort(), queueChanged: true }
+          : next
+      )
+    }
+  }
 
   of(subscriber: Subscriber): SubscriberDeliveryLane {
     let lane = this.lanes.get(subscriber)
