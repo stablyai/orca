@@ -1,6 +1,6 @@
-import { Activity } from 'lucide-react-native'
+import { Activity, MessageCircleQuestion } from 'lucide-react-native'
 import { Animated, View, type ViewStyle } from 'react-native'
-import type { AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
+import { agentStateLabel, type AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, radii } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -8,17 +8,14 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useWorkingRingRotation } from '../../components/motion/use-working-motion'
 
-/** An agent waiting on the owner, or failed. */
+/** A waiting, permission or failure dot. */
 export const AGENT_ATTENTION_COLOR = '#ef4444'
 
-// Match desktop per-agent vocabulary: working yellow spinner, done emerald, attention red, interrupted muted, unconfirmed amber, idle neutral.
-// Separate from AgentSpinner’s five-state worktree rollup.
 const dotColors = (): Record<
-  Exclude<AgentDotState, 'working' | 'monitoring' | 'unverifiable'>,
+  Exclude<AgentDotState, 'working' | 'monitoring' | 'blocked' | 'unverifiable'>,
   string
 > => ({
   done: '#10b981',
-  blocked: AGENT_ATTENTION_COLOR,
   waiting: AGENT_ATTENTION_COLOR,
   permission: AGENT_ATTENTION_COLOR,
   interrupted: colors.textMuted,
@@ -80,6 +77,14 @@ export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable'
         accessibilityLabel={t('components.agentStateDot.unverifiable', 'No recent update')}
       >
         <View style={styles.dashedRing} />
+      </View>
+    )
+  }
+
+  if (state === 'blocked') {
+    return (
+      <View style={styles.wrapper} accessibilityLabel={agentStateLabel(state)}>
+        <MessageCircleQuestion size={AGENT_STATE_DOT_SIZE} color={colors.agentQuestion} />
       </View>
     )
   }

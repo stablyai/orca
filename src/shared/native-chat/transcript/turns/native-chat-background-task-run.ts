@@ -22,6 +22,8 @@ export function nativeChatBackgroundTaskRun(
 ) {
   const kind = normalizeBackgroundTaskKind(block.kind)
   const state = normalizeBackgroundTaskState(block.state)
+  // The durable task records a settled failure as blocked.
+  const dotState = state === 'blocked' ? 'failed' : state
   // Show fixed duration only after settlement; live time belongs to the ticking strip.
   const duration =
     isSettledBackgroundTaskState(state) &&
@@ -31,7 +33,7 @@ export function nativeChatBackgroundTaskRun(
       : null
   return {
     kind,
-    state,
+    dotState,
     // Share naming with the live strip so one task cannot appear as two different tasks.
     label: resolveBackgroundTaskName({ id: block.taskId, kind, description: block.label }, say),
     status: [

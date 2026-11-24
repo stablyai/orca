@@ -6,6 +6,7 @@ import { Alert, Pressable, Text, View } from 'react-native'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
 import type { WorktreeStatus } from '../../../src/shared/worktree/row-display/worktree-status-rollup'
 import { AgentSpinner, agentStatusColors } from './presentation/AgentSpinner'
+import { AgentStateDot } from './presentation/AgentStateDot'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { MobileBotAvatar } from '../bots/MobileBotAvatar'
 import { mobileBotAvatarSource } from '../bots/host-bot-row-facts'
@@ -33,10 +34,9 @@ import { agentStatusGroup, type AgentListRow } from './agent-list-rows'
 import { agentListPreview } from './agent-list-row-text'
 
 // The Home rollup glyph is the list's size; this maps a per-agent state onto its palette.
-const GLYPH_STATUS: Record<AgentDotState, WorktreeStatus> = {
+const GLYPH_STATUS: Record<Exclude<AgentDotState, 'blocked'>, WorktreeStatus> = {
   working: 'working',
   monitoring: 'monitoring',
-  blocked: 'permission',
   waiting: 'permission',
   permission: 'permission',
   failed: 'failed',
@@ -273,7 +273,11 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
           delayLongPress={400}
         >
           <View style={[homeListStyles.status, row.stale && homeListStyles.rowDisabled]}>
-            <AgentSpinner status={GLYPH_STATUS[row.dotState]} />
+            {row.dotState === 'blocked' ? (
+              <AgentStateDot state={row.dotState} />
+            ) : (
+              <AgentSpinner status={GLYPH_STATUS[row.dotState]} />
+            )}
           </View>
           <View style={[styles.text, row.stale && homeListStyles.rowDisabled]}>
             <View style={styles.titleLine}>
