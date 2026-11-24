@@ -98,7 +98,8 @@ export function handleTerminalHttpLink(
     openRoutedHttpLink(url, {
       ...deps,
       modifierHeld: forceDestination ? false : Boolean(event?.shiftKey),
-      forceDestination
+      forceDestination,
+      ...(deps.actionDestinations?.plainClick ? { requireOwnerHostRoute: true } : {})
     })
     return true
   }
@@ -137,6 +138,10 @@ export function handleTerminalHttpLink(
           ...chooserDeps,
           modifierHeld: false,
           forceDestination: destination,
+          // A chooser row passes a choice; only the direct open of a reachable localhost link doesn't.
+          ...(choice === undefined && deps.actionDestinations?.plainClick
+            ? { requireOwnerHostRoute: true }
+            : {}),
           ...(onAdmission ? { onAdmission } : {})
         })
       },
