@@ -1,4 +1,5 @@
 // One chat in the Chats tab: one folded row; its chevron shows the workers it started, capped and stepped.
+import { BOT_CHAT_ROW_ATTRIBUTE, openRowMenuFromKeyboard } from './BotChatEndMenu'
 import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
@@ -250,6 +251,7 @@ export function BotChatTreeGroup({
         <div className="group/bot-chat relative flex w-full min-w-0 items-start gap-1 rounded-md py-1.5 pr-2 pl-2 hover:bg-accent">
           <button
             type="button"
+            {...{ [BOT_CHAT_ROW_ATTRIBUTE]: '' }}
             aria-label={[label, chat.unread ? t('bots.chats.unread', 'Unread') : null]
               .filter(Boolean)
               .join(' · ')}
@@ -257,6 +259,9 @@ export function BotChatTreeGroup({
             onClick={pressRow}
             // A held key repeats its click; it must not open the chat again and again.
             onKeyDown={(event) => {
+              if (openRowMenuFromKeyboard(event)) {
+                return
+              }
               if (event.repeat) {
                 event.preventDefault()
               }

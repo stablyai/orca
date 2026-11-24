@@ -41,7 +41,7 @@ export function applyAgentSessionStoreCacheRows(
   }
   if (writes.sessionTabs !== null) {
     const prior = draft.sessionTabs
-    draft.sessionTabs = writes.sessionTabs.recorded
+    const next = writes.sessionTabs.recorded
       ? agentSessionTabTableFromStored(
           writes.sessionTabs.tabs.map(({ tabId, sessionId }) => [tabId, sessionId]),
           {
@@ -51,6 +51,8 @@ export function applyAgentSessionStoreCacheRows(
           }
         )
       : null
+    next?.carryEnded(prior, writes.sessionTabs.ended)
+    draft.sessionTabs = next
   }
 }
 

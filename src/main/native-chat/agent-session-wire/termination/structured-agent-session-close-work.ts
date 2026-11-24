@@ -9,6 +9,26 @@ import {
   type StructuredAgentSessionConversationLifetimeHost
 } from './structured-agent-session-conversation-lifetime-host'
 
+/** Work a session owes with no agent loaded: a start or delivery in flight, an acquire being
+ *  aborted, provider child work, or ingress not yet journaled. The automatic close and End
+ *  both rest on this one read. */
+export function structuredAgentSessionOwesUnloadedWork(
+  runtimeState: {
+    hasDeliveryWork: (sessionId: string) => boolean
+    acquireAborts: { has: (sessionId: string) => boolean }
+    childWork?: { childWorkOpen: (sessionId: string) => boolean }
+    hasPendingIngress: (sessionId: string) => boolean
+  },
+  sessionId: string
+): boolean {
+  return (
+    runtimeState.hasDeliveryWork(sessionId) ||
+    runtimeState.acquireAborts.has(sessionId) ||
+    runtimeState.childWork?.childWorkOpen(sessionId) === true ||
+    runtimeState.hasPendingIngress(sessionId)
+  )
+}
+
 export type StructuredAgentSessionCloseWork = {
   /** A replaced source grants no subject, even to an explicit release that joined the read. */
   sessionId: string | null
@@ -39,8 +59,7 @@ export async function admitClosingStructuredAgentSession(
   if (!session) {
     const record = deps.store.getConversation(sessionId)
     finish(
-      !ownedWork() &&
-        !runtimeState.hasPendingIngress(sessionId) &&
+      !structuredAgentSessionOwesUnloadedWork(runtimeState, sessionId) &&
         record?.ownerObservation.claimStatus === 'released' &&
         !structuredAgentSessionOwnerUnverifiable({ record, child: null })
         ? 'idle'

@@ -9,6 +9,7 @@ import {
   AiVaultSetSearchEnabledParamsSchema
 } from '../ai-vault/search/ai-vault-search-contract'
 import { UsageCallParams } from '../backend/backend-service-contract'
+import { BotChatEndParams } from '../bots/bot-chat-end'
 import {
   BotGroupCreate,
   BotGroupDelete,
@@ -1281,6 +1282,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.create': BotCreate,
   'bots.createOffer': BotCreateOfferRequest,
   'bots.delete': BotDelete,
+  'bots.endChat': BotChatEndParams,
   'bots.github.setDefaultBot': BotGitHubDefaultBot,
   'bots.github.state': null,
   'bots.github.unlink': BotGitHubUnlink,

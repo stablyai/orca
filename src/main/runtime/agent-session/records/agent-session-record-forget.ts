@@ -44,6 +44,8 @@ export function forgetIdleAgentSessionRecord(
     return false
   }
   setAgentSessionTabVisibility(state, forget.sessionId, false, undefined, legacyTabIds)
+  // An ended chat's mark goes with its record, so the ended list never outgrows the chats.
+  state.sessionTabs?.forget(forget.sessionId)
   state.records.delete(forget.sessionId)
   return true
 }

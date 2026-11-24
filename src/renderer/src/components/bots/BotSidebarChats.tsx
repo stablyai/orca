@@ -24,6 +24,7 @@ import { BotChatStatusSlot, useBotChatLabel } from './BotChatOriginIcon'
 import { BotChatPaging, BotChatRowEnd, useBotChatPress } from './BotChatRowControls'
 import type { BotChatTree } from './use-bot-chat-tree'
 import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChatRowMenu'
+import { BOT_CHAT_ROW_ATTRIBUTE, openRowMenuFromKeyboard } from './BotChatEndMenu'
 import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
@@ -186,6 +187,7 @@ function BotSidebarChat({
         <div
           role="button"
           data-bot-sidebar-chat={chat.chatId}
+          {...{ [BOT_CHAT_ROW_ATTRIBUTE]: '' }}
           aria-label={[label, trailing].filter(Boolean).join(' · ')}
           // The chat whose tab is in front reads as the current row, as the open workspace's does.
           aria-current={active ? 'true' : undefined}
@@ -197,6 +199,9 @@ function BotSidebarChat({
           )}
           onClick={pressRow}
           onKeyDown={(event) => {
+            if (openRowMenuFromKeyboard(event)) {
+              return
+            }
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault()
               pressRow(event)

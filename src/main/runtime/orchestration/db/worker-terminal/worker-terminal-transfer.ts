@@ -1,4 +1,5 @@
 import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
+import { guardChatCustody } from '../chat-custody-guard'
 import { OrchestrationError } from '../../orchestration-error'
 import { isEquivalentPaneKey } from '../pane-key-match'
 import { createPreviousCustodianLookup } from './worker-custody-read'
@@ -106,6 +107,8 @@ export function assertTakesNewWork(
   assignee: NewWorkAssignee,
   taskId: string
 ): void {
+  // A chat being ended, or ended, takes no Dispatch: checked in the same synchronous step as the claim.
+  guardChatCustody(db, assignee.assigneeHandle, 'custody')
   const refusal = newWorkRefusal(db, assignee, taskId)
   if (refusal) {
     throw refusal

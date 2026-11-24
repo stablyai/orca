@@ -1,3 +1,4 @@
+import { structuredAgentSessionTurnRefusal } from '../native-chat/agent-session-wire/operations/structured-agent-session-turn-gate'
 import { externalConversationTitle } from '../../shared/external-conversation-title'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
@@ -108,6 +109,11 @@ export function writeChatLink(
   text?: string
 ): LinkedConversation | null {
   const { worktreeId, sessionId } = chat
+  // A chat ended (or being ended) takes no thread; a delivery that started a turn was admitted first.
+  const refused = structuredAgentSessionTurnRefusal(sessionId)
+  if (refused) {
+    throw new Error(refused.refusal.message)
+  }
   const existing = findLink(store, key)
   if (existing?.link.sessionId === sessionId && existing.workspace.worktreeId === worktreeId) {
     return null

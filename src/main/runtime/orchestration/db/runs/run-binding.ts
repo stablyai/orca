@@ -1,4 +1,5 @@
 import type { RunRow } from '../orchestration-records'
+import { coordinatorCustodyHandle, guardChatCustody } from '../chat-custody-guard'
 import { OrchestrationError } from '../../orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import { isEquivalentPaneKey } from '../pane-key-match'
@@ -41,6 +42,7 @@ export function bindRun(
   const runMailbox = `run:${params.runId}`
   this.db.exec('BEGIN IMMEDIATE')
   try {
+    guardChatCustody(this, coordinatorCustodyHandle(coordinator), 'custody')
     const run = this.getRunRaw(params.runId)
     if (!run || run.legacy === 1) {
       this.db.exec('ROLLBACK')
