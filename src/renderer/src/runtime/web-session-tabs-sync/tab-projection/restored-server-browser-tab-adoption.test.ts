@@ -34,11 +34,12 @@ function relaunchedState() {
     createdAt: NOW,
     browserRuntimeEnvironmentId: ENV
   }
-  const saved = buildPersistedBrowserPagesByWorkspace(
-    { [WORKSPACE]: [live] },
-    { [PAGE]: { environmentId: ENV, remotePageId: PAGE } },
-    {}
-  )
+  const saved =
+    buildPersistedBrowserPagesByWorkspace(
+      { [WORKSPACE]: [live] },
+      { [PAGE]: { environmentId: ENV, remotePageId: PAGE } },
+      {}
+    ) ?? {}
   return makeState({
     browserTabsByWorktree: {
       [WT]: [{ ...live, id: WORKSPACE, activePageId: PAGE, pageIds: [PAGE] }]
