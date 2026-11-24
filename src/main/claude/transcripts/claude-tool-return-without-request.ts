@@ -132,16 +132,16 @@ function withDeadline(check: Promise<number | null>): Promise<number | null> {
 // main one parse at a time (about 1 ms per 512 KB), not all of them back to back (1,000 at once
 // held the event loop 596 ms).
 let checks: Promise<unknown> = Promise.resolve()
-// Reads still out past the deadline: while one is, no check reads, so a hung mount holds at most
-// one filesystem thread.
-let stuckReads = 0
+// A read still out when the next check runs (checks run one at a time) outlived its check's
+// deadline: until it returns no check reads, so a hung mount holds at most one filesystem thread.
+let readOut = false
 
 async function checkToolReturn(
   input: ClaudeToolReturnCheck,
   now: number,
   giveUpAt: number
 ): Promise<number | null> {
-  if (stuckReads > 0 || Date.now() >= giveUpAt || !input.stillWanted()) {
+  if (readOut || Date.now() >= giveUpAt || !input.stillWanted()) {
     return null
   }
   const text = await readTail(input.transcriptPath)
@@ -157,16 +157,9 @@ async function checkToolReturn(
 }
 
 function readTail(transcriptPath: string): Promise<string | null> {
-  let stuck = false
-  const timer = setTimeout(() => {
-    stuck = true
-    stuckReads += 1
-  }, CHECK_DEADLINE_MS)
+  readOut = true
   return readClaudeTranscriptTailText(transcriptPath, TAIL_BYTES).finally(() => {
-    clearTimeout(timer)
-    if (stuck) {
-      stuckReads -= 1
-    }
+    readOut = false
   })
 }
 

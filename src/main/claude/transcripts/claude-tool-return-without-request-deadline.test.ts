@@ -29,12 +29,15 @@ it('settles every check within 5 s of its call, and reads nothing more while a r
     readClaudeToolReturnWithoutRequest({ transcriptPath, quietMs: 1, stillWanted: () => true })
   const settled: string[] = []
   const hung = check('hung.jsonl').then(() => settled.push('hung'))
+  await vi.advanceTimersByTimeAsync(1_000)
+  // Queued a second later: the hung check's deadline frees the queue while its own has 1 s left.
   const queued = check('queued.jsonl').then(() => settled.push('queued'))
-  await vi.advanceTimersByTimeAsync(4_999)
+  await vi.advanceTimersByTimeAsync(3_999)
   expect(settled).toEqual([])
   await vi.advanceTimersByTimeAsync(1)
   await Promise.all([hung, queued])
-  // The queued check's own deadline passed while it waited: it read nothing.
+  // The hung read is still out, so the queued check settled at once and read nothing.
+  expect(settled).toEqual(['hung', 'queued'])
   expect(tailRead.reads).toEqual(['hung.jsonl'])
   await expect(check('later.jsonl')).resolves.toBeNull()
   expect(tailRead.reads).toEqual(['hung.jsonl'])
