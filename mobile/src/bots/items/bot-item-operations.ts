@@ -14,8 +14,10 @@ import type {
   BotItemCommentSkill,
   BotItemStatus
 } from '../../../../src/shared/bots/bot-items'
+import { botItemStatusFields } from '../../../../src/shared/bots/bot-item-status-fields'
 import { readHostMethodReply } from '../../host-screen/sidebar-feed/host-sidebar-feed-operations'
 import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
+import { RpcRefusedError } from '../../transport/rpc/rpc-refused-error'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
@@ -99,7 +101,10 @@ export type BotItemRead<T> =
 export async function readBotItems(
   client: RpcClient,
   botId: string,
-  { chatIds, ...page }: { chatIds?: readonly string[] | null; closedCursor?: string } = {}
+  {
+    chatIds,
+    ...page
+  }: { chatIds?: readonly string[] | null; closedCursor?: string; closedOnly?: boolean } = {}
 ): Promise<BotItemRead<BotItemsListRead>> {
   try {
     const answer = readHostMethodReply(
@@ -146,7 +151,7 @@ export function markBotItemsOpened(client: RpcClient, botId: string): void {
 /** How an owner write went: `unknown` when the connection dropped after sending, so it may have landed. */
 export type BotItemWriteOutcome =
   | { kind: 'done'; result?: unknown }
-  | { kind: 'refused'; message: string }
+  | { kind: 'refused'; message: string; code?: string }
   | { kind: 'unknown' }
   | { kind: 'not-sent' }
 
@@ -158,7 +163,11 @@ async function write(send: () => Promise<unknown>): Promise<BotItemWriteOutcome>
     return isRpcDeliveryUnknown(error) ? { kind: 'unknown' } : { kind: 'not-sent' }
   }
   return reply instanceof Error
-    ? { kind: 'refused', message: botFailureMessage(reply) ?? reply.message }
+    ? {
+        kind: 'refused',
+        message: botFailureMessage(reply) ?? reply.message,
+        ...(reply instanceof RpcRefusedError ? { code: reply.code } : {})
+      }
     : { kind: 'done', result: reply }
 }
 
@@ -172,6 +181,11 @@ export function commentOnBotItem(
     images?: readonly string[]
     requestId?: string
     skills?: readonly BotItemCommentSkill[]
+    /** The ask the comment answers; `plain`: it answers none. */
+    questionId?: string
+    plain?: boolean
+    /** The ask's lines this answer skips. */
+    skipped?: readonly number[]
   } = {}
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
@@ -182,7 +196,10 @@ export function commentOnBotItem(
         text,
         ...(extra.images?.length ? { images: [...extra.images] } : {}),
         ...(extra.requestId ? { requestId: extra.requestId } : {}),
-        ...(extra.skills?.length ? { skills: [...extra.skills] } : {})
+        ...(extra.skills?.length ? { skills: [...extra.skills] } : {}),
+        ...(extra.questionId ? { questionId: extra.questionId } : {}),
+        ...(extra.plain ? { plain: true } : {}),
+        ...(extra.skipped?.length ? { skipped: [...extra.skipped] } : {})
       },
       { failWhenDisconnected: true }
     )
@@ -200,16 +217,14 @@ export function setBotItemsStatus(
   client: RpcClient,
   uids: readonly string[],
   status: BotItemStatus,
-  note?: string
+  note: string | undefined,
+  /** The host advertises BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY. */
+  cancelTakesNoReason: boolean
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
     const reply = await itemsStatus.request(
       client,
-      {
-        items: [...uids],
-        status,
-        ...(note ? (status === 'waiting' ? { note } : { reason: note }) : {})
-      },
+      { items: [...uids], ...botItemStatusFields(status, note, cancelTakesNoReason) },
       { failWhenDisconnected: true }
     )
     try {

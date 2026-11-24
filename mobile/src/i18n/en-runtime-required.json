@@ -142,6 +142,7 @@
       "botMissing": "The bot this automation runs as no longer exists.",
       "botPaused": "{{bot}} is paused, so Orca skipped this run.",
       "botsOff": "Bots are turned off in Settings, so Orca skipped this run.",
+      "botsOffByTeam": "Bots are turned off by your team, so Orca skipped this run.",
       "destinationChanged": "The automation destination changed before this run could launch.",
       "hooksReviewBlocked": "The agent is waiting for someone to review new or changed hooks (\"Hooks need review\"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.",
       "legacyTwinHosts": "This automation was saved before Orca tracked which host it runs on, and its project is on more than one host. Open the automation and pick the host it should run on.",
@@ -229,7 +230,7 @@
       "reachLinear": "Comment on, update and create Linear issues as you",
       "reachPermission": "New conversations start in {{mode}}",
       "reachPermissionUnknown": "New conversations start from your chat permission setting",
-      "reachSlack": "Post in Slack as @{{name}}",
+      "reachSlack": "Post in Slack as {{name}}",
       "reject": "Reject",
       "removeAnyTime": "You can remove them from Who can ask at any time.",
       "review": "Review…",
@@ -376,6 +377,7 @@
       "toolGone": "This bot no longer has that tool.",
       "toolNameTaken": "This bot already has a tool named {{name}}.",
       "toolNameTakenByAgent": "Your {{agent}} already has a tool named {{name}}, which this bot gets too. Pick another name with --name.",
+      "toolNameTakenByCodexStdio": "Your Codex already has a local tool named {{name}}, so this bot's {{name}} can't run. Rename this bot's tool.",
       "toolNeedsNoSignIn": "{{name}} uses its saved values and needs no sign-in.",
       "toolNotFound": "This bot has no tool named {{name}}.",
       "toolNotUpdated": "The tool was not updated.",
@@ -394,15 +396,17 @@
       "items": {
         "needsYouCount_one": "{{count}} needs you",
         "needsYouCount_other": "{{count}} needs you",
-        "outsideRoom_one": "{{count}} more outside this room",
-        "outsideRoom_other": "{{count}} more outside this room",
-        "outsideThread_one": "{{count}} more outside this thread",
-        "outsideThread_other": "{{count}} more outside this thread",
-        "outside_one": "{{count}} more outside this group",
-        "outside_other": "{{count}} more outside this group",
         "workingCount_one": "{{count}} working",
         "workingCount_other": "{{count}} working"
-      }
+      },
+      "memberCount_one": "{{count}} bot",
+      "memberCount_other": "{{count}} bots",
+      "membersHere_one": "{{names}} is here.",
+      "membersHere_other": "{{names}} are here.",
+      "moreCount_one": "{{count}} more",
+      "moreCount_other": "{{count}} more",
+      "workingCount_one": "{{count}} working",
+      "workingCount_other": "{{count}} working"
     },
     "import": {
       "folderItems_one": "{{count}} item",
@@ -431,6 +435,10 @@
     "panel": {
       "needYou_one": "{{count}} needs you",
       "needYou_other": "{{count}} need you"
+    },
+    "search": {
+      "pausedMatches_one": "{{count}} paused match",
+      "pausedMatches_other": "{{count}} paused matches"
     },
     "settings": {
       "memoryFiles_one": "{{count}} file",
@@ -912,7 +920,7 @@
         "paused": "{{bot}} is paused."
       },
       "toolAdded": {
-        "heading": "Added a tool",
+        "added": "Added",
         "remove": "Remove",
         "removed": "Removed"
       },
@@ -947,6 +955,10 @@
       "moreCount_other": "{{count}} more",
       "queuedCount_one": "{{count}} queued message",
       "queuedCount_other": "{{count}} queued messages"
+    },
+    "receipt": {
+      "answeredCount_one": "You answered <answer>{{count}} question</answer>",
+      "answeredCount_other": "You answered <answer>{{count}} questions</answer>"
     },
     "restartNote": {
       "continued": "Orca asked this agent to continue after a restart. Your own prompt was not re-sent.",
@@ -1054,6 +1066,12 @@
       "turnDiff": {
         "changedFiles_one": "{{count}} changed file",
         "changedFiles_other": "{{count}} changed files"
+      },
+      "workerDock": {
+        "taskCount_one": "{{count}} task",
+        "taskCount_other": "{{count}} tasks",
+        "workerCount_one": "{{count}} worker",
+        "workerCount_other": "{{count}} workers"
       }
     },
     "worktreeAgentList": {
@@ -1080,6 +1098,20 @@
       "repairRequired": "Re-pair this phone with the computer to use dictation.",
       "sessionLimit": "Too many devices are dictating on this computer. Try again when one finishes.",
       "sessionLost": "Dictation lost its connection to the computer. Try again."
+    }
+  },
+  "home": {
+    "bots": {
+      "waits": {
+        "access_one": "access request",
+        "access_other": "{{count}} access requests",
+        "items_one": "item",
+        "items_other": "{{count}} items",
+        "questions_one": "question",
+        "questions_other": "{{count}} questions",
+        "workers_one": "worker",
+        "workers_other": "{{count}} workers"
+      }
     }
   },
   "hostScreen": {
@@ -1220,6 +1252,10 @@
     "queuedMessageCardRow": {
       "images_one": "{{count}} image",
       "images_other": "{{count}} images"
+    },
+    "tabsSheet": {
+      "panes_one": "{{count}} pane",
+      "panes_other": "{{count}} panes"
     }
   },
   "settings": {

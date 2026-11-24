@@ -76,13 +76,16 @@ const botShareReview = bindDeferredRpcOperation(
   })
 )
 
-/** The version the link serves now; null when it was stopped. */
+/** The version the link serves now, or `versionId` while the link still serves it; null when it was stopped. */
 export async function reviewPhoneBotShare(
   client: RpcClient,
-  shareId: string
+  shareId: string,
+  versionId?: string
 ): Promise<PhoneShareReview | null> {
   return botShareReview.interpret(
-    await botShareReview.request(client, { shareId }, { failWhenDisconnected: true })
+    await botShareReview.request(client, versionId ? { shareId, versionId } : { shareId }, {
+      failWhenDisconnected: true
+    })
   ).review
 }
 

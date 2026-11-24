@@ -10,7 +10,10 @@ import {
 import { botTarget, type BotOnHost } from '@/lib/bot-hosts'
 import { useNow } from '@/lib/window-activity/use-now'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
-import { hostUsageLimitStops, type HostUsageLimitStop } from './host-usage-limit-stops'
+import {
+  hostUsageLimitStops,
+  type HostUsageLimitStop
+} from '../../../../shared/bots/host-usage-limit-stops'
 
 export type BotUsageLimitStop = HostUsageLimitStop
 

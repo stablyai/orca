@@ -104,14 +104,16 @@ export class AntigravityAccountService {
     })
   }
 
-  selectAccount(id: string): Promise<AntigravityAccountState> {
+  /** `switched` runs once agy holds another login than before and the switch is saved. */
+  selectAccount(id: string, switched?: () => void): Promise<AntigravityAccountState> {
     return this.serialize(async () => {
       const { vault, current } = await this.reconcile(id)
       const selected = vault.accounts.find((account) => account.id === id)
       if (!selected) {
         throw new Error('Antigravity account was not found.')
       }
-      if (!current || !this.matches(selected, current)) {
+      const switching = !current || !this.matches(selected, current)
+      if (switching) {
         await this.backend.write(selected.credentials, current?.contents ?? null)
       }
       const readback = await this.backend.read()
@@ -129,6 +131,9 @@ export class AntigravityAccountService {
       latest.selectedAccountId = id
       this.updateSnapshot(latest, readback)
       await this.store.write(latest)
+      if (switching) {
+        switched?.()
+      }
       return this.state({ vault: latest, current: readback })
     })
   }

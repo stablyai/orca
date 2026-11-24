@@ -25,6 +25,7 @@ import { getLinearAgentSkillSetupInlineRuntimeCopy } from './linear-agent-skill-
 import type { LinearAgentSkillPromptSettings } from './linear-agent-skill-runtime'
 import { useIntegrationSubordinateRowClass } from '../../integrations/presentation/integration-card-presentation'
 import { BundledSkillInstallStatus } from './BundledSkillInstallStatus'
+import { BundledSkillReplaceHint } from './BundledSkillReplaceHint'
 import { recheckSurfacesAfterAgentSkillInstall } from './agent-skill-recheck-surface-sync'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -40,7 +41,10 @@ function BundledLinearAgentSkillInstallCta({
   // Match sidebar runtime resolution so both surfaces scan/install on the same host or WSL distro.
   const remote = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const activeRuntime = useActiveProjectSkillRuntime()
-  const agentRuntime = activeRuntime.agentRuntime ?? { runtime: 'host', label: '' }
+  const agentRuntime = activeRuntime.agentRuntime ?? {
+    runtime: 'host',
+    label: ''
+  }
   const skill = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
     discoveryTarget: activeRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
@@ -130,39 +134,50 @@ function BundledLinearAgentSkillInstallCta({
           {!showInstall ||
           state.kind === 'unsupported' ||
           bundledSkillInstallNeedsAttention(state) ? null : (
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              className="w-fit"
-              onClick={() => void install([skillName], replacePaths)}
-              disabled={installing || !ready || action.kind === 'loading'}
+            <BundledSkillReplaceHint
+              action={action}
+              replacing={!installing && Boolean(replacePaths)}
             >
-              {installing ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <Download className="size-3" />
-              )}
-              {installing
-                ? t('auto.components.settings.AgentSkillSetupPanel.installing', 'Installing...')
-                : replacePaths
-                  ? t(
-                      'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
-                      'Replace with Orca’s'
-                    )
-                  : action.kind === 'run' && action.changes
-                    ? bundledSkillSetupActionLabel(action.changes, t)
-                    : skill.installed
-                      ? t('auto.components.settings.AgentSkillSetupPanel.updateLabel', 'Update')
-                      : t('auto.components.skills.SkillInstallDialog.39acb9e8f4', 'Install skill')}
-            </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                className="w-fit"
+                onClick={() => void install([skillName], replacePaths)}
+                disabled={installing || !ready || action.kind === 'loading'}
+              >
+                {installing ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <Download className="size-3" />
+                )}
+                {installing
+                  ? t('auto.components.settings.AgentSkillSetupPanel.installing', 'Installing...')
+                  : replacePaths
+                    ? t(
+                        'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
+                        'Replace with Orca’s'
+                      )
+                    : action.kind === 'run' && action.changes
+                      ? bundledSkillSetupActionLabel(action.changes, t)
+                      : skill.installed
+                        ? t('auto.components.settings.AgentSkillSetupPanel.updateLabel', 'Update')
+                        : t(
+                            'auto.components.skills.SkillInstallDialog.39acb9e8f4',
+                            'Install skill'
+                          )}
+              </Button>
+            </BundledSkillReplaceHint>
           )}
           <BundledSkillInstallStatus
             install={skillInstall}
             unsupported={unsupported}
             attention={
               needsAttention
-                ? { retry: () => void install([skillName]), message: action.attentionMessage }
+                ? {
+                    retry: () => void install([skillName]),
+                    message: action.attentionMessage
+                  }
                 : undefined
             }
             buttonSize="xs"

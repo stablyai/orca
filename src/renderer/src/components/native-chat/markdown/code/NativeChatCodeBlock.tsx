@@ -34,7 +34,11 @@ export function NativeChatCodeBlock({
   const actions = code ? (
     <>
       <NativeChatCodeWrapButton wrapped={wrapped} onToggle={() => setWrapped(!wrapped)} />
-      <NativeChatCopyButton text={code} label={t('components.native-chat.copyCode', 'Copy code')} />
+      <NativeChatCopyButton
+        platformLineEndings
+        text={code}
+        label={t('components.native-chat.copyCode', 'Copy code')}
+      />
     </>
   ) : null
 

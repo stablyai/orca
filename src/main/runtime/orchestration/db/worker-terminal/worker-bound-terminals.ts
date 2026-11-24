@@ -1,4 +1,5 @@
-// Terminals that close with a worker: the setup terminal and startup tabs its start opened.
+// Terminals that close with a worker: the setup terminal and startup tabs its start opened, and
+// terminals its agent created with `orca terminal create`.
 import type { OrchestrationDb } from '../orchestration-db'
 import { isEquivalentPaneKey, paneKeyMatchSuffix } from '../pane-key-match'
 import type { WorkerAutoCloseState } from '../../../../../shared/orchestration/workers/worker-auto-close'
@@ -9,7 +10,7 @@ CREATE TABLE IF NOT EXISTS worker_bound_terminals (
   -- The worker's first Dispatch: its terminal resource's origin_dispatch_id.
   dispatch_id     TEXT NOT NULL,
   pane_key        TEXT NOT NULL,
-  -- setup or configured_tab; no CHECK, so later roles need no table rebuild.
+  -- setup, configured_tab or created; no CHECK, so later roles need no table rebuild.
   role            TEXT NOT NULL,
   created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -17,7 +18,7 @@ CREATE INDEX IF NOT EXISTS idx_worker_bound_terminals_dispatch
   ON worker_bound_terminals(dispatch_id);
 `
 
-export type WorkerBoundTerminalRole = 'setup' | 'configured_tab'
+export type WorkerBoundTerminalRole = 'setup' | 'configured_tab' | 'created'
 
 export type WorkerBoundTerminalRow = {
   terminal_handle: string

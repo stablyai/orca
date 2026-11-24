@@ -38,7 +38,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     ],
     identityFlagRoles: { from: 'caller', terminal: 'target' },
     notes: [
-      "--item <n> (from a bot's own chat) links the worker to that item and moves your own item to In progress; another bot's item keeps its status.",
+      "--item <n> (from a bot's own chat) links the worker to that item and moves your own item to In progress, unless it still asks your owner a question (it stays Needs you); another bot's item keeps its status. Link every worker you start for an item, reviewers included.",
       '--for <message id> links the worker to a question you took and are starting it to answer. The start never fails on it: the receipt says when the question could not be linked, and why.',
       'With --spec and no bound Run, a coordinator gets a new Run bound to it, named after the Task title; the receipt names the Run it created or joined.',
       'Current and existing worktrees never rerun setup; a fresh agent terminal is created unless --terminal is explicit.',
@@ -148,7 +148,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'Post-completion cleanup for a settled (succeeded or failed) worker; closes only the exact coordinator-owned agent terminal of that worker.',
       'A settled Dispatch created by orchestration dispatch has no owned terminal resource and is reported retained without process action.',
       "worker-read afterwards reads the worker's own transcript or chat history while it still exists; a worker with none, or whose original is gone, reads as no longer available.",
-      "Also closes the setup terminal and startup tabs the worker's start opened, unless setup failed.",
+      "Also closes the setup terminal and startup tabs the worker's start opened, unless setup failed, and terminals its agent created without --keep-open.",
       'Never closes reused or pre-existing terminals, terminals the user kept open, or unproven identities.',
       'Idempotent: repeating the call reports already_released. Only release_unknown exits 1; retained, release_pending, and already_released exit 0.',
       'On a runtime that advertises orchestration.worker-auto-release.v1, an accepted worker_done already schedules this release about 2 minutes later (autoReleaseAt in worker-show and worker-list); call it only to release sooner or to clear a worker-keep-open. Chat workers follow autoReleaseAt too. autoReleaseAt is absent while its agent works again, and set afresh when it next goes idle.'

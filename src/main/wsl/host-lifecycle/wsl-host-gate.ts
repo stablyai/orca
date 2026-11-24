@@ -197,6 +197,9 @@ export function assertWslHostRunAllowed(
   }
 }
 
-export function wslHostRuntimeCallGuard(message: string, _reason: 'parked' | 'unavailable'): Error {
+export function wslHostRuntimeCallGuard(
+  message: string,
+  _reason: 'parked' | 'unavailable' | 'idle'
+): Error {
   return new Error(message)
 }
