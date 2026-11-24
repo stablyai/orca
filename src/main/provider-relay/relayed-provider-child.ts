@@ -7,6 +7,7 @@ import type {
   ProviderRelayDetachPolicy,
   ProviderRelayExit
 } from '../daemon/protocol/daemon-provider-relay-protocol'
+import { RELAY_WRITE_CHUNK_CHARS } from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayChannel } from './provider-relay-channel'
 import { RelayedProviderOutput } from './relayed-provider-output'
 
@@ -111,6 +112,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     this.output.restartAt(fromSeq)
     this.unbind = this.options.channel.bind(this.relayId, {
       line: (event, seq, line) => this.output.line(event, seq, line),
+      ackWanted: () => void this.output.settle(),
       exit: (exit) => this.onExit(exit),
       disconnected: () => void this.reattach()
     })
@@ -179,7 +181,12 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     const data = chunks
       .map((chunk) => (typeof chunk === 'string' ? chunk : Buffer.from(chunk as Buffer).toString()))
       .join('')
-    const sent = this.writing.then(() => this.send(data))
+    // The daemon joins a surrogate pair split between writes, so a plain slice is safe.
+    const sent = this.writing.then(async () => {
+      for (let at = 0; at < data.length; at += RELAY_WRITE_CHUNK_CHARS) {
+        await this.send(data.slice(at, at + RELAY_WRITE_CHUNK_CHARS))
+      }
+    })
     this.writing = sent.then(
       () => {},
       () => {}

@@ -1,8 +1,8 @@
 import type { Readable } from 'node:stream'
 import type { ProviderRelayDataEvent } from '../daemon/protocol/daemon-provider-relay-protocol'
 
-/** Acks wait this long after output, so a burst of lines costs one ack and one durability wait. */
-const ACK_DELAY_MS = 100
+/** Acks batch this long after output; the daemon asks sooner (relayAckWanted) when it holds a lot. */
+const ACK_DELAY_MS = 1_000
 
 type OutputOptions = {
   stdout: Readable

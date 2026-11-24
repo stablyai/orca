@@ -1,5 +1,6 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import type {
+  ProviderRelayAckWantedEvent,
   ProviderRelayAttachResult,
   ProviderRelayDataEvent,
   ProviderRelayExit,
@@ -17,11 +18,13 @@ const RELAY_SPAWN_TIMEOUT_MS = 30_000
 export type ProviderRelaySink = {
   line: (event: ProviderRelayDataEvent['event'], seq: number, line: string) => void
   exit: (exit: ProviderRelayExit) => void
+  /** The daemon holds a lot of unacked output: ack everything received now. */
+  ackWanted: () => void
   /** The stream to the daemon dropped; the daemon detached this relay. */
   disconnected: () => void
 }
 
-type ChannelEvent = ProviderRelayDataEvent | ProviderRelayExitEvent
+type ChannelEvent = ProviderRelayDataEvent | ProviderRelayAckWantedEvent | ProviderRelayExitEvent
 
 function isRelayEvent(raw: unknown): raw is ChannelEvent {
   if (typeof raw !== 'object' || raw === null) {
@@ -34,6 +37,7 @@ function isRelayEvent(raw: unknown): raw is ChannelEvent {
     (event.event === 'relayData' ||
       event.event === 'relayPending' ||
       event.event === 'relayInitialize' ||
+      event.event === 'relayAckWanted' ||
       event.event === 'relayExit')
   )
 }
@@ -147,6 +151,10 @@ export class ProviderRelayChannel {
     }
     if (event.event === 'relayExit') {
       sink.exit(event.payload)
+      return
+    }
+    if (event.event === 'relayAckWanted') {
+      sink.ackWanted()
       return
     }
     const { seq, line, more } = event.payload
