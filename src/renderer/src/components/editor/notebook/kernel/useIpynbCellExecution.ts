@@ -10,12 +10,8 @@ import {
   withIpynbCellIds
 } from '../document/ipynb-cell-mutations'
 import { toStoredOutputs } from './ipynb-kernel-outputs'
-import {
-  forgetFinishedRuns,
-  markRunCommitted,
-  runCells,
-  trustNotebook
-} from './ipynb-kernel-session'
+import { forgetFinishedRuns, markRunCommitted } from './ipynb-kernel-runs'
+import { runCells, trustNotebook } from './ipynb-kernel-session'
 import {
   getCellRun,
   getSession,

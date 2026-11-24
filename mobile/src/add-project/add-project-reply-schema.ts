@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import { salvagedOptional, salvagingArray } from '../../../src/shared/validation/zod-salvage'
 
 // Read only what the sheet shows or hands to New Workspace; the host list re-reads the full repo afterwards.
 const addedProjectSchema = z.looseObject({

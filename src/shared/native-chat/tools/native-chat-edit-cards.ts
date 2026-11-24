@@ -7,6 +7,7 @@ import { editFilesFromToolPair, isEditToolName } from './native-chat-edit-normal
 import type { NativeChatEditFile, NativeChatEditLine } from './native-chat-edit-model'
 import {
   editFilesFromPatchText,
+  nativeChatDiffChangedPaths,
   type NativeChatEditFileSummary
 } from './native-chat-edit-patch-files'
 import { pairToolBlocks } from './native-chat-tool-pairs'
@@ -95,8 +96,24 @@ const diffSummaries = new WeakMap<
   }
 >()
 
+const rowEditSummaries = new WeakMap<NativeChatBlock[], ReturnType<typeof deriveEditSummaries>>()
+
+export function buildEditSummaries(
+  blocks: NativeChatBlock[]
+): ReadonlyMap<
+  NativeChatToolCallBlock,
+  { files: NativeChatEditFileSummary[]; key: string; result: NativeChatToolResultBlock | undefined }
+> {
+  let summaries = rowEditSummaries.get(blocks)
+  if (!summaries) {
+    summaries = deriveEditSummaries(blocks)
+    rowEditSummaries.set(blocks, summaries)
+  }
+  return summaries
+}
+
 // Only the journal's path-only Diff envelope has counts that can be read without tool normalization.
-export function buildEditSummaries(blocks: NativeChatBlock[]): Map<
+function deriveEditSummaries(blocks: NativeChatBlock[]): Map<
   NativeChatToolCallBlock,
   {
     files: NativeChatEditFileSummary[]
@@ -130,8 +147,12 @@ export function buildEditSummaries(blocks: NativeChatBlock[]): Map<
       typeof input === 'object' &&
       'path' in input &&
       typeof input.path === 'string' &&
-      Object.keys(input).every((key) => key === 'path')
-        ? { output: result.output, path: input.path }
+      Object.keys(input).every((key) => key === 'path' || key === 'paths')
+        ? {
+            output: result.output,
+            path: input.path,
+            paths: 'paths' in input ? nativeChatDiffChangedPaths(input.paths) : null
+          }
         : undefined
     if (!journalDiff) {
       const files = normalizedToolEditFiles(call, result)
@@ -143,7 +164,7 @@ export function buildEditSummaries(blocks: NativeChatBlock[]): Map<
     const cached = diffSummaries.get(call)
     let files = cached && cached.result === result ? cached.files : undefined
     if (files === undefined) {
-      files = editFilesFromPatchText(journalDiff.output, journalDiff.path, true)
+      files = editFilesFromPatchText(journalDiff.output, journalDiff.path, true, journalDiff.paths)
       diffSummaries.set(call, { result, files })
     }
     if (files?.length) {

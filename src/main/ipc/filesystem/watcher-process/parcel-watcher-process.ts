@@ -1,11 +1,11 @@
-import { WatcherProcessSupervisor } from './parcel-watcher-process-supervisor'
+import { WatcherProcessSupervisor } from './supervision/parcel-watcher-process-supervisor'
 import type { WatcherProcessSubscribeOptions } from './parcel-watcher-process-protocol'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks,
   WatcherProcessSubscription
 } from './parcel-watcher-process-subscription'
-import { RuntimeWatcherProcessPool } from './runtime-watcher-process-pool'
+import { RuntimeWatcherProcessPool } from './runtime-pool/runtime-watcher-process-pool'
 
 const sharedWatcherProcessSupervisor = new WatcherProcessSupervisor()
 // Healthy roots share a child; quarantine adds isolation only after faults to limit RSS.
@@ -55,14 +55,6 @@ export async function disposeWatcherProcessAndWait(): Promise<void> {
   if (failures.length > 0) {
     throw new AggregateError(failures, 'watcher_process_shutdown_incomplete')
   }
-}
-
-export function resetWatcherProcessForTest(): void {
-  sharedWatcherProcessSupervisor.resetForTest()
-}
-
-export function resetRuntimeWatcherProcessForTest(): void {
-  runtimeWatcherProcessPool.resetForTest()
 }
 
 export function forgetRuntimeWatcherProcessRoot(rootPath: string): void {

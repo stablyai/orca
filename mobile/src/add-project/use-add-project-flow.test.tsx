@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import type { AddProjectRpcSender } from './add-project-operations'
-import type { RpcResponse } from '../transport/types'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { useAddProjectFlow, type AddProjectFlow } from './use-add-project-flow'
 
 type Handler = (params: unknown) => RpcResponse | Promise<RpcResponse>

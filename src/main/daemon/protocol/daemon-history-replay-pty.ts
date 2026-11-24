@@ -1,6 +1,6 @@
 import { release } from 'node:os'
 import { resolvePtyOwnerBackend } from '../../../shared/terminal/pty/lifecycle/pty-owner-backend'
-import { windowsPtyForOwnerBackend } from '../../../shared/xterm-conpty-options'
+import { windowsPtyForOwnerBackend } from '../../../shared/terminal/pty/native-process/xterm-conpty-options'
 
 /**
  * Reported in hello by a daemon whose live emulators resize like ConPTY (resizeLikeOwnPty), and

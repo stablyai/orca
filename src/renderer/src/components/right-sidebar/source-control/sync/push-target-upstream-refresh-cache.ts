@@ -2,7 +2,7 @@ import type {
   GitStatusResult,
   GitUpstreamStatus
 } from '../../../../../../shared/git/status/git-status-types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 
 const AUTOMATIC_PUSH_TARGET_UPSTREAM_REFRESH_TTL_MS = 60_000

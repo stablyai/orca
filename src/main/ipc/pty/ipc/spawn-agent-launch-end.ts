@@ -11,7 +11,7 @@ import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch/contr
 import type { RunningAgentLaunchPane } from '../../../agent-launch/agent-launch-pane-attachment'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { agentLaunchFailureCode } from '../../../runtime/rpc/methods/agent-launch-failure-code'
+import { agentLaunchFailureCode } from '../../../runtime/rpc/methods/agent-launch/agent-launch-failure-code'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export type PaneAgentLaunch = {

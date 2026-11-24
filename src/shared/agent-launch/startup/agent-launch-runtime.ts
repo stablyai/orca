@@ -1,9 +1,9 @@
-import type { ProjectExecutionRuntimeResolution } from '../../project-execution-runtime'
-import { isWindowsAbsolutePathLike } from '../../cross-platform-path'
-import type { LocalWindowsTerminalRuntimeOptions } from '../../local-windows-terminal-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../execution-host/project-execution-runtime'
+import { isWindowsAbsolutePathLike } from '../../file-access/cross-platform-path'
+import type { LocalWindowsTerminalRuntimeOptions } from '../../shell/launch/local-windows-terminal-runtime'
 import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
-import { resolveLocalWindowsAgentStartupShell } from '../../windows-terminal-shell'
-import { isWslUncPath } from '../../wsl-paths'
+import { resolveLocalWindowsAgentStartupShell } from '../../shell/launch/windows-terminal-shell'
+import { isWslUncPath } from '../../file-access/wsl-paths'
 
 /** Resolve command platform and actual PTY shell once on the execution host; in-memory only. */
 export type AgentLaunchRuntime = {

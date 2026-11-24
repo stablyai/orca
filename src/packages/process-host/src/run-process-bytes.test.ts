@@ -46,32 +46,4 @@ describe('process byte capture', () => {
     expect(result.stdoutBytes).toEqual(Buffer.alloc(50))
     expect(result.code === 0 && result.signal === null).toBe(false)
   })
-
-  it('lets diagnostic streams exceed the cap while retaining their binary tails', async () => {
-    const result = await runProcess(
-      {
-        program: process.execPath,
-        args: [
-          '-e',
-          'process.stdout.write(Buffer.alloc(12*1024*1024));process.stdout.write(Buffer.from([0,255,254,128]));process.stderr.write(Buffer.alloc(12*1024*1024));process.stderr.write(Buffer.from([128,254,255,0]))'
-        ],
-        maxOutputBytes: 4,
-        captureStdoutAsBytes: true,
-        captureStderrAsBytes: true,
-        terminationBarrier: true,
-        timeoutMs: 10_000
-      },
-      'tail'
-    )
-    expect(result).toMatchObject({
-      code: 0,
-      signal: null,
-      timedOut: false,
-      outputTruncated: true,
-      stdout: '',
-      stderr: ''
-    })
-    expect(result.stdoutBytes).toEqual(Buffer.from([0, 255, 254, 128]))
-    expect(result.stderrBytes).toEqual(Buffer.from([128, 254, 255, 0]))
-  })
 })

@@ -26,6 +26,8 @@ export function startControlFlagChannel<Flags>(input: {
   defaults: Flags
   parse: ControlFlagParse<Flags>
   appliedEvent: string
+  // Called once per applied generation, after it is logged; a throw is logged, never retried.
+  onApplied?: (applied: AppliedControlFlags<Flags>) => void
   fetch?: typeof fetch
   random?: () => number
   pollMs?: number
@@ -134,6 +136,17 @@ export function startControlFlagChannel<Flags>(input: {
     const { flags, ignoredKeys } = parsed
     applied = ignoredKeys.length > 0 ? { generation, flags, ignoredKeys } : { generation, flags }
     console.log(JSON.stringify({ event: input.appliedEvent, ...applied }))
+    try {
+      input.onApplied?.(applied)
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          event: 'orca_relay_control_flags_listener_failed',
+          object: input.objectName,
+          reason: error instanceof Error ? error.message : 'unknown'
+        })
+      )
+    }
   }
 
   const poll = (): Promise<void> => {

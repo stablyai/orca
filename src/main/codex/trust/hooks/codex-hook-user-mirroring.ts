@@ -1,20 +1,11 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { removeManagedCommands, type HookDefinition } from '../../../agent-hooks/installer-utils'
-import { readHooksJsonWithRaw } from '../../../agent-hooks/hooks-json-read'
-import {
-  writeLoadableHookTrustConfig,
-  type CodexEventLabel,
-  type CodexTrustEntry
-} from '../toml/config-toml-trust'
-import {
-  computeCodexTrustKey as computeTrustKey,
-  getExplicitHomeCodexHookSourcePath as getCodexExplicitHomeHookSourcePath,
-  parseCodexTrustKey as parseTrustKey
-} from '../identity/codex-trust-identity'
-import { escapeTomlBasicString as escapeTomlString } from '../../configuration/toml/config-toml-syntax'
+import { removeManagedCommands } from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
+import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { readHooksJsonWithRaw } from '../../../agent-hooks/installation/configuration/hooks-json-read'
+import type { CodexEventLabel, CodexTrustEntry } from '../toml/config-toml-trust'
+import { getExplicitHomeCodexHookSourcePath as getCodexExplicitHomeHookSourcePath } from '../identity/codex-trust-identity'
 import {
   createCodexHookTrustEntry,
-  getCodexHookTrustSignature
+  getCodexUserHookMirrorSignature
 } from '../../hooks/definitions/codex-hook-identity'
 import {
   CODEX_PLUGIN_ONLY_HOOK_PLACEHOLDERS,
@@ -131,7 +122,7 @@ function collectMirroredRuntimeUserHookTrustEntries(
         if (!entry) {
           return
         }
-        const signature = getCodexHookTrustSignature(entry)
+        const signature = getCodexUserHookMirrorSignature(entry)
         const state = trustedSystemHookSignatures.get(signature)
         if (state !== undefined) {
           entries.push({
@@ -158,54 +149,6 @@ export function moveMirroredRuntimeUserTrustAfterManagedStatusHook(
       enabled
     }
   })
-}
-
-function escapeRegex(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function buildHookTrustHeaderKeyPattern(key: string): string {
-  const keyVariants = [key]
-  const parsed = parseTrustKey(key)
-  if (parsed && /^[A-Za-z]:[\\/]|^\\\\/.test(parsed.sourcePath)) {
-    const suffix = `:${parsed.eventLabel}:${parsed.groupIndex}:${parsed.handlerIndex}`
-    keyVariants.push(
-      `${parsed.sourcePath.replace(/\\/g, '/')}${suffix}`,
-      `${parsed.sourcePath.replace(/\//g, '\\')}${suffix}`
-    )
-  }
-  const alternatives = [...new Set(keyVariants)].flatMap((variant) => {
-    const quoted = [`"${escapeRegex(escapeTomlString(variant))}"`]
-    if (!variant.includes("'")) {
-      // Codex/manual approval may use raw-backslash literal keys for either Windows path spelling.
-      quoted.push(`'${escapeRegex(variant)}'`)
-    }
-    return quoted
-  })
-  return `(?:${alternatives.join('|')})`
-}
-
-export function applyMirroredRuntimeUserHookTrustStates(
-  tomlPath: string,
-  entries: readonly MirroredRuntimeUserHookTrustEntry[]
-): void {
-  if (entries.length === 0 || !existsSync(tomlPath)) {
-    return
-  }
-
-  const existing = readFileSync(tomlPath, 'utf-8')
-  let updated = existing
-  for (const { entry, enabled } of entries) {
-    const headerKeyPattern = buildHookTrustHeaderKeyPattern(computeTrustKey(entry))
-    const pattern = new RegExp(
-      `(\\[hooks\\.state\\.${headerKeyPattern}\\]\\r?\\n[ \\t]*enabled[ \\t]*=[ \\t]*)(true|false)`,
-      'g'
-    )
-    updated = updated.replace(pattern, `$1${enabled}`)
-  }
-  if (updated !== existing) {
-    writeLoadableHookTrustConfig(tomlPath, existing, updated)
-  }
 }
 
 function dedupeHookDefinitions(definitions: readonly HookDefinition[]): HookDefinition[] {

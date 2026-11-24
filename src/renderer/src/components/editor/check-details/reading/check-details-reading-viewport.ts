@@ -1,4 +1,7 @@
-import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  scrollTopCache,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import { hasCheckReadingLayout } from '@/components/right-sidebar/checks-panel/logs/check-log-initial-diagnostic-position'
 import type { CheckDetailsReadingOwner } from './check-details-reading-owner'
 

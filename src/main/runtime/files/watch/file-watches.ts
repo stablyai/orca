@@ -10,8 +10,11 @@ import {
 } from '../file-target'
 import type { RuntimeFileCommandHost } from '../file-command-host'
 import { stat } from 'node:fs/promises'
-import type { DirEntry, FsChangeEvent } from '../../../../shared/filesystem-entry-types'
-import { sortDirEntries } from '../../../../shared/file-name-sort'
+import { resolve } from 'node:path'
+import { isPathOutsideAllowedDirectoriesError } from '../../../../shared/file-access/local-file-access'
+import type { DirEntry } from '../../../../shared/file-listing/directory-entry'
+import type { FsChangeEvent } from '../../../../shared/file-watch/filesystem-change-event'
+import { sortDirEntries } from '../../../../shared/file-listing/file-name-sort'
 import { resolveAuthorizedPath } from '../../../ipc/filesystem/access/filesystem-auth'
 import { resolveRuntimeAuthorizedPath } from '../chat-scratch-file-root'
 import { WindowsRuntimeWatchPool } from './windows-runtime-watch-pool'
@@ -19,7 +22,7 @@ import { beginWatcherInstall } from '../../../workspaces/removal/watcher-removal
 import {
   closeFileExplorerWatcherInWatcherProcess,
   watchFileExplorerInWatcherProcess
-} from '../../file-watcher-host'
+} from './file-watcher-host'
 
 type RuntimeFileWatchHost = Pick<
   RuntimeFileCommandHost,
@@ -99,7 +102,16 @@ export class RuntimeFileWatches {
     // Windows watches in-process, so only the leases above exist; Git may already have revoked the path.
     if (!connectionId && process.platform !== 'win32') {
       // Failed setup may still own a child without having published a lease-release callback.
-      const resolvedRootPath = await resolveAuthorizedPath(rootPath, this.host.requireStore())
+      // Closing only looks up existing watches, so a revoked path still closes.
+      const resolvedRootPath = await resolveAuthorizedPath(
+        rootPath,
+        this.host.requireStore()
+      ).catch((error: unknown) => {
+        if (!isPathOutsideAllowedDirectoriesError(error)) {
+          throw error
+        }
+        return resolve(rootPath)
+      })
       await closeFileExplorerWatcherInWatcherProcess(resolvedRootPath)
     }
   }

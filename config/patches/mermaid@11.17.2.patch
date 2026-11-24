@@ -1,0 +1,28 @@
+diff --git a/dist/chunks/mermaid.core/chunk-GMAD6QVW.mjs b/dist/chunks/mermaid.core/chunk-GMAD6QVW.mjs
+index 99dd1942086bd11492ebeb3672a1e57b41d20e77..0df104fc4c880695e18e9cca9f038beab8cf873f 100644
+--- a/dist/chunks/mermaid.core/chunk-GMAD6QVW.mjs
++++ b/dist/chunks/mermaid.core/chunk-GMAD6QVW.mjs
+@@ -485,7 +485,8 @@ async function addHtmlSpan(element, node, width, classes, addBackground = false,
+     div.attr("class", "labelBkg");
+   }
+   const bbox = await fastdom_default.measure(() => div.node().getBoundingClientRect());
+-  if (bbox.width === width) {
++  // Fractional zoom rounds a label clamped to max-width a fraction of a pixel off width.
++  if (Math.abs(bbox.width - width) < 0.5) {
+     div.style("display", "table");
+     div.style("white-space", "break-spaces");
+     div.style("width", width + "px");
+diff --git a/dist/chunks/mermaid.esm/chunk-LBQO3HYP.mjs b/dist/chunks/mermaid.esm/chunk-LBQO3HYP.mjs
+index d36a9de8f147ec1a312aa61032c11cc99a58751e..ecd1535d9aced06edbfca6e48290aa033df96ca1 100644
+--- a/dist/chunks/mermaid.esm/chunk-LBQO3HYP.mjs
++++ b/dist/chunks/mermaid.esm/chunk-LBQO3HYP.mjs
+@@ -1917,7 +1917,8 @@ async function addHtmlSpan(element, node, width, classes, addBackground = false,
+     div.attr("class", "labelBkg");
+   }
+   const bbox = await fastdom_default.measure(() => div.node().getBoundingClientRect());
+-  if (bbox.width === width) {
++  // Fractional zoom rounds a label clamped to max-width a fraction of a pixel off width.
++  if (Math.abs(bbox.width - width) < 0.5) {
+     div.style("display", "table");
+     div.style("white-space", "break-spaces");
+     div.style("width", width + "px");

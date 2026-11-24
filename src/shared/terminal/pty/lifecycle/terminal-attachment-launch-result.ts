@@ -5,7 +5,7 @@ import type {
 } from '../../../agent-session/lifecycle/agent-session-resume'
 import { isTuiAgent } from '../../../agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
-import { ResumeProviderSessionParam } from '../../../rpc-contract/terminal-unary-params'
+import { ResumeProviderSessionParam } from '../../../rpc-contract/terminal/terminal-unary-params'
 import { sleepingAgentLaunchConfigBaseSchema } from '../../../workspace-session/workspace-session-sleeping-agents'
 
 /** A launch recipe for a pane the window was not shown; the reveal otherwise carries it. */

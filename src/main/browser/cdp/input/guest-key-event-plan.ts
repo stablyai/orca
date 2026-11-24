@@ -79,7 +79,7 @@ function electronModifiers(mask: unknown): ElectronModifier[] {
   return CDP_MODIFIER_NAMES.filter(([bit]) => (bits & bit) !== 0).map(([, name]) => name)
 }
 
-// Blink drops control characters from char events; use the fallback to preserve them.
+// Blink drops control characters from char events.
 function typeableText(text: unknown): text is string {
   return (
     typeof text === 'string' &&
@@ -145,8 +145,4 @@ export function planCdpKeyEvent(params: Record<string, unknown>): GuestKeyPlan |
       ? [{ type: 'char', keyCode: '\r', modifiers, skipIfUnhandled: true }]
       : []
   return { events: [event, ...enterChar], commands }
-}
-
-export function planInsertText(text: unknown): GuestKeyboardEvent[] | null {
-  return typeableText(text) ? charEvents(text, []) : null
 }

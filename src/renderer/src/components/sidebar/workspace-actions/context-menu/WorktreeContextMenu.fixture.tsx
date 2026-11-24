@@ -1,6 +1,8 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import type { Repo } from '../../../../../../shared/repo-types'
+import { ConfirmationDialogProvider } from '../../../dismiss/confirmation/confirmation-dialog'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import WorktreeContextMenu from './WorktreeContextMenu'
 
 const repo: Repo = {
@@ -33,21 +35,52 @@ const worktree: Worktree = {
   lastActivityAt: 1
 }
 
-function menuFixture(fixtureRepo: Repo, fixtureWorktree: Worktree = worktree) {
+const childWorktree: Worktree = {
+  ...worktree,
+  id: 'orca::/preview/orca/release-notes',
+  instanceId: 'release-notes-instance',
+  path: '/preview/orca/release-notes',
+  displayName: 'Write release notes',
+  branch: 'release-notes'
+}
+
+function menuFixture(
+  fixtureRepo: Repo,
+  fixtureWorktree: Worktree = worktree,
+  extra: { children?: Worktree[]; projectGroups?: ProjectGroup[] } = {}
+) {
+  const children = extra.children ?? []
   return defineFixture({
-    width: 360,
+    width: extra.projectGroups ? 720 : 360,
     store: {
       repos: [fixtureRepo],
-      worktreesByRepo: { [fixtureRepo.id]: [fixtureWorktree] }
+      projectGroups: extra.projectGroups ?? [],
+      worktreesByRepo: { [fixtureRepo.id]: [fixtureWorktree, ...children] },
+      worktreeLineageById: Object.fromEntries(
+        children.map((child) => [
+          child.id,
+          {
+            worktreeId: child.id,
+            worktreeInstanceId: child.instanceId ?? '',
+            parentWorktreeId: fixtureWorktree.id,
+            parentWorktreeInstanceId: fixtureWorktree.instanceId ?? '',
+            origin: 'manual' as const,
+            capture: { source: 'manual-action' as const, confidence: 'explicit' as const },
+            createdAt: 1
+          }
+        ])
+      )
     },
     render: () => (
-      <div className="h-[640px] bg-background p-4 text-foreground">
-        <WorktreeContextMenu worktree={fixtureWorktree}>
-          <div className="text-sm">Prepare the release</div>
-        </WorktreeContextMenu>
-      </div>
+      <ConfirmationDialogProvider>
+        <div className="h-[640px] bg-background p-4 text-foreground">
+          <WorktreeContextMenu worktree={fixtureWorktree}>
+            <div className="text-sm">Prepare the release</div>
+          </WorktreeContextMenu>
+        </div>
+      </ConfirmationDialogProvider>
     ),
-    interact: (frame) => {
+    interact: async (frame) => {
       frame.querySelector('[data-worktree-context-menu-scope]')?.dispatchEvent(
         new MouseEvent('contextmenu', {
           bubbles: true,
@@ -56,11 +89,52 @@ function menuFixture(fixtureRepo: Repo, fixtureWorktree: Worktree = worktree) {
           clientY: 40
         })
       )
+      if (extra.projectGroups) {
+        await new Promise(requestAnimationFrame)
+        const trigger = Array.from(
+          frame.ownerDocument.querySelectorAll<HTMLElement>(
+            '[data-slot="dropdown-menu-sub-trigger"]'
+          )
+        ).find((item) => item.textContent === 'Project Group')
+        trigger?.focus()
+        trigger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+      }
     }
   })
 }
 
 export const open = menuFixture(repo)
+export const primaryCheckout = menuFixture(repo, { ...worktree, isMainWorktree: true })
+export const primaryCheckoutDeleteTooltip = defineFixture({
+  ...primaryCheckout,
+  width: 480,
+  interact: async (frame) => {
+    await primaryCheckout.interact?.(frame)
+    await new Promise(requestAnimationFrame)
+    const item = Array.from(
+      frame.ownerDocument.querySelectorAll<HTMLElement>('[role="menuitem"]')
+    ).find((entry) => entry.textContent === 'Delete Worktree')
+    item?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }))
+    await new Promise((resolve) => setTimeout(resolve, 700))
+  }
+})
+export const withChild = menuFixture(repo, worktree, { children: [childWorktree] })
+const projectGroups: ProjectGroup[] = ['Releases', 'Experiments'].map((name, index) => ({
+  id: name.toLowerCase(),
+  name,
+  parentPath: null,
+  parentGroupId: null,
+  createdFrom: 'manual',
+  tabOrder: index,
+  isCollapsed: false,
+  color: null,
+  createdAt: 1,
+  updatedAt: 1
+}))
+export const groupedProject = menuFixture({ ...repo, projectGroupId: 'releases' }, worktree, {
+  projectGroups
+})
+export const ungroupedProject = menuFixture(repo, worktree, { projectGroups })
 export const folderProject = menuFixture({ ...repo, kind: 'folder' })
 export const folderWorkspace = menuFixture(repo, { ...worktree, id: 'folder:release' })
 export const recipeVm = menuFixture(
@@ -71,3 +145,28 @@ export const ssh = menuFixture(
   { ...repo, connectionId: 'preview' },
   { ...worktree, hostId: 'ssh:preview' }
 )
+
+function vmMenuFixture(status: 'running' | 'suspended' | 'resume_failed', waking = false) {
+  const fixture = menuFixture(repo)
+  return defineFixture({
+    ...fixture,
+    store: {
+      ...fixture.store,
+      ephemeralVmRuntimesByWorkspaceId: {
+        [worktree.id]: {
+          id: 'vm-1',
+          workspaceId: worktree.id,
+          status,
+          runtimeEnvironmentId: 'vm',
+          canSuspend: true
+        }
+      },
+      wakingEphemeralVmWorkspaceIds: waking ? { [worktree.id]: true } : {}
+    }
+  })
+}
+
+export const vmRunning = vmMenuFixture('running')
+export const vmSuspended = vmMenuFixture('suspended')
+export const vmResumeFailed = vmMenuFixture('resume_failed')
+export const vmWaking = vmMenuFixture('suspended', true)

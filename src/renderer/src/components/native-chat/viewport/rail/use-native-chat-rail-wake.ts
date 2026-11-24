@@ -1,0 +1,77 @@
+import { useCallback, useRef } from 'react'
+import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
+const NATIVE_CHAT_RAIL_WAKE_MS = 300
+const NATIVE_CHAT_RAIL_SUSTAIN_MS = 1500
+/** Scrolling the transcript keeps an awake rail lit; `onScroll` is the transcript's own handler. */
+export function useNativeChatRailWake(onScroll: (event: React.UIEvent<HTMLDivElement>) => void): {
+  railRef: React.RefObject<HTMLDivElement | null>
+  wake: () => void
+  onScroll: (event: React.UIEvent<HTMLDivElement>) => void
+} {
+  const railRef = useRef<HTMLDivElement | null>(null)
+  const awakeRail = useRef<HTMLDivElement | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sleepAt = useRef(0)
+  const sustainUntil = useRef(0)
+
+  const wake = useCallback(() => {
+    const now = performance.now()
+    sleepAt.current = now + NATIVE_CHAT_RAIL_WAKE_MS
+    sustainUntil.current = now + NATIVE_CHAT_RAIL_SUSTAIN_MS
+    const rail = railRef.current
+    if (rail && !('awake' in rail.dataset)) {
+      rail.dataset.awake = ''
+    }
+    if (rail) {
+      awakeRail.current = rail
+    }
+    if (timer.current !== null) {
+      return
+    }
+    const settle = (): void => {
+      const remaining = sleepAt.current - performance.now()
+      if (remaining > 0) {
+        timer.current = setTimeout(settle, remaining)
+        return
+      }
+      timer.current = null
+      if (awakeRail.current) {
+        delete awakeRail.current.dataset.awake
+        awakeRail.current = null
+      }
+    }
+    timer.current = setTimeout(settle, NATIVE_CHAT_RAIL_WAKE_MS)
+  }, [])
+
+  const sustain = useCallback(() => {
+    if (timer.current === null) {
+      return
+    }
+    const now = performance.now()
+    if (now < sustainUntil.current) {
+      sleepAt.current = now + NATIVE_CHAT_RAIL_WAKE_MS
+    }
+  }, [])
+
+  const onTranscriptScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      onScroll(event)
+      sustain()
+    },
+    [onScroll, sustain]
+  )
+
+  useNativeChatPaneLifetimeEffect(
+    useCallback(
+      () => () => {
+        if (timer.current !== null) {
+          clearTimeout(timer.current)
+        }
+        awakeRail.current = null
+      },
+      []
+    )
+  )
+
+  return { railRef, wake, onScroll: onTranscriptScroll }
+}

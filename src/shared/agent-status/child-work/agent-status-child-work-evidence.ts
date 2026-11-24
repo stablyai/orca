@@ -27,6 +27,8 @@ export type AgentChildWorkLiveObservation = {
   name?: string
   description?: string
   agentType?: string
+  model?: string
+  effort?: string
   totalTokens?: number
   /** `null`: the operation that was open has ended. Absent: this edge says nothing about it. */
   operation?: AgentChildWorkOperation | null
@@ -52,6 +54,8 @@ export type AgentChildWorkOperationEvidence = {
   childId: string
   /** `null`: the call it had open has ended. */
   operation: AgentChildWorkOperation | null
+  /** The model the child's own message ran on. */
+  model?: string
 }
 
 /** The child's own terminal frame. `unknown` is an ending whose status the provider did not say. */

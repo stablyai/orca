@@ -1,0 +1,69 @@
+import { runKeyedSerializedOperation } from '../../../../shared/concurrency/keyed-serialized-operations'
+import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+
+export class StructuredAgentSessionTaskQueue {
+  private readonly chains = new Map<string, Promise<void>>()
+  private readonly attaching = new Set<Promise<unknown>>()
+  private readonly pendingLocations = new Map<
+    Promise<unknown>,
+    {
+      sessionId: string
+      location: AgentSessionExecutionLocation
+    }
+  >()
+
+  serialize<T>(sessionId: string, task: () => Promise<T>): Promise<T> {
+    return runKeyedSerializedOperation(this.chains, sessionId, task)
+  }
+
+  /** Own preparation through founding separately from the destination's journal mutations. */
+  serializeCreateIntent<T>(
+    callerKey: string,
+    envelope: { sessionId: string; clientOperationId: string },
+    run: () => Promise<T>
+  ): Promise<T> {
+    return this.serialize(
+      JSON.stringify(['create-intent', callerKey, envelope.sessionId, envelope.clientOperationId]),
+      run
+    )
+  }
+
+  trackAttach<T>(
+    operation: Promise<T>,
+    pending?: { sessionId: string; location: AgentSessionExecutionLocation }
+  ): Promise<T> {
+    this.attaching.add(operation)
+    if (pending) {
+      this.pendingLocations.set(operation, pending)
+    }
+    void operation.then(
+      () => this.finishAttach(operation),
+      () => this.finishAttach(operation)
+    )
+    return operation
+  }
+
+  private finishAttach(operation: Promise<unknown>): void {
+    this.attaching.delete(operation)
+    this.pendingLocations.delete(operation)
+  }
+
+  pendingMembers(workspaceId: string, executionHostId: string): string[] {
+    return [...this.pendingLocations.values()]
+      .filter(
+        ({ location }) =>
+          location.workspaceId === workspaceId && location.executionHostId === executionHostId
+      )
+      .map(({ sessionId }) => sessionId)
+  }
+
+  hasPendingAttach(sessionId: string): boolean {
+    return [...this.pendingLocations.values()].some((pending) => pending.sessionId === sessionId)
+  }
+
+  async drainAttaches(): Promise<void> {
+    while (this.attaching.size > 0) {
+      await Promise.allSettled(this.attaching)
+    }
+  }
+}

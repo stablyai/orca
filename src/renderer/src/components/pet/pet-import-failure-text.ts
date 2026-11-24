@@ -1,12 +1,13 @@
 import { translate } from '@/i18n/i18n'
-import type { CustomPet } from '../../../../shared/pet-types'
+import type { Translate } from '@/i18n/use-translate'
+import type { CustomPet } from '../../../../shared/pets/pet-types'
 import {
   CUSTOM_PET_DEFAULT_LABEL,
   PET_BUNDLE_DEFAULT_LABEL,
   PET_IMPORT_FAILURE_COPY as EN,
   type PetImportFailure,
   type PetImportFailureCode
-} from '../../../../shared/pet-import-failure-copy'
+} from '../../../../shared/pets/pet-import-failure-copy'
 
 type Values = {
   text: (name: string) => string | null
@@ -144,13 +145,16 @@ export function petImportFailureText(failure: PetImportFailure): string {
 }
 
 /** Default names are stored in English; show them in the UI language. */
-export function customPetLabel(pet: Pick<CustomPet, 'label' | 'kind'>): string {
+export function customPetLabel(
+  pet: Pick<CustomPet, 'label' | 'kind'>,
+  t: Translate = translate
+): string {
   if (pet.kind === 'bundle') {
     return pet.label === PET_BUNDLE_DEFAULT_LABEL
-      ? translate('pet.defaultLabels.bundle', PET_BUNDLE_DEFAULT_LABEL)
+      ? t('pet.defaultLabels.bundle', PET_BUNDLE_DEFAULT_LABEL)
       : pet.label
   }
   return pet.label === CUSTOM_PET_DEFAULT_LABEL
-    ? translate('pet.defaultLabels.image', CUSTOM_PET_DEFAULT_LABEL)
+    ? t('pet.defaultLabels.image', CUSTOM_PET_DEFAULT_LABEL)
     : pet.label
 }

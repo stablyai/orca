@@ -96,6 +96,7 @@ async function retained(count, bytes, offset) {
 for (let id = 0; id < 3; id++) {
   await cold(id + 1, 128 * 1024)
 }
+assert.equal(host.downloadCount(), 3, 'Cold downloads bypassed the generated gh fixture')
 host.prCheckLogTailCache.clear()
 const pinnedBefore = memory()
 let pinned = Array.from({ length: 8 }, (_, index) => parent(8 * mib, index).slice(-limit))

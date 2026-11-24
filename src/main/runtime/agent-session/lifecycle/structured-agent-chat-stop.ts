@@ -1,4 +1,4 @@
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 /** Stop every running chat child for this agent, rejecting unless all are proven gone; chats remain and next send restarts them. */
 export async function stopStructuredAgentChats(agent: string, label: string): Promise<void> {
@@ -14,4 +14,10 @@ export async function stopStructuredAgentChats(agent: string, label: string): Pr
   if (stillLoaded || closes.some((close) => close.status === 'rejected')) {
     throw new Error(`Not every ${label} chat on this host could be stopped. Try again.`)
   }
+}
+
+/** How many chats of `agent` hold a running child that a stop would end. */
+export function countStructuredAgentChats(agent: string): number {
+  const host = getStructuredAgentSessionHost()
+  return host ? host.loadedSessionIds().filter((id) => host.sessionAgent(id) === agent).length : 0
 }

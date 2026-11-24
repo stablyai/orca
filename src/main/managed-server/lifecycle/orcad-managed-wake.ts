@@ -11,7 +11,7 @@ import {
 import { orcadLivenessProvenExited } from '../install/orcad-remote-launch'
 import { readBoundedOrcadRemoteRecord } from '../install/orcad-remote-record-file'
 import { orcadActivationFenceLockDir } from '../activation/orcad-activation-transaction'
-import { joinRemotePath } from '../../ssh/ssh-remote-platform'
+import { joinRemotePath } from '../../ssh/remote-host/ssh-remote-platform'
 
 import { readOrcadActivationTransaction } from '../activation/orcad-activation-transaction-store'
 import {
@@ -24,7 +24,7 @@ import {
   resolveOrcadSlotIdentity,
   slotLiveness,
   type OrcadSlotOptions
-} from '../../ssh/orcad-recovery-slot'
+} from '../activation/orcad-recovery-slot'
 
 type OrcadManagedWake =
   | { outcome: 'serving' | 'not-activated' | 'unverifiable' }

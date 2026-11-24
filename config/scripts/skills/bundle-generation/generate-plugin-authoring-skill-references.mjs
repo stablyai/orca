@@ -208,12 +208,15 @@ function hookLines({ hooks, hookContribution, typeText }) {
 
 function renderHostApi(sources, { frame, worker }) {
   const { hostApi, hostDoc, capabilities } = sources
-  const names = hostApi.PLUGIN_HOST_METHOD_NAMES
+  const names = hostApi.PLUGIN_STABLE_HOST_METHOD_NAMES
   const methodsFor = (surface) => hostApi.pluginHostMethodsFor(surface).map(code).join(', ')
   const methods = names.map((name) => {
     const spec = hostApi.PLUGIN_HOST_API[name]
     const facts = [
       spec.capability ? `capability ${code(spec.capability)}` : 'no capability',
+      ...Object.entries(spec.paramCapabilities ?? {}).map(
+        ([param, kind]) => `${code(param)} also needs ${code(kind)}`
+      ),
       spec.surfaces.join(', '),
       `since ${hostVersion(sources, spec.since)}`,
       ...(spec.deprecatedSince === undefined
@@ -255,7 +258,7 @@ function renderHostApi(sources, { frame, worker }) {
       [
         '## Theme variables in frames',
         '',
-        "HTML panels and custom editors get these CSS variables from Orca's active theme, plus a `light` or `dark` class on `<html>`. A theme change updates them in place and emits `theme` (`orca.on('theme', ...)`); the frame is not reloaded. Style from them, not fixed colours.",
+        "HTML panels and custom editors get these CSS variables from Orca's active theme and fonts, plus a `light` or `dark` class on `<html>`. A theme or font change updates them in place and emits `theme` (`orca.on('theme', ...)`); the frame is not reloaded. Style from them, not fixed colours.",
         '',
         ...sources.themeTokens.pluginFrameThemeVariables().map(({ variable, paints }) => {
           // Name the frame's own variables, not the app theme tokens behind them.
@@ -299,7 +302,7 @@ function renderEvents({ events, eventContribution, typeText }, { services, frame
   const { REFERENCE_TYPE_TEXT, zodTypeText } = typeText
   const workerEvents = eventContribution.PLUGIN_EVENT_NAMES.map(
     (name) =>
-      `- ${code(name)} (capability ${code(eventContribution.PLUGIN_EVENT_CAPABILITY[name])}; since ${eventContribution.PLUGIN_EVENT_SINCE[name]}): ${events.PLUGIN_EVENT_SUMMARIES[name]}\n  ${code(zodTypeText(events.PLUGIN_EVENT_PAYLOAD_SCHEMAS[name], 'output', REFERENCE_TYPE_TEXT))}`
+      `- ${code(name)} (${eventContribution.PLUGIN_EVENT_CAPABILITY[name] ? `capability ${code(eventContribution.PLUGIN_EVENT_CAPABILITY[name])}` : 'no capability'}; since ${eventContribution.PLUGIN_EVENT_SINCE[name]}): ${events.PLUGIN_EVENT_SUMMARIES[name]}\n  ${code(zodTypeText(events.PLUGIN_EVENT_PAYLOAD_SCHEMAS[name], 'output', REFERENCE_TYPE_TEXT))}`
   )
   return document(
     'Events',

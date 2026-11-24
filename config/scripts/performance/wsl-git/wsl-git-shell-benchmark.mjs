@@ -129,7 +129,7 @@ async function main() {
   const distro = await resolveDistro(options.distro)
   const jiti = createJiti(import.meta.url)
   const { buildWslLoginShellCommand } = await jiti.import(
-    '../../../../src/shared/wsl-login-shell-command.ts'
+    '../../../../src/shared/shell/wsl/wsl-login-shell-command.ts'
   )
   const { quotePosixShell } = await jiti.import(
     '../../../../src/shared/shell/launch/shell-argument-quoting.ts'
@@ -325,8 +325,10 @@ async function main() {
       '--untracked-files=all'
     ]
     const [{ gitExecFileAsync }, { getWslGitReadEnvironment }, expected] = await Promise.all([
-      jiti.import('../../../../src/main/git/runner.ts'),
-      jiti.import('../../../../src/main/git/wsl-git-read-environment.ts'),
+      jiti.import('../../../../src/main/git/command-runner/git-exec-file.ts'),
+      jiti.import(
+        '../../../../src/main/git/command-runner/host-routing/wsl-git-read-environment.ts'
+      ),
       runGit('fast', repo, args)
     ])
     await getWslGitReadEnvironment(distro)

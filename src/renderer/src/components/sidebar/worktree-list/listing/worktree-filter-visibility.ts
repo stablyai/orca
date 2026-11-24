@@ -1,15 +1,16 @@
 import { useAppStore } from '@/store'
-import { getRepoMapFromState } from '@/store/selectors'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import {
   getSettingsFocusedExecutionHostId,
   getWorktreeExecutionHostId,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import './visible-worktrees'
 import { computeVisibleWorktrees } from './compute-visible-worktrees'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** Check filters without collapse/order elision; a known host must match so a visible twin cannot qualify another host. */
 export function worktreePassesSidebarFilters(
@@ -17,13 +18,13 @@ export function worktreePassesSidebarFilters(
   executionHostId?: ExecutionHostId
 ): boolean {
   const state = useAppStore.getState()
-  const repoMap = getRepoMapFromState(state)
+  const repoMap = getIndexedRepoMap(state.repos)
   const requestedHostId = executionHostId ? normalizeExecutionHostId(executionHostId) : null
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
   return computeVisibleWorktrees(
     selectWorktreesByRepo(state),
     [],
-    buildVisibleWorktreeOptionsFromState(state, repoMap)
+    buildVisibleWorktreeOptionsFromState(state, readRuntimeStatuses(), repoMap)
   ).some((worktree) => {
     if (worktree.id !== worktreeId) {
       return false

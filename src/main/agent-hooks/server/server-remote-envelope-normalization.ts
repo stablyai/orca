@@ -1,5 +1,10 @@
 import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
+  isTurnEndDisposition,
+  type HostTurnEndFacts
+} from '../../../shared/agent-status/contracts/agent-status-types'
+import { isTurnEndedAt } from '../../../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
+import {
   normalizeClaudePromptId,
   normalizeGrokPromptId
 } from '../../../shared/agent-hook-listener/listener-limits'
@@ -27,6 +32,7 @@ export type RemoteAgentStatusEnvelope = {
   source?: unknown
   providerPromptId?: unknown
   grokPromptBoundary?: unknown
+  opensTurn?: unknown
   compactTrigger?: unknown
   toolUseId?: string
   claudeSettledRequests?: unknown
@@ -53,6 +59,9 @@ export type RemoteEnvelopeFields = {
   source?: AgentHookSource
   providerPromptId?: string
   grokPromptBoundary?: true
+  opensTurn?: true
+  /** The execution host's turn-end facts, validated. */
+  hostTurnEnd: HostTurnEndFacts
   compactTrigger?: 'manual' | 'auto'
   worktreeId?: string
   promptInteractionKey?: string
@@ -69,6 +78,9 @@ export function normalizeRemoteEnvelopeFields(envelope: {
   source?: unknown
   providerPromptId?: unknown
   grokPromptBoundary?: unknown
+  opensTurn?: unknown
+  turnEndedAt?: unknown
+  turnEndDisposition?: unknown
   compactTrigger?: unknown
   worktreeId?: string
   promptInteractionKey?: string
@@ -95,6 +107,16 @@ export function normalizeRemoteEnvelopeFields(envelope: {
           : undefined,
     grokPromptBoundary:
       source === 'grok' && envelope.grokPromptBoundary === true ? true : undefined,
+    opensTurn:
+      source === 'claude' && envelope.opensTurn === true && envelope.isReplay !== true
+        ? true
+        : undefined,
+    hostTurnEnd: {
+      ...(isTurnEndedAt(envelope.turnEndedAt) ? { turnEndedAt: envelope.turnEndedAt } : {}),
+      ...(isTurnEndDisposition(envelope.turnEndDisposition)
+        ? { turnEndDisposition: envelope.turnEndDisposition }
+        : {})
+    },
     compactTrigger:
       source === 'claude' &&
       (envelope.compactTrigger === 'manual' || envelope.compactTrigger === 'auto')

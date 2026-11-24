@@ -1,0 +1,231 @@
+import { retireRemovedNativeChatTabs } from '@/components/native-chat/session/native-chat-removed-tab-retirement'
+import {
+  markStructuredAgentSessionLaunchesPublished,
+  publishedStructuredSessions
+} from '@/lib/agent-session/launch/structured-agent-session-launch-publication'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { AppState } from '../../../store/types'
+import { useAppStore } from '../../../store/index'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import {
+  pickHostTurnEnd,
+  pickParsedAgentStatusPayload,
+  type TurnEndDisposition
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
+import { normalizeTurnCompletedAtField } from '../../../../../shared/agent-status/contracts/agent-status-field-normalization'
+import { isSeenHostReplay } from '@/hooks/ipc-events/agent-status/agent-status-routing'
+import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/agent-status/renderer-owned-agent-status-registry'
+import { observeAgentHookCompletionForNotification } from '@/components/terminal-pane/agent-completion/hook-lane/agent-hook-completion-notifications'
+import { remapHostAgentStatus } from '../agent-status/agent-status-primitives'
+import { agentStatusEntryEqual } from './state-equality-core'
+import {
+  HOST_WORKING_CLIENT_BOUNDARY_LIMIT,
+  hostWorkingClientBoundaryByPaneKey,
+  type WebSessionTabsSyncState
+} from '../state'
+import { markHostMirrorPatchFullResync } from './scoped-patch-annotation'
+import { reportVisibleTabPickToHost } from '../navigation/web-session-visible-tab-pick-report'
+import {
+  createHostSessionMirrorSettle,
+  type HostSessionMirrorPatchVerdict,
+  type HostSessionMirrorSettle
+} from '../hydration/mirror-settle'
+import { recordAgentFinishDropped } from '@/attention/agent-finish-drop-breadcrumb'
+
+/** Commit a reconciliation patch and return a receipt for its host evidence. */
+export function applyWebSessionTabsStorePatch(
+  buildPatch: (
+    state: AppState,
+    changedAgentPaneKeys: Set<string>
+  ) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>,
+  hostMirrorVerdict: HostSessionMirrorPatchVerdict,
+  agentStatusSnapshots?: RuntimeMobileSessionTabsResult | readonly RuntimeMobileSessionTabsResult[],
+  allowCompletionNotification = false,
+  affectedWorkspaces = hostMirrorVerdict.frames
+    .filter(({ decision }) => decision.apply)
+    .map(({ worktreeId }) => worktreeId)
+): HostSessionMirrorSettle {
+  let mirroredAgentStatusChanged = false
+  const acceptedNotificationStatuses: {
+    paneKey: string
+    worktreeId: string
+    seedOnly?: true
+    payload: ReturnType<typeof pickParsedAgentStatusPayload> & {
+      stateStartedAt: number
+      turnEndedAt?: number
+      turnEndDisposition?: TurnEndDisposition
+      localStateStartedAt?: number
+    }
+  }[] = []
+
+  const runStorePatch = (
+    state: AppState,
+    changedAgentPaneKeys: Set<string>
+  ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> => {
+    const patch = buildPatch(state, changedAgentPaneKeys)
+    markHostMirrorPatchFullResync(state, patch)
+    mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
+    if (agentStatusSnapshots) {
+      const nextAgentStatuses = patch.agentStatusByPaneKey ?? state.agentStatusByPaneKey
+      const snapshots = Array.isArray(agentStatusSnapshots)
+        ? agentStatusSnapshots
+        : [agentStatusSnapshots]
+      for (const snapshot of snapshots) {
+        for (const surface of snapshot.tabs) {
+          if (surface.type !== 'terminal') {
+            continue
+          }
+          const remapped = remapHostAgentStatus(surface, snapshot.worktree)
+          const accepted = remapped ? nextAgentStatuses.get(remapped.paneKey) : undefined
+          const turnCompletedAt = remapped
+            ? normalizeTurnCompletedAtField(surface.turnCompletedAt, remapped.state)
+            : undefined
+          if (remapped?.state === 'done' && turnCompletedAt === undefined) {
+            hostWorkingClientBoundaryByPaneKey.delete(remapped.paneKey)
+          }
+          // Client OSC owns display state; the host hook stream carries background-turn stamps.
+          const clientOwnedNotification = Boolean(
+            remapped &&
+            isClientAuthoritativeAgentStatusPane(remapped.paneKey) &&
+            (remapped.state === 'working' || turnCompletedAt !== undefined)
+          )
+          if (
+            !remapped ||
+            (!clientOwnedNotification &&
+              (!accepted ||
+                accepted === state.agentStatusByPaneKey.get(remapped.paneKey) ||
+                !agentStatusEntryEqual(accepted, remapped)))
+          ) {
+            continue
+          }
+          const notificationStatus = clientOwnedNotification ? remapped : accepted
+          // Why: an unverifiable `done` restates an earlier turn or none, never a completion.
+          if (!notificationStatus) {
+            continue
+          }
+          if (notificationStatus.state === 'done' && notificationStatus.restoredUnconfirmed) {
+            recordAgentFinishDropped('restored-unconfirmed', {
+              workspaceId: notificationStatus.worktreeId ?? snapshot.worktree,
+              paneKey: notificationStatus.paneKey
+            })
+            continue
+          }
+          const currentClientStateStartedAt = clientOwnedNotification
+            ? state.agentStatusByPaneKey.get(notificationStatus.paneKey)?.stateStartedAt
+            : undefined
+          let localStateStartedAt = currentClientStateStartedAt
+          if (
+            clientOwnedNotification &&
+            notificationStatus.state === 'working' &&
+            currentClientStateStartedAt !== undefined
+          ) {
+            if (turnCompletedAt === undefined) {
+              const retainedBoundary = hostWorkingClientBoundaryByPaneKey.get(
+                notificationStatus.paneKey
+              )
+              if (
+                !retainedBoundary ||
+                retainedBoundary.hostStateStartedAt !== notificationStatus.stateStartedAt ||
+                retainedBoundary.hostPrompt !== notificationStatus.prompt ||
+                retainedBoundary.stamped
+              ) {
+                hostWorkingClientBoundaryByPaneKey.delete(notificationStatus.paneKey)
+                hostWorkingClientBoundaryByPaneKey.set(notificationStatus.paneKey, {
+                  hostStateStartedAt: notificationStatus.stateStartedAt,
+                  hostPrompt: notificationStatus.prompt,
+                  clientStateStartedAt: currentClientStateStartedAt,
+                  stamped: false
+                })
+                if (hostWorkingClientBoundaryByPaneKey.size > HOST_WORKING_CLIENT_BOUNDARY_LIMIT) {
+                  const oldestPaneKey = hostWorkingClientBoundaryByPaneKey.keys().next().value
+                  if (oldestPaneKey !== undefined) {
+                    hostWorkingClientBoundaryByPaneKey.delete(oldestPaneKey)
+                  }
+                }
+              }
+            } else {
+              const retainedBoundary = hostWorkingClientBoundaryByPaneKey.get(
+                notificationStatus.paneKey
+              )
+              if (
+                retainedBoundary?.hostStateStartedAt === notificationStatus.stateStartedAt &&
+                retainedBoundary.hostPrompt === notificationStatus.prompt
+              ) {
+                localStateStartedAt = retainedBoundary.clientStateStartedAt
+                retainedBoundary.stamped = true
+              }
+            }
+          }
+          // Why: a hydrated `done` unlike this renderer's prior row ended while the host was unreachable.
+          const notifyCompletion =
+            allowCompletionNotification ||
+            (!clientOwnedNotification &&
+              !isSeenHostReplay(
+                {
+                  isReplay: true,
+                  stateStartedAt: notificationStatus.stateStartedAt,
+                  turnCompletedAt,
+                  turnEndedAt: notificationStatus.turnEndedAt
+                },
+                notificationStatus.state,
+                state.agentStatusByPaneKey.get(notificationStatus.paneKey)
+              ))
+          if (!notifyCompletion && notificationStatus.state !== 'working') {
+            if (notificationStatus.state === 'done') {
+              recordAgentFinishDropped('host-replay-skipped', {
+                workspaceId: notificationStatus.worktreeId ?? snapshot.worktree,
+                paneKey: notificationStatus.paneKey
+              })
+            }
+            continue
+          }
+          acceptedNotificationStatuses.push({
+            paneKey: notificationStatus.paneKey,
+            worktreeId: notificationStatus.worktreeId ?? snapshot.worktree,
+            ...(!notifyCompletion ? { seedOnly: true as const } : {}),
+            payload: {
+              ...pickParsedAgentStatusPayload({
+                ...notificationStatus,
+                ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {})
+              }),
+              stateStartedAt: notificationStatus.stateStartedAt,
+              ...pickHostTurnEnd(notificationStatus),
+              ...(clientOwnedNotification ? { localStateStartedAt } : {})
+            }
+          })
+        }
+      }
+    }
+    for (const key of new Set(affectedWorkspaces)) {
+      retireRemovedNativeChatTabs(
+        state.unifiedTabsByWorktree[key] ?? [],
+        (patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree)[key] ?? []
+      )
+    }
+    return patch
+  }
+
+  useAppStore.getState().updateAgentStatusState(runStorePatch)
+
+  for (const { environmentId, source, decision } of hostMirrorVerdict.frames) {
+    if (decision.apply && source) {
+      markStructuredAgentSessionLaunchesPublished(
+        toRuntimeExecutionHostId(environmentId),
+        publishedStructuredSessions([source])
+      )
+      reportVisibleTabPickToHost(environmentId, source)
+    }
+  }
+  const settleHostMirror = createHostSessionMirrorSettle(hostMirrorVerdict)
+  try {
+    if (mirroredAgentStatusChanged) {
+      useAppStore.getState().scheduleAgentStatusFreshness()
+    }
+    for (const status of acceptedNotificationStatuses) {
+      observeAgentHookCompletionForNotification(status)
+    }
+  } catch (error) {
+    console.warn('[web-session-tabs-sync] post-patch bookkeeping failed:', error)
+  }
+  return settleHostMirror
+}

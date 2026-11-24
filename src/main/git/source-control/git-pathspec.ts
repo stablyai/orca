@@ -1,13 +1,11 @@
 import {
   commandLineLength,
   MAX_COMMAND_LINE_CHARS
-} from '../../../shared/windows-command-line-budget'
-import {
-  resolveGitCommandWithoutProbe,
-  wslDistroForCommand
-} from '../command-runner/git-command-resolution'
-import { WINDOWS_CHECKOUT_GIT_CONFIG_ARGS } from '../wsl-windows-checkout-git-config'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+} from '../../../shared/shell/launch/windows-command-line-budget'
+import { resolveGitCommandWithoutProbe } from '../command-runner/host-routing/git-command-resolution'
+import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
+import { WINDOWS_CHECKOUT_GIT_CONFIG_ARGS } from '../command-runner/host-routing/wsl-windows-checkout-git-config'
+import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 
 /** Ceiling on argv entries per invocation; under WSL the byte budget bites first. */
 const BULK_CHUNK_SIZE = 100
@@ -65,7 +63,8 @@ export function bulkPathspecCommands(
   leadingArgs: readonly string[],
   filePaths: readonly string[],
   worktreePath: string,
-  options: GitRuntimeOptions
+  options: GitRuntimeOptions,
+  pathSource: 'host' | 'git' | ((filePath: string) => string) = 'host'
 ): string[][] {
   // Budget belongs to the host that spawns; the overhead measured above belongs to the transport.
   const budget = process.platform === 'win32' ? MAX_COMMAND_LINE_CHARS : POSIX_COMMAND_LINE_BUDGET
@@ -74,7 +73,12 @@ export function bulkPathspecCommands(
   let pathspecs: string[] = []
   let length = baseLength
   for (const filePath of filePaths) {
-    const pathspec = literalPathspec(filePath, worktreePath, options)
+    const pathspec =
+      typeof pathSource === 'function'
+        ? pathSource(filePath)
+        : pathSource === 'git'
+          ? `:(literal)${filePath}`
+          : literalPathspec(filePath, worktreePath, options)
     const cost =
       finishedCommandLineLength([...leadingArgs, pathspec], worktreePath, options) - baseLength
     if (pathspecs.length > 0 && (pathspecs.length >= BULK_CHUNK_SIZE || length + cost > budget)) {

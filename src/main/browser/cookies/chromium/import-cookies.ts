@@ -1,15 +1,15 @@
 import { session } from 'electron'
-import { browserCookieImportFailure } from '../../../../shared/browser-cookie-import-failure-copy'
+import { browserCookieImportFailure } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import { existsSync } from 'node:fs'
-import type { BrowserCookieImportResult } from '../../../../shared/browser-workspace-types'
+import type { BrowserCookieImportResult } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   diag,
   getDiagLogPath,
   summarizeCookieImportError
 } from '../browser-cookie-import-diagnostics'
 import type { DetectedBrowser } from '../sources/browser-cookie-source-profiles'
-import type { CookieImportOptions } from '../browser-cookie-import-pipeline'
-import { withCookieMutationLock } from '../browser-cookie-import-clear'
+import type { CookieImportOptions } from '../imports/cookie-import-contracts'
+import { withCookieMutationLock } from '../mutation/cookie-mutation-lock'
 import { prepareChromiumCookieImport } from './prepare-import'
 import { scanChromiumCookieRows } from './scan-source-rows'
 import { finalizeChromiumCookieImport } from './finalize-import'

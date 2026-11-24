@@ -1,7 +1,7 @@
 import {
   sameRuntimeBrowserPlacement,
   type RuntimeBrowserClientPlacement
-} from '../../../../shared/runtime-browser-placement'
+} from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
 export type RuntimeBrowserClientPageReleaseHost = {

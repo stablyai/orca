@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { searchKeywords } from '../../search/settings-search-keywords'
 
 const AGENT_GENERATED_TAB_TITLES_TITLE_KEY =
@@ -6,12 +7,12 @@ const AGENT_GENERATED_TAB_TITLES_TITLE_KEY =
 const AGENT_GENERATED_TAB_TITLES_DESCRIPTION_KEY =
   'auto.components.settings.agent-generated-tab-title-copy.b036c7a409'
 
-export function getAgentGeneratedTabTitlesTitle(): string {
-  return translate(AGENT_GENERATED_TAB_TITLES_TITLE_KEY, 'Auto-generate tab titles')
+export function getAgentGeneratedTabTitlesTitle(t: Translate = translate): string {
+  return t(AGENT_GENERATED_TAB_TITLES_TITLE_KEY, 'Auto-generate tab titles')
 }
 
-export function getAgentGeneratedTabTitlesDescription(): string {
-  return translate(
+export function getAgentGeneratedTabTitlesDescription(t: Translate = translate): string {
+  return t(
     AGENT_GENERATED_TAB_TITLES_DESCRIPTION_KEY,
     'Derive short stable tab names from the first known agent prompt. Manual renames always win.'
   )

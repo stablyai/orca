@@ -74,10 +74,39 @@ export function evaluateSecurityAudit(
 ) {
   const audit = auditSchema.parse(value)
   const count = Object.values(audit.metadata.vulnerabilities).reduce((sum, n) => sum + n, 0)
-  if (count !== Object.keys(audit.advisories).length) {
-    throw new Error('Incomplete vulnerability report')
-  }
+  const reportedCount = Object.keys(audit.advisories).length
   const findings = []
+  if (count !== reportedCount) {
+    const policy = root
+      ? parse(readFileSync(join(root, workspace, 'pnpm-workspace.yaml'), 'utf8'))
+      : null
+    const ignoreGhsas = new Set(policy?.auditConfig?.ignoreGhsas ?? [])
+    const ignoredExceptions = exceptions.filter(
+      (entry) =>
+        entry.workspace === workspace &&
+        entry.expires > today &&
+        ignoreGhsas.has(entry.advisory) &&
+        !Object.values(audit.advisories).some(
+          (advisory) => advisory.github_advisory_id === entry.advisory
+        )
+    )
+    const ignoredAdvisoryCount = new Set(ignoredExceptions.map((entry) => entry.advisory)).size
+    if (count !== reportedCount + ignoredAdvisoryCount) {
+      throw new Error('Incomplete vulnerability report')
+    }
+    for (const exception of ignoredExceptions) {
+      verifyPatch(root, exception)
+      findings.push({
+        package: exception.package,
+        version: exception.version,
+        advisory: exception.advisory,
+        severity: 'high',
+        url: `https://github.com/advisories/${exception.advisory}`,
+        blocking: false,
+        exception
+      })
+    }
+  }
   for (const advisory of Object.values(audit.advisories)) {
     for (const finding of advisory.findings) {
       const item = {
