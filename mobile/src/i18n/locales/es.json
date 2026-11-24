@@ -121,17 +121,13 @@
       "codeNoLongerValid": "Este código de emparejamiento caducó, ya se usó o se reemplazó. Muestra un código nuevo en tu ordenador y vuelve a escanear."
     },
     "terminalSettings": {
-      "keepPhoneSize": "Mantener en tamaño de teléfono (predeterminado)",
-      "leaveAppDescription": "Mientras usas un terminal en el teléfono, Orca lo reduce para ajustarlo a la pantalla. Al cerrar la aplicación o dejarla en segundo plano, este ajuste controla si el terminal mantiene el tamaño del teléfono (para que las herramientas CLI interactivas no redistribuyan su contenido) o recupera el tamaño del escritorio. Siempre puedes pulsar Restaurar en el banner del escritorio para cambiar el tamaño manualmente.",
       "leaveAppHeading": "Al salir de la aplicación",
-      "noPairedDesktops": "Aún no hay escritorios emparejados. Empareja uno para controlar el comportamiento del terminal.",
       "restoreAfterMinutes_many": "Después de {{count}} minutos",
       "restoreAfterMinutes_one": "Después de {{count}} minuto",
       "restoreAfterMinutes_other": "Después de {{count}} minutos",
       "restoreAfterSeconds_many": "Después de {{count}}s",
       "restoreAfterSeconds_one": "Después de {{count}}s",
       "restoreAfterSeconds_other": "Después de {{count}}s",
-      "restoreHost": "Restaurar {{name}}",
       "title": "Terminal"
     }
   },
@@ -1163,19 +1159,10 @@
       "failed": "Falló"
     },
     "terminalShortcutSettings": {
-      "addDescription": "Crear una combinación de teclas o una macro de texto",
-      "addShortcut": "Añadir atajo personalizado…",
-      "customShortcuts": "Atajos personalizados",
-      "empty": "Aún no hay atajos personalizados definidos.",
       "removeShortcut": "Eliminar {{label}}",
-      "resetDefaults": "Restablecer valores predeterminados",
-      "resetDescription": "Mostrar todas las teclas de atajo integradas en su orden original",
       "moreKeys": "Más teclas",
-      "moreKeysDescription": "Estas teclas están bajo ⋯ en la fila de teclas del terminal. Activa o desactiva las teclas para mostrarlas u ocultarlas y mantén pulsado el asa para arrastrarlas al orden que quieras. Las teclas que ya están en la fila, como Esc o las flechas, no aparecen en ⋯.",
-      "directionPad": "Cruceta",
       "showDirectionPad": "Mostrar cruceta",
-      "showDirectionPadDescription": "Fija la cruceta en la barra lateral. Si está desactivada, la barra muestra las teclas de flecha.",
-      "showShortcut": "Mostrar atajo {{label}}"
+      "showDirectionPadDescription": "Fija la cruceta en la barra lateral. Si está desactivada, la barra muestra las teclas de flecha."
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "¿Usar un restablecimiento de límites de uso?",

@@ -121,17 +121,13 @@
       "codeNoLongerValid": "Ce code d'appairage a expiré, a déjà été utilisé ou a été remplacé. Affichez un nouveau code sur votre ordinateur et scannez à nouveau."
     },
     "terminalSettings": {
-      "keepPhoneSize": "Conserver à la taille téléphone (par défaut)",
-      "leaveAppDescription": "Lorsque vous utilisez un terminal sur votre téléphone, Orca le réduit pour l'adapter à votre écran. Lorsque vous fermez l'application ou la mettez en arrière-plan, ce paramètre détermine s'il conserve la taille du téléphone (pour éviter que les outils CLI interactifs ne réorganisent leur affichage) ou reprend sa taille sur l'ordinateur. Vous pouvez à tout moment utiliser « Restaurer » dans la bannière sur l'ordinateur pour le redimensionner manuellement.",
       "leaveAppHeading": "Lorsque vous quittez l'application",
-      "noPairedDesktops": "Aucun ordinateur appairé pour le moment. Appairez-en un pour régler le comportement du terminal.",
       "restoreAfterMinutes_many": "Après {{count}} minutes",
       "restoreAfterMinutes_one": "Après {{count}} minute",
       "restoreAfterMinutes_other": "Après {{count}} minutes",
       "restoreAfterSeconds_many": "Après {{count}} s",
       "restoreAfterSeconds_one": "Après {{count}} s",
       "restoreAfterSeconds_other": "Après {{count}} s",
-      "restoreHost": "Restaurer {{name}}",
       "title": "Terminal"
     }
   },
@@ -1163,19 +1159,10 @@
       "failed": "Échec"
     },
     "terminalShortcutSettings": {
-      "addDescription": "Créer une combinaison de touches ou une macro de texte",
-      "addShortcut": "Ajouter un raccourci personnalisé…",
-      "customShortcuts": "Raccourcis personnalisés",
-      "empty": "Aucun raccourci personnalisé défini pour le moment.",
       "removeShortcut": "Supprimer {{label}}",
-      "resetDefaults": "Rétablir les valeurs par défaut",
-      "resetDescription": "Afficher toutes les touches de raccourci intégrées dans l'ordre initial",
       "moreKeys": "Plus de touches",
-      "moreKeysDescription": "Ces touches se trouvent sous ⋯ dans la rangée de touches du terminal. Activez ou désactivez les touches pour les afficher ou les masquer, puis maintenez la poignée pour les réordonner. Les touches déjà présentes dans la rangée, comme Échap ou les flèches, ne figurent pas sous ⋯.",
-      "directionPad": "Pavé directionnel",
       "showDirectionPad": "Afficher le pavé directionnel",
-      "showDirectionPadDescription": "Épingler le pavé de flèches dans la barre latérale. Sinon, la barre affiche les touches fléchées.",
-      "showShortcut": "Afficher le raccourci {{label}}"
+      "showDirectionPadDescription": "Épingler le pavé de flèches dans la barre latérale. Sinon, la barre affiche les touches fléchées."
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Utiliser une réinitialisation des limites de débit ?",

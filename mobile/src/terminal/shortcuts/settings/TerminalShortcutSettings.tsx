@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AppState, View, Text, Pressable, type AppStateStatus } from 'react-native'
+import { AppState, Text, View, type AppStateStatus } from 'react-native'
 import { useFocusEffect } from 'expo-router'
-import { X } from 'lucide-react-native'
+import { CircleMinus, Trash2 } from 'lucide-react-native'
 import type Animated from 'react-native-reanimated'
 import type { AnimatedRef, SharedValue } from 'react-native-reanimated'
 import { useDirectionPadAvailable } from '../../../layout/use-shell-side-rail'
 import { CustomKeyModal } from './CustomKeyModal'
 import { ListRow } from '../../../components/list/ListGroup'
-import { SettingsEmptyRow, SettingsSection } from '../../../settings/settings-screen-frame'
+import { SwipeRowActions } from '../../../components/list/SwipeRowActions'
+import { PickerModal, type PickerOption } from '../../../components/sheets/PickerModal'
+import { SettingsSection } from '../../../settings/settings-screen-frame'
 import {
   loadCustomKeys,
   saveCustomKeys,
@@ -32,51 +34,40 @@ import {
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
 import { SmartRailRow } from '../../../components/list/SmartRailRow'
 
-// Absolutely positioned DragReorderList rows require one fixed height per section.
-const REORDER_ROW_HEIGHT = 56
+// Absolutely positioned DragReorderList rows require one fixed height per list.
+const KEY_ROW_HEIGHT = 48
+const CUSTOM_KEY_ROW_HEIGHT = 60
+const NEW_KEY = '\u0000new'
 
-function ShortcutBarRow({
-  shortcutKey,
-  visible,
-  onToggle
-}: {
-  shortcutKey: TerminalAccessoryKey
-  visible: boolean
-  onToggle: (visible: boolean) => void
-}): React.JSX.Element {
-  useMobileColorScheme()
-  const t = useMobileTranslation()
-  return (
-    <View style={styles.reorderRowContent}>
-      <View style={styles.keycap}>
-        <Text style={styles.keycapText}>{shortcutKey.label}</Text>
-      </View>
-      <View style={styles.rowContent}>
-        <Text style={styles.rowLabel}>{shortcutKey.accessibilityLabel ?? shortcutKey.label}</Text>
-      </View>
-      <MobileSwitch
-        accessibilityLabel={t(
-          'components.terminalShortcutSettings.showShortcut',
-          'Show {{label}} shortcut',
-          {
-            label: shortcutKey.accessibilityLabel ?? shortcutKey.label
-          }
-        )}
-        value={visible}
-        onValueChange={onToggle}
-      />
-    </View>
-  )
+/** The key's name; its glyph too when that says something the name doesn't ("Ctrl+C" beside Interrupt). */
+function keyName(key: TerminalAccessoryKey): { title: string; glyph?: string } {
+  const title = key.accessibilityLabel ?? key.label
+  const plain = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
+  return plain(title).startsWith(plain(key.label)) ? { title } : { title, glyph: key.label }
+}
+
+function customKeyBytes(key: CustomKey): string {
+  return key.bytes.replace(/\r/g, ' ↵')
+}
+
+/** `order` with the visible keys swapped into `visibleOrder`, so hidden keys keep their places. */
+function withVisibleOrder(order: string[], visible: Set<string>, visibleOrder: string[]): string[] {
+  let next = 0
+  return order.map((id) => (visible.has(id) ? (visibleOrder[next++] ?? id) : id))
 }
 
 type Props = {
+  /** Rows show grips and drag instead of swiping. */
+  editing: boolean
   scrollRef: AnimatedRef<Animated.ScrollView>
   scrollOffsetY: SharedValue<number>
   scrollContentHeight: SharedValue<number>
   onDragActiveChange: (active: boolean) => void
 }
 
+/** The Key row page: the keys under ⋯ and your own keys, then the row's switches. */
 export function TerminalShortcutSettings({
+  editing,
   scrollRef,
   scrollOffsetY,
   scrollContentHeight,
@@ -95,23 +86,15 @@ export function TerminalShortcutSettings({
     adoptStored: adoptStoredCustomKeys
   } = useSerializedStoredState<CustomKey[]>([], loadCustomKeys, saveCustomKeys)
   const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
+  const [addPickerOpen, setAddPickerOpen] = useState(false)
+  // A new key's sheet waits for the picker to finish closing: iOS presents one sheet at a time.
+  const [newKeyAfterPicker, setNewKeyAfterPicker] = useState(false)
   const {
     value: shortcutLayout,
     setValue: setShortcutLayout,
     persist: persistLayout,
     refresh: refreshShortcutLayout
   } = useSerializedStoredState(defaultLayout, loadShortcutLayout, saveTerminalAccessoryLayout)
-
-  const handleDeleteCustomKey = useCallback(
-    (key: CustomKey) => {
-      setCustomKeys((current) => {
-        const updated = current.filter((k) => k.id !== key.id)
-        persistCustomKeys(updated)
-        return updated
-      })
-    },
-    [persistCustomKeys]
-  )
 
   useFocusEffect(
     useCallback(() => {
@@ -130,223 +113,298 @@ export function TerminalShortcutSettings({
     return () => sub.remove()
   }, [refreshShortcutLayout, refreshCustomKeys])
 
-  const toggleBuiltInKey = useCallback(
-    (id: string, visible: boolean) => {
+  const updateLayout = useCallback(
+    (change: (current: typeof shortcutLayout) => typeof shortcutLayout) =>
       setShortcutLayout((current) => {
-        const next = setTerminalAccessoryBuiltInVisible(current, id, visible)
+        const next = change(current)
         persistLayout(next)
         return next
-      })
-    },
+      }),
     [persistLayout]
   )
 
-  const reorderBuiltInKeys = useCallback(
-    (orderedKeys: string[]) => {
-      setShortcutLayout((current) => {
-        const next = reorderTerminalAccessoryBuiltInIds(current, orderedKeys)
-        persistLayout(next)
-        return next
-      })
-    },
-    [persistLayout]
-  )
-
-  // Resetting the keys leaves the Smart rail setting alone.
-  const resetBuiltInKeys = useCallback(() => {
-    setShortcutLayout((current) => {
-      const next = { ...defaultLayout(), smartRail: current.smartRail }
-      persistLayout(next)
-      return next
-    })
-  }, [defaultLayout, persistLayout])
-
-  const reorderCustomKeys = useCallback(
-    (orderedKeys: string[]) => {
+  const updateCustomKeys = useCallback(
+    (change: (current: CustomKey[]) => CustomKey[]) =>
       setCustomKeys((current) => {
-        const byId = new Map(current.map((key) => [key.id, key]))
-        const reordered = orderedKeys.flatMap((id) => {
-          const key = byId.get(id)
-          return key ? [key] : []
-        })
-        if (reordered.length !== current.length) {
-          return current
+        const next = change(current)
+        if (next !== current) {
+          persistCustomKeys(next)
         }
-        persistCustomKeys(reordered)
-        return reordered
-      })
-    },
+        return next
+      }),
     [persistCustomKeys]
   )
 
-  const orderedAccessoryKeys = useMemo(() => {
+  const { shownKeys, hiddenKeys } = useMemo(() => {
     const byId = new Map(TERMINAL_ACCESSORY_KEYS.map((key) => [key.id, key]))
-    return shortcutLayout.orderedBuiltInIds.flatMap((id) => {
+    const visible = new Set(shortcutLayout.visibleBuiltInIds)
+    const ordered = shortcutLayout.orderedBuiltInIds.flatMap((id) => {
       const key = byId.get(id)
       return key ? [key] : []
     })
-  }, [shortcutLayout.orderedBuiltInIds])
+    return {
+      shownKeys: ordered.filter((key) => visible.has(key.id)),
+      hiddenKeys: ordered.filter((key) => !visible.has(key.id))
+    }
+  }, [shortcutLayout.orderedBuiltInIds, shortcutLayout.visibleBuiltInIds])
+  const shownCustomKeys = customKeys.filter((key) => key.visible !== false)
+  const hiddenCustomKeys = customKeys.filter((key) => key.visible === false)
+
+  const reorderShownKeys = useCallback(
+    (orderedKeys: string[]) =>
+      updateLayout((current) =>
+        reorderTerminalAccessoryBuiltInIds(
+          current,
+          withVisibleOrder(
+            current.orderedBuiltInIds,
+            new Set(current.visibleBuiltInIds),
+            orderedKeys
+          )
+        )
+      ),
+    [updateLayout]
+  )
+
+  const reorderCustomKeys = useCallback(
+    (orderedKeys: string[]) =>
+      updateCustomKeys((current) => {
+        const ids = withVisibleOrder(
+          current.map((key) => key.id),
+          new Set(current.filter((key) => key.visible !== false).map((key) => key.id)),
+          orderedKeys
+        )
+        const byId = new Map(current.map((key) => [key.id, key]))
+        const reordered = ids.flatMap((id) => {
+          const key = byId.get(id)
+          return key ? [key] : []
+        })
+        return reordered.length === current.length ? reordered : current
+      }),
+    [updateCustomKeys]
+  )
+
+  // Removed keys come back from Add a key, so it lists them before a new one.
+  const addOptions: PickerOption[] = [
+    ...hiddenKeys.map((key) => {
+      const { title, glyph } = keyName(key)
+      return { value: `builtin:${key.id}`, label: title, subtitle: glyph }
+    }),
+    ...hiddenCustomKeys.map((key) => ({
+      value: `custom:${key.id}`,
+      label: key.label,
+      subtitle: customKeyBytes(key)
+    })),
+    {
+      value: NEW_KEY,
+      label: t('components.terminalShortcutSettings.newKey', 'New key…')
+    }
+  ]
+  const addKey = (value: string) => {
+    setAddPickerOpen(false)
+    if (value === NEW_KEY) {
+      setNewKeyAfterPicker(true)
+    } else if (value.startsWith('builtin:')) {
+      const id = value.slice('builtin:'.length)
+      updateLayout((current) => setTerminalAccessoryBuiltInVisible(current, id, true))
+    } else {
+      const id = value.slice('custom:'.length)
+      updateCustomKeys((current) =>
+        current.map((key) => (key.id === id ? { ...key, visible: true } : key))
+      )
+    }
+  }
+
+  const removeLabel = t('components.terminalShortcutSettings.remove', 'Remove')
+  const deleteLabel = t('components.terminalShortcutSettings.delete', 'Delete')
 
   return (
     <>
-      <SettingsSection>
-        <SmartRailRow
-          enabled={shortcutLayout.smartRail === true}
-          onChange={(enabled) =>
-            setShortcutLayout((current) => {
-              const next = { ...current, smartRail: enabled }
-              persistLayout(next)
-              return next
-            })
-          }
-        />
-      </SettingsSection>
-      {hasPad ? (
-        <SettingsSection
-          title={t('components.terminalShortcutSettings.directionPad', 'Direction pad')}
-        >
-          <ListRow
-            key="directionPad"
-            title={t('components.terminalShortcutSettings.showDirectionPad', 'Show D-pad')}
-            subtitle={t(
-              'components.terminalShortcutSettings.showDirectionPadDescription',
-              'Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.'
-            )}
-            accessory={
-              <MobileSwitch
-                accessibilityLabel={t(
-                  'components.terminalShortcutSettings.showDirectionPad',
-                  'Show D-pad'
-                )}
-                value={shortcutLayout.directionPadEnabled !== false}
-                onValueChange={(enabled) =>
-                  setShortcutLayout((current) => {
-                    const next = { ...current, directionPadEnabled: enabled }
-                    persistLayout(next)
-                    return next
-                  })
-                }
-              />
-            }
-          />
-        </SettingsSection>
-      ) : null}
       <SettingsSection
+        first
         title={t('components.terminalShortcutSettings.moreKeys', 'More keys')}
-        footer={t(
-          'components.terminalShortcutSettings.moreKeysDescription',
-          'These keys sit under ⋯ on the terminal key row. Toggle keys to show or hide them, and hold the grip to drag a key into the order you want. A key already on the row, like Esc or the arrows, is left out of ⋯.'
-        )}
+        footer={
+          editing
+            ? undefined
+            : t(
+                'components.terminalShortcutSettings.swipeToRemove',
+                'Swipe a key left to remove it.'
+              )
+        }
       >
-        <DragReorderList
-          key="builtIn"
-          items={orderedAccessoryKeys}
-          itemKey={(shortcutKey) => shortcutKey.id}
-          rowHeight={REORDER_ROW_HEIGHT}
-          scrollRef={scrollRef}
-          scrollOffsetY={scrollOffsetY}
-          scrollContentHeight={scrollContentHeight}
-          onDragActiveChange={onDragActiveChange}
-          onReorder={reorderBuiltInKeys}
-          renderRow={(shortcutKey) => (
-            <ShortcutBarRow
-              shortcutKey={shortcutKey}
-              visible={shortcutLayout.visibleBuiltInIds.includes(shortcutKey.id)}
-              onToggle={(visible) => toggleBuiltInKey(shortcutKey.id, visible)}
-            />
-          )}
-        />
-        <ListRow
-          key="reset"
-          title={t('components.terminalShortcutSettings.resetDefaults', 'Reset Defaults')}
-          subtitle={t(
-            'components.terminalShortcutSettings.resetDescription',
-            'Show every built-in shortcut key in the original order'
-          )}
-          onPress={resetBuiltInKeys}
-        />
-      </SettingsSection>
-
-      <SettingsSection
-        title={t('components.terminalShortcutSettings.customShortcuts', 'Custom shortcuts')}
-      >
-        {customKeys.length === 0 ? (
-          <SettingsEmptyRow key="empty">
-            {t('components.terminalShortcutSettings.empty', 'No custom shortcuts defined yet.')}
-          </SettingsEmptyRow>
-        ) : (
+        {editing ? (
           <DragReorderList
-            key="custom"
-            items={customKeys}
+            key="builtIn"
+            items={shownKeys}
             itemKey={(key) => key.id}
-            rowHeight={REORDER_ROW_HEIGHT}
+            rowHeight={KEY_ROW_HEIGHT}
             scrollRef={scrollRef}
             scrollOffsetY={scrollOffsetY}
             scrollContentHeight={scrollContentHeight}
             onDragActiveChange={onDragActiveChange}
-            onReorder={reorderCustomKeys}
-            renderRow={(key) => (
-              <View style={styles.reorderRowContent}>
-                <View style={styles.keycap}>
-                  <Text style={styles.keycapText}>{key.label}</Text>
-                </View>
-                <View style={styles.rowContent}>
-                  <Text style={styles.rowLabel}>{key.label}</Text>
-                  <Text style={styles.rowSublabel} numberOfLines={1} ellipsizeMode="tail">
-                    {key.bytes.replace(/\r/g, ' ↵')}
+            onReorder={reorderShownKeys}
+            renderRow={(key) => {
+              const { title, glyph } = keyName(key)
+              return (
+                <View style={styles.reorderRowContent}>
+                  <Text style={[styles.rowLabel, styles.rowContent]} numberOfLines={1}>
+                    {title}
                   </Text>
+                  {glyph ? <Text style={styles.rowValue}>{glyph}</Text> : null}
                 </View>
-                <MobileSwitch
-                  accessibilityLabel={t(
-                    'components.terminalShortcutSettings.showShortcut',
-                    'Show {{label}} shortcut',
-                    {
-                      label: key.label
-                    }
-                  )}
-                  value={key.visible !== false}
-                  onValueChange={(visible) =>
-                    setCustomKeys((current) => {
-                      const next = current.map((item) =>
-                        item.id === key.id ? { ...item, visible } : item
-                      )
-                      persistCustomKeys(next)
-                      return next
-                    })
-                  }
-                />
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.deleteButton,
-                    pressed && styles.deleteButtonPressed
-                  ]}
-                  onPress={() => handleDeleteCustomKey(key)}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={t(
+              )
+            }}
+          />
+        ) : (
+          shownKeys.map((key) => {
+            const { title, glyph } = keyName(key)
+            return (
+              <SwipeRowActions
+                key={key.id}
+                trailing={{
+                  label: removeLabel,
+                  accessibilityLabel: t(
                     'components.terminalShortcutSettings.removeShortcut',
                     'Remove {{label}}',
-                    { label: key.label }
-                  )}
-                >
-                  <X size={16} color={colors.statusRed} />
-                </Pressable>
-              </View>
-            )}
+                    { label: title }
+                  ),
+                  icon: CircleMinus,
+                  background: colors.statusRed,
+                  foreground: colors.onStatusRed,
+                  onPress: () =>
+                    updateLayout((current) =>
+                      setTerminalAccessoryBuiltInVisible(current, key.id, false)
+                    )
+                }}
+              >
+                {() => <ListRow title={title} value={glyph} />}
+              </SwipeRowActions>
+            )
+          })
+        )}
+        {editing ? null : (
+          <ListRow
+            key="add"
+            title={t('components.terminalShortcutSettings.addKey', 'Add a key')}
+            accent
+            onPress={() =>
+              addOptions.length > 1 ? setAddPickerOpen(true) : setShowCustomKeyModal(true)
+            }
           />
         )}
-        <ListRow
-          key="add"
-          title={t('components.terminalShortcutSettings.addShortcut', 'Add Custom Shortcut…')}
-          subtitle={t(
-            'components.terminalShortcutSettings.addDescription',
-            'Create key combo or text macro'
-          )}
-          navigates
-          onPress={() => setShowCustomKeyModal(true)}
-        />
       </SettingsSection>
 
+      {shownCustomKeys.length > 0 ? (
+        <SettingsSection title={t('components.terminalShortcutSettings.yourKeys', 'Your keys')}>
+          {editing ? (
+            <DragReorderList
+              key="custom"
+              items={shownCustomKeys}
+              itemKey={(key) => key.id}
+              rowHeight={CUSTOM_KEY_ROW_HEIGHT}
+              scrollRef={scrollRef}
+              scrollOffsetY={scrollOffsetY}
+              scrollContentHeight={scrollContentHeight}
+              onDragActiveChange={onDragActiveChange}
+              onReorder={reorderCustomKeys}
+              renderRow={(key) => (
+                <View style={styles.reorderRowContent}>
+                  <View style={styles.rowContent}>
+                    <Text style={[styles.rowLabel, styles.rowLabelEmphasis]} numberOfLines={1}>
+                      {key.label}
+                    </Text>
+                    <Text style={styles.rowSublabel} numberOfLines={1}>
+                      {customKeyBytes(key)}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            />
+          ) : (
+            shownCustomKeys.map((key) => (
+              <SwipeRowActions
+                key={key.id}
+                trailing={{
+                  label: deleteLabel,
+                  accessibilityLabel: t(
+                    'components.terminalShortcutSettings.deleteKey',
+                    'Delete {{label}}',
+                    { label: key.label }
+                  ),
+                  icon: Trash2,
+                  background: colors.statusRed,
+                  foreground: colors.onStatusRed,
+                  onPress: () =>
+                    updateCustomKeys((current) => current.filter((k) => k.id !== key.id))
+                }}
+              >
+                {() => <ListRow title={key.label} />}
+              </SwipeRowActions>
+            ))
+          )}
+        </SettingsSection>
+      ) : null}
+
+      {editing ? null : (
+        <>
+          <SettingsSection>
+            <SmartRailRow
+              key="smartRail"
+              enabled={shortcutLayout.smartRail === true}
+              onChange={(enabled) =>
+                updateLayout((current) => ({ ...current, smartRail: enabled }))
+              }
+            />
+            {hasPad ? (
+              <ListRow
+                key="directionPad"
+                title={t('components.terminalShortcutSettings.showDirectionPad', 'Show D-pad')}
+                subtitle={t(
+                  'components.terminalShortcutSettings.showDirectionPadDescription',
+                  'Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.'
+                )}
+                accessory={
+                  <MobileSwitch
+                    accessibilityLabel={t(
+                      'components.terminalShortcutSettings.showDirectionPad',
+                      'Show D-pad'
+                    )}
+                    value={shortcutLayout.directionPadEnabled !== false}
+                    onValueChange={(enabled) =>
+                      updateLayout((current) => ({ ...current, directionPadEnabled: enabled }))
+                    }
+                  />
+                }
+              />
+            ) : null}
+          </SettingsSection>
+
+          <SettingsSection>
+            <ListRow
+              key="reset"
+              title={t('components.terminalShortcutSettings.resetKeys', 'Reset keys')}
+              onPress={() =>
+                // Resetting the keys leaves the Smart rail setting alone.
+                updateLayout((current) => ({ ...defaultLayout(), smartRail: current.smartRail }))
+              }
+            />
+          </SettingsSection>
+        </>
+      )}
+
+      <PickerModal
+        visible={addPickerOpen}
+        title={t('components.terminalShortcutSettings.addKey', 'Add a key')}
+        options={addOptions}
+        selected=""
+        onSelect={addKey}
+        onClose={() => setAddPickerOpen(false)}
+        onAfterClose={() => {
+          if (newKeyAfterPicker) {
+            setNewKeyAfterPicker(false)
+            setShowCustomKeyModal(true)
+          }
+        }}
+      />
       <CustomKeyModal
         visible={showCustomKeyModal}
         onClose={() => setShowCustomKeyModal(false)}

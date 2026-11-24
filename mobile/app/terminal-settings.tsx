@@ -1,44 +1,35 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useWindowDimensions, View } from 'react-native'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import Animated, {
-  useAnimatedRef,
-  useAnimatedScrollHandler,
-  useSharedValue
-} from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
-import { Smartphone } from 'lucide-react-native'
 import { colors, spacing } from '../src/theme/mobile-theme'
+import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import type { Translate } from '../src/i18n/mobile-i18n'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
 import { loadHosts, peekHosts } from '../src/host-catalog/host-store'
 import type { HostProfile } from '../src/host-catalog/host-profile'
+import { useHostDisplay } from '../src/host-descriptors/use-host-display'
+import { MachineGlyph } from '../src/home/MobileHomeDesktopRow'
 import { useFocusedSettingsHostClients } from '../src/settings/settings-host-client-connections'
 import type { RpcClient } from '../src/transport/rpc/rpc-client-contract'
-import { LIST_LEADING_INSET, ListRow, SectionHeader } from '../src/components/list/ListGroup'
+import { LIST_LEADING_INSET, ListRow } from '../src/components/list/ListGroup'
 import { PickerModal, type PickerOption } from '../src/components/sheets/PickerModal'
-import { TerminalShortcutSettings } from '../src/terminal/shortcuts/settings/TerminalShortcutSettings'
 import {
   readTerminalAutoRestoreFitMs,
   saveTerminalAutoRestoreFitMs,
   setTerminalAutoRestoreFitMsForHost
 } from '../src/terminal/viewport/terminal-auto-restore-fit-state'
-import { setDragReorderScrollEnabled } from '../src/components/reorder/drag-reorder-scroll-lock'
 import { useTerminalFontSettings } from '../src/terminal/preferences/use-terminal-font-settings'
 import {
-  TerminalFontPicker,
-  TerminalFontSection
+  terminalFontLabel,
+  terminalPointsLabel
 } from '../src/terminal/preferences/settings/TerminalFontSettings'
 import { TerminalFontPreview } from '../src/terminal/preferences/settings/TerminalFontPreview'
-import { getResponsiveLayoutMetrics } from '../src/layout/responsive-layout-metrics'
-import { themedStyleSheet } from '../src/theme/themed-styles'
+import { terminalFontPxForScale } from '../src/terminal/preferences/terminal-text-scales'
 import {
   SettingsEmptyRow,
-  SettingsNavBar,
-  SettingsSection,
-  settingsScreenStyles
+  SettingsScreen,
+  SettingsSection
 } from '../src/settings/settings-screen-frame'
 
 type RestoreValue = 'indefinite' | '60s' | '5m' | '30m'
@@ -55,7 +46,7 @@ function autoRestoreFitOptions(
   return [
     {
       value: 'indefinite',
-      label: t('app.terminalSettings.keepPhoneSize', 'Keep at phone size (default)'),
+      label: t('app.terminalSettings.phoneSize', 'Phone size'),
       ms: null
     },
     { value: '60s', label: restoreAfterMinutes(t, 1), ms: 60_000 },
@@ -107,26 +98,27 @@ function autoRestoreSummary(ms: number | null | undefined, t: Translate): string
 }
 
 function HostFitRow({
+  host,
   client,
-  hostName,
   ms,
   onPress
 }: {
+  host: HostProfile
   client: RpcClient | null
-  hostName: string
   ms: number | null | undefined
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const display = useHostDisplay(host)
+  // An offline computer can't take the choice, so it says so instead of opening a picker.
   return (
     <ListRow
-      title={hostName}
-      subtitle={autoRestoreSummary(ms, t)}
-      leading={<Smartphone size={18} color={colors.textSecondary} />}
-      navigates
-      disabled={!client}
-      onPress={onPress}
+      title={host.name}
+      value={client ? autoRestoreSummary(ms, t) : t('app.terminalSettings.offline', 'Offline')}
+      leading={<MachineGlyph kind={display.machineKind} size={18} color={colors.textSecondary} />}
+      navigates={client !== null}
+      onPress={client ? onPress : undefined}
     />
   )
 }
@@ -135,7 +127,6 @@ export default function TerminalSettingsScreen() {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const router = useRouter()
-  const insets = useSafeAreaInsets()
   const [hosts, setHosts] = useState<HostProfile[]>(() => peekHosts() ?? [])
   useEffect(() => {
     void loadHosts().then(setHosts)
@@ -152,18 +143,11 @@ export default function TerminalSettingsScreen() {
   const [pickerHostId, setPickerHostId] = useState<string | null>(null)
 
   const fontSettings = useTerminalFontSettings()
-  const [fontPickerOpen, setFontPickerOpen] = useState(false)
   const window = useWindowDimensions()
-  // A wide iPad screen keeps the preview beside the controls instead of scrolling it away.
-  const wide = getResponsiveLayoutMetrics(window.width, window.height).isWideLayout
-  const preview = (
-    <TerminalFontPreview
-      textScale={fontSettings.textScale}
-      fontStyle={fontSettings.fontStyle}
-      columnsWidth={window.width}
-      height={wide ? 360 : 180}
-    />
-  )
+  const fontValue = `${terminalFontLabel(fontSettings.fontStyle.font, t)}, ${terminalPointsLabel(
+    terminalFontPxForScale(fontSettings.textScale),
+    t
+  )}`
 
   useEffect(() => {
     let cancelled = false
@@ -211,134 +195,79 @@ export default function TerminalSettingsScreen() {
 
   const pickerHost = pickerHostId ? hosts.find((h) => h.id === pickerHostId) : null
 
-  const scrollRef = useAnimatedRef<Animated.ScrollView>()
-  const scrollOffsetY = useSharedValue(0)
-  const scrollContentHeight = useSharedValue(0)
-  const scrollHandler = useAnimatedScrollHandler((event) => {
-    scrollOffsetY.value = event.contentOffset.y
-  })
-  // Toggle imperatively: rerendering during drag rebuilds row gestures and can cancel it.
-  const setScrollEnabled = useCallback(
-    (enabled: boolean) => {
-      setDragReorderScrollEnabled(scrollRef, enabled)
-    },
-    [scrollRef]
-  )
-  const handleDragActiveChange = useCallback(
-    (active: boolean) => setScrollEnabled(!active),
-    [setScrollEnabled]
-  )
-
   return (
-    <GestureHandlerRootView style={settingsScreenStyles.container}>
-      <SafeAreaView style={settingsScreenStyles.container} edges={['top']}>
-        <SettingsNavBar
-          title={t('app.terminalSettings.title', 'Terminal')}
-          onBack={() => router.back()}
+    <SettingsScreen
+      title={t('app.terminalSettings.title', 'Terminal')}
+      onBack={() => router.back()}
+      overlays={
+        <PickerModal<RestoreValue>
+          visible={pickerHost != null}
+          title={t('app.terminalSettings.leaveAppHeading', 'When you leave the app')}
+          subtitle={pickerHost?.name}
+          options={autoRestoreFitOptions(t)}
+          selected={valueFromMs(pickerHost ? hostMs[pickerHost.id] : null, t)}
+          onSelect={(v) => {
+            if (pickerHost) {
+              void selectValue(pickerHost.id, v)
+            }
+          }}
+          onClose={() => setPickerHostId(null)}
         />
+      }
+    >
+      <View style={styles.preview}>
+        <TerminalFontPreview
+          textScale={fontSettings.textScale}
+          fontStyle={fontSettings.fontStyle}
+          columnsWidth={window.width}
+          height={180}
+        />
+      </View>
 
-        <View style={styles.body}>
-          <Animated.ScrollView
-            ref={scrollRef}
-            style={styles.controls}
-            contentContainerStyle={[
-              settingsScreenStyles.scrollContent,
-              { paddingBottom: insets.bottom + spacing.xl }
-            ]}
-            showsVerticalScrollIndicator={false}
-            onScroll={scrollHandler}
-            scrollEventThrottle={16}
-            onContentSizeChange={(_width, height) => {
-              scrollContentHeight.value = height
-            }}
-          >
-            {wide ? null : <View style={styles.previewSlot}>{preview}</View>}
-            <TerminalFontSection
-              settings={fontSettings}
-              onOpenFontPicker={() => setFontPickerOpen(true)}
+      <SettingsSection first>
+        <ListRow
+          key="font"
+          title={t('app.terminalSettings.fontAndSize', 'Font and size')}
+          value={fontValue}
+          navigates
+          onPress={() => router.push('/terminal-font-settings')}
+        />
+        <ListRow
+          key="keys"
+          title={t('app.terminalSettings.keyRow', 'Key row')}
+          navigates
+          onPress={() => router.push('/terminal-keys')}
+        />
+      </SettingsSection>
+
+      <SettingsSection
+        title={t('app.terminalSettings.leaveAppHeading', 'When you leave the app')}
+        separatorInset={LIST_LEADING_INSET}
+        footer={t(
+          'app.terminalSettings.leaveAppFooter',
+          'Phone size keeps CLI tools from redrawing.'
+        )}
+      >
+        {hosts.length === 0 ? (
+          <SettingsEmptyRow key="empty">
+            {t('app.terminalSettings.noComputers', 'No computers paired yet.')}
+          </SettingsEmptyRow>
+        ) : (
+          hosts.map((host) => (
+            <HostFitRow
+              key={host.id}
+              host={host}
+              client={hostClientsById.get(host.id) ?? null}
+              ms={hostMs[host.id]}
+              onPress={() => setPickerHostId(host.id)}
             />
-
-            <SettingsSection
-              title={t('app.terminalSettings.leaveAppHeading', 'When you leave the app')}
-              separatorInset={LIST_LEADING_INSET}
-              footer={t(
-                'app.terminalSettings.leaveAppDescription',
-                "While you're using a terminal on your phone, Orca shrinks it to fit your screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore on the desktop banner to resize manually."
-              )}
-            >
-              {hosts.length === 0 ? (
-                <SettingsEmptyRow key="empty">
-                  {t(
-                    'app.terminalSettings.noPairedDesktops',
-                    'No paired desktops yet. Pair one to control terminal behavior.'
-                  )}
-                </SettingsEmptyRow>
-              ) : (
-                hosts.map((host) => (
-                  <HostFitRow
-                    key={host.id}
-                    client={hostClientsById.get(host.id) ?? null}
-                    hostName={host.name}
-                    ms={hostMs[host.id]}
-                    onPress={() => setPickerHostId(host.id)}
-                  />
-                ))
-              )}
-            </SettingsSection>
-
-            <TerminalShortcutSettings
-              scrollRef={scrollRef}
-              scrollOffsetY={scrollOffsetY}
-              scrollContentHeight={scrollContentHeight}
-              onDragActiveChange={handleDragActiveChange}
-            />
-
-            <SettingsSection>
-              <ListRow
-                key="resetFont"
-                title={t('app.terminalSettings.resetFont', 'Reset font settings')}
-                onPress={fontSettings.reset}
-              />
-            </SettingsSection>
-          </Animated.ScrollView>
-          {wide ? (
-            <View style={styles.widePreview}>
-              <SectionHeader first title={t('app.terminalSettings.previewHeading', 'Preview')} />
-              {preview}
-            </View>
-          ) : null}
-        </View>
-      </SafeAreaView>
-
-      <PickerModal<RestoreValue>
-        visible={pickerHost != null}
-        title={
-          pickerHost
-            ? t('app.terminalSettings.restoreHost', 'Restore {{name}}', { name: pickerHost.name })
-            : ''
-        }
-        options={autoRestoreFitOptions(t)}
-        selected={valueFromMs(pickerHost ? hostMs[pickerHost.id] : null, t)}
-        onSelect={(v) => {
-          if (pickerHost) {
-            void selectValue(pickerHost.id, v)
-          }
-        }}
-        onClose={() => setPickerHostId(null)}
-      />
-
-      <TerminalFontPicker
-        visible={fontPickerOpen}
-        settings={fontSettings}
-        onClose={() => setFontPickerOpen(false)}
-      />
-    </GestureHandlerRootView>
+          ))
+        )}
+      </SettingsSection>
+    </SettingsScreen>
   )
 }
 
 const styles = themedStyleSheet(() => ({
-  body: { flex: 1, flexDirection: 'row' },
-  controls: { flex: 1 },
-  previewSlot: { paddingTop: spacing.sm },
-  widePreview: { flex: 1, paddingTop: spacing.sm, paddingRight: spacing.lg }
+  preview: { marginBottom: spacing.lg }
 }))

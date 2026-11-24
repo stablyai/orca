@@ -119,15 +119,11 @@
       "codeNoLongerValid": "このペアリングコードは期限切れ、使用済み、または置き換え済みです。デスクトップで新しいコードを表示して、もう一度スキャンしてください。"
     },
     "terminalSettings": {
-      "keepPhoneSize": "スマートフォンサイズを維持（デフォルト）",
-      "leaveAppDescription": "スマートフォンでターミナルを使用している間、Orca は画面に合わせてターミナルを縮小します。アプリを閉じたり別のアプリに切り替えたりしたときに、スマートフォンサイズを維持して対話型 CLI ツールのレイアウトを保つか、デスクトップのサイズに戻すかを設定します。デスクトップのバナーにある「復元する」で、いつでも手動でサイズを戻せます。",
       "leaveAppHeading": "アプリを離れたとき",
-      "noPairedDesktops": "ペアリング済みのデスクトップはまだありません。ペアリングすると、ターミナルの動作を設定できます。",
       "restoreAfterMinutes_one": "{{count}} 分後",
       "restoreAfterMinutes_other": "{{count}} 分後",
       "restoreAfterSeconds_one": "{{count}} 秒後",
       "restoreAfterSeconds_other": "{{count}} 秒後",
-      "restoreHost": "「{{name}}」のサイズ復元",
       "title": "ターミナル"
     }
   },
@@ -1115,19 +1111,10 @@
       "failed": "失敗"
     },
     "terminalShortcutSettings": {
-      "addDescription": "キーの組み合わせやテキストマクロを作成",
-      "addShortcut": "カスタムショートカットを追加…",
-      "customShortcuts": "カスタムショートカット",
-      "empty": "カスタムショートカットはまだ設定されていません。",
       "removeShortcut": "{{label}} を削除",
-      "resetDefaults": "初期設定に戻す",
-      "resetDescription": "すべての組み込みショートカットキーを元の順序で表示",
       "moreKeys": "その他のキー",
-      "moreKeysDescription": "これらのキーは、ターミナルのキー列にある ⋯ の下に表示されます。キーの表示・非表示を切り替え、ハンドルを長押ししてドラッグすると順序を変更できます。Esc や矢印キーなど、キー列にすでにあるキーは ⋯ に表示されません。",
-      "directionPad": "方向パッド",
       "showDirectionPad": "方向パッドを表示",
-      "showDirectionPadDescription": "矢印パッドをサイドレールに固定します。オフの場合、レールに各矢印キーが表示されます。",
-      "showShortcut": "{{label}} ショートカットを表示"
+      "showDirectionPadDescription": "矢印パッドをサイドレールに固定します。オフの場合、レールに各矢印キーが表示されます。"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "レート制限のリセット枠を使用しますか？",

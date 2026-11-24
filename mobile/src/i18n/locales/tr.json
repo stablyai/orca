@@ -170,27 +170,18 @@
       "runtimeAccessLink": "Bu bağlantı başka bir Orca uygulaması için. Bilgisayarınızda Ayarlar → Mobil bölümündeki kodu tarayın veya sunucunuzda orca pair --mobile komutunu çalıştırın."
     },
     "terminalSettings": {
-      "keepPhoneSize": "Telefon boyutunda tut (varsayılan)",
-      "leaveAppDescription": "Telefonunuzda terminal kullanırken Orca, terminali ekranınıza sığacak şekilde küçültür. Uygulamayı kapattığınızda veya başka bir uygulamaya geçtiğinizde bu ayar, terminalin telefon boyutunda kalmasını (etkileşimli CLI araçlarının düzeninin değişmemesi için) ya da masaüstü boyutuna geri dönmesini belirler. Boyutu elle değiştirmek için masaüstündeki bildirim çubuğunda Geri yükle seçeneğini her zaman kullanabilirsiniz.",
       "leaveAppHeading": "Uygulamadan ayrıldığınızda",
-      "noPairedDesktops": "Henüz eşleştirilmiş masaüstü yok. Terminal davranışını ayarlamak için bir masaüstü eşleştirin.",
       "restoreAfterMinutes_one": "{{count}} dakika sonra",
       "restoreAfterMinutes_other": "{{count}} dakika sonra",
       "restoreAfterSeconds_one": "{{count}} sn sonra",
       "restoreAfterSeconds_other": "{{count}} sn sonra",
-      "restoreHost": "{{name}} için geri yükleme",
       "title": "Terminal",
       "previewColumns_one": "{{count}} sütun",
       "previewColumns_other": "{{count}} sütun",
       "previewLabel": "Terminal önizlemesi",
-      "previewHeading": "Önizleme",
-      "fontHeading": "Yazı tipi",
-      "fontDescription": "Boyutu değiştirmek için terminalde iki parmağınızı birbirine yaklaştırın veya uzaklaştırın. Ayar burada saklanır ve yalnızca bu cihazı etkiler; masaüstü terminali değişmez.",
       "font": "Yazı tipi",
       "size": "Boyut",
       "sizePoints": "{{size}} nk",
-      "smaller": "Daha küçük",
-      "larger": "Daha büyük",
       "lineSpacing": "Satır aralığı",
       "lineSpacingTight": "Sıkı",
       "lineSpacingNormal": "Normal",
@@ -1744,19 +1735,10 @@
       "failed": "Kopyalanamadı"
     },
     "terminalShortcutSettings": {
-      "addDescription": "Tuş birleşimi veya metin makrosu oluştur",
-      "addShortcut": "Özel Kısayol Ekle…",
-      "customShortcuts": "Özel kısayollar",
-      "empty": "Henüz özel kısayol tanımlanmadı.",
       "removeShortcut": "{{label}} kısayolunu kaldır",
-      "resetDefaults": "Varsayılanlara Sıfırla",
-      "resetDescription": "Tüm yerleşik kısayol tuşlarını özgün sırayla göster",
       "moreKeys": "Diğer tuşlar",
-      "moreKeysDescription": "Bu tuşlar, terminal tuş satırındaki ⋯ altında bulunur. Tuşları göstermek veya gizlemek için açıp kapatın; istediğiniz sıraya sürüklemek için tutamacı basılı tutun. Esc veya oklar gibi satırda zaten bulunan tuşlar ⋯ altında gösterilmez.",
-      "directionPad": "Yön tuş takımı",
       "showDirectionPad": "Yön tuş takımını göster",
-      "showDirectionPadDescription": "Ok takımını yan çubuğa sabitleyin. Kapalıyken çubukta ayrı ok tuşları listelenir.",
-      "showShortcut": "{{label}} kısayolunu göster"
+      "showDirectionPadDescription": "Ok takımını yan çubuğa sabitleyin. Kapalıyken çubukta ayrı ok tuşları listelenir."
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Hız sınırı sıfırlama hakkı kullanılsın mı?",

@@ -131,17 +131,13 @@
       "codeNoLongerValid": "Este código de pareamento expirou, já foi usado ou foi substituído. Mostre um novo código no computador e escaneie novamente."
     },
     "terminalSettings": {
-      "keepPhoneSize": "Manter no tamanho do celular (padrão)",
-      "leaveAppDescription": "Enquanto você usa um terminal no celular, o Orca o reduz para caber na tela. Ao fechar o app ou alternar para outro, esta opção define se o terminal mantém o tamanho do celular (evitando que ferramentas de CLI interativas reorganizem o conteúdo) ou volta ao tamanho do desktop. Você pode usar Restaurar no banner do desktop a qualquer momento para redimensioná-lo manualmente.",
       "leaveAppHeading": "Ao sair do app",
-      "noPairedDesktops": "Nenhum desktop pareado ainda. Pareie um para controlar o comportamento do terminal.",
       "restoreAfterMinutes_many": "Após {{count}} minutos",
       "restoreAfterMinutes_one": "Após {{count}} minuto",
       "restoreAfterMinutes_other": "Após {{count}} minutos",
       "restoreAfterSeconds_many": "Após {{count}}s",
       "restoreAfterSeconds_one": "Após {{count}}s",
       "restoreAfterSeconds_other": "Após {{count}}s",
-      "restoreHost": "Restaurar {{name}}",
       "title": "Terminal"
     }
   },
@@ -1244,19 +1240,10 @@
       "failed": "Falhou"
     },
     "terminalShortcutSettings": {
-      "addDescription": "Criar combinação de teclas ou macro de texto",
-      "addShortcut": "Adicionar Atalho Personalizado…",
-      "customShortcuts": "Atalhos personalizados",
-      "empty": "Nenhum atalho personalizado definido ainda.",
       "removeShortcut": "Remover {{label}}",
-      "resetDefaults": "Restaurar Padrões",
-      "resetDescription": "Mostrar todas as teclas de atalho integradas na ordem original",
       "moreKeys": "Mais teclas",
-      "moreKeysDescription": "Estas teclas ficam em ⋯ na linha de teclas do terminal. Ative ou desative as teclas para mostrá-las ou ocultá-las e segure a alça para arrastá-las até a ordem desejada. Uma tecla que já esteja na linha, como Esc ou as setas, não aparece em ⋯.",
-      "directionPad": "Direcional",
       "showDirectionPad": "Mostrar direcional",
-      "showDirectionPadDescription": "Fixe o direcional de setas na barra lateral. Sem ele, a barra lista as teclas de seta.",
-      "showShortcut": "Mostrar atalho {{label}}"
+      "showDirectionPadDescription": "Fixe o direcional de setas na barra lateral. Sem ele, a barra lista as teclas de seta."
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Usar uma redefinição de limite de taxa?",

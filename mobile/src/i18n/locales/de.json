@@ -119,15 +119,11 @@
       "codeNoLongerValid": "Dieser Kopplungscode ist abgelaufen, wurde bereits verwendet oder wurde ersetzt. Zeige auf deinem Computer einen neuen Code an und scanne erneut."
     },
     "terminalSettings": {
-      "keepPhoneSize": "Smartphone-Größe beibehalten (Standard)",
-      "leaveAppDescription": "Während ein Terminal auf dem Smartphone verwendet wird, verkleinert Orca es auf die Bildschirmgröße des Smartphones. Diese Einstellung legt fest, ob es beim Schließen oder Verlassen der App in Smartphone-Größe bleibt (damit interaktive CLI-Tools ihr Layout beibehalten) oder wieder an den Desktop angepasst wird. Über „Wiederherstellen“ im Desktop-Banner lässt sich die Größe jederzeit manuell anpassen.",
       "leaveAppHeading": "Beim Verlassen der App",
-      "noPairedDesktops": "Noch keine Desktops gekoppelt. Einen Desktop koppeln, um das Terminalverhalten festzulegen.",
       "restoreAfterMinutes_one": "Nach {{count}} Minute",
       "restoreAfterMinutes_other": "Nach {{count}} Minuten",
       "restoreAfterSeconds_one": "Nach {{count}} s",
       "restoreAfterSeconds_other": "Nach {{count}} s",
-      "restoreHost": "{{name}} wiederherstellen",
       "title": "Terminal"
     }
   },
@@ -1121,19 +1117,10 @@
       "failed": "Fehlgeschlagen"
     },
     "terminalShortcutSettings": {
-      "addDescription": "Tastenkombination oder Textmakro erstellen",
-      "addShortcut": "Eigenes Tastenkürzel hinzufügen…",
-      "customShortcuts": "Eigene Tastenkürzel",
-      "empty": "Noch keine eigenen Tastenkürzel definiert.",
       "removeShortcut": "{{label}} entfernen",
-      "resetDefaults": "Auf Standard zurücksetzen",
-      "resetDescription": "Alle integrierten Tastenkürzel in der ursprünglichen Reihenfolge anzeigen",
       "moreKeys": "Weitere Tasten",
-      "moreKeysDescription": "Diese Tasten befinden sich unter ⋯ in der Terminal-Tastenleiste. Blende Tasten ein oder aus und halte den Griff gedrückt, um sie in die gewünschte Reihenfolge zu ziehen. Tasten, die bereits in der Leiste sind, etwa Esc oder die Pfeiltasten, erscheinen nicht unter ⋯.",
-      "directionPad": "Steuerkreuz",
       "showDirectionPad": "Steuerkreuz anzeigen",
-      "showDirectionPadDescription": "Das Steuerkreuz in der Seitenleiste anheften. Andernfalls werden dort die einzelnen Pfeiltasten angezeigt.",
-      "showShortcut": "Tastenkürzel {{label}} anzeigen"
+      "showDirectionPadDescription": "Das Steuerkreuz in der Seitenleiste anheften. Andernfalls werden dort die einzelnen Pfeiltasten angezeigt."
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Ratenlimit-Zurücksetzung verwenden?",

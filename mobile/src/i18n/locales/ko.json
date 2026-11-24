@@ -119,15 +119,11 @@
       "codeNoLongerValid": "이 페어링 코드는 만료되었거나 이미 사용되었거나 교체되었습니다. 데스크톱에서 새 코드를 표시한 후 다시 스캔하세요."
     },
     "terminalSettings": {
-      "keepPhoneSize": "휴대폰 크기로 유지(기본값)",
-      "leaveAppDescription": "휴대폰에서 터미널을 사용하는 동안 Orca는 화면에 맞게 터미널을 축소합니다. 앱을 닫거나 다른 앱으로 전환할 때, 대화형 CLI 도구의 화면 배치가 바뀌지 않도록 휴대폰 크기를 유지할지 데스크톱 크기로 되돌릴지 설정합니다. 데스크톱 배너의 '복원'을 눌러 언제든 직접 크기를 조정할 수 있습니다.",
       "leaveAppHeading": "앱을 벗어날 때",
-      "noPairedDesktops": "아직 페어링된 데스크톱이 없습니다. 터미널 동작을 설정하려면 데스크톱을 페어링하세요.",
       "restoreAfterMinutes_one": "{{count}}분 후",
       "restoreAfterMinutes_other": "{{count}}분 후",
       "restoreAfterSeconds_one": "{{count}}초 후",
       "restoreAfterSeconds_other": "{{count}}초 후",
-      "restoreHost": "{{name}} 복원",
       "title": "터미널"
     }
   },
@@ -1115,19 +1111,10 @@
       "failed": "실패"
     },
     "terminalShortcutSettings": {
-      "addDescription": "키 조합 또는 텍스트 매크로 만들기",
-      "addShortcut": "맞춤 단축키 추가…",
-      "customShortcuts": "맞춤 단축키",
-      "empty": "아직 설정된 맞춤 단축키가 없습니다.",
       "removeShortcut": "{{label}} 제거",
-      "resetDefaults": "기본값 복원",
-      "resetDescription": "모든 기본 단축키를 원래 순서로 표시",
       "moreKeys": "더 많은 키",
-      "moreKeysDescription": "이 키는 터미널 키 행의 ⋯ 아래에 있습니다. 키의 표시 여부를 전환하고 핸들을 길게 눌러 원하는 순서로 끌어 놓으세요. Esc나 화살표처럼 이미 행에 있는 키는 ⋯에 표시되지 않습니다.",
-      "directionPad": "방향 패드",
       "showDirectionPad": "방향 패드 표시",
-      "showDirectionPadDescription": "화살표 패드를 사이드 레일에 고정합니다. 끄면 레일에 개별 화살표 키가 표시됩니다.",
-      "showShortcut": "{{label}} 단축키 표시"
+      "showDirectionPadDescription": "화살표 패드를 사이드 레일에 고정합니다. 끄면 레일에 개별 화살표 키가 표시됩니다."
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "사용량 한도를 재설정하시겠습니까?",

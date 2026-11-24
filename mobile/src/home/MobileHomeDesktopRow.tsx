@@ -24,6 +24,20 @@ const MACHINE_GLYPHS: Record<'laptop' | 'desktop' | 'server', LucideIcon> = {
   server: Server
 }
 
+/** The computer's own glyph (laptop, desktop or server); a desktop when it hasn't said. */
+export function MachineGlyph({
+  kind,
+  ...icon
+}: {
+  kind: keyof typeof MACHINE_GLYPHS | null
+  size: number
+  color: string
+  strokeWidth?: number
+}) {
+  const Glyph = kind ? MACHINE_GLYPHS[kind] : Monitor
+  return <Glyph {...icon} />
+}
+
 const PROBLEM_VERDICTS: ReadonlySet<ConnectionVerdict['kind']> = new Set([
   'warning',
   'unreachable',
@@ -106,7 +120,6 @@ export function MobileHomeDesktopRow(props: {
         ? t('components.hostCard.needsYou_one', '{{count}} needs you', { count: needsYou })
         : t('components.hostCard.needsYou_other', '{{count}} need you', { count: needsYou })
       : null
-  const MachineGlyph = display.machineKind ? MACHINE_GLYPHS[display.machineKind] : Monitor
   const accessibilityLabel = [
     t('components.hostCard.openHost', 'Open {{title}}', { title: display.title }),
     display.machineLine ?? display.descriptorLine,
@@ -138,7 +151,12 @@ export function MobileHomeDesktopRow(props: {
       delayLongPress={400}
     >
       <View style={styles.tile}>
-        <MachineGlyph size={17} strokeWidth={1.8} color={colors.textPrimary} />
+        <MachineGlyph
+          kind={display.machineKind}
+          size={17}
+          strokeWidth={1.8}
+          color={colors.textPrimary}
+        />
         <View style={[styles.tileDot, { backgroundColor: dotColor }]} />
       </View>
       <View style={styles.text}>
