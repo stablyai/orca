@@ -33,7 +33,7 @@ export function useTitlebarChromeFoldObserver({
     }
     shapeKeyRef.current = headerShapeKey
     headerWidthByLevelRef.current = {}
-    levelBeforeResetRef.current ??= getTitlebarChromeFoldLevel()
+    levelBeforeResetRef.current = levelBeforeResetRef.current ?? getTitlebarChromeFoldLevel()
     setTitlebarChromeFoldLevel(0)
   }, [headerShapeKey])
 
