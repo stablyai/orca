@@ -19,6 +19,7 @@ import {
 } from './worker-transcript-local-read'
 import { readTailLocalWorkerTranscriptPage } from './worker-transcript-local-tail-read'
 import { readInitialWorkerTranscriptReusing } from './worker-transcript-initial-read-cache'
+import { AGENT_READ_MAX_LIMIT } from '../../../../../shared/agent-conversations/agent-conversation-contracts'
 import {
   nativeChatTurnEvidenceObserverForAgent,
   type NativeChatTurnEvidence
@@ -96,7 +97,11 @@ export async function readWorkerTranscript(args: {
   if (!filePath) {
     return { ok: false, reason: 'transcript_missing', warnings: [] }
   }
-  const limit = clampWorkerTranscriptLimit(args.limit)
+  // `agent read` pages up to its own advertised limit; the byte bound still caps the response.
+  const limit = clampWorkerTranscriptLimit(
+    args.limit,
+    args.backward ? AGENT_READ_MAX_LIMIT : undefined
+  )
   const resolvedPath = filePath
   const read = () => readResolvedWorkerTranscript(resolvedPath, decode, limit, args)
   // A first read of an unchanged file serves its settled page; any other read scans.

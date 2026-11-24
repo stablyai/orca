@@ -71,8 +71,8 @@ async function readChat(
     orcaSessionId,
     limit,
     ...(cursor !== undefined ? { cursor } : {}),
-    // A legacy /clear made the running session a replacement; Orca doesn't read the old one.
-    clearedFromEarlierSession: running.lineage.length > 1
+    // A legacy /clear made the running session a replacement of the root, whichever ID was read.
+    clearedFromEarlierSession: running.sessionId !== orcaSessionId
   })
   return {
     orcaSessionId,

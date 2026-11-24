@@ -27,11 +27,14 @@ export type TranscriptBoundState = {
   shownContentCut?: boolean
 }
 
-export function clampWorkerTranscriptLimit(limit: number | undefined): number {
+export function clampWorkerTranscriptLimit(
+  limit: number | undefined,
+  max = MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT
+): number {
   if (!Number.isFinite(limit) || (limit ?? 0) <= 0) {
     return DEFAULT_WORKER_TRANSCRIPT_MESSAGE_LIMIT
   }
-  return Math.min(Math.floor(limit!), MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT)
+  return Math.min(Math.floor(limit!), max)
 }
 
 export function boundWorkerTranscriptMessages(
