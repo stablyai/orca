@@ -19,7 +19,6 @@ import {
 } from '../acp/acp-dialects/antigravity-dialect'
 import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import {
-  AGY_ORCA_HOME_MINIMUM_VERSION,
   agyOrcaHomeArgs,
   antigravityAgyOrcaAccount,
   antigravityAgyOrcaAccountHome,
@@ -71,19 +70,19 @@ function agyClientInfo(version: string | null): Implementation {
     : ZED_CLIENT_INFO
 }
 
-// An inherited Gemini API key switches agy to key auth, which its models reject (401);
-// alternate-case updater flags on Windows would shadow the configured uppercase entry.
-function scrubAgyHostApiKeys(env: Record<string, string>, inherited: NodeJS.ProcessEnv): string[] {
-  const removed = [...new Set([...Object.keys(env), ...Object.keys(inherited)])].filter((key) => {
-    const normalized = process.platform === 'win32' ? key.toUpperCase() : key
-    const shadowsDisableAutoUpdate =
-      process.platform === 'win32' &&
-      normalized === 'AGY_CLI_DISABLE_AUTO_UPDATE' &&
-      key !== normalized
-    return (
-      shadowsDisableAutoUpdate || normalized === 'GEMINI_API_KEY' || normalized === 'GOOGLE_API_KEY'
-    )
-  })
+// An alternate-case updater flag on Windows would shadow the configured uppercase entry. A
+// GEMINI_API_KEY is left alone: agy uses it only where its own settings pick a key provider.
+function scrubAgyHostEnvironment(
+  env: Record<string, string>,
+  inherited: NodeJS.ProcessEnv
+): string[] {
+  if (process.platform !== 'win32') {
+    return []
+  }
+  const removed = [...new Set([...Object.keys(env), ...Object.keys(inherited)])].filter(
+    (key) =>
+      key.toUpperCase() === 'AGY_CLI_DISABLE_AUTO_UPDATE' && key !== 'AGY_CLI_DISABLE_AUTO_UPDATE'
+  )
   for (const key of removed) {
     delete env[key]
   }
@@ -113,7 +112,7 @@ const ANTIGRAVITY_AGY_LAUNCH_SPEC = {
   // Match terminal and quota launches: a background updater steals focus on Windows (#27390)
   // and can replace agy mid-probe.
   env: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },
-  scrubEnvironment: scrubAgyHostApiKeys,
+  scrubEnvironment: scrubAgyHostEnvironment,
   dialect: { ...ANTIGRAVITY_ACP_DIALECT, signInAccount: 'system' },
   loginCommand: agentSessionSetupFor('antigravity')?.loginCommand ?? [],
   modelDiscovery: AGY_SESSION_MODEL_DISCOVERY,
@@ -157,8 +156,7 @@ const ANTIGRAVITY_AGY_ORCA_HOME_LAUNCH_SPEC: AcpLaunchSpec = {
   readsAntigravityChatAuth: true,
   scrubEnvironment: scrubAgyOrcaHomeEnvironment,
   dialect: ANTIGRAVITY_AGY_ORCA_HOME_DIALECT,
-  account: antigravityAgyOrcaAccount,
-  minimumVersions: [AGY_ORCA_HOME_MINIMUM_VERSION]
+  account: antigravityAgyOrcaAccount
 }
 
 /** The Orca-home spec for one home: agy is pointed at it on every launch. */

@@ -33,9 +33,6 @@ export const ANTIGRAVITY_AGY_CHAT_HOME_FOLDER = 'antigravity-agy-chat'
 const VARIABLE = 'GEMINI_HOME'
 const ORCA_HOME_FOLDERS = [ANTIGRAVITY_AGY_CHAT_HOME_FOLDER, ANTIGRAVITY_CHAT_HOME_FOLDER]
 
-/** The oldest agy that runs a chat on a home it is given (`--gemini-dir`/`--app-data-dir`). */
-export const AGY_ORCA_HOME_MINIMUM_VERSION = '1.5.5'
-
 export function antigravityAgyOrcaAccountHome(stateDirectory: string): AgentSessionAccountHome {
   return { variable: VARIABLE, path: join(stateDirectory, ANTIGRAVITY_AGY_CHAT_HOME_FOLDER) }
 }
