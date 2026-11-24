@@ -1761,9 +1761,9 @@
       }
     },
     "hostOfflineBanner": {
-      "offline": "{{host}} is offline",
+      "offline": "Can’t reach {{host}}",
       "reconnecting": "Reconnecting to {{host}}…",
-      "asOf": "Showing what was here as of {{time}}"
+      "asOf": "As of {{time}}"
     },
     "offlineAsOfTime": {
       "yesterday": "yesterday, {{time}}"
@@ -7946,9 +7946,6 @@
     },
     "upcoming": {
       "needsSignIn": "Needs sign-in"
-    },
-    "page": {
-      "serverDownTitle": "Can’t reach {{host}}"
     },
     "memoryHistory": {
       "tidyUp": "Tidy-up"
