@@ -1,6 +1,5 @@
 import { DaemonPtyTargetInspection } from './daemon-pty-target-inspection'
 import { terminateResolvedDaemonSession } from '../../server/daemon-fenced-termination'
-import type { PtyFencedTerminationRequest } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import { reconcileDaemonRouterSessions } from './daemon-router-session-reconciliation'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import { DaemonPtyAdapterSubscriptionFanout } from './daemon-pty-adapter-subscription-fanout'
@@ -126,8 +125,8 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.ownerResolver.getVerifiedRoute(id)?.supportsFencedTermination?.(id) === true
   }
 
-  killFenced = (request: PtyFencedTerminationRequest) =>
-    terminateResolvedDaemonSession(request, () =>
+  killFenced: NonNullable<IPtyProvider['killFenced']> = (request, options) =>
+    terminateResolvedDaemonSession(request, options, () =>
       this.ownerResolver.resolveTermination(request.id, request.expectedIncarnationId)
     )
 

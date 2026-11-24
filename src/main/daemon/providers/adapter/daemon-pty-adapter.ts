@@ -1,8 +1,9 @@
-import {
-  isPtyFencedTerminationOutcome,
-  type PtyFencedTerminationRequest,
-  type PtyFencedTerminationOutcome
+import type {
+  PtyFencedTerminationRequest,
+  PtyFencedTerminationOutcome,
+  PtyFencedTerminationLocalOptions
 } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
+import { killDaemonPtyFenced } from './daemon-pty-fenced-kill'
 import {
   FENCED_TERMINATION_PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact
@@ -45,41 +46,22 @@ export class DaemonPtyAdapter extends DaemonPtyPreservedHostLoss implements IPty
     return this.protocolVersion >= FENCED_TERMINATION_PROTOCOL_VERSION
   }
 
-  async killFenced(request: PtyFencedTerminationRequest): Promise<PtyFencedTerminationOutcome> {
-    if (!this.supportsFencedTermination(request.id)) {
-      return { outcome: 'refused', reason: 'unsupported' }
-    }
-    // Capture the checked identity before waiting on connection or lifecycle locks.
-    const { id, expectedIncarnationId, requireNoAgentOwner, requireUnattached } = request
-    try {
-      return await this.withHistorySpawnLock(id, async () => {
-        const incarnationBeforeKill = this.sessionIncarnations.get(id)
-        await this.ensureConnected()
-        const result = await this.client.request<unknown>('kill', {
-          sessionId: id,
-          immediate: true,
-          expectedIncarnationId,
-          requireNoAgentOwner,
-          requireUnattached
-        })
-        if (!isPtyFencedTerminationOutcome(result)) {
-          return { outcome: 'refused', reason: 'unverifiable' }
-        }
-        const currentIncarnationId = this.sessionIncarnations.get(id)
-        if (
-          (result.outcome === 'ended' || result.outcome === 'already_exited') &&
-          (incarnationBeforeKill === undefined ||
-            incarnationBeforeKill === expectedIncarnationId) &&
-          (currentIncarnationId === undefined || currentIncarnationId === expectedIncarnationId)
-        ) {
-          // Exit may clear the incarnation first; hold the spawn lock through removal to protect replacement sessions.
-          await this.completeShutdownWithHistoryLock(id, {})
-        }
-        return result
-      })
-    } catch {
-      return { outcome: 'refused', reason: 'unverifiable' }
-    }
+  killFenced(
+    request: PtyFencedTerminationRequest,
+    options?: PtyFencedTerminationLocalOptions
+  ): Promise<PtyFencedTerminationOutcome> {
+    return killDaemonPtyFenced(
+      {
+        supportsFencedTermination: (id) => this.supportsFencedTermination(id),
+        withHistorySpawnLock: (id, run) => this.withHistorySpawnLock(id, run),
+        sessionIncarnation: (id) => this.sessionIncarnations.get(id),
+        ensureConnected: () => this.ensureConnected(),
+        requestKill: (args) => this.client.request<unknown>('kill', args),
+        completeShutdownWithHistoryLock: (id) => this.completeShutdownWithHistoryLock(id, {})
+      },
+      request,
+      options
+    )
   }
 
   async getAsyncIoHealth(): Promise<DaemonAsyncIoStatus> {

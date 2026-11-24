@@ -415,4 +415,29 @@ describe('account restart exits arriving out of order', () => {
     expect(t.runtime.onPtyExit).toHaveBeenCalledTimes(1)
     expect(t.sendPtyExitToRenderer).toHaveBeenCalledTimes(1)
   })
+
+  it('writes no kill when the grant is revoked during the daemon connection wait', async () => {
+    const t = setup()
+    let releaseConnection!: () => void
+    const connected = new Promise<void>((resolve) => {
+      releaseConnection = resolve
+    })
+    let killsWritten = 0
+    h.killFenced = vi.fn(async (...args: unknown[]) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restart IPC passes its local options second.
+      const options = args[1] as { beforeRequest?: () => boolean } | undefined
+      await connected
+      if (options?.beforeRequest?.() === false) {
+        return { outcome: 'refused', reason: 'unverifiable' } as const
+      }
+      killsWritten += 1
+      return { outcome: 'ended', writersExited: true } as const
+    })
+    const result = t.request()
+    await vi.waitFor(() => expect(h.killFenced).toHaveBeenCalledTimes(1))
+    h.selectedAccount = 'old'
+    releaseConnection()
+    await expect(result).resolves.toMatchObject({ outcome: 'not-started', reason: 'not-stale' })
+    expect(killsWritten).toBe(0)
+  })
 })

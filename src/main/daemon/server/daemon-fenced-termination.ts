@@ -2,7 +2,8 @@ import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import type { DaemonSessionOwnerResolution } from '../providers/routing/daemon-session-owner-resolution'
 import type {
   PtyFencedTerminationRequest,
-  PtyFencedTerminationOutcome
+  PtyFencedTerminationOutcome,
+  PtyFencedTerminationLocalOptions
 } from '../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { TerminalHost } from '../terminal-host/terminal-host'
 import type { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations'
@@ -12,6 +13,7 @@ type FencedOwner<T extends IPtyProvider> = DaemonSessionOwnerResolution<T> | { k
 
 export async function terminateResolvedDaemonSession(
   request: PtyFencedTerminationRequest,
+  options: PtyFencedTerminationLocalOptions | undefined,
   resolve: () => Promise<FencedOwner<IPtyProvider>>
 ): Promise<PtyFencedTerminationOutcome> {
   const resolution = await resolve()
@@ -27,7 +29,12 @@ export async function terminateResolvedDaemonSession(
   if (!resolution.provider.supportsFencedTermination?.(request.id)) {
     return { outcome: 'refused', reason: 'unsupported' }
   }
-  return resolution.provider.killFenced?.(request) ?? { outcome: 'refused', reason: 'unsupported' }
+  return (
+    resolution.provider.killFenced?.(request, options) ?? {
+      outcome: 'refused',
+      reason: 'unsupported'
+    }
+  )
 }
 
 export async function handleDaemonFencedTermination(

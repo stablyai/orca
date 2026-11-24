@@ -11,6 +11,11 @@ export type PtyFencedTerminationRequest = {
   }
 }
 
+/** Main-local hooks for a fenced stop; never sent to the daemon. */
+export type PtyFencedTerminationLocalOptions = {
+  beforeRequest?: () => boolean
+}
+
 export type PtyFencedTerminationOutcome =
   /** `writersExited`: the teardown also proved every captured descendant gone (or ended the owned job tree). */
   | { outcome: 'ended'; writersExited?: true }

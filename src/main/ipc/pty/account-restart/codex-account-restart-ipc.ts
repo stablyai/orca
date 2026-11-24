@@ -119,16 +119,29 @@ async function stopCodexRestartOccupant(
   if (!authorize()) {
     return 'not-authorized'
   }
+  let revoked = false
   let outcome: Awaited<ReturnType<NonNullable<typeof provider.killFenced>>>
   try {
-    outcome = await provider.killFenced({
-      id: occupant.ptyId,
-      expectedIncarnationId: occupant.incarnationId,
-      requireNoAgentOwner: true,
-      requireUnattached: false
-    })
+    outcome = await provider.killFenced(
+      {
+        id: occupant.ptyId,
+        expectedIncarnationId: occupant.incarnationId,
+        requireNoAgentOwner: true,
+        requireUnattached: false
+      },
+      {
+        // Re-checked after route, lock and connection waits, right before the kill is written.
+        beforeRequest: () => {
+          revoked = !authorize()
+          return !revoked
+        }
+      }
+    )
   } catch {
     return 'unknown'
+  }
+  if (revoked) {
+    return 'not-authorized'
   }
   if (outcome.outcome === 'ended') {
     // Deliver through the window registered now, not the one that asked for the stop.
