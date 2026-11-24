@@ -1285,8 +1285,8 @@
       "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host.",
       "agentActions": "{{agent}} actions",
-      "showDetails": "Show details",
-      "hideDetails": "Hide details",
+      "showAgentDetails": "Show {{agent}} details",
+      "hideAgentDetails": "Hide {{agent}} details",
       "defaultAutoBadge": "Default · Auto",
       "newAgentsTitle": "New agents",
       "defaultSurfaceServerDescription": "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice."
@@ -7392,13 +7392,6 @@
           "changesLost_other": "{{count}} uncommitted changes will be lost",
           "uncountedChangesLost": "Uncommitted changes will be lost",
           "moreLoadedPaths": "and {{value0}} more loaded paths"
-        },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Child workspaces will be deleted",
-          "alsoDeletesChildren_one": "Deleting this workspace also deletes {{count}} child workspace.",
-          "alsoDeletesChildren_other": "Deleting this workspace also deletes {{count}} child workspaces.",
-          "moreChildren_one": "+{{count}} more",
-          "moreChildren_other": "+{{count}} more"
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Show worktree",
@@ -24004,12 +23997,13 @@
       "downloadSize": "{{size}} MB download.",
       "downloading": "Downloading {{done}} MB.",
       "downloadingOf": "Downloading {{done}} MB of {{total}} MB.",
-      "external": "Uses the copy of {{agent}} found on this host.",
-      "extracting": "Extracting {{agent}}.",
+      "external": "Uses your own {{agent}}",
+      "externalShort": "Uses your own copy",
+      "extracting": "Unpacking {{agent}}…",
+      "extractingShort": "Unpacking…",
       "failed": "Installation failed. Try again.",
       "cancelFailed": "Couldn't cancel the installation. Try again.",
       "install": "Install {{agent}}",
-      "installManaged": "Install Orca's copy",
       "installedByOrca": "Installed by Orca · {{version}}",
       "notInstalled": "Not installed.",
       "progress": "{{agent}} download",
@@ -24028,7 +24022,8 @@
       "unavailable": "{{agent}} is not available on this host.",
       "update": "Update",
       "updateTo": "Update to {{version}}",
-      "verifying": "Checking the downloaded runtime.",
+      "verifying": "Verifying…",
+      "verifyingAgent": "Verifying {{agent}}…",
       "installTitle": "Install {{agent}} to start chatting",
       "continueTitle": "Install {{agent}} to continue",
       "heroBody": "One-time {{size}} MB download. It's shared by {{agent}} chats on the computer running this chat.",
@@ -24046,7 +24041,7 @@
       "checkingTitle": "Checking the download",
       "progressOf": "{{done}} of {{total}} MB",
       "unpackingDetail": "Unpacking the runtime",
-      "checkingDetail": "Checking the downloaded runtime",
+      "checkingDetail": "Verifying {{agent}}…",
       "stepDownload": "Download",
       "stepUnpack": "Unpack",
       "stepCheck": "Check"
@@ -24561,6 +24556,9 @@
     "scanTooLarge": "Quick Open scan too large ({{reason}})."
   },
   "checksPanel": {
+    "commentsUnavailable": "Could not load comments.",
+    "linkedReviewUnavailable": "Could not load the linked pull request.",
+    "loadingReviewDetails": "Loading review details…",
     "unlinked": {
       "title": "Pull request unlinked",
       "description": "PR #{{number}} is hidden for this workspace. Link it again to restore checks and review details.",
@@ -25545,8 +25543,6 @@
     "setupTerminalTitle": "Setup",
     "delete": {
       "detachingChildren": "Detaching children...",
-      "childrenPreservedTitle": "Child workspaces will be kept",
-      "childrenCannotBeKeptTitle": "Child workspaces cannot be kept",
       "childrenPreservedDescription": "Direct children will become top-level workspaces. Their files, terminals, and nested children will be kept.",
       "detachChildren": "Detach and keep child workspaces",
       "nestedChildrenCannotBeKept": "Child workspace folders inside this workspace must be moved outside it before they can be kept.",
@@ -25578,7 +25574,11 @@
       "singleTitle": "Delete {{name}}?",
       "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
       "errorDetails": "Details",
-      "changesIncomplete": "Some changes couldn’t be fully checked."
+      "changesIncomplete": "Some changes couldn’t be fully checked.",
+      "parentWorkspace": "Parent workspace",
+      "workspacesToReview": "Workspaces to review",
+      "workspaceDetails": "Selected workspace details",
+      "workspaceKept": "Will be kept"
     }
   },
   "projectBoard": {
@@ -28172,7 +28172,8 @@
       "runNow": "Run now",
       "openOnPage": "Open on Automations page",
       "pauseShort": "Pause",
-      "resumeShort": "Resume"
+      "resumeShort": "Resume",
+      "nextAt": "next {{time}}"
     },
     "access": {
       "thisComputer": "this computer",
@@ -30308,10 +30309,8 @@
         "activity": "Activity",
         "canceledNote": "Canceled:",
         "doneNote": "Done:",
-        "links": "Links",
         "showLess": "Show less",
         "showMore": "Show more",
-        "subWhere": "Item {{number}} · {{chat}}",
         "showEarlier": "Show earlier",
         "next": "Next item",
         "previous": "Previous item",
@@ -30323,7 +30322,10 @@
         "firstItem": "First item",
         "lastItem": "Last item",
         "deleted": "This item was deleted.",
-        "moreLinks": "{{count}} more links",
+        "linkCount": "{{count}} links",
+        "reply": "Reply",
+        "replyAbove": "Reply, above",
+        "replyBelow": "Reply, below",
         "loading": "Loading item…"
       },
       "loading": "Loading items…",
@@ -30956,7 +30958,8 @@
     "navigationLabel": "App navigation",
     "toolsLabel": "App tools",
     "workspaces": "Workspaces",
-    "more": "More"
+    "more": "More",
+    "pageRegion": "Page"
   },
   "chats": {
     "delete": {

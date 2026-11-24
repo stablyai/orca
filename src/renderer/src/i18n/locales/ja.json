@@ -6029,11 +6029,6 @@
           "uncountedChangesLost": "未コミットの変更が失われます",
           "moreLoadedPaths": "ほかに読み込まれたパスが{{value0}}件"
         },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "子ワークスペースは削除されます",
-          "alsoDeletesChildren_other": "このワークスペースを削除すると、{{count}} 件の子ワークスペースも削除されます。",
-          "moreChildren_other": "ほか {{count}} 件"
-        },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "worktreeを表示",
           "ad99f4eea9": "非表示のままにする",
@@ -21473,12 +21468,13 @@
       "downloadSize": "{{size}} MB のダウンロード。",
       "downloading": "{{done}} MB をダウンロード中です。",
       "downloadingOf": "{{total}} MB 中 {{done}} MB をダウンロード中です。",
-      "external": "このホストで見つかった {{agent}} のコピーを使用しています。",
-      "extracting": "{{agent}} を展開しています。",
+      "external": "ご自身の {{agent}} を使用しています",
+      "externalShort": "ご自身のコピーを使用しています",
+      "extracting": "{{agent}} を展開しています…",
+      "extractingShort": "展開しています…",
       "failed": "インストールに失敗しました。もう一度お試しください。",
       "cancelFailed": "インストールをキャンセルできませんでした。もう一度お試しください。",
       "install": "{{agent}} をインストール",
-      "installManaged": "Orca のコピーをインストール",
       "notInstalled": "インストールされていません。",
       "progress": "{{agent}} のダウンロード",
       "readFailed": "このホストの {{agent}} を確認できませんでした。再試行しています。",
@@ -21495,7 +21491,8 @@
       "thisComputer": "このコンピューター",
       "unavailable": "{{agent}} はこのホストでは利用できません。",
       "update": "更新",
-      "verifying": "ダウンロードしたランタイムを確認しています。",
+      "verifying": "検証しています…",
+      "verifyingAgent": "{{agent}} を検証しています…",
       "installTitle": "チャットを始めるには {{agent}} をインストールしてください",
       "continueTitle": "続けるには {{agent}} をインストールしてください",
       "heroBody": "{{size}} MB の一度きりのダウンロードです。このチャットを実行するコンピューター上の {{agent}} チャットで共有されます。",
@@ -21513,7 +21510,7 @@
       "checkingTitle": "ダウンロードを確認中",
       "progressOf": "{{total}} MB 中 {{done}} MB",
       "unpackingDetail": "ランタイムを展開しています",
-      "checkingDetail": "ダウンロードしたランタイムを確認しています",
+      "checkingDetail": "{{agent}} を検証しています…",
       "stepDownload": "ダウンロード",
       "stepUnpack": "展開",
       "stepCheck": "確認"
@@ -23477,8 +23474,6 @@
     "setupTerminalTitle": "セットアップ",
     "delete": {
       "detachingChildren": "子ワークスペースを切り離し中…",
-      "childrenPreservedTitle": "子ワークスペースは保持されます",
-      "childrenCannotBeKeptTitle": "子ワークスペースを保持できません",
       "childrenPreservedDescription": "直下の子ワークスペースはトップレベルのワークスペースになります。それらのファイル、ターミナル、さらにその下の子ワークスペースは保持されます。",
       "detachChildren": "切り離して子ワークスペースを保持",
       "nestedChildrenCannotBeKept": "このワークスペース内にある子ワークスペースのフォルダーは、保持する前にこのワークスペースの外へ移動する必要があります。",
@@ -25540,7 +25535,10 @@
         "lastItem": "最後の項目",
         "previous": "前の項目",
         "next": "次の項目",
-        "subWhere": "項目 {{number}} · {{chat}}"
+        "linkCount": "リンク{{count}}件",
+        "reply": "返信",
+        "replyAbove": "上の質問に返信",
+        "replyBelow": "下の質問に返信"
       },
       "activity": {
         "linked": "が {{links}} をリンクしました",

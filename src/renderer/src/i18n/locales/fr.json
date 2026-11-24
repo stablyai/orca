@@ -6032,15 +6032,6 @@
           "uncountedChangesLost": "Les modifications non commitées seront perdues",
           "moreLoadedPaths": "et {{value0}} autres chemins chargés"
         },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Les espaces de travail enfants seront supprimés",
-          "alsoDeletesChildren_one": "Supprimer cet espace de travail supprime également {{count}} espace de travail enfant.",
-          "alsoDeletesChildren_other": "Supprimer cet espace de travail supprime également {{count}} espaces de travail enfants.",
-          "alsoDeletesChildren_many": "Supprimer cet espace de travail supprime également {{count}} espaces de travail enfants.",
-          "moreChildren_one": "+{{count}} de plus",
-          "moreChildren_other": "+{{count}} de plus",
-          "moreChildren_many": "+{{count}} de plus"
-        },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Afficher le worktree",
           "ad99f4eea9": "Garder masqué",
@@ -21214,12 +21205,13 @@
       "downloadSize": "Téléchargement de {{size}} Mo.",
       "downloading": "Téléchargement de {{done}} Mo.",
       "downloadingOf": "Téléchargement de {{done}} Mo sur {{total}} Mo.",
-      "external": "Utilise la copie de {{agent}} trouvée sur cet hôte.",
-      "extracting": "Extraction de {{agent}}.",
+      "external": "Utilise votre propre {{agent}}",
+      "externalShort": "Utilise votre propre copie",
+      "extracting": "Décompression de {{agent}}…",
+      "extractingShort": "Décompression…",
       "failed": "L'installation a échoué. Réessayez.",
       "cancelFailed": "Impossible d'annuler l'installation. Réessayez.",
       "install": "Installer {{agent}}",
-      "installManaged": "Installer la copie d'Orca",
       "notInstalled": "Non installé.",
       "progress": "Téléchargement de {{agent}}",
       "readFailed": "Impossible de vérifier {{agent}} sur cet hôte. Nouvel essai en cours.",
@@ -21236,7 +21228,8 @@
       "thisComputer": "cet ordinateur",
       "unavailable": "{{agent}} n'est pas disponible sur cet hôte.",
       "update": "Mettre à jour",
-      "verifying": "Vérification de l’environnement téléchargé.",
+      "verifying": "Vérification…",
+      "verifyingAgent": "Vérification de {{agent}}…",
       "installTitle": "Installez {{agent}} pour commencer à discuter",
       "continueTitle": "Installez {{agent}} pour continuer",
       "heroBody": "Téléchargement unique de {{size}} Mo, partagé par les conversations {{agent}} sur l’ordinateur qui exécute cette conversation.",
@@ -21254,7 +21247,7 @@
       "checkingTitle": "Vérification du téléchargement",
       "progressOf": "{{done}} sur {{total}} Mo",
       "unpackingDetail": "Décompression de l'environnement d'exécution",
-      "checkingDetail": "Vérification de l'environnement d'exécution téléchargé",
+      "checkingDetail": "Vérification de {{agent}}…",
       "stepDownload": "Télécharger",
       "stepUnpack": "Décompresser",
       "stepCheck": "Vérifier"
@@ -24825,7 +24818,10 @@
         "lastItem": "Dernier élément",
         "previous": "Élément précédent",
         "next": "Élément suivant",
-        "subWhere": "Élément {{number}} · {{chat}}"
+        "linkCount": "{{count}} liens",
+        "reply": "Répondre",
+        "replyAbove": "Répondre, plus haut",
+        "replyBelow": "Répondre, plus bas"
       },
       "activity": {
         "linked": "a lié {{links}}",

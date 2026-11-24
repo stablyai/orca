@@ -6213,13 +6213,6 @@
           "changesLost_other": "{{count}} nicht committete Änderungen gehen verloren",
           "uncountedChangesLost": "Nicht committete Änderungen gehen verloren"
         },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Untergeordnete Arbeitsbereiche werden gelöscht",
-          "alsoDeletesChildren_one": "Beim Löschen dieses Arbeitsbereichs wird auch {{count}} untergeordneter Arbeitsbereich gelöscht.",
-          "alsoDeletesChildren_other": "Beim Löschen dieses Arbeitsbereichs werden auch {{count}} untergeordnete Arbeitsbereiche gelöscht.",
-          "moreChildren_one": "+{{count}} weiterer",
-          "moreChildren_other": "+{{count}} weitere"
-        },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Worktree anzeigen",
           "ad99f4eea9": "Ausgeblendet lassen",
@@ -21112,12 +21105,13 @@
       "downloadSize": "Download: {{size}} MB.",
       "downloading": "{{done}} MB werden heruntergeladen.",
       "downloadingOf": "{{done}} MB von {{total}} MB werden heruntergeladen.",
-      "external": "Verwendet die auf diesem Host gefundene Installation von {{agent}}.",
-      "extracting": "{{agent}} wird entpackt.",
+      "external": "Verwendet deine eigene {{agent}}-Installation",
+      "externalShort": "Verwendet deine eigene Installation",
+      "extracting": "{{agent}} wird entpackt…",
+      "extractingShort": "Wird entpackt…",
       "failed": "Installation fehlgeschlagen. Erneut versuchen.",
       "cancelFailed": "Die Installation konnte nicht abgebrochen werden. Erneut versuchen.",
       "install": "{{agent}} installieren",
-      "installManaged": "Orcas Version installieren",
       "notInstalled": "Nicht installiert.",
       "progress": "Download von {{agent}}",
       "readFailed": "{{agent}} konnte auf diesem Host nicht überprüft werden. Erneuter Versuch.",
@@ -21134,7 +21128,8 @@
       "thisComputer": "dieser Computer",
       "unavailable": "{{agent}} ist auf diesem Host nicht verfügbar.",
       "update": "Aktualisieren",
-      "verifying": "Die heruntergeladene Laufzeitumgebung wird überprüft.",
+      "verifying": "Wird überprüft…",
+      "verifyingAgent": "{{agent}} wird überprüft…",
       "installTitle": "{{agent}} installieren, um einen Chat zu starten",
       "continueTitle": "{{agent}} installieren, um fortzufahren",
       "heroBody": "Einmaliger Download von {{size}} MB. Alle Chats mit {{agent}} auf dem Computer, auf dem dieser Chat läuft, verwenden ihn gemeinsam.",
@@ -21152,7 +21147,7 @@
       "checkingTitle": "Download wird überprüft",
       "progressOf": "{{done}} von {{total}} MB",
       "unpackingDetail": "Laufzeitumgebung wird entpackt",
-      "checkingDetail": "Heruntergeladene Laufzeitumgebung wird überprüft",
+      "checkingDetail": "{{agent}} wird überprüft…",
       "stepDownload": "Herunterladen",
       "stepUnpack": "Entpacken",
       "stepCheck": "Überprüfen"
@@ -24227,7 +24222,10 @@
         "lastItem": "Letztes Element",
         "previous": "Vorheriges Element",
         "next": "Nächstes Element",
-        "subWhere": "Element {{number}} · {{chat}}"
+        "linkCount": "{{count}} Links",
+        "reply": "Antworten",
+        "replyAbove": "Antworten, weiter oben",
+        "replyBelow": "Antworten, weiter unten"
       },
       "activity": {
         "linked": "hat {{links}} verknüpft",

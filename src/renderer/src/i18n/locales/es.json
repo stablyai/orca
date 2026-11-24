@@ -5724,15 +5724,6 @@
           "uncountedChangesLost": "Se perderán los cambios sin confirmar",
           "moreLoadedPaths": "y {{value0}} rutas cargadas más"
         },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Se eliminarán los espacios de trabajo secundarios",
-          "alsoDeletesChildren_one": "Al eliminar este espacio de trabajo también se elimina {{count}} espacio de trabajo secundario.",
-          "alsoDeletesChildren_other": "Al eliminar este espacio de trabajo también se eliminan {{count}} espacios de trabajo secundarios.",
-          "alsoDeletesChildren_many": "Al eliminar este espacio de trabajo también se eliminan {{count}} espacios de trabajo secundarios.",
-          "moreChildren_one": "+{{count}} más",
-          "moreChildren_other": "+{{count}} más",
-          "moreChildren_many": "+{{count}} más"
-        },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Mostrar worktree",
           "ad99f4eea9": "Mantener oculto",
@@ -20919,12 +20910,13 @@
       "downloadSize": "Descarga de {{size}} MB.",
       "downloading": "Descargando {{done}} MB.",
       "downloadingOf": "Descargando {{done}} MB de {{total}} MB.",
-      "external": "Usa la copia de {{agent}} encontrada en este host.",
-      "extracting": "Extrayendo {{agent}}.",
+      "external": "Usa tu propio {{agent}}",
+      "externalShort": "Usa tu propia copia",
+      "extracting": "Descomprimiendo {{agent}}…",
+      "extractingShort": "Descomprimiendo…",
       "failed": "La instalación falló. Inténtalo de nuevo.",
       "cancelFailed": "No se pudo cancelar la instalación. Inténtalo de nuevo.",
       "install": "Instalar {{agent}}",
-      "installManaged": "Instalar la copia de Orca",
       "notInstalled": "No instalado.",
       "progress": "Descarga de {{agent}}",
       "readFailed": "No se pudo comprobar {{agent}} en este host. Reintentando.",
@@ -20941,7 +20933,8 @@
       "thisComputer": "este equipo",
       "unavailable": "{{agent}} no está disponible en este host.",
       "update": "Actualizar",
-      "verifying": "Comprobando el entorno descargado.",
+      "verifying": "Verificando…",
+      "verifyingAgent": "Verificando {{agent}}…",
       "installTitle": "Instala {{agent}} para empezar a chatear",
       "continueTitle": "Instala {{agent}} para continuar",
       "heroBody": "Descarga única de {{size}} MB. La comparten los chats de {{agent}} en el equipo que ejecuta este chat.",
@@ -20959,7 +20952,7 @@
       "checkingTitle": "Comprobando la descarga",
       "progressOf": "{{done}} de {{total}} MB",
       "unpackingDetail": "Descomprimiendo el entorno de ejecución",
-      "checkingDetail": "Comprobando el entorno de ejecución descargado",
+      "checkingDetail": "Verificando {{agent}}…",
       "stepDownload": "Descargar",
       "stepUnpack": "Descomprimir",
       "stepCheck": "Comprobar"
@@ -24804,7 +24797,10 @@
         "lastItem": "Último elemento",
         "previous": "Elemento anterior",
         "next": "Elemento siguiente",
-        "subWhere": "Elemento {{number}} · {{chat}}"
+        "linkCount": "{{count}} enlaces",
+        "reply": "Responder",
+        "replyAbove": "Responder, arriba",
+        "replyBelow": "Responder, abajo"
       },
       "activity": {
         "linked": "enlazó {{links}}",

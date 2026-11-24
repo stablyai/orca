@@ -1,6 +1,6 @@
 // An item's Activity on a rail: comments on one quiet surface, and between them one muted line per event
 // (worker started and finished from the worker's record, edits, links and status changes).
-import { useCallback, useRef, useState } from 'react'
+import { Fragment, useCallback, useRef, useState } from 'react'
 import {
   AlarmClock,
   AlarmClockOff,
@@ -21,6 +21,7 @@ import {
 } from '../../../../../shared/bots/bot-items'
 import {
   botItemActivity,
+  botItemNeedsYouEntryKey,
   botItemWaitEntryKey,
   botItemWorkerStopReason,
   type BotItemActivityEntry
@@ -28,6 +29,11 @@ import {
 import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name'
 import { botItemStatusName } from './bot-item-status-name'
 import { BotItemCommentCard } from './BotItemCommentCard'
+import {
+  BotItemNeedsYouMarkBox,
+  botItemMadeAt,
+  type BotItemNeedsYouMark
+} from './BotItemNeedsYouMark'
 import { BotItemWaitCard } from './BotItemWaitCard'
 import { revealBotItemComment } from './bot-item-comment-reveal'
 import type { BotItemQuickReplyActions } from './use-bot-item-question-steps'
@@ -254,7 +260,8 @@ export function BotItemActivityList({
   item,
   events,
   pending,
-  quickReplies
+  quickReplies,
+  needsYou
 }: {
   bot: Bot
   item: BotItem
@@ -263,16 +270,68 @@ export function BotItemActivityList({
   pending?: BotItemPendingComments
   /** What the waiting question's quick replies do; absent where the item takes no comment (deleted). */
   quickReplies?: BotItemQuickReplyActions
+  needsYou?: BotItemNeedsYouMark
 }): React.JSX.Element {
   const t = useTranslate()
   const entries = botItemActivity(item, events)
   const waitKey = botItemWaitEntryKey(item, entries)
+  const needsYouKey = needsYou ? botItemNeedsYouEntryKey(item, entries) : null
   const list = useRef<HTMLDivElement | null>(null)
   // A reply's quote leads to its question, focused so Tab goes on from there.
   const jump = useCallback(
     (eventId: string) => revealBotItemComment(list.current, eventId, 'focus'),
     []
   )
+  const drawEntry = (entry: BotItemActivityEntry): React.ReactNode => {
+    // An answer reads on its question's lines.
+    if (entry.kind === 'comment' && entry.onAsk) {
+      return null
+    }
+    if (entry.kind === 'comment') {
+      return (
+        <BotItemCommentCard
+          bot={bot}
+          item={item}
+          // A reply already sent answers the question, before the host's read says so.
+          entry={
+            pending?.shown.some(({ failed }) => !failed) ? { ...entry, waiting: false } : entry
+          }
+          onJump={jump}
+          quickReplies={quickReplies}
+        />
+      )
+    }
+    // Shown last, as its card, while the item waits.
+    if (entry.key === waitKey) {
+      return null
+    }
+    return (
+      <div className="relative flex min-w-0 flex-wrap items-start gap-x-2 py-[3px] text-xs leading-[18px] text-muted-foreground">
+        <span className="flex h-[18px] w-5 shrink-0 items-center justify-center bg-sidebar">
+          <EntryIcon entry={entry} />
+        </span>
+        {/* Any long word (a path, a URL, a linked ref) wraps, so the page never scrolls sideways. */}
+        <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+          {entry.kind === 'worker' ? (
+            <WorkerBody entry={entry} />
+          ) : (
+            <EventBody event={entry.event} item={item} />
+          )}
+        </div>
+        {entry.kind === 'event' && entry.event.kind === 'made' ? (
+          <span className="shrink-0 text-2xs text-muted-foreground @max-[340px]:basis-full @max-[340px]:pl-7">
+            {botItemMadeAt(entry.at)}
+          </span>
+        ) : (
+          <NativeChatMessageTimestamp
+            timestamp={entry.at}
+            // A narrow pane puts the time under the line, so dates don't squeeze it.
+            className="shrink-0 text-2xs text-muted-foreground @max-[340px]:basis-full @max-[340px]:pl-7"
+          />
+        )}
+      </div>
+    )
+  }
   // The rail runs through the event glyphs; each glyph and card sits on the panel fill over it.
   return (
     <>
@@ -283,53 +342,16 @@ export function BotItemActivityList({
         className="relative flex flex-col before:absolute before:inset-y-2.5 before:left-[9.5px] before:w-px before:bg-foreground/12"
       >
         {entries.map((entry) => {
-          // An answer reads on its question's lines.
-          if (entry.kind === 'comment' && entry.onAsk) {
+          const row = drawEntry(entry)
+          if (row === null) {
             return null
           }
-          if (entry.kind === 'comment') {
-            return (
-              <BotItemCommentCard
-                key={entry.key}
-                bot={bot}
-                item={item}
-                // A reply already sent answers the question, before the host's read says so.
-                entry={
-                  pending?.shown.some(({ failed }) => !failed)
-                    ? { ...entry, waiting: false }
-                    : entry
-                }
-                onJump={jump}
-                quickReplies={quickReplies}
-              />
-            )
-          }
-          // Shown last, as its card, while the item waits.
-          if (entry.key === waitKey) {
-            return null
-          }
-          return (
-            <div
-              key={entry.key}
-              className="relative flex min-w-0 flex-wrap items-start gap-x-2 py-[3px] text-xs leading-[18px] text-muted-foreground"
-            >
-              <span className="flex h-[18px] w-5 shrink-0 items-center justify-center bg-sidebar">
-                <EntryIcon entry={entry} />
-              </span>
-              {/* Any long word (a path, a URL, a linked ref) wraps, so the page never scrolls sideways. */}
-              <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-                {entry.kind === 'worker' ? (
-                  <WorkerBody entry={entry} />
-                ) : (
-                  <EventBody event={entry.event} item={item} />
-                )}
-              </div>
-              <NativeChatMessageTimestamp
-                timestamp={entry.at}
-                // A narrow pane puts the time under the line, so dates don't squeeze it.
-                className="shrink-0 text-2xs text-muted-foreground @max-[340px]:basis-full @max-[340px]:pl-7"
-              />
-            </div>
+          return needsYou && entry.key === needsYouKey ? (
+            <BotItemNeedsYouMarkBox key={entry.key} mark={needsYou}>
+              {row}
+            </BotItemNeedsYouMarkBox>
+          ) : (
+            <Fragment key={entry.key}>{row}</Fragment>
           )
         })}
         {item.status === 'waiting' && item.wait ? (
