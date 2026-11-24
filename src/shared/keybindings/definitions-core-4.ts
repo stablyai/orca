@@ -223,7 +223,17 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     title: 'Toggle Automations',
     group: 'Global',
     scope: 'global',
-    searchKeywords: ['shortcut', 'automations', 'automation', 'schedule', 'cron', 'toggle'],
+    searchKeywords: [
+      'shortcut',
+      'automations',
+      'automation',
+      'schedule',
+      'cron',
+      'toggle',
+      '自动化',
+      '定时',
+      '计划任务'
+    ],
     // Why: unbound by default, matching workspace.openBoard, so no global chord is taken from terminal users.
     defaultBindings: platformBindings([]),
     allowInTerminal: true
@@ -233,7 +243,7 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     title: 'Toggle Activity',
     group: 'Global',
     scope: 'global',
-    searchKeywords: ['shortcut', 'activity', 'runs', 'history', 'toggle'],
+    searchKeywords: ['shortcut', 'activity', 'runs', 'history', 'toggle', '活动', '运行记录'],
     defaultBindings: platformBindings([]),
     allowInTerminal: true
   }
