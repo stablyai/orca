@@ -17,6 +17,7 @@ import type { BotChatTreeWorker } from '../../../../src/shared/bots/bot-chat-tre
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { MobileEdgeFade } from '../../components/list/MobileEdgeFade'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
+import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
 import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -333,7 +334,7 @@ function ClampedDescription({ text }: { text: string }) {
     <View style={styles.description}>
       <View style={!open && clamps ? styles.clamped : undefined}>
         <View onLayout={(event) => setHeight(event.nativeEvent.layout.height)}>
-          <MobileMarkdown content={text} />
+          <MobileMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
         </View>
       </View>
       {clamps ? (
