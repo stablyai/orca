@@ -85,10 +85,11 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
   reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes))
   if (mirrorResult.status === 'skipped-missing-source') {
     // Bootstrap seeded homes only; advancing an existing baseline would strand unmirrored changes.
-    if (!readCodexSettingsBaseline(homes.runtimeHomePath)) {
-      return { ran: true, complete: snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath) }
-    }
-    return { ran: true, complete: true }
+    // With no baseline the plan is empty apart from a guest home's carry-forward mark.
+    const seeded = !readCodexSettingsBaseline(homes.runtimeHomePath)
+    const complete =
+      !seeded || snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath, promotionPlan)
+    return { ran: true, complete }
   }
   // Advance the baseline only after mirroring so unpromoted changes remain eligible for retry.
   const complete = snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath, {

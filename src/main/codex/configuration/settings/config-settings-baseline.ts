@@ -28,6 +28,8 @@ export type CodexSettingsBaseline = {
   /** MCP server names the last mirror copied from the canonical source. */
   mcpServers: ReadonlySet<string>
   mcpServerRoot: boolean
+  /** False for baselines from before Orca recorded which plugin tables it mirrored. */
+  tracksRegistrations?: boolean
   /** Set once a WSL distro config regenerated this home; absent on homes an older Orca mirrored. */
   guestCarryForward?: CodexGuestCarryForward
 }
@@ -100,6 +102,7 @@ function readParsedCodexSettingsBaseline(
       mcpServers: readStoredMcpServers(parsed.mcpServers),
       // Older mirrors owned the whole MCP root; retain that removal policy for one pass.
       mcpServerRoot: parsed.mcpServers === undefined || parsed.mcpServerRoot === true,
+      tracksRegistrations: parsed.registrations !== undefined || parsed.mcpServers !== undefined,
       ...(parsed.guestCarryForward !== undefined && {
         guestCarryForward: readStoredGuestCarryForward(parsed.guestCarryForward)
       })

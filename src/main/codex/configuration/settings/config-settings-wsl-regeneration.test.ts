@@ -241,6 +241,22 @@ describe('managed Codex config for a WSL distro config', () => {
     expect(readRuntimeConfig()).not.toContain('old@market')
   })
 
+  it('keeps a first plugin added in a tab before the update', () => {
+    writeSystemConfig('model = "gpt-5"\n')
+    syncSystemConfigIntoManagedCodexHome()
+    writeFileSync(
+      runtimeConfigPath(),
+      `${readRuntimeConfig()}\n[plugins."docs@market"]\nenabled = true\n`,
+      'utf-8'
+    )
+    wslTestState.wslPath = systemConfigPath()
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toBe('model = "gpt-5"\n')
+    expect(readRuntimeConfig()).toContain('[plugins."docs@market"]')
+  })
+
   it('does not hold managed-copy plugins against a starter baseline', () => {
     writeSystemConfig('')
     wslTestState.wslPath = systemConfigPath()
