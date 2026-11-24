@@ -8,7 +8,10 @@ import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { makeRepo } from '../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type { Bot } from '../../../../../shared/bot-types'
-import type { ConnectorGitHubInstallation } from '../../../../../shared/connector-bot-github-contract'
+import type {
+  ConnectorGitHubInstallation,
+  ConnectorGitHubLinkedAccount
+} from '../../../../../shared/connector-bot-github-contract'
 import {
   openGitHubInstall,
   resetGitHubInstallForTests,
@@ -67,6 +70,8 @@ const triage: Bot = {
 
 let installations: ConnectorGitHubInstallation[] = [stablyai]
 let account: { userId: string; login: string } | null = { userId: '42', login: 'carol-gh' }
+/** Several GitHub users linked to this Orca account; unset means only `account`. */
+let accounts: ConnectorGitHubLinkedAccount[] | undefined
 let shownBot = marketing
 const neverReturns = (): Promise<never> => new Promise(() => {})
 
@@ -80,6 +85,7 @@ function stubGitHub(
   delete document.documentElement.dataset.githubDialogShot
   installations = options.with ?? [stablyai]
   account = options.signedIn === false ? null : { userId: '42', login: 'carol-gh' }
+  accounts = undefined
   shownBot = options.bot ?? marketing
   stopAwaitingGitHub('local')
   cancelConnectorConnect('local', 'github')
@@ -92,6 +98,7 @@ function stubGitHub(
       value: {
         installUrl: 'https://github.com/apps/orca-ide/installations/new',
         account,
+        ...(accounts ? { accounts } : {}),
         installations,
         defaultBotId: null
       }
@@ -322,6 +329,8 @@ function dialogShot(options: {
   people?: boolean
   bot?: Partial<Bot>
   login?: string
+  /** Several linked GitHub logins: the header lists them all and drops Not you?. */
+  logins?: string[]
   signedIn?: boolean
   expand?: string
   /** Then click "+ Add ↗": GitHub opens in the system browser and setup waits on it. */
@@ -337,6 +346,15 @@ function dialogShot(options: {
       })
       if (options.login && account) {
         account = { ...account, login: options.login }
+      }
+      if (options.logins) {
+        accounts = options.logins.map((login, index) => ({
+          userId: String(42 + index),
+          login,
+          installations: installations.map((entry) => entry.installationId),
+          defaultBotId: null
+        }))
+        account = { userId: '42', login: options.logins[0] }
       }
       if (!document.getElementById('github-dialog-shot')) {
         const style = document.createElement('style')
@@ -392,3 +410,11 @@ export const shotDoneNarrow = dialogShot({ width: 340, repos: 'seven', bot: { gi
 export const shotWaiting = dialogShot({ width: 440, repos: 'twoOrgs', addRepositories: true })
 export const shotWaitingNarrow = dialogShot({ width: 340, repos: 'twoOrgs', addRepositories: true })
 export const shotConnect = dialogShot({ width: 340, repos: 'one', signedIn: false })
+// Three linked GitHub logins, one 48 characters long: one header line, ellipsized, × stays put.
+const THREE_LOGINS = ['carol-gh', LONG_LOGIN, 'carol-work'] as const
+export const shotLogins = dialogShot({ width: 440, repos: 'twoOrgs', logins: [...THREE_LOGINS] })
+export const shotLoginsNarrow = dialogShot({
+  width: 340,
+  repos: 'twoOrgs',
+  logins: [...THREE_LOGINS]
+})

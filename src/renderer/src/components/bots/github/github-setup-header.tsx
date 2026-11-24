@@ -18,7 +18,8 @@ export function GitHubSignedInLine({
   const signedInAs = t('bots.connect.signedInAs', 'Signed in as {{who}}', { who })
   return (
     <span className="flex min-w-0 items-center gap-1 whitespace-nowrap">
-      <span className="min-w-0 truncate" title={signedInAs}>
+      {/* relative: the sr-only text is clipped here instead of widening the dialog. */}
+      <span className="relative min-w-0 truncate" title={signedInAs}>
         <span aria-hidden>{who}</span>
         <span className="sr-only">{signedInAs}</span>
       </span>
