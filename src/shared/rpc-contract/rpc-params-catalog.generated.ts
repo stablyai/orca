@@ -324,6 +324,8 @@ import {
 import {
   FileChooserAnswer,
   PagePromptAnswer,
+  ReadPrintPdf,
+  ReleasePrintPdf,
   Screencast,
   ScreencastAck,
   ScreencastReclaimForDesktop,
@@ -520,6 +522,7 @@ import {
 } from './google-files-params'
 import {
   GoogleBotAccessSetParams,
+  GoogleBotConnectedParams,
   GoogleClientExportParams,
   GoogleClientImportParams,
   GoogleDefaultSetParams,
@@ -1447,6 +1450,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.profileImportFromBrowser': ProfileImportFromBrowser,
   'browser.profileList': null,
   'browser.readImage': ReadImage,
+  'browser.readPrintPdf': ReadPrintPdf,
+  'browser.releasePrintPdf': ReleasePrintPdf,
   'browser.reload': Reload,
   'browser.replaceMisspelling': PageMenuWord,
   'browser.saveImage': PageMenuImage,
@@ -1717,6 +1722,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'gitlab.updateMRState': UpdateMrState,
   'gitlab.workItemByPath': WorkItemByPath,
   'gitlab.workItemDetails': WorkItemDetailsOfGitlabParams,
+  'google.bot.connected': GoogleBotConnectedParams,
   'google.bot.set': GoogleBotAccessSetParams,
   'google.calendar.calendars': CalendarCalendarsParams,
   'google.calendar.create': CalendarCreateParams,

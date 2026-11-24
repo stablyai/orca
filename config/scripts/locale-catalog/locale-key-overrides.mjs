@@ -121,7 +121,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'オンボーディングチェックリスト、{{value0}}/{{value1}} 完了。セットアップガイドを表示。'
   },
   'auto.components.settings.ShortcutFilterRail.02dc7d4251': {
-    ko: '바로가기 검색',
+    ko: '단축키 검색',
     zh: '搜索快捷键',
     ja: 'ショートカットを検索'
   },
@@ -395,7 +395,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'GitHub イシュー'
   },
   'auto.components.settings.CommitMessageAiPane.4f722a5f53': {
-    ko: '사용자 지정 명령을 선택하는 커밋 메시지, PR 및 브랜치 이름 레시피에서 사용됩니다. 사용',
+    ko: '사용자 지정 명령을 선택하는 커밋 메시지, PR 및 브랜치 이름 레시피에서 사용됩니다. 명령 입력을 인수로 넘기려면 명령에',
     zh: '由选择自定义命令的提交消息、拉取请求和分支名称配方使用。使用',
     ja: 'カスタムコマンドを選択するコミットメッセージ、PR、ブランチ名のレシピで使用されます。使用'
   },

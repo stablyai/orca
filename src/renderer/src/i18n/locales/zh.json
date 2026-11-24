@@ -589,7 +589,7 @@
     "followSymlinkedDirectories": "跟随符号链接目录",
     "followSymlinkedDirectoriesDescription": "在快速打开中搜索链接文件夹，并在文件资源管理器中展开本地链接文件夹",
     "accounts": {
-      "codexRemoveHome": "Orca 会删除此账户在 {{host}} 上的 Codex 文件夹，包括其中的登录信息、MCP 登录以及仅保存在该文件夹中的 Codex 历史记录，此操作无法撤销。如果此账户被选中，你下次启动的 Codex 将使用系统默认",
+      "codexRemoveHome": "Orca 会删除此账户在 {{host}} 上的 Codex 文件夹，包括其中的登录信息和 MCP 登录。此操作无法撤销。如果此账户被选中，你下次启动的 Codex 将使用系统默认",
       "claudeRemoveProfile": "Orca 会删除此账户在 {{host}} 上自己的 Claude 文件夹及其中保存的登录信息，你的系统默认登录以及与其共享的聊天记录会保留。如果此账户被选中，你下次启动的 Claude 将使用系统默认"
     },
     "sourceControl": {
@@ -19461,9 +19461,7 @@
         "streamBrowserUnavailable": "远程浏览器不可用，请检查其在服务器上的设置"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "此设备上的浏览器",
         "remoteLabel": "{{value0}} 上的浏览器",
-        "clientNoteLocalStorage": "导入操作会读取此设备上的浏览器，Cookie 存储在本机",
         "remoteNoteRemoteStorage": "导入操作会读取 {{value0}} 上的浏览器，Cookie 存储在该设备上，其屏幕上可能会出现权限提示"
       },
       "native": {
@@ -20112,6 +20110,8 @@
         "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录",
         "historyUnusable": "无法加载此聊天",
         "historyUnavailable": "Orca 目前无法打开此聊天的历史记录",
+        "diskFull": "运行此聊天的电脑磁盘已满。",
+        "freeDiskSpace": "请释放该磁盘空间后重试。",
         "savedInOtherFolder": "此对话保存在另一个文件夹中",
         "savedByNewerOrca": "这些聊天由更新版本的 Orca 保存",
         "updateOrcaToKeepUsing": "请更新 Orca 以继续使用这些聊天",
@@ -20476,7 +20476,6 @@
         "terminalRequired": "在终端中回答这个 OMP 问题",
         "openTerminal": "在终端中回答",
         "recommended": "推荐",
-        "stepAnswered": "{{value0}}，已回答",
         "stepOf": "第 {{value0}} 个，共 {{value1}} 个",
         "answered": "已回答",
         "title": "问题",
@@ -20545,6 +20544,9 @@
       "imagePreview": {
         "fileActions": "文件操作",
         "linkActions": "链接操作"
+      },
+      "imageGallery": {
+        "loadFailed": "无法加载 {{name}}"
       },
       "launchPromptNotDelivered": "未送达 — 请检查终端",
       "taskList": {
@@ -21236,7 +21238,6 @@
       },
       "googleOffer": {
         "useAccount": "将 {{email}} 用于 Google",
-        "useAnother": "使用其他账户",
         "reconnect": "重新连接 {{email}}",
         "use": "使用 {{email}}",
         "staysDefault": "{{email}} 仍为默认账户"
@@ -22985,11 +22986,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "临时编排工作代理 · 完成后 2 分钟关闭",
-        "finished": "临时编排工作代理已完成 · {{countdown}}后关闭",
         "keepOpen": "保持打开",
         "bannerRunning": "编排工作代理 · 完成后 2 分钟关闭",
         "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭",
+        "bannerFinishedStatus": "编排工作代理已完成 · 即将关闭",
         "boundRunning": "随 {{worker}} 一起关闭",
         "boundFinished": "{{worker}} 已完成 · {{countdown}} 后关闭",
         "boundFallbackName": "它的工作者"
@@ -23519,10 +23519,12 @@
         "imported_other": "已为 {{domains}} 导入 {{count}} 个 Cookie。请重新加载页面以使用它们",
         "failed": "Cookie 导入失败：{{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "此设备上的浏览器",
-        "destination": "导入到 {{host}} 的浏览器",
-        "hostAgents": "{{host}} 上的智能体可以使用这些登录状态，但无法读取 Cookie",
+        "destination": "导入到 {{host}} 的浏览器。",
+        "hostAgents": "{{host}} 上的智能体可以使用这些登录状态，但无法读取 Cookie。"
+      },
+      "sshPage": {
         "stored": "已存储到 {{host}} 的浏览器",
         "googleCookiesSkipped": "未导入 Google Cookie。请打开一个通过 {{host}} 浏览的页面，然后登录 Google"
       }
@@ -24732,7 +24734,7 @@
       "signInRequired": "请重新登录以使用此账户",
       "signInAgain": "重新登录",
       "usageSignInLabel": "重新登录",
-      "usageSignInMessage": "所选 Claude 账户需要你重新登录，请打开设置 > AI 提供商账户，或选择系统默认",
+      "usageSignInMessage": "此账户需要您重新登录。",
       "signIn": "登录",
       "moreSignInOptions": "更多登录选项",
       "copySignInLink": "改为复制登录链接",
@@ -25445,8 +25447,7 @@
   "updates": {
     "installOnQuit": {
       "title": "请手动重启 Orca",
-      "summary": "Orca 无法自动重启。请退出 Orca，等更新安装完成后再重新打开",
-      "keepWorking": "继续工作"
+      "summary": "Orca 无法自动重启。请退出 Orca，等更新安装完成后再重新打开"
     },
     "installBlock": {
       "instancesLabel": "正在使用 Orca 的实例",
@@ -27868,7 +27869,6 @@
       "waitingFor": "正在等待 {{label}}",
       "waitingForUntil": "正在等待 {{label}} · 直到 {{time}}",
       "waitingCount": "正在等待 {{count}} 个事件",
-      "hostDisconnected": "{{host}} 已断开连接",
       "disconnected": "已断开连接",
       "runsOn": "在 {{host}} 上运行",
       "deleteTitle": "要删除 {{name}} 吗？",
@@ -28026,12 +28026,7 @@
       },
       "cancel": {
         "confirmMany": "取消 {{count}} 项",
-        "confirmOne": "取消事项",
-        "keep": "保留",
-        "placeholder": "原因",
-        "titleMany": "要取消 {{count}} 个事项吗？",
-        "titleOne": "要取消\"{{title}}\"吗？",
-        "why": "bot 会看到原因。不会删除任何内容"
+        "keep": "保留"
       },
       "chat": {
         "added": "添加了 {{items}}",
@@ -28131,8 +28126,7 @@
         "automationEnded": "已结束"
       },
       "menu": {
-        "cancel": "取消事项…",
-        "canceled": "已取消…",
+        "cancel": "取消事项",
         "done": "完成",
         "waiting": "等待中…"
       },
@@ -28194,7 +28188,9 @@
         "recommended": "推荐",
         "step": "第 {{n}} 个，共 {{total}} 个",
         "typeAnswer": "输入你的回答",
-        "replaced": "智能体提出了新问题。请先阅读，再回复"
+        "replaced": "智能体提出了新问题。请先阅读，再回复",
+        "replacedByNewer": "已由较新的问题取代",
+        "skipped": "已跳过"
       },
       "readMoreClosedFailed": "无法读取更多已关闭的条目",
       "wait": {
@@ -28475,13 +28471,10 @@
       "hostChoice": {
         "description": "选择 {{bot}} 登录你的 Gmail、日历和云端硬盘的方式",
         "orca": "Orca 托管",
-        "comingSoon": "即将推出",
-        "orcaNote": "使用 Google 登录。无需任何设置",
+        "soon": "即将推出",
+        "orcaNote": "使用 Google 登录",
         "self": "自行托管",
-        "selfNote": "你将自行创建 Google Cloud 应用，因此你的登录信息会保留在你的电脑上。所有内容都不会经过 Orca 的服务器",
-        "stepApp": "{{bot}} 打开 Google Cloud 并设置应用",
-        "stepSignIn": "你勾选 Google 的条款复选框，然后登录",
-        "stepCheck": "{{bot}} 检查 Gmail、日历和云端硬盘能否正常使用",
+        "selfNote": "使用你自己的 Google 应用",
         "continue": "继续"
       },
       "connectDescription": "让你的 bots 能够访问 Gmail、日历和云端硬盘。你的登录信息会保留在 {{host}} 上",

@@ -42,10 +42,16 @@ export async function stopCodexSharedChatWorkload(input: {
     input.leaseId,
     input.watcherPid
   )
-  // macOS has no process proof, so there only a confirmed terminal stop counts.
+  // macOS and Windows have no process proof, so there only a confirmed terminal stop counts.
   return (
-    (process.platform === 'darwin' ? terminalsGone === true : terminalsGone !== false) && leftovers
+    (attributesProcesses(process.platform) ? terminalsGone !== false : terminalsGone === true) &&
+    leftovers
   )
+}
+
+/** Only Linux can tie a process to a chat (by its environment). */
+function attributesProcesses(platform: NodeJS.Platform): boolean {
+  return platform !== 'darwin' && platform !== 'win32'
 }
 
 /** Lets the server drop these threads; true when Codex confirmed each (or can't unsubscribe). */
@@ -109,15 +115,16 @@ async function stopListedTerminals(input: {
 /** Proves none of this lease's processes is left; signals nothing, since a pid that isn't ours to
  *  reap can be reused before any signal lands. On Linux any tagged survivor, or an own process
  *  whose environment couldn't be read, leaves it unproven (the server then drains and its exit
- *  reaps the tree). macOS can't attribute a process to a chat, so there, as Codex's own clients
- *  do, the interrupted turns and the confirmed stop of the listed terminals are the proof. */
+ *  reaps the tree). macOS and Windows can't attribute a process to a chat, so there, as Codex's
+ *  own clients do, the interrupted turns and the confirmed stop of the listed terminals are the
+ *  proof; on Windows the server's job ends most of what a finished command left running. */
 export async function codexLeaseProcessesGone(
   serverPid: number,
   leaseId: string,
   watcherPid?: number,
   platform: NodeJS.Platform = process.platform
 ): Promise<boolean> {
-  if (platform === 'darwin') {
+  if (!attributesProcesses(platform)) {
     return true
   }
   try {

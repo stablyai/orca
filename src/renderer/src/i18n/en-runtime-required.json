@@ -3174,6 +3174,8 @@
         "compactAfterSending": "Your earlier message is still being sent. Run /compact once it has gone.",
         "continuationSuperseded": "This chat has moved on. Check the latest messages before continuing.",
         "conversationCleared": "This conversation has been cleared.",
+        "diskFull": "The disk on the computer running this chat is full.",
+        "freeDiskSpace": "Free up space on that disk, then try again.",
         "goalsUnsupported": "This agent doesn't support goals.",
         "historyUnavailable": "Orca couldn't open this chat's history right now.",
         "historyUnreadable": "Orca couldn't read this chat's saved history.",

@@ -21,7 +21,8 @@ export type BotWorkerSummary = {
   server: string | null
   pr: BotWorkPullRequest | null
   startedAt: number | null
-  /** Where the turn that started it was asked: Orca itself, or a connector's conversation. */
+  /** Where the turn that started it was asked: Orca itself (titled when it was one of the bot's
+   *  chats), or a connector's conversation. */
   source: { source: ConnectorSource | 'app'; title: string | null }
 }
 
@@ -73,10 +74,11 @@ function age(startedAt: number, now: number): string {
 export function formatBotWorkerSummary(item: BotWorkerSummary, now: number): string {
   const who = `${item.title}${item.agent ? ` (${item.agent})` : ''}`
   const where = [item.workspace, item.server].filter(Boolean).join(' on ')
+  const titled = item.source.title ? ` "${item.source.title}"` : ''
   const from =
     item.source.source === 'app'
-      ? 'from Orca'
-      : `from ${CONNECTOR_SOURCE_NAMES[item.source.source]}${item.source.title ? ` "${item.source.title}"` : ''}`
+      ? `from Orca${titled}`
+      : `from ${CONNECTOR_SOURCE_NAMES[item.source.source]}${titled}`
   return [
     `${item.id} ${who}`,
     item.idle ? 'idle' : item.state ? STATE_WORDS[item.state] : 'state unknown',
