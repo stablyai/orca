@@ -35,3 +35,11 @@ export function openPluginIntegrationSettings(pluginKey: string): boolean {
   state.openSettingsPage()
   return true
 }
+
+/** Another way into the integrations pane ends the plugin's page, as a pane pick ends a general sub-page. */
+export function closePluginIntegrationSettings(): void {
+  const navigation = usePluginIntegrationNavigation.getState()
+  if (navigation.pluginKey !== null) {
+    navigation.show(null)
+  }
+}

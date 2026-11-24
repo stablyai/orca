@@ -16,9 +16,9 @@ import {
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { openPluginsSettings } from '../navigation/open-plugins-settings'
 import {
+  closePluginIntegrationSettings,
   openPluginIntegrationSettings,
-  PLUGIN_INTEGRATION_SETTINGS_TARGET,
-  usePluginIntegrationNavigation
+  PLUGIN_INTEGRATION_SETTINGS_TARGET
 } from './plugin-integration-navigation'
 
 export function PluginIntegrationsGroup(): React.JSX.Element | null {
@@ -104,11 +104,7 @@ export function PluginIntegrationSettings({ pluginKey }: { pluginKey: string }):
   return (
     <div id={PLUGIN_INTEGRATION_SETTINGS_TARGET} className="space-y-6 scroll-mt-8">
       <div className="flex items-center justify-between gap-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => usePluginIntegrationNavigation.getState().show(null)}
-        >
+        <Button variant="ghost" size="sm" onClick={closePluginIntegrationSettings}>
           <ArrowLeft />
           {t('pluginIntegrations.back', 'All integrations')}
         </Button>

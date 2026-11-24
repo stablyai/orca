@@ -12,6 +12,7 @@ import {
 } from '../navigation/settings-navigation-foundations'
 import { cancelPendingSettingsTargetFocus } from '../navigation/settings-target-focus'
 import type { SettingsSearchResult } from '../navigation/settings-search-results'
+import { closePluginIntegrationSettings } from '../integrations/plugin-integration-navigation'
 
 export function useSettingsNavigationActions(
   model: Pick<
@@ -68,6 +69,7 @@ export function useSettingsNavigationActions(
       cancelPendingSettingsTargetFocus({ pendingFocusTargetRef, pendingFocusWatchRef })
       setHighlightedSettingsTarget(null)
       setGeneralSubPage(null)
+      closePluginIntegrationSettings()
       releaseNativeAccounts()
       setActiveSectionId(sectionId)
     },
@@ -100,6 +102,8 @@ export function useSettingsNavigationActions(
       }
       cancelSettingsListReveal()
       setHighlightedSettingsTarget(null)
+      // No result opens a plugin's page, so any one of them ends the page that was open.
+      closePluginIntegrationSettings()
       cancelPendingSettingsTargetFocus({ pendingFocusTargetRef, pendingFocusWatchRef })
       pendingNavSectionRef.current = sectionId
       pendingScrollTargetRef.current = result.targetId
