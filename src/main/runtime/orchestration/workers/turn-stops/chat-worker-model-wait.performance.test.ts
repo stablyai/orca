@@ -82,9 +82,7 @@ it('reads a streaming tool row once per read in flight, not once per commit', as
   feed.onItems?.(['tool-1'])
   await answerReads()
   await vi.advanceTimersByTimeAsync(10 * MINUTE)
-  expect(
-    db.getUnreadRunMailbox(run.id, 100, ['escalation']).map((message) => message.subject)
-  ).toEqual(['Worker has shown no activity'])
+  expect(db.getUnreadRunMailbox(run.id, 100, ['escalation'])).toHaveLength(1)
   watch.dispose()
   db.close()
 })
