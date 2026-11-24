@@ -288,8 +288,8 @@ await next()`)
     // The next call was admitted only once the abandoned ticket had gone silent: its decision
     // clock (held_at) is past the ticket's last check-in plus staleMs.
     const rows = queueRows()
-    const lastCheckIn = rows.find((row) => row.id === ticket.id).seen_at
-    const admittedAt = rows.find((row) => row.held_at !== null).held_at
+    const lastCheckIn = Number(rows.find((row) => row.id === ticket.id).seen_at)
+    const admittedAt = Number(rows.find((row) => row.held_at !== null).held_at)
     expect(admittedAt).toBeGreaterThan(lastCheckIn + staleMs)
     await release()
     // Removal gave up after staleMs; the ticket stays aside until it expires.
