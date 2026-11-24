@@ -12,6 +12,7 @@ import { PRCommentsList } from './comments/comments-list'
 import { refreshChecksPanelHostedReview } from './refresh/hosted-review-manual-refresh'
 import type { ChecksPanelManualRefreshInput } from './refresh/manual-refresh-dependencies'
 import { useAppStore } from '@/store/index'
+import type { HostedReviewInfo } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 
 type HostedReviewCacheEntry = ReturnType<typeof useAppStore.getState>['hostedReviewCache'][string]
 
@@ -170,8 +171,11 @@ function ReviewDataHost({ model }: { model: ReviewDataModel }): null {
 
 function reviewDataModel(
   set: ReturnType<typeof setters>,
-  fetchPRComments: ReturnType<typeof vi.fn>,
-  overrides: { headSha?: string; hostId?: string } = {}
+  fetchPRComments: ReviewDataModel['fetchPRComments'],
+  overrides: {
+    headSha?: string
+    hostId?: NonNullable<ReviewDataModel['activeWorktree']>['hostId']
+  } = {}
 ): ReviewDataModel {
   return testDouble<ReviewDataModel>({
     ...set,
@@ -182,7 +186,7 @@ function reviewDataModel(
     gitLabProjectRefRef,
     isCurrentAsyncResult,
     isPanelVisible: true,
-    pr: { number: 7, headSha: overrides.headSha ?? 'sha-1', prRepo: null },
+    pr: { number: 7, headSha: overrides.headSha ?? 'sha-1' },
     prCacheKey: 'cache',
     prNumber: 7,
     repo,
@@ -200,7 +204,7 @@ describe('GitHub comments resets', () => {
     set.setComments.mockClear()
     act(() =>
       root.render(
-        <ReviewDataHost model={reviewDataModel(set, fetchPRComments, { hostId: 'local:alias' })} />
+        <ReviewDataHost model={reviewDataModel(set, fetchPRComments, { hostId: 'ssh:fixture' })} />
       )
     )
     await act(async () => {})
@@ -299,8 +303,18 @@ describe('manual refresh lookups', () => {
     expect(fetchGitLabDetails).not.toHaveBeenCalled()
   })
 
-  function gitLabReview(number: number, headSha: string) {
-    return { provider: 'gitlab', number, headSha, state: 'open', title: `MR ${number}` } as const
+  function gitLabReview(number: number, headSha: string): HostedReviewInfo {
+    return {
+      provider: 'gitlab',
+      number,
+      headSha,
+      state: 'open',
+      title: `MR ${number}`,
+      url: `https://example.com/merge_requests/${number}`,
+      status: 'success',
+      updatedAt: '2026-01-01T00:00:00Z',
+      mergeable: 'MERGEABLE'
+    }
   }
 
   function gitLabRefreshModel(
