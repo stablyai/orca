@@ -16,8 +16,8 @@ export type LinkedWorkerState = {
   reason?: string | null
 }
 
-/** A big profile's linked Dispatches (thousands) stay kept, within a few MB in all: a worker whose own
- *  read is longer isn't kept, and reports past their budget are read from the Task on use. */
+/** A big profile's linked Dispatches (thousands) stay kept: a few MB for real workers, at most ~32 MB
+ *  if every one were at the worker limit. Reports past their budget are read from the Task on use. */
 const KEPT_MAX = 8_192
 const KEPT_WORKER_MAX_CHARS = 2_048
 const KEPT_REPORT_MAX_CHARS = 1_000_000
@@ -56,6 +56,8 @@ export class LinkedWorkerStates {
   private readonly refsOf = new Map<string, Set<string>>()
   private keptChars = 0
   private source: unknown = null
+  /** The last `PRAGMA data_version` a read saw. */
+  private version: number | null = null
   /** Counts the database's row notices: a read that saw one while it ran keeps nothing. */
   private writes = 0
 
@@ -88,6 +90,12 @@ export class LinkedWorkerStates {
     // Row notices, other connections' commits (which fire none here) and the dock's own revision: with
     // none since a kept worker was last checked, its rows are unchanged and no fingerprint is read.
     const stamp = this.stampOf(db)
+    // Another connection's commit fires no notice here, and a fingerprint misses a rewrite inside long text.
+    const version = dataVersion(db)
+    if (version !== this.version) {
+      this.forgetAll()
+      this.version = version
+    }
     const states = new Map<string, LinkedWorkerState | null>()
     const candidates = unique.flatMap((ref) => {
       const kept = this.kept.get(ref)
@@ -147,7 +155,7 @@ export class LinkedWorkerStates {
       // A Task written while the walk ran: kept workers show its report as of now.
       reports.clear()
       for (const [ref, kept] of hits) {
-        if (workers.has(ref)) {
+        if (workers.has(ref) || !states.has(ref)) {
           continue
         }
         states.set(ref, {
