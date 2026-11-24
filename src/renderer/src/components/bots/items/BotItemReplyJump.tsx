@@ -63,7 +63,17 @@ export function useBotItemNeedsYouJump({
       ],
       { duration: 1400, easing: 'ease' }
     )
-    comment.current?.focus()
+    if (comment.current) {
+      comment.current.focus()
+    } else {
+      // An earlier page can attach its Activity row before the composer handle returns.
+      const landed = watch.jump()
+      requestAnimationFrame(() => {
+        if (node.isConnected && watch.node() === node && watch.jump() === landed) {
+          comment.current?.focus()
+        }
+      })
+    }
   }
   // A pending jump goes on from the entry's ref, as it draws; it uses this render's comment box.
   useEffect(() => {
@@ -162,6 +172,7 @@ function BotItemReplyButton({
           ? t('bots.items.view.replyAbove', 'Reply, above')
           : t('bots.items.view.replyBelow', 'Reply, below')
       }
+      onMouseDown={(event) => event.preventDefault()}
       onClick={onJump}
     >
       {t('bots.items.view.reply', 'Reply')}
