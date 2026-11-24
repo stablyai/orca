@@ -3,7 +3,7 @@ import {
   matchEmulatorErrorCopy,
   type EmulatorCodedMessage,
   type EmulatorFailureCode
-} from '../../shared/emulator-failure-copy'
+} from '../../shared/emulator/emulator-failure-copy'
 
 // Keep error codes stable: agents and CLI callers depend on them.
 export class EmulatorError extends Error {
@@ -16,6 +16,7 @@ export class EmulatorError extends Error {
 }
 
 export type EmulatorErrorCode =
+  | 'emulator_attach_superseded'
   | 'emulator_no_active'
   | 'emulator_device_not_found'
   | 'emulator_helper_failed'

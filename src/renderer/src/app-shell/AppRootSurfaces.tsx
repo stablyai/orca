@@ -1,38 +1,48 @@
 import { useTranslation } from 'react-i18next'
-import { ModalBoundary, OverlayBoundary } from './app-root-surface-boundaries'
+import { ModalBoundary, OverlayBoundary } from './root-surfaces/app-root-surface-boundaries'
 import { OnboardingLanguageLoading } from '../components/onboarding/OnboardingLanguageLoading'
 import { useLanguageReadiness } from '../i18n/language-readiness'
 import { memo, Suspense } from 'react'
 import { createPortal } from 'react-dom'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
-import { translate } from '@/i18n/i18n'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
+import { useTranslate } from '@/i18n/use-translate'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
-import NewWorkspaceComposerModal from '../components/NewWorkspaceComposerModal'
+import NewWorkspaceComposerModal from '../components/new-workspace/composer/NewWorkspaceComposerModal'
 import { CrashReportDialog } from '../components/crash-report/CrashReportDialog'
 import { MarkdownTemplatePicker } from '../components/editor/markdown/documents/MarkdownTemplatePicker'
-import RecentTabSwitcher from '../components/tab-bar/RecentTabSwitcher'
-import { SkillFreshnessUpdateDialog } from '../components/skills/SkillFreshnessUpdateDialog'
+import RecentTabSwitcher from '../components/tab-bar/recent-switcher/RecentTabSwitcher'
+import { SkillFreshnessUpdateDialog } from '../components/skills/freshness/SkillFreshnessUpdateDialog'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
-import { NativeChatResumeOnRestartModal } from '../components/NativeChatResumeRuntimeModal'
+import { NativeChatResumeToasts } from '../components/native-chat-recovery/toast/NativeChatResumeToastHost'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
-import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
-import { ZoomOverlay } from '../components/ZoomOverlay'
+import { LanguagePackDiscoveryHost } from '../components/languages/LanguagePackDiscoveryHost'
+import { PluginInstallTrustDialogHost } from '../components/plugins/dialogs/PluginInstallTrustDialog'
+import { TelemetryFirstLaunchSurface } from '../components/onboarding/telemetry/TelemetryFirstLaunchSurface'
+import { ZoomOverlay } from './chrome/ZoomOverlay'
 import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'
+import { AgentCliUpdateFailedDialogHost } from '../components/agent-cli-update/AgentCliUpdateFailedDialogHost'
+import { MacosUpdateRequirementHost } from '../components/macos-update-requirement/MacosUpdateRequirementHost'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
-import { useAppStore } from '../store'
-import type { UpdateStatus } from '../../../shared/update-status-types'
-import { useLazyModalMounts } from './use-lazy-modal-mounts'
-import { AppNotificationCards } from './AppNotificationCards'
-import { usePreloadWorktreeJumpPalette, WorktreeJumpPalette } from './worktree-jump-palette-preload'
+import { useAppStore } from '../store/index'
+import { shouldMountUpdateCardForStatus } from './root-surfaces/update-notification-visibility'
+import { useLazyModalMounts } from './root-surfaces/use-lazy-modal-mounts'
+import { AppNotificationCards } from './root-surfaces/AppNotificationCards'
+import {
+  usePreloadWorktreeJumpPalette,
+  WorktreeJumpPalette
+} from '../components/worktree-jump/worktree-jump-palette-preload'
+import { AiVaultSessionHistoryDialog } from '../components/right-sidebar/ai-vault/session-list/agent-session-history-dialog-preload'
+import { usePrefetchAvatarCapability } from '../components/bots/avatar-generation-capability-store'
+import { useLocalAgentCliUpdateCheck } from '../components/agent-cli-update/use-local-agent-cli-update-check'
 import {
   selectAppRootSurfacePetEnabled,
   selectAppRootSurfaceTelemetryOptedIn,
   selectAppRootSurfaceVoiceEnabled
-} from './app-root-surface-settings'
-import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
-import type { OnboardingGate } from './use-onboarding-and-feature-tips'
+} from './root-surfaces/app-root-surface-settings'
+import type { FloatingWorkspacePanelState } from '../components/floating-terminal/workspace/use-floating-workspace-panel'
+import type { OnboardingGate } from './startup/use-onboarding-and-feature-tips'
 
-const QuickOpen = lazy(() => import('../components/QuickOpen'))
+const QuickOpen = lazy(() => import('../components/file-actions/quick-open/QuickOpen'))
 const WorkspaceCleanupDialog = lazy(
   () => import('../components/workspace-cleanup/WorkspaceCleanupDialog')
 )
@@ -51,15 +61,15 @@ const NonGitFolderDialog = lazy(
 const AddProjectFromFolderDialog = lazy(
   () => import('../components/sidebar/project-admission/dialog/AddProjectFromFolderDialog')
 )
-const DiagramViewerModal = lazy(() => import('../components/editor/DiagramViewerModal'))
+const DiagramViewerModal = lazy(() => import('../components/editor/diagrams/DiagramViewerModal'))
 const ProjectAddedDialog = lazy(
   () => import('../components/sidebar/project-admission/completion/ProjectAddedDialog')
 )
 const NodeDistMirrorDialog = lazy(
-  () => import('../components/settings/advanced/network/NodeDistMirrorDialog')
+  () => import('../components/ssh-host-recovery/NodeDistMirrorDialog')
 )
-const AiVaultSessionHistoryDialog = lazy(
-  () => import('../components/right-sidebar/ai-vault/session-list/AiVaultSessionHistoryDialog')
+const NativeChatAccountUsageDialog = lazy(
+  () => import('../components/native-chat/usage/NativeChatAccountUsageDialog')
 )
 const DeleteWorktreeDialog = lazy(
   () => import('../components/sidebar/workspace-actions/deletion/DeleteWorktreeDialog')
@@ -100,27 +110,20 @@ const PetOverlay = lazy(() => import('../components/pet/PetOverlay'))
 // Avoid fetching onboarding assets for users past first launch.
 const OnboardingFlow = lazy(() => import('../components/onboarding/OnboardingFlow'))
 
-function shouldMountUpdateCardForStatus(status: UpdateStatus): boolean {
-  if (status.state === 'idle') {
-    return false
-  }
-  if (status.state === 'checking' || status.state === 'not-available') {
-    return status.userInitiated === true
-  }
-  return true
-}
-
 /** Keep root overlays in stable sibling order; fetch gated chunks only when their surfaces can appear. Memoized so active-workspace App renders skip every root overlay. */
 export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
   floatingWorkspace: FloatingWorkspacePanelState
   onboardingGate: OnboardingGate
 }): React.JSX.Element {
+  const t = useTranslate()
   const { floatingWorkspace, onboardingGate } = props
   // Memoized: subscribe so a language change still repaints its labels.
   useTranslation()
   const languageReady = useLanguageReadiness((state) => state.ready)
   const { mountedLazyModalIds, shouldMountAddRepoDialog } = useLazyModalMounts()
   usePreloadWorktreeJumpPalette()
+  usePrefetchAvatarCapability()
+  useLocalAgentCliUpdateCheck()
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   // Subscribe only to consumed settings so unrelated preferences cannot rerender every overlay.
@@ -147,8 +150,8 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
           <OverlayBoundary
             boundaryId="overlay.floating-workspace"
             resetKey={floatingWorkspace.open}
-            title={translate('auto.App.1b3024bcd6', 'The floating workspace hit an error.')}
-            description={translate(
+            title={t('auto.App.1b3024bcd6', 'The floating workspace hit an error.')}
+            description={t(
               'auto.App.7cbfbf622f',
               'Retry the floating workspace or close and reopen it.'
             )}
@@ -170,11 +173,8 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
           <OverlayBoundary
             boundaryId="overlay.status-bar"
             resetKey={activeView}
-            title={translate('auto.App.2e8ff36f94', 'The status bar hit an error.')}
-            description={translate(
-              'auto.App.8a023cea1f',
-              'Retry the status bar to remount its controls.'
-            )}
+            title={t('auto.App.2e8ff36f94', 'The status bar hit an error.')}
+            description={t('auto.App.8a023cea1f', 'Retry the status bar to remount its controls.')}
           >
             <StatusBar floatingTerminalOpen={floatingWorkspace.open} />
           </OverlayBoundary>
@@ -208,10 +208,15 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
             <ProjectAddedDialog />
           </ModalBoundary>
         ) : null}
-        {/* Root hosting prevents chat capture handlers receiving history-dialog events. */}
+        {/* Root hosting prevents chat capture handlers receiving /resume and /usage dialog events. */}
         {activeModal === 'agent-session-history' ? (
           <ModalBoundary boundaryId="modal.agent-session-history" resetKey>
             <AiVaultSessionHistoryDialog />
+          </ModalBoundary>
+        ) : null}
+        {activeModal === 'chat-account-usage' ? (
+          <ModalBoundary boundaryId="modal.chat-account-usage" resetKey>
+            <NativeChatAccountUsageDialog />
           </ModalBoundary>
         ) : null}
         {/* Own store, not activeModal: another modal must never evict a running move. */}
@@ -222,6 +227,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
             <NodeDistMirrorDialog />
           </ModalBoundary>
         ) : null}
+        <AgentCliUpdateFailedDialogHost />
         {/* The viewer must outlive the virtualized chat row that opened it. */}
         {activeModal === 'diagram-viewer' ? (
           <ModalBoundary boundaryId="modal.diagram-viewer" resetKey>
@@ -288,6 +294,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
           </OverlayBoundary>
         </Suspense>
       ) : null}
+      <MacosUpdateRequirementHost />
       <AppNotificationCards
         activeView={activeView}
         shouldMountUpdateCard={shouldMountUpdateCard}
@@ -295,12 +302,17 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         onChatUiHereCornerCardClose={() => onboardingGate.setChatUiHereCornerCardOpen(false)}
       />
       <OverlayBoundary boundaryId="overlay.native-chat-resume-on-restart" resetKey={activeView}>
-        <NativeChatResumeOnRestartModal />
+        <NativeChatResumeToasts />
       </OverlayBoundary>
       <OverlayBoundary boundaryId="overlay.star-nag-toast" resetKey={activeView}>
         <StarNagToastHost />
       </OverlayBoundary>
       <StarNagAgentValueMomentObserver />
+      <LanguagePackDiscoveryHost
+        onboardingKnown={onboardingGate.onboarding !== null}
+        onboardingVisible={onboardingGate.shouldRender}
+      />
+      <PluginInstallTrustDialogHost />
       {/* Mount once per session; the internal gate selects pre-telemetry users (telemetry-plan.md §First-launch experience). */}
       <OverlayBoundary boundaryId="overlay.telemetry-first-launch" resetKey={telemetryOptedIn}>
         <TelemetryFirstLaunchSurface />
@@ -336,8 +348,8 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         reportAsCrash={false}
         resetKey={activeModal}
         compact
-        title={translate('auto.App.722d03aa62', 'The crash report dialog hit an error.')}
-        description={translate(
+        title={t('auto.App.722d03aa62', 'The crash report dialog hit an error.')}
+        description={t(
           'auto.App.acd66311dc',
           'Use the Help menu after retrying if you still need diagnostics.'
         )}
@@ -351,8 +363,8 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
                 boundaryId="modal.onboarding"
                 surface="modal"
                 className="fixed inset-0 z-40 bg-background"
-                title={translate('auto.App.f02d37278a', 'Onboarding hit an error.')}
-                description={translate(
+                title={t('auto.App.f02d37278a', 'Onboarding hit an error.')}
+                description={t(
                   'auto.App.221a95ba38',
                   'Retry onboarding or close it and continue in the app.'
                 )}

@@ -1,28 +1,32 @@
 import { useCallback } from 'react'
-import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { toast } from 'sonner'
-import { mergePRCommentIntoList } from '@/store/github/pr-comment-cache'
-import { githubProjectHost } from '../../../../../../shared/github/project-identity'
-import { setReactionOnSubject, restoreReactionOnSubject } from '@/lib/pr-comment-reactions'
+import { mergePRCommentIntoList } from '@/store/github/comments/pr-comment-cache'
+import { githubProjectHost } from '../../../../../../shared/github/projects/project-identity'
+import {
+  setReactionOnSubject,
+  restoreReactionOnSubject
+} from '@/lib/source-control/review/comments/pr-comment-reactions'
 import { buildPRCommentConversationReplyBody } from './pr-comment-fixing-reply-body'
 import {
   attachPRReviewReplyParent,
   canPostPRReviewThreadReply,
   resolvePRReviewReplyThreadId
 } from './pr-comments-ai-launch-ack'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
 import type { ChecksPanelCommentResolutionState } from './use-checks-panel-comment-resolution'
-import type { ChecksPanelComposerState } from '../use-checks-panel-composer-state'
-import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
+import type { ChecksPanelComposerState } from '../review-actions/use-checks-panel-composer-state'
+import type { ChecksPanelContextState } from '../review-state/use-checks-panel-context-state'
 import { checksPanelAsyncResultKey } from '../refresh/checks-panel-async-result-key'
-import { isMutablePRConversationComment } from '../../../../../../shared/github/pr-comment-mutability'
+import { isMutablePRConversationComment } from '../../../../../../shared/github/comments/pr-comment-mutability'
 import type {
   GitHubReactionContent,
   PRComment
-} from '../../../../../../shared/github/comment-types'
+} from '../../../../../../shared/github/comments/comment-types'
 import { translate } from '@/i18n/i18n'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
-import { errorMessage } from '../../../../../../shared/error-message'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
+import { gitHubSlugApiForWorkspace } from '@/runtime/repository-github/github-slug-owner-api'
+import { errorMessage } from '../../../../../../shared/errors/error-message'
 
 type ChecksPanelCommentMutationsInput = Pick<
   ChecksPanelControllerState,
@@ -108,17 +112,32 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
 
   const handleEditComment = useCallback(
     async (comment: PRComment, body: string): Promise<boolean> => {
-      if (!pr?.prRepo || !isMutablePRConversationComment(comment)) {
+      if (!repo || !prNumber || !pr?.prRepo || !isMutablePRConversationComment(comment)) {
         return false
       }
-      const result = await window.api.gh.updateIssueCommentBySlug({
-        owner: pr.prRepo.owner,
-        repo: pr.prRepo.repo,
-        host: githubProjectHost(pr.prRepo.host),
-        commentId: comment.id,
-        body,
-        wakeWslDistro: true
-      })
+      const requestKey = checksPanelAsyncResultKey(
+        prCacheKey,
+        branch,
+        prNumber,
+        pr.prRepo,
+        pr.headSha
+      )
+      const result = await gitHubSlugApiForWorkspace(repo, activeWorktree)
+        .updateIssueCommentBySlug({
+          owner: pr.prRepo.owner,
+          repo: pr.prRepo.repo,
+          host: githubProjectHost(pr.prRepo.host),
+          commentId: comment.id,
+          body,
+          wakeWslDistro: true
+        })
+        .catch((error: unknown) => ({
+          ok: false as const,
+          error: { message: errorMessage(error) }
+        }))
+      if (!isCurrentAsyncResult(requestKey)) {
+        return result.ok
+      }
       if (!result.ok) {
         toast.error(result.error.message)
         return false
@@ -128,16 +147,16 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       )
       return true
     },
-    [pr?.prRepo, setComments]
+    [activeWorktree, branch, isCurrentAsyncResult, pr, prCacheKey, prNumber, repo, setComments]
   )
 
   const handleDeleteComment = useCallback(
     async (comment: PRComment): Promise<void> => {
-      if (!pr?.prRepo || !isMutablePRConversationComment(comment)) {
+      if (!repo || !prNumber || !pr?.prRepo || !isMutablePRConversationComment(comment)) {
         return
       }
       const confirmed = await confirm({
-        title: translate('auto.components.right.sidebar.ChecksPanel.ea9b649ce3', 'Delete comment?'),
+        title: translate('common.delete', 'Delete'),
         description: translate(
           'auto.components.right.sidebar.ChecksPanel.3b203c62f8',
           'This will permanently remove the comment from the PR.'
@@ -148,20 +167,45 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       if (!confirmed) {
         return
       }
-      const result = await window.api.gh.deleteIssueCommentBySlug({
-        owner: pr.prRepo.owner,
-        repo: pr.prRepo.repo,
-        host: githubProjectHost(pr.prRepo.host),
-        commentId: comment.id,
-        wakeWslDistro: true
-      })
+      const requestKey = checksPanelAsyncResultKey(
+        prCacheKey,
+        branch,
+        prNumber,
+        pr.prRepo,
+        pr.headSha
+      )
+      const result = await gitHubSlugApiForWorkspace(repo, activeWorktree)
+        .deleteIssueCommentBySlug({
+          owner: pr.prRepo.owner,
+          repo: pr.prRepo.repo,
+          host: githubProjectHost(pr.prRepo.host),
+          commentId: comment.id,
+          wakeWslDistro: true
+        })
+        .catch((error: unknown) => ({
+          ok: false as const,
+          error: { message: errorMessage(error) }
+        }))
+      if (!isCurrentAsyncResult(requestKey)) {
+        return
+      }
       if (!result.ok) {
         toast.error(result.error.message)
         return
       }
       setComments((prev) => prev.filter((entry) => entry.id !== comment.id))
     },
-    [pr?.prRepo, confirm, setComments]
+    [
+      activeWorktree,
+      branch,
+      confirm,
+      isCurrentAsyncResult,
+      pr,
+      prCacheKey,
+      prNumber,
+      repo,
+      setComments
+    ]
   )
 
   const handleSetReaction = useCallback(

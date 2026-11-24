@@ -1,6 +1,6 @@
-import type { BrowserHistoryEntry } from '../browser-workspace-types'
+import type { BrowserHistoryEntry } from '../browser/workspaces/browser-workspace-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
-import { redactKagiSessionToken } from '../browser-url'
+import { redactKagiSessionToken } from '../browser/navigation/browser-url'
 
 export const MAX_BROWSER_HISTORY_ENTRIES = 200
 

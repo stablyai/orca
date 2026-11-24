@@ -12,9 +12,13 @@
   },
   "rules": {
     "typescript/await-thenable": "warn",
+    "typescript/no-array-delete": "error",
+    "typescript/no-for-in-array": "error",
     "typescript/no-redundant-type-constituents": "warn",
+    "typescript/prefer-find": "error",
     "typescript/restrict-plus-operands": "warn",
     "typescript/restrict-template-expressions": "warn",
+    "typescript/return-await": ["error", "error-handling-correctness-only"],
     "typescript/switch-exhaustiveness-check": [
       "error",
       { "allowDefaultCaseForExhaustiveSwitch": false }

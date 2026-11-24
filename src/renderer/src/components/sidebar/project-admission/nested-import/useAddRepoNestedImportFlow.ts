@@ -1,25 +1,30 @@
 import { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { useAppStore } from '@/store/index'
-import { getSelectedNestedRepoPathsInScanOrder } from '@/lib/nested-repo-selected-paths'
+import { getSelectedNestedRepoPathsInScanOrder } from '@/lib/workspace/creation/nested-repo-selected-paths'
 import {
   buildNestedRepoImportActionTelemetry,
   buildNestedRepoImportResultTelemetry,
   shouldEmitNestedRepoImportSubmitTelemetry,
   type NestedRepoTelemetryRuntimeKind
-} from '../../../../../../shared/nested-repo-telemetry'
-import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
+} from '../../../../../../shared/telemetry/nested-repo-telemetry'
+import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type {
   NestedRepoScanResult,
   ProjectGroupImportResult
-} from '../../../../../../shared/project-group-types'
-import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
-import { translate } from '@/i18n/i18n'
+} from '../../../../../../shared/project/groups/project-group-types'
+import type { WorktreeFetchOptions } from '@/store/slices/worktrees/listing/worktree-fetch-options'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 import { completeNestedFolderOpen } from './complete-nested-folder-open'
+import {
+  toastNoNestedRepositoriesImported,
+  toastSomeNestedRepositoriesFailed
+} from './nested-import-result-toasts'
 import { defaultProjectGroupNameForPath } from '../dialog/add-repo-dialog-types'
 import type { CompleteGitRepoAdd } from '../completion/use-complete-git-repo-add'
+import type { NestedProjectReporter } from './useAddRepoNestedReviewState'
+import { reportAfterGitRepoReady } from './report-after-git-repo-ready'
 
 export function useAddRepoNestedImportFlow({
   nestedAttemptId,
@@ -36,7 +41,8 @@ export function useAddRepoNestedImportFlow({
   importNestedRepos,
   getNestedRepoRuntimeKind,
   onGitRepoReady,
-  setIsAdding
+  setIsAdding,
+  takeNestedProjectReporter
 }: {
   nestedAttemptId: string | null
   nestedScan: NestedRepoScanResult | null
@@ -61,6 +67,7 @@ export function useAddRepoNestedImportFlow({
   getNestedRepoRuntimeKind: (connectionId: string | null) => NestedRepoTelemetryRuntimeKind
   onGitRepoReady: CompleteGitRepoAdd
   setIsAdding: (isAdding: boolean) => void
+  takeNestedProjectReporter: () => NestedProjectReporter | null
 }): {
   handleImportNestedRepos: (mode: 'group' | 'separate') => Promise<void>
   handleOpenNestedRootFolder: () => Promise<void>
@@ -160,16 +167,9 @@ export function useAddRepoNestedImportFlow({
           .filter((projectId): projectId is string => typeof projectId === 'string')
         const firstRepoId = importedRepoIds[0]
         if (!firstRepoId) {
-          const firstFailure = result.projects.find((entry) => entry.status === 'failed')?.error
           if (gen === nestedImportGenRef.current) {
-            toast.error(
-              translate(
-                'auto.components.sidebar.useAddRepoNestedImportFlow.1b33c5f090',
-                'No repositories imported'
-              ),
-              {
-                description: firstFailure ?? undefined
-              }
+            toastNoNestedRepositoriesImported(
+              result.projects.find((entry) => entry.status === 'failed')
             )
           }
           return
@@ -183,19 +183,7 @@ export function useAddRepoNestedImportFlow({
           return
         }
         if (result.failedCount > 0) {
-          toast.warning(
-            translate(
-              'auto.components.sidebar.useAddRepoNestedImportFlow.cbfbc7a797',
-              'Some repositories could not be imported'
-            ),
-            {
-              description: translate(
-                'auto.components.sidebar.useAddRepoNestedImportFlow.680cac2c82',
-                '{{value0}} failed',
-                { value0: result.failedCount }
-              )
-            }
-          )
+          toastSomeNestedRepositoriesFailed(result.failedCount)
         }
         const repo = useAppStore.getState().repos.find((entry) => entry.id === firstRepoId)
         if (repo) {
@@ -204,13 +192,21 @@ export function useAddRepoNestedImportFlow({
             : activeRuntimeEnvironmentId?.trim()
               ? 'runtime_server_path'
               : 'local_folder_picker'
-          await onGitRepoReady(
-            repo.id,
-            source,
-            completionOwnerOptions.executionHostId,
-            mode === 'group' && result.group
-              ? { importedProjectGroupId: result.group.id }
-              : undefined
+          // Why: the close inside onGitRepoReady resets review, so take the reporter first and
+          // report after, letting the move open once the dialog closed, as for a plain repo add.
+          await reportAfterGitRepoReady(
+            takeNestedProjectReporter(),
+            () =>
+              onGitRepoReady(
+                repo.id,
+                source,
+                completionOwnerOptions.executionHostId,
+                mode === 'group' && result.group
+                  ? { importedProjectGroupId: result.group.id }
+                  : undefined
+              ),
+            // Every imported repo starts checked, so a new group is not split across hosts.
+            { repo, imported: importedRepoIds.map((id) => ({ kind: 'repo', id })) }
           )
         }
       } catch (err) {
@@ -251,7 +247,8 @@ export function useAddRepoNestedImportFlow({
       nestedSelectedPaths,
       getNestedRepoRuntimeKind,
       onGitRepoReady,
-      setIsAdding
+      setIsAdding,
+      takeNestedProjectReporter
     ]
   )
   const handleOpenNestedRootFolder = useCallback(() => {
@@ -277,6 +274,7 @@ export function useAddRepoNestedImportFlow({
       owner: nestedRuntimeEnvironmentId,
       ...(displayName ? { displayName } : {}),
       closeModal,
+      reportProject: (repo) => takeNestedProjectReporter()?.({ repo }),
       setIsAdding
     })
   }, [
@@ -289,7 +287,8 @@ export function useAddRepoNestedImportFlow({
     nestedRuntimeEnvironmentId,
     nestedScan,
     nestedSelectedPaths.size,
-    setIsAdding
+    setIsAdding,
+    takeNestedProjectReporter
   ])
   return {
     handleImportNestedRepos,

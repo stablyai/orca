@@ -1,5 +1,12 @@
-import type { BrowserGrabRect, BrowserGrabScreenshot } from '../../../shared/browser-grab-types'
-import { GRAB_BUDGET } from '../../../shared/browser-grab-types'
+import type {
+  BrowserGrabRect,
+  BrowserGrabScreenshot
+} from '../../../shared/browser/element-grab/browser-grab-types'
+import { GRAB_BUDGET } from '../../../shared/browser/element-grab/browser-grab-types'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
+
+// A hidden host window can stop compositing and leave capturePage pending forever.
+const CAPTURE_TIMEOUT_MS = 10_000
 
 const HIDE_BROWSER_GRAB_OVERLAY_SCRIPT = `(function(){
   var g = window.__orcaGrab;
@@ -36,13 +43,13 @@ export async function captureSelectionScreenshot(
 
     // Hide selection overlays during capture and attempt restoration even if capture fails.
     await guest.executeJavaScript(HIDE_BROWSER_GRAB_OVERLAY_SCRIPT).catch(() => {})
-    let image: Electron.NativeImage
+    let image: Electron.NativeImage | null
     try {
-      image = await guest.capturePage()
+      image = await withTimeout(guest.capturePage(), CAPTURE_TIMEOUT_MS, null)
     } finally {
       await guest.executeJavaScript(RESTORE_BROWSER_GRAB_OVERLAY_SCRIPT).catch(() => {})
     }
-    if (image.isEmpty()) {
+    if (!image || image.isEmpty()) {
       return null
     }
 

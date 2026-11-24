@@ -2,13 +2,18 @@ import { createElement as h, useRef, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import type { MobileNativeChatScrollNode } from '../../mobile-native-chat-reading-place'
+import type { MobileNativeChatScrollNode } from './viewport/mobile-native-chat-reading-place'
 import { MobileNativeChatRowList } from './MobileNativeChatRowList'
-import type { MobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
+import { forgetMobileNativeChatPlace } from './viewport/use-mobile-native-chat-place-keeper'
+import type { MobileNativeChatRowKeys } from './projection/mobile-native-chat-row-keys'
 import type {
   MobileNativeChatListHandle,
   MobileNativeChatTailFollow
-} from './use-mobile-native-chat-tail-follow'
+} from './viewport/use-mobile-native-chat-tail-follow'
+
+vi.mock('react-native-gesture-handler', () => ({
+  GestureDetector: (props: { children?: unknown }) => props.children ?? null
+}))
 
 const platform = vi.hoisted(() => ({ OS: 'web' }))
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test stub slot starts empty and is filled with the scroller node.
@@ -186,7 +191,12 @@ function tailOf(
 ): MobileNativeChatTailFollow {
   return {
     listProps: { ref: listRef },
-    pageListProps: { ref: listRef, isFollowing: () => false, onEndDistance },
+    pageListProps: {
+      ref: listRef,
+      isFollowing: () => false,
+      onEndDistance,
+      onPlaceRestored: () => {}
+    },
     showJumpToTail: false,
     showPreviousMessage: true,
     previousStopsRef: { current: ['m0', 'm1', 'm2'] },
@@ -195,12 +205,22 @@ function tailOf(
     pinToTail: () => {},
     pinToTailAfterContentResize: () => {},
     jumpToTail: () => {},
+    releaseFollow: () => {},
+    scrollRowToTop: () => {},
     beginUserScroll,
     endUserDrag: () => {},
     beginMomentum: () => {},
     endMomentum,
     scrollMayLoadEarlier: () => false,
-    recordScrollMetrics: () => {}
+    recordScrollMetrics: () => {},
+    viewport: {
+      record: () => {},
+      contentResized: () => {},
+      laidOut: () => {},
+      reset: () => {},
+      read: () => null,
+      subscribe: () => () => {}
+    }
   }
 }
 
@@ -244,7 +264,10 @@ function Host(props: {
     footer: null,
     emptyStateView: null,
     onScroll: () => {},
-    hasHeader: false
+    hasHeader: false,
+    resolveRow: () => ({}),
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The jump tests stub the pinch wrapper and never run the gesture.
+    pinchGesture: {} as never
   })
 }
 
@@ -287,6 +310,8 @@ describe('previous-message jump while the list is moving', () => {
     )
     platform.OS = 'web'
     scrollerSlot.current = pageScroller()
+    // Upstream keeps a reading place for the page's lifetime. A finished jump must not restore into the next case.
+    forgetMobileNativeChatPlace('chat')
   })
 
   afterEach(() => {

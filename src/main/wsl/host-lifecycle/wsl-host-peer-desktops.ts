@@ -1,10 +1,10 @@
 /** R39: a WSL host's server lives in the Linux login's ~/.orca, so another Orca on this computer may share it. */
 import { z } from 'zod'
-import { ORCAD_PEER_DESKTOPS_RUNTIME_CAPABILITY } from '../../../shared/orcad-runtime-capabilities'
+import { ORCAD_PEER_DESKTOPS_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
 import {
   ORCAD_PEER_DESKTOPS_METHOD,
   OrcadPeerDesktopsResultSchema
-} from '../../../shared/orcad-peer-desktops-contract'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-peer-desktops-contract'
 import { wslHostClientInstanceId } from './wsl-host-client-instance'
 
 export type WslHostPeerDesktops =

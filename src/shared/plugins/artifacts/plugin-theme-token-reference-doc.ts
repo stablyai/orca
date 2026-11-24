@@ -57,13 +57,26 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--tab-bar': 'Strip behind tabs, including the title bar when tabs sit in it',
   '--tab-active': 'Active tab',
   '--tab-active-foreground': 'Active tab text, and inactive tab text on hover',
-  '--tab-active-indicator': 'Line under the active tab',
+  '--tab-active-indicator': 'Line marking the active tab and the active right sidebar tool',
   '--tab-inactive': 'Inactive tabs',
   '--tab-inactive-foreground': 'Inactive tab text',
   '--split-divider': 'Divider between split tab groups',
   '--split-divider-hover': 'Split divider while hovered or dragged',
   '--chat-user-message': 'Your messages in chat; may be translucent, it paints over the chat',
-  '--text-link': 'Links in Markdown previews and editors',
+  '--chat-bold-foreground': 'Bold text in chat messages',
+  '--chat-muted-foreground':
+    'Secondary chat text: tool rows, status lines, timestamps and hunk headers',
+  '--chat-inline-code': 'Inline code in chat; may be translucent, it paints over the chat',
+  '--chat-inline-code-foreground': 'Inline code text in chat',
+  '--chat-code-block':
+    'Code blocks, tool output and diffs in chat; may be translucent, it paints over the chat',
+  '--chat-selection': 'Selected text in chat; may be translucent, it paints over the chat',
+  '--chat-selection-foreground': 'Text inside a chat selection',
+  '--text-link': 'Links in Markdown previews, editors and agent chat',
+  '--theme-accent-foreground':
+    "Label on a fill of `--text-link` (the accent). Derived from the accent when omitted: near-black or white, whichever reads better. If no label reads on the accent, that fill uses Orca's accent instead; links keep the theme's",
+  '--editor-selection':
+    'Selected text in the code editor; keep it translucent so find matches show through. An unfocused editor shows it at half its opacity',
   '--diff-added': 'Added-line hue: Monaco overview ruler and chat diff text',
   '--diff-added-background': 'Added lines in diffs',
   '--diff-added-emphasis': 'Added characters within a changed line',
@@ -81,16 +94,34 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--git-decoration-ignored': 'Git-ignored files'
 }
 
-// Why: these mix per mode in main.css, which the derivation rules cannot express.
-const MODE_MIXES: Partial<Record<PluginAppThemeToken, string>> = {
-  '--worktree-sidebar-active': 'a translucent wash of `--worktree-sidebar-foreground`',
+// Why: these mix per mode in main.css, come from chat-internal colors that authors cannot set,
+// or fall back differently per surface.
+const OMITTED_DESCRIPTIONS: Partial<Record<PluginAppThemeToken, string>> = {
+  '--tab-active':
+    'light: same as `--tab-bar`; dark: `--foreground` mixed into `--tab-bar`, up to 11%, as deep as keeps the active tab text and line as readable as at 6% (never under 6%)',
+  '--tab-inactive':
+    'light: `--foreground` mixed into `--tab-bar`, up to 8%, as deep as keeps tab text as readable as at 4% (never under 4%); dark: same as `--tab-bar`',
+  '--tab-active-indicator':
+    'tab line: same as `--tab-active-foreground`; right sidebar tool line: same as `--foreground`',
   '--worktree-sidebar-active-border': 'a mix of `--worktree-sidebar-border`',
-  '--chat-user-message': '`--foreground` mixed lightly into the chat background'
+  '--chat-user-message': '`--foreground` mixed lightly into the chat background',
+  '--chat-bold-foreground': 'the chat text color around it',
+  '--chat-muted-foreground': '`--muted-foreground` as chat paints it',
+  '--chat-inline-code': '`--foreground` mixed lightly into the chat background',
+  '--chat-inline-code-foreground': '`--foreground` mixed 85% into the chat background',
+  '--chat-code-block': '`--foreground` mixed lightly into the chat background',
+  '--chat-selection':
+    "`--text-link` (else Orca's link blue) mixed into the chat background, up to 30% light and 40% dark, as deep as keeps selected text 4.5:1 (never under 15%)",
+  '--chat-selection-foreground': 'same as `--foreground`'
 }
 
 /** What an omitted token becomes, read back from the real derivation with every other token
  *  standing in as `var(<name>)`, so the table cannot drift from what Orca applies. */
 function omittedValueFor(token: PluginAppThemeToken, base: 'light' | 'dark'): string {
+  const described = OMITTED_DESCRIPTIONS[token]
+  if (described) {
+    return described
+  }
   const others = Object.fromEntries(
     PLUGIN_APP_THEME_TOKENS.filter((other) => other !== token).map((other) => [
       other,
@@ -107,7 +138,7 @@ function omittedValueFor(token: PluginAppThemeToken, base: 'light' | 'dark'): st
       : `var(${cssFallback[0]})`
     : completePluginAppThemeTokens(others)[token]
   if (derived === undefined) {
-    return MODE_MIXES[token] ?? "Orca's built-in color"
+    return "Orca's built-in color"
   }
   const mix = /^color-mix\(in srgb, var\((--[\w-]+)\) (\d+)%, var\((--[\w-]+)\)\)$/.exec(derived)
   if (mix) {
@@ -126,7 +157,10 @@ const APP_THEME_TOKENS: ReadonlySet<string> = new Set(PLUGIN_APP_THEME_TOKENS)
 const isAppThemeToken = (token: string): token is PluginAppThemeToken => APP_THEME_TOKENS.has(token)
 // Frame variables that are not colours of an app theme.
 const FRAME_ONLY_ROLES: Record<string, string> = {
-  '--radius': 'Corner radius of cards and controls'
+  '--radius': 'Corner radius of cards and controls',
+  '--font-sans':
+    'Interface font stack. Fonts Orca loads itself (the default Geist, plugin fonts) are not in frames, so the next installed font in the stack is used',
+  '--font-mono': 'Monospace font stack for code'
 }
 
 /** The `--orca-*` CSS variables panel and editor frames get, with what each paints. */
@@ -156,7 +190,7 @@ export function renderPluginThemeTokenReference(): string {
     '',
     '## Frame CSS variables',
     '',
-    "Panel and custom editor frames get these stable variables, set from Orca's active theme and updated in place when it changes. Other tokens are not exposed to frames.",
+    "Panel and custom editor frames get these stable variables, set from Orca's active theme and fonts and updated in place when they change. Other tokens are not exposed to frames.",
     '',
     '| Variable | Orca token |',
     '| --- | --- |',

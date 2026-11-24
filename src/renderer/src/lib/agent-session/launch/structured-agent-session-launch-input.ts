@@ -1,12 +1,14 @@
-import { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
+import { launchStateLifecycle } from './structured-agent-session-launch-lifecycle'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { deleteStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
+import {
+  deleteStructuredAgentLaunchRecord,
+  readStructuredAgentLaunchRecord
+} from './structured-agent-session-launch-persistence'
 import {
   getStructuredLaunchStateBySessionId,
-  getPersistedStructuredAgentLaunchRecord,
   notifyStructuredLaunchListeners
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
 
 /** Existing opening content is correlation after uncertainty, not an active create. */
 export function structuredAgentSessionLaunchHasRetainedInput(
@@ -21,7 +23,7 @@ export function structuredAgentSessionLaunchHasRetainedInput(
       !!state.intent.params.firstMessage
     )
   }
-  const record = getPersistedStructuredAgentLaunchRecord(sessionId)
+  const record = readStructuredAgentLaunchRecord(sessionId)
   return !!record?.firstMessage && record.lifecycle !== 'failed'
 }
 
@@ -34,19 +36,24 @@ export function settleStructuredLaunchFirstMessageFromJournal(
   const state = getStructuredLaunchStateBySessionId(sessionId)
   if (
     state &&
-    (state.cancelled || state.callers.outcome === 'failed' || state.callers.outcome === 'published')
+    (state.cancelled ||
+      (state.callers.outcome === 'failed' && !state.visibilityUnknown) ||
+      state.callers.outcome === 'published')
   ) {
     return
   }
-  const firstMessage =
-    state?.intent.params.firstMessage ??
-    getPersistedStructuredAgentLaunchRecord(sessionId)?.firstMessage
+  const record = readStructuredAgentLaunchRecord(sessionId)
+  if (!state && record?.lifecycle === 'failed') {
+    return
+  }
+  const firstMessage = state?.intent.params.firstMessage ?? record?.firstMessage
   const submission = firstMessage && readRecorded().get(firstMessage.clientMessageId)
   if (!submission) {
     return
   }
   if (state) {
     state.visibilityUnknown = false
+    delete state.failure
     state.callers.outcome = 'published'
     state.promise = import('./structured-agent-session-launch-create-message').then(
       ({ publishStructuredLaunchCreateOptions }) =>
@@ -59,14 +66,14 @@ export function settleStructuredLaunchFirstMessageFromJournal(
     )
   }
   deleteStructuredAgentLaunchRecord(sessionId)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(sessionId)
 }
 
 /** The launch adopts an existing conversation, which may keep a model of its own. */
 export function getStructuredAgentSessionLaunchResumes(sessionId: string): boolean {
-  const state = getStructuredLaunchStateBySessionId(sessionId)
-  const resumeFrom = state
-    ? state.intent.params.resumeFrom
-    : getPersistedStructuredAgentLaunchRecord(sessionId)?.resumeFrom
-  return resumeFrom !== undefined
+  // A fork opens onto history it adopts, as a resume does.
+  const params =
+    getStructuredLaunchStateBySessionId(sessionId)?.intent.params ??
+    readStructuredAgentLaunchRecord(sessionId)
+  return params?.resumeFrom !== undefined || params?.forkFrom !== undefined
 }

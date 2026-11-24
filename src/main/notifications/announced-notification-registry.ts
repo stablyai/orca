@@ -1,15 +1,15 @@
 // Track pending and delivered announcements: journal updates can change renderer-reconstructed IDs.
 // Memory-only; after restart, the current status row supplies the fallback ID.
-import type { StructuredAttentionOrigin } from '../../shared/agent-session/agent-session-attention'
+import type { StructuredAttentionOrigin } from '../../shared/agent-session/view/agent-session-attention'
 import type {
   NotificationAttentionAcknowledgement,
   NotificationDispatchRequest,
   StructuredNotificationRead
-} from '../../shared/notification-settings-types'
+} from '../../shared/notifications/notification-settings-types'
 import {
   NotificationAttentionReadFrontiers,
   notificationWasAcknowledged
-} from '../../shared/notification-attention-acknowledgement'
+} from '../../shared/notifications/notification-attention-acknowledgement'
 const DEFAULT_MAX_SUBJECTS = 256
 const DEFAULT_MAX_IDS_PER_SUBJECT = 20
 

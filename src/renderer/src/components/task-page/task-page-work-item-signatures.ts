@@ -1,4 +1,4 @@
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 
 // Why the host: a twin's two hosts return the same PR under one repo id.
 export function taskPageWorkItemKey(item: GitHubWorkItem): string {
@@ -37,6 +37,7 @@ export function taskPageWorkItemStatusSignature(item: GitHubWorkItem): string {
     item.checksSummary?.passed ?? null,
     item.checksSummary?.scope ?? null,
     item.checksSummary?.pending ?? null,
+    item.checksSummary?.actionRequired ?? null,
     item.checksSummary?.neutral ?? null,
     item.mergeable ?? null,
     item.autoMergeEnabled ?? null,

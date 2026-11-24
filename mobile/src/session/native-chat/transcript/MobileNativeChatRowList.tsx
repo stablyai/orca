@@ -1,14 +1,17 @@
 import { useLayoutEffect, useRef, type ComponentProps, type ReactElement } from 'react'
 import { FlatList, Platform } from 'react-native'
+import type { LegacyComposedGesture } from 'react-native-gesture-handler'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
+import { MobileNativeChatPinchZoom } from './viewport/mobile-native-chat-pinch-zoom'
+import type { MobileNativeChatRowKeys } from './projection/mobile-native-chat-row-keys'
+import { MobileNativeChatPageList } from './viewport/MobileNativeChatPageList'
+import { MobileNativeChatScrollRowToTopContext } from './viewport/mobile-native-chat-scroll-row-to-top-context'
 import {
   NativeJumpContext,
   PreviousMessageCell,
   withOwnedScroll,
   type NativeJumpBag
 } from './mobile-native-chat-native-jump'
-import type { MobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
-import { MobileNativeChatPageList } from './MobileNativeChatPageList'
 import {
   PREVIOUS_MESSAGE_ALIGN_PX,
   applyTrailingStop,
@@ -20,12 +23,14 @@ import {
   mobileNativeChatRowAnchor,
   type MobileNativeChatListHandle,
   type MobileNativeChatTailFollow
-} from './use-mobile-native-chat-tail-follow'
+} from './viewport/use-mobile-native-chat-tail-follow'
+import { useMobileNativeChatPreviousStops } from './use-mobile-native-chat-previous-stops'
 
 type PageProps = ComponentProps<typeof MobileNativeChatPageList>
 
 type Props = Pick<
   PageProps,
+  | 'itemJump'
   | 'rows'
   | 'roots'
   | 'renderItem'
@@ -42,22 +47,42 @@ type Props = Pick<
   rowKeys: MobileNativeChatRowKeys
   /** With a header, the row below it anchors the native list's visible content. */
   hasHeader: boolean
+  pinchGesture: LegacyComposedGesture
+  resolveRow: (
+    index: number,
+    message: NativeChatMessage
+  ) => { joinsWorkRun?: boolean; foldedAway?: boolean }
 }
 
 export function MobileNativeChatRowList(props: Props): ReactElement {
+  useMobileNativeChatPreviousStops(
+    props.tail,
+    { listMessages: props.rows, resolveRow: props.resolveRow },
+    props.rowKeys.keyOf,
+    props.layoutKey
+  )
   const { tail, rowKeys, rows, renderItem, contentContainerStyle, onScroll, footer } = props
   const { header, emptyStateView } = props
   if (Platform.OS === 'web') {
-    const { roots, runs, layoutKey, onNearTop } = props
+    const { roots, runs, layoutKey, onNearTop, itemJump } = props
     return (
-      <MobileNativeChatPageList
-        {...tail.pageListProps}
-        {...{ rows, rowKeys, roots, renderItem, runs, contentContainerStyle, layoutKey }}
-        {...{ header, footer, emptyStateView, onScroll, onNearTop }}
-      />
+      <MobileNativeChatPinchZoom gesture={props.pinchGesture}>
+        {/* Only the page list draws row keys to scroll to. */}
+        <MobileNativeChatScrollRowToTopContext value={tail.scrollRowToTop}>
+          <MobileNativeChatPageList
+            {...tail.pageListProps}
+            {...{ rows, rowKeys, roots, renderItem, runs, contentContainerStyle, layoutKey }}
+            {...{ header, footer, emptyStateView, onScroll, onNearTop, itemJump }}
+          />
+        </MobileNativeChatScrollRowToTopContext>
+      </MobileNativeChatPinchZoom>
     )
   }
-  return <MobileNativeChatNativeRowList {...props} />
+  return (
+    <MobileNativeChatPinchZoom gesture={props.pinchGesture}>
+      <MobileNativeChatNativeRowList {...props} />
+    </MobileNativeChatPinchZoom>
+  )
 }
 
 function MobileNativeChatNativeRowList({
@@ -294,9 +319,9 @@ function MobileNativeChatNativeRowList({
           tail.pinToTail()
         }}
         maintainVisibleContentPosition={mobileNativeChatRowAnchor(hasHeader)}
-        ListHeaderComponent={header}
-        ListFooterComponent={footer}
-        ListEmptyComponent={emptyStateView}
+        ListHeaderComponent={header ?? undefined}
+        ListFooterComponent={footer ?? undefined}
+        ListEmptyComponent={emptyStateView ?? undefined}
       />
     </NativeJumpContext.Provider>
   )

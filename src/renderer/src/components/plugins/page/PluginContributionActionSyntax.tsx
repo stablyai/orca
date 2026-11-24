@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { Button } from '../../ui/button'
 import { openPluginBlankFileFromSettings } from '../state/plugin-try-action'
@@ -12,6 +12,7 @@ export function PluginContributionSyntaxHint({
   extensions: readonly string[]
   filenames: readonly string[]
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const noWorkspace = useAppStore((state) => pluginPanelUnavailableReason(state) !== null)
   const extension = extensions[0]
   const filename = filenames[0]
@@ -22,7 +23,7 @@ export function PluginContributionSyntaxHint({
         size="xs"
         onClick={() => openPluginBlankFileFromSettings(extension)}
       >
-        {translate('auto.components.settings.pluginInstallAction.tryIt', 'Try it')}
+        {t('auto.components.settings.pluginInstallAction.tryIt', 'Try it')}
       </Button>
     )
   }
@@ -32,12 +33,12 @@ export function PluginContributionSyntaxHint({
   return (
     <span className="text-xs text-muted-foreground">
       {extension
-        ? translate(
+        ? t(
             'auto.components.settings.PluginContributionActionSyntax.openExtension',
             'Open any {{value0}} file',
             { value0: extension }
           )
-        : translate(
+        : t(
             'auto.components.settings.PluginContributionActionSyntax.openFilename',
             'Open {{value0}}',
             { value0: filename }

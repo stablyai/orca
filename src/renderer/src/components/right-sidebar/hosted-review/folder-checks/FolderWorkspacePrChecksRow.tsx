@@ -1,10 +1,13 @@
 import { ChevronRight, ExternalLink, GitMerge } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
-import { translate } from '@/i18n/i18n'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
+import { cn } from '@/lib/class-names'
+import { SpinnerFrame } from '@/components/ui/LoadingSpinner'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { useTranslate } from '@/i18n/use-translate'
+import type {
+  PRCheckDetail,
+  PRCheckRunDetails
+} from '../../../../../../shared/github/checks/check-types'
 import {
   CHECK_COLOR,
   CHECK_ICON,
@@ -27,23 +30,24 @@ export function FolderWorkspacePrChecksRow({
   onToggle,
   onLoadCheckDetails
 }: FolderWorkspacePrChecksRowProps): React.JSX.Element {
+  const t = useTranslate()
   const ReviewIcon = row.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const StatusIcon = CHECK_ICON[row.checkTone] ?? CHECK_ICON.neutral
   const showStatusIcon = row.checkTone !== 'neutral'
   const animateStatusIcon = row.checkTone === 'pending'
   const reviewProviderLabel = row.provider === 'gitlab' ? 'MR' : 'PR'
   const toggleDetailsLabel = expanded
-    ? translate(
+    ? t(
         'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.hideDetails',
         'Hide {{value0}} PR check details',
         { value0: row.worktree.displayName }
       )
-    : translate(
+    : t(
         'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.showDetails',
         'Show {{value0}} PR check details',
         { value0: row.worktree.displayName }
       )
-  const openExternalLabel = translate(
+  const openExternalLabel = t(
     'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.openReviewExternally',
     'Open {{value0}} externally',
     { value0: reviewProviderLabel }
@@ -80,18 +84,13 @@ export function FolderWorkspacePrChecksRow({
         <div className="min-w-0 flex-1">
           <PrChecksRowHeader row={row} />
           <div className="mt-1 truncate text-[12px] text-foreground/90">{row.title}</div>
-          <div
-            ref={animateStatusIcon ? observeOffscreenAnimation : undefined}
-            className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground"
-          >
-            {showStatusIcon ? (
-              <StatusIcon
-                className={cn(
-                  'size-3 shrink-0',
-                  CHECK_COLOR[row.checkTone],
-                  animateStatusIcon && 'animate-spin motion-reduce:animate-none'
-                )}
-              />
+          <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+            {showStatusIcon && animateStatusIcon ? (
+              <SpinnerFrame>
+                <StatusIcon className={cn('block size-3', CHECK_COLOR[row.checkTone])} />
+              </SpinnerFrame>
+            ) : showStatusIcon ? (
+              <StatusIcon className={cn('size-3 shrink-0', CHECK_COLOR[row.checkTone])} />
             ) : null}
             <span className="truncate">{row.summary}</span>
             {row.repo ? <span className="shrink-0">· {row.repo.displayName}</span> : null}

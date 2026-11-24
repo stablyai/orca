@@ -1,34 +1,45 @@
-import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/native-chat/input/native-chat-picker-items'
-import type { NativeChatSendFollowUp } from '../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
-import type { StructuredMobileSendAttachment } from '../use-mobile-structured-send-with-outcome'
+import type { WorkerDockEntry } from '../../../../src/shared/orchestration/dock/worker-dock'
+import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
+import type { AgentSessionRewindSurface } from '../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
+import type { NativeChatSendFollowUp } from '../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
+import type { StructuredMobileSendAttachment } from './composer/delivery/use-mobile-structured-send-with-outcome'
 import type { MobileSessionView } from '../../storage/session-view-preferences'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   AskAnswerSelection,
   NativeChatAnswerSource
-} from '../../../../src/shared/native-chat/input/native-chat-ask-answer'
-import type { AskPrompt } from '../../../../src/shared/native-chat/input/native-chat-ask-types'
-import type { MobileChatPermission } from './input/mobile-native-chat-permission'
-import type { MobileChatQuestion } from './input/mobile-native-chat-question'
+} from '../../../../src/shared/native-chat/input/questions/native-chat-ask-answer'
+import type { AskPrompt } from '../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
+import type { MobileChatPermission } from './input/prompts/mobile-native-chat-permission'
+import type { MobileWorkerApprovals } from './input/prompts/use-mobile-worker-approvals'
+import type { MobileNativeChatCollapsedPrompt } from './input/prompts/MobileNativeChatPromptStrip'
+import type { MobileChatQuestion } from './input/prompts/mobile-native-chat-question'
 import type {
   NativeChatLiveTurnIndicator,
   NativeChatSettledTurns
-} from '../../../../src/shared/native-chat/transcript/native-chat-turn-status'
-import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
-import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat/native-chat-terminal-turn'
-import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/native-chat-resolution-receipt'
+} from '../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
+import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
+import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
+import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat/transcript/turns/native-chat-terminal-turn'
+import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
-} from './mobile-native-chat-send'
-import type { MobileNativeChatCommandRefusalCauses } from './use-mobile-native-chat-send-error'
-import type { MobileStructuredQueuedMessageControls } from '../use-mobile-structured-queued-message-controls'
-import type { MobileStructuredBackgroundTasks } from '../use-mobile-structured-background-tasks'
-import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
-import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
-import type { MobileNativeChatSessionOptionPickersProps } from './input/MobileNativeChatSessionOptionPickers'
+} from './composer/delivery/mobile-native-chat-send'
+import type { MobileNativeChatCommandRefusalCauses } from './composer/delivery/use-mobile-native-chat-send-error'
+import type { MobileStructuredQueuedMessageControls } from './input/queued-messages/use-mobile-structured-queued-message-controls'
+import type { MobileStructuredThreadGoal } from './input/tasks/use-mobile-structured-thread-goal'
+import type { MobileStructuredBackgroundTasks } from './input/tasks/use-mobile-structured-background-tasks'
+import type { MobileStructuredInterruptedContinue } from './composer/delivery/use-mobile-structured-interrupted-continue'
+import type { MobileNativeChatPendingMessage } from './transcript/sending/mobile-native-chat-pending-echo'
+import type { useMobileNativeChatSession } from './conversation/use-mobile-native-chat-session'
+import type { MobileNativeChatSessionOptionPickersProps } from './input/session-options/MobileNativeChatSessionOptionPickers'
+import type { MobileStructuredMcpPanel } from './mcp/use-mobile-structured-mcp-panel'
+import type { MobileStructuredAccountUsage } from './usage/use-mobile-structured-account-usage'
 import type { MobileNativeChatVisualSource } from './visual/mobile-native-chat-visual-read'
-import type { useMobileStructuredSessionCommands } from '../use-mobile-structured-session-commands'
+import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
+import type { useMobileStructuredSessionCommands } from './composer/commands/use-mobile-structured-session-commands'
+import type { MobileNativeChatUsageLimit } from './status/use-mobile-native-chat-usage-limit'
 
 export type MobileNativeChatController = {
   sessionViewReady: boolean
@@ -50,6 +61,8 @@ export type MobileNativeChatController = {
   nativeChatStructured: boolean
   nativeChatVisualSource: MobileNativeChatVisualSource | null
   nativeChatItemSource: MobileNativeChatVisualSource | null
+  /** The paired desktop's CI result lines setting; false until it reports one. */
+  nativeChatShowsCiResultLines: boolean
   /** Working or waiting on the reader: keeps the turn clock running. */
   nativeChatTurnActive: boolean
   nativeChatAwaitingInput: NativeChatAwaitingInput | null
@@ -65,6 +78,10 @@ export type MobileNativeChatController = {
   nativeChatSendFollowUp: NativeChatSendFollowUp | null
   nativeChatStreamingText?: string
   nativeChatPermission: MobileChatPermission | null
+  /** A coordinator chat's workers' open permission prompts, answered on their host. */
+  nativeChatWorkerApprovals: MobileWorkerApprovals
+  /** Its current workers, for the strip above the message box. */
+  nativeChatWorkerDock: readonly WorkerDockEntry[]
   // A new prompt occurrence resets local card submission state only.
   nativeChatPromptKey: string | null
   /** Only a structured chat's journal question; a terminal chat's questions are asks. */
@@ -84,7 +101,7 @@ export type MobileNativeChatController = {
   // Collapse writes nothing to the terminal and frees Send.
   collapseNativeChatAsk: () => void
   collapseNativeChatPrompt?: () => void
-  nativeChatCollapsedPrompt: { title: string; expand: () => void } | null
+  nativeChatCollapsedPrompt: MobileNativeChatCollapsedPrompt | null
   handleNativeChatCancelPrompt?: (prompt?: {
     itemId: string
     expectedRevision: number
@@ -93,6 +110,12 @@ export type MobileNativeChatController = {
   handleNativeChatStop: () => void
   nativeChatQueued: MobileStructuredQueuedMessageControls
   nativeChatBackgroundTasks: MobileStructuredBackgroundTasks | null
+  nativeChatContextUsage: NativeChatContextUsageSummary | null
+  nativeChatInterruptedContinue: MobileStructuredInterruptedContinue | null
+  nativeChatThreadGoal: MobileStructuredThreadGoal | null
+  nativeChatMcpPanel: MobileStructuredMcpPanel | null
+  nativeChatAccountUsage: MobileStructuredAccountUsage | null
+  nativeChatRewind: AgentSessionRewindSurface | undefined
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
   nativeChatSkills: NativeChatSkillDiscoverySnapshot
@@ -117,4 +140,9 @@ export type MobileNativeChatController = {
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
   nativeChatSessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
   nativeChatAcceptsImages: boolean
+  /** The structured chat's options read on whether its agent forks; absent until it answers. */
+  nativeChatForkSupport?: AgentSessionOptionsResult['forkSupport']
+  nativeChatUsageLimit: MobileNativeChatUsageLimit | null
+  /** Rows whose failure no later successful turn resolved. */
+  nativeChatUnresolvedFailureRows: ReadonlySet<string>
 }

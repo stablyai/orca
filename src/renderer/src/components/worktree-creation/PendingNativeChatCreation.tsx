@@ -1,40 +1,38 @@
 import React from 'react'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
-import { retryBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { retryBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
-import { holdNativeChatStagedInput } from '@/components/native-chat/native-chat-draft-attachment-staging'
+import { holdNativeChatStagedInput } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
 import {
   pendingCreationChatDraftScopeKey,
   pendingCreationHeldChatMessage,
   type PendingWorktreeCreation
-} from '@/lib/pending-worktree-creation'
-import { shouldPreserveEditableFocus } from '@/components/terminal-pane/pane-helpers'
-import {
-  NativeChatComposer,
-  type NativeChatComposerHandle
-} from '@/components/native-chat/NativeChatComposer'
-import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/native-chat-composer-types'
-import { useNativeChatComposerError } from '@/components/native-chat/use-native-chat-composer-notice'
-import type { NativeChatComposerNotice } from '@/components/native-chat/native-chat-composer-notice'
-import { NativeChatEmptyState } from '@/components/native-chat/NativeChatEmptyState'
-import { NativeChatUserMessageRow } from '@/components/native-chat/NativeChatUserMessageRow'
+} from '@/lib/workspace/creation/pending-worktree-creation'
+import { shouldPreserveEditableFocus } from '@/lib/text-input/focus/editable-focus-preservation'
+import { NativeChatComposer } from '@/components/native-chat/composer/NativeChatComposer'
+import type { NativeChatComposerHandle } from '@/components/native-chat/composer/native-chat-composer-types'
+import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
+import { useNativeChatComposerError } from '@/components/native-chat/composer/controls/use-native-chat-composer-notice'
+import type { NativeChatComposerNotice } from '@/components/native-chat/composer/controls/native-chat-composer-notice'
+import { NativeChatEmptyState } from '@/components/native-chat/host-access/NativeChatEmptyState'
+import { NativeChatUserMessageRow } from '@/components/native-chat/messages/rows/NativeChatUserMessageRow'
 import {
   NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
   NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS,
   nativeChatTranscriptOuterClass
-} from '@/components/native-chat/native-chat-appearance-style'
-import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/use-native-chat-store-appearance-style'
+} from '@/components/native-chat/appearance/native-chat-appearance-style'
+import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/appearance/use-native-chat-store-appearance-style'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'
 import { WorktreeSetupSteps } from './WorktreeSetupSteps'
 import { deriveWorktreeSetupSteps } from './worktree-setup-steps'
 import { useWorktreeCreationClock } from './worktree-creation-clock'
-import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
-import type { NativeChatComposerDraftImage } from '@/components/native-chat/native-chat-composer-draft-storage'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { pendingChatAccountOwner } from '@/lib/workspace/ownership/visible-account-surface'
+import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import { usePendingNativeChatOptions } from './use-pending-native-chat-options'
 
 const NO_COMMAND_CAUSES = {
@@ -45,10 +43,10 @@ const NO_COMMAND_CAUSES = {
   retry: false
 } as const
 
-function failureText(entry: PendingWorktreeCreation): string {
+function failureText(entry: PendingWorktreeCreation, t: Translate = translate): string {
   return (
     entry.error ??
-    translate(
+    t(
       'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
       'Something went wrong while creating the worktree.'
     )
@@ -63,19 +61,14 @@ export default function PendingNativeChatCreation({
   creationId: string
   reserveCollapsedSidebarHeaderSpace?: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
-  const sourceWorktreeId = useAppStore((s) => {
-    const repo = s.repos.find((repo) => repo.id === entry?.request.repoId)
-    return repo ? getRepoMainWorktreeId(repo) : undefined
-  })
-  const executionHostId = useAppStore((s) => {
-    const repo = s.repos.find((repo) => repo.id === entry?.request.repoId)
-    return (
-      entry?.request.executionHostId ??
-      entry?.request.workspaceRunContext?.hostId ??
-      (repo ? getRepoExecutionHostId(repo) : undefined)
-    )
-  })
+  const sourceWorktreeId = useAppStore(
+    (s) => pendingChatAccountOwner(s, creationId).sourceWorktreeId
+  )
+  const executionHostId = useAppStore(
+    (s) => pendingChatAccountOwner(s, creationId).hostId ?? undefined
+  )
   const options = usePendingNativeChatOptions(entry, executionHostId, sourceWorktreeId)
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
   const composerRef = React.useRef<NativeChatComposerHandle>(null)
@@ -84,7 +77,7 @@ export default function PendingNativeChatCreation({
   const handedOff = entry?.chatInputHandedOff === true
   const heldMessage = entry ? pendingCreationHeldChatMessage(entry) : null
   const held = heldMessage !== null
-  // Like t3code, progress shows only in the steps card after a send, never above the composer.
+  // Progress shows only in the steps card after a send, never above the composer.
   const now = useWorktreeCreationClock(status === 'creating' && held)
   const suppressFocus = entry?.request.suppressTerminalFocusOnCompletion === true
 
@@ -139,6 +132,7 @@ export default function PendingNativeChatCreation({
       ...(sendBlockedReason ? { sendBlockedReason } : {}),
       optionsSurface: options.surface,
       optionSnapshot: options.snapshot,
+      pendingCreationId: creationId,
       worktreeId: sourceWorktreeId,
       attachmentStagingScope: pendingCreationChatDraftScopeKey(creationId),
       onError: reportComposerError,
@@ -192,7 +186,7 @@ export default function PendingNativeChatCreation({
       <WorktreeSetupSteps
         steps={deriveWorktreeSetupSteps(entry, now)}
         agentLabel={agentLabel}
-        error={isError ? failureText(entry) : null}
+        error={isError ? failureText(entry, t) : null}
         onRetry={() => retryBackgroundWorktreeCreation(creationId)}
         onDismiss={dismiss}
       />

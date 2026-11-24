@@ -22,6 +22,9 @@ export async function ghExecFileAsync() {
  return { stdout: output, stderr: '' };
 }
 `
+const ghExecFileSpecifier = '../../../git/command-runner/hosted-cli/gh-exec-file'
+const ghExecFileSource = 'src/main/git/command-runner/hosted-cli/gh-exec-file.ts'
+const ghExecFileFilter = /^\.\.\/\.\.\/\.\.\/git\/command-runner\/hosted-cli\/gh-exec-file$/
 const scriptUrl = (name) => new URL(name, import.meta.url)
 const scriptRoot = fileURLToPath(scriptUrl('../../../../../'))
 const sourceName = (root, filename) => path.relative(root, filename).split(path.sep).join('/')
@@ -34,12 +37,12 @@ const cpuDescriptors = [8, 63].map((size) => ({
 
 export async function prepareHostMeasurement(root = process.cwd()) {
   const directory = await mkdtemp(path.join(tmpdir(), 'orca-check-host-retention-'))
+  let ghExecFileStubbed = false
   try {
     const bundle = await build({
       absWorkingDir: root,
       stdin: {
-        contents:
-          "export { attachFailedJobLogTails, prCheckLogTailCache } from './check-job-log-tails'; export { setFixtureOutput, downloadCount } from '../../gh-utils';",
+        contents: `export { attachFailedJobLogTails, prCheckLogTailCache } from './check-job-log-tails'; export { setFixtureOutput, downloadCount } from '${ghExecFileSpecifier}';`,
         resolveDir: path.join(root, 'src', 'main', 'github', 'client', 'check'),
         loader: 'ts'
       },
@@ -52,10 +55,12 @@ export async function prepareHostMeasurement(root = process.cwd()) {
         {
           name: 'generated-gh-capture-result',
           setup(builder) {
-            builder.onResolve({ filter: /^\.\.\/\.\.\/gh-utils$/ }, () => ({
-              path: 'generated-gh-result',
-              namespace: 'fixture'
-            }))
+            // Why: check-job-log-download.ts imports ghExecFileAsync by this exact
+            // specifier; stubbing any other path lets the bundle spawn the real gh.
+            builder.onResolve({ filter: ghExecFileFilter }, () => {
+              ghExecFileStubbed = true
+              return { path: 'generated-gh-result', namespace: 'fixture' }
+            })
             builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({
               contents: fixtureSource,
               loader: 'js'
@@ -67,6 +72,11 @@ export async function prepareHostMeasurement(root = process.cwd()) {
     const bundleSources = Object.keys(bundle.metafile.inputs)
       .filter((name) => name !== '<stdin>' && !name.startsWith('fixture:'))
       .sort()
+    assert(ghExecFileStubbed, 'Host measurement did not stub the gh downloader')
+    assert(
+      !bundleSources.includes(ghExecFileSource),
+      'Host measurement bundle includes the real gh downloader'
+    )
     const executedSources = [
       import.meta.filename,
       fileURLToPath(scriptUrl('./check-job-log-cache-retention-child.mjs')),

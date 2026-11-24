@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import {
   mobileNativeChatRowViewportTops,
   type MobileNativeChatScrollNode
-} from '../../mobile-native-chat-reading-place'
+} from './viewport/mobile-native-chat-reading-place'
 import {
   endAnchoredScrollTopForRow,
   previousMessageChained,
@@ -27,7 +27,8 @@ type AlignArgs<S extends MobileNativeChatScrollNode> = {
   scroller: () => S | null
   write: (s: S, to: number) => void
   notePlace: (s: S) => void
-  latest: { current: LatestGeometry }
+  // Readonly so a ref that also tracks layout can be passed without a mutable-current clash.
+  latest: { readonly current: LatestGeometry }
   revealUndrawn: (index: number) => void
 }
 

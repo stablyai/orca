@@ -1,6 +1,6 @@
 import type { Socket } from 'node:net'
 import { StringDecoder } from 'node:string_decoder'
-import { createNdjsonParser } from '../../../../shared/main-process-ndjson-framer'
+import { createNdjsonParser } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import {
   BINARY_STREAM_FRAMING,
   createBinaryStreamFrameReader,

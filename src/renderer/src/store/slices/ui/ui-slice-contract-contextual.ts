@@ -1,14 +1,18 @@
-import type { PersistedTrustedOrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
+import type { FeatureInteractionState } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import type {
-  FeatureInteractionId,
-  FeatureInteractionState
-} from '../../../../../shared/feature-interactions'
-import type { FeatureTipId } from '../../../../../shared/feature-tips'
-import type { ChatUiLaunchTipVariant } from '../../../../../shared/native-chat/chat-ui-launch-tip-audience'
-import type { ContextualTourId } from '../../../../../shared/contextual-tours'
-import type { OrcaHookScriptKind } from '../../../lib/orca-hook-trust'
-import type { SettingsNavigationTarget } from '../../../lib/settings-navigation-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+  FeatureTipId,
+  FeatureTipSeenId
+} from '../../../../../shared/feature-education/feature-tips'
+import type { ChatUiLaunchTipVariant } from '../../../../../shared/feature-education/chat-ui-launch-tip-audience'
+import type { ContextualTourId } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
+import type { OrcaHookTrustKind } from '../../../../../shared/workspace-setup/hooks/orca-hook-trust-entries'
+import type { SettingsNavigationTarget } from '../../../components/settings/navigation/settings-navigation-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { WslMovedProject } from '../../../../../shared/wsl-move/wsl-moved-project'
+
+export type WorktreeCardsIntroChoice = 'new' | 'classic'
 
 export type UISliceContextual = {
   openSettingsPage: () => void
@@ -49,21 +53,26 @@ export type UISliceContextual = {
     | 'worktree-visibility'
     | 'setup-guide'
     | 'feature-wall'
+    | 'bot-templates'
     | 'feature-tips'
     | 'new-workspace-composer'
     | 'confirm-orca-yaml-hooks'
     | 'diagram-viewer'
     | 'agent-session-history'
+    | 'chat-account-usage'
     | 'node-dist-mirror'
+    | 'agent-cli-update-failed'
   modalData: Record<string, unknown>
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
-  featureTipsSeenIds: FeatureTipId[]
+  featureTipsSeenIds: FeatureTipSeenId[]
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
   /** Main's once-decided Chat UI launch tip variant; null until read. */
   chatUiLaunchTipVariant: ChatUiLaunchTipVariant | null
   setChatUiLaunchTipVariant: (variant: ChatUiLaunchTipVariant) => void
   featureInteractions: FeatureInteractionState
+  /** Whether the profile had opened the workspace board before this launch; null until persisted UI loads. */
+  workspaceBoardUsedBeforeLaunch: boolean | null
   recordFeatureInteraction: (id: FeatureInteractionId) => Promise<void>
   contextualToursSeenIds: ContextualTourId[]
   contextualToursAutoEligible: boolean | null
@@ -100,7 +109,7 @@ export type UISliceContextual = {
   trustedOrcaHooks: PersistedTrustedOrcaHooks
   markOrcaHookScriptConfirmed: (
     repoId: string,
-    kind: OrcaHookScriptKind,
+    kind: OrcaHookTrustKind,
     contentHash: string
   ) => void
   markOrcaHookRepoAlwaysTrusted: (repoId: string) => void
@@ -132,6 +141,23 @@ export type UISliceContextual = {
   markCodexTerminalServerIsolationNoticeSeen: () => void
   codexSharedSettingsNoticeSeen: boolean
   markCodexSharedSettingsNoticeSeen: () => void
+  worktreeCardsUpdateNoticeSeen: boolean
+  markWorktreeCardsUpdateNoticeSeen: () => void
+  worktreeCardsIntroNoticeSeen: boolean
+  markWorktreeCardsIntroNoticeSeen: () => void
+  /** Open intro note's switch position; 'new' previews the new cards without saving. Not persisted. */
+  worktreeCardsIntroChoice: WorktreeCardsIntroChoice | null
+  setWorktreeCardsIntroChoice: (choice: WorktreeCardsIntroChoice | null) => void
+  /** One-shot pointer at the options button after someone keeps the new cards. Not persisted. */
+  worktreeCardsIntroKeptHintOpen: boolean
+  setWorktreeCardsIntroKeptHintOpen: (open: boolean) => void
   claudeDiffPanelNoticeSeen: boolean
   markClaudeDiffPanelNoticeSeen: () => void
+  wslMovedSectionCollapsed: boolean
+  setWslMovedSectionCollapsed: (collapsed: boolean) => void
+  /** `wslMovedProjectKey`s of moved-project entries hidden from the sidebar. */
+  hiddenWslMovedProjectKeys: readonly string[]
+  hideWslMovedProject: (project: Pick<WslMovedProject, 'kind' | 'id' | 'distro'>) => void
+  /** Drops hidden keys of projects no longer moved, so a later move lists again. */
+  retainHiddenWslMovedProjects: (projects: readonly WslMovedProject[]) => void
 }

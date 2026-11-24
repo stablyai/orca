@@ -5,33 +5,33 @@ import {
   decodeBrowserExtensionWireJson,
   encodeBrowserExtensionWireJson
 } from '../shared/browser/extensions/browser-extension-worker-api'
-import { BROWSER_EXTENSION_API_SURFACE } from './browser-extension-api-surface'
+import { BROWSER_EXTENSION_API_SURFACE } from './browser/extensions/api/browser-extension-api-surface'
 import {
   createContentScriptSyncForward,
   installContentScriptRelayFilter
-} from './browser-extension-content-script-relay'
+} from './browser/extensions/messaging/browser-extension-content-script-relay'
 import {
   installBrowserExtensionDocumentTargets,
   PRELOAD_FIRST_DISCARDED_TAB_ID
-} from './browser-extension-document-targets'
-import { passesBrowserExtensionEventFilter } from './browser-extension-event-filters'
-import { installBrowserExtensionInertApis } from './browser-extension-inert-apis'
+} from './browser/extensions/documents/browser-extension-document-targets'
+import { passesBrowserExtensionEventFilter } from './browser/extensions/api/browser-extension-event-filters'
+import { installBrowserExtensionInertApis } from './browser/extensions/api/browser-extension-inert-apis'
 import {
   installBrowserExtensionApis,
   type BrowserExtensionInvokeReply,
   type BrowserExtensionMainWorldBridge
-} from './browser-extension-main-world'
-import { installBrowserExtensionNativeMessaging } from './browser-extension-native-messaging'
-import { installBrowserExtensionStorageRelay } from './browser-extension-storage-relay'
+} from './browser/extensions/api/browser-extension-main-world'
+import { installBrowserExtensionNativeMessaging } from './browser/extensions/messaging/browser-extension-native-messaging'
+import { installBrowserExtensionStorageRelay } from './browser/extensions/storage/browser-extension-storage-relay'
 import {
   installBrowserExtensionStorageSync,
   PRELOAD_STORAGE_SYNC_CONSTANTS
-} from './browser-extension-storage-sync'
+} from './browser/extensions/storage/browser-extension-storage-sync'
 
 /**
- * Orca's API shim for extension service workers, bundled into one standalone script that Orca's
- * background wrapper loads before the extension's own worker (importScripts or a side-effect
- * import). It installs the same `chrome.*` additions as the page preload, over fetch instead of IPC.
+ * Orca's API shim for extension service workers, bundled into one standalone script that the
+ * extension's own worker loads first (Orca puts an importScripts or side-effect import at its top).
+ * It installs the same `chrome.*` additions as the page preload, over fetch instead of IPC.
  */
 
 const FAILED: BrowserExtensionInvokeReply = {
@@ -192,16 +192,25 @@ const bridge: BrowserExtensionMainWorldBridge = {
   passesFilter: passesBrowserExtensionEventFilter
 }
 
-void connectEvents()
-installBrowserExtensionApis(bridge, BROWSER_EXTENSION_API_SURFACE)
-installBrowserExtensionStorageRelay(bridge, 'worker')
-installBrowserExtensionNativeMessaging(bridge, 'worker')
-installBrowserExtensionDocumentTargets(bridge, PRELOAD_FIRST_DISCARDED_TAB_ID)
-installBrowserExtensionInertApis('worker')
-installContentScriptRelayFilter(
-  installBrowserExtensionStorageSync(
-    bridge,
-    PRELOAD_STORAGE_SYNC_CONSTANTS,
-    createContentScriptSyncForward() ?? undefined
-  ) ?? undefined
-)
+const INSTALLED = Symbol.for('orca.browserExtensionWorkerApi')
+// Why only once, and only in the service worker: a second copy (the worker importing its own
+// script again, or a page's own Worker on that file) would take the event stream from the first.
+if (
+  globalThis.constructor.name === 'ServiceWorkerGlobalScope' &&
+  !Object.hasOwn(globalThis, INSTALLED)
+) {
+  Object.defineProperty(globalThis, INSTALLED, { value: true })
+  void connectEvents()
+  installBrowserExtensionApis(bridge, BROWSER_EXTENSION_API_SURFACE)
+  installBrowserExtensionStorageRelay(bridge, 'worker')
+  installBrowserExtensionNativeMessaging(bridge, 'worker')
+  installBrowserExtensionDocumentTargets(bridge, PRELOAD_FIRST_DISCARDED_TAB_ID)
+  installBrowserExtensionInertApis('worker')
+  installContentScriptRelayFilter(
+    installBrowserExtensionStorageSync(
+      bridge,
+      PRELOAD_STORAGE_SYNC_CONSTANTS,
+      createContentScriptSyncForward() ?? undefined
+    ) ?? undefined
+  )
+}

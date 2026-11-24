@@ -1,23 +1,44 @@
 import { useCallback } from 'react'
-import type { useAppStore } from '@/store'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../../../shared/execution-host/execution-host'
+import { getRepoWorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
+import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
 import {
   createWorktreeContextMenuDeleteIntent,
   deferWorktreeContextMenuDeleteIntent
 } from './worktree-context-menu-delete-intent'
 import { runSleepWorktrees } from '../sleep/sleep-worktree-flow'
 import { collectTwinHostsAlsoSlept } from '../sleep/sleep-twin-confirmation'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
-import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
-import { getWorktreeRowLocalPathOpenOwner } from '@/lib/worktree-row-open-in-owner'
-import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
+import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
+import { getWorktreeRowLocalPathOpenOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
 import {
+  canCreateChildWorktree,
   planWorkspaceStatusAssignment,
   preserveDeleteSiblingPosition
 } from './worktree-context-menu-policy'
+import type { useAppStore } from '@/store/index'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
+import type { WorktreeDeleteIdentity } from '../deletion/worktree-delete-request'
+
+export type OpenedWorktreeDeleteTarget = {
+  worktree: WorktreeDeleteIdentity
+  folderWorkspaceId: string | null
+}
+
+function resolveChildWorktreeRepository(repos: readonly Repo[], worktree: Worktree): Repo | null {
+  return resolveReviewRepository(repos, {
+    ...worktree,
+    // Unstamped clicked rows are local, regardless of the active workspace's owner.
+    hostId:
+      worktree.hostId ??
+      (worktree.runtimeOwnerEnvironmentId?.trim() ? undefined : LOCAL_EXECUTION_HOST_ID)
+  })
+}
 
 export function useWorktreeContextMenuCommands(args: {
   activeContextWorktrees: readonly Worktree[]
@@ -29,6 +50,7 @@ export function useWorktreeContextMenuCommands(args: {
   isMultiContext: boolean
   moveProjectToGroup: ReturnType<typeof useAppStore.getState>['moveProjectToGroup']
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
+  openedDeleteTarget: OpenedWorktreeDeleteTarget | null
   openModal: ReturnType<typeof useAppStore.getState>['openModal']
   repo: Repo | null | undefined
   scopeRef: React.RefObject<HTMLDivElement | null>
@@ -38,10 +60,11 @@ export function useWorktreeContextMenuCommands(args: {
   setWorktreesPinnedAndReveal: ReturnType<
     typeof useAppStore.getState
   >['setWorktreesPinnedAndReveal']
+  showsUnread: boolean
   sleepableWorktrees: readonly Worktree[]
   subtreeSleepableWorktrees: readonly Worktree[]
   updateWorktreeMeta: ReturnType<typeof useAppStore.getState>['updateWorktreeMeta']
-  validParentWorktreeId: string | null
+  validParent: Worktree | null
   worktree: Worktree
   statusesForWorktree: (worktree: Worktree) => readonly WorkspaceStatusDefinition[]
 }) {
@@ -59,7 +82,7 @@ export function useWorktreeContextMenuCommands(args: {
   const handleToggleRead = useCallback(() => {
     args.setWorkspaceUnreadByUser(
       args.worktree.id,
-      !args.worktree.isUnread,
+      !args.showsUnread,
       args.worktree.hostId ?? 'local'
     )
   }, [args])
@@ -146,6 +169,20 @@ export function useWorktreeContextMenuCommands(args: {
       focus: 'displayName'
     })
   }, [args])
+  const handleNewChildWorktree = useCallback(() => {
+    const state = args.getState()
+    const repo = resolveChildWorktreeRepository(state.repos, args.worktree)
+    if (!repo || !canCreateChildWorktree({ ...args, repo })) {
+      return
+    }
+    args.setMenuOpenState(false)
+    args.openModal('new-workspace-composer', {
+      initialRepoId: repo.id,
+      initialWorkspaceTarget: getRepoWorkspaceCreationTargetHint(repo, state.projectHostSetups),
+      initialParentWorktreeId: args.worktree.id,
+      telemetrySource: 'sidebar'
+    })
+  }, [args])
   const sleepWorktreesAfterMenuClose = useCallback(
     (worktrees: readonly Worktree[]) => {
       args.setMenuOpenState(false)
@@ -166,26 +203,43 @@ export function useWorktreeContextMenuCommands(args: {
   const handleSleepSubtree = useCallback(() => {
     sleepWorktreesAfterMenuClose(args.subtreeSleepableWorktrees)
   }, [args.subtreeSleepableWorktrees, sleepWorktreesAfterMenuClose])
+  // Suspend VM with active descendants: this workspace sleeps too, even idle, so its VM suspends
+  // once every child session on it has stopped.
+  const handleSleepSubtreeWithVm = useCallback(() => {
+    sleepWorktreesAfterMenuClose([
+      args.worktree,
+      ...args.subtreeSleepableWorktrees.filter((target) => target.id !== args.worktree.id)
+    ])
+  }, [args.worktree, args.subtreeSleepableWorktrees, sleepWorktreesAfterMenuClose])
   const handleDelete = useCallback(() => {
+    if (!args.openedDeleteTarget) {
+      return
+    }
+    const { worktree, folderWorkspaceId } = args.openedDeleteTarget
     const restoreSidebarPosition = preserveDeleteSiblingPosition(args.scopeRef.current)
-    args.scopeRef.current
-      ?.closest('[data-worktree-sidebar]')
-      ?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
     const intent = createWorktreeContextMenuDeleteIntent({
-      worktree: args.worktree,
+      worktree,
       batchDeleteWorktrees: args.batchDeleteWorktrees,
       isMultiContext: args.isMultiContext,
-      ...(args.folderWorkspaceId ? { folderWorkspaceId: args.folderWorkspaceId } : {})
+      ...(folderWorkspaceId ? { folderWorkspaceId } : {})
     })
     deferWorktreeContextMenuDeleteIntent(intent, restoreSidebarPosition)
     args.setMenuOpenState(false)
   }, [args])
   const handleOpenParent = useCallback(() => {
-    if (args.validParentWorktreeId) {
-      activateAndRevealWorktree(args.validParentWorktreeId, { navigationIntent: 'user-open' })
+    if (args.validParent) {
+      // A parent on another machine shares no host with the child; open the parent's own row.
+      activateAndRevealWorktree(args.validParent.id, {
+        navigationIntent: 'user-open',
+        executionHostId: args.validParent.hostId
+      })
     }
-  }, [args.validParentWorktreeId])
+  }, [args.validParent])
   return {
+    canCreateChildWorktree: canCreateChildWorktree({
+      ...args,
+      repo: resolveChildWorktreeRepository(args.getState().repos, args.worktree)
+    }),
     handleAssignWorkspaceStatus,
     handleCloseTerminals,
     handleCopyName,
@@ -194,10 +248,12 @@ export function useWorktreeContextMenuCommands(args: {
     handleCreateGroupFromRepo,
     handleDelete,
     handleMoveProjectToGroup,
+    handleNewChildWorktree,
     handleOpenParent,
     handleRemoveProjectFromGroup,
     handleRename,
     handleSleepSubtree,
+    handleSleepSubtreeWithVm,
     handleSubmitNewProjectGroup,
     handleTogglePin,
     handleToggleRead

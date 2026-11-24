@@ -10,7 +10,7 @@ vi.mock('lucide-react-native', () => ({
     createElement('svg', { 'data-icon': 'down' }, createElement('path', { d: 'M1 1' }))
 }))
 
-import { MobileNativeChatFloatingControls } from './MobileNativeChatFloatingControls'
+import { MobileNativeChatFloatingControls } from './lower-region/MobileNativeChatFloatingControls'
 
 describe('jump arrow glyph hits', () => {
   let root: Root | undefined

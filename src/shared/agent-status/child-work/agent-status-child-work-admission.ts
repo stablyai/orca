@@ -41,6 +41,7 @@ export type AgentChildWorkObservationFields = {
   description?: string
   agentType?: string
   model?: string
+  effort?: string
   totalTokens?: number
   providerTiming?: AgentChildWorkProviderTiming
   parentChildWorkId?: AgentChildWorkId

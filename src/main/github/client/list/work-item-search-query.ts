@@ -1,4 +1,4 @@
-import type { ParsedTaskQuery } from '../../../../shared/task-query'
+import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 // Creation order aligns rich PR rows with numbered Search API issue pages.
 export const WORK_ITEM_NUMBER_SORT_QUALIFIER = 'sort:created-desc'
 
@@ -29,8 +29,8 @@ export function buildSearchQueryString(
   if (query.assignee) {
     parts.push(`assignee:${quoteGitHubSearchValue(query.assignee)}`)
   }
-  if (query.author) {
-    parts.push(`author:${quoteGitHubSearchValue(query.author)}`)
+  for (const author of query.authors) {
+    parts.push(`author:${quoteGitHubSearchValue(author)}`)
   }
   if (query.reviewRequested) {
     parts.push(`review-requested:${quoteGitHubSearchValue(query.reviewRequested)}`)
@@ -57,7 +57,7 @@ export function defaultOpenWorkItemQuery(): ParsedTaskQuery {
     state: 'open',
     draft: false,
     assignee: null,
-    author: null,
+    authors: [],
     reviewRequested: null,
     reviewedBy: null,
     labels: [],

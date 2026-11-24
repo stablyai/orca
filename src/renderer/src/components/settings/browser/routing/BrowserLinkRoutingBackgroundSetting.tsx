@@ -1,7 +1,8 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
 import { getLinkRoutingBackgroundSearchEntry } from './browser-link-routing-copy'
+import { useTranslate } from '../../../../i18n/use-translate'
 
 type BrowserLinkRoutingBackgroundSettingProps = {
   settings: Pick<GlobalSettings, 'openLinksInAppInBackground'>
@@ -12,7 +13,8 @@ export function BrowserLinkRoutingBackgroundSetting({
   settings,
   updateSettings
 }: BrowserLinkRoutingBackgroundSettingProps): React.JSX.Element {
-  const entry = getLinkRoutingBackgroundSearchEntry()
+  const t = useTranslate()
+  const entry = getLinkRoutingBackgroundSearchEntry(t)
 
   return (
     <SearchableSetting

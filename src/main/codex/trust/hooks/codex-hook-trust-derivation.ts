@@ -3,9 +3,9 @@ import { mkdir, mkdtemp, readdir, realpath, stat, writeFile } from 'node:fs/prom
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { removeTree } from '../../../../shared/windows-transient-lock-removal'
+import { removeTree } from '../../../../shared/file-write/windows-transient-lock-removal'
 import '../../../codex-cli/command'
-import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
+import { withCliRuntimeOnPath } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
 import { collectListedHooks, type CodexListedHook } from '../../app-server/codex-app-server-client'
 import {
@@ -114,6 +114,7 @@ export async function listCodexHooks(
 ): Promise<CodexListedHook[]> {
   const result = await runCodexAppServerSession(
     {
+      allowHost: false,
       command: codexPath,
       // Disable plugin startup to avoid leaving marketplace clones behind short sessions.
       args: [...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS],

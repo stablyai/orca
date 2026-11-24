@@ -34,14 +34,13 @@ Every plugin frame on desktop is an Electron `<webview>`:
     nowhere to go; preconnect hints go through it and are never resolved.
   - `<link rel="dns-prefetch">` resolves on the system resolver, outside webRequest and the proxy, so
     `will-attach-webview` pins the guest renderer's `--blink-settings=dnsPrefetchingEnabled=false`
-    (`PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS`), covering static, script-inserted and child-frame hints
-    (`plugin-frame-guest-egress.electron.test.ts`). `X-DNS-Prefetch-Control: off`, the matching `<meta>`
+    (`PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS`), covering static, script-inserted and child-frame hints.
+    `X-DNS-Prefetch-Control: off`, the matching `<meta>`
     and the app-wide `dns-prefetch-disable` switch were measured and do not stop it.
 - **Storage**: uninstalling a plugin clears its partition (`clearStorageData` and `clearCache`).
   - Guest `setWebRTCIPHandlingPolicy('disable_non_proxied_udp')`.
   - Permission request/check handlers deny everything, so `navigator.clipboard` reads and writes are
-    refused; `document.execCommand('copy'|'cut')` works only inside a user gesture, as on any web page
-    (pinned by `plugin-frame-guest-clipboard.electron.test.ts`);
+    refused; `document.execCommand('copy'|'cut')` works only inside a user gesture, as on any web page;
     HID, serial, USB and Bluetooth choosers are cancelled.
   - `will-download` is cancelled; `setWindowOpenHandler` denies; navigation away from the plugin origin is
     cancelled.
@@ -72,7 +71,7 @@ Every plugin frame on desktop is an Electron `<webview>`:
   browser-page chords (address bar, find, reload, history, page zoom); a custom editor's save chord still
   rides `editor.keydown`, so it fires once. Editable fields get Orca's Cut/Copy/Paste context menu.
 - **Switch (default on)**: rolling back is the constant `PLUGIN_ISOLATED_FRAMES_DEFAULT` in
-  `src/main/plugins/panels/plugin-frame-isolation.ts`. `ORCA_PLUGIN_ISOLATED_FRAMES=0` turns guests off
+  `src/main/plugins/panels/guest-isolation/plugin-frame-isolation.ts`. `ORCA_PLUGIN_ISOLATED_FRAMES=0` turns guests off
   for one machine and `=1` on, overriding the
   `experimentalPluginIsolatedFrames` setting; all are main-process only. Off, frames use the `srcdoc` iframe
   (never offered `orca.shell`/`orca.files`), and components panels say they are not available.
@@ -82,9 +81,11 @@ Every plugin frame on desktop is an Electron `<webview>`:
   revoked); the iframe is never a fallback for a setup failure. On the guest path no `srcdoc` HTML is read,
   hashed or sent over IPC; the guest's own navigation is the one integrity check per open.
 - **Serving**: images, fonts and media stream from disk (one `Range: bytes=` answered with `206`, HEAD
-  from `stat`), up to 32 MiB a file; a session holds at most 32 requests at once (`503` past that).
-  Documents, scripts, styles, JSON, SVG and WASM are read whole (16 MiB cap). A declared HTML entry is a
-  document whatever its extension. Path segments ending in a dot or space are refused.
+  from `stat`), up to 32 MiB a file; a session holds at most 32 open streams (`503` past that). Other
+  requests are served 32 at a time, with up to 1024 more queued for up to 10 s each (`503` past either
+  bound). Refusals are logged once per burst as `busy`. Documents, scripts, styles, JSON, SVG and WASM
+  are read whole (16 MiB cap). A declared HTML entry is a document whatever its extension. Path segments
+  ending in a dot or space are refused.
 - **Source modules**: `.ts`, `.tsx`, `.mts` and `.jsx` are read whole (1 MiB cap), digest-checked like
   any script, then transpiled with sucrase on one shared, lazily started worker thread (types stripped, automatic JSX for `orca`, lines
   kept, inline source map) and served as `text/javascript`. Relative imports are rewritten to exact

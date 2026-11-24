@@ -1,6 +1,7 @@
 import { connect, type Socket } from 'node:net'
 import { DaemonProtocolError } from '../../protocol/daemon-errors'
 import { ensureDaemonSocketDir } from '../../endpoint/publication/daemon-socket-endpoint-path'
+import { startResponsiveDeadline } from './daemon-responsive-deadline'
 
 export function connectDaemonSocket(socketPath: string, timeoutMs: number): Promise<Socket> {
   return new Promise((resolve, reject) => {
@@ -8,7 +9,7 @@ export function connectDaemonSocket(socketPath: string, timeoutMs: number): Prom
     ensureDaemonSocketDir(socketPath)
     const socket = connect(socketPath)
     const cleanup = (): void => {
-      clearTimeout(timer)
+      cancelDeadline()
       socket.removeListener('connect', onConnect)
       socket.removeListener('error', onError)
     }
@@ -20,15 +21,51 @@ export function connectDaemonSocket(socketPath: string, timeoutMs: number): Prom
       cleanup()
       reject(err)
     }
-    const timer = setTimeout(() => {
+    // A connect that completed while this process was frozen must not be timed out ahead of its event.
+    const cancelDeadline = startResponsiveDeadline(timeoutMs, () => {
       cleanup()
       socket.destroy()
       reject(new DaemonProtocolError('Connection timed out'))
-    }, timeoutMs)
+    })
 
     socket.on('connect', onConnect)
     socket.on('error', onError)
   })
+}
+
+// Watch the authenticated control socket for failure until its permanent close handlers are armed.
+export function watchControlSocketBootstrap(
+  socket: Socket,
+  connectSocket: typeof connectDaemonSocket
+): {
+  race: <T>(step: Promise<T>) => Promise<T>
+  connect: (socketPath: string, timeoutMs: number) => Promise<Socket>
+  stop: () => void
+} {
+  const failure = Promise.withResolvers<never>()
+  const onClose = (): void =>
+    failure.reject(new DaemonProtocolError('Control socket closed during connection'))
+  socket.on('error', failure.reject)
+  socket.on('close', onClose)
+  const race = <T>(step: Promise<T>): Promise<T> => Promise.race([step, failure.promise])
+  return {
+    race,
+    connect: (socketPath, timeoutMs) => {
+      const connecting = connectSocket(socketPath, timeoutMs)
+      return race(connecting).catch((error: unknown) => {
+        // A socket that connects after the attempt failed has no owner left to close it.
+        void connecting.then(
+          (late) => late.destroy(),
+          () => {}
+        )
+        throw error
+      })
+    },
+    stop: () => {
+      socket.off('error', failure.reject)
+      socket.off('close', onClose)
+    }
+  }
 }
 
 // Capture socket values because teardown nulls the client fields before cleanup.
@@ -57,16 +94,16 @@ export function waitForDaemonConnectionAttempt(
   timeoutMs: number
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
+    const cancelDeadline = startResponsiveDeadline(timeoutMs, () => {
       reject(new DaemonProtocolError('Connection attempt wait timed out'))
-    }, timeoutMs)
+    })
     attempt.then(
       () => {
-        clearTimeout(timer)
+        cancelDeadline()
         resolve()
       },
       (error) => {
-        clearTimeout(timer)
+        cancelDeadline()
         reject(error)
       }
     )

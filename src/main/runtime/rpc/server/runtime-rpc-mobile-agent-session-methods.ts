@@ -1,11 +1,15 @@
 /** The structured agent-session methods (and chat attachment uploads) a phone may call; spread into the execution-host routes. */
 export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.createSupport',
+  // The host's agents and what each can do: the phone's "Fork from this response" reads it.
+  'agentSession.agents',
   'agentSession.create',
   'agentSession.ensure',
   'agentSession.reveal',
   'agentSession.send',
   'agentSession.cancel',
+  // Continue a turn Orca's own stop cut off; phones gate on agent-session.continue-interrupted.phone.v1.
+  'agentSession.continueInterrupted',
   'agentSession.queuedMessageSend',
   'agentSession.queuedMessageDelete',
   'agentSession.queuedMessageMove',
@@ -13,6 +17,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.queuedMessageEditHold',
   'agentSession.queuedMessagesResume',
   'agentSession.close',
+  // Delete chat in an agent's Chats; phones gate on agent-session.delete.phone.v1.
+  'agentSession.delete',
   'agentSession.respondToApproval',
   'agentSession.respondToQuestion',
   'agentSession.setOption',
@@ -20,7 +26,13 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.options',
   'agentSession.modelCatalog',
   'agentSession.conversationCommand',
+  // Gated on the phone by agent-session.thread-goal.phone.v1.
+  'agentSession.threadGoal',
   'agentSession.commands',
+  // The `/mcp` sheet; phones offer it where the host advertises agent-session.mcp.v1.
+  'agentSession.mcp',
+  // `/usage` in a Codex chat; phones offer it where the host advertises agent-session.account-usage.phone.v1.
+  'agentSession.accountUsage',
   'agentSession.history',
   'agentSession.currentRequests',
   'agentSession.subscribe',
@@ -31,6 +43,20 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.readVisual',
   // One item whole, for "Show full output" and "Show full message".
   'agentSession.item',
+  // Whether the host recorded a send, for one the phone lost track of; gated on agent-session.send-recorded.v1.
+  'agentSession.sendRecorded',
+  // "Rewind to here"; phones offer it only where AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY says so.
+  'agentSession.rewind',
+  // History's interrupted-chats banner and its Resume all; phones gate on agent-session.restart-resume.phone.v1.
+  'agentSession.restartResumable',
+  'agentSession.restartContinue',
+  // A paired window waits on the host's own launch continuation before offering the rest.
+  'agentSession.restartLaunchSettled',
+  'agentSession.restartResumableDismiss',
+  // "Don't continue" on a usage-limit row the host will continue at its reset.
+  'agentSession.cancelUsageLimitContinue',
+  // Skip on a Codex async question card; phones offer it where the host advertises it.
+  'agentSession.skipAsyncQuestions',
   // A file the phone attaches to a chat, stored on this host; the agent sees only the host path.
   'agentSessionAttachment.uploadStart',
   'agentSessionAttachment.uploadAppend',

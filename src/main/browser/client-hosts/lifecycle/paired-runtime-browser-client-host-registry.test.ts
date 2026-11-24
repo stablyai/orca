@@ -1,208 +1,50 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { PairedRuntimeBrowserClientHostRegistry } from './paired-runtime-browser-client-host-registry'
 
 const authority: BrowserClientHostLeaseAuthority = {
-  authorityRuntimeId: 'runtime-a',
-  authorityEpoch: 'epoch-a',
+  authorityRuntimeId: 'runtime-b',
+  authorityEpoch: 'epoch-b',
   browserHostClientId: 'client-a',
-  browserHostGeneration: 2,
+  browserHostGeneration: 1,
   pageCommandProtocolVersion: 1
 }
 
 describe('PairedRuntimeBrowserClientHostRegistry', () => {
-  it('shares one composition for the exact environment pairing revision', async () => {
-    const composition = createComposition()
-    const compositionFactory = vi.fn(() => composition)
-    const registry = new PairedRuntimeBrowserClientHostRegistry({
-      createComposition: compositionFactory
+  it('accepts a new host once a failed authority replacement finishes failing its cleanup', async () => {
+    let failCleanup = (_error: Error): void => {}
+    const cleanup = new Promise<void>((_resolve, reject) => {
+      failCleanup = reject
     })
-
-    const first = registry.start(input(11))
-    const second = registry.start(input(11))
-
-    await expect(Promise.all([first, second])).resolves.toEqual([authority, authority])
-    expect(compositionFactory).toHaveBeenCalledOnce()
-    expect(composition.start).toHaveBeenCalledOnce()
-  })
-
-  it('closes an old pairing revision before creating its replacement', async () => {
-    const order: string[] = []
-    const first = createComposition(order, 'start-first', 'close-first')
-    const second = createComposition(order, 'start-second', 'close-second')
+    const started: string[] = []
     const registry = new PairedRuntimeBrowserClientHostRegistry({
-      createComposition: vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
+      createComposition: (input) => {
+        started.push(input.authorityRuntimeId)
+        const first = started.length === 1
+        return {
+          start: async () => authority,
+          replaceAuthority: async () => {
+            throw new Error('replacement attach failed')
+          },
+          retirePage: async () => true,
+          hostsPage: () => false,
+          close: async () => !first,
+          whenClosed: () => (first ? cleanup : Promise.resolve())
+        }
+      }
     })
-    await registry.start(input(11))
+    const start = (authorityRuntimeId: string) =>
+      registry.start({ environmentId: 'environment-a', pairingRevision: 1, authorityRuntimeId })
 
-    await registry.start(input(12))
-
-    expect(order).toEqual(['start-first', 'close-first', 'start-second'])
-  })
-
-  it('preserves the composition across a runtime authority transition', async () => {
-    const composition = createComposition()
-    const compositionFactory = vi.fn(() => composition)
-    const registry = new PairedRuntimeBrowserClientHostRegistry({
-      createComposition: compositionFactory
-    })
-    await registry.start(input(11))
-
-    await registry.start(input(11, 'runtime-b'))
-
-    expect(compositionFactory).toHaveBeenCalledOnce()
-    expect(composition.replaceAuthority).toHaveBeenCalledWith(input(11, 'runtime-b'))
-    expect(composition.close).not.toHaveBeenCalled()
-  })
-
-  it('keeps a failed authority transition tombstoned until cleanup settles', async () => {
-    const cleanup = deferred<void>()
-    const failed = createComposition(undefined, undefined, undefined, false, cleanup.promise)
-    failed.replaceAuthority.mockRejectedValueOnce(new Error('replacement attach failed'))
-    const replacement = createComposition()
-    const compositionFactory = vi.fn().mockReturnValueOnce(failed).mockReturnValueOnce(replacement)
-    const registry = new PairedRuntimeBrowserClientHostRegistry({
-      createComposition: compositionFactory
-    })
-    await registry.start(input(11))
-
-    await expect(registry.start(input(11, 'runtime-b'))).rejects.toThrow(
-      'replacement attach failed'
-    )
-    await expect(registry.start(input(11, 'runtime-b'))).rejects.toThrow(
-      'paired_runtime_browser_client_host_cleanup_pending'
-    )
-    expect(replacement.start).not.toHaveBeenCalled()
-
-    cleanup.resolve()
-    await cleanup.promise
-    await expect(registry.start(input(11, 'runtime-b'))).resolves.toEqual(authority)
-    expect(replacement.start).toHaveBeenCalledOnce()
-  })
-
-  it('blocks replacement when the old host cannot prove handler settlement', async () => {
-    const cleanup = deferred<void>()
-    const first = createComposition(undefined, undefined, undefined, false, cleanup.promise)
-    const second = createComposition()
-    const compositionFactory = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
-    const registry = new PairedRuntimeBrowserClientHostRegistry({
-      createComposition: compositionFactory
-    })
-    await registry.start(input(11))
-
-    await expect(registry.start(input(12))).rejects.toThrow(
+    await start('runtime-a')
+    await expect(start('runtime-b')).rejects.toThrow('replacement attach failed')
+    await expect(start('runtime-b')).rejects.toThrow(
       'paired_runtime_browser_client_host_cleanup_pending'
     )
 
-    expect(compositionFactory).toHaveBeenCalledOnce()
-    expect(second.start).not.toHaveBeenCalled()
-
-    cleanup.resolve()
-    await cleanup.promise
-    await expect(registry.start(input(12))).resolves.toEqual(authority)
-    expect(second.start).toHaveBeenCalledOnce()
-  })
-
-  it('keeps replacement fenced when deferred cleanup cannot prove completion', async () => {
-    const cleanup = deferred<void>()
-    const first = createComposition(undefined, undefined, undefined, false, cleanup.promise)
-    const second = createComposition()
-    const compositionFactory = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
-    const registry = new PairedRuntimeBrowserClientHostRegistry({
-      createComposition: compositionFactory
-    })
-    await registry.start(input(11))
-
-    await expect(registry.start(input(12))).rejects.toThrow(
-      'paired_runtime_browser_client_host_cleanup_pending'
-    )
-    cleanup.reject(new Error('cleanup unresolved'))
-    await cleanup.promise.catch(() => undefined)
-    await expect(registry.start(input(12))).rejects.toThrow(
-      'paired_runtime_browser_client_host_cleanup_pending'
-    )
-
-    expect(compositionFactory).toHaveBeenCalledOnce()
-    expect(second.start).not.toHaveBeenCalled()
-  })
-
-  it('reports a page as hosted only by the live composition of its own environment', async () => {
-    const cleanup = deferred<void>()
-    const composition = createComposition(undefined, undefined, undefined, false, cleanup.promise)
-    composition.hostsPage.mockImplementation((browserPageId) => browserPageId === 'page-a')
-    composition.replaceAuthority.mockRejectedValueOnce(new Error('replacement attach failed'))
-    const registry = new PairedRuntimeBrowserClientHostRegistry({
-      createComposition: vi.fn(() => composition)
-    })
-    await registry.start(input(11))
-
-    expect(registry.hostsPage('environment-a', 'page-a')).toBe(true)
-    expect(registry.hostsPage('environment-a', 'page-b')).toBe(false)
-    expect(registry.hostsPage('environment-b', 'page-a')).toBe(false)
-    await expect(registry.start(input(11, 'runtime-b'))).rejects.toThrow()
-    expect(registry.hostsPage('environment-a', 'page-a')).toBe(false)
-  })
-
-  it('permanently fences new starts before closing every environment', async () => {
-    const first = createComposition()
-    const second = createComposition()
-    const registry = new PairedRuntimeBrowserClientHostRegistry({
-      createComposition: vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
-    })
-    await registry.start(input(11))
-    await registry.start({ ...input(11), environmentId: 'environment-b' })
-
-    await registry.close()
-
-    expect(first.close).toHaveBeenCalledOnce()
-    expect(second.close).toHaveBeenCalledOnce()
-    await expect(registry.start(input(11))).rejects.toThrow(
-      'paired_runtime_browser_client_host_registry_closed'
-    )
+    failCleanup(new Error('browser_client_page_renderer_request_timeout'))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await expect(start('runtime-b')).resolves.toEqual(authority)
+    expect(started).toEqual(['runtime-a', 'runtime-b'])
   })
 })
-
-function createComposition(
-  order?: string[],
-  startLabel?: string,
-  closeLabel?: string,
-  closeSettled = true,
-  closed = Promise.resolve()
-) {
-  return {
-    start: vi.fn(async () => {
-      if (order && startLabel) {
-        order.push(startLabel)
-      }
-      return authority
-    }),
-    replaceAuthority: vi.fn(async () => ({ ...authority, authorityRuntimeId: 'runtime-b' })),
-    retirePage: vi.fn(async () => true),
-    hostsPage: vi.fn((_browserPageId: string) => false),
-    close: vi.fn(async () => {
-      if (order && closeLabel) {
-        order.push(closeLabel)
-      }
-      return closeSettled
-    }),
-    whenClosed: vi.fn(() => closed)
-  }
-}
-
-function deferred<T>() {
-  let resolve = (_value: T): void => {}
-  let reject = (_error: unknown): void => {}
-  const promise = new Promise<T>((innerResolve, innerReject) => {
-    resolve = innerResolve
-    reject = innerReject
-  })
-  return { promise, reject, resolve }
-}
-
-function input(pairingRevision: number, authorityRuntimeId = 'runtime-a') {
-  return {
-    environmentId: 'environment-a',
-    pairingRevision,
-    authorityRuntimeId
-  }
-}

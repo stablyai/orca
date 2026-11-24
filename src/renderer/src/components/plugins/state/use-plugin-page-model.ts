@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type {
   PluginMarketplaceHostInstallPreview,
   PluginMarketplaceHostListing
-} from '../../../../../preload/api-types'
+} from '../../../../../preload/api/plugins/plugin-host-api'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { PLUGIN_CONTRIBUTION_SUMMARY_LIMIT } from '../../../../../shared/plugins/contributions/plugin-contribution-summary'
 import {
@@ -21,6 +21,7 @@ import {
 import type { PluginPagePreview } from './use-plugin-catalog'
 import { useInstalledPluginManifest } from './use-plugin-contribution-source'
 import type { PluginFileMatch } from '../../../../../shared/plugins/contributions/plugin-file-match'
+import { pluginPreviewCatalogRevision } from './plugin-preview-cache'
 
 /** A shortcut a plugin binds, by the key as written and the command it runs. */
 export type PluginPageShortcut = { key: string; command: string }
@@ -35,7 +36,7 @@ export function previewMatchesListing(
   preview: PluginMarketplaceHostInstallPreview,
   listing: PluginMarketplaceHostListing
 ): boolean {
-  if (preview.marketplaceCommit !== listing.marketplaceCommit) {
+  if (pluginPreviewCatalogRevision(preview) !== pluginPreviewCatalogRevision(listing)) {
     return false
   }
   return (
@@ -50,7 +51,8 @@ export function previewMatchesListing(
 function listingIdentity(listing: PluginMarketplaceHostListing): string {
   const release = listing.release
   return [
-    listing.marketplaceCommit,
+    listing.marketplaceSourceId,
+    pluginPreviewCatalogRevision(listing),
     release?.commit ?? '',
     release?.contentHash ?? '',
     release?.execution ?? ''
@@ -70,8 +72,9 @@ export function usePluginPageModel({
 }) {
   const plugin = entry.installed
   // Why pinned: a catalog refresh mid-view must never swap the rows above an armed button.
-  const [pinned, setPinned] = useState(entry.listing)
-  const listing = plugin ? entry.listing : pinned
+  const [pinned, setPinned] = useState(entry)
+  const shownEntry = plugin ? entry : pinned
+  const listing = shownEntry.listing
   const [preview, setPreview] = useState<PluginMarketplaceHostInstallPreview | null>(null)
   const [previewFailed, setPreviewFailed] = useState(false)
   const [previewAttempt, setPreviewAttempt] = useState(0)
@@ -99,8 +102,8 @@ export function usePluginPageModel({
   const newerListed =
     !plugin &&
     entry.listing !== null &&
-    pinned !== null &&
-    listingIdentity(entry.listing) !== listingIdentity(pinned)
+    pinned.listing !== null &&
+    listingIdentity(entry.listing) !== listingIdentity(pinned.listing)
   // Why a mismatched preview counts too: it is the catalog's newer release, not what is shown.
   const stale = newerListed || previewMatches === false
   // Why disarm while refreshing: the listing under the button may be replaced any moment.
@@ -183,12 +186,13 @@ export function usePluginPageModel({
     plugin?.images ?? listing?.images ?? shownPreview?.images
   )
   return {
+    entry: shownEntry,
     plugin,
     listing,
     preview: shownPreview,
     previewFailed,
     retryPreview: () => setPreviewAttempt((attempt) => attempt + 1),
-    showNewer: () => setPinned(entry.listing),
+    showNewer: () => setPinned(entry),
     stale,
     disarmed,
     execution,

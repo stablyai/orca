@@ -6,7 +6,8 @@ import type {
   LinearSliceSet
 } from './linear-slice-contract'
 import { patchLinearIssueCollectionCache } from './linear-cache'
-import { publishLinearIssuePatch } from './linear-issue-publication'
+import './linear-issue-read'
+import { publishLinearIssuePatch } from './linear-issue-read-lifecycle'
 import { getLinearReadScope, canPublishLinearScopeCache } from './linear-slice-scope'
 
 export function createLinearInvalidationActions(

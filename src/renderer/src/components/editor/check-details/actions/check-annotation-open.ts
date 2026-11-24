@@ -1,9 +1,9 @@
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { useAppStore } from '@/store/index'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
 import { resolveAnnotationPathInsideWorktree } from './check-annotation-path'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export function openAnnotationLocation(params: {
   worktreeId: string

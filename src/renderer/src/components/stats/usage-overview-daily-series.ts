@@ -1,4 +1,4 @@
-import type { ClaudeUsageDailyPoint } from '../../../../shared/claude-usage-types'
+import type { ClaudeUsageDailyPoint } from '../../../../shared/agent-usage/analytics/claude-usage-types'
 import type { UsageOverviewDailyPoint, UsageOverviewInput } from './usage-overview-types'
 
 export function getClaudeDailyTotal(entry: ClaudeUsageDailyPoint): number {

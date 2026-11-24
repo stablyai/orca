@@ -29,8 +29,11 @@ export class RuntimeHostStatusOwner {
   private active = false
   private disposed = false
   private persistent: boolean
-  private attempt = 0
   private retry: ReturnType<typeof setTimeout> | null = null
+  /** Consecutive failed checks from any caller; only a verified status or a reconnect clears them. */
+  private failures = 0
+  /** A failed verdict stands until then: background refreshes reuse it and the owner retries at it. */
+  private nextProbeAt = 0
   private request: AbortController | null = null
   private readonly waiters = new Set<Waiter>()
   private response: RuntimeHostStatusResponse = runtimeHostStatusFailure(
@@ -75,7 +78,14 @@ export class RuntimeHostStatusOwner {
   }
 
   refresh(
-    options: { timeoutMs?: number; observeOnly?: true; reconnect?: true; signal?: AbortSignal } = {}
+    options: {
+      timeoutMs?: number
+      observeOnly?: true
+      reconnect?: true
+      /** A user-requested check: probe now despite a recent failure, without reconnect side effects. */
+      force?: true
+      signal?: AbortSignal
+    } = {}
   ): Promise<RuntimeHostStatusResponse> {
     if (options.signal?.aborted) {
       return Promise.reject(options.signal.reason)
@@ -87,10 +97,22 @@ export class RuntimeHostStatusOwner {
       this.active = true
     }
     if (options.reconnect) {
-      this.attempt = 0
+      this.failures = 0
+      this.nextProbeAt = 0
       this.update({ verification: 'checking' })
     }
     if (this.snapshot.verification === 'blocked') {
+      return Promise.resolve(this.response)
+    }
+    // Why: background callers retrying a down host would otherwise each restart verification,
+    // publishing checking/unavailable far faster than the backoff schedule.
+    if (
+      !options.force &&
+      !this.request &&
+      this.snapshot.verification === 'unavailable' &&
+      Date.now() < this.nextProbeAt
+    ) {
+      this.armRetry()
       return Promise.resolve(this.response)
     }
     const result = new Promise<RuntimeHostStatusResponse>((resolve, reject) => {
@@ -150,7 +172,7 @@ export class RuntimeHostStatusOwner {
       }
     }
     if (transport === 'ready' && this.snapshot.verification !== 'blocked') {
-      // A pre-reconnect answer cannot verify the new socket's runtime.
+      // A pre-reconnect answer cannot verify the new socket's runtime; check now without resetting the backoff.
       this.retireRequest()
       if (this.active || this.waiters.size > 0) {
         this.startRequest()
@@ -158,13 +180,13 @@ export class RuntimeHostStatusOwner {
     }
   }
 
-  authenticationRejected(message = 'Pair this client again.'): void {
+  authenticationRejected(message = 'Pair this client again.', code = 'unauthorized'): void {
     if (this.disposed) {
       return
     }
     this.retireRequest()
     this.clearRetry()
-    this.complete(runtimeHostStatusFailure('unauthorized', message))
+    this.complete(runtimeHostStatusFailure(code, message))
   }
 
   dispose(): void {
@@ -217,7 +239,8 @@ export class RuntimeHostStatusOwner {
   private complete(response: RuntimeHostStatusResponse): void {
     this.response = response
     if (response.ok) {
-      this.attempt = 0
+      this.failures = 0
+      this.nextProbeAt = 0
       this.update({ status: response.result, checkedAt: Date.now(), verification: 'verified' })
       this.persistent = this.options.verified(response, this.active)
     } else {
@@ -233,19 +256,27 @@ export class RuntimeHostStatusOwner {
   }
 
   private scheduleRetry(): void {
-    if (
-      !this.active ||
-      this.disposed ||
-      this.snapshot.verification === 'blocked' ||
-      (this.persistent && this.snapshot.transport !== 'ready')
-    ) {
+    if (this.disposed || this.snapshot.verification === 'blocked') {
       return
     }
-    const delay = RETRY_DELAYS_MS[Math.min(this.attempt++, RETRY_DELAYS_MS.length - 1)]
-    this.retry = setTimeout(() => {
-      this.retry = null
-      this.startRequest()
-    }, delay)
+    // Why: passive failures count too, so callers polling faster than the owner's retry still back off.
+    this.nextProbeAt =
+      Date.now() + RETRY_DELAYS_MS[Math.min(this.failures++, RETRY_DELAYS_MS.length - 1)]
+    this.clearRetry()
+    this.armRetry()
+  }
+
+  private armRetry(): void {
+    if (this.retry || !this.active || (this.persistent && this.snapshot.transport !== 'ready')) {
+      return
+    }
+    this.retry = setTimeout(
+      () => {
+        this.retry = null
+        this.startRequest()
+      },
+      Math.max(0, this.nextProbeAt - Date.now())
+    )
   }
 
   private settleWaiters(): void {

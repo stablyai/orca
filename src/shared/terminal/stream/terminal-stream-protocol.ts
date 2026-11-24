@@ -1,4 +1,4 @@
-import { assertJsonTextStructureWithinLimits } from '../../json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from '../../json-stream/json-text-structure-limit'
 
 const TERMINAL_STREAM_KIND = 0x74
 const TERMINAL_STREAM_VERSION = 1
@@ -34,7 +34,9 @@ export enum TerminalStreamOpcode {
   // Host->client; `seq` is the cumulative input sequence the host applied (see encodeTerminalInputAck). Sent only after `inputAck` negotiation.
   InputAck = 18,
   // Host->client, empty payload; at most once per pause, when the host first discards output for a paused stream. Sent only after `outputPauseDropNotice` negotiation.
-  PausedOutputDropped = 19
+  PausedOutputDropped = 19,
+  // Client->host; negotiated per stream like SetOutputPaused.
+  SetOutputCadence = 20
 }
 
 export type TerminalInputAckKind = 'applied' | 'delivery-unknown' | 'resend'
@@ -100,7 +102,8 @@ export function decodeTerminalStreamFrame(bytes: Uint8Array): TerminalStreamFram
     opcode,
     streamId: view.getUint32(4, true),
     seq: high * 0x100000000 + low,
-    payload: bytes.slice(HEADER_BYTES)
+    // Why a view: each message is a fresh buffer, and only the header is ever rewritten in place.
+    payload: bytes.subarray(HEADER_BYTES)
   }
 }
 
@@ -166,6 +169,7 @@ function isTerminalStreamOpcode(value: number): value is TerminalStreamOpcode {
     value === TerminalStreamOpcode.SetOutputPaused ||
     value === TerminalStreamOpcode.WriteUnavailable ||
     value === TerminalStreamOpcode.InputAck ||
-    value === TerminalStreamOpcode.PausedOutputDropped
+    value === TerminalStreamOpcode.PausedOutputDropped ||
+    value === TerminalStreamOpcode.SetOutputCadence
   )
 }

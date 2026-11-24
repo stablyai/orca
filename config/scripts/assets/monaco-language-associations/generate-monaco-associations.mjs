@@ -19,6 +19,9 @@ const rubyAssociations = {
   filenames: ['Guardfile', 'Capfile', 'Podfile', 'Brewfile', 'Vagrantfile']
 }
 
+// Monaco lists only .cshtml, but Blazor components use the same Razor syntax.
+const razorExtensions = ['.razor']
+
 // Read registration metadata without importing Monaco or executing its grammar loaders.
 export function readMonacoAssociations() {
   const entry = ts.createSourceFile(
@@ -76,6 +79,9 @@ export function readMonacoAssociations() {
             ...new Set([...metadata.extensions, ...rubyAssociations.extensions])
           ]
           metadata.filenames = [...new Set([...metadata.filenames, ...rubyAssociations.filenames])]
+        }
+        if (metadata.id === 'razor') {
+          metadata.extensions = [...new Set([...metadata.extensions, ...razorExtensions])]
         }
         registrations.push(metadata)
       }
