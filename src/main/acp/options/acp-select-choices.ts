@@ -84,3 +84,14 @@ export function acpInteractionModeValue(
     ? native
     : null
 }
+
+/** The select row for a category; model also matches the legacy id-only row. */
+export function acpCategorySelect(
+  options: readonly SessionConfigOption[],
+  category: string
+): SelectOption | null {
+  const option = options.find(
+    (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
+  )
+  return option?.type === 'select' ? option : null
+}

@@ -1,11 +1,21 @@
-import { acpEffortOption, acpInteractionModeValue, acpSelectChoices } from './acp-select-choices'
+import {
+  acpCategorySelect,
+  acpEffortOption,
+  acpInteractionModeValue,
+  acpSelectChoices
+} from './acp-select-choices'
 import { acpModelMenuModels, withFastModeOption } from './acp-model-menu'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
 import { acpSessionSlashCommand } from './acp-session-slash-command'
+import {
+  acpThinkingVariantEffortWrite,
+  isAcpThinkingVariantEffortPick,
+  type AcpOptionWrite
+} from './acp-option-write'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
 
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/protocol/agent-session-options-result'
-import type { AcpDialect } from '../acp-dialects/acp-dialect'
+import type { AcpStructuredOptionsDialect } from '../acp-dialects/acp-dialect'
 import {
   unpickedSessionConfiguredChoice,
   withLiveCatalogListing,
@@ -22,31 +32,12 @@ import type {
 
 type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
 
-export type AcpOptionWrite =
-  | { method: 'config'; configId: string; value: string }
-  | { method: 'model'; modelId: string }
-
 function isSelect(option: SessionConfigOption): option is SelectOption {
   return option.type === 'select'
 }
 
 export class AcpStructuredOptions {
-  constructor(
-    private readonly dialect: Pick<
-      AcpDialect,
-      | 'modelEfforts'
-      | 'familyEfforts'
-      | 'withheldCommands'
-      | 'chatModelIds'
-      | 'effortChangesModel'
-      | 'clampsUnlistedEffort'
-      | 'builtinCommands'
-      | 'skillDescription'
-      | 'fastConfigId'
-      | 'thinkingConfigId'
-      | 'interactionModes'
-    > = {}
-  ) {}
+  constructor(private readonly dialect: AcpStructuredOptionsDialect = {}) {}
 
   private forkSupport: AgentSessionOptionsResult['forkSupport'] = 'unknown'
   /** As the agent last reported them; replace through `adoptConfigOptions`. */
@@ -117,7 +108,8 @@ export class AcpStructuredOptions {
     },
     origin: 'new' | 'loaded' = 'loaded'
   ): void {
-    this.configOptions = response.configOptions ?? []
+    const rawOptions = response.configOptions ?? []
+    this.configOptions = this.dialect.normalizeConfigOptions?.(rawOptions) ?? rawOptions
     this.models = response.models ?? null
     this.resolvesConfig = origin === 'new'
     this.appliedInput.clear()
@@ -135,6 +127,13 @@ export class AcpStructuredOptions {
   /** `resolvedModel` marks selector proof: the model the agent's own command reported. */
   adoptOwnWrite(key: string, value: string, resolvedModel?: string): void {
     this.appliedInput.set(key, value)
+    // A confirmed thinking-variant write is a model write, so it proves the model too.
+    const provenModel = isAcpThinkingVariantEffortPick(this.dialect, key, value)
+      ? this.select('model')?.currentValue
+      : undefined
+    if (provenModel) {
+      this.appliedInput.set('model', provenModel)
+    }
     if (resolvedModel !== undefined) {
       this.selectorProof = { ...this.currentValues(), model: resolvedModel }
     } else if (key === 'model') {
@@ -156,11 +155,12 @@ export class AcpStructuredOptions {
     this.picked.add(key)
   }
 
+  /** Adopts an agent-pushed menu, retiring selector proof when the agent moved model or effort itself. */
   adoptConfigOptions(configOptions: SessionConfigOption[] | null | undefined): void {
     if (!configOptions) {
       return
     }
-    this.configOptions = configOptions
+    this.configOptions = this.dialect.normalizeConfigOptions?.(configOptions) ?? configOptions
     if (this.writing === 0 && this.unsettled.size === 0) {
       if (this.select('model')) {
         this.unobservedCurrent.delete('model')
@@ -222,6 +222,7 @@ export class AcpStructuredOptions {
 
   refusesEffort = (value: string) => this.effortOption() !== null && !this.offersEffort(value)
 
+  /** The agent write for a picker change; mcode's on/off effort rewrites the model's thinking variant. */
   write(key: string, value: string): AcpOptionWrite | null {
     if (key === 'fastMode' || key === 'thinking') {
       const option = this.idSelect(
@@ -238,8 +239,9 @@ export class AcpStructuredOptions {
       return this.models ? { method: 'model', modelId: model } : null
     }
     if (key === 'effort') {
+      const variant = acpThinkingVariantEffortWrite(this.dialect, this.select('model'), key, value)
       const option = this.effortOption()
-      return option ? { method: 'config', configId: option.id, value } : null
+      return variant ?? (option ? { method: 'config', configId: option.id, value } : null)
     }
     if (key === 'interactionMode') {
       const option = this.select('mode')
@@ -347,10 +349,8 @@ export class AcpStructuredOptions {
     return option && isSelect(option) ? option : null
   }
 
+  /** The select row for a category; model also matches the legacy id-only row. */
   private select(category: string): SelectOption | null {
-    const option = this.configOptions.find(
-      (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
-    )
-    return option && isSelect(option) ? option : null
+    return acpCategorySelect(this.configOptions, category)
   }
 }

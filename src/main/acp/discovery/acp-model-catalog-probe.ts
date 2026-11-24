@@ -6,40 +6,34 @@ import {
 } from '../../native-chat/agent-launch/structured-agent-command-resolution'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
 import type {
   AgentModelCatalogProgress,
   AgentModelCatalogProbe,
   AgentModelCatalogLookup
 } from '../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
-import { agentModelCatalogInputStamp } from '../../native-chat/agent-model-catalog/agent-model-catalog-input-stamp'
 import {
   runAgentModelCatalogListing,
   runAgentModelCatalogSession
 } from '../../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
-import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
-import type { ProviderAcquisitionConnection } from '../../provider-process/provider-acquisition-starts'
 import { enterAcpListingGate } from './acp-listing-launch-gate'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
-import {
-  createAcpAgentConnection,
-  type AcpAgentConnectionOptions
-} from '../process/acp-agent-connection'
+import { createAcpAgentConnection } from '../process/acp-agent-connection'
 import { acpClientInfo } from '../launch/acp-client-info'
 import { acpRunFolder } from '../launch/acp-private-temp'
-import { acpListingDependsOnRelease, acpModelListingForRelease } from './acp-model-discovery-policy'
+import {
+  acpListingDependsOnRelease,
+  acpModelCatalogStampInput,
+  acpModelListingForRelease
+} from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
 import { prepareAcpListingAccount } from './acp-listing-account'
 import { acpLaunchSpecForAccount } from '../launch/acp-launch-command'
 import { agentSessionAccountHomePath } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import {
-  resolveAcpLaunchInvocation,
-  type AcpLaunchInvocationDeps
-} from '../launch/acp-structured-launch-resolution'
+import { resolveAcpLaunchInvocation } from '../launch/acp-structured-launch-resolution'
 import {
   readSessionModels,
-  type AcpModelCatalogConnection,
+  type AcpModelCatalogProbeDeps,
   type AcpModelCatalogSessionConnection
 } from './acp-listing-session-models'
 import { AcpAgentExitedError } from '../transport/acp-errors'
@@ -48,18 +42,7 @@ import { discardAcpListingSessions } from './acp-listing-session-discard'
 import { sealSharedToolProcessChild } from '../../runtime/agent-session/environment/structured-session-child-env'
 import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 
-type AcpListingConnect<C> = (
-  launch: ProviderProcessLaunch,
-  options: AcpAgentConnectionOptions
-) => C & ProviderAcquisitionConnection
-
-export type AcpModelCatalogProbeDeps = AcpLaunchInvocationDeps & {
-  resolveSavedEnvironment?: () => Promise<Record<string, string>>
-  probeVersion?: AgentCliVersionReader
-  connect?: AcpListingConnect<AcpModelCatalogConnection>
-  connectSession?: AcpListingConnect<AcpModelCatalogSessionConnection>
-  runListing?: typeof runAgentModelCatalogListing
-}
+export type { AcpModelCatalogProbeDeps, AcpListingConnect } from './acp-listing-session-models'
 
 /** Uses the same binary, account and scrubbed environment as chats. */
 export function createAcpModelCatalogProbe(
@@ -97,15 +80,14 @@ export function createAcpModelCatalogProbe(
     return {
       answerSignIn: spec.signIn?.answered,
       identity: { command, prefixArgs, cwd, workspace },
-      inputStamp: JSON.stringify(
-        await Promise.all(
-          [
-            ...new Set([cwd, ...(discovery.kind === 'command' && workspace ? [workspace] : [])])
-          ].map((directory) =>
-            agentModelCatalogInputStamp({ command, prefixArgs, cwd: directory, env })
-          )
-        )
-      ),
+      inputStamp: await acpModelCatalogStampInput(discovery, {
+        command,
+        prefixArgs,
+        cwd,
+        workspace,
+        env,
+        home: agentSessionAccountHomePath(accountHome)
+      }),
       run: async (
         signal?: AbortSignal,
         runOperation = operation,
@@ -268,7 +250,11 @@ export function createAcpModelCatalogProbe(
                 const initialized = await connection.initialize()
                 assertStructuredAgentResolutionCurrent(operation)
                 observeAcpForkSupport(spec.agent, initialized)
-                return listing.read(initialized, connection)
+                return listing.read(
+                  initialized,
+                  connection,
+                  agentSessionAccountHomePath(accountHome)
+                )
               },
               run
             )

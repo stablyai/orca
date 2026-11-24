@@ -77,6 +77,8 @@ export type AgentSessionOptionCatalog = {
   /** For a host too old to say so itself: its model listing names the model the account is
    *  configured to run, so a new chat may run the listed default. */
   hostListingNamesConfiguredModel?: true
+  /** This agent's catalog seeds its structured chats as is, because its launch flags hold for them too. */
+  structuredSessionSeed?: true
   listModels?: {
     command: string
     parse: (stdout: string) => CatalogModel[]

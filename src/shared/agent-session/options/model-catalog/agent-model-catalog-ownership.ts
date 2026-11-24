@@ -19,7 +19,13 @@ export function keepsRicherAgentModelListing(agent: string): boolean {
 }
 
 export function usesModelSpecificAcpEfforts(agent: string): boolean {
-  return agent === 'opencode' || agent === 'opencode2' || agent === 'omp' || agent === 'kilo'
+  return (
+    agent === 'opencode' ||
+    agent === 'opencode2' ||
+    agent === 'omp' ||
+    agent === 'kilo' ||
+    agent === 'mcode'
+  )
 }
 
 /** Its listing's efforts stay unconfirmed until a chat runs the model, so a send refuses one the

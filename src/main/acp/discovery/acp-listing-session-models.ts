@@ -13,9 +13,17 @@ import type {
   InitializeResponse,
   SetSessionConfigOptionResponse
 } from '../generated/acp-protocol.generated'
-import type { AgentModelCatalogReady } from '../../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
+import type {
+  AgentModelCatalogReady,
+  runAgentModelCatalogListing
+} from '../../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import type { AgentModelCatalogProgress } from '../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import { AcpAgentError } from '../transport/acp-errors'
+import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
+import type { ProviderAcquisitionConnection } from '../../provider-process/provider-acquisition-starts'
+import type { AcpAgentConnectionOptions } from '../process/acp-agent-connection'
+import type { AcpLaunchInvocationDeps } from '../launch/acp-structured-launch-resolution'
+import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
 
 /** Session-free capability boundary: no session methods are exposed. */
 export type AcpModelCatalogConnection = {
@@ -31,6 +39,20 @@ export type AcpModelCatalogSessionConnection = Omit<
   start(options: AcpSessionStartOptions): Promise<AcpSessionStarted>
   setConfigOption(configId: string, value: string): Promise<SetSessionConfigOptionResponse>
   deleteSession(sessionId: string): Promise<unknown>
+}
+
+export type AcpListingConnect<C> = (
+  launch: ProviderProcessLaunch,
+  options: AcpAgentConnectionOptions
+) => C & ProviderAcquisitionConnection
+
+/** Injected seams of the model catalog probe: connection factories, version reads and listings. */
+export type AcpModelCatalogProbeDeps = AcpLaunchInvocationDeps & {
+  resolveSavedEnvironment?: () => Promise<Record<string, string>>
+  probeVersion?: AgentCliVersionReader
+  connect?: AcpListingConnect<AcpModelCatalogConnection>
+  connectSession?: AcpListingConnect<AcpModelCatalogSessionConnection>
+  runListing?: typeof runAgentModelCatalogListing
 }
 
 // OpenCode can answer -32603 while its providers are still opening; a later attempt lists them.
