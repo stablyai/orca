@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -10,16 +12,13 @@ vi.mock(
     isHoldingForNewerProtocolDaemon: () => newerDaemonHold.held
   })
 )
-import { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
+import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import '../../../../../orchestration/db/contract-constants'
 import '../../../../../orchestration/db/messages/mailbox-routing-page'
 import '../../../../../orchestration/db/dispatch-row-writer'
 import '../../../../../orchestration/db/attempt-outcome-projection'
 import { reconcileRequestedWorkerTerminalReleases } from '../../../../../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'
-import { OrcaRuntimeService } from '../../../../../orca-runtime'
-import { isStreamingMethod, eraseRpcMethods, type RpcContext } from '../../../../core'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
-import { recordWorkerResumeSession } from '../../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
+import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import { LocalPtyProvider } from '../../../../../../providers/local-pty/local-pty-provider'
 import { exitListeners } from '../../../../../../providers/local-pty/local-pty-provider-state'
 import type { IPtyProvider } from '../../../../../../providers/pty/provider-contract'
@@ -29,28 +28,28 @@ import { observeInProcessWorkerExits } from '../../../../../../ipc/pty/runtime/i
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../../../../terminal/lifecycle/pty-controller-inventory-budget'
 import { DaemonSessionOwnerResolver } from '../../../../../../daemon/providers/routing/daemon-session-owner-resolution'
 import { sweepStoppedWorkerTerminals } from '../../../../../orchestration/terminal-authority/release/stopped-worker-terminal-release'
-
-function isStartReceipt(value: unknown): value is { dispatchId: string; state: string } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'dispatchId' in value &&
-    typeof value.dispatchId === 'string' &&
-    'state' in value &&
-    typeof value.state === 'string'
-  )
-}
+import { createLegacyDaemonAdapters } from '../../../../../../daemon/providers/routing/daemon-legacy-adapters'
+import { mayUnaskedDaemonRunSessions } from '../../../../../../daemon/providers/routing/daemon-unlisted-session'
+import {
+  createWorkerReleaseFixture,
+  deferred,
+  isStartReceipt,
+  workerIncarnation,
+  workerPaneKey,
+  type WorkerReleaseFixture
+} from './worker-release.test-fixture'
 
 const workerGeneration = '11111111-1111-4111-8111-111111111111'
 const otherGeneration = '33333333-3333-4333-8333-333333333333'
 
 /**
  * Two daemon generations behind the real routing resolver, each listing `pty-worker` under its own
- * incarnation, with the route on the first. The routed view lists only the first.
+ * incarnation, with the route on the first (or, with `routed: false`, on neither). The routed view lists only the first.
  */
 function twoGenerationDaemon(
   routedIncarnation: string,
-  unroutedIncarnation: string
+  unroutedIncarnation: string,
+  routed = true
 ): Pick<IPtyProvider, 'listProcesses'> {
   const generation = (incarnationId: string) => ({
     listProcesses: async () => [{ id: 'pty-worker', incarnationId, cwd: '', title: '' }]
@@ -60,99 +59,23 @@ function twoGenerationDaemon(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inventory listing reads only listProcesses from each generation.
   const providers = generations as unknown as IPtyProvider[]
   const resolver = new DaemonSessionOwnerResolver(providers, new Map())
-  resolver.recordRoute('pty-worker', providers[0]!, routedIncarnation)
+  if (routed) {
+    resolver.recordRoute('pty-worker', providers[0]!, routedIncarnation)
+  }
   return { listProcesses: (opts) => resolver.listProcesses(opts) }
-}
-
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((promiseResolve) => {
-    resolve = promiseResolve
-  })
-  return { promise, resolve }
 }
 
 describe('worker release once the exact process is proven exited', () => {
   let db: OrchestrationDb
   let dbOpen = false
   let runtime: OrcaRuntimeService
-  let ctx: RpcContext
   let activeRunId: string
-
-  const coordinatorPaneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-  const workerPaneKey = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-  const workerIncarnation = 'pty-worker:11111111-1111-4111-8111-111111111111'
+  let fixture: WorkerReleaseFixture
 
   function setup(): void {
-    db = new OrchestrationDb(':memory:')
+    fixture = createWorkerReleaseFixture()
+    ;({ db, runtime, activeRunId } = fixture)
     dbOpen = true
-    runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
-      handle === 'term_coord' ? coordinatorPaneKey : handle === 'term_worker' ? workerPaneKey : null
-    )
-    vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
-      handle === 'term_worker' ? workerIncarnation : null
-    )
-    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
-      handle === 'term_worker'
-        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub supplies only the authority fields worker start reads.
-          ({
-            terminalHandle: handle,
-            paneKey: workerPaneKey,
-            processIncarnation: workerIncarnation,
-            hostScope: { kind: 'local', hostId: 'local' }
-          } as never)
-        : null
-    )
-    vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-    vi.spyOn(runtime, 'showTerminal').mockImplementation(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: release reads only the handle, worktree and status of a shown terminal.
-      async (handle) => ({ handle, worktreeId: 'repo::worktree', status: 'running' }) as never
-    )
-    vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worker start reads only the workspace id.
-      { id: 'repo::worktree' } as never
-    )
-    vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      worktreeId: 'repo::worktree',
-      title: 'worker'
-    })
-    vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      condition: 'tui-idle',
-      satisfied: true,
-      status: 'running',
-      exitCode: null
-    })
-    vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
-    vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
-      handle: 'term_worker',
-      accepted: true,
-      bytesWritten: 1
-    })
-    vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
-    vi.spyOn(runtime, 'getExactWorkerProviderSession').mockReturnValue(null)
-    vi.spyOn(runtime, 'readTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      status: 'running',
-      tail: ['worker output line 1', 'worker output line 2'],
-      truncated: false,
-      nextCursor: '2'
-    })
-    vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      tabId: 'tab-worker',
-      ptyKilled: true
-    })
-    vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
-    activeRunId = db.createRun({
-      objective: 'Release recovery test Run',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey
-    }).id
-    ctx = { runtime }
   }
 
   afterEach(() => {
@@ -165,75 +88,14 @@ describe('worker release once the exact process is proven exited', () => {
     vi.restoreAllMocks()
   })
 
-  async function call(name: string, params: Record<string, unknown>) {
-    const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
-      (candidate) => candidate.name === name
-    )
-    if (!method || isStreamingMethod(method)) {
-      throw new Error(`Method not found: ${name}`)
-    }
-    const parsed = method.params ? method.params.parse(params) : undefined
-    return method.handler(parsed, ctx)
-  }
-
-  async function startWorker(): Promise<{ taskId: string; dispatchId: string }> {
-    const task = db.createTask({ spec: 'release recovery fixture task', runId: activeRunId })
-    const result: unknown = await call('orchestration.workerStart', {
-      task: task.id,
-      from: 'term_coord',
-      agent: 'codex'
-    })
-    if (!isStartReceipt(result)) {
-      throw new Error('worker start returned no receipt')
-    }
-    expect(result.state).toBe('ready')
-    return { taskId: task.id, dispatchId: result.dispatchId }
-  }
-
-  async function startSettledWorker(
-    outcome: 'succeeded' | 'failed' = 'succeeded'
-  ): Promise<{ taskId: string; dispatchId: string }> {
-    const worker = await startWorker()
-    expect(
-      db.settleWorkerReport({
-        taskId: worker.taskId,
-        dispatchId: worker.dispatchId,
-        outcome,
-        result: `worker ${outcome}`
-      }).action
-    ).toBe('settled')
-    return worker
-  }
-
-  /** A current worker whose terminal is gone; the local owner answers with `listing`. */
-  function loseWorkerTerminal(
-    listing: () => Promise<{ processes: PtyProcessInfo[]; inProcessOwner: boolean }>
-  ): void {
-    runtime.setPtyController({
-      write: () => false,
-      kill: () => false,
-      getForegroundProcess: async () => null,
-      listLocalProcessesForExitProof: listing
-    })
-  }
-
-  function goneAfterSettle(): void {
-    vi.mocked(runtime.showTerminal).mockRejectedValue(new Error('terminal_handle_stale'))
-    vi.spyOn(runtime, 'resolveTerminalHandleByProcessIncarnation').mockReturnValue(null)
-  }
-
-  function saveSession(resourceId: string, sessionId: string): string {
-    const transcriptPath = path.join(os.tmpdir(), `${sessionId}.jsonl`)
-    recordWorkerResumeSession(db, resourceId, {
-      paneKey: workerPaneKey,
-      processIncarnation: workerIncarnation,
-      connectionId: null,
-      agent: 'claude',
-      providerSession: { key: 'session_id', id: sessionId, transcriptPath },
-      observedAt: 0
-    })
-    return transcriptPath
-  }
+  const call = (name: string, params: Record<string, unknown>) => fixture.call(name, params)
+  const startSettledWorker = (outcome?: 'succeeded' | 'failed') =>
+    fixture.startSettledWorker(outcome)
+  const loseWorkerTerminal: WorkerReleaseFixture['loseWorkerTerminal'] = (listing) =>
+    fixture.loseWorkerTerminal(listing)
+  const goneAfterSettle = () => fixture.goneAfterSettle()
+  const saveSession = (resourceId: string, sessionId: string) =>
+    fixture.saveSession(resourceId, sessionId)
 
   it('releases a requested worker whose exited terminal is gone, keeping its newest saved transcript', async () => {
     setup()
@@ -512,17 +374,35 @@ describe('worker release once the exact process is proven exited', () => {
   })
 
   describe("when daemon generations share the worker's PTY id", () => {
-    function serveLocalDaemon(daemon: Pick<IPtyProvider, 'listProcesses'>): void {
+    function serveLocalDaemon(
+      daemon: Pick<IPtyProvider, 'listProcesses'>,
+      mayUnlistedDaemonOwnPtys?: () => Promise<boolean>
+    ): void {
       loseWorkerTerminal(() =>
         listLocalProcessesForExitProofFromRuntimeController(
           { getLocalPtyProviderStartupPromise: () => undefined },
-          () => daemon
+          () => daemon,
+          PTY_CONTROLLER_LIST_TIMEOUT_MS,
+          mayUnlistedDaemonOwnPtys
         )
       )
     }
 
-    async function stoppedWorkerFromBeforeTheSweep(): Promise<string> {
+    /** Older daemons as discovery leaves them in `runtimeDir`; the proof then asks about the rest. */
+    async function discoverLegacyDaemons(runtimeDir: string): Promise<() => Promise<boolean>> {
+      const adapters = await createLegacyDaemonAdapters(
+        runtimeDir,
+        path.join(runtimeDir, 'history')
+      )
+      const asked = new Set(adapters.map((adapter) => adapter.protocolVersion))
+      return () => mayUnaskedDaemonRunSessions(runtimeDir, asked)
+    }
+
+    async function stoppedWorkerFromBeforeTheSweep(
+      prepare?: (resourceId: string, dispatchId: string) => void
+    ): Promise<string> {
       const { dispatchId } = await startSettledWorker()
+      prepare?.(db.getWorkerTerminalResourceByOwner(dispatchId)!.id, dispatchId)
       db.db
         .prepare("UPDATE worker_dispatches SET state = 'stopped' WHERE dispatch_id = ?")
         .run(dispatchId)
@@ -602,6 +482,112 @@ describe('worker release once the exact process is proven exited', () => {
       expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
     })
 
+    it('keeps a release pending when discovery keeps a corrupt older-daemon record it cannot rule out', async () => {
+      setup()
+      const runtimeDir = mkdtempSync(path.join(os.tmpdir(), 'orca-legacy-discovery-'))
+      try {
+        // A torn record and no socket: discovery adopts nothing, yet the record may name a live daemon.
+        writeFileSync(path.join(runtimeDir, 'daemon-v5.pid'), '{"pid": 12')
+        const guard = await discoverLegacyDaemons(runtimeDir)
+        expect(existsSync(path.join(runtimeDir, 'daemon-v5.pid'))).toBe(true)
+        serveLocalDaemon(twoGenerationDaemon(otherGeneration, otherGeneration), guard)
+        const { dispatchId } = await startSettledWorker()
+        goneAfterSettle()
+
+        await expect(
+          runtime.inspectTerminalProcessIncarnationLiveness(
+            workerIncarnation,
+            JSON.stringify({ kind: 'local', hostId: 'local' })
+          )
+        ).resolves.toBe('unverifiable')
+        await expect(
+          call('orchestration.workerRelease', { dispatch: dispatchId })
+        ).resolves.toMatchObject({ state: 'release_unknown', processAction: 'none' })
+        expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.ownership_state).toBe('owned')
+      } finally {
+        rmSync(runtimeDir, { recursive: true, force: true })
+      }
+    })
+
+    it('releases once discovery removes an older record whose daemon has exited', async () => {
+      setup()
+      const runtimeDir = mkdtempSync(path.join(os.tmpdir(), 'orca-legacy-discovery-'))
+      try {
+        const exitedPid = spawnSync(process.execPath, ['-e', '']).pid
+        writeFileSync(path.join(runtimeDir, 'daemon-v5.pid'), JSON.stringify({ pid: exitedPid }))
+        const guard = await discoverLegacyDaemons(runtimeDir)
+        expect(existsSync(path.join(runtimeDir, 'daemon-v5.pid'))).toBe(false)
+        serveLocalDaemon(twoGenerationDaemon(otherGeneration, otherGeneration), guard)
+        const { dispatchId } = await startSettledWorker()
+        goneAfterSettle()
+
+        await expect(
+          call('orchestration.workerRelease', { dispatch: dispatchId })
+        ).resolves.toMatchObject({ state: 'released' })
+      } finally {
+        rmSync(runtimeDir, { recursive: true, force: true })
+      }
+    })
+
+    it('sweeps a stopped worker to its saved transcript, which released worker-read still reads', async () => {
+      setup()
+      // Two complete generations, no route, neither listing the worker: the absence is proven.
+      serveLocalDaemon(twoGenerationDaemon(otherGeneration, otherGeneration, false))
+      let transcriptPath = ''
+      const dispatchId = await stoppedWorkerFromBeforeTheSweep((resourceId) => {
+        transcriptPath = saveSession(resourceId, `claude-swept-${resourceId}`)
+      })
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          type: 'assistant',
+          uuid: 'swept-1',
+          timestamp: '2026-11-24T00:00:00.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'swept worker output' }] }
+        })}\n`
+      )
+      try {
+        await sweepStoppedWorkerTerminals(runtime, () => false)
+
+        expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+          release_state: 'released',
+          archive_source: 'transcript',
+          archive_status: 'captured'
+        })
+        expect(JSON.parse(db.getWorkerTerminalArchive(dispatchId)!.content)).toMatchObject({
+          agent: 'claude',
+          transcriptPath
+        })
+        expect(
+          JSON.stringify(await call('orchestration.workerRead', { dispatch: dispatchId }))
+        ).toContain('swept worker output')
+      } finally {
+        rmSync(transcriptPath, { force: true })
+      }
+    })
+
+    it('keeps the archive a stopped worker already had, byte for byte, when the sweep releases it', async () => {
+      setup()
+      serveLocalDaemon(twoGenerationDaemon(otherGeneration, otherGeneration, false))
+      const content = '{"version":3,"agent":"claude","sessionId":"kept-session"}'
+      const dispatchId = await stoppedWorkerFromBeforeTheSweep((resourceId, owner) => {
+        saveSession(resourceId, 'newer-session')
+        db.storeWorkerTerminalArchiveBeforeStop({
+          dispatchId: owner,
+          resourceId,
+          kind: 'transcript_pin',
+          content,
+          archiveSource: 'transcript',
+          archiveStatus: 'captured'
+        })
+      })
+
+      await sweepStoppedWorkerTerminals(runtime, () => false)
+
+      expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
+      expect(db.getWorkerTerminalArchive(dispatchId)?.content).toBe(content)
+    })
+
     it('refuses when the daemon inventory is incomplete', async () => {
       setup()
       const resolver = new DaemonSessionOwnerResolver(
@@ -677,5 +663,150 @@ describe('worker release once the exact process is proven exited', () => {
           ([target, kind]) => target === `dispatch:${dispatchId}` && kind === 'status'
         )
     ).toHaveLength(1)
+  })
+
+  it('shares one proof between two joined releases of a finished worker; only one reports released', async () => {
+    setup()
+    const listing = deferred<{ processes: never[]; inProcessOwner: boolean }>()
+    const proving = vi.fn(() => listing.promise)
+    loseWorkerTerminal(proving)
+    const { dispatchId } = await startSettledWorker()
+    goneAfterSettle()
+
+    const first = call('orchestration.workerRelease', { dispatch: dispatchId })
+    await vi.waitFor(() => expect(proving).toHaveBeenCalledTimes(1))
+    const second = call('orchestration.workerRelease', { dispatch: dispatchId })
+    listing.resolve({ processes: [], inProcessOwner: false })
+
+    await expect(first).resolves.toMatchObject({ state: 'released' })
+    await expect(second).resolves.toMatchObject({ state: 'already_released' })
+    expect(proving).toHaveBeenCalledTimes(1)
+    expect(
+      vi
+        .mocked(runtime.notifyMessageArrived)
+        .mock.calls.filter(
+          ([target, kind]) => target === `dispatch:${dispatchId}` && kind === 'status'
+        )
+    ).toHaveLength(1)
+  })
+
+  /** The coordinator keeps the worker, then a new worker reuses its terminal: worker-start transfers it. */
+  async function transferWhileProving(
+    from: string
+  ): Promise<{ taskId: string; dispatchId: string }> {
+    await call('orchestration.workerRetain', { dispatch: from })
+    const task = db.createTask({ spec: 'reuses the kept terminal', runId: activeRunId })
+    // The terminal resolves again for the reuse, then is gone once more.
+    vi.mocked(runtime.showTerminal).mockImplementation(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worker start reads only the handle, worktree and status of a shown terminal.
+      async (handle) => ({ handle, worktreeId: 'repo::worktree', status: 'running' }) as never
+    )
+    const started: unknown = await call('orchestration.workerStart', {
+      task: task.id,
+      from: 'term_coord',
+      terminal: 'term_worker'
+    })
+    goneAfterSettle()
+    if (!isStartReceipt(started)) {
+      throw new Error('worker start returned no receipt')
+    }
+    expect(db.getWorkerTerminalResourceByOwner(started.dispatchId)).toBeDefined()
+    return { taskId: task.id, dispatchId: started.dispatchId }
+  }
+
+  it("reports a requested release's transfer as ownership_transferred and leaves the new owner's row alone", async () => {
+    setup()
+    const listing = deferred<{ processes: never[]; inProcessOwner: boolean }>()
+    const proving = vi.fn(() => listing.promise)
+    loseWorkerTerminal(proving)
+    const { dispatchId } = await startSettledWorker()
+    goneAfterSettle()
+
+    const release = call('orchestration.workerRelease', { dispatch: dispatchId })
+    await vi.waitFor(() => expect(proving).toHaveBeenCalled())
+    const { dispatchId: successor } = await transferWhileProving(dispatchId)
+    const before = db.getWorkerTerminalResourceByOwner(successor)
+    listing.resolve({ processes: [], inProcessOwner: false })
+
+    await expect(release).resolves.toMatchObject({
+      dispatchId,
+      state: 'retained',
+      reason: 'ownership_transferred',
+      archive: null
+    })
+    expect(db.getWorkerTerminalResourceByOwner(successor)).toEqual(before)
+  })
+
+  it("never hands a successor's release the predecessor's pending proof or receipt", async () => {
+    setup()
+    const proofs: ReturnType<
+      typeof deferred<{ processes: PtyProcessInfo[]; inProcessOwner: boolean }>
+    >[] = []
+    loseWorkerTerminal(() => {
+      proofs.push(deferred())
+      return proofs.at(-1)!.promise
+    })
+    const { dispatchId } = await startSettledWorker()
+    goneAfterSettle()
+
+    const release = call('orchestration.workerRelease', { dispatch: dispatchId })
+    await vi.waitFor(() => expect(proofs).toHaveLength(1))
+    const { taskId, dispatchId: successor } = await transferWhileProving(dispatchId)
+    db.settleWorkerReport({
+      taskId,
+      dispatchId: successor,
+      outcome: 'succeeded',
+      result: 'successor done'
+    })
+    const successorRelease = call('orchestration.workerRelease', { dispatch: successor })
+    // Its own proof, not a join onto the predecessor's.
+    await vi.waitFor(() => expect(proofs).toHaveLength(2))
+    // The predecessor's proof answers first, and the worker is still alive.
+    const alive = [{ id: 'pty-worker', incarnationId: workerGeneration, cwd: '', title: '' }]
+    proofs[0]!.resolve({ processes: alive, inProcessOwner: false })
+    await expect(release).resolves.toMatchObject({ dispatchId, reason: 'ownership_transferred' })
+    expect(db.getWorkerTerminalResourceByOwner(successor)?.release_state).toBe('requested')
+
+    proofs[1]!.resolve({ processes: [], inProcessOwner: false })
+    await expect(successorRelease).resolves.toMatchObject({
+      dispatchId: successor,
+      state: 'released'
+    })
+  })
+
+  it('never lets a former owner release the resource its successor now holds', async () => {
+    setup()
+    loseWorkerTerminal(async () => ({ processes: [], inProcessOwner: false }))
+    const { dispatchId } = await startSettledWorker()
+    const { taskId, dispatchId: successor } = await transferWhileProving(dispatchId)
+    db.settleWorkerReport({
+      taskId,
+      dispatchId: successor,
+      outcome: 'succeeded',
+      result: 'successor done'
+    })
+    const resourceId = db.getWorkerTerminalResourceByOwner(successor)!.id
+    // The successor holds a matching archive, and its exact process is proven gone.
+    db.storeWorkerTerminalArchiveBeforeStop({
+      dispatchId: successor,
+      resourceId,
+      kind: 'terminal_tail',
+      content: '{"version":3,"fallbackReason":"session_not_reported"}',
+      archiveSource: 'terminal',
+      archiveStatus: 'unavailable'
+    })
+    goneAfterSettle()
+    const before = db.getWorkerTerminalResource(resourceId)
+    const archive = db.getWorkerTerminalArchive(successor)
+
+    await expect(
+      call('orchestration.workerRelease', { dispatch: dispatchId })
+    ).resolves.toMatchObject({ state: 'retained', reason: 'ownership_transferred' })
+    expect(db.getWorkerTerminalResource(resourceId)).toEqual(before)
+    expect(db.getWorkerTerminalArchive(successor)).toEqual(archive)
+    expect(runtime.notifyMessageArrived).not.toHaveBeenCalledWith(
+      `dispatch:${dispatchId}`,
+      'status'
+    )
   })
 })

@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { parseDaemonPidFile } from '../endpoint/identity/daemon-pid-file-parse'
+import {
+  parseDaemonPidFile,
+  salvagePidFromCorruptDaemonRecord
+} from '../endpoint/identity/daemon-pid-file-parse'
 import { hasErrorCode } from '../endpoint/identity/daemon-process-inspection'
 import { getDaemonPidPath } from './daemon-spawner'
 
@@ -25,22 +28,23 @@ export function legacyDaemonProcessMayBeAlive(
 }
 
 /**
- * Exit proof's stricter, non-blocking form: it reads false as "no daemon here", so only a missing pid
- * file (ENOENT) or a missing process (ESRCH) proves the daemon gone. An unreadable or unparsable record
- * may still name a live daemon. (The sync form stays lenient: discovery deletes such records.)
+ * The strict, non-blocking form, for callers that read false as "no daemon here": exit proof, and
+ * discovery deciding whether a record may be deleted. Only a missing pid file (ENOENT) or a positive
+ * pid naming no process (ESRCH) proves the daemon gone; an unreadable record, or one naming no
+ * positive pid (even after salvage), may still stand for a live daemon.
  */
 export async function legacyDaemonMayStillRun(
   runtimeDir: string,
   protocolVersion: number
 ): Promise<boolean> {
   try {
-    const parsed = parseDaemonPidFile(
-      await readFile(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
-    )
-    if (!parsed) {
+    const content = await readFile(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
+    const pid = parseDaemonPidFile(content)?.pid ?? salvagePidFromCorruptDaemonRecord(content)
+    // Signal 0 to zero or a negative pid probes a process group; its ESRCH says nothing about a daemon.
+    if (pid === null || !Number.isSafeInteger(pid) || pid <= 0) {
       return true
     }
-    process.kill(parsed.pid, 0)
+    process.kill(pid, 0)
     return true
   } catch (error) {
     return !(hasErrorCode(error, 'ENOENT') || hasErrorCode(error, 'ESRCH'))

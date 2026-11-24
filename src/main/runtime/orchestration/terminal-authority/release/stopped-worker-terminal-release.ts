@@ -141,7 +141,8 @@ async function releaseExitedSlice(
       db,
       dispatchId: release.requestingDispatchId,
       terminalHandle: release.terminalHandle,
-      attachedAt: release.attachedAt
+      attachedAt: release.attachedAt,
+      exitProven: true
     })
   }
   // One write per slice, so Crew readers wake once per slice; it re-checks owner, incarnation and archive.

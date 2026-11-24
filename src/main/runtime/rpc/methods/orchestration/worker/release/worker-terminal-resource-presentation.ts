@@ -1,7 +1,8 @@
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import {
   liveWorkerTerminalAutoReleaseAt,
-  type WorkerTerminalResourceRow
+  type WorkerTerminalResourceRow,
+  type WorkerTerminalRetainedReason
 } from '../../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { WorkerReleaseReceipt } from './worker-release-completion'
 
@@ -96,4 +97,15 @@ export function exposeWorkerRetainReceipt(
     processAction: 'none',
     archive: archiveSummary(retained.resource)
   }
+}
+
+/** Why a retained row is held, for its receipt. */
+export function retainedReason(resource: WorkerTerminalResourceRow): WorkerTerminalRetainedReason {
+  if (resource.retained_reason) {
+    return resource.retained_reason as WorkerTerminalRetainedReason
+  }
+  if (resource.ownership_state === 'user_owned') {
+    return 'user_takeover'
+  }
+  return 'identity_unproven'
 }

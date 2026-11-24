@@ -237,6 +237,8 @@ export function releaseDeadWorkerTerminalInTransaction(
     !requesterSettled ||
     !ownerSettled ||
     !unchanged ||
+    // A proven-exit settle is the owner's own: a prior owner may not release its successor's row.
+    (expected !== null && !isOwner) ||
     resource.process_incarnation !== params.processIncarnation ||
     (archive ? archive.resource_id !== resource.id : !archiveUnreachable) ||
     decideWorkerTerminalRelease(resource).action !== 'proceed'

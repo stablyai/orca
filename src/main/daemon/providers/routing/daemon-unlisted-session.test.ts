@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mayUnaskedDaemonRunSessions } from './daemon-unlisted-session'
 
 describe('daemons outside the inventory', () => {
@@ -49,6 +49,27 @@ describe('daemons outside the inventory', () => {
     // A directory where the pid file should be: reading it fails with EISDIR, not ENOENT.
     mkdirSync(join(dir, 'daemon-v5.pid'))
     await expect(mayUnaskedDaemonRunSessions(dir, new Set())).resolves.toBe(true)
+  })
+
+  it('never probes a record whose pid is not a positive integer, and counts it as possibly running', async () => {
+    const kill = vi.spyOn(process, 'kill')
+    try {
+      for (const pid of [-1, 0, 1.5]) {
+        await expect(
+          mayUnaskedDaemonRunSessions(runtimeDir({ 'daemon-v5.pid': pid }), new Set())
+        ).resolves.toBe(true)
+      }
+      // Signal 0 to zero or a negative pid targets a process group; its ESRCH proves nothing.
+      expect(kill).not.toHaveBeenCalled()
+    } finally {
+      kill.mockRestore()
+    }
+  })
+
+  it('ignores a live pid file for the current protocol, which the inventory already asks', async () => {
+    await expect(
+      mayUnaskedDaemonRunSessions(runtimeDir({ 'daemon-v9999.pid': process.pid }), new Set())
+    ).resolves.toBe(false)
   })
 
   it('treats an unreadable runtime directory as possibly owned', async () => {
