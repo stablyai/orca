@@ -11,6 +11,18 @@ import { webhookSummaryFixture } from '../../bots/webhooks/webhook-summary.test-
 import { NativeChatVisualOwnerContext } from '../media/visuals/native-chat-visual-owner'
 import { NativeChatAutomationSavedRow } from './NativeChatAutomationSavedRow'
 
+// The card's own behavior, past the host check use-verified-receipt-webhook.test.tsx covers.
+vi.mock('./use-verified-receipt-webhook', async () => {
+  const { automationHookId } = await import('../../../../../shared/automation-event-triggers')
+  return {
+    useVerifiedReceiptWebhook: (
+      _owner: unknown,
+      _itemId: unknown,
+      saved: { automation: Parameters<typeof automationHookId>[0] }
+    ) => automationHookId(saved.automation)
+  }
+})
+
 const HOOK = 'wh_SetupCardTest001'
 // A hook the host no longer has: its read fails.
 const GONE = 'wh_SetupCardGone001'

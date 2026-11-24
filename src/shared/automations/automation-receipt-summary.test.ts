@@ -344,3 +344,67 @@ it('keeps the approved single-event Details free of a duplicate trigger label', 
     )
   ).toEqual([{ id: 'g', showLabel: false }])
 })
+
+it.each([
+  ['legacy', undefined],
+  ['partial', v1([slackExtra, gmailExtra], 'partial')],
+  ['missing extras', v1([])],
+  ['orphan extra', v1([slackExtra, gmailExtra, { ...slackExtra, triggerId: 'x' }])],
+  ['incoherent Google arm', v1([slackExtra, { ...gmailExtra, google: undefined }])],
+  ['unavailable', { version: 1, unavailable: 'item-budget' }]
+] as const)(
+  'leaves an event-only %s wait unproven, with one or several retained events and no deadline',
+  (_case, facts) => {
+    for (const on of [[slack], [slack, gmail]]) {
+      const set = automationReceiptStartSet({ ...automation, once: {}, on }, facts)
+      expect(set.alternativesUnproven).toBe(true)
+      expect(set.starts.map((start) => start.kind)).toEqual(on.map(() => 'event'))
+    }
+  }
+)
+
+it('leaves a shortened event-only wait unproven', () => {
+  const set = automationReceiptStartSet(
+    { ...automation, once: {}, on: [slack] },
+    v1([slackExtra]),
+    true
+  )
+  expect(set).toEqual({
+    starts: [{ kind: 'event', trigger: slack, extra: null, placeWithheld: true }],
+    alternativesUnproven: true
+  })
+})
+
+it('renders a stored wait with a recurrence as unknown, with or without a deadline', () => {
+  const recurring = { ...automation, dtstart: 0, rrule: '0 9 * * 1' }
+  for (const once of [{ by: 5000 }, {}]) {
+    for (const [on, facts] of [
+      [[], v1([])],
+      [[slack], v1([slackExtra])]
+    ] as const) {
+      expect(automationReceiptStartSet({ ...recurring, once, on: [...on] }, facts)).toEqual({
+        starts: [{ kind: 'unknown' }],
+        alternativesUnproven: false
+      })
+    }
+  }
+  // A historical deadline is not required to be in the future.
+  expect(automationReceiptStartSet({ ...automation, once: { by: 1 } }, v1([]))).toEqual({
+    starts: [{ kind: 'deadline', at: 1 }],
+    alternativesUnproven: false
+  })
+})
+
+it('keeps a complete event-only wait exact, with one or several events (control)', () => {
+  for (const [on, extras] of [
+    [[slack], [slackExtra]],
+    [
+      [slack, gmail],
+      [slackExtra, gmailExtra]
+    ]
+  ] as const) {
+    const set = automationReceiptStartSet({ ...automation, once: {}, on: [...on] }, v1([...extras]))
+    expect(set.alternativesUnproven).toBe(false)
+    expect(set.starts.map((start) => start.kind)).toEqual(on.map(() => 'event'))
+  }
+})

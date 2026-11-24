@@ -161,17 +161,23 @@ export async function openCardAutomation(
     )
   }
   let current = true
+  // Why: once superseded, the gesture settles now instead of holding its row busy until a reply.
+  const superseded = Promise.withResolvers<'stale'>()
+  const drop = (): void => superseded.resolve('stale')
   // Leaving and returning is a new view generation, even if its final IDs match.
   const unsubscribe = useAppStore.subscribe(() => {
     current &&= sameView()
+    if (!current) {
+      drop()
+    }
   })
-  signal.addEventListener('abort', unsubscribe, { once: true })
+  signal.addEventListener('abort', drop, { once: true })
   // Why: a reply after re-pair or a runtime restart is stale even when the view is unchanged.
   const accepts = (): boolean =>
     current && !signal.aborted && sameView() && automationReceiptSourceCurrent(source)
   try {
-    const result = await readAutomationReceipt(source)
-    if (!accepts()) {
+    const result = await Promise.race([readAutomationReceipt(source), superseded.promise])
+    if (result === 'stale' || !accepts()) {
       return 'stale'
     }
     return result.status === 'ready' &&
@@ -184,7 +190,7 @@ export async function openCardAutomation(
     }
     throw error
   } finally {
-    signal.removeEventListener('abort', unsubscribe)
+    signal.removeEventListener('abort', drop)
     unsubscribe()
   }
 }

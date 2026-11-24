@@ -9,10 +9,7 @@ import { cn } from '@/lib/class-names'
 import { botErrorMessage } from '@/components/bots/bot-presentation'
 import { useBotForWorkspace } from '@/components/bots/bot-workspace'
 import { webhookUnknownBotName } from '@/components/bots/webhooks/webhook-copy'
-import {
-  automationHookId,
-  hasAutomationSchedule
-} from '../../../../../shared/automation-event-triggers'
+import { hasAutomationSchedule } from '../../../../../shared/automation-event-triggers'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { NativeChatCardAvatar, NativeChatCardFrame } from '../NativeChatCardFrame'
 import { NativeChatMessageTimestamp } from '../messages/rows/NativeChatMessageTimestamp'
@@ -28,6 +25,7 @@ import { requestNativeChatComposerFocus } from '../composer/focus/native-chat-co
 import { automationReceiptSummary } from '../automation-receipt-copy'
 import { openCardAutomation } from '../automation-receipt-client'
 import { NativeChatWebhookSetupCard } from './NativeChatWebhookSetupCard'
+import { useVerifiedReceiptWebhook } from './use-verified-receipt-webhook'
 
 const AUTOMATION_CARD_DISCLOSURE = 'automation-card:'
 type AutomationSaved = NonNullable<NativeChatMessage['automationSaved']>
@@ -49,6 +47,27 @@ function draftChangeInChat(owner: NativeChatVisualOwner, name: string): void {
       { name }
     )
   })
+}
+
+/** Only a verified webhook receipt reads the bot catalog, for the name its setup copy shows. */
+function ReceiptWebhookSetupCard({
+  owner,
+  hookId,
+  name
+}: {
+  owner: NativeChatVisualOwner
+  hookId: string
+  name: string
+}): React.JSX.Element {
+  const botName = useBotForWorkspace(owner.worktreeId)?.name ?? webhookUnknownBotName()
+  return (
+    <NativeChatWebhookSetupCard
+      target={owner.target}
+      hookId={hookId}
+      botName={botName}
+      name={name}
+    />
+  )
 }
 
 /** A saved receipt. Only an intentional disclosure or Open acquires current data. */
@@ -85,8 +104,7 @@ export function NativeChatAutomationSavedRow({
     },
     []
   )
-  const hookId = automationHookId(automation)
-  const botName = useBotForWorkspace(owner?.worktreeId ?? null)?.name ?? webhookUnknownBotName()
+  const hookId = useVerifiedReceiptWebhook(owner, disclosureId, saved, shortened)
   const Icon = hasAutomationSchedule(automation) ? CalendarClock : Zap
   const Chevron = open ? ChevronUp : ChevronDown
   const choose = (next: boolean): void => {
@@ -100,6 +118,17 @@ export function NativeChatAutomationSavedRow({
     pendingCardOpen = lifetime
     pendingOpen.current = lifetime
     setOpening(true)
+    // Why: a superseded Open's reply may never come; its row must not stay busy waiting for it.
+    lifetime.signal.addEventListener(
+      'abort',
+      () => {
+        if (pendingOpen.current === lifetime) {
+          pendingOpen.current = null
+          setOpening(false)
+        }
+      },
+      { once: true }
+    )
     void openCardAutomation(owner, disclosureId, saved, shortened, lifetime.signal)
       .then((opened) => {
         if (!lifetime.signal.aborted && opened === 'unavailable') {
@@ -124,15 +153,9 @@ export function NativeChatAutomationSavedRow({
       })
   }
   if (hookId && owner) {
-    // Its URL is what the user needs next, so a webhook automation is a card, not a folded row.
-    return (
-      <NativeChatWebhookSetupCard
-        target={owner.target}
-        hookId={hookId}
-        botName={botName}
-        name={automation.name}
-      />
-    )
+    // Its URL is what the user needs next, so a verified webhook automation is a card, not a
+    // folded row. Until verified, Details offers the receipt-bound Copy URL instead.
+    return <ReceiptWebhookSetupCard owner={owner} hookId={hookId} name={automation.name} />
   }
   return (
     <div

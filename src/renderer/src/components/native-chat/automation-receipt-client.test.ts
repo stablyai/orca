@@ -340,3 +340,36 @@ it.each([
     expect(fixture.navigation).toMatchObject({ automationId: 'collision', hostId: 'runtime:E' })
   }
 )
+
+it.each(['abort', 'view'] as const)(
+  'settles a superseded Open as stale on %s without waiting for its reply',
+  async (cause) => {
+    const reply = Promise.withResolvers<unknown>()
+    fixture.reply = reply.promise
+    const lifetime = new AbortController()
+    const opening = openCardAutomation(
+      {
+        target: { kind: 'local' },
+        sessionId: 'chat-on-W',
+        worktreeId: 'project-Y',
+        tabId: 'chat-tab'
+      },
+      'receipt',
+      saved,
+      false,
+      lifetime.signal
+    )
+    await Promise.resolve()
+    if (cause === 'abort') {
+      lifetime.abort()
+    } else {
+      fixture.view.activeView = 'automations'
+      fixture.listeners.forEach((listener) => listener())
+    }
+    // The old reply is still pending: the gesture must settle on supersession alone.
+    expect(await opening).toBe('stale')
+    reply.resolve({ status: 'ready', automation, owner })
+    await reply.promise
+    expect(fixture.navigation).toBeNull()
+  }
+)

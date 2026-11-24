@@ -2,10 +2,14 @@ import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
 import { EVENT_ONLY_SCHEDULE } from '../../../../../shared/automation-event-triggers'
 import { webhookRuleId } from '../../../../../shared/connector-webhook-contract'
+import type { Automation } from '../../../../../shared/automations/automation-definition'
+import { automationReceiptFacts } from '../../../../../shared/automations/automation-receipt-facts'
+import { botAutomationFacts } from '../../../../../shared/bots/bot-automation-rows'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import type { WebhookSummary } from '../../../../../shared/rpc-contract/webhooks-params'
 import { setWebhookHostTransportForTests } from '../../bots/webhooks/webhook-host-client'
 import { webhookSummaryFixture } from '../../bots/webhooks/webhook-summary.test-fixture'
+import { makeAutomation } from '../../automations/automations-page-fixtures'
 import { NativeChatVisualOwnerContext } from '../media/visuals/native-chat-visual-owner'
 import {
   NativeChatDisclosureContext,
@@ -26,25 +30,31 @@ const HOOKS = {
   created: 'wh_CreatedCreatedCr',
   opened: 'wh_OpenedOpenedOpen',
   copied: 'wh_CopiedCopiedCopi',
-  called: 'wh_CalledCalledCall'
+  called: 'wh_CalledCalledCall',
+  unverified: 'wh_UnverifiedUnveri'
 } as const
 type State = keyof typeof HOOKS
 
+function automationFor(hookId: string): Automation {
+  return makeAutomation({
+    id: `auto-${hookId}`,
+    name: 'Failed payment follow-up',
+    createdAt: 1_700_000_000_000,
+    updatedAt: 0,
+    nextRunAt: 0,
+    ...EVENT_ONLY_SCHEDULE,
+    on: [{ id: webhookRuleId(hookId), source: 'webhook', event: 'call', rev: 1 }],
+    bot: { botId: 'bot-1', runsIn: 'new', resultsTo: 'chat' }
+  })
+}
+
 function saved(hookId: string): NonNullable<NativeChatMessage['automationSaved']> {
+  const automation = automationFor(hookId)
   return {
     change: 'created',
     resultsTo: 'chat',
-    automation: {
-      id: `auto-${hookId}`,
-      name: 'Failed payment follow-up',
-      enabled: true,
-      nextRunAt: 0,
-      updatedAt: 0,
-      ...EVENT_ONLY_SCHEDULE,
-      workspaceId: null,
-      on: [{ id: webhookRuleId(hookId), source: 'webhook', event: 'call' }],
-      bot: { botId: 'bot-1' }
-    }
+    automation: botAutomationFacts(automation),
+    receiptFacts: automationReceiptFacts(automation)
   }
 }
 
@@ -77,6 +87,28 @@ function stubHost(): void {
     throw new Error('not in this fixture')
   })
   Reflect.set(window.api.ui, 'writeSecretClipboardText', async () => ({ clearsLater: true }))
+  // Setup appears only once the chat's host confirms the receipt as its own webhook automation.
+  const runtime: unknown = window.api.runtime
+  Reflect.set(window.api, 'runtime', {
+    ...(typeof runtime === 'object' ? runtime : {}),
+    call: async ({ method, params }: { method: string; params: { itemId?: string } }) => {
+      if (method !== 'agentSession.automationReceipt') {
+        return { ok: false, error: { code: 'runtime_error', message: 'Not in this fixture' } }
+      }
+      const hookId = params.itemId ?? ''
+      return {
+        ok: true,
+        result:
+          hookId === HOOKS.unverified
+            ? { status: 'missing' }
+            : {
+                status: 'ready',
+                automation: automationFor(hookId),
+                owner: { selector: { kind: 'self' } }
+              }
+      }
+    }
+  })
 }
 
 function Chat({ state }: { state: State }): React.JSX.Element {
@@ -151,4 +183,12 @@ export const narrow = defineFixture({
   setup: stubHost,
   render: () => <Chat state="opened" />,
   interact: () => click('Key and signing secret')
+})
+
+// A receipt its host can't confirm stays a saved row: no live setup controls.
+export const unverifiedReceipt = defineFixture({
+  width: 736,
+  setup: stubHost,
+  render: () => <Chat state="unverified" />,
+  interact: settle
 })

@@ -237,3 +237,87 @@ it.each([false, true])(
     expect(controller.getSnapshot()).toEqual({ status: 'missing', acknowledgement: 'deleted' })
   }
 )
+
+const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+it.each([
+  ['update', 'while hidden', 'none'],
+  ['remove', 'while hidden', 'none'],
+  ['update', 'after reconnect', 'none'],
+  ['remove', 'after reconnect', 'none'],
+  ['update', 'after reconnect', 'host notice first'],
+  ['remove', 'after reconnect', 'host notice first']
+] as const)(
+  'gives a retained pane one fresh post-ack read when its %s is acknowledged %s (%s)',
+  async (mutation, when, notice) => {
+    let reads = 0
+    let effects = 0
+    let read: () => Promise<AutomationReceiptRead> = async () => present
+    const updated = deferred<typeof automation>()
+    const removed = deferred<boolean>()
+    const controller = new AutomationCardDetailsController({
+      current: () => true,
+      read: () => {
+        reads++
+        return read()
+      },
+      runs: async () => [],
+      update: () => {
+        effects++
+        return updated.promise
+      },
+      remove: () => {
+        effects++
+        return removed.promise
+      },
+      run: async () => {}
+    })
+    const acknowledge = () =>
+      mutation === 'update'
+        ? updated.resolve({ ...automation, enabled: false })
+        : removed.resolve(true)
+    const fresh: AutomationReceiptRead =
+      mutation === 'update'
+        ? { ...present, automation: { ...automation, enabled: false } }
+        : { status: 'missing' }
+    controller.start()
+    await settled(controller, 'ready')
+    const mutating = mutation === 'update' ? controller.setEnabled(false) : controller.remove()
+    // The chat pane's <Activity> hides: effects clean up, the controller is retained.
+    controller.dispose()
+    if (when === 'while hidden') {
+      acknowledge()
+      await mutating
+      read = async () => fresh
+      const before = reads
+      controller.start()
+      await flush()
+      expect(reads - before).toBe(1)
+    } else {
+      const resumed = deferred<AutomationReceiptRead>()
+      read = () => resumed.promise
+      controller.start()
+      if (notice === 'host notice first') {
+        controller.changed()
+      }
+      const reconcile = deferred<AutomationReceiptRead>()
+      read = () => reconcile.promise
+      const before = reads
+      acknowledge()
+      await mutating
+      expect(reads - before).toBe(1)
+      // The read resumed before the acknowledgement reports the old definition; it is obsolete.
+      resumed.resolve(present)
+      await flush()
+      expect(controller.getSnapshot().status).toBe('loading')
+      reconcile.resolve(fresh)
+      await flush()
+    }
+    expect(effects).toBe(1)
+    expect(controller.getSnapshot()).toEqual(
+      mutation === 'update'
+        ? { ...fresh, runs: [] }
+        : { status: 'missing', acknowledgement: 'deleted' }
+    )
+  }
+)

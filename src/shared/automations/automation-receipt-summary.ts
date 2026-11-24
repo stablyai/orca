@@ -77,9 +77,19 @@ export function automationReceiptStartSet(
   })
   // Complete means coherent extras for every event of an intact base, per the saved V1 delta.
   const complete = facts?.triggerExtras.coverage === 'complete' && coherent
-  if (automation.once?.by !== undefined) {
-    // Unknown alternatives qualify the wait; they are never listed as another trigger.
-    starts.push({ kind: 'deadline', at: automation.once.by })
+  if (automation.once) {
+    if (starts.some((start) => start.kind === 'schedule')) {
+      // Why: the scheduler rejects recurrence on a wait, so this stored pair is contradictory.
+      return { starts: [{ kind: 'unknown' }], alternativesUnproven: false }
+    }
+    if (automation.once.by !== undefined) {
+      starts.push({ kind: 'deadline', at: automation.once.by })
+    }
+    if (!starts.length) {
+      return { starts: [{ kind: 'unknown' }], alternativesUnproven: false }
+    }
+    // Unknown alternatives qualify the wait, with or without a deadline; they are never listed
+    // as another trigger.
     return { starts, alternativesUnproven: !complete }
   }
   return { starts: starts.length ? starts : [{ kind: 'unknown' }], alternativesUnproven: false }

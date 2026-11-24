@@ -165,7 +165,7 @@ export class AutomationCardDetailsController {
     this.mutating = true
     try {
       await this.transport!.update(automation, owner, enabled)
-      if (this.disposed || binding !== this.bindingGeneration || !this.transport!.current()) {
+      if (binding !== this.bindingGeneration || !this.transport!.current()) {
         return
       }
       this.mutationGeneration++
@@ -185,10 +185,13 @@ export class AutomationCardDetailsController {
     this.mutating = true
     try {
       const removed = await this.transport!.remove(automation, owner)
-      if (this.disposed || binding !== this.bindingGeneration || !this.transport!.current()) {
+      if (binding !== this.bindingGeneration || !this.transport!.current()) {
         return
       }
       if (!removed) {
+        if (this.disposed) {
+          return
+        }
         throw new Error('Automation was not removed. Reopen the receipt to check its state.')
       }
       this.mutationGeneration++
@@ -213,9 +216,13 @@ export class AutomationCardDetailsController {
     }
   }
 
+  /**
+   * Ends this mount, which a hidden <Activity> pane may resume with start(). A mutation still in
+   * flight keeps its binding: its acknowledgement fences every earlier read and its one post-ack
+   * read runs now if mounted, else from start(). Re-pair or restart still voids it via invalidate().
+   */
   dispose = (): void => {
     this.disposed = true
-    this.bindingGeneration++
     this.readGeneration++
     this.listeners.clear()
   }

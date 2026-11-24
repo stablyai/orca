@@ -73,3 +73,28 @@ it('omits shortened place strings so a clipped value never reads as a saved plac
   expect(text).not.toContain('#ops')
   expect(text).toMatch(/^Saved: On a Slack message, or .*may not be listed$/)
 })
+
+function eventOnlyWait(on: (typeof slack)[], receiptFacts?: unknown) {
+  const saved = wait(on, receiptFacts)
+  return { ...saved, automation: { ...saved.automation, once: {} } }
+}
+
+it('qualifies an event-only wait unless its receipt proves the listed starts complete', () => {
+  const one = automationReceiptSummary(eventOnlyWait([slack]))
+  expect(one).toMatch(/^Saved: On a Slack message.*; other start conditions may not be listed$/)
+  expect(one).not.toMatch(/whichever came first/)
+  const three = [slack, { ...slack, id: 't' }, { ...slack, id: 'u' }]
+  expect(automationReceiptSummary(eventOnlyWait(three))).toBe('Saved: at least 3 start conditions')
+  // Control: a complete receipt keeps the exact wording and count.
+  expect(automationReceiptSummary(eventOnlyWait([slack], complete([slackExtra])))).not.toMatch(
+    /may not be listed/
+  )
+  expect(
+    automationReceiptSummary(
+      eventOnlyWait(
+        three,
+        complete(three.map(({ id }) => ({ triggerId: id, additionalConditions: 'none' })))
+      )
+    )
+  ).toBe('Saved: 3 start conditions')
+})

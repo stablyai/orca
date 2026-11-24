@@ -217,12 +217,12 @@ function Receipt({ scenario }: { scenario: Scenario }): React.JSX.Element {
   )
 }
 
-function receiptFixture(scenario: Scenario, width: number): ComponentFixture {
+function receiptFixture(scenario: Scenario, width: number, expand = false): ComponentFixture {
   return defineFixture({
     width,
     setup: () => stubHost(scenario),
     render: () => <Receipt scenario={scenario} />,
-    ...(scenario === 'failed' || scenario === 'missing' || scenario === 'pausedMissing'
+    ...(expand || scenario === 'failed' || scenario === 'missing' || scenario === 'pausedMissing'
       ? {
           interact: async (frame: HTMLElement) => {
             frame.querySelector<HTMLButtonElement>('button[aria-expanded]')?.click()
@@ -259,3 +259,6 @@ export const waitLegacyWide = receiptFixture('waitLegacy', 640)
 export const waitLegacyNarrow = receiptFixture('waitLegacy', 380)
 export const noDeliveryWide = receiptFixture('noDelivery', 640)
 export const noDeliveryNarrow = receiptFixture('noDelivery', 380)
+// Expanded, so current settings read RESULTS Nowhere for an explicit no-delivery automation.
+export const noDeliveryExpandedWide = receiptFixture('noDelivery', 640, true)
+export const noDeliveryExpandedNarrow = receiptFixture('noDelivery', 380, true)

@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { makeAutomation } from '@/components/automations/automations-page-fixtures'
 import type { Automation } from '../../../../shared/automations/automation-definition'
-import type { AutomationCardDetailsController } from './automation-card-details-controller'
+import { AutomationCardDetailsController } from './automation-card-details-controller'
 import { NativeChatAutomationCurrentDetails } from './NativeChatAutomationCurrentDetails'
 
 // Explicit no-delivery must not read as delivery into each run; only an absent target does.
@@ -39,7 +39,7 @@ function resultsRow(automation: Automation): string | null {
           botId: automation.bot?.botId
         }}
         owner={{ selector: { kind: 'self' } }}
-        controller={{} as AutomationCardDetailsController}
+        controller={new AutomationCardDetailsController(null)}
         onEditInChat={null}
       />
     )
