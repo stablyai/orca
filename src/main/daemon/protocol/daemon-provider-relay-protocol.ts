@@ -134,10 +134,14 @@ export type ProviderRelayAttachResult = {
    * view starts empty, so it keeps these until it sees them end, and hands them back at its detach.
    */
   openWork?: Record<string, string[][]>
-  /** Kept lines through this seq were dropped at the spool file's cap, so the replay starts inside them. */
-  truncatedThrough?: number
   /** Tasks the daemon saw end while detached, which the app may still show running: restate them. */
   endedWork?: Record<string, string[][]>
+  /**
+   * Set only when kept lines (`keepFrom`) after the client's cursor were dropped at the spool file
+   * cap before this attach: its replay starts after this seq, inside the item the client asked to
+   * keep. Older clients ignore it.
+   */
+  truncatedThrough?: number
 }
 
 export type ProviderRelayInfo = {

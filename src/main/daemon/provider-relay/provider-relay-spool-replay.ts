@@ -1,6 +1,7 @@
 import { createReadStream } from 'node:fs'
 import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-protocol'
 import type { SpoolFileIndex } from './provider-relay-spool-file-index'
+import { parseSpoolRow } from './provider-relay-spool-row'
 
 const REPLAY_READ_CHUNK_BYTES = 64 * 1024
 
@@ -13,17 +14,6 @@ type SpoolReplay = {
   drained?: () => Promise<void>
 }
 
-function isSpoolRecord(value: unknown): value is ProviderRelayRecord {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'seq' in value &&
-    Number.isSafeInteger(value.seq) &&
-    'line' in value &&
-    typeof value.line === 'string'
-  )
-}
-
 /** 'stale' means the attach was superseded; 'failed' means the file could not be read through. */
 export type SpoolReplayOutcome = 'done' | 'stale' | 'failed'
 
@@ -34,12 +24,10 @@ export async function replaySpoolFile(replay: SpoolReplay): Promise<SpoolReplayO
     if (line.length === 0 || !replay.current()) {
       return
     }
-    try {
-      const record: unknown = JSON.parse(line)
-      if (isSpoolRecord(record) && record.seq > replay.after) {
-        replay.deliver(record)
-      }
-    } catch {}
+    const record = parseSpoolRow(line)
+    if (record && record.seq > replay.after) {
+      replay.deliver(record)
+    }
   }
   // utf8 decoding keeps a character split across chunks whole.
   const stream = createReadStream(replay.path, {
@@ -77,7 +65,7 @@ export async function replaySpoolFile(replay: SpoolReplay): Promise<SpoolReplayO
         return 'stale'
       }
     }
-    replayLine(partial + parts.join(''))
+    // A last row without its newline was torn by a failed write, so it is never sent.
     return replay.current() ? 'done' : 'stale'
   } catch {
     return replay.current() ? 'failed' : 'stale'
