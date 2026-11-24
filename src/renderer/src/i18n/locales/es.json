@@ -24782,7 +24782,6 @@
     "row": {
       "runsOn": "Se ejecuta en {{host}}",
       "disconnected": "Desconectado",
-      "hostDisconnected": "{{host}} desconectado",
       "idle": "Inactivo",
       "paused": "En pausa",
       "reading": "Leyendo tu mensaje",

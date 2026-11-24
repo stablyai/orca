@@ -24206,7 +24206,6 @@
     "row": {
       "runsOn": "Läuft auf {{host}}",
       "disconnected": "Getrennt",
-      "hostDisconnected": "{{host}}: getrennt",
       "idle": "Inaktiv",
       "paused": "Pausiert",
       "reading": "Liest deine Nachricht",

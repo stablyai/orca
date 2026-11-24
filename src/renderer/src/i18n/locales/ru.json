@@ -24981,7 +24981,6 @@
     "row": {
       "runsOn": "Работает на {{host}}",
       "disconnected": "Отключён",
-      "hostDisconnected": "{{host}} отключён",
       "idle": "Бездействует",
       "paused": "Приостановлен",
       "reading": "Читает ваше сообщение",

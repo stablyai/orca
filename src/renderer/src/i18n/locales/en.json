@@ -27360,7 +27360,6 @@
       "waitingForUntil": "Waiting for {{label}} · until {{time}}",
       "waitingCount": "Waiting on {{count}} events",
       "settings": "Bot settings…",
-      "hostDisconnected": "{{host}} disconnected",
       "disconnected": "Disconnected",
       "runsOn": "Runs on {{host}}"
     },

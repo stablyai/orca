@@ -25322,7 +25322,6 @@
     "row": {
       "runsOn": "Em execução em {{host}}",
       "disconnected": "Desconectado",
-      "hostDisconnected": "{{host}} desconectado",
       "idle": "Inativo",
       "paused": "Pausado",
       "reading": "Lendo sua mensagem",
