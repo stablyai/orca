@@ -25,6 +25,7 @@ import { googleSetupKeyRefusedLine } from '../../../google/google-setup-key-down
 import { noWindowAnswersGoogleCards } from '../../../google/google-card-reach'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { requireSetupPageInAgentWorkspace } from '../../../google/google-setup-page-binding'
+import { reconcileGoogleSetupFinishedOutside } from '../../../google/google-setup-finished-outside'
 import { postConnectorOffer } from './bots-connector-offer'
 import { isAgentRpcCaller } from '../callers/rpc-caller-identity'
 import {
@@ -105,9 +106,10 @@ export async function answerGoogleSetupCard(
 }
 
 /** The run with where it's stuck and the owner's buttons, from this host's Google and the bot's turn. */
-export async function withBlocker(context: RpcContext, botId: string, run: GoogleSetupRun | null) {
+export async function withBlocker(context: RpcContext, botId: string, read: GoogleSetupRun | null) {
   const google = await hostGoogle()
   const chat = chatOf(context.runtime, botId)
+  const run = reconcileGoogleSetupFinishedOutside(read, google, chat)
   const blocker = googleSetupBlocker({
     run,
     google,

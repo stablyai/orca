@@ -20366,8 +20366,8 @@
         "fromAgain": "Depuis {{app}}, à nouveau",
         "from": "Depuis {{app}}",
         "selected": "{{chosen}} sur {{total}} sélectionnés · les clés et identifiants de connexion ne sont jamais copiés",
-        "importOne": "Importer 1 élément",
-        "importMany": "Importer {{count}} éléments",
+        "importOne": "Importer (1)",
+        "importMany": "Importer ({{count}})",
         "askedOne": "Import de 1 élément demandé",
         "askedMany": "Import de {{count}} éléments demandé"
       },

@@ -10,6 +10,7 @@ import {
   googleSetupKeyBlocker
 } from '../../../../shared/google/google-setup-blocker'
 import { getGoogleConnect } from '../../../google/google-connect'
+import { markGoogleSetupFinishedOutside } from '../../../google/google-setup-finished-outside'
 import {
   GoogleSetupError,
   googleSetupRuns,
@@ -106,11 +107,8 @@ export async function refuseUnfinishedDone(run: GoogleSetupRun | null): Promise<
     connect.checkAccounts().catch(() => connect.accounts()),
     connect.checkClient()
   ])
-  const refusal = googleSetupDoneRefusal(run, {
-    client: await connect.client(),
-    accounts,
-    ...(clientKey ? { clientKey } : {})
-  })
+  const google = { client: await connect.client(), accounts, ...(clientKey ? { clientKey } : {}) }
+  const refusal = googleSetupDoneRefusal(markGoogleSetupFinishedOutside(run, google), google)
   if (refusal) {
     throw new InvalidArgumentError(`${refusal} Run done again once it's sorted.`)
   }
