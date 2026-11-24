@@ -14096,7 +14096,7 @@
             "noRebaseInProgress": "Kein Rebase in Arbeit",
             "rebaseStopMovedOn": "Der Rebase ist bereits weitergegangen. Prüfe das Panel und versuche es erneut.",
             "rebaseEmptyStep": "In diesem Schritt gibt es nichts zu committen. Brich den Rebase ab oder schließe ihn im Terminal ab.",
-            "rebaseStepUnreadableShort": "Schritt nicht geprüft",
+            "rebaseStepUnreadableShort": "Prüfung fehlgeschlagen",
             "rebaseCheckAgain": "Erneut prüfen",
             "rebaseRetryInspect": "Erneut versuchen",
             "rebaseRetryInspectLabel": "Rebase-Schritt erneut prüfen",

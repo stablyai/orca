@@ -13719,7 +13719,7 @@
             "noRebaseInProgress": "No hay ningún rebase en curso",
             "rebaseStopMovedOn": "El rebase ya avanzó. Revisa el panel e inténtalo de nuevo.",
             "rebaseEmptyStep": "No hay nada que confirmar en este paso. Aborta el rebase o termínalo en una terminal.",
-            "rebaseStepUnreadableShort": "No se pudo comprobar",
+            "rebaseStepUnreadableShort": "Comprobación fallida",
             "rebaseCheckAgain": "Comprobar de nuevo",
             "rebaseRetryInspect": "Reintentar",
             "rebaseRetryInspectLabel": "Volver a comprobar el paso del rebase",

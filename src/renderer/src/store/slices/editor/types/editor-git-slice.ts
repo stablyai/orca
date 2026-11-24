@@ -25,6 +25,7 @@ export type EditorGitSlice = {
 
   gitStatusByWorktree: Record<string, GitStatusEntry[]>
   gitStatusHeadByWorktree: Record<string, string>
+  gitRebaseIndexObservationByWorktree: Record<string, string | undefined>
   // Why: set when status hit the entry limit; SCM shows "too many changes" and pauses polling. `{ limit }` when huge, else absent.
   gitStatusHugeByWorktree: Record<string, { limit: number }>
   // Git's error from the latest failed status read; entries keep the last successful read.

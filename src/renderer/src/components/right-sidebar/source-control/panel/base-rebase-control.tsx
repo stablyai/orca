@@ -1,4 +1,4 @@
-import React, { useId } from 'react'
+import React, { useId, useLayoutEffect, useRef, useState } from 'react'
 import { GitPullRequestArrow, Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -193,6 +193,77 @@ function useRebaseStepButton(
   }
 }
 
+function RebaseStatusLabel({
+  pausedLabel,
+  detailLabel
+}: {
+  pausedLabel: string
+  detailLabel: string | null
+}): React.JSX.Element {
+  const slot = useRef<HTMLSpanElement>(null)
+  const full = useRef<HTMLSpanElement>(null)
+  const detail = useRef<HTMLSpanElement>(null)
+  const [visible, setVisible] = useState<'full' | 'detail' | 'none'>('none')
+  useLayoutEffect(() => {
+    const measure = () => {
+      const width = slot.current?.clientWidth ?? 0
+      setVisible(
+        width >= (full.current?.scrollWidth ?? Infinity)
+          ? 'full'
+          : detailLabel && width >= (detail.current?.scrollWidth ?? Infinity)
+            ? 'detail'
+            : 'none'
+      )
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    if (slot.current) {
+      observer.observe(slot.current)
+    }
+    return () => observer.disconnect()
+  }, [pausedLabel, detailLabel])
+  const fullLabel = detailLabel ? `${pausedLabel} · ${detailLabel}` : pausedLabel
+  return (
+    <>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            tabIndex={0}
+            role="img"
+            aria-label={fullLabel}
+            className="shrink-0 rounded-sm focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <TriangleAlert className="size-3.5 text-destructive" aria-hidden="true" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{fullLabel}</TooltipContent>
+      </Tooltip>
+      <span
+        ref={slot}
+        role="status"
+        aria-live="polite"
+        className="relative min-w-0 flex-1 whitespace-nowrap text-foreground"
+      >
+        <span
+          ref={full}
+          aria-hidden="true"
+          className="pointer-events-none invisible absolute whitespace-nowrap"
+        >
+          {fullLabel}
+        </span>
+        <span
+          ref={detail}
+          aria-hidden="true"
+          className="pointer-events-none invisible absolute whitespace-nowrap"
+        >
+          {detailLabel}
+        </span>
+        {visible === 'full' ? fullLabel : visible === 'detail' ? detailLabel : null}
+      </span>
+    </>
+  )
+}
+
 export function RebasePausedStrip({
   actions,
   unresolvedCount,
@@ -217,10 +288,7 @@ export function RebasePausedStrip({
           }
         )
       : continueState === 'unreadable'
-        ? t(
-            'auto.components.right.sidebar.SourceControl.rebaseStepUnreadableShort',
-            "Couldn't check step"
-          )
+        ? t('auto.components.right.sidebar.SourceControl.rebaseStepUnreadableShort', 'Check failed')
         : continueState === 'empty'
           ? t('auto.components.right.sidebar.SourceControl.rebaseEmptyStepShort', 'Empty step')
           : null
@@ -228,18 +296,7 @@ export function RebasePausedStrip({
   const step = useRebaseStepButton(actions, unresolvedCount, continueState, inspectFailureMessage)
   return (
     <div className="@container -mx-1 flex min-h-7 min-w-0 items-center gap-1.5 rounded-md bg-destructive/10 px-1 py-0.5">
-      <TriangleAlert className="size-3.5 shrink-0 text-destructive" aria-hidden="true" />
-      <span role="status" aria-live="polite" className="min-w-0 flex-1 truncate text-foreground">
-        {detailLabel ? (
-          <>
-            {/* Narrow panels keep only the detail, which is the actionable part. */}
-            <span className="@max-[17.25rem]:hidden">{pausedLabel} · </span>
-            {detailLabel}
-          </>
-        ) : (
-          pausedLabel
-        )}
-      </span>
+      <RebaseStatusLabel pausedLabel={pausedLabel} detailLabel={detailLabel} />
       <ReasonButton
         variant="destructive-chip"
         size="xs"

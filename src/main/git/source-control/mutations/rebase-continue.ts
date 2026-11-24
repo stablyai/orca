@@ -13,7 +13,9 @@ import {
   gitOptionsForWorktree
 } from '../../command-runner/git-runtime-options'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { trackGitOperationWriters } from '../../command-runner/git-writer-lifetime'
 import { runWithGitReadCacheInvalidation } from '../git-read-cache-invalidation'
+import { readRebaseIndexObservation } from './rebase-index-observation'
 import { resolveGitDir } from '../resolve-git-dir'
 import { AUTOSTASH_REAPPLY_CONFLICT, detectConflictOperation } from './git-conflict-operation'
 import { takeOrcaRebaseProvenance } from './orca-rebase-provenance'
@@ -33,12 +35,17 @@ export async function continueRebase(
   options: GitRuntimeOptions & ContinueRebaseRequest = {}
 ): Promise<ContinueRebaseResult> {
   const { expected, ...gitOptions } = options
-  return runWithGitWorktreeOperationLock(worktreePath, gitOptions.signal, () =>
-    action === 'inspect'
-      ? inspectRebaseStop(worktreePath, gitOptions)
-      : runWithGitReadCacheInvalidation(() =>
-          continueRebaseUnlocked(worktreePath, expected, gitOptions)
-        )
+  const lifetime = trackGitOperationWriters(gitOptions, action === 'continue')
+  return runWithGitWorktreeOperationLock(
+    worktreePath,
+    gitOptions.signal,
+    () =>
+      action === 'inspect'
+        ? inspectRebaseStop(worktreePath, gitOptions)
+        : runWithGitReadCacheInvalidation(() =>
+            continueRebaseUnlocked(worktreePath, expected, lifetime.options)
+          ),
+    lifetime.waitForWriters
   )
 }
 
@@ -49,10 +56,20 @@ async function inspectRebaseStop(
   if ((await detectConflictOperation(worktreePath, options)) !== 'rebase') {
     return { outcome: 'not_rebasing' }
   }
+  const before = await readRebaseStopToken(worktreePath, options)
+  const indexBefore = await readRebaseIndexObservation(worktreePath, options)
+  const hasStagedChanges = await readHasStagedChanges(worktreePath, options)
+  const indexAfter = await readRebaseIndexObservation(worktreePath, options)
+  const after = await readRebaseStopToken(worktreePath, options)
+  if (!indexBefore || indexBefore !== indexAfter || !sameStop(before, after)) {
+    return { outcome: 'failed', message: 'Rebase state changed while checking.' }
+  }
   return {
     outcome: 'inspected',
-    stop: await readRebaseStopToken(worktreePath, options),
-    branch: await readRebasingBranch(worktreePath, options)
+    stop: after,
+    branch: await readRebasingBranch(worktreePath, options),
+    indexObservation: indexAfter,
+    hasStagedChanges
   }
 }
 
@@ -83,7 +100,7 @@ async function continueRebaseUnlocked(
     const { stdout, stderr } = await gitExecFileAsync(['rebase', '--continue'], {
       ...gitOptionsForWorktree(worktreePath, options),
       // A cancelled Continue must not release the worktree lock while Git still writes rebase state.
-      terminationBarrier: true,
+      terminationBarrier: 'wait-for-posix-group',
       env
     })
     output = joinGitOutput(stdout, stderr)
@@ -121,10 +138,14 @@ async function continueRebaseUnlocked(
   if (
     !advanced &&
     EMPTY_PICK_OUTPUT.test(output) &&
-    !(await hasUnmergedPaths(worktreePath, options)) &&
-    (await gitDiffIsQuiet(worktreePath, ['--cached', 'HEAD'], options))
+    !(await hasUnmergedPaths(worktreePath, options))
   ) {
-    return { outcome: 'empty', ...stopped }
+    const indexBefore = await readRebaseIndexObservation(worktreePath, options)
+    const hasStagedChanges = await readHasStagedChanges(worktreePath, options)
+    const indexAfter = await readRebaseIndexObservation(worktreePath, options)
+    if (indexBefore && indexBefore === indexAfter && !hasStagedChanges) {
+      return { outcome: 'empty', ...stopped, indexObservation: indexAfter }
+    }
   }
   return { outcome: 'failed', ...stopped }
 }
@@ -254,18 +275,20 @@ async function hasUnmergedPaths(
   }
 }
 
-async function gitDiffIsQuiet(
+async function readHasStagedChanges(
   worktreePath: string,
-  args: string[],
   options: GitRuntimeOptions
 ): Promise<boolean> {
   try {
     await gitExecFileAsync(
-      ['diff', '--quiet', ...args, '--'],
+      ['diff', '--quiet', '--cached', 'HEAD', '--'],
       gitOptionsForWorktree(worktreePath, options)
     )
-    return true
-  } catch {
     return false
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 1) {
+      return true
+    }
+    throw error
   }
 }

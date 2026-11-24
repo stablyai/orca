@@ -44,6 +44,7 @@ export type OrcaRebaseMarker = {
 /** The stop the panel last read; Continue sends it back so Git only continues what was shown. */
 export type RebaseStopReading = {
   token: RebaseStopToken
+  indexObservation?: string
   branch: string | null
   // Git cannot continue this stop. empty: nothing to commit, so Abort or finish in a terminal; stopped: Git paused
   // for its own reason (edit, break, exec), so Abort or finish in a terminal.

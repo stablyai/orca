@@ -34,7 +34,7 @@ export async function continueRuntimeGitRebase(
         ...(expected ? { expected } : {})
       },
       // Each step can run hooks and rewrite many commits; a timeout leaves the outcome unknown.
-      { timeoutMs: 120_000 }
+      { timeoutMs: 120_000, ...(action === 'inspect' ? { background: true, wake: false } : {}) }
     )
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
@@ -66,7 +66,7 @@ export async function readRuntimeGitRebaseAutoStash(
       target,
       'git.rebaseAutoStash',
       { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
-      { timeoutMs: 15_000 }
+      { timeoutMs: 15_000, background: true, wake: false }
     )
     return result.autoStash
   } catch (error) {

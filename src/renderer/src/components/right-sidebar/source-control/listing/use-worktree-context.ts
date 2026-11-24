@@ -94,6 +94,9 @@ export function useSourceControlWorktreeContext() {
   const activeGitStatusHead = useSourceControlState((s) =>
     activeWorktreeId ? (s.gitStatusHeadByWorktree?.[activeWorktreeId] ?? null) : null
   )
+  const rebaseIndexObservation = useSourceControlState((s) =>
+    activeWorktreeId ? (s.gitRebaseIndexObservationByWorktree?.[activeWorktreeId] ?? null) : null
+  )
   const repositoryHuge = useSourceControlState((s) =>
     activeWorktreeId ? s.gitStatusHugeByWorktree?.[activeWorktreeId] : undefined
   )
@@ -228,6 +231,7 @@ export function useSourceControlWorktreeContext() {
     scope,
     activeConnectionId,
     activeGitStatusHead,
+    rebaseIndexObservation,
     activeGroupId,
     activePrCacheKey,
     activePrFromQueue,
