@@ -189,7 +189,8 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '        lifecycleState.waiting = true',
     '        lifecycleState.completionPostedGeneration = -1',
     '      }',
-    "      post('agent_start')",
+    // Only pi-subagents async starts are known detached work; an OMP lifecycle start may be a child of the cancelled turn.
+    "      post('agent_start', forcedStatus === 'started' ? { subagent_started: true } : {})",
     '      return',
     '    }',
     "    if (status !== 'completed' && status !== 'failed' && status !== 'aborted') return",

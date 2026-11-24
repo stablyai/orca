@@ -19,7 +19,12 @@ import {
 } from '../host-guest/viewport/browser-page-viewport'
 import { isBrowserPagePanePaintable } from '../host-guest/retention/browser-page-paintability'
 import { getShareableBrowserArtifactFile } from '../describe-page/browser-artifact-upload'
-import { getOpenableExternalUrl, toDisplayUrl } from '../describe-page/browser-page-url-display'
+import {
+  getOpenableExternalUrl,
+  getSshRoutedOpenableExternalUrl,
+  toDisplayUrl
+} from '../describe-page/browser-page-url-display'
+import { useSshRoutedPagePortForwards } from './profile-routing/use-ssh-workspace-browser-route'
 import type { BrowserPagePaneProps } from '../describe-page/browser-page-types'
 import { BrowserPageChromeHeader } from './browser-page-chrome-header'
 import { BrowserPageContextMenu } from './context-menu/browser-page-context-menu'
@@ -298,12 +303,20 @@ export function BrowserPagePane({
 
   // Why: synchronous webview URL access blocks render; navigation handlers update this cache before their store writes can re-render the pane.
   const liveBrowserUrl = getLiveBrowserUrl(browserTab.id) ?? browserTab.url
-  const externalUrl = getOpenableExternalUrl(liveBrowserUrl)
+  // An SSH-routed page's localhost is the SSH host's; the system browser reaches it only through a forward.
+  const sshRouted = Boolean(sessionPartition?.startsWith('persist:orca-browser-v1-'))
+  const sshPortForwards = useSshRoutedPagePortForwards(worktreeId, sshRouted)
+  const sshRoutedExternalUrl = sshRouted
+    ? (url: string) => getSshRoutedOpenableExternalUrl(url, sshPortForwards)
+    : undefined
+  const externalUrl = (sshRoutedExternalUrl ?? getOpenableExternalUrl)(liveBrowserUrl)
   const currentBrowserUrl = toDisplayUrl(liveBrowserUrl)
   // A file: page in this webview is always this machine's file, even in an SSH workspace.
   const shareableArtifactFile = getShareableBrowserArtifactFile(currentBrowserUrl)
   const failedNavigationUrl = browserTab.loadError?.validatedUrl ?? currentBrowserUrl
-  const failureExternalUrl = normalizeExternalBrowserUrl(failedNavigationUrl)
+  const failureExternalUrl = (sshRoutedExternalUrl ?? normalizeExternalBrowserUrl)(
+    failedNavigationUrl
+  )
   const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab
 
   useWebviewInputLock(webviewRef, inputLocked)
@@ -340,6 +353,7 @@ export function BrowserPagePane({
         canGoForward={browserTab.canGoForward}
         webviewRef={webviewRef}
         onReload={() => reload.reloadWebviewOrRecoverGuest(false)}
+        externalUrl={sshRoutedExternalUrl}
       />
       <BrowserPageChromeHeader
         chromeHeaderRef={chromeHeaderRef}
@@ -387,7 +401,7 @@ export function BrowserPagePane({
               retryGuestRecoveryRef={retryGuestRecoveryRef}
               navigateToUrl={nav.navigateToUrl}
               certificateFailure={certificateFailure}
-              sshRouted={Boolean(sessionPartition?.startsWith('persist:orca-browser-v1-'))}
+              sshRouted={sshRouted}
               autoRetry={{
                 active: isPaintable,
                 whileWindowHidden: isMobileDriven || isRemotelyViewed

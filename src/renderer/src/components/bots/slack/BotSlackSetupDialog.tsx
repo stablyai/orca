@@ -130,7 +130,7 @@ function BotSlackSetupFlow({
         installed
           ? t('bots.slack.setup.isIn', '{{name}} is in Slack', { name: bot.name })
           : reconnecting
-            ? slackReconnectTitle(t, reconnectOffer ? hostName : null)
+            ? slackReconnectTitle(t, reconnectOffer ? hostName : null, step.unsure === true)
             : title
       }
       intro={intro}
@@ -206,6 +206,7 @@ function BotSlackSetupFlow({
             hostName={hostName}
             offer={reconnectOffer}
             mine={step.mine === true}
+            unsure={step.unsure === true}
             ownEmail={ownEmail}
             error={step.error}
             onUse={(useTeamId) => void handOff(useTeamId)}

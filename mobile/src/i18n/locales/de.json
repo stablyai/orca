@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "Erneut anmelden",
-      "usageSignInMessage": "Für das ausgewählte Claude-Konto ist eine erneute Anmeldung erforderlich. Einstellungen > Konten für KI-Anbieter öffnen oder „Systemstandard“ auswählen."
+      "usageSignInMessage": "Für dieses Konto ist eine erneute Anmeldung erforderlich."
     }
   },
   "agentHistory": {
@@ -392,6 +392,13 @@
     "queuedMessages": {
       "deleteAll": "Alle löschen",
       "editMessage": "Nachricht bearbeiten",
+      "showLess": "Weniger anzeigen",
+      "moreCount_one": "{{count}} weitere",
+      "moreCount_other": "{{count}} weitere",
+      "deleteMessage": "Nachricht löschen",
+      "queuedCount_one": "{{count}} Nachricht in der Warteschlange",
+      "queuedCount_other": "{{count}} Nachrichten in der Warteschlange",
+      "foldNeedsAttention": "{{more}}, eine Nachricht erfordert Aufmerksamkeit",
       "pausedState": "Pausiert",
       "queuedState": "In der Warteschlange",
       "resume": "Fortsetzen",
@@ -2429,6 +2436,7 @@
       "images_one": "{{count}} Bild",
       "images_other": "{{count}} Bilder",
       "moreActions": "Weitere Aktionen",
+      "you": "Du",
       "send": "Senden",
       "sendAgainHint": "Diese Nachricht erneut senden",
       "sendHint": "Diese Nachricht senden",
@@ -2538,6 +2546,7 @@
       "unsavedMarkdown": "Ungespeicherte Markdown-Änderungen",
       "urlPrompt": "URL eingeben oder für einen neuen Tab leer lassen.",
       "allowAutoClose": "Automatisches Schließen erlauben",
+      "agents": "Agenten",
       "renameTerminalFailed": "Das Terminal konnte nicht umbenannt werden. {{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -2751,6 +2760,8 @@
       "conversationCleared": "Diese Unterhaltung wurde geleert.",
       "goalsUnsupported": "Dieser Agent unterstützt keine Ziele.",
       "historyUnavailable": "Orca konnte den Verlauf dieses Chats gerade nicht öffnen.",
+      "diskFull": "Der Datenträger auf dem Computer, auf dem dieser Chat läuft, ist voll.",
+      "freeDiskSpace": "Gib auf diesem Datenträger Speicherplatz frei und versuche es dann erneut.",
       "savedInOtherFolder": "Diese Unterhaltung wurde in einem anderen Ordner gespeichert.",
       "historyUnreadable": "Orca konnte den gespeicherten Verlauf dieses Chats nicht lesen.",
       "historyUnusable": "Dieser Chat konnte nicht geladen werden.",
@@ -2850,16 +2861,35 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "Der Worktree wurde gelöscht.",
+      "projectRemoved": "Das Projekt wurde aus Orca entfernt.",
       "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
     },
     "nativeChatView": {
       "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden."
     },
+    "tabsSheet": {
+      "needsYou": "Benötigt dich",
+      "working": "In Arbeit",
+      "everythingElse": "Alles andere",
+      "closeTab": "{{title}} schließen"
+    },
+    "tabRows": {
+      "browser": "Browser",
+      "markdown": "Markdown-Notiz",
+      "file": "Datei",
+      "chat": "Chat",
+      "terminal": "Terminal"
+    },
     "browserProfile": {
       "default": "Standard"
     },
     "tabBar": {
+      "oneTab": "1 Tab",
       "tabCount": "{{count}} Tabs",
+      "anotherNeedsYou": "ein anderer Tab benötigt dich",
+      "actionsHint": "Zeigt Aktionen für diesen Tab",
+      "next": "Nächster Tab",
+      "previous": "Vorheriger Tab",
       "hint": "Zeigt alle Tabs"
     }
   },
@@ -3439,6 +3469,9 @@
       "planModelUnavailable": "Modell „{{model}}“ ist für {{label}} nicht verfügbar.",
       "planModelWithoutThinking": "Modell „{{model}}“ unterstützt keine Einstellung des Denkaufwands.",
       "planThinkingLevelInvalid": "Die Denkstufe „{{level}}“ ist für {{model}} nicht gültig.",
+      "commandTemplateEmptyDictationCleanup": "Die Befehlsvorlage für die Diktatnachbearbeitung ist leer.",
+      "dictationCleanupAgentUnsupported": "Unter Einstellungen -> Spracheingabe -> Nachbearbeitung einen unterstützten Agenten für die KI-Nachbearbeitung auswählen. Unterstützte Agenten: {{agents}} oder Benutzerdefinierter Befehl.",
+      "agentCannotGenerateDictationCleanup": "Agent „{{agent}}“ unterstützt keine Diktatnachbearbeitung. Unterstützte Agenten: {{agents}} oder Benutzerdefinierter Befehl.",
       "promptTooLargeForArgument": "Der Prompt für {{label}} ist zu groß, um ihn als einzelnes Befehlszeilenargument zu übergeben. Weniger Änderungen vormerken und erneut versuchen.",
       "promptTooLargeForWindows": "Der Prompt für {{label}} ist für die Windows-Befehlszeile zu groß. Weniger Änderungen vormerken und erneut versuchen.",
       "pullRequestDetailsUnparseable": "Die generierten Pull-Request-Details konnten nicht geparst werden.",
@@ -4119,7 +4152,6 @@
       "extraAgentArguments": "Zusätzliche Agentenargumente",
       "allAutomations": "Alle Automatisierungen",
       "schedule": "Zeitplan",
-      "nextRun": "Nächste Ausführung",
       "project": "Projekt",
       "unavailable": "Nicht verfügbar",
       "workspace": "Arbeitsbereich",
@@ -4168,7 +4200,6 @@
       "newWorkspacePerRun": "Neuer Arbeitsbereich pro Ausführung",
       "instructions": "Anweisungen",
       "runNow": "Jetzt ausführen",
-      "viewAllRuns": "Alle Ausführungen anzeigen",
       "savedAgent": "{{agent}} (gespeichert)",
       "chooseAProjectSetUpOnThisHost": "Wähle ein auf diesem Host eingerichtetes Projekt.",
       "newAutomation": "Neue Automatisierung",
@@ -4193,9 +4224,6 @@
       "letYourAgentsWorkOnASchedule": "Lass deine Agenten nach Zeitplan arbeiten",
       "createAnAutomationToRunATaskOnThisHost": "Erstelle eine Automatisierung, um eine Aufgabe auf diesem Host auszuführen.",
       "nextDate": "Nächste: {{date}}",
-      "lastResult": "Zuletzt: {{status}} · {{date}}",
-      "latestResultNotReported": "Letztes Ergebnis nicht gemeldet",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Verbinde dich erneut mit diesem Host, um zu aktualisieren oder Änderungen vorzunehmen. Gespeicherte Informationen bleiben unten verfügbar.",
       "recentRuns": "Letzte Ausführungen",
       "outcome": "Ergebnis",
@@ -4218,7 +4246,6 @@
       "fullOutputUnavailable": "Die vollständige Ausgabe konnte nicht geladen werden.",
       "retryFullOutput": "Erneut versuchen",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "Keine passenden Ausführungen im geladenen Verlauf. Lade weitere, um fortzufahren.",
-      "noMatchingRunsYet": "Noch keine passenden Ausführungen.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
       "scheduled": "Geplant",
       "loadMoreRuns": "Weitere Ausführungen laden",
@@ -4443,6 +4470,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "Nach links scrollen · {{amount}} ausgeblendet",
+      "scrollRight": "Nach rechts scrollen · {{amount}} ausgeblendet"
+    },
     "link": {
       "pairTitle": "Computer koppeln",
       "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",
@@ -4624,7 +4655,9 @@
       "skillLimit": "Nachricht nicht gesendet. Wähle höchstens {{limit}} Skill-Dateien aus und versuche es erneut.",
       "ask": {
         "notSentYet": "noch nicht gesendet",
-        "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann."
+        "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann.",
+        "replacedByNewer": "Durch eine neuere Frage ersetzt",
+        "skipped": "Übersprungen"
       }
     },
     "needs": {
@@ -5171,6 +5204,10 @@
       "today": "heute",
       "yesterday": "gestern",
       "lastTidied": "zuletzt aufgeräumt {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Fortsetzung um {{time}}",
+      "hitLimit": "Limit erreicht · Reset {{time}}"
     }
   },
   "sidebar": {

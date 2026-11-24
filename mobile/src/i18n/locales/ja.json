@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "もう一度サインイン",
-      "usageSignInMessage": "選択した Claude アカウントは再度サインインが必要です。設定 > AI プロバイダーアカウントを開くか、システムのデフォルトを選択してください。"
+      "usageSignInMessage": "このアカウントは再度サインインが必要です。"
     }
   },
   "agentHistory": {
@@ -392,6 +392,13 @@
     "queuedMessages": {
       "deleteAll": "すべて削除",
       "editMessage": "メッセージを編集",
+      "showLess": "表示を減らす",
+      "moreCount_one": "他 {{count}} 件",
+      "moreCount_other": "他 {{count}} 件",
+      "deleteMessage": "メッセージを削除",
+      "queuedCount_one": "送信待ちのメッセージ {{count}} 件",
+      "queuedCount_other": "送信待ちのメッセージ {{count}} 件",
+      "foldNeedsAttention": "{{more}}、確認が必要なメッセージがあります",
       "pausedState": "一時停止中",
       "queuedState": "キュー待ち",
       "resume": "再開",
@@ -2425,6 +2432,7 @@
       "images_one": "画像 {{count}} 枚",
       "images_other": "画像 {{count}} 枚",
       "moreActions": "その他の操作",
+      "you": "あなた",
       "send": "送信",
       "sendAgainHint": "このメッセージを再送信",
       "sendHint": "このメッセージを送信",
@@ -2534,6 +2542,7 @@
       "unsavedMarkdown": "Markdown の未保存の変更",
       "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。",
       "allowAutoClose": "自動終了を許可",
+      "agents": "Agent",
       "renameTerminalFailed": "ターミナルの名前を変更できませんでした。{{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -2747,6 +2756,8 @@
       "conversationCleared": "この会話はクリアされました。",
       "goalsUnsupported": "この Agent は目標に対応していません。",
       "historyUnavailable": "Orca は現在このチャットの履歴を開けませんでした。",
+      "diskFull": "このチャットを実行しているコンピューターのディスクがいっぱいです。",
+      "freeDiskSpace": "そのディスクの空き容量を増やしてから、もう一度お試しください。",
       "savedInOtherFolder": "この会話は別のフォルダーに保存されています。",
       "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
       "historyUnusable": "このチャットを読み込めません。",
@@ -2846,17 +2857,36 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "ワークツリーは削除されました。",
+      "projectRemoved": "プロジェクトは Orca から削除されました。",
       "folderWorkspaceRemoved": "フォルダーワークスペースは削除されました。"
     },
     "nativeChatView": {
       "linkedMessageMissing": "そのメッセージが見つかりませんでした。"
+    },
+    "tabsSheet": {
+      "needsYou": "確認が必要",
+      "working": "作業中",
+      "everythingElse": "その他",
+      "closeTab": "{{title}} を閉じる"
+    },
+    "tabRows": {
+      "browser": "ブラウザ",
+      "markdown": "Markdown ノート",
+      "file": "ファイル",
+      "chat": "チャット",
+      "terminal": "ターミナル"
     },
     "browserProfile": {
       "title": "プロファイル",
       "default": "デフォルト"
     },
     "tabBar": {
+      "oneTab": "1 個のタブ",
       "tabCount": "{{count}} 個のタブ",
+      "anotherNeedsYou": "別のタブで確認が必要です",
+      "actionsHint": "このタブの操作を表示します",
+      "next": "次のタブ",
+      "previous": "前のタブ",
       "hint": "すべてのタブを表示"
     }
   },
@@ -3436,6 +3466,9 @@
       "planModelUnavailable": "モデル「{{model}}」は {{label}} で利用できません。",
       "planModelWithoutThinking": "モデル「{{model}}」は思考の強度設定に対応していません。",
       "planThinkingLevelInvalid": "思考レベル「{{level}}」は {{model}} では無効です。",
+      "commandTemplateEmptyDictationCleanup": "音声入力のクリーンアップ用のコマンドテンプレートが空です。",
+      "dictationCleanupAgentUnsupported": "設定 -> 音声 -> クリーンアップ で、AI クリーンアップに対応した Agent を選択してください。対応している Agent: {{agents}}、またはカスタムコマンド。",
+      "agentCannotGenerateDictationCleanup": "Agent「{{agent}}」は音声入力のクリーンアップに対応していません。対応している Agent: {{agents}}、またはカスタムコマンド。",
       "promptTooLargeForArgument": "{{label}} のプロンプトが大きすぎるため、単一のコマンドライン引数として渡せません。ステージする変更を減らして、もう一度お試しください。",
       "promptTooLargeForWindows": "{{label}} のプロンプトが Windows のコマンドラインには大きすぎます。ステージする変更を減らして、もう一度お試しください。",
       "pullRequestDetailsUnparseable": "生成された PR の詳細を解析できませんでした。",
@@ -4116,7 +4149,6 @@
       "extraAgentArguments": "追加の Agent 引数",
       "allAutomations": "すべての自動化",
       "schedule": "スケジュール",
-      "nextRun": "次の実行",
       "project": "プロジェクト",
       "unavailable": "利用不可",
       "workspace": "ワークスペース",
@@ -4167,7 +4199,6 @@
       "newWorkspacePerRun": "実行ごとに新しいワークスペース",
       "instructions": "指示",
       "runNow": "今すぐ実行",
-      "viewAllRuns": "すべての実行を表示",
       "savedAgent": "{{agent}}（保存済み）",
       "chooseAProjectSetUpOnThisHost": "このホストに設定されたプロジェクトを選択してください。",
       "newAutomation": "新しい自動化",
@@ -4191,9 +4222,6 @@
       "letYourAgentsWorkOnASchedule": "Agentをスケジュールに従って実行",
       "createAnAutomationToRunATaskOnThisHost": "このホストでタスクを実行する自動化を作成します。",
       "nextDate": "次回：{{date}}",
-      "lastResult": "前回：{{status}} · {{date}}",
-      "latestResultNotReported": "最新の結果は未報告です",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "更新や変更を行うには、このホストに再接続してください。保存済みの情報は引き続き以下で確認できます。",
       "recentRuns": "最近の実行",
       "outcome": "結果",
@@ -4216,7 +4244,6 @@
       "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
       "retryFullOutput": "再試行",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "読み込んだ履歴に一致する実行はありません。さらに読み込んでください。",
-      "noMatchingRunsYet": "一致する実行はまだありません。",
       "runSummary": "{{title}}、{{status}}、{{date}}",
       "scheduled": "スケジュール実行",
       "loadMoreRuns": "実行をさらに読み込む",
@@ -4524,6 +4551,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "左にスクロール · 非表示 {{amount}} 件",
+      "scrollRight": "右にスクロール · 非表示 {{amount}} 件"
+    },
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",
@@ -4705,7 +4736,9 @@
       "skillLimit": "メッセージは送信されませんでした。選択するスキルファイルを {{limit}} 個以内にして、もう一度お試しください。",
       "ask": {
         "notSentYet": "まだ送信されていません",
-        "replaced": "Agent が新たな質問をしました。確認してから返信してください。"
+        "replaced": "Agent が新たな質問をしました。確認してから返信してください。",
+        "replacedByNewer": "新しい質問に置き換えられました",
+        "skipped": "スキップ済み"
       }
     },
     "needs": {
@@ -5252,6 +5285,10 @@
       "today": "今日",
       "yesterday": "昨日",
       "lastTidied": "最後の整理 {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "{{time}} に再開",
+      "hitLimit": "上限に到達 · {{time}} にリセット"
     }
   },
   "sidebar": {

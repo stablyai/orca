@@ -1,7 +1,6 @@
 import type {
   AgentJournalRenderItem,
-  AgentJournalSnapshot,
-  AgentJournalSubmission
+  AgentJournalSnapshot
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { journalDomainQueueRow } from './journal-domain-queue-rows'
@@ -9,6 +8,15 @@ import { journalDomainContextHead } from './journal-sql-continuation-context'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import { readOperationWindowItems } from './journal-operation-window-rows'
+import { marginAfter } from './journal-operation-window-end'
+import {
+  type Send,
+  operationSends,
+  readSend,
+  sendHeads,
+  windowSends,
+  withSends
+} from './journal-operation-window-sends'
 
 /** Where a reader's interest starts; the window runs from a turn ahead of the earliest to the head. */
 export type JournalOperationWindowAnchors = {
@@ -35,6 +43,10 @@ export type JournalOperationWindowAnchors = {
    *  before the reader decodes a row: for readers that weigh who spoke and what ran, never what a
    *  tool printed, which is nearly all of a long chat's bytes. */
   withoutToolOutput?: boolean
+  /** With `operationIds` alone, for a reader of the anchored operations' own turns: the window ends where the next root turn
+   *  opens, and only the anchored operations' sends and those placed inside the window are read, so
+   *  its cost never grows with the chat after them. Unanswered sends outside it do not come along. */
+  throughAnchoredTurns?: boolean
   /** Only the rows that say who opened and ran each turn: messages, turn and status rows, and any
    *  row of no known turn (it ends a turn's reach); never tool calls or diffs. */
   turnShape?: boolean
@@ -44,19 +56,6 @@ export type JournalOperationWindow = {
   snapshot: AgentJournalSnapshot
   /** The window starts at the conversation's first row, so it holds everything. */
   complete: boolean
-}
-
-type Send = {
-  messageId: string
-  itemId: string
-  ordinal: number
-  dispatchState: string
-  recovered: boolean
-  providerItemId: string | null
-  queuedMessageId: string | null
-  submittedSequence: number | null
-  /** Where its opener, the provider's row for it and the turn it was answered in sit. */
-  positions: number[]
 }
 
 /**
@@ -70,13 +69,37 @@ export function readJournalDomainOperationWindow(
   scope: JournalSqlScope,
   anchors: JournalOperationWindowAnchors
 ): JournalOperationWindow {
-  const sends = sendHeads(scope)
+  // A window through its anchored turns reads only the sends it can hold, each found by index, so
+  // opening one old turn costs the same however many sends the chat has made since.
+  const bounded = anchors.throughAnchoredTurns === true
+  if (
+    bounded &&
+    (anchors.itemIds?.length ||
+      anchors.turnIds?.length ||
+      anchors.latestEndedTurn ||
+      anchors.latestTurns !== undefined ||
+      anchors.afterSequence !== undefined ||
+      anchors.observedSince !== undefined)
+  ) {
+    throw new Error('a window through its anchored turns is anchored by operation ids alone')
+  }
+  let sends = bounded ? operationSends(scope, anchors) : sendHeads(scope)
   const operations = resolveOperations(scope, sends, anchors)
+  // Where each anchored send's own turn may reach: past the first turn after it when it names its
+  // turn (a turn row naming it, or its answeredInTurn), past the second when it doesn't (an older
+  // import, placed by position, whose own turn may be that first one).
+  const reaches: { last: number; placed: boolean }[] = []
   const anchored = [
     ...sends.flatMap((send) => {
       if (operations.has(send.messageId)) {
         const turns = openedTurnPositions(scope, send)
         const at = [...send.positions, ...turns]
+        if (at.length > 0) {
+          reaches.push({
+            last: Math.max(...at),
+            placed: turns.length > 0 || send.answeredSequence !== null
+          })
+        }
         // Nothing of it is saved where a reading can place it: only the whole conversation answers.
         return at.length > 0 ? at : send.submittedSequence !== null ? [send.submittedSequence] : [0]
       }
@@ -87,11 +110,15 @@ export function readJournalDomainOperationWindow(
   const earliest = anchored.length > 0 ? Math.min(...anchored) : null
   let start =
     earliest === null ? null : anchors.withoutTurnAhead ? earliest : marginBefore(scope, earliest)
+  const end = earliest !== null && bounded ? windowEnd(scope, reaches) : null
+  if (bounded && start !== null) {
+    sends = withSends(scope, sends, windowSends(scope, start, end ?? Number.MAX_SAFE_INTEGER))
+  }
   let kept: Send[] = []
   // A held send's own rows, and the head it was sent at, are held too: a turn may claim a send by
   // that position. No margin here, so the window never walks back a turn per held send.
   for (;;) {
-    kept = keptSends(sends, operations, start, anchors.anchorsOnly === true)
+    kept = keptSends(sends, operations, start, end, anchors.anchorsOnly === true)
     const reach = kept.flatMap((send) => [
       ...send.positions,
       ...(send.submittedSequence !== null ? [send.submittedSequence] : [])
@@ -100,9 +127,13 @@ export function readJournalDomainOperationWindow(
     if (next === null || (start !== null && next >= start)) {
       break
     }
+    if (bounded && start !== null) {
+      // The sends placed in the stretch the window just took on.
+      sends = withSends(scope, sends, windowSends(scope, next, start))
+    }
     start = next
   }
-  const items = start === null ? [] : readOperationWindowItems(scope, start, anchors)
+  const items = start === null ? [] : readOperationWindowItems(scope, start, anchors, end)
   const first = scope.db
     .prepare(`SELECT MIN(sequence) AS sequence FROM journal_items INDEXED BY journal_items_visible_position
     WHERE session_id=? AND epoch=? AND hidden=0`)
@@ -114,50 +145,10 @@ export function readJournalDomainOperationWindow(
       items,
       submissions: kept.map((send) => readSend(scope, send.messageId))
     },
-    complete: first === null || first === undefined || (start !== null && start <= Number(first))
+    complete:
+      end === null &&
+      (first === null || first === undefined || (start !== null && start <= Number(first)))
   }
-}
-
-/** Every current send's selectors and where its rows sit; payloads are decoded only for those kept. */
-function sendHeads(scope: JournalSqlScope): Send[] {
-  const at = (column: string) => `(SELECT sequence FROM journal_items item
-    WHERE item.session_id=send.session_id AND item.epoch=send.epoch AND item.item_id=${column}
-    AND item.hidden=0)`
-  return scope.db
-    .prepare(`SELECT message_id,item_id,ordinal,dispatch_state,recovered,provider_item_id,submitted_sequence,
-    (CASE WHEN json_valid(payload_json) THEN json_extract(payload_json,'$.queuedMessageId') END) AS queued_message_id,
-    ${at('send.item_id')} AS opener_sequence,${at('send.provider_item_id')} AS provider_sequence,
-    ${at("(CASE WHEN json_valid(send.payload_json) THEN json_extract(send.payload_json,'$.answeredInTurn.turnItemId') END)")} AS answered_sequence
-    FROM journal_submission_attempts send WHERE session_id=? AND epoch=? AND current=1 ORDER BY ordinal`)
-    .all(...scope.prefix)
-    .map((row) => {
-      const read = scope.examined(row)
-      return {
-        messageId: String(read.message_id),
-        itemId: String(read.item_id),
-        ordinal: Number(read.ordinal),
-        dispatchState: String(read.dispatch_state),
-        recovered: Number(read.recovered) === 1,
-        providerItemId: read.provider_item_id === null ? null : String(read.provider_item_id),
-        queuedMessageId: read.queued_message_id === null ? null : String(read.queued_message_id),
-        submittedSequence:
-          read.submitted_sequence === null ? null : Number(read.submitted_sequence),
-        positions: [read.opener_sequence, read.provider_sequence, read.answered_sequence].flatMap(
-          (value) => (value === null || value === undefined ? [] : [Number(value)])
-        )
-      }
-    })
-}
-
-function readSend(scope: JournalSqlScope, messageId: string): AgentJournalSubmission {
-  const row = scope.db
-    .prepare(`SELECT payload_json FROM journal_submission_attempts
-    WHERE session_id=? AND epoch=? AND message_id=? AND current=1`)
-    .get(...scope.prefix, messageId)
-  if (!row) {
-    throw new Error('journal send left between its selector and payload reads')
-  }
-  return scope.decode<AgentJournalSubmission>(scope.examined(row).payload_json)
 }
 
 /** Handed over and not answered: its turn is still to be attributed. */
@@ -171,9 +162,11 @@ function keptSends(
   sends: readonly Send[],
   operations: ReadonlySet<string>,
   start: number | null,
+  end: number | null,
   anchorsOnly: boolean
 ): Send[] {
-  const after = (position: number) => start !== null && position >= start
+  const after = (position: number) =>
+    start !== null && position >= start && (end === null || position < end)
   const kept = new Set(
     sends.filter(
       (send) =>
@@ -335,4 +328,21 @@ function marginBefore(scope: JournalSqlScope, sequence: number): number {
     AND sequence<?`)
     .get(...scope.prefix, Number(turn))?.sequence
   return user === null || user === undefined ? 0 : Number(user)
+}
+
+/** The furthest any anchored send's own turn may reach; null (the head) when one may reach it. */
+function windowEnd(
+  scope: JournalSqlScope,
+  reaches: readonly { last: number; placed: boolean }[]
+): number | null {
+  let end = 0
+  for (const { last, placed } of reaches) {
+    const after = marginAfter(scope, last)
+    const reach = after !== null && !placed ? marginAfter(scope, after) : after
+    if (reach === null) {
+      return null
+    }
+    end = Math.max(end, reach)
+  }
+  return reaches.length > 0 ? end : null
 }

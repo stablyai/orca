@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import type { HelpMenuController } from '@/components/sidebar/chrome/help-menu-controller'
-import { AppRailButton } from './AppRailButton'
+import { APP_RAIL_ICON_SIZE, APP_RAIL_ICON_STROKE_WIDTH, AppRailButton } from './AppRailButton'
 import { appRailSlotCapacity } from './app-rail-overflow'
 
 /** What doesn't fit on a very short rail: Help (as a submenu sharing the rail's one Help controller), then Settings. */
@@ -58,7 +58,13 @@ export function AppRailMoreMenu({
               label={current ? `${label}, ${current}` : label}
               active={current !== undefined}
               tabStop={tabStop}
-              icon={<Ellipsis size={18} aria-hidden />}
+              icon={
+                <Ellipsis
+                  size={APP_RAIL_ICON_SIZE}
+                  strokeWidth={APP_RAIL_ICON_STROKE_WIDTH}
+                  aria-hidden
+                />
+              }
             />
           </DropdownMenuTrigger>
         </TooltipTrigger>

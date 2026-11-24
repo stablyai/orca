@@ -21,6 +21,7 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
     onGuestIdleDiscardDue: () => () => {},
     reserveGuestDiscard: () => false,
     acknowledgeGuestRemoval: async () => false,
+    wakeClientPage: async () => false,
     registerGuest: () => Promise.resolve(false),
     isGuestRegistered: () => Promise.resolve(false),
     repairGuestRegistration: () => Promise.resolve(false),

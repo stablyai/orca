@@ -89,7 +89,8 @@ export function BrowserPageDownloadList({
                 >
                   {t('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}
                 </Button>
-              ) : download.status === 'completed' ? (
+              ) : download.status === 'completed' && download.savePath ? (
+                // A download saved on another host has no file here to open or show.
                 <>
                   <Button
                     size="xs"

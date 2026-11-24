@@ -16,6 +16,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { SkillUpdateRow, type SkillReplaceToggle, type SkillRowPhase } from './SkillUpdateRow'
+import type { SkillBackupLocation } from './skill-backup-location'
 
 // Why: what Update changes reads first, then what it leaves for the user.
 const ROW_ORDER: readonly BundledSkillPlanState[] = [
@@ -70,7 +71,8 @@ export function SkillUpdateRows({
   outcomes,
   replace,
   showLocations,
-  onToggleLocations
+  onToggleLocations,
+  backup
 }: {
   skills: readonly BundledSkillPlanSkillSummary[]
   unforcedPlan: BundledSkillPlan | null
@@ -80,6 +82,7 @@ export function SkillUpdateRows({
   replace: SkillReplaceToggle
   showLocations: boolean
   onToggleLocations: () => void
+  backup: SkillBackupLocation
 }): React.JSX.Element {
   const t = useTranslate()
   const unforcedStates = new Map(
@@ -125,6 +128,7 @@ export function SkillUpdateRows({
               outcome={outcomes.get(skill.name)}
               replace={replace}
               showLocations={showLocations && phase !== 'result'}
+              backup={backup}
             />
           ))}
       </TooltipProvider>

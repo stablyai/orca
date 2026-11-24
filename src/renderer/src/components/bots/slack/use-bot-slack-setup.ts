@@ -12,45 +12,15 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/ex
 import { botSlackErrorMessage } from './bot-slack-copy'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { slackSetupShownStep, useSlackApprovalOutcome } from './slack-setup-shown-step'
-import { hostBots, knownSlackTeam, otherSlackTeams } from './slack-setup-teams'
+import { otherSlackTeams } from '../../../../../shared/bots/bot-slack-setup-teams'
+import { hostBots, setupTeams, slackAppMadeIn } from './slack-setup-teams'
 import {
   slackInstallLink as installLink,
   useSlackLinkExpired,
   type SlackInstallLink
 } from './slack-install-link'
+import type { BotSlackSetupStep } from './slack-setup-step'
 import { openedKey, openedSlackPages, type OpenedSlackPage } from './slack-opened-pages'
-
-export type BotSlackSetupStep =
-  | { kind: 'checking' }
-  /** Another workspace for a bot already in Slack: one this computer's bots are in, or a new one. */
-  | { kind: 'pick'; teamIds: string[] }
-  /**
-   * `teamId`: the workspace whose token lapsed. `mine`: that token is this desktop's own Orca
-   * account's, from a hand-off; the new one is saved there and the hand-off runs again.
-   */
-  | { kind: 'token'; reconnect: boolean; error: string | null; teamId?: string; mine?: boolean }
-  /** `handOff`: this desktop's own Orca account creates the app. */
-  | { kind: 'setting-up'; handOff?: boolean }
-  /** A paired computer's bot: its app is made; Slack's page opens only on Approve in Slack. */
-  | { kind: 'ready'; teamId: string; link: SlackInstallLink }
-  /** `returnUrl`: where Slack's page sends the browser back, read at once on landing. */
-  | {
-      kind: 'waiting'
-      teamId: string
-      returnUrl: string | null
-      link: SlackInstallLink | null
-      copied: boolean
-    }
-  | { kind: 'expired'; teamId: string }
-  /** Slack says a Slack user other than the token's approved the link. */
-  | { kind: 'other-user'; teamId: string }
-  | { kind: 'uncertain'; teamId: string }
-  /** `teamId`: the workspace it is in, whose people the owner then picks. */
-  /** `setupState`: the install link this flow installed with, so its identity pick applies at once. */
-  | { kind: 'installed'; teamId: string; setupState?: string }
-  /** `code` is the desktop error code, so a signed-out failure can offer Sign in; `local`: this
-   *  computer's own account failed. `teamId`, `handOff`: the workspace and step a recovery resumes. */
-  | { kind: 'failed'; code: string; local?: true; teamId?: string; handOff?: boolean }
 
 /** One open of the dialog; compared by identity. `started`: its setup ran, which it does once. */
 type SetupMount = { readonly openedAt: number; started: boolean }
@@ -174,11 +144,14 @@ export function useBotSlackSetup(
         await install(teamId, installLink(result.value), mount, openNow)
         return
       }
-      setStep(
-        result.error === 'grant_expired'
-          ? { kind: 'token', reconnect: true, error: null, teamId }
-          : { kind: 'failed', code: result.error, teamId }
-      )
+      if (result.error !== 'grant_expired') {
+        setStep({ kind: 'failed', code: result.error, teamId })
+        return
+      }
+      // A token lapsed only where this bot's app was made with one; other bots' workspaces may
+      // have none saved under this account.
+      const unsure = slackAppMadeIn(bot, teamId) ? {} : { unsure: true as const }
+      setStep({ kind: 'token', reconnect: true, error: null, teamId, ...unsure })
     },
     [bot, install]
   )
@@ -268,7 +241,12 @@ export function useBotSlackSetup(
         case 'grant_expired':
           return setStep({ kind: 'token', reconnect: true, error: null, teamId: slack.teamId })
         case 'not_created': {
-          const knownTeam = resume ?? teamId ?? knownSlackTeam(hostBots(bot), bot.id)
+          const knownTeams = setupTeams(bot, resume ?? teamId)
+          // More than one workspace on this computer: the owner picks, never the latest by default.
+          if (knownTeams.length > 1) {
+            return setStep({ kind: 'pick', teamIds: knownTeams })
+          }
+          const knownTeam = knownTeams[0]
           return knownTeam
             ? await (viaHandOff && resume ? handOff : setUp)(knownTeam, mount)
             : setStep({ kind: 'token', reconnect: false, error: null })
@@ -296,7 +274,8 @@ export function useBotSlackSetup(
           reconnect,
           error: botSlackErrorMessage(grant.error, mine ? null : hostName),
           ...(step.teamId ? { teamId: step.teamId } : {}),
-          ...(mine ? { mine } : {})
+          ...(mine ? { mine } : {}),
+          ...(step.unsure ? { unsure: step.unsure } : {})
         })
         return
       }

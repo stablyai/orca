@@ -93,19 +93,34 @@ function createPanelWebview(panel: BrowserExtensionSidePanel, host: HTMLDivEleme
   }
 }
 
+/**
+ * Sets the room pages leave for the panel on the slot root's parent, the workspace's overlay slot:
+ * local page shells sit in the slot root, a This-device page's box beside it.
+ */
+export function setBrowserExtensionSidePanelWidth(
+  slotRoot: HTMLDivElement,
+  width: string | null
+): void {
+  const style = (slotRoot.parentElement ?? slotRoot).style
+  if (width === null) {
+    style.removeProperty(BROWSER_SIDE_PANEL_WIDTH_VARIABLE)
+  } else {
+    style.setProperty(BROWSER_SIDE_PANEL_WIDTH_VARIABLE, width)
+  }
+}
+
 /** Shows the host beside the pages (they leave `width` free on their right), or hides it. */
 export function layoutBrowserExtensionSidePanelHost(
   host: BrowserExtensionSidePanelHost,
   slotRoot: HTMLDivElement,
   layout: { width: string; top: number } | null
 ): void {
+  setBrowserExtensionSidePanelWidth(slotRoot, layout?.width ?? null)
   if (layout) {
-    slotRoot.style.setProperty(BROWSER_SIDE_PANEL_WIDTH_VARIABLE, layout.width)
     host.root.style.width = `var(${BROWSER_SIDE_PANEL_WIDTH_VARIABLE})`
     host.root.style.top = `${layout.top}px`
     host.root.style.display = 'flex'
   } else {
-    slotRoot.style.removeProperty(BROWSER_SIDE_PANEL_WIDTH_VARIABLE)
     host.root.style.display = 'none'
   }
 }

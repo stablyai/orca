@@ -110,7 +110,7 @@
 1 src/renderer/src/components/editor/csv/grid/CsvGrid.tsx
 1 src/renderer/src/components/editor/csv/preview/useCsvPagedPreview.ts
 1 src/renderer/src/components/editor/diff/large-files/useDiffViewerLargeDiffLifecycle.ts
-3 src/renderer/src/components/editor/diff/monaco-view/DiffViewer.tsx
+2 src/renderer/src/components/editor/diff/monaco-view/DiffViewer.tsx
 1 src/renderer/src/components/editor/diff/review/DiffNotesSendMenu.tsx
 1 src/renderer/src/components/editor/external-changes/ExternalFileChangeCompareDialog.tsx
 2 src/renderer/src/components/editor/file-drop/use-editor-group-file-drop-owner.ts
@@ -394,7 +394,6 @@
 1 src/renderer/src/components/runtime-access/RuntimeRepairDialog.tsx
 1 src/renderer/src/components/session-search/use-session-search-status.ts
 7 src/renderer/src/components/settings/accounts/AccountsPane.tsx
-1 src/renderer/src/components/settings/accounts/providers/AntigravityAccountsSection.tsx
 1 src/renderer/src/components/settings/accounts/providers/CursorAccountsSection.tsx
 2 src/renderer/src/components/settings/accounts/providers/GrokAccountsSection.tsx
 2 src/renderer/src/components/settings/accounts/providers/ManagedDataAccountsSection.tsx
@@ -444,7 +443,7 @@
 1 src/renderer/src/components/settings/runtime-environments/managed-servers/runtime-install-server-dialog.tsx
 1 src/renderer/src/components/settings/runtime-environments/managed-servers/use-managed-server-catalog.ts
 2 src/renderer/src/components/settings/runtime-environments/managed-servers/use-managed-server-lifecycle.ts
-4 src/renderer/src/components/settings/runtime-environments/pairing/RuntimePairingUrlGenerator.tsx
+3 src/renderer/src/components/settings/runtime-environments/pairing/RuntimePairingUrlGenerator.tsx
 1 src/renderer/src/components/settings/runtime-environments/ssh-access/RuntimeSshAccessControl.tsx
 1 src/renderer/src/components/settings/session-history/SessionHistoryServerRow.tsx
 2 src/renderer/src/components/settings/session-history/SessionHistorySettingsPane.tsx
@@ -520,7 +519,6 @@
 3 src/renderer/src/components/sidebar/workspace-board/viewport/use-workspace-kanban-column-resize.ts
 3 src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
 2 src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agents.tsx
-1 src/renderer/src/components/sidebar/workspace-card/identity/AutoRenameFailedDialog.tsx
 1 src/renderer/src/components/sidebar/workspace-card/identity/WorktreeTitleInlineRename.tsx
 1 src/renderer/src/components/sidebar/workspace-card/metadata/WorktreeMetaDialogDraft.tsx
 1 src/renderer/src/components/sidebar/workspace-card/review/WorkspaceAttachmentOrigins.tsx

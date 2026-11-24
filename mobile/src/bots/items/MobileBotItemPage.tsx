@@ -39,7 +39,9 @@ import type { PhoneBotItemStepper } from './use-phone-bot-item-walk'
 import { MobileBotItemPageHeader } from './MobileBotItemPageHeader'
 import { MobileBotItemSubtitle } from './MobileBotItemSubtitle'
 import { usePhoneBotItemPendingComments } from './use-phone-bot-item-pending-comments'
+import { botItemCommentDraftKey, returnBotItemCommentDraft } from './bot-item-comment-drafts'
 import { useBotItemQuestionSteps } from './use-phone-bot-item-question-steps'
+import { MobileNativeChatComposerMenuHost } from '../../session/native-chat/composer/menus/MobileNativeChatComposerMenuHost'
 
 const DESCRIPTION_LINES_HEIGHT = 3 * 20
 
@@ -97,7 +99,8 @@ export function MobileBotItemPage({
     uid,
     events: view.events,
     hostName,
-    showToast
+    showToast,
+    returnText: (text) => returnBotItemCommentDraft(botItemCommentDraftKey(hostId, uid), text)
   })
   // From the comment box or a quick reply: shown at once, then sent to the host.
   const jump = useBotItemActivityFollow({
@@ -158,162 +161,164 @@ export function MobileBotItemPage({
   return (
     <View style={styles.page}>
       {back}
-      <View style={styles.scroll}>
-        <ScrollView
-          ref={jump.ref}
-          style={styles.scroll}
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={jump.onContentSizeChange}
-          onLayout={jump.onLayout}
-          onScroll={jump.onScroll}
-          onScrollToTop={jump.tail.releaseFollow}
-          onScrollBeginDrag={jump.tail.beginUserScroll}
-          onScrollEndDrag={jump.tail.endUserDrag}
-          onMomentumScrollBegin={jump.tail.beginMomentum}
-          onMomentumScrollEnd={jump.tail.endMomentum}
-          scrollEventThrottle={32}
-        >
-          <View style={styles.head}>
-            <Text style={styles.title}>
-              <Text style={styles.number}>{formatBotItemNumber(item.number)} </Text>
-              {item.title}
-            </Text>
-            <MobileBotItemSubtitle item={item} chatTitle={chatTitle} />
-            {item.description ? <ClampedDescription text={item.description} /> : null}
-          </View>
-          {view.failed ? (
+      <MobileNativeChatComposerMenuHost style={styles.scroll}>
+        <View style={styles.scroll}>
+          <ScrollView
+            ref={jump.ref}
+            style={styles.scroll}
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={jump.onContentSizeChange}
+            onLayout={jump.onLayout}
+            onScroll={jump.onScroll}
+            onScrollToTop={jump.tail.releaseFollow}
+            onScrollBeginDrag={jump.tail.beginUserScroll}
+            onScrollEndDrag={jump.tail.endUserDrag}
+            onMomentumScrollBegin={jump.tail.beginMomentum}
+            onMomentumScrollEnd={jump.tail.endMomentum}
+            scrollEventThrottle={32}
+          >
+            <View style={styles.head}>
+              <Text style={styles.title}>
+                <Text style={styles.number}>{formatBotItemNumber(item.number)} </Text>
+                {item.title}
+              </Text>
+              <MobileBotItemSubtitle item={item} chatTitle={chatTitle} />
+              {item.description ? <ClampedDescription text={item.description} /> : null}
+            </View>
+            {view.failed ? (
+              <ListGroup>
+                <ListRow
+                  title={t('bots.items.readFailedShort', 'Couldn’t load items.')}
+                  subtitle={t('bots.items.lastRead', 'Showing the last items read.')}
+                  accessory={
+                    <MobileBotTextButton
+                      label={t('bots.items.retry', 'Retry')}
+                      onPress={view.retry}
+                    />
+                  }
+                />
+              </ListGroup>
+            ) : null}
+            {closed && item.closeNote ? (
+              <View style={styles.note}>
+                <Text style={styles.noteText}>
+                  {item.status === 'canceled'
+                    ? t('bots.items.view.canceledNote', 'Canceled:')
+                    : t('bots.items.view.doneNote', 'Done:')}{' '}
+                  <Text style={styles.noteBody}>{item.closeNote}</Text>
+                </Text>
+              </View>
+            ) : null}
             <ListGroup>
               <ListRow
-                title={t('bots.items.readFailedShort', 'Couldn’t load items.')}
-                subtitle={t('bots.items.lastRead', 'Showing the last items read.')}
+                title={t('bots.items.field.status', 'Status')}
                 accessory={
-                  <MobileBotTextButton
-                    label={t('bots.items.retry', 'Retry')}
-                    onPress={view.retry}
-                  />
-                }
-              />
-            </ListGroup>
-          ) : null}
-          {closed && item.closeNote ? (
-            <View style={styles.note}>
-              <Text style={styles.noteText}>
-                {item.status === 'canceled'
-                  ? t('bots.items.view.canceledNote', 'Canceled:')
-                  : t('bots.items.view.doneNote', 'Done:')}{' '}
-                <Text style={styles.noteBody}>{item.closeNote}</Text>
-              </Text>
-            </View>
-          ) : null}
-          <ListGroup>
-            <ListRow
-              title={t('bots.items.field.status', 'Status')}
-              accessory={
-                <View style={styles.value}>
-                  <MobileBotItemStatusIcon status={item.status} live={isBotItemLive(item)} />
-                  <Text style={styles.valueText}>{botItemStatusName(item.status, t)}</Text>
-                </View>
-              }
-              navigates
-              disabled={!online || view.failed}
-              onPress={() => setSheet({ kind: 'status', item })}
-            />
-            {item.snoozedUntil !== null && isBotItemSnoozed(item, now) ? (
-              <ListRow
-                title={t('bots.items.field.snoozed', 'Snoozed')}
-                accessory={
-                  <Text style={styles.valueText}>
-                    {t('bots.items.snooze.rowUntil', 'until {{when}}', {
-                      when: formatPhoneSnoozeTime(item.snoozedUntil, now)
-                    })}
-                  </Text>
+                  <View style={styles.value}>
+                    <MobileBotItemStatusIcon status={item.status} live={isBotItemLive(item)} />
+                    <Text style={styles.valueText}>{botItemStatusName(item.status, t)}</Text>
+                  </View>
                 }
                 navigates
                 disabled={!online || view.failed}
-                onPress={() => setSheet({ kind: 'snooze', items: [item] })}
+                onPress={() => setSheet({ kind: 'status', item })}
+              />
+              {item.snoozedUntil !== null && isBotItemSnoozed(item, now) ? (
+                <ListRow
+                  title={t('bots.items.field.snoozed', 'Snoozed')}
+                  accessory={
+                    <Text style={styles.valueText}>
+                      {t('bots.items.snooze.rowUntil', 'until {{when}}', {
+                        when: formatPhoneSnoozeTime(item.snoozedUntil, now)
+                      })}
+                    </Text>
+                  }
+                  navigates
+                  disabled={!online || view.failed}
+                  onPress={() => setSheet({ kind: 'snooze', items: [item] })}
+                />
+              ) : null}
+              <ListRow
+                title={t('bots.items.field.chat', 'Chat')}
+                accessory={
+                  <View style={styles.value}>
+                    <ChatIcon size={14} color={colors.textSecondary} />
+                    <Text style={styles.valueText} numberOfLines={1}>
+                      {chatTitle}
+                    </Text>
+                  </View>
+                }
+                navigates
+                onPress={() => onOpenChat(item)}
+              />
+            </ListGroup>
+            {item.doneMeans ? (
+              <View style={styles.doneMeans}>
+                <Text style={styles.doneMeansLabel}>
+                  {t('bots.items.field.doneMeans', 'Done means')}
+                </Text>
+                <Text style={styles.doneMeansText}>{item.doneMeans}</Text>
+              </View>
+            ) : null}
+            {item.links.length > 0 ? (
+              <>
+                <SectionHeader
+                  title={`${t('bots.items.view.links', 'Links')} ${item.links.length}`}
+                />
+                <MobileBotItemLinks
+                  bot={bot}
+                  links={item.links}
+                  onOpenWorker={onOpenWorker}
+                  onOpenFile={onOpenFile}
+                />
+              </>
+            ) : null}
+            <SectionHeader title={t('bots.items.view.activity', 'Activity')} />
+            {view.hasEarlier ? (
+              <MobileBotTextButton
+                label={t('bots.items.view.showEarlier', 'Show earlier')}
+                onPress={view.loadEarlier}
               />
             ) : null}
-            <ListRow
-              title={t('bots.items.field.chat', 'Chat')}
-              accessory={
-                <View style={styles.value}>
-                  <ChatIcon size={14} color={colors.textSecondary} />
-                  <Text style={styles.valueText} numberOfLines={1}>
-                    {chatTitle}
-                  </Text>
-                </View>
-              }
-              navigates
-              onPress={() => onOpenChat(item)}
+            <MobileBotItemActivity
+              item={item}
+              events={view.events}
+              attachments={{ client, onOpenFile }}
+              pending={pending}
+              onReveal={jump.center}
+              itemScope={itemKey}
+              quickReplies={quickReplies}
+              repliesDisabled={!online || view.failed}
             />
-          </ListGroup>
-          {item.doneMeans ? (
-            <View style={styles.doneMeans}>
-              <Text style={styles.doneMeansLabel}>
-                {t('bots.items.field.doneMeans', 'Done means')}
-              </Text>
-              <Text style={styles.doneMeansText}>{item.doneMeans}</Text>
-            </View>
-          ) : null}
-          {item.links.length > 0 ? (
-            <>
-              <SectionHeader
-                title={`${t('bots.items.view.links', 'Links')} ${item.links.length}`}
-              />
-              <MobileBotItemLinks
-                bot={bot}
-                links={item.links}
-                onOpenWorker={onOpenWorker}
-                onOpenFile={onOpenFile}
-              />
-            </>
-          ) : null}
-          <SectionHeader title={t('bots.items.view.activity', 'Activity')} />
-          {view.hasEarlier ? (
-            <MobileBotTextButton
-              label={t('bots.items.view.showEarlier', 'Show earlier')}
-              onPress={view.loadEarlier}
-            />
-          ) : null}
-          <MobileBotItemActivity
-            item={item}
-            events={view.events}
-            attachments={{ client, onOpenFile }}
-            pending={pending}
-            onReveal={jump.center}
-            itemScope={itemKey}
-            quickReplies={quickReplies}
-            repliesDisabled={!online || view.failed}
+          </ScrollView>
+          {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
+          <MobileEdgeFade edge="bottom" color={colors.sheetSurface} />
+          <MobileNativeChatFloatingControls
+            showJumpToTail={jump.tail.showJumpToTail}
+            onJumpToTail={jump.jumpToTail}
           />
-        </ScrollView>
-        {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
-        <MobileEdgeFade edge="bottom" color={colors.sheetSurface} />
-        <MobileNativeChatFloatingControls
-          showJumpToTail={jump.tail.showJumpToTail}
-          onJumpToTail={jump.jumpToTail}
-        />
-      </View>
-      <View onLayout={(event) => onCommentBoxHeight(event.nativeEvent.layout.height)}>
-        <MobileBotItemCommentBox
-          ref={comment}
-          client={client}
-          item={item}
-          online={online && !view.failed}
-          hostName={hostName}
-          question={
-            waitingLine && !pending.shown.some(({ failed }) => !failed)
-              ? { ...waitingLine, asker: item.owner.name ?? bot.name }
-              : null
-          }
-          attachTo={takesImages && !item.chat.gone ? item.chat.id : null}
-          hostId={hostId}
-          bot={bot}
-          onSend={fromBox}
-          showToast={showToast}
-        />
-      </View>
+        </View>
+        <View onLayout={(event) => onCommentBoxHeight(event.nativeEvent.layout.height)}>
+          <MobileBotItemCommentBox
+            ref={comment}
+            client={client}
+            item={item}
+            online={online && !view.failed}
+            hostName={hostName}
+            question={
+              waitingLine && !pending.shown.some(({ failed }) => !failed)
+                ? { ...waitingLine, asker: item.owner.name ?? bot.name }
+                : null
+            }
+            attachTo={takesImages && !item.chat.gone ? item.chat.id : null}
+            hostId={hostId}
+            bot={bot}
+            onSend={fromBox}
+            showToast={showToast}
+          />
+        </View>
+      </MobileNativeChatComposerMenuHost>
     </View>
   )
 }

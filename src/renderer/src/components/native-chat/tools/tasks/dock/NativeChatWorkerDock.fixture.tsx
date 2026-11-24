@@ -108,7 +108,6 @@ function dock(expanded: boolean, list: readonly WorkerDockRowView[]) {
         onStop={() => {}}
         workerRows={workerRows}
         workerIdentities={workerIdentities}
-        ownerActionsAvailable
       />
     </NativeChatWorkerDockFrame>
   )

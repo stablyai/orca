@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BotHostOutage } from '../use-bot-host-outage'
-import type { BotSlackSetupStep } from './use-bot-slack-setup'
+import type { BotSlackSetupStep } from './slack-setup-step'
 import {
   SlackSetupProblemStep,
   slackSetupProblem,

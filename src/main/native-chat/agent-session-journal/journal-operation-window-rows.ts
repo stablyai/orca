@@ -28,15 +28,18 @@ const CUTTABLE = `kind IN ('tool-call','diff')`
 export function readOperationWindowItems(
   scope: JournalSqlScope,
   start: number,
-  anchors: Pick<JournalOperationWindowAnchors, 'withoutToolOutput' | 'turnShape'>
+  anchors: Pick<JournalOperationWindowAnchors, 'withoutToolOutput' | 'turnShape'>,
+  /** Rows before this sequence only; null runs to the head. */
+  end: number | null = null
 ): AgentJournalRenderItem[] {
   const projected = anchors.withoutToolOutput ? WITHOUT_TOOL_OUTPUT : 'payload_json'
   const rows = `FROM journal_items INDEXED BY journal_items_visible_position
-    WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? ${anchors.turnShape ? TURN_SHAPE : ''}`
+    WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? AND sequence<? ${anchors.turnShape ? TURN_SHAPE : ''}`
+  const range = [start, end ?? Number.MAX_SAFE_INTEGER] as const
   // Plain sizes cost no parse; only a window past the budget sizes rows as projected.
   const sizes = scope.db
     .prepare(`SELECT item_id, octet_length(payload_json) AS bytes, ${CUTTABLE} AS cuttable ${rows}`)
-    .all(...scope.prefix, start)
+    .all(...scope.prefix, ...range)
     .map((row) => ({
       itemId: String(row.item_id),
       bytes: Number(row.bytes),
@@ -70,7 +73,7 @@ export function readOperationWindowItems(
         scope.db
           .prepare(`SELECT SUM(CASE WHEN octet_length(payload_json)<=${CUT_ROW_BYTES}
           OR NOT ${CUTTABLE} THEN octet_length(${projected}) END) AS bytes ${rows}`)
-          .get(...scope.prefix, start)?.bytes ?? 0
+          .get(...scope.prefix, ...range)?.bytes ?? 0
       ) + large.reduce((sum, row) => sum + row.bytes, 0)
   }
   // A cut row may keep a large input; the window total, not a per-row bound, admits it.
@@ -104,6 +107,6 @@ export function readOperationWindowItems(
     : projected
   return scope.db
     .prepare(`SELECT ${value} AS payload_json ${rows} ORDER BY sequence,sequence_index,ordinal`)
-    .all(...(cut.length ? [JSON.stringify(cut)] : []), ...scope.prefix, start)
+    .all(...(cut.length ? [JSON.stringify(cut)] : []), ...scope.prefix, ...range)
     .map((row) => scope.decode<AgentJournalRenderItem>(scope.examined(row).payload_json))
 }

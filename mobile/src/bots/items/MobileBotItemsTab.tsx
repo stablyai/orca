@@ -37,6 +37,8 @@ import { colors, feedback, radii, spacing, typography } from '../../theme/mobile
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileBotTextButton } from '../MobileBotTextButton'
+import type { PhoneBot } from '../host-bots-operations'
+import { MobileBotItemsAllClear } from './MobileBotItemsAllClear'
 import { MobileBotItemRow } from './MobileBotItemRow'
 import { MobileBotNeedsYouGroup } from './MobileBotNeedsYouGroup'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -45,7 +47,7 @@ import type { BotItemSheet } from './MobileBotItemSheets'
 import type { PhoneBotItems } from './use-phone-bot-items'
 
 export function MobileBotItemsTab({
-  botName,
+  bot,
   items,
   filter,
   filterLabel,
@@ -65,7 +67,7 @@ export function MobileBotItemsTab({
   client,
   showToast
 }: {
-  botName: string
+  bot: PhoneBot
   items: PhoneBotItems
   filter: BotItemFilter
   /** The filter's chip text; null while nothing is filtered. */
@@ -94,6 +96,7 @@ export function MobileBotItemsTab({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { read } = items
+  const botName = bot.name
   const failed = items.error !== null
   const all = useMemo(() => mergeBotItemsByUid(read?.items ?? [], items.items), [read, items.items])
   const shown = useMemo(() => filterBotItems(all, filter), [all, filter])
@@ -208,7 +211,14 @@ export function MobileBotItemsTab({
         onLongPress={() => (selecting ? toggle(item) : setSheet({ kind: 'row', item }))}
       />
     )
-    body = BOT_ITEM_GROUP_IDS.map((id) =>
+    // Paused and offline say so elsewhere, as on the desktop.
+    const allClear =
+      !filtered &&
+      asks.length === 0 &&
+      online &&
+      !bot.paused &&
+      groups.needs_you.length + groups.working.length === 0
+    const list = BOT_ITEM_GROUP_IDS.map((id) =>
       id === 'needs_you' ? (
         <MobileBotNeedsYouGroup
           key={id}
@@ -237,6 +247,12 @@ export function MobileBotItemsTab({
           }
         />
       )
+    )
+    body = (
+      <>
+        {allClear ? <MobileBotItemsAllClear /> : null}
+        {list}
+      </>
     )
   }
   return (

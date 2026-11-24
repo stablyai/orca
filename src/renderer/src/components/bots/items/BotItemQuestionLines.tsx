@@ -17,6 +17,7 @@ import {
   botItemAnswerWords,
   botItemUnsentAnswers
 } from '../../../../../shared/bots/bot-item-answer-lines'
+import type { BotItemAskEnd } from '../../../../../shared/bots/bot-item-question-answers'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { BotItemMarkdown } from './BotItemMarkdown'
 import {
@@ -40,6 +41,7 @@ export function BotItemQuestionLines({
   waiting,
   answers = NO_ANSWERS,
   byOrder,
+  ended = null,
   actions,
   className
 }: {
@@ -54,6 +56,8 @@ export function BotItemQuestionLines({
   answers?: readonly (BotItemEvent | null)[]
   /** Per line, answered only by a comment naming no line: that comment shows as itself. */
   byOrder?: readonly boolean[]
+  /** Why its open lines take no answer: a later ask replaced them, or the owner skipped them. */
+  ended?: BotItemAskEnd | null
   /** While it waits, what its quick replies do; absent where the item takes no comment. */
   actions?: BotItemQuickReplyActions
   /** Its spacing from the body above; by default a gap under a body. */
@@ -171,6 +175,13 @@ export function BotItemQuestionLines({
           )
         })}
       </div>
+      {ended && answered.some((words, index) => !words && !unsent?.[index]) ? (
+        <div className="mt-1.5 text-xs text-muted-foreground">
+          {ended === 'skipped'
+            ? t('bots.items.ask.skipped', 'Skipped')
+            : t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
+        </div>
+      ) : null}
     </div>
   )
 }

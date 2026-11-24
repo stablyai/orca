@@ -1,6 +1,8 @@
 // An agent's Needs you question: one normal comment with its body (`--comment`), its question lines
 // (`--ask`, once per decision) and each one's quick replies (`--option`, `--recommended`). The owner
 // answers with a quick reply or in their own words, as a plain comment.
+// Hosts keep the waiting ask that pairing works out from what this file reads, writes or limits: any change
+// to it bumps WAITING_ASK_RULES (src/main/bots/bot-item-waiting-ask-keep.ts).
 import * as z from 'zod'
 import { BOT_ITEM_LIMITS, type BotItem } from './bot-items'
 

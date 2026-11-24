@@ -43,8 +43,18 @@ export function SlackOneLineIntro({ text }: { text: string }): React.JSX.Element
   )
 }
 
-/** The dialog's title on this step: what lapsed, and where, when this desktop's sign-in is offered. */
-export function slackReconnectTitle(t: Translate, offeredOn: string | null): string {
+/**
+ * The dialog's title on this step: what lapsed, and where, when this desktop's sign-in is offered.
+ * `unsure`: no token may ever have been saved, so nothing is said to have expired.
+ */
+export function slackReconnectTitle(
+  t: Translate,
+  offeredOn: string | null,
+  unsure = false
+): string {
+  if (unsure) {
+    return t('bots.slack.reconnect.neededTitle', 'Slack needs a token for this workspace')
+  }
   return offeredOn
     ? t('bots.slack.reconnect.expiredOnTitle', 'Slack sign-in expired on {{host}}', {
         host: offeredOn
@@ -57,6 +67,7 @@ export function SlackReconnectStep({
   hostName,
   offer,
   mine,
+  unsure,
   ownEmail,
   error,
   onUse,
@@ -69,6 +80,8 @@ export function SlackReconnectStep({
   offer: SlackReconnectOffer | null
   /** The lapsed token is this desktop's own Orca account's, from a hand-off. */
   mine: boolean
+  /** Slack refused, yet no token may ever have been saved for this workspace. */
+  unsure?: boolean
   /** This desktop's own Orca account. */
   ownEmail: string | null
   error: string | null
@@ -86,13 +99,15 @@ export function SlackReconnectStep({
           'Each computer keeps its own Slack token. Slack stopped accepting the one {{email}} uses.',
           { email: ownEmail }
         )
-      : hostName
-        ? t(
-            'bots.slack.reconnect.whyHost',
-            'Each computer keeps its own Slack token. Slack stopped accepting the one {{host}} uses.',
-            { host: hostName }
-          )
-        : t('bots.slack.reconnect.why', 'Slack stopped accepting this workspace’s saved token.')
+      : unsure
+        ? t('bots.slack.reconnect.whyNeeded', 'Orca has no working Slack token for this workspace.')
+        : hostName
+          ? t(
+              'bots.slack.reconnect.whyHost',
+              'Each computer keeps its own Slack token. Slack stopped accepting the one {{host}} uses.',
+              { host: hostName }
+            )
+          : t('bots.slack.reconnect.why', 'Slack stopped accepting this workspace’s saved token.')
   const pasteRef = useRef<HTMLDivElement>(null)
   const offered = offer !== null && hostName !== null
   const device = useDeviceSignInLabel()
@@ -184,7 +199,9 @@ export function SlackReconnectStep({
             ? isMac
               ? t('bots.slack.reconnect.mineMac', 'This Mac’s token expired. Paste a new one.')
               : t('bots.slack.reconnect.mine', 'This computer’s token expired. Paste a new one.')
-            : t('bots.slack.reconnect.paste', 'Paste a new token to reconnect.')}
+            : unsure
+              ? t('bots.slack.reconnect.pasteNeeded', 'Paste a token to continue.')
+              : t('bots.slack.reconnect.paste', 'Paste a new token to reconnect.')}
         </LineWithWhy>
       )}
       <div>
@@ -211,7 +228,11 @@ export function SlackReconnectStep({
             compact
             // This desktop's own token is made with this computer's Slack login.
             hostId={mine ? LOCAL_EXECUTION_HOST_ID : bot.hostId}
-            submitLabel={t('bots.slack.reconnect.submit', 'Reconnect')}
+            submitLabel={
+              unsure
+                ? t('bots.slack.reconnect.continue', 'Continue')
+                : t('bots.slack.reconnect.submit', 'Reconnect')
+            }
             busy={false}
             error={error}
             onSubmit={onSubmit}

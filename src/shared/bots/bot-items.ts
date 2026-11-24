@@ -131,6 +131,8 @@ export type BotItemLinkView =
       settledAt: number | null
       /** The report the worker ended with: its result. */
       report: { subject: string; body: string | null } | null
+      /** Why it ended, as the chat's worker strip shows it. Absent from older hosts. */
+      reason?: string | null
       pr: BotItemPullRequest | null
     }
   | { kind: 'pr'; ref: string; pr: BotItemPullRequest | null }
