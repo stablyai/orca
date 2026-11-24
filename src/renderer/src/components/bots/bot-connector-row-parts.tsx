@@ -1,5 +1,5 @@
 // The pieces a connector row's header is made of, shared by the row in a list and its own page.
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import {
   CircleStop,
   Ellipsis,
@@ -90,6 +90,18 @@ export function BotConnectorMenu({
   popover?: BotConnectorMenuPopover
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  // Set while Choose accounts… hands focus to its popover, so only that close skips returning to ⋯.
+  const openingPopover = useRef(false)
+  const popoverOpen = popover?.open === true
+  const wasOpen = useRef(popoverOpen)
+  useEffect(() => {
+    // The popover is anchored, not triggered, so its close hands focus back to ⋯ here.
+    if (wasOpen.current && !popoverOpen) {
+      requestAnimationFrame(() => triggerRef.current?.focus())
+    }
+    wasOpen.current = popoverOpen
+  }, [popoverOpen])
   const { accounts, add, addAccount, link, update, stop, remove } = actions
   if (!accounts && !add && !addAccount && !link && !update && !stop && !remove) {
     return null
@@ -102,6 +114,7 @@ export function BotConnectorMenu({
     >
       <DropdownMenuTrigger asChild>
         <Button
+          ref={triggerRef}
           variant="ghost"
           size="icon-xs"
           aria-label={t('bots.connector.actions', '{{name}} actions', { name })}
@@ -116,11 +129,21 @@ export function BotConnectorMenu({
       {popover ? <PopoverAnchor asChild>{trigger}</PopoverAnchor> : trigger}
       <DropdownMenuContent
         align="end"
-        // The popover an item opens takes focus; the menu handing it back to ⋯ would close it.
-        onCloseAutoFocus={popover ? (event) => event.preventDefault() : undefined}
+        onCloseAutoFocus={(event) => {
+          // The popover the item opens takes focus; handing it back to ⋯ would close it.
+          if (openingPopover.current) {
+            event.preventDefault()
+            openingPopover.current = false
+          }
+        }}
       >
         {accounts ? (
-          <DropdownMenuItem onSelect={accounts.onClick}>
+          <DropdownMenuItem
+            onSelect={() => {
+              openingPopover.current = popover !== undefined
+              accounts.onClick()
+            }}
+          >
             <UserRoundCheck />
             {accounts.label}
           </DropdownMenuItem>

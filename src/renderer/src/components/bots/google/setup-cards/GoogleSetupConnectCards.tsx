@@ -48,6 +48,7 @@ export function GoogleSetupConnectCard({
   const [signedIn, setSignedIn] = useState<string | null>(null)
   const done = run.steps.connect?.status === 'done'
   const open = googleSetupConnectOpen(run)
+  const picking = newest && signedIn !== null && open
   const blocker = useGoogleSetupBlocker(bot)
   const stuck = blocker && googleSetupBlockerIsConnect(blocker) ? blocker : null
   const connect = async (): Promise<void> => {
@@ -62,33 +63,38 @@ export function GoogleSetupConnectCard({
   return (
     <div>
       <GoogleSetupCardFrame heading={HEADING()} trailing={googleSetupOwnerStep(3)}>
-        <div className="mt-0.5 text-sm font-medium text-foreground">
-          {run.account
-            ? t('bots.googleSetup.connect.titleAccount', 'Sign in to connect {{email}}', {
-                email: run.account
-              })
-            : t('bots.googleSetup.connect.title', 'Sign in to connect')}
-        </div>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {host
-            ? t(
-                'bots.googleSetup.connect.noteOnHost',
-                'Orca’s browser for {{host}} opens Google’s sign-in. Your Google sign-in stays on {{host}}.',
-                { host }
-              )
-            : t(
-                'bots.googleSetup.connect.note',
-                'Your browser opens Google’s sign-in. Your Google sign-in stays on this computer.'
-              )}
-        </p>
-        {open && run.kind !== 'work' ? (
-          <p className="mt-1 text-xs text-muted-foreground">
-            {t(
-              'bots.googleSetup.connect.warning',
-              'Google will show a warning because this app is yours and brand new. Choose Advanced, then Go to Orca, and tick every box on the next screen.'
-            )}
-          </p>
-        ) : null}
+        {/* Signed in: the accounts list takes the card's place of the sign-in copy. */}
+        {picking ? null : (
+          <>
+            <div className="mt-0.5 text-sm font-medium text-foreground">
+              {run.account
+                ? t('bots.googleSetup.connect.titleAccount', 'Sign in to connect {{email}}', {
+                    email: run.account
+                  })
+                : t('bots.googleSetup.connect.title', 'Sign in to connect')}
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {host
+                ? t(
+                    'bots.googleSetup.connect.noteOnHost',
+                    'Orca’s browser for {{host}} opens Google’s sign-in. Your Google sign-in stays on {{host}}.',
+                    { host }
+                  )
+                : t(
+                    'bots.googleSetup.connect.note',
+                    'Your browser opens Google’s sign-in. Your Google sign-in stays on this computer.'
+                  )}
+            </p>
+            {open && run.kind !== 'work' ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t(
+                  'bots.googleSetup.connect.warning',
+                  'Google will show a warning because this app is yours and brand new. Choose Advanced, then Go to Orca, and tick every box on the next screen.'
+                )}
+              </p>
+            ) : null}
+          </>
+        )}
         {/* A failed sign-in says so whichever buttons follow, the blocker's or Sign in. */}
         {signIn.state.kind === 'failed' ? (
           <p role="alert" className="mt-2 text-xs text-destructive">
@@ -110,7 +116,7 @@ export function GoogleSetupConnectCard({
               personal={run.kind === 'personal'}
             />
           </div>
-        ) : signedIn && open ? (
+        ) : picking && signedIn ? (
           <GoogleSetupAccountsStep bot={bot} added={signedIn} />
         ) : stuck ? (
           <GoogleSetupBlockerPanel bot={bot} run={run} blocker={stuck} signIn={signIn} />
@@ -155,7 +161,7 @@ function GoogleSetupAccountsStep({
     }
   }
   return (
-    <div className="mt-2">
+    <div className="mt-0.5">
       <p className="text-sm font-medium text-foreground">
         {t('bots.google.picker.caption', 'Accounts {{bot}} can use', { bot: bot.name })}
       </p>

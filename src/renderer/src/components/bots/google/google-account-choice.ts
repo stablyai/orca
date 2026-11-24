@@ -20,8 +20,17 @@ export function initialGoogleAccountChoice(
       ? emails
       : access.kind === 'some'
         ? emails.filter((email) => access.accounts.includes(email))
-        : emails.filter((email) => email === (defaultAccount ?? emails[0])?.toLowerCase())
+        : emails.filter((email) => email === googleDefaultOrFirst(emails, defaultAccount))
   return added ? withGoogleAccount(chosen, added) : chosen
+}
+
+/** The computer's default when it is still here, else the first account. */
+function googleDefaultOrFirst(
+  emails: readonly string[],
+  defaultAccount: string | null
+): string | undefined {
+  const fallback = defaultAccount?.toLowerCase()
+  return fallback && emails.includes(fallback) ? fallback : emails[0]
 }
 
 export function withGoogleAccount(chosen: readonly string[], email: string): string[] {

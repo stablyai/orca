@@ -89,7 +89,7 @@ export function GoogleAccountPicker({
   )
 }
 
-function GoogleAccountPickerRow({
+export function GoogleAccountPickerRow({
   account,
   on,
   onToggle,
@@ -109,20 +109,8 @@ function GoogleAccountPickerRow({
       .map((entry) => googleServiceLabel(entry.service))
   )
   return (
-    // A div, not a button: a signed-out row holds its own Reconnect button.
-    <div
-      role="checkbox"
-      aria-checked={on}
-      tabIndex={0}
-      onClick={onToggle}
-      onKeyDown={(event) => {
-        if (event.key === ' ' || event.key === 'Enter') {
-          event.preventDefault()
-          onToggle()
-        }
-      }}
-      className="flex cursor-default items-center gap-3 rounded-lg p-2 transition-colors outline-none hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50"
-    >
+    // The toggle is a button stretched over the row; Reconnect sits beside it, a control of its own.
+    <div className="group/row relative flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-accent/40">
       <span
         aria-hidden
         className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground"
@@ -130,7 +118,15 @@ function GoogleAccountPickerRow({
         {account.email.charAt(0).toUpperCase()}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">{account.email}</span>
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={on}
+          onClick={onToggle}
+          className="block max-w-full cursor-default truncate text-left text-sm font-medium outline-none after:absolute after:inset-0 after:rounded-[inherit] focus-visible:after:ring-[3px] focus-visible:after:ring-ring/50"
+        >
+          {account.email}
+        </button>
         {signedOut ? (
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <span className={STATUS_DOT_CLASSES.attention} aria-hidden />
@@ -146,10 +142,11 @@ function GoogleAccountPickerRow({
         <Button
           size="xs"
           variant="outline"
-          onClick={(event) => {
-            event.stopPropagation()
-            onReconnect()
-          }}
+          className="relative"
+          aria-label={t('bots.google.bot.reconnectAccount', 'Reconnect {{email}}', {
+            email: account.email
+          })}
+          onClick={onReconnect}
         >
           {t('bots.google.reconnect', 'Reconnect')}
         </Button>

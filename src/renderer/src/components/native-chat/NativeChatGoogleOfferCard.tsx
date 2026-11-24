@@ -11,7 +11,6 @@ import { BOT_CONNECTORS } from '../bots/bot-connectors'
 import { useConnectorSetup } from '../bots/ConnectorSetupDialogs'
 import { botErrorMessage } from '../bots/bot-presentation'
 import { refreshGoogle, useGoogleHost } from '../bots/google/google-connect-client'
-import { setBotGoogle } from '../bots/google/set-bot-google'
 import { tellGoogleConnected } from '../bots/google/google-connected-answer'
 import { googleSignInChoices } from '../bots/google/google-account-readiness'
 import { GoogleSignInWaiting } from '../bots/google/GoogleSignInWaiting'
@@ -21,11 +20,7 @@ import { startGoogleSetupInChat } from '../bots/google/setup-cards/google-setup-
 import { useGoogleNewApp } from '../bots/google/use-google-new-app'
 import { useGoogleSignIn } from '../bots/google/use-google-sign-in'
 import { useTurnOnBotGoogle } from '../bots/google/use-turn-on-bot-google'
-import { withGoogleAccount } from '../bots/google/google-account-choice'
-import {
-  botGoogleAccess,
-  botMayUseGoogleAccount
-} from '../../../../shared/google/google-bot-accounts'
+import { giveBotGoogleAccount } from '../bots/google/give-bot-google-account'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   NativeChatCardActions,
@@ -59,20 +54,9 @@ export function NativeChatGoogleOfferCard({
   const added = answering.sent?.[0] ?? null
   const shown = added ?? defaultAccount
 
-  // The account signed in here is the bot's too: Google turns on with it, or it joins the bot's list.
-  const giveGoogleAccount = async (email: string): Promise<boolean> => {
-    const access = botGoogleAccess(bot)
-    if (access.kind === 'off') {
-      return turnOnGoogle(bot, [email])
-    }
-    if (access.kind === 'some' && !botMayUseGoogleAccount(access, email)) {
-      await setBotGoogle(bot, true, { accounts: withGoogleAccount(access.accounts, email) })
-    }
-    return true
-  }
   const signInThenTurnOn = async (account?: string): Promise<void> => {
     const connected = await signIn.connect(choices, account)
-    if (!connected || !(await giveGoogleAccount(connected.email))) {
+    if (!connected || !(await giveBotGoogleAccount(bot, connected.email, turnOnGoogle))) {
       return
     }
     // The sign-in can take minutes; compare with the default as it is now, not at the click.
