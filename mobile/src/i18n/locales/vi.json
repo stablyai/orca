@@ -2208,7 +2208,7 @@
       },
       "fileTitle": "File này muốn",
       "permissionTitle": "{{site}} muốn",
-      "block": "Khối",
+      "block": "Chặn",
       "allow": "Cho phép",
       "signInTitle": "Đăng nhập",
       "signInDescription": "{{origin}} đang yêu cầu tên người dùng và mật khẩu.",
@@ -5450,7 +5450,7 @@
       "reverseSearch": "Tìm kiếm ngược",
       "startOfLine": "Đầu dòng",
       "endOfLine": "Cuối dòng",
-      "deleteWordBackward": "Xóa từ về phía trước",
+      "deleteWordBackward": "Xóa từ trước con trỏ",
       "clearLineBeforeCursor": "Xóa dòng trước con trỏ"
     },
     "webviewEngineErrorState": {

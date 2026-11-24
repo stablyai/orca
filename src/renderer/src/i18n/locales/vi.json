@@ -977,7 +977,7 @@
       },
       "sitePermissions": {
         "allow": "Cho phép",
-        "block": "Khối",
+        "block": "Chặn",
         "ask": "Hỏi lại",
         "profile": "Hồ sơ trình duyệt",
         "empty": "Chưa có site nào được cho phép hay chặn.",
@@ -16911,7 +16911,7 @@
           "androidHelp": {
             "guide": "Hướng dẫn cài đặt"
           },
-          "openAppAndScan": "Mở Orca Mobile, chạm <strong>Pair Desktop</strong>, và quét mã."
+          "openAppAndScan": "Mở Orca Mobile, chạm <strong>Ghép nối desktop</strong>, và quét mã."
         },
         "MobilePage": {
           "e17393c6a3": "Xem trước trên điện thoại",
@@ -20425,7 +20425,7 @@
           },
           "title": "{{site}} muốn",
           "allow": "Cho phép",
-          "block": "Khối",
+          "block": "Chặn",
           "localFiles": "File cục bộ",
           "fileTitle": "File này muốn"
         }
