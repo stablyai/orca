@@ -1,7 +1,10 @@
 import { expect, it, vi } from 'vitest'
 import { getAgentSessionOptionCatalog } from '../../../agent-session/options/agent-session-option-catalog'
 import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
-import { decodeNativeChatAppliedSessionOptions } from './native-chat-session-option-cache'
+import {
+  decodeNativeChatAppliedSessionOptions,
+  seedNativeChatAppliedSessionOptions
+} from './native-chat-session-option-cache'
 import {
   takeNativeChatStatusReport,
   type NativeChatStatusReportMemory
@@ -46,7 +49,10 @@ it('fills only missing chat options from the launch, including launches without 
     'high',
     'applied'
   ])
-  expect(empty.shown('fastMode')).toBe(true)
+  // A toggle is never filled on the phone; the desktop seed keeps the decoded boolean.
+  expect(empty.source('fastMode')).toBe('unknown')
+  seedNativeChatAppliedSessionOptions('applied-options-desktop', 'claude', applied)
+  expect(chip('applied-options-desktop').shown('fastMode')).toBe(true)
 
   const picked = chip('applied-options-pick')
   await picked.surface.setOption('effort', 'low')

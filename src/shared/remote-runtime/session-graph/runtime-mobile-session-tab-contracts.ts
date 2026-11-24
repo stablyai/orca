@@ -45,7 +45,7 @@ export type RuntimeMobileSessionTerminalTab = {
   viewMode?: 'terminal' | 'chat'
   launchDraft?: string
   launchDraftCreatedAt?: number
-  /** Options Orca applied to this agent: at launch, or by a desktop chip pick since; older hosts omit it. */
+  /** Options Orca launched this agent with; older hosts omit it. */
   appliedSessionOptions?: Record<string, SessionOptionValue>
   isActive: boolean
 }

@@ -96,35 +96,28 @@ export function decodeNativeChatAppliedSessionOptions(
 export function fillNativeChatSessionOptionGaps(
   record: NativeChatSessionOptionRecord,
   applied: NativeChatSessionOptionRecord
-): boolean {
-  let changed = false
+): void {
   for (const [modelId, values] of Object.entries(applied.valuesByModel)) {
-    const tracked = { ...record.valuesByModel[modelId] }
-    if (fillTrackedValueGaps(tracked, values)) {
-      record.valuesByModel[modelId] = tracked
-      changed = true
-    }
+    record.valuesByModel[modelId] = withTrackedValueGapsFilled(
+      record.valuesByModel[modelId],
+      values
+    )
   }
   if (applied.valuesWithoutModel) {
-    const tracked = { ...record.valuesWithoutModel }
-    if (fillTrackedValueGaps(tracked, applied.valuesWithoutModel)) {
-      record.valuesWithoutModel = tracked
-      changed = true
-    }
+    record.valuesWithoutModel = withTrackedValueGapsFilled(
+      record.valuesWithoutModel,
+      applied.valuesWithoutModel
+    )
   }
-  return changed
 }
 
-function fillTrackedValueGaps(
-  tracked: Record<string, TrackedNativeChatSessionOption>,
+function withTrackedValueGapsFilled(
+  tracked: Record<string, TrackedNativeChatSessionOption> | undefined,
   applied: Record<string, TrackedNativeChatSessionOption>
-): boolean {
-  let changed = false
+): Record<string, TrackedNativeChatSessionOption> {
+  const filled = { ...tracked }
   for (const [id, value] of Object.entries(applied)) {
-    if (tracked[id] === undefined) {
-      tracked[id] = { ...value }
-      changed = true
-    }
+    filled[id] ??= { ...value }
   }
-  return changed
+  return filled
 }

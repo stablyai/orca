@@ -12,6 +12,7 @@ import {
   applyNativeChatReportedSessionOptions,
   clearNativeChatSessionModel,
   createNativeChatSessionOptionRecord,
+  isFlipOnlyMidSession,
   setTrackedSessionOption,
   type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
@@ -188,7 +189,17 @@ export function createNativeChatPtySessionOptions(
       }
     },
     fillAppliedSessionOptions: (values) => {
-      const applied = nativeChatAppliedSessionOptionRecord(args.agent, values)
+      // A toggle flips from what the chat believes is on, so an unconfirmed launch value must not become its baseline.
+      const flipOnly = [
+        ...catalog.models.flatMap((model) => model.options),
+        ...(catalog.unknownModelOptions ?? [])
+      ]
+        .filter((option) => isFlipOnlyMidSession(option.apply.midSession))
+        .map((option) => option.id)
+      const fillable = Object.fromEntries(
+        Object.entries(values).filter(([id]) => !flipOnly.includes(id))
+      )
+      const applied = nativeChatAppliedSessionOptionRecord(args.agent, fillable)
       if (!applied) {
         return
       }

@@ -218,7 +218,7 @@ export function useMobileNativeChatSessionOptions(
     return created
   }, [agent, canSwitchOmpModel, identity, scopeKey, surfaces])
   const surface = entry?.surface ?? null
-  useMobileNativeChatAppliedSessionOptionSeed(surface, args.appliedSessionOptions)
+  useMobileNativeChatAppliedSessionOptionSeed(surface, identity, args.appliedSessionOptions)
 
   useEffect(() => {
     if (entry && discoveredModels && entry.models !== discoveredModels) {
