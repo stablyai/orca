@@ -116,10 +116,23 @@ test('restart only stops Codex; the pane resumes the same conversation on the ne
   const first = readLaunches()[0]!
   expect(first.codexHome).toBe(accounts[0]!.managedHomePath)
 
-  // Switch to B: the pane is now stale and offers the restart.
-  await orcaPage.evaluate(async () => {
-    await window.api.codexAccounts.select({ accountId: 'acct-b', runtime: 'host' })
+  // Switch to B the way a user does (Settings > Accounts); the pane is now stale and offers the restart.
+  await orcaPage.evaluate(() => {
+    window.__store!.getState().openSettingsTarget({ pane: 'accounts', repoId: null })
   })
+  const accountB = orcaPage.getByRole('button', { name: /acct-b@example\.com/ }).first()
+  await expect(accountB).toBeVisible({ timeout: 20_000 })
+  await accountB.click()
+  await expect
+    .poll(
+      () =>
+        orcaPage.evaluate(
+          () => window.__store!.getState().settings?.activeCodexManagedAccountId ?? null
+        ),
+      { timeout: 15_000 }
+    )
+    .toBe('acct-b')
+  await orcaPage.evaluate(() => window.__store!.getState().closeSettingsPage())
   const restart = orcaPage.getByRole('button', { name: 'Restart', exact: true })
   await expect(restart).toBeVisible({ timeout: 30_000 })
   await restart.click()
