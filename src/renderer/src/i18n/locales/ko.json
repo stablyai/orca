@@ -20412,7 +20412,6 @@
         "permissionAppliesNextMessage": "{{saved}}은(는) 다음 메시지부터 적용됩니다. 현재 {{active}} 사용 중",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "모델 및 추론 수준",
-        "botFor": "대상: {{detail}}",
         "agents": "에이전트",
         "recent": "최근",
         "bots": "봇",

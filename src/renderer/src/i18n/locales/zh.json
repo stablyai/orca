@@ -20142,7 +20142,6 @@
         "pasteNotSaved": "此粘贴内容未保存。请重新粘贴或将其移除",
         "pastedTextTooLarge": "此次粘贴会使消息超过单条消息 256 KB 的上限。请缩短后再粘贴",
         "imageUnavailable": "预览不可用",
-        "botFor": "用途：{{detail}}",
         "agents": "智能体",
         "recent": "最近",
         "bots": "Bots",

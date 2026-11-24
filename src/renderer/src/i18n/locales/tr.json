@@ -19808,7 +19808,6 @@
         "exitPlanMode": "Plan modundan çık",
         "moreControls": "Diğer sohbet kontrolleri",
         "permissionAppliesNextMessage": "{{saved}} sonraki mesajınızda geçerli olur; şu anda {{active}} kullanılıyor",
-        "botFor": "Amaç: {{detail}}",
         "bots": "Botlar"
       },
       "tool": {

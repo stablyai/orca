@@ -19810,7 +19810,6 @@
         "moreControls": "その他のチャット操作",
         "exitPlanMode": "プランモードを終了",
         "permissionAppliesNextMessage": "{{saved}} は次のメッセージから適用されます。現在は {{active}} を使用しています",
-        "botFor": "用途: {{detail}}",
         "bots": "ボット",
         "backToBots": "ボットに戻る",
         "loadingBotChats": "{{name}} のチャットを読み込み中…"

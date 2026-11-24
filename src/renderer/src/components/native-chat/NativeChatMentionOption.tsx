@@ -1,13 +1,11 @@
 import { translate } from '@/i18n/i18n'
-import { useTranslate } from '@/i18n/use-translate'
 import { FilenameFirstPath } from '@/components/file-actions/file-path-cursor-tooltip'
 import { FileTypeIcon, FolderIcon } from '@/components/icons/FileTypeIcon'
 import { isFolderPath } from '../../../../shared/quick-open/quick-open-folder-paths'
 import { cn } from '@/lib/class-names'
-import {
-  nativeChatMentionSnippet,
-  type NativeChatMentionHit,
-  type NativeChatRoomMemberMatch
+import type {
+  NativeChatMentionHit,
+  NativeChatRoomMemberMatch
 } from '../../../../shared/native-chat/input/native-chat-room-mentions'
 import {
   nativeChatMentionValue,
@@ -45,54 +43,8 @@ function Highlighted({
   return <>{parts}</>
 }
 
-// Stands in for the purpose inside the translated "For: {{detail}}" so a highlighted snippet can
-// take its place while the label keeps the translation's wording and order.
-const DETAIL_SLOT = '\uE000'
-
-function MemberDetail({
-  detail,
-  hits,
-  muted
-}: {
-  detail: string
-  hits: readonly NativeChatMentionHit[]
-  muted: boolean
-}): React.JSX.Element {
-  if (hits.length === 0) {
-    return <>{detail}</>
-  }
-  const snippet = nativeChatMentionSnippet(detail, hits)
-  return (
-    <>
-      {snippet.clipped ? '…' : null}
-      <Highlighted text={snippet.text} hits={snippet.hits} muted={muted} />
-    </>
-  )
-}
-
-/** A purpose snippet inside its "For: …" label, so every row reads the same way. */
-function ForDetail({
-  label,
-  children
-}: {
-  label: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  const slot = label.indexOf(DETAIL_SLOT)
-  if (slot === -1) {
-    return <>{children}</>
-  }
-  return (
-    <>
-      {label.slice(0, slot)}
-      {children}
-      {label.slice(slot + DETAIL_SLOT.length)}
-    </>
-  )
-}
-
-/** One `@` menu row: a room member (a bot) on one line with what it is for, or else a workspace
- *  file or folder. A paused member is muted, never faded, so its name stays readable. */
+/** One `@` menu row: a room member (a bot) by name, or else a workspace file or folder. A paused
+ *  member is muted, never faded, so its name stays readable. */
 export function NativeChatMentionOption({
   value,
   member,
@@ -102,18 +54,8 @@ export function NativeChatMentionOption({
   member: NativeChatRoomMention | undefined
   match?: NativeChatRoomMemberMatch
 }): React.JSX.Element {
-  const t = useTranslate()
   if (member) {
-    const purpose =
-      member.note ??
-      (member.detail
-        ? t('components.native-chat.composer.botFor', 'For: {{detail}}', {
-            detail: member.detail
-          })
-        : null)
-    // One line: name, its computer, then what it is for, cut short (its title has it all).
     const paused = Boolean(member.unavailable)
-    const detailHits = match?.detailHits ?? []
     return (
       <>
         {member.icon}
@@ -132,22 +74,12 @@ export function NativeChatMentionOption({
           {member.noteIcon ? (
             <span className="flex shrink-0 self-center">{member.noteIcon}</span>
           ) : null}
-          {purpose ? (
-            <span title={purpose} className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-              {member.detail && detailHits.length > 0 ? (
-                <ForDetail
-                  label={
-                    member.note ??
-                    t('components.native-chat.composer.botFor', 'For: {{detail}}', {
-                      detail: DETAIL_SLOT
-                    })
-                  }
-                >
-                  <MemberDetail detail={member.detail} hits={detailHits} muted={paused} />
-                </ForDetail>
-              ) : (
-                purpose
-              )}
+          {member.note ? (
+            <span
+              title={member.note}
+              className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+            >
+              {member.note}
             </span>
           ) : null}
         </span>
@@ -205,7 +137,7 @@ export function NativeChatUnavailableMentions({
   )
 }
 
-/** The full row text for a hover title, since one-line rows truncate the name and purpose. */
+/** A row's hover title: its full name, and what it is for, which the row itself leaves out. */
 export function nativeChatMentionTitle(
   value: string,
   mentions: readonly NativeChatRoomMention[] | undefined

@@ -20947,7 +20947,6 @@
         "exitPlanMode": "Sair do modo de planejamento",
         "moreControls": "Mais controles do chat",
         "permissionAppliesNextMessage": "{{saved}} vale para a próxima mensagem; usando {{active}} no momento",
-        "botFor": "Para: {{detail}}",
         "bots": "Bots"
       },
       "tool": {
