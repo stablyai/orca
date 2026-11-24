@@ -24606,6 +24606,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "Modelle aktualisieren",
     "catalogUnsupportedLaunch": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Deine aktuelle Auswahl gilt weiterhin.",
     "catalogEmpty": "Für {{agent}} sind keine Modelle verfügbar.",
     "setByArguments": "Durch Argumente festgelegt",

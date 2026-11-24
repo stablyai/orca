@@ -23943,6 +23943,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "Actualiser les modèles",
     "catalogUnsupportedLaunch": "Les modèles de {{agent}} sont indisponibles sur cet hôte. Vos choix actuels s'appliquent toujours.",
     "catalogEmpty": "{{agent}} n’a aucun modèle disponible.",
     "search": "Rechercher, p. ex. Opus 5.5…",

@@ -25395,6 +25395,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "Обновить модели",
     "catalogUnsupportedLaunch": "Модели {{agent}} недоступны на этом сервере. Текущий выбор по-прежнему применяется.",
     "catalogEmpty": "У {{agent}} нет доступных моделей.",
     "setByArguments": "Задано аргументами",

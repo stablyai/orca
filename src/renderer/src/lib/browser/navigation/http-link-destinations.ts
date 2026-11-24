@@ -1,4 +1,4 @@
-import { showOpenInGroupRefusedToast } from '@/components/terminal-pane/links/files/terminal-file-open-in-group-toast'
+import { showLinkOpenInGroupRefusedToast } from '@/components/terminal-pane/links/files/terminal-file-open-in-group-toast'
 import { beginLinkOpenRequest } from '../../links/link-open-request'
 import { translate } from '@/i18n/i18n'
 import {
@@ -181,7 +181,7 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
     deps.openInSourceGroup
   )
   if (deps.openInSourceGroup && !linkIntent) {
-    showOpenInGroupRefusedToast(url)
+    showLinkOpenInGroupRefusedToast()
     return
   }
   const linkContext = deps.sourceTabId ? { linkIntent, isCurrentRequest } : undefined
