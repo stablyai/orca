@@ -32,7 +32,9 @@ export function useVerifiedReceiptWebhook(
   const [verified, setVerified] = useState<AutomationReceiptSource | null>(null)
   // Why: a rebuilt transcript may hand over an equal saved body; only a different receipt rechecks.
   const latestSaved = useRef(saved)
-  latestSaved.current = saved
+  useEffect(() => {
+    latestSaved.current = saved
+  }, [saved])
   const automationId = saved.automation.id
   useEffect(() => {
     if (!eligible) {
@@ -49,21 +51,23 @@ export function useVerifiedReceiptWebhook(
         setVerified((value) => (value === source ? null : value))
       }
     }
-    const unsubscribers =
-      source.target.kind === 'environment'
-        ? [
-            useAppStore.subscribe((state, previous) => {
-              if (
-                state.runtimeStatusByEnvironmentId !== previous.runtimeStatusByEnvironmentId ||
-                state.runtimeEnvironments !== previous.runtimeEnvironments
-              ) {
-                revoke()
-              }
-            }),
-            onRuntimeEnvironmentsRetired(revoke),
-            onRuntimeEnvironmentRevisionsChanged(revoke)
-          ]
-        : []
+    // Why: only a remote host can change under a confirmed receipt; a local one is always current.
+    const watchesHost = source.target.kind === 'environment'
+    const revokeHost = (): void => {
+      if (watchesHost) {
+        revoke()
+      }
+    }
+    const unsubscribeStore = useAppStore.subscribe((state, previous) => {
+      if (
+        state.runtimeStatusByEnvironmentId !== previous.runtimeStatusByEnvironmentId ||
+        state.runtimeEnvironments !== previous.runtimeEnvironments
+      ) {
+        revokeHost()
+      }
+    })
+    const unsubscribeRetired = onRuntimeEnvironmentsRetired(revokeHost)
+    const unsubscribeRevisions = onRuntimeEnvironmentRevisionsChanged(revokeHost)
     readAutomationReceipt(source).then(
       (read) => {
         if (live && automationReceiptSourceCurrent(source)) {
@@ -79,7 +83,9 @@ export function useVerifiedReceiptWebhook(
     )
     return () => {
       live = false
-      unsubscribers.forEach((unsubscribe) => unsubscribe())
+      unsubscribeStore()
+      unsubscribeRetired()
+      unsubscribeRevisions()
     }
   }, [automationId, eligible, hookId, itemId, owner])
   return eligible &&

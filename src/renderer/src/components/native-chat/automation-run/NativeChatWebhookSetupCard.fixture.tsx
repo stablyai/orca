@@ -92,6 +92,10 @@ function stubHost(): void {
   Reflect.set(window.api, 'runtime', {
     ...(typeof runtime === 'object' ? runtime : {}),
     call: async ({ method, params }: { method: string; params: { itemId?: string } }) => {
+      // The copy refreshes the bot list; an empty one keeps the shot free of a load error.
+      if (method === 'bots.list') {
+        return { ok: true, result: { bots: [] } }
+      }
       if (method !== 'agentSession.automationReceipt') {
         return { ok: false, error: { code: 'runtime_error', message: 'Not in this fixture' } }
       }
