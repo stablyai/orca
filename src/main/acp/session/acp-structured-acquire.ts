@@ -108,6 +108,7 @@ export async function acquireAcpStructuredSession(input: {
       // Only a chat can show a URL request's card, so other connections never advertise it.
       clientCapabilities: withAcpUrlElicitation(spec.dialect.clientCapabilities),
       retryBusyPrompts: spec.agent === 'omp',
+      concurrentPrompts: spec.dialect.promptSteers === true,
       ...(spec.signIn ? { signIn: spec.signIn } : {}),
       onPermission: acpStructuredPermissionHandler(() => session, spec, prompts),
       onRequest: (method, params, context) => prompts.handle(method, params, context),

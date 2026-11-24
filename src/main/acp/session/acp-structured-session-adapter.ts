@@ -249,6 +249,11 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return session ? childState.isAcpReadySession(session) && session.turns.running : false
   }
 
+  steeringMode: NonNullable<SessionAdapter['steeringMode']> = (sessionId) => {
+    const session = this.children.sessions.get(sessionId)
+    return session ? (session.spec.dialect.promptSteers ? 'inject' : 'queue') : undefined
+  }
+
   confirmIdle: NonNullable<SessionAdapter['confirmIdle']> = (sessionId) => {
     const session = this.children.sessions.get(sessionId)
     // OMP cannot prove that a finished parent has no background work or pending results.

@@ -169,7 +169,8 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   authMethod: undefined,
   authMethodUnavailableMessage: undefined,
   signIn: undefined,
-  dialect: { ...ANTIGRAVITY_ACP_DIALECT, signInAccount: 'system' },
+  // agy acp yields an active prompt on a concurrent session/prompt without cancelling background work.
+  dialect: { ...ANTIGRAVITY_ACP_DIALECT, signInAccount: 'system', promptSteers: true },
   // `agy models` lists without opening a session.
   modelDiscovery: {
     kind: 'command',

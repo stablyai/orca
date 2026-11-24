@@ -1,3 +1,4 @@
+import type { AgentSessionCapabilities } from '../../../../shared/agent-session/capabilities/agent-session-capabilities'
 import type { StructuredMessageSteeringInputs } from '../../../../shared/agent-session/options/codex-message-compiler'
 import type {
   AgentSessionMcpOperation,
@@ -269,6 +270,8 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
   /** Derive unanswered retained work from the live child; false without one. */
   holdsDispatch?(sessionId: string): boolean
+  /** Live child steering mode when a provider's backends differ; absent falls back to the agent definition. */
+  steeringMode?(sessionId: string): AgentSessionCapabilities['steering'] | undefined
   /** Fresh answer before an idle stop: provider-declared work keeps the child; undefined has none to ask. */
   confirmIdle?(sessionId: string): Promise<AgentSessionIdleConfirmation> | undefined
   /** The root turn the live child is running, null when idle; absent when the agent cannot say. */

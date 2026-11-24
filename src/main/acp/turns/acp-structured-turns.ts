@@ -1,56 +1,71 @@
-import type { AcpStructuredTurnsDeps } from './acp-turn-dispatch-contract'
-// Steers wait for the active prompt to answer cancellation; agent-initiated turns accept sends directly.
+// Steers wait for cancellation or overlap on dialects that yield in place; agent-initiated turns accept sends directly.
 
-import {
-  agentSessionFailureFact,
-  type SubmissionRejectionFact
-} from '../../../shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { acpCompactPrompt } from './acp-compaction-turn'
+import { AcpTurnFlight } from './acp-structured-turn-flight'
 import {
-  AcpAgentError,
-  AcpAuthRequiredError,
-  AcpConnectionClosedError
-} from '../transport/acp-errors'
-import { acpPromptRejection } from './acp-prompt-failure'
-import type { ContentBlock } from '../generated/acp-protocol.generated'
-
-type Send = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: number }
+  ACP_PROVIDER_EXITED_FACT,
+  ACP_WITHDRAWN_STEER_FACT,
+  AcpTurnIdleWaiters,
+  interruptAcpUnpromptedTurn,
+  rejectAcpQueuedSends,
+  runAcpCompactTurn,
+  settleAcpEndedTurns,
+  type AcpTurnSend
+} from './acp-structured-turn-settlement'
+import type { AcpStructuredTurnsDeps } from './acp-turn-dispatch-contract'
 
 export class AcpStructuredTurns {
-  private active: Send | null = null
-  // One cancel per prompt; failed writes allow a later steer to retry.
-  private steerCancelled: Send | null = null
-  private readonly steers: Send[] = []
   private readonly unsettled = new Set<string>()
-  private readonly idleWaiters = new Set<() => void>()
+  private readonly idle = new AcpTurnIdleWaiters()
+  private readonly flight: AcpTurnFlight
   private ended = false
   private stopAt: number | null = null
-  // Steers still preparing their controls; they hold their place like queued steers.
   private preparingSteers = 0
-  // Counts Stops: finish() clears stopAt before a preparing steer can see it.
   private withdrawals = 0
 
-  constructor(private readonly deps: AcpStructuredTurnsDeps) {}
+  constructor(private readonly deps: AcpStructuredTurnsDeps) {
+    this.flight = new AcpTurnFlight({
+      deps,
+      unsettled: this.unsettled,
+      isEnded: () => this.ended,
+      isStopped: () => this.stopAt !== null,
+      isPreparingSteers: () => this.preparingSteers > 0,
+      markEnded: () => {
+        this.ended = true
+      },
+      clearStop: () => {
+        this.stopAt = null
+      },
+      accept: (clientMessageId) => this.accept(clientMessageId),
+      notifyIdle: () => this.idle.notify()
+    })
+  }
 
   capturePendingSend(clientMessageId: string): () => boolean {
-    const send = this.active?.clientMessageId === clientMessageId ? this.active : null
-    return () => send !== null && this.active === send && !this.ended
+    const entry =
+      this.flight.active?.send.clientMessageId === clientMessageId
+        ? this.flight.active
+        : this.flight.steering?.send.clientMessageId === clientMessageId
+          ? this.flight.steering
+          : null
+    return () =>
+      entry !== null &&
+      (this.flight.active === entry || this.flight.steering === entry) &&
+      !this.ended
   }
 
   get running(): boolean {
-    return this.active !== null
+    return this.flight.running
   }
 
-  /** Interactive requests wait for the person, including in turns the agent began itself, unless Stop or a steer cuts them short. */
+  /** Interactive requests wait for the person unless Stop or a cancel-steer cuts them short. */
   get acceptsRequests(): boolean {
     return (
       this.stopAt === null &&
-      (this.active === null || this.steerCancelled !== this.active) &&
+      (this.flight.active === null || this.flight.steerCancelled !== this.flight.active.send) &&
       !this.ended
     )
   }
@@ -60,7 +75,9 @@ export class AcpStructuredTurns {
   }
 
   get holdsSteers(): boolean {
-    return this.steers.length > 0 || this.preparingSteers > 0
+    return (
+      this.flight.steering !== null || this.flight.steers.length > 0 || this.preparingSteers > 0
+    )
   }
 
   get withdrawalEpoch(): number {
@@ -78,8 +95,8 @@ export class AcpStructuredTurns {
 
   /** A Stop covers the running prompt or the agent's own open turn; later work may ask again. */
   stop(at: number): boolean {
-    const agentTurn = this.active ? null : this.deps.lane.openTurnId
-    if ((this.active || agentTurn !== null) && this.stopAt === null) {
+    const agentTurn = this.running ? null : this.deps.lane.openTurnId
+    if ((this.running || agentTurn !== null) && this.stopAt === null) {
       this.stopAt = at
       if (agentTurn !== null) {
         void this.deps.lane.whenTurnLeaves(agentTurn).then(() => {
@@ -89,40 +106,30 @@ export class AcpStructuredTurns {
         })
       }
     }
-    return this.withdrawSteers()
+    this.withdrawals += 1
+    const withdrawn = this.flight.steers.splice(0)
+    rejectAcpQueuedSends(this.deps, this.unsettled, withdrawn, ACP_WITHDRAWN_STEER_FACT)
+    return withdrawn.length > 0
   }
 
   /** Earlier admitted steers retain their native queue and settlement while the host holds new input. */
   interruptForPermissionTransition(): void {
-    if (this.active) {
-      this.cancelForSteer()
-    } else if (this.deps.lane.openTurnId !== null && !this.deps.lane.agentTurn.endUnasked()) {
-      this.deps.withdrawRequests()
-      void this.deps.connection.cancel().catch(() => undefined)
-      this.deps.lane.agentTurn.end('cancelled')
+    if (!this.flight.active) {
+      interruptAcpUnpromptedTurn(this.deps)
+      return
     }
+    this.flight.cancelPromoted ||= this.flight.steering !== null
+    this.flight.cancelForSteer()
   }
 
   whenIdle(signal?: AbortSignal): Promise<void> {
-    if (!this.active || signal?.aborted) {
-      return Promise.resolve()
-    }
-    return new Promise((resolve) => {
-      const wake = (): void => {
-        this.idleWaiters.delete(wake)
-        signal?.removeEventListener('abort', wake)
-        resolve()
-      }
-      this.idleWaiters.add(wake)
-      signal?.addEventListener('abort', wake, { once: true })
-    })
+    return this.idle.wait(this.running, signal)
   }
 
-  /** A steer whose controls must run as a prompt first holds its place until released: Stop
-   *  reaches it, and answers ahead of it are cancelled as they start, as for any newer steer. */
+  /** A steer whose controls must run as a prompt first holds its place until released. */
   holdSteer(): () => void {
     this.preparingSteers += 1
-    this.cancelForSteer()
+    this.flight.cancelForSteer()
     return () => void this.preparingSteers--
   }
 
@@ -131,220 +138,55 @@ export class AcpStructuredTurns {
     return this.ended ? 'ended' : this.withdrawals === epoch ? null : 'stopped'
   }
 
-  dispatch(send: Send): void {
+  dispatch(send: AcpTurnSend): void {
     this.unsettled.add(send.clientMessageId)
-    if (this.active) {
-      this.steers.push(send)
-      this.cancelForSteer()
+    if (!this.flight.active) {
+      this.flight.start(send)
       return
     }
-    this.start(send)
+    if (this.flight.canPromptSteer()) {
+      this.flight.launchSteer(send)
+      return
+    }
+    this.flight.steers.push(send)
+    if (this.deps.dialect?.promptSteers !== true) {
+      this.flight.cancelForSteer()
+    }
   }
 
   /** The host owns compaction-message settlement; reuse its open command turn. */
   async compact(command: StructuredAgentSessionCommandRun): Promise<AgentSessionCommandAdmission> {
-    if (this.active || this.ended) {
-      throw new Error(`${this.deps.agentName} is still working`)
-    }
-    const { lane } = this.deps
-    const agentTurn = lane.openTurnId
-    // A backed-up journal admits the agent turn's end later; adopt the command after it.
-    if (lane.agentTurn.end() && agentTurn !== null) {
-      await lane.whenTurnLeaves(agentTurn)
-      if (this.active || this.ended) {
-        throw new Error(`${this.deps.agentName} is still working`)
-      }
-    }
-    const send: Send = {
-      clientMessageId: command.clientMessageId,
-      prompt: acpCompactPrompt(command.instructions, this.deps.compactCommand),
-      requestedAt: this.deps.now()
-    }
-    lane.beginCommand(command)
-    this.stopAt = null
-    try {
-      const opened = lane.translator.openPrompt(
-        send.clientMessageId,
-        send.requestedAt,
-        command.turnId
-      )
-      this.active = send
-      this.run(send, opened.promptId)
-    } catch (error) {
-      lane.forgetCommand(command.turnId)
-      throw error
-    }
+    await runAcpCompactTurn(
+      this.deps,
+      command,
+      () => this.running || this.ended,
+      (send, promptId) => this.flight.startCompact(send, promptId)
+    )
     return { state: 'accepted', providerIdentity: null }
   }
 
   accept(clientMessageId: string): void {
     if (this.unsettled.delete(clientMessageId)) {
-      this.deps.settle({
-        clientMessageId,
-        providerIdentity: { provider: 'orca', clientMessageId }
-      })
+      this.deps.settle({ clientMessageId, providerIdentity: { provider: 'orca', clientMessageId } })
     }
   }
 
-  private withdrawSteers(): boolean {
-    this.withdrawals += 1
-    const withdrawn = this.steers.splice(0)
-    for (const send of withdrawn) {
-      this.reject(
-        send.clientMessageId,
-        agentSessionFailureFact('cancelled', { neverReachedAgent: true })
-      )
-    }
-    return withdrawn.length > 0
-  }
-
-  /** Teardown rejects held steers; an unconfirmed active send remains unknown. */
+  /** Teardown rejects held steers; unconfirmed in-flight sends remain unknown. */
   end(reason: string, cause?: Error): void {
     this.ended = true
-    for (const send of this.steers.splice(0)) {
-      this.reject(send.clientMessageId, agentSessionFailureFact('providerExited'))
-    }
-    const active = this.active
-    if (active && cause instanceof AcpAuthRequiredError) {
-      this.agentFailed(active, cause)
-    } else if (active && this.unsettled.delete(active.clientMessageId)) {
-      this.deps.settle({ clientMessageId: active.clientMessageId, state: 'unknown', reason })
-    }
-    this.active = null
-    this.steerCancelled = null
-    this.notifyIdle()
-  }
-
-  private start(send: Send): void {
-    const { lane } = this.deps
-    // A new message is not covered by a Stop of the agent's own earlier turn.
-    this.stopAt = null
-    this.active = send
-    lane.agentTurn.end()
-    const opened = lane.translator.openPrompt(send.clientMessageId, send.requestedAt)
-    lane.apply(opened.events)
-    this.run(send, opened.promptId)
-  }
-
-  private run(send: Send, promptId: string): void {
-    const { lane } = this.deps
-    // Inject identity only for dialects that echo it on turn events.
-    const meta = lane.translator.injectsPromptIdentity
-      ? { promptId, requestId: promptId }
-      : undefined
-    const answered = this.deps.connection.prompt(send.prompt, meta)
-    if (this.steers.length > 0 || this.preparingSteers > 0) {
-      this.cancelForSteer()
-    }
-    answered.then(
-      (result) => {
-        if (this.active !== send) {
-          return
-        }
-        const cancelled = this.stopAt !== null || this.steerCancelled === send
-        const { clientMessageId } = send
-        lane.apply(
-          lane.translator.promptResult(clientMessageId, result, this.deps.now(), cancelled)
-        )
-        this.accept(send.clientMessageId)
-        this.finishAndRetireIfLost(send, lane.translator.failures.takeSessionLoss())
-      },
-      (error: unknown) => {
-        if (this.active !== send || error instanceof AcpConnectionClosedError) {
-          // Connection teardown owns unknown-send settlement.
-          return
-        }
-        if (!(error instanceof AcpAgentError)) {
-          // Unreadable replies fail the turn but allow the next send.
-          lane.apply(
-            lane.translator.promptFailed(
-              send.clientMessageId,
-              error instanceof Error ? error : new Error(String(error)),
-              this.deps.now()
-            )
-          )
-          this.accept(send.clientMessageId)
-          this.finish(send)
-          return
-        }
-        this.agentFailed(send, error)
-      }
+    this.flight.cancelPromoted = false
+    rejectAcpQueuedSends(
+      this.deps,
+      this.unsettled,
+      this.flight.steers.splice(0),
+      ACP_PROVIDER_EXITED_FACT
     )
-  }
-
-  private agentFailed(send: Send, error: AcpAgentError): void {
-    const { lane } = this.deps
-    const refusal = lane.translator.promptRefused(send.clientMessageId, error)
-    // Also retires the proof of a model the agent turned out not to have.
-    const noModel = this.deps.modelRefusal?.(error)
-    if (refusal !== null) {
-      const signedOut = lane.translator.authenticationRequired(error)
-      this.reject(send.clientMessageId, acpPromptRejection(refusal, signedOut, noModel))
-    } else {
-      lane.apply(lane.translator.promptFailed(send.clientMessageId, error, this.deps.now()))
-    }
-    this.finishAndRetireIfLost(send, lane.translator.sessionLost(error) ? error : undefined)
-  }
-
-  private finishAndRetireIfLost(send: Send, sessionLoss: Error | undefined): void {
-    // Held steers must not reach the dead session.
-    this.ended ||= sessionLoss !== undefined
-    this.finish(send)
-    if (sessionLoss) {
-      this.deps.sessionLost(sessionLoss)
-    }
-  }
-
-  private finish(send: Send): void {
-    if (this.active === send) {
-      this.active = null
-      this.stopAt = null
-    }
-    if (this.steerCancelled === send) {
-      this.steerCancelled = null
-    }
-    const next = this.ended ? undefined : this.steers.shift()
-    if (next) {
-      this.start(next)
-    } else if (!this.active) {
-      this.notifyIdle()
-    }
-  }
-
-  /** Steering waits indefinitely for cancellation; Stop can still end the child. */
-  private cancelForSteer(): void {
-    const send = this.active
-    if (!send) {
-      return
-    }
-    this.deps.withdrawRequests()
-    if (this.steerCancelled === send) {
-      return
-    }
-    this.steerCancelled = send
-    this.deps.connection.cancel().catch(() => {
-      // A failed write lets the next steer retry.
-      if (this.steerCancelled === send) {
-        this.steerCancelled = null
-      }
-    })
-  }
-
-  private notifyIdle(): void {
-    for (const wake of this.idleWaiters) {
-      wake()
-    }
-    this.idleWaiters.clear()
-  }
-
-  private reject(clientMessageId: string, fact: SubmissionRejectionFact): void {
-    if (!this.unsettled.delete(clientMessageId)) {
-      return
-    }
-    this.deps.settle({
-      clientMessageId,
-      state: 'rejected',
-      ...agentSessionFailureWords(fact, { surface: 'rejection', agentName: this.deps.agentName })
-    })
+    const inFlight = { active: this.flight.active, steering: this.flight.steering }
+    this.flight.active = null
+    this.flight.steering = null
+    this.flight.steerCancelled = null
+    this.stopAt = null
+    settleAcpEndedTurns(this.deps, this.unsettled, inFlight, reason, cause)
+    this.idle.notify()
   }
 }

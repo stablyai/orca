@@ -149,6 +149,9 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
   holdsDispatch = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsDispatch?.(sessionId) ?? false
 
+  steeringMode: NonNullable<Adapter['steeringMode']> = (sessionId) =>
+    this.liveOwnerOrNull(sessionId)?.steeringMode?.(sessionId)
+
   confirmIdle = (id: string) => this.liveOwnerOrNull(id)?.confirmIdle?.(id)
 
   liveTurnId = (sessionId: string): string | null | undefined =>

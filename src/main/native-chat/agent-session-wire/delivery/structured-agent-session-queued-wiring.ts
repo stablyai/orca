@@ -40,6 +40,9 @@ export function wireStructuredAgentSessionQueuedMessages(
       const stopping = await ctx.readStopping(sessionId)
       const child = sessions.get(sessionId)?.child
       const record = ctx.deps.store.getRecord(sessionId)
+      const steering =
+        ctx.deps.adapter.steeringMode?.(sessionId) ??
+        (record ? ctx.deps.agents.capabilities(record.provider)?.steering : undefined)
       return {
         authority: captureHostStructuredAgentSessionWork(
           { store: ctx.deps.store, sessions },
@@ -66,8 +69,7 @@ export function wireStructuredAgentSessionQueuedMessages(
                 }) ?? { kind: 'codex-unavailable' })
               : { kind: 'codex-unavailable' },
         // A provider that takes input mid-turn only by cancelling its prompt gets mail after the turn.
-        mailJoinsTurn:
-          !record || ctx.deps.agents.capabilities(record.provider)?.steering !== 'queue'
+        mailJoinsTurn: !record || steering !== 'queue'
       }
     },
     submissionReceipt: (sessionId) => context().deps.store.submissionReceipt(sessionId),

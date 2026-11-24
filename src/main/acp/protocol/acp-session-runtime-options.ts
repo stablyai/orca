@@ -6,6 +6,8 @@ import type { AcpPermissionHandler } from './acp-permission-requests'
 export type AcpSessionRuntimeOptions = {
   /** OMP's typed busy refusal confirms this prompt never ran. */
   retryBusyPrompts?: boolean
+  /** Allow overlapping `session/prompt` RPCs for agents that steer in place without `session/cancel`. */
+  concurrentPrompts?: boolean
   clientInfo?: InitializeRequest['clientInfo']
   clientCapabilities?: Pick<ClientCapabilities, 'elicitation' | '_meta'>
   peer?: AcpPeerOptions

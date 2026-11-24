@@ -261,6 +261,8 @@ const ORCA_HOME_SIGN_IN =
 /** agy running a Gemini API key chat on Orca's home: Sign in opens Settings. */
 export const ANTIGRAVITY_AGY_ORCA_HOME_DIALECT: AcpDialect = {
   ...ANTIGRAVITY_ACP_DIALECT,
+  // agy acp yields an active prompt on a concurrent session/prompt without cancelling background work.
+  promptSteers: true,
   signInAccount: 'managed',
   promptErrorDetail: (error) =>
     error.code === -32000 ? ORCA_HOME_SIGN_IN : ANTIGRAVITY_ACP_DIALECT.promptErrorDetail?.(error)
