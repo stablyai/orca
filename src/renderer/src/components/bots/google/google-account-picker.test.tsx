@@ -10,7 +10,10 @@ import { ConfirmationDialogProvider } from '@/components/dismiss/confirmation/co
 
 const setBotGoogle = vi.hoisted(() => vi.fn())
 const toastError = vi.hoisted(() => vi.fn())
-vi.mock('./set-bot-google', () => ({ setBotGoogle }))
+vi.mock('./set-bot-google', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  setBotGoogle
+}))
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
 beforeEach(() => vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true))
@@ -64,7 +67,8 @@ describe('giving an agent an account signed in for it', () => {
       false
     )
     expect(setBotGoogle).toHaveBeenCalledWith(bot, true, {
-      accounts: ['me@work.com', 'me@gmail.com']
+      accounts: ['me@work.com', 'me@gmail.com'],
+      basedOn: { on: true, accounts: ['me@work.com'] }
     })
     expect(toastError).toHaveBeenCalledTimes(1)
   })
@@ -75,7 +79,7 @@ describe('giving an agent an account signed in for it', () => {
     await expect(giveBotGoogleAccount(off, 'me@gmail.com', turnOn, async (b) => b)).resolves.toBe(
       true
     )
-    expect(turnOn).toHaveBeenCalledWith(off, ['me@gmail.com'])
+    expect(turnOn).toHaveBeenCalledWith(off, ['me@gmail.com'], { on: false })
     expect(setBotGoogle).not.toHaveBeenCalled()
   })
 })
@@ -94,7 +98,11 @@ describe('granting after a sign-in', () => {
     await expect(giveBotGoogleAccount(stale, 'b@x.com', vi.fn(), async () => fresh)).resolves.toBe(
       true
     )
-    expect(setBotGoogle).toHaveBeenCalledWith(fresh, true, { accounts: ['c@x.com', 'b@x.com'] })
+    // Based on the fresh read: a change made since then is refused, never undone.
+    expect(setBotGoogle).toHaveBeenCalledWith(fresh, true, {
+      accounts: ['c@x.com', 'b@x.com'],
+      basedOn: { on: true, accounts: ['c@x.com'] }
+    })
   })
 
   it('grants nothing when the host’s current list cannot be confirmed', async () => {
@@ -118,11 +126,13 @@ describe('turning Google on for an agent', () => {
     })
     const bot = { id: 'scout', name: 'Scout', hostId: 'local' as const, members: [] }
     await act(async () => {
-      await expect(result.current(bot, ['me@gmail.com'])).resolves.toBe(true)
+      await expect(result.current(bot, ['me@gmail.com'], { on: false })).resolves.toBe(true)
     })
+    // What the caller read goes along, so a change made while confirming is refused.
     expect(setBotGoogle).toHaveBeenCalledWith(bot, true, {
       accounts: ['me@gmail.com'],
-      confirmedAskers: []
+      confirmedAskers: [],
+      basedOn: { on: false }
     })
   })
 })
