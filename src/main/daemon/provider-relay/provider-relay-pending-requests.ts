@@ -41,6 +41,7 @@ const MAX_PENDING_REQUESTS = 256
 const MAX_PENDING_CHARS = 8 * 1024 * 1024
 /** Codex resolves a server request elsewhere (another client, a timeout) and says so with this. */
 const RESOLVED_METHOD = 'serverRequest/resolved'
+const RESOLVED_METHOD_ESCAPED = 'serverRequest\\/resolved'
 
 /** A client line longer than this is forwarded but not classified, so it can't grow without bound. */
 const MAX_CLIENT_LINE_CHARS = 256 * 1024 * 1024
@@ -51,7 +52,7 @@ function mayHideKey(line: string): boolean {
   return line.includes('\\u00') && ESCAPED_LETTER.test(line)
 }
 
-/** A line without these substrings can't be a request, a cancel or an answer. */
+/** A client line without these substrings can't be a request, a cancel or an answer. */
 function mayCarryKey(line: string): boolean {
   return line.includes('"id"') || line.includes('control_') || mayHideKey(line)
 }
@@ -167,9 +168,9 @@ export class ProviderRelayPendingRequests {
       return true
     }
     if (!complete) {
-      // Cut by the window or the field limit: undecided, so gated by substring as the base gates
-      // every line; such lines are never parsed more often than before.
-      return mayCarryKey(line)
+      // Cut by the window or the field limit: undecided, so gated by the substring test the base
+      // used for every agent line; such lines are never parsed more often than before.
+      return this.mayClassifyBySubstring(line)
     }
     const field = (key: string): LeadingProperty | undefined =>
       properties.find((property) => property.key === key)
@@ -186,6 +187,17 @@ export class ProviderRelayPendingRequests {
       type === 'control_cancel_request' ||
       (type === 'control_response' && this.awaitingInitialize)
     )
+  }
+
+  private mayClassifyBySubstring(line: string): boolean {
+    const maybeRequest =
+      line.includes('"method"') &&
+      (line.includes('"id"') ||
+        line.includes(RESOLVED_METHOD) ||
+        line.includes(RESOLVED_METHOD_ESCAPED))
+    const maybeAnswer =
+      this.awaitingInitialize && (line.includes('"result"') || line.includes('"error"'))
+    return maybeRequest || maybeAnswer || line.includes('control_') || mayHideKey(line)
   }
 
   /**
