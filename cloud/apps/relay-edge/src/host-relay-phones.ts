@@ -75,11 +75,12 @@ export abstract class HostRelayPhones extends HostRelayControl {
       await this.backend.failReservation(reservation).catch(() => {})
       return this.missedSeat(reservation)
     }
-    const conns = await this.conns()
-    const limit = relayHostConnectionLimit(control.a.caps)
-    if (Object.keys(conns).length >= limit) {
+    let conns = await this.conns()
+    if (Object.keys(conns).length >= relayHostConnectionLimit(control.a.caps)) {
+      // The liveness probes let other admissions and a control rebind run: recheck both.
       await this.pruneDeadConns(conns)
-      if (Object.keys(conns).length >= limit) {
+      conns = await this.conns()
+      if (this.activeControl()?.ws !== control.ws || Object.keys(conns).length >= relayHostConnectionLimit(control.a.caps)) {
         await this.backend.failReservation(reservation).catch(() => {})
         return { ok: false, code: RELAY_CLOSE_CODE.LIMIT_EXCEEDED }
       }
@@ -168,12 +169,14 @@ export abstract class HostRelayPhones extends HostRelayControl {
   }
 
   // A splice object that was reset never reports its close. Ask before refusing on the budget.
-  protected async pruneDeadConns(conns: Record<string, Conn>): Promise<void> {
-    const ids = Object.keys(conns)
+  // Rereads the map past the probes so admissions made meanwhile survive the write.
+  protected async pruneDeadConns(probed: Record<string, Conn>): Promise<void> {
+    const ids = Object.keys(probed)
     const alive = await Promise.all(ids.map((id) => this.splice(id).isAlive(id).catch(() => false)))
+    const conns = await this.conns()
     const dead: [string, Conn][] = []
     ids.forEach((id, i) => {
-      if (!alive[i]) {
+      if (!alive[i] && conns[id]) {
         dead.push([id, conns[id]])
         delete conns[id]
       }

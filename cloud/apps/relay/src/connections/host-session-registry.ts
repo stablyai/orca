@@ -920,10 +920,7 @@ export class HostSessionRegistry {
       )
       return
     }
-    if (
-      session.activeConnIds.size + session.pendingConns.size >=
-      relayHostConnectionLimit(this.hostCapabilities.get(session.socket))
-    ) {
+    if (this.hostConnectionsFull(session)) {
       capacityReservation?.release()
       await this.store.failReservation(reservation)
       this.rejectClient(socket, RELAY_CLOSE_CODE.LIMIT_EXCEEDED)
@@ -971,6 +968,15 @@ export class HostSessionRegistry {
       this.failReservationBestEffort(reservation)
       if (credentialActivityId) this.releaseActivityBestEffort(identity, credentialActivityId)
       this.rejectClient(socket, RELAY_CLOSE_CODE.WRONG_CELL)
+      return
+    }
+    // Concurrent admissions all passed the check above before awaiting; only this synchronous
+    // recheck, which runs through the insert below, keeps the host within its limit.
+    if (this.hostConnectionsFull(session)) {
+      capacityReservation?.release()
+      this.failReservationBestEffort(reservation)
+      if (credentialActivityId) this.releaseActivityBestEffort(identity, credentialActivityId)
+      this.rejectClient(socket, RELAY_CLOSE_CODE.LIMIT_EXCEEDED)
       return
     }
     markStage('activity')
@@ -2369,6 +2375,14 @@ export class HostSessionRegistry {
     }
     session.pendingPingAt = now
     send(session.socket, 'ping', { t: now })
+  }
+
+  private hostConnectionsFull(session: HostSession): boolean {
+    const capabilities = session.socket ? this.hostCapabilities.get(session.socket) : undefined
+    return (
+      session.activeConnIds.size + session.pendingConns.size >=
+      relayHostConnectionLimit(capabilities)
+    )
   }
 
   private sendHelloAck(session: HostSession): void {
