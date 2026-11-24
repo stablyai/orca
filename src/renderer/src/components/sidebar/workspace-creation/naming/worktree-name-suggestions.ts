@@ -2,11 +2,11 @@ import {
   normalizeSuggestedName,
   selectSuggestedCreatureName,
   suggestionPathBasename
-} from '../../../../../../shared/worktree-name-suggestion'
+} from '../../../../../../shared/worktree/naming/worktree-name-suggestion'
 import {
   EMPTY_RETIRED_NAME_REGISTRY,
   type RetiredNameRegistry
-} from '../../../../../../shared/worktree/retired-name-registry'
+} from '../../../../../../shared/worktree/naming/retired-name-registry'
 
 type WorktreePathLike = {
   path: string

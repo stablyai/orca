@@ -1,9 +1,13 @@
-import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
-import type { Repo } from '../../../../shared/repo-types'
-import { githubAvatarIcon, githubAvatarSlug, type RepoIcon } from '../../../../shared/repo-icon'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { GitHubRepositoryIdentity } from '../../../../shared/github/repositories/repository-identity'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import {
+  githubAvatarIcon,
+  githubAvatarSlug,
+  type RepoIcon
+} from '../../../../shared/repository/appearance/repo-icon'
+import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 type ResolveRepositoryGitHubAvatarOptions = {
   forceLive?: boolean
@@ -89,6 +93,9 @@ function sameRepoIcon(a: RepoIcon | null | undefined, b: RepoIcon | null | undef
   }
   if (a.type === 'emoji' && b.type === 'emoji') {
     return a.emoji === b.emoji
+  }
+  if (a.type === 'letters' && b.type === 'letters') {
+    return a.text === b.text
   }
   return a.type === 'lucide' && b.type === 'lucide' && a.name === b.name
 }

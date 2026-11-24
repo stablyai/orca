@@ -1,12 +1,13 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store/index'
-import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'
-import { editorDiscardEpoch } from './editor-discard-epoch'
+import {
+  captureEditorViewEditGeneration,
+  type EditorDiscardGeneration
+} from './editor-discard-epoch'
 
 /** Snapshot when a delayed view edit starts; a Discard since then drops the edit silently. */
-export function staleViewEditEpoch(fileId: string): number {
-  return editorDiscardEpoch(editorBufferIdOfView(useAppStore.getState(), fileId))
+export function captureViewEditGeneration(fileId: string): EditorDiscardGeneration {
+  return captureEditorViewEditGeneration(fileId)
 }
 
 /** Focus moved outside the view, e.g. into another view of the same file, so its delayed edit must commit now. */
@@ -19,8 +20,8 @@ export function focusLeftView(event: {
 }
 
 /** A delayed view edit was dropped because the shared text changed after the edit began. */
-export function notifyStaleViewEditRejected(fileId: string, editEpoch: number): void {
-  if (staleViewEditEpoch(fileId) !== editEpoch) {
+export function notifyStaleViewEditRejected(generation: EditorDiscardGeneration | null): void {
+  if (generation?.discarded) {
     return
   }
   toast.error(

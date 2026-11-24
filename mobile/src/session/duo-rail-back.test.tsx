@@ -49,7 +49,7 @@ vi.mock('../layout/reserved-regions', () => ({
 vi.mock('./duo-chat-width', () => ({
   useDuoChatExpanded: () => scene.expanded
 }))
-vi.mock('../transport/client-context.web', () => ({
+vi.mock('../transport/connection/client-context.web', () => ({
   usePageBridgeClientIfPresent: () =>
     scene.pressBack === null ? null : { pressBack: scene.pressBack }
 }))

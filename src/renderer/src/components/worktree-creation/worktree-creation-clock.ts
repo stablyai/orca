@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 
 /** Ticks once a second while `running`; paused while the window is hidden to avoid unseen rerenders. */
 export function useWorktreeCreationClock(running: boolean): number {

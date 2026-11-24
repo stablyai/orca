@@ -1,7 +1,7 @@
 import type React from 'react'
 import { UserRound } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { SessionReceiptSection } from '../session-list/AiVaultSessionReceiptSection'
 
 export function SessionAccountSection({
@@ -9,10 +9,11 @@ export function SessionAccountSection({
 }: {
   accountLabel: string | null
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <SessionReceiptSection
       icon={<UserRound className="size-3" />}
-      label={translate('aiVault.sessionAccount', 'Account')}
+      label={t('aiVault.sessionAccount', 'Account')}
     >
       <div
         className={cn(
@@ -20,7 +21,7 @@ export function SessionAccountSection({
           accountLabel ? 'font-medium text-foreground' : 'text-muted-foreground'
         )}
       >
-        {accountLabel ?? translate('aiVault.sessionAccountUnknown', 'Unknown')}
+        {accountLabel ?? t('aiVault.sessionAccountUnknown', 'Unknown')}
       </div>
     </SessionReceiptSection>
   )

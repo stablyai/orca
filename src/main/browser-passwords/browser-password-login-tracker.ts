@@ -1,7 +1,7 @@
 import type {
   BrowserPasswordFormSummary,
   BrowserPasswordGuestCapture
-} from '../../shared/browser-passwords-types'
+} from '../../shared/browser/passwords/browser-passwords-types'
 import { registrableDomainOf } from './browser-password-origin'
 
 /** A login the tracker decided succeeded: offer to save it. */

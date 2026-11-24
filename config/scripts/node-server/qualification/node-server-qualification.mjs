@@ -21,8 +21,8 @@ const CROSS_HOST_PREFIXES = [
   'src/main/ssh/',
   'src/main/managed-server/',
   'src/main/node-runtime/',
-  'src/main/orcad/orcad-artifact-materializer.ts',
-  'src/main/orcad/orcad-host-unavailable.ts',
+  'src/main/orcad/artifact-slots/orcad-artifact-materializer.ts',
+  'src/main/orcad/diagnostics/orcad-host-unavailable.ts',
   'src/main/providers/',
   'src/wsl-guest/'
 ]
@@ -71,7 +71,7 @@ export function nodeServerQualification(changedFiles, scope, { fullQualification
       CROSS_HOST_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
       (/(?:^|[/.-])(?:remote|ssh)(?:[/.-]|$)/i.test(file) &&
         PLATFORM_FAMILIES.some(({ pattern }) => pattern.test(file))) ||
-      file === 'src/shared/node-runtime-pin.ts' ||
+      file === 'src/shared/node-runtime/node-runtime-pin.ts' ||
       file === '.github/workflows/node-server-tests.yml' ||
       file.startsWith('config/scripts/node-server-') ||
       file.startsWith('config/scripts/ci/unit-selection/node-server-') ||

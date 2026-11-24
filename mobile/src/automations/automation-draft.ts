@@ -1,19 +1,20 @@
 import { translate } from '../i18n/mobile-i18n'
-import { assertAutomationExtraAgentArgs } from '../../../src/shared/automation-extra-agent-args-record'
+import { assertAutomationExtraAgentArgs } from '../../../src/shared/automations/launch/automation-extra-agent-args-record'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
-import type { RpcSendParams } from '../transport/rpc-params-contract'
+import type { RpcSendParams } from '../../../src/shared/rpc-contract/rpc-send-params'
 import type { MobileAutomation } from './automation-reply-schema'
 import type { AutomationTargets } from './automation-target-inventory'
 import { AutomationDraftValidationError } from './automation-error'
+import { automationSetupRedecided } from './automation-setup-redecision'
 import {
   automationTargetContext,
   automationTargetDestination,
   automationSetupKey,
   workspaceMatchesSetup
 } from './automation-target-inventory'
-import { acceptsAutomationDraftSchedule } from '../../../src/shared/automation-schedule-input-gate'
-import { isValidAutomationSchedule } from '../../../src/shared/automation-schedule-parsing'
-import { MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS } from '../../../src/shared/automation-precheck'
+import { acceptsAutomationDraftSchedule } from '../../../src/shared/automations/scheduling/automation-schedule-input-gate'
+import { isValidAutomationSchedule } from '../../../src/shared/automations/scheduling/automation-schedule-parsing'
+import { MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS } from '../../../src/shared/automations/launch/automation-precheck'
 
 export type AutomationDraft = {
   targetEdited?: boolean
@@ -29,6 +30,8 @@ export type AutomationDraft = {
   timezone: string
   baseBranch: string
   setupDecision: 'inherit' | 'run' | 'skip'
+  /** Set only by an approval that can't trust the repo; the host runs only this setup content. */
+  setupTrustHash?: string
   reuseSession: boolean
   extraAgentArgs: string
   precheckCommand: string
@@ -57,6 +60,22 @@ export function newAutomationDraft(current?: MobileAutomation): AutomationDraft 
     precheckTimeout: String(current?.precheck?.timeoutSeconds ?? 60),
     grace: String(current?.missedRunGraceMinutes ?? 720)
   }
+}
+
+/** The fields that differ from `original`; null when nothing the user would lose did (the *Edited flags only record how a field changed). */
+export function automationDraftEdits(
+  original: AutomationDraft,
+  draft: AutomationDraft
+): Partial<AutomationDraft> | null {
+  const before = new Map(Object.entries(original))
+  const edits = Object.entries(draft).filter(([key, value]) => value !== before.get(key))
+  return edits.some(([key]) => key !== 'targetEdited' && key !== 'setupDecisionEdited')
+    ? Object.fromEntries(edits)
+    : null
+}
+
+export function automationDraftChanged(original: AutomationDraft, draft: AutomationDraft): boolean {
+  return automationDraftEdits(original, draft) !== null
 }
 
 // The host checks arguments for an agent or surface this build doesn't know.
@@ -166,6 +185,9 @@ function editableFields(draft: AutomationDraft): UpdateFields {
     timezone: draft.timezone,
     baseBranch: draft.baseBranch || null,
     setupDecision: draft.setupDecision,
+    ...(draft.setupDecision === 'run' && draft.setupTrustHash
+      ? { setupTrustHash: draft.setupTrustHash }
+      : {}),
     reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
     extraAgentArgs: draft.extraAgentArgs,
     precheck: draft.precheckCommand.trim()
@@ -181,7 +203,15 @@ export function automationDraftPatch(
 ): UpdateFields {
   const fields: Record<string, unknown> = editableFields(draft)
   const before: Record<string, unknown> = editableFields(original)
-  const patch: UpdateFields = {}
+  // The host keeps the saved pin unless a write names the decision, so a re-decided save always names it.
+  const patch: UpdateFields = automationSetupRedecided(draft, original)
+    ? {
+        setupDecision: draft.setupDecision,
+        ...(draft.setupDecision === 'run' && draft.setupTrustHash
+          ? { setupTrustHash: draft.setupTrustHash }
+          : {})
+      }
+    : {}
   for (const key of new Set([...Object.keys(before), ...Object.keys(fields)])) {
     if (fields[key] !== before[key]) {
       if (

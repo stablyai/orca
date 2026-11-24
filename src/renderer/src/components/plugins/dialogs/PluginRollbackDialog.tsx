@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { Loader2 } from 'lucide-react'
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
-import { translate } from '@/i18n/i18n'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { usePluginRollbackVersion } from '../state/use-plugin-rollback-version'
 import {
@@ -28,6 +28,7 @@ export function PluginRollbackDialog({
   onCancel,
   onConfirm
 }: PluginRollbackDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const cancelRef = useRef<HTMLButtonElement>(null)
   const version = usePluginRollbackVersion(plugin?.pluginKey ?? null)
   return (
@@ -42,22 +43,18 @@ export function PluginRollbackDialog({
       >
         <DialogHeader>
           <DialogTitle>
-            {translate(
-              'auto.components.settings.PluginRollbackDialog.title',
-              'Roll back {{value0}}?',
-              {
-                value0: plugin?.name ?? ''
-              }
-            )}
+            {t('auto.components.settings.PluginRollbackDialog.title', 'Roll back {{value0}}?', {
+              value0: plugin?.name ?? ''
+            })}
           </DialogTitle>
           <DialogDescription>
             {version
-              ? translate(
+              ? t(
                   'auto.components.settings.PluginRollbackDialog.descriptionVersion',
                   'Restores version {{value0}}.',
                   { value0: version }
                 )
-              : translate(
+              : t(
                   'auto.components.settings.PluginRollbackDialog.description',
                   'Restores the previous version.'
                 )}
@@ -66,7 +63,7 @@ export function PluginRollbackDialog({
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <DialogFooter>
           <Button ref={cancelRef} variant="ghost" disabled={busy} onClick={onCancel}>
-            {translate('auto.components.settings.PluginRollbackDialog.cancel', 'Cancel')}
+            {t('auto.components.settings.PluginRollbackDialog.cancel', 'Cancel')}
           </Button>
           <Button
             variant="destructive"
@@ -74,7 +71,7 @@ export function PluginRollbackDialog({
             onClick={() => plugin && onConfirm(plugin.pluginKey)}
           >
             {busy ? <Loader2 className="animate-spin" /> : null}
-            {translate('auto.components.settings.PluginRollbackDialog.confirm', 'Roll back')}
+            {t('auto.components.settings.PluginRollbackDialog.confirm', 'Roll back')}
           </Button>
         </DialogFooter>
       </DialogContent>

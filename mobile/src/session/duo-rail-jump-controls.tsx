@@ -8,14 +8,14 @@ import {
   useState,
   type ReactNode
 } from 'react'
-import { StyleSheet, View, useWindowDimensions } from 'react-native'
+import { StyleSheet, View, useWindowDimensions, type HostInstance } from 'react-native'
 import type { DuoRailJumpFrames } from '../layout/duo-status-row'
 import { useReservedRegions } from '../layout/reserved-regions'
 import { getSideRailStrip } from '../layout/side-rail-strip'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
 import { useDuoChatExpanded } from './duo-chat-width'
 import { duoRailJumpPlacement } from './duo-rail-jump'
-import { MobileNativeChatFloatingControls } from './native-chat/MobileNativeChatFloatingControls'
+import { MobileNativeChatFloatingControls } from './native-chat/lower-region/MobileNativeChatFloatingControls'
 
 type JumpActions = {
   showJumpToTail: boolean
@@ -109,7 +109,7 @@ export function DuoRailComposerTop({
   children: ReactNode
 }) {
   const report = useContext(DuoRailJumpContext)?.reportComposerTop
-  const ref = useRef<View>(null)
+  const ref = useRef<HostInstance>(null)
   const measure = useCallback(() => {
     ref.current?.measureInWindow((_x, y, _width, height) => {
       if (height > 0) {

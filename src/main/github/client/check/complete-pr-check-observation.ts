@@ -1,4 +1,4 @@
-import type { GitHubApiRepository } from '../../github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import type { GhExecOptions } from '../github-exec-scope'
 import { assertRateLimitBudget } from '../lookup/pr-lookup-rate-limit'
 import { readGraphQLPRCheckRollup } from './pr-check-rollup'
@@ -8,17 +8,18 @@ export async function readCompletePRCheckObservation(
   repository: GitHubApiRepository,
   number: number,
   headSha: string | undefined,
-  options: GhExecOptions
+  options: GhExecOptions,
+  pageLimit?: number
 ): Promise<unknown[] | undefined> {
   if (!headSha) {
     return undefined
   }
   try {
     await assertRateLimitBudget('graphql', repository, options)
-    return await readGraphQLPRCheckRollup(repository, number, headSha, options)
+    return await readGraphQLPRCheckRollup(repository, number, headSha, options, pageLimit)
   } catch {
     try {
-      return await readRestPRCheckRollup(repository, headSha, options)
+      return await readRestPRCheckRollup(repository, headSha, options, pageLimit)
     } catch {
       return undefined
     }

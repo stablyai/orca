@@ -2,6 +2,7 @@
 
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { AgentLaunchSurface } from './agent-launch-surface'
+import type { SetupTrustMismatch } from '../../worktree/create-types'
 
 /** How a launch's initial text reaches the agent. */
 export type AgentLaunchPromptDelivery =
@@ -112,6 +113,8 @@ export type AgentLaunchResult = {
   worktreeId: string
   /** Keep partial workspace/surface failures in one top-level warning for both launch modes; callers must surface incomplete creation. */
   warning?: string
+  /** The create skipped setup because the created branch's commands differ from the approved ones. */
+  setupTrustMismatch?: SetupTrustMismatch
   /** Why the outcome is what it is — always populated, so a downgrade is never silent. */
   receipt: AgentLaunchModeReceipt
   prompt?: AgentLaunchPromptReceipt
@@ -122,11 +125,13 @@ export type AgentLaunchResult = {
 
 export type AgentLaunchMode = 'structured' | 'terminal'
 
-/** Why a launch ran in the mode it did. `user_default` is the preference being honoured and
- *  `requested` the caller's explicit pick; every other member is a reason a chat could not run. */
+/** Why a launch ran in the mode it did. `user_default` is the preference being honoured,
+ *  `requested` the caller's explicit pick and `chat_lineage` the worker lineage's; every other
+ *  member is a reason a chat could not run. */
 export type AgentLaunchModeReason =
   | 'user_default'
   | 'requested'
+  | 'chat_lineage'
   | 'remote_execution_host'
   | 'reused_terminal'
   | 'agent_without_structured_session'
@@ -137,8 +142,10 @@ export type AgentLaunchModeReason =
   | 'structured_support_unknown'
   | 'wsl_execution_runtime'
   | 'codex_on_windows'
+  | 'chat_unavailable_on_windows'
   | 'structured_unsupported_on_host'
   | 'chat_runtime_not_installed'
+  | 'chat_cannot_run_orca_commands'
 
 /** Restates `WorkerStartModeReceipt` in surface-neutral terms so orchestration's receipt and a
  *  mobile or renderer launch report the same vocabulary. */

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
-import { runPsInProcess } from '../../libproc-process-table'
+import { runPsInProcess } from '../../process-observation/darwin/libproc-process-table'
 import type { AgentProcessIdentity, AgentProcessVerdict } from './agent-process-presence'
 
 export type AgentProcessObservation =

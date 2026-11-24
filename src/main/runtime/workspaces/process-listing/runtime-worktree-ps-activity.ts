@@ -1,16 +1,23 @@
-import type { RuntimeSyncedTab } from '../../../../shared/runtime-session-contracts'
-import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
-import type { Repo } from '../../../../shared/repo-types'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { RuntimeSyncedTab } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getWorkspaceSessionTabActivityIds } from '../../../../shared/workspace-session/workspace-session-tab-activity'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
 } from '../../terminal/records/runtime-terminal-state-records'
-import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
+import {
+  connectionEvidenceHostId,
+  type RuntimeWorktreePsSummaryLookup
+} from './runtime-worktree-summary-paths'
 import {
   getLatestPtyTitle,
   getLeafDisplayRecord,
@@ -44,8 +51,8 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
   paneOf: PtyPaneOf
   getTitleDisplayClear: (ptyId: string) => TitleDisplayClear | null
   getSummary: RuntimeWorktreePsSummaryLookup
-}): Map<string, RuntimeTerminalTitleEvidence[]> {
-  const titleEvidence = new Map<string, RuntimeTerminalTitleEvidence[]>()
+}): Map<RuntimeWorktreePsSummary, RuntimeTerminalTitleEvidence[]> {
+  const titleEvidence = new Map<RuntimeWorktreePsSummary, RuntimeTerminalTitleEvidence[]>()
   const savedTabOwnerById = new Map<string, { worktreeId: string; title: string }>()
   for (const [worktreeId, tabs] of Object.entries(args.session?.tabsByWorktree ?? {})) {
     for (const tab of tabs) {
@@ -77,7 +84,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     ) {
       continue
     }
-    const summary = args.getSummary(leaf.worktreeId)
+    const summary = args.getSummary(leaf.worktreeId, ptyRecordHostId(freshOwner))
     if (!summary) {
       continue
     }
@@ -92,7 +99,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
       args.tabs.get(leaf.tabId)?.title ?? null
     )
     if (leafStatus === 'working' || leafStatus === 'permission') {
-      addTerminalTitleEvidence(titleEvidence, summary.worktreeId, {
+      addTerminalTitleEvidence(titleEvidence, summary, {
         status: leafStatus,
         paneKey: args.getPaneKey(leaf),
         ptyId: leaf.ptyId,
@@ -143,7 +150,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     if (!owner) {
       continue
     }
-    const summary = args.getSummary(owner.worktreeId)
+    const summary = args.getSummary(owner.worktreeId, ptyRecordHostId(pty))
     if (!summary) {
       continue
     }
@@ -155,7 +162,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     summary.lastOutputAt = maxTimestamp(summary.lastOutputAt, pty.lastOutputAt)
     const ptyStatus = getSavedTabWorktreeStatus(owner.title, true)
     if (ptyStatus === 'working' || ptyStatus === 'permission') {
-      addTerminalTitleEvidence(titleEvidence, summary.worktreeId, {
+      addTerminalTitleEvidence(titleEvidence, summary, {
         status: ptyStatus,
         paneKey: recorded.paneKey,
         ptyId: pty.ptyId,
@@ -174,16 +181,23 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
 }
 
 function addTerminalTitleEvidence(
-  evidenceByWorktreeId: Map<string, RuntimeTerminalTitleEvidence[]>,
-  worktreeId: string,
+  evidenceByRow: Map<RuntimeWorktreePsSummary, RuntimeTerminalTitleEvidence[]>,
+  summary: RuntimeWorktreePsSummary,
   evidence: RuntimeTerminalTitleEvidence
 ): void {
-  const existing = evidenceByWorktreeId.get(worktreeId)
+  const existing = evidenceByRow.get(summary)
   if (existing) {
     existing.push(evidence)
   } else {
-    evidenceByWorktreeId.set(worktreeId, [evidence])
+    evidenceByRow.set(summary, [evidence])
   }
+}
+
+/** The host a PTY record proves: its SSH connection, else this Orca. A missing record proves none. */
+export function ptyRecordHostId(
+  pty: Pick<RuntimePtyWorktreeRecord, 'connectionId'> | undefined
+): ExecutionHostId | undefined {
+  return pty ? connectionEvidenceHostId(pty.connectionId) : undefined
 }
 
 export function applyRuntimeWorktreePsSessionActivity(args: {
@@ -198,22 +212,30 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
   getSummary: RuntimeWorktreePsSummaryLookup
 }): {
   mirroredWorktreeIdByTabId: Map<string, string>
+  savedAgentRecords: SleepingAgentSessionRecord[]
   connectedPtyEvidence: {
     tabIds: Set<string>
     paneKeys: Set<string>
     ptyIdByTerminalHandle: Map<string, string>
+    terminalHandleByPaneKey: Map<string, string>
   }
 } {
   const mirroredWorktreeIdByTabId = new Map<string, string>()
   const sessionsByHostId = new Map<ExecutionHostId, WorkspaceSessionState>()
   for (const summary of args.summaries.values()) {
     const repo = args.repoById.get(summary.repoId)
-    const session = args.store?.getWorkspaceSession?.(repo ? getRepoExecutionHostId(repo) : 'local')
+    // Same-id repos on two hosts share one repoById entry; the row's own host names its session.
+    const hostId = summary.hostId ?? (repo ? getRepoExecutionHostId(repo) : 'local')
+    const session = args.store?.getWorkspaceSession?.(hostId)
     if (session) {
-      sessionsByHostId.set(repo ? getRepoExecutionHostId(repo) : 'local', session)
+      sessionsByHostId.set(hostId, session)
     }
   }
-  for (const session of sessionsByHostId.values()) {
+  const savedAgentRecords: SleepingAgentSessionRecord[] = []
+  // Each host's session names that host's copy of a same-id workspace.
+  for (const [hostId, session] of sessionsByHostId) {
+    savedAgentRecords.push(...Object.values(session.sleepingAgentSessionsByPaneKey ?? {}))
+    const getSummary = (worktreeId: string) => args.getSummary(worktreeId, hostId)
     for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
       for (const tab of tabs) {
         mirroredWorktreeIdByTabId.set(tab.id, worktreeId)
@@ -221,19 +243,19 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
       if (tabs.length === 0) {
         continue
       }
-      const summary = args.getSummary(worktreeId)
+      const summary = getSummary(worktreeId)
       if (summary && tabs.some((tab) => tab.ptyId && args.ptysById.get(tab.ptyId)?.connected)) {
         summary.hasHostSidebarActivity = true
       }
     }
     for (const worktreeId of getWorkspaceSessionTabActivityIds(session)) {
-      const summary = args.getSummary(worktreeId)
+      const summary = getSummary(worktreeId)
       if (summary) {
         summary.hasHostSidebarActivity = true
       }
     }
     if (session.activeWorktreeId) {
-      const summary = args.getSummary(session.activeWorktreeId)
+      const summary = getSummary(session.activeWorktreeId)
       if (summary) {
         summary.isActive = true
       }
@@ -247,8 +269,17 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
   const connectedPtyEvidence = {
     tabIds: new Set<string>(),
     paneKeys: new Set<string>(),
-    ptyIdByTerminalHandle: new Map<string, string>()
+    ptyIdByTerminalHandle: new Map<string, string>(),
+    terminalHandleByPaneKey: new Map<string, string>()
   }
+  // Every live terminal claims both the pane its env exported and the pane it shows in.
+  const claimants = new Map<string, Set<string>>()
+  const claim = (paneKey: string | null | undefined, ptyId: string) => {
+    if (paneKey) {
+      claimants.set(paneKey, (claimants.get(paneKey) ?? new Set()).add(ptyId))
+    }
+  }
+  const settled: { ptyId: string; paneKey: string }[] = []
   for (const pty of args.ptysById.values()) {
     if (!pty.connected) {
       continue
@@ -260,9 +291,23 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
     if (paneKey) {
       connectedPtyEvidence.paneKeys.add(paneKey)
     }
+    claim(pty.spawnPaneKey, pty.ptyId)
+    claim(paneKey, pty.ptyId)
+    // Its hook rows are filed under the exported key, so only a terminal still in that pane names them.
+    if (paneKey && pty.spawnPaneKey === paneKey) {
+      settled.push({ ptyId: pty.ptyId, paneKey })
+    }
     for (const terminalHandle of args.getTerminalHandlesForPty(pty.ptyId)) {
       connectedPtyEvidence.ptyIdByTerminalHandle.set(terminalHandle, pty.ptyId)
     }
   }
-  return { mirroredWorktreeIdByTabId, connectedPtyEvidence }
+  // A pane no other live terminal exported or shows; every handle of its one PTY drives the same process.
+  for (const { ptyId, paneKey } of settled) {
+    const handle =
+      claimants.get(paneKey)?.size === 1 ? args.getTerminalHandlesForPty(ptyId)[0] : undefined
+    if (handle) {
+      connectedPtyEvidence.terminalHandleByPaneKey.set(paneKey, handle)
+    }
+  }
+  return { mirroredWorktreeIdByTabId, connectedPtyEvidence, savedAgentRecords }
 }

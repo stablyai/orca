@@ -5,7 +5,7 @@ import {
   isChromeWebStoreUrl,
   type ChromeWebStoreReply
 } from '../../../../shared/browser/extensions/browser-extension-webstore'
-import { browserManager } from '../../browser-manager'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { getBrowserExtensionProfileIdForSession } from '../api-runtime/browser-extension-api-host'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
 import { toChromeWebStoreExtensionInfo } from './browser-extension-webstore-events'
@@ -60,7 +60,7 @@ const defaultLookups: StoreSenderLookups = {
 }
 
 /**
- * The caller must be the top frame of an Orca browser tab, in a local browser profile that runs
+ * The caller must be the top frame of an Orca browser tab, in a session that runs
  * extensions, whose document is exactly https://chromewebstore.google.com.
  */
 export function resolveChromeWebStoreFrame(

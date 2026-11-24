@@ -1,5 +1,5 @@
 import type { PtyIncarnationHandleRecord, TerminalHandleRecord } from './terminal-handle-records'
-import type { AgentSenderHandleReads } from '../../runtime-agent-sender-associations'
+import type { AgentSenderHandleReads } from '../../agent-senders/runtime-agent-sender-associations'
 
 import type {
   RuntimeLeafRecord,

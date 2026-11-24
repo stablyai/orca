@@ -1,6 +1,7 @@
 import type { AgentJournalCursor } from '../journal/agent-session-journal-identity'
 import type { AgentJournalTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
 import type { AgentSessionExecutionLocation } from '../lifecycle/agent-session-record'
+import type { AgentSessionFailureFact } from '../failures/agent-session-failure'
 
 // Turn completion feed: the per-turn EDGE beside the status feed's STATE.
 
@@ -18,6 +19,10 @@ export type AgentSessionTurnCompletion = {
   completedAt: number
   /** The request settled while a prompt waits on the user. Absent otherwise, and from older hosts. */
   awaitingUser?: true
+  /** Why a failed request failed, typed, so its alert can say so. Absent from older hosts. */
+  failure?: AgentSessionFailureFact
+  /** The turn's last words were a bot's quiet marker: it finished with nothing to tell anyone. */
+  quiet?: true
 }
 
 /** Emit one host-commit edge per newly pending prompt, usually mid-turn; pending revisions retain identity and emit nothing. */

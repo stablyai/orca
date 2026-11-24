@@ -23,8 +23,10 @@ import {
   Wrench,
   type LucideIcon
 } from 'lucide-react'
-import type { RepoIcon } from '../../../../shared/repo-icon'
-import { cn } from '@/lib/utils'
+import type { RepoIcon } from '../../../../shared/repository/appearance/repo-icon'
+import { cn } from '@/lib/class-names'
+import { softMarkColors } from '../../../../shared/repository/appearance/repo-badge-color'
+import { monogramFontScale } from '../../../../shared/repository/appearance/repo-monogram'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
@@ -157,6 +159,32 @@ export function RepoIconGlyph({
           draggable={false}
           onError={() => setFailedImageSrc(imageSrc)}
         />
+      </span>
+    )
+  }
+
+  if (repoIcon?.type === 'letters') {
+    const light = softMarkColors(color, 'light')
+    const dark = softMarkColors(color, 'dark')
+    const markColors: React.CSSProperties & Record<`--mark-${string}`, string> = {
+      '--mark-bg': light.background,
+      '--mark-fg-light': light.foreground,
+      '--mark-fg-dark': dark.foreground
+    }
+    return (
+      <span
+        className={cn(
+          'inline-flex items-center justify-center overflow-hidden rounded-[22%] bg-(--mark-bg) font-semibold leading-none text-(--mark-fg-light) [container-type:size] dark:text-(--mark-fg-dark)',
+          className,
+          iconClassName
+        )}
+        style={markColors}
+        aria-hidden="true"
+      >
+        {/* Why: container units scale the letters with the mark, from 16px sidebar chips to 40px tiles. */}
+        <span style={{ fontSize: `${(monogramFontScale(repoIcon.text) * 100).toFixed(1)}cqh` }}>
+          {repoIcon.text}
+        </span>
       </span>
     )
   }

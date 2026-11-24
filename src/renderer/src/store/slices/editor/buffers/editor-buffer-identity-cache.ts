@@ -1,7 +1,7 @@
 import type { OpenFile } from '../types/open-file'
-import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
-import { worktreeOwnerRowsTokenOf } from '@/lib/worktree-owner-rows-token'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
+import { worktreeOwnerRowsTokenOf } from '@/lib/workspace/ownership/worktree-owner-rows-token'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { editorBufferIdentityOf } from './editor-buffer-identity'
 
 /** Route state plus the counter bumped when the runtime revision registry changes. */

@@ -2,7 +2,7 @@ import { win32 as pathWin32 } from 'node:path'
 import {
   MANAGED_HOOK_TIMEOUT_SECONDS,
   type HookDefinition
-} from '../../../agent-hooks/installer-utils'
+} from '../../../agent-hooks/installation/configuration/hook-config-schema'
 import {
   readHookTrustEntries,
   removeHookTrustEntries,
@@ -132,13 +132,15 @@ export function removeSystemManagedHookTrustEntries(
 
 export function removeRuntimeManagedHookTrustEntries(
   configPath: string,
-  codexHashes: readonly CodexHookHashes[]
+  codexHashes: readonly CodexHookHashes[],
+  runtimeHomePath: string = getOrcaManagedCodexHomePath()
 ): void {
   try {
     removeCodexManagedHookTrustEntries({
       codexHashes,
-      tomlPath: getCodexConfigTomlPath(),
-      runtimeHomePath: getOrcaManagedCodexHomePath(),
+      // A per-account home keeps its own trust and ledger; never touch the default home's.
+      tomlPath: getCodexConfigTomlPath(runtimeHomePath),
+      runtimeHomePath,
       sourcePaths: [configPath],
       command: getManagedCommand(getManagedScriptPath()),
       managedEventLabels: CODEX_MANAGED_EVENT_LABELS,

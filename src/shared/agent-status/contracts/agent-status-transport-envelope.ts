@@ -7,7 +7,7 @@ import {
   parseAgentStatusStoreMutation,
   parseAgentStatusStoreSnapshot
 } from '../store/agent-status-store-codec'
-import { assertJsonTextStructureWithinLimits } from '../../json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from '../../json-stream/json-text-structure-limit'
 
 // Why: the store has no size limit, so only nesting is bounded; any envelope it can serialize must parse.
 const ENVELOPE_STRUCTURE_LIMITS = {

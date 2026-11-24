@@ -1,15 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { SourceControlGroupOrder } from '../../../../../shared/ui-chrome-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { SourceControlGroupOrder } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { normalizeSourceControlGroupOrder } from '../../../../../shared/source-control/listing/source-control-group-order'
-import { Input } from '../../ui/input'
-import { Label } from '../../ui/label'
-import { Switch } from '../../ui/switch'
 import { useAppStore } from '../../../store/index'
 
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { BranchPrefixFeedback } from './BranchPrefixFeedback'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { BranchPrefixSetting } from './BranchPrefixSetting'
+import type { SettingsHostScope } from '../host-scope/settings-host-scope'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
 import {
@@ -23,30 +22,15 @@ import {
   compareAgainstUpstreamMatchesSearch
 } from './CompareAgainstUpstreamSetting'
 import { getAutoRenameBranchSearchEntries } from './auto-rename-branch-search'
+import { getKeepLocalMainUpToDateTitle } from './keep-local-main-up-to-date-setting'
 import {
-  KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,
-  getKeepLocalMainUpToDateTitle
-} from './keep-local-main-up-to-date-setting'
-import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
+  KEEP_LOCAL_MAIN_UP_TO_DATE_DESCRIPTION,
+  KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS,
+  KeepLocalMainUpToDateSetting
+} from './KeepLocalMainUpToDateSetting'
+import { useTranslate } from '@/i18n/use-translate'
 import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 
-const KEEP_LOCAL_MAIN_UP_TO_DATE_DESCRIPTION =
-  'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as main or master. This keeps commands like git diff main...HEAD from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.'
-const KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS = [
-  'main',
-  'master',
-  'origin/main',
-  'git diff',
-  'behind main',
-  'up to date',
-  'stale main',
-  'refresh local main',
-  'base ref',
-  'fresh base',
-  'safely',
-  'worktree'
-]
 const SOURCE_CONTROL_GROUP_ORDER_KEYWORDS = [
   'group order',
   'changes first',
@@ -71,6 +55,8 @@ type GitPaneProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
   writeSourceControlAiSettings: (patch: SourceControlAiSettingsPatch) => Promise<void>
   displayedGitUsername: string
+  /** The host whose workspace creates read the branch rows. */
+  hostScope: SettingsHostScope
   hasUnsavedBranchPromptChanges?: boolean
   onBranchPromptDirtyChange?: (dirty: boolean) => void
   branchPromptDiscardSignal?: number
@@ -84,12 +70,10 @@ export function SourceControlGroupOrderSetting({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const value = normalizeSourceControlGroupOrder(settings.sourceControlGroupOrder)
-  const title = translate(
-    'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
-    'Source Control Group Order'
-  )
-  const description = translate(
+  const title = t('auto.components.settings.GitPane.53a0daed73', 'Source control group order')
+  const description = t(
     'auto.components.settings.GitPane.sourceControlGroupOrderDescription',
     'Choose whether Staged Changes or Changes appear first in Source Control.'
   )
@@ -118,11 +102,11 @@ export function SourceControlGroupOrderSetting({
             options={[
               {
                 value: 'changes-first',
-                label: translate('auto.components.settings.GitPane.changesFirst', 'Changes first')
+                label: t('auto.components.settings.GitPane.changesFirst', 'Changes first')
               },
               {
                 value: 'staged-first',
-                label: translate('auto.components.settings.GitPane.stagedFirst', 'Staged first')
+                label: t('auto.components.settings.GitPane.stagedFirst', 'Staged first')
               }
             ]}
           />
@@ -137,106 +121,42 @@ export function GitPane({
   updateSettings,
   writeSourceControlAiSettings,
   displayedGitUsername,
+  hostScope,
   hasUnsavedBranchPromptChanges = false,
   onBranchPromptDirtyChange,
   branchPromptDiscardSignal,
   settingsSearchQuery
-}: GitPaneProps): React.JSX.Element {
+}: GitPaneProps): React.JSX.Element | null {
+  const t = useTranslate()
   const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
-  const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle()
-
-  const isBranchPrefixInputMode = settings.branchPrefix !== 'none'
-  // Local drafts preserve caret/fast typing through async IPC; adopt external reloads but ignore delayed echoes of our own edits.
-  const [customPrefixDraft, setCustomPrefixDraft] = useState(settings.branchPrefixCustom)
-  const lastCommittedPrefixRef = useRef(settings.branchPrefixCustom)
-  useEffect(() => {
-    if (settings.branchPrefixCustom !== lastCommittedPrefixRef.current) {
-      lastCommittedPrefixRef.current = settings.branchPrefixCustom
-      setCustomPrefixDraft(settings.branchPrefixCustom)
-    }
-  }, [settings.branchPrefixCustom])
-  const branchPrefixInputValue =
-    settings.branchPrefix === 'git-username' ? displayedGitUsername : customPrefixDraft
+  const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle(t)
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, {
-      title: translate('auto.components.settings.GitPane.330f584b50', 'Branch Prefix'),
-      description: translate(
+      title: t('auto.components.settings.GitPane.7826f35f63', 'Branch prefix'),
+      description: t(
         'auto.components.settings.GitPane.1ffaadf0a0',
         'Prefix added to branch names when creating worktrees.'
       ),
       keywords: [
-        translate('auto.components.settings.GitPane.cc63fce906', 'branch naming'),
-        translate('auto.components.settings.GitPane.2351aa5a31', 'git username'),
-        translate('auto.components.settings.GitPane.813e15b346', 'custom')
+        t('auto.components.settings.GitPane.cc63fce906', 'branch naming'),
+        t('auto.components.settings.GitPane.2351aa5a31', 'git username'),
+        t('auto.components.settings.GitPane.813e15b346', 'custom')
       ]
     }) ? (
-      <SearchableSetting
-        key="branch-prefix"
-        title={translate('auto.components.settings.GitPane.330f584b50', 'Branch Prefix')}
-        description={translate(
-          'auto.components.settings.GitPane.1ffaadf0a0',
-          'Prefix added to branch names when creating worktrees.'
-        )}
-        keywords={['branch naming', 'git username', 'custom']}
-        className="space-y-3"
-      >
-        <div className="space-y-0.5">
-          <Label>{translate('auto.components.settings.GitPane.330f584b50', 'Branch Prefix')}</Label>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.GitPane.1ec5c91e1d',
-              'Choose whether branch names use your Git username, a custom prefix, or no prefix.'
-            )}
-          </p>
-        </div>
-        <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
-          {(['git-username', 'custom', 'none'] as const).map((option) => (
-            <button
-              key={option}
-              onClick={() => updateSettings({ branchPrefix: option })}
-              className={`rounded-sm px-3 py-1 text-sm transition-colors ${
-                settings.branchPrefix === option
-                  ? 'bg-accent font-medium text-accent-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {option === 'git-username'
-                ? translate('auto.components.settings.GitPane.a182c5125e', 'Git Username')
-                : option === 'custom'
-                  ? translate('auto.components.settings.GitPane.1f32ba27a6', 'Custom')
-                  : translate('auto.components.settings.GitPane.3d172725cc', 'None')}
-            </button>
-          ))}
-        </div>
-        {isBranchPrefixInputMode && (
-          <Input
-            value={branchPrefixInputValue}
-            onChange={(e) => {
-              const next = e.target.value
-              lastCommittedPrefixRef.current = next
-              setCustomPrefixDraft(next)
-              updateSettings({ branchPrefixCustom: next })
-            }}
-            placeholder={
-              settings.branchPrefix === 'git-username'
-                ? translate(
-                    'auto.components.settings.GitPane.aefa1ecb59',
-                    'No git username configured'
-                  )
-                : translate('auto.components.settings.GitPane.b559bf9899', 'e.g. feature')
-            }
-            className="max-w-xs"
-            readOnly={settings.branchPrefix === 'git-username'}
-          />
-        )}
-        {isBranchPrefixInputMode && <BranchPrefixFeedback rawPrefix={branchPrefixInputValue} />}
-      </SearchableSetting>
+      <BranchPrefixSetting
+        // A fresh row per host, so one host's unsaved draft never shows on another.
+        key={`branch-prefix:${runtimeTargetEnvironmentId(hostScope.target) ?? 'local'}`}
+        hostScope={hostScope}
+        settings={settings}
+        updateSettings={updateSettings}
+        displayedGitUsername={displayedGitUsername}
+      />
     ) : null,
     matchesSettingsSearch(searchQuery, {
-      title: getJiraIssueKeyCasingTitle(),
-      description: getJiraIssueKeyCasingDescription(),
+      title: getJiraIssueKeyCasingTitle(t),
+      description: getJiraIssueKeyCasingDescription(t),
       keywords: JIRA_ISSUE_KEY_CASING_KEYWORDS
     }) ? (
       <JiraIssueKeyCasingSetting
@@ -250,48 +170,16 @@ export function GitPane({
       description: KEEP_LOCAL_MAIN_UP_TO_DATE_DESCRIPTION,
       keywords: KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS
     }) ? (
-      <SearchableSetting
-        key="refresh-base-ref"
-        id={KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID}
-        title={keepLocalMainUpToDateTitle}
-        description={KEEP_LOCAL_MAIN_UP_TO_DATE_DESCRIPTION}
-        keywords={KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS}
-        className="flex items-center justify-between gap-4 py-2"
-      >
-        <div className="space-y-0.5">
-          <Label>{keepLocalMainUpToDateTitle}</Label>
-          <p className="text-xs text-muted-foreground">
-            <Trans
-              i18n={i18n}
-              defaults={translate(
-                'auto.components.settings.GitPane.refreshLocalBaseDescription',
-                'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as <mainBranch>main</mainBranch> or <masterBranch>master</masterBranch>. This keeps commands like <diffCommand>git diff main...HEAD</diffCommand> from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.'
-              )}
-              components={{
-                mainBranch: <code />,
-                masterBranch: <code />,
-                diffCommand: <code />
-              }}
-            />
-          </p>
-        </div>
-        <Switch
-          aria-label={keepLocalMainUpToDateTitle}
-          checked={settings.refreshLocalBaseRefOnWorktreeCreate}
-          onCheckedChange={(checked) =>
-            updateSettings({
-              refreshLocalBaseRefOnWorktreeCreate: checked
-            })
-          }
-        />
-      </SearchableSetting>
+      <KeepLocalMainUpToDateSetting
+        key={`refresh-base-ref:${runtimeTargetEnvironmentId(hostScope.target) ?? 'local'}`}
+        hostScope={hostScope}
+        settings={settings}
+        updateSettings={updateSettings}
+      />
     ) : null,
     matchesSettingsSearch(searchQuery, {
-      title: translate(
-        'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
-        'Source Control Group Order'
-      ),
-      description: translate(
+      title: t('auto.components.settings.GitPane.53a0daed73', 'Source control group order'),
+      description: t(
         'auto.components.settings.GitPane.sourceControlGroupOrderDescription',
         'Choose whether Staged Changes or Changes appear first in Source Control.'
       ),
@@ -303,7 +191,7 @@ export function GitPane({
         updateSettings={updateSettings}
       />
     ) : null,
-    compareAgainstUpstreamMatchesSearch(searchQuery) ? (
+    compareAgainstUpstreamMatchesSearch(searchQuery, t) ? (
       <CompareAgainstUpstreamSetting
         key="compare-against-upstream"
         settings={settings}
@@ -324,5 +212,9 @@ export function GitPane({
     ) : null
   ].filter(Boolean)
 
-  return <div className="space-y-4">{visibleSections}</div>
+  if (visibleSections.length === 0) {
+    return null
+  }
+
+  return <SettingsGroup>{visibleSections}</SettingsGroup>
 }

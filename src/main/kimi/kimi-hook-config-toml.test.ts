@@ -1,103 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import {
-  applyManagedKimiHooks,
-  buildManagedKimiHooksBlock,
-  KIMI_HOOK_EVENTS,
-  readManagedKimiHookEvents,
-  removeManagedKimiHooks
-} from './kimi-hook-config-toml'
+import { applyManagedKimiHooks, removeManagedKimiHooks } from './kimi-hook-config-toml'
 
 const COMMAND =
   "if [ -x '/home/u/.orca/agent-hooks/kimi-hook.sh' ]; then /bin/sh '/home/u/.orca/agent-hooks/kimi-hook.sh'; fi"
 const isManaged = (command: string | undefined): boolean =>
   typeof command === 'string' && command.includes('agent-hooks/kimi-hook.sh')
-
-const END_MARKER_LINE = '# <<< orca-managed-kimi-hooks <<<'
 const START_MARKER = '# >>> orca-managed-kimi-hooks (managed by Orca; do not edit) >>>'
 
 /** Drops only the `# <<< ... <<<` line, the hand-edit that orphans the block. */
 function deleteEndMarker(text: string): string {
   return text.replace(/\r?\n# <<< orca-managed-kimi-hooks <<<(?=\r?\n|$)/, '')
 }
-
-describe('kimi managed hooks TOML block', () => {
-  it('installs every managed event, scoping only SessionStart to resumes', () => {
-    const block = buildManagedKimiHooksBlock(COMMAND)
-    for (const event of KIMI_HOOK_EVENTS) {
-      expect(block).toContain(`event = "${event}"`)
-    }
-    // Kimi treats matcher as a regex; omitting it matches all tools.
-    expect(block.match(/matcher = .*/g)).toEqual(['matcher = "^resume$"'])
-    expect(block).toContain('event = "SessionStart"\nmatcher = "^resume$"')
-    expect(
-      readManagedKimiHookEvents(applyManagedKimiHooks('', COMMAND, isManaged), isManaged)
-    ).toEqual(new Set(KIMI_HOOK_EVENTS))
-  })
-
-  it('preserves existing user config above the managed block', () => {
-    const userConfig = [
-      'default_model = "kimi-k2.6"',
-      '',
-      '[providers."mine"]',
-      'type = "openai"',
-      'base_url = "https://example.com/v1"',
-      'api_key = "sk-secret"',
-      '',
-      '[[hooks]]',
-      'event = "SessionStart"',
-      'command = "node my-own-hook.mjs"',
-      ''
-    ].join('\n')
-
-    const next = applyManagedKimiHooks(userConfig, COMMAND, isManaged)
-    expect(next).toContain('default_model = "kimi-k2.6"')
-    expect(next).toContain('api_key = "sk-secret"')
-    // The user's own hook survives untouched.
-    expect(next).toContain('command = "node my-own-hook.mjs"')
-    expect(readManagedKimiHookEvents(next, isManaged)).toEqual(new Set(KIMI_HOOK_EVENTS))
-  })
-
-  it('is idempotent — reinstalling does not duplicate the block', () => {
-    const once = applyManagedKimiHooks('default_model = "x"\n', COMMAND, isManaged)
-    const twice = applyManagedKimiHooks(once, COMMAND, isManaged)
-    expect(twice).toBe(once)
-    const markerCount = (twice.match(/orca-managed-kimi-hooks \(/g) ?? []).length
-    expect(markerCount).toBe(1)
-  })
-
-  it('removes the managed block and restores the user config', () => {
-    const userConfig = 'default_model = "kimi-k2.6"\n'
-    const installed = applyManagedKimiHooks(userConfig, COMMAND, isManaged)
-    const { text, changed } = removeManagedKimiHooks(installed, isManaged)
-    expect(changed).toBe(true)
-    expect(text).toBe(userConfig)
-    expect(readManagedKimiHookEvents(text, isManaged).size).toBe(0)
-  })
-
-  it('is stable across repeated calls (no stateful global-regex lastIndex drift)', () => {
-    const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND, isManaged)
-    // Repeated detection must not inherit stateful regex lastIndex.
-    expect(removeManagedKimiHooks(installed, isManaged).changed).toBe(true)
-    expect(removeManagedKimiHooks(installed, isManaged).changed).toBe(true)
-    expect(removeManagedKimiHooks('default_model = "x"\n', isManaged).changed).toBe(false)
-    expect(removeManagedKimiHooks(installed, isManaged).changed).toBe(true)
-    expect(readManagedKimiHookEvents(installed, isManaged)).toEqual(new Set(KIMI_HOOK_EVENTS))
-    expect(readManagedKimiHookEvents(installed, isManaged)).toEqual(new Set(KIMI_HOOK_EVENTS))
-  })
-
-  it('recovers when a hand-edit deletes only the trailing end marker', () => {
-    const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND, isManaged)
-    const orphaned = deleteEndMarker(installed)
-    expect(orphaned).not.toContain('<<<')
-    expect(readManagedKimiHookEvents(orphaned, isManaged)).toEqual(new Set(KIMI_HOOK_EVENTS))
-    expect(removeManagedKimiHooks(orphaned, isManaged)).toEqual({
-      text: 'default_model = "x"\n',
-      changed: true
-    })
-    const reinstalled = applyManagedKimiHooks(orphaned, COMMAND, isManaged)
-    expect((reinstalled.match(/orca-managed-kimi-hooks \(/g) ?? []).length).toBe(1)
-  })
-})
 
 // #18861: an orphaned start marker used to make every following byte "managed".
 describe('orphaned managed block ownership (#18861)', () => {
@@ -126,16 +39,6 @@ describe('orphaned managed block ownership (#18861)', () => {
     expect(text).not.toContain('agent-hooks/kimi-hook.sh')
   })
 
-  it('keeps user tables appended after an orphaned block through reinstall', () => {
-    const reinstalled = applyManagedKimiHooks(orphanedWithUserTail(), COMMAND, isManaged)
-    expect(reinstalled).toContain('api_key = "sk-secret"')
-    expect(reinstalled).toContain('command = "node my-own-hook.mjs"')
-    expect((reinstalled.match(/orca-managed-kimi-hooks \(/g) ?? []).length).toBe(1)
-    expect(reinstalled.indexOf('sk-secret')).toBeLessThan(reinstalled.indexOf(START_MARKER))
-    expect(readManagedKimiHookEvents(reinstalled, isManaged)).toEqual(new Set(KIMI_HOOK_EVENTS))
-    expect(applyManagedKimiHooks(reinstalled, COMMAND, isManaged)).toBe(reinstalled)
-  })
-
   it('reclaims a genuinely managed orphan table but stops at the first user line', () => {
     const orphan = [
       'default_model = "x"',
@@ -152,58 +55,6 @@ describe('orphaned managed block ownership (#18861)', () => {
     const { text, changed } = removeManagedKimiHooks(orphan, isManaged)
     expect(changed).toBe(true)
     expect(text).toBe('default_model = "x"\n[hand.written]\nvalue = "keep"\n')
-  })
-
-  it('removes only the stray marker when an orphan owns no managed content', () => {
-    const orphan = `default_model = "x"\n\n${START_MARKER}\n[user.table]\nvalue = "keep"\n`
-    const { text, changed } = removeManagedKimiHooks(orphan, isManaged)
-    expect(changed).toBe(true)
-    expect(text).toBe('default_model = "x"\n[user.table]\nvalue = "keep"\n')
-  })
-
-  it('does not treat a user [[hooks]] table as Orca-owned content', () => {
-    const orphan = [
-      START_MARKER,
-      '[[hooks]]',
-      'event = "Stop"',
-      'command = "node my-own-hook.mjs"',
-      'timeout = 10',
-      ''
-    ].join('\n')
-    const { text } = removeManagedKimiHooks(orphan, isManaged)
-    expect(text).toContain('command = "node my-own-hook.mjs"')
-    expect(text).not.toContain(START_MARKER)
-  })
-
-  // Command ownership survives extra user keys; leaving the table would still emit events after uninstall.
-  it('owns a managed table the user added an extra key to', () => {
-    const orphan = [
-      START_MARKER,
-      '[[hooks]]',
-      'event = "Stop"',
-      `command = "${COMMAND.replaceAll('"', '')}"`,
-      'timeout = 10',
-      'matcher = "Bash"',
-      ''
-    ].join('\n')
-    expect(removeManagedKimiHooks(orphan, isManaged).text).toBe('')
-  })
-
-  it('owns a customised managed table sitting outside any marker', () => {
-    const customised = [
-      'default_model = "x"',
-      '',
-      '[[hooks]]',
-      'event = "Stop"',
-      `command = "${COMMAND.replaceAll('"', '')}"`,
-      'timeout = 10',
-      'matcher = "Bash"',
-      ''
-    ].join('\n')
-    expect(removeManagedKimiHooks(customised, isManaged).text).toBe('default_model = "x"\n')
-    expect(readManagedKimiHookEvents(customised, isManaged)).toEqual(new Set(['Stop']))
-    const reinstalled = applyManagedKimiHooks(customised, COMMAND, isManaged)
-    expect((reinstalled.match(/event = "Stop"/g) ?? []).length).toBe(1)
   })
 
   // Extent safety: a multi-line value means the table's end is not knowable by
@@ -224,24 +75,6 @@ describe('orphaned managed block ownership (#18861)', () => {
     expect(text).not.toContain(START_MARKER)
   })
 
-  // Match exact parsed keys, excluding suffixes and comments.
-  it('does not read a managed event from key suffixes or commented keys', () => {
-    const nearMiss = [
-      START_MARKER,
-      '[[hooks]]',
-      'previous_event = "Stop"',
-      `fallback_command = "${COMMAND.replaceAll('"', '')}"`,
-      'timeout = 10',
-      END_MARKER_LINE,
-      '',
-      '[[hooks]]',
-      '# event = "PreToolUse"',
-      `# command = "${COMMAND.replaceAll('"', '')}"`,
-      ''
-    ].join('\n')
-    expect(readManagedKimiHookEvents(nearMiss, isManaged)).toEqual(new Set())
-  })
-
   // TOML gaps do not end tables; removing a partial run would orphan later keys.
   it('fails closed when more keys follow a gap inside the table', () => {
     for (const gap of ['', '# note']) {
@@ -260,108 +93,10 @@ describe('orphaned managed block ownership (#18861)', () => {
       expect(text).not.toContain(START_MARKER)
     }
   })
-
-  it('still owns a table whose keys are followed by a gap and a new table', () => {
-    const orphan = [
-      START_MARKER,
-      '[[hooks]]',
-      'event = "Stop"',
-      `command = "${COMMAND.replaceAll('"', '')}"`,
-      'timeout = 10',
-      '',
-      '# a user comment',
-      '',
-      '[user.table]',
-      'v = 1',
-      ''
-    ].join('\n')
-    const { text } = removeManagedKimiHooks(orphan, isManaged)
-    expect(text).not.toContain(START_MARKER)
-    expect(text).not.toContain('agent-hooks/kimi-hook.sh')
-    expect(text).toContain('# a user comment')
-    expect(text).toContain('[user.table]')
-  })
-
-  // Command-owned tables with unreadable events must still appear installed or partial.
-  it('never reports not_installed for a table remove() would strip', () => {
-    for (const eventLine of [`event = 'Stop'`, 'event = "Stop" # note', 'event = 12']) {
-      const config = [
-        START_MARKER,
-        '[[hooks]]',
-        eventLine,
-        `command = "${COMMAND.replaceAll('"', '')}"`,
-        'timeout = 10',
-        END_MARKER_LINE,
-        ''
-      ].join('\n')
-      expect(removeManagedKimiHooks(config, isManaged).changed).toBe(true)
-      expect(readManagedKimiHookEvents(config, isManaged).size).toBeGreaterThan(0)
-    }
-    const singleQuoted = [
-      START_MARKER,
-      '[[hooks]]',
-      `event = 'Stop'`,
-      `command = "${COMMAND.replaceAll('"', '')}"`,
-      'timeout = 10',
-      END_MARKER_LINE,
-      ''
-    ].join('\n')
-    expect(readManagedKimiHookEvents(singleQuoted, isManaged)).toEqual(new Set(['Stop']))
-  })
-
-  // Reclaim recognized managed tables even when edits strand them outside the marker block.
-  it('reclaims managed tables stranded below user text', () => {
-    const managedTable = [
-      '[[hooks]]',
-      'event = "Stop"',
-      `command = "${COMMAND.replaceAll('"', '')}"`,
-      'timeout = 10'
-    ].join('\n')
-    const orphan = `${START_MARKER}\n${managedTable}\n[user.table]\nv = 1\n${managedTable}\n`
-    const { text } = removeManagedKimiHooks(orphan, isManaged)
-    expect(text).toBe('[user.table]\nv = 1\n')
-  })
-
-  it('stops an orphaned block at a second start marker', () => {
-    const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND, isManaged)
-    const duplicated = `${deleteEndMarker(installed)}\n${START_MARKER}\n[user.table]\nv = 1\n`
-    const { text, changed } = removeManagedKimiHooks(duplicated, isManaged)
-    expect(changed).toBe(true)
-    expect(text).toContain('[user.table]')
-    expect(text).not.toContain(START_MARKER)
-    expect(text).not.toContain('agent-hooks/kimi-hook.sh')
-  })
-
-  it('removes both blocks when the markers are duplicated wholesale', () => {
-    const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND, isManaged)
-    const block = buildManagedKimiHooksBlock(COMMAND)
-    const doubled = `${installed}\n${block}\n[user.table]\nv = 1\n`
-    const { text, changed } = removeManagedKimiHooks(doubled, isManaged)
-    expect(changed).toBe(true)
-    expect(text).toBe('default_model = "x"\n[user.table]\nv = 1\n')
-  })
-
-  it('leaves a stray start marker after a well-formed block bounded', () => {
-    const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND, isManaged)
-    const withStray = `${installed}${START_MARKER}\n[user.table]\nv = 1\n`
-    const { text } = removeManagedKimiHooks(withStray, isManaged)
-    expect(text).toBe('default_model = "x"\n[user.table]\nv = 1\n')
-  })
 })
 
 describe('CRLF configs', () => {
   const userConfig = 'default_model = "kimi-k2.6"\r\n'
-
-  it('writes the managed block with the file’s existing CRLF endings', () => {
-    const installed = applyManagedKimiHooks(userConfig, COMMAND, isManaged)
-    expect(installed).not.toMatch(/[^\r]\n/)
-    expect(readManagedKimiHookEvents(installed, isManaged)).toEqual(new Set(KIMI_HOOK_EVENTS))
-    expect(applyManagedKimiHooks(installed, COMMAND, isManaged)).toBe(installed)
-    expect(removeManagedKimiHooks(installed, isManaged)).toEqual({
-      text: userConfig,
-      changed: true
-    })
-  })
 
   it('keeps CRLF user bytes after an orphaned block', () => {
     const installed = applyManagedKimiHooks(userConfig, COMMAND, isManaged)

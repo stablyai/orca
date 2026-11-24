@@ -87,6 +87,7 @@ function decodeView(value: unknown): AgentChildWorkView | null {
   const description = text(view.description)
   const agentType = text(view.agentType)
   const model = text(view.model)
+  const effort = text(view.effort)
   const lastMessage = text(view.lastMessage)
   const parentChildWorkId = text(view.parentChildWorkId)
   const totalTokens = clock(view.totalTokens)
@@ -97,6 +98,7 @@ function decodeView(value: unknown): AgentChildWorkView | null {
     ...(description ? { description } : {}),
     ...(agentType ? { agentType } : {}),
     ...(model ? { model } : {}),
+    ...(effort ? { effort } : {}),
     ...(lastMessage ? { lastMessage } : {}),
     ...(parentChildWorkId ? { parentChildWorkId } : {}),
     kind: arm(KINDS, view.kind) ?? 'unknown',
@@ -150,6 +152,7 @@ function viewsEqual(a: AgentChildWorkView, b: AgentChildWorkView, clockTolerance
     a.description === b.description &&
     a.agentType === b.agentType &&
     a.model === b.model &&
+    a.effort === b.effort &&
     a.state === b.state &&
     a.membership === b.membership &&
     a.outcome === b.outcome &&

@@ -1,10 +1,13 @@
-import type { PRCheckDetail } from '../../github/check-types'
+import type { PRCheckDetail } from '../../github/checks/check-types'
 
 export function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['conclusion']> {
   return check.conclusion ?? 'pending'
 }
 
 export function getCheckStatusLabel(check: PRCheckDetail): string {
+  if (check.gitlabAllowedFailure === true && check.conclusion === 'neutral') {
+    return 'Allowed to fail'
+  }
   const conclusion = getCheckConclusion(check)
   if (conclusion === 'success') {
     return 'Successful'

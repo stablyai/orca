@@ -100,7 +100,7 @@ function collectBindings(source) {
 
 // Resolve file-wide static import/re-export/import()/require/module.require/createRequire aliases and getBuiltinModule; literals/const strings and literal property keys only.
 // No scope tracking, computed values/specifiers, imported parameters, object/argument loaders or eval/Function resolution.
-export function collectModuleSpecifiers(file, contents) {
+export function collectModuleSpecifiers(file, contents, { runtimeOnly = false } = {}) {
   const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, false)
   if (source.parseDiagnostics.length > 0) {
     throw new Error(`Cannot parse ${file}; the process-host import check must not skip it.`)
@@ -226,6 +226,14 @@ export function collectModuleSpecifiers(file, contents) {
     }
   }
   for (const node of modules) {
+    if (
+      runtimeOnly &&
+      (ts.isImportTypeNode(node) ||
+        node.isTypeOnly ||
+        (ts.isImportDeclaration(node) && node.importClause?.isTypeOnly))
+    ) {
+      continue
+    }
     if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
       add(node.moduleSpecifier)
     } else if (

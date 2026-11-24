@@ -1,4 +1,4 @@
-import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
+import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 
 export type CachedCombinedDiffViewState = {
@@ -7,7 +7,6 @@ export type CachedCombinedDiffViewState = {
   sections: DiffSection[]
   sectionHeights: Record<number, number>
   loadedIndices: number[]
-  sideBySide: boolean
 }
 
 type CombinedDiffViewMemory = {

@@ -1,6 +1,7 @@
 const { createHash } = require('node:crypto')
 const { readFileSync, readdirSync, statSync } = require('node:fs')
 const { join, resolve } = require('node:path')
+const { brotliDecompressSync } = require('node:zlib')
 
 const { darkBuildMarkerFileNames } = require('../../../dark-build-switches.cjs')
 
@@ -98,6 +99,25 @@ function parseManifest(bundleDir) {
     if (typeof asset.contentType !== 'string' || asset.contentType.length === 0) {
       throw failure(`manifest asset ${asset.path} has no contentType`)
     }
+    if (asset.brotliByteLength !== undefined) {
+      assertInteger(asset.brotliByteLength, `assets[${asset.path}].brotliByteLength`)
+      if (asset.brotliByteLength >= asset.byteLength) {
+        throw failure(`manifest asset ${asset.path} declares a brotli copy no smaller than itself`)
+      }
+    }
+  }
+  if (manifest.catalogs !== undefined && !Array.isArray(manifest.catalogs)) {
+    throw failure('manifest catalogs is not a list')
+  }
+  for (const catalog of manifest.catalogs ?? []) {
+    if (typeof catalog !== 'object' || catalog === null || typeof catalog.locale !== 'string') {
+      throw failure('manifest catalog entry has no locale')
+    }
+    assertSafeRelativePath(catalog.path)
+    if (typeof catalog.sha256 !== 'string' || !SHA256_PATTERN.test(catalog.sha256)) {
+      throw failure(`manifest catalog ${catalog.path} has no sha256 digest`)
+    }
+    assertInteger(catalog.byteLength, `catalogs[${catalog.path}].byteLength`)
   }
   if (!manifest.assets.some((asset) => asset.path === manifest.entrypoint)) {
     throw failure(`manifest entrypoint ${manifest.entrypoint} is not one of its assets`)
@@ -119,6 +139,11 @@ function parseManifest(bundleDir) {
   return manifest
 }
 
+// Assets go to the phone; catalogs stay on the host, which serves one on request.
+function servedFiles(manifest) {
+  return [...manifest.assets, ...(manifest.catalogs ?? [])]
+}
+
 function listBundleFiles(directory, prefix = '') {
   const found = []
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -132,13 +157,33 @@ function listBundleFiles(directory, prefix = '') {
   return found
 }
 
+// Mirrors mobileWebBundleBrotliPath in src/shared/mobile-web-bundle/manifest-contract.ts.
+function brotliPath(asset) {
+  return `${asset.path}.br`
+}
+
+function brotliCopies(manifest) {
+  return manifest.assets.filter((asset) => asset.brotliByteLength !== undefined)
+}
+
+function statSize(bundleDir, path) {
+  try {
+    return statSync(join(bundleDir, path)).size
+  } catch (error) {
+    throw failure(
+      `manifest lists ${path}, which is missing from ${bundleDir} (${error.code ?? error.message}). ${REMEDY}`
+    )
+  }
+}
+
 // Reject unlisted on-disk assets: content-addressed stale files survive interrupted builds and would ship unreachable/unverified in asar.
 function assertNoUnlistedFiles(bundleDir, manifest) {
   // A dark build's marker is accounted for here; packaging refuses it through assertNotDarkBuild.
   const listed = new Set([
     'manifest.json',
     ...darkBuildMarkerFileNames(),
-    ...manifest.assets.map((asset) => asset.path)
+    ...servedFiles(manifest).map((file) => file.path),
+    ...brotliCopies(manifest).map((asset) => brotliPath(asset))
   ])
   const strays = listBundleFiles(bundleDir).filter((path) => !listed.has(path))
   if (strays.length > 0) {
@@ -153,16 +198,9 @@ function assertNoUnlistedFiles(bundleDir, manifest) {
 function assertMobileWebBundleBuilt(bundleDir = MOBILE_WEB_BUNDLE_DIR) {
   const manifest = parseManifest(bundleDir)
   assertNoUnlistedFiles(bundleDir, manifest)
-  for (const asset of manifest.assets) {
+  for (const asset of servedFiles(manifest)) {
     const assetPath = join(bundleDir, asset.path)
-    let size
-    try {
-      size = statSync(assetPath).size
-    } catch (error) {
-      throw failure(
-        `manifest lists ${asset.path}, which is missing from ${bundleDir} (${error.code ?? error.message}). ${REMEDY}`
-      )
-    }
+    const size = statSize(bundleDir, asset.path)
     if (size !== asset.byteLength) {
       throw failure(
         `${asset.path} is ${String(size)} bytes on disk, manifest says ${String(asset.byteLength)}. ${REMEDY}`
@@ -173,6 +211,20 @@ function assertMobileWebBundleBuilt(bundleDir = MOBILE_WEB_BUNDLE_DIR) {
       throw failure(
         `${asset.path} hashes to ${sha256} on disk, manifest says ${asset.sha256}. ${REMEDY}`
       )
+    }
+  }
+  // Phones verify only the inflated bytes, so a copy that inflates to anything else fails every download.
+  for (const asset of brotliCopies(manifest)) {
+    const path = brotliPath(asset)
+    const size = statSize(bundleDir, path)
+    if (size !== asset.brotliByteLength) {
+      throw failure(
+        `${path} is ${String(size)} bytes on disk, manifest says ${String(asset.brotliByteLength)}. ${REMEDY}`
+      )
+    }
+    const inflated = brotliDecompressSync(readFileSync(join(bundleDir, path)))
+    if (createHash('sha256').update(inflated).digest('hex') !== asset.sha256) {
+      throw failure(`${path} does not inflate to ${asset.path}. ${REMEDY}`)
     }
   }
   console.log(

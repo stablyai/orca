@@ -1,20 +1,24 @@
+// @protected-copy scope=file
+// What a permission choice does: a language pack must never misstate it.
 import { Terminal } from 'lucide-react'
 import type { AgentPermissionChoice } from '../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { translate } from '@/i18n/i18n'
-import { DropdownMenuRadioItem, DropdownMenuSeparator } from '../../ui/dropdown-menu'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { DropdownMenuSeparator } from '../../ui/dropdown-menu'
 import {
   NativeChatPermissionModeItems,
   NativeChatPermissionModeName
-} from '../../native-chat/NativeChatPermissionModePicker'
+} from '../../native-chat/session/options/controls/NativeChatPermissionModePicker'
+import { PermissionChoiceRadioItem } from '../../native-chat/session/options/controls/PermissionChoiceRadioItem'
 
-function ownDescription(chatOwnSupported: boolean): string {
+function ownDescription(chatOwnSupported: boolean, t: Translate = translate): string {
   if (!chatOwnSupported) {
-    return translate(
+    return t(
       'settings.agents.permissionOwnLegacyDescription',
       'Orca adds no permission flag in terminals; chats use Settings → Chat.'
     )
   }
-  return translate(
+  return t(
     'settings.agents.permissionOwnDescription',
     'Terminals and chats follow the agent’s own permission settings.'
   )
@@ -57,6 +61,7 @@ export function AgentPermissionChoiceItems({
   disabled?: boolean
   onSelect: (choice: AgentPermissionChoice) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const modes = choices.filter((choice) => choice !== 'own')
   return (
     <>
@@ -69,14 +74,14 @@ export function AgentPermissionChoiceItems({
       {choices.includes('own') ? (
         <>
           {modes.length > 0 ? <DropdownMenuSeparator /> : null}
-          <DropdownMenuRadioItem value="own" disabled={disabled} onSelect={() => onSelect('own')}>
-            <div className="min-w-0 py-0.5">
-              <AgentPermissionChoiceName choice="own" ownLabel={ownLabel} />
-              <div className="text-xs font-normal text-muted-foreground">
-                {ownDescription(chatOwnSupported)}
-              </div>
-            </div>
-          </DropdownMenuRadioItem>
+          <PermissionChoiceRadioItem
+            value="own"
+            description={ownDescription(chatOwnSupported, t)}
+            disabled={disabled}
+            onSelect={() => onSelect('own')}
+          >
+            <AgentPermissionChoiceName choice="own" ownLabel={ownLabel} />
+          </PermissionChoiceRadioItem>
         </>
       ) : null}
     </>
