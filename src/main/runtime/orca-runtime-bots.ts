@@ -106,14 +106,14 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       this.servedOrcaProfileId
         ? profileAccountUserId(this.servedOrcaProfileId, getProfileUserDataPath())
         : null,
-    forgetBot: (botId) => {
+    forgetBot: async (botId) => {
       void this.botSharePicks()
         .forget(botId)
         .catch(() => undefined)
       this.lookAround.forget(botId)
       void this.botWork.forgetBot(botId)
       this.bots.memory.removed(botId)
-      void revokeDeletedBotShareDevices(this.botShareDevices, botId)
+      await revokeDeletedBotShareDevices(this.botShareDevices, botId)
     }
   })
 

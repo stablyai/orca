@@ -64,8 +64,9 @@ export type BotControllerDependencies = {
   filesystem: BotHomeFilesystem
   /** The Orca account signed in now, recorded on the links a bot gets. */
   accountUserId?: () => string | null
-  /** Drops what this host keeps for a bot outside its record (its Look around), once it is deleted. */
-  forgetBot?: (botId: string) => void
+  /** Drops what this host keeps for a bot outside its record (its Look around), once it is deleted;
+   *  the delete answers after it, so teammates' devices are ended by then. */
+  forgetBot?: (botId: string) => Promise<void>
 }
 
 export class BotController {
@@ -339,7 +340,7 @@ export class BotController {
       }
       store.removeBot(bot)
       await persistBotStore(store)
-      this.deps.forgetBot?.(bot.id)
+      await this.deps.forgetBot?.(bot.id)
       this.deps.notifyBotsWritten(true)
       return { deleted: true }
     })
