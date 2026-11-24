@@ -3,7 +3,9 @@
  *  messages and ones from before it was kept. A device's `account` is the Orca account name it
  *  claimed when the message was sent: unverified, shown by name only. `accountId` is that claim's
  *  id; `own` compares it with the host's account at send (absent when either side had none);
- *  `computer` names the computer the claim came from, and `phone` the relayed phone it was typed on. */
+ *  `computer` names the computer the claim came from, and `phone` the relayed phone it was typed on.
+ *  `verified: 'share'`: not a claim; the host stamped the teammate's share row the connection
+ *  signed in as, so the account is that teammate's. */
 export type AgentJournalTypedBy =
   | { by: 'host' }
   | {
@@ -14,6 +16,7 @@ export type AgentJournalTypedBy =
       own?: boolean
       computer?: string
       phone?: string
+      verified?: 'share'
     }
   | { by: 'agent' }
 
@@ -22,6 +25,22 @@ export type OtherPersonTypist = { name: string; computer?: string; phone?: strin
 
 const nonEmpty = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim() ? value.trim() : undefined
+
+/** The teammate a share connection proved typed a message, by their share row; undefined for any
+ *  other message, a paired device's claim included. */
+export function shareTypistOf(
+  typedBy: AgentJournalTypedBy | undefined
+): { accountId: string; name?: string } | undefined {
+  if (typedBy?.by !== 'device' || typedBy.verified !== 'share') {
+    return undefined
+  }
+  const accountId = nonEmpty(typedBy.accountId)
+  if (!accountId) {
+    return undefined
+  }
+  const name = nonEmpty(typedBy.account)
+  return { accountId, ...(name ? { name } : {}) }
+}
 
 /** Only a claimed account the host compared and found different draws a line: unknown is not other. */
 export function otherPersonTypistOf(

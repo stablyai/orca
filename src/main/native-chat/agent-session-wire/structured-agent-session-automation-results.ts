@@ -10,9 +10,9 @@ import type { AgentJournalTurnScope } from '../../../shared/agent-session/journa
 import {
   agentSessionSendCarriesStoppedHistory,
   agentSessionSendDeliversStoppedHistory,
-  messageWords,
   refusedBeforeWrite
 } from '../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
+import { messageWords } from '../../../shared/agent-session/journal/agent-journal-message-words'
 import {
   automationResultNoteBody,
   automationResultNoteClientMessageId,

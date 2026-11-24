@@ -26,6 +26,7 @@ import {
 } from '../operations/structured-agent-session-command-turn'
 import type { StoppedHistoryDelivery } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
 import { withStoppedHistory } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
+import { withShareTypistPrompt } from '../../../../shared/bots/bot-share-typist-prompt'
 import { structuredAgentSessionRideAlong } from '../structured-agent-session-ride-along'
 import {
   markStructuredAgentSessionInputUnadmitted,
@@ -70,8 +71,9 @@ export async function beginSubmissionHandover(
   const turnScope = await readContextStructuredAgentSessionTurnScope(ctx)
   let carried: StoppedHistoryDelivery | null = null
   const rideAlong = structuredAgentSessionRideAlong(ctx, submission, body)
+  const own = withShareTypistPrompt(body)
   const outgoing = (): AgentJournalMessageItem =>
-    rideAlong.outgoing(carried ? withStoppedHistory(body, carried.messages) : body)
+    rideAlong.outgoing(carried ? withStoppedHistory(own, carried.messages) : own)
   let ownsChild = stillCurrent
   let closing: UnsentSendHold['cause'] | undefined
   let unwritten = false

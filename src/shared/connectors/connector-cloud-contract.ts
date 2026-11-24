@@ -149,6 +149,7 @@ export {
   type ConnectorContextItem,
   type ConnectorAsker,
   ConnectorAskerVia,
+  ConnectorAskerViaAccount,
   type ConnectorEarlierOwn
 } from '../connector-asker-contract'
 

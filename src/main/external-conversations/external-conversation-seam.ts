@@ -313,7 +313,7 @@ export class ExternalConversationSeam {
             .askerImages({ botId: chat.bot.botId, conversation: key, asker: message.asker, signal })
             .catch(() => [])
         : []
-    const delivered = await this.chatDeliveries.deliver(host.chat, key, chat, {
+    const delivered = await this.chatDeliveries.deliver(host, key, chat, {
       ...message,
       signal,
       ...(images.length > 0 ? { images } : {})

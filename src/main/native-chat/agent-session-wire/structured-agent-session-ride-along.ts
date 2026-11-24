@@ -8,9 +8,9 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionSendCarriesStoppedHistory,
-  agentSessionSendDeliversStoppedHistory,
-  isPromptCommand
+  agentSessionSendDeliversStoppedHistory
 } from '../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
+import { isPromptCommand } from '../../../shared/agent-session/journal/agent-journal-message-words'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionHandoverContext } from './host/structured-agent-session-host-types'
 import { agentSessionInstructionsContext } from '../../runtime/agent-session/records/agent-session-instructions-receipt'
