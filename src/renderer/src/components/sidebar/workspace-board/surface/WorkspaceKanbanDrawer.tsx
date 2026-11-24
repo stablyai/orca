@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
+import { selectWorkspaceListOpen } from '@/components/app-rail/app-rail-layout'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useWorkspaceStatusDocumentDrop } from '../../worktree-list/drag/use-workspace-status-drop'
@@ -76,7 +77,7 @@ function WorkspaceKanbanDrawerContent({
   const workspaceBoardColumnWidth = useAppStore((s) => s.workspaceBoardColumnWidth)
   const setWorkspaceBoardColumnWidth = useAppStore((s) => s.setWorkspaceBoardColumnWidth)
   const sortBy = useAppStore((s) => s.sortBy)
-  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  const sidebarOpen = useAppStore(selectWorkspaceListOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const boardRef = useRef<HTMLDivElement>(null)
   const laneScrollerRef = useRef<HTMLDivElement>(null)

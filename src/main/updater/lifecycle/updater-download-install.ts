@@ -270,4 +270,9 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
   protected isQuittingForUpdate(): boolean {
     return this.quittingForUpdate
   }
+
+  /** True once the native updater is closing windows to install; false during preflight, cleanup or deferred staging. */
+  isNativeUpdateInstallUnderWay(): boolean {
+    return this.quitAndInstallNativeInvoked && !this.isAwaitingMacStaging()
+  }
 }

@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "다시 로그인",
-      "usageSignInMessage": "선택한 Claude 계정에 다시 로그인해야 합니다. 설정 > AI 제공자 계정을 열거나 시스템 기본값을 선택하세요."
+      "usageSignInMessage": "이 계정에 다시 로그인해야 합니다."
     }
   },
   "agentHistory": {
@@ -392,6 +392,13 @@
     "queuedMessages": {
       "deleteAll": "모두 삭제",
       "editMessage": "메시지 편집",
+      "showLess": "간략히 보기",
+      "moreCount_one": "{{count}}개 더 보기",
+      "moreCount_other": "{{count}}개 더 보기",
+      "deleteMessage": "메시지 삭제",
+      "queuedCount_one": "대기 중인 메시지 {{count}}개",
+      "queuedCount_other": "대기 중인 메시지 {{count}}개",
+      "foldNeedsAttention": "{{more}}, 확인이 필요한 메시지가 있습니다",
       "pausedState": "일시 중지됨",
       "queuedState": "대기 중",
       "resume": "재개",
@@ -2427,6 +2434,7 @@
       "images_one": "이미지 {{count}}개",
       "images_other": "이미지 {{count}}개",
       "moreActions": "추가 작업",
+      "you": "나",
       "send": "보내기",
       "sendAgainHint": "이 메시지 다시 보내기",
       "sendHint": "이 메시지 보내기",
@@ -2536,6 +2544,7 @@
       "unsavedMarkdown": "저장되지 않은 Markdown 변경 사항",
       "urlPrompt": "URL을 입력하세요. 비워 두면 새 탭이 열립니다.",
       "allowAutoClose": "자동 닫기 허용",
+      "agents": "에이전트",
       "renameTerminalFailed": "터미널 이름을 변경하지 못했습니다. {{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -2750,6 +2759,8 @@
       "conversationCleared": "이 대화는 지워졌습니다.",
       "goalsUnsupported": "이 에이전트는 목표를 지원하지 않습니다.",
       "historyUnavailable": "Orca가 지금 이 채팅의 기록을 열지 못했습니다.",
+      "diskFull": "이 채팅을 실행 중인 컴퓨터의 디스크가 가득 찼습니다.",
+      "freeDiskSpace": "해당 디스크의 공간을 확보한 후 다시 시도하세요.",
       "savedInOtherFolder": "이 대화는 다른 폴더에 저장되었습니다.",
       "historyUnreadable": "Orca가 이 채팅의 저장된 기록을 읽지 못했습니다.",
       "historyUnusable": "이 채팅을 불러올 수 없습니다.",
@@ -2855,6 +2866,19 @@
     "nativeChatView": {
       "linkedMessageMissing": "해당 메시지를 찾을 수 없습니다."
     },
+    "tabsSheet": {
+      "needsYou": "확인 필요",
+      "working": "작업 중",
+      "everythingElse": "기타",
+      "closeTab": "{{title}} 닫기"
+    },
+    "tabRows": {
+      "browser": "브라우저",
+      "markdown": "Markdown 노트",
+      "file": "파일",
+      "chat": "채팅",
+      "terminal": "터미널"
+    },
     "browserProfile": {
       "default": "기본"
     },
@@ -2872,7 +2896,12 @@
       "workspaceSegment": "이 워크스페이스 ({{count}})"
     },
     "tabBar": {
+      "oneTab": "탭 1개",
       "tabCount": "탭 {{count}}개",
+      "anotherNeedsYou": "다른 탭에서 확인이 필요합니다",
+      "actionsHint": "이 탭의 작업을 표시합니다",
+      "next": "다음 탭",
+      "previous": "이전 탭",
       "hint": "모든 탭 표시"
     }
   },
@@ -3463,6 +3492,9 @@
       "planModelUnavailable": "\"{{model}}\" 모델은 {{label}}에서 사용할 수 없습니다.",
       "planModelWithoutThinking": "\"{{model}}\" 모델은 사고 강도 설정을 지원하지 않습니다.",
       "planThinkingLevelInvalid": "{{model}}에서는 사고 강도 \"{{level}}\" 설정을 사용할 수 없습니다.",
+      "commandTemplateEmptyDictationCleanup": "받아쓰기 정리용 명령 템플릿이 비어 있습니다.",
+      "dictationCleanupAgentUnsupported": "설정 -> 음성 -> 정리에서 AI 정리를 지원하는 에이전트를 선택하세요. 지원하는 에이전트: {{agents}}, 또는 사용자 지정 명령.",
+      "agentCannotGenerateDictationCleanup": "에이전트 \"{{agent}}\"은(는) 받아쓰기 정리를 지원하지 않습니다. 지원하는 에이전트: {{agents}}, 또는 사용자 지정 명령.",
       "promptTooLargeForArgument": "{{label}} 프롬프트가 너무 커서 단일 명령줄 인수로 전달할 수 없습니다. 스테이징할 변경 사항을 줄이고 다시 시도하세요.",
       "promptTooLargeForWindows": "{{label}} 프롬프트가 Windows 명령줄에서 사용하기에 너무 큽니다. 스테이징할 변경 사항을 줄이고 다시 시도하세요.",
       "pullRequestDetailsUnparseable": "생성된 PR 세부 정보를 구문 분석할 수 없습니다.",
@@ -4413,7 +4445,7 @@
             "remoteOwnerNotConfigured": "{{server}}에 구성되지 않음",
             "claudeUnknownOnHost": "{{server}}에서 Claude 사용량을 가져올 수 없습니다. 그곳에서 로그인하지 않았거나 API 키 결제를 사용 중일 수 있습니다.",
             "remoteOwnerSignInSavedHere": "로그인 정보는 이 컴퓨터에만 저장되어 있습니다.",
-            "f8b8dbed85": "사용량 사용할 수 없음",
+            "f8b8dbed85": "사용량을 확인할 수 없음",
             "e2c6a4f917": "Grok을 실행하여 새로 고침",
             "f90b3d7a16": "새로고침하려면 Kimi를 실행하세요.",
             "0d8d7cfe15": "Claude 세션 대기 중",
@@ -4424,7 +4456,7 @@
               }
             },
             "1804cd8c3f": "로그인 새로 고치는 중",
-            "bf2e739f18": "로그인 사용할 수 없음",
+            "bf2e739f18": "로그인할 수 없음",
             "f8f0f9d8cc": "네트워크 문제",
             "minimax": {
               "expired": {
@@ -4461,6 +4493,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "왼쪽으로 스크롤 · 숨겨진 봇 {{amount}}개",
+      "scrollRight": "오른쪽으로 스크롤 · 숨겨진 봇 {{amount}}개"
+    },
     "link": {
       "pairTitle": "컴퓨터 페어링",
       "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",
@@ -4557,26 +4593,12 @@
       "peerTold": "{{from}}이(가) {{to}}에게 알림",
       "startAConversationWithThisGroupMentionBots": "이 그룹과 대화를 시작하세요. @이름 또는 @everyone으로 봇을 멘션하세요.",
       "items": {
-        "thisGroup": "이 그룹",
-        "thread": "스레드",
-        "all": "모든 작업",
-        "orNames": "{{names}} 또는 {{last}}",
-        "outsideRoom_one": "이 방 밖에 {{count}}개 더",
-        "outsideRoom_other": "이 방 밖에 {{count}}개 더",
-        "outsideThread_one": "이 스레드 밖에 {{count}}개 더",
-        "outsideThread_other": "이 스레드 밖에 {{count}}개 더",
-        "outside_one": "이 그룹 밖에 {{count}}개 더",
-        "outside_other": "이 그룹 밖에 {{count}}개 더",
         "emptyTitle": "이 그룹의 항목이 아직 없음",
-        "emptyBody": "{{names}}이(가) 이 그룹에서 무언가를 맡으면 여기에 표시됩니다.",
         "needsYouCount_one": "확인 필요 {{count}}개",
         "needsYouCount_other": "확인 필요 {{count}}개",
         "workingCount_one": "{{count}}개 작업 중",
         "workingCount_other": "{{count}}개 작업 중",
         "filterBot": "봇",
-        "outsideRoom": "이 방 밖에 {{count}}개 더",
-        "outsideThread": "이 스레드 밖에 {{count}}개 더",
-        "outside": "이 그룹 밖에 {{count}}개 더",
         "needsYouCount": "확인 필요 {{count}}개",
         "workingCount": "{{count}}개 작업 중"
       },
@@ -5005,8 +5027,7 @@
     },
     "items": {
       "filter": {
-        "clearAll": "필터 지우기",
-        "chat": "채팅"
+        "clearAll": "필터 지우기"
       },
       "tab": "항목",
       "activity": {
@@ -5033,7 +5054,9 @@
       "skillLimit": "메시지를 보내지 않았습니다. 선택한 스킬 파일을 {{limit}}개 이하로 줄인 뒤 다시 시도하세요.",
       "ask": {
         "notSentYet": "아직 보내지 않음",
-        "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요."
+        "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요.",
+        "replacedByNewer": "새 질문으로 대체됨",
+        "skipped": "건너뜀"
       }
     },
     "needs": {
@@ -5611,6 +5634,10 @@
       "today": "오늘",
       "yesterday": "어제",
       "lastTidied": "마지막 정리 {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "{{time}}에 계속",
+      "hitLimit": "한도 도달 · {{time}}에 초기화"
     }
   },
   "sidebar": {

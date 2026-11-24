@@ -21,6 +21,7 @@ export function runProcess(
     spec.onChildTerminated?.()
     return Promise.resolve({ code: null, signal: null, stdout: '', stderr: '', timedOut: false })
   }
+  const waitForPosixGroup = spec.terminationBarrier === 'wait-for-posix-group'
   const maxOutputBytes = spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
 
   return new Promise<ProcessResult>((resolve, reject) => {
@@ -48,14 +49,15 @@ export function runProcess(
     let deferredClose: { code: number | null; signal: NodeJS.Signals | null } | null = null
     let deferredError: Error | null = null
     let rootExitedBeforeBarrier = false
+    const onGroupTerminated = (): void => {
+      terminationReporter.report()
+      if (barrierStopping) {
+        markBarrierTerminationVerified()
+      }
+    }
     const nativeGroupTermination =
-      spec.terminationBarrier === true && process.platform !== 'win32'
-        ? createPosixGroupTermination(child, () => {
-            terminationReporter.report()
-            if (barrierStopping) {
-              markBarrierTerminationVerified()
-            }
-          })
+      (spec.terminationBarrier === true || waitForPosixGroup) && process.platform !== 'win32'
+        ? createPosixGroupTermination(child, onGroupTerminated, waitForPosixGroup)
         : undefined
 
     const settle = (act: () => void): void => {
@@ -308,7 +310,6 @@ export function runProcess(
         rootExitedBeforeBarrier = true
       }
       if (barrierStopping) {
-        deferredClose = { code, signal }
         resolveBarrierIfSafe()
         return
       }

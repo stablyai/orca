@@ -252,3 +252,22 @@ export function usePhoneConnectTrip(
     showSignIn: mine.status === 'waiting' ? (trips?.showSignIn ?? null) : null
   }
 }
+
+/** Starts the sign-in with the account picker once, as the page opens for one; a page reopened after
+ *  showing the sign-in here finds its trip running or ended, and leaves it be. */
+export function useSignInOnOpen(
+  signIn: boolean,
+  trip: PhoneConnectTrip,
+  start: (switchAccount: boolean) => void
+): void {
+  const started = useRef(false)
+  const idle = trip.status === 'idle'
+  useEffect(() => {
+    if (signIn && !started.current) {
+      started.current = true
+      if (idle) {
+        start(true)
+      }
+    }
+  }, [signIn, idle, start])
+}

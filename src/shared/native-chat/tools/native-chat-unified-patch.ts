@@ -123,6 +123,8 @@ export type UnifiedPatchSection = {
   path: string | null
   oldPath: string | null
   changeKind: 'added' | 'deleted' | 'edited' | 'renamed'
+  /** Opened by a `diff --git` line rather than by text that merely looks like file headers. */
+  fromGitHeader: boolean
   body: string
 }
 
@@ -203,6 +205,7 @@ export function unifiedPatchSections(text: string): {
       path: section.newPath ?? section.oldPath,
       oldPath: sectionChangeKind(section) === 'renamed' ? section.oldPath : null,
       changeKind: sectionChangeKind(section),
+      fromGitHeader: section.fromGitHeader,
       body: section.rows.join('\n')
     })),
     truncated: source.truncated

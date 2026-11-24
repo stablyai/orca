@@ -12,26 +12,31 @@ import { SshForwardedPortRow } from './ssh-forwarded-port-row'
 import { SshUnrestoredPortRow } from './ssh-unrestored-port-row'
 import type { PortForwardDialogState } from './ssh-port-forward-dialog'
 import { browserUrlForPortForwardEntry } from '@/lib/workspace-ports/workspace-port-urls'
+import { portForwardOwnerKey, type PortForwardOwner } from './port-forward-owner'
 
 const NO_FORWARDS: readonly PortForwardEntry[] = []
 const NO_UNRESTORED: readonly UnrestoredPortForward[] = []
 
 export function SshForwardedPortsSection({
-  connectionId,
+  owner,
+  canAdd,
   onOpenDialog
 }: {
-  connectionId: string
+  owner: PortForwardOwner
+  /** The owner's connection can start a forward now. */
+  canAdd: boolean
   onOpenDialog: (state: PortForwardDialogState) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const connectionId = portForwardOwnerKey(owner)
   const forwards = useAppStore((s) => s.portForwardsByConnection[connectionId] ?? NO_FORWARDS)
-  const unrestored = useAppStore(
-    (s) => s.unrestoredPortForwardsByConnection[connectionId] ?? NO_UNRESTORED
+  // Only SSH hosts save forwards across restarts, so only they have saved forwards that didn't start.
+  const unrestored = useAppStore((s) =>
+    owner.kind === 'ssh'
+      ? (s.unrestoredPortForwardsByConnection[connectionId] ?? NO_UNRESTORED)
+      : NO_UNRESTORED
   )
   const count = forwards.length + unrestored.length
-  const connected = useAppStore(
-    (s) => s.sshConnectionStates.get(connectionId)?.status === 'connected'
-  )
   const [collapsed, setCollapsed] = useState(false)
 
   return (
@@ -56,8 +61,8 @@ export function SshForwardedPortsSection({
           type="button"
           variant="ghost"
           size="xs"
-          disabled={!connected}
-          onClick={() => onOpenDialog({ mode: 'add', defaults: { targetId: connectionId } })}
+          disabled={!canAdd}
+          onClick={() => onOpenDialog({ mode: 'add', owner, defaults: {} })}
         >
           <Plus />
           {t('auto.components.right.sidebar.PortsPanel.a103dae837', 'Add')}
@@ -69,8 +74,9 @@ export function SshForwardedPortsSection({
             {forwards.map((entry) => (
               <SshForwardedPortRow
                 key={entry.id}
+                owner={owner}
                 entry={entry}
-                onEdit={() => onOpenDialog({ mode: 'edit', entry })}
+                onEdit={() => onOpenDialog({ mode: 'edit', owner, entry })}
                 // Use the system browser: this forward listens locally, while Orca’s browser may run on another host.
                 onOpenInBrowser={() =>
                   void window.api.shell.openUrl(browserUrlForPortForwardEntry(entry))

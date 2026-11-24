@@ -18,7 +18,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { formatTimeAgo, type AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
+import { agentStateLabel, formatTimeAgo, type AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
 import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import type { MobileSessionController } from '../use-mobile-session-controller'
@@ -238,6 +238,8 @@ function MobileSessionTabsSheetContent({
   const renderSplit = (entry: Extract<Entry, { kind: 'split' }>) => {
     const { panes } = entry
     const splitTitle = panes[0].title
+    const unreadBell = entry.unread && entry.group === 'other'
+    const badgeState = !unreadBell && entry.dotState !== 'idle' ? entry.dotState : undefined
     const paneCount =
       panes.length === 1
         ? t('session.tabsSheet.panes_one', '{{count}} pane', { count: panes.length })
@@ -253,6 +255,7 @@ function MobileSessionTabsSheetContent({
         accessibilityLabel={[
           splitTitle,
           paneCount,
+          badgeState ? agentStateLabel(badgeState) : null,
           entry.unread ? t('agents.list.unread', 'Unread') : null
         ]
           .filter(Boolean)
@@ -262,8 +265,8 @@ function MobileSessionTabsSheetContent({
         onSwipeClose={() => void closePanes(panes)}
       >
         <Tile
-          badge={entry.dotState}
-          unreadBell={entry.unread && entry.group === 'other'}
+          badge={badgeState}
+          unreadBell={unreadBell}
           mark={<Columns2 size={17} color={colors.textSecondary} strokeWidth={2.1} />}
         />
         <View style={styles.text}>
@@ -414,7 +417,7 @@ function Tile({
   unreadBell
 }: {
   mark: ReactNode
-  badge: AgentDotState | undefined
+  badge: MobileSessionTabSummary['dotState']
   unreadBell: boolean
 }) {
   const dot = badge && badge !== 'idle' ? badge : undefined
@@ -426,7 +429,7 @@ function Tile({
           {unreadBell ? (
             <Bell size={10} color={colors.statusAmber} fill={colors.statusAmber} />
           ) : dot ? (
-            <AgentStateDot state={dot} />
+            <AgentStateDot state={dot} decorative />
           ) : null}
         </View>
       ) : null}
@@ -442,13 +445,15 @@ function RowDetail({ row }: { row: MobileSessionTabRow }) {
   if (!row.stateWord && row.tab.type !== 'terminal' && row.tab.type !== 'agent-session') {
     return <TailClippedText style={styles.detail}>{row.content}</TailClippedText>
   }
+  const stateStyle =
+    row.dotState === 'failed'
+      ? styles.stateFailed
+      : row.group === 'needs-you'
+        ? styles.stateNeedsYou
+        : undefined
   return (
     <Text style={styles.detail} numberOfLines={1}>
-      {row.stateWord ? (
-        <Text style={row.group === 'needs-you' ? styles.stateNeedsYou : undefined}>
-          {row.stateWord}
-        </Text>
-      ) : null}
+      {row.stateWord ? <Text style={stateStyle}>{row.stateWord}</Text> : null}
       {row.stateWord && row.content ? ' · ' : ''}
       {row.content}
     </Text>
@@ -512,6 +517,7 @@ const styles = themedStyleSheet(() => ({
   title: { fontSize: 15, fontWeight: '500', color: colors.textPrimary },
   paneTitle: { fontSize: 14, color: colors.textPrimary },
   detail: { fontSize: 13, color: colors.textSecondary },
-  stateNeedsYou: { color: AGENT_ATTENTION_COLOR },
+  stateNeedsYou: { color: colors.agentQuestionText },
+  stateFailed: { color: colors.statusRed },
   time: { fontSize: 12, color: colors.textMuted, fontVariant: ['tabular-nums'] }
 }))
