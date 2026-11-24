@@ -7,9 +7,10 @@
 // answer sent with the rest skipped ("send anyway") closes its ask's.
 import { botItemNamedAnswers } from './bot-item-answer-lines'
 import {
+  botItemIsQuickReplyText,
+  botItemQuestionLeads,
   botItemQuestionLine,
   botItemQuestionShape,
-  botItemQuickReplyText,
   type BotItemDecision,
   type BotItemQuestionShape
 } from './bot-item-ask'
@@ -30,6 +31,15 @@ export type BotItemQuestionAnswers = {
 }
 
 export type BotItemAskEnd = 'replaced' | 'skipped'
+
+/** The end an ask's card names: while a line no comment or send answered stays open to nothing, even
+ *  one showing an answer held on this device, which only goes back to the box. */
+export function botItemShownAskEnd(
+  ended: BotItemAskEnd | null,
+  answered: readonly (string | null)[]
+): BotItemAskEnd | null {
+  return ended && answered.some((words) => !words) ? ended : null
+}
 
 export type BotItemQuestionPairing = {
   /** By the ask's event id. */
@@ -102,19 +112,21 @@ function answeredLines(
   const picked = shape.decisions.findIndex(
     (decision, index) =>
       isOpen(index) &&
-      decision.replies.some((option) => botItemQuickReplyText(shape, decision, option) === text)
+      decision.replies.some((option) => botItemIsQuickReplyText(shape, index, option, text))
   )
   if (picked !== -1) {
     return { lines: [picked], byOrder: false }
   }
   // Several questions answered in one comment, a line each; or a quick reply edited before sending.
-  const named = botItemNamedAnswers(shape, text).flatMap((words, index) =>
+  const wordsByLine = botItemNamedAnswers(shape, text)
+  const named = wordsByLine.flatMap((words, index) =>
     words !== null && isOpen(index) ? [index] : []
   )
   if (named.length > 0) {
     return { lines: named, byOrder: false }
   }
-  if (answersAskedQuestions(text, asked)) {
+  // If the named lines were answered meanwhile, a late reply can't take another line by order.
+  if (wordsByLine.some((words) => words !== null) || answersAskedQuestions(text, asked)) {
     return none
   }
   const next = answers.indexOf(null)
@@ -160,7 +172,9 @@ export function botItemQuestionPairing(
         }
         questions.set(event.id, entry)
         for (const decision of shape.decisions) {
-          asked.add(botItemQuestionLine(decision.question))
+          for (const lead of botItemQuestionLeads(decision.question)) {
+            asked.add(lead)
+          }
         }
         if (open?.entry.answers.includes(null)) {
           // A new ask replaces the earlier one's open lines; its answers so far stand.

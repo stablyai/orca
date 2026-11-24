@@ -9,7 +9,8 @@ import { googleAccountApp } from '../../../../../../shared/google/google-account
 import type { GoogleSetupRun } from '../../../../../../shared/google/google-setup-run'
 import {
   googleReadyChoices,
-  googleSetupBlockerIsConnect
+  googleSetupBlockerIsConnect,
+  googleSetupConnectOpen
 } from '../../../../../../shared/google/google-setup-card-view'
 import { useTurnOnBotGoogle } from '../use-turn-on-bot-google'
 import { googleAccountChoices, googleReadinessFixer } from '../google-account-readiness'
@@ -42,6 +43,7 @@ export function GoogleSetupConnectCard({
   const host = useBotHostLabel(bot.hostId)
   const turnOn = useTurnOnBotGoogle()
   const done = run.steps.connect?.status === 'done'
+  const open = googleSetupConnectOpen(run)
   const blocker = useGoogleSetupBlocker(bot)
   const stuck = blocker && googleSetupBlockerIsConnect(blocker) ? blocker : null
   const connect = async (): Promise<void> => {
@@ -78,7 +80,7 @@ export function GoogleSetupConnectCard({
                 'Your browser opens Google’s sign-in. Your Google sign-in stays on this computer.'
               )}
         </p>
-        {!done && run.kind !== 'work' ? (
+        {open && run.kind !== 'work' ? (
           <p className="mt-1 text-xs text-muted-foreground">
             {t(
               'bots.googleSetup.connect.warning',
@@ -94,7 +96,7 @@ export function GoogleSetupConnectCard({
         ) : null}
         {/* An older copy never acts, done or not; it points down while something is left to press. */}
         {!newest ? (
-          stuck || !done ? (
+          stuck || open ? (
             <p className="mt-2 text-xs text-muted-foreground">
               {t('bots.googleSetup.movedDown', 'Continued further down.')}
             </p>
@@ -109,13 +111,13 @@ export function GoogleSetupConnectCard({
           </div>
         ) : stuck ? (
           <GoogleSetupBlockerPanel bot={bot} run={run} blocker={stuck} signIn={signIn} />
-        ) : done ? null : (
+        ) : open ? (
           <div className="mt-2">
             <Button size="xs" onClick={() => void connect()}>
               {t('bots.google.signIn', 'Sign in to Google')}
             </Button>
           </div>
-        )}
+        ) : null}
       </GoogleSetupCardFrame>
       {done ? (
         <GoogleSetupReceipt

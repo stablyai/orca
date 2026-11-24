@@ -4570,26 +4570,12 @@
       "peerTold": "{{from}}, {{to}} botuna bildirdi",
       "startAConversationWithThisGroupMentionBots": "Bu grupla bir konuşma başlatın. Botları @Ad veya @everyone ile anın.",
       "items": {
-        "thisGroup": "Bu grup",
-        "thread": "İleti dizisi",
-        "all": "Tüm işleri",
-        "orNames": "{{names}} veya {{last}}",
-        "outsideRoom_one": "Bu odanın dışında {{count}} tane daha",
-        "outsideRoom_other": "Bu odanın dışında {{count}} tane daha",
-        "outsideThread_one": "Bu ileti dizisinin dışında {{count}} tane daha",
-        "outsideThread_other": "Bu ileti dizisinin dışında {{count}} tane daha",
-        "outside_one": "Bu grubun dışında {{count}} tane daha",
-        "outside_other": "Bu grubun dışında {{count}} tane daha",
         "emptyTitle": "Bu gruptan henüz öğe yok",
-        "emptyBody": "{{names}} bu grupta bir iş üstlendiğinde burada görünür.",
         "needsYouCount_one": "{{count}} sizi bekliyor",
         "needsYouCount_other": "{{count}} sizi bekliyor",
         "workingCount_one": "{{count}} çalışıyor",
         "workingCount_other": "{{count}} çalışıyor",
         "filterBot": "Bot",
-        "outsideRoom": "Bu odanın dışında {{count}} tane daha",
-        "outsideThread": "Bu ileti dizisinin dışında {{count}} tane daha",
-        "outside": "Bu grubun dışında {{count}} tane daha",
         "needsYouCount": "{{count}} sizi bekliyor",
         "workingCount": "{{count}} çalışıyor"
       },
@@ -4627,8 +4613,7 @@
     },
     "items": {
       "filter": {
-        "clearAll": "Filtreleri temizle",
-        "chat": "Sohbet"
+        "clearAll": "Filtreleri temizle"
       },
       "tab": "Öğeler",
       "activity": {

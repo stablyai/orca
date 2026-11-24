@@ -1,7 +1,6 @@
 // `orca bot work list`: the work a bot started, one line each, from its work record and orchestration.
 import type { ConnectorSource } from '../connectors/external-conversation-link'
 import { CONNECTOR_SOURCE_NAMES } from '../connectors/external-conversation-link'
-import type { CheckStatus } from '../github/pull-requests/pull-request-types'
 import type { BotWorkPullRequest } from './bot-work-pull-request'
 import type { OrchestrationSessionWorkerState } from '../orchestration-session-workers'
 
@@ -44,24 +43,9 @@ const STATE_WORDS: Record<OrchestrationSessionWorkerState, string> = {
   unverifiable: 'out of contact'
 }
 
-const CHECK_WORDS: Record<CheckStatus, string> = {
-  pending: 'CI running',
-  success: 'CI green',
-  failure: 'CI failing',
-  neutral: 'no CI'
-}
-
+// The PR's link only: its state and checks are a cached read that goes stale, so GitHub is the source.
 function prWords(pr: BotWorkPullRequest): string {
-  if (pr.state === 'merged' || pr.state === 'closed') {
-    return `PR #${pr.number} ${pr.state}`
-  }
-  const review =
-    pr.review === 'APPROVED'
-      ? 'approved'
-      : pr.review === 'CHANGES_REQUESTED'
-        ? 'changes requested'
-        : 'waiting on review'
-  return `PR #${pr.number}${pr.state === 'draft' ? ' (draft)' : ''}: ${CHECK_WORDS[pr.checks]}, ${review}`
+  return `PR #${pr.number} ${pr.url}`
 }
 
 function age(startedAt: number, now: number): string {
