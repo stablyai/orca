@@ -137,7 +137,6 @@ export function useWorkspaceCleanupRemoval({
   const confirmUnverifiedRemoval = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
       if (
-        removalInFlightRef.current ||
         isWorkspaceCleanupRemovalBusy(candidate, useAppStore.getState().deleteStateByWorktreeId)
       ) {
         clearAgentStopRequest()

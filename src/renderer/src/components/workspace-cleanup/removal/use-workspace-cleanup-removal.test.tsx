@@ -29,6 +29,63 @@ afterEach(() => {
 })
 
 describe('useWorkspaceCleanupRemoval Browse failures', () => {
+  it('retries a failed row while the batch still owns another deletion', async () => {
+    const failed = makeCandidate({
+      executionHostId: 'local',
+      worktreeId: 'repo-1::/repo/preflight-failure',
+      path: '/repo/preflight-failure'
+    })
+    const sibling = makeCandidate({
+      executionHostId: 'local',
+      worktreeId: 'repo-1::/repo/waiting',
+      path: '/repo/waiting'
+    })
+    const failedIdentity = getWorkspaceCleanupCandidateIdentity(failed)
+    useAppStore.setState({
+      removeWorkspaceCleanupCandidates: ([worktreeId], options) => {
+        if (worktreeId === sibling.worktreeId) {
+          return new Promise(() => {})
+        }
+        if (options?.unverifiedRemovalConsent) {
+          return Promise.resolve({
+            removedIds: [worktreeId],
+            removedIdentities: [failedIdentity],
+            failures: []
+          })
+        }
+        return Promise.resolve({
+          removedIds: [],
+          removedIdentities: [],
+          failures: [
+            {
+              worktreeId,
+              executionHostId: 'local',
+              displayName: failed.displayName,
+              message: 'Git status could not be verified',
+              canDeleteAnyway: true
+            }
+          ]
+        })
+      }
+    })
+    const { result } = renderHook(() =>
+      useWorkspaceCleanupRemoval({ onDeselect: () => {}, closeModal: () => {} })
+    )
+    const status = (identity: string) =>
+      useWorkspaceCleanupRunStore.getState().run?.rows.find((row) => row.identity === identity)
+        ?.status
+
+    act(() => result.current.confirmRemove([failed, sibling]))
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(status(failedIdentity)).toBe('failed')
+    expect(status(getWorkspaceCleanupCandidateIdentity(sibling))).toBe('deleting')
+
+    act(() => result.current.confirmUnverifiedRemoval(failed))
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(status(failedIdentity)).toBe('deleted')
+    expect(status(getWorkspaceCleanupCandidateIdentity(sibling))).toBe('deleting')
+  })
+
   it('guards a permanent retry against the busy marker for its own host', () => {
     const local = makeCandidate({
       executionHostId: 'local',

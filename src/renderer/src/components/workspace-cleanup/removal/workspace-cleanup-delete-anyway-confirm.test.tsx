@@ -12,7 +12,11 @@ import { getWorkspaceCleanupGroupTabId } from '../dialog/workspace-cleanup-group
 
 afterEach(cleanup)
 
-const candidate = makeCandidate({ worktreeId: 'repo-1::/repo/flaky', displayName: 'flaky-login' })
+const candidate = makeCandidate({
+  worktreeId: 'repo-1::/repo/flaky',
+  displayName: 'flaky-login',
+  executionHostId: 'ssh:workbench-lab'
+})
 const identity = getWorkspaceCleanupCandidateIdentity(candidate)
 const nextFrame = (): Promise<void> =>
   new Promise((resolve) => requestAnimationFrame(() => resolve()))
@@ -23,6 +27,7 @@ function expectConfirmationBeforeDelete(onDeleteAnyway: ReturnType<typeof vi.fn>
   expect(onDeleteAnyway).not.toHaveBeenCalled()
   const dialog = screen.getByRole('dialog')
   expect(dialog.textContent).toContain('flaky-login')
+  expect(dialog.textContent).toContain('workbench-lab')
   fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }))
   expect(onDeleteAnyway).toHaveBeenCalledTimes(1)
   expect(onDeleteAnyway).toHaveBeenCalledWith(candidate)
