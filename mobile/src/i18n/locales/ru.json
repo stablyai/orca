@@ -862,7 +862,8 @@
     },
     "agentSpinner": {
       "monitoring": "Наблюдает за фоновыми задачами",
-      "unconfirmed": "Не удалось подтвердить"
+      "unconfirmed": "Не удалось подтвердить",
+      "sleeping": "В спящем режиме"
     },
     "agentStateDot": {
       "monitoring": "Наблюдает за фоновыми задачами",

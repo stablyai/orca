@@ -17,6 +17,7 @@ import type { AgentActivityDisplayMode } from '../../../../src/shared/ui-chrome/
 import type { WorktreeStatus } from '../../../../src/shared/worktree/row-display/worktree-status-rollup'
 import { areStructurallyEqual } from '../catalog/structural-equality'
 import { projectGroupRowIndent } from '../project-sections/project-group-indent'
+import { isWorktreeActive } from '../workspace-list/workspace-row-filtering'
 import { getWorktreeMetaGlyphPresence } from './worktree-meta-glyph-presence'
 import { MobileBotHomeRow } from '../../bots/MobileBotHomeRow'
 import { MobileBotWorkerLine } from '../../bots/MobileBotChatRows'
@@ -84,6 +85,7 @@ function WorktreeListRowComponent({
   const now = useNow(30_000, Boolean(view.botWorkspace))
   // A bot worker line shows its own agents' state.
   const status = view.botFacts?.status ?? rowStatus
+  const isSleeping = status !== null && !isWorktreeActive(item)
   const isFolderWorkspace = item.workspaceKind === 'folder-workspace'
   const folderMeta =
     item.comment?.trim() || item.path || t('components.worktreeListRow.folder', 'Folder')
@@ -176,7 +178,7 @@ function WorktreeListRowComponent({
       delayLongPress={400}
     >
       <View style={styles.indicatorCol}>
-        <AgentSpinner status={status} workingMode={item.workingMode} />
+        <AgentSpinner status={status} workingMode={item.workingMode} sleeping={isSleeping} />
         {item.unread && (
           <Bell
             size={10}
@@ -187,7 +189,9 @@ function WorktreeListRowComponent({
         )}
       </View>
 
-      <View style={styles.worktreeMain}>
+      <View
+        style={[styles.worktreeMain, isSleeping && !view.dimmed && styles.worktreeMainSleeping]}
+      >
         <View style={styles.worktreeNameRow}>
           {showHostGlyph && (
             <View

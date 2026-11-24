@@ -1176,7 +1176,8 @@
     },
     "agentSpinner": {
       "monitoring": "Monitoring background tasks",
-      "unconfirmed": "Couldn’t confirm"
+      "unconfirmed": "Couldn’t confirm",
+      "sleeping": "Sleeping"
     },
     "agentStateDot": {
       "monitoring": "Monitoring background tasks",

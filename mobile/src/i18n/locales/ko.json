@@ -778,7 +778,8 @@
     },
     "agentSpinner": {
       "monitoring": "백그라운드 작업 모니터링 중",
-      "unconfirmed": "확인하지 못함"
+      "unconfirmed": "확인하지 못함",
+      "sleeping": "절전 중"
     },
     "agentStateDot": {
       "monitoring": "백그라운드 작업 모니터링 중",

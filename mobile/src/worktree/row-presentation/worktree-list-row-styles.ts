@@ -44,6 +44,9 @@ export const worktreeListRowStyles = themedStyleSheet(() => ({
   worktreeMain: {
     flex: 1
   },
+  worktreeMainSleeping: {
+    opacity: 0.6
+  },
   worktreeNameRow: {
     flexDirection: 'row',
     alignItems: 'center',

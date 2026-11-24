@@ -857,7 +857,8 @@
     },
     "agentSpinner": {
       "monitoring": "Monitorando tarefas em segundo plano",
-      "unconfirmed": "Não foi possível confirmar"
+      "unconfirmed": "Não foi possível confirmar",
+      "sleeping": "Suspenso"
     },
     "agentStateDot": {
       "monitoring": "Monitorando tarefas em segundo plano",

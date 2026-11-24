@@ -778,7 +778,8 @@
     },
     "agentSpinner": {
       "monitoring": "バックグラウンドタスクを監視中",
-      "unconfirmed": "確認できませんでした"
+      "unconfirmed": "確認できませんでした",
+      "sleeping": "スリープ中"
     },
     "agentStateDot": {
       "monitoring": "バックグラウンドタスクを監視中",

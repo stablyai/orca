@@ -24,6 +24,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { agentDotState, formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
 import { areStructurallyEqual } from '../worktree/catalog/structural-equality'
+import { isWorktreeActive } from '../worktree/workspace-list/workspace-row-filtering'
 import type { Worktree, WorktreeRowView } from '../worktree/workspace-list/workspace-list-types'
 import { setBotChatFold } from './bot-chat-fold-store'
 import { setBotChatSteps } from './bot-chat-steps-store'
@@ -208,6 +209,7 @@ function WorkerLineComponent({
 }) {
   useMobileColorScheme()
   const now = useNow(30_000, true)
+  const isSleeping = status !== null && !isWorktreeActive(item)
   // One logo says who works there, as on the desktop's compact line.
   const agent = botWorkspaceLineAgent(
     (item.agents ?? []).map((row) => ({
@@ -222,7 +224,7 @@ function WorkerLineComponent({
         styles.line,
         { paddingLeft: LINE_INDENT + (facts.depth - 1) * DEPTH_STEP },
         item.isActive && styles.active,
-        view.dimmed && styles.dimmed,
+        (view.dimmed || isSleeping) && styles.dimmed,
         pressed && styles.pressed
       ]}
       disabled={isReadOnly}
@@ -238,7 +240,11 @@ function WorkerLineComponent({
       delayLongPress={400}
     >
       <View style={styles.slot}>
-        <AgentSpinner status={status ?? 'inactive'} workingMode={item.workingMode} />
+        <AgentSpinner
+          status={status ?? 'inactive'}
+          workingMode={item.workingMode}
+          sleeping={isSleeping}
+        />
       </View>
       {agent ? (
         <BotLineAgentLogos

@@ -1256,7 +1256,8 @@
     },
     "agentSpinner": {
       "monitoring": "监控后台任务",
-      "unconfirmed": "无法确认"
+      "unconfirmed": "无法确认",
+      "sleeping": "休眠中"
     },
     "agentStateDot": {
       "monitoring": "监控后台任务",
