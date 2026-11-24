@@ -103,15 +103,17 @@ function AccessRequestRows({
 export function BotWhoCanAskList({
   bot,
   service,
-  compact = false
+  compactCaption
 }: {
   bot: Bot
   service: BotWhoCanAskService
-  /** A setup dialog's version: chips under a short label, outsiders behind ⓘ, and one warning line
-   *  once someone else is added in place of the summary and what they reach. */
-  compact?: boolean
+  /** A setup dialog's version, under this short label: chips, outsiders behind ⓘ, and one warning
+   *  line once someone else is added in place of the summary and what they reach. The caller
+   *  translates the label so a trust dialog can keep it from being replaced by a language pack. */
+  compactCaption?: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const compact = compactCaption !== undefined
   const {
     owner,
     listed,
@@ -179,9 +181,7 @@ export function BotWhoCanAskList({
       ) : null}
       {compact ? (
         <div className="flex h-5.5 items-center gap-1">
-          <h3 className="text-xs font-medium text-muted-foreground">
-            {t('bots.whoCanAsk.caption', 'Who can ask')}
-          </h3>
+          <h3 className="text-xs font-medium text-muted-foreground">{compactCaption}</h3>
           {service.outsiders ? (
             <Tooltip>
               <TooltipTrigger asChild>

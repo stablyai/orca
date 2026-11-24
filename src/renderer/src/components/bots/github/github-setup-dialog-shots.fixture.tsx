@@ -1,6 +1,10 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { readGitHubAwait } from '@/lib/bot-github-state'
 import { expandGitHubInstall } from '@/lib/bot-github-install-record'
+import { GitHubIcon } from '@/components/icons/GitHubIcon'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { ConnectorSetupHeader, connectorSetupFor } from '../connector-connect-parts'
+import { GitHubSetupCorner } from './github-setup-header'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { ConnectorGitHubInstallation } from '../../../../../shared/connector-bot-github-contract'
 import {
@@ -8,6 +12,7 @@ import {
   clickAddRepositories,
   clickWhenShown,
   failGitHubReads,
+  signOutOfOrcaCloud,
   inOrcaStore,
   marketing,
   settle,
@@ -60,6 +65,18 @@ const WORST: Partial<Bot> = {
   members: [{ id: 'long', name: 'someone-with-a-really-long-github-login-name', source: 'github' }]
 }
 
+/** The dialog alone at `width`, pinned into the frame. */
+function pinShot(width: number): void {
+  if (!document.getElementById('github-dialog-shot')) {
+    const style = document.createElement('style')
+    style.id = 'github-dialog-shot'
+    style.textContent = SHOT_STYLE
+    document.head.append(style)
+  }
+  document.documentElement.dataset.githubDialogShot = ''
+  document.documentElement.style.setProperty('--github-dialog-shot-width', `${width}px`)
+}
+
 function dialogShot(options: {
   width: 440 | 340
   repos: keyof typeof SHOT_REPOS
@@ -72,8 +89,11 @@ function dialogShot(options: {
   expand?: string
   /** Then click "+ Add ↗": GitHub opens in the system browser and setup waits on it. */
   addRepositories?: boolean
-  /** GitHub opens in Orca's browser, a state read then fails, and the dialog opens again. */
-  failedWhilePending?: boolean
+  /** GitHub opens in Orca's browser, then a read fails (`read`), this computer's sign-in lapses as GitHub
+   *  reads it (`signedOut`) or for Orca Cloud (`cloud`), and the dialog opens again. */
+  failedWhilePending?: 'read' | 'signedOut' | 'cloud'
+  /** Orca Cloud is signed out from the start, with nothing followed. */
+  cloudSignedOut?: boolean
   /** GitHub's state never answers (Checking) or fails with nothing pending (failed). */
   state?: 'hangs' | 'fails'
 }): ReturnType<typeof defineFixture> {
@@ -89,14 +109,10 @@ function dialogShot(options: {
         logins: options.logins,
         state: options.state
       })
-      if (!document.getElementById('github-dialog-shot')) {
-        const style = document.createElement('style')
-        style.id = 'github-dialog-shot'
-        style.textContent = SHOT_STYLE
-        document.head.append(style)
+      if (options.cloudSignedOut) {
+        signOutOfOrcaCloud()
       }
-      document.documentElement.dataset.githubDialogShot = ''
-      document.documentElement.style.setProperty('--github-dialog-shot-width', `${options.width}px`)
+      pinShot(options.width)
     },
     render: () => <Setup />,
     interact: async (frame) => {
@@ -107,9 +123,13 @@ function dialogShot(options: {
       if (options.addRepositories) {
         await clickAddRepositories()
       }
-      if (options.failedWhilePending) {
+      if (options.failedWhilePending !== undefined) {
         await clickAddRepositories()
-        failGitHubReads()
+        if (options.failedWhilePending === 'cloud') {
+          signOutOfOrcaCloud()
+        } else {
+          failGitHubReads(options.failedWhilePending === 'signedOut' ? 'signed_out' : undefined)
+        }
         // The running poll's next read fails and ends it; the record then holds a slower refollow.
         for (let tries = 0; tries < 60 && readGitHubAwait('local') === 'checking'; tries++) {
           await settle(200)
@@ -160,7 +180,45 @@ export const shotLogins = dialogShot({ width: 440, repos: 'twoOrgs', logins: [..
 export const shotFailedPendingNarrow = dialogShot({
   width: 340,
   repos: 'twoOrgs',
-  failedWhilePending: true
+  failedWhilePending: 'read'
+})
+// The same, when the read says this computer's sign-in lapsed, or Orca Cloud signs out: still Minimize.
+export const shotSignedOutPendingNarrow = dialogShot({
+  width: 340,
+  repos: 'twoOrgs',
+  failedWhilePending: 'signedOut'
+})
+export const shotCloudSignedOutPendingNarrow = dialogShot({
+  width: 340,
+  repos: 'twoOrgs',
+  failedWhilePending: 'cloud'
+})
+// Signed out with nothing followed: the sign-in ask as every setup shows it, Cancel only.
+export const shotCloudSignedOutNarrow = dialogShot({
+  width: 340,
+  repos: 'twoOrgs',
+  cloudSignedOut: true
+})
+
+// The compact status line for a paired server's bot, with names that need escaping, at 340px.
+const PAIRED_BOT = { name: 'R&D <Ops> "Escalations" & Release-Notes-Writer/Bot' }
+const PAIRED_HOST = 'build&deploy <eu-west-1> / long-paired-server-name-02'
+export const shotHeaderPairedNarrow = defineFixture({
+  width: 372,
+  setup: () => pinShot(340),
+  render: () => (
+    <Dialog open>
+      <DialogContent surface="security" size="form" showCloseButton={false}>
+        <ConnectorSetupHeader
+          connector={{ id: 'github', Icon: GitHubIcon }}
+          title="Connect GitHub"
+          intro={connectorSetupFor(PAIRED_BOT, PAIRED_HOST)}
+          bare
+          corner={<GitHubSetupCorner minimize={false} onEnd={() => undefined} />}
+        />
+      </DialogContent>
+    </Dialog>
+  )
 })
 // A long name with no spaces in the header's status line, while checking and after a failed read.
 const UNBROKEN: Partial<Bot> = { name: 'CustomerSupportEscalationsAndReleaseNotesWriterBot' }

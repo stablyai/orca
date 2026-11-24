@@ -2,6 +2,7 @@
 import { withBotConnectorRuntime } from '@/lib/bot-connector-host-calls.test-fixture'
 import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
 import { publishBots } from '@/lib/bot-catalog-snapshot'
+import { useAppStore } from '@/store'
 import { stopAwaitingGitHub } from '@/lib/bot-github-state'
 import { cancelConnectorConnect } from '@/lib/connector-connect-state'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
@@ -55,6 +56,8 @@ let account: { userId: string; login: string } | null = { userId: '42', login: '
 let accounts: ConnectorGitHubLinkedAccount[] | undefined
 /** GitHub's state read fails, e.g. a dropped connection while an install is followed. */
 let stateFails = false
+/** The error a failing read returns, e.g. `signed_out` when this computer's sign-in lapsed. */
+let stateError = 'fixture_unreachable'
 /** GitHub's state read never answers: setup stays on Checking GitHub…. */
 let stateHangs = false
 let stateReads = 0
@@ -88,6 +91,8 @@ export function stubGitHub(
     account = { ...account, login }
   }
   stateFails = options.state === 'fails'
+  stateError = 'fixture_unreachable'
+  useAppStore.setState({ orcaProfileAuthStatus: null })
   stateHangs = options.state === 'hangs'
   stateReads = 0
   shownBot = options.bot ?? marketing
@@ -103,7 +108,7 @@ export function stubGitHub(
         return neverReturns()
       }
       return stateFails
-        ? { ok: false, error: 'fixture_unreachable' }
+        ? { ok: false, error: stateError }
         : {
             ok: true,
             value: {
@@ -191,8 +196,21 @@ export const settle = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms))
 
 /** A later read of GitHub's state fails, e.g. the connection drops while an install is followed. */
-export function failGitHubReads(): void {
+export function failGitHubReads(error = 'fixture_unreachable'): void {
   stateFails = true
+  stateError = error
+}
+
+/** This computer's Orca sign-in lapses: setups that need Orca Cloud ask to sign in again. */
+export function signOutOfOrcaCloud(): void {
+  useAppStore.setState({
+    orcaProfileAuthStatus: {
+      activeProfileId: 'fixture',
+      configured: true,
+      state: 'local',
+      persistence: 'none'
+    }
+  })
 }
 
 /** GitHub's installs from now on, e.g. after its install page saved. */

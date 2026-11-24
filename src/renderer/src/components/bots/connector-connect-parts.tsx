@@ -160,20 +160,16 @@ export function connectorSetupFor(bot: { name: string }, hostName: string | null
     : translate('bots.setup.for', 'for {{name}}', { name: bot.name, ...HOW_TO_ASK_ESCAPED })
 }
 
-const INTRO_ENTITIES: Record<string, string> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  '#39': "'",
-  '#x2F': '/'
-}
-
-/** An escaped intro (see HOW_TO_ASK_ESCAPED) as plain text, for a tooltip. */
+/** An escaped intro (see HOW_TO_ASK_ESCAPED) as the plain text it reads as: entities decoded, markup
+ *  dropped, a line break read as a space. The compact header shows and titles this same string. */
 function plainIntro(intro: string): string {
-  return intro
-    .replace(/<[^>]*>/g, '')
-    .replace(/&(amp|lt|gt|quot|#39|#x2F);/g, (_, entity: string) => INTRO_ENTITIES[entity])
+  // An inert parse: nothing in it runs or loads.
+  const body = new DOMParser().parseFromString(intro, 'text/html').body
+  for (const lineBreak of body.querySelectorAll('br')) {
+    lineBreak.replaceWith(' ')
+  }
+  // HTML's own whitespace collapsing: a no-break space stays as written.
+  return (body.textContent ?? '').replace(/[ \t\n\r\f]+/g, ' ').trim()
 }
 
 export function ConnectorSetupHeader({
@@ -197,6 +193,7 @@ export function ConnectorSetupHeader({
   /** In place of the dialog's own corner button, centered on the title's line. */
   corner?: React.ReactNode
 }): React.JSX.Element {
+  const compactIntro = bare && !line && intro ? plainIntro(intro) : null
   return (
     <DialogHeader>
       <div
@@ -226,13 +223,16 @@ export function ConnectorSetupHeader({
             {corner}
           </div>
           <DialogDescription asChild size={bare ? 'compact' : 'default'}>
-            {/* Compact: one line; a long intro ends in … with the whole of it as the tooltip. */}
-            <div
-              className={bare ? (line ? 'min-w-0' : 'min-w-0 truncate') : 'break-words'}
-              title={bare && !line && intro ? plainIntro(intro) : undefined}
-            >
-              {line ?? (intro ? <BotHowToAsk text={intro} /> : null)}
-            </div>
+            {compactIntro !== null ? (
+              // Compact: one line of plain text; a long one ends in … with all of it as the tooltip.
+              <div className="min-w-0 truncate" title={compactIntro}>
+                {compactIntro}
+              </div>
+            ) : (
+              <div className={bare ? 'min-w-0' : 'break-words'}>
+                {line ?? (intro ? <BotHowToAsk text={intro} /> : null)}
+              </div>
+            )}
           </DialogDescription>
         </div>
       </div>

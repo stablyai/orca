@@ -753,6 +753,7 @@
     "bots.github.setup.retry",
     "bots.github.setup.titleOn",
     "bots.github.setup.tryIt",
+    "bots.github.setup.whoCanAsk",
     "bots.github.signOut.many",
     "bots.github.signOut.one",
     "bots.github.signOut.title",

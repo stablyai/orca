@@ -28116,7 +28116,8 @@
         "allRepos": "All repos",
         "repoCount_one": "{{count}} repo",
         "repoCount_other": "{{count}} repos",
-        "finishInYourBrowser": "Finish in your browser…"
+        "finishInYourBrowser": "Finish in your browser…",
+        "whoCanAsk": "Who can ask"
       },
       "account": {
         "defaultBot": "Default bot for my requests",

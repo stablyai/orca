@@ -49,7 +49,14 @@ import {
 
 /** Once linked and installed, the owner picks who may ask the bot on GitHub. */
 function LinkedPeople({ bot }: { bot: Bot }): React.JSX.Element {
-  return <BotWhoCanAskList bot={bot} service={useGitHubWhoCanAsk(bot.hostId, true)} compact />
+  const t = useTranslate()
+  return (
+    <BotWhoCanAskList
+      bot={bot}
+      service={useGitHubWhoCanAsk(bot.hostId, true)}
+      compactCaption={t('bots.github.setup.whoCanAsk', 'Who can ask')}
+    />
+  )
 }
 
 const GITHUB = { id: 'github', Icon: GitHubIcon } as const
@@ -168,6 +175,8 @@ function BotGitHubSetupFlow({
         reason={orcaCloudSignInReason('github')}
         onCancel={onClose}
         onSignedIn={() => refreshBotGitHub(bot.hostId)}
+        // A trip to GitHub still followed keeps its Minimize; otherwise Cancel is the way out.
+        corner={record.waiting ? <GitHubSetupCorner minimize onEnd={onClose} /> : undefined}
       />
     )
   }
@@ -397,6 +406,11 @@ export function BotGitHubSetupDialog({
               reason={orcaCloudSignInReason('github')}
               onCancel={closeGitHubInstall}
               resume={() => refreshBotGitHub(bot.hostId)}
+              corner={
+                record.waiting ? (
+                  <GitHubSetupCorner minimize onEnd={closeGitHubInstall} />
+                ) : undefined
+              }
             >
               <BotGitHubSetupFlow
                 bot={bot}
