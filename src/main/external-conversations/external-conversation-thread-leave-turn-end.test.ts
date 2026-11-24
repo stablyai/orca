@@ -50,8 +50,8 @@ async function endLeftTurn(
       }
     },
     ending: () => {},
-    handOff: async () => {},
-    restore: () => {}
+    // Posts once the cloud takes the end just emitted, which these ends always reach.
+    afterTurnEnd: () => leaveLines.post()
   }
   const events: ConversationEvent[] = []
   const prose: string[] = []
@@ -95,7 +95,7 @@ async function endLeftTurn(
 }
 
 it('confirms a leave once, after the answer, and only while the thread is still left', async () => {
-  // An end outside the reply outbox may reach no one: the line posts on its own, kept owed.
+  // An end outside the reply outbox: the line posts on its own once the cloud took that end.
   expect(await endLeftTurn({ lastAssistantMessage: 'Noted #123.' })).toEqual({
     said: 'Noted #123.',
     prose: [],

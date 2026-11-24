@@ -22,11 +22,12 @@ export type TurnLeave = {
   prose: (prose: string | undefined) => string | undefined
   /** The fill wrote the turn's prose, and so the line, into an answer. */
   filled: (answered: boolean) => void
-  /** The end is over: a line no answer took posts on its own, kept owed until it does. */
-  settle: () => void
+  /** The end is over: a line no answer took posts on its own, kept owed until it does. `after`:
+   *  once the cloud took the end just emitted ('end'), or one an owner's failed post holds ('held'). */
+  settle: (after?: 'end' | 'held') => void
 }
 
-type Lines = Pick<LeaveLines, 'owed' | 'carried' | 'post' | 'ending'>
+type Lines = Pick<LeaveLines, 'owed' | 'carried' | 'post' | 'ending' | 'afterTurnEnd'>
 
 // The line rides only on an answer every cloud keeps whole (the smallest takes 8 KB).
 const RIDE_MAX_BYTES = 7 * 1024
@@ -66,12 +67,16 @@ export function turnLeave(
         left.lines.carried(link, left.turnId)
       }
     },
-    settle: () => {
+    settle: (after) => {
       // An answer the fill wrote already took it over.
       if (!left || rode || !live()) {
         return
       }
-      left.lines.post(link, left.turnId)
+      if (after) {
+        left.lines.afterTurnEnd(link, left.turnId, after === 'end')
+      } else {
+        left.lines.post(link, left.turnId)
+      }
     }
   }
 }

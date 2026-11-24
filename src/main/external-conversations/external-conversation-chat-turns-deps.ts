@@ -46,5 +46,5 @@ export type ChatTurnsDeps = ConversationWorkersDeps &
     /** A chat's turn ended, heard or not. */
     turnEnded?: (paneKey: string) => void
     /** The "I've left this thread" lines a turn's end owes its thread. */
-    leaveLines?: Pick<LeaveLines, 'owed' | 'carried' | 'post' | 'ending'>
+    leaveLines?: Pick<LeaveLines, 'owed' | 'carried' | 'post' | 'ending' | 'afterTurnEnd'>
   }

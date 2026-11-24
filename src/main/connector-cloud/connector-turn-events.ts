@@ -22,6 +22,7 @@ import {
 import { ConnectorPromptPublications } from './connector-prompt-publications'
 import { answerFor, answerTextFor, toConnectorEvent } from './connector-event-wire'
 import { slackReplyBody } from './connector-slack-text'
+import { installedLeaveLines } from '../external-conversations/external-conversation-leave-lines'
 import type { ConnectorCallObserver } from './connector-transport'
 import {
   ConnectorReplyOutbox,
@@ -156,6 +157,7 @@ export class ConnectorTurnEvents {
       onAccepted: (batch, stamp) => {
         this.trace.accepted(batch, stamp)
         void this.replies.accepted(batch)
+        installedLeaveLines()?.turnEndsTaken(batch.filter(isTurnEnded))
       },
       onSplit: (batch) => this.trace.split(batch),
       onDropped: (item, stamp, failure) => {

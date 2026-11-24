@@ -84,8 +84,8 @@ export function endMirroredTurn(end: ChatTurnEnd, mirrored: SlackMirrorTurn): vo
         ? { failure: connectorFailure(read.failure, end.agent) }
         : {})
     })
-    // Its line posts on its own, kept owed until it does: this end may reach no one.
-    end.leave.settle()
+    // Its line posts on its own once its end is let go and taken, kept owed until it posts.
+    end.leave.settle('held')
   })
 }
 
@@ -190,6 +190,8 @@ export async function endRepliedTurn(
           }
         : {})
     })
+    end.leave.settle('end')
+    return 'told'
   }
   end.leave.settle()
   return 'told'

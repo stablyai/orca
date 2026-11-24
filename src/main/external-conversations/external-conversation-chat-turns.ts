@@ -301,7 +301,7 @@ export class ChatTurns {
         ...turnFailure(end, turn),
         ...(workLinks.length > 0 ? { links: workLinks } : {})
       })
-      end.leave.settle()
+      end.leave.settle(mirrored ? 'held' : 'end')
     })
   }
 

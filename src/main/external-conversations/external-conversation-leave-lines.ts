@@ -59,6 +59,15 @@ export type LeaveLines = {
   ) => void
   /** A turn end is deciding `turnId`'s line (on its answer or alone): a resume leaves it alone. */
   ending: (link: Thread, turnId: number) => void
+  /** Posts the line once the cloud took `turnId`'s end, so it lands after the answer. `fallback`:
+   *  posts anyway that long after, for an end the cloud never takes; else the next watch does. */
+  afterTurnEnd: (
+    link: Pick<ExternalConversationLink, 'source' | 'externalId' | 'sessionId'>,
+    turnId: number,
+    fallback: boolean
+  ) => void
+  /** The cloud took these turn ends: the lines waiting on them post now. */
+  turnEndsTaken: (ends: readonly { conversation: Thread; turnId: number }[]) => void
   /** Posts every line still owed for a turn that isn't running (cut short by a quit or a reset). */
   resume: (running: (link: ExternalConversationLink) => number | null) => void
 }
@@ -90,6 +99,11 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
   const posting = new Map<string, () => void>()
   // Turn ends deciding their line, by when they began; a watch's resume leaves these alone.
   const ending = new Map<string, number>()
+  // Lines waiting for the cloud to take their turn's end.
+  const afterEnds = new Map<
+    string,
+    Pick<ExternalConversationLink, 'source' | 'externalId' | 'sessionId'>
+  >()
   const idOf = (link: Thread, turnId: number) =>
     JSON.stringify([link.source, link.externalId, turnId])
   const owed: LeaveLines['owed'] = (link, turnId) => {
@@ -126,11 +140,11 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
         posting.delete(id)
         return
       }
-      // A cloud known not to mark mentions lets every reply wake the bot: the line would be false.
+      // A cloud known not to mark mentions lets every reply wake the bot: the line would be false
+      // there, so it stays owed for a cloud that does.
       const features = deps.cloud()?.cloudFeatures?.()
       if (features && !features.has(CONNECTOR_CLOUD_MENTIONED_FEATURE)) {
         posting.delete(id)
-        settle(link, turnId)
         return
       }
       const replying = deps.cloud()?.reply({
@@ -189,11 +203,29 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
     ending: (link, turnId) => {
       ending.set(idOf(link, turnId), Date.now())
     },
+    afterTurnEnd: (link, turnId, fallback) => {
+      const id = idOf(link, turnId)
+      afterEnds.set(id, link)
+      ending.set(id, Date.now())
+      if (fallback) {
+        timer(() => afterEnds.delete(id) && post(link, turnId), ENDING_MS)
+      }
+    },
+    turnEndsTaken: (ends) => {
+      for (const end of ends) {
+        const id = idOf(end.conversation, end.turnId)
+        const link = afterEnds.get(id)
+        if (link && afterEnds.delete(id)) {
+          post(link, end.turnId)
+        }
+      }
+    },
     resume: (running) => {
       const now = Date.now()
       for (const [id, at] of ending) {
         if (now - at > ENDING_MS) {
           ending.delete(id)
+          afterEnds.delete(id)
         }
       }
       for (const { link } of allLinks(deps.store)) {

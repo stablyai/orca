@@ -13,6 +13,7 @@ import { REPLY_ONLY_REFUSAL, LOOK_AROUND_REFUSAL } from '../../../bots/bot-look-
 import { slackThreadBotUser } from '../../../connector-cloud/connector-thread-mute'
 import {
   reserveThreadMuteSave,
+  threadMuteSaving,
   threadMuteSaves
 } from '../../../connector-cloud/connector-thread-mute-saves'
 import { chatPaneKey } from '../../../external-conversations/external-conversation-chat'
@@ -69,8 +70,19 @@ export const CONNECTOR_LEAVE_THREAD_METHOD = defineMethod({
     if (turnId === null) {
       throw new ConnectorActError('leave_refused_stale', STALE)
     }
-    // Left in this turn and no @mention since: nothing to save, and its line is already owed.
+    // Left in this turn and no @mention since: nothing to save, and its line is already owed. A
+    // leave still saving answers only once it is on disk, as what it saved.
     if (thread.muted && thread.leaveLine === turnId) {
+      await threadMuteSaving(key)?.catch(() => undefined)
+      const saved = readThreadMute(store, key)
+      if (
+        typeof saved !== 'object' ||
+        saved === null ||
+        !saved.muted ||
+        saved.leaveLine !== turnId
+      ) {
+        throw new ConnectorActError('thread_mute_not_saved', NOT_SAVED)
+      }
       return { ok: true as const, already: true as const }
     }
     // Replies arriving from now on wait for this leave to save or be refused, so none slips past it

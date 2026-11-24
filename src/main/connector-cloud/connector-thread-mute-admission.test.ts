@@ -206,6 +206,7 @@ function leaver(
   // What the cloud answers each post, in turn; it posts while it answers ok.
   const answers: ({ ok: true } | { ok: false; status: number | null; error: string | null })[] = []
   const cloud = {
+    cloudFeatures: () => new Set(features),
     reply: async (reply: unknown) => {
       const answer = answers.shift() ?? { ok: true as const }
       if (answer.ok) {
@@ -371,10 +372,13 @@ describe('a bot that leaves its thread', () => {
 
     const leaving = leave()
     await expect.poll(() => readThreadMute(store, FIRST)).toMatchObject({ muted: true })
+    // Asked again while it saves: answered as what was saved, never "already" first.
+    const again = leave()
     // A reply while the save is on its way waits for it, so the failed save swallows nothing.
     const replied = deliver(send(FIRST, 'still there?'))
     fail()
     await expect(leaving).rejects.toMatchObject({ code: 'thread_mute_not_saved' })
+    await expect(again).rejects.toMatchObject({ code: 'thread_mute_not_saved' })
     await replied
     expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
     expect(lines().owed(link(), TURN_ID)).toBe(false)
@@ -410,6 +414,24 @@ describe('a bot that leaves its thread', () => {
     expect(own.owed(link(), TURN_ID)).toBe(false)
     recheck()
     expect(posted).toHaveLength(1)
+  })
+
+  it('posts a line once the cloud took its turn end, and keeps it owed where mentions go unmarked', async () => {
+    const store = await botHome({})
+    const { leave, posted, lines, link, features } = leaver(store)
+    await leave()
+    const own = lines()
+    own.afterTurnEnd(link(), TURN_ID, true)
+    expect(posted).toEqual([])
+    // A cloud that stopped marking mentions: saying so would be false, so it waits, still owed.
+    features.length = 0
+    own.turnEndsTaken([{ conversation: FIRST, turnId: TURN_ID }])
+    await expect.poll(() => own.owed(link(), TURN_ID)).toBe(true)
+    expect(posted).toEqual([])
+    features.push('sends.mentioned')
+    own.post(link(), TURN_ID)
+    await expect.poll(() => posted.length).toBe(1)
+    expect(own.owed(link(), TURN_ID)).toBe(false)
   })
 
   it('drops a line the cloud refuses for good', async () => {
