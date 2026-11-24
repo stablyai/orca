@@ -1359,6 +1359,7 @@
           "codebuddy_label": "CodeBuddy",
           "zcode_label": "ZCode",
           "jcode_label": "Jcode",
+          "mcode_label": "MiniMax Code",
           "freebuff_label": "Freebuff",
           "dsh_label": "DeepSeek Harness",
           "qoder_label": "Qoder CLI",
@@ -19739,6 +19740,7 @@
         "optionValue": {
           "none": "なし",
           "off": "オフ",
+          "on": "オン",
           "ultracode": "Ultracode",
           "fast": "高速",
           "minimal": "最小",

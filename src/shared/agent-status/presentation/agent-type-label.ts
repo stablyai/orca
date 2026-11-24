@@ -36,7 +36,8 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   dsh: 'DeepSeek Harness',
   dsb: 'DeepSeek Build',
   jcode: 'Jcode',
-  kiro: 'Kiro'
+  kiro: 'Kiro',
+  mcode: 'MiniMax Code'
 }
 
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {

@@ -1776,6 +1776,7 @@
           "codebuddy_label": "CodeBuddy",
           "zcode_label": "ZCode",
           "jcode_label": "Jcode",
+          "mcode_label": "MiniMax Code",
           "freebuff_label": "Freebuff",
           "dsh_label": "DeepSeek Harness",
           "qoder_label": "Qoder CLI",
@@ -20202,6 +20203,7 @@
           "max": "Max",
           "ultra": "极致",
           "standard": "标准",
+          "on": "开启",
           "ultracode": "Ultracode"
         },
         "noCommandsOrSkills": "没有匹配的命令或技能",

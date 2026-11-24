@@ -1544,6 +1544,7 @@
           "codebuddy_label": "CodeBuddy",
           "zcode_label": "ZCode",
           "jcode_label": "Jcode",
+          "mcode_label": "MiniMax Code",
           "freebuff_label": "Freebuff",
           "dsh_label": "DeepSeek Harness",
           "qoder_label": "Qoder CLI",
@@ -20339,6 +20340,7 @@
         "optionValue": {
           "none": "없음",
           "off": "꺼짐",
+          "on": "켜짐",
           "ultracode": "Ultracode",
           "fast": "빠름",
           "minimal": "최소",
