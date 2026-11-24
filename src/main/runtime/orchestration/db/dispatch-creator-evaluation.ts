@@ -38,7 +38,7 @@ export type CreatorRole = Pick<
 >
 export type RemoteCreatorRole = Pick<
   RemoteDispatchAttachmentRow,
-  'dispatch_id' | 'depth' | 'pane_key' | 'process_incarnation' | 'state'
+  'dispatch_id' | 'depth' | 'pane_key' | 'process_incarnation' | 'state' | 'chat_lineage'
 >
 
 /** Completed caller derivations live for one command or one snapshot action pass. */

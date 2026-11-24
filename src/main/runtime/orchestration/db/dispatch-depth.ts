@@ -104,7 +104,11 @@ function findPotentiallyLiveAttachmentsForCreator(
 export function creatorStartsChatWorkers(this: OrchestrationDb, creator: DispatchCreator): boolean {
   return (
     creator.kind !== 'system' &&
-    findActiveDispatchForCreator.call(this, creator)?.chat_lineage === 1
+    (findActiveDispatchForCreator.call(this, creator)?.chat_lineage === 1 ||
+      (creator.kind === 'terminal' &&
+        findPotentiallyLiveAttachmentsForCreator
+          .call(this, creator)
+          .some((attachment) => attachment.chat_lineage === 1)))
   )
 }
 

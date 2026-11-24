@@ -162,6 +162,7 @@ export const REMOTE_DISPATCH_ATTACHMENT_COLUMNS = [
   'residual_resources',
   'to_worker_imported_sequence',
   'depth',
+  'chat_lineage',
   'consumer_generation',
   'last_error',
   'created_at',

@@ -32,6 +32,7 @@ import { assertWorkerStartTaskSpecWithinPromptBudget } from '../../rpc/methods/o
 import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../rpc/callers/workspace-creator-context'
 import { claimTerminalForRemoteAttach } from '../db/worker-dispatch/worker-terminal-claim'
+import { startsInChatLineage } from '../../rpc/methods/orchestration/worker/start/worker-chat-lineage'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineOrchestrationMethod({
@@ -85,6 +86,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
       }
 
       const db = runtime.getOrchestrationDb()
+      const chatLineage = startsInChatLineage(runtime, db, params, context.orchestrationCaller)
       // Synchronous through the insert, so a racing start on the same terminal is refused before any wait.
       const releaseTerminalClaim = claimTerminalForRemoteAttach(db, params.terminal, runtime, {
         dispatchId: params.dispatchId,
@@ -99,6 +101,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           protocolVersion: params.protocolVersion,
           runtimeEpoch: runtime.getRuntimeId(),
           depth: params.depth,
+          chatLineage,
           mutationReceipt: orchestrationMutation
         })
       } catch (error) {
@@ -250,7 +253,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
               canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
               subWorkersInOwnRun: true,
               cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle),
-              preserveHumanCommitCredit: params.chatLineage === true
+              preserveHumanCommitCredit: chatLineage
             })
           }
         }).finally(() => briefGuard?.dispose())

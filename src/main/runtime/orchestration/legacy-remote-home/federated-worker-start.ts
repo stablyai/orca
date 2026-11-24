@@ -41,6 +41,7 @@ import {
   recordWorkerLaunchObservation,
   workerLaunchAgent
 } from '../workers/launch/worker-launch-observation'
+import { forwardedFederatedChatLineage } from './federated-worker-chat-lineage'
 export async function startFederatedWorker(args: FederatedWorkerStartRequest): Promise<unknown> {
   const { params, runtime, db, task, orchestrationMutation } = args
   const recordStart = prepareWorkerStartCard(runtime, args.callerSession)
@@ -209,7 +210,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           effort: params.effort,
           timeoutMs: budgets.readinessTimeoutMs,
           devMode: params.devMode,
-          ...(chatLineage ? { chatLineage: true } : {})
+          ...forwardedFederatedChatLineage(chatLineage, status.capabilities)
         },
         budgets.attachDeadlineMs,
         { orchestrationRequestId: orchestrationMutation.requestId },

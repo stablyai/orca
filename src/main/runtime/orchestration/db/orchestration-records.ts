@@ -215,6 +215,8 @@ export type RemoteDispatchAttachmentRow = {
   to_worker_imported_sequence: number
   /** Nesting depth propagated from the Run home; 1 when an old client omitted it. */
   depth: number
+  /** 1 when this remote worker and every helper it starts belongs to a bot lineage. */
+  chat_lineage: 1 | null
   /** Worker-host mailbox generation; the home's dispatch_contexts row is not visible here. */
   consumer_generation: number
   last_error: string | null

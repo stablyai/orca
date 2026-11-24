@@ -34,6 +34,7 @@ const Remote = z.object({
   depth: z.number(),
   pane_key: nullable,
   process_incarnation: nullable,
+  chat_lineage: z.literal(1).nullable(),
   state: z.enum(['starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown'])
 })
 const Run = z.object({ id: z.string(), legacy: z.number() })
@@ -103,7 +104,7 @@ export function createCrewFollowUpAuthorityInputs(db: OrchestrationDb) {
         Remote.array().parse(
           db.db
             .prepare(
-              `SELECT dispatch_id, depth, pane_key, process_incarnation, state FROM remote_dispatch_attachments WHERE ${where} AND ${potentiallyLiveRemoteAttachmentSql()}`
+              `SELECT dispatch_id, depth, pane_key, process_incarnation, chat_lineage, state FROM remote_dispatch_attachments WHERE ${where} AND ${potentiallyLiveRemoteAttachmentSql()}`
             )
             .all(key)
         )

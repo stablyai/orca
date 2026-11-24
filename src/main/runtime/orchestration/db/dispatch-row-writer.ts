@@ -44,8 +44,8 @@ const STARTING_DISPATCH_CONTEXT_SQL = `INSERT INTO dispatch_contexts (
  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'), ?, ?, ?, ?)`
 
 const REMOTE_DISPATCH_ATTACHMENT_SQL = `INSERT INTO remote_dispatch_attachments (
-   dispatch_id, home_run_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch, depth
- ) VALUES (?, ?, ?, ?, ?, ?, ?)`
+   dispatch_id, home_run_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch, depth, chat_lineage
+ ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
 /** Missing depth would turn a worker into an apparent root. */
 function assertStampedDepth(depth: number): void {
@@ -162,6 +162,7 @@ export function insertRemoteDispatchAttachmentRow(
     runtimeEpoch: string
     /** Home-computed depth; old clients default to 1. */
     depth: number
+    chatLineage?: boolean
   }
 ): void {
   assertStampedDepth(params.depth)
@@ -172,6 +173,7 @@ export function insertRemoteDispatchAttachmentRow(
     params.homePeerFingerprint,
     params.protocolVersion,
     params.runtimeEpoch,
-    params.depth
+    params.depth,
+    params.chatLineage ? 1 : null
   )
 }
