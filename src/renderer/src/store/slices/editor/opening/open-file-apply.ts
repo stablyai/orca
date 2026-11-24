@@ -11,6 +11,7 @@ import {
   type OpenFile
 } from '../types/open-file'
 import {
+  canReuseLocalMacUnicodeAlias,
   canReuseLocalWslAlias,
   getReusableOpenFileModes,
   isSameEditorOwner,
@@ -88,7 +89,9 @@ export function applyOpenFileToState(
     (f) =>
       matchesEditorMode(f, reusableOpenFileModes) &&
       isSameEditorOwner(f, worktreeId, runtimeEnvironmentId) &&
-      (f.filePath === file.filePath || canReuseLocalWslAlias(s, f, file, runtimeEnvironmentId))
+      (f.filePath === file.filePath ||
+        canReuseLocalWslAlias(s, f, file, runtimeEnvironmentId) ||
+        canReuseLocalMacUnicodeAlias(s, f, file, runtimeEnvironmentId))
   )
   // Already-open owner tabs outrank stale reopenId shapes; bare/namespaced drift otherwise points selection at no OpenFile.
   const id = existing

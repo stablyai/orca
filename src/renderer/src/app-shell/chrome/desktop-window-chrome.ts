@@ -15,6 +15,14 @@ export function isLocalWindowsDesktopClient(): boolean {
   )
 }
 
+export function isLocalMacDesktopClient(): boolean {
+  return (
+    !isPairedWebClientWindow() &&
+    typeof navigator !== 'undefined' &&
+    navigator.userAgent.includes('Mac')
+  )
+}
+
 export function shouldRenderDesktopWindowChrome({
   platform,
   isWebClient
