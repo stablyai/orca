@@ -76,3 +76,25 @@ export function workerDockKindCount(t: Translate, kind: string, count: number): 
       })
   }
 }
+
+/** The pill and card with no rows: work the provider reports but does not list, or a failed read. */
+export function workerDockEmptyCopy(
+  t: Translate,
+  unlisted: boolean
+): { title: string; note: string } {
+  return unlisted
+    ? {
+        title: t('components.native-chat.workerDock.unlisted', 'Background work running'),
+        note: t(
+          'components.native-chat.workerDock.unlistedDetail',
+          'Some background work isn’t listed here'
+        )
+      }
+    : {
+        title: t('components.native-chat.workerDock.unread', 'Workers couldn’t load'),
+        note: t(
+          'components.native-chat.workerDock.unreadDetail',
+          'Workers will show here once they load'
+        )
+      }
+}

@@ -3,12 +3,14 @@
 // an answer a v1.4.265 host recorded answers every line it holds. The host links only the first reply
 // to its question (that reply moves the item to In progress), so the pairing is read from the order of
 // events: the owner's comments after each ask, until its lines are answered, the item closes, or the
-// item leaves Needs you without an answer. A later ask replaces an earlier one's open lines.
+// item leaves Needs you without an answer. A later ask replaces an earlier one's open lines, and an
+// answer sent with the rest skipped ("send anyway") closes its ask's.
 import { botItemNamedAnswers } from './bot-item-answer-lines'
 import {
+  botItemIsQuickReplyText,
+  botItemQuestionLeads,
   botItemQuestionLine,
   botItemQuestionShape,
-  botItemQuickReplyText,
   type BotItemDecision,
   type BotItemQuestionShape
 } from './bot-item-ask'
@@ -24,8 +26,19 @@ export type BotItemQuestionAnswers = {
   byOrder: boolean[]
   /** Lines still open, and the agent still waiting on them. */
   waiting: boolean
-  /** A later ask came while a line was still open: its open lines take no answer. */
-  replaced: boolean
+  /** Why its open lines take no answer: a later ask came, or the owner sent answers skipping them. */
+  ended: BotItemAskEnd | null
+}
+
+export type BotItemAskEnd = 'replaced' | 'skipped'
+
+/** The end an ask's card names: while a line no comment or send answered stays open to nothing, even
+ *  one showing an answer held on this device, which only goes back to the box. */
+export function botItemShownAskEnd(
+  ended: BotItemAskEnd | null,
+  answered: readonly (string | null)[]
+): BotItemAskEnd | null {
+  return ended && answered.some((words) => !words) ? ended : null
 }
 
 export type BotItemQuestionPairing = {
@@ -99,19 +112,21 @@ function answeredLines(
   const picked = shape.decisions.findIndex(
     (decision, index) =>
       isOpen(index) &&
-      decision.replies.some((option) => botItemQuickReplyText(shape, decision, option) === text)
+      decision.replies.some((option) => botItemIsQuickReplyText(shape, index, option, text))
   )
   if (picked !== -1) {
     return { lines: [picked], byOrder: false }
   }
   // Several questions answered in one comment, a line each; or a quick reply edited before sending.
-  const named = botItemNamedAnswers(shape, text).flatMap((words, index) =>
+  const wordsByLine = botItemNamedAnswers(shape, text)
+  const named = wordsByLine.flatMap((words, index) =>
     words !== null && isOpen(index) ? [index] : []
   )
   if (named.length > 0) {
     return { lines: named, byOrder: false }
   }
-  if (answersAskedQuestions(text, asked)) {
+  // If the named lines were answered meanwhile, a late reply can't take another line by order.
+  if (wordsByLine.some((words) => words !== null) || answersAskedQuestions(text, asked)) {
     return none
   }
   const next = answers.indexOf(null)
@@ -153,15 +168,17 @@ export function botItemQuestionPairing(
           answers: shape.decisions.map(() => null),
           byOrder: shape.decisions.map(() => false),
           waiting: false,
-          replaced: false
+          ended: null
         }
         questions.set(event.id, entry)
         for (const decision of shape.decisions) {
-          asked.add(botItemQuestionLine(decision.question))
+          for (const lead of botItemQuestionLeads(decision.question)) {
+            asked.add(lead)
+          }
         }
         if (open?.entry.answers.includes(null)) {
           // A new ask replaces the earlier one's open lines; its answers so far stand.
-          open.entry.replaced = true
+          open.entry.ended = 'replaced'
         }
         open = { id: event.id, entry }
       }
@@ -187,12 +204,27 @@ export function botItemQuestionPairing(
     if (quoted !== undefined) {
       replies.set(event.id, { questionId: open.id, decision: shape.decisions[quoted]! })
     }
+    if (skipsRest(open, event)) {
+      if (answers.includes(null)) {
+        open.entry.ended = 'skipped'
+      }
+      open = null
+    }
   }
   // Only the latest ask waits, so each answer has one question to go to.
   if (open?.entry.answers.includes(null) && item.status !== 'done' && item.status !== 'canceled') {
     open.entry.waiting = true
   }
   return { questions, replies }
+}
+
+/** An answer sent with the ask's other lines skipped: the host lists them in `skipped`. */
+function skipsRest(open: OpenAsk, reply: BotItemEvent): boolean {
+  return (
+    reply.data.answers === open.id &&
+    Array.isArray(reply.data.skipped) &&
+    reply.data.skipped.length > 0
+  )
 }
 
 /** The line a reply quotes: the one its image is on, else the last it answers (answers held for

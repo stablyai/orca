@@ -1,5 +1,6 @@
 import type { BrowserPageAnnotation } from '../element-grab/browser-grab-types'
 import type { BrowserAgentPointerPoint } from '../automation/browser-agent-activity-contract'
+import type { RuntimeFileReadChunkResult } from '../../file-content/runtime-file-read'
 import type {
   BrowserCertificateFailure,
   BrowserCookieImportResult,
@@ -159,7 +160,14 @@ export type BrowserScreencastDriverResult = {
 /** Sent only to viewers that asked with `downloads: 1`: a page's download starting and ending, as a local window hears them. */
 export type BrowserScreencastDownloadResult =
   | { type: 'downloadRequested'; download: BrowserDownloadRequestedEvent }
-  | { type: 'downloadFinished'; download: BrowserDownloadFinishedEvent }
+  | {
+      type: 'downloadFinished'
+      download: BrowserDownloadFinishedEvent
+      // Only for a viewer that asked with `downloadCopyStreams: 1`: browser.downloadCopyStream sends the saved file once.
+      copyId?: string
+    }
+/** Sent only to a viewer that asked with `prints: 1`, when its own input made the page call print(); it reads the PDF printed then with browser.readPrintPdf. */
+export type BrowserScreencastPrintResult = { type: 'print'; printId: string; title: string }
 export type BrowserScreencastErrorResult = { type: 'error'; message: string }
 
 export type BrowserScreencastResult =
@@ -175,6 +183,7 @@ export type BrowserScreencastResult =
   | BrowserScreencastAgentCursorResult
   | BrowserScreencastDriverResult
   | BrowserScreencastDownloadResult
+  | BrowserScreencastPrintResult
   | BrowserScreencastErrorResult
 
 export type BrowserEvalResult = { result: string; origin: string }
@@ -259,6 +268,8 @@ export type BrowserClearResult = { cleared: string }
 export type BrowserSelectAllResult = { selected: string }
 export type BrowserKeypressResult = { pressed: string }
 export type BrowserPdfResult = { data: string }
+/** One slice of a print handed to the viewer; the last slice releases it on the host. */
+export type BrowserReadPrintPdfResult = RuntimeFileReadChunkResult
 
 export type BrowserCookie = {
   name: string
