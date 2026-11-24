@@ -22544,7 +22544,7 @@
         "turnDiffsSearchChangedFiles": "변경된 파일",
         "turnDiffsSearchEdits": "편집",
         "promptSuggestionsTitle": "추천 프롬프트",
-        "promptSuggestionsCopy": "Claude가 답한 뒤, 다음 메시지로 추측한 내용이 빈 메시지 입력란에 표시됩니다. Tab 키를 눌러 사용하세요. 추천마다 요청이 하나 더 발생하며 Claude 사용량에 포함됩니다.",
+        "promptSuggestionsCopy": "Claude 또는 Codex가 답한 뒤, 다음 메시지로 추측한 내용이 빈 메시지 입력란에 표시됩니다. Tab 키를 눌러 사용하세요. 추천마다 요청이 하나 더 발생하며 해당 에이전트 사용량에 포함됩니다.",
         "promptSuggestionsSearchNext": "다음 프롬프트",
         "promptSuggestionsSearchGhost": "고스트 텍스트"
       },

@@ -23490,7 +23490,7 @@
         "turnDiffsSearchChangedFiles": "changed files",
         "turnDiffsSearchEdits": "edits",
         "promptSuggestionsTitle": "Suggested prompts",
-        "promptSuggestionsCopy": "After Claude replies, its guess at your next message shows in the empty message box. Press Tab to use it. Each guess is an extra request that counts toward your Claude usage.",
+        "promptSuggestionsCopy": "After Claude or Codex replies, its guess at your next message shows in the empty message box. Press Tab to use it. Each guess is an extra request that counts toward that agent's usage.",
         "promptSuggestionsSearchNext": "next prompt",
         "promptSuggestionsSearchGhost": "ghost text"
       },

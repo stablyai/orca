@@ -20802,7 +20802,7 @@
         "turnDiffsSearchChangedFiles": "archivos modificados",
         "turnDiffsSearchEdits": "ediciones",
         "promptSuggestionsTitle": "Prompts sugeridos",
-        "promptSuggestionsCopy": "Cuando Claude responde, su sugerencia para tu próximo mensaje aparece en el cuadro de mensaje vacío. Pulsa Tab para usarla. Cada sugerencia es una solicitud adicional que cuenta para tu uso de Claude.",
+        "promptSuggestionsCopy": "Cuando Claude o Codex responde, su sugerencia para tu próximo mensaje aparece en el cuadro de mensaje vacío. Pulsa Tab para usarla. Cada sugerencia es una solicitud adicional que cuenta para tu uso de ese agente.",
         "promptSuggestionsSearchNext": "siguiente prompt",
         "promptSuggestionsSearchGhost": "texto fantasma"
       },

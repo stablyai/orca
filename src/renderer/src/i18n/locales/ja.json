@@ -21394,7 +21394,7 @@
         "turnDiffsSearchChangedFiles": "変更されたファイル",
         "turnDiffsSearchEdits": "編集",
         "promptSuggestionsTitle": "プロンプトの提案",
-        "promptSuggestionsCopy": "Claude が返信すると、次のメッセージの候補が空のメッセージ欄に表示されます。Tab キーで入力できます。候補ごとに追加のリクエストが発生し、Claude の使用量に含まれます。",
+        "promptSuggestionsCopy": "Claude または Codex が返信すると、次のメッセージの候補が空のメッセージ欄に表示されます。Tab キーで入力できます。候補ごとに追加のリクエストが発生し、その Agent の使用量に含まれます。",
         "promptSuggestionsSearchNext": "次のプロンプト",
         "promptSuggestionsSearchGhost": "ゴーストテキスト"
       },

@@ -22716,7 +22716,7 @@
         "usageLimitContinueToggleLabel": "Alternar a continuação dos bate-papos quando um limite de uso for redefinido",
         "openedPullRequestsSearchPr": "PR",
         "promptSuggestionsTitle": "Prompts sugeridos",
-        "promptSuggestionsCopy": "Depois que o Claude responde, o palpite dele para a sua próxima mensagem aparece na caixa de mensagem vazia. Pressione Tab para usá-lo. Cada palpite é uma solicitação extra que conta para o seu uso do Claude.",
+        "promptSuggestionsCopy": "Depois que o Claude ou o Codex responde, o palpite dele para a sua próxima mensagem aparece na caixa de mensagem vazia. Pressione Tab para usá-lo. Cada palpite é uma solicitação extra que conta para o seu uso desse agente.",
         "promptSuggestionsSearchNext": "próximo prompt",
         "promptSuggestionsSearchGhost": "texto fantasma"
       },
