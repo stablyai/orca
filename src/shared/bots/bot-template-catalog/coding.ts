@@ -31,6 +31,27 @@ export const BOT_TEMPLATES_CODING: readonly BotTemplate[] = [
     ]
   },
   {
+    id: 'open-code-review',
+    category: 'coding',
+    name: 'OpenCodeReview',
+    line: 'Review local changes or a pull request with OpenCodeReview (OCR).',
+    firstChat:
+      'Asks which Git workspace and changes to review. Uses your configured OCR model, or offers to review with the current agent if OCR has no model.',
+    mascot: 'B1',
+    watches: 'Only the workspace or pull request you ask about',
+    does: 'Reviews the diff and reports findings with file and line, without changing your code.',
+    reports: 'Here, when you ask for a review',
+    connectors: [],
+    schedules: [],
+    events: [],
+    skills: ['review-with-ocr'],
+    needsSetup: 'Both modes need the ocr CLI and Git 2.41 or newer on the workspace host.',
+    example: [
+      'The retry handler drops the last failed request (src/queue.ts:42).',
+      'One file was not reviewed; its diff exceeded the review budget.'
+    ]
+  },
+  {
     id: 'bug-investigation',
     category: 'coding',
     name: 'Bug investigation',

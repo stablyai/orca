@@ -457,6 +457,7 @@
         "pr-review-checklist": "Read a diff for behaviour changes, missing tests and risky edits; cite each finding.",
         "release-notes-style": "Notes for users: new, fixed, changed; leave out refactors and code names.",
         "release-readiness": "What blocks a release and how to list it: checks, reviews, open blockers.",
+        "review-with-ocr": "Review with the OCR model or delegate the same diff to this agent.",
         "security-checklist": "Secrets, injection, auth checks and unsafe defaults to look for in a change.",
         "spec-format": "A one-page spec: problem, decision, scope, open questions.",
         "status-brief": "Changed, blocked, needs a decision: a brief in under ten lines.",
@@ -716,6 +717,17 @@
           }
         },
         "watches": "Your alert channel and incident issues"
+      },
+      "open-code-review": {
+        "does": "Reviews the diff and reports findings with file and line, without changing your code.",
+        "example1": "The retry handler drops the last failed request (src/queue.ts:42).",
+        "example2": "One file was not reviewed; its diff exceeded the review budget.",
+        "firstChat": "Asks which Git workspace and changes to review. Uses your configured OCR model, or offers to review with the current agent if OCR has no model.",
+        "line": "Review local changes or a pull request with OpenCodeReview (OCR).",
+        "name": "OpenCodeReview",
+        "needsSetup": "Both modes need the ocr CLI and Git 2.41 or newer on the workspace host.",
+        "reports": "Here, when you ask for a review",
+        "watches": "Only the workspace or pull request you ask about"
       },
       "pr-review": {
         "does": "Reviews each one and lists risky changes and missing tests, with file and line.",

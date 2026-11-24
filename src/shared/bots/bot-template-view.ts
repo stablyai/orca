@@ -12,6 +12,7 @@ import {
 export const BOT_TEMPLATE_SKILL_LINES: Record<BotTemplateSkill, string> = {
   'pr-review-checklist':
     'Read a diff for behaviour changes, missing tests and risky edits; cite each finding.',
+  'review-with-ocr': 'Review with the OCR model or delegate the same diff to this agent.',
   'bug-reproduction': 'Write down the exact steps that show the bug before looking for its cause.',
   'ci-failure-triage':
     'Tell a flaky check from a real failure or broken infrastructure, and find the commit that started it.',

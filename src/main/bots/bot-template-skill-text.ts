@@ -9,6 +9,7 @@ import { SKILL as issueTriage } from './bot-template-skills/issue-triage'
 import { SKILL as prReviewChecklist } from './bot-template-skills/pr-review-checklist'
 import { SKILL as releaseNotesStyle } from './bot-template-skills/release-notes-style'
 import { SKILL as releaseReadiness } from './bot-template-skills/release-readiness'
+import { SKILL as reviewWithOcr } from './bot-template-skills/review-with-ocr'
 import { SKILL as securityChecklist } from './bot-template-skills/security-checklist'
 import { SKILL as specFormat } from './bot-template-skills/spec-format'
 import { SKILL as statusBrief } from './bot-template-skills/status-brief'
@@ -24,6 +25,7 @@ export const BOT_TEMPLATE_SKILL_TEXT: Record<BotTemplateSkill, string> = {
   'pr-review-checklist': prReviewChecklist,
   'release-notes-style': releaseNotesStyle,
   'release-readiness': releaseReadiness,
+  'review-with-ocr': reviewWithOcr,
   'security-checklist': securityChecklist,
   'spec-format': specFormat,
   'status-brief': statusBrief,

@@ -244,6 +244,7 @@ const LONG_TEMPLATE_NAME = 'Customer Escalations Concierge for the Platform Reli
 
 export const prReview340 = defineFixture(templateReview(340, 'pr-review'))
 export const prReview480 = defineFixture(templateReview(480, 'pr-review'))
+export const openCodeReview480 = defineFixture(templateReview(480, 'open-code-review'))
 export const largest340 = defineFixture(templateReview(340, 'security-check'))
 export const largest480 = defineFixture(templateReview(480, 'security-check'))
 export const manyApps340 = defineFixture(templateReview(340, 'meeting-prep'))

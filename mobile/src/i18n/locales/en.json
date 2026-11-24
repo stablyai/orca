@@ -5820,6 +5820,17 @@
         "personal": "Personal assistant"
       },
       "allCategories": "All",
+      "open-code-review": {
+        "name": "OpenCodeReview",
+        "line": "Review local changes or a pull request with OpenCodeReview (OCR).",
+        "firstChat": "Asks which Git workspace and changes to review. Uses your configured OCR model, or offers to review with the current agent if OCR has no model.",
+        "watches": "Only the workspace or pull request you ask about",
+        "does": "Reviews the diff and reports findings with file and line, without changing your code.",
+        "reports": "Here, when you ask for a review",
+        "needsSetup": "Both modes need the ocr CLI and Git 2.41 or newer on the workspace host.",
+        "example1": "The retry handler drops the last failed request (src/queue.ts:42).",
+        "example2": "One file was not reviewed; its diff exceeded the review budget."
+      },
       "pr-review": {
         "name": "Pull request review",
         "line": "Reviews pull requests you’re asked to review and lists risky changes.",
@@ -6710,6 +6721,7 @@
     "templateSkills": {
       "nameWithFolder": "{{name}} ({{folder}})",
       "prReviewChecklist": "pr-review-checklist",
+      "reviewWithOcr": "review-with-ocr",
       "bugReproduction": "bug-reproduction",
       "ciFailureTriage": "ci-failure-triage",
       "releaseReadiness": "release-readiness",
@@ -6724,6 +6736,7 @@
       "workspaceHygiene": "workspace-hygiene",
       "lines": {
         "pr-review-checklist": "Read a diff for behaviour changes, missing tests and risky edits; cite each finding.",
+        "review-with-ocr": "Review with the OCR model or delegate the same diff to this agent.",
         "bug-reproduction": "Write down the exact steps that show the bug before looking for its cause.",
         "ci-failure-triage": "Tell a flaky check from a real failure or broken infrastructure, and find the commit that started it.",
         "release-readiness": "What blocks a release and how to list it: checks, reviews, open blockers.",
