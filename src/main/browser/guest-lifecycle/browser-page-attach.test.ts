@@ -64,13 +64,18 @@ describe('claimBrowserPageFirstLoad', () => {
   })
 
   it('still reports a first load that failed before it was claimed', async () => {
-    const url = 'http://localhost:9/'
-    openTab('page-failed', url, false, 'fails')
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    vi.useFakeTimers()
+    try {
+      const url = 'http://localhost:9/'
+      openTab('page-failed', url, false, 'fails')
+      await vi.advanceTimersByTimeAsync(10)
 
-    await expect(claimBrowserPageFirstLoad('page-failed', url)?.load).rejects.toThrow(
-      'ERR_CONNECTION_REFUSED'
-    )
+      await expect(claimBrowserPageFirstLoad('page-failed', url)?.load).rejects.toThrow(
+        'ERR_CONNECTION_REFUSED'
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('settles a first load that became a download without waiting out the timeout', async () => {
