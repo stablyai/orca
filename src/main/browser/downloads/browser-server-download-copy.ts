@@ -26,6 +26,7 @@ import { browserDownloadDestinationReservations } from './browser-download-desti
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../shared/remote-runtime/rpc/runtime-rpc-feature-interaction-source'
 
 const COPY_START_TIMEOUT_MS = 60_000
+const COPY_PROGRESS_TIMEOUT_MS = 60_000
 const COPY_RELEASE_TIMEOUT_MS = 10_000
 
 // Running copies by copy id, for Cancel.
@@ -85,15 +86,22 @@ export async function copyBrowserServerDownloadHere(
       let ended = false
       let settled = false
       let writes = Promise.resolve()
+      // A server whose socket stays up but whose file stops arriving frees everything here.
+      const stall = setTimeout(
+        () => fail(new Error('The server stopped sending the file.')),
+        COPY_PROGRESS_TIMEOUT_MS
+      )
       const fail = (error: Error): void => {
         if (!settled) {
           settled = true
+          clearTimeout(stall)
           reject(error)
         }
       }
       const finishIfDone = (): void => {
         if (!settled && ended && size !== null && written === size) {
           settled = true
+          clearTimeout(stall)
           resolve()
         }
       }
@@ -127,6 +135,7 @@ export async function copyBrowserServerDownloadHere(
             offset += (await file.write(bytes, offset, bytes.byteLength - offset)).bytesWritten
           }
           written += bytes.byteLength
+          stall.refresh()
           stream.subscription?.sendBinary(encodeBrowserDownloadCopyAck(written))
           finishIfDone()
         })
@@ -143,6 +152,7 @@ export async function copyBrowserServerDownloadHere(
         COPY_START_TIMEOUT_MS,
         {
           onEvent: (payload) => {
+            stall.refresh()
             if (payload.type === 'binary') {
               onBinary(payload.bytes)
               return
