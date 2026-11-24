@@ -270,6 +270,13 @@
       "sshPage": {
         "stored": "Enregistré dans le navigateur de {{host}}.",
         "googleCookiesSkipped": "Les cookies Google n’ont pas été importés. Ouvrez une page qui navigue via {{host}}, puis connectez-vous à Google."
+      },
+      "picker": {
+        "menuItem": "Importer des cookies…",
+        "search": "Rechercher des profils",
+        "lastUsed": "Dernière utilisation",
+        "noMatches": "Aucun résultat",
+        "googleNote": "Connexions Google non importées"
       }
     },
     "passwords": {
@@ -4706,7 +4713,7 @@
             "minimax": {
               "expired": {
                 "label": "Connexion expirée",
-                "apiKey": "La clé API MiniMax a expiré. Remplacez-le dans Paramètres.",
+                "apiKey": "La clé API MiniMax a expiré. Remplacez-la dans Paramètres.",
                 "cookie": "Le cookie de session MiniMax a expiré. Remplacez-le dans Paramètres."
               }
             },
@@ -7737,7 +7744,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "Profil « {{value0}} » supprimé.",
-          "2d4bea7f35": "Cookies par défaut effacés.",
           "796d846483": "Aucun cookie importé",
           "c29648fe5b": "Actif",
           "b4c167764d": "{{value0}} cookies importés depuis un fichier vers {{value1}}.",
@@ -7745,10 +7751,7 @@
           "b4e9d3f2a1c5": "{{value0}} cookies importés depuis {{value1}} vers {{value2}}.",
           "c5a273a809": "Depuis {{value0}}",
           "80bffd32bf": "Importer des cookies",
-          "bd7d68f138": "Depuis un fichier…",
-          "4054c458e1": "Effacer les cookies par défaut",
-          "3b662becd5": "Effacer les cookies du profil par défaut ?",
-          "f159cf5a3e": "Vous pourriez être déconnecté des sites de ce profil."
+          "bd7d68f138": "Depuis un fichier…"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Si l'import de cookies ne convient pas, Computer Use peut contrôler des apps locales et, le cas échéant, réutiliser des sessions de navigateur déjà connectées. Installez la skill Orca Computer Use ; macOS exige aussi des autorisations de confidentialité.",
@@ -17464,8 +17467,6 @@
             "ed8f54509d": "Par défaut",
             "e5d31de1a9": "Taille de la zone d'affichage",
             "56f94f4ffa": "Depuis un fichier…",
-            "eb280bfb11": "Depuis {{value0}}",
-            "2293adf620": "Importer des cookies",
             "cf7cdc67ef": "Nouveau profil…",
             "7b838540c7": "Menu du navigateur",
             "a7a86702b3": "Profil {{value0}} créé et activé",

@@ -11,15 +11,22 @@ import type {
 
 // Name the import machine for remote pages: it chooses the browser inventory and receives permission prompts. Local imports need no notice.
 export function BrowserCookieImportMachineNotice({
-  pageRoute = null
+  pageRoute = null,
+  settingsSshRoute = null
 }: {
   /** Set when a page imports into its own jar; Settings imports follow the Settings host. */
   pageRoute?: BrowserPageCookieImportRoute | null
+  /** Settings' selected host when it is an SSH host. */
+  settingsSshRoute?: BrowserSshPageCookieImportRoute | null
 }): React.JSX.Element | null {
   const t = useTranslate()
   const settingsBrowsersHost = useAppStore((s) => s.detectedBrowsersHost)
   if (pageRoute?.kind === 'ssh') {
     return <SshPageCookieImportNotice route={pageRoute} />
+  }
+  // Settings on an SSH host fills that host's jar, the same one its pages' import fills.
+  if (!pageRoute && settingsSshRoute) {
+    return <SshPageCookieImportNotice route={settingsSshRoute} />
   }
   // A server's This-device jar: its agents always drive these pages but never get the cookies.
   if (pageRoute?.kind === 'client-host') {

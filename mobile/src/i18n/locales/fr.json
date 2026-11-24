@@ -4544,7 +4544,7 @@
             "minimax": {
               "expired": {
                 "label": "Connexion expirée",
-                "apiKey": "La clé API MiniMax a expiré. Remplacez-le dans Paramètres.",
+                "apiKey": "La clé API MiniMax a expiré. Remplacez-la dans Paramètres.",
                 "cookie": "Le cookie de session MiniMax a expiré. Remplacez-le dans Paramètres."
               }
             },

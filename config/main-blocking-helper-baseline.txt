@@ -166,7 +166,8 @@
 1 src/main/browser/network/execution-routes/ssh-browser-network-execution-route.ts
 2 src/main/browser/network/execution-routes/wsl-browser-network-execution-route.ts
 2 src/main/browser/network/execution-routes/wsl-browser-network-relay-launch.ts
-2 src/main/browser/routing/local-host-partitions/local-ssh-browser-partitions.ts
+1 src/main/browser/routing/local-host-partitions/local-ssh-browser-partition-bindings.ts # moved with the jar binding code from local-ssh-browser-partitions.ts
+1 src/main/browser/routing/local-host-partitions/local-ssh-browser-partitions.ts
 1 src/main/browser/routing/local-host-partitions/wsl-host-browser-route-partition.ts
 4 src/main/browser/routing/partitions/browser-route-partition-binding-store.ts
 5 src/main/browser/routing/partitions/browser-route-partition-pending-deletes.ts

@@ -543,6 +543,13 @@
       "sshPage": {
         "stored": "Im Browser für {{host}} gespeichert.",
         "googleCookiesSkipped": "Google-Cookies wurden nicht importiert. Öffne eine Seite, die über {{host}} surft, und melde dich dann bei Google an."
+      },
+      "picker": {
+        "menuItem": "Cookies importieren…",
+        "search": "Profile suchen",
+        "lastUsed": "Zuletzt verwendet",
+        "noMatches": "Keine Treffer",
+        "googleNote": "Kein Import von Google-Logins"
       }
     },
     "passwords": {
@@ -7873,7 +7880,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "Profil „{{value0}}“ entfernt.",
-          "2d4bea7f35": "Cookies des Standardprofils gelöscht.",
           "796d846483": "Keine Cookies importiert",
           "c29648fe5b": "Aktiv",
           "b4c167764d": "{{value0}} Cookies aus einer Datei in {{value1}} importiert.",
@@ -7881,10 +7887,7 @@
           "b4e9d3f2a1c5": "{{value0}} Cookies aus {{value1}} in {{value2}} importiert.",
           "c5a273a809": "Aus {{value0}}",
           "80bffd32bf": "Cookies importieren",
-          "bd7d68f138": "Aus Datei…",
-          "4054c458e1": "Cookies des Standardprofils löschen",
-          "3b662becd5": "Cookies im Standardprofil löschen?",
-          "f159cf5a3e": "Dadurch wirst du möglicherweise auf Websites in diesem Profil abgemeldet."
+          "bd7d68f138": "Aus Datei…"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Orca Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
@@ -17496,8 +17499,6 @@
             "ed8f54509d": "Standard",
             "e5d31de1a9": "Größe des Anzeigebereichs",
             "56f94f4ffa": "Aus Datei…",
-            "eb280bfb11": "Aus {{value0}}",
-            "2293adf620": "Cookies importieren",
             "cf7cdc67ef": "Profil erstellen…",
             "7b838540c7": "Browsermenü",
             "a7a86702b3": "Profil {{value0}} erstellt und aktiviert",
