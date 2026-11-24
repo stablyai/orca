@@ -1,7 +1,7 @@
 // Automations in a bot's Activity panel: Tidy memory, Look around, automations and waits, failed first,
 // then running, then soonest; paused ones last. Five show, then "All N automations". Folded, the rows
 // in trouble stay listed under the header. An automation's Delete confirms here and keeps focus near it.
-import { useRef, useState, type RefObject } from 'react'
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { ChevronRight, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -17,6 +17,7 @@ import { useBotPanelFold } from './use-bot-panel-fold'
 import {
   AUTOMATION_CARD_CAP,
   botAutomationCardView,
+  botAutomationCardRows,
   useAutomationCardOrder,
   type BotAutomationCardRow
 } from './bot-automation-card'
@@ -29,6 +30,7 @@ import {
 } from './bot-automation-row-membership'
 import { botReadAuthorityKey } from './bot-read-authority'
 import type { BotAutomationDeletion } from './use-bot-automation-delete'
+import type { BotActivityWithAuthority } from './use-bot-activity'
 import {
   useBotAutomationDeleteFocus,
   type BotAutomationFocusIntent
@@ -40,7 +42,7 @@ export function BotUpcomingSection({
   hiddenKeys,
   upNext,
   hasAutomations,
-  signInStops,
+  hasConnectorNeed,
   now,
   deletion,
   panelFallback
@@ -54,7 +56,7 @@ export function BotUpcomingSection({
   /** It has automations or waits of its own, beyond Tidy memory and Look around. */
   hasAutomations: boolean
   /** Automations whose sign-in stop Needs you lists. */
-  signInStops: ReadonlySet<string>
+  hasConnectorNeed: boolean
   now: number
   deletion: BotAutomationDeletion
   panelFallback: RefObject<HTMLDivElement | null>
@@ -74,23 +76,41 @@ export function BotUpcomingSection({
   const [dialogId, setDialogId] = useState(0)
   const [target, setTarget] = useState<BotAutomationFocusIntent | null>(null)
   const [dontAskAgain, setDontAskAgain] = useState(false)
-  const membership = useBotAutomationMembership(bot, signInStops)
+  const membership = useBotAutomationMembership(bot, hasConnectorNeed)
+  const membershipAtCommit = useRef(membership)
+  useLayoutEffect(() => {
+    membershipAtCommit.current = membership
+  }, [membership])
+  const troubleCleared = (
+    intent: BotAutomationFocusIntent,
+    cards: readonly BotAutomationCardRow[]
+  ): boolean => {
+    const card = cards.find((row) => row.key === intent.rowKey)
+    if (card?.kind !== 'automation') {
+      return false
+    }
+    const { automation } = card.row
+    const enabled =
+      intent.saved?.from === automation.updatedAt ? intent.saved.enabled : automation.enabled
+    return !isBotRowTrouble(
+      botAutomationMembershipState(card, membershipAtCommit.current, t, enabled)
+    )
+  }
   const { section, newButton, newShown, setNewShown, follow, onCloseAutoFocus } =
     useBotAutomationDeleteFocus({
       deletion,
       open: fold.open,
       panelFallback,
-      troubleCleared: (intent) => {
-        const card = rows.find((row) => row.key === intent.rowKey)
-        if (card?.kind !== 'automation') {
-          return false
-        }
-        const { automation } = card.row
-        const enabled =
-          intent.saved?.from === automation.updatedAt ? intent.saved.enabled : automation.enabled
-        return !isBotRowTrouble(botAutomationMembershipState(card, membership, t, enabled))
-      }
+      troubleCleared: (intent) => troubleCleared(intent, rows)
     })
+  const admit = (intent: BotAutomationFocusIntent) =>
+    deletion.admit(
+      intent,
+      intent.folded && intent.admittedAsTrouble
+        ? (activity: BotActivityWithAuthority['activity']) =>
+            troubleCleared(intent, botAutomationCardRows(bot, activity, now))
+        : undefined
+    )
 
   const request = (
     row: BotAutomationCardRow,
@@ -112,7 +132,7 @@ export function BotUpcomingSection({
       saved
     }
     if (useAppStore.getState().settings?.skipDeleteAutomationConfirm) {
-      const admission = deletion.admit(intent)
+      const admission = admit(intent)
       if (admission) {
         follow(intent, admission)
       }
@@ -127,7 +147,7 @@ export function BotUpcomingSection({
     if (!target) {
       return
     }
-    const admission = deletion.admit(target)
+    const admission = admit(target)
     if (!admission) {
       if (deletion.membership(target) !== 'listed') {
         setTarget(null)

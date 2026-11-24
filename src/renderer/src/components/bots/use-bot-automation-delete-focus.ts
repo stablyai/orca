@@ -169,7 +169,7 @@ export function useBotAutomationDeleteFocus({
         ((entry.outcome === 'hidden' &&
           (deletion.hidden.has(intent.id) || membership === 'absent')) ||
           (entry.outcome === 'omitted' && membership === 'absent') ||
-          (entry.outcome === 'still-listed' &&
+          (entry.outcome === 'trouble-cleared' &&
             membership === 'listed' &&
             intent.folded &&
             intent.admittedAsTrouble &&
@@ -195,10 +195,14 @@ export function useBotAutomationDeleteFocus({
         continue
       }
       const button = rows.get(entry.intent.rowKey)
+      const stillPending = deletion.pending.get(entry.intent.id)?.opId === opId
       if (button) {
         entry.order = [...rows.keys()]
+        if (stillPending) {
+          entry.leftOtherwise = false
+        }
       } else if (
-        deletion.pending.get(entry.intent.id)?.opId === opId &&
+        stillPending &&
         deletion.membership(entry.intent) === 'listed' &&
         !deletion.hidden.has(entry.intent.id)
       ) {

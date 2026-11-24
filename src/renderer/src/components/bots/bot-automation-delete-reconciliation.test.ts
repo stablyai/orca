@@ -6,8 +6,12 @@ import {
   clearRuntimeCompatibilityCache,
   markRuntimeEnvironmentCompatible
 } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
-import { setRuntimeEnvironmentCatalogRefresher } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
+import {
+  refreshRuntimeEnvironmentCatalog,
+  setRuntimeEnvironmentCatalogRefresher
+} from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import * as registry from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { runtimeEnvironmentChangedFailure } from '../../../../main/ipc/runtime-environments/requests/runtime-environment-revision-guard'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../../shared/remote-runtime/protocol/protocol-version'
 import { createBotHostRead } from './bot-host-read-store'
@@ -40,6 +44,20 @@ const old: BotActivityWithAuthority = {
     ]
   }
 }
+const bothListed: BotActivityWithAuthority = {
+  ...old,
+  activity: {
+    ...old.activity,
+    automations: [
+      ...old.activity.automations,
+      {
+        ...old.activity.automations[0],
+        key: 'second',
+        automation: { ...old.activity.automations[0].automation, id: 'second', name: 'Second' }
+      }
+    ]
+  }
+}
 const revision = (pairingRevision: number): void => {
   replaceRuntimeEnvironmentRevisions([{ id: 'paired', createdAt: 1, pairingRevision }])
 }
@@ -63,11 +81,20 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function scenario(options: { warm?: boolean; holdActivity?: boolean } = {}) {
+function scenario(
+  options: {
+    warm?: boolean
+    holdActivity?: boolean
+    identity?: boolean
+    predecessor?: boolean
+  } = {}
+) {
   if (options.warm) {
     markRuntimeEnvironmentCompatible('paired')
   }
   const calls: [string, number | undefined][] = []
+  const activityReplies: (() => void)[] = []
+  let refused = false
   vi.stubGlobal('api', {
     runtimeEnvironments: {
       call: async ({
@@ -78,15 +105,25 @@ function scenario(options: { warm?: boolean; holdActivity?: boolean } = {}) {
         expectedEnvironmentPairingRevision?: number
       }) => {
         calls.push([method, expected])
-        if (expected !== 22) {
-          return runtimeEnvironmentChangedFailure({ runtimeId: 'replacement' }, method, true)
+        if (
+          expected === 11 &&
+          !(options.predecessor && method === 'bots.activity') &&
+          (!options.identity || (!refused && method !== 'bots.activity'))
+        ) {
+          refused = true
+          return runtimeEnvironmentChangedFailure(
+            { runtimeId: 'replacement' },
+            method,
+            !options.identity
+          )
         }
         if (method === 'status.get') {
           return { ok: true, result: { runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION } }
         }
+        const reply = { ok: true, result: { activity: NO_ACTIVITY } }
         return options.holdActivity
-          ? new Promise(() => {})
-          : { ok: true, result: { activity: NO_ACTIVITY } }
+          ? new Promise((resolve) => activityReplies.push(() => resolve(reply)))
+          : reply
       }
     }
   })
@@ -104,8 +141,8 @@ function scenario(options: { warm?: boolean; holdActivity?: boolean } = {}) {
     useBotAutomationDelete(
       bot,
       {
-        read: old,
-        currentRead: () => read.snapshot(botRefKey(bot)) ?? old,
+        read: bothListed,
+        currentRead: () => read.snapshot(botRefKey(bot)) ?? bothListed,
         refresh: () => read.request(bot),
         refreshSettled: (deadline) => read.requestSettled(bot, deadline)
       },
@@ -115,11 +152,13 @@ function scenario(options: { warm?: boolean; holdActivity?: boolean } = {}) {
   return {
     calls,
     close,
-    admit: async (): Promise<BotAutomationDeleteAdmission> => {
+    activityReplies,
+    request: () => read.request(bot),
+    admit: async (id = 'digest'): Promise<BotAutomationDeleteAdmission> => {
       const admissions: BotAutomationDeleteAdmission[] = []
       await act(async () => {
         const admission = result.current.admit({
-          id: 'digest',
+          id,
           name: 'Digest',
           authority: old.authority,
           botKey: result.current.botKey,
@@ -139,6 +178,20 @@ function scenario(options: { warm?: boolean; holdActivity?: boolean } = {}) {
 function advance(ms: number): void {
   clock += ms
   vi.advanceTimersByTime(ms)
+}
+
+function watchCatalogSubscribers(): Set<() => void> {
+  const subscribers = new Set<() => void>()
+  const subscribe = registry.onRuntimeEnvironmentRevisionsPublished
+  vi.spyOn(registry, 'onRuntimeEnvironmentRevisionsPublished').mockImplementation((listener) => {
+    subscribers.add(listener)
+    const dispose = subscribe(listener)
+    return () => {
+      subscribers.delete(listener)
+      dispose()
+    }
+  })
+  return subscribers
 }
 
 describe('reconciling a resolved pairing refusal', () => {
@@ -246,4 +299,173 @@ describe('reconciling a resolved pairing refusal', () => {
     ])
     view.close()
   })
+
+  it.each([false, true])(
+    'releases two recoveries on publication while a shared trailing read stalls (Activity predecessor %s)',
+    async (predecessor) => {
+      let catalogReads = 0
+      let publish = (): void => {}
+      let finishTrailing = (): void => {}
+      const subscribers = watchCatalogSubscribers()
+      setRuntimeEnvironmentCatalogRefresher(
+        () =>
+          new Promise((resolve) => {
+            catalogReads += 1
+            if (catalogReads === 1) {
+              publish = () => {
+                revision(22)
+                resolve()
+              }
+            } else {
+              finishTrailing = resolve
+            }
+          })
+      )
+      const beforeRejection = refreshRuntimeEnvironmentCatalog()
+      const view = scenario({ warm: true, holdActivity: true, predecessor })
+      if (predecessor) {
+        await act(async () => view.request())
+      }
+      const first = await view.admit()
+      const second = await view.admit('second')
+      expect(subscribers.size).toBe(2)
+      await act(async () => advance(4_000))
+      await act(async () => publish())
+      await beforeRejection
+      expect(catalogReads).toBe(2)
+      expect(subscribers.size).toBe(0)
+      if (predecessor) {
+        expect(view.calls.filter(([method]) => method === 'bots.activity')).toEqual([
+          ['bots.activity', 11]
+        ])
+        await act(async () => view.activityReplies[0]())
+      }
+      expect(view.calls).toEqual([
+        ...(predecessor ? [['bots.activity', 11]] : []),
+        ['automation.delete', 11],
+        ['automation.delete', 11],
+        ['bots.activity', 22]
+      ])
+      const outcomes: string[] = []
+      void first.settled.then((outcome) => outcomes.push(outcome))
+      void second.settled.then((outcome) => outcomes.push(outcome))
+      await act(async () => advance(10_999))
+      expect(outcomes).toEqual([])
+      await act(async () => advance(1))
+      expect(outcomes).toEqual(['uncertain', 'uncertain'])
+      await act(async () => {
+        view.activityReplies.at(-1)?.()
+        finishTrailing()
+      })
+      view.close()
+    }
+  )
+
+  it('requires a post-rejection success when a pre-existing read republishes the same revision', async () => {
+    let finishOlder = (): void => {}
+    let finishFresh = (): void => {}
+    let reads = 0
+    setRuntimeEnvironmentCatalogRefresher(
+      () =>
+        new Promise((resolve) => {
+          reads += 1
+          if (reads === 1) {
+            finishOlder = resolve
+          } else {
+            finishFresh = resolve
+          }
+        })
+    )
+    const older = refreshRuntimeEnvironmentCatalog()
+    const view = scenario({ warm: true, identity: true })
+    const admission = await view.admit()
+    await act(async () => {
+      revision(11)
+      finishOlder()
+    })
+    await older
+    expect(reads).toBe(2)
+    expect(view.calls).toEqual([['automation.delete', 11]])
+    await act(async () => {
+      revision(11)
+      finishFresh()
+    })
+    await expect(admission.settled).resolves.toBe('omitted')
+    expect(view.calls).toEqual([
+      ['automation.delete', 11],
+      ['bots.activity', 11]
+    ])
+    view.close()
+  })
+
+  it.each([false, true])(
+    'uses a successful fresh catalog to reconcile a same-revision identity refusal (warm %s)',
+    async (warm) => {
+      let reads = 0
+      setRuntimeEnvironmentCatalogRefresher(async () => {
+        reads += 1
+        revision(11)
+      })
+      const view = scenario({ warm, identity: true })
+      const admission = await view.admit()
+      await expect(admission.settled).resolves.toBe('omitted')
+      expect(reads).toBe(1)
+      expect(view.calls).toEqual(
+        warm
+          ? [
+              ['automation.delete', 11],
+              ['bots.activity', 11]
+            ]
+          : [
+              ['status.get', 11],
+              ['status.get', 11],
+              ['bots.activity', 11]
+            ]
+      )
+      view.close()
+    }
+  )
+
+  it.each(['failed', 'unavailable', 'timeout', 'removed'] as const)(
+    'does not read the same revision after an identity refusal with a %s catalog',
+    async (kind) => {
+      const subscribers = watchCatalogSubscribers()
+      let release = (): void => {}
+      if (kind !== 'unavailable') {
+        setRuntimeEnvironmentCatalogRefresher(async () => {
+          if (kind === 'failed') {
+            throw new Error('catalog unavailable')
+          }
+          if (kind === 'removed') {
+            replaceRuntimeEnvironmentRevisions([])
+          }
+          if (kind === 'timeout') {
+            await new Promise<void>((resolve) => {
+              release = resolve
+            })
+          }
+        })
+      }
+      const view = scenario({ warm: true, identity: true })
+      const admission = await view.admit()
+      const outcomes: string[] = []
+      void admission.settled.then((outcome) => outcomes.push(outcome))
+      if (kind === 'timeout') {
+        expect(subscribers.size).toBe(1)
+        await act(async () => advance(14_999))
+        expect(outcomes).toEqual([])
+        await act(async () => advance(1))
+        expect(outcomes).toEqual(['uncertain'])
+      }
+      await expect(admission.settled).resolves.toBe('uncertain')
+      expect(subscribers.size).toBe(0)
+      expect(view.calls).toEqual([['automation.delete', 11]])
+      await act(async () => {
+        revision(22)
+        release()
+      })
+      expect(view.calls).toEqual([['automation.delete', 11]])
+      view.close()
+    }
+  )
 })

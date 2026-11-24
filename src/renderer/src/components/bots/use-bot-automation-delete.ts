@@ -20,7 +20,7 @@ import {
   sameBotReadAuthority,
   type BotReadAuthority
 } from './bot-read-authority'
-import type { useBotActivityAuthorityRead } from './use-bot-activity'
+import type { BotActivityWithAuthority, useBotActivityAuthorityRead } from './use-bot-activity'
 
 /** What a Delete asked for, captured from the row as shown when it was asked. */
 export type BotAutomationDeleteIntent = {
@@ -37,7 +37,8 @@ export type BotAutomationDeleteIntent = {
 type DeleteOp = BotAutomationDeleteIntent & { opId: number; opKey: string }
 
 export type BotAutomationPending = { opId: number; admittedAsTrouble: boolean }
-export type BotAutomationDeleteOutcome = 'hidden' | 'omitted' | 'still-listed' | 'uncertain'
+export type BotAutomationDeleteOutcome = 'hidden' | 'omitted' | 'trouble-cleared' | 'uncertain'
+type CheckFoldedTrouble = (read: BotActivityWithAuthority['activity']) => boolean
 export type BotAutomationDeleteAdmission = {
   opId: number
   settled: Promise<BotAutomationDeleteOutcome>
@@ -58,7 +59,10 @@ export type BotAutomationDeletion = {
   membership: (intent: BotAutomationDeleteIntent) => DeleteMembership
   ownsFocus: (intent: BotAutomationDeleteIntent) => boolean
   canAdmit: (intent: BotAutomationDeleteIntent) => boolean
-  admit: (intent: BotAutomationDeleteIntent) => BotAutomationDeleteAdmission | null
+  admit: (
+    intent: BotAutomationDeleteIntent,
+    troubleClearedBy?: CheckFoldedTrouble
+  ) => BotAutomationDeleteAdmission | null
 }
 
 type DeleteState = {
@@ -115,7 +119,10 @@ export function useBotAutomationDelete(
     update(expected, (previous) => ({ ...previous, ops: snapshot }))
   }
 
-  const run = async (op: DeleteOp): Promise<BotAutomationDeleteOutcome> => {
+  const run = async (
+    op: DeleteOp,
+    troubleClearedBy?: CheckFoldedTrouble
+  ): Promise<BotAutomationDeleteOutcome> => {
     const alive = (): boolean =>
       liveGeneration.current === op.generation && ops.current.get(op.opKey)?.opId === op.opId
     try {
@@ -137,7 +144,9 @@ export function useBotAutomationDelete(
         return 'omitted'
       }
       toast.error(t('bots.automations.deleteFailed', 'Couldn’t delete {{name}}', { name: op.name }))
-      return sameRead ? 'still-listed' : 'uncertain'
+      return sameRead && troubleClearedBy?.(settled.value.activity)
+        ? 'trouble-cleared'
+        : 'uncertain'
     }
     if (!alive()) {
       return 'uncertain'
@@ -185,7 +194,10 @@ export function useBotAutomationDelete(
   const canAdmit = (intent: BotAutomationDeleteIntent): boolean =>
     !offlineNow.current && membership(intent) === 'listed' && !ops.current.has(deleteOpKey(intent))
 
-  const admit = (intent: BotAutomationDeleteIntent): BotAutomationDeleteAdmission | null => {
+  const admit = (
+    intent: BotAutomationDeleteIntent,
+    troubleClearedBy?: CheckFoldedTrouble
+  ): BotAutomationDeleteAdmission | null => {
     if (!canAdmit(intent)) {
       return null
     }
@@ -193,7 +205,7 @@ export function useBotAutomationDelete(
     const op: DeleteOp = { ...intent, opId: ++nextOpId.current, opKey }
     ops.current.set(opKey, op)
     mirrorOps(op.generation)
-    const settled = run(op).finally(() => {
+    const settled = run(op, troubleClearedBy).finally(() => {
       if (ops.current.get(op.opKey)?.opId === op.opId) {
         ops.current.delete(op.opKey)
         mirrorOps(op.generation)

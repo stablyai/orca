@@ -5,6 +5,7 @@ const continuedRevisionsByEnvironmentId = new Map<string, Map<number, number>>()
 const pendingContinuationByEnvironmentId = new Map<string, number>()
 const retirementListeners = new Set<(environmentIds: readonly string[]) => void>()
 const revisionChangeListeners = new Set<(environmentIds: readonly string[]) => void>()
+const publicationListeners = new Set<() => void>()
 
 export type RuntimeEnvironmentContinuity = {
   /** Ids now naming a different machine. */
@@ -63,6 +64,13 @@ export function replaceRuntimeEnvironmentRevisions(
       listener(changed)
     }
   }
+  publicationListeners.forEach((listener) => listener())
+}
+
+/** Fires after the registry is populated, including removed or newly registered environments. */
+export function onRuntimeEnvironmentRevisionsPublished(listener: () => void): () => void {
+  publicationListeners.add(listener)
+  return () => publicationListeners.delete(listener)
 }
 
 /** Fires, before the new revisions are published, with ids removed or now naming another machine. */

@@ -161,10 +161,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   }, [read, now.needs, stoppedForSignIn])
   // The badge's count, unfiltered: the header's dot and line say what the Items tab says.
   const needsYou = useBotNeedsYouCount(bot, now)
-  const signInStops = useMemo(
-    () => new Set(stoppedForSignIn.map((row) => row.key)),
-    [stoppedForSignIn]
-  )
+  const hasConnectorNeed = now.needs.some((need) => need.kind === 'connector')
   const rowName = (row: BotAutomationCardRow): string =>
     row.kind === 'look-around'
       ? t('settings.bots.lookAround.title', 'Look around')
@@ -240,7 +237,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
           panelFallback={scroll}
           upNext={activity.upNext?.state}
           hasAutomations={activity.automations.length + activity.waits.length > 0}
-          signInStops={signInStops}
+          hasConnectorNeed={hasConnectorNeed}
           now={clock}
         />
         {activity.upNext ? (

@@ -5,8 +5,8 @@ const PAIRING_CHANGED_MESSAGE = 'Runtime environment pairing changed'
 type CatalogRefresher = () => Promise<void>
 
 let refreshCatalog: CatalogRefresher | null = null
-let inFlight: Promise<void> | null = null
-let trailing: Promise<void> | null = null
+let inFlight: Promise<boolean> | null = null
+let trailing: Promise<boolean> | null = null
 
 export function setRuntimeEnvironmentCatalogRefresher(refresher: CatalogRefresher | null): void {
   refreshCatalog = refresher
@@ -29,29 +29,37 @@ export function refreshRuntimeEnvironmentsAfterPairingChange(error: unknown): Pr
 }
 
 /** One catalog re-read for every caller that learned of a new pairing at the same time. */
-export function refreshRuntimeEnvironmentCatalog(): Promise<void> {
+export async function refreshRuntimeEnvironmentCatalog(): Promise<void> {
+  await refreshRuntimeEnvironmentCatalogWithResult()
+}
+
+/** The shared fresh read, with failure and an unavailable refresher reported to recovery callers. */
+export function refreshRuntimeEnvironmentCatalogWithResult(): Promise<boolean> {
   if (!refreshCatalog) {
-    return Promise.resolve()
+    return Promise.resolve(false)
   }
   if (inFlight) {
     // The running read may predate this caller's change, so queue one more for the whole burst.
     trailing ??= inFlight.then(() => {
       trailing = null
-      return refreshRuntimeEnvironmentCatalog()
+      return refreshRuntimeEnvironmentCatalogWithResult()
     })
     return trailing
   }
-  inFlight = refreshCatalog()
-    .catch((refreshError: unknown) => {
-      console.warn(
-        '[runtime-environments] Could not re-read a re-paired environment:',
-        refreshError
-      )
-    })
-    .finally(() => {
-      inFlight = null
-    })
+  inFlight = readCatalog(refreshCatalog).finally(() => {
+    inFlight = null
+  })
   return inFlight
+}
+
+async function readCatalog(refresh: CatalogRefresher): Promise<boolean> {
+  try {
+    await refresh()
+    return true
+  } catch (error) {
+    console.warn('[runtime-environments] Could not re-read a re-paired environment:', error)
+    return false
+  }
 }
 
 /** `runtimeEnvironments.subscribe`, re-reading the catalog when the pairing changed under it. */

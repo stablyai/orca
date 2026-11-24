@@ -10,10 +10,10 @@ import { useOrcaCloudSignedOut } from './orca-cloud-signed-out'
 export type NormalAutomationCardRow = Extract<BotAutomationCardRow, { kind: 'automation' }>
 export type AutomationEnabledOverride = { enabled: boolean; from: number }
 
-export function useBotAutomationMembership(bot: Bot, signInStops: ReadonlySet<string>) {
+export function useBotAutomationMembership(bot: Bot, hasConnectorNeed: boolean) {
   return {
     bot,
-    signInStops,
+    hasConnectorNeed,
     webhooks: useBotWebhooks(bot.hostId),
     cloudSignedOut: useOrcaCloudSignedOut()
   }
@@ -36,12 +36,12 @@ export function botAutomationMembershipState(
   if (card.running) {
     return { kind: 'running', label: t('bots.automations.running', 'Running') }
   }
-  const { automation, key, needsSignIn } = card.row
+  const { automation, needsSignIn } = card.row
   const wontFire = automationWontFire(automation, [facts.bot], facts.webhooks, facts.cloudSignedOut)
   if (wontFire) {
     return wontFireState(wontFire.label)
   }
-  return needsSignIn && !facts.signInStops.has(key)
+  return needsSignIn && !facts.hasConnectorNeed
     ? {
         kind: 'alert',
         label: t('bots.upcoming.needsSignIn', 'Needs sign-in'),
