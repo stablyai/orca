@@ -5,7 +5,11 @@ import {
   type BotTeamShareOffer
 } from '../../shared/bots/bot-team-share-seal'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
-import { acceptBotShare, type BotShareAcceptDeps } from './bot-team-share-deliveries'
+import {
+  acceptBotShare,
+  resolveBotShareInvite,
+  type BotShareAcceptDeps
+} from './bot-team-share-deliveries'
 
 const primitives = NODE_PAIRED_E2EE_PRIMITIVES
 const device = primitives.generateKeyPair()
@@ -101,5 +105,62 @@ describe('share accept on the host', () => {
     await expect(acceptBotShare(value, accept('share-alice', 'acct-alice'))).rejects.toThrow(
       'unknown_share'
     )
+  })
+})
+
+describe('invite resolved on the host', () => {
+  const invite: BotShare = {
+    kind: 'invite',
+    shareId: 'share-carol',
+    email: 'carol@example.com',
+    addedAt: 1
+  }
+  const resolved = {
+    kind: 'share_resolved' as const,
+    deliveryId: 'd2',
+    expiresAt: 10,
+    conversation: { source: 'orca' as const, externalId: 'share-carol' },
+    shareId: 'share-carol',
+    botId: 'bot-1',
+    email: 'carol@example.com',
+    accountId: 'acct-carol'
+  }
+  function hostWith(listed: BotShare[], saved: BotShare[]) {
+    const writes: (BotShare[] | undefined)[] = []
+    const bots = {
+      list: () => [{ id: 'bot-1', shares: listed }],
+      update: async (
+        _botId: string,
+        edit: (bot: { shares?: BotShare[] }) => { shares?: BotShare[] }
+      ) => {
+        writes.push(edit({ shares: saved }).shares)
+      }
+    }
+    return { bots, writes }
+  }
+
+  it('writes the account under the invite id when the invite is still there', async () => {
+    const { bots, writes } = hostWith([invite], [invite])
+    await expect(resolveBotShareInvite(bots, resolved)).resolves.toBe(true)
+    expect(writes).toEqual([
+      [
+        {
+          kind: 'account',
+          shareId: 'share-carol',
+          accountId: 'acct-carol',
+          email: 'carol@example.com',
+          addedAt: 1
+        }
+      ]
+    ])
+  })
+
+  it('is refused, writing nothing, when the invite was removed before or during the write', async () => {
+    const removedBefore = hostWith([], [])
+    await expect(resolveBotShareInvite(removedBefore.bots, resolved)).resolves.toBe(false)
+    expect(removedBefore.writes).toEqual([])
+    const removedDuring = hostWith([invite], [])
+    await expect(resolveBotShareInvite(removedDuring.bots, resolved)).resolves.toBe(false)
+    expect(removedDuring.writes).toEqual([undefined])
   })
 })

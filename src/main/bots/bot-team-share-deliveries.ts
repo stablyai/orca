@@ -15,14 +15,21 @@ import {
   type BotTeamShareOffer
 } from '../../shared/bots/bot-team-share-seal'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
-import type { BotController } from './bot-controller'
+import type { BotHostUpdates } from '../../shared/rpc-contract/bots-params'
 
 type ShareResolved = Extract<ConnectorDelivery, { kind: 'share_resolved' }>
 type ShareAccept = Extract<ConnectorDelivery, { kind: 'share_accept' }>
 
 /** Rewrites the invite as the account; false once it was removed or is another email's. */
 export async function resolveBotShareInvite(
-  bots: Pick<BotController, 'list' | 'update'>,
+  bots: {
+    list: () => readonly Pick<Bot, 'id' | 'shares'>[]
+    // BotController.update: the edit reads the bot as saved, inside its write queue.
+    update: (
+      botId: string,
+      edit: (saved: Pick<Bot, 'shares'>) => Pick<BotHostUpdates, 'shares'>
+    ) => Promise<unknown>
+  },
   delivery: ShareResolved
 ): Promise<boolean> {
   const bot = bots.list().find((entry) => entry.id === delivery.botId)
