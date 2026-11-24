@@ -7,6 +7,7 @@ import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/
 import type { BotAccessRequestWatch } from '../bots/bot-access-request-watch'
 import type { ConnectorGitHubInstallations } from '../connector-cloud/connector-github-installations'
 import { BotChangeNotices } from '../bots/bot-change-notices'
+import type { BotShareDevices } from '../bots/team-share/bot-share-access'
 import { deleteAutomationsOfBot } from '../bots/bot-automations-removal'
 import { syncBotAutomationAgents } from '../bots/bot-automation-agent-sync'
 import { BotController } from '../bots/bot-controller'
@@ -60,6 +61,9 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** The host's GitHub orgs as its connector says them; null on a host without a connector. */
   connectorGitHubInstallations: Pick<ConnectorGitHubInstallations, 'track'> | null = null
 
+  /** The RPC server's teammate devices of shared bots, set as it is made; null without one. */
+  botShareDevices: BotShareDevices | null = null
+
   private readonly botWriteListeners = new Set<() => void>()
 
   /** Every bot record save or removal on this host, for its own readers (webhooks, avatars, the
@@ -106,6 +110,11 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       this.lookAround.forget(botId)
       void this.botWork.forgetBot(botId)
       this.bots.memory.removed(botId)
+      void this.botShareDevices?.revokeBotShareDevices(botId).then((ended) => {
+        if (!ended) {
+          console.warn('[bots] a deleted bot’s teammate devices are not all disconnected yet')
+        }
+      })
     }
   })
 

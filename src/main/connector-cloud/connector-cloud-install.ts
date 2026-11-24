@@ -9,7 +9,11 @@ import type { ConnectorGitHubInstallations } from './connector-github-installati
 import type { ConnectorRuntimeKind } from './connector-machine'
 import { connectorBots, displayText, type ConnectorPlacesStore } from './connector-places'
 import { connectorAccount, desktopConnectorTokenMint } from './connector-token-mint'
-import { resolveBotShareInvite } from '../bots/bot-team-share-deliveries'
+import {
+  acceptBotShare,
+  putBotShareOffer,
+  resolveBotShareInvite
+} from '../bots/bot-team-share-deliveries'
 import { connectorTriggers, runTriggerDelivery } from './connector-triggers'
 import { hostNeedsConnector } from './connector-connection-need'
 import type { WebhookHostService } from '../webhooks/webhook-host-service'
@@ -152,6 +156,20 @@ export function createConnectorCloud({
       webhookNotice: async (delivery) => webhooks.notice(delivery),
       prEvent: (delivery) => prWaker.handle(delivery.deliveryId, delivery.event),
       shareResolved: (delivery) => resolveBotShareInvite(runtime.bots, delivery),
+      shareAccept: (delivery) =>
+        acceptBotShare(
+          {
+            bots: runtime.bots,
+            mintOffer: async (ask) => {
+              if (!runtime.botShareDevices) {
+                throw new Error('share_offer_unavailable')
+              }
+              return await runtime.botShareDevices.mintBotShareOffer(ask)
+            },
+            putOffer: (...offer) => putBotShareOffer(runtime.getConnectorCloud(), ...offer)
+          },
+          delivery
+        ),
       helloAnswered: (answer) => {
         webhooks.helloAnswered(answer)
         migratePlaces()

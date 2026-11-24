@@ -41,6 +41,7 @@ import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
 import { refuseUnsavedFolderDrafts } from '../../repositories/folder-workspace-deletion'
 import { botShareScopeOf, emptyChatReusableBy } from '../../../bots/team-share/bot-share-chats'
 import { startBotShareSession } from '../../../bots/team-share/bot-share-session-start'
+import { botShareListedBots } from '../../../bots/team-share/bot-share-access'
 
 async function updateBot(params: BotUpdateParams, context: RpcContext) {
   if (params.updates.slackMirror !== undefined) {
@@ -121,7 +122,7 @@ export const BOT_METHODS = [
       if (share) {
         // A teammate sees the shared bot alone, and none of this host's own state.
         return {
-          bots: listing.bots.filter((bot) => bot.id === share.botId),
+          bots: botShareListedBots(listing.bots, share),
           botsEnabled: listing.botsEnabled
         }
       }

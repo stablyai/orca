@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/rpc-contract/bots-team-shares-params'
 import { defineMethod } from '../core'
 import { ownerOnly } from './bots-caller-gates'
+import { removeBotShare } from '../../../bots/team-share/bot-share-access'
 
 const OWNER_ONLY = 'Only your owner shares you with people, in Orca.'
 
@@ -41,9 +42,14 @@ export const BOT_TEAM_SHARES_METHODS = [
     params: BotTeamSharesRemove,
     handler: async ({ botId, shareId }, context) => {
       ownerOnly(context, OWNER_ONLY)
-      const bot = await context.runtime.bots.update(botId, (saved) => ({
-        shares: (saved.shares ?? []).filter((share) => share.shareId !== shareId)
-      }))
+      const bot = await removeBotShare(
+        {
+          update: (id, edit) => context.runtime.bots.update(id, edit),
+          devices: context.runtime.botShareDevices
+        },
+        botId,
+        shareId
+      )
       console.info('[bots] person removed from the share list', {
         botId,
         shareId,
