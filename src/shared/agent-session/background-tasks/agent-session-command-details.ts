@@ -22,13 +22,15 @@ export function commandDetailTupleOf(view: AgentChildWorkView): AgentSessionComm
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function exactTuple(value: unknown): AgentSessionCommandDetailTuple | null {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (!isRecord(value)) {
     return null
   }
-  const childWorkId: unknown = Reflect.get(value, 'childWorkId')
-  const invocationId: unknown = Reflect.get(value, 'invocationId')
-  const generation: unknown = Reflect.get(value, 'generation')
+  const { childWorkId, invocationId, generation } = value
   if (
     Object.keys(value).length !== 3 ||
     typeof childWorkId !== 'string' ||
