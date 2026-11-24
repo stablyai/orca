@@ -10,8 +10,8 @@ Rules:
 - Give each start its own receipt file and error file, and collect each exit status.
 - Read every receipt, including after a failure: a receipt with `next`, `failedStage` or recovery
   steps is handled exactly as for a single start. A missing or cut-off receipt is an unknown
-  outcome: check `ORCA orchestration worker-list` before anything else, and never start that spec
-  again blindly.
+  outcome: check `ORCA orchestration worker-list --environment local` before anything else, and
+  never start that spec again blindly.
 - Use the form for the shell that runs the CLI. `ORCA` stands for the executable path you resolved;
   quote it if it contains spaces.
 
@@ -19,8 +19,8 @@ POSIX shells (bash, zsh; also WSL and SSH hosts):
 
 ```sh
 d=$(mktemp -d)
-ORCA orchestration worker-start --spec-file w1.md --worktree new-child --name w1 --agent <agent> >"$d/w1.out" 2>"$d/w1.err" & p1=$!
-ORCA orchestration worker-start --spec-file w2.md --worktree new-child --name w2 --agent <agent> >"$d/w2.out" 2>"$d/w2.err" & p2=$!
+ORCA orchestration worker-start --environment local --spec-file w1.md --worktree new-child --name w1 --agent <agent> >"$d/w1.out" 2>"$d/w1.err" & p1=$!
+ORCA orchestration worker-start --environment local --spec-file w2.md --worktree new-child --name w2 --agent <agent> >"$d/w2.out" 2>"$d/w2.err" & p2=$!
 s=0; wait "$p1" || s=$?; echo "w1 exit $s"
 s=0; wait "$p2" || s=$?; echo "w2 exit $s"
 for f in "$d"/*; do echo "== $f"; cat "$f"; done
@@ -32,7 +32,7 @@ Windows PowerShell (5.1 or later; from cmd, run `powershell -NoProfile -Command`
 $d = New-Item -ItemType Directory -Path (Join-Path $env:TEMP ([guid]::NewGuid()))
 $starts = foreach ($n in 'w1', 'w2') {
   $p = Start-Process -FilePath 'ORCA' -NoNewWindow -PassThru -WorkingDirectory (Get-Location) `
-    -ArgumentList "orchestration worker-start --spec-file $n.md --worktree new-child --name $n --agent <agent>" `
+    -ArgumentList "orchestration worker-start --environment local --spec-file $n.md --worktree new-child --name $n --agent <agent>" `
     -RedirectStandardOutput "$d\$n.out" -RedirectStandardError "$d\$n.err"
   $null = $p.Handle
   [pscustomobject]@{ Name = $n; Process = $p }

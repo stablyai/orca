@@ -31,6 +31,11 @@ export function createUiBotPreferenceActions(set: UISliceSet, get: UISliceGet): 
       const normalized = normalizeSidebarBotsHeight(height)
       window.api.ui.set({ sidebarBotsHeight: normalized }).catch(console.error)
       set({ sidebarBotsHeight: normalized })
+    },
+    sidebarProjectsFirst: false,
+    setSidebarProjectsFirst: (sidebarProjectsFirst) => {
+      set({ sidebarProjectsFirst })
+      window.api.ui.set({ sidebarProjectsFirst }).catch(console.error)
     }
   }
 }

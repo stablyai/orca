@@ -148,8 +148,8 @@
   },
   {
     "filePath": "mobile/src/new-workspace/creation/forms/NewWorkspaceSetupScriptField.tsx",
-    "kind": "jsx-expression",
-    "text": "ORCA.YAML",
+    "kind": "jsx-text",
+    "text": "orca.yaml",
     "dynamic": false,
     "count": 1
   },
@@ -698,6 +698,48 @@
     "filePath": "mobile/src/terminal/preferences/settings/TerminalFontSettings.tsx",
     "kind": "object-property:label",
     "text": "Geist Mono",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/bots/BotSessionLinkResolver.tsx",
+    "kind": "error-message",
+    "text": "Opening superseded",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/bots/bot-link-connection-read.ts",
+    "kind": "error-message",
+    "text": "Bot link host is unreachable",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/bots/bot-link-connection-read.ts",
+    "kind": "error-message",
+    "text": "Bot link read cancelled",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/bots/bot-link-host-reads.ts",
+    "kind": "error-message",
+    "text": "Bot link discovery superseded",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/bots/bot-session-link-locate.ts",
+    "kind": "error-message",
+    "text": "Bot link lookup cancelled",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/bots/soul-memory/use-bot-home-files.ts",
+    "kind": "error-message",
+    "text": "files.readDir refused",
     "dynamic": false,
     "count": 1
   }

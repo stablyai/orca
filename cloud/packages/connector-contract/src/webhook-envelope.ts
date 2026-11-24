@@ -2,7 +2,7 @@ import { EpochMsSchema } from '@orca-cloud/push-contract'
 import { z } from 'zod'
 
 // A call as the cloud keeps it and its host fetches it: the hook's own keys already scrubbed out,
-// credential and signature headers dropped, only allowlisted headers kept. Filters, the stored copy,
+// every header kept but credential, signature, cookie and proxy-added ones. Filters, the stored copy,
 // the run's file and its quote all read this, never the raw request.
 export const WEBHOOK_ENVELOPE_LIMITS = {
   // What a caller may send; a larger body is a 413.

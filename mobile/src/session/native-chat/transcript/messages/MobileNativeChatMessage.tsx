@@ -78,10 +78,9 @@ function MobileNativeChatMessageImpl({
   unsentNotice,
   receipt,
   awaiting,
-  subagentGroupsOpen,
-  onToggleSubagentGroup,
   userMessageOpen,
-  onToggleUserMessage
+  onToggleUserMessage,
+  withoutMeta
 }: {
   message: Chat.NativeChatMessage
   // Stable placement key survives older messages joining a folded row.
@@ -115,10 +114,10 @@ function MobileNativeChatMessageImpl({
   unsentNotice?: string
   receipt?: NativeChatResolvedPrompt
   awaiting?: boolean
-  subagentGroupsOpen?: ReadonlySet<string>
-  onToggleSubagentGroup?: (groupId: string) => void
   userMessageOpen?: boolean
   onToggleUserMessage?: (messageId: string) => void
+  /** A group room draws one time line per turn; otherwise the time line always shows, so the row never shifts when copy appears. */
+  withoutMeta?: true
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -169,6 +168,7 @@ function MobileNativeChatMessageImpl({
         pending={askPending}
         fontScale={fontScale}
         listsQuestions={false}
+        disclosureKey={`ask:${rowKey ?? message.id}`}
       />
     ) : null
   // A ref keeps the memoized Markdown context stable as the message streams.
@@ -230,6 +230,7 @@ function MobileNativeChatMessageImpl({
         <MobileNativeChatResolutionReceipt
           body={receipt}
           awaiting={awaiting}
+          disclosureKey={`receipt:${rowId}`}
           fontScale={fontScale}
         />
       </View>
@@ -263,8 +264,7 @@ function MobileNativeChatMessageImpl({
       <MobileNativeChatSubagentGroup
         key={`subagent-group:${block.groupId}`}
         block={block}
-        open={subagentGroupsOpen?.has(block.groupId) === true}
-        onToggle={onToggleSubagentGroup}
+        fontScale={fontScale}
       />
     ) : isSystem ? null : isUser && structuredActivityUi && Chat.isTextBlock(block) ? (
       <View key={textKey}>
@@ -320,6 +320,7 @@ function MobileNativeChatMessageImpl({
                 <MobileNativeChatPullRequestEventLine
                   block={pullRequestEvent}
                   messageId={message.id}
+                  timestamp={message.timestamp}
                   fontScale={fontScale}
                   onLongPress={onLongPress}
                 />
@@ -329,6 +330,7 @@ function MobileNativeChatMessageImpl({
                   fontScale={fontScale}
                   onLongPress={onLongPress}
                   cardId={message.id}
+                  timestamp={message.timestamp}
                 />
               ) : null}
               {isUser ? (
@@ -397,8 +399,7 @@ function MobileNativeChatMessageImpl({
         </Content>
         {isUser ? <Marks.MobileNativeChatUserMessageNotes message={message} /> : null}
         {unsentNotice ? <Text style={styles.unsentNotice}>{unsentNotice}</Text> : null}
-        {/* Always shown, so the row never shifts when copy appears. */}
-        {isChatTurn && !agentFrom ? (
+        {isChatTurn && !agentFrom && !withoutMeta ? (
           <MobileNativeChatMessageMeta
             message={message}
             rowKey={rowKey ?? message.id}

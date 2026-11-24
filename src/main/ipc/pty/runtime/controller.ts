@@ -9,6 +9,7 @@ import {
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { claimRuntimePaneCreate, makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
+import { requestRepaintFromRuntimeController } from './pty-repaint-request'
 import { spawnPtyFromRuntimeController } from './spawn'
 import {
   killPtyFromRuntimeController,
@@ -33,10 +34,13 @@ import {
   inspectProcessFromRuntimeController,
   probePtyLivenessFromRuntimeController,
   resizePtyFromRuntimeController,
-  serializeProviderBufferFromRuntimeController,
   waitForRendererSerializerFromRuntimeController,
   writePtyFromRuntimeController
 } from './operations'
+import {
+  serializeProviderBufferFromRuntimeController,
+  supportsVisibleProjectionSnapshotFromRuntimeController
+} from './provider-buffer-snapshot'
 import { supportsForegroundProcessEvidenceFromRuntimeController } from './foreground-process-evidence-capability'
 import {
   listProcessesFromRuntimeController,
@@ -110,14 +114,15 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
       // Mobile needs exact screen state and geometry before rendering live TUI output.
       return requestSerializedBuffer(ptyId, opts)
     },
-    serializeProviderBuffer: (ptyId, opts) =>
-      serializeProviderBufferFromRuntimeController(ptyId, opts),
+    serializeProviderBuffer: serializeProviderBufferFromRuntimeController,
+    supportsVisibleProjectionSnapshot: supportsVisibleProjectionSnapshotFromRuntimeController,
     hasRendererSerializer: (ptyId) => hasRendererSerializerFromRuntimeController(ptyId),
     getRendererSerializerGeneration: (ptyId) =>
       getRendererSerializerGenerationFromRuntimeController(ptyId),
     waitForRendererSerializer: (ptyId, afterGeneration, timeoutMs, signal) =>
       waitForRendererSerializerFromRuntimeController(ptyId, afterGeneration, timeoutMs, signal),
     getSize: (ptyId) => getSizeFromRuntimeController(ptyId),
-    resize: (ptyId, cols, rows) => resizePtyFromRuntimeController(ptyId, cols, rows)
+    resize: (ptyId, cols, rows) => resizePtyFromRuntimeController(ptyId, cols, rows),
+    requestRepaint: (ptyId) => requestRepaintFromRuntimeController(deps, ptyId)
   })
 }

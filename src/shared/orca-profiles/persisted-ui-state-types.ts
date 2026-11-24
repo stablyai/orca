@@ -55,6 +55,9 @@ export type PersistedUIState = {
   rightSidebarWidth: number
   /** Right sidebar activity-bar edge. Missing on older profiles, which stay at the top. */
   activityBarPosition?: ActivityBarPosition
+  activityBarOrder?: string[]
+  activityBarBotOrder?: string[]
+  activityBarHidden?: string[]
   markdownTocPanelWidth?: number
   combinedDiffFileTreeWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
@@ -135,6 +138,7 @@ export type PersistedUIState = {
   workspaceBoardColumnWidth?: number
   /** Dragged cap on the sidebar Bots section in px; absent or null keeps the default 40% cap. */
   sidebarBotsHeight?: number | null
+  sidebarProjectsFirst?: boolean
   syncTaskStatusFromWorkspaceBoard?: boolean
   /** Migrate reversed defaults once; never infer later user order from IDs/labels. */
   _workspaceStatusesDefaultOrderMigrated?: boolean

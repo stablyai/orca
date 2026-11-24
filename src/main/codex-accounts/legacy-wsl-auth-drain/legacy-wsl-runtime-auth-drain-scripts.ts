@@ -12,7 +12,12 @@ import {
   ROLLBACK_SESSION_LINKS_FUNCTION
 } from './legacy-wsl-runtime-auth-drain-shell-commands'
 import './legacy-wsl-runtime-auth-finalize-script'
+
+/** Inspect's first output, before any recovery: its absence after a wsl.exe failure means no guest ran. */
+export const INSPECT_STARTED_MARKER = 'ORCA_DRAIN_INSPECT_STARTED'
+
 export const INSPECT_LEGACY_AUTH_SCRIPT = `
+printf '%s\\n' '${INSPECT_STARTED_MARKER}'
 set -eu
 source_recovery_auth="$3.orca-drain-source"
 source_quarantine_auth="$3.orca-drain-live-source"

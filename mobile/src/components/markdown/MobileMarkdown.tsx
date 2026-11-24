@@ -9,6 +9,7 @@ import { MobileMarkdownRemoteImage } from './blocks/MobileMarkdownRemoteImage'
 import { MarkdownTextContext, type MarkdownTextSetup } from './mobile-markdown-text-setup'
 import { MarkdownLinkHandlerContext } from './links/markdown-link-handler'
 import { useMobileMarkdownTree } from './parsing/use-mobile-markdown-tree'
+import { MobileMarkdownSlackPeopleContext } from './parsing/mobile-markdown-mentions'
 import {
   MobileMarkdownLinksContext,
   useNativeChatFileLinkExistsFrom
@@ -18,7 +19,7 @@ import type { NativeChatVisualDirective } from '../../../../src/shared/native-ch
 type Props = {
   content?: string
   fallback?: string
-  /** Enables iOS range selection for native-chat transcript prose. */
+  /** Makes paragraphs selectable; on native Android it instead turns block selection off. */
   rangeSelectable?: boolean
   /** Forward long presses from interactive Android transcript spans to the message. */
   onLongPress?: () => void
@@ -77,6 +78,7 @@ function MobileMarkdownContent({
   const setup = useContext(MarkdownTextContext)
   const onOpenLink = useContext(MarkdownLinkHandlerContext)
   const links = useContext(MobileMarkdownLinksContext)
+  const slackPeople = useContext(MobileMarkdownSlackPeopleContext)
   const fileLinkExists = useNativeChatFileLinkExistsFrom(
     links?.fileLinks ?? null,
     onOpenFile !== undefined,
@@ -88,7 +90,12 @@ function MobileMarkdownContent({
     renderVisual !== undefined,
     growing,
     chatMath,
-    { fileLinkExists, githubRepo: links?.githubRepo, slackMentions }
+    {
+      fileLinkExists,
+      githubRepo: links?.githubRepo,
+      slackMentions,
+      slackPeople
+    }
   )
   const weight = fontWeight === undefined ? null : { fontWeight }
   if (!text) {

@@ -5,10 +5,13 @@ import { colors, radii, spacing, typography, pressedStyle } from '../../../../th
 import { ASK_CHOICE_RADIUS } from './MobileNativeChatAsk.styles'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { nativeChatQuestionOptionLabel } from '../../../../../../src/shared/native-chat/input/questions/native-chat-question-option-label'
 
 export function MobileNativeChatAskOptionRow({
   label,
   description,
+  recommended,
   preview,
   onPreview,
   selected,
@@ -18,6 +21,7 @@ export function MobileNativeChatAskOptionRow({
 }: {
   label: string
   description?: string
+  recommended?: boolean
   /** Read-only inspection is separate from choosing the option. */
   preview?: string
   onPreview?: () => void
@@ -27,7 +31,10 @@ export function MobileNativeChatAskOptionRow({
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const hasPreview = Boolean(preview && onPreview)
+  // Agents mark their pick inline ("Tabs (Recommended)"); the answer keeps the full label.
+  const shown = nativeChatQuestionOptionLabel(label)
   const row = (
     <Pressable
       accessibilityRole={multi ? 'checkbox' : 'radio'}
@@ -52,7 +59,15 @@ export function MobileNativeChatAskOptionRow({
         {selected ? <Check size={12} color={colors.bgBase} strokeWidth={3} /> : null}
       </View>
       <View style={styles.optionBody}>
-        <Text style={styles.optionLabel}>{label}</Text>
+        <Text style={styles.optionLabel}>
+          {shown.shown}
+          {recommended || shown.recommended ? (
+            <Text style={styles.recommended}>
+              {'  '}
+              {t('chat.ask.recommended', 'Recommended')}
+            </Text>
+          ) : null}
+        </Text>
         {description ? (
           <Text style={styles.optionDescription} numberOfLines={3}>
             {description}
@@ -121,6 +136,12 @@ const styles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '600'
+  },
+  // The phone's Recommended tag (the voice model list's).
+  recommended: {
+    color: colors.statusGreen,
+    fontSize: 11,
+    fontWeight: '700'
   },
   optionDescription: {
     color: colors.textSecondary,

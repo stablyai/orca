@@ -17,7 +17,8 @@ const METADATA_KEYS = [
   'imageHeight',
   'scrollOffsetX',
   'scrollOffsetY',
-  'timestamp'
+  'timestamp',
+  'zoomFactor'
 ] as const
 
 export enum BrowserScreencastOpcode {
@@ -36,6 +37,8 @@ export type BrowserScreencastFrameMetadata = {
   scrollOffsetX?: number
   scrollOffsetY?: number
   timestamp?: number
+  /** The page's zoom; it shrinks the CSS viewport without changing the painted size, so pointer mapping needs it. Older hosts omit it. */
+  zoomFactor?: number
 }
 
 export type BrowserScreencastFrame = {

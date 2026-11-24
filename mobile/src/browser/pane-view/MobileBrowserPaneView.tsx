@@ -1,4 +1,4 @@
-import type { Dispatch, RefObject, SetStateAction } from 'react'
+import type { Dispatch, ReactNode, RefObject, SetStateAction } from 'react'
 import {
   ActivityIndicator,
   Image,
@@ -10,12 +10,14 @@ import {
   type ViewStyle,
   type HostInstance
 } from 'react-native'
-import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
+import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw, X } from 'lucide-react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
 import { MobileBrowserJavaScriptDialog } from './MobileBrowserJavaScriptDialog'
+import { MobileBrowserPagePrompt } from './MobileBrowserPagePrompt'
+import type { MobileBrowserPagePromptState } from '../page-interaction/use-mobile-browser-page-prompts'
 import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
 import { MobileBrowserLoadFailure } from './MobileBrowserLoadFailure'
 import {
@@ -36,6 +38,7 @@ import type { MobileBrowserViewMode } from '../screencast/browser-screencast-req
 import type { MobileBrowserTab } from '../../session/tabs/mobile-session-tabs'
 import type { BrowserDialogState } from '../screencast/mobile-browser-stream-events'
 import { FieldTextInput } from '../../components/composer-input/FieldTextInput'
+import type { MobileCertificateProceedFailure } from '../certificate/mobile-browser-certificate-proceed'
 
 // Why: seeds layer 0 as the visible one; the pacer owns opacity after mount, so a render must not.
 const FRAME_LAYER_STYLES: [StyleProp<ViewStyle>, StyleProp<ViewStyle>] = [
@@ -44,13 +47,20 @@ const FRAME_LAYER_STYLES: [StyleProp<ViewStyle>, StyleProp<ViewStyle>] = [
 ]
 
 type MobileBrowserPaneViewProps = {
+  /** Just the page and typing, for a sign-in: no address bar, page buttons or modifier keys. */
+  bare?: boolean
+  /** Drawn over the page's foot, e.g. a sheet's own toast where the screen's would sit under it. */
+  pageOverlay?: ReactNode
   addressFocused: boolean
   addressValue: string
   bottomInset: number
   browserViewMode: MobileBrowserViewMode
   busy: boolean
+  certificateTrustSupported: boolean
   controlsDisabled: boolean
   dialog: BrowserDialogState | null
+  pagePrompt: MobileBrowserPagePromptState | null
+  answerPagePrompt: (value: unknown) => Promise<void>
   error: string | null
   frameGeometry: BrowserFrameGeometry | null
   frameLayers: readonly [BrowserFrameLayerBinding, BrowserFrameLayerBinding]
@@ -61,7 +71,9 @@ type MobileBrowserPaneViewProps = {
   layoutRef: RefObject<BrowserTouchLayout | null>
   navigateToAddress: () => Promise<void>
   panResponder: PanResponderInstance
+  proceedCertificate: (challengeId: string) => Promise<MobileCertificateProceedFailure | null>
   pointerModifiers: BrowserPointerModifier[]
+  reconnectStream: () => void
   reloadPage: () => void
   retryFailedLoad: () => void
   renderedFrameSource: { uri: string } | null
@@ -77,6 +89,10 @@ type MobileBrowserPaneViewProps = {
   setKeyboardValue: Dispatch<SetStateAction<string>>
   setLayout: Dispatch<SetStateAction<BrowserTouchLayout | null>>
   setRootViewRef: (view: HostInstance | null) => void
+  showStop: boolean
+  stopPage: () => void
+  /** Why the host stopped the stream; the frame on screen is the last one it sent. */
+  streamStopped: string | null
   tab: MobileBrowserTab
   togglePointerModifier: (modifier: BrowserPointerModifier) => void
   zoom: BrowserZoomState
@@ -88,13 +104,18 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const {
+    bare = false,
+    pageOverlay,
     addressFocused,
     addressValue,
     bottomInset,
     browserViewMode,
     busy,
+    certificateTrustSupported,
     controlsDisabled,
     dialog,
+    pagePrompt,
+    answerPagePrompt,
     error,
     frameGeometry,
     frameLayers,
@@ -106,6 +127,8 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     navigateToAddress,
     panResponder,
     pointerModifiers,
+    proceedCertificate,
+    reconnectStream,
     reloadPage,
     retryFailedLoad,
     renderedFrameSource,
@@ -118,51 +141,62 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     setKeyboardValue,
     setLayout,
     setRootViewRef,
+    showStop,
+    stopPage,
+    streamStopped,
     tab,
     togglePointerModifier,
     zoom
   } = props
   return (
     <View ref={setRootViewRef} style={styles.root}>
-      <View style={styles.toolbar}>
-        <MobileBrowserToolbarIconButton
-          disabled={controlsDisabled || !tab.canGoBack}
-          label={t('common.back', 'Back')}
-          onPress={goBack}
-        >
-          <ChevronLeft size={15} color={buttonColor(!controlsDisabled && tab.canGoBack)} />
-        </MobileBrowserToolbarIconButton>
-        <MobileBrowserToolbarIconButton
-          disabled={controlsDisabled || !tab.canGoForward}
-          label={t('browser.paneView.forward', 'Forward')}
-          onPress={goForward}
-        >
-          <ChevronRight size={15} color={buttonColor(!controlsDisabled && tab.canGoForward)} />
-        </MobileBrowserToolbarIconButton>
-        <MobileBrowserToolbarIconButton
-          disabled={controlsDisabled}
-          label={t('browser.paneView.reload', 'Reload')}
-          onPress={reloadPage}
-        >
-          <RefreshCw size={15} color={buttonColor(!controlsDisabled)} />
-        </MobileBrowserToolbarIconButton>
-        <MobileBrowserAddressField
-          value={addressValue}
-          onChangeText={setAddressValue}
-          onFocus={() => setAddressFocused(true)}
-          onBlur={() => setAddressFocused(false)}
-          onSubmit={() => void navigateToAddress()}
-          focused={addressFocused}
-          disabled={controlsDisabled}
-          loading={tab.loading}
-          loadFailed={tab.loadError != null}
-        />
-        <MobileBrowserViewModeSwitch
-          disabled={controlsDisabled}
-          value={browserViewMode}
-          onChange={selectBrowserViewMode}
-        />
-      </View>
+      {bare ? null : (
+        <View style={styles.toolbar}>
+          <MobileBrowserToolbarIconButton
+            disabled={controlsDisabled || !tab.canGoBack}
+            label={t('common.back', 'Back')}
+            onPress={goBack}
+          >
+            <ChevronLeft size={15} color={buttonColor(!controlsDisabled && tab.canGoBack)} />
+          </MobileBrowserToolbarIconButton>
+          <MobileBrowserToolbarIconButton
+            disabled={controlsDisabled || !tab.canGoForward}
+            label={t('browser.paneView.forward', 'Forward')}
+            onPress={goForward}
+          >
+            <ChevronRight size={15} color={buttonColor(!controlsDisabled && tab.canGoForward)} />
+          </MobileBrowserToolbarIconButton>
+          <MobileBrowserToolbarIconButton
+            disabled={controlsDisabled}
+            label={
+              showStop ? t('browser.paneView.stop', 'Stop') : t('browser.paneView.reload', 'Reload')
+            }
+            onPress={showStop ? stopPage : reloadPage}
+          >
+            {showStop ? (
+              <X size={15} color={buttonColor(!controlsDisabled)} />
+            ) : (
+              <RefreshCw size={15} color={buttonColor(!controlsDisabled)} />
+            )}
+          </MobileBrowserToolbarIconButton>
+          <MobileBrowserAddressField
+            value={addressValue}
+            onChangeText={setAddressValue}
+            onFocus={() => setAddressFocused(true)}
+            onBlur={() => setAddressFocused(false)}
+            onSubmit={() => void navigateToAddress()}
+            focused={addressFocused}
+            disabled={controlsDisabled}
+            loading={tab.loading}
+            loadFailed={tab.loadError != null}
+          />
+          <MobileBrowserViewModeSwitch
+            disabled={controlsDisabled}
+            value={browserViewMode}
+            onChange={selectBrowserViewMode}
+          />
+        </View>
+      )}
 
       <View
         style={styles.viewport}
@@ -255,17 +289,47 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
         {tab.loadError ? (
           <MobileBrowserLoadFailure
             loadError={tab.loadError}
+            certificateFailure={tab.certificateFailure}
+            browserPageId={tab.browserPageId}
+            certificateTrustSupported={certificateTrustSupported}
             retryDisabled={controlsDisabled}
             onRetry={retryFailedLoad}
+            onProceedCertificate={proceedCertificate}
           />
         ) : null}
-        {!renderedFrameSource || busy || error ? (
-          <View pointerEvents="none" style={styles.overlay}>
+        {!renderedFrameSource || busy || error || streamStopped ? (
+          <View pointerEvents={streamStopped ? 'box-none' : 'none'} style={styles.overlay}>
             {/* Key busy indicator on received pixels, not ready status: ready streams may send no frames. */}
-            {busy || (!renderedFrameSource && !error) ? (
+            {busy || (!renderedFrameSource && !error && !streamStopped) ? (
               <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : null}
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {streamStopped ? (
+              <View style={styles.streamStopped}>
+                <Text style={styles.streamStoppedText}>{streamStopped}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  style={({ pressed }) => [
+                    styles.dialogButton,
+                    styles.dialogButtonPrimary,
+                    styles.streamStoppedButton,
+                    pressed && styles.dialogButtonPressed
+                  ]}
+                  onPress={reconnectStream}
+                >
+                  <Text
+                    style={[
+                      styles.dialogButtonText,
+                      styles.dialogButtonPrimaryText,
+                      styles.streamStoppedButtonText
+                    ]}
+                  >
+                    {t('browser.paneView.reconnect', 'Reconnect')}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : error ? (
+              <Text style={styles.errorText}>{error}</Text>
+            ) : null}
           </View>
         ) : null}
         {dialog ? (
@@ -275,7 +339,15 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             keyboardLift={keyboardLift}
             sendDialogCommand={sendDialogCommand}
           />
+        ) : pagePrompt ? (
+          <MobileBrowserPagePrompt
+            key={pagePrompt.request.requestId}
+            prompt={pagePrompt}
+            keyboardLift={keyboardLift}
+            answer={answerPagePrompt}
+          />
         ) : null}
+        {pageOverlay}
       </View>
 
       <View
@@ -284,11 +356,13 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
           { paddingBottom: bottomInset, transform: [{ translateY: -keyboardLift }] }
         ]}
       >
-        <MobileBrowserPointerModifiers
-          disabled={controlsDisabled}
-          selectedModifiers={pointerModifiers}
-          onToggle={togglePointerModifier}
-        />
+        {bare ? null : (
+          <MobileBrowserPointerModifiers
+            disabled={controlsDisabled}
+            selectedModifiers={pointerModifiers}
+            onToggle={togglePointerModifier}
+          />
+        )}
         <MobileBrowserKeyRow
           disabled={controlsDisabled}
           onKeypress={(key) => void sendKeypress(key)}

@@ -2,7 +2,7 @@ import {
   createMarkdownFenceRangeCursor,
   createMarkdownFenceTracker,
   getMarkdownFenceRanges
-} from './markdown-fence-scanner'
+} from '../../../../../../shared/markdown/markdown-fence-scanner'
 
 type ReferenceLinkDefinition = {
   label: string

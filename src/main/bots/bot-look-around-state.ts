@@ -1,5 +1,6 @@
 // What a bot's looks found, and what the owner did with it. Pure: the store persists it.
 import type { BotTidyUpState } from './bot-memory-tidy-up'
+import { botRunFailure } from './bot-run-failure-code'
 import { randomUUID } from 'node:crypto'
 import { containsSecretLike } from '../../shared/crash-reporting/crash-report-redaction'
 import type { Bot } from '../../shared/bot-types'
@@ -284,7 +285,8 @@ export function upNextState(state: BotLookState, nextAt: number | undefined): Up
     ...(last?.endedAt !== undefined
       ? { lastLookedAt: last.endedAt, tookMs: last.endedAt - last.startedAt }
       : {}),
-    ...(last?.error ? { error: last.error } : {}),
+    ...(last ? { lastSessionId: last.sessionId } : {}),
+    ...(last?.error ? { error: last.error, failure: botRunFailure(last.error) } : {}),
     ...(nextAt !== undefined ? { nextAt } : {})
   }
 }

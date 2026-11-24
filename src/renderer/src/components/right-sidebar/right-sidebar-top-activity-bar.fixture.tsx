@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Activity, Files, PanelRight, Plug } from 'lucide-react'
+import { Activity, Files, Plug } from 'lucide-react'
+import { SidebarToggleIcon } from '@/components/icons/SidebarToggleIcon'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome/ui-chrome-types'
 import type { ActivityBarItem } from './activity-bar/activity-bar-buttons'
@@ -59,11 +60,12 @@ function BotPageBar({
         checksStatus={null}
         closeButton={
           <button type="button" className="sidebar-toggle mr-1" aria-label="Toggle right sidebar">
-            <PanelRight size={16} />
+            <SidebarToggleIcon side="right" size={16} />
           </button>
         }
         activityBarPosition="top"
         onChangeActivityBarPosition={() => {}}
+        arrangementItems={items}
       />
       <div className="h-6" />
     </div>
@@ -124,7 +126,7 @@ const BOT_PAGE_ITEMS_WITH_PLUGIN = getVisibleRightSidebarActivityItems(
       }
     ]).map((item) => ({ ...item, labeledTab: true }))
   ],
-  { isFolder: true, isFolderWorkspace: true, hasSshHost: false, isBot: true }
+  { isFolder: true, isFolderWorkspace: true, hasRemoteHost: false, isBot: true }
 )
 
 export const withPluginPanel = defineFixture({
@@ -190,7 +192,7 @@ const BOT_PAGE_ITEMS_WITH_SEVEN_PLUGINS = getVisibleRightSidebarActivityItems(
       }))
     ).map((item) => ({ ...item, labeledTab: true }))
   ],
-  { isFolder: true, isFolderWorkspace: true, hasSshHost: false, isBot: true }
+  { isFolder: true, isFolderWorkspace: true, hasRemoteHost: false, isBot: true }
 )
 
 export const pluginPanelOpenFromMore = defineFixture({

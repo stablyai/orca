@@ -1,6 +1,8 @@
+import type { WithAgentStatusObservation } from '../../agent-status/contracts/agent-status-observation'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import { foldMainAgentWithRowChildWork } from './agent-hook-row-child-work-fold'
+import { PI_SUBAGENT_START_EVENT } from '../providers/pi-family/pi-subagent-start-event'
 
 const INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS = 15_000
 const TOOL_PROGRESS_HOOK_EVENTS = new Set([
@@ -21,7 +23,7 @@ export function isToolProgressWorkingAfterInterrupt(next: AgentHookEventPayload)
   return next.hookEventName !== undefined && TOOL_PROGRESS_HOOK_EVENTS.has(next.hookEventName)
 }
 
-type CancelledRow = AgentHookEventPayload & { receivedAt: number }
+type CancelledRow = AgentHookEventPayload & WithAgentStatusObservation & { receivedAt: number }
 
 export type CancelVerdictLatchDecision =
   | { hold: true }
@@ -108,6 +110,8 @@ export function resolveCancelVerdictLatch(
   if (
     !previous ||
     !isCancelVerdictLatched(previous) ||
+    // A resumed row's verdict outlives its process; nothing late can follow it, as on main.
+    previous.observation?.origin === 'launch' ||
     previous.payload.agentType !== incoming.payload.agentType ||
     restatesAnotherPrompt(previous, incoming) ||
     incoming.payload.mainAgent?.state === 'done' ||
@@ -134,7 +138,9 @@ export function resolveCancelVerdictLatch(
     incoming.payload.state === 'working' &&
     (incoming.isReplay === true ||
       isToolProgressWorkingAfterInterrupt(incoming) ||
-      (incoming.hasExplicitPrompt !== true && withinWindow))
+      (incoming.hasExplicitPrompt !== true &&
+        incoming.hookEventName !== PI_SUBAGENT_START_EVENT &&
+        withinWindow))
   ) {
     return HOLD
   }

@@ -1,7 +1,10 @@
 import { readdir, realpath } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import { join } from 'node:path'
-import { PLUGIN_CONTENT_HASH_PATTERN } from '../../../shared/plugins/installation/plugin-install-lockfile'
+import {
+  PLUGIN_CONTENT_HASH_PATTERN,
+  type PluginLockEntry
+} from '../../../shared/plugins/installation/plugin-install-lockfile'
 import {
   PLUGIN_MANIFEST_FILENAME,
   parseHostPluginManifest,
@@ -26,8 +29,14 @@ import { validateDeclaredPluginArtifacts } from '../artifacts/plugin-artifact-va
 import { validatePluginFontArtifacts } from '../media/plugin-font-files'
 import { readPluginManifestText } from '../artifacts/plugin-manifest-file'
 import { readPluginCurrentPointer } from '../installation/plugin-current-pointer'
+import { readPluginLockfile } from '../installation/plugin-install-lockfile-store'
 import { hashPluginTree } from '../artifacts/plugin-content-hash'
 import { pluginDevChangeCount } from '../development/plugin-dev-revision'
+import {
+  getRequiredTeamPlugins,
+  teamAllowsMemberPluginSource
+} from '../installation/plugin-team-install-policy'
+import { logPluginManifestWarnings } from './plugin-manifest-warning-log'
 
 const INSTALLED_PLUGIN_DISCOVERY_CONCURRENCY = 8
 
@@ -44,6 +53,8 @@ export type ValidDiscoveredPlugin = {
   consentContentHash?: string | null
   /** Null for mutable dev trees. */
   contentHash: string | null
+  /** Present for team requirements only and bound to the installed bytes. */
+  teamPolicyInstall?: Pick<PluginLockEntry, 'pluginKey' | 'version' | 'source'>
   /** Dev worker plugins: hash of the working tree, so a save restarts the worker. */
   devRevision?: string | null
   /** Dev folders: the watcher's change count when this discovery read the folder. */
@@ -117,6 +128,7 @@ async function readManifestDir(
     installedPublisher ?? localPluginPublisher(parsed.manifest.publisher)
   )
   const pluginKey = qualifiedPluginKey(manifest)
+  logPluginManifestWarnings(rootDir, pluginKey, parsed.warnings ?? [])
   if (!satisfiesOrcaEngineRange(hostVersion, manifest.engines.orca)) {
     return {
       pluginKey,
@@ -258,6 +270,7 @@ export async function discoverPlugins(options: {
   pluginsDir: string
   devPluginPaths: readonly string[]
   hostVersion: string
+  requiredPluginKeys?: readonly string[] | undefined
 }): Promise<DiscoveredPlugin[]> {
   const discovered: DiscoveredPlugin[] = []
   let entries: Dirent[] = []
@@ -273,7 +286,23 @@ export async function discoverPlugins(options: {
   discovered.push(
     ...(await readInstalledPlugins(options.pluginsDir, installedEntries, options.hostVersion))
   )
-  for (const devPath of options.devPluginPaths) {
+  const requiredKeys = new Set(options.requiredPluginKeys ?? getRequiredTeamPlugins())
+  if (requiredKeys.size > 0) {
+    const lock = await readPluginLockfile(options.pluginsDir)
+    for (const plugin of discovered) {
+      if (!isInvalidDiscoveredPlugin(plugin) && requiredKeys.has(plugin.pluginKey)) {
+        const entry = lock.plugins[plugin.pluginKey]
+        if (
+          entry?.contentHash === plugin.contentHash &&
+          entry.version === plugin.manifest.version
+        ) {
+          plugin.teamPolicyInstall = entry
+        }
+      }
+    }
+  }
+  const devPaths = teamAllowsMemberPluginSource() ? options.devPluginPaths : []
+  for (const devPath of devPaths) {
     // Why read the count first: a save during the read bumps it again and schedules another refresh.
     const devChangeCount = pluginDevChangeCount(devPath)
     const plugin = {
@@ -282,6 +311,9 @@ export async function discoverPlugins(options: {
     }
     // Dev paths override installed identities; two dev paths still cannot claim one identity.
     if (!isInvalidDiscoveredPlugin(plugin)) {
+      if (requiredKeys.has(plugin.pluginKey)) {
+        continue
+      }
       const collision = discovered.find(
         (existing) =>
           !isInvalidDiscoveredPlugin(existing) && existing.pluginKey === plugin.pluginKey

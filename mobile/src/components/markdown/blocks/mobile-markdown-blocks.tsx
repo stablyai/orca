@@ -100,7 +100,7 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
         <View key={itemIndex} style={styles.listItem}>
           {item.checked == null ? (
             <NativeText style={ctx.listMarker}>
-              {node.ordered ? `${(node.start ?? 1) + itemIndex}.` : '•'}
+              {node.ordered ? `${item.data?.value ?? (node.start ?? 1) + itemIndex}.` : '•'}
             </NativeText>
           ) : (
             // A GitHub task's read-only box, centred on the item's first line.

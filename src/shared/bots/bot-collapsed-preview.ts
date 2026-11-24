@@ -22,32 +22,23 @@ export function botPreviewSignal(bot: BotPreviewFacts): BotPreviewSignal {
 const PRIORITY = { attention: 0, unread: 1, working: 2 }
 
 /** Only the collapsed preview ranks bots; ties retain the host's saved order. */
-export function collapsedBotPreview<T extends BotPreviewFacts>(bots: readonly T[], limit = 5) {
-  const ranked = bots
-    .map((bot, index) => ({
-      bot,
-      index,
-      priority: botPreviewSignal(bot) === null ? 3 : PRIORITY[botPreviewSignal(bot)!]
-    }))
+export function rankBotsForPreview<T extends BotPreviewFacts>(bots: readonly T[]): T[] {
+  return bots
+    .map((bot, index) => {
+      const signal = botPreviewSignal(bot)
+      return { bot, index, priority: signal === null ? 3 : PRIORITY[signal] }
+    })
     .sort((a, b) => a.priority - b.priority || a.index - b.index)
     .map(({ bot }) => bot)
-  const shown = ranked.slice(0, Math.max(0, Math.min(5, Math.floor(limit))))
-  const hidden = ranked.slice(shown.length)
+}
+
+export function summarizeBotPreview(bots: readonly BotPreviewFacts[]) {
   return {
-    shown,
-    hidden,
-    hiddenSignal: hidden.length ? botPreviewSignal(hidden[0]!) : null,
     total: bots.length,
     attention: bots.filter((bot) => botPreviewSignal(bot) === 'attention').length,
     unread: bots.filter((bot) => bot.unread).length,
     working: bots.filter((bot) => bot.status === 'working' || bot.status === 'monitoring').length
   }
-}
-
-/** 20px faces 4px apart; reserve a circle for omitted bots before choosing the face cap. */
-export function botPreviewCapacity(width: number, count: number): number {
-  const circles = Math.max(0, Math.floor((width + 4) / 24))
-  return Math.max(0, Math.min(5, count > circles ? circles - 1 : circles))
 }
 
 export function botStatusNeedsAttention(status: WorktreeStatus): boolean {

@@ -8,6 +8,18 @@ export class KeyedDeadlines {
     this.length = base?.size ?? 0
   }
 
+  static fromUniqueEntries(entries: Iterable<readonly [string, number]>): KeyedDeadlines {
+    const deadlines = new KeyedDeadlines()
+    for (const [key, at] of entries) {
+      deadlines.append(key, at)
+    }
+    // Bottom-up heap construction is linear even when deadlines arrive in descending order.
+    for (let index = (deadlines.length >> 1) - 1; index >= 0; index--) {
+      deadlines.down(index)
+    }
+    return deadlines
+  }
+
   /** Transaction-private copy-on-write view; the base must stay unchanged until it is discarded. */
   fork(): KeyedDeadlines {
     return new KeyedDeadlines(this)
@@ -25,14 +37,17 @@ export class KeyedDeadlines {
 
   set(key: string, at: number | undefined): void {
     this.delete(key)
-    if (at === undefined) {
-      return
+    if (at !== undefined) {
+      this.up(this.append(key, at))
     }
+  }
+
+  private append(key: string, at: number): number {
     const index = this.length
     this.heap.set(index, { key, at })
     this.length++
     this.positions.set(key, index)
-    this.up(index)
+    return index
   }
 
   capture(): KeyedDeadlines {

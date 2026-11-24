@@ -7,8 +7,10 @@ import {
 } from '../../shared/automation-google-triggers'
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { Bot } from '../../shared/bot-types'
+import { mailboxAddresses } from '../../shared/google/email-address-list'
 import type { UpcomingEvent } from './google-calendar-changes'
-import { addressesIn, type NewMail } from './google-gmail-changes'
+import type { GoogleDefaultAccount } from './google-credential-store'
+import { senderAddress, type NewMail } from './google-gmail-changes'
 
 type GmailRule = Extract<AutomationGoogleTrigger, { source: 'gmail' }>
 type CalendarRule = Extract<AutomationGoogleTrigger, { source: 'calendar' }>
@@ -24,15 +26,16 @@ export type GoogleRunEvent = { automationId: string; event: AutomationRunEvent }
 
 /**
  * The enabled bot automations' Google rules on accounts connected here, for bots whose owner turned
- * Google on. A rule without an account listens on the only account; with several it listens nowhere.
+ * Google on. A rule without an account listens on this computer's default, while it is connected.
  */
 export function googleRuleTargets(
   automations: readonly Pick<Automation, 'id' | 'enabled' | 'bot' | 'on'>[],
   bots: readonly Pick<Bot, 'id' | 'google'>[],
-  accounts: readonly string[]
+  accounts: readonly string[],
+  defaultAccount: string | null
 ): GoogleRuleTarget[] {
   const connected = new Set(accounts.map((email) => email.toLowerCase()))
-  const only = accounts.length === 1 ? accounts[0]?.toLowerCase() : undefined
+  const fallback = defaultAccount?.toLowerCase()
   return automations.flatMap((automation) => {
     const botId = automation.bot?.botId
     const bot = bots.find((entry) => entry.id === botId)
@@ -43,12 +46,27 @@ export function googleRuleTargets(
       if (!isGoogleTrigger(rule)) {
         return []
       }
-      const account = rule.account?.toLowerCase() ?? only
+      const account = rule.account?.toLowerCase() ?? fallback
       return account && connected.has(account)
         ? [{ automationId: automation.id, botId, account, rule }]
         : []
     })
   })
+}
+
+/** Why rules without an account (on bots with Google on) can't listen now, or null while they can. */
+export function accountlessRulesPausedBy(
+  fallback: GoogleDefaultAccount,
+  automations: readonly Pick<Automation, 'enabled' | 'bot' | 'on'>[],
+  bots: readonly Pick<Bot, 'id' | 'google'>[]
+): string | null {
+  const waiting = automations.some(
+    (automation) =>
+      automation.enabled &&
+      bots.some((bot) => bot.id === automation.bot?.botId && bot.google === true) &&
+      (automation.on ?? []).some((rule) => isGoogleTrigger(rule) && !rule.account)
+  )
+  return waiting && 'unreadable' in fallback ? fallback.unreadable : null
 }
 
 export function isGmailTarget(target: GoogleRuleTarget): target is GoogleRuleTarget<GmailRule> {
@@ -76,14 +94,14 @@ export function gmailRuleMatches(
   labelIds: ReadonlyMap<string, string> | null
 ): boolean {
   if (rule.from?.length) {
-    const sender = addressesIn(mail.from)[0]
+    const sender = senderAddress(mail.from)
     // A forged sender must never start a run, so a from= rule needs Gmail's domain check.
     if (!sender || !mail.senderVerified || !rule.from.some((w) => addressMatches(sender, w))) {
       return false
     }
   }
   if (rule.to?.length) {
-    const recipients = addressesIn(`${mail.to}, ${mail.cc}`)
+    const recipients = mailboxAddresses(`${mail.to}, ${mail.cc}`)
     if (!recipients.some((address) => rule.to?.some((w) => addressMatches(address, w)))) {
       return false
     }

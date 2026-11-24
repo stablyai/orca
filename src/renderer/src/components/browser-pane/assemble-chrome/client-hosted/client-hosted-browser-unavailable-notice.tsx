@@ -1,6 +1,11 @@
 import { useEffect } from 'react'
 import { Globe } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
+import {
+  useAppStoreWithHostStatuses,
+  useRuntimeHostStatusSelector
+} from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { useAppStore } from '@/store'
 import { readBrowserClientHostId } from '@/runtime/browser/client-hosting/browser-client-host-identity'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
@@ -18,19 +23,21 @@ import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../../../shared/
 
 /** No guest exists here to retry; offer reopening on a capable server when hosting is unavailable or belongs to another desktop. */
 export function ClientHostedBrowserUnavailableNotice({
+  browserPageId,
   runtimeEnvironmentId,
   worktreeId,
   reopenUrl,
   placementHostClientId
 }: {
+  browserPageId: string
   runtimeEnvironmentId: string
   worktreeId: string
   reopenUrl: string
   placementHostClientId: string | null
 }): React.JSX.Element {
   const t = useTranslate()
-  const offlineHostName = useAppStore((s) => {
-    const entry = s.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)
+  const offlineHostName = useAppStoreWithHostStatuses((s, statuses) => {
+    const entry = statuses.get(runtimeEnvironmentId)
     const state = runtimeHostConnectionStateForEntry(entry)
     // Revoked/refused pairings also read disconnected but cannot reconnect.
     const offline =
@@ -42,9 +49,8 @@ export function ClientHostedBrowserUnavailableNotice({
       : null
   })
   // Why: a runtime known to have no browser of its own (orcad) cannot take the page back.
-  const runtimeCanHostPage = useAppStore((s) => {
-    const capabilities =
-      s.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)?.status?.capabilities
+  const runtimeCanHostPage = useRuntimeHostStatusSelector(runtimeEnvironmentId, (entry) => {
+    const capabilities = entry?.status?.capabilities
     return !capabilities || capabilities.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY)
   })
   const ownHostClientId = readBrowserClientHostId()
@@ -54,7 +60,7 @@ export function ClientHostedBrowserUnavailableNotice({
   // Reclaim hosting on mount too; a failed lease reconnect after contact returns has no later contact edge.
   useEffect(() => {
     const state = useAppStore.getState()
-    if (!onOtherDesktop && state.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)?.status) {
+    if (!onOtherDesktop && readRuntimeStatuses().get(runtimeEnvironmentId)?.status) {
       void ensureBrowserClientHostOnRuntimeContact(state, runtimeEnvironmentId)
     }
   }, [onOtherDesktop, runtimeEnvironmentId])
@@ -85,6 +91,7 @@ export function ClientHostedBrowserUnavailableNotice({
           <>
             <div className="text-xs leading-5 text-muted-foreground">{reopenOnServerCaveat(t)}</div>
             <ReopenBrowserPageOnServerButton
+              browserPageId={browserPageId}
               environmentId={runtimeEnvironmentId}
               worktreeId={worktreeId}
               reopenUrl={reopenUrl}
