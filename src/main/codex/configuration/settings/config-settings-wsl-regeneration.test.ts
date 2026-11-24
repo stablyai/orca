@@ -22,11 +22,13 @@ const { homedirMock, wslTestState } = vi.hoisted(() => {
     wslPath: string | null
     daemonGuard: boolean
     failTempWrite: boolean
+    failTempWriteMatch: string | null
     unresolvablePath: string | null
   } = {
     wslPath: null,
     daemonGuard: false,
     failTempWrite: false,
+    failTempWriteMatch: null,
     unresolvablePath: null
   }
   return { homedirMock: vi.fn<() => string>(), wslTestState: state }
@@ -64,7 +66,14 @@ vi.mock('node:fs', async (importOriginal) => {
     ...actual,
     realpathSync,
     writeFileSync: (...args: Parameters<typeof actual.writeFileSync>) => {
-      if (wslTestState.failTempWrite && String(args[0]).endsWith('.tmp')) {
+      const path = String(args[0])
+      if (
+        wslTestState.failTempWrite &&
+        // A named file fails wherever it is written, so an in-place write is cut off too.
+        (wslTestState.failTempWriteMatch
+          ? path.includes(wslTestState.failTempWriteMatch)
+          : path.endsWith('.tmp'))
+      ) {
         // A disk that fills partway through the temp file.
         actual.writeFileSync(args[0], String(args[1]).slice(0, 5))
         throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })
@@ -98,6 +107,7 @@ beforeEach(() => {
   wslTestState.wslPath = null
   wslTestState.daemonGuard = false
   wslTestState.failTempWrite = false
+  wslTestState.failTempWriteMatch = null
   wslTestState.unresolvablePath = null
   if (homedir() !== tmpHome) {
     throw new Error('node:os homedir mock is not active; refusing to touch the real ~/.codex')
@@ -242,23 +252,22 @@ describe('managed Codex config for a WSL distro config', () => {
     expect(readRuntimeConfig()).not.toContain('old@market')
   })
 
-  it('rebuilds a kept value from its marked line when the baseline is lost', () => {
+  it('keeps a kept value whole when the baseline write is cut off', () => {
     writeSystemConfig('model = "gpt-5"\n')
     syncSystemConfigIntoManagedCodexHome()
     simulateCodexSettingWrite('model', '"o4"')
     wslTestState.wslPath = systemConfigPath()
+    wslTestState.failTempWrite = true
+    wslTestState.failTempWriteMatch = '.orca-config-settings-baseline.json'
+
     syncSystemConfigIntoManagedCodexHome()
-    // An interrupted baseline write leaves nothing readable.
-    writeFileSync(
-      join(runtimeConfigPath(), '..', '.orca-config-settings-baseline.json'),
-      '{',
-      'utf-8'
+    wslTestState.failTempWrite = false
+    syncSystemConfigIntoManagedCodexHome()
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readRuntimeConfig()).toMatch(
+      /^model = "o4" # orca: tab edit kept from before the update$/m
     )
-
-    syncSystemConfigIntoManagedCodexHome()
-    syncSystemConfigIntoManagedCodexHome()
-
-    expect(readRuntimeConfig()).toMatch(/^model = "o4" # orca: /m)
     expect(readFileSync(systemConfigPath(), 'utf-8')).toBe('model = "gpt-5"\n')
   })
 

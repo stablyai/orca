@@ -51,9 +51,12 @@ function planGuestCarryForward(
   const systemEntries = readCodexRegistrationEntries(systemConfig)
   return {
     settings: new Map(
-      [...updates].map(([key, raw]) => [key, { raw, system: systemValues.get(key)?.raw ?? null }])
+      [...updates].map(([key, raw]) => [
+        key,
+        { raw: stripCarryForwardMarker(raw), system: systemValues.get(key)?.raw ?? null }
+      ])
     ),
-    registrations: registrations.map((promotion) => {
+    registrations: registrations.map(stripRegistrationMarker).map((promotion) => {
       const entry = promotion.kind === 'field' ? systemEntries.get(promotion.key) : undefined
       return {
         promotion,
@@ -65,6 +68,26 @@ function planGuestCarryForward(
       }
     })
   }
+}
+
+// A pass cut off before its baseline write leaves marked lines that the next pass reads as tab edits.
+function stripCarryForwardMarker(raw: string): string {
+  return raw.endsWith(CODEX_GUEST_CARRY_FORWARD_MARKER)
+    ? raw.slice(0, -CODEX_GUEST_CARRY_FORWARD_MARKER.length).trimEnd()
+    : raw
+}
+
+function stripRegistrationMarker(
+  promotion: CodexRegistrationPromotion
+): CodexRegistrationPromotion {
+  if (promotion.kind === 'append') {
+    const lines = promotion.block.split('\n')
+    const kept = lines.filter((line) => line.trimEnd() !== CODEX_GUEST_CARRY_FORWARD_MARKER)
+    return { ...promotion, block: kept.join('\n') }
+  }
+  return promotion.raw === null
+    ? promotion
+    : { ...promotion, raw: stripCarryForwardMarker(promotion.raw) }
 }
 
 /** Drop values the distro file has since changed or caught up with: its own edits win. */
@@ -172,10 +195,6 @@ export function planGuestRegenerationCarryForward(
   if (baseline?.guestCarryForward) {
     return retainGuestCarryForward(baseline.guestCarryForward, systemConfig)
   }
-  // Only this version writes the marker, so a home that has it lost its baseline; rebuild from the lines.
-  if (runtimeConfig.includes(CODEX_GUEST_CARRY_FORWARD_MARKER)) {
-    return recoverGuestCarryForward(runtimeConfig, systemConfig)
-  }
   const updates = new Map<string, string>()
   if (baseline) {
     collectPromotionChanges({
@@ -197,18 +216,4 @@ export function planGuestRegenerationCarryForward(
     trackedRegistrations
   ).filter((promotion) => promotion.kind !== 'append' || tracksRegistrations)
   return planGuestCarryForward(updates, registrations, systemConfig)
-}
-
-/** Marked setting lines are the managed copy's own record of kept values. */
-function recoverGuestCarryForward(
-  runtimeConfig: string,
-  systemConfig: string
-): CodexGuestCarryForward {
-  const updates = new Map<string, string>()
-  for (const [key, value] of readPromotedSettingValuesFromContent(runtimeConfig)) {
-    if (!value.multiline && value.raw.endsWith(CODEX_GUEST_CARRY_FORWARD_MARKER)) {
-      updates.set(key, value.raw.slice(0, -CODEX_GUEST_CARRY_FORWARD_MARKER.length).trimEnd())
-    }
-  }
-  return planGuestCarryForward(updates, [], systemConfig)
 }
