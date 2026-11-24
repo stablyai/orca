@@ -1,3 +1,4 @@
+import { settledWorkspaceCleanupPolicySaves } from './workspace-cleanup-policy-write'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import {
@@ -117,6 +118,8 @@ export async function removeWorkspaceForCleanup(args: {
   const { runtime, store, workspace } = args
   const selector = selectorFor(workspace)
   try {
+    // Rules still being saved are not yet the user's: wait until they land or roll back.
+    await settledWorkspaceCleanupPolicySaves()
     // Earlier removals in this run took time: decide on what is true now, not what the scan saw.
     // A folder member is re-read with its folder as listed now: a sibling added here since holds it
     // too. Paired servers' members are as the scan read them; they're asked once per run.

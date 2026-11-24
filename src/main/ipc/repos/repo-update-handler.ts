@@ -1,4 +1,4 @@
-import { persistWorkspaceCleanupPolicy } from '../../workspaces/cleanup/workspace-cleanup-policy-write'
+import { persistGuardedProjectPolicy } from '../../workspaces/cleanup/workspace-cleanup-policy-write'
 import type { WorkspaceCleanupPolicyGuard } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
@@ -268,6 +268,12 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
       if (!target) {
         return null
       }
+      const beforePolicy = store
+        .getRepos()
+        .find(
+          (repo) =>
+            repo.id === target.id && getRepoExecutionHostId(repo) === getRepoExecutionHostId(target)
+        )?.workspaceCleanupPolicy
       const write = (proven: Pick<Repo, 'folderUpgradeGitRootPath'>): Repo | null => {
         if (isWslMoveSourceHost(args.hostId)) {
           assertWslMoveProjectWritable(store, { repoId: args.repoId })
@@ -286,7 +292,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
         updated = write({})
       }
       if (updated && args.updates.workspaceCleanupGuard) {
-        await persistWorkspaceCleanupPolicy(store)
+        await persistGuardedProjectPolicy(store, updated, beforePolicy)
       }
       if (updated) {
         if ('worktreeBasePath' in updates) {

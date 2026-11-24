@@ -1,4 +1,4 @@
-import { persistWorkspaceCleanupPolicy } from '../../../workspaces/cleanup/workspace-cleanup-policy-write'
+import { persistGuardedSettingsPolicy } from '../../../workspaces/cleanup/workspace-cleanup-policy-write'
 import { publishedLegacyChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
@@ -186,7 +186,7 @@ export class RuntimeClientSettingsController {
       },
       { notifyListeners: true }
     )
-    await (updates.workspaceCleanupGuard && persistWorkspaceCleanupPolicy(this.store))
+    await persistGuardedSettingsPolicy(this.store, updates, beforeSettings)
     const settings = this.store.getSettings()
     await getClaudeAgentViewService().reconcile(settings)
     // Nesting moves the worktree roots the base-directory watcher follows.
