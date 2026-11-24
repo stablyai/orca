@@ -1,6 +1,7 @@
 import type { Readable } from 'node:stream'
 import type { ProviderRelayDataEvent } from '../daemon/protocol/daemon-provider-relay-protocol'
 import { RelayedProviderConsumption } from './relayed-provider-consumption'
+import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 
 /** Acks batch this long after output; the daemon asks sooner (relayAckWanted) when it holds a lot. */
 const ACK_DELAY_MS = 1_000
@@ -140,6 +141,11 @@ export class RelayedProviderOutput {
   settle(force = false): Promise<void> {
     this.clearAckTimer()
     return this.ack(force)
+  }
+
+  /** Settles once the stream's reader took every line handed on, or after `waitMs` regardless. */
+  allTaken(waitMs: number): Promise<void> {
+    return withTimeout(this.consumption.allTaken(), waitMs, undefined)
   }
 
   /** No more acks: the relay was handed off. */

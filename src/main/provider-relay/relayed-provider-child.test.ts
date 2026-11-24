@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ProviderRelayChannel, ProviderRelaySink } from './provider-relay-channel'
 import { RelayedProviderChild } from './relayed-provider-child'
+import { createProviderRecordReader } from '../provider-process/provider-record-reader'
 
 const policy = () => ({ idleStopMs: null, markers: [] })
 
@@ -89,5 +90,50 @@ describe('relayed provider child', () => {
     await new Promise((resolve) => child.once('close', resolve))
     expect(order).toEqual(['five', 'six', 'exit:0'])
     expect(acks).toEqual([6])
+  })
+
+  it('a paused reader hears of the exit only after it took the last lines', async () => {
+    let sink = null as ProviderRelaySink | null
+    const channel = {
+      bind: (_relayId: string, bound: ProviderRelaySink) => {
+        sink = bound
+        return () => {}
+      },
+      attach: async () => ({
+        replayThroughSeq: 0,
+        pending: [],
+        maxClientRequestId: null,
+        initializeResultSent: false,
+        stderrTail: '',
+        exit: null
+      }),
+      ack: async () => ({}),
+      close: async () => ({})
+    } as unknown as ProviderRelayChannel
+    const child = new RelayedProviderChild({ channel, relayId: 'r', pid: 42, policy })
+    const order: string[] = []
+    // The journal drains after the first record, so the reader pauses there.
+    const reader = createProviderRecordReader({
+      stdout: child.stdout,
+      onRecord: (record) => {
+        order.push(String((record as { n: number }).n))
+        if (order.length === 1) {
+          reader.pause()
+        }
+      },
+      onRejected: () => {},
+      onFatal: () => {}
+    })
+    child.on('exit', (code) => order.push(`exit:${code}`))
+    await child.start(0)
+    for (const n of [1, 2, 3]) {
+      sink?.line('relayData', n, JSON.stringify({ n }))
+    }
+    sink?.exit({ code: 0, signal: null })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(order).toEqual(['1'])
+    reader.resume()
+    await new Promise((resolve) => child.once('close', resolve))
+    expect(order).toEqual(['1', '2', '3', 'exit:0'])
   })
 })

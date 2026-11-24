@@ -20,6 +20,7 @@ export class RelayedProviderConsumption {
   private readonly after: number[] = []
   private head = 0
   private consumed = 0
+  private readonly caughtUp: (() => void)[] = []
 
   constructor(private readonly onTaken: () => void) {}
 
@@ -43,6 +44,21 @@ export class RelayedProviderConsumption {
         }
         this.onTaken()
       }
+      this.notifyCaughtUp()
+    }
+  }
+
+  /** Settles once a claiming reader has taken every line handed on (at once if none claims). */
+  allTaken(): Promise<void> {
+    if (this.mode !== 'claimed' || this.head === this.after.length) {
+      return Promise.resolve()
+    }
+    return new Promise((resolve) => this.caughtUp.push(resolve))
+  }
+
+  private notifyCaughtUp(): void {
+    if (this.mode !== 'claimed' || this.head === this.after.length) {
+      this.caughtUp.splice(0).forEach((resolve) => resolve())
     }
   }
 
@@ -50,6 +66,7 @@ export class RelayedProviderConsumption {
     this.after.length = 0
     this.head = 0
     this.consumed = seq
+    this.notifyCaughtUp()
   }
 
   /** A line (or, with `line` false, only the cursor) went onto the stream; `seq` is the cursor now. */

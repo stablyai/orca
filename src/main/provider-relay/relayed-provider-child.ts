@@ -16,6 +16,9 @@ import type { ProviderRelayRecordTaking } from './relayed-provider-consumption'
 const INPUT_FULL_RETRY_MS = 50
 const INPUT_FULL = 'Relay input is full'
 
+/** A reader paused this long past an exit (a stuck journal drain) no longer holds the exit back. */
+const EXIT_AFTER_OUTPUT_WAIT_MS = 10_000
+
 type RelayState = 'attaching' | 'attached' | 'reattaching' | 'detached' | 'exited'
 
 export type RelayedProviderChildOptions = {
@@ -301,22 +304,28 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     if (lost) {
       this.outcomeLost = true
     }
-    // The final output is acked so the daemon can drop the ended relay.
-    void this.output.settle().finally(() => {
-      this.output.stop()
-      this.unbind?.()
-      this.unbind = null
-    })
     if (exit.stderrTail) {
       this.stderr.push(exit.stderrTail)
     }
     this.stderr.push(null)
     this.stdout.push(null)
     this.stdin.destroy()
-    // A turn later, so a flowing reader gets the last output before it hears of the exit.
-    setImmediate(() => {
-      notifyProviderChild(this, 'exit', exit.code, this.signalCode)
-      setImmediate(() => notifyProviderChild(this, 'close', exit.code, this.signalCode))
-    })
+    // The chat hears of the exit only after its reader took the last output (a paused reader
+    // would otherwise end the turn before its last lines), and then a turn later still.
+    const taken = this.output.allTaken(EXIT_AFTER_OUTPUT_WAIT_MS)
+    // The final output is acked so the daemon can drop the ended relay.
+    void taken
+      .then(() => this.output.settle())
+      .finally(() => {
+        this.output.stop()
+        this.unbind?.()
+        this.unbind = null
+      })
+    void taken.then(() =>
+      setImmediate(() => {
+        notifyProviderChild(this, 'exit', exit.code, this.signalCode)
+        setImmediate(() => notifyProviderChild(this, 'close', exit.code, this.signalCode))
+      })
+    )
   }
 }

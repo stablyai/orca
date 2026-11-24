@@ -283,7 +283,16 @@ async function detachKeptAgentUnderSerialize(
   }
   const working = (await runningRootTurnItemId(session.journal)) !== null
   const open = context.deps.adapter.relayOpenWork?.(sessionId, working) ?? null
-  return detachProviderRelayForQuit(sessionId, open)
+  if (!(await detachProviderRelayForQuit(sessionId, open))) {
+    return false
+  }
+  // The agent goes on: what the adapter would still write here (its own teardown settling the turn,
+  // lines read past the last ack) is dropped, and the unacked lines replay at the next launch.
+  const sink = context.runtimeState.currentEventSink(sessionId)
+  const landed = sink?.drained()
+  sink?.close()
+  await landed
+  return true
 }
 
 async function awaitsReopen(journal: SqlAgentSessionJournal): Promise<boolean> {
