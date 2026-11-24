@@ -31004,9 +31004,7 @@
       "pane_one": "This pane has a worker · stop or close it first",
       "pane_other": "This pane has {{count}} workers · stop or close them first",
       "bulk_one": "Kept {{count}} tab with a worker",
-      "bulk_other": "Kept {{count}} tabs with workers",
-      "bulk": "Kept {{count}} tabs with workers",
-      "pane": "This pane has {{count}} workers · stop or close them first"
+      "bulk_other": "Kept {{count}} tabs with workers"
     }
   }
 }
