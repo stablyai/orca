@@ -98,6 +98,7 @@ export function BotGroupMembersDialog({
   const unchanged =
     group !== undefined && botGroupUnchanged({ name: group.name, botIds: savedKeys }, name, order)
   const shownBots = filterByName(allBots, query, (bot) => bot.name)
+  const noMatches = shownBots.length === 0 && query.trim() !== ''
   // Keep each row under the same parent when a computer appears or goes offline.
   const shownByHost = group ? null : Map.groupBy(shownBots, (bot) => bot.hostId)
   // The host a pick is held to: anywhere a mixed room can reach, else the first pick's computer.
@@ -270,9 +271,13 @@ export function BotGroupMembersDialog({
             ) : null}
           </div>
           <BotPickRows role="group" labelledBy="bot-group-members" compact={!group}>
-            {!group && query.trim() && shownBots.length === 0 ? (
-              <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">
-                {t('bots.search.noMatches', 'No matches')}
+            {!group && allBots.length > FILTER_FROM ? (
+              <p
+                role="status"
+                aria-atomic="true"
+                className={noMatches ? 'px-2 py-1.5 text-xs text-muted-foreground' : 'sr-only'}
+              >
+                {noMatches ? t('bots.search.noMatches', 'No matches') : null}
               </p>
             ) : null}
             {shownByHost
