@@ -7,7 +7,9 @@ it.skipIf(process.platform === 'win32')(
   async () => {
     const termination = createWslProcessGroupTermination('fixture')
     let terminated = false
-    const args = termination.wrapGuestArgs(['sh', '-c', 'printf output; printf diagnostic >&2'])
+    const args = termination
+      .wrapGuestArgs(['sh', '-c', 'printf output; printf diagnostic >&2'])
+      .slice(1)
     const result = await runProcess({
       program: 'sh',
       args,
