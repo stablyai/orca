@@ -1,4 +1,4 @@
-import { getSecretStore } from '../../shared/secret-store'
+import { getSecretStore } from '../../shared/secure-storage/secret-store'
 
 export const PROTECTED_SECRET_SLOT = {
   opencodeSessionCookie: 'settings.opencodeSessionCookie',
@@ -23,6 +23,11 @@ export type ProtectedSecretRetentionUpdate = {
 
 export type LegacyPlaintextValidator = (value: string) => boolean
 
+/** One protected value the next save will write. */
+export type ProtectedSecretPlaintext = { slot: string; plaintext: string }
+
+type SealRequest = { plaintext: string; settled: Promise<void> }
+
 type ProtectedSecretEncryption = {
   blob: string
   degraded: boolean
@@ -36,12 +41,21 @@ export class ProtectedSecretPersistence {
   private readonly sealedSlots = new Set<string>()
   private readonly pendingEncryption = new Set<string>()
   private readonly retentionEpochs = new Map<string, symbol>()
+  // Ciphertext sealed ahead of a save, valid only for the exact plaintext it sealed.
+  private readonly readySeals = new Map<string, { plaintext: string; blob: string }>()
+  private readonly sealRequests = new Map<string, SealRequest>()
+  // Plaintext whose seal failed during this save; its capture degrades instead of sealing again.
+  private readonly failedSeals = new Map<string, string>()
 
   hasPendingEncryption(): boolean {
     return this.pendingEncryption.size > 0
   }
 
   removeRetainedBlob(slot: string): void {
+    // A cleared or replaced secret drops its seals, so a late seal cannot write the old value back.
+    this.readySeals.delete(slot)
+    this.sealRequests.delete(slot)
+    this.failedSeals.delete(slot)
     this.retentionEpochs.delete(slot)
     this.retainedBlobs.delete(slot)
     this.sealedSlots.delete(slot)
@@ -113,7 +127,13 @@ export class ProtectedSecretPersistence {
       }
     }
     try {
-      const blob = getSecretStore().encryptString(plaintext).toString('base64')
+      if (this.failedSeals.get(slot) === plaintext) {
+        this.failedSeals.delete(slot)
+        throw new Error('sealing this value already failed during this save')
+      }
+      const blob =
+        this.readySealFor(slot, plaintext) ??
+        getSecretStore().encryptString(plaintext).toString('base64')
       return {
         blob,
         degraded: false,
@@ -166,6 +186,64 @@ export class ProtectedSecretPersistence {
     }
   }
 
+  /**
+   * Seals the values a save is about to write before it captures them, so the capture needs no
+   * synchronous sealing. Null when every value already has its seal or failed to seal. A failed
+   * value keeps today's degradation and retention when the save captures it.
+   */
+  sealAhead(values: readonly ProtectedSecretPlaintext[]): Promise<void> | null {
+    const pending: Promise<void>[] = []
+    for (const { slot, plaintext } of values) {
+      if (!this.needsSeal(slot, plaintext)) {
+        continue
+      }
+      const current = this.sealRequests.get(slot)
+      if (current?.plaintext === plaintext) {
+        pending.push(current.settled)
+        continue
+      }
+      const request: SealRequest = { plaintext, settled: Promise.resolve() }
+      request.settled = sealString(plaintext).then(
+        (blob) => {
+          // Only the slot's current request may publish; a newer or cleared value supersedes it.
+          if (this.sealRequests.get(slot) === request) {
+            this.sealRequests.delete(slot)
+            this.readySeals.set(slot, { plaintext, blob })
+          }
+        },
+        () => {
+          if (this.sealRequests.get(slot) === request) {
+            this.sealRequests.delete(slot)
+            this.failedSeals.set(slot, plaintext)
+          }
+        }
+      )
+      this.sealRequests.set(slot, request)
+      pending.push(request.settled)
+    }
+    return pending.length > 0 ? Promise.all(pending).then(() => {}) : null
+  }
+
+  /** Ends a save's failures, so the next save or export tries a failed value again. */
+  forgetFailedSeals(): void {
+    this.failedSeals.clear()
+  }
+
+  private needsSeal(slot: string, plaintext: string): boolean {
+    return (
+      plaintext !== '' &&
+      this.failedSeals.get(slot) !== plaintext &&
+      this.readySeals.get(slot)?.plaintext !== plaintext &&
+      !this.isSealed(slot, plaintext) &&
+      this.encryptionAvailable()
+    )
+  }
+
+  private readySealFor(slot: string, plaintext: string): string | null {
+    const ready = this.readySeals.get(slot)
+    return ready?.plaintext === plaintext ? ready.blob : null
+  }
+
   private prepareRetentionUpdate(
     slot: string,
     blob: string | null
@@ -185,4 +263,12 @@ export class ProtectedSecretPersistence {
       return false
     }
   }
+}
+
+async function sealString(plaintext: string): Promise<string> {
+  const store = getSecretStore()
+  const sealed = store.encryptStringAsync
+    ? await store.encryptStringAsync(plaintext)
+    : store.encryptString(plaintext)
+  return sealed.toString('base64')
 }

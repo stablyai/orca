@@ -5,11 +5,12 @@ import {
   IntegrationCardShell
 } from '../presentation/integration-card-shell'
 import { usePreflightCardStatuses } from './source-control-preflight-card-status'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { tokenProviderStatusLabel } from './token-source-control-status'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function AzureDevOpsIntegrationCard(): React.JSX.Element {
+  const t = useTranslate()
   const { statuses, unavailable, refresh } = usePreflightCardStatuses('azureDevOps')
   const status = unavailable ? 'unavailable' : statuses.azureDevOpsStatus
   const configured = status === 'configured'
@@ -21,81 +22,84 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
       description={
         configured
           ? statuses.azureDevOpsAccount
-            ? translate(
+            ? t(
                 'auto.components.settings.token.source.control.integration.cards.ea204f5e03',
                 '{{value0}} · Pull requests and build statuses',
                 { value0: statuses.azureDevOpsAccount }
               )
             : statuses.azureDevOpsBaseUrl
-              ? translate(
+              ? t(
                   'auto.components.settings.token.source.control.integration.cards.ea204f5e03',
                   '{{value0}} · Pull requests and build statuses',
                   { value0: statuses.azureDevOpsBaseUrl }
                 )
-              : translate(
+              : t(
                   'auto.components.settings.token.source.control.integration.cards.54636c65d4',
                   'Pull requests and build statuses for detected Azure Repos'
                 )
-          : translate(
+          : t(
               'auto.components.settings.token.source.control.integration.cards.0eb50d5593',
               'Pull requests and build statuses via Azure DevOps REST API tokens.'
             )
       }
       checking={status === 'checking'}
       statusTone={configured ? 'connected' : 'attention'}
-      statusLabel={tokenProviderStatusLabel({
-        configured,
-        hasAccount: Boolean(statuses.azureDevOpsAccount),
-        status
-      })}
+      statusLabel={tokenProviderStatusLabel(
+        {
+          configured,
+          hasAccount: Boolean(statuses.azureDevOpsAccount),
+          status
+        },
+        t
+      )}
     >
       {status !== 'checking' && !configured ? (
         <IntegrationCardDetails>
           <p className="text-xs text-muted-foreground">
             {status === 'unavailable' ? (
-              translate(
+              t(
                 'auto.components.settings.token.source.control.integration.cards.f3f47dc7de',
                 'Azure DevOps status is not available in this runtime yet.'
               )
             ) : status === 'not-configured' ? (
               <>
-                {translate(
+                {t(
                   'auto.components.settings.token.source.control.integration.cards.7bbc9c64f0',
                   'Set'
                 )}{' '}
                 <span className="font-mono text-[11px]">
-                  {translate(
+                  {t(
                     'auto.components.settings.token.source.control.integration.cards.48842720d2',
                     'ORCA_AZURE_DEVOPS_TOKEN'
                   )}
                 </span>
-                {translate(
+                {t(
                   'auto.components.settings.token.source.control.integration.cards.087feb92f1',
                   ', or set'
                 )}{' '}
                 <span className="font-mono text-[11px]">
-                  {translate(
+                  {t(
                     'auto.components.settings.token.source.control.integration.cards.fbfd237f5e',
                     'ORCA_AZURE_DEVOPS_ACCESS_TOKEN'
                   )}
                 </span>
-                {translate(
+                {t(
                   'auto.components.settings.token.source.control.integration.cards.b8a10b07c1',
                   '. Set'
                 )}{' '}
                 <span className="font-mono text-[11px]">
-                  {translate(
+                  {t(
                     'auto.components.settings.token.source.control.integration.cards.186a6689df',
                     'ORCA_AZURE_DEVOPS_API_BASE_URL'
                   )}
                 </span>{' '}
-                {translate(
+                {t(
                   'auto.components.settings.token.source.control.integration.cards.7bd345e3f6',
                   'only when Orca cannot derive the API base URL from the git remote.'
                 )}
               </>
             ) : (
-              translate(
+              t(
                 'auto.components.settings.token.source.control.integration.cards.40f678df73',
                 'Azure DevOps credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart Orca if environment variables changed.'
               )
@@ -115,13 +119,13 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
               }
             >
               <ExternalLink className="size-3.5 mr-1.5" />
-              {translate(
+              {t(
                 'auto.components.settings.token.source.control.integration.cards.1a9475dace',
                 'Learn more'
               )}
             </Button>
             <Button variant="ghost" size="sm" onClick={refresh}>
-              {translate(
+              {t(
                 'auto.components.settings.token.source.control.integration.cards.793a06e899',
                 'Re-check'
               )}
@@ -134,6 +138,7 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
 }
 
 export function GiteaIntegrationCard(): React.JSX.Element {
+  const t = useTranslate()
   const { statuses, unavailable, refresh } = usePreflightCardStatuses('gitea')
   const status = unavailable ? 'unavailable' : statuses.giteaStatus
   const configured = status === 'configured'
@@ -145,72 +150,75 @@ export function GiteaIntegrationCard(): React.JSX.Element {
       description={
         configured
           ? statuses.giteaAccount
-            ? translate(
+            ? t(
                 'auto.components.settings.token.source.control.integration.cards.0b5242f8a2',
                 '{{value0}} · Pull requests and commit statuses',
                 { value0: statuses.giteaAccount }
               )
             : statuses.giteaBaseUrl
-              ? translate(
+              ? t(
                   'auto.components.settings.token.source.control.integration.cards.0b5242f8a2',
                   '{{value0}} · Pull requests and commit statuses',
                   { value0: statuses.giteaBaseUrl }
                 )
-              : translate(
+              : t(
                   'auto.components.settings.token.source.control.integration.cards.52f75876be',
                   'Pull requests and commit statuses for detected repositories'
                 )
-          : translate(
+          : t(
               'auto.components.settings.token.source.control.integration.cards.05863d2599',
               'Pull requests and commit statuses via the Gitea REST API.'
             )
       }
       checking={status === 'checking'}
       statusTone={configured ? 'connected' : 'attention'}
-      statusLabel={tokenProviderStatusLabel({
-        configured,
-        hasAccount: Boolean(statuses.giteaAccount),
-        status,
-        optional: true
-      })}
+      statusLabel={tokenProviderStatusLabel(
+        {
+          configured,
+          hasAccount: Boolean(statuses.giteaAccount),
+          status,
+          optional: true
+        },
+        t
+      )}
     >
       {status !== 'checking' && !configured ? (
         <IntegrationCardDetails>
           <p className="text-xs text-muted-foreground">
             {status === 'unavailable' ? (
-              translate(
+              t(
                 'auto.components.settings.token.source.control.integration.cards.0613928cb3',
                 'Gitea status is not available in this runtime yet.'
               )
             ) : status === 'not-configured' ? (
               <>
-                {translate(
+                {t(
                   'auto.components.settings.token.source.control.integration.cards.fcbe0469fd',
                   'Public repositories are detected from their git remote. Set'
                 )}{' '}
                 <span className="font-mono text-[11px]">
-                  {translate(
+                  {t(
                     'auto.components.settings.token.source.control.integration.cards.6d5c2a3005',
                     'ORCA_GITEA_TOKEN'
                   )}
                 </span>{' '}
-                {translate(
+                {t(
                   'auto.components.settings.token.source.control.integration.cards.6da9dfa5de',
                   'for private repositories, and set'
                 )}{' '}
                 <span className="font-mono text-[11px]">
-                  {translate(
+                  {t(
                     'auto.components.settings.token.source.control.integration.cards.709057ad91',
                     'ORCA_GITEA_API_BASE_URL'
                   )}
                 </span>{' '}
-                {translate(
+                {t(
                   'auto.components.settings.token.source.control.integration.cards.60708f23da',
                   'only when Orca cannot derive the API URL from the remote.'
                 )}
               </>
             ) : (
-              translate(
+              t(
                 'auto.components.settings.token.source.control.integration.cards.19fb419c12',
                 'Gitea credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart Orca if environment variables changed.'
               )
@@ -225,13 +233,13 @@ export function GiteaIntegrationCard(): React.JSX.Element {
               }
             >
               <ExternalLink className="size-3.5 mr-1.5" />
-              {translate(
+              {t(
                 'auto.components.settings.token.source.control.integration.cards.1a9475dace',
                 'Learn more'
               )}
             </Button>
             <Button variant="ghost" size="sm" onClick={refresh}>
-              {translate(
+              {t(
                 'auto.components.settings.token.source.control.integration.cards.793a06e899',
                 'Re-check'
               )}

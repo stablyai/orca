@@ -3,13 +3,13 @@ import {
   CUSTOM_PET_DEFAULT_LABEL,
   PetImportError,
   type PetImportFailure
-} from '../../../shared/pet-import-failure-copy'
+} from '../../../shared/pets/pet-import-failure-copy'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { basename, extname, join, normalize, sep } from 'node:path'
 import { z } from 'zod'
-import type { CustomPet } from '../../../shared/pet-types'
+import type { CustomPet } from '../../../shared/pets/pet-types'
 import { importPetBundle } from './pet-bundle-import'
 import { classifyFile } from './pet-image-formats'
 import { MAX_BYTES } from './pet-import-size-limits'

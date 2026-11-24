@@ -1,7 +1,8 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { Switch, Text, View } from 'react-native'
-import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../../src/shared/automation-runtime-capabilities'
+import { Text, View } from 'react-native'
+import { MobileSwitch } from '../components/controls/MobileSwitch'
+import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../../src/shared/automations/automation-runtime-capabilities'
 import { AutomationChoice, AutomationField } from './AutomationControls'
 import type { AutomationDraft } from './automation-draft'
 import { automationStyles as styles } from './automation-styles'
@@ -49,7 +50,7 @@ export function AutomationAdvancedFields({
           <Text style={[styles.text, styles.grow]}>
             {t('automations.mobile.reuseAgentSession', 'Reuse agent session')}
           </Text>
-          <Switch
+          <MobileSwitch
             accessibilityLabel={t('automations.mobile.reuseAgentSession', 'Reuse agent session')}
             value={draft.reuseSession}
             onValueChange={(reuseSession) => change({ reuseSession })}

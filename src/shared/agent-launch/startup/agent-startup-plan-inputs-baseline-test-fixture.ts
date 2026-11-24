@@ -9,7 +9,7 @@ import {
 } from '../choices/tui-agent-launch-defaults'
 import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
 import { hasExtraAgentArgs, mergeExtraAgentArgs } from './automation-extra-agent-args'
-import { resolveLocalWindowsAgentStartupShell } from '../../windows-terminal-shell'
+import { resolveLocalWindowsAgentStartupShell } from '../../shell/launch/windows-terminal-shell'
 
 export function resolveBaselineAgentStartupPlanInputs(args: {
   agent: TuiAgent

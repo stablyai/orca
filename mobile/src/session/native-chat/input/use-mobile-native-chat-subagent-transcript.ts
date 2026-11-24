@@ -11,8 +11,8 @@ import {
   buildMobileNativeChatTransientData,
   foldMobileNativeChatAgentMessages,
   type MobileNativeChatPendingItem
-} from '../mobile-native-chat-render-data'
-import type { OlderPagePhase } from '../../use-mobile-older-page-loader'
+} from '../transcript/projection/mobile-native-chat-render-data'
+import type { OlderPagePhase } from '../transcript/ingestion/use-mobile-older-page-loader'
 import {
   useMobileNativeChatSubagentPage,
   type MobileNativeChatSubagentRead

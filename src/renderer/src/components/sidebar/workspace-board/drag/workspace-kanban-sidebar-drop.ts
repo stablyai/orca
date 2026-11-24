@@ -7,7 +7,7 @@ import {
   resolveFullLaneDropIndex
 } from './workspace-kanban-filtered-drop-index'
 import '../../workspace-status/presentation/workspace-status'
-import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
 import {
   collectDropWrites,
   uniqueDraggedKeys,
@@ -18,7 +18,7 @@ import {
   shouldWriteManualOrderForGroupDrop,
   type WorktreeDragGroup
 } from '../../worktree-list/drag/worktree-manual-order'
-import type { WorktreeMetaBatchUpdate } from '../../../../store/slices/worktree-helpers'
+import type { WorktreeMetaBatchUpdate } from '../../../../store/slices/worktrees/metadata/worktree-meta-update-options'
 import {
   CARD_SELECTOR,
   getCardDropTarget,

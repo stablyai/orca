@@ -1,14 +1,14 @@
 /** Flag macOS managed servers that outlive their launching SSH session. */
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { readManagedOrcadLaunchSshSession } from '../../managed-server/lifecycle/orcad-managed-launch-session'
-import { knownSshHostPlatform } from '../../ssh/ssh-host-platform-memo'
-import { getSshHostServerStatus } from '../../ssh/ssh-host-server-status'
+import { knownSshHostPlatform } from '../../ssh/remote-host/ssh-host-platform-memo'
+import { getSshHostServerStatus } from '../../ssh/host-server/ssh-host-server-status'
 import { connectionManager } from './ssh-ipc-context'
 import {
   clearLaunchSessionNote,
   publishHostServerStatus
-} from '../runtime-environments/runtime-environment-managed-tunnel'
+} from '../runtime-environments/managed-orcad/runtime-environment-managed-tunnel'
 
 // Restores run on every runtime call; cache only within the same environment and SSH session.
 const checked = new WeakMap<
@@ -36,7 +36,7 @@ export async function noteEndedLaunchSshSession(
   const sameSession = prior?.generation === generation && prior.environmentId === environmentId
   if (sameSession && now() - prior.at < RECHECK_MS) {
     if (prior.ended) {
-      flag(targetId, environmentId)
+      await flag(targetId, environmentId)
     }
     return
   }
@@ -44,9 +44,9 @@ export async function noteEndedLaunchSshSession(
   checked.set(connection, pending)
   // Only a live probe disproves a proven end; unanswered or unknown keeps it.
   const provenEnded = sameSession && prior.ended
-  const markEnded = (): void => {
+  const markEnded = async (): Promise<void> => {
     checked.set(connection, { environmentId, generation, ended: true, at: now() })
-    flag(targetId, environmentId)
+    await flag(targetId, environmentId)
   }
   // Disconnect, reconnect, unlink or relaunch during probing invalidates the answer.
   const stale = (): boolean =>
@@ -68,13 +68,13 @@ export async function noteEndedLaunchSshSession(
       return
     }
     if (session === 'exited' || (session !== 'live' && provenEnded)) {
-      markEnded()
+      await markEnded()
     } else if (session === 'live' && launchSessionNoted(targetId, environmentId)) {
       clearLaunchSessionNote(targetId, environmentId)
     }
   } catch (error) {
     if (provenEnded && !stale()) {
-      markEnded()
+      await markEnded()
     }
     console.warn('[ssh] Could not check which SSH session started the managed server:', error)
   }
@@ -90,9 +90,9 @@ function launchSessionNoted(targetId: string, environmentId: string): boolean {
 }
 
 /** Restored hosts may lack status; preserve any conflicting server decision. */
-function flag(targetId: string, environmentId: string): void {
+async function flag(targetId: string, environmentId: string): Promise<void> {
   const userDataPath = getAppEnvironment().getPath('userData')
-  if (!listEnvironments(userDataPath).some((entry) => entry.id === environmentId)) {
+  if (!(await listEnvironments(userDataPath)).some((entry) => entry.id === environmentId)) {
     return
   }
   const status = getSshHostServerStatus(targetId)

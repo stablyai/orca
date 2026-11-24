@@ -11,6 +11,7 @@ export type KeybindingScope =
   | 'composer'
   | 'chat'
   | 'settings'
+  | 'botItem'
 
 export type KeybindingContext = 'app' | 'terminal' | 'browser'
 
@@ -73,6 +74,8 @@ export type KeybindingActionId =
   | 'tab.closeAll'
   | 'tab.rename'
   | 'tab.reopenClosed'
+  | 'tab.moveLeft'
+  | 'tab.moveRight'
   | 'tab.nextSameType'
   | 'tab.previousSameType'
   | 'tab.nextAllTypes'
@@ -97,6 +100,7 @@ export type KeybindingActionId =
   | 'editor.save'
   | 'editor.markdownPreview'
   | 'editor.toggleWordWrap'
+  | 'editor.toggleChangesView'
   | 'editor.copyContext'
   | 'editor.previousChange'
   | 'editor.nextChange'
@@ -119,11 +123,15 @@ export type KeybindingActionId =
   | 'terminal.expandPane'
   | 'terminal.setTitle'
   | 'terminal.clearPaneTitle'
+  | 'terminal.copySessionId'
   | 'terminal.closePane'
   | 'terminal.splitRight'
   | 'terminal.splitDown'
   | 'terminal.switchInputSource'
   | 'terminal.toggleNativeChat'
+  | 'botItem.back'
+  | 'botItem.previous'
+  | 'botItem.next'
   | PluginKeybindingActionId
 
 export type KeybindingOverrides = Partial<Record<KeybindingActionId, string[]>>
@@ -147,6 +155,7 @@ export type KeybindingFileSnapshot = {
   platform: KeybindingPlatform
   exists: boolean
   overrides: KeybindingOverrides
+  defaultOverrides?: KeybindingOverrides
   commonOverrides: KeybindingOverrides
   platformOverrides: Partial<Record<KeybindingPlatform, KeybindingOverrides>>
   diagnostics: KeybindingFileDiagnostic[]
@@ -168,6 +177,8 @@ export type KeybindingDefinition = {
   allowInTerminal?: boolean
   // Leaving it out means a focused text field keeps every key.
   allowInTextField?: 'non-default-chords'
+  // The chat prompt mirrors the terminal, so it yields even the default chords.
+  runsInChatPrompt?: boolean
   allowBareKeybindings?: boolean
   allowShiftOnlyKeybindings?: boolean
   conflictGroup?: string
@@ -220,6 +231,6 @@ export type KeybindingConflict = {
 export type FindKeybindingConflictOptions = {
   ignoredActionIds?: Iterable<KeybindingActionId>
   relevantActionIds?: Iterable<KeybindingActionId>
-  /** Settings-only diagnostic; the loader and writes keep the scope-only check so saved overrides still load. */
+  /** Include native interception for Settings writes, diagnostics and inherited defaults; saved overrides use scope-only checks. */
   includeMainProcessInterception?: boolean
 }

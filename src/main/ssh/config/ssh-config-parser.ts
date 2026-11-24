@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { expandSshConfigIncludes } from './ssh-config-include-expander'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
 

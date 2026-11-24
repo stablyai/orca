@@ -26,3 +26,23 @@ export function resetDesktopBrowserBridgeEnvironment(environmentId: string): voi
     console.warn('[desktop-browser-bridge] reset failed:', error)
   }
 }
+
+/** Hosts a person stopped for this app session; their persisted setting is untouched. */
+const stoppedTargetIds = new Set<string>()
+
+export function isDesktopBrowserBridgeHostStopped(targetId: string): boolean {
+  return stoppedTargetIds.has(targetId)
+}
+
+/** Stopping detaches the host now; saving the host with the setting on lifts it before a restart. */
+export function setDesktopBrowserBridgeHostStopped(targetId: string, stopped: boolean): void {
+  const changed = stopped ? !stoppedTargetIds.has(targetId) : stoppedTargetIds.has(targetId)
+  if (stopped) {
+    stoppedTargetIds.add(targetId)
+  } else {
+    stoppedTargetIds.delete(targetId)
+  }
+  if (changed) {
+    requestDesktopBrowserBridgeReconcile()
+  }
+}

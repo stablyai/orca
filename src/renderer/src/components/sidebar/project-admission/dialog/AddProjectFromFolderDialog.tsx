@@ -11,15 +11,16 @@ import {
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store/index'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import { finishProjectAddWithDefaultCheckout } from '../completion/project-added-default-checkout'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 
 const NON_GIT_REPO_ERROR = 'Not a valid git repository'
 
 const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialog() {
+  const t = useTranslate()
   useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
@@ -27,7 +28,6 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
   const openModal = useAppStore((s) => s.openModal)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
-  const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
 
   const [isAdding, setIsAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -92,8 +92,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         source: runtimeEnvironmentId ? 'runtime_server_path' : 'local_folder_picker',
         selectedPath: folderPath,
         executionHostId: ownerOptions.executionHostId,
-        closeModal,
-        setHideDefaultBranchWorkspace
+        closeModal
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -119,8 +118,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
     isAdding,
     mountedRef,
     openNonGitConfirmation,
-    runtimeEnvironmentId,
-    setHideDefaultBranchWorkspace
+    runtimeEnvironmentId
   ])
 
   const handleOpenChange = useCallback(
@@ -138,13 +136,10 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {translate(
-              'auto.components.sidebar.AddProjectFromFolderDialog.7d1f51678c',
-              'Add Project'
-            )}
+            {t('auto.components.sidebar.AddProjectFromFolderDialog.7d1f51678c', 'Add Project')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.sidebar.AddProjectFromFolderDialog.046751dbfb',
               'Add this folder as a separate Orca project.'
             )}
@@ -161,7 +156,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
 
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isAdding}>
-            {translate('auto.components.sidebar.AddProjectFromFolderDialog.7726a16374', 'Cancel')}
+            {t('auto.components.sidebar.AddProjectFromFolderDialog.7726a16374', 'Cancel')}
           </Button>
           <Button onClick={handleConfirm} disabled={!folderPath || isAdding}>
             {isAdding ? (
@@ -169,10 +164,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
             ) : (
               <FolderPlus className="size-4" />
             )}
-            {translate(
-              'auto.components.sidebar.AddProjectFromFolderDialog.7d1f51678c',
-              'Add Project'
-            )}
+            {t('auto.components.sidebar.AddProjectFromFolderDialog.7d1f51678c', 'Add Project')}
           </Button>
         </DialogFooter>
       </DialogContent>

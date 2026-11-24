@@ -1,6 +1,7 @@
 import type { CodexSessionBridgeIncrementalOptions } from '../rollouts/codex-session-file-listing'
 
 export type CodexSessionBackfillSummary = {
+  scanTruncated?: boolean
   stopped: boolean
   scannedFiles: number
   linkedFiles: number
@@ -24,7 +25,9 @@ export type CodexSessionBackfillPaths = {
 export type CodexSessionBackfillOptions = CodexSessionBridgeIncrementalOptions & {
   /** Polled between file mutations, preserving progress on opt-out. */
   shouldStop?: () => boolean
-  scanDates?: readonly CodexSessionBackfillDate[]
+  scanFrom?: CodexSessionBackfillDate
+  scanCursor?: readonly string[]
+  boundedScan?: boolean
   fullScanRequired?: boolean
   /** Scheduled launch passes still publish new rollouts when nothing is pending. */
   ignoreCompletionMarker?: boolean
@@ -35,3 +38,9 @@ export type CodexSessionBackfillOptions = CodexSessionBridgeIncrementalOptions &
 }
 
 export type CodexSessionBackfillDate = readonly [year: string, month: string, day: string]
+
+export type CodexSessionBackfillScanProgress = {
+  recentDates: CodexSessionBackfillDate[]
+  cursor?: readonly string[]
+  truncated: boolean
+}

@@ -44,24 +44,37 @@ export function appendCompletedTerminalTranscript(
   }
 
   const omittedNewLineCount = Math.max(0, newCompleteLineCount - newlyCompletedLines.length)
-  const lines = omittedNewLineCount > 0 ? [] : [...previousLines]
+  // Resolve both caps against the virtual concatenation so the kept window is copied once.
+  const keptPrevious = omittedNewLineCount > 0 ? 0 : previousLines.length
+  const combinedLength = keptPrevious + newlyCompletedLines.length
+  const lineAt = (index: number): string =>
+    index < keptPrevious ? previousLines[index]! : newlyCompletedLines[index - keptPrevious]!
   let characters = omittedNewLineCount > 0 ? 0 : previousCharacters
   for (const line of newlyCompletedLines) {
-    lines.push(line)
     characters += line.length
   }
 
-  let dropCount = Math.max(0, lines.length - MAX_TAIL_LINES)
+  let dropCount = Math.max(0, combinedLength - MAX_TAIL_LINES)
   for (let index = 0; index < dropCount; index += 1) {
-    characters -= lines[index]!.length
+    characters -= lineAt(index).length
   }
-  while (dropCount < lines.length && characters > MAX_TAIL_CHARS) {
-    characters -= lines[dropCount]!.length
+  while (dropCount < combinedLength && characters > MAX_TAIL_CHARS) {
+    characters -= lineAt(dropCount).length
     dropCount += 1
   }
 
+  const lines: string[] =
+    dropCount < keptPrevious ? previousLines.slice(dropCount, keptPrevious) : []
+  for (
+    let index = Math.max(0, dropCount - keptPrevious);
+    index < newlyCompletedLines.length;
+    index += 1
+  ) {
+    lines.push(newlyCompletedLines[index]!)
+  }
+
   return {
-    lines: dropCount > 0 ? lines.slice(dropCount) : lines,
+    lines,
     characters,
     truncated: omittedNewLineCount > 0 || dropCount > 0
   }

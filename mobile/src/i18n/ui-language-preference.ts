@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useSyncExternalStore } from 'react'
-import { SUPPORTED_UI_LOCALES, type SupportedUiLocale } from '../../../src/shared/ui-locale'
-import { UI_LANGUAGE_SYSTEM } from '../../../src/shared/ui-language'
+import { SUPPORTED_UI_LOCALES, type SupportedUiLocale } from '../../../src/shared/i18n/ui-locale'
+import { UI_LANGUAGE_SYSTEM } from '../../../src/shared/i18n/ui-language'
 import { activateMobileUiLocale } from './mobile-i18n'
 import { readDeviceUiLocaleTags, resolveUiLocaleFromTags } from './system-ui-locale'
 

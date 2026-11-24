@@ -1,4 +1,4 @@
-import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
 import { tokenizeCustomCommandTemplate } from '../../../../../shared/source-control/ai/generation/commit-message-prompt'
 import { quotePosixShellDoubleQuotedApostrophe } from '../../../../../shared/shell/launch/shell-argument-quoting'
 

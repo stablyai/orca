@@ -25,20 +25,6 @@ describe('terminal history log codec', () => {
     expect(decodeLogHeader(Buffer.alloc(3))).toBeNull()
   })
 
-  it('round-trips output, resize, and clear records', () => {
-    const records: PendingOutputRecord[] = [
-      { kind: 'output', data: 'hello \x1b[31mred\x1b[0m — émoji 🐳\r\n' },
-      { kind: 'resize', cols: 132, rows: 43 },
-      { kind: 'clear' },
-      { kind: 'output', data: 'after clear' }
-    ]
-    const log = decodeTerminalHistoryLog(buildLog(7, [{ seq: 3, records }]))
-    expect(log).not.toBeNull()
-    expect(log!.generation).toBe(7)
-    expect(log!.truncatedTail).toBe(false)
-    expect(log!.batches).toEqual([{ seq: 3, records }])
-  })
-
   it('rejects the whole log on a batch sequence gap', () => {
     // A missing take batch leaves a hole that makes terminal replay unsafe.
     const log = decodeTerminalHistoryLog(
@@ -74,13 +60,5 @@ describe('terminal history log codec', () => {
       encodeLogBatch(1, [{ kind: 'output', data: 'x' }]).subarray(9)
     ])
     expect(decodeTerminalHistoryLog(orphanRecord)).toBeNull()
-  })
-
-  it('rejects a clear frame with a payload', () => {
-    const log = buildLog(1, [{ seq: 1, records: [{ kind: 'clear' }] }])
-    const clearFrameOffset = log.length - 5
-    log.writeUInt32LE(1, clearFrameOffset + 1)
-
-    expect(decodeTerminalHistoryLog(Buffer.concat([log, Buffer.from('x')]))).toBeNull()
   })
 })

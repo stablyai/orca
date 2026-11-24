@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { NativeChatSessionTransport } from './native-chat-session-transport'
-import type { NativeChatReadSessionResult } from '../../../../preload/api/native-chat-api'
+import type { NativeChatSessionTransport } from './session/terminal/read/native-chat-session-transport'
+import type { NativeChatReadSessionResult } from '../../../../preload/api/native-chat/native-chat-api'
 import type { NativeChatSubagentPageRead } from './use-native-chat-subagent-page'
 
 function transcriptUnavailable(): string {

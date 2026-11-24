@@ -1,5 +1,9 @@
-import { setLocalPtyProvider } from '../../../ipc/pty/provider/registry'
-import { setLocalDaemonPidReader } from '../../../memory/local-daemon-pid'
+import { getLocalPtyProvider, setLocalPtyProvider } from '../../../ipc/pty/provider/registry'
+import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
+import {
+  setKnownLocalDaemonPidReader,
+  setLocalDaemonPidReader
+} from '../../../memory/local-daemon-pid'
 import { DegradedDaemonPtyProvider } from '../routing/degraded-daemon-pty-provider'
 import { DaemonPtyRouter } from '../routing/daemon-pty-router'
 import { getDaemonRuntimeDir as getRuntimeDir } from '../../launch/daemon-launch-paths'
@@ -36,15 +40,19 @@ export function installDaemonProvider(
   spawner = newSpawner
   replaceDaemonProvider(newAdapter)
   setLocalDaemonPidReader(() => readDaemonPidRecord()?.pid ?? null)
+  setKnownLocalDaemonPidReader(getCurrentDaemonPid)
 }
 
 export function getDaemonSpawner(): DaemonSpawner | null {
   return spawner
 }
 
-/** Degraded providers keep existing sessions persistent but spawn fresh terminals in-process. */
+/** Degraded providers spawn fresh terminals in-process until their routing recovers to the daemon. */
 export function daemonOwnsFreshPersistentPtys(): boolean {
-  return adapter !== null && !(adapter instanceof DegradedDaemonPtyProvider)
+  return (
+    adapter !== null &&
+    !(adapter instanceof DegradedDaemonPtyProvider && adapter.routesFreshSpawnsToLocalProvider)
+  )
 }
 
 /** Endpoint coordinates of the daemon this process installed, for out-of-band health probes. */
@@ -153,6 +161,19 @@ export async function countInProcessFallbackTerminals(): Promise<number> {
     : 0
 }
 
+/** Every terminal that ends with this process: degraded fallback ones, or all of them when no daemon is installed. */
+export async function countInProcessTerminals(): Promise<number> {
+  if (adapter) {
+    return countInProcessFallbackTerminals()
+  }
+  const local = getLocalPtyProvider()
+  // A disconnected daemon provider stays installed as the local provider; it cannot be counted here.
+  if (!(local instanceof LocalPtyProvider)) {
+    throw new Error('No daemon is installed, and terminals do not run on the in-process provider')
+  }
+  return (await local.listProcesses()).length
+}
+
 /** Atomically fence new daemon terminals and retire only an idle, single-generation daemon. */
 export async function requestIdleDaemonRetirement(): Promise<DaemonIdleRetirementResult> {
   if (!adapter) {
@@ -188,4 +209,10 @@ export function releaseDaemonRetirementFence(): void {
   if (adapter && !(adapter instanceof DegradedDaemonPtyProvider)) {
     adapter.releaseIdleRetirementFence()
   }
+}
+
+export function getProviderProcessHostClient() {
+  return adapter && !(adapter instanceof DegradedDaemonPtyProvider)
+    ? getCurrentDaemonAdapter(adapter).getProviderProcessClient()
+    : null
 }

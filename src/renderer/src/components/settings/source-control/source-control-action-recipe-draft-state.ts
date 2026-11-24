@@ -4,7 +4,7 @@ import {
   type ActionArgumentChoices
 } from '../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
 import { liftActionPermissionArgs } from '../../../../../shared/source-control/ai/recipes/source-control-action-permission-lift'
-import { useEffect, useMemo, useRef, useState, type SetStateAction } from 'react'
+import { useEffect, useMemo, useState, type SetStateAction } from 'react'
 import type {
   SourceControlAiSettings,
   SourceControlAiModelChoice,
@@ -74,8 +74,6 @@ export function useSourceControlActionRecipeDraftState({
   writeConfig
 }: UseSourceControlActionRecipeDraftStateArgs) {
   const persistedActionRecipeValues = useMemo(() => readActionRecipeInputValues(config), [config])
-  const persistedActionRecipeValuesRef = useRef(persistedActionRecipeValues)
-  persistedActionRecipeValuesRef.current = persistedActionRecipeValues
   const [storedDraftState, setActionRecipeDraftState] = useState<ActionRecipeDraftState>(() => ({
     values: persistedActionRecipeValues,
     baseValues: persistedActionRecipeValues
@@ -93,6 +91,15 @@ export function useSourceControlActionRecipeDraftState({
       followPersistedRecipeValues(current, persistedActionRecipeValues)
     )
   }
+  const [seenDiscardSignal, setSeenDiscardSignal] = useState(customPromptDiscardSignal)
+  if (seenDiscardSignal !== customPromptDiscardSignal) {
+    actionRecipeDraftState = {
+      values: persistedActionRecipeValues,
+      baseValues: persistedActionRecipeValues
+    }
+    setSeenDiscardSignal(customPromptDiscardSignal)
+    setActionRecipeDraftState(actionRecipeDraftState)
+  }
   const [savingActionTemplateIds, setSavingActionTemplateIds] = useState<
     Partial<Record<SourceControlActionId, boolean>>
   >({})
@@ -105,13 +112,6 @@ export function useSourceControlActionRecipeDraftState({
     [actionRecipeDraftState.baseValues]
   )
   const actionTemplateDirty = actionRecipeDraftSerialized !== actionRecipeBaseSerialized
-
-  useEffect(() => {
-    setActionRecipeDraftState({
-      values: persistedActionRecipeValuesRef.current,
-      baseValues: persistedActionRecipeValuesRef.current
-    })
-  }, [customPromptDiscardSignal])
 
   useEffect(() => {
     onCustomPromptDirtyChange?.(actionTemplateDirty)

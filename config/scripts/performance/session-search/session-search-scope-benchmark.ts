@@ -6,14 +6,14 @@ import {
 } from '../../../../src/main/ai-vault/parse-cache/session-scanner-parse-cache'
 import { resetSessionParseCacheForTests } from '../../../../src/main/ai-vault/parse-cache/session-parse-cache-store'
 import { resetTranscriptConsumersForTests } from '../../../../src/main/ai-vault/transcripts/session-transcript-consumers'
-import { SessionSearchEngine } from '../../../../src/main/ai-vault-search/session-search-engine'
+import { SessionSearchEngine } from '../../../../src/main/ai-vault-search/query/session-search-engine'
 import type {
   SessionSearchRequest,
   SessionSearchScope
-} from '../../../../src/main/ai-vault-search/session-search-engine-types'
-import { registerSessionSearchIndexConsumer } from '../../../../src/main/ai-vault-search/session-search-index-consumer'
-import { SessionSearchStore } from '../../../../src/main/ai-vault-search/session-search-store'
-import { sessionCandidate } from '../../../../src/main/ai-vault-search/session-search-transcript-fixtures'
+} from '../../../../src/main/ai-vault-search/query/session-search-engine-types'
+import { registerSessionSearchIndexConsumer } from '../../../../src/main/ai-vault-search/indexing/session-search-index-consumer'
+import { SessionSearchStore } from '../../../../src/main/ai-vault-search/storage/session-search-store'
+import { sessionCandidate } from '../../../../src/main/ai-vault-search/indexing/session-search-transcript-fixtures'
 import type SyncDatabase from '../../../../src/main/sqlite/sync-database'
 import { writeToolHeavyCorpus, type ToolHeavyCorpus } from './session-search-tool-heavy-corpus'
 

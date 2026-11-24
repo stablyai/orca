@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import type { OlderPagePhase } from '../../use-mobile-older-page-loader'
+import type { OlderPagePhase } from '../transcript/ingestion/use-mobile-older-page-loader'
 
 const INITIAL_LIMIT = 40
 const PAGE_LIMIT = 60

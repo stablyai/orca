@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import type { MobileNativeChatSendProps } from './composer/MobileNativeChatComposer'
-import type { OlderPagePhase } from '../use-mobile-older-page-loader'
+import type { OlderPagePhase } from './transcript/ingestion/use-mobile-older-page-loader'
 
 /** Send and earlier-page actions shared by the transcript list and its composer. */
 export function useMobileNativeChatListActions({

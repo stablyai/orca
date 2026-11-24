@@ -1,6 +1,6 @@
 import { ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import type { MarkdownTocItem } from './markdown-table-of-contents'
 import { isMarkdownTocItemExpanded } from './markdown-toc-collapse-state'
 
@@ -22,6 +22,7 @@ export function MarkdownTocRow({
   onNavigate: (id: string) => void
   onToggleCollapsed: (id: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const hasChildren = item.children.length > 0
   const expanded = isMarkdownTocItemExpanded(collapsedIds, item)
   // Parent chevrons supply the base inset; keep it only on root rows to avoid flush titles at the panel edge.
@@ -40,12 +41,12 @@ export function MarkdownTocRow({
             className="markdown-toc-disclosure"
             aria-label={
               expanded
-                ? translate(
+                ? t(
                     'auto.components.editor.MarkdownTableOfContentsPanel.97ad46f11f',
                     'Collapse {{value0}}',
                     { value0: item.title }
                   )
-                : translate(
+                : t(
                     'auto.components.editor.MarkdownTableOfContentsPanel.65b036a6c8',
                     'Expand {{value0}}',
                     { value0: item.title }

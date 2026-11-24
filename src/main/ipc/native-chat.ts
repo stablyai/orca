@@ -1,31 +1,23 @@
-import { DESKTOP_READ_WINDOW } from '../native-chat/transcript-watch-contract'
+import { DESKTOP_READ_WINDOW } from '../native-chat/transcript-watching/transcript-watch-contract'
 import { ipcMain } from 'electron'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
+import type { NativeChatSubagentActivity } from '../../shared/native-chat/input/native-chat-activity'
 import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat/native-chat-types'
-import type { NativeChatSubagentActivity } from '../../shared/native-chat/input/native-chat-activity'
-import { clearNativeChatTranscriptCache } from '../native-chat/transcript-read-cache'
+import { readNativeChatTranscriptTail } from '../native-chat/transcript-tail-reader'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { openNativeChatTranscript } from '../native-chat/transcript-discovery/native-chat-open-wake'
 import { nativeChatReadSessionBounds } from './native-chat-read-bounds'
-import type { ReadTranscriptResult } from '../native-chat/transcript-reader'
-import { readNativeChatTranscriptTail } from '../native-chat/transcript-watch'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import { openNativeChatTranscript } from '../native-chat/native-chat-open-wake'
-import {
-  _getNativeChatPendingSubscriptionCountForTest,
-  _getNativeChatSenderCleanupCountForTest,
-  clearNativeChatSubscriptions,
-  handleSubscribe,
-  teardownSubscription
-} from './native-chat-subscribe'
+import { handleSubscribe, teardownSubscription } from './native-chat-subscribe'
 
-export { clearNativeChatTranscriptCache }
+export { clearNativeChatTranscriptCache } from '../native-chat/transcript-read-cache'
 export {
   _getNativeChatPendingSubscriptionCountForTest,
   _getNativeChatSenderCleanupCountForTest,
   clearNativeChatSubscriptions
-}
+} from './native-chat-subscribe'
 
 export type NativeChatReadSessionArgs = {
   agent: AgentType
@@ -36,15 +28,13 @@ export type NativeChatReadSessionArgs = {
   transcriptPath?: string
   /** The user opened or paged this chat: may start its stopped WSL distro (E9). Absent never does. */
   wakeWslDistro?: boolean
-  /** Byte offset of an older page. Absent reads the newest window. */
+  /** Provider row cursor for an older page; absent reads the newest window. */
   beforeOffset?: number
   /** One child. Absent reads the parent. */
   subagentId?: string
 }
 
-// Bound parsing and rendering to the recent window; pagination raises the limit.
-
-async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscriptResult> {
+async function readSession(args: NativeChatReadSessionArgs) {
   const { agent, sessionId } = args
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
   const wake = args.wakeWslDistro === true

@@ -1,10 +1,10 @@
 import { useCallback, type MutableRefObject } from 'react'
-import type { NativeChatMerger } from '../../../../src/shared/native-chat/native-chat-merge'
+import type { NativeChatMerger } from '../../../../src/shared/native-chat/transcript/streaming/native-chat-merge'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
-import type { NativeChatTranscriptPage } from '../../../../src/shared/native-chat/native-chat-transcript-frames'
-import type { RpcClient } from '../../transport/rpc-client'
-import { nativeChatSessionPageRead } from '../mobile-session-read-operations'
-import type { useMobileOlderPageLoader } from '../use-mobile-older-page-loader'
+import type { NativeChatTranscriptPage } from '../../../../src/shared/native-chat/transcript/streaming/native-chat-transcript-frames'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { nativeChatSessionPageRead } from './agent-session/mobile-native-chat-page-read-operations'
+import type { useMobileOlderPageLoader } from './transcript/ingestion/use-mobile-older-page-loader'
 
 const PAGE = 60
 export const MAX_MESSAGES = 2000

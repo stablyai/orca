@@ -1,11 +1,11 @@
 import { isAgentChildWorkKind } from '../../shared/agent-status/child-work/agent-status-child-work-liveness'
-import { classifyClaudeBackgroundTaskKind } from '../../shared/claude-background-task-kind'
+import { classifyClaudeBackgroundTaskKind } from '../../shared/agent-hook-listener/providers/claude/background-tasks/claude-background-task-kind'
 import { nativeChatRosterActivityLine } from '../../shared/native-chat/input/native-chat-roster-activity-line'
 import type {
   NativeChatMessage,
   NativeChatSubagentState
 } from '../../shared/native-chat/native-chat-types'
-import { timestampMs } from '../ai-vault/session-scanner-values'
+import { timestampMs } from '../ai-vault/parsing/session-record-time'
 
 const NOTICE = /<task-notification>[\s\S]*?<\/task-notification>/
 const TASK_ID = /<task-id>\s*([^<]+?)\s*<\/task-id>/

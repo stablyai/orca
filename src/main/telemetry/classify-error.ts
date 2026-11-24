@@ -1,6 +1,6 @@
 // Send closed error_class enums only, never raw messages/stacks; add new buckets when unknown volume warrants call-site review.
 
-import type { ErrorClass } from '../../shared/telemetry-events'
+import type { ErrorClass } from '../../shared/telemetry/schemas/telemetry-property-schemas'
 
 export type ClassifiedError = {
   error_class: ErrorClass

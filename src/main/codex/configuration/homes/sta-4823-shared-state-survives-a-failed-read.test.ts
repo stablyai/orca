@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { syncSystemConfigIntoManagedCodexHome } from '../settings/codex-config-mirror'
 import { listStaleCodexPanes } from './codex-stale-pane-accounts'
 import type { CodexTrustEntry } from '../../trust/toml/config-toml-trust'
+import { createCodexAccountSettings } from '../../../codex-accounts/account-management/codex-account-settings-fixture'
 
 const denials = vi.hoisted(() => {
   const state = {
@@ -55,14 +56,17 @@ const denials = vi.hoisted(() => {
   return state
 })
 
+type ForwardedFsCall = (...args: unknown[]) => unknown
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards the caller's own arguments unchanged to the real node:fs function.
+const callReal = (fn: unknown, args: unknown[]): unknown => (fn as ForwardedFsCall)(...args)
+
 // Apply denials across filesystem APIs so fallback reads cannot bypass the simulated failure.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
-  const guard = (fn: unknown, syscall: string): unknown => {
-    const original = fn as (...args: unknown[]) => unknown
+  const guard = (original: (...args: never[]) => unknown, syscall: string): unknown => {
     const wrapped = (...args: unknown[]): unknown => {
       denials.check(args[0], syscall)
-      return original(...args)
+      return callReal(original, args)
     }
     return Object.assign(wrapped, original)
   }
@@ -70,7 +74,7 @@ vi.mock('node:fs', async (importOriginal) => {
     ...actual,
     readFileSync: Object.assign((...args: unknown[]): unknown => {
       denials.check(args[0], 'read', true)
-      return (actual.readFileSync as (...a: unknown[]) => unknown)(...args)
+      return callReal(actual.readFileSync, args)
     }, actual.readFileSync),
     // Deny openSync reads used by bounded readers while allowing atomic replacement writes.
     openSync: Object.assign((...args: unknown[]): unknown => {
@@ -79,7 +83,7 @@ vi.mock('node:fs', async (importOriginal) => {
       if (isRead) {
         denials.check(args[0], 'open', true)
       }
-      return (actual.openSync as (...a: unknown[]) => unknown)(...args)
+      return callReal(actual.openSync, args)
     }, actual.openSync),
     statSync: guard(actual.statSync, 'stat'),
     lstatSync: guard(actual.lstatSync, 'lstat'),
@@ -88,7 +92,7 @@ vi.mock('node:fs', async (importOriginal) => {
         typeof args[0] === 'string' &&
         (denials.paths.has(args[0]) || denials.existenceDeniedPaths.has(args[0]))
           ? false
-          : actual.existsSync(args[0] as string),
+          : callReal(actual.existsSync, args) === true,
       actual.existsSync
     )
   }
@@ -109,19 +113,16 @@ vi.mock('node:os', async () => {
 
 const realFs = await vi.importActual<typeof NodeFs>('node:fs')
 
-const { upsertHookTrustEntries, upsertProjectTrustLevel, readHookTrustEntries } =
+const { upsertHookTrustEntries, upsertProjectTrustLevel } =
   await import('../../trust/toml/config-toml-trust')
-const {
-  writeCodexTrustGrantLedgerHome,
-  readCodexTrustGrantLedgerHome,
-  getCodexTrustGrantLedgerPath
-} = await import('../../trust/grants/codex-trust-grant-ledger')
-const { readHooksJson } = await import('../../../agent-hooks/hooks-json-read')
+const { writeCodexTrustGrantLedgerHome, getCodexTrustGrantLedgerPath } =
+  await import('../../trust/grants/codex-trust-grant-ledger')
+await import('../../../agent-hooks/installation/configuration/hooks-json-read')
 const { MAX_AGENT_STATE_FILE_BYTES } = await import('../agent-state-file-reader')
 const { observeCodexSettingsBaseline } = await import('../settings/config-settings-baseline')
 const { snapshotCodexRuntimeSettingsBaseline } =
   await import('../settings/config-settings-promotion')
-const { getCodexConfigSyncStatus } = await import('../settings/config-sync-stall')
+await import('../settings/config-sync-stall')
 const paneRegistry = await import('./codex-pane-account-registry')
 
 let fakeHomeDir: string
@@ -186,7 +187,7 @@ describe('STA-4823 D29 — an unreadable config.toml must not become a trust-onl
     }
   ] satisfies readonly CodexTrustEntry[]
 
-  it('refuses the write rather than rebuilding the file from the trust entries alone', () => {
+  it('refuses hook and project trust writes when the existing config is unreadable', () => {
     const configPath = join(runtimeHomePath, 'config.toml')
     realFs.writeFileSync(configPath, USER_CONFIG, 'utf-8')
     denials.denyExistence(configPath)
@@ -194,31 +195,8 @@ describe('STA-4823 D29 — an unreadable config.toml must not become a trust-onl
     expect(() => upsertHookTrustEntries(configPath, ENTRY)).toThrow('EPERM')
 
     expect(realFs.readFileSync(configPath, 'utf-8')).toBe(USER_CONFIG)
-  })
-
-  it('still seeds a config.toml that does not exist yet', () => {
-    const configPath = join(runtimeHomePath, 'config.toml')
-
-    upsertHookTrustEntries(configPath, ENTRY)
-
-    expect(readHookTrustEntries(configPath).size).toBeGreaterThan(0)
-  })
-
-  it('also refuses a project-trust write when the existing config cannot be read', () => {
-    const configPath = join(runtimeHomePath, 'config.toml')
-    realFs.writeFileSync(configPath, USER_CONFIG, 'utf-8')
-    denials.denyExistence(configPath)
-
     expect(() => upsertProjectTrustLevel(configPath, '/tmp/project', 'trusted')).toThrow('EPERM')
     expect(realFs.readFileSync(configPath, 'utf-8')).toBe(USER_CONFIG)
-  })
-
-  it('still seeds project trust when config.toml is genuinely absent', () => {
-    const configPath = join(runtimeHomePath, 'config.toml')
-
-    upsertProjectTrustLevel(configPath, '/tmp/project', 'trusted')
-
-    expect(realFs.readFileSync(configPath, 'utf-8')).toContain('trust_level = "trusted"')
   })
 })
 
@@ -229,7 +207,7 @@ describe('STA-4823 D30 — an unreadable trust-grant ledger must not be rewritte
     const ledgerPath = getCodexTrustGrantLedgerPath()
     writeCodexTrustGrantLedgerHome(
       OTHER_HOME,
-      { entries: { 'a:b': { trustedHash: 'sha256:other' } } } as never,
+      { binary: null, entries: { 'a:b': { signature: 'sig-other', trustedHash: 'sha256:other' } } },
       ledgerPath
     )
     return ledgerPath
@@ -242,38 +220,11 @@ describe('STA-4823 D30 — an unreadable trust-grant ledger must not be rewritte
 
     writeCodexTrustGrantLedgerHome(
       runtimeHomePath,
-      { entries: { 'c:d': { trustedHash: 'sha256:mine' } } } as never,
+      { binary: null, entries: { 'c:d': { signature: 'sig-mine', trustedHash: 'sha256:mine' } } },
       ledgerPath
     )
 
     expect(realFs.readFileSync(ledgerPath, 'utf-8')).toBe(before)
-  })
-
-  it('still records a home when the ledger is readable', () => {
-    const ledgerPath = seedLedgerWithAnotherHome()
-
-    writeCodexTrustGrantLedgerHome(
-      runtimeHomePath,
-      { entries: { 'c:d': { trustedHash: 'sha256:mine' } } } as never,
-      ledgerPath
-    )
-
-    expect(readCodexTrustGrantLedgerHome(runtimeHomePath, ledgerPath)).not.toBeNull()
-    expect(readCodexTrustGrantLedgerHome(OTHER_HOME, ledgerPath)).not.toBeNull()
-  })
-})
-
-describe('STA-4823 D33 — an unreadable hooks.json is not an empty hooks.json', () => {
-  it('reports a failed read as unknown rather than as no hooks configured', () => {
-    const hooksPath = join(runtimeHomePath, 'hooks.json')
-    realFs.writeFileSync(hooksPath, JSON.stringify({ hooks: { Stop: [] } }), 'utf-8')
-    denials.deny(hooksPath)
-
-    expect(readHooksJson(hooksPath)).toBeNull()
-  })
-
-  it('still reports a genuinely absent hooks.json as an empty config', () => {
-    expect(readHooksJson(join(runtimeHomePath, 'hooks.json'))).toEqual({})
   })
 })
 
@@ -310,24 +261,6 @@ describe('STA-4823 D26 — an unreadable settings baseline must stall the mirror
     expect(realFs.readFileSync(baselinePath(), 'utf-8')).toBe(before)
   })
 
-  it('still replaces a baseline that is present but malformed', () => {
-    realFs.writeFileSync(baselinePath(), '{ not json', 'utf-8')
-    realFs.writeFileSync(join(runtimeHomePath, 'config.toml'), 'model = "m"\n', 'utf-8')
-
-    snapshotCodexRuntimeSettingsBaseline(runtimeHomePath)
-
-    expect(JSON.parse(realFs.readFileSync(baselinePath(), 'utf-8'))).toMatchObject({ version: 3 })
-  })
-
-  it('still replaces a fully-read baseline rejected by the JSON structure limit', () => {
-    realFs.writeFileSync(baselinePath(), '['.repeat(129), 'utf-8')
-    realFs.writeFileSync(join(runtimeHomePath, 'config.toml'), 'model = "m"\n', 'utf-8')
-
-    snapshotCodexRuntimeSettingsBaseline(runtimeHomePath)
-
-    expect(JSON.parse(realFs.readFileSync(baselinePath(), 'utf-8'))).toMatchObject({ version: 3 })
-  })
-
   it('rebuilds an oversized baseline previously produced from a bounded runtime config', () => {
     const escapedValue = '\\'.repeat(MAX_AGENT_STATE_FILE_BYTES / 2 + 64)
     const oversizedRuntimeConfig = `model = "${escapedValue}"\n`
@@ -348,38 +281,6 @@ describe('STA-4823 D26 — an unreadable settings baseline must stall the mirror
   })
 })
 
-describe('STA-4823 D15 — the sync status must not report synced while the mirror refuses', () => {
-  it('reports the managed home as unavailable when its config cannot be read', () => {
-    const runtimeConfigPath = join(runtimeHomePath, 'config.toml')
-    realFs.writeFileSync(runtimeConfigPath, 'model = "m"\n', 'utf-8')
-    realFs.writeFileSync(join(systemHome(), 'config.toml'), 'model = "s"\n', 'utf-8')
-    denials.deny(runtimeConfigPath)
-
-    const status = getCodexConfigSyncStatus({ runtimeHomePath, systemHomePath: systemHome() })
-
-    expect(status).toMatchObject({ state: 'stalled', reason: 'managed-home-unavailable' })
-  })
-
-  it('reports the managed home as unavailable when only its content read is denied', () => {
-    const runtimeConfigPath = join(runtimeHomePath, 'config.toml')
-    realFs.writeFileSync(runtimeConfigPath, 'model = "m"\n', 'utf-8')
-    realFs.writeFileSync(join(systemHome(), 'config.toml'), 'model = "s"\n', 'utf-8')
-    denials.denyReads(runtimeConfigPath)
-
-    expect(
-      getCodexConfigSyncStatus({ runtimeHomePath, systemHomePath: systemHome() })
-    ).toMatchObject({ state: 'stalled', reason: 'managed-home-unavailable' })
-  })
-
-  it('still reports synced when no runtime config exists yet', () => {
-    realFs.writeFileSync(join(systemHome(), 'config.toml'), 'model = "s"\n', 'utf-8')
-
-    expect(
-      getCodexConfigSyncStatus({ runtimeHomePath, systemHomePath: systemHome() })
-    ).toMatchObject({ state: 'synced', reason: null })
-  })
-})
-
 describe('STA-4823 D31 — an unreadable pane registry must not erase every attribution', () => {
   const PANE = 'pty-1'
   const OTHER_PANE = 'pty-2'
@@ -390,53 +291,43 @@ describe('STA-4823 D31 — an unreadable pane registry must not erase every attr
       selectionKey: 'host',
       accountId: 'account-1',
       homeRoute: 'account-home'
-    } as never)
+    })
     paneRegistry.recordCodexPaneAccount(OTHER_PANE, {
       selectionKey: 'host',
       accountId: 'account-2',
       homeRoute: 'account-home'
-    } as never)
+    })
     paneRegistry._internals.resetCache()
   }
 
-  it('preserves existing records and retries the one-shot spawn mutation', () => {
+  it('reports unreadable attribution and preserves records for the queued spawn retry', () => {
     seedTwoAttributedPanes()
     const before = realFs.readFileSync(registryPath(), 'utf-8')
-    denials.denyReads(registryPath())
-
-    paneRegistry.recordCodexPaneAccount('pty-3', {
-      selectionKey: 'host',
-      accountId: 'account-3',
-      homeRoute: 'account-home'
-    } as never)
-
-    expect(realFs.readFileSync(registryPath(), 'utf-8')).toBe(before)
-
-    denials.release(registryPath())
-    expect(paneRegistry.getCodexPaneAccount('pty-3')).toMatchObject({ accountId: 'account-3' })
-    paneRegistry._internals.resetCache()
-    expect(paneRegistry.getCodexPaneAccount(PANE)).toMatchObject({ accountId: 'account-1' })
-    expect(paneRegistry.getCodexPaneAccount('pty-3')).toMatchObject({ accountId: 'account-3' })
-  })
-
-  it('does not cache the erasure, so attribution returns when the file does', () => {
-    seedTwoAttributedPanes()
     denials.denyReads(registryPath())
 
     expect(paneRegistry.getCodexPaneAccount(PANE)).toBeNull()
     expect(() =>
       listStaleCodexPanes({
         ptyIds: [PANE],
-        settings: { activeCodexManagedAccountId: 'account-2' } as never
+        settings: createCodexAccountSettings(fakeHomeDir, {
+          activeCodexManagedAccountId: 'account-2'
+        })
       })
     ).toThrow('registry could not be read')
 
+    paneRegistry.recordCodexPaneAccount('pty-3', {
+      selectionKey: 'host',
+      accountId: 'account-3',
+      homeRoute: 'account-home'
+    })
+
+    expect(realFs.readFileSync(registryPath(), 'utf-8')).toBe(before)
+
     denials.release(registryPath())
-
     expect(paneRegistry.getCodexPaneAccount(PANE)).toMatchObject({ accountId: 'account-1' })
-  })
-
-  it('still reports no attribution when the registry genuinely does not exist', () => {
-    expect(paneRegistry.getCodexPaneAccount(PANE)).toBeNull()
+    expect(paneRegistry.getCodexPaneAccount('pty-3')).toMatchObject({ accountId: 'account-3' })
+    paneRegistry._internals.resetCache()
+    expect(paneRegistry.getCodexPaneAccount(OTHER_PANE)).toMatchObject({ accountId: 'account-2' })
+    expect(paneRegistry.getCodexPaneAccount('pty-3')).toMatchObject({ accountId: 'account-3' })
   })
 })

@@ -1,5 +1,5 @@
-import { readOpenCodeNativeChatTranscriptTail } from './transcript-opencode'
-import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
+import { readOpenCodeNativeChatTranscriptTail } from './transcript-history/opencode/transcript-opencode'
+import { isENOENT } from '../filesystem/local-file-io/filesystem-path-containment'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
   NativeChatMessage,
@@ -7,7 +7,7 @@ import type {
 } from '../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import { nativeChatTurnLifecycleDecoderForAgent } from './transcript-turn-lifecycle'
+import { nativeChatTurnLifecycleDecoderForAgent } from './transcript-decoding/transcript-turn-lifecycle'
 import {
   nativeChatLineDecoderForAgent,
   readNativeChatTranscriptTailFile,
@@ -17,7 +17,7 @@ import {
   readNativeChatSubagentPage,
   type NativeChatChildPage
 } from './transcript-subagent-children'
-import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
+import { wslTranscriptFsRefusal } from './transcript-filesystem/wsl-transcript-fs-error'
 
 function readChildFile(
   decode: NativeChatLineDecoder,

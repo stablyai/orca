@@ -1,12 +1,13 @@
-import { getDefaultUserDataPath } from '../../../../src/cli/runtime/metadata'
+import { useInlineEnvironmentStoreForCli as runEnvironmentStoreInline } from '../../../../src/shared/remote-runtime/host-store/runtime-environment-store-execution'
+import { getDefaultUserDataPath } from '../../../../src/cli/runtime/profile/metadata'
 import type { PairingOffer } from '../../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { RemoteRuntimeSharedControlConnection } from '../../../../src/shared/remote-runtime/control/remote-runtime-shared-control-connection'
 import {
   resolveEnvironment,
   resolveEnvironmentPairingOffer
 } from '../../../../src/shared/remote-runtime/host-store/runtime-environment-store'
-import type { MemorySnapshot } from '../../../../src/shared/process-stats-types'
-import type { RuntimeStatus } from '../../../../src/shared/runtime-types'
+import type { MemorySnapshot } from '../../../../src/shared/diagnostics/process-stats-types'
+import type { RuntimeStatus } from '../../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 
 async function main(): Promise<void> {
   const environmentName = process.env.ORCA_PROBE_ENVIRONMENT_NAME
@@ -14,8 +15,8 @@ async function main(): Promise<void> {
     throw new Error('ORCA_PROBE_ENVIRONMENT_NAME is required')
   }
   const userDataPath = getDefaultUserDataPath()
-  const environment = resolveEnvironment(userDataPath, environmentName)
-  const pairing = resolveEnvironmentPairingOffer(userDataPath, environment.id)
+  const environment = await resolveEnvironment(userDataPath, environmentName)
+  const pairing = await resolveEnvironmentPairingOffer(userDataPath, environment.id)
   const cycles = readProbeInteger('ORCA_PROBE_CYCLES', 10, 100)
   const concurrency = readProbeInteger('ORCA_PROBE_CONCURRENCY', 25, 200)
   const settleMs = readProbeInteger('ORCA_PROBE_SETTLE_MS', 250, 5_000)
@@ -257,6 +258,7 @@ function wait(delayMs: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, delayMs))
 }
 
+runEnvironmentStoreInline()
 void main().catch((error: unknown) => {
   console.error(error)
   process.exitCode = 1

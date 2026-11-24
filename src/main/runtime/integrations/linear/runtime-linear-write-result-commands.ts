@@ -2,7 +2,7 @@ import type {
   getAttachmentByUuidForAgent as getLinearAttachmentByUuidForAgent,
   getCommentByUuidForAgent as getLinearCommentByUuidForAgent,
   getIssueByUuidForAgent as getLinearIssueByUuidForAgent
-} from '../../../linear/linear-issue-lookups'
+} from '../../../linear/issues/linear-issue-lookups'
 import type {
   LinearAttachResult,
   LinearCommentAddResult,

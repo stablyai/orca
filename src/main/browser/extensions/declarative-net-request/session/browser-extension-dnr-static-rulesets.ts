@@ -1,8 +1,11 @@
 import { readFile } from 'node:fs/promises'
 import { isAbsolute, relative, resolve } from 'node:path'
-import { buildDnrRulesetInSlices, type DnrInvalidRulePolicy } from '../ruleset-builder'
-import type { DnrRulesetIndex } from '../ruleset-index'
-import type { DnrRulesetSource } from '../rule-types'
+import {
+  buildDnrRulesetInSlices,
+  type DnrInvalidRulePolicy
+} from '../rule-compilation/ruleset-builder'
+import type { DnrRulesetIndex } from '../indexing/ruleset-index'
+import type { DnrRulesetSource } from '../rule-compilation/rule-types'
 
 /** One manifest declarative_net_request.rule_resources entry. */
 export type DnrManifestRuleset = {
@@ -83,18 +86,36 @@ function yieldWhenOverBudget(): Promise<void> {
 export type DnrRulesBuild = { ok: true; built: DnrBuiltRuleset } | { ok: false; error: string }
 
 /** Static rulesets skip invalid rules; API updates ('error') reject on the first one. */
+const BUILD_CANCELLED = new Error('Rules build cancelled')
+
+/** `cancelled` ends the build at its next slice, e.g. once the extension it was for unloads. */
 export async function buildDnrRules(
   rules: readonly unknown[],
   extensionId: string,
   source: DnrRulesetSource,
-  invalidRules: DnrInvalidRulePolicy
+  invalidRules: DnrInvalidRulePolicy,
+  cancelled?: () => boolean
 ): Promise<DnrRulesBuild> {
-  const result = await buildDnrRulesetInSlices(
-    rules,
-    { extensionId, source, invalidRules },
-    BUILD_SLICE_SIZE,
-    yieldWhenOverBudget
-  )
+  const pause = async (): Promise<void> => {
+    await yieldWhenOverBudget()
+    if (cancelled?.()) {
+      throw BUILD_CANCELLED
+    }
+  }
+  let result: Awaited<ReturnType<typeof buildDnrRulesetInSlices>>
+  try {
+    result = await buildDnrRulesetInSlices(
+      rules,
+      { extensionId, source, invalidRules },
+      BUILD_SLICE_SIZE,
+      pause
+    )
+  } catch (error) {
+    if (error === BUILD_CANCELLED) {
+      return { ok: false, error: BUILD_CANCELLED.message }
+    }
+    throw error
+  }
   if (!result.ok) {
     return { ok: false, error: result.error.message }
   }

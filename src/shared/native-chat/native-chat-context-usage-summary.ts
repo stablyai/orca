@@ -1,4 +1,4 @@
-import type { StructuredAgentContextUsage } from '../agent-session/structured-agent-session-context-usage'
+import type { StructuredAgentContextUsage } from '../agent-session/conversation-context/structured-agent-session-context-usage'
 
 /** Reduce provider context breakdowns to the rows shown by the composer ring. */
 export type NativeChatContextUsageSummary = {
@@ -6,8 +6,8 @@ export type NativeChatContextUsageSummary = {
   windowTokens: number
   percentage: number
   estimated: boolean
-  /** Largest first, as a share of the window; empty rows are dropped. */
-  rows: readonly { name: string; tokens: number; percentage: number }[]
+  /** Largest first, as a share of the window; empty rows are dropped, and deferred rows sit outside the used total. */
+  rows: readonly { name: string; tokens: number; percentage: number; deferred?: true }[]
 }
 
 /** Past this the window is nearly spent, so the ring turns red to say so. */
@@ -45,7 +45,8 @@ export function summarizeContextUsage(
       .map((row) => ({
         name: row.name,
         tokens: row.tokens,
-        percentage: rowPercentage(row.tokens, usage.windowTokens)
+        percentage: rowPercentage(row.tokens, usage.windowTokens),
+        ...(row.deferred === true ? { deferred: true as const } : {})
       }))
       .sort((left, right) => right.tokens - left.tokens)
   }

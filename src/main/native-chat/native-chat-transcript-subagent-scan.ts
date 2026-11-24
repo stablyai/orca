@@ -8,8 +8,8 @@ import {
 import { projectNativeChatTranscript } from '../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { readNativeChatTranscript } from './transcript-reader'
 import { resolveSessionFilePath } from './session-file-resolver'
-import { toHostReadableTranscriptPath } from './host-readable-transcript-path'
-import { transcriptFileStat } from './wsl-transcript-fs-access'
+import { toHostReadableTranscriptPath } from './transcript-discovery/host-readable-transcript-path'
+import { transcriptFileStat } from './transcript-filesystem/wsl-transcript-fs-access'
 import { fillSubagentRosterActivity } from './transcript-subagent-roster-activity'
 
 export type NativeChatTranscriptActivitySeed = {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import type { NativeChatOlderPageResult } from './native-chat-pagination'
+import type { NativeChatOlderPageResult } from './viewport/history/native-chat-pagination'
 
 const INITIAL_LIMIT = 40
 const PAGE_LIMIT = 60
@@ -167,17 +167,26 @@ export function useNativeChatSubagentPage(
     }
   }, [agentId])
 
-  if (!readPage || !agentId || !page || page.agentId !== agentId) {
+  if (!readPage || !agentId) {
     return {
       messages: null,
-      loading: Boolean(readPage && agentId),
+      loading: false,
+      hasMore: false,
+      loadingEarlier: false,
+      loadEarlier
+    }
+  }
+  if (!page || page.agentId !== agentId) {
+    return {
+      messages: [],
+      loading: true,
       hasMore: false,
       loadingEarlier: false,
       loadEarlier
     }
   }
   return {
-    messages: page.loading ? null : page.messages,
+    messages: page.messages,
     loading: page.loading,
     hasMore: page.hasMore,
     loadingEarlier: page.loadingEarlier,

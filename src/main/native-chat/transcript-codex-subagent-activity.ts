@@ -2,7 +2,8 @@ import type {
   NativeChatMessage,
   NativeChatSubagentState
 } from '../../shared/native-chat/native-chat-types'
-import { asRecord, extractString } from '../ai-vault/session-scanner-values'
+import { asRecord } from '../ai-vault/parsing/session-record-fields'
+import { extractString } from '../../shared/text/trimmed-string'
 
 function pathLabel(agentPath: string): string {
   let label = agentPath

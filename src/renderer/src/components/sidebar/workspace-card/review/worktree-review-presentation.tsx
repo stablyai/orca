@@ -4,11 +4,15 @@ import {
 } from '../../../../../../shared/source-control/checks/provider-check-summary'
 import { createElement } from 'react'
 import { GitMerge } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getReviewStateIcon } from '@/components/github/review-state-presentation'
 import '../activity/worktree-card-empty-inputs'
 import { PullRequestIcon } from '../identity/worktree-card-glyphs'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+
+// Last-known review data; the marker lets offscreen rows drop it so reveal re-anchors its shared clock.
+export const STALE_REVIEW_SHIMMER =
+  'stale-review-shimmer shimmer shimmer-duration-2400 shimmer-steps-30'
 
 export function getReviewLabel(review: WorktreeCardPrDisplay): 'MR' | 'PR' {
   return review.provider === 'gitlab' ? 'MR' : 'PR'

@@ -2,7 +2,7 @@ import { createContext, useContext, type ReactNode } from 'react'
 import {
   NativeChatDisclosureContext,
   useNativeChatDisclosures
-} from './native-chat-disclosure-store'
+} from './messages/disclosure/native-chat-disclosure-store'
 
 const NativeChatOpenSubagentContext = createContext<((agentId: string) => void) | null>(null)
 

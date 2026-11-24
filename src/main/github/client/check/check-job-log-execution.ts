@@ -1,7 +1,7 @@
-import { normalizeGhAccountBinding } from '../../../../shared/github/account-binding'
+import { normalizeGhAccountBinding } from '../../../../shared/github/accounts/account-binding'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
-import { githubReadExecutionScope } from '../../github-read-execution-scope'
-import type { GitHubApiRepository } from '../../github-api-repository'
+import { codeHostReadExecutionScope as githubReadExecutionScope } from '../../../source-control/code-host-read-execution-scope'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import type { GhExecOptions } from '../github-exec-scope'
 
 function reusableHost(host: string): 'cloud' | 'enterprise' | null {
