@@ -9,7 +9,8 @@ export type SharedBotHostLink = SharedHostLink
 export const SHARED_HOSTS_HOLD_WHILE_AWAY: boolean = false
 
 /** A held message as Orca Cloud last reported it: waiting for the host, in its journal, or refused. */
-export type SharedBotHeldState = 'waiting' | 'delivered' | 'not_sent'
+export const SHARED_BOT_HELD_STATES = ['waiting', 'delivered', 'not_sent'] as const
+export type SharedBotHeldState = (typeof SHARED_BOT_HELD_STATES)[number]
 
 export type SharedBotHeldView = {
   clientMessageId: string

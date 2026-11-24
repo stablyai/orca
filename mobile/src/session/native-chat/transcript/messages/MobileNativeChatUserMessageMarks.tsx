@@ -1,6 +1,7 @@
 // The desktop's marks on a person's message: for one Orca delivered from Slack, GitHub, Linear or
 // Discord, the "Sam Lee · Slack" tag and the folded lines from people without access; for one another
 // person typed on their paired computer, "Sam Lee · Sam's MacBook Pro"; "Sent as goal".
+import { MobileNativeChatMessageDelivery } from '../notices/MobileNativeChatDeliveryNotice'
 import { useState } from 'react'
 import { Pressable, Text, View, type StyleProp, type TextStyle } from 'react-native'
 import { ChevronRight, Goal } from 'lucide-react-native'
@@ -193,6 +194,7 @@ export function MobileNativeChatUserMessageNotes({
   return (
     <>
       <MobileSlackMirrorPostLine messageId={message.id} />
+      <MobileNativeChatMessageDelivery messageId={message.id} />
       {message.sentAs === 'goal' ? <MobileNativeChatSentAsGoal /> : null}
       {message.automationResultsCarried ? (
         <MobileNativeChatAutomationResultsCarried count={message.automationResultsCarried} />

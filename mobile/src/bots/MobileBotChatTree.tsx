@@ -1,8 +1,7 @@
 // Activity's Chats on the phone: the desktop's tree, each chat with its workers one level down.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronDown, CircleX } from 'lucide-react-native'
-import { AGENT_FAILURE_COLOR, AgentStateDot } from '../agents/presentation/AgentStateDot'
+import { ChevronDown } from 'lucide-react-native'
 import { DisclosureChevron } from '../components/list/DisclosureChevron'
 import { MobileSearchField } from '../components/controls/MobileSearchField'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
@@ -31,7 +30,6 @@ import {
   type BotChatSearchHit,
   type BotChatTreeShown
 } from '../../../src/shared/bots/bot-chat-tree-view'
-import { formatNativeChatDuration } from '../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import { setBotChatFold, useBotChatFold } from './bot-chat-fold-store'
 import {
   createBotChatSearchHook,
@@ -41,8 +39,14 @@ import { MobileBotTextButton } from './MobileBotTextButton'
 import { ChatLeading, useMobileBotChatLabel } from './MobileBotChatLeading'
 import { MobileBotChatSearchNotes } from './MobileBotChatSearchNotes'
 import { MobileBotChatMenu } from './MobileBotChatDelete'
+import { MobileBotWorkerRow, type TreeBot } from './MobileBotWorkerRow'
 
 const useBotChatSearch = createBotChatSearchHook({ useCallback, useEffect, useMemo, useState })
+
+/** What a chat's row says in place of its line and time: a message of theirs held for its host. */
+export type BotChatTreeNote = (
+  chat: BotChatTreeChat
+) => { line: string; aside: React.ReactNode } | null
 
 export type BotChatTreeActions = {
   openChat: (chat: BotChatTreeChat) => void
@@ -50,8 +54,6 @@ export type BotChatTreeActions = {
   /** Asks, then deletes the chat; absent where the host can't. */
   deleteChat?: (chat: BotChatTreeChat) => void
 }
-
-type TreeBot = { id: string; name: string }
 
 function useChatLine(bot: TreeBot, chat: BotChatTreeChat, folded: boolean): string {
   const t = useMobileTranslation()
@@ -77,74 +79,6 @@ function useChatLine(bot: TreeBot, chat: BotChatTreeChat, folded: boolean): stri
     .join(' · ')
 }
 
-function WorkerIcon({ state }: { state: BotChatTreeWorker['state'] }) {
-  switch (state) {
-    case 'running':
-    case 'asking-bot':
-      return <AgentStateDot state="working" />
-    case 'unreachable':
-      return <AgentStateDot state="unverifiable" />
-    case 'needs-you':
-      return <AgentStateDot state="permission" decorative />
-    case 'done':
-      return <AgentStateDot state="done" />
-    case 'failed':
-      return <CircleX size={13} color={AGENT_FAILURE_COLOR} />
-  }
-}
-
-/** A worker's row, as a chat lists it and an item's Links list it (`nested: false`). */
-export function MobileBotWorkerRow({
-  bot,
-  worker,
-  onOpen,
-  onLongPress,
-  nested = true
-}: {
-  bot: TreeBot
-  worker: BotChatTreeWorker
-  onOpen: (() => void) | undefined
-  onLongPress?: () => void
-  nested?: boolean
-}) {
-  const t = useMobileTranslation()
-  const counting = worker.state === 'running'
-  const now = useNow(1_000, counting)
-  const end = counting ? now : worker.settledAt
-  const value =
-    worker.state === 'needs-you'
-      ? t('bots.chats.needsYou', 'Needs you')
-      : worker.state === 'asking-bot'
-        ? t('bots.chats.askingBot', 'Asking {{name}}', { name: bot.name })
-        : worker.state === 'unreachable'
-          ? t('bots.chats.statusUnknown', 'Status unknown')
-          : end === undefined
-            ? undefined
-            : formatNativeChatDuration(Math.max(0, (end - worker.startedAt) / 1000))
-  const note =
-    worker.note === 'handed-over'
-      ? t('bots.chats.handedOver', 'Handed over')
-      : worker.note === 'from-closed-chat'
-        ? t('bots.chats.fromClosedChat', 'From closed chat')
-        : worker.note === 'automation-terminal'
-          ? t('bots.chats.automationTerminal', 'Automation run · terminal')
-          : null
-  const line2 = [note, worker.branch].filter(Boolean).join(' · ')
-  return (
-    <View style={nested ? styles.nested : undefined}>
-      <ListRow
-        title={worker.title || t('bots.chats.untitledWorker', 'Worker')}
-        subtitle={line2 || undefined}
-        leading={<WorkerIcon state={worker.state} />}
-        value={value}
-        onPress={onOpen}
-        onLongPress={onLongPress}
-        disabled={!onOpen}
-      />
-    </View>
-  )
-}
-
 function StepLink({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <View style={styles.step}>
@@ -159,7 +93,8 @@ function ChatGroup({
   chat,
   matches,
   loadMore,
-  actions
+  actions,
+  note
 }: {
   bot: TreeBot
   hostKey: string
@@ -167,6 +102,7 @@ function ChatGroup({
   matches: ReadonlySet<string> | null
   loadMore: (chatId: string) => void
   actions: BotChatTreeActions
+  note: ReturnType<BotChatTreeNote>
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -212,12 +148,15 @@ function ChatGroup({
         {(onLongPress) => (
           <ListRow
             title={title}
-            subtitle={line || undefined}
+            subtitle={note?.line ?? (line || undefined)}
             leading={<ChatLeading chat={chat} />}
             strong={chat.unread}
-            value={chat.lastActiveAt > 0 ? formatTimeAgo(chat.lastActiveAt, now) : undefined}
+            value={
+              !note && chat.lastActiveAt > 0 ? formatTimeAgo(chat.lastActiveAt, now) : undefined
+            }
             accessory={
               <>
+                {note?.aside}
                 {chat.unseen ? (
                   <Text style={styles.newTag}>{t('bots.chats.newTag', 'New')}</Text>
                 ) : null}
@@ -312,7 +251,9 @@ export function MobileBotChatTree({
   chats: treeChats,
   loadMore,
   search,
-  actions
+  actions,
+  heading,
+  note
 }: {
   bot: TreeBot
   /** The phone's key for the bot's host; folds are kept under it. */
@@ -323,6 +264,9 @@ export function MobileBotChatTree({
   /** Asks the bot's host to search every chat and worker. */
   search: BotChatSearchAsk
   actions: BotChatTreeActions
+  /** In place of Chats and its count, with no search: a list of only someone's own chats. */
+  heading?: string
+  note?: BotChatTreeNote
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -344,15 +288,16 @@ export function MobileBotChatTree({
       matches={matches}
       loadMore={loadMore}
       actions={actions}
+      note={note?.(chat) ?? null}
     />
   )
   return (
     <View>
       <SectionHeader
-        title={t('bots.chats.title', 'Chats')}
-        trailing={<Text style={styles.count}>{chats.length}</Text>}
+        title={heading ?? t('bots.chats.title', 'Chats')}
+        trailing={heading ? undefined : <Text style={styles.count}>{chats.length}</Text>}
       />
-      {view.onlyHome ? null : (
+      {view.onlyHome || heading ? null : (
         <MobileSearchField
           value={query}
           onChangeText={setQuery}
@@ -397,8 +342,6 @@ export function MobileBotChatTree({
 }
 
 const styles = themedStyleSheet(() => ({
-  // Indent only, no guide line: a worker sits one step under its chat.
-  nested: { paddingLeft: spacing.xl },
   step: { paddingLeft: spacing.xl + spacing.md, paddingVertical: 2 },
   count: { fontSize: 13, color: colors.textMuted },
   search: { marginBottom: spacing.sm },

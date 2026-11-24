@@ -6,7 +6,8 @@ import { hostConnectionEpoch } from '../../query/host-status-query'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { HostWorktreeInfo } from '../../worktree/catalog/home-worktree-info'
-import { homeBotRows } from './home-bot-rows'
+import { compareHomeBotRows, homeBotRows } from './home-bot-rows'
+import { useHomeSharedAgentRows } from './use-home-shared-agent-rows'
 import { homeBotsQuery, type HomeComputerBots } from './home-bots-query'
 import type { KeptComputerBots } from '../../bots/kept-computer-bots'
 import {
@@ -109,5 +110,14 @@ export function useHomeBots(args: {
       }
     }
   }, [subscribed, fresh, reads, hydrated, bots.activityByHost])
-  return { bots, botsByHost: reads }
+  // Agents shared with a computer's account list among its own, by the same order.
+  const shared = useHomeSharedAgentRows(homeHosts, hostStates)
+  const listed = useMemo(
+    () =>
+      shared.length === 0
+        ? bots
+        : { ...bots, rows: [...bots.rows, ...shared].sort(compareHomeBotRows) },
+    [bots, shared]
+  )
+  return { bots: listed, botsByHost: reads }
 }

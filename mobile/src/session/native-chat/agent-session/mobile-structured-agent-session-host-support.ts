@@ -42,6 +42,9 @@ import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../../../src/shared/s
 import { AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/lifecycle/stopping/agent-session-continue-interrupted-capability'
 
 export type StructuredAgentSessionHostSupport = {
+  /** A shared agent's host takes a send with no fence, and needs no read first while it is away
+   *  (the phone holds the send for it then), as the desktop's do. */
+  sendsWithoutFence?: boolean
   commandsOnRequest?: boolean
   coherentModelCatalog?: boolean
   modelEffortDiscovery?: boolean

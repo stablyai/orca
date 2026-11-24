@@ -162,7 +162,7 @@ export function MobileWebShellScreen({
     readWorkspaceKey
   } = usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
   // Create the media registry before the bridge; staged files belong to this page session.
-  const serveDeviceVerb = useNativeDeviceVerbs(readySessionId)
+  const serveDeviceVerb = useNativeDeviceVerbs(readySessionId, hostId)
   const servePdfView = useNativePdfViewer(hostId, readySessionId)
   const serveImageAction = useNativeImageActions(readySessionId)
   // Read the shell's storage for this host.

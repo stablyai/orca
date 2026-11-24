@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react'
+import { Users } from 'lucide-react-native'
 import { botsOfflineWord } from '../../bots/host-bot-listing'
 import { botHomeWorktreeId } from '../../bots/host-bots-read'
 import { mobileBotRowLimitText } from '../../bots/mobile-bot-row-line'
@@ -50,7 +51,9 @@ export const MobileHomeBotRow = memo(function MobileHomeBotRow(props: {
   return (
     <MobileBotRowView
       avatar={
-        row.kind === 'bot' ? (
+        row.kind === 'shared' ? (
+          <MobileBotRowAvatar avatar={row.avatar} dot={row.dot} surface={surface} />
+        ) : row.kind === 'bot' ? (
           <MobileBotRowAvatar
             avatar={mobileBotAvatarSource(row.bot)}
             dot={row.dot}
@@ -68,17 +71,25 @@ export const MobileHomeBotRow = memo(function MobileHomeBotRow(props: {
       unread={row.unread}
       preview={limitText ?? row.preview}
       previewLeading={
-        <HostContextPill
-          hostId={row.executionHost}
-          label={row.hostLabel}
-          healthLabel={row.offline ? botsOfflineWord() : undefined}
-        />
+        row.kind === 'shared' ? null : (
+          <HostContextPill
+            hostId={row.executionHost}
+            label={row.hostLabel}
+            healthLabel={row.offline ? botsOfflineWord() : undefined}
+          />
+        )
       }
       age={row.age}
       dimmed={row.offline === true || (row.kind === 'bot' && row.bot.paused)}
       divider={props.divider}
       onPress={() => props.onOpen(row)}
-      titleTrailing={row.needsYou > 0 ? <MobileBotNeedsYouCount count={row.needsYou} /> : null}
+      titleTrailing={
+        row.kind === 'shared' ? (
+          <Users size={14} color={colors.textSecondary} accessibilityLabel={row.preview} />
+        ) : row.needsYou > 0 ? (
+          <MobileBotNeedsYouCount count={row.needsYou} />
+        ) : null
+      }
     />
   )
 })

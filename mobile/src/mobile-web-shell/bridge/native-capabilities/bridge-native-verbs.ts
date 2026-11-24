@@ -20,6 +20,11 @@ import {
 import { imageParamsSchema, imageResultSchema } from './bridge-image-verbs'
 import { BRIDGE_SPEECH_VERB, speechParamsSchema, speechResultSchema } from './bridge-speech-verbs'
 import { BRIDGE_STORE_VERB, storeParamsSchema, storeResultSchema } from './bridge-store-verb'
+import {
+  BRIDGE_SHARED_AGENTS_VERB,
+  sharedAgentsParamsSchema,
+  sharedAgentsResultSchema
+} from './bridge-shared-agents-verb'
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../../page-storage/page-storage-keys'
 import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../../files/media/mobile-file-media'
 import { BRIDGE_MAX_EXTERNAL_LINK_CHARS } from '../protocol/bridge-caps'
@@ -44,7 +49,8 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   BRIDGE_SPEECH_VERB,
   BRIDGE_STORE_VERB,
   'native.a11y.announce',
-  'native.link.open'
+  'native.link.open',
+  BRIDGE_SHARED_AGENTS_VERB
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -172,6 +178,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.link.open': {
     params: linkOpenParamsSchema,
     result: linkOpenResultSchema
+  },
+  [BRIDGE_SHARED_AGENTS_VERB]: {
+    params: sharedAgentsParamsSchema,
+    result: sharedAgentsResultSchema
   }
 }
 

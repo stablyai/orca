@@ -20,7 +20,8 @@ import type { MobileNativeChatSendErrorReporter } from '../composer/delivery/use
 export async function sendMobileStructuredAgentSessionMessage(input: {
   client: RpcClient
   sessionId: string
-  expectedRuntimeFence: number
+  /** Null only for a host that takes no fence (`sendsWithoutFence`). */
+  expectedRuntimeFence: number | null
   text: string
   attachments: readonly StructuredAgentSessionAttachment[]
   /** Sent only when the host advertises `agent-session.send-skills.v1`. */

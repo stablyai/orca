@@ -2,6 +2,7 @@
 // phone's key, and held in Orca Cloud with its share credential. Their states come from Orca Cloud's
 // read of that share's held messages; a refused one can be sent again.
 import nacl from 'tweetnacl'
+import { z } from 'zod'
 import { sealBotTeamShareHeldMessage } from '../../../../src/shared/bots/bot-team-share-seal'
 import {
   sendsHeldTo,
@@ -9,10 +10,12 @@ import {
   sharedBotHeldChatId,
   type SharedBotHeldChat
 } from '../../../../src/shared/bots/shared-bot-held-routing'
-import type {
-  SharedBotHeldState,
-  SharedBotHeldView
+import {
+  newSharedBotChatId,
+  type SharedBotHeldState,
+  type SharedBotHeldView
 } from '../../../../src/shared/bots/shared-bot-hosts'
+import type { RpcResponse } from '../../../../src/shared/remote-runtime/rpc/rpc-response-shape'
 import { MAX_HELD_MESSAGE_CHARS } from '../../../../src/shared/connector-share-contract'
 import type { SharedHostLink } from '../../../../src/shared/remote-runtime/relay/client/shared-host-relay-link'
 import { SendParams } from '../../../../src/shared/rpc-contract/structured-agent-session/structured-agent-session-params'
@@ -30,6 +33,10 @@ export const HELD_WAIT_MS = 24 * 60 * 60 * 1000
 
 /** `unshared`: Orca Cloud knows no such share for this credential any more (revoked). */
 export type HoldResult = 'held' | 'too-large' | 'unshared' | 'failed'
+
+// A new chat started live under the id its held messages name, and the session the host gave it.
+const NewChatParams = z.looseObject({ newChatId: z.string() })
+const StartedSession = z.looseObject({ sessionId: z.string() })
 
 export class PhoneSharedAgentHeld {
   private states = new Map<string, SharedBotHeldState>()
@@ -72,10 +79,55 @@ export class PhoneSharedAgentHeld {
     return { chat: sharedBotHeldChat(sessionId), clientMessageId, text: texts.join('\n\n') }
   }
 
+  /**
+   * A new chat started while the host is away: a placeholder until its first held message starts it
+   * there. A start naming a placeholder is its swap to the real chat, which only the host answers.
+   */
+  startHere(link: SharedHostLink, method: string, params: unknown): RpcResponse | null {
+    if (
+      method !== 'bots.session.start' ||
+      link === 'live' ||
+      NewChatParams.safeParse(params).success
+    ) {
+      return null
+    }
+    return { id: method, ok: true, result: { sessionId: newSharedBotChatId(randomV4Uuid()) } }
+  }
+
+  /** A live answer this owner learns from: the host started a new chat under its placeholder's id,
+   *  so that chat's held messages land there and its later ones wait behind them. */
+  noteAnswer(
+    entry: PhoneSharedAgent,
+    method: string,
+    params: unknown,
+    response: RpcResponse
+  ): void {
+    const newChat = method === 'bots.session.start' ? NewChatParams.safeParse(params).data : null
+    const started = response.ok ? StartedSession.safeParse(response.result).data : undefined
+    const current = this.deps.store.get(entry.shareId) ?? entry
+    if (
+      !newChat ||
+      !started ||
+      !current.held.some((held) => sharedBotHeldChatId(held) === newChat.newChatId)
+    ) {
+      return
+    }
+    this.deps.store.put({
+      ...current,
+      held: current.held.map((held) =>
+        sharedBotHeldChatId(held) === newChat.newChatId
+          ? { ...held, startedAs: started.sessionId }
+          : held
+      )
+    })
+    this.deps.changed()
+  }
+
   async hold(
     entry: PhoneSharedAgent,
     message: { chat: SharedBotHeldChat; clientMessageId: string; text: string },
-    replaces?: string
+    replaces?: string,
+    startedAs?: string
   ): Promise<HoldResult> {
     const sentAt = this.deps.now()
     const secretKey = PRIMITIVES.decodeBase64(entry.deviceKey.secretKeyB64)
@@ -106,7 +158,7 @@ export class PhoneSharedAgentHeld {
       return answer.status === 404 ? 'unshared' : 'failed'
     }
     const current = this.deps.store.get(entry.shareId) ?? entry
-    const held: Held = { ...message, sentAt }
+    const held: Held = { ...message, sentAt, ...(startedAs ? { startedAs } : {}) }
     this.deps.store.put({
       ...current,
       held: [...current.held.filter((kept) => kept.clientMessageId !== replaces), held]
@@ -126,7 +178,7 @@ export class PhoneSharedAgentHeld {
       return false
     }
     const message = { chat: refused.chat, clientMessageId: randomV4Uuid(), text: refused.text }
-    return (await this.hold(entry, message, clientMessageId)) === 'held'
+    return (await this.hold(entry, message, clientMessageId, refused.startedAs)) === 'held'
   }
 
   /**

@@ -1,4 +1,5 @@
 import { agentSessionInteractionCommand } from '../../../../../../src/shared/agent-session/options/permissions/agent-session-interaction-mode'
+import type { StructuredAgentSessionHostSupport } from '../../agent-session/mobile-structured-agent-session-host-support'
 import { selectAgentSessionCurrentRequests } from '../../../../../../src/shared/agent-session/requests/agent-session-current-requests'
 import { useCallback } from 'react'
 import { runningStructuredAgentSessionTurnId } from '../../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
@@ -81,7 +82,7 @@ export function useMobileStructuredSendWithOutcome(args: {
   sendSelection?: () => Pick<StructuredAgentSessionSendControl, 'options' | 'selection'>
   sendOptions?: () => Readonly<Record<string, string>> | undefined
   // An older host refuses a send body carrying `skills`; there the `$name` text stands alone.
-  takesSkills?: boolean
+  hostSupport?: Pick<StructuredAgentSessionHostSupport, 'sendSkills' | 'sendsWithoutFence'> | null
 }): (
   text: string,
   images?: string[],
@@ -113,8 +114,10 @@ export function useMobileStructuredSendWithOutcome(args: {
     sessionId,
     stateRef,
     stopping,
-    takesSkills
+    hostSupport
   } = args
+  const takesSkills = hostSupport?.sendSkills === true
+  const fenceless = hostSupport?.sendsWithoutFence === true
   return useCallback(
     async (
       text: string,
@@ -125,7 +128,7 @@ export function useMobileStructuredSendWithOutcome(args: {
       intent?: MobileNativeChatSendIntent
     ): Promise<MobileNativeChatSendOutcome> => {
       const currentFence = stateRef.current.fence
-      if (!client || !sessionId || !enabled || currentFence === null) {
+      if (!client || !sessionId || !enabled || (currentFence === null && !fenceless)) {
         onSendError('Message not sent (disconnected)')
         return 'rejected'
       }
@@ -161,42 +164,44 @@ export function useMobileStructuredSendWithOutcome(args: {
       const pickedModeSkill =
         agentSessionInteractionCommand(agent ?? '', messageText) !== null &&
         pickedSkills?.some((skill) => messageText.trimEnd() === `/${skill.name}`)
-      const commandOutcome = pickedModeSkill
-        ? null
-        : await dispatchMobileStructuredCommand({
-            text: messageText,
-            hasAttachments,
-            client,
-            sessionId,
-            fence: currentFence,
-            pending: commandPending,
-            controller: { agent: agent ?? undefined, ...controller, sessionCommands },
-            agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined,
-            holds: () => {
-              const state = stateRef.current
-              const turnId = runningStructuredAgentSessionTurnId(state)
-              const tasks = structuredSessionBackgroundTasksView(state.backgroundTasks, turnId)
-              return {
-                working: mobileStructuredAgentSessionWorking(state) || queueSendsNext,
-                prompt: Boolean(
-                  actionableStructuredApproval(state) || actionableStructuredQuestion(state)
+      // A command needs the chat's fence; without one (its host away) the words go as a message.
+      const commandOutcome =
+        pickedModeSkill || currentFence === null
+          ? null
+          : await dispatchMobileStructuredCommand({
+              text: messageText,
+              hasAttachments,
+              client,
+              sessionId,
+              fence: currentFence,
+              pending: commandPending,
+              controller: { agent: agent ?? undefined, ...controller, sessionCommands },
+              agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined,
+              holds: () => {
+                const state = stateRef.current
+                const turnId = runningStructuredAgentSessionTurnId(state)
+                const tasks = structuredSessionBackgroundTasksView(state.backgroundTasks, turnId)
+                return {
+                  working: mobileStructuredAgentSessionWorking(state) || queueSendsNext,
+                  prompt: Boolean(
+                    actionableStructuredApproval(state) || actionableStructuredQuestion(state)
+                  ),
+                  background: tasks.show || tasks.isMonitoring,
+                  backgroundTasksRunning: tasks.isMonitoring,
+                  sending: sendsOut.sending()
+                }
+              },
+              startFailures: () => agentSessionVisibleFailureFacts(stateRef.current.items),
+              waitsInLine: (command) =>
+                command === 'compact' &&
+                commandsWait &&
+                !pendingPromptsAllUnanswerableHere(
+                  selectAgentSessionCurrentRequests(stateRef.current)
                 ),
-                background: tasks.show || tasks.isMonitoring,
-                backgroundTasksRunning: tasks.isMonitoring,
-                sending: sendsOut.sending()
-              }
-            },
-            startFailures: () => agentSessionVisibleFailureFacts(stateRef.current.items),
-            waitsInLine: (command) =>
-              command === 'compact' &&
-              commandsWait &&
-              !pendingPromptsAllUnanswerableHere(
-                selectAgentSessionCurrentRequests(stateRef.current)
-              ),
-            onError: onSendError,
-            onClearSent,
-            timeoutMs
-          })
+              onError: onSendError,
+              onClearSent,
+              timeoutMs
+            })
       if (commandOutcome !== null) {
         return commandOutcome
       }
@@ -291,7 +296,8 @@ export function useMobileStructuredSendWithOutcome(args: {
       sessionId,
       stateRef,
       stopping,
-      takesSkills
+      takesSkills,
+      fenceless
     ]
   )
 }

@@ -5,12 +5,13 @@
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
 import type { RpcEnvelopeFields } from '../../transport/rpc/rpc-envelope-fields'
+import { SHARED_AGENTS_WATCH_METHOD } from '../../mobile-web-shell/bridge/native-capabilities/bridge-shared-agents-verb'
 import type { PhoneSharedAgent } from './phone-shared-agent-store'
 import { phoneSharedAgents, type PhoneSharedAgents } from './phone-shared-agents'
 
 const RUNTIME_PREFIX = 'runtime:'
 
-type Agents = Pick<PhoneSharedAgents, 'ready' | 'loaded' | 'find' | 'call' | 'subscribe'>
+type Agents = Pick<PhoneSharedAgents, 'ready' | 'loaded' | 'find' | 'call' | 'subscribe' | 'watch'>
 
 function runtimeTarget(envelope: RpcEnvelopeFields | undefined): string | null {
   const target = envelope?.executionHost
@@ -91,6 +92,9 @@ export function routeSharedAgentCalls(
         : await client.sendRequest(method, params, options)
     },
     subscribe: (method, params, onData, options) => {
+      if (method === SHARED_AGENTS_WATCH_METHOD) {
+        return agents.watch(pairedHostId, (hosts) => onData({ hosts }))
+      }
       const open = () => {
         const agent = sharedAgentOf(agents, pairedHostId, options?.envelope)
         return agent
@@ -124,7 +128,8 @@ export function sharedAgentBridgeRoutes(client: RpcClient, pairedHostId: string)
   const agents = phoneSharedAgents()
   return {
     client: routeSharedAgentCalls(client, pairedHostId, agents),
-    bypassesVerdict: (message: { envelope?: RpcEnvelopeFields }) =>
+    bypassesVerdict: (message: { method: string; envelope?: RpcEnvelopeFields }) =>
+      message.method === SHARED_AGENTS_WATCH_METHOD ||
       namesPhoneSharedAgent(agents, pairedHostId, message.envelope),
     // Loaded before the page's first frame where it can be; one that waited for it leaves then.
     bypassesVerdictSettled: agents.ready()

@@ -66,6 +66,14 @@ export type HomeBotRow =
       line: BotRowLine | null
     })
   | (HomeRowBase & {
+      /** An agent shared with the computer's account, reached over this phone's own link. */
+      kind: 'shared'
+      environmentId: string
+      avatar: MobileBotAvatarSource
+      /** Grey while its owner's computer is away; none while it is reached. */
+      dot: BotRowStatus | null
+    })
+  | (HomeRowBase & {
       kind: 'group'
       group: BotGroup
       faces: readonly { id: string; name: string; avatar: MobileBotAvatarSource }[]

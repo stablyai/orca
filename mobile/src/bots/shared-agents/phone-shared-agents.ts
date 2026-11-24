@@ -190,6 +190,10 @@ export class PhoneSharedAgents {
 
   async call(entry: PhoneSharedAgent, method: string, params: unknown): Promise<RpcResponse> {
     const link = await this.reach(entry)
+    const here = this.held.startHere(link, method, params)
+    if (here) {
+      return here
+    }
     if (method === 'agentSession.send') {
       const held = await this.sendHeld(entry, link, params)
       if (held) {
@@ -200,7 +204,9 @@ export class PhoneSharedAgents {
       return this.offline(entry, method)
     }
     try {
-      return await this.linkFor(entry).request(method, params)
+      const response = await this.linkFor(entry).request(method, params)
+      this.held.noteAnswer(entry, method, params, response)
+      return response
     } catch {
       return this.offline(entry, method)
     }
@@ -227,6 +233,26 @@ export class PhoneSharedAgents {
     return () => {
       released = true
       stop?.()
+    }
+  }
+
+  /** The computer's shared agents as `views` reads them, now and on each change that alters them. */
+  watch(pairedHostId: string, onViews: (views: SharedBotHostView[]) => void): () => void {
+    let last: string | null = null
+    const emit = () => {
+      const views = this.views(pairedHostId)
+      const seen = JSON.stringify(views)
+      if (seen !== last) {
+        last = seen
+        onViews(views)
+      }
+    }
+    let stopped = false
+    const stop = this.onChanged(emit)
+    void this.ready().then(() => !stopped && emit())
+    return () => {
+      stopped = true
+      stop()
     }
   }
 

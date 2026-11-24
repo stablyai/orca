@@ -26,6 +26,7 @@ import {
   sealBotTeamShareOffer
 } from '../../../../src/shared/bots/bot-team-share-seal'
 import {
+  isSharedBotNewChatId,
   SHARED_BOT_HOST_ERRORS,
   SHARED_HOSTS_HOLD_WHILE_AWAY
 } from '../../../../src/shared/bots/shared-bot-hosts'
@@ -37,7 +38,10 @@ import { hashRelayCredential } from '../../../../src/shared/remote-runtime/relay
 import type { RpcResponse } from '../../../../src/shared/remote-runtime/rpc/rpc-response-shape'
 import { MOBILE_PAIRED_E2EE_PRIMITIVES as PRIMITIVES } from '../../transport/encryption/mobile-paired-e2ee-primitives'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { HELD_WAIT_MS } from './phone-shared-agent-held'
+import { HELD_WAIT_MS, PhoneSharedAgentHeld } from './phone-shared-agent-held'
+import { PhoneSharedAgentStore } from './phone-shared-agent-store'
+import { sendMobileStructuredAgentSessionMessage } from '../../session/native-chat/agent-session/mobile-structured-agent-session-send'
+import { scopeRpcClientToExecutionHost } from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import { PhoneSharedAgents } from './phone-shared-agents'
 import { namesPhoneSharedAgent, routeSharedAgentCalls } from './shared-agent-call-routing'
 import {
@@ -291,5 +295,60 @@ describe('a page frame before the phone’s shared agents are loaded', () => {
     // The paired server's frame still waits for the computer's verdict.
     hold.releaseBypassing((message) => sent.push(message.id))
     expect(sent).toEqual(['shared'])
+  })
+})
+
+describe('a new chat while the shared agent’s host is away', () => {
+  it('starts as a placeholder whose sends read as sent and wait, then moves to the chat its host starts', async () => {
+    const agents = new PhoneSharedAgents(() => 1_000)
+    const desktop = computer()
+    cloud()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only sendRequest and subscribe of the computer's client.
+    const page = routeSharedAgentCalls(desktop.client as unknown as RpcClient, 'computer-1', agents)
+    await agents.syncComputer('computer-1', desktop.client)
+    const shown: string[][] = []
+    const stop = agents.watch('computer-1', (views) =>
+      shown.push(views.flatMap((view) => view.held.map((held) => held.state)))
+    )
+
+    const started = await page.sendRequest('bots.session.start', { botId: 'bot-1' }, SHARED)
+    const placeholder = started.ok
+      ? z.object({ sessionId: z.string() }).parse(started.result).sessionId
+      : ''
+    expect(isSharedBotNewChatId(placeholder)).toBe(true)
+    const errors: string[] = []
+    const outcome = await sendMobileStructuredAgentSessionMessage({
+      client: scopeRpcClientToExecutionHost(page, 'runtime:env-1'),
+      sessionId: placeholder,
+      // A shared agent's host takes no fence, as the chat sends while it is away.
+      expectedRuntimeFence: null,
+      text: 'Also check it on Android.',
+      attachments: [],
+      clientMessageId: 'm1',
+      onError: (message) => errors.push(message)
+    })
+    expect({ outcome, errors }).toEqual({ outcome: 'accepted', errors: [] })
+    expect(desktop.desktopCalls).toEqual([])
+    const [view] = agents.views('computer-1')
+    expect(view?.held).toMatchObject([{ sessionId: placeholder, state: 'waiting' }])
+    // Drawn once with nothing held and once with it waiting; a change that alters nothing draws nothing.
+    await agents.refreshHeld([])
+    expect(shown).toEqual([[], ['waiting']])
+    stop()
+
+    // The host, back, starts the chat for the placeholder: its held message lands there.
+    await vi.waitFor(() => expect([...appStorage.values()].join('')).toContain('m1'))
+    const store = new PhoneSharedAgentStore()
+    await store.load()
+    const held = new PhoneSharedAgentHeld({ store, now: () => 1_000, changed: () => {} })
+    held.noteAnswer(
+      store.get('share-1')!,
+      'bots.session.start',
+      { botId: 'bot-1', newChatId: placeholder },
+      { id: 'x', ok: true, result: { sessionId: 'chat-9' } }
+    )
+    expect(held.views(store.get('share-1')!).map((message) => message.sessionId)).toEqual([
+      'chat-9'
+    ])
   })
 })

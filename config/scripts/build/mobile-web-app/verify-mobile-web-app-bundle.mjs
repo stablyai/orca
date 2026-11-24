@@ -44,9 +44,9 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 // budget holds only files outfitSheetsOnDemand proves are fetched when used, and any that the document
 // names count as eager. The phone shell still downloads each on-demand file to disk once per bundle
 // update (shellDownloadedAssets), so this budget also bounds that download.
-// Eager: main's own fence. 10.9375 MiB since main reached 11,435,308 bytes with the phone's connector
-// account actions still to land (2026-11-23).
-export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 10.9375 * 1024 * 1024
+// Eager: main's own fence. 10.96875 MiB since the shared-agent pages took the page to 11,480,958
+// bytes (2026-11-24).
+export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 10.96875 * 1024 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES = 1024 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES = 128 * 1024
 
@@ -127,20 +127,22 @@ export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./h/[hostId]/[...page].tsx', 6],
   ['./h/[hostId]/accounts.tsx', 7],
   ['./h/[hostId]/agent-history/[worktreeId].tsx', 9],
-  ['./h/[hostId]/automations.tsx', 13],
-  ['./h/[hostId]/edit.tsx', 14],
-  ['./h/[hostId]/files/[worktreeId].tsx', 18],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 22],
-  ['./h/[hostId]/group/[groupId].tsx', 29],
-  ['./h/[hostId]/history/[worktreeId].tsx', 30],
-  ['./h/[hostId]/index.tsx', 38],
-  ['./h/[hostId]/new-workspace.tsx', 43],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 44],
-  ['./h/[hostId]/review/[worktreeId].tsx', 54],
-  ['./h/[hostId]/session/[worktreeId].tsx', 77],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 79],
-  ['./h/[hostId]/tasks.tsx', 86],
-  ['./h/_layout.tsx', 90]
+  ['./h/[hostId]/automations.tsx', 12],
+  ['./h/[hostId]/edit.tsx', 13],
+  ['./h/[hostId]/files/[worktreeId].tsx', 17],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 23],
+  ['./h/[hostId]/group/[groupId].tsx', 30],
+  ['./h/[hostId]/history/[worktreeId].tsx', 31],
+  ['./h/[hostId]/index.tsx', 40],
+  ['./h/[hostId]/new-workspace.tsx', 48],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 49],
+  ['./h/[hostId]/review/[worktreeId].tsx', 59],
+  ['./h/[hostId]/session/[worktreeId].tsx', 81],
+  ['./h/[hostId]/shared/[environmentId]/[sessionId].tsx', 88],
+  ['./h/[hostId]/shared/[environmentId]/index.tsx', 86],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 88],
+  ['./h/[hostId]/tasks.tsx', 93],
+  ['./h/_layout.tsx', 97]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)

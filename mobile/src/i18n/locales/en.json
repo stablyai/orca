@@ -266,7 +266,8 @@
       "clearSearch": "Clear search"
     },
     "waitingForHost": "Waiting for host…",
-    "connectingToHost": "Connecting to host…"
+    "connectingToHost": "Connecting to host…",
+    "loading": "Loading…"
   },
   "host": {
     "edit": {
@@ -4256,6 +4257,13 @@
       "always": "Always allow {{server}}",
       "deny": "Deny",
       "thisServer": "this server"
+    },
+    "sharedHeld": {
+      "waiting": "Waiting for {{owner}}’s computer",
+      "notSent": "Not sent",
+      "notHeld": "Couldn’t send it again",
+      "waitingShort": "Waiting",
+      "sendAgain": "Send again"
     }
   },
   "sourceControl": {
@@ -7549,7 +7557,8 @@
         "sharedBy": "Shared by {{who}}",
         "viewOriginal": "View original",
         "originalGone": "No longer available"
-      }
+      },
+      "sharedBy": "Shared by {{name}}"
     },
     "settingsView": {
       "sharing": "Sharing",
@@ -7939,6 +7948,17 @@
     "usageLimit": {
       "continuesAt": "Continues at {{time}}",
       "hitLimit": "Hit limit · resets {{time}}"
+    },
+    "shared": {
+      "chatOf": "{{name}} · Shared by {{owner}}",
+      "offline": "{{owner}}’s computer is offline. Messages wait and send when it’s back.",
+      "back": "Back to bots",
+      "removedTitle": "You no longer have access to {{name}}",
+      "removedTitleUnnamed": "You no longer have access to this bot",
+      "removedBody": "{{owner}} stopped sharing it with you.",
+      "backToBots": "Back to bots",
+      "newChat": "New chat",
+      "yourChats": "Your chats"
     }
   },
   "mobileWebShell": {
