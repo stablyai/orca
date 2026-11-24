@@ -237,8 +237,9 @@ async function completeWorkerTerminalReleaseOnce(
     // After certified exit, absent close targets mean success; other failures retain recovery intent.
     if (!(closeError.alreadyGone && observation.status === 'exited')) {
       const current = db.getWorkerTerminalResource(resource.id)
-      if (!current || !isStillReleasing(current, dispatchId)) {
-        // A Keep open won during the close: no intent of this release is left to retry.
+      if (!current || !holdsReleaseIntent(current, dispatchId)) {
+        // A Keep open won during the close: no intent of this release is left to retry. A fresh
+        // request that joined since (Allow Auto-Close, then release) still holds one, and retries.
         return receiptForUnchangedRelease(dispatchId, current)
       }
       if (closeError.transient) {
@@ -286,6 +287,15 @@ function retainUnproven(
   return receiptForUnchangedRelease(
     dispatchId,
     db.revertWorkerTerminalReleaseToRetained(resourceId, 'identity_unproven', dispatchId)
+  )
+}
+
+/** This dispatch still owns the row and a release of it is under way: requested or closing. */
+function holdsReleaseIntent(resource: WorkerTerminalResourceRow, dispatchId: string): boolean {
+  return (
+    resource.owner_dispatch_id === dispatchId &&
+    resource.ownership_state === 'owned' &&
+    (resource.release_state === 'requested' || resource.release_state === 'releasing')
   )
 }
 

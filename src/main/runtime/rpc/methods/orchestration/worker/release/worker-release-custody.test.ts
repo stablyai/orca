@@ -317,6 +317,45 @@ describe('worker release stays within its own custody', () => {
     expect(db.settleWorkerTerminalRelease(resourceId, successor).release_state).toBe('released')
   })
 
+  it('keeps a fresh release that joined a held automatic close pending when that close fails transiently', async () => {
+    setup()
+    vi.spyOn(runtime, 'isWorkerAgentInTurn').mockReturnValue(false)
+    const { dispatchId } = await startSettledWorker()
+    db.db
+      .prepare(
+        `UPDATE worker_terminal_resources SET auto_release_at = datetime('now', '-1 minute'),
+           auto_release_dispatch_id = owner_dispatch_id WHERE owner_dispatch_id = ?`
+      )
+      .run(dispatchId)
+    expect(db.claimDueWorkerTerminalAutoReleases(Date.now())).toBe(1)
+    const closing = deferred<{ handle: string; tabId: string; ptyKilled: boolean }>()
+    vi.mocked(runtime.closeTerminal).mockImplementationOnce(() => closing.promise)
+
+    const recovery = reconcileRequestedWorkerTerminalReleases(runtime)
+    await vi.waitFor(() => expect(runtime.closeTerminal).toHaveBeenCalledTimes(1))
+    // Keep open, then Allow Auto-Close, then the coordinator asks again: a fresh request joins the held close.
+    await call('orchestration.workerKeepOpen', { paneKey: workerPaneKey, keep: true })
+    await call('orchestration.workerKeepOpen', { paneKey: workerPaneKey, keep: false })
+    const fresh = call('orchestration.workerRelease', { dispatch: dispatchId })
+    await vi.waitFor(() =>
+      expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('requested')
+    )
+    closing.reject(new Error('Terminal endpoint not connected'))
+
+    await expect(fresh).resolves.toMatchObject({
+      dispatchId,
+      state: 'release_pending',
+      processAction: 'none'
+    })
+    await expect(recovery).resolves.toMatchObject({ attempted: 1, pending: 1, retained: 0 })
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('requested')
+    // The pending intent is still recovery's to finish.
+    await expect(reconcileRequestedWorkerTerminalReleases(runtime)).resolves.toMatchObject({
+      attempted: 1,
+      released: 1
+    })
+  })
+
   it.each(['killed', 'unconfirmed', 'failed'] as const)(
     "reports a close that lost custody (%s) as transferred, never with the successor's state or error",
     async (outcome) => {
