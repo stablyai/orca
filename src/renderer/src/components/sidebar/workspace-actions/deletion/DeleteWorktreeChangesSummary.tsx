@@ -102,7 +102,6 @@ export function DeleteWorktreeChangesSummary({
   const [open, setOpen] = useState(false)
   const [fit, setFit] = useState({ need: 0, room: 0, chevronRoom: 0, noteTooNarrow: false })
   const [focused, setFocused] = useState(false)
-  const [opened, setOpened] = useState(false)
   const rowRef = useRef<HTMLDivElement>(null)
   const textRef = useRef<HTMLSpanElement>(null)
   const noteRef = useRef<HTMLSpanElement>(null)
@@ -315,10 +314,7 @@ export function DeleteWorktreeChangesSummary({
           variant="code"
           status={tone === 'warning' ? 'warning' : 'muted'}
           open={open}
-          onOpenChange={(next) => {
-            setOpen(next)
-            setOpened(true)
-          }}
+          onOpenChange={setOpen}
         >
           {clipped || !hasDetails ? (
             <p
@@ -327,8 +323,7 @@ export function DeleteWorktreeChangesSummary({
               {fullText}
             </p>
           ) : null}
-          {/* Rows mount on first open and stay, so neither opening nor reopening rebuilds them early. */}
-          {opened && hasChangedOrUnsaved && (
+          {hasChangedOrUnsaved && (
             <div>
               {showSectionHeaders && (
                 <div className={sectionLabelClass}>
@@ -338,7 +333,7 @@ export function DeleteWorktreeChangesSummary({
               <DeleteWorktreeChangesFileList preview={preview} unsavedFiles={unsavedFiles} />
             </div>
           )}
-          {opened && hasIgnored && (
+          {hasIgnored && (
             <div className={hasChangedOrUnsaved ? 'mt-2.5 border-t border-border/60 pt-2.5' : ''}>
               {showSectionHeaders && (
                 <div className={sectionLabelClass}>
