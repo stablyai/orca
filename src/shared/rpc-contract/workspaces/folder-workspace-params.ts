@@ -6,6 +6,7 @@ import { isWorkspaceLinkedItemSourceContextMatch } from '../../workspace-attachm
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
 import { DiffCommentSchema } from '../../file-review/diff-comment-schema'
+import { DiffCommentRecoverySchema } from '../../file-review/diff-comment-recovery'
 import { sleepingAgentLaunchConfigSchema } from '../../workspace-session/workspace-session-sleeping-agents'
 import { AgentArgs, LaunchPreferences } from '../terminal/agent-session-params'
 import { LaunchSourceParam } from '../agent-launch/launch-source-param'
@@ -103,7 +104,8 @@ export const FolderWorkspaceUpdate = z.object({
       firstAgentMessageRenameError: z.string().nullable().optional(),
       lastActivityAt: OptionalFiniteNumber,
       diffComments: z.array(DiffCommentSchema).optional(),
-      diffCommentsBase: z.array(DiffCommentSchema).optional()
+      diffCommentsBase: z.array(DiffCommentSchema).optional(),
+      diffCommentsRecovery: DiffCommentRecoverySchema.optional()
     })
     .superRefine(assertLinkedTaskSourceContextMatch)
 })

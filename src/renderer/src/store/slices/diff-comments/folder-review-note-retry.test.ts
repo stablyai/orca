@@ -6,6 +6,11 @@ import {
   applyDiffCommentWrite,
   type DiffCommentBaseMutation
 } from '../../../../../shared/file-review/diff-comment-mutation'
+import {
+  applyDiffCommentRecovery,
+  type DiffCommentRecoveryMutation
+} from '../../../../../shared/file-review/diff-comment-recovery'
+import { FOLDER_WORKSPACE_DIFF_COMMENT_RECOVERY_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
@@ -33,7 +38,8 @@ vi.stubGlobal('window', {
   }
 })
 
-type FolderUpdates = { diffComments?: DiffComment[] } & DiffCommentBaseMutation
+type FolderUpdates = { diffComments?: DiffComment[] } & DiffCommentBaseMutation &
+  DiffCommentRecoveryMutation
 
 function folderUpdatesOf(params: RuntimeEnvironmentCallRequest['params']): FolderUpdates {
   const updates = params?.updates
@@ -58,7 +64,7 @@ function note(id: string, body: string, lineNumber = 1): DiffComment {
   }
 }
 
-/** One host's catalog row: it merges each write the way the real host does. */
+/** One host's catalog row: it applies each write the way the real host's folder update does. */
 function createHost(row: FolderWorkspace, { merges }: { merges: boolean }) {
   const host = {
     row,
@@ -74,10 +80,16 @@ function createHost(row: FolderWorkspace, { merges }: { merges: boolean }) {
       if (updates.diffComments !== undefined) {
         host.row = {
           ...host.row,
-          // An older server takes the list as sent, base or not.
-          diffComments: merges
-            ? applyDiffCommentWrite(host.row.diffComments, updates)
-            : updates.diffComments
+          // An older server takes the list as sent: it knows neither a base nor a recovery.
+          diffComments: !merges
+            ? updates.diffComments
+            : updates.diffCommentsRecovery
+              ? applyDiffCommentRecovery(
+                  host.row.diffComments ?? [],
+                  updates.diffComments,
+                  updates.diffCommentsRecovery
+                )
+              : applyDiffCommentWrite(host.row.diffComments, updates)
         }
       }
       if (host.dropNextAck) {
@@ -152,6 +164,19 @@ function setup({ hostId, runtimeEnvironmentId, merges }: HostCase, saved: DiffCo
   })
   const host = createHost(row, { merges })
   if (runtimeEnvironmentId) {
+    if (!merges) {
+      // An older server does not advertise the recovery.
+      runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+        const status = createCompatibleRuntimeStatusResponseIfNeeded(args)
+        if (!status?.ok) {
+          return status ?? runtimeEnvironmentCall(args)
+        }
+        const capabilities = status.result.capabilities?.filter(
+          (entry) => entry !== FOLDER_WORKSPACE_DIFF_COMMENT_RECOVERY_RUNTIME_CAPABILITY
+        )
+        return { ...status, result: { ...status.result, capabilities } }
+      })
+    }
     runtimeEnvironmentCall.mockImplementation(async (args: RuntimeEnvironmentCallRequest) => {
       if (args.method === 'folderWorkspace.list') {
         return rpcReply({ folderWorkspaces: [host.row] })
@@ -221,44 +246,50 @@ describe('folder review notes after a failed save', () => {
     errSpy.mockRestore()
   })
 
-  it.each([
+  const CURRENT_HOSTS = [
     ['this computer', LOCAL],
-    ['a paired server', PAIRED],
-    ['an older paired server that replaces the list', OLDER_PAIRED]
-  ])(
+    ['a paired server', PAIRED]
+  ] as const
+
+  it.each(CURRENT_HOSTS)(
     'keeps a note another device added after a save that landed unacknowledged (%s)',
     async (_name, hostCase) => {
       const { host, add, shown } = setup(hostCase)
       host.dropNextAck = true
       // The save is reported as failed even though the host kept it.
-      const mine = { id: expect.any(String), body: 'my note' }
       expect(await add('my note')).toBeNull()
-      expect(host.notes()).toEqual([mine])
+      expect(host.notes()).toEqual([{ id: expect.any(String), body: 'my note' }])
 
       host.peerEdit((notes) => [...notes, note('peer', 'from another device', 2)])
       expect(await add('my note again')).not.toBeNull()
 
-      // This copy's own notes converge to what it shows (the failed one was rolled back);
-      // the note it never listed is another device's and stays.
+      // This copy's own notes converge to what it shows (the failed one was rolled back, and the
+      // host still held exactly the version it sent); the note it never listed stays.
       expect(host.notes()).toEqual([
         { id: 'peer', body: 'from another device' },
         { id: expect.any(String), body: 'my note again' }
       ])
       expect(shown()).toEqual(['my note again'])
-      // Recovery reads the one row it writes, never the whole catalog.
-      expect(folderWorkspacesList).not.toHaveBeenCalled()
-      expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
-        expect.objectContaining({ method: 'folderWorkspace.list' })
-      )
     }
   )
 
-  const MIXED_HOSTS = [
-    ['this computer', LOCAL],
-    ['an older paired server that replaces the list', OLDER_PAIRED]
-  ] as const
+  it('refuses the save after a failure on an older paired server, sending nothing', async () => {
+    const { host, add } = setup(OLDER_PAIRED)
+    host.dropNextAck = true
+    expect(await add('my note')).toBeNull()
+    host.peerEdit((notes) => [...notes, note('peer', 'from another device', 2)])
+    const before = host.notes()
+    const updatesBefore = runtimeEnvironmentCall.mock.calls.length
 
-  it.each(MIXED_HOSTS)(
+    expect(await add('my note again')).toBeNull()
+
+    // That host would replace the list, so nothing is written and the other device's note stays.
+    expect(host.notes()).toEqual(before)
+    expect(host.notes()).toContainEqual({ id: 'peer', body: 'from another device' })
+    expect(runtimeEnvironmentCall.mock.calls.length).toBe(updatesBefore)
+  })
+
+  it.each(CURRENT_HOSTS)(
     "keeps another device's edit to a note this copy still shows unchanged (%s)",
     async (_name, hostCase) => {
       const { host, add } = setup(hostCase, [note('x', 'v1')])
@@ -277,7 +308,7 @@ describe('folder review notes after a failed save', () => {
     }
   )
 
-  it.each(MIXED_HOSTS)(
+  it.each(CURRENT_HOSTS)(
     'does not bring back a note another device deleted while this copy still shows it (%s)',
     async (_name, hostCase) => {
       const { host, add } = setup(hostCase, [note('x', 'v1')])
@@ -293,7 +324,7 @@ describe('folder review notes after a failed save', () => {
     }
   )
 
-  it.each(MIXED_HOSTS)(
+  it.each(CURRENT_HOSTS)(
     "keeps another device's edit to a note whose save landed unacknowledged (%s)",
     async (_name, hostCase) => {
       const { host, add } = setup(hostCase)

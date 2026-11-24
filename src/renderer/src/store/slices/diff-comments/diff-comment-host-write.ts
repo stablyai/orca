@@ -4,40 +4,11 @@ import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import type { DiffCommentOwner } from './diff-comment-owner'
 import { toRuntimeWorktreeSelector } from '../../../runtime/rpc/targets/runtime-worktree-selector'
 import { callHostRoute } from '@/runtime/rpc/calls/host-route-call'
-import { hostRouteForAuthority, type HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
-import {
-  captureHostIdentityFence,
-  isHostIdentityContinued
-} from '@/runtime/rpc/environment-revisions/host-identity-fence'
+import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
-
-// Why local: the folder's catalog row lives on the server even when it names an SSH target.
-function folderCatalogRoute(
-  runtimeEnvironmentId: string
-): ReturnType<typeof hostRouteForAuthority> {
-  return hostRouteForAuthority({
-    endpoint: { kind: 'environment', environmentId: runtimeEnvironmentId },
-    at: 'local'
-  })
-}
-
-/** One folder row's update on the host owning its catalog; the host answers with the row it changed. */
-async function updateFolderRow(
-  owner: Extract<DiffCommentOwner, { kind: 'folder' }>,
-  folderWorkspaceId: string,
-  updates: { diffComments?: DiffComment[]; diffCommentsBase?: DiffComment[] }
-): Promise<FolderWorkspace | null> {
-  return owner.runtimeEnvironmentId
-    ? (
-        await callHostRoute<{ folderWorkspace: FolderWorkspace | null }>(
-          folderCatalogRoute(owner.runtimeEnvironmentId),
-          'folderWorkspace.update',
-          { folderWorkspaceId, updates },
-          { timeoutMs: 15_000 }
-        )
-      ).folderWorkspace
-    : await window.api.folderWorkspaces.update({ folderWorkspaceId, updates })
-}
+import type { DiffCommentRecovery } from '../../../../../shared/file-review/diff-comment-recovery'
+import { FOLDER_WORKSPACE_DIFF_COMMENT_RECOVERY_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
+import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 
 /** Writes a workspace's whole review-note list to the host that owns it; the base is the list it was edited from. */
 export async function writeDiffCommentsToHost(
@@ -45,15 +16,78 @@ export async function writeDiffCommentsToHost(
   diffComments: DiffComment[],
   diffCommentsBase: DiffComment[] | undefined
 ): Promise<void> {
+  return writeDiffComments(owner, {
+    diffComments,
+    ...(diffCommentsBase ? { diffCommentsBase } : {})
+  })
+}
+
+/**
+ * Refuses, before anything is sent, a recovering save to a paired host too old to apply it: such a
+ * host would drop the recovery and replace the whole list. This computer's host is this build.
+ */
+export async function assertFolderRecoverySupported(
+  owner: Extract<DiffCommentOwner, { kind: 'folder' }>
+): Promise<void> {
+  if (owner.runtimeEnvironmentId) {
+    await assertRuntimeEnvironmentCapability(
+      owner.runtimeEnvironmentId,
+      FOLDER_WORKSPACE_DIFF_COMMENT_RECOVERY_RUNTIME_CAPABILITY,
+      'This Orca server cannot save review notes safely after a failed save; update it.',
+      15_000
+    )
+  }
+}
+
+/** Writes a folder's notes after a failed save; the host decides each note against what it holds as it applies. */
+export async function writeFolderDiffCommentsRecovery(
+  owner: Extract<DiffCommentOwner, { kind: 'folder' }>,
+  diffComments: DiffComment[],
+  diffCommentsRecovery: DiffCommentRecovery
+): Promise<void> {
+  return writeDiffComments(owner, { diffComments, diffCommentsRecovery })
+}
+
+async function writeDiffComments(
+  owner: DiffCommentOwner,
+  {
+    diffComments,
+    diffCommentsBase,
+    diffCommentsRecovery
+  }: {
+    diffComments: DiffComment[]
+    diffCommentsBase?: DiffComment[]
+    diffCommentsRecovery?: DiffCommentRecovery
+  }
+): Promise<void> {
   const worktreeId = owner.worktreeId
   const scope = parseWorkspaceKey(worktreeId)
   // Why base: the host applies only this edit, so notes another device added meanwhile survive.
   const baseUpdate = diffCommentsBase ? { diffCommentsBase } : {}
   if (scope?.type === 'folder' && owner.kind === 'folder') {
-    const updated = await updateFolderRow(owner, scope.folderWorkspaceId, {
+    const runtimeEnvironmentId = owner.runtimeEnvironmentId
+    const updates = {
       diffComments,
-      ...baseUpdate
-    })
+      ...baseUpdate,
+      ...(diffCommentsRecovery ? { diffCommentsRecovery } : {})
+    }
+    const updated = runtimeEnvironmentId
+      ? (
+          await callHostRoute<{ folderWorkspace: FolderWorkspace | null }>(
+            // Why local: the folder's catalog row lives on the server even when it names an SSH target.
+            hostRouteForAuthority({
+              endpoint: { kind: 'environment', environmentId: runtimeEnvironmentId },
+              at: 'local'
+            }),
+            'folderWorkspace.update',
+            { folderWorkspaceId: scope.folderWorkspaceId, updates },
+            { timeoutMs: 15_000 }
+          )
+        ).folderWorkspace
+      : await window.api.folderWorkspaces.update({
+          folderWorkspaceId: scope.folderWorkspaceId,
+          updates
+        })
     if (!updated?.diffComments) {
       throw new Error('Failed to persist folder workspace review notes')
     }
@@ -88,30 +122,10 @@ export async function writeDiffCommentsToHost(
   )
 }
 
-/**
- * The notes a folder row holds now, read through an update that changes no field: the host answers
- * with exactly the row a later write merges into (never another same-id row), and only that row.
- */
-async function readFolderDiffCommentsFromHost(
-  owner: Extract<DiffCommentOwner, { kind: 'folder' }>
+/** The notes a worktree's host holds now; this computer's are read through an update that changes nothing. */
+export async function readDiffCommentsFromHost(
+  owner: Extract<DiffCommentOwner, { kind: 'worktree' }>
 ): Promise<DiffComment[]> {
-  const scope = parseWorkspaceKey(owner.worktreeId)
-  if (scope?.type !== 'folder') {
-    throw new Error('The workspace host is unresolved; review notes were not saved.')
-  }
-  const held = await updateFolderRow(owner, scope.folderWorkspaceId, {})
-  // Why throw: without the host's list there is no safe base, and a write without one replaces it.
-  if (!held) {
-    throw new Error('This workspace was not found on its host; review notes were not saved.')
-  }
-  return held.diffComments ?? []
-}
-
-/** The notes a workspace's host holds now, read through an update that changes nothing where one exists. */
-async function readDiffCommentsFromHost(owner: DiffCommentOwner): Promise<DiffComment[]> {
-  if (owner.kind === 'folder') {
-    return readFolderDiffCommentsFromHost(owner)
-  }
   const { endpoint, at } = owner.authority
   if (endpoint.kind === 'self') {
     const meta = await window.api.worktrees.updateMeta({
@@ -131,28 +145,4 @@ async function readDiffCommentsFromHost(owner: DiffCommentOwner): Promise<DiffCo
     { timeoutMs: 15_000 }
   )
   return worktree?.diffComments ?? []
-}
-
-function remoteRouteOf(owner: DiffCommentOwner): HostRoute | null {
-  if (owner.kind === 'folder') {
-    return owner.runtimeEnvironmentId ? folderCatalogRoute(owner.runtimeEnvironmentId) : null
-  }
-  return owner.authority.endpoint.kind === 'self' ? null : hostRouteForAuthority(owner.authority)
-}
-
-/**
- * Reads what the host holds, decides the write from it, then writes it to the same machine.
- * Why the identity check: a base read from one machine must never be merged on another one.
- */
-export async function rewriteDiffCommentsOnHost(
-  owner: DiffCommentOwner,
-  decide: (held: DiffComment[]) => { diffComments: DiffComment[]; diffCommentsBase: DiffComment[] }
-): Promise<void> {
-  const route = remoteRouteOf(owner)
-  const fence = route ? captureHostIdentityFence(route) : null
-  const { diffComments, diffCommentsBase } = decide(await readDiffCommentsFromHost(owner))
-  if (fence && !isHostIdentityContinued(fence)) {
-    throw new Error('The workspace host changed; review notes were not saved.')
-  }
-  await writeDiffCommentsToHost(owner, diffComments, diffCommentsBase)
 }

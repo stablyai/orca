@@ -1,4 +1,5 @@
 import type { DiffCommentBaseMutation } from '../../../shared/file-review/diff-comment-mutation'
+import type { DiffCommentRecoveryMutation } from '../../../shared/file-review/diff-comment-recovery'
 import type {
   FolderWorkspaceCreateInput,
   FolderWorkspaceCreateResult
@@ -216,7 +217,8 @@ export type FolderWorkspacesApi = {
         | 'diffComments'
       >
     > &
-      DiffCommentBaseMutation
+      DiffCommentBaseMutation &
+      DiffCommentRecoveryMutation
   }) => Promise<FolderWorkspace | null>
   delete: (args: {
     folderWorkspaceId: string

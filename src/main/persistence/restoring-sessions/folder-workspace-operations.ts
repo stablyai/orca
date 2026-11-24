@@ -21,7 +21,10 @@ import { folderWorkspaceWriteOptions } from './folder-workspace-write-options'
 import type { StateWriteOptions } from '../loading-store/profile-writing/write-scheduling'
 import { findFolderWorkspace } from './folder-workspace-index'
 import type { DiffCommentBaseMutation } from '../../../shared/file-review/diff-comment-mutation'
-import { applyDiffCommentWrite } from '../../../shared/file-review/diff-comment-mutation'
+import {
+  applyFolderDiffCommentWrite,
+  type DiffCommentRecoveryMutation
+} from '../../../shared/file-review/diff-comment-recovery'
 
 export type FolderWorkspaceMutationOperations = {
   state: PersistedState
@@ -145,7 +148,8 @@ export class FolderWorkspacePersistenceOperations {
       >
     > &
       WorkspaceAttachmentMutation &
-      DiffCommentBaseMutation
+      DiffCommentBaseMutation &
+      DiffCommentRecoveryMutation
   ): FolderWorkspace | null {
     const workspace = this.getFolderWorkspace(id)
     if (!workspace) {
@@ -253,7 +257,8 @@ export class FolderWorkspacePersistenceOperations {
       workspace.lastTerminalUseAt = updates.lastTerminalUseAt
     }
     if (updates.diffComments !== undefined) {
-      workspace.diffComments = applyDiffCommentWrite(workspace.diffComments, updates)
+      // Why here: decided against the notes held now, in the same synchronous update that saves them.
+      workspace.diffComments = applyFolderDiffCommentWrite(workspace.diffComments, updates)
     }
     if (updates.externalConversations !== undefined) {
       workspace.externalConversations = updates.externalConversations

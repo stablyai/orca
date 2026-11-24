@@ -33,6 +33,9 @@ export const FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY =
 // Hosts whose folderWorkspace.update/delete honor `requireUniqueId`; older hosts edit the first twin and delete every row with the id.
 export const FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY =
   'folder-workspace.unique-id-mutation.v1' as const
+// Hosts that apply `diffCommentsRecovery` on folderWorkspace.update; older hosts strip it and replace the notes.
+export const FOLDER_WORKSPACE_DIFF_COMMENT_RECOVERY_RUNTIME_CAPABILITY =
+  'folder-workspace.diff-comment-recovery.v1' as const
 // Replay ambiguous creates only with advertised idempotency support; older hosts strip clientMutationId. status.worktreeCreateIdempotency supplies optional retention policy.
 export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'worktree.create-idempotency.v1' as const
@@ -141,6 +144,7 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY,
+  FOLDER_WORKSPACE_DIFF_COMMENT_RECOVERY_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_HOST_OWNED_SETTINGS_RUNTIME_CAPABILITY,
   WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY,
