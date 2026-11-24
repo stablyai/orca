@@ -1,3 +1,9 @@
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
+import {
+  installLeaveLines,
+  leaveLines,
+  type LeaveLinesCloud
+} from './external-conversation-leave-lines'
 import { setConnectorClaimSource } from '../native-chat/agent-session-wire/recovery/structured-agent-session-connector-claims'
 import type { AgentTransitionDetector } from '../agent-hooks/observations/agent-transition-detector'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
@@ -45,7 +51,12 @@ import {
 
 /** The seam is local and subscribes to nothing until watched, so it lives for the process, built on first use. */
 export function installExternalConversations(
-  store: (ExternalConversationLinkStore & { getBots?: () => readonly Bot[] }) | null,
+  store:
+    | (ExternalConversationLinkStore & {
+        getBots?: () => readonly Bot[]
+        flushPendingOrThrowAsync?: RuntimeStore['flushPendingOrThrowAsync']
+      })
+    | null,
   runtime: {
     getOrchestrationDb: () => DeliveryReceiptDb & OrchestrationDb
     listAutomationRuns: BotConversationActsForSources['listAutomationRuns']
@@ -53,6 +64,7 @@ export function installExternalConversations(
     onWorktreeLifecycle: (listener: (event: RuntimeWorktreeLifecycleEvent) => void) => () => void
     agentTransitions: Pick<AgentTransitionDetector, 'latestRow' | 'subscribe'>
     onConversationLinked?: () => void
+    ensureStructuredAgentSessionHost?: () => Promise<unknown>
     /** Settles once this start continued what the last run cut, naming what it did not. */
     structuredAgentSessionLaunchContinuation?: {
       continued: Promise<{ cutByLastRun: ReadonlySet<string> }>
@@ -62,6 +74,7 @@ export function installExternalConversations(
           refResolver(): ConnectorRefResolver | null
           orcaAccountName(): string
           repliesFilled(): void
+          reply: LeaveLinesCloud['reply']
         })
       | null
   }
@@ -98,12 +111,31 @@ export function installExternalConversations(
         signal
       })
     let replyOutbox: ReturnType<typeof connectorReplyOutbox> | null = null
+    const lines = leaveLines({
+      store,
+      cloud: () => runtime.getConnectorCloud?.() ?? null,
+      ...(store.flushPendingOrThrowAsync
+        ? { flush: () => store.flushPendingOrThrowAsync!({ drainToStableGeneration: false }) }
+        : {}),
+      answerPending: (link, turnId) =>
+        // At startup the chat host may not be in yet: read the outbox only once it is. A read that
+        // fails rejects, so the line tries again rather than going before an answer.
+        Promise.resolve(runtime.ensureStructuredAgentSessionHost?.()).then(
+          async () =>
+            (await getStructuredAgentSessionHost()
+              ?.deps.store.connectorReplies()
+              ?.unsentAnswer(link.sessionId, link, turnId)) === true
+        )
+    })
+    installLeaveLines(lines)
     const restartCuts = heldTurnEnds(() => seam)
     seam = new ExternalConversationSeam({
       slackMirror: () => mirror,
       watched: () => {
         mirror?.flushHeld()
         restartCuts.flush()
+        // Lines a quit or a reset cut short; a turn still running posts its own as it ends.
+        lines.resume((link) => seam?.replyTarget(link.paneKey)?.turnId ?? null)
       },
       replyFill: () => replyOutbox?.fill ?? null,
       replyAdmitted: (sessionId) => replyOutbox?.admitted(sessionId),

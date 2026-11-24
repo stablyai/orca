@@ -138,6 +138,7 @@ import {
   AutomationRuns,
   AutomationUpdate
 } from './automations/automation-params'
+import { BotAvatarRead, BotAvatarUpload } from './bot-avatar-params'
 import {
   ComposioApp,
   ComposioApps,
@@ -205,8 +206,6 @@ import {
   BotAccessDecide,
   BotAccessRedeem,
   BotActivityRead,
-  BotAvatarRead,
-  BotAvatarUpload,
   BotChat,
   BotChatReset,
   BotChatSearch,
@@ -322,9 +321,11 @@ import {
   Wait
 } from './browser/browser-params'
 import {
+  DownloadCopyStream,
   FileChooserAnswer,
   PagePromptAnswer,
   ReadPrintPdf,
+  ReleaseDownloadCopy,
   ReleasePrintPdf,
   Screencast,
   ScreencastAck,
@@ -373,6 +374,7 @@ import {
 } from './computer/computer-schemas-params'
 import {
   ConnectorAct,
+  ConnectorLeaveThread,
   ConnectorReact,
   ConnectorReply,
   ConnectorSlackMirrorPost,
@@ -834,6 +836,7 @@ import {
   GitCommitAction,
   GitCommitCompare,
   GitCommitDiff,
+  GitContinueRebase,
   GitCreateBranch,
   GitDiff,
   GitDiscoverCommitMessageModels,
@@ -1084,6 +1087,7 @@ import {
   SkillUploadChunkRequestSchema,
   SkillUploadCommitRequestSchema
 } from '../skills/sharing/skill-upload-session-contract'
+import { NetworkPortForwardAttachParams } from '../workspace/ports/port-forward-loopback-host'
 
 // Why: the host parses params with these schemas, so a client that matches this map
 // matches the dispatcher. Clients must import it for types only — parsing a params
@@ -1400,6 +1404,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.dialogAccept': DialogAccept,
   'browser.dialogDismiss': ExpectUrlBrowserTarget,
   'browser.download': SelectorPath,
+  'browser.downloadCopyStream': DownloadCopyStream,
   'browser.drag': Drag,
   'browser.dropFiles': DropFiles,
   'browser.eval': Eval,
@@ -1452,6 +1457,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.profileList': null,
   'browser.readImage': ReadImage,
   'browser.readPrintPdf': ReadPrintPdf,
+  'browser.releaseDownloadCopy': ReleaseDownloadCopy,
   'browser.releasePrintPdf': ReleasePrintPdf,
   'browser.reload': Reload,
   'browser.replaceMisspelling': PageMenuWord,
@@ -1519,6 +1525,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.setValue': SetValue,
   'computer.typeText': TypeText,
   'connector.act': ConnectorAct,
+  'connector.leaveThread': ConnectorLeaveThread,
   'connector.react': ConnectorReact,
   'connector.reply': ConnectorReply,
   'connector.slackMirror.post': ConnectorSlackMirrorPost,
@@ -1619,6 +1626,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.commitDiff': GitCommitDiff,
   'git.completeMerge': WorktreeSelectorOfGitParams,
   'git.conflictOperation': WorktreeSelectorOfGitParams,
+  'git.continueRebase': GitContinueRebase,
   'git.createBranch': GitCreateBranch,
   'git.diff': GitDiff,
   'git.discard': GitFilePath,
@@ -1633,6 +1641,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.mutationInFlight': WorktreeSelectorOfGitParams,
   'git.pull': GitTargetedRemote,
   'git.push': GitPush,
+  'git.rebaseAutoStash': WorktreeSelectorOfGitParams,
   'git.rebaseFromBase': GitRebaseFromBase,
   'git.refs': GitRefs,
   'git.remoteCommitUrl': GitRemoteCommitUrl,
@@ -1883,6 +1892,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'nativeChat.subscribe': NativeChatSession,
   'nativeChat.unsubscribe': NativeChatUnsubscribe,
   'network.browserTunnel': BrowserNetworkTunnelAttachParams,
+  'network.portForward': NetworkPortForwardAttachParams,
   'notifications.getMissedSince': NotificationGetMissedSinceParams,
   'notifications.pushCoverage': NotificationPushCoverageParams,
   'notifications.registerPush': NotificationRegisterPushParams,

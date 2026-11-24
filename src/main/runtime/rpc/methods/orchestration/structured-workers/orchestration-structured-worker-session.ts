@@ -21,7 +21,7 @@ import type { StructuredAgentSessionHost } from '../../../../../native-chat/agen
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { ANTIGRAVITY_LEVEL_SUFFIX } from '../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-antigravity'
-import { antigravityListedFamilySelection } from '../../../../../antigravity/antigravity-model-listing'
+import { antigravityListedFamilySelection } from '../../../../../acp/acp-dialects/antigravity-dialect'
 import type { AgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'

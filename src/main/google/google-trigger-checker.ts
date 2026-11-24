@@ -34,7 +34,7 @@ type Timer = ReturnType<typeof setTimeout>
 
 export type GoogleTriggerCheckerDeps = {
   automations(): readonly Pick<Automation, 'id' | 'enabled' | 'bot' | 'on'>[]
-  bots(): readonly Pick<Bot, 'id' | 'google'>[]
+  bots(): readonly Pick<Bot, 'id' | 'google' | 'googleAccounts'>[]
   /** Accounts signed in here that Google still accepts. */
   accounts(): string[] | Promise<string[]>
   /** Where a rule without an account listens. */
@@ -96,7 +96,7 @@ export class GoogleTriggerChecker {
       automations,
       this.deps.bots(),
       await this.deps.accounts(),
-      'email' in fallback ? fallback.email : null
+      fallback
     )
     const state = this.deps.readState()
     const before = JSON.stringify(state)

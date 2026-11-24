@@ -178,6 +178,9 @@ export const ConnectorDeliverySchema = z.discriminatedUnion('kind', [
     asker: ConnectorAskerSchema.optional(),
     automations: TurnAutomations,
     bareMention: BareMention,
+    // The reply @mentioned the bot, so a thread its machine muted takes it again. An older machine
+    // ignores it.
+    mentioned: z.literal(true).optional(),
     askedAt: AskedAt,
     // Resume pressed on the failed turn `turnId` (its turn-started `at`): the machine continues the
     // chat only while its newest turn is still failed, else refuses NOT_FAILED_REFUSAL. Sent only

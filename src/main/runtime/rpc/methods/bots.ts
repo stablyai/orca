@@ -202,16 +202,22 @@ export const BOT_METHODS = [
     permission: 'workspace',
     params: BotAvatarUpload,
     handler: async (params, { runtime }) => ({
-      bot: await runtime.bots.setAvatarImage(params.botId, Buffer.from(params.png, 'base64'))
+      bot: await runtime.bots.setAvatarImage(
+        params.botId,
+        Buffer.from(params.png, 'base64'),
+        params.expectedAvatarRevision,
+        params.expectedAvatarEpoch
+      )
     })
   }),
   defineMethod({
     name: 'bots.avatar.read',
     permission: 'workspace',
     params: BotAvatarRead,
-    handler: async (params, { runtime }) => ({
-      png: (await runtime.bots.readAvatarImage(params.botId))?.toString('base64') ?? null
-    })
+    handler: async (params, { runtime }) =>
+      params.catalogRevision === undefined
+        ? { png: (await runtime.bots.readAvatarImage(params.botId))?.toString('base64') ?? null }
+        : runtime.bots.generationRevision(params.botId, params.catalogRevision, params.catalogEpoch)
   }),
   defineMethod({
     name: 'bots.activity',
