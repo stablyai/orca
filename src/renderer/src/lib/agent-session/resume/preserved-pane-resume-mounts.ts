@@ -55,14 +55,19 @@ export function requestInPlaceResumeMounts(
     return 0
   }
   const targets = [...tabIds]
-  requestSleepingAgentWakeOnMount(worktreeId, targets)
+  // Why the claim filter on marking too: a host-claimed record can share a mounted tab with an
+  // unclaimed one, and waking its pane would start a second `--resume` writer (STA-3859).
+  requestSleepingAgentWakeOnMount(worktreeId, targets, { skipClaimKeys: hostClaimedKeys })
   // An active worktree mounts these panes itself; only one activation will not mount needs the request,
   // which must stay targeted so a whole-worktree mount cannot spawn every saved tab.
   const unactivatedTabIds = targets.filter(
     (tabId) => !paneWillConnectOnActivation(worktreeId, tabId, state)
   )
   if (unactivatedTabIds.length > 0) {
-    requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: unactivatedTabIds })
+    requestBackgroundTerminalWorktreeMount(
+      { worktreeId, tabIds: unactivatedTabIds },
+      hostClaimedKeys
+    )
   }
   return targets.length
 }

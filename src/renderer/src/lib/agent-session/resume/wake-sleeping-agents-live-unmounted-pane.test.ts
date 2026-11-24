@@ -273,9 +273,63 @@ describe('background wake of a pane whose PTY the host still holds', () => {
       expect(hasSleepingAgentWakeRequest(record)).toBe(true)
       vi.advanceTimersByTime(5 * 60_000 + 1)
       expect(hasSleepingAgentWakeRequest(record)).toBe(false)
+      // A later activation's re-dispatch must not refresh the lapsed bound, or the sweep's
+      // fallback fork could never run for a pane that never mounts.
+      markSleepingAgentWakeRequest(record)
+      expect(hasSleepingAgentWakeRequest(record)).toBe(false)
+      // A replaced record is a new wake cycle and marks again.
+      const fresh = liveRecord()
+      markSleepingAgentWakeRequest(fresh)
+      expect(hasSleepingAgentWakeRequest(fresh)).toBe(true)
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  // STA-3859: the host still holds this record's session, so mounting its tab must not wake it.
+  it('does not mark a host-claimed record that shares the tab an unclaimed record mounts', async () => {
+    const SIBLING_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+    const SIBLING_PANE_KEY = makePaneKey('tab-live', SIBLING_LEAF_ID)
+    const base = unmountedLivePaneState()
+    const unclaimed: SleepingAgentSessionRecord = {
+      ...liveRecord(),
+      paneKey: SIBLING_PANE_KEY,
+      providerSession: { key: 'session_id', id: 'sibling-session' }
+    }
+    const splitState: Partial<AppState> = {
+      ...base,
+      terminalLayoutsByTabId: {
+        'tab-live': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: LEAF_ID },
+            second: { type: 'leaf', leafId: SIBLING_LEAF_ID }
+          },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: LIVE_PTY_ID }
+        }
+      },
+      sleepingAgentSessionsByPaneKey: { [PANE_KEY]: liveRecord(), [SIBLING_PANE_KEY]: unclaimed }
+    }
+    useAppStore.setState(splitState)
+    listedSessions = [
+      {
+        id: LIVE_PTY_ID,
+        cwd: '/repo',
+        title: 'claude',
+        agentOwnership: 'present'
+      }
+    ]
+
+    await wakeAndSettle()
+
+    const records = useAppStore.getState().sleepingAgentSessionsByPaneKey
+    // The unclaimed record routes to its pane; the claimed one keeps its host-held session untouched.
+    expect(hasSleepingAgentWakeRequest(records[SIBLING_PANE_KEY]!)).toBe(true)
+    expect(hasSleepingAgentWakeRequest(records[PANE_KEY]!)).toBe(false)
+    expect(queuedResumes()).toEqual([])
   })
 
   // #11598: a tab can hold two panes, one of them put to sleep on purpose.

@@ -46,6 +46,12 @@ const holdPaneResumeAttempt = (session: ConnectPanePtySession, paneKey: string):
     const inFlight = paneResumeAttemptInFlight(session)
     if (!inFlight) {
       releasePaneResumeHold(paneKey, hold)
+      // Why: a self-released hold must stop matching, or a later attempt on this pane would return
+      // at the identity check without registering a fresh registry entry.
+      if (session.agentResumeAttemptHold === hold) {
+        session.agentResumeAttemptHold = null
+        session.agentResumeAttemptHoldPaneKey = null
+      }
     }
     return inFlight
   }
