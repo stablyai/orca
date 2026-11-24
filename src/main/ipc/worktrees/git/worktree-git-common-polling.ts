@@ -148,6 +148,7 @@ export async function startGitCommonPolling(
   let entryDirGateTrusted = true
   let dirGateMissTicks = 0
   const onDemand = createOnDemandScanGate(options.minOnDemandScanIntervalMs, visibility)
+  let pokeAfterScan = false
   let snapshot = await snapshotGitCommon(
     commonDirPath,
     undefined,
@@ -234,6 +235,10 @@ export async function startGitCommonPolling(
     } finally {
       ticking = false
     }
+    if (pokeAfterScan && !disposed) {
+      pokeAfterScan = false
+      onDemand.retryWhenOpen(poke)
+    }
     if (disposed) {
       return
     }
@@ -274,13 +279,18 @@ export async function startGitCommonPolling(
   timer = setTimeout(() => void tick(), pollIntervalMs)
   timer.unref?.()
 
-  const poke = (): boolean => {
+  function poke(): boolean {
     // A pending reveal sweep supersedes the gated check (focus can arrive before show/restore).
     const revealPending = parkedWhileHidden || onDemand.hideSpannedOldTick()
     if (disposed || revealPending || !visibility.isWindowVisible()) {
       return false
     }
-    if (ticking || onDemand.scannedRecently()) {
+    // A running scan (possibly stalled on a hung mount) re-arms the retry only when it ends.
+    if (ticking) {
+      pokeAfterScan = true
+      return false
+    }
+    if (onDemand.scannedRecently()) {
       onDemand.retryWhenOpen(poke)
       return false
     }

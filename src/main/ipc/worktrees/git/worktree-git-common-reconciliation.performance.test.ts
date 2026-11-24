@@ -8,13 +8,20 @@ import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-
 // visible (~200 stats/s at 1,900 worktrees) even though the native watcher already reports changes.
 
 type Node = { dir: boolean; mtimeMs: number; ino: number }
-const fs = vi.hoisted(() => ({ nodes: new Map<string, Node>(), stats: 0, clock: 1, ino: 1 }))
+const fs = vi.hoisted(() => ({
+  nodes: new Map<string, Node>(),
+  stats: 0,
+  clock: 1,
+  ino: 1,
+  stall: null as Promise<void> | null
+}))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
   const missing = (path: string): Error =>
     Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
   const stat = async (path: string) => {
+    await fs.stall
     fs.stats += 1
     const node = fs.nodes.get(String(path))
     if (!node) {
@@ -130,6 +137,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   fs.nodes.clear()
   fs.stats = 0
+  fs.stall = null
   events = []
   visible = true
   put(join('/', 'repo'), true)
@@ -311,6 +319,28 @@ it('checks again once the throttle opens when activity lands inside it', async (
   await vi.advanceTimersByTimeAsync(0)
   expect(events).not.toContainEqual({ type: 'create', path: added })
   await vi.advanceTimersByTimeAsync(25_000)
+  expect(events).toContainEqual({ type: 'create', path: added })
+  await stop()
+})
+
+it('holds activity during a stalled scan without spinning timers', async () => {
+  const { unsubscribe: stop } = await startReconciliation()
+  await vi.advanceTimersByTimeAsync(30_000)
+  let release = (): void => {}
+  fs.stall = new Promise((resolve) => {
+    release = resolve
+  })
+  activity?.('repo')
+  await vi.advanceTimersByTimeAsync(0)
+  activity?.('repo')
+  await vi.advanceTimersByTimeAsync(60_000)
+  // Only the five-minute sweep timer; a hung mount must not drive a retry loop.
+  expect(vi.getTimerCount()).toBeLessThanOrEqual(1)
+  const added = addWorktreeEntry('after-stall')
+  fs.stall = null
+  release()
+  await vi.advanceTimersByTimeAsync(0)
+  await vi.advanceTimersByTimeAsync(0)
   expect(events).toContainEqual({ type: 'create', path: added })
   await stop()
 })
