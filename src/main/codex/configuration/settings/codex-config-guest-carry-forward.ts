@@ -183,13 +183,18 @@ export function planGuestRegenerationCarryForward(
       runtimeValuesToPreserve: new Map()
     })
   }
-  // Without tracked registrations (a starter or pre-tracking baseline), a managed-copy table may be
-  // one the distro dropped, so only edits to registrations the distro still has carry.
+  // Without tracked registrations (a starter or pre-tracking baseline), a managed-copy plugin table
+  // may be one the distro dropped, so only plugins the distro still has carry.
   const trackedRegistrations = baseline?.registrations ?? new Map()
   const registrations = planCodexRegistrationPromotion(
     runtimeConfig,
     upsertPromotedSettingsInContent(systemConfig, updates),
     trackedRegistrations
-  ).filter((promotion) => promotion.kind !== 'append' || trackedRegistrations.size > 0)
+  ).filter(
+    (promotion) =>
+      promotion.kind !== 'append' ||
+      !promotion.key.startsWith('plugins:') ||
+      trackedRegistrations.size > 0
+  )
   return planGuestCarryForward(updates, registrations, systemConfig)
 }
