@@ -4,7 +4,7 @@ import { structuredAgentSessionCommandTurn } from '../../../../shared/agent-sess
 import { isStructuredAgentSessionCommandTurnId } from '../../../native-chat/agent-session-wire/operations/structured-agent-session-command-turn'
 import type { StructuredAgentSessionCommandRun } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { AcpStructuredSessionAdapterDeps } from '../acp-structured-session-adapter-deps'
-import { carryKeptAcpCalls } from './acp-kept-calls'
+import { carryKeptAcpBackgroundWork } from './acp-kept-background-work'
 import { assertAcpStartingSession, type AcpStructuredChild } from '../children/acp-structured-child'
 
 /** The translator's turn from the journal's spelling of its id; null for host turns and for ids
@@ -68,7 +68,7 @@ export async function carryOnKeptAcpAgent<Opened>(
   const turn = turnId === null ? null : providerTurn(turnId)
   assertAcpStartingSession(child, () => signal.aborted)
   // Before any turn opens here: these calls belong to turns that already ended.
-  await carryKeptAcpCalls(child, deps.spec.agent)
+  await carryKeptAcpBackgroundWork(child, deps.spec.agent)
   const command =
     turnId !== null && isStructuredAgentSessionCommandTurnId(turnId)
       ? await savedCommandRun(child, turnId)

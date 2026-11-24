@@ -26,6 +26,13 @@ export class AcpBackgroundTaskTimeline {
     return [...this.running.keys()]
   }
 
+  /** A task an earlier app saw start, as it saved it; no row is written. */
+  restate(block: NativeChatBackgroundTaskBlock): void {
+    if (!this.running.has(block.taskId) && !isSettledBackgroundTaskState(block.state)) {
+      this.running.set(block.taskId, block)
+    }
+  }
+
   reconcile(taskId: string, thread: string): ProviderTimelineEvent[] {
     return this.translate([{ taskId, state: 'unverifiable', summary: '', error: '' }], { thread })
   }
