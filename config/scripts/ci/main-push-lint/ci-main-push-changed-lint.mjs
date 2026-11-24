@@ -1,38 +1,75 @@
-// Lint the files a main push changed with the root oxlint config.
-// PR checks lint each PR against an older main, so a merge can still push a file over a limit; this reports
-// the failure first, then names the commits and merged PRs in the push that changed each failing file.
-import { appendFileSync } from 'node:fs'
+// Lint what a main push changed with the repo's own oxlint configs, then name the commits and merged PRs behind
+// each failure. PR checks lint each PR against an older main, so a merge can still push a file over a limit; this
+// reports the failure first, then attributes it. The plan comes from the earlier plan step when it ran.
+import { appendFileSync, readFileSync } from 'node:fs'
 import process from 'node:process'
 import { resolveOxlintInvocation } from '../../tool-invocation/oxlint-cli-invocation.mjs'
 import { isDirectInvocation } from '../../tool-invocation/script-entry-detection.mjs'
-import { changedLintableFiles, git, resolveRange } from './main-push-range.mjs'
+import { governingPolicies } from './main-push-plan.mjs'
 import {
   escapeAnnotationData,
   escapeAnnotationProperty,
   logLine,
   logText,
-  markdownText,
+  MAX_LOG_LINE_CHARS,
   renderAttributionSummary,
   renderLintSummary
 } from './main-push-report.mjs'
 import { collectBatchResults, runOxlint } from './oxlint-batches.mjs'
+import { computePlan, rangeText, reportPlanFailure } from './plan-main-push-lint.mjs'
 import { attributeFiles, createGithubApi, describeAttribution } from './push-attribution.mjs'
 
 // GitHub shows at most 10 error annotations per step; the log carries the rest.
 const MAX_ANNOTATIONS = 20
-const MAX_LOG_DIAGNOSTICS = 2_000
+// Diagnostic lines have their own count cap; every other log line shares one byte budget.
+const MAX_LOG_DIAGNOSTICS = 1_000
+const LOG_BUDGET_BYTES = 256 * 1024
+const MAX_INCOMPLETE_LOGGED = 10
 const MAX_LOGGED_PATHS = 50
 
-function createReporter(env) {
+export function createReporter(env) {
+  let logBytes = 0
+  let omittedLines = 0
+  let omittedAnnotations = 0
+  let annotations = 0
+  const write = (line) => process.stdout.write(`${line}\n`)
   return {
-    log: (line) => process.stdout.write(`${line}\n`),
-    error: (title, message, location = '') =>
-      process.stdout.write(
-        `::error ${location}title=${escapeAnnotationProperty(title)}::${escapeAnnotationData(message)}\n`
-      ),
-    summary: (markdown) => {
+    // Escapes and truncates the line; returns whether it fit in the log budget.
+    log(text) {
+      const line = logText(text, MAX_LOG_LINE_CHARS)
+      logBytes += Buffer.byteLength(line) + 1
+      if (logBytes > LOG_BUDGET_BYTES) {
+        omittedLines += 1
+        return false
+      }
+      write(line)
+      return true
+    },
+    // A line already escaped for the log, outside the shared budget (diagnostics have their own count cap).
+    writeEscaped: write,
+    error(title, message, location = '') {
+      annotations += 1
+      if (annotations > MAX_ANNOTATIONS + MAX_INCOMPLETE_LOGGED + 1) {
+        omittedAnnotations += 1
+        return
+      }
+      write(
+        `::error ${location}title=${escapeAnnotationProperty(title)}::${escapeAnnotationData(message)}`
+      )
+    },
+    summary(markdown) {
       if (env.GITHUB_STEP_SUMMARY) {
         appendFileSync(env.GITHUB_STEP_SUMMARY, `${markdown}\n`)
+      }
+    },
+    finish() {
+      if (omittedLines > 0) {
+        write(
+          `${omittedLines} more log line(s) were omitted after the ${LOG_BUDGET_BYTES / 1024} KiB log budget.`
+        )
+      }
+      if (omittedAnnotations > 0) {
+        write(`${omittedAnnotations} more error annotation(s) were omitted.`)
       }
     }
   }
@@ -40,10 +77,12 @@ function createReporter(env) {
 
 function reportDiagnostics(diagnostics, reporter) {
   for (const diagnostic of diagnostics.slice(0, MAX_LOG_DIAGNOSTICS)) {
-    reporter.log(logLine(diagnostic))
+    reporter.writeEscaped(logLine(diagnostic))
   }
   if (diagnostics.length > MAX_LOG_DIAGNOSTICS) {
-    reporter.log(`${diagnostics.length - MAX_LOG_DIAGNOSTICS} more oxlint error(s) are not listed.`)
+    reporter.writeEscaped(
+      `${diagnostics.length - MAX_LOG_DIAGNOSTICS} more oxlint error(s) are not listed.`
+    )
   }
   for (const diagnostic of diagnostics.slice(0, MAX_ANNOTATIONS)) {
     const location = diagnostic.file
@@ -51,46 +90,89 @@ function reportDiagnostics(diagnostics, reporter) {
       : ''
     reporter.error(diagnostic.rule, diagnostic.message, location)
   }
+  return Math.min(diagnostics.length, MAX_LOG_DIAGNOSTICS)
 }
 
 function reportIncomplete(incomplete, reporter) {
-  for (const batch of incomplete) {
+  for (const batch of incomplete.slice(0, MAX_INCOMPLETE_LOGGED)) {
     const output = batch.output.trim().slice(0, 4_000)
     reporter.error(
       'Main-push lint',
-      `oxlint did not finish ${batch.files.length} file(s), so they were not linted:\n${output}`
+      `oxlint did not finish ${batch.files.length} path(s) (${batch.reason}), so they were not linted:\n${output}`
     )
     const more =
       batch.files.length > MAX_LOGGED_PATHS
         ? ` and ${batch.files.length - MAX_LOGGED_PATHS} more`
         : ''
-    reporter.log(logText(`Not linted: ${batch.files.slice(0, MAX_LOGGED_PATHS).join(' ')}${more}`))
+    reporter.log(`Not linted: ${batch.files.slice(0, MAX_LOGGED_PATHS).join(' ')}${more}`)
   }
+  if (incomplete.length > MAX_INCOMPLETE_LOGGED) {
+    reporter.log(
+      `${incomplete.length - MAX_INCOMPLETE_LOGGED} more unfinished oxlint run(s) are not listed.`
+    )
+  }
+  return Math.min(incomplete.length, MAX_INCOMPLETE_LOGGED)
 }
 
-async function reportAttribution({ diagnostics, base, head, env, reporter, api }) {
-  const files = [...new Set(diagnostics.map((diagnostic) => diagnostic.file).filter(Boolean))]
-  if (files.length === 0) {
+// A failing file the push touched is attributed to the commits that changed it. One it did not touch was
+// linted only because a lint policy changed, so the commits that changed that policy are named instead.
+async function reportAttribution({ diagnostics, plan, env, reporter, api }) {
+  const failing = [...new Set(diagnostics.map((diagnostic) => diagnostic.file).filter(Boolean))]
+  if (failing.length === 0) {
     return
   }
   const ref = env.GITHUB_REF_NAME || 'main'
+  const noun = plan.event === 'push' ? 'this push' : 'the linted range'
+  const touched = new Set(plan.touched)
+  const policiesFor = new Map(
+    failing
+      .filter((file) => !touched.has(file))
+      .map((file) => [file, governingPolicies(file, plan.policies)])
+  )
+  const lookups = [
+    ...new Set([
+      ...failing.filter((file) => touched.has(file)),
+      ...[...policiesFor.values()].flat().map((policy) => policy.path)
+    ])
+  ]
   const attributions = env.GITHUB_REPOSITORY
-    ? await attributeFiles(files, {
-        base,
-        head,
+    ? await attributeFiles(lookups, {
+        base: plan.base,
+        head: plan.head,
         repo: env.GITHUB_REPOSITORY,
         ref,
         api: api ?? createGithubApi(env)
       })
     : new Map()
-  const rows = files.map((file) => ({
+  const describe = (file) => describeAttribution(attributions.get(file), ref)
+  const rows = failing.map((file) => ({
     file,
-    description: describeAttribution(attributions.get(file), ref)
+    description: touched.has(file)
+      ? describe(file)
+      : `not changed in ${noun}; linted because ${policiesFor
+          .get(file)
+          .map(
+            (policy) => `${policy.why}, and ${policy.path} was changed by ${describe(policy.path)}`
+          )
+          .join('; ')}`
   }))
+  let logged = 0
   for (const { file, description } of rows) {
-    reporter.log(logText(`${file}: changed in this push by ${description}`))
+    const line = touched.has(file)
+      ? `${file}: changed in ${noun} by ${description}`
+      : `${file}: ${description}`
+    if (reporter.log(line)) {
+      logged += 1
+    }
   }
-  reporter.summary(renderAttributionSummary(rows))
+  reporter.summary(renderAttributionSummary(rows, { noun, logged }))
+}
+
+function readPlan(env, root) {
+  if (env.MAIN_PUSH_LINT_PLAN) {
+    return JSON.parse(readFileSync(env.MAIN_PUSH_LINT_PLAN, 'utf8'))
+  }
+  return computePlan({ env, root })
 }
 
 export async function main({
@@ -100,46 +182,64 @@ export async function main({
   api
 } = {}) {
   const reporter = createReporter(env)
-  let range
-  let files
+  let plan
   try {
-    const head = (await git(['rev-parse', env.HEAD_SHA || 'HEAD'], root)).trim()
-    const event = env.GITHUB_EVENT_NAME || 'workflow_dispatch'
-    const { base, scope } = await resolveRange({ event, before: env.BEFORE_SHA, head, cwd: root })
-    range = { base, head, scope }
-    files = await changedLintableFiles(base, head, root)
+    plan = await readPlan(env, root)
   } catch (error) {
-    reporter.error('Main-push lint', error.message)
-    reporter.summary(`### Main-push lint failed\n\n${markdownText(error.message)}`)
+    reportPlanFailure(env, error)
     return 1
   }
-  const rangeText = `${range.base.slice(0, 10)}..${range.head.slice(0, 10)}`
-  reporter.log(`Linting ${files.length} changed candidate file(s) in ${rangeText}: ${range.scope}.`)
+  const range = rangeText(plan)
+  const targets = [...plan.dirs, ...plan.files]
+  reporter.log(
+    `Linting ${plan.files.length} changed candidate file(s)${plan.dirs.length > 0 ? ` and every file under ${plan.dirs.join(', ')}` : ''} in ${range}: ${plan.scope}.`
+  )
+  for (const policy of plan.policies) {
+    reporter.log(`Lint policy changed: ${policy.why}; linting everything under ${policy.dir}.`)
+  }
   let results = { diagnostics: [], incomplete: [], linted: 0 }
-  if (files.length > 0) {
+  if (targets.length > 0) {
     try {
       const invocation = resolveOxlintInvocation(invocationRoot)
-      results = collectBatchResults(await runOxlint(files, { cwd: root, invocation }))
+      results = collectBatchResults(await runOxlint(targets, { cwd: root, invocation }))
     } catch (error) {
-      results.incomplete.push({ files, output: `${error.message}\n` })
+      results.incomplete.push({
+        files: targets,
+        reason: 'could not run oxlint',
+        output: `${error.message}\n`
+      })
     }
+  }
+  if (plan.unrepresentable.length > 0) {
+    results.incomplete.push({
+      files: plan.unrepresentable,
+      reason: 'the path is not valid UTF-8, so it cannot be passed to oxlint exactly',
+      output: ''
+    })
   }
   const { diagnostics, incomplete, linted } = results
   // The verdict, locations and summary are published before any optional PR lookup.
-  reportDiagnostics(diagnostics, reporter)
-  reportIncomplete(incomplete, reporter)
+  const loggedDiagnostics = reportDiagnostics(diagnostics, reporter)
+  const loggedIncomplete = reportIncomplete(incomplete, reporter)
   reporter.summary(
     renderLintSummary({
-      range: rangeText,
-      scope: range.scope,
-      candidates: files.length,
+      range,
+      scope: plan.scope,
+      candidates: plan.touched.length,
+      dirs: plan.dirs,
+      policies: plan.policies,
       linted,
       diagnostics,
-      incomplete
+      incomplete,
+      loggedDiagnostics,
+      loggedIncomplete
     })
   )
-  reporter.log(`oxlint linted ${linted} of ${files.length} candidate file(s).`)
-  await reportAttribution({ diagnostics, base: range.base, head: range.head, env, reporter, api })
+  reporter.log(
+    `oxlint reported linting ${linted} file(s); ${plan.touched.length} changed candidate file(s).`
+  )
+  await reportAttribution({ diagnostics, plan, env, reporter, api })
+  reporter.finish()
   return diagnostics.length > 0 || incomplete.length > 0 ? 1 : 0
 }
 

@@ -1,53 +1,15 @@
 // Pin which files a main push lints, against real shallow clones and the real oxlint.
-import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
 import process from 'node:process'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { resolveOxlintInvocation } from '../../tool-invocation/oxlint-cli-invocation.mjs'
 import { main } from './ci-main-push-changed-lint.mjs'
+import { CONFIG, createGitFixture, DEBUGGER, REPO_ROOT } from './main-push-git-test-fixture.mjs'
 import { changedLintableFiles, EMPTY_TREE_SHA, resolveRange } from './main-push-range.mjs'
 import { collectBatchResults, runOxlint } from './oxlint-batches.mjs'
 
-const REPO_ROOT = resolve(import.meta.dirname, '../../../..')
-const scratch = mkdtempSync(join(tmpdir(), 'orca-main-push-lint-'))
-afterAll(() => rmSync(scratch, { recursive: true, force: true }))
-
-function git(cwd, ...args) {
-  return execFileSync(
-    'git',
-    ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false', ...args],
-    { cwd, encoding: 'utf8' }
-  ).trim()
-}
-
-function commit(cwd, files, message) {
-  for (const [file, content] of Object.entries(files)) {
-    writeFileSync(join(cwd, file), content)
-  }
-  git(cwd, 'add', '-A')
-  git(cwd, 'commit', '-q', '-m', message)
-  return git(cwd, 'rev-parse', 'HEAD')
-}
-
-let counter = 0
-function makeOrigin() {
-  const origin = join(scratch, `origin-${counter++}`)
-  git(scratch, 'init', '-q', '-b', 'main', origin)
-  git(origin, 'config', 'uploadpack.allowAnySHA1InWant', 'true')
-  return origin
-}
-
-// The Actions checkout: one commit deep, so the push base must be fetched.
-function shallowCheckout(origin) {
-  const checkout = join(scratch, `checkout-${counter++}`)
-  git(scratch, 'clone', '-q', '--depth=1', '--no-local', `file://${origin}`, checkout)
-  return checkout
-}
-
-const DEBUGGER = 'debugger\n'
-const CONFIG = JSON.stringify({ rules: { 'no-debugger': 'error' } })
+const { git, commit, makeOrigin, shallowCheckout, scratchFile, cleanup } = createGitFixture()
+afterAll(cleanup)
 
 describe('main-push lint range', () => {
   const origin = makeOrigin()
@@ -110,13 +72,20 @@ describe('main-push lint range', () => {
       [b, c]
     ]) {
       // Like actions/checkout, each run fetches only its own pushed commit.
-      const cwd = shallowCheckout(pushes)
-      git(cwd, 'fetch', '-q', '--depth=1', 'origin', tip)
-      git(cwd, 'checkout', '-q', '--detach', tip)
+      const cwd = shallowCheckout(pushes, tip)
       const { base } = await resolveRange({ event: 'push', before, head: tip, cwd })
       runs.push(await changedLintableFiles(base, tip, cwd))
     }
     expect(runs).toEqual([['a.ts'], ['only-in-b.ts'], ['c.ts']])
+  })
+
+  it('reads parents only from commit headers, not from a message line that starts with parent', async () => {
+    const lone = makeOrigin()
+    const only = commit(lone, { 'a.ts': '' }, `root\n\nparent ${'1'.repeat(40)}`)
+    expect(git(lone, 'cat-file', 'commit', only)).toContain(`\nparent ${'1'.repeat(40)}`)
+    expect(
+      await resolveRange({ event: 'workflow_dispatch', head: only, cwd: shallowCheckout(lone) })
+    ).toMatchObject({ base: EMPTY_TREE_SHA })
   })
 
   it('treats a real root commit as a change from the empty tree', async () => {
@@ -153,7 +122,6 @@ describe('main-push lint range', () => {
 
   it('passes a clean push under a nested oxlint config', async () => {
     const nested = makeOrigin()
-    mkdirSync(join(nested, 'sub'))
     const tip = commit(
       nested,
       {
@@ -176,7 +144,7 @@ describe('main-push lint range', () => {
 
   it('publishes the failure before any PR lookup, and exits 1', async () => {
     const cwd = shallowCheckout(origin)
-    const summaryPath = join(scratch, `summary-${counter++}.md`)
+    const summaryPath = scratchFile('summary.md')
     const out = []
     const write = vi
       .spyOn(process.stdout, 'write')

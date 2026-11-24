@@ -16,12 +16,23 @@ jobs:
       # Read the merged PRs behind a lint failure so the summary can name them.
       pull-requests: read
     steps:
-      # Keep the fetch credentials: the lint fetches the push's old tip into this shallow checkout.
+      # Keep the fetch credentials: the plan fetches the push's old tip into this shallow checkout.
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/install-node-dependencies
-      - name: Lint files this push changed
-        timeout-minutes: 5
+      # Built-ins and Git only, on the runner's own Node: a push with no lintable file and no lint
+      # policy change stops here, before dependency setup. An unusable range fails here.
+      - name: Plan what this push lints
+        id: plan
+        timeout-minutes: 2
         env:
           BEFORE_SHA: ${{ github.event.before }}
+          MAIN_PUSH_LINT_PLAN: ${{ runner.temp }}/main-push-lint-plan.json
+        run: node config/scripts/ci/main-push-lint/plan-main-push-lint.mjs
+      - if: steps.plan.outputs.lint == 'true'
+        uses: ./.github/actions/install-node-dependencies
+      - name: Lint files this push changed
+        if: steps.plan.outputs.lint == 'true'
+        timeout-minutes: 5
+        env:
           GH_TOKEN: ${{ github.token }}
+          MAIN_PUSH_LINT_PLAN: ${{ runner.temp }}/main-push-lint-plan.json
         run: node config/scripts/ci/main-push-lint/ci-main-push-changed-lint.mjs

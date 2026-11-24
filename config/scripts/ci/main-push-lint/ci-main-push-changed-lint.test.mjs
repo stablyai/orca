@@ -53,17 +53,42 @@ describe('main-push changed-file lint', () => {
   })
 
   it('counts a batch only when oxlint finished it and explained any failure', () => {
+    const lintExit = { failed: true, exitCode: 1, reason: 'exit code 1' }
     const result = collectBatchResults([
-      { files: ['a.ts'], failed: true, output: `${maxLines(PANE)}\n${FINISHED}` },
-      { files: ['b.ts'], failed: true, output: 'thread panicked: out of memory\n' },
+      { files: ['a.ts'], ...lintExit, output: `${maxLines(PANE)}\n${FINISHED}` },
+      { files: ['b.ts'], failed: true, reason: 'killed by SIGABRT', output: 'thread panicked\n' },
       { files: ['c.ts'], failed: false, output: '' },
-      { files: ['d.ts'], failed: true, output: FINISHED },
+      { files: ['d.ts'], ...lintExit, output: FINISHED },
       // Nested configs drop "with N rules" from the Finished line.
-      { files: ['e.ts'], failed: false, output: 'Finished in 32ms on 1 file using 18 threads.\n' }
+      { files: ['e.ts'], failed: false, output: 'Finished in 32ms on 1 file using 18 threads.\n' },
+      // A crash after some diagnostics: keep them, and still report the run as unfinished.
+      {
+        files: ['f.ts', 'g.ts'],
+        failed: true,
+        exitCode: 101,
+        reason: 'exit code 101',
+        output: `${maxLines('f.ts')}\n${FINISHED}`
+      }
     ])
-    expect(result.diagnostics.map((diagnostic) => diagnostic.file)).toEqual([PANE])
+    expect(result.diagnostics.map((diagnostic) => diagnostic.file)).toEqual([PANE, 'f.ts'])
     expect(result.linted).toBe(4)
-    expect(result.incomplete.map((batch) => batch.files)).toEqual([['b.ts'], ['c.ts'], ['d.ts']])
+    expect(result.incomplete.map(({ files, reason }) => [files, reason])).toEqual([
+      [['b.ts'], 'killed by SIGABRT'],
+      [['c.ts'], 'no Finished line'],
+      [['d.ts'], 'exit code 1 without a parsed lint error'],
+      [['f.ts', 'g.ts'], 'exit code 101']
+    ])
+  })
+
+  it('keeps a diagnostic whose path holds a Unicode line separator', () => {
+    const odd = 'a b.ts'
+    const output = `${maxLines(odd)}\n${maxLines(PANE)}\n${FINISHED}`
+    const result = collectBatchResults([
+      { files: [odd, PANE], failed: true, exitCode: 1, reason: 'exit code 1', output }
+    ])
+    expect(result.diagnostics.map((diagnostic) => diagnostic.file)).toEqual([odd, PANE])
+    expect(result.diagnostics[0].message).toBe('File has too many lines (402).')
+    expect(result.incomplete).toEqual([])
   })
 
   it('keeps every untrusted path and message inside its own table cell and log line', () => {
@@ -182,7 +207,7 @@ describe('main-push changed-file lint', () => {
       if (path.startsWith('commits?')) {
         return path.includes('one.ts') ? [later, inPush, before] : [inPush, before]
       }
-      if (path === `commits/${inPush.sha}/pulls`) {
+      if (path.startsWith(`commits/${inPush.sha}/pulls?`)) {
         return [
           {
             number: 7,
@@ -205,7 +230,7 @@ describe('main-push changed-file lint', () => {
       '2 commits: commit bbbbbbbbbb by @bob (PR lookup unavailable; its subject cites #8, unverified); #7 by @ann (aaaaaaaaaa)'
     )
     expect(describeAttribution(result.get('two.ts'), 'main')).toBe('#7 by @ann (aaaaaaaaaa)')
-    expect(calls.filter((path) => path.endsWith('/pulls'))).toHaveLength(2)
+    expect(calls.filter((path) => path.includes('/pulls?'))).toHaveLength(2)
   })
 
   it('stops attribution at the first API failure and within its time budget', async () => {
@@ -261,5 +286,25 @@ describe('main-push changed-file lint', () => {
     expect(workflow).not.toMatch(/^\s*concurrency:/m)
     expect(workflow).toMatch(/^on:\n {2}push:\n {4}branches: \[main\]$/m)
     expect(workflow).toContain('BEFORE_SHA: ${{ github.event.before }}')
+  })
+
+  it('plans on the bare runner and installs dependencies only when there is something to lint', () => {
+    const workflow = readFileSync(
+      new URL('../../../../.github/workflows/main-push-lint.yml', import.meta.url),
+      'utf8'
+    )
+    const steps = workflow
+      .slice(workflow.indexOf('    steps:'))
+      .split(/\n {6}- /)
+      .slice(1)
+    expect(steps.map((step) => step.split('\n')[0])).toEqual([
+      'uses: actions/checkout@v6',
+      'name: Plan what this push lints',
+      "if: steps.plan.outputs.lint == 'true'",
+      'name: Lint files this push changed'
+    ])
+    expect(steps[1]).toContain('run: node config/scripts/ci/main-push-lint/plan-main-push-lint.mjs')
+    expect(steps[2]).toContain('uses: ./.github/actions/install-node-dependencies')
+    expect(steps[3]).toContain("if: steps.plan.outputs.lint == 'true'")
   })
 })

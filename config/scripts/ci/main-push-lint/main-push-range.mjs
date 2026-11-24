@@ -1,20 +1,34 @@
-// Pick the commit a main-push lint diffs against, and list the lintable files that changed.
+// Pick the commit a main-push lint diffs against, and list what changed between the two trees.
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 const MAX_BUFFER_BYTES = 64 * 1024 * 1024
 export const EMPTY_TREE_SHA = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
-// The extensions oxlint 1.x lints; ignorePatterns in .oxlintrc.json can still skip explicit paths.
+// The extensions oxlint 1.x lints; oxlint can still exclude an explicit path (ignorePatterns, minified files).
 const OXLINT_EXTENSION = /\.(?:[jt]sx?|[cm][jt]s|vue|astro|svelte)$/
+const STRICT_UTF8 = new TextDecoder('utf-8', { fatal: true })
 
 export async function git(args, cwd) {
   const { stdout } = await execFileAsync('git', args, { cwd, maxBuffer: MAX_BUFFER_BYTES })
   return stdout
 }
 
+async function gitBuffer(args, cwd) {
+  const { stdout } = await execFileAsync('git', args, {
+    cwd,
+    encoding: 'buffer',
+    maxBuffer: MAX_BUFFER_BYTES
+  })
+  return stdout
+}
+
 export function isZeroSha(sha) {
   return /^0+$/.test(sha ?? '')
+}
+
+export function isLintable(file) {
+  return OXLINT_EXTENSION.test(file)
 }
 
 async function hasCommit(sha, cwd) {
@@ -42,9 +56,12 @@ async function requireCommit(sha, label, cwd) {
   }
 }
 
-async function parentsOf(head, cwd) {
+export async function parentsOf(head, cwd) {
   // A shallow commit still records its parents, so a root commit is told apart from an unfetched parent.
-  return (await git(['cat-file', '-p', head], cwd))
+  // Headers end at the first blank line; a message line that starts with "parent " is not a header.
+  const object = await git(['cat-file', 'commit', head], cwd)
+  const end = object.indexOf('\n\n')
+  return (end === -1 ? object : object.slice(0, end))
     .split('\n')
     .filter((line) => line.startsWith('parent '))
     .map((line) => line.slice('parent '.length))
@@ -74,11 +91,40 @@ export async function resolveRange({ event, before, head, cwd }) {
   return { base: parent, scope: "the head commit's own change (manual run)" }
 }
 
+// Every path the two trees differ in, deletions included, with Git's exact bytes checked as UTF-8:
+// oxlint takes paths as strings, so a path that is not valid UTF-8 cannot be passed on exactly.
+export async function changedPaths(base, head, cwd) {
+  const output = await gitBuffer(['diff', '--name-status', '-z', '--no-renames', base, head], cwd)
+  const fields = []
+  let start = 0
+  for (let index = 0; index < output.length; index += 1) {
+    if (output[index] === 0) {
+      fields.push(output.subarray(start, index))
+      start = index + 1
+    }
+  }
+  const changes = []
+  const unrepresentable = []
+  for (let index = 0; index + 1 < fields.length; index += 2) {
+    const status = fields[index].toString('latin1')
+    try {
+      changes.push({ status, path: STRICT_UTF8.decode(fields[index + 1]) })
+    } catch {
+      // Show the bytes as written, with each invalid byte as \xNN, so the file can still be found.
+      unrepresentable.push(
+        [...fields[index + 1]]
+          .map((byte) => (byte < 0x80 ? String.fromCharCode(byte) : `\\x${byte.toString(16)}`))
+          .join('')
+      )
+    }
+  }
+  return { changes, unrepresentable }
+}
+
+// Lintable files the push added or modified; deletions have nothing to lint.
 export async function changedLintableFiles(base, head, cwd) {
-  // NUL-separated so any byte a path can hold survives; deletions have nothing to lint.
-  const output = await git(
-    ['diff', '--name-only', '-z', '--no-renames', '--diff-filter=d', base, head],
-    cwd
-  )
-  return output.split('\0').filter((file) => file && OXLINT_EXTENSION.test(file))
+  const { changes } = await changedPaths(base, head, cwd)
+  return changes
+    .filter((change) => change.status !== 'D' && isLintable(change.path))
+    .map((change) => change.path)
 }

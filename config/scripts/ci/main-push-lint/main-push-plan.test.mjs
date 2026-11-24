@@ -1,0 +1,267 @@
+// Pin what a main push lints when it changes lint policy, and that the plan step gates dependency setup.
+import { execFileSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+import process from 'node:process'
+import { afterAll, describe, expect, it, vi } from 'vitest'
+import { main as lint } from './ci-main-push-changed-lint.mjs'
+import {
+  CONFIG,
+  createGitFixture,
+  DEBUGGER,
+  LENIENT,
+  REPO_ROOT
+} from './main-push-git-test-fixture.mjs'
+import { oxlintVersionFromLockfile, planLint } from './main-push-plan.mjs'
+import { main as plan } from './plan-main-push-lint.mjs'
+
+const { git, commit, makeOrigin, shallowCheckout, scratchFile, cleanup } = createGitFixture()
+afterAll(cleanup)
+
+const CLEAN = 'export {}\n'
+const lock = (version) =>
+  `importers:\n\n  .:\n    devDependencies:\n      oxlint:\n        specifier: ^${version}\n        version: ${version}(oxlint-tsgolint@7.0.2007)\n`
+
+// Push `files` on top of `setup`, returning the push's before and after SHAs.
+function push(setup, files) {
+  const origin = makeOrigin()
+  const before = commit(origin, setup, 'setup (#1)')
+  const after = commit(origin, files, 'push (#2)')
+  return { origin, before, after }
+}
+
+async function planFor({ origin, before, after }) {
+  const cwd = shallowCheckout(origin, after)
+  git(cwd, 'fetch', '-q', '--depth=1', 'origin', before)
+  return planLint({ base: before, head: after, cwd })
+}
+
+// The workflow's two steps: plan into a file, then lint from it, with stdout and the summary captured.
+async function runWorkflow({ origin, before, after }, api = async () => []) {
+  const cwd = shallowCheckout(origin, after)
+  const env = {
+    GITHUB_EVENT_NAME: 'push',
+    BEFORE_SHA: before,
+    GITHUB_REPOSITORY: 'o/r',
+    GITHUB_STEP_SUMMARY: scratchFile('summary.md'),
+    GITHUB_OUTPUT: scratchFile('output.txt'),
+    MAIN_PUSH_LINT_PLAN: scratchFile('plan.json')
+  }
+  const out = []
+  const write = vi
+    .spyOn(process.stdout, 'write')
+    .mockImplementation((chunk) => out.push(String(chunk)))
+  let planExit
+  let lintExit = null
+  try {
+    planExit = await plan({ env, root: cwd })
+    const gated = existsSync(env.GITHUB_OUTPUT) && readFileSync(env.GITHUB_OUTPUT, 'utf8')
+    if (gated === 'lint=true\n') {
+      lintExit = await lint({ env, root: cwd, api, invocationRoot: REPO_ROOT })
+    }
+  } finally {
+    write.mockRestore()
+  }
+  return {
+    planExit,
+    lintExit,
+    output: existsSync(env.GITHUB_OUTPUT) ? readFileSync(env.GITHUB_OUTPUT, 'utf8') : '',
+    log: out.join(''),
+    summary: existsSync(env.GITHUB_STEP_SUMMARY)
+      ? readFileSync(env.GITHUB_STEP_SUMMARY, 'utf8')
+      : ''
+  }
+}
+
+describe('main-push lint plan', () => {
+  it('lints only touched source on an ordinary push, leaving older files alone', async () => {
+    const pushed = push(
+      { '.oxlintrc.json': LENIENT, 'old.ts': DEBUGGER, 'a.ts': CLEAN },
+      { 'a.ts': 'export const a = 1\n' }
+    )
+    expect(await planFor(pushed)).toMatchObject({ files: ['a.ts'], dirs: [], policies: [] })
+    const run = await runWorkflow(pushed)
+    expect([run.planExit, run.lintExit]).toEqual([0, 0])
+  })
+
+  it('lints the whole tree when a stricter root config lands after newer source', async () => {
+    // newer.ts passed the old config; the config PR, based on an older main, never saw it.
+    const pushed = push(
+      { '.oxlintrc.json': LENIENT, 'newer.ts': DEBUGGER },
+      { '.oxlintrc.json': CONFIG }
+    )
+    expect(await planFor(pushed)).toMatchObject({ files: [], dirs: ['.'] })
+    const pulls = async (path) =>
+      path.startsWith('compare/')
+        ? { total_commits: 1, commits: [{ sha: pushed.after }] }
+        : path.startsWith('commits?')
+          ? [{ sha: pushed.after, author: { login: 'cfg' }, commit: { message: 'push (#2)' } }]
+          : []
+    const run = await runWorkflow(pushed, pulls)
+    expect([run.planExit, run.lintExit]).toEqual([0, 1])
+    expect(run.log).toContain('::error file=newer.ts,line=1,col=1,title=eslint(no-debugger)::')
+    expect(run.log).toContain(
+      `newer.ts: not changed in this push; linted because .oxlintrc.json changed, and .oxlintrc.json was changed by commit ${pushed.after.slice(0, 10)} by @cfg (no merged PR into main)`
+    )
+    expect(run.summary).toContain('Lint policy changed, so the whole scope it governs is linted')
+  })
+
+  it('lints a subtree when its nested exemption is deleted', async () => {
+    const pushed = push(
+      {
+        '.oxlintrc.json': CONFIG,
+        'sub/.oxlintrc.json': LENIENT,
+        'sub/x.ts': DEBUGGER,
+        'top.ts': CLEAN
+      },
+      { 'sub/.oxlintrc.json': null }
+    )
+    expect(await planFor(pushed)).toMatchObject({ files: [], dirs: ['sub'] })
+    const run = await runWorkflow(pushed)
+    expect([run.planExit, run.lintExit]).toEqual([0, 1])
+    expect(run.log).toContain('::error file=sub/x.ts,line=1,col=1')
+    expect(run.log).not.toContain('file=top.ts')
+  })
+
+  it('walks a changed subtree and still lints touched files outside it', async () => {
+    const pushed = push(
+      {
+        '.oxlintrc.json': CONFIG,
+        'sub/.oxlintrc.json': LENIENT,
+        'sub/old.ts': DEBUGGER,
+        'a.ts': CLEAN
+      },
+      { 'sub/.oxlintrc.json': CONFIG, 'a.ts': DEBUGGER, 'sub/new.ts': CLEAN }
+    )
+    expect(await planFor(pushed)).toMatchObject({
+      touched: ['a.ts', 'sub/new.ts'],
+      files: ['a.ts'],
+      dirs: ['sub']
+    })
+    const run = await runWorkflow(pushed)
+    expect(run.lintExit).toBe(1)
+    expect(run.log).toContain('::error file=sub/old.ts,')
+    expect(run.log).toContain('::error file=a.ts,')
+  })
+
+  it('follows extends: a config that extends a changed file has its scope linted', async () => {
+    const nested = JSON.stringify({ extends: ['../base.json'] })
+    const pushed = push(
+      {
+        '.oxlintrc.json': LENIENT,
+        'base.json': LENIENT,
+        'm/.oxlintrc.json': nested,
+        'm/x.ts': DEBUGGER
+      },
+      { 'base.json': CONFIG }
+    )
+    expect(await planFor(pushed)).toMatchObject({
+      dirs: ['m'],
+      policies: [
+        { dir: 'm', path: 'base.json', why: 'm/.oxlintrc.json extends base.json, which changed' }
+      ]
+    })
+    expect((await runWorkflow(pushed)).lintExit).toBe(1)
+  })
+
+  it('treats a new locked oxlint version as a root policy change, and other lockfile edits as none', async () => {
+    expect(oxlintVersionFromLockfile(lock('1.94.0'))).toBe('1.94.0')
+    const bumped = push({ 'pnpm-lock.yaml': lock('1.94.0') }, { 'pnpm-lock.yaml': lock('1.95.0') })
+    expect(await planFor(bumped)).toMatchObject({
+      dirs: ['.'],
+      policies: [
+        { path: 'pnpm-lock.yaml', why: 'the locked oxlint version changed (1.94.0 to 1.95.0)' }
+      ]
+    })
+    const other = push(
+      { 'pnpm-lock.yaml': lock('1.94.0') },
+      { 'pnpm-lock.yaml': `${lock('1.94.0')}  other: {}\n` }
+    )
+    expect(await planFor(other)).toMatchObject({ dirs: [], policies: [] })
+  })
+
+  it('skips dependency setup for a docs-only push and fails an unusable range in the plan step', async () => {
+    const docs = await runWorkflow(
+      push({ '.oxlintrc.json': CONFIG, 'a.ts': CLEAN }, { 'README.md': '#\n' })
+    )
+    expect(docs).toMatchObject({ planExit: 0, lintExit: null, output: 'lint=false\n' })
+    expect(docs.summary).toContain('Nothing to lint')
+    const config = await runWorkflow(
+      push({ '.oxlintrc.json': CONFIG }, { '.oxlintrc.json': LENIENT })
+    )
+    expect(config).toMatchObject({ planExit: 0, lintExit: 0, output: 'lint=true\n' })
+    const pushed = push({ 'a.ts': CLEAN }, { 'a.ts': DEBUGGER })
+    const broken = await runWorkflow({ ...pushed, before: 'f'.repeat(40) })
+    expect(broken).toMatchObject({ planExit: 1, lintExit: null, output: '' })
+    expect(broken.log).toMatch(/^::error title=Main-push lint::Cannot fetch the push base f+ /m)
+  })
+
+  it('does not guess why oxlint excluded a path it was given', async () => {
+    const run = await runWorkflow(
+      push({ '.oxlintrc.json': CONFIG }, { 'bundle.min.js': DEBUGGER, 'a.ts': CLEAN })
+    )
+    expect(run.lintExit).toBe(0)
+    expect(run.summary).toContain(
+      'Planned: 2 changed candidate file(s). oxlint reported linting 1 file(s). oxlint excluded the other 1 itself.'
+    )
+    expect(run.summary).not.toContain('ignorePatterns')
+  })
+
+  it('reports a path that is not valid UTF-8 instead of linting a different path', async () => {
+    const origin = makeOrigin()
+    const before = commit(origin, { '.oxlintrc.json': CONFIG, 'a.ts': CLEAN }, 'setup')
+    // Build the commit with plumbing and a scratch index, so no file system has to hold the name and main
+    // (which the checkout clones) stays at the clean base.
+    const index = { ...process.env, GIT_INDEX_FILE: scratchFile('index') }
+    const plumbing = (args, input) =>
+      execFileSync('git', args, { cwd: origin, env: index, input, encoding: 'utf8' }).trim()
+    plumbing(['read-tree', before])
+    const blob = git(origin, 'rev-parse', 'HEAD:a.ts')
+    plumbing(
+      ['update-index', '--index-info'],
+      Buffer.concat([
+        Buffer.from(`100644 blob ${blob}\tbad`),
+        Buffer.from([0xff]),
+        Buffer.from('.ts\n')
+      ])
+    )
+    const after = plumbing(
+      [
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@example.com',
+        'commit-tree',
+        plumbing(['write-tree']),
+        '-p',
+        before,
+        '-m',
+        'odd byte'
+      ],
+      ''
+    )
+    // Some file systems reject the name, so fetch the pushed commit without checking it out.
+    const cwd = shallowCheckout(origin, before)
+    git(cwd, 'fetch', '-q', '--depth=1', 'origin', after)
+    expect(await planLint({ base: before, head: after, cwd })).toMatchObject({
+      files: [],
+      unrepresentable: ['bad\\xff.ts']
+    })
+    const out = []
+    const write = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation((chunk) => out.push(String(chunk)))
+    let exit
+    try {
+      exit = await lint({
+        env: { GITHUB_EVENT_NAME: 'push', BEFORE_SHA: before, HEAD_SHA: after },
+        root: cwd,
+        invocationRoot: REPO_ROOT
+      })
+    } finally {
+      write.mockRestore()
+    }
+    expect(exit).toBe(1)
+    expect(out.join('')).toContain('the path is not valid UTF-8')
+    expect(out.join('')).toContain('Not linted: bad\\\\xff.ts')
+  })
+})

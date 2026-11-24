@@ -1,11 +1,13 @@
 // Run oxlint over explicit paths in bounded batches and tell lint errors apart from runs that did not finish.
 import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 
-const execFileAsync = promisify(execFile)
 const MAX_BUFFER_BYTES = 64 * 1024 * 1024
 // Windows caps a whole command line at 32,767 characters; leave room for node, the bin path and options.
 const MAX_PATH_CHARS_PER_RUN = 24_000
+// The step times out at 5 minutes; stop linting well before, so finished batches and PR lookups still report.
+export const LINT_BUDGET_MS = 180_000
+// oxlint exits 1 when it reports lint errors; any other exit, a signal or a spawn error is operational.
+const LINT_ERROR_EXIT = 1
 // oxlint prints this only after it has linted every path it accepted. With nested configs it omits
 // "with N rules": `Finished in 32ms on 1 file using 18 threads.`
 const FINISHED_LINE = /^Finished in .* on (\d+) files? (?:with \d+ rules? )?using /m
@@ -29,10 +31,53 @@ export function batchPaths(files, maxChars = MAX_PATH_CHARS_PER_RUN) {
   return batches
 }
 
-// Each batch keeps its own output, so one batch's lint errors never hide another batch's failure.
-export async function runOxlint(files, { cwd, invocation }) {
+function runOnce(command, args, options) {
+  return new Promise((resolve) => {
+    execFile(command, args, options, (error, stdout, stderr) => {
+      resolve({ error, output: `${stdout ?? ''}${stderr ?? ''}` })
+    })
+  })
+}
+
+// What stopped a child, if anything other than a clean exit: exit code, signal, timeout or spawn error.
+function describeFailure(error, timedOut) {
+  if (!error) {
+    return { failed: false }
+  }
+  if (timedOut) {
+    return { failed: true, reason: 'stopped when the lint time budget ran out' }
+  }
+  if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+    return { failed: true, reason: 'its output exceeded 64 MiB' }
+  }
+  if (error.signal) {
+    return { failed: true, reason: `killed by ${error.signal}` }
+  }
+  if (typeof error.code === 'number') {
+    return { failed: true, exitCode: error.code, reason: `exit code ${error.code}` }
+  }
+  return { failed: true, reason: `could not run oxlint (${error.code ?? error.message})` }
+}
+
+// Each batch keeps its own output and outcome, so one batch's lint errors never hide another batch's failure.
+// One deadline covers every batch: a stalled run is stopped, and later batches are reported as not run.
+export async function runOxlint(
+  paths,
+  { cwd, invocation, budgetMs = LINT_BUDGET_MS, maxChars = MAX_PATH_CHARS_PER_RUN }
+) {
+  const deadline = Date.now() + budgetMs
   const results = []
-  for (const paths of batchPaths(files)) {
+  for (const batch of batchPaths(paths, maxChars)) {
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) {
+      results.push({
+        files: batch,
+        failed: true,
+        reason: 'not run: the lint time budget ran out',
+        output: ''
+      })
+      continue
+    }
     // `--` keeps a path such as `--format=x.ts` from being read as an option.
     const args = [
       ...invocation.prefixArgs,
@@ -41,18 +86,16 @@ export async function runOxlint(files, { cwd, invocation }) {
       '--quiet',
       '--no-error-on-unmatched-pattern',
       '--',
-      ...paths
+      ...batch
     ]
-    try {
-      const { stdout, stderr } = await execFileAsync(invocation.command, args, {
-        cwd,
-        maxBuffer: MAX_BUFFER_BYTES
-      })
-      results.push({ files: paths, failed: false, output: `${stdout}${stderr}` })
-    } catch (error) {
-      const output = `${error.stdout ?? ''}${error.stderr ?? ''}`
-      results.push({ files: paths, failed: true, output: output || `${error.message}\n` })
-    }
+    const { error, output } = await runOnce(invocation.command, args, {
+      cwd,
+      maxBuffer: MAX_BUFFER_BYTES,
+      timeout: remaining,
+      killSignal: 'SIGKILL'
+    })
+    // Only the timeout kills a child here.
+    results.push({ files: batch, output, ...describeFailure(error, Boolean(error?.killed)) })
   }
   return results
 }
@@ -63,10 +106,11 @@ function decodeAnnotation(value) {
 }
 
 // Parses `oxlint --format github` lines: `::error file=<path>,line=<n>,...,title=<rule>::<path>:<line>:<col>: <message>`.
+// The format escapes only CR, LF and %, so a line can hold U+2028/U+2029; split on LF and let `.` match them.
 export function parseGithubDiagnostics(output) {
   const diagnostics = []
-  for (const line of output.split('\n')) {
-    const match = /^::(error|warning) (.*?)::(.*)$/.exec(line.trim())
+  for (const rawLine of output.split('\n')) {
+    const match = /^::(error|warning) (.*?)::(.*)$/s.exec(rawLine.replace(/\r$/, ''))
     if (!match) {
       continue
     }
@@ -92,7 +136,8 @@ export function parseGithubDiagnostics(output) {
   return diagnostics
 }
 
-// A batch counts only if oxlint finished it and any nonzero exit is explained by a parsed error.
+// A batch counts only if oxlint finished it and exited cleanly, or exited 1 with a parsed lint error.
+// Errors parsed from an unfinished batch are still reported, next to why it did not finish.
 export function collectBatchResults(batches) {
   const diagnostics = []
   const incomplete = []
@@ -101,12 +146,26 @@ export function collectBatchResults(batches) {
     const errors = parseGithubDiagnostics(batch.output).filter(
       (diagnostic) => diagnostic.severity === 'error'
     )
-    diagnostics.push(...errors)
+    for (const error of errors) {
+      diagnostics.push(error)
+    }
     const finished = FINISHED_LINE.exec(batch.output)
-    if (finished && (!batch.failed || errors.length > 0)) {
+    const explained = !batch.failed || (batch.exitCode === LINT_ERROR_EXIT && errors.length > 0)
+    if (finished && explained) {
       linted += Number(finished[1])
     } else {
-      incomplete.push({ files: batch.files, output: batch.output })
+      const reasons = []
+      if (batch.failed) {
+        reasons.push(
+          batch.exitCode === LINT_ERROR_EXIT && errors.length === 0
+            ? 'exit code 1 without a parsed lint error'
+            : batch.reason
+        )
+      }
+      if (!finished && !batch.failed) {
+        reasons.push('no Finished line')
+      }
+      incomplete.push({ files: batch.files, reason: reasons.join('; '), output: batch.output })
     }
   }
   return { diagnostics, incomplete, linted }

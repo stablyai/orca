@@ -4,6 +4,7 @@ const FAILURE_TABLE_BYTES = 384 * 1024
 const ATTRIBUTION_TABLE_BYTES = 192 * 1024
 const MAX_CELL_CHARS = 500
 const MAX_EXCERPT_CHARS = 2_000
+export const MAX_LOG_LINE_CHARS = 1_000
 const MAX_INCOMPLETE_SHOWN = 5
 const MAX_PATHS_SHOWN = 10
 
@@ -29,7 +30,7 @@ export function markdownText(value) {
   )
 }
 
-function markdownCode(value) {
+export function markdownCode(value) {
   return `<code>${markdownText(value)}</code>`
 }
 
@@ -45,14 +46,17 @@ export function describeLocation(diagnostic) {
 
 // The runner reads a line that starts with `::` or contains `##[` as a workflow command, so a path
 // such as `::stop-commands::x.ts` must not reach the log as one.
-export function logText(value) {
-  return visibleText(value)
+export function logText(value, maxChars = Number.POSITIVE_INFINITY) {
+  return visibleText(truncate(String(value), maxChars))
     .replace(/^( *):/, (_, spaces) => `${spaces}\\u003a`)
     .replaceAll('##[', '##\\u005b')
 }
 
-export function logLine(diagnostic) {
-  return logText(`${describeLocation(diagnostic)} ${diagnostic.rule} ${diagnostic.message}`)
+export function logLine(diagnostic, maxChars = MAX_LOG_LINE_CHARS) {
+  return logText(
+    `${describeLocation(diagnostic)} ${diagnostic.rule} ${diagnostic.message}`,
+    maxChars
+  )
 }
 
 // Escape a value for the data part of a workflow command (`::error ...::<data>`).
@@ -79,21 +83,53 @@ function boundedRows(items, renderRow, maxBytes) {
   return { shown, omitted: items.length - shown.length }
 }
 
-function coverageLine({ candidates, linted, incomplete }) {
-  const skipped = incomplete.reduce((total, batch) => total + batch.files.length, 0)
-  const ignored =
-    skipped === 0 && linted < candidates
-      ? ` (oxlint's ignorePatterns skipped ${candidates - linted})`
-      : ''
-  const partial =
-    skipped > 0
-      ? `; ${skipped} candidate(s) were in oxlint runs that did not finish, so coverage is incomplete`
-      : ''
-  return `oxlint linted ${linted} of ${candidates} changed candidate file(s)${ignored}${partial}.`
+// Where the log stops, so an omission note never points at rows the log also left out.
+function logNote(total, logged, noun) {
+  return logged >= total
+    ? `the step log lists every ${noun}`
+    : `the step log lists the first ${logged} of ${total}`
 }
 
-export function renderLintSummary({ range, scope, candidates, linted, diagnostics, incomplete }) {
-  const header = `Range ${markdownCode(range)}: ${scope}. ${coverageLine({ candidates, linted, incomplete })}`
+function coverageLine({ candidates, dirs, linted, incomplete }) {
+  const walked =
+    dirs.length > 0 ? `, plus every lintable file under ${dirs.map(markdownCode).join(', ')}` : ''
+  const unfinished = incomplete.reduce((total, batch) => total + batch.files.length, 0)
+  const partial =
+    unfinished > 0
+      ? `; ${unfinished} path(s) were in oxlint runs that did not finish, so coverage is incomplete`
+      : ''
+  // oxlint does not say which explicit paths it excluded or why, so neither does this.
+  const excluded =
+    dirs.length === 0 && unfinished === 0 && linted < candidates
+      ? ` oxlint excluded the other ${candidates - linted} itself.`
+      : ''
+  return `Planned: ${candidates} changed candidate file(s)${walked}. oxlint reported linting ${linted} file(s)${partial}.${excluded}`
+}
+
+function policyLine(policies) {
+  return policies.length > 0
+    ? `Lint policy changed, so the whole scope it governs is linted: ${policies.map((policy) => markdownText(policy.why)).join('; ')}.`
+    : ''
+}
+
+export function renderLintSummary({
+  range,
+  scope,
+  candidates,
+  dirs = [],
+  policies = [],
+  linted,
+  diagnostics,
+  incomplete,
+  loggedDiagnostics = diagnostics.length,
+  loggedIncomplete = incomplete.length
+}) {
+  const header = [
+    `Range ${markdownCode(range)}: ${scope}. ${coverageLine({ candidates, dirs, linted, incomplete })}`,
+    policyLine(policies)
+  ]
+    .filter(Boolean)
+    .join('\n\n')
   if (diagnostics.length === 0 && incomplete.length === 0) {
     return `### Main-push lint passed\n\n${header}\n`
   }
@@ -114,7 +150,10 @@ export function renderLintSummary({ range, scope, candidates, linted, diagnostic
       ''
     )
     if (omitted > 0) {
-      lines.push(`${omitted} more error(s) are not shown here; the step log lists them.`, '')
+      lines.push(
+        `${omitted} more error(s) are not shown here; ${logNote(diagnostics.length, loggedDiagnostics, 'error')}.`,
+        ''
+      )
     }
   }
   for (const batch of incomplete.slice(0, MAX_INCOMPLETE_SHOWN)) {
@@ -124,38 +163,38 @@ export function renderLintSummary({ range, scope, candidates, linted, diagnostic
         ? ` and ${batch.files.length - MAX_PATHS_SHOWN} more`
         : ''
     lines.push(
-      `#### oxlint did not finish ${batch.files.length} file(s): ${paths}${more}`,
+      `#### oxlint did not finish ${batch.files.length} path(s) (${markdownText(batch.reason)}): ${paths}${more}`,
       '',
-      preformatted(batch.output),
+      preformatted(batch.output || '(no output)'),
       ''
     )
   }
   if (incomplete.length > MAX_INCOMPLETE_SHOWN) {
     lines.push(
-      `${incomplete.length - MAX_INCOMPLETE_SHOWN} more unfinished oxlint run(s) are in the step log.`,
+      `${incomplete.length - MAX_INCOMPLETE_SHOWN} more unfinished oxlint run(s) are not shown here; ${logNote(incomplete.length, loggedIncomplete, 'unfinished run')}.`,
       ''
     )
   }
   return lines.join('\n')
 }
 
-export function renderAttributionSummary(rows) {
+export function renderAttributionSummary(rows, { noun = 'this push', logged = rows.length } = {}) {
   const { shown, omitted } = boundedRows(
     rows,
     ({ file, description }) => `| ${markdownCode(file)} | ${markdownText(description)} |`,
     ATTRIBUTION_TABLE_BYTES
   )
   return [
-    '#### Commits in this push that changed each failing file',
+    `#### Commits in ${noun} that changed each failing file`,
     '',
-    'Newest first. The error may predate them if the file already failed before this push; older revisions are not linted.',
+    `Newest first. The error may predate them if the file already failed before ${noun}; older revisions are not linted.`,
     '',
-    '| File | Changed in this push by |',
+    `| File | Changed in ${noun} by |`,
     '| --- | --- |',
     ...shown,
     '',
     ...(omitted > 0
-      ? [`${omitted} more file(s) are not shown here; the step log lists them.`, '']
+      ? [`${omitted} more file(s) are not shown here; ${logNote(rows.length, logged, 'file')}.`, '']
       : [])
   ].join('\n')
 }

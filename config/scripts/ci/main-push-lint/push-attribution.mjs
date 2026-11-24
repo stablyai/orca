@@ -56,8 +56,15 @@ export function pullNumberFromSubject(subject) {
   return match ? Number(match[1]) : null
 }
 
+// One page of results; a full page may have more behind it.
+const MAX_PAGE = 100
+
 // Only a merged PR into this repo and branch counts; open or other-base associations are not evidence.
+// A full page of associations may hide more, so it cannot show that a PR is the only one, or that none exists.
 export function choosePull(pulls, { repo, ref }) {
+  if (pulls.length >= MAX_PAGE) {
+    return { status: 'partial' }
+  }
   const merged = pulls.filter(
     (pull) => pull.merged_at && pull.base?.ref === ref && pull.base?.repo?.full_name === repo
   )
@@ -114,15 +121,19 @@ export async function attributeFiles(
       continue
     }
     try {
-      // Main is linear, so the push's commits to this file are the newest entries in its history.
+      // Main is linear, so the push's commits to this file are the newest entries in its history. Asking for one
+      // more than the push holds shows where they end; a full page of push commits may have more behind it.
+      const perPage = Math.min(MAX_PAGE, pushShas.size + 1)
       const history = await api(
-        `commits?sha=${head}&path=${encodeURIComponent(file)}&per_page=${Math.min(100, pushShas.size)}`
+        `commits?sha=${head}&path=${encodeURIComponent(file)}&per_page=${perPage}`
       )
+      const inPush = history.filter((entry) => pushShas.has(entry.sha))
       const commits = []
-      for (const commit of history.filter((entry) => pushShas.has(entry.sha))) {
+      for (const commit of inPush) {
         commits.push(await describeCommit(commit))
       }
-      results.set(file, { status: 'found', commits })
+      const partial = history.length >= perPage && inPush.length === history.length
+      results.set(file, { status: 'found', commits, partial })
     } catch (error) {
       results.set(file, { status: 'unavailable', reason: error.message })
     }
@@ -136,7 +147,7 @@ async function lookupCommit(commit, { repo, ref, api }) {
     return {
       sha: commit.sha,
       author,
-      pull: choosePull(await api(`commits/${commit.sha}/pulls`), { repo, ref })
+      pull: choosePull(await api(`commits/${commit.sha}/pulls?per_page=${MAX_PAGE}`), { repo, ref })
     }
   } catch {
     const subjectHint = pullNumberFromSubject(commit.commit?.message?.split('\n')[0])
@@ -154,6 +165,8 @@ function describeCommit({ sha, author, pull }, ref) {
       return `commit ${commit}${by} (several merged PRs: ${pull.numbers.map((number) => `#${number}`).join(', ')})`
     case 'none':
       return `commit ${commit}${by} (no merged PR into ${ref})`
+    case 'partial':
+      return `commit ${commit}${by} (PR lookup incomplete: ${MAX_PAGE} or more associated PRs)`
     default:
       return `commit ${commit}${by} (PR lookup unavailable${pull.subjectHint ? `; its subject cites #${pull.subjectHint}, unverified` : ''})`
   }
@@ -168,5 +181,8 @@ export function describeAttribution(entry, ref) {
     return 'no commit added by this push changed it'
   }
   const commits = entry.commits.map((commit) => describeCommit(commit, ref))
+  if (entry.partial) {
+    return `at least ${commits.length} commits, listing stopped at one page of ${MAX_PAGE}: ${commits.join('; ')}`
+  }
   return commits.length === 1 ? commits[0] : `${commits.length} commits: ${commits.join('; ')}`
 }
