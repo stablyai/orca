@@ -118,6 +118,10 @@ if (selectedModel && !models.some((model) => model.file === selectedModel)) {
   throw new Error(`Unknown native model: ${selectedModel}`)
 }
 
+// Every selected model is built and validated before any bundle is replaced, so a refused one
+// leaves the vendor set and its manifest exactly as they were.
+const built = []
+
 for (const model of models) {
   if (selectedModel && model.file !== selectedModel) {
     continue
@@ -211,8 +215,16 @@ for (const model of models) {
   }
   execFileSync('git', ['diff', '--quiet', revision, '--', ...inputFiles], { cwd: upstream })
   const bytes = result.outputFiles[0].contents
+  built.push({
+    output,
+    bytes,
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+    provenance: { [model.provenance]: { revision, esbuild: version, sources: inputFiles } }
+  })
+}
+for (const { output, bytes, sha256, provenance } of built) {
   writeFileSync(join(project, output), bytes)
-  manifest.sha256[output] = createHash('sha256').update(bytes).digest('hex')
-  manifest[model.provenance] = { revision, esbuild: version, sources: inputFiles }
+  manifest.sha256[output] = sha256
+  Object.assign(manifest, provenance)
 }
 writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
