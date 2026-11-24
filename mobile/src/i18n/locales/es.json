@@ -2789,11 +2789,9 @@
       "shift": "Shift"
     },
     "activeContent": {
-      "createTab": "Crear pestaña",
       "creatingTab": "Creando…",
       "fileTitle": "Archivo",
       "loadingTerminal": "Cargando terminal",
-      "noTabs": "No hay pestañas en esta sesión",
       "retryLoadingTerminal": "Reintentar cargar la terminal",
       "terminalTakingLonger": "La terminal está tardando más de lo esperado"
     },
@@ -2895,21 +2893,11 @@
       "workflow": "Flujo de trabajo en segundo plano"
     },
     "browserTabActionSheet": {
-      "forward": "Adelante",
-      "reload": "Recargar",
       "title": "Navegador",
       "hardReload": "Forzar recarga"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "Cerrar las otras pestañas"
-    },
-    "bulkTabClose": {
-      "confirm": "Cerrar pestañas",
-      "description": "Se cerrarán las pestañas seleccionadas. Las pestañas fijadas permanecerán abiertas.",
-      "titleEditors": "¿Cerrar todas las pestañas del editor?",
-      "titleLeft": "¿Cerrar las pestañas de la izquierda?",
-      "titleOthers": "¿Cerrar las otras pestañas?",
-      "titleRight": "¿Cerrar las pestañas de la derecha?"
     },
     "commandDock": {
       "liveInputHint": "El texto que escribes se envía directamente a la terminal activa.",
@@ -3317,7 +3305,6 @@
       "file": "Archivo",
       "markdown": "Markdown",
       "markdownNote": "Nota en Markdown",
-      "newBrowser": "Nuevo navegador",
       "newTab": "Nueva pestaña",
       "notesCopied": "Notas copiadas",
       "notesHint": "Elige una sesión de agente a la que enviar las notas actuales.",
@@ -3333,11 +3320,9 @@
       "shellWsl": "WSL",
       "terminalName": "Nombre de la terminal",
       "unsavedMarkdown": "Cambios en Markdown sin guardar",
-      "urlPrompt": "Introduce una URL o deja el campo en blanco para abrir una pestaña nueva.",
       "allowAutoClose": "Permitir cierre automático",
       "agents": "Agentes",
       "renameTerminalFailed": "No se pudo cambiar el nombre del terminal. {{reason}}",
-      "browserStreamingUnavailable": "Este host no puede transmitir pestañas del navegador",
       "cli": "CLI",
       "cliOnly": "Solo CLI",
       "more": "Más",
@@ -3616,8 +3601,6 @@
       "mailOwnerUnconfirmed": "Orca no pudo confirmar que este mensaje siga estando dirigido a este chat."
     },
     "workerAutoClose": {
-      "running": "Agente de orquestación temporal · Se cierra 2 minutos después de terminar",
-      "finished": "Agente de orquestación temporal finalizado · Se cierra en {{countdown}}",
       "keepOpen": "Mantener abierto"
     },
     "terminalLayoutSheet": {
@@ -3699,7 +3682,6 @@
     "tabBar": {
       "oneTab": "1 pestaña",
       "tabCount": "Pestañas: {{count}}",
-      "anotherNeedsYou": "otra pestaña requiere tu atención",
       "actionsHint": "Muestra las acciones de esta pestaña",
       "next": "Pestaña siguiente",
       "previous": "Pestaña anterior",

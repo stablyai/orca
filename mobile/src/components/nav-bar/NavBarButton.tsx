@@ -1,5 +1,12 @@
 import { createContext, useContext, type ComponentType, type Ref } from 'react'
-import { Pressable, Text, View, type HostInstance } from 'react-native'
+import {
+  Pressable,
+  Text,
+  View,
+  type HostInstance,
+  type StyleProp,
+  type ViewStyle
+} from 'react-native'
 import { colors, feedback, radii } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -60,12 +67,31 @@ export function NavBarButton({
         color={active ? colors.bgBase : (iconColor ?? colors.textPrimary)}
         strokeWidth={2.1}
       />
-      {badge && badge.count > 0 ? (
-        <View style={[styles.badge, { backgroundColor: badge.color }]}>
-          <Text style={styles.badgeText}>{badge.count > 99 ? '99+' : badge.count}</Text>
-        </View>
-      ) : null}
+      {badge ? <NavBarBadge count={badge.count} color={badge.color} /> : null}
     </Pressable>
+  )
+}
+
+/** A count on a control's corner, ringed in the surface colour so it reads over the edge; nothing at 0. */
+export function NavBarBadge({
+  count,
+  color,
+  ringColor = colors.bgBase,
+  style
+}: {
+  count: number
+  color: string
+  ringColor?: string
+  style?: StyleProp<ViewStyle>
+}) {
+  useMobileColorScheme()
+  if (count <= 0) {
+    return null
+  }
+  return (
+    <View style={[styles.badge, { backgroundColor: color, borderColor: ringColor }, style]}>
+      <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
+    </View>
   )
 }
 
@@ -98,8 +124,7 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.bgBase
+    borderWidth: 2
   },
   badgeText: { fontSize: 10, fontWeight: '700', color: '#ffffff', lineHeight: 12 }
 }))
