@@ -6,6 +6,8 @@ export const LEAVE_THREAD_REFUSALS = {
     "Nothing changed: no request is running in this thread's chat now, so there's nothing to leave from.",
   leave_refused_mixed:
     "Nothing changed: this turn includes a message that isn't from a person who can ask you, so it can't be used to leave. Ask them to say it again on its own.",
+  leave_unavailable:
+    "Nothing changed: this Orca connection can't tell when someone @mentions you yet, so you couldn't be brought back. Tell them you're still in the thread.",
   thread_mute_not_saved:
     "Nothing changed: Orca couldn't save that you left, so replies here still wake you. Say it didn't work."
 } as const

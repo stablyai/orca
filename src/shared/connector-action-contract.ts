@@ -174,6 +174,7 @@ export const CONNECTOR_ACT_ERROR_CODES = [
   'not_a_thread',
   'leave_refused_stale',
   'leave_refused_mixed',
+  'leave_unavailable',
   'thread_mute_not_saved'
 ] as const
 export type ConnectorActErrorCode = (typeof CONNECTOR_ACT_ERROR_CODES)[number]

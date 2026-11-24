@@ -20,13 +20,16 @@ export function withThreadLeftLine(words: string | undefined): string {
 export type TurnLeave = {
   /** The turn as read, its answer (prose and final message) with the line after it. */
   turn: <T extends { turnProse?: string; lastAssistantMessage?: string }>(turn: T) => T
-  /** An outbox fill wrote the turn's prose, and so the line, into an answer. */
-  answered: () => void
+  /** Before the outbox fill: an answer about to carry the line takes it over, saved first, so a
+   *  quit after the fill never posts it again. */
+  handOff: () => Promise<void>
+  /** The fill wrote the turn's prose, and so the line, into an answer (or didn't: owed again). */
+  filled: (answered: boolean) => void
   /** `carried`: the end went out with the turn's words. */
   settle: (carried?: boolean) => void
 }
 
-type Lines = Pick<LeaveLines, 'owed' | 'carried' | 'post' | 'ending'>
+type Lines = Pick<LeaveLines, 'owed' | 'carried' | 'post' | 'ending' | 'handOff' | 'restore'>
 
 // The line rides only on an answer every cloud keeps whole (the smallest takes 8 KB).
 const RIDE_MAX_BYTES = 7 * 1024
@@ -47,6 +50,7 @@ export function turnLeave(
   // Which of the turn's words were given the line (its outbox prose, its final message); only
   // those can carry it.
   const appended = { prose: false, message: false }
+  let handedOff = false
   let rode = false
   const said = (words: string | undefined, part: keyof typeof appended) => {
     const spoken = words && !isQuietBotResult(words) ? words : undefined
@@ -57,16 +61,26 @@ export function turnLeave(
     return withThreadLeftLine(spoken)
   }
   return {
+    // Read once the turn is: an @mention since its end began means it is no longer left.
     turn: (turn) =>
-      left && outcome === 'success'
+      left && outcome === 'success' && left.lines.owed(link, left.turnId)
         ? {
             ...turn,
             turnProse: said(turn.turnProse, 'prose'),
             lastAssistantMessage: said(turn.lastAssistantMessage, 'message')
           }
         : turn,
-    answered: () => {
-      rode ||= appended.prose
+    handOff: async () => {
+      if (left && appended.prose && live()) {
+        handedOff = true
+        await left.lines.handOff(link, left.turnId)
+      }
+    },
+    filled: (answered) => {
+      rode ||= answered && appended.prose
+      if (handedOff && !rode && left) {
+        left.lines.restore(link, left.turnId)
+      }
     },
     settle: (carried) => {
       if (!left || !live()) {

@@ -70,11 +70,11 @@ const cases: [string, ReturnType<typeof running>, ReturnType<typeof leaveThreadR
   ['a member asking in this thread', running(fromThread(person())), null],
   ['the owner asking in this thread', running(fromThread(person('owner'))), null],
   ['the owner typing in Orca', running(typedInOrca, [], PERSON), null],
-  // Typed while the bot worked, then handed over from the queue.
+  // Handed over from the queue: its card, not the send, says who queued it, so it fails safe.
   [
-    'the owner\u2019s queued message',
+    'a queued message handed over',
     running(typedInOrca, [], { origin: 'host', queuedMessageId: 'q1' }),
-    null
+    'leave_refused_mixed'
   ],
   // Orca's continue opens the next turn: it never inherits the cut turn's request, or its refusal.
   ['Orca continuing a cut-short turn', running(typedInOrca, [], ORCA), 'leave_refused_mixed'],

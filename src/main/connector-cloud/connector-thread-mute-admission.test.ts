@@ -185,6 +185,7 @@ function leaver(store: ReturnType<typeof createStore>) {
     }
   ]
   const posted: unknown[] = []
+  const features = ['sends.mentioned']
   // What the cloud answers each post, in turn; it posts while it answers ok.
   const answers: ({ ok: true } | { ok: false; status: number | null; error: string | null })[] = []
   const cloud = {
@@ -202,6 +203,8 @@ function leaver(store: ReturnType<typeof createStore>) {
       bots: { enabled: () => true },
       lookAround: { botOfTidyUp: () => null, botOfLook: () => null },
       requireStore: () => store,
+      // A cloud that marks a reply mentioning the bot, so a mention can bring it back.
+      getConnectorCloud: () => ({ cloudFeatures: () => new Set(features) }),
       getExternalConversationSeam: () => ({
         replyTarget: () => ({ key: FIRST, turnId: TURN_ID }),
         queued: async (_key: unknown, work: () => Promise<unknown>) => {
@@ -217,7 +220,7 @@ function leaver(store: ReturnType<typeof createStore>) {
   const lines = (on = store) =>
     leaveLines({ store: on, cloud: () => cloud, setTimer: (run) => timers.push(run) })
   const link = () => findLink(store, FIRST)!.link
-  return { leave, posted, lines, link, answers, timers }
+  return { leave, posted, lines, link, answers, timers, features }
 }
 
 describe('a muted bot thread', () => {
@@ -357,17 +360,24 @@ describe('a bot that leaves its thread', () => {
     own.ending(link(), TURN_ID)
     own.resume(() => null)
     expect(posted).toEqual([])
-    // Unreachable for longer than every listed wait: it keeps trying, then posts once.
+    // Checked again once that end's hold runs out, in case it never finished.
+    const recheck = timers.shift()!
+    // Busy past every listed wait: still owed, and the next watch posts it once.
     answers.push(
-      ...Array.from({ length: 8 }, () => ({ ok: false as const, status: null, error: null }))
+      ...Array.from({ length: 7 }, () => ({ ok: false as const, status: 503, error: null }))
     )
     own.post(link(), TURN_ID)
-    for (let tries = 0; tries < 8; tries++) {
+    for (let tries = 0; tries < 6; tries++) {
       await expect.poll(() => timers.length).toBe(1)
       timers.shift()!()
     }
+    await expect.poll(() => own.owed(link(), TURN_ID) && timers.length === 0).toBe(true)
+    expect(posted).toEqual([])
+    own.resume(() => null)
     await expect.poll(() => posted.length).toBe(1)
     expect(own.owed(link(), TURN_ID)).toBe(false)
+    recheck()
+    expect(posted).toHaveLength(1)
   })
 
   it('drops a line the cloud refuses for good', async () => {
@@ -381,6 +391,14 @@ describe('a bot that leaves its thread', () => {
     expect(posted).toEqual([])
     expect(timers).toEqual([])
     expect(readThreadMute(store, FIRST)).toMatchObject({ muted: true })
+  })
+
+  it('never leaves on a cloud that can\u2019t say a reply @mentioned it', async () => {
+    const store = await botHome({})
+    const { leave, features } = leaver(store)
+    features.length = 0
+    await expect(leave()).rejects.toMatchObject({ code: 'leave_unavailable' })
+    expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
   })
 
   it('changes nothing when no request of the thread is running', async () => {

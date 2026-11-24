@@ -22,20 +22,36 @@ const TURN = 5
  *  how often the line posted on its own. */
 async function endLeftTurn(
   turn: EndedChatTurn,
-  options: { outcome?: 'success' | 'failure'; outbox?: boolean; undone?: boolean } = {}
+  options: {
+    outcome?: 'success' | 'failure'
+    outbox?: boolean
+    undone?: boolean
+    /** An @mention lands after the end began, before the turn is read. */
+    undoneWhileReading?: boolean
+  } = {}
 ) {
   let posted = 0
   let carried = 0
+  let reads = 0
   // The thread owes TURN's line while it is still left.
   const leaveLines = {
-    owed: (_link: unknown, turnId: number) => turnId === TURN && !options.undone,
+    owed: (_link: unknown, turnId: number) => {
+      const owes = turnId === TURN && !options.undone && !(options.undoneWhileReading && reads > 0)
+      reads += 1
+      return owes
+    },
     carried: () => {
       carried += 1
     },
+    // As the real one: nothing posts once the thread no longer owes it.
     post: () => {
-      posted += 1
+      if (!options.undone && !options.undoneWhileReading) {
+        posted += 1
+      }
     },
-    ending: () => {}
+    ending: () => {},
+    handOff: async () => {},
+    restore: () => {}
   }
   const events: ConversationEvent[] = []
   const prose: string[] = []
@@ -116,6 +132,10 @@ it('confirms a leave once, after the answer, and only while the thread is still 
     posted: 1,
     carried: 0
   })
+  // An @mention while the turn was being read: its answer goes out without the line.
+  expect(
+    (await endLeftTurn({ lastAssistantMessage: 'Ok.' }, { undoneWhileReading: true })).said
+  ).toBe('Ok.')
   // An @mention brought it back first: no line at all.
   expect(await endLeftTurn({ lastAssistantMessage: 'Ok.' }, { undone: true })).toEqual({
     said: 'Ok.',

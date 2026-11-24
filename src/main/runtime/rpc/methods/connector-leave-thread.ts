@@ -13,6 +13,7 @@ import { chatPaneKey } from '../../../external-conversations/external-conversati
 import { readThreadMute } from '../../../external-conversations/external-conversation-link-writes'
 import { defineMethod } from '../core'
 import { ConnectorActError } from './connector-act'
+import { CONNECTOR_CLOUD_MENTIONED_FEATURE } from '../../../../shared/connector-cloud-features'
 import { LEAVE_THREAD_REFUSALS } from '../../../../shared/connectors/connector-leave-thread-copy'
 
 const {
@@ -46,6 +47,10 @@ export const CONNECTOR_LEAVE_THREAD_METHOD = defineMethod({
     const key = target?.key
     if (!seam || !key || key.source !== 'slack' || !slackThreadBotUser(key.externalId)) {
       throw new ConnectorActError('not_a_thread', NOT_A_THREAD)
+    }
+    // Only an @mention brings it back: never leave where the cloud can't say there was one.
+    if (!runtime.getConnectorCloud()?.cloudFeatures()?.has(CONNECTOR_CLOUD_MENTIONED_FEATURE)) {
+      throw new ConnectorActError('leave_unavailable', LEAVE_THREAD_REFUSALS.leave_unavailable)
     }
     const store = runtime.requireStore()
     const thread = readThreadMute(store, key)

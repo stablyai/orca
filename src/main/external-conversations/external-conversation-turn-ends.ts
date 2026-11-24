@@ -141,6 +141,7 @@ export async function endRepliedTurn(
   }
   const failure = turnFailure(end, turn)
   let threw = false
+  await end.leave.handOff()
   const { covered, resumesAt, answered } = await fill({
     sessionId: end.news.sessionId,
     turnItemId: turn.turnItemId,
@@ -160,9 +161,7 @@ export async function endRepliedTurn(
   // A turn whose stamps name this conversation answers it through the outbox only, even when its
   // rows were already sent and gone or the fill failed (recovery drains what is left): never also as
   // a full end.
-  if (answered) {
-    end.leave.answered()
-  }
+  end.leave.filled(answered === true)
   const outboxed =
     covered.has(link.externalId) || (answersThroughOutbox(link.source) && stampsName(turn, link))
   if (!end.current()) {

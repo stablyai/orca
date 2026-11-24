@@ -44,12 +44,10 @@ function typedByPerson(
       submission.providerItemId === item.itemId
   )
   // As the journal reads a personal send; Orca's continues name no sender and come from the host.
-  // A queued card handed over is the owner's: an agent's or an automation's is marked on its body.
+  // A queued card handed over says nothing of who queued it here, so it is refused: they ask again.
   return (
     sent !== undefined &&
-    (sent.source?.kind === 'user' ||
-      (sent.source === undefined &&
-        (sent.origin === 'client' || sent.queuedMessageId !== undefined)))
+    (sent.source?.kind === 'user' || (sent.source === undefined && sent.origin === 'client'))
   )
 }
 

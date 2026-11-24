@@ -12,7 +12,7 @@ import { allLinks, type ExternalConversationLinkStore } from './external-convers
 export const THREAD_LEFT_LINE =
   "I've left this thread. New replies here won't reach me unless someone @mentions me."
 
-// Waits between tries of a line that couldn't post; the last repeats while it is owed.
+// Waits between tries of a line the cloud didn't take; then the next watch or restart tries again.
 const RETRY_MS = [15_000, 60_000, 5 * 60_000, 15 * 60_000, 30 * 60_000, 60 * 60_000]
 // A turn end still deciding its line holds it from a watch's resume this long at most.
 const ENDING_MS = 10 * 60_000
@@ -34,6 +34,8 @@ type LeaveLinesDeps = {
   /** Null while no client runs: the line waits. */
   cloud: () => LeaveLinesCloud | null
   setTimer?: (run: () => void, ms: number) => void
+  /** Saves pending store writes to disk. */
+  flush?: () => Promise<void>
 }
 
 export type LeaveLines = {
@@ -46,6 +48,10 @@ export type LeaveLines = {
     link: Pick<ExternalConversationLink, 'source' | 'externalId' | 'sessionId'>,
     turnId: number
   ) => void
+  /** An answer is about to carry the line: owed no more, saved before the answer is. */
+  handOff: (link: Thread, turnId: number) => Promise<void>
+  /** The answer didn't carry it after all: owed again, while the thread is still left. */
+  restore: (link: Thread, turnId: number) => void
   /** A turn end is deciding `turnId`'s line (on its answer or alone): a resume leaves it alone. */
   ending: (link: Thread, turnId: number) => void
   /** Posts every line still owed for a turn that isn't running (cut short by a quit or a reset). */
@@ -75,7 +81,8 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
     ((run: () => void, ms: number) => {
       setTimeout(run, ms).unref?.()
     })
-  const posting = new Set<string>()
+  // Lines posting now, each with what wakes its waiting retry at once.
+  const posting = new Map<string, () => void>()
   // Turn ends deciding their line, by when they began; a watch's resume leaves these alone.
   const ending = new Map<string, number>()
   const idOf = (link: Thread, turnId: number) =>
@@ -96,25 +103,36 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
     const id = idOf(link, turnId)
     ending.delete(id)
     const conversation = cloudConversation(link)
-    if (!conversation || posting.has(id)) {
+    if (!conversation) {
       return
     }
-    posting.add(id)
+    // Already posting: a reconnect tries it now rather than after its wait.
+    const waiting = posting.get(id)
+    if (waiting) {
+      waiting()
+      return
+    }
+    let tries = 0
+    posting.set(id, () => {})
     const attempt = async (retry: number): Promise<void> => {
       if (!owed(link, turnId)) {
         posting.delete(id)
         return
       }
-      const sent = await Promise.resolve(
-        deps.cloud()?.reply({
-          replyId: leaveLineReplyId(link, turnId),
-          conversation,
-          turnId,
-          text: THREAD_LEFT_LINE,
-          // Orca's own line, on no one's behalf: no bot hears it as a person's request.
-          turnFor: 'none'
-        }) ?? null
-      ).catch(() => null)
+      const replying = deps.cloud()?.reply({
+        replyId: leaveLineReplyId(link, turnId),
+        conversation,
+        turnId,
+        text: THREAD_LEFT_LINE,
+        // Orca's own line, on no one's behalf: no bot hears it as a person's request.
+        turnFor: 'none'
+      })
+      // No client runs (signed out, quitting): the next watch starts the line again.
+      if (!replying) {
+        posting.delete(id)
+        return
+      }
+      const sent = await replying.catch(() => null)
       // Posted, or refused for good (another account's thread, a body the cloud won't take).
       const never =
         sent !== null &&
@@ -129,14 +147,48 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
         settle(link, turnId)
         return
       }
-      // While owed it keeps trying, at the longest wait once the shorter ones are spent.
-      timer(() => void attempt(retry + 1), RETRY_MS[Math.min(retry, RETRY_MS.length - 1)]!)
+      const wait = RETRY_MS[retry]
+      if (wait === undefined) {
+        console.warn(
+          '[connectors] could not post that a bot left its thread; it posts on reconnect'
+        )
+        posting.delete(id)
+        return
+      }
+      const mine = ++tries
+      const next = () => {
+        // A wake and its timer both fire: only the first tries.
+        if (mine === tries) {
+          tries += 1
+          void attempt(retry + 1)
+        }
+      }
+      posting.set(id, next)
+      timer(next, wait)
     }
     void attempt(0)
   }
   return {
     owed,
     carried: settle,
+    handOff: async (link, turnId) => {
+      if (owed(link, turnId)) {
+        writeLinkFact(deps.store, link, { leaveLine: undefined })
+        // A failed save leaves it to a restart, which may post it again: never a false line.
+        await deps.flush?.().catch(() => undefined)
+      }
+    },
+    restore: (link, turnId) => {
+      const thread = readThreadMute(deps.store, link)
+      if (
+        typeof thread === 'object' &&
+        thread !== null &&
+        thread.muted &&
+        thread.leaveLine === undefined
+      ) {
+        writeLinkFact(deps.store, link, { leaveLine: turnId })
+      }
+    },
     post,
     ending: (link, turnId) => {
       ending.set(idOf(link, turnId), Date.now())
@@ -150,13 +202,15 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
       }
       for (const { link } of allLinks(deps.store)) {
         const turnId = link.leaveLine
-        if (
-          link.muted &&
-          turnId !== undefined &&
-          running(link) !== turnId &&
-          !ending.has(idOf(link, turnId))
-        ) {
+        if (!link.muted || turnId === undefined || running(link) === turnId) {
+          continue
+        }
+        const began = ending.get(idOf(link, turnId))
+        if (began === undefined) {
           post(link, turnId)
+        } else {
+          // Its turn end is deciding it; one that never finishes (a reset meanwhile) lets go here.
+          timer(() => post(link, turnId), began + ENDING_MS - now)
         }
       }
     }

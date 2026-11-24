@@ -1,3 +1,4 @@
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import {
   installLeaveLines,
   leaveLines,
@@ -50,7 +51,12 @@ import {
 
 /** The seam is local and subscribes to nothing until watched, so it lives for the process, built on first use. */
 export function installExternalConversations(
-  store: (ExternalConversationLinkStore & { getBots?: () => readonly Bot[] }) | null,
+  store:
+    | (ExternalConversationLinkStore & {
+        getBots?: () => readonly Bot[]
+        flushPendingOrThrowAsync?: RuntimeStore['flushPendingOrThrowAsync']
+      })
+    | null,
   runtime: {
     getOrchestrationDb: () => DeliveryReceiptDb & OrchestrationDb
     listAutomationRuns: BotConversationActsForSources['listAutomationRuns']
@@ -104,7 +110,13 @@ export function installExternalConversations(
         signal
       })
     let replyOutbox: ReturnType<typeof connectorReplyOutbox> | null = null
-    const lines = leaveLines({ store, cloud: () => runtime.getConnectorCloud?.() ?? null })
+    const lines = leaveLines({
+      store,
+      cloud: () => runtime.getConnectorCloud?.() ?? null,
+      ...(store.flushPendingOrThrowAsync
+        ? { flush: () => store.flushPendingOrThrowAsync!({ drainToStableGeneration: false }) }
+        : {})
+    })
     installLeaveLines(lines)
     const restartCuts = heldTurnEnds(() => seam)
     seam = new ExternalConversationSeam({

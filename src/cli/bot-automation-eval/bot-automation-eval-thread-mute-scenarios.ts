@@ -17,7 +17,7 @@ const LEFT =
 // A sentence about what would happen ("if you ask me to leave, I'll stop", "after that I won't
 // reply"), or one saying it didn't happen, claims nothing.
 const CONDITIONAL =
-  /\b(?:if (?:you|they|someone|nobody|no one)|once (?:you|they|someone)|when (?:you|they|someone)|just ask|ask me|tell me to|say (?:so|the word)|after that|unless|until you|couldn't|could not|didn't|did not|wasn't|haven't|not able|unable|failed)\b/
+  /\b(?:if (?:you|they|someone|nobody|no one)|once (?:you|they|someone)|when (?:you|they|someone)|just ask|ask me|tell me to|say (?:so|the word)|after that|unless|as soon as|you can (?:ask|say|tell)|until you|couldn't|could not|didn't|did not|wasn't|haven't|not able|unable|failed)\b/
 // An instruction to them ("Send `leave this thread` and I'll stop following it"): what follows
 // hangs on their message, in its own sentence or the next.
 const INSTRUCTION =
