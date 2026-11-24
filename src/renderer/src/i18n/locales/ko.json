@@ -4037,27 +4037,20 @@
         "cleanup": {
           "WorkspaceCleanupDialog": {
             "3828408538": "{{value0}} 제거",
-            "b6bae1eed1": "취소",
-            "38ca0b1400": "그러면 로컬 파일이 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.",
             "e97e4580c7": "변경 있음",
             "9623a5107d": "푸시하지 않은 커밋",
             "e8b3741ff7": "무시됨",
             "a9957007eb": "{{value0}} 무시",
             "bef0adef9b": "브랜치",
             "bbb1ab6a6f": "{{value0}} 선택",
-            "b771c92598": "선택 항목 삭제",
             "7eee951968": "워크스페이스 스캔 중",
             "191f0bc98e": "닫기",
-            "7ae2ad30f4": "새로고침",
             "7f451a3e2c": "정리 제안을 무시할 수 없습니다.",
             "662b8ec3f8": "워크스페이스 정리 검사 실패",
             "9cc26c019d": "제거",
             "0e2d235c63": "워크스페이스 스캔 준비됨",
             "4a35c08764": "리뷰",
             "47123d0108": "워크스페이스 정보를 모으는 중입니다. 이 창을 닫았다가 다시 와도 됩니다.",
-            "1d3503357d": "삭제가 계속되는 동안 이 창을 닫고 나중에 돌아올 수 있습니다.",
-            "4c2990886e": "{{value0}}/{{value1}}개 삭제됨",
-            "86ba852118": "{{value0}}, {{value1}}개 실패",
             "archivedStatus": "보관됨",
             "mergedStatus": "병합됨",
             "unchangedStatus": "새 커밋 없음",
@@ -22024,12 +22017,9 @@
               "finishedAgents": "완료된 에이전트"
             }
           },
-          "forceDeleteRisk_one": "워크스페이스 {{count}}개에 위험이 있어 강제 삭제가 필요할 수 있습니다",
           "noSizes": "아직 측정된 워크스페이스 크기가 없습니다.",
           "noSizesDescription": "디스크 사용량을 측정한 후 크기가 나타납니다.",
           "measureSizesTitle": "워크스페이스 크기 스캔",
-          "sizeOnDisk": "디스크 크기: {{value0}}",
-          "checkingGitRow": "Git 상태 확인 중",
           "searchPlaceholder": "이름, 저장소, 브랜치, 경로, 호스트 검색",
           "searchLabel": "워크스페이스 검색",
           "filters": "필터",
@@ -22087,7 +22077,6 @@
           "noMatches": "이 필터와 일치하는 워크스페이스가 없습니다.",
           "noMatchesDescription": "모든 워크스페이스가 한 목록에 있습니다. 조건을 넓히거나 필터를 지워 보세요.",
           "sortBy": "정렬 기준",
-          "sortByField": "{{value0}} 기준으로 정렬",
           "sort": {
             "lastActivity": "마지막 활동",
             "lastVisited": "마지막 열림",
@@ -22143,28 +22132,19 @@
             "none": "없음"
           },
           "idleSignalField": "유휴 기준",
-          "updatedAgo": "{{value0}} 업데이트됨",
-          "refreshing": "새로고침 중…",
-          "refreshingProgress": "새로고침 중 {{value0}}/{{value1}}",
-          "notMeasured": "측정되지 않음",
           "openWorkspaceNamed": "{{value0}} 열기",
           "openWorkspace": "워크스페이스 열기",
-          "workspaceStatus": "워크스페이스 상태: {{value0}}",
           "measuringSizesProgress": "{{value0}}/{{value1}} 스캔 중",
           "measuringSizes": "크기 스캔 중",
           "measureSizesFailed": "워크스페이스 크기를 스캔할 수 없습니다.",
-          "selectedCount": "{{value0}} 선택됨",
-          "forceDeleteRisk_other": "현재 워크스페이스 {{count}}개에 위험 요소가 있으며 강제 삭제가 필요할 수 있음",
           "selectionVanishedCount_one": "선택한 워크스페이스 {{count}}개가 더 이상 없습니다.",
           "selectionVanishedCount_other": "선택한 워크스페이스 {{count}}개가 더 이상 존재하지 않습니다.",
           "selectionWithheldCount_one": "선택한 워크스페이스 {{count}}개가 현재 필터에 가려져 선택이 해제되었습니다.",
           "selectionWithheldCount_other": "선택한 워크스페이스 {{count}}개가 현재 필터에 의해 숨겨져 선택 해제되었습니다.",
-          "selectAllSafetyChecked_one": "안전 검사를 마친 워크스페이스 {{count}}개 선택",
-          "selectAllSafetyChecked_other": "안전성 검사를 마친 워크스페이스 {{count}}개 모두 선택",
-          "clearSelection": "선택 해제",
           "lastActive": "마지막 활동: {{value0}}",
+          "sortAscending": "오름차순",
+          "sortDescending": "내림차순",
           "projectNamed": "프로젝트: {{value0}}",
-          "moreFlags": "플래그 {{value0}}개 더 보기",
           "pathLabel": "경로",
           "copyPath": "경로 복사",
           "gitNotChecked": "확인 안 됨",
@@ -22220,8 +22200,69 @@
           "ignoredFilesUnchecked": "무시된 파일을 완전히 확인하지 못함"
         },
         "confirm": {
-          "deletingTitle_one": "워크스페이스 {{count}}개 삭제 중",
-          "deletingTitle_other": "워크스페이스 {{count}}개 삭제 중"
+          "title_other": "워크스페이스 {{count}}개를 삭제할까요?",
+          "localFilesSection": "로컬 파일이 사라집니다",
+          "back": "뒤로",
+          "deletePermanently": "영구 삭제",
+          "retryDescription": "{{name}} 및 해당 로컬 파일이 영구적으로 삭제됩니다.",
+          "showMore": "{{count}}개 더 보기"
+        },
+        "review": {
+          "title": "워크스페이스 검토",
+          "refresh": "새로고침",
+          "checking": "변경 사항 확인 중",
+          "updatesAvailable": "업데이트가 있습니다. 새로고침"
+        },
+        "row": {
+          "sizeLabel": "크기",
+          "reviewLabel": "리뷰",
+          "statusLabel": "상태",
+          "signalsLabel": "신호",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "Git 워크스페이스가 아닙니다. 대신 Orca에서 프로젝트를 제거하세요.",
+          "unreachable": "{{host}}에 연결할 수 없습니다. 다시 연결해 삭제하거나 Orca에서 제거하세요.",
+          "mainCheckout": "프로젝트의 기본 체크아웃은 삭제할 수 없습니다.",
+          "uncommittedFiles_other": "커밋되지 않은 파일 {{count}}개",
+          "couldntCheck": "변경 사항을 확인하지 못했습니다"
+        },
+        "group": {
+          "empty": "여기에 워크스페이스가 없습니다.",
+          "nothingLocal": "로컬 변경 없음",
+          "localFiles": "로컬 파일 있음",
+          "cannotDelete": "삭제 불가",
+          "label": "워크스페이스 그룹",
+          "selected": "{{count}}개 선택됨"
+        },
+        "footer": {
+          "delete_other": "워크스페이스 {{count}}개 삭제",
+          "selected": "{{count}}개 선택됨",
+          "waitForDelete": "현재 삭제가 끝날 때까지 기다리세요."
+        },
+        "selectAll": {
+          "partial": "{{total}}개 중 {{selected}}개 선택됨",
+          "all": "{{count}}개 모두 선택"
+        },
+        "runCard": {
+          "title": "워크스페이스 삭제 중",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "닫기",
+          "show": "보기"
+        },
+        "done": {
+          "failedLine_other": "{{count}}개를 삭제하지 못했습니다.",
+          "title": "워크스페이스 {{total}}개 중 {{deleted}}개 삭제됨",
+          "singleTitle": "워크스페이스 {{total}}개 중 {{deleted}}개 삭제됨",
+          "button": "완료"
+        },
+        "deleting": {
+          "title_other": "워크스페이스 {{count}}개 삭제 중",
+          "runInBackground": "백그라운드에서 실행",
+          "progress": "{{total}}개 중 {{done}}개 삭제됨",
+          "statusDeleted": "삭제됨",
+          "statusDeleting": "삭제 중…",
+          "statusFailed": "삭제하지 못함",
+          "statusWaiting": "대기 중",
+          "unconfirmed": "삭제를 확인하지 못했습니다. 새로고침해 확인하세요."
         }
       },
       "creation": {

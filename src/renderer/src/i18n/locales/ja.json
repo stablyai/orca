@@ -3816,27 +3816,20 @@
         "cleanup": {
           "WorkspaceCleanupDialog": {
             "3828408538": "{{value0}} を削除",
-            "b6bae1eed1": "キャンセル",
-            "38ca0b1400": "これにより、ローカルファイルが完全に削除されます。これを元に戻すことはできません。",
             "e97e4580c7": "汚い",
             "9623a5107d": "未プッシュのコミット",
             "e8b3741ff7": "無視済み",
             "a9957007eb": "{{value0}} を無視する",
             "bef0adef9b": "ブランチ",
             "bbb1ab6a6f": "{{value0}} を選択",
-            "b771c92598": "選択したものを削除",
             "7eee951968": "作業場の安全性の確認",
             "191f0bc98e": "閉じる",
-            "7ae2ad30f4": "更新",
             "7f451a3e2c": "クリーンアップの提案を無視できませんでした",
             "662b8ec3f8": "ワークスペースのクリーンアップスキャンに失敗しました",
             "9cc26c019d": "削除",
             "0e2d235c63": "非アクティブなワークスペースのスキャン準備完了",
             "4a35c08764": "レビュー",
             "47123d0108": "非アクティブなワークスペースをスキャンしています。これを閉じて戻ってきても構いません。",
-            "1d3503357d": "削除の続行中にこれを閉じて後で戻れます。",
-            "4c2990886e": "{{value0}}/{{value1}} 件を削除済み",
-            "86ba852118": "{{value0}}、{{value1}} 件が失敗",
             "archivedStatus": "アーカイブ済み",
             "mergedStatus": "マージ済み",
             "unchangedStatus": "新しいコミットなし",
@@ -20891,8 +20884,6 @@
           "noSizes": "ワークスペースのサイズはまだ測定されていません。",
           "noSizesDescription": "サイズは、ディスク使用量が測定された後に表示されます。",
           "measureSizesTitle": "スキャンワークスペースのサイズ",
-          "sizeOnDisk": "ディスク上のサイズ: {{value0}}",
-          "checkingGitRow": "gitのステータスを確認する",
           "searchPlaceholder": "名前、リポジトリ、ブランチ、パス、ホストを検索します",
           "searchLabel": "ワークスペースの検索",
           "filters": "フィルター",
@@ -20950,7 +20941,6 @@
           "noMatches": "これらのフィルターに一致するワークスペースはありません。",
           "noMatchesDescription": "すべてのワークスペースは 1 つのリスト内にあります。ファセットを広げるかフィルターをクリアします。",
           "sortBy": "並べ替え",
-          "sortByField": "{{value0}} で並べ替え",
           "sort": {
             "lastActivity": "最後のアクティビティ",
             "lastVisited": "最後に開いた",
@@ -21006,17 +20996,11 @@
             "none": "何もありません"
           },
           "idleSignalField": "アイドル信号",
-          "updatedAgo": "{{value0}} を更新しました",
-          "refreshing": "更新中…",
-          "refreshingProgress": "リフレッシュ {{value0}}/{{value1}}",
-          "notMeasured": "測定されていない",
           "openWorkspaceNamed": "{{value0}} を開く",
           "openWorkspace": "ワークスペースを開く",
-          "workspaceStatus": "ワークスペースのステータス: {{value0}}",
           "measuringSizesProgress": "{{value0}}/{{value1}} をスキャンしています",
           "measuringSizes": "スキャンサイズ",
           "measureSizesFailed": "ワークスペースのサイズをスキャンできませんでした",
-          "selectedCount": "{{value0}} が選択されました",
           "gitStatusCheckFailed": "Git ステータスチェックに失敗しました",
           "gitStatusUnverified": "Git のステータスを確認できませんでした",
           "deleteAnyway": "とにかく削除する",
@@ -21064,14 +21048,10 @@
               "finishedAgents": "完成した Agent"
             }
           },
-          "forceDeleteRisk_other": "現在 {{count}} 件のワークスペースにリスクがあり、強制削除が必要になる可能性があります",
           "selectionVanishedCount_other": "選択した {{count}} 件のワークスペースはすでに存在しません。",
           "selectionWithheldCount_other": "選択した {{count}} 件のワークスペースは現在のフィルターで非表示になっているため、選択を解除しました。",
-          "selectAllSafetyChecked_other": "安全性を確認した {{count}} 件のワークスペースをすべて選択",
-          "clearSelection": "選択を解除",
           "lastActive": "最終アクティブ：{{value0}}",
           "projectNamed": "プロジェクト: {{value0}}",
-          "moreFlags": "さらに {{value0}} 個のフラグを表示",
           "pathLabel": "パス",
           "copyPath": "パスをコピー",
           "gitNotChecked": "未確認",
@@ -21079,7 +21059,9 @@
           "restoreFailed": "{{value0}} の無視を解除できませんでした",
           "ignoreTooltip": "無視: 一括削除でスキップ",
           "stopIgnoring": "無視を解除",
-          "stopIgnoringNamed": "{{value0}} の無視を解除"
+          "stopIgnoringNamed": "{{value0}} の無視を解除",
+          "sortAscending": "昇順",
+          "sortDescending": "降順"
         },
         "scan": {
           "progress": "ワークスペースのスキャン ({{value0}}/{{value1}})",
@@ -21119,7 +21101,69 @@
           "ignoredFilesUnchecked": "無視されたファイルを完全には確認できていません"
         },
         "confirm": {
-          "deletingTitle_other": "{{count}} 個のワークスペースを削除中"
+          "title_other": "{{count}} 件のワークスペースを削除しますか？",
+          "localFilesSection": "ローカルファイルは失われます",
+          "back": "戻る",
+          "deletePermanently": "完全に削除",
+          "retryDescription": "{{name}} とそのローカルファイルは完全に削除されます。",
+          "showMore": "さらに {{count}} 件を表示"
+        },
+        "review": {
+          "title": "ワークスペースを確認",
+          "refresh": "更新",
+          "checking": "変更を確認中",
+          "updatesAvailable": "更新があります。更新する"
+        },
+        "row": {
+          "sizeLabel": "サイズ",
+          "reviewLabel": "レビュー",
+          "statusLabel": "ステータス",
+          "signalsLabel": "シグナル",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "Git ワークスペースではありません。代わりにプロジェクトを Orca から削除してください。",
+          "unreachable": "{{host}} に接続できません。削除するには再接続するか、Orca から削除してください。",
+          "mainCheckout": "プロジェクトのメインチェックアウトは削除できません。",
+          "uncommittedFiles_other": "未コミットのファイル {{count}} 件",
+          "couldntCheck": "変更を確認できませんでした"
+        },
+        "group": {
+          "empty": "ここにワークスペースはありません。",
+          "nothingLocal": "ローカルの変更なし",
+          "localFiles": "ローカルファイルあり",
+          "cannotDelete": "削除不可",
+          "label": "ワークスペースのグループ",
+          "selected": "{{count}} 件選択中"
+        },
+        "footer": {
+          "delete_other": "{{count}} 件のワークスペースを削除",
+          "selected": "{{count}} 件選択中",
+          "waitForDelete": "現在の削除が終わるまでお待ちください。"
+        },
+        "selectAll": {
+          "partial": "{{total}} 件中 {{selected}} 件を選択中",
+          "all": "{{count}} 件をすべて選択"
+        },
+        "runCard": {
+          "title": "ワークスペースを削除中",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "閉じる",
+          "show": "表示"
+        },
+        "done": {
+          "failedLine_other": "{{count}} 件を削除できませんでした。",
+          "title": "{{total}} 件中 {{deleted}} 件のワークスペースを削除しました",
+          "singleTitle": "{{total}} 件中 {{deleted}} 件のワークスペースを削除しました",
+          "button": "完了"
+        },
+        "deleting": {
+          "title_other": "{{count}} 件のワークスペースを削除中",
+          "runInBackground": "バックグラウンドで実行",
+          "progress": "{{total}} 件中 {{done}} 件を削除済み",
+          "statusDeleted": "削除済み",
+          "statusDeleting": "削除中…",
+          "statusFailed": "削除できませんでした",
+          "statusWaiting": "待機中",
+          "unconfirmed": "削除を確認できませんでした。更新して確認してください。"
         }
       },
       "creation": {

@@ -57,6 +57,8 @@ const buttonVariants = cva(
         // A quiet secondary link, such as a dialog footer's "Manual steps".
         'link-muted':
           'text-muted-foreground underline-offset-4 hover:text-foreground hover:underline',
+        // A link-style action on an error line, e.g. "Delete anyway" under a failed row.
+        'destructive-link': 'text-destructive underline-offset-4 hover:underline',
         'menu-launch':
           'min-w-0 flex-1 justify-start rounded-l-[7px] rounded-r-none text-foreground',
         'menu-segment': 'rounded-l-none border-l border-border',
