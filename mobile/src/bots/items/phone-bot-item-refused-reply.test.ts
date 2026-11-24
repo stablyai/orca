@@ -12,13 +12,33 @@ const pendingCommentsOutsideReact = createBotItemPendingCommentsHook({
 
 const one: BotItemQuestionShape = {
   body: '',
-  decisions: [{ question: 'Merge it?', replies: [{ label: 'Yes' }, { label: 'No' }] }]
+  decisions: [
+    {
+      question: 'Merge it?',
+      replies: [
+        { label: 'Yes', recommended: false },
+        { label: 'No', recommended: false }
+      ]
+    }
+  ]
 }
 const two: BotItemQuestionShape = {
   body: '',
   decisions: [
-    { question: 'Use these hostnames?', replies: [{ label: 'Yes' }, { label: 'No' }] },
-    { question: 'Go ahead?', replies: [{ label: 'Yes' }, { label: 'No' }] }
+    {
+      question: 'Use these hostnames?',
+      replies: [
+        { label: 'Yes', recommended: false },
+        { label: 'No', recommended: false }
+      ]
+    },
+    {
+      question: 'Go ahead?',
+      replies: [
+        { label: 'Yes', recommended: false },
+        { label: 'No', recommended: false }
+      ]
+    }
   ]
 }
 
