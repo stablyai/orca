@@ -3,6 +3,7 @@ import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { startWindowsTerminalCapabilityReprobe } from './windows-terminal-capability-reprobe'
 import { readWindowsTerminalCapabilities } from './windows-terminal-capability-read'
 import { isWindowsTerminalCapabilityOwnerHeld } from './windows-terminal-capability-holds'
+import { capabilitiesToCache } from './windows-terminal-capability-host'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type WindowsTerminalCapabilities = {
@@ -170,8 +171,9 @@ export function loadWindowsTerminalCapabilities(
     .then(({ capabilities, gitBashProbed }) => {
       if (requestId === latestCapabilityRequestIdByOwnerKey.get(ownerKey)) {
         pendingCapabilitiesByOwnerKey.delete(ownerKey)
-        publish(capabilities, ownerKey, now, gitBashProbed && isLocalDesktopRead)
-        return capabilities
+        const published = capabilitiesToCache(capabilities, gitBashProbed, UNAVAILABLE_CAPABILITIES)
+        publish(published, ownerKey, now, gitBashProbed && isLocalDesktopRead)
+        return published
       }
       return getCachedWindowsTerminalCapabilities(ownerKey)
     })
