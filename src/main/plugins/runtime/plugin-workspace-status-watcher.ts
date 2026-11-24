@@ -4,6 +4,8 @@ import type { PluginRuntimeDelegate } from '../workers/host-api/plugin-host-serv
 import { readPluginWorkspaceStatuses } from '../workers/host-api/plugin-host-workspace-list'
 
 const WORKSPACE_STATUS_DEBOUNCE_MS = 150
+const WORKSPACE_STATUS_MAX_RETRIES = 2
+const WORKSPACE_STATUS_RETRY_DELAY_MS = 1000
 const WORKSPACE_STATUS_STATE_DOMAINS: ReadonlySet<string> = new Set([
   ...WORKTREE_METADATA_DOMAINS,
   'folderWorkspaces',
@@ -27,11 +29,13 @@ export function watchPluginWorkspaceStatus(input: {
   onStateWritten: (listener: (domains: readonly string[] | undefined) => void) => () => void
   onWorktreeLifecycle?: (listener: () => void) => () => void
   delayMs?: number
+  retryDelayMs?: number
 }): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
   let inFlight = false
   let rerun = false
   let stopped = false
+  let consecutiveFailures = 0
   const lastById = new Map<string, string>()
   const check = async (): Promise<void> => {
     timer = null
@@ -39,6 +43,7 @@ export function watchPluginWorkspaceStatus(input: {
       return
     }
     if (!input.events.wantsEvent('workspace.status.changed')) {
+      consecutiveFailures = 0
       lastById.clear()
       return
     }
@@ -46,15 +51,29 @@ export function watchPluginWorkspaceStatus(input: {
     if (!call) {
       return
     }
+    let shouldRetry = false
     inFlight = true
     try {
       const statuses = await readPluginWorkspaceStatuses(
         call,
         input.delegate.getNotificationsMutedByWorktree
       ).catch(() => null)
-      if (stopped || !statuses || !input.events.wantsEvent('workspace.status.changed')) {
+      if (stopped) {
         return
       }
+      if (!input.events.wantsEvent('workspace.status.changed')) {
+        consecutiveFailures = 0
+        lastById.clear()
+        return
+      }
+      if (!statuses) {
+        if (consecutiveFailures < WORKSPACE_STATUS_MAX_RETRIES) {
+          consecutiveFailures += 1
+          shouldRetry = true
+        }
+        return
+      }
+      consecutiveFailures = 0
       for (const id of lastById.keys()) {
         if (!statuses.byId.has(id)) {
           lastById.delete(id)
@@ -73,24 +92,35 @@ export function watchPluginWorkspaceStatus(input: {
       }
     } finally {
       inFlight = false
-      if (rerun && !stopped) {
-        rerun = false
-        schedule()
+      if (!stopped) {
+        if (rerun) {
+          rerun = false
+          schedule()
+        } else if (shouldRetry) {
+          schedule(input.retryDelayMs ?? WORKSPACE_STATUS_RETRY_DELAY_MS)
+        }
       }
     }
   }
-  const schedule = (): void => {
-    if (stopped || !input.events.wantsEvent('workspace.status.changed')) {
+  const schedule = (delayMs?: number): void => {
+    if (stopped) {
+      return
+    }
+    if (!input.events.wantsEvent('workspace.status.changed')) {
+      consecutiveFailures = 0
       return
     }
     if (inFlight) {
       rerun = true
       return
     }
-    timer ??= setTimeout(() => void check(), input.delayMs ?? WORKSPACE_STATUS_DEBOUNCE_MS)
+    timer ??= setTimeout(
+      () => void check(),
+      delayMs ?? input.delayMs ?? WORKSPACE_STATUS_DEBOUNCE_MS
+    )
   }
-  const stopAgent = input.onAgentStatus(schedule)
-  const stopSession = input.onSessionWritten(schedule)
+  const stopAgent = input.onAgentStatus(() => schedule())
+  const stopSession = input.onSessionWritten(() => schedule())
   const stopState = input.onStateWritten((domains) => {
     if (
       domains === undefined ||
@@ -99,7 +129,7 @@ export function watchPluginWorkspaceStatus(input: {
       schedule()
     }
   })
-  const stopLifecycle = input.onWorktreeLifecycle?.(schedule)
+  const stopLifecycle = input.onWorktreeLifecycle?.(() => schedule())
   return () => {
     stopped = true
     rerun = false
