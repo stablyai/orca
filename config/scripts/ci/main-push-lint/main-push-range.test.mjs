@@ -95,6 +95,30 @@ describe('main-push lint range', () => {
     })
   })
 
+  // GitHub starts a run per push and, with no concurrency group, never replaces a pending one;
+  // each run then lints its own before..after, so a push no later push touches is still linted.
+  it('lints a middle push in its own run when pushes A, B and C land back to back', async () => {
+    const pushes = makeOrigin()
+    const start = commit(pushes, { '.oxlintrc.json': CONFIG }, 'start')
+    const a = commit(pushes, { 'a.ts': 'export {}\n' }, 'A')
+    const b = commit(pushes, { 'only-in-b.ts': DEBUGGER }, 'B')
+    const c = commit(pushes, { 'c.ts': 'export {}\n' }, 'C')
+    const runs = []
+    for (const [before, tip] of [
+      [start, a],
+      [a, b],
+      [b, c]
+    ]) {
+      // Like actions/checkout, each run fetches only its own pushed commit.
+      const cwd = shallowCheckout(pushes)
+      git(cwd, 'fetch', '-q', '--depth=1', 'origin', tip)
+      git(cwd, 'checkout', '-q', '--detach', tip)
+      const { base } = await resolveRange({ event: 'push', before, head: tip, cwd })
+      runs.push(await changedLintableFiles(base, tip, cwd))
+    }
+    expect(runs).toEqual([['a.ts'], ['only-in-b.ts'], ['c.ts']])
+  })
+
   it('treats a real root commit as a change from the empty tree', async () => {
     const lone = makeOrigin()
     const only = commit(lone, { 'a.ts': '' }, 'root')

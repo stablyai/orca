@@ -93,12 +93,12 @@ describe('main-push changed-file lint', () => {
       expect(row.match(/\|/g)).toHaveLength(4)
       expect(row).not.toMatch(/[`*[\]@\\]|<(?!\/?code>)/)
     }
-    expect(summary).not.toMatch(/^::/m)
+    expect(summary).toContain('<pre>\n```\n&lt;/pre&gt;&lt;b&gt;raw&lt;/b&gt;\n::error::y\n</pre>')
     expect(summary.match(/<\/pre>/g)).toHaveLength(1)
     for (const diagnostic of diagnostics) {
       expect(logLine(diagnostic)).not.toContain('\n')
     }
-    expect(markdownText('x'.repeat(600))).toContain('… (100 more characters)')
+    expect(markdownText('x'.repeat(600))).toContain('… &#40;100 more characters&#41;')
   })
 
   it('stays under the 1 MiB step-summary limit and says what it left out', () => {
@@ -227,5 +227,7 @@ describe('main-push changed-file lint', () => {
       'utf8'
     )
     expect(workflow).not.toMatch(/^\s*concurrency:/m)
+    expect(workflow).toMatch(/^on:\n {2}push:\n {4}branches: \[main\]$/m)
+    expect(workflow).toContain('BEFORE_SHA: ${{ github.event.before }}')
   })
 })
