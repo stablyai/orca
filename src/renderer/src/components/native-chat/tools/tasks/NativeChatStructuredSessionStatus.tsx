@@ -1,8 +1,9 @@
-import { lazy, Suspense, useCallback, useContext, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useNativeChatPinnedWorkerApprovals } from '../../worker-approvals/native-chat-worker-approval-feed'
 import { useWorkerDockFeed } from './dock/worker-dock-feed'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
+import type { WorkerDockSnapshot } from '../../../../../../shared/orchestration/dock/worker-dock'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useWorkerDockOwnerActions } from './dock/use-worker-dock-owner-actions'
 import { WorkerDockFeedLossesContext, workerDockStopBlock } from './dock/worker-dock-stop-check'
@@ -83,12 +84,19 @@ export function NativeChatStructuredSessionStatus(props: {
       ),
     [approvals]
   )
+  const identityById = useMemo(
+    () => new Map((feed.snapshot?.identities ?? []).map((row) => [row.id, row])),
+    [feed.snapshot?.identities]
+  )
   const workerRows = useMemo(
     () =>
       new Map(
-        [...feed.rows].map(([id, row]) => {
+        [...feed.rows].map(([id, detail]) => {
+          const row = withCurrentLifecycle(detail, identityById.get(id))
           const settled = workerDockRowSettled(row)
-          const prompt = settled ? undefined : openApprovals.get(row.dispatchId)
+          const prompt = approvalLabels(row, settled)
+            ? openApprovals.get(row.dispatchId)
+            : undefined
           return [
             id,
             !feed.available && !settled
@@ -104,13 +112,13 @@ export function NativeChatStructuredSessionStatus(props: {
           ]
         })
       ),
-    [feed.rows, feed.available, openApprovals]
+    [feed.rows, identityById, feed.available, openApprovals]
   )
   const workerIdentities = useMemo(
     () =>
       feed.snapshot?.identities.map((row) => {
         const settled = workerDockRowSettled(row)
-        const prompt = settled ? undefined : openApprovals.get(row.dispatchId)
+        const prompt = approvalLabels(row, settled) ? openApprovals.get(row.dispatchId) : undefined
         return !feed.available && !settled
           ? { ...row, state: 'unavailable' as const, changedAt: null }
           : prompt
@@ -180,6 +188,14 @@ export function NativeChatStructuredSessionStatus(props: {
     stopBlock
   )
   const { dialog, failure } = owner
+  // An attempt that ends with no failure line (it succeeded, or was dismissed) hands focus to no
+  // line: a later, unrelated failure must not take it.
+  const attemptOpen = Boolean(failure) || owner.pending.size > 0
+  useEffect(() => {
+    if (!attemptOpen) {
+      failureFocus.release()
+    }
+  }, [attemptOpen, failureFocus])
   if (crew) {
     // The suspended crew panel's strip keeps main's own view while it is enabled.
     return (
@@ -286,3 +302,34 @@ export function NativeChatStructuredSessionStatus(props: {
 }
 
 const LOCAL: RuntimeClientTarget = { kind: 'local' }
+
+/** The identity is the current lifecycle; a cached detail can lag it (a metadata-only update
+ *  moves the identity alone). The row shows, and Stop is checked against, the identity's state. */
+function withCurrentLifecycle(
+  detail: WorkerDockRowView,
+  current: WorkerDockSnapshot['identities'][number] | undefined
+): WorkerDockRowView {
+  if (
+    !current ||
+    current.dispatchId !== detail.dispatchId ||
+    (current.state === detail.state &&
+      current.settlement === detail.settlement &&
+      current.changedAt === detail.changedAt &&
+      current.ownerActionsAvailable === detail.ownerActionsAvailable)
+  ) {
+    return detail
+  }
+  return {
+    ...detail,
+    state: current.state,
+    changedAt: current.changedAt,
+    settlement: current.settlement,
+    ownerActionsAvailable: current.ownerActionsAvailable
+  }
+}
+
+/** An open approval labels a worker as waiting on you only while it is unsettled and not already
+ *  stopping, so the label never hides that state or re-enables its Stop. */
+function approvalLabels(row: { state: WorkerDockRowView['state'] }, settled: boolean): boolean {
+  return !settled && row.state !== 'stopping'
+}

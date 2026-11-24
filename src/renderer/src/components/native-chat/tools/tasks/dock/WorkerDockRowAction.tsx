@@ -8,6 +8,27 @@ import { cn } from '@/lib/class-names'
 import type { WorkerDockRowView } from './WorkerDockRow'
 import { WorkerDockFeedLossesContext, workerDockCanStop } from './worker-dock-stop-check'
 
+type Press = {
+  row: WorkerDockRowView
+  action: 'stop' | 'clear'
+  cancelled: boolean
+  activated: boolean
+  /** The feed this press started on, and its loss count then. */
+  readLosses: () => number
+  losses: number
+}
+
+/** A press the feed dropped during, or that started on another feed, is cancelled even after the
+ *  feed recovers: the row it was aimed at may not be the worker it is now. */
+function workerDockPressStillLive(press: Press, readLosses: () => number): boolean {
+  return (
+    !press.cancelled &&
+    !press.activated &&
+    press.readLosses === readLosses &&
+    press.losses === readLosses()
+  )
+}
+
 /** A dock row's Stop or Clear, which keeps the pressed intent through a structural update. */
 export function WorkerDockRowAction({
   row,
@@ -21,15 +42,10 @@ export function WorkerDockRowAction({
   onAction: (row: WorkerDockRowView, action: 'stop' | 'clear') => void
 }) {
   const t = useTranslate()
-  const gesture = useRef<{
-    row: WorkerDockRowView
-    action: 'stop' | 'clear'
-    rect: DOMRect | null
-    cancelled: boolean
-    activated: boolean
-    /** The feed's loss count when this press started; a loss before activation cancels it. */
-    losses: number
-  } | null>(null)
+  // One press per input, each cleared only by its own release: a mouse press and a key press can
+  // overlap, and neither may end, or activate as, the other.
+  const pointerPress = useRef<(Press & { pointerId: number; rect: DOMRect }) | null>(null)
+  const keyPress = useRef<(Press & { key: string }) | null>(null)
   const readLosses = useContext(WorkerDockFeedLossesContext)
   const [focusedAction, setFocusedAction] = useState<'stop' | 'clear' | null>(null)
   const failed = row.state === 'failed' || row.state === 'unexpected'
@@ -41,6 +57,14 @@ export function WorkerDockRowAction({
   const canStop = workerDockCanStop(row)
   const action = focusedAction ?? (canClear ? 'clear' : 'stop')
   const unavailable = !canStop || pending
+  const startPress = (): Press => ({
+    row,
+    action,
+    cancelled: false,
+    activated: false,
+    readLosses,
+    losses: readLosses()
+  })
   return (
     <div
       className={cn(
@@ -83,32 +107,38 @@ export function WorkerDockRowAction({
               }
               aria-disabled={action === 'stop' ? unavailable : pending}
               onPointerDown={(event) => {
-                if (event.button === 0) {
-                  window.addEventListener(
-                    'pointerup',
-                    () =>
-                      setTimeout(() => {
-                        gesture.current = null
-                      }, 0),
-                    { once: true }
-                  )
-                  gesture.current = {
-                    row,
-                    action,
-                    rect: event.currentTarget.getBoundingClientRect(),
-                    cancelled: false,
-                    activated: false,
-                    losses: readLosses()
-                  }
+                if (event.button !== 0) {
+                  return
                 }
+                const press = {
+                  ...startPress(),
+                  pointerId: event.pointerId,
+                  rect: event.currentTarget.getBoundingClientRect()
+                }
+                pointerPress.current = press
+                const end = (released: PointerEvent) => {
+                  if (released.pointerId !== press.pointerId) {
+                    return
+                  }
+                  window.removeEventListener('pointerup', end, true)
+                  window.removeEventListener('pointercancel', end, true)
+                  // After this release's click, which reads the press.
+                  setTimeout(() => {
+                    if (pointerPress.current === press) {
+                      pointerPress.current = null
+                    }
+                  }, 0)
+                }
+                window.addEventListener('pointerup', end, true)
+                window.addEventListener('pointercancel', end, true)
               }}
               onPointerLeave={() => {
-                if (gesture.current?.rect) {
-                  gesture.current.cancelled = true
+                if (pointerPress.current) {
+                  pointerPress.current.cancelled = true
                 }
               }}
               onPointerMove={(event) => {
-                const current = gesture.current
+                const current = pointerPress.current
                 const rect = current?.rect
                 if (
                   current &&
@@ -123,43 +153,40 @@ export function WorkerDockRowAction({
                 }
               }}
               onPointerCancel={() => {
-                if (gesture.current) {
-                  gesture.current.cancelled = true
+                if (pointerPress.current) {
+                  pointerPress.current.cancelled = true
                 }
               }}
               onKeyDown={(event) => {
                 if ((event.key === 'Enter' || event.key === ' ') && !event.repeat) {
-                  gesture.current = {
-                    row,
-                    action,
-                    rect: null,
-                    cancelled: false,
-                    activated: false,
-                    losses: readLosses()
-                  }
+                  keyPress.current = { ...startPress(), key: event.key }
                 }
               }}
               onKeyUp={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
+                const press = keyPress.current
+                // Only the key that started the press ends it.
+                if (press?.key === event.key) {
                   setTimeout(() => {
-                    gesture.current = null
+                    if (keyPress.current === press) {
+                      keyPress.current = null
+                    }
                   }, 0)
                 }
               }}
               onBlur={() => {
-                gesture.current = null
+                // Without focus no held press may activate; each is cleared by its own release.
+                for (const press of [pointerPress.current, keyPress.current]) {
+                  if (press) {
+                    press.cancelled = true
+                  }
+                }
                 setFocusedAction(null)
               }}
               onFocus={() => setFocusedAction(action)}
-              onClick={() => {
-                const captured = gesture.current
-                // A press the feed dropped during is cancelled even if it has since recovered:
-                // the row it was aimed at may not be the worker it is now.
-                if (
-                  captured?.cancelled ||
-                  captured?.activated ||
-                  (captured && captured.losses !== readLosses())
-                ) {
+              onClick={(event) => {
+                // A keyboard activation clicks with detail 0, a pointer one with its click count.
+                const captured = event.detail === 0 ? keyPress.current : pointerPress.current
+                if (captured && !workerDockPressStillLive(captured, readLosses)) {
                   return
                 }
                 const intendedRow = captured?.row ?? row

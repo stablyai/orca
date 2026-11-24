@@ -21,19 +21,31 @@ const hoisted = vi.hoisted(() => {
     identities: WorkerDockSnapshot['identities'] | null
     // The feed's live loss count, which moves at publication, before React renders.
     losses: number
+    // The feed's reader for it; a replaced feed brings a new one.
+    readLosses: () => number
+    approvals: readonly {
+      approval: {
+        state: 'open'
+        worker: { dispatchId: string }
+        summary: { title: string }
+      }
+      at: string
+    }[]
   } = {
     rpc: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
     party: 'party-synthetic',
     available: true,
     rows: [],
     identities: null,
-    losses: 0
+    losses: 0,
+    readLosses: () => 0,
+    approvals: []
   }
   return state
 })
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: hoisted.rpc }))
 vi.mock('../../worker-approvals/native-chat-worker-approval-feed', () => ({
-  useNativeChatPinnedWorkerApprovals: () => []
+  useNativeChatPinnedWorkerApprovals: () => hoisted.approvals
 }))
 vi.mock('./dock/worker-dock-feed', () => ({
   useWorkerDockFeed: () => ({
@@ -56,7 +68,7 @@ vi.mock('./dock/worker-dock-feed', () => ({
         )
     },
     loadWindow: async () => {},
-    readLosses: () => hoisted.losses
+    readLosses: hoisted.readLosses
   })
 }))
 
@@ -155,6 +167,8 @@ beforeEach(() => {
   hoisted.rows = [worker]
   hoisted.identities = null
   hoisted.losses = 0
+  hoisted.readLosses = () => hoisted.losses
+  hoisted.approvals = []
 })
 afterEach(cleanup)
 
@@ -260,7 +274,7 @@ it('sends Stop for a held mouse press with no outage', () => {
   const stop = screen.getByRole('button', { name: STOP })
   fireEvent.pointerDown(stop, { button: 0, pointerId: 1 })
   fireEvent.pointerUp(stop, { button: 0, pointerId: 1 })
-  fireEvent.click(stop)
+  fireEvent.click(stop, { detail: 1 })
   expect(stopCalls()).toHaveLength(1)
 })
 
@@ -270,7 +284,7 @@ it('cancels a held mouse press on Stop when the feed drops, even if it recovers 
   fireEvent.pointerDown(stop, { button: 0, pointerId: 1 })
   outageAndRecovery(dock)
   fireEvent.pointerUp(stop, { button: 0, pointerId: 1 })
-  fireEvent.click(stop)
+  fireEvent.click(stop, { detail: 1 })
   await act(async () => {})
   expect(stopCalls()).toHaveLength(0)
   // After release, a fresh press stops it.
@@ -278,7 +292,7 @@ it('cancels a held mouse press on Stop when the feed drops, even if it recovers 
   const fresh = screen.getByRole('button', { name: STOP })
   fireEvent.pointerDown(fresh, { button: 0, pointerId: 2 })
   fireEvent.pointerUp(fresh, { button: 0, pointerId: 2 })
-  fireEvent.click(fresh)
+  fireEvent.click(fresh, { detail: 1 })
   expect(stopCalls()).toHaveLength(1)
 })
 
@@ -319,4 +333,135 @@ it('cancels a held Space press when a loss and recovery are published before Rea
   fireEvent.click(stop)
   await act(async () => {})
   expect(stopCalls()).toHaveLength(0)
+})
+
+const approval = {
+  approval: {
+    state: 'open' as const,
+    worker: { dispatchId: worker.dispatchId },
+    summary: { title: 'Run the migration?' }
+  },
+  at: '2026-11-23T12:00:00.000Z'
+}
+
+it.each([
+  ['no approval', []],
+  ['an open approval', [approval]]
+])(
+  'shows no Stop and sends none while the current identity is stopping over stale detail, with %s',
+  async (_name, approvals) => {
+    hoisted.approvals = approvals
+    // The detail still reads as a stoppable running worker; the identity has moved on.
+    hoisted.identities = [identity({ state: 'stopping' })]
+    renderDock()
+    expect(screen.queryByRole('button', { name: STOP })).toBeNull()
+    expect(screen.queryByText('Waiting on you')).toBeNull()
+    expect(stopCalls()).toHaveLength(0)
+  }
+)
+
+it('still stops a running worker that is waiting on an approval', async () => {
+  hoisted.approvals = [approval]
+  renderDock()
+  expect(screen.getByText('Waiting on you')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: STOP }), { detail: 1 })
+  await act(async () => {})
+  expect(stopCalls()).toHaveLength(1)
+})
+
+it('cancels a mouse hold across an outage even when a fresh Space press overlaps its release', async () => {
+  const dock = renderDock()
+  const stop = screen.getByRole('button', { name: STOP })
+  fireEvent.pointerDown(stop, { button: 0, pointerId: 1 })
+  outageAndRecovery(dock)
+  // Space starts after the recovery, so it is a fresh press of its own.
+  fireEvent.keyDown(stop, { key: ' ' })
+  fireEvent.pointerUp(stop, { button: 0, pointerId: 1 })
+  fireEvent.click(stop, { detail: 1 })
+  await act(async () => {})
+  expect(stopCalls()).toHaveLength(0)
+  fireEvent.keyUp(stop, { key: ' ' })
+  fireEvent.click(stop)
+  await act(async () => {})
+  expect(stopCalls()).toHaveLength(1)
+})
+
+it('keeps a held Space press cancelled when a different key is released', async () => {
+  const dock = renderDock()
+  const stop = screen.getByRole('button', { name: STOP })
+  fireEvent.keyDown(stop, { key: ' ' })
+  outageAndRecovery(dock)
+  fireEvent.keyUp(stop, { key: 'Enter' })
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 0)))
+  fireEvent.keyUp(stop, { key: ' ' })
+  fireEvent.click(stop)
+  await act(async () => {})
+  expect(stopCalls()).toHaveLength(0)
+})
+
+it('cancels a held Space press when the feed is replaced during it, then takes a fresh press', async () => {
+  const dock = renderDock()
+  const stop = screen.getByRole('button', { name: STOP })
+  fireEvent.keyDown(stop, { key: ' ' })
+  // A new feed for the same button starts its own count, which can match the old one.
+  hoisted.readLosses = () => hoisted.losses
+  dock.update()
+  fireEvent.keyUp(stop, { key: ' ' })
+  fireEvent.click(stop)
+  await act(async () => {})
+  expect(stopCalls()).toHaveLength(0)
+  fireEvent.keyDown(stop, { key: ' ' })
+  fireEvent.keyUp(stop, { key: ' ' })
+  fireEvent.click(stop)
+  await act(async () => {})
+  expect(stopCalls()).toHaveLength(1)
+})
+
+/** Retry with focus on it, holding the retried Stop open until the test rejects it. */
+async function retryHeldOpen() {
+  await failFirstStop()
+  let reject: (error: Error) => void = () => {}
+  hoisted.rpc.mockImplementation((_target, method) =>
+    method === 'orchestration.workerDockStop'
+      ? new Promise((_resolve, fail) => {
+          reject = fail
+        })
+      : Promise.resolve({})
+  )
+  const retry = screen.getByRole('button', { name: 'Retry' })
+  retry.focus()
+  fireEvent.click(retry)
+  await act(async () => {})
+  const toggle = screen.getByRole('button', { expanded: true })
+  // The line left with focus, so focus waits on the dock toggle.
+  expect(toggle).toHaveFocus()
+  return {
+    toggle,
+    rejectLate: async () => {
+      await act(async () => reject(new Error('Connection dropped')))
+      await screen.findByText('Connection dropped')
+    }
+  }
+}
+
+it('hands focus to the next line when it stayed parked for the whole attempt', async () => {
+  const { rejectLate } = await retryHeldOpen()
+  await rejectLate()
+  expect(screen.getByRole('button', { name: 'Retry' })).toHaveFocus()
+})
+
+it('leaves focus on the toggle when the user left it and came back during the attempt', async () => {
+  const { toggle, rejectLate } = await retryHeldOpen()
+  screen.getByRole('region', { name: 'Workers' }).focus()
+  toggle.focus()
+  await rejectLate()
+  expect(toggle).toHaveFocus()
+})
+
+it('leaves focus where the user moved it during the attempt', async () => {
+  const { rejectLate } = await retryHeldOpen()
+  const roster = screen.getByRole('region', { name: 'Workers' })
+  roster.focus()
+  await rejectLate()
+  expect(roster).toHaveFocus()
 })
