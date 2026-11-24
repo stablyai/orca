@@ -13,6 +13,7 @@ import {
   skillShareIdFromArguments
 } from '../../shared/skills/sharing/skill-share-link'
 import { formatConnectorLinkDeepLink, parseConnectorLinkDeepLink } from './connector-link-deep-link'
+import { parseWorktreeDeepLink, type WorktreeDeepLink } from './open-routing/worktree-deep-link'
 import { PendingDeepLinkState } from './open-routing/skill-share-deep-link-state'
 
 export type DeepLink =
@@ -21,6 +22,7 @@ export type DeepLink =
   | { kind: 'bot'; link: BotDeepLink }
   | { kind: 'connector-link'; link: ConnectorLinkDeepLink }
   | { kind: 'access-request'; link: BotAccessRequestDeepLink }
+  | { kind: 'worktree'; link: WorktreeDeepLink }
 
 function deepLinkOf(value: string): DeepLink | null {
   const accessRequest = parseBotAccessRequestDeepLink(value)
@@ -34,6 +36,10 @@ function deepLinkOf(value: string): DeepLink | null {
   const connector = parseConnectorLinkDeepLink(value)
   if (connector) {
     return { kind: 'connector-link', link: connector }
+  }
+  const worktree = parseWorktreeDeepLink(value)
+  if (worktree) {
+    return { kind: 'worktree', link: worktree }
   }
   const botShareId = botShareIdFromArguments([value])
   if (botShareId) {
@@ -73,6 +79,11 @@ export class DeepLinkState {
       }
       if (link.kind === 'bot-share') {
         this.botShares.capture([link.shareId], () => publish?.(link))
+        continue
+      }
+      if (link.kind === 'worktree') {
+        // Acted on at once, never held: a stale link must not move the window later.
+        publish?.(link)
         continue
       }
       if (link.kind === 'bot') {
