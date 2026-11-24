@@ -1,5 +1,8 @@
 import type { WorkspaceCleanupGroup } from '../../../../../shared/workspace-cleanup/workspace-cleanup-groups'
-import { getWorkspaceCleanupGroupTabId } from './workspace-cleanup-group-cards'
+import {
+  getWorkspaceCleanupGroupTabId,
+  WORKSPACE_CLEANUP_GROUP_PANEL_ID
+} from './workspace-cleanup-group-cards'
 
 export type WorkspaceCleanupConfirmOpener =
   | { kind: 'row' | 'retry'; identity: string }
@@ -19,6 +22,12 @@ function findOpener(opener: WorkspaceCleanupConfirmOpener): HTMLElement | null {
   return null
 }
 
+export function findWorkspaceCleanupFocusFallback(scope: ParentNode): HTMLElement | null {
+  return scope.querySelector<HTMLElement>(
+    `[aria-controls="${WORKSPACE_CLEANUP_GROUP_PANEL_ID}"][aria-selected="true"], [data-workspace-cleanup-run-action]`
+  )
+}
+
 /**
  * Back remounts the list, so focus returns to the control that opened confirmation once it
  * renders again. A disabled or scrolled-away opener falls back to the active group tab.
@@ -35,7 +44,7 @@ export function focusWorkspaceCleanupConfirmOpener(
     }
     const fallback =
       document.getElementById(getWorkspaceCleanupGroupTabId(group)) ??
-      document.querySelector<HTMLElement>('[data-workspace-cleanup-run-action]')
+      findWorkspaceCleanupFocusFallback(document)
     fallback?.focus()
   })
 }

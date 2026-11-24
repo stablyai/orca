@@ -20,11 +20,13 @@ import {
   isWorkspaceCleanupRemovalBusy
 } from './workspace-cleanup-removal-candidates'
 import { createWorkspaceCleanupSnapshotPruneBatch } from './workspace-cleanup-snapshot-prune-batch'
+import { updateWorkspaceCleanupDeletionPhases } from './workspace-cleanup-deletion-phases'
 import { useWorkspaceCleanupUnverifiedRemoval } from './use-workspace-cleanup-unverified-removal'
 import { useWorkspaceCleanupRunStore } from './run/workspace-cleanup-run-store'
 import {
   mergeWorkspaceCleanupRowFailures,
-  startWorkspaceCleanupRowAttempt
+  startWorkspaceCleanupRowAttempt,
+  type WorkspaceCleanupRowAttempts
 } from './workspace-cleanup-row-failures'
 import {
   createWorkspaceCleanupRunReporter,
@@ -84,7 +86,7 @@ export function useWorkspaceCleanupRemoval({
   const [rowFailures, setRowFailures] = useState<Record<string, WorkspaceCleanupFailure>>({})
   const removalInFlightRef = useRef(false)
   // Browse keeps attempt ownership after Done dismisses the run summary.
-  const browseAttempts = useRef(new Map<string, symbol>())
+  const browseAttempts = useRef<WorkspaceCleanupRowAttempts>(new Map())
 
   const resetRowFailures = useCallback(() => setRowFailures({}), [])
 
@@ -167,14 +169,6 @@ export function useWorkspaceCleanupRemoval({
     setConfirmCandidates([])
   }, [clearAgentStopRequest])
 
-  const settle = useCallback(() => {
-    setRemovalProgress(null)
-    setRemovalInFlight(false)
-    setConfirming(false)
-    setConfirmCandidates([])
-    setDeletionPhaseByIdentity({})
-  }, [])
-
   const confirmRemove = (candidates: ConfirmationCandidates = confirmCandidates): void => {
     if (removalInFlightRef.current) {
       return
@@ -197,11 +191,12 @@ export function useWorkspaceCleanupRemoval({
     removalInFlightRef.current = true
     setRemovalInFlight(true)
     // Hung settlements retain callbacks indefinitely; capture IDs rather than candidate objects.
-    const removableDeleteStateTargets = removableCandidates.map((candidate) => {
-      const hostId = resolveWorkspaceCleanupRemovalHostId(candidate)
-      return hostId ? { id: candidate.worktreeId, hostId } : candidate.worktreeId
-    })
-    const removableIdentities = removableCandidates.map(getWorkspaceCleanupCandidateIdentity)
+    const removalRows = removableCandidates.map((candidate) => ({
+      identity: getWorkspaceCleanupCandidateIdentity(candidate),
+      id: candidate.worktreeId,
+      hostId: resolveWorkspaceCleanupRemovalHostId(candidate) ?? undefined
+    }))
+    const removableIdentities = removalRows.map(({ identity }) => identity)
     const browseAttempt = startWorkspaceCleanupRowAttempt(
       browseAttempts.current,
       removableIdentities
@@ -210,10 +205,29 @@ export function useWorkspaceCleanupRemoval({
     const runReporter = createWorkspaceCleanupRunReporter(
       useWorkspaceCleanupRunStore.getState().startRun(removableCandidates)
     )
-    setDeletionPhaseByIdentity(
-      Object.fromEntries(removableIdentities.map((identity) => [identity, 'queued' as const]))
+    setDeletionPhaseByIdentity((current) => ({
+      ...current,
+      ...Object.fromEntries(removableIdentities.map((identity) => [identity, 'queued' as const]))
+    }))
+    markWorktreesQueuedForDeletion(
+      removalRows.map(({ id, hostId }) => (hostId ? { id, hostId } : id))
     )
-    markWorktreesQueuedForDeletion(removableDeleteStateTargets)
+    const updateOwnedDeletionPhases = (phase: 'deleting' | null): void => {
+      const ownedIdentities = removableIdentities.filter(browseAttempt.owns)
+      setDeletionPhaseByIdentity((current) =>
+        updateWorkspaceCleanupDeletionPhases(current, ownedIdentities, phase)
+      )
+    }
+    const settle = (): void => {
+      removalInFlightRef.current = false
+      if (mountedRef.current) {
+        updateOwnedDeletionPhases(null)
+        setRemovalProgress(null)
+        setRemovalInFlight(false)
+        setConfirming(false)
+        setConfirmCandidates([])
+      }
+    }
     const reportBrowseResult = (result: WorkspaceCleanupRemoveResult): void => {
       const settlement = browseAttempt.settle(result)
       for (const failure of settlement.failures) {
@@ -226,30 +240,24 @@ export function useWorkspaceCleanupRemoval({
     }
     const handleRemovalError = (): void => {
       runReporter.onError()
-      for (const target of removableDeleteStateTargets) {
-        if (typeof target === 'string') {
-          clearWorktreeDeleteState(target)
-        } else {
-          clearWorktreeDeleteState(target.id, target.hostId)
+      for (const { identity, id, hostId } of removalRows) {
+        if (browseAttempt.owns(identity)) {
+          clearWorktreeDeleteState(id, hostId)
         }
       }
-      if (mountedRef.current) {
-        settle()
-      }
-      removalInFlightRef.current = false
+      settle()
     }
     try {
       const snapshotPruneBatch = createWorkspaceCleanupSnapshotPruneBatch()
       startWorkspaceCleanupBackgroundRemoval({
         candidates: removableCandidates,
         removeCandidates,
+        canReportFailure: browseAttempt.canReportFailure,
         snapshotPruneBatch,
         onProgress: (progress) => {
           if (mountedRef.current) {
             setRemovalProgress(progress)
-            setDeletionPhaseByIdentity((current) =>
-              Object.fromEntries(Object.keys(current).map((identity) => [identity, 'deleting']))
-            )
+            updateOwnedDeletionPhases('deleting')
           }
         },
         onRowStarted: runReporter.onRowStarted,
@@ -262,20 +270,15 @@ export function useWorkspaceCleanupRemoval({
           }
           clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
           if (mountedRef.current) {
-            setDeletionPhaseByIdentity((current) => {
-              const next = { ...current }
-              delete next[identity]
-              return next
-            })
+            setDeletionPhaseByIdentity((current) =>
+              updateWorkspaceCleanupDeletionPhases(current, [identity], null)
+            )
           }
         },
         onResult: (result) => {
           runReporter.onResult(result)
+          settle()
           reportBrowseResult(result)
-          if (mountedRef.current) {
-            settle()
-          }
-          removalInFlightRef.current = false
         },
         onLateResult: (result) => {
           runReporter.onLateResult(result)

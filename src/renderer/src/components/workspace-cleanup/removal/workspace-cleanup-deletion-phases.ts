@@ -7,6 +7,22 @@ import {
 import { composeWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
 import type { WorkspaceCleanupDeletionPhase } from '../candidate-list/workspace-cleanup-candidate-row'
 
+export function updateWorkspaceCleanupDeletionPhases(
+  current: Record<string, WorkspaceCleanupDeletionPhase>,
+  ownedIdentities: readonly string[],
+  phase: WorkspaceCleanupDeletionPhase | null
+): Record<string, WorkspaceCleanupDeletionPhase> {
+  const next = { ...current }
+  for (const identity of ownedIdentities) {
+    if (phase === null) {
+      delete next[identity]
+    } else if (next[identity]) {
+      next[identity] = phase
+    }
+  }
+  return next
+}
+
 export function getWorkspaceCleanupDeletionPhaseByIdentity(
   candidates: readonly WorkspaceCleanupCandidate[],
   cleanupPhases: Readonly<Record<string, WorkspaceCleanupDeletionPhase>>,
