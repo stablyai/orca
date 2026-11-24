@@ -11,6 +11,12 @@ export function focusWorkerDockPaneEditor(pane: Element | null | undefined): voi
 /** Back to the row that opened a dialog; once that row is gone, its own pane's worker pill; once
  *  the last worker left too, that pane's message box. Never another pane, never the page. */
 export function returnWorkerDockFocus(opener: HTMLElement, pane: Element | null): void {
+  // The dialog hands focus back only after it has detached. Focus already moved somewhere still on
+  // screen (another pane, by the user) stays there; only focus that fell to the page comes back.
+  const active = document.activeElement
+  if (active && active !== document.body && active.isConnected) {
+    return
+  }
   if (opener.isConnected) {
     opener.focus()
     return
