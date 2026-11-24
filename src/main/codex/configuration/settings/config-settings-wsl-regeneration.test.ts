@@ -230,6 +230,7 @@ describe('managed Codex config for a WSL distro config', () => {
     syncSystemConfigIntoManagedCodexHome()
     const baselinePath = join(runtimeConfigPath(), '..', '.orca-config-settings-baseline.json')
     const stored = JSON.parse(readFileSync(baselinePath, 'utf-8'))
+    stored.version = 2
     delete stored.registrations
     delete stored.mcpServers
     writeFileSync(baselinePath, JSON.stringify(stored), 'utf-8')
@@ -239,6 +240,26 @@ describe('managed Codex config for a WSL distro config', () => {
     syncSystemConfigIntoManagedCodexHome()
 
     expect(readRuntimeConfig()).not.toContain('old@market')
+  })
+
+  it('rebuilds a kept value from its marked line when the baseline is lost', () => {
+    writeSystemConfig('model = "gpt-5"\n')
+    syncSystemConfigIntoManagedCodexHome()
+    simulateCodexSettingWrite('model', '"o4"')
+    wslTestState.wslPath = systemConfigPath()
+    syncSystemConfigIntoManagedCodexHome()
+    // An interrupted baseline write leaves nothing readable.
+    writeFileSync(
+      join(runtimeConfigPath(), '..', '.orca-config-settings-baseline.json'),
+      '{',
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readRuntimeConfig()).toMatch(/^model = "o4" # orca: /m)
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toBe('model = "gpt-5"\n')
   })
 
   it('keeps a first plugin added in a tab before the update', () => {

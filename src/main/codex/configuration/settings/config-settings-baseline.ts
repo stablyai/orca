@@ -102,7 +102,8 @@ function readParsedCodexSettingsBaseline(
       mcpServers: readStoredMcpServers(parsed.mcpServers),
       // Older mirrors owned the whole MCP root; retain that removal policy for one pass.
       mcpServerRoot: parsed.mcpServers === undefined || parsed.mcpServerRoot === true,
-      tracksRegistrations: parsed.registrations !== undefined || parsed.mcpServers !== undefined,
+      // Version 3 came with registration tracking.
+      tracksRegistrations: parsed.version === 3,
       ...(parsed.guestCarryForward !== undefined && {
         guestCarryForward: readStoredGuestCarryForward(parsed.guestCarryForward)
       })

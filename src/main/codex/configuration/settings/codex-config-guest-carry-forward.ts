@@ -172,6 +172,10 @@ export function planGuestRegenerationCarryForward(
   if (baseline?.guestCarryForward) {
     return retainGuestCarryForward(baseline.guestCarryForward, systemConfig)
   }
+  // Only this version writes the marker, so a home that has it lost its baseline; rebuild from the lines.
+  if (runtimeConfig.includes(CODEX_GUEST_CARRY_FORWARD_MARKER)) {
+    return recoverGuestCarryForward(runtimeConfig, systemConfig)
+  }
   const updates = new Map<string, string>()
   if (baseline) {
     collectPromotionChanges({
@@ -183,17 +187,28 @@ export function planGuestRegenerationCarryForward(
       runtimeValuesToPreserve: new Map()
     })
   }
-  // Without a baseline that tracked registrations, a managed-copy plugin table may be one the distro
-  // dropped, so only plugins the distro still has carry.
+  // Without a baseline that tracked registrations, a managed-copy table may be one the distro
+  // dropped, so only registrations the distro still has carry.
   const trackedRegistrations = baseline?.registrations ?? new Map()
   const tracksRegistrations = baseline?.tracksRegistrations === true
   const registrations = planCodexRegistrationPromotion(
     runtimeConfig,
     upsertPromotedSettingsInContent(systemConfig, updates),
     trackedRegistrations
-  ).filter(
-    (promotion) =>
-      promotion.kind !== 'append' || !promotion.key.startsWith('plugins:') || tracksRegistrations
-  )
+  ).filter((promotion) => promotion.kind !== 'append' || tracksRegistrations)
   return planGuestCarryForward(updates, registrations, systemConfig)
+}
+
+/** Marked setting lines are the managed copy's own record of kept values. */
+function recoverGuestCarryForward(
+  runtimeConfig: string,
+  systemConfig: string
+): CodexGuestCarryForward {
+  const updates = new Map<string, string>()
+  for (const [key, value] of readPromotedSettingValuesFromContent(runtimeConfig)) {
+    if (!value.multiline && value.raw.endsWith(CODEX_GUEST_CARRY_FORWARD_MARKER)) {
+      updates.set(key, value.raw.slice(0, -CODEX_GUEST_CARRY_FORWARD_MARKER.length).trimEnd())
+    }
+  }
+  return planGuestCarryForward(updates, [], systemConfig)
 }
