@@ -5,6 +5,7 @@ import {
 } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import type { HTMLAttributes, RefObject } from 'react'
 import { linkedSelectionText } from '../../paste/native-chat-pasted-links'
+import { toLfPastedText } from '@/lib/clipboard/clipboard-line-endings'
 import { applyMentionSuggestion } from '../../../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
 
 /** Text coordinates keep transport, attachments, and picker logic independent of the editor. */
@@ -72,12 +73,13 @@ export function insertNativeChatPastedText(
   }
   // A paste routed from a hidden terminal or a transcript click must leave the caret in the composer.
   input.focus()
+  const pasted = toLfPastedText(text)
   const { selectionStart, selectionEnd } = input
   const linked =
     selectionStart !== null && selectionEnd !== null && selectionStart < selectionEnd
-      ? linkedSelectionText(input.value.slice(selectionStart, selectionEnd), text)
+      ? linkedSelectionText(input.value.slice(selectionStart, selectionEnd), pasted)
       : null
-  input.insertText(linked ?? text)
+  input.insertText(linked ?? pasted)
   return true
 }
 

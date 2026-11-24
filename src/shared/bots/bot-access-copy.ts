@@ -55,6 +55,8 @@ export const BOT_ACCESS_COPY = {
   controlBriefIfAdded: 'Anyone you add can act as you here.',
   controlBriefOnHost: 'They can act as you on {{computer}}.',
   controlBriefIfAddedOnHost: 'Anyone you add can act as you on {{computer}}.',
+  // The GitHub setup's one-line warning once someone else can ask; the control line is its detail.
+  actsAsYou: 'They act as you on {{computer}}.',
   reachHeading: 'What {{name}} can reach',
   reachComputer: 'Your files, commands and accounts on {{computer}}',
   reachComputerDetail: 'As you, as far as the permission below allows.',
@@ -66,7 +68,7 @@ export const BOT_ACCESS_COPY = {
   codexNoSandbox: 'No Codex sandbox.',
   whoeverAskedApproves: 'If it asks, whoever asked can approve.',
   reachLinear: 'Comment on, update and create Linear issues as you',
-  reachSlack: 'Post in Slack as @{{name}}',
+  reachSlack: 'Post in Slack as {{name}}',
   reachGitHub: 'Comment, review and push on GitHub as you',
   reachGoogleEmail: 'Read and send your email',
   reachGoogleCalendar: 'Use your calendar',

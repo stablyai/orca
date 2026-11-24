@@ -188,7 +188,7 @@ export async function loadGitHistoryFromExecutor(
     options.branchOnly &&
     rawBaseRef?.revision &&
     !(await isBaseOfItself(git, cwd, rawBaseRef, currentRef))
-      ? await resolveBranchRange(git, cwd, headOid, rawBaseRef)
+      ? await resolveBranchRange(git, cwd, headOid, rawBaseRef, options.branchListOnly === true)
       : undefined
 
   // Keep upstream/base as comparison metadata so old workspaces do not gain fetched commits outside their HEAD history.
@@ -245,7 +245,7 @@ export async function loadGitHistoryFromExecutor(
         '-z',
         '--topo-order',
         '--decorate=full',
-        ...(branchBase ? ['--shortstat'] : []),
+        ...(branchBase && !options.branchListOnly ? ['--shortstat'] : []),
         ...(skip > 0 ? [`--skip=${skip}`] : []),
         `-n${limit + 1}`,
         ...(refs === 'head' && !pinned ? historyRevisions : ['--stdin'])
@@ -262,7 +262,7 @@ export async function loadGitHistoryFromExecutor(
   }
   const parsed = parseGitHistoryLog(stdout)
   const items = parsed.slice(0, limit)
-  if (branchBase) {
+  if (branchBase && !options.branchListOnly) {
     for (const item of items) {
       item.pushed = branchBase.unpushedIds ? !branchBase.unpushedIds.has(item.id) : false
     }

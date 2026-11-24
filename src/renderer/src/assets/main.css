@@ -218,8 +218,20 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Why: react-remove-scroll-bar sets this on body per modal and nothing reads it; inheriting it restyles the whole app. */
+@property --removed-body-scroll-bar-size {
+  syntax: '*';
+  inherits: false;
+}
+
 /* Why: only the drawer that carries it reads the live sidebar width; don't restyle its subtree per drag frame. */
 @property --workspace-sidebar-live-width {
+  syntax: '*';
+  inherits: false;
+}
+
+/* Why: non-inherited and keyed on .app-layout, so a modal toggle restyles only its direct children, not the whole app. */
+@property --app-layout-modal-blur {
   syntax: '*';
   inherits: false;
 }
@@ -1258,6 +1270,49 @@ body[data-modal-overlay-open]
 
 /* SortableTab renders activity as a DOM child, reserving ::before/::after for drop-indicator feedback. */
 
+/* Icon-only slots in a condensed strip: the identity icon centred; controls are display:none so
+   nothing clipped stays focusable, and the title stays for screen readers and the hover card. */
+[data-tab-density='icon'] > * {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+[data-tab-density='icon'] > * > * {
+  margin-inline: 0;
+  flex: none;
+}
+
+[data-tab-density='icon'] button,
+[data-tab-density='icon'] [data-tab-compact-hide] {
+  display: none;
+}
+
+[data-tab-density='icon'] .tab-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-tab-density='icon'] [data-tab-icon-badge] {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+}
+
+[data-tab-density='icon'] [data-tab-dirty-dot] {
+  display: block;
+}
+
+[data-tab-density='icon'] > :focus-visible {
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
 #root {
   height: 100dvh;
   width: 100vw;
@@ -1334,9 +1389,14 @@ body[data-modal-overlay-open]
 /* Blur source regions independently so status-bar animation cannot re-filter the workspace. */
 :root:not([data-reduce-effects])
   body:is([data-modal-overlay-open], [data-onboarding-overlay-open])
-  .app-layout
-  > :not(.window-controls) {
-  filter: blur(2px);
+  .app-layout {
+  --app-layout-modal-blur: blur(2px);
+}
+
+/* Always applies, so it overrides any filter utility on a direct child of .app-layout. */
+.app-layout > :not(.window-controls) {
+  --app-layout-modal-blur: inherit;
+  filter: var(--app-layout-modal-blur);
 }
 
 :root:not([data-reduce-effects])
@@ -1483,6 +1543,7 @@ html.native-shell .app-layout {
 
 /* Modal inline pointer styles must not turn noninteractive labels into hit targets. */
 [data-radix-popper-content-wrapper]:has(> [data-slot='tooltip-content'].pointer-events-none),
+[data-radix-popper-content-wrapper]:has(> [data-workspace-board-moved-hint]),
 [data-slot='tooltip-content'].pointer-events-none {
   pointer-events: none !important;
 }
@@ -2413,6 +2474,13 @@ html.native-shell .app-layout {
   --native-chat-quiet-leave-top: calc(-20px * var(--chat-estimated-spacing-scale, 1));
 }
 
+/* Why CanvasText: plugin path icons opt out of forced-color adjustment, so name the system text color. */
+@media (forced-colors: active) {
+  .plugin-panel-icon {
+    color: CanvasText;
+  }
+}
+
 /* Why: keyframes run when the content mounts already in its final state. */
 @keyframes compact-agent-expansion-reveal {
   from {
@@ -2741,6 +2809,24 @@ html.native-shell .app-layout {
 /* The library sets `font-family: sans-serif` on every descendant, so inheriting from the root never lands. */
 .repo-icon-emoji-picker .EmojiPickerReact * {
   font-family: var(--font-sans);
+}
+
+/* Inside the sidebar project card: no inner card, tighter header, smaller emoji. */
+.repo-icon-emoji-picker[data-compact] .EmojiPickerReact {
+  --epr-bg-color: transparent;
+  --epr-category-label-bg-color: var(--popover);
+  --epr-horizontal-padding: 0px;
+  --epr-header-padding: 0 0 6px;
+  --epr-category-navigation-button-size: 20px;
+  --epr-category-label-height: 22px;
+  --epr-emoji-size: 20px;
+  --epr-emoji-padding: 4px;
+}
+
+.repo-icon-emoji-picker[data-compact] .epr-emoji-category-label {
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--muted-foreground);
 }
 
 .repo-icon-emoji-picker .epr-body {

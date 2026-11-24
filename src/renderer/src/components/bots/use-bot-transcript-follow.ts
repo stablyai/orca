@@ -7,6 +7,7 @@ import {
   type ScrollGeometry
 } from '../native-chat/viewport/scroll/native-chat-autoscroll'
 import { useNativeChatReaderScrollInput } from '../native-chat/viewport/scroll/native-chat-reader-scroll-input'
+import { useNativeChatToolRunScroll } from '../native-chat/viewport/scroll/native-chat-transcript-scroll-context'
 import { useNativeChatTranscriptScroll } from '../native-chat/viewport/scroll/use-native-chat-transcript-scroll'
 import { useBotTranscriptReaderAnchor } from './use-bot-transcript-reader-anchor'
 
@@ -88,6 +89,12 @@ export function useBotTranscriptFollow({
     ),
     reconcileReaderScroll: noop
   })
+  const toolRunScroll = useNativeChatToolRunScroll(
+    scrollRef,
+    input.isVisible,
+    { markProgrammaticScroll: marks.mark },
+    scroll
+  )
   const { record: recordAnchor, clear: clearAnchor } = useBotTranscriptReaderAnchor({
     scrollRef,
     contentRef,
@@ -129,6 +136,7 @@ export function useBotTranscriptFollow({
     scrollRef,
     contentRef,
     scrollerProps: { ...reader.scrollerProps, onScroll },
+    toolRunScroll,
     showJump: scroll.showJump,
     jumpToLatest: scroll.scrollToBottom,
     revealRow,

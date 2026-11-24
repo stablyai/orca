@@ -48,6 +48,10 @@ export type ConnectorCloudFeature = (typeof CONNECTOR_CLOUD_FEATURES)[number]
  *  keeps it: without it this Orca sends those prompts nowhere. */
 export const CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE = 'prompts.audience'
 
+/** The cloud marks a thread reply that @mentions the bot (`mentioned`), which is what brings back a
+ *  bot that left the thread; without it no bot leaves a thread on that cloud. */
+export const CONNECTOR_CLOUD_MENTIONED_FEATURE = 'sends.mentioned'
+
 /** The cloud takes a turn's answer up to maxLongAnswerBytes; without it this Orca keeps to
  *  maxLastAssistantMessageBytes. Its own constant, as the cloud's contract keeps it. */
 export const CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE = 'answers.long'

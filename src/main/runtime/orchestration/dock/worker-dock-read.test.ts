@@ -305,6 +305,22 @@ describe('worker dock lifecycle projection', () => {
     expect(readWorkerDockResult(db, party, id)?.body).toBe('The journal is verified.')
   })
 
+  it('marks a failed report as the worker report and a start failure as a raw error', () => {
+    const reported = worker()
+    report(reported, 'failed')
+    expect(readWorkerDockResult(db, party, reported)).toMatchObject({
+      outcome: 'failed',
+      body: 'Verified the journal.',
+      report: true
+    })
+    const failed = worker()
+    db.failWorkerStart(failed, 'verification', 'Verification exited with code 1.')
+    expect(readWorkerDockResult(db, party, failed)).toMatchObject({
+      body: 'Verification exited with code 1.',
+      report: false
+    })
+  })
+
   it('shares 200 durable failure acknowledgments across reopen and another paired client', () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-dock-'))
     db.close()

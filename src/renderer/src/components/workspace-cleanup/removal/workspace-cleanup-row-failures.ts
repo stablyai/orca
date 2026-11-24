@@ -5,26 +5,41 @@ import type {
 import { getWorkspaceCleanupFailureIdentity } from './run/workspace-cleanup-run-reporter'
 
 export type WorkspaceCleanupRowFailures = Record<string, WorkspaceCleanupFailure>
+export type WorkspaceCleanupRowAttempts = Map<string, { token: symbol; removed?: true }>
 type BrowseSettlement = Pick<WorkspaceCleanupRemoveResult, 'removedIdentities' | 'failures'>
 
 export function startWorkspaceCleanupRowAttempt(
-  activeAttempts: Map<string, symbol>,
+  activeAttempts: WorkspaceCleanupRowAttempts,
   identities: readonly string[]
-): { owns: (identity: string) => boolean; settle: (result: BrowseSettlement) => BrowseSettlement } {
-  const attempt = Symbol()
+): {
+  owns: (identity: string) => boolean
+  canReportFailure: (identity: string) => boolean
+  settle: (result: BrowseSettlement) => BrowseSettlement
+} {
+  const token = Symbol()
   for (const identity of identities) {
-    activeAttempts.set(identity, attempt)
+    activeAttempts.set(identity, { token })
   }
-  const owns = (identity: string): boolean => activeAttempts.get(identity) === attempt
+  const owns = (identity: string): boolean => activeAttempts.get(identity)?.token === token
+  const canReportFailure = (identity: string): boolean => {
+    const current = activeAttempts.get(identity)
+    return current?.token === token && !current.removed
+  }
   return {
     owns,
+    canReportFailure,
     settle: ({ removedIdentities, failures }) => {
       const ownedFailures = failures.filter((failure) =>
-        owns(getWorkspaceCleanupFailureIdentity(failure))
+        canReportFailure(getWorkspaceCleanupFailureIdentity(failure))
       )
-      // Late deletion still settles the actual workspace, even after another attempt starts.
       for (const identity of removedIdentities) {
-        activeAttempts.delete(identity)
+        const current = activeAttempts.get(identity)
+        if (current && current.token !== token) {
+          // An authoritative deletion suppresses errors, but the retry still owns its phase.
+          current.removed = true
+        } else {
+          activeAttempts.delete(identity)
+        }
       }
       return { removedIdentities, failures: ownedFailures }
     }

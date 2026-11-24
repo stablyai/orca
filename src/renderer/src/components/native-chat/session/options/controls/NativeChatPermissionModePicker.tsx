@@ -1,3 +1,5 @@
+// @protected-copy scope=file
+// The pill names the policy the agent runs under: a language pack must not reword what it says.
 import { memo } from 'react'
 import { ChevronDown, PencilRuler, Settings2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'

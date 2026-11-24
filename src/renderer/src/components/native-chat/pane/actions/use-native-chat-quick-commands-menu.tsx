@@ -19,7 +19,9 @@ type QuickCommandPane = { worktreeId: string; groupId: string }
 // state; menu data is read by components that live with the open menu content.
 export function useNativeChatQuickCommandsMenu(
   pane: QuickCommandPane | undefined,
-  close: () => void
+  close: () => void,
+  /** Where focus lands when the editor closes; its opener (a menu row) is gone by then. */
+  onEditorCloseAutoFocus?: (event: Event) => void
 ) {
   const [editor, setEditor] = useState<QuickCommandEditor | null>(null)
   return {
@@ -34,6 +36,7 @@ export function useNativeChatQuickCommandsMenu(
         onSave={(command) =>
           useAppStore.getState().upsertTerminalQuickCommand(editor.hostId, command)
         }
+        onCloseAutoFocus={onEditorCloseAutoFocus}
       />
     ) : null
   }
