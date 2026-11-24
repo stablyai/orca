@@ -83,6 +83,14 @@ export function hostUnavailableFailure(message: string, reason: string): Error {
   return openFailure(message, reason, undefined, { kind: 'host-unavailable' })
 }
 
+export function clientCreateFailure(message: string, cause: unknown): Error {
+  return openFailure(message, 'client tab creation rejected', cause, {
+    kind: 'host-error',
+    stage: 'create',
+    code: 'client_create_rejected'
+  })
+}
+
 export function routeFailure(message: string, reason: string, code: string): Error {
   return openFailure(message, reason, undefined, { kind: 'host-error', stage: 'route', code })
 }

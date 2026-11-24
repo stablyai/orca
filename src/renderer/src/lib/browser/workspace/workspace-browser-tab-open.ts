@@ -27,6 +27,7 @@ import {
   resolveWorktreeOperationRoute
 } from '../../workspace/ownership/worktree-operation-route'
 import {
+  clientCreateFailure,
   hostUnavailableFailure,
   intentPresentation,
   NOT_WEB_LINK,
@@ -100,7 +101,7 @@ async function createClientBrowserTab(
     })
     return created.activePageId ?? null
   } catch (error) {
-    throw openFailure(presentation.error, 'client tab creation rejected', error)
+    throw clientCreateFailure(presentation.error, error)
   }
 }
 
@@ -109,7 +110,7 @@ function assertManagedBrowserEnabled(
   presentation: { error: string }
 ): asserts availability is Extract<ClientCreationActionAvailability, { state: 'enabled' }> {
   if (availability.state !== 'enabled') {
-    throw openFailure(presentation.error, availability.reason)
+    throw routeFailure(presentation.error, availability.reason, 'browser_unavailable')
   }
 }
 

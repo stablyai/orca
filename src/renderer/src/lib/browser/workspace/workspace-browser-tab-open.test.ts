@@ -5,9 +5,9 @@ vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 // A workspace on paired runtime env-1 whose host refuses the create, as a stale profile would.
 vi.mock('../../workspace/creation/surface-policy/client-creation-action-policy', async (load) => ({
   ...(await load<object>()),
-  getClientCreationActionPolicy: () => ({
+  getClientCreationActionPolicy: vi.fn(() => ({
     'managed-browser': { state: 'enabled', provider: 'paired-runtime' }
-  })
+  }))
 }))
 vi.mock('../../workspace/ownership/worktree-operation-route', async (load) => ({
   ...(await load<object>()),
@@ -73,4 +73,22 @@ it("a paired host's refusal reaches the toast with its stage and code", async ()
   const detail = openFailureDetail(error)
   expect(detail).toContain('create')
   expect(detail).toContain('invalid_argument')
+})
+
+it('a policy-refused open still names its cause', async () => {
+  const { getClientCreationActionPolicy } =
+    await import('../../workspace/creation/surface-policy/client-creation-action-policy')
+  vi.mocked(getClientCreationActionPolicy).mockReturnValueOnce({
+    'managed-browser': { state: 'hidden', reason: 'Managed browser tabs are unavailable.' },
+    'mobile-emulator': { state: 'hidden', reason: 'Mobile Emulator is unavailable.' }
+  })
+  const error = await openWorkspaceBrowserTab({
+    workspaceId: 'wt',
+    url: 'https://example.com/page',
+    intent: { kind: 'url' }
+  }).then(
+    () => null,
+    (reason: unknown) => reason
+  )
+  expect(openFailureDetail(error)).toContain('browser_unavailable')
 })
