@@ -1,6 +1,6 @@
 // What a shared agent's page and its chats read: the agent as this phone reaches it, the client to
 // its host, and its row as that host lists it, read again each time the phone's link comes up.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { SharedBotHostView } from '../../../../src/shared/bots/shared-bot-hosts'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -29,10 +29,12 @@ export type SharedAgentPage =
 export function useSharedAgentPage(hostId: string, environmentId: string): SharedAgentPage {
   const views = useSharedAgentViews(hostId)
   const view = views?.find((entry) => entry.environmentId === environmentId)
-  const last = useRef<SharedBotHostView | null>(null)
-  if (view) {
-    last.current = view
-  }
+  const [last, setLast] = useState<SharedBotHostView | null>(null)
+  useEffect(() => {
+    if (view) {
+      setLast(view)
+    }
+  }, [view])
   const { client: paired } = useHostClient(hostId)
   const client = useMemo(
     () => (paired ? sharedAgentClient(paired, environmentId) : null),
@@ -64,7 +66,7 @@ export function useSharedAgentPage(hostId: string, environmentId: string): Share
   }
   // Gone from the computer's shares: its owner stopped sharing it (or this account left).
   if (!view) {
-    return { kind: 'removed', last: last.current, bot }
+    return { kind: 'removed', last, bot }
   }
   return { kind: 'agent', view, client, bot, capabilities, live, reads }
 }
