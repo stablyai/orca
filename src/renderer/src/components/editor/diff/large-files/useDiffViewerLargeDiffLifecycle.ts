@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import type { editor } from 'monaco-editor'
-import { monaco } from '@/lib/monaco-setup'
+import { monaco } from '@/lib/editor/monaco/monaco-setup'
 import {
   disposeUnattachedDiffViewerMonacoModels,
   disposeUnattachedMonacoModelPaths,

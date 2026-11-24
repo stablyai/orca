@@ -2,7 +2,7 @@ import {
   COMMAND_TOKEN_SCAN_MAX_CHARS,
   getCommandTokenPathBasename,
   getFirstCommandToken
-} from '../../command-token-scanner'
+} from '../../shell/command-resolution/command-token-scanner'
 import {
   recognizeAgentProcessFromCommandLine,
   type RecognizedAgentProcess

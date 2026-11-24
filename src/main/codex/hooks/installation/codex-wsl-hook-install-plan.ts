@@ -1,6 +1,6 @@
 import { runProcess } from '@orca/process-host'
 import { posix as pathPosix, win32 as pathWin32 } from 'node:path'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { wslExeProcessSpec, wslExeStdout } from '../../../wsl/execution/wsl-exe-process'
 import { blockedWslDistroForExec } from '../../../wsl/discovery/wsl-background-exec-gate'
 

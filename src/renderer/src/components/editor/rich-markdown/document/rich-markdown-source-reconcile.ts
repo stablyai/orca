@@ -8,7 +8,7 @@ import {
 import {
   getUtf8ByteLengthForCodePoint,
   readUtf8CodePointAt
-} from '../../../../../../shared/utf8-byte-limits'
+} from '../../../../../../shared/text/utf8-byte-limits'
 
 // Bound UTF-16 length so the throwaway safety parse stays within the serialization debounce budget.
 const RECONCILE_SIZE_CAP_CODE_UNITS = 50_000

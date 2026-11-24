@@ -1,4 +1,4 @@
-import type { DnrRule } from '../rule-types'
+import type { DnrRule } from '../rule-compilation/rule-types'
 
 /** chrome.declarativeNetRequest constants (declarative_net_request.webidl, Chromium 150). */
 export const DNR_API_CONSTANTS = {
@@ -57,6 +57,20 @@ export function isSafeDnrRule(rule: Pick<DnrRule, 'action'>): boolean {
 }
 
 export type DnrRuleScope = 'dynamic' | 'session'
+
+/** The first limit enabled static rulesets break (updateEnabledRulesets), else null. */
+export function dnrStaticRuleLimitError(
+  rulesets: readonly { ruleCount: number; regexRuleCount: number }[],
+  staticRuleLimit: number
+): string | null {
+  if (rulesets.reduce((sum, ruleset) => sum + ruleset.ruleCount, 0) > staticRuleLimit) {
+    return DNR_ERRORS.enabledRulesetsRuleCount
+  }
+  return rulesets.reduce((sum, ruleset) => sum + ruleset.regexRuleCount, 0) >
+    DNR_API_CONSTANTS.MAX_NUMBER_OF_REGEX_RULES
+    ? DNR_ERRORS.enabledRulesetsRegexRuleCount
+    : null
+}
 
 /** The first limit a dynamic or session rule set breaks, as Chrome reports it, else null. */
 export function dnrRuleLimitError(

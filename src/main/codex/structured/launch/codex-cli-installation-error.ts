@@ -1,13 +1,13 @@
 import {
   CODEX_MINIMUM_SUPPORTED_VERSION,
   parseCodexCliVersion
-} from '../../../../shared/codex-cli-installation'
+} from '../../../../shared/agent-launch/startup/codex-cli-installation'
 import {
   checkAgentCliVersion,
   readAgentCliVersion,
   type AgentCliVersionReader
 } from '../../../agent-launch/preflight/agent-cli-version-probe'
-import { AgentCliInstallationError } from '../../../native-chat/agent-cli-installation-error'
+import { AgentCliInstallationError } from '../../../native-chat/agent-launch/agent-cli-installation-error'
 import type { StructuredAgentLaunchResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import {
   resolveProviderChildEnv,
@@ -20,7 +20,7 @@ export const readCodexCliVersion: AgentCliVersionReader = (input) =>
 export async function requireSupportedCodexCli(
   input: Parameters<AgentCliVersionReader>[0],
   readVersion: AgentCliVersionReader = readCodexCliVersion
-): Promise<void> {
+): Promise<string | null> {
   const check = await checkAgentCliVersion(input, [CODEX_MINIMUM_SUPPORTED_VERSION], readVersion)
   if (check.status === 'tooOld') {
     throw AgentCliInstallationError.tooOld('codex', check)
@@ -28,6 +28,7 @@ export async function requireSupportedCodexCli(
   if (check.status !== 'ready') {
     console.warn(`[codex-cli-version] Could not verify ${input.program}; allowing structured chat`)
   }
+  return check.version
 }
 
 /** Check every acquired child against the same sealed launch the app-server will use. */
@@ -39,7 +40,7 @@ export function withSupportedCodexCli<
 ): StructuredAgentLaunchResolver<L> {
   return async (request) => {
     const launch = await resolveLaunch(request)
-    await requireSupportedCodexCli(
+    const codexVersion = await requireSupportedCodexCli(
       {
         program: launch.command,
         prefixArgs: launch.prefixArgs,
@@ -48,6 +49,7 @@ export function withSupportedCodexCli<
       },
       readVersion
     )
-    return launch
+    // A shared app-server pool keys on the version, so an upgrade starts new servers.
+    return codexVersion ? { ...launch, codexVersion } : launch
   }
 }

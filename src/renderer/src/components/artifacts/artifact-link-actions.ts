@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export async function copyArtifactLink(
   shareUrl: string,

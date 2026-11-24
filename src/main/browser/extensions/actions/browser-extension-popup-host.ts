@@ -4,7 +4,9 @@ import {
   getChromeExtensionOrigin,
   isSameExtensionNavigation
 } from '../../../../shared/browser/extensions/browser-extension-url'
-import { allowPageUnload } from '../../guest-lifecycle/browser-guest-unload-policy'
+import { allowPageUnload } from '../../guest-lifecycle/navigation/browser-guest-unload-policy'
+import { recordBrowserSessionInput } from '../../guest-lifecycle/input/browser-guest-input-gesture'
+import { markNativeBrowserPopupWindow } from '../../guest-lifecycle/popups/presentation/native-browser-popup-windows'
 import { BrowserExtensionApiError } from '../api-runtime/browser-extension-namespace-registry'
 import {
   BROWSER_EXTENSION_POPUP_MAX,
@@ -135,7 +137,9 @@ export function openBrowserExtensionPopup(options: BrowserExtensionPopupOptions)
     extensionId: options.extensionId
   }
   current = popup
+  markNativeBrowserPopupWindow(window)
   const contents = window.webContents
+  recordBrowserSessionInput(contents)
   contents.on('will-prevent-unload', allowPageUnload)
 
   // Why measure in the page: preferred-size-changed only reports while the window paints, and its
@@ -188,7 +192,7 @@ export function openBrowserExtensionPopup(options: BrowserExtensionPopupOptions)
     void watchSize().then(() => {
       if (!window.isDestroyed()) {
         presented = true
-        presentBrowserExtensionWindow(window, true)
+        presentBrowserExtensionWindow(window, 'focused')
       }
     })
   })

@@ -1,7 +1,7 @@
 import { createElement, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PanZoomSize } from '../../../src/shared/pan-zoom-view'
+import type { PanZoomSize } from '../../../src/shared/document-preview/pan-zoom-view'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ref only ever holds the handler the mocked BackHandler registers.
 const back = vi.hoisted(() => ({ press: null as (() => boolean) | null }))
@@ -23,7 +23,7 @@ import {
   useMobilePanZoom,
   type MobilePanZoom,
   type MobilePanZoomDismiss
-} from './use-mobile-pan-zoom'
+} from '../files/media/presentation/use-mobile-pan-zoom'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook only reads client size, bounds, and pointer capture from the canvas.
 const canvas = {

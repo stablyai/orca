@@ -1,12 +1,14 @@
 import {
   describeAutomationSchedule,
   type AutomationScheduleDescriptor
-} from '../../../src/shared/automation-schedules'
+} from '../../../src/shared/automations/scheduling/automation-schedules'
 import { translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 
 // Translate whole sentences; the shared English formatter also serves the CLI.
-function formatAutomationScheduleDescriptor(descriptor: AutomationScheduleDescriptor): string {
+export function formatAutomationScheduleDescriptor(
+  descriptor: AutomationScheduleDescriptor
+): string {
   if (descriptor.kind === 'invalid') {
     return translate(
       'auto.components.automations.automation.schedule.label.086a5a9fe2',
@@ -61,4 +63,12 @@ function formatAutomationScheduleDescriptor(descriptor: AutomationScheduleDescri
 
 export function formatAutomationSchedule(scheduleExpression: string): string {
   return formatAutomationScheduleDescriptor(describeAutomationSchedule(scheduleExpression))
+}
+
+/** The schedule, with its time zone only when it isn't the phone's. */
+export function automationScheduleText(automation: { rrule: string; timezone: string }): string {
+  const schedule = formatAutomationSchedule(automation.rrule)
+  return automation.timezone === Intl.DateTimeFormat().resolvedOptions().timeZone
+    ? schedule
+    : `${schedule} · ${automation.timezone}`
 }

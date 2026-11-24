@@ -1,24 +1,28 @@
-import type { RuntimeBrowserDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 type RuntimeBrowserDriverControllerDeps = {
-  notifyChanged: (browserPageId: string, next: RuntimeBrowserDriverState) => void
-  cancelScreencast: (browserPageId: string) => void
+  notifyChanged: (browserPageId: string, next: RuntimeTerminalDriverState) => void
+  /** The page's screencasts: their viewers hear who drives it, and a reclaim ends the phone's. */
+  screencasts: {
+    publishBrowserDriver: (browserPageId: string, driver: RuntimeTerminalDriverState) => void
+    cancelScreencast: (browserPageId: string) => void
+  }
 }
 
 export class RuntimeBrowserDriverController {
-  private readonly drivers = new Map<string, RuntimeBrowserDriverState>()
+  private readonly drivers = new Map<string, RuntimeTerminalDriverState>()
 
   constructor(private readonly deps: RuntimeBrowserDriverControllerDeps) {}
 
-  getAll(): Map<string, RuntimeBrowserDriverState> {
+  getAll(): Map<string, RuntimeTerminalDriverState> {
     return new Map(this.drivers)
   }
 
-  get(browserPageId: string): RuntimeBrowserDriverState {
+  get(browserPageId: string): RuntimeTerminalDriverState {
     return this.drivers.get(browserPageId) ?? { kind: 'idle' }
   }
 
-  set(browserPageId: string, next: RuntimeBrowserDriverState): void {
+  set(browserPageId: string, next: RuntimeTerminalDriverState): void {
     const prev = this.get(browserPageId)
     if (prev.kind === next.kind) {
       if (prev.kind === 'mobile' && next.kind === 'mobile' && prev.clientId === next.clientId) {
@@ -34,11 +38,12 @@ export class RuntimeBrowserDriverController {
       this.drivers.set(browserPageId, next)
     }
     this.deps.notifyChanged(browserPageId, next)
+    this.deps.screencasts.publishBrowserDriver(browserPageId, next)
   }
 
   reclaimForDesktop(browserPageId: string): boolean {
     this.set(browserPageId, { kind: 'desktop' })
-    this.deps.cancelScreencast(browserPageId)
+    this.deps.screencasts.cancelScreencast(browserPageId)
     return true
   }
 }

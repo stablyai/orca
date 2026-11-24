@@ -5,10 +5,10 @@ import {
   getRepoSshConnectionId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import { deleteRemovedOwnerBrowserProfile } from '../../browser-host/profiles/managed-browser-profile-removal'
 import { listFailedAgentLaunchWorktreeIds } from '../../../agent-launch/agent-launch-pane-attachment'

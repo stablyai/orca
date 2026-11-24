@@ -4,58 +4,6 @@
   "family": "tasks.item-detail-gitlab",
   "namedDeltas": [],
   "values": {
-    "0b1aa38d91fe": {
-      "name": "gitlab.workItemDetails#1",
-      "ordinal": 7,
-      "args": [
-        {
-          "name": "method",
-          "value": "gitlab.workItemDetails"
-        },
-        {
-          "name": "params",
-          "value": {
-            "iid": 4,
-            "projectRef": {
-              "host": "gitlab.com",
-              "path": "group/project"
-            },
-            "repo": "id:repo-1",
-            "type": "issue"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "approvalState": {
-              "approvalsLeft": 0,
-              "approvalsRequired": 1
-            },
-            "assignees": [],
-            "body": "body",
-            "comments": [],
-            "item": {
-              "labels": ["bug"],
-              "mergeable": "MERGEABLE"
-            },
-            "pipelineJobs": [],
-            "reviewers": []
-          }
-        }
-      }
-    },
     "16125975286b": {
       "name": "detailLoading",
       "ordinal": 3,
@@ -220,11 +168,6 @@
         "$rpc": "null"
       }
     },
-    "8ac545c58ec2": {
-      "name": "gitlab.workItemDetails#1",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.workItemDetails\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":4,\"type\":\"issue\",\"projectRef\":{\"host\":\"gitlab.com\",\"path\":\"group/project\"}}}"
-    },
     "988fd3d6f1c4": {
       "name": "detailRefreshSeq",
       "ordinal": 5,
@@ -234,6 +177,64 @@
       "name": "detailError",
       "ordinal": 2,
       "value": ""
+    },
+    "ba6215ed3c22": {
+      "name": "gitlab.workItemDetails#1",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.workItemDetails\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":4,\"type\":\"issue\",\"projectRef\":{\"host\":\"gitlab.com\",\"path\":\"group/project\"},\"markViewerComments\":true}}"
+    },
+    "c0f53c2b7ecd": {
+      "name": "gitlab.workItemDetails#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.workItemDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "iid": 4,
+            "markViewerComments": true,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repo": "id:repo-1",
+            "type": "issue"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "approvalState": {
+              "approvalsLeft": 0,
+              "approvalsRequired": 1
+            },
+            "assignees": [],
+            "body": "body",
+            "comments": [],
+            "item": {
+              "labels": ["bug"],
+              "mergeable": "MERGEABLE"
+            },
+            "pipelineJobs": [],
+            "reviewers": []
+          }
+        }
+      }
     },
     "cc2ece9478f0": {
       "name": "actionItem",
@@ -293,8 +294,8 @@
       {
         "id": "mounted",
         "observation": {
-          "sender": ["0b1aa38d91fe"],
-          "payloads": ["8ac545c58ec2"],
+          "sender": ["c0f53c2b7ecd"],
+          "payloads": ["ba6215ed3c22"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

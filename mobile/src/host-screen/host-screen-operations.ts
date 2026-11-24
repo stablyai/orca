@@ -1,5 +1,5 @@
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import {
   hostPlatformSchema,
   hostRepoCatalogSnapshotSchema,
@@ -126,6 +126,17 @@ export const worktreeRemove = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('worktree-removed', hostScreenUnreadReplySchema)
+  })
+)
+
+// A folder row's delete; desktops from before phones could remove folder workspaces refuse it.
+export const folderWorkspaceRemove = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'folder-workspace.remove-or-skip',
+    method: 'folderWorkspace.delete',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('folder-workspace-removed', hostScreenUnreadReplySchema)
   })
 )
 

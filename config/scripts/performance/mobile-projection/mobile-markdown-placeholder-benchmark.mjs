@@ -5,7 +5,8 @@ import { dirname, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
 
-const sourcePath = 'mobile/src/components/mobile-markdown-preview-html.ts'
+const currentSourcePath = 'mobile/src/components/markdown/parsing/mobile-markdown-preview-html.ts'
+const legacyBaselineSourcePath = 'mobile/src/components/mobile-markdown-preview-html.ts'
 const baselineRef = process.argv[2]
 if (!baselineRef) {
   throw new Error(
@@ -14,7 +15,7 @@ if (!baselineRef) {
 }
 async function load(source) {
   const result = await build({
-    stdin: { contents: source, resolveDir: dirname(resolve(sourcePath)), loader: 'ts' },
+    stdin: { contents: source, resolveDir: dirname(resolve(currentSourcePath)), loader: 'ts' },
     bundle: true,
     write: false,
     platform: 'node',
@@ -26,10 +27,25 @@ async function load(source) {
     )
   ).normalizeMobileMarkdownPreviewHtml
 }
-const before = await load(
-  execFileSync('git', ['show', `${baselineRef}:${sourcePath}`], { encoding: 'utf8' })
+const baselinePaths = execFileSync(
+  'git',
+  ['ls-tree', '-r', '--name-only', baselineRef, '--', currentSourcePath, legacyBaselineSourcePath],
+  { encoding: 'utf8' }
 )
-const after = await load(readFileSync(sourcePath, 'utf8'))
+  .trim()
+  .split('\n')
+const baselineSourcePath = baselinePaths.includes(currentSourcePath)
+  ? currentSourcePath
+  : baselinePaths.includes(legacyBaselineSourcePath)
+    ? legacyBaselineSourcePath
+    : null
+if (baselineSourcePath === null) {
+  throw new Error(`Baseline contains neither Markdown preview source path: ${baselineRef}`)
+}
+const before = await load(
+  execFileSync('git', ['show', `${baselineRef}:${baselineSourcePath}`], { encoding: 'utf8' })
+)
+const after = await load(readFileSync(currentSourcePath, 'utf8'))
 function measure(fn, input, repeats) {
   const samples = []
   for (let run = 0; run < repeats; run++) {

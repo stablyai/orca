@@ -1,14 +1,9 @@
-import { useEffect, useMemo, type JSX } from 'react'
+import type { JSX } from 'react'
 import { AlertTriangle } from 'lucide-react'
-import { useAppStore } from '@/store'
-import type { WorktreePurgeTarget } from '@/store/slices/worktree-helpers'
-import { worktreePurgeClosedFileIds } from '@/store/slices/worktrees/teardown/worktree-purge-closed-files'
-import {
-  flushRemovalPendingEdits,
-  lastViewUnsavedFiles
-} from '@/components/editor/save/flush/removal-unsaved-editor-files'
-import { runAfterEditorFramesFlush } from '@/components/editor/save/flush/editor-pending-flush'
+import type { WorktreePurgeTarget } from '@/store/slices/worktrees/teardown/worktree-purge-target'
+import { useRemovalUnsavedFiles } from './use-removal-unsaved-files'
 import { discardedUnsavedFilesLabel, moreUnsavedFilesLabel } from './removal-unsaved-files'
+import { useTranslate } from '@/i18n/use-translate'
 
 const MAX_LISTED_FILES = 5
 
@@ -20,27 +15,8 @@ export function RemovalUnsavedFilesNotice({
   targets: readonly WorktreePurgeTarget[]
   enabled: boolean
 }): JSX.Element | null {
-  const openFiles = useAppStore((s) => (enabled ? s.openFiles : null))
-  const editorDrafts = useAppStore((s) => (enabled ? s.editorDrafts : null))
-
-  useEffect(() => {
-    if (enabled) {
-      // Flush delayed typing so this list includes the latest unsaved drafts.
-      const state = useAppStore.getState()
-      const fileIds = worktreePurgeClosedFileIds(state, targets)
-      flushRemovalPendingEdits(state, fileIds)
-      // Custom editor frames answer asynchronously; the list re-renders when their edits land.
-      runAfterEditorFramesFlush(state, fileIds, () => {})
-    }
-  }, [enabled, targets])
-
-  const files = useMemo(() => {
-    if (!openFiles || !editorDrafts) {
-      return []
-    }
-    const state = { ...useAppStore.getState(), openFiles, editorDrafts }
-    return lastViewUnsavedFiles(state, worktreePurgeClosedFileIds(state, targets))
-  }, [editorDrafts, openFiles, targets])
+  const t = useTranslate()
+  const files = useRemovalUnsavedFiles(targets, enabled)
 
   if (files.length === 0) {
     return null
@@ -51,14 +27,14 @@ export function RemovalUnsavedFilesNotice({
       <div className="flex items-start gap-2">
         <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
         <div className="min-w-0 flex-1">
-          {discardedUnsavedFilesLabel(files.length)}
+          {discardedUnsavedFilesLabel(files.length, t)}
           <ul className="mt-1 min-w-0 space-y-0.5">
             {files.slice(0, MAX_LISTED_FILES).map((file) => (
               <li key={file.id} className="truncate text-foreground" title={file.filePath}>
                 {file.relativePath || file.filePath}
               </li>
             ))}
-            {hidden > 0 && <li>{moreUnsavedFilesLabel(hidden)}</li>}
+            {hidden > 0 && <li>{moreUnsavedFilesLabel(hidden, t)}</li>}
           </ul>
         </div>
       </div>

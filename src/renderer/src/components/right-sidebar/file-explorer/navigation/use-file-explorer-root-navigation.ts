@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import './file-explorer-display-root'
 import type { ExplorerRootOption } from './file-explorer-display-root'
-import { FILE_EXPLORER_FULL_ROOT } from '../../../../../../shared/file-explorer-display-root'
+import { FILE_EXPLORER_FULL_ROOT } from '../../../../../../shared/file-listing/file-explorer-display-root'
 
 export function useFileExplorerRootNavigation(
   worktreeId: string | null,

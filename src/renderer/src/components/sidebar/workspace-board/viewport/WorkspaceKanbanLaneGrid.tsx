@@ -8,14 +8,14 @@ import React, {
   useState
 } from 'react'
 import { useVirtualizer, type Range } from '@tanstack/react-virtual'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
   Worktree
 } from '../../../../../../shared/worktree/types'
 import type { WorkspaceKanbanLaneView } from '../search/workspace-kanban-search'
-import { extractWorkspaceKanbanLaneRange } from './workspace-kanban-lane-range'
+import { extractPinnedVirtualRange } from '@/lib/list-interaction/pinned-virtual-range'
 import WorkspaceKanbanStatusLane from './WorkspaceKanbanStatusLane'
 
 // Reuse empty lane arrays so unrelated renders preserve memoization.
@@ -97,7 +97,7 @@ export default function WorkspaceKanbanLaneGrid({
   const estimateLaneSize = useCallback(() => columnWidth, [columnWidth])
   const getLaneKey = useCallback((index: number) => statuses[index]?.id ?? index, [statuses])
   const rangeExtractor = useCallback(
-    (range: Range) => extractWorkspaceKanbanLaneRange(range, focusedIndex),
+    (range: Range) => extractPinnedVirtualRange(range, [focusedIndex]),
     [focusedIndex]
   )
   const laneVirtualizer = useVirtualizer({

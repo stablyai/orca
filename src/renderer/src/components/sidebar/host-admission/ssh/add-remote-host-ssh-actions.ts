@@ -5,7 +5,7 @@ import {
   getSshTargetDraftConnectionFields,
   hasAdvancedConnectionValues,
   type EditingTarget
-} from '../../../settings/ssh/targets/ssh-target-draft'
+} from '../../../ssh-host-form/ssh-target-draft'
 import {
   SSH_CONFIG_HOST_RESULT_LIMIT,
   type SshConfigHostSummary,
@@ -16,7 +16,7 @@ import {
   type SshTarget,
   type SshTargetAddResult,
   type SshTargetCreateInput
-} from '../../../../../../shared/ssh-types'
+} from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 
 import { isDuplicateSshTargetAlias } from './ssh-target-duplicate'
 

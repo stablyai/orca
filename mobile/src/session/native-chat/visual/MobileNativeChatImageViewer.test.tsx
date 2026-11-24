@@ -5,7 +5,7 @@ import {
   IMAGE_VIEWER_DISMISS_DISTANCE,
   IMAGE_VIEWER_DISMISS_VELOCITY
 } from '../../../components/image-viewer-swipe'
-import type { MobilePanZoomDismiss } from '../../../components/use-mobile-pan-zoom'
+import type { MobilePanZoomDismiss } from '../../../files/media/presentation/use-mobile-pan-zoom'
 
 const motion = vi.hoisted(() => ({ reduced: false }))
 const seen = vi.hoisted(() => ({
@@ -41,7 +41,11 @@ vi.mock('react-native', () => {
     useWindowDimensions: () => ({ width: 390, height: 844 })
   }
 })
-vi.mock('lucide-react-native', () => ({ X: 'X' }))
+vi.mock('lucide-react-native', () => ({
+  ChevronLeft: 'ChevronLeft',
+  ChevronRight: 'ChevronRight',
+  X: 'X'
+}))
 vi.mock('../../../layout/side-safe-area', () => ({
   useWindowSafeAreaInsets: () => ({ top: 12, right: 0, bottom: 21, left: 0 })
 }))
@@ -51,22 +55,22 @@ vi.mock('../../../theme/use-mobile-color-scheme', () => ({
 vi.mock('../../../i18n/use-mobile-translation', () => ({
   useMobileTranslation: () => (_key: string, fallback: string) => fallback
 }))
-vi.mock('../../../components/MobilePanZoomImage', () => ({
+vi.mock('../../../files/media/presentation/MobilePanZoomImage', () => ({
   MobilePanZoomImage: (props: { dismiss?: MobilePanZoomDismiss | null }) => {
     seen.dismiss = props.dismiss ?? null
     return null
   }
 }))
-vi.mock('../../../platform/use-reduced-motion', () => ({
+vi.mock('../../../platform/accessibility/use-reduced-motion', () => ({
   useReducedMotionEnabled: () => motion.reduced
 }))
 
-import { MobileNativeChatImageViewer } from './MobileNativeChatImageViewer'
+import { MobileImageViewer } from '../../../files/media/presentation/MobileImageViewer'
 
 function render(onClose = vi.fn()): { onClose: ReturnType<typeof vi.fn> } {
   act(() => {
     create(
-      createElement(MobileNativeChatImageViewer, {
+      createElement(MobileImageViewer, {
         uri: 'file:///tmp/shot.png',
         label: 'shot',
         onClose
@@ -80,7 +84,7 @@ function closeButton(renderer: ReactTestRenderer) {
   return renderer.root.findByProps({ accessibilityLabel: 'Close image' })
 }
 
-describe('MobileNativeChatImageViewer swipe dismiss', () => {
+describe('MobileImageViewer swipe dismiss', () => {
   beforeEach(() => {
     motion.reduced = false
     seen.dismiss = null
@@ -91,7 +95,7 @@ describe('MobileNativeChatImageViewer swipe dismiss', () => {
     const onClose = vi.fn()
     act(() => {
       renderer = create(
-        createElement(MobileNativeChatImageViewer, {
+        createElement(MobileImageViewer, {
           uri: 'file:///tmp/shot.png',
           label: 'shot',
           onClose

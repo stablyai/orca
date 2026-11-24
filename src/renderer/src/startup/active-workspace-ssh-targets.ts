@@ -1,4 +1,4 @@
-import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 
 type ActiveWorkspaceSshTargetInput = {

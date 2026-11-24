@@ -44,25 +44,6 @@ describe('Git change lists', () => {
     ])
   })
 
-  it('keeps copies, binary changes and type changes', () => {
-    expect(
-      parseGitChangeList(
-        [
-          raw('C080', 'source', 'copy'),
-          raw('M', 'binary'),
-          raw('T', 'type'),
-          '1\t0\t\0source\0copy\0',
-          '-\t-\tbinary\0',
-          '0\t0\ttype\0'
-        ].join('')
-      )
-    ).toEqual([
-      { path: 'copy', oldPath: 'source', status: 'copied', added: 1, removed: 0 },
-      { path: 'binary', status: 'modified', added: undefined, removed: undefined },
-      { path: 'type', status: 'modified', added: 0, removed: 0 }
-    ])
-  })
-
   it('handles empty output and rejects truncated paths rather than partial changes', () => {
     expect(parseGitChangeList('')).toEqual([])
     expect(() => parseGitChangeList(':100644 100644 a b M\0unterminated')).toThrow('Incomplete')

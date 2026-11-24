@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { isWindowVisible } from '@/lib/window-visibility-interval'
+import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 

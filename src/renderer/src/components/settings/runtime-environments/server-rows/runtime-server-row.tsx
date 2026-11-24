@@ -4,19 +4,20 @@ import {
   getOrcadSshDeployment,
   type PublicKnownRuntimeEnvironment
 } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { SshTarget } from '../../../../../../shared/ssh-types'
-import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
-import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
-import type { UpdateCheckOptions } from '../../../../../../shared/update-status-types'
+import type { SshTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
+import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
+import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import type { UpdateCheckOptions } from '../../../../../../shared/updater/update-status-types'
 import { getRuntimeServerProblemLine, getRuntimeServerRoute } from './runtime-server-row-meta'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
-import { LoadingSpinner } from '../../../LoadingSpinner'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
+import { LoadingSpinner } from '../../../ui/LoadingSpinner'
 import { Button } from '../../../ui/button'
 import type { RuntimeHostDetails } from '../catalog/runtime-environment-host-details'
 import {
   formatRuntimeEndpointAddress,
   getRuntimeServerAvailableUpdateText,
+  getRuntimeServerNewerThanAppText,
   getRuntimeServerStatusIndicator,
   getRuntimeServerVersionText,
   isRemoteServerUpdateInFlight
@@ -30,7 +31,7 @@ import {
   ServerRowChip,
   ServerRowDetailsToggle,
   type ServerRowStatus
-} from './runtime-server-list-row'
+} from '../../host-rows/ServerListRow'
 import { RuntimeSshAccessControl } from '../ssh-access/RuntimeSshAccessControl'
 import { RuntimeSshAccessDialog } from '../ssh-access/runtime-ssh-access-dialog'
 import {
@@ -42,7 +43,7 @@ import {
   managedServerHasPrimaryAction,
   managedServerForgettable,
   ManagedServerPrimaryAction
-} from '../managed-servers/managed-server-row-parts'
+} from '../managed-servers/managed-server-row-content'
 import type { ManagedServerLifecycle } from '../managed-servers/use-managed-server-lifecycle'
 
 const NO_SSH_TARGETS: SshTarget[] = []
@@ -105,6 +106,8 @@ export function RuntimeServerRow({
   onRecheck,
   rechecking = false
 }: RuntimeServerRowProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const [repairOpen, setRepairOpen] = useState(false)
   const [sshDialogOpen, setSshDialogOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -139,77 +142,98 @@ export function RuntimeServerRow({
               ? 'recheck'
               : null
 
-  const status: ServerRowStatus = getRuntimeServerStatusIndicator({
-    connectionState: row.connectionState,
-    accessRevoked: row.accessRevoked,
-    compatibilityBlocked: row.compatibilityBlocked,
-    probeFailed: row.probeFailed,
-    connecting,
-    disconnecting,
-    remoteUpdate,
-    managedNotRunning: Boolean(managed?.status && !managed.status.activeVersion)
-  })
+  const status: ServerRowStatus = getRuntimeServerStatusIndicator(
+    {
+      connectionState: row.connectionState,
+      accessRevoked: row.accessRevoked,
+      compatibilityBlocked: row.compatibilityBlocked,
+      probeFailed: row.probeFailed,
+      connecting,
+      disconnecting,
+      remoteUpdate,
+      managedNotRunning: Boolean(managed?.status && !managed.status.activeVersion)
+    },
+    t
+  )
 
   const endpoint =
     environment.endpoints.find((entry) => entry.id === environment.preferredEndpointId)?.endpoint ??
     environment.endpoints[0]?.endpoint ??
     null
-  const sshRoute = getRuntimeServerRoute(environment, sshTargets)
+  const sshRoute = getRuntimeServerRoute(environment, sshTargets, t)
   const address = formatRuntimeEndpointAddress(endpoint ?? undefined)
-  const problemLine = getRuntimeServerProblemLine({
-    environment,
-    row,
-    remoteUpdate,
-    managedStatusError: managed?.statusError ?? null,
-    managedSummary: managed ? getManagedServerSummary(managed) : null,
-    address,
-    duplicateOfNames
-  })
+  const problemLine = getRuntimeServerProblemLine(
+    {
+      environment,
+      row,
+      remoteUpdate,
+      managedStatusError: managed?.statusError ?? null,
+      managedSummary: managed ? getManagedServerSummary(managed, t) : null,
+      address,
+      duplicateOfNames
+    },
+    t,
+    intlLocale
+  )
 
   const versionText = getRuntimeServerVersionText(
     remoteUpdate,
     managed?.status?.activeAppVersion ??
       managed?.status?.activeVersion ??
-      row.descriptorStatus?.appVersion
+      row.descriptorStatus?.appVersion,
+    t
   )
   const availableText =
-    getRuntimeServerAvailableUpdateText(remoteUpdate) ??
+    getRuntimeServerAvailableUpdateText(remoteUpdate, t) ??
     (managed?.status?.availableUpdate
-      ? translate('auto.components.settings.RemoteServerUpdateStatus.available', 'Update available')
+      ? t('auto.components.settings.RemoteServerUpdateStatus.available', 'Update available')
       : null)
-  const infoParts = [sshRoute ?? address, versionText].filter((part): part is string =>
-    Boolean(part)
-  )
+  const availableVersion =
+    remoteUpdate?.phase === 'available'
+      ? getRuntimeServerVersionText(undefined, remoteUpdate.targetVersion, t)
+      : null
+  const infoParts = [sshRoute ?? address, versionText].filter(Boolean)
+  const newerThanAppText = getRuntimeServerNewerThanAppText(remoteUpdate, t)
 
-  const meta = (
+  const meta = problemLine ? (
     <>
-      {problemLine ? (
-        <span className={cn('truncate', problemLine.destructive && 'text-destructive')}>
-          {problemLine.text}
-        </span>
-      ) : (
-        infoParts.map((part, index) => (
-          <span key={part} className="flex min-w-0 shrink items-center gap-1">
-            {index > 0 ? <span aria-hidden>·</span> : null}
-            <span className="truncate">{part}</span>
-          </span>
-        ))
-      )}
-      {!problemLine && availableText ? (
-        <span className="flex shrink-0 items-center gap-1 text-status-warning">
-          <span aria-hidden className="text-muted-foreground">
-            ·
-          </span>
-          {availableText}
-        </span>
-      ) : null}
-      {problemLine ? (
-        <>
-          <span aria-hidden>·</span>
-          <ServerRowDetailsToggle expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
-        </>
-      ) : null}
+      <span className={cn('truncate', problemLine.destructive && 'text-destructive')}>
+        {problemLine.text}
+      </span>
+      <span aria-hidden>·</span>
+      <ServerRowDetailsToggle expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
     </>
+  ) : (
+    <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 @max-[18rem]/server-row:gap-x-1 @max-[14rem]/server-row:gap-x-0.5 @max-[14rem]/server-row:text-2xs">
+      {infoParts.length > 0 ? (
+        <span className="max-w-full truncate">{infoParts.join(' · ')}</span>
+      ) : null}
+      {availableText ? (
+        <span className="max-w-full truncate text-status-warning">
+          {availableVersion ? (
+            <>
+              <span className="@max-[18rem]/server-row:hidden">{availableText}</span>
+              <span className="@[18rem]/server-row:hidden">
+                {infoParts.length > 0 ? (
+                  <span
+                    aria-hidden
+                    className="me-1 text-muted-foreground @max-[14rem]/server-row:me-0.5"
+                  >
+                    ·
+                  </span>
+                ) : null}
+                {availableVersion}
+              </span>
+            </>
+          ) : (
+            availableText
+          )}
+        </span>
+      ) : null}
+      {newerThanAppText ? (
+        <span className="max-w-full wrap-anywhere text-xs">{newerThanAppText}</span>
+      ) : null}
+    </span>
   )
 
   const primaryAction =
@@ -224,7 +248,7 @@ export function RuntimeServerRow({
         disabled={actionBusy}
       >
         <Link2 />
-        {translate('auto.components.settings.RuntimeEnvironmentsPane.repair', 'Re-pair…')}
+        {t('auto.components.settings.RuntimeEnvironmentsPane.repair', 'Re-pair…')}
       </Button>
     ) : primary === 'update' ? (
       <Button
@@ -234,12 +258,12 @@ export function RuntimeServerRow({
         onClick={onOpenUpdate}
         disabled={remoteServerUpdatesRunning || isRemoteServerUpdateInFlight(remoteUpdate)}
       >
-        {translate('auto.components.settings.RuntimeEnvironmentsPane.updateServer', 'Update')}
+        {t('auto.components.settings.RuntimeEnvironmentsPane.updateServer', 'Update')}
       </Button>
     ) : primary === 'recheck' ? (
       <Button type="button" variant="ghost" size="xs" onClick={onRecheck} disabled={rechecking}>
         {rechecking ? <LoadingSpinner className="size-3" /> : null}
-        {translate('auto.components.settings.serverList.retry', 'Retry')}
+        {t('auto.components.settings.serverList.retry', 'Retry')}
       </Button>
     ) : primary === 'connect' || primary === 'retry' ? (
       <Button
@@ -251,8 +275,8 @@ export function RuntimeServerRow({
       >
         {connecting ? <LoadingSpinner className="size-3" /> : null}
         {primary === 'retry'
-          ? translate('auto.components.settings.serverList.retry', 'Retry')
-          : translate('auto.components.settings.RuntimeEnvironmentsPane.connect', 'Connect')}
+          ? t('auto.components.settings.serverList.retry', 'Retry')
+          : t('auto.components.settings.RuntimeEnvironmentsPane.connect', 'Connect')}
       </Button>
     ) : null
 
@@ -303,12 +327,12 @@ export function RuntimeServerRow({
           <>
             {isActive ? (
               <ServerRowChip>
-                {translate('auto.components.settings.serverList.defaultChip', 'Default')}
+                {t('auto.components.settings.serverList.defaultChip', 'Default')}
               </ServerRowChip>
             ) : null}
             {!deployment && (sshAccess || environment.connectionDependency === 'ssh-tunnel') ? (
               <ServerRowChip>
-                {translate('auto.components.settings.serverList.sshTunnelChip', 'SSH tunnel')}
+                {t('auto.components.settings.serverList.sshTunnelChip', 'SSH tunnel')}
               </ServerRowChip>
             ) : null}
           </>

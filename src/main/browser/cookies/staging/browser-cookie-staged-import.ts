@@ -1,12 +1,8 @@
 import { DatabaseSync } from 'node:sqlite'
-import type { ImportedDomainScope } from '../browser-cookie-import-policy'
-import {
-  domainIsInImportedScope,
-  importedDomainScope,
-  isNonTransplantableCookieDomain,
-  normalizeCookieDomain,
-  normalizeCookieImportDomain
-} from '../browser-cookie-import-policy'
+import type { ImportedDomainScope } from '../policy/cookie-import-scope'
+import { domainIsInImportedScope, importedDomainScope } from '../policy/cookie-import-scope'
+import { isNonTransplantableCookieDomain } from '../policy/cookie-import-exclusions'
+import { normalizeCookieDomain, normalizeCookieImportDomain } from '../policy/cookie-domain'
 
 const IMPORT_SCOPE_TABLE = 'orca_cookie_import_scope'
 const IMPORT_SCOPE_FORMAT_VERSION = 1

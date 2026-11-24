@@ -1,26 +1,6 @@
-import {
-  createPairedE2EEClientHandshake,
-  type PairedE2EEClientHandshake
-} from './e2ee/paired-e2ee-client-handshake'
-import { NODE_PAIRED_E2EE_PRIMITIVES } from './e2ee/node/paired-e2ee-node-primitives'
-import { serializeRemoteRuntimePayload } from './remote-runtime-memory-limits'
-import { parseRemoteRuntimeJsonText } from './requests/remote-runtime-request-frames'
+import type { PairedE2EEClientHandshake } from './e2ee/paired-e2ee-client-handshake'
 
 export type RemoteRuntimeHandshakeState = 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
-
-// Desktop and CLI runtime clients: legacy framing, structure-limited parsing,
-// size-limited auth serialization. Throws on an invalid host public key.
-export function createRemoteRuntimeClientHandshake(
-  hostPublicKeyB64: string
-): PairedE2EEClientHandshake {
-  return createPairedE2EEClientHandshake({
-    primitives: NODE_PAIRED_E2EE_PRIMITIVES,
-    hostPublicKeyB64,
-    framing: 'legacy',
-    parseJson: parseRemoteRuntimeJsonText,
-    serializeJson: serializeRemoteRuntimePayload
-  })
-}
 
 // Async auth sealing may outlive socket close/replacement; recheck stillAwaiting before send and route sealing errors to fail.
 export async function sendRemoteRuntimeTokenAuth(args: {

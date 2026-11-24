@@ -8,9 +8,10 @@ import { redactPtyIdForDiagnostics } from '../../../../shared/terminal/pty/diagn
 import { installTerminalViewAttributesIpc } from './terminal-view-attributes-ipc'
 import {
   consumeHiddenRendererPtyDropMemory,
-  recordHiddenRendererPtyDataDrop,
+  recordVisibleReportUnhideEpisode,
   setRendererPtyDeliveryInterest,
-  shouldDropHiddenRendererPtyData
+  shouldDropHiddenRendererPtyData,
+  shouldVisibleViewRevealHiddenRendererPty
 } from '../delivery/pty-hidden-delivery-gate'
 import { tryGetProviderForPty, closeStartupQueryAuthorityForPty } from '../provider/registry'
 import {
@@ -27,10 +28,14 @@ import {
 } from '../delivery/debug'
 import { PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS } from '../delivery/constants'
 import { applyCumulativeAck } from '../delivery/accounting'
-import { sendModelRestoreNeededMarker } from '../delivery/payload'
+import {
+  revealHiddenRendererPty,
+  updateHiddenRendererPtyClaim,
+  type HiddenRendererPtyClaim
+} from '../delivery/hidden-transition'
 import { isMainWindowPtyIpcEvent } from './write-input'
 import { acknowledgePaintedColdRestore } from './painted-cold-restore-ack'
-import type { PaintedRestoreAck } from '../../../../shared/painted-restore-ack'
+import type { PaintedRestoreAck } from '../../../../shared/terminal/replay/painted-restore-ack'
 import type { PtyIpcSession } from '../session'
 
 export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
@@ -235,6 +240,18 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
     if (args.visible) {
       visibleRendererPtys.add(args.id)
       closeStartupQueryAuthorityForPty(args.id)
+      // Panes release main's runtime mark only on their own claim release or first gate sync; a pane
+      // that synced before the mark, or never syncs the gate, would leave it stuck (#43972).
+      if (shouldVisibleViewRevealHiddenRendererPty(args.id)) {
+        mainDeliveryBreadcrumbs.record('visible-gate-unmark', {
+          id: redactPtyIdForDiagnostics(args.id)
+        })
+        const episode = revealHiddenRendererPty(session, args.id, 'visibility-report')
+        if (episode !== undefined) {
+          recordVisibleReportUnhideEpisode(args.id, episode)
+        }
+        return
+      }
     } else {
       visibleRendererPtys.delete(args.id)
     }
@@ -242,57 +259,9 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
   })
 
   ipcMain.removeAllListeners('pty:setHiddenRendererPty')
-  ipcMain.on('pty:setHiddenRendererPty', (_event, args: { id: string; hidden: boolean }) => {
-    if (typeof args.id !== 'string' || !args.id) {
-      return
-    }
-    mainDeliveryBreadcrumbs.record(args.hidden === true ? 'gate-mark' : 'gate-unmark', {
-      id: redactPtyIdForDiagnostics(args.id)
-    })
-    const transition = session.transitionHiddenRendererPtyDeliveryState(
-      args.id,
-      args.hidden === true
-    )
-    if (args.hidden === true) {
-      closeStartupQueryAuthorityForPty(args.id)
-      // Newly hidden queued bytes can drop despite ACK starvation; reveal restores their model snapshot.
-      const pending = session.pendingData.get(args.id)
-      if (pending && transition.droppable) {
-        session.pendingData.delete(args.id)
-        session.updateProducerFlowControl(args.id)
-        session.pendingOverflowMarkedPtys.delete(args.id)
-        const drop = recordHiddenRendererPtyDataDrop(args.id, pending.data.length)
-        if (drop.shouldEmitRestoreMarker) {
-          sendModelRestoreNeededMarker(
-            session,
-            args.id,
-            'hidden-drop',
-            runtime?.getPtyOutputSequence(args.id),
-            drop.hiddenDropEpisode
-          )
-        }
-      }
-      if (transition.policyChanged) {
-        invalidatePendingPtyDrainPolicy(args.id)
-      }
-      session.syncPtyBackgroundedDelivery(args.id, 'gate-mark')
-      return
-    }
-    if (transition.policyChanged) {
-      invalidatePendingPtyDrainPolicy(args.id)
-    }
-    session.syncPtyBackgroundedDelivery(args.id, 'gate-unmark')
-    // Reload/remount can replace the marker consumer; repeat on reveal rather than lose recovery.
-    if (transition.droppedWhileHidden) {
-      sendModelRestoreNeededMarker(
-        session,
-        args.id,
-        'unhide',
-        runtime?.getPtyOutputSequence(args.id),
-        transition.hiddenDropEpisode
-      )
-    }
-  })
+  ipcMain.on('pty:setHiddenRendererPty', (_event, args: HiddenRendererPtyClaim) =>
+    updateHiddenRendererPtyClaim(session, args)
+  )
 
   installTerminalViewAttributesIpc(session)
 

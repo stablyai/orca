@@ -1,12 +1,13 @@
+import { RuntimePtyForegroundAgent } from './runtime-pty-foreground-agent'
 import type {
   TerminalIdentityRawInputs,
   TerminalIdentityReadContext
 } from '../query/terminal-identity-read-context'
 import type { CrewRuntimeReaders } from '../../orchestration/crew/crew-runtime-watch'
-import { TerminalIdentitySource } from '../identity/terminal-identity-source'
-import type { WaitBlockedCheckState } from '../../wait-blocked-check-state'
+import { createCrewNotifiedTerminalIdentity } from '../identity/terminal-identity-crew-notice'
+import type { WaitBlockedCheckState } from '../wait/wait-blocked-check-state'
 import { OrcaRuntimeWithStopRequestedPtyIds } from '../../construction/runtime-service-state'
-import { RuntimeSubscriptionRegistry } from '../../runtime-subscription-registry'
+import { RuntimeSubscriptionRegistry } from '../../client/runtime-subscription-registry'
 import { RuntimeMobileNotificationController } from '../../push/notifications/runtime-mobile-notification-controller'
 import type {
   ProviderBufferAcquisition,
@@ -15,20 +16,26 @@ import type {
   RuntimeVisibleTerminalState
 } from '../records/runtime-terminal-state-records'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 import type { createAgentStatusOscProcessor } from '../../../../shared/agent-status/transport/agent-status-osc'
 import { RuntimeTerminalViewSubscribers } from '../view/runtime-terminal-view-subscribers'
 import { MainDaemonAttachments } from './main-daemon-attachments'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import type { HostTerminalUsage } from '../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 
 export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequestedPtyIds {
-  protected readonly terminalIdentity = new TerminalIdentitySource(this.crewChanges.notify)
+  protected readonly terminalIdentity = createCrewNotifiedTerminalIdentity(this.crewChanges)
   protected readonly ptysById = this.terminalIdentity.ptys
   readonly handles = this.terminalIdentity.handles
   protected readonly handleByLeafKey = this.terminalIdentity.leafHandles
   protected readonly handleByPtyId = this.terminalIdentity.reverse
   protected readonly handleByPtyIncarnation = this.terminalIdentity.incarnations
   protected readonly syntheticTerminalHandles = this.terminalIdentity.synthetic
+  /** What a terminal's own spawn reported of its host's terminals; asks no host. */
+  getSpawnHostTerminalUsage(handle: string): HostTerminalUsage | undefined {
+    const ptyId = this.handles.get(handle)?.ptyId
+    return ptyId ? this.ptysById.get(ptyId)?.spawnHostTerminalUsage : undefined
+  }
   protected get leaves() {
     return this.terminalIdentity.leaves
   }
@@ -103,16 +110,22 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected providerSequenceOffsetByPtyId = new Map<string, number>()
 
+  /** The daemon's output count when main reattached to a running process, in the daemon's numbering. */
+  protected reattachedProviderSequenceByPtyId = new Map<string, number>()
+
   protected providerSnapshotPreferredPtys = new Set<string>()
 
   protected providerModeTrackersByPtyId = new Map<string, TerminalKittyKeyboardModeTracker>()
 
   protected providerModeSnapshotScansByPtyId = new Map<
     string,
-    Set<TerminalKittyKeyboardModeTracker>
+    { tracker: TerminalKittyKeyboardModeTracker; pendingCaptures: number }
   >()
 
-  protected providerBufferAcquisitionsByPtyId = new Map<string, ProviderBufferAcquisition>()
+  protected providerBufferAcquisitionsByPtyId = new Map<
+    string,
+    { ansi?: ProviderBufferAcquisition; visible?: ProviderBufferAcquisition }
+  >()
 
   protected providerVisibleStateByPtyId = new Map<string, RuntimeVisibleTerminalState>()
 
@@ -123,7 +136,17 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected providerVisibleRetryAtByPtyId = new Map<string, number>()
 
+  /** PTYs whose screen has shown no agent dialog since this runtime attached; their restored permission waits are spent. */
+  protected restoredAgentDialogRuledOutPtys = new Set<string>()
+
   protected providerSnapshotsWithLiveModeTransition = new WeakSet<PtyProviderBufferSnapshot>()
+
+  /** Forgets the provider frame facts of a PTY whose screen restarts or ends. */
+  protected forgetProviderVisibleState(ptyId: string): void {
+    this.providerVisibleStateByPtyId.delete(ptyId)
+    this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    this.restoredAgentDialogRuledOutPtys.delete(ptyId)
+  }
 
   protected ptyLifecycleGenerationById = new Map<string, number>()
 
@@ -174,8 +197,8 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     }
   >()
 
-  // Desktop mode prevents mobile fit until a deliberate gesture; absent mode defaults to auto, and restart clears modes.
-  protected mobileDisplayModes = new Map<string, 'desktop'>()
+  // Desktop mode prevents mobile fit until a deliberate gesture; absent mode uses the host default, and restart clears modes.
+  protected mobileDisplayModes = new Map<string, 'auto' | 'desktop'>()
 
   // Keep independent client records per PTY; subscribedAt selects restore baseline, lastActedAt selects the active viewport (docs/mobile-presence-lock.md).
   protected mobileSubscribers = new Map<
@@ -205,6 +228,21 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     hasMainTerminalState: (ptyId) =>
       this.headlessTerminals.has(ptyId) || this.providerSnapshotPreferredPtys.has(ptyId),
     attachProvider: (ptyId) => this.ptyController?.attach?.(ptyId) ?? null
+  })
+
+  protected readonly ptyForegroundAgent = new RuntimePtyForegroundAgent({
+    getController: () => this.ptyController,
+    getPty: (ptyId) => this.ptysById.get(ptyId) ?? null,
+    touchSnapshot: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
+    pendingAttach: (ptyId) => this.mainDaemonAttachments.pending(ptyId),
+    finishDelayedSnapshot: (ptyId, changed) => {
+      if (this.mobileSessionTabListeners.size > 0) {
+        this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
+      }
+      if (!changed) {
+        this.touchMobileSessionSnapshotsForPty(ptyId)
+      }
+    }
   })
 
   // Remote xterms own query replies; ref-count streams and retain suppression through mobile soft-leave grace (terminal-query-authority.md).

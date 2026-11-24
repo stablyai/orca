@@ -1,56 +1,33 @@
-import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
+import {
+  buildAgentSessionContinuationPrompt,
+  type AgentSessionContinuationRequest
+} from '../../../../../../shared/agent-session/conversation-context/agent-session-continuation'
+import { AI_VAULT_SESSION_HANDOFF_TIMEOUT_MS } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-handoff'
+import {
+  prepareAiVaultSessionContinuation,
+  type AiVaultSessionContinuationTarget
+} from '../../../../../../shared/ai-vault/resume/ai-vault-session-continuation'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
 
-export function canContinueAiVaultSessionInNewSession(
-  session: AiVaultSession,
-  targetWorktreeId: string | null | undefined
-): boolean {
-  return Boolean(
-    targetWorktreeId &&
-    (vaultTranscriptPath(session) || session.previewMessages.some((message) => message.text.trim()))
+/** A database row's host saves this one conversation first; null when nothing usable came back. */
+export async function loadDatabaseAiVaultSessionContinuation(
+  target: AiVaultSessionContinuationTarget & { session: AiVaultSession }
+): Promise<AgentSessionContinuationRequest | null> {
+  const { session } = target
+  const saved = await withTimeout(
+    window.api.aiVault.prepareSessionHandoff({
+      agent: session.agent,
+      filePath: session.filePath,
+      sessionId: session.sessionId,
+      executionHostId: session.executionHostId
+    }),
+    AI_VAULT_SESSION_HANDOFF_TIMEOUT_MS,
+    {}
   )
-}
-
-export function prepareAiVaultSessionContinuation(args: {
-  session: AiVaultSession
-  targetWorktreeId: string
-  targetWorkspacePath: string
-}): AgentSessionContinuationRequest {
-  const { session, targetWorktreeId, targetWorkspacePath } = args
-  return {
-    source: {
-      capturedText: previewTranscript(session),
-      sourceAgent: session.agent,
-      sourceTitle: session.title,
-      sourceWorkingDirectory: session.cwd,
-      transcriptPath: vaultTranscriptPath(session),
-      // Use provider-authenticated prompts; preview user entries may contain tool results or injected skills.
-      lastPrompt: session.lastUserPrompt ?? null,
-      lastAssistantMessage: latestAssistantPreview(session)
-    },
-    worktreeId: targetWorktreeId,
-    workspacePath: targetWorkspacePath,
-    // Preserve recorded cwd even when the original worktree selection is gone.
-    initialCwd: session.cwd || targetWorkspacePath,
-    launchSource: 'sidebar'
-  }
-}
-
-function latestAssistantPreview(session: AiVaultSession): string | null {
-  return session.previewMessages.findLast((message) => message.role === 'assistant')?.text ?? null
-}
-
-function previewTranscript(session: AiVaultSession): string {
-  return session.previewMessages
-    .filter((message) => message.text.trim())
-    .map((message) => `${message.role}: ${message.text.trim()}`)
-    .join('\n\n')
-}
-
-function vaultTranscriptPath(session: AiVaultSession): string | null {
-  // OpenCode vault paths identify its database or storage metadata, not a full transcript.
-  if (session.agent === 'opencode' || session.agent === 'opencode2') {
-    return null
-  }
-  return session.filePath.trim() || null
+  const request = prepareAiVaultSessionContinuation({
+    ...target,
+    savedTranscriptPath: saved.transcriptPath
+  })
+  return buildAgentSessionContinuationPrompt(request.source, 'focused') ? request : null
 }

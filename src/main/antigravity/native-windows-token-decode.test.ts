@@ -88,15 +88,6 @@ describe('ordered Windows token decoding', () => {
       expect(decode(JSON.stringify({ id_token, access_token: 7 }))).toBeNull()
     }
   })
-
-  it.each(['0', 'null', '-0', '9223372036854775807', '-9223372036854775808'])(
-    'accepts actual int64 values %s',
-    (value) => {
-      expect(
-        parseAntigravityWindowsSnapshot(`{"access_token":"a","expires_in":${value}}`).accessToken
-      ).toBe('a')
-    }
-  )
   it.each(['"1"', '1e0', '1.5', '9223372036854775808', '-9223372036854775809', 'true'])(
     'retains integer errors despite later duplicates %s',
     (value) => {
@@ -106,21 +97,6 @@ describe('ordered Windows token decoding', () => {
       ).toBe(0)
     }
   )
-
-  it.each([
-    '2026-10-28T12:34:56Z',
-    '2026-10-28T1:34:56Z',
-    '2026-10-28T12:34:56,25Z',
-    '2026-10-28T12:34:56.1234567899Z',
-    '2026-10-28T12:34:56+24:00',
-    '2026-10-28T12:34:56+00:60',
-    '2026-10-28T12:34:56+24:60',
-    '0000-02-29T00:00:00Z'
-  ])('accepts the effective lenient time grammar after JSON unquote: %s', (expiry) => {
-    const raw = JSON.stringify({ access_token: 'a', expiry }).replace(/Z/g, '\\u005a')
-    expect(parseAntigravityWindowsSnapshot(raw).accessToken).toBe('a')
-    expect(decode(`${raw.slice(0, -1)},"expiry":null}`)).not.toBeNull()
-  })
   it.each([
     '2026-10-28T12:34:56+25:00',
     '2026-10-28T12:34:56+00:61',

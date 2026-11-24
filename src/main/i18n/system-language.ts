@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { detectUiLanguage, type UiLanguageDetection } from '../../shared/ui-locale'
+import { detectUiLanguage, type UiLanguageDetection } from '../../shared/i18n/ui-locale'
 
 let snapshot: UiLanguageDetection | null | undefined
 

@@ -122,6 +122,10 @@ export function collectDescendantRows(
   if (!rootRow || duplicateRoot) {
     return { rootPgid: null, descendants: [], capturedAtMs }
   }
+  if (rootRow.zombie) {
+    // Its PID still reserves the group, but an exited root cannot authorize ancestry.
+    return { rootPgid: rootRow.pgid, descendants: [], capturedAtMs }
+  }
   const descendants: ProcessTableRow[] = []
   const queue = [rootPid]
   const visited = new Set(queue)
