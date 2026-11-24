@@ -26,6 +26,7 @@ import {
 } from './worktree-removal-table'
 import type { LocalWorktreeFilesystemOptions } from './local-worktree-filesystem'
 import { readCheckoutMarkerState } from './worktree-removal-gitdir-identity'
+import { checkoutDirectoryKey } from '../../../shared/worktree/removal/worktree-checkout-identity'
 import { waitForWorktreeRemovalAcceptance } from './worktree-removal-settlement'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
@@ -162,14 +163,30 @@ function isRealDirectory(entry: unknown): boolean {
  * An empty real directory holds nothing anyone could lose, so it needs no marker to prove whose it is:
  * Git can exit 0 and leave the emptied root, and a manual delete finishes that the same way.
  */
-async function isEmptyLeftoverDirectory(repoPath: string, worktreePath: string): Promise<boolean> {
+async function isEmptyLeftoverDirectory(
+  repoPath: string,
+  worktreePath: string,
+  rootKey: string | undefined
+): Promise<boolean> {
   if (isDangerousWorktreeRemovalPath(worktreePath, repoPath, CLIENT_REMOVAL_HOME)) {
     return false
   }
-  if (!isRealDirectory(await lstat(worktreePath).catch(() => null))) {
+  const root = await lstat(worktreePath, { bigint: true }).catch(() => null)
+  if (!isRealDirectory(root)) {
+    return false
+  }
+  // A reviewed removal recorded its root: an empty folder made at the path since is someone else's.
+  if (rootKey !== undefined && (!root || checkoutDirectoryKey(root) !== rootKey)) {
     return false
   }
   return (await readdir(worktreePath).catch(() => null))?.length === 0
+}
+
+/** The root a removal reviewed, while it still carries the review or after Retry dropped it. */
+export function recordedRootKey(
+  record: Pick<WorktreeRemovalRecord, 'rootKey' | 'expectedCheckoutIdentity'>
+): string | undefined {
+  return record.rootKey ?? record.expectedCheckoutIdentity?.rootKey
 }
 
 /** `rmdir` only: it fails rather than delete anything that appeared since the folder was found empty. */
@@ -194,7 +211,8 @@ export type UnregisteredLeftover = 'orphan' | 'empty' | false
 export async function assertUnregisteredLeftoverRemovable(
   repoPath: string,
   worktreePath: string,
-  registeredWorktrees: readonly Pick<GitWorktreeInfo, 'path'>[]
+  registeredWorktrees: readonly Pick<GitWorktreeInfo, 'path'>[],
+  rootKey?: string
 ): Promise<UnregisteredLeftover> {
   if (!(await worktreeCheckoutExists(worktreePath))) {
     return false
@@ -203,7 +221,7 @@ export async function assertUnregisteredLeftoverRemovable(
   if (await isProvenOrphanLeftover(repoPath, worktreePath)) {
     return 'orphan'
   }
-  if (await isEmptyLeftoverDirectory(repoPath, worktreePath)) {
+  if (await isEmptyLeftoverDirectory(repoPath, worktreePath, rootKey)) {
     return 'empty'
   }
   throw unregisteredFolderRefusal(worktreePath)
@@ -228,7 +246,8 @@ export async function isLeftoverStillRemovable(
   const removable = await assertUnregisteredLeftoverRemovable(
     repoPath,
     record.worktreePath,
-    current
+    current,
+    recordedRootKey(record)
   )
   if (removable === 'orphan') {
     await assertLeftoverIsRecordedCheckout(record, localOptions)
@@ -255,7 +274,8 @@ export async function retryFailedRemovalUnlessRegistered(
       (await assertUnregisteredLeftoverRemovable(
         failed.repoPath,
         failed.worktreePath,
-        registeredWorktrees
+        registeredWorktrees,
+        recordedRootKey(failed)
       ))
     try {
       await (native

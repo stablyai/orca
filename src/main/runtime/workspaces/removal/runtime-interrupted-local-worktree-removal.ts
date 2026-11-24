@@ -34,6 +34,7 @@ import {
   assertLeftoverIsRecordedCheckout,
   assertUnregisteredLeftoverRemovable,
   isLeftoverStillRemovable,
+  recordedRootKey,
   removeEmptyLeftoverDirectory,
   isRecordedCheckout,
   differentCheckoutAtPathError
@@ -213,10 +214,11 @@ async function finishInterruptedLocalWorktreeRemoval(
     deletable = undefined
   }
   // Check before teardown so refused folders retain terminals/watchers.
+  const rootKey = recordedRootKey(record)
   const leftover =
     !native &&
     !deletable &&
-    (await assertUnregisteredLeftoverRemovable(repo.path, record.worktreePath, worktrees))
+    (await assertUnregisteredLeftoverRemovable(repo.path, record.worktreePath, worktrees, rootKey))
   // An empty folder has nothing for force to override; a marked orphan still needs it.
   if (leftover === 'orphan' && !record.force) {
     throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)

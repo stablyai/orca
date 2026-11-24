@@ -30,6 +30,8 @@ export type WorktreeRemovalRecord = {
   requestedAt: number
   expectedInstanceId?: string
   expectedCheckoutIdentity?: WorktreeCheckoutIdentity
+  /** The reviewed checkout's root directory, kept when Retry drops the review: an empty leftover must still be it. */
+  rootKey?: string
   /** Cleanup failed; files, Git ownership or metadata may still need an explicit retry. */
   failure?: WorktreeRemovalFailure
 }
@@ -95,6 +97,7 @@ function parseRecord(value: unknown): WorktreeRemovalRecord | null {
       ? { expectedCheckoutIdentity: parseWorktreeCheckoutIdentity(value.expectedCheckoutIdentity)! }
       : {}),
     ...(typeof value.gitdir === 'string' && value.gitdir ? { gitdir: value.gitdir } : {}),
+    ...(typeof value.rootKey === 'string' && value.rootKey ? { rootKey: value.rootKey } : {}),
     ...(failure ? { failure } : {})
   }
 }

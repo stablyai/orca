@@ -24,7 +24,11 @@ import { runWorktreeChangeInvalidators } from '../../ipc/worktrees/listing/workt
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { readWorktreeRemovalRecords, type WorktreeRemovalRecord } from './worktree-removal-records'
 import { failureLeftByGit } from './worktree-removal-failure'
-import { differentCheckoutAtPathError, isCheckoutRegistered } from './worktree-removal-leftover'
+import {
+  differentCheckoutAtPathError,
+  isCheckoutRegistered,
+  recordedRootKey
+} from './worktree-removal-leftover'
 import {
   closeWorktreeRemovalRecords,
   failedWorktreeRemovals,
@@ -166,7 +170,9 @@ export function retryFailedWorktreeRemoval(
       expectedCheckoutIdentity: _reviewedCheckout,
       ...original
     } = failed
-    const record = { ...original, force: force ?? original.force }
+    // The reviewed root stays bound: an empty folder recreated at the path is not this leftover.
+    const rootKey = recordedRootKey(failed)
+    const record = { ...original, force: force ?? original.force, ...(rootKey ? { rootKey } : {}) }
     const settlement = addPendingRemoval(record)
     const job = jobFor(record)
     const leftoverOnly: BackgroundWorktreeRemovalJob = {

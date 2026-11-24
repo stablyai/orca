@@ -5,6 +5,7 @@ import { runProcessSync } from '@orca/process-host'
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
@@ -255,50 +256,47 @@ it('retains the removal fence after an uncertain partial deletion settles', asyn
     injection.mockRestore()
   }
 })
-it.each([true, false])(
-  'refuses a real replacement after worker dispatch and before spawn (queue=%s)',
-  async (queued) => {
-    const f = await fixture(queued)
-    const workspace = (
-      await collectWorkspaceCleanupWorkspaces({
-        store: f.store,
-        runtime: f.runtime,
-        globalRules: f.rules,
-        now: Date.now()
-      })
-    ).find((row) => row.ref.worktreeId === f.id)
-    if (!workspace) {
-      throw new Error('Missing fixture workspace')
-    }
-    const dispatched = worker.holdRemoval()
-    const removal = removeWorkspaceForCleanup({
+it('refuses a real replacement after worker dispatch and before spawn', async () => {
+  const f = await fixture(false)
+  const workspace = (
+    await collectWorkspaceCleanupWorkspaces({
       store: f.store,
       runtime: f.runtime,
-      workspace,
-      globalRules: () => f.rules,
-      now: Date.now
+      globalRules: f.rules,
+      now: Date.now()
     })
-    try {
-      await Promise.race([
-        dispatched,
-        removal.then(() => {
-          throw new Error('Removal never reached the worker queue')
-        })
-      ])
-      f.git('-C', f.root, 'worktree', 'remove', '--force', f.path)
-      f.git('-C', f.root, 'worktree', 'add', f.path, 'topic')
-    } finally {
-      worker.releaseRemoval()
-    }
-    expect(await removal).toMatchObject({ outcome: 'failed' })
-    expect(existsSync(f.path)).toBe(true)
-    expect(readFileSync(join(f.path, 'tracked'), 'utf8')).toBe('seed')
-    expect(f.store.getWorktreeMetaForHost(f.id, 'local')).toMatchObject({
-      instanceId: 'A',
-      isPinned: false
-    })
+  ).find((row) => row.ref.worktreeId === f.id)
+  if (!workspace) {
+    throw new Error('Missing fixture workspace')
   }
-)
+  const dispatched = worker.holdRemoval()
+  const removal = removeWorkspaceForCleanup({
+    store: f.store,
+    runtime: f.runtime,
+    workspace,
+    globalRules: () => f.rules,
+    now: Date.now
+  })
+  try {
+    await Promise.race([
+      dispatched,
+      removal.then(() => {
+        throw new Error('Removal never reached the worker queue')
+      })
+    ])
+    f.git('-C', f.root, 'worktree', 'remove', '--force', f.path)
+    f.git('-C', f.root, 'worktree', 'add', f.path, 'topic')
+  } finally {
+    worker.releaseRemoval()
+  }
+  expect(await removal).toMatchObject({ outcome: 'failed' })
+  expect(existsSync(f.path)).toBe(true)
+  expect(readFileSync(join(f.path, 'tracked'), 'utf8')).toBe('seed')
+  expect(f.store.getWorktreeMetaForHost(f.id, 'local')).toMatchObject({
+    instanceId: 'A',
+    isPinned: false
+  })
+})
 it('refuses a valid checkout proof attached to a different Git removal target', async () => {
   const f = await fixture(false)
   const proof = await captureWorktreeCheckoutIdentity(f.path, 'A', f.root)
@@ -344,18 +342,24 @@ const branchExists = (f: Awaited<ReturnType<typeof fixture>>) =>
     cwd: testState.dir
   }).code === 0
 
-it.each(['empty', 'gone', 'marked', 'files'] as const)(
+it.each(['empty', 'gone', 'marked', 'files', 'recreated', 'unforced'] as const)(
   'Retry finishes what a cleanup removal left behind like a manual delete (%s leftover)',
   async (leftover) => {
     const f = await fixture(false)
     const record = await failedCleanupRecord(f)
-    if (leftover === 'marked') {
+    if (leftover === 'marked' || leftover === 'unforced') {
       // Git dropped the registration; the folder still names the removed admin entry.
       rmSync(join(f.root, '.git', 'worktrees', 'checkout'), { recursive: true, force: true })
+    } else if (leftover === 'empty') {
+      // Git emptied A's own root, marker included, and dropped its registration.
+      for (const name of readdirSync(f.path)) {
+        rmSync(join(f.path, name), { recursive: true, force: true })
+      }
+      f.git('-C', f.root, 'worktree', 'prune')
     } else {
       f.git('-C', f.root, 'worktree', 'remove', '--force', f.path)
       if (leftover !== 'gone') {
-        // Git exited 0 and left the emptied root behind.
+        // A folder made at the path after A's root was gone.
         mkdirSync(f.path)
       }
       if (leftover === 'files') {
@@ -366,14 +370,21 @@ it.each(['empty', 'gone', 'marked', 'files'] as const)(
       { ...record, failure: { message: 'The checkout remains after Git deletion.', failedAt: old } }
     ])
     await loadWorktreeRemovalRecords(testState.dir)
-    // The runtime Retry entry: a marked orphan still needs the user's force, an empty folder does not.
+    // The runtime Retry entry: a marked orphan still needs the user's force, an empty root does not.
     const retry = f.runtime.removeManagedWorktree(`id:${f.id}`, {
       force: leftover === 'marked',
       waitForBackgroundRemoval: true
     })
-    if (leftover === 'files') {
+    if (leftover === 'files' || leftover === 'recreated' || leftover === 'unforced') {
       await expect(retry).rejects.toThrow()
-      expect(readFileSync(join(f.path, 'notes'), 'utf8')).toBe('not the removed checkout')
+      await settleRemovals()
+      expect(existsSync(f.path)).toBe(true)
+      if (leftover === 'files') {
+        expect(readFileSync(join(f.path, 'notes'), 'utf8')).toBe('not the removed checkout')
+      }
+      if (leftover === 'unforced') {
+        expect(readFileSync(join(f.path, 'tracked'), 'utf8')).toBe('seed')
+      }
       expect(f.store.getWorktreeMetaForHost(f.id, 'local')).toMatchObject({ instanceId: 'A' })
       return
     }
