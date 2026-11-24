@@ -111,8 +111,10 @@ export function usageLimitAccountSources(deps: UsageLimitAccountSourceDeps): {
       ? deps.rateLimits()?.usageReadingAccount(provider)
       : null
   return {
+    // The service starting is a change even before its first reading: from then on an attribution
+    // can bootstrap one, so one made while it was absent must not keep holding.
     accountWitness: (provider) =>
-      `${idOf(deps.settings())}:${deps.shellEnvironmentRevision()}:${idOf(readingSource(provider))}`,
+      `${idOf(deps.settings())}:${deps.shellEnvironmentRevision()}:${deps.rateLimits() ? idOf(readingSource(provider)) : 'off'}`,
     accountUsage: async (provider, accountHome) => {
       const path = agentSessionAccountHomePath(accountHome)
       const service = deps.rateLimits()
