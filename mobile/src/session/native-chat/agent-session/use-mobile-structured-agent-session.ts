@@ -227,7 +227,7 @@ export function useMobileStructuredAgentSession(
     sessionKey,
     agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined,
     journalItems: state.items,
-    transcriptShown: state.items.length > 0,
+    transcriptShown: messages.length > 0,
     queuedMessages,
     queuePause,
     submissions: state.submissions,

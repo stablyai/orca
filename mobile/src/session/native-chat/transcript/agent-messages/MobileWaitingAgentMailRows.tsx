@@ -1,5 +1,5 @@
-import { memo, useState } from 'react'
-import { Text, View, type LayoutChangeEvent } from 'react-native'
+import { memo, useEffect, useState } from 'react'
+import { AccessibilityInfo, Text, View, type LayoutChangeEvent } from 'react-native'
 import { Image as ImageIcon } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -31,6 +31,7 @@ export const MobileWaitingAgentMailRows = memo(function MobileWaitingAgentMailRo
   viewport?: MobileNativeChatTailViewport
 }): React.JSX.Element | null {
   const block = useMobileFooterBlock(viewport)
+  const screenReader = useMobileScreenReaderOn()
   if (!mail || mail.rows.length === 0) {
     return null
   }
@@ -43,6 +44,7 @@ export const MobileWaitingAgentMailRows = memo(function MobileWaitingAgentMailRo
             message={message}
             fontScale={fontScale}
             block={block}
+            windowed={!screenReader}
           />
         ))}
       </View>
@@ -66,15 +68,18 @@ export function mobileWaitingAgentMailRows(
 const MobileWaitingAgentMailRow = memo(function MobileWaitingAgentMailRow({
   message,
   fontScale,
-  block
+  block,
+  windowed
 }: {
   message: NativeChatMessage
   fontScale: number
   block: MobileFooterBlock
+  /** Off while a screen reader runs, so swiping reaches every waiting row. */
+  windowed: boolean
 }): React.JSX.Element | null {
   const { onScreen, ref, onLayout } = useMobileFooterRowOnScreen(block, message.id)
   const [height, setHeight] = useState<number | null>(null)
-  const held = !onScreen && height !== null
+  const held = windowed && !onScreen && height !== null
   const laidOut = (event: LayoutChangeEvent): void => {
     onLayout(event)
     // Every drawn layout, so a row that arrived off screen is windowed too.
@@ -131,4 +136,19 @@ function MobileQueuedImageCount({
       <Text style={queuedMessageStyles.metaText}>{count}</Text>
     </View>
   )
+}
+
+/** Whether VoiceOver or TalkBack is running, following changes. */
+function useMobileScreenReaderOn(): boolean {
+  const [on, setOn] = useState(false)
+  useEffect(() => {
+    let live = true
+    void AccessibilityInfo.isScreenReaderEnabled().then((enabled) => live && setOn(enabled))
+    const subscription = AccessibilityInfo.addEventListener('screenReaderChanged', setOn)
+    return () => {
+      live = false
+      subscription.remove()
+    }
+  }, [])
+  return on
 }

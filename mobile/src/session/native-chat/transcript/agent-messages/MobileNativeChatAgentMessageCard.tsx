@@ -38,7 +38,7 @@ import {
 
 type Sender = AgentMessageSource['senders'][number]
 
-function lead(heading: AgentMessageHeading, t: Translate): string {
+export function mobileAgentMessageLead(heading: AgentMessageHeading, t: Translate): string {
   switch (heading) {
     case 'started':
     case 'started-agent':
@@ -110,7 +110,7 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   const view = useMobileAgentMessageView(sender)
   const { shown, more } = agentMessageSendersShown(from)
   const heading = agentMessageHeading(from, message)
-  const words = lead(heading, t)
+  const words = mobileAgentMessageLead(heading, t)
   const kind = kindWord(heading, t)
   const preview = useMemo(() => agentMessagePreviewLine(text).line, [text])
   const items = message.agentStartItems ?? []
@@ -134,8 +134,8 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
     <MobileNativeChatEventRow
       testID={waiting ? 'agent-message-card-waiting' : 'agent-message-card'}
       icon={<SenderMark agentType={view.agentType} />}
-      // The live state never marks a row failed: a restarted worker would un-fail it.
-      badge={view.dot === 'working' ? 'running' : null}
+      // The live state never marks a row failed: a restarted worker would un-fail it. Waiting mail shows no status.
+      badge={!waiting && view.dot === 'working' ? 'running' : null}
       label={`${words} ${sender ? senderName : unnamed}${more > 0 ? ` +${more}` : ''}${
         items.length > 0
           ? ` ${t('chat.agentMessage.row.forItems', 'for')} ${items.map((item) => item.title).join(', ')}`
@@ -183,7 +183,7 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
             {status}
             {merged.map((earlier) => {
               const earlierWords = earlier.from
-                ? lead(agentMessageHeading(earlier.from, earlier), t)
+                ? mobileAgentMessageLead(agentMessageHeading(earlier.from, earlier), t)
                 : null
               const earlierText = mobileNativeChatDisplayCopyText(earlier)
               return (

@@ -43,7 +43,9 @@ const NativeChatWaitingAgentMailRow = memo(function NativeChatWaitingAgentMailRo
   const [element, setElement] = useState<HTMLDivElement | null>(null)
   const shown = useNativeChatWaitingRowShown(element)
   const height = useNativeChatWaitingRowHeight(element, shown)
-  const held = !shown && height !== null
+  // A row holding keyboard focus stays drawn, so scrolling it away never drops the focused button.
+  const [focused, setFocused] = useState(false)
+  const held = !shown && height !== null && !focused
   if (!message.from) {
     return null
   }
@@ -54,6 +56,8 @@ const NativeChatWaitingAgentMailRow = memo(function NativeChatWaitingAgentMailRo
       // A held row is empty, so in a flex column (setup mail block) it would shrink to nothing.
       className="shrink-0"
       style={held ? { height } : undefined}
+      onFocus={() => setFocused(true)}
+      onBlur={(event) => setFocused(event.currentTarget.contains(event.relatedTarget))}
     >
       {held ? null : <NativeChatWaitingAgentMailCard message={message} />}
     </div>

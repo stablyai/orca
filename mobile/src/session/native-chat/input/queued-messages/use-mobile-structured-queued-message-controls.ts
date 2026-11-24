@@ -28,6 +28,7 @@ import {
 import type { MobileStructuredAgentMutate } from '../../agent-session/use-mobile-structured-agent-mutation'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { useMobileStructuredQueuedEdit } from './use-mobile-structured-queued-edit'
+import { useMobileWaitingAgentMailArrivalAnnouncement } from '../../transcript/agent-messages/use-mobile-waiting-agent-mail-arrival-announcement'
 import type { MobileQueuedMessageInlineEditor } from './mobile-queued-message-edit-draft'
 // The host owns queued drafts; render its published cards even when it cannot queue new sends.
 
@@ -149,6 +150,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
     () => composerQueuedCards(allCards, waitingAgentMail, editor?.messageId),
     [allCards, waitingAgentMail, editor?.messageId]
   )
+  useMobileWaitingAgentMailArrivalAnnouncement(agentMail, args.chatActive)
   const resolved = useCallback(
     (accepted: boolean): boolean => {
       if (accepted) {
