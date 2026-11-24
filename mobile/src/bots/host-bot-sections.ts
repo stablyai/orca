@@ -81,6 +81,7 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
     ])
   )
   const drawn: DrawnBotEntry[] = []
+  const headerLines: BotsListEndLine[] = []
   const endLines: BotsListEndLine[] = []
   let total = 0
   let shownTotal = 0
@@ -91,7 +92,7 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
       continue
     }
     if (listing.kind === 'unreachable') {
-      endLines.push({
+      headerLines.push({
         key: `unreachable:${listing.hostId}`,
         text: translate(
           'bots.list.cantReach',
@@ -107,6 +108,14 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
         }
       }
       continue
+    }
+    if (listing.workerStatus === 'unavailable') {
+      endLines.push({
+        key: `workers-unavailable:${listing.hostId}`,
+        text: translate('bots.workers.unavailable', 'Worker status unavailable on {{host}}.', {
+          host: listing.hostLabel
+        })
+      })
     }
     const host = drawHostBotEntries(listing, hostRows, inputs, lineageOf, hosts)
     drawn.push(...host.drawn)
@@ -134,7 +143,7 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
     }
   }
   const newBotHostId = defaultNewBotHostId(listings)
-  if (total === 0 && !newBotHostId && endLines.length === 0) {
+  if (total === 0 && !newBotHostId && headerLines.length === 0 && endLines.length === 0) {
     return { sections: [], listedIdentities }
   }
   // The paired computer's Bot options order and filter every computer's bots: Manual keeps this
@@ -175,6 +184,7 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
         ...(newBotHostId ? { newBotHostId } : {}),
         // Groups are this computer's: New group counts its bots alone, whatever the search hides.
         botCount: local?.kind === 'listed' ? local.bots.length : 0,
+        ...(headerLines.length > 0 ? { headerLines } : {}),
         ...(lines.length > 0 ? { endLines: lines } : {}),
         botPreview: arranged.flatMap(({ preview }) => preview ?? []),
         data: inputs.collapsedGroups.has(BOTS_GROUP_KEY)

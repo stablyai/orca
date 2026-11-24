@@ -81,7 +81,11 @@ export function useHostBotChatTrees(args: {
           wanted.set(hostBotTreeKey(hostId, bot.id), { hostId, botId: bot.id, client: hostClient })
         }
       }
-      if (hostId !== LOCAL_EXECUTION_HOST_ID && readFor.current.get(hostId) !== listing.bots) {
+      if (
+        listing.workerStatus === 'available' &&
+        hostId !== LOCAL_EXECUTION_HOST_ID &&
+        readFor.current.get(hostId) !== listing.bots
+      ) {
         readFor.current.set(hostId, listing.bots)
         reread.push(hostId)
       }

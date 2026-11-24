@@ -27,6 +27,8 @@ const keptListingSchema = z.object({
   view: z.unknown().transform(normalizeBotSidebarView),
   workspaceLineage: z.record(z.string(), z.custom<WorkspaceLineage>(someObject)),
   worktreeLineage: z.record(z.string(), z.custom<WorktreeLineage>(someObject)),
+  // Listings saved before worker availability was explicit had a successful lineage read.
+  workerStatus: z.enum(['available', 'unavailable']).catch('available'),
   createRefusal: z.enum(['bots-off', 'update', 'update-desktop']).optional(),
   groups: z.array(z.custom<BotGroup>(someObject)).optional()
 })

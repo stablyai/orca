@@ -10,6 +10,7 @@ import { rpcClientForExecutionHost } from '../worktree/execution-hosts/execution
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import { newBotRefusal, shownHostBotListings, type HostBotListing } from './host-bot-listing'
+import { listingNeedsGroupsRetry, mergeHostBotListing } from './host-bot-listing-merge'
 import {
   botHomeLinksRead,
   botOwnChatsRead,
@@ -51,13 +52,31 @@ export async function readHostBotListing(
   if (bots.kind !== 'bots') {
     return null
   }
-  // Only a host with bots is asked for their workers' lineage.
+  // Only a host with bots is asked for their workers' lineage. A failed ancillary read must not
+  // hide the bot list that already arrived.
   const lineageReply = await workspaceLineageRead.request(target.client).catch(() => null)
   const lineage = lineageReply && readHostMethodReply(lineageReply, workspaceLineageRead.interpret)
-  if (lineage?.kind !== 'answered') {
-    return null
+  const links = lineage?.kind === 'answered' ? lineage.value : null
+  const createRefusal = newBotRefusal(bots, target.relaysCreate)
+  if (!links) {
+    return {
+      kind: 'listed',
+      waits: bots.waits,
+      needsYou: bots.needsYou,
+      needsYouChangeInMs: bots.needsYouChangeInMs,
+      hostId: target.hostId,
+      hostLabel: target.hostLabel,
+      ...(target.installationId ? { installationId: target.installationId } : {}),
+      bots: bots.bots,
+      hideBotCreated: bots.hideBotCreated,
+      view: bots.view,
+      workspaceLineage: {},
+      worktreeLineage: {},
+      workerStatus: 'unavailable',
+      ...(createRefusal ? { createRefusal } : {}),
+      takesTemplates: bots.takesTemplates
+    }
   }
-  const links = lineage.value
   const [unseenReply, linksReply, ownChatsReply, accessRequests] = await Promise.all([
     botUpNextUnseenRead.request(target.client).catch(() => null),
     threads ? botHomeLinksRead.request(target.client).catch(() => null) : null,
@@ -72,7 +91,6 @@ export async function readHostBotListing(
     .then((reply) => groupList.interpret(reply).groups)
     .catch(() => null)
   const unseen = unseenReply && readHostMethodReply(unseenReply, botUpNextUnseenRead.interpret)
-  const createRefusal = newBotRefusal(bots, target.relaysCreate)
   return {
     kind: 'listed',
     ...(unseen?.kind === 'answered' ? { unseen: unseen.value.unseen } : {}),
@@ -90,6 +108,7 @@ export async function readHostBotListing(
     view: bots.view,
     workspaceLineage: links.workspaceLineage,
     worktreeLineage: links.lineage,
+    workerStatus: 'available',
     ...(createRefusal ? { createRefusal } : {}),
     takesTemplates: bots.takesTemplates,
     // Groups read on their own: a failed read leaves them out, and the list reads again.
@@ -132,24 +151,10 @@ function startBotListingReads(args: {
     // went down lists its last read, dimmed. A read without threads keeps the last threads' facts.
     if (listing) {
       setListings((previous) => {
-        const last = previous.find((entry) => entry.hostId === hostId)
-        const kept = listing.kind === 'listed' && last && last.kind === 'listed' ? last : null
-        const groups =
-          kept && listing.kind === 'listed' && !listing.groups ? kept.groups : undefined
-        const threadFacts =
-          kept && !threads
-            ? {
-                ...(kept.links ? { links: kept.links } : {}),
-                ...(kept.ownChats ? { ownChats: kept.ownChats } : {})
-              }
-            : {}
-        return [
-          ...previous.filter((entry) => entry.hostId !== hostId),
-          { ...listing, ...threadFacts, ...(groups ? { groups } : {}) }
-        ]
+        return mergeHostBotListing(previous, listing, threads)
       })
     }
-    if (listing?.kind === 'listed' && !listing.groups) {
+    if (listingNeedsGroupsRetry(listing)) {
       groupsUnread.add(hostId)
     } else {
       groupsUnread.delete(hostId)
@@ -177,7 +182,10 @@ function startBotListingReads(args: {
       }
       apply(host.hostId, listing, withThreads)
       // A failed or unlisted read drops the timer; the read that follows a reconnect sets it again.
-      countTimers.readAfter(host, listing?.kind === 'listed' ? listing : null)
+      countTimers.readAfter(
+        host,
+        listing?.kind === 'listed' && listing.workerStatus === 'available' ? listing : null
+      )
     } while (askedAgain.get(host.hostId))
     askedAgain.delete(host.hostId)
   }

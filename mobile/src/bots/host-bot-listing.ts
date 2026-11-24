@@ -48,6 +48,8 @@ export type ListedHostBots = {
   view: BotSidebarView
   workspaceLineage: Readonly<Record<string, WorkspaceLineage>>
   worktreeLineage: Readonly<Record<string, WorktreeLineage>>
+  /** The separate lineage read failed, so bot workers cannot be shown until the host answers it. */
+  workerStatus: 'available' | 'unavailable'
   unseen?: Readonly<Record<string, number>>
   /** Each bot's waits still waiting, by bot id, for its row's line. */
   waits?: BotListWaits

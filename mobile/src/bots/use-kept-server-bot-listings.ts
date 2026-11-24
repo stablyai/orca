@@ -3,6 +3,7 @@ import type { ExecutionHostId } from '../../../src/shared/execution-host/executi
 import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { HostBotListing } from './host-bot-listing'
 import { keepServerBotListing, readKeptServerBotListings } from './kept-server-bot-listings'
+import { mergeKeptServerBotListing } from './host-bot-listing-merge'
 
 /** Starts each listed server from its kept listing, keeps each newer read, and forgets a server once the desktop stops listing it. */
 export function useKeptServerBotListings(args: {
@@ -50,10 +51,22 @@ export function useKeptServerBotListings(args: {
       // A read that landed first is newer than anything kept.
       if (shownFor.current === pairedHostId && kept.length > 0) {
         kept.forEach((entry) => handed.current.set(slot(entry.hostId), entry))
-        setListings((previous) => [
-          ...previous,
-          ...kept.filter((entry) => !previous.some((listing) => listing.hostId === entry.hostId))
-        ])
+        setListings((previous) => {
+          const hydrated = kept.map((entry) =>
+            mergeKeptServerBotListing(
+              previous.find((listing) => listing.hostId === entry.hostId),
+              entry
+            )
+          )
+          return hydrated.every((entry) => previous.includes(entry))
+            ? previous
+            : [
+                ...previous.filter(
+                  (listing) => !kept.some((entry) => entry.hostId === listing.hostId)
+                ),
+                ...hydrated
+              ]
+        })
       }
     })
   }, [pairedHostId, serverIds, setListings])
