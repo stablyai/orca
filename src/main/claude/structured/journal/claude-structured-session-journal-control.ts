@@ -46,6 +46,7 @@ export function createClaudeSessionJournalTranslator(
         goalBackgroundWork: () =>
           currentSession()?.backgroundTasks.goalBackgroundWork ?? 'unverifiable',
         onBackgroundTaskJournalFailure: createClaudeJournalFailureHandler(failure),
+        handedOff: () => attempt.connection?.handedOff === true,
         bindPromptItemId: (itemId, promptKey) =>
           attempt.prompts.bindJournalItemId(itemId, promptKey),
         acceptStartupFailure,

@@ -171,9 +171,6 @@ async function finalizeClaudePublishedSession(
       acquisitionGeneration: session.acquisitionGeneration,
       observedAt
     }
-    if (session.connection.handedOff) {
-      session.translator?.handOff()
-    }
     try {
       try {
         session.translator?.handle(ended)

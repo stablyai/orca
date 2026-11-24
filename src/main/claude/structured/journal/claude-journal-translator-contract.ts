@@ -33,6 +33,8 @@ export type ClaudeJournalTranslatorDeps = {
   account?: () => AgentSessionAccountKind | undefined
   model?: () => string | undefined
   goalBackgroundWork?: () => ClaudeGoalBackgroundWork
+  /** The agent was handed to the terminal host at quit: its open tasks aren't settled. */
+  handedOff?: () => boolean
   /** True when this acquisition's pending startup took a turnless failure result and will fail with it. */
   acceptStartupFailure?: (message: Record<string, unknown>) => boolean
   /** True while a send written with priority `now` has not been echoed. */
@@ -84,8 +86,6 @@ export type ClaudeJournalTranslator = {
   modelMayHaveChanged: () => void
   /** Size interim estimates with the applied model until its window is measured. */
   modelWritten: (model: string) => void
-  /** The agent was handed to the terminal host at quit: its open tasks aren't settled. */
-  handOff: () => void
   /** Continue the turn a kept agent was running when the last app quit. */
   adoptKeptTurn: (turn: ClaudeCurrentTurn) => void
   dispose: () => void

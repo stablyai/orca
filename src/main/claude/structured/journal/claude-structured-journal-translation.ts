@@ -95,7 +95,8 @@ export function createClaudeJournalTranslator(
     openOutputTurn: (frame, observedAt) =>
       turn.ensureOpen(frame, claudeStreamTurnSource(frame), observedAt),
     turnScope,
-    onPersistenceFailure: deps.onBackgroundTaskJournalFailure
+    onPersistenceFailure: deps.onBackgroundTaskJournalFailure,
+    handedOff: deps.handedOff
   })
   const streamedText = createClaudeStreamedTextCheckpoints({
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
@@ -291,7 +292,6 @@ export function createClaudeJournalTranslator(
     recordContextReport: (target, report, askedAt) => context.recordReport(target, report, askedAt),
     modelMayHaveChanged: () => context.modelMayHaveChanged(),
     modelWritten: (model) => context.modelWritten(model),
-    handOff: () => backgroundTasks.handOff(),
     adoptKeptTurn: (kept) => turn.adoptKept(kept),
     dispose: () => {
       delivery.dispose()
