@@ -7,22 +7,17 @@ import { describe, expect, it } from 'vitest'
 import { CONNECTOR_CLOUD_BOT_SHARES_FEATURE } from '../../shared/connector-cloud-features'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
-import { connectorHello, type ConnectorHelloSaid } from './connector-hello'
-import type { ConnectorMachine } from './connector-machine'
-
-const said: ConnectorHelloSaid = { bots: [], paged: false, cut: false, triggers: [] }
+import { connectorHello, connectorHelloSaid } from './connector-hello'
+import { fakeMachine } from './fake-connector-seam.test-fixture'
+import { isRecord } from './connector-poll-client.test-fixture'
 
 function helloOf(hostKey: (() => string | null) | null): Record<string, unknown> {
-  const machine: Partial<ConnectorMachine> = {
-    runtime: 'serve',
-    orcaVersion: '1.0.0',
-    hostName: () => 'Mac',
-    ...(hostKey
-      ? { shareSend: { hostKey, deliver: async () => ({ outcome: 'accepted' as const }) } }
-      : {})
+  const machine = fakeMachine(() => null)
+  if (hostKey) {
+    machine.shareSend = { hostKey, deliver: async () => ({ outcome: 'accepted' }) }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: connectorHello reads only the fields set above.
-  return connectorHello(machine as ConnectorMachine, said).body as Record<string, unknown>
+  const { body } = connectorHello(machine, connectorHelloSaid(machine, null))
+  return isRecord(body) ? body : {}
 }
 
 describe('the hello and held messages', () => {

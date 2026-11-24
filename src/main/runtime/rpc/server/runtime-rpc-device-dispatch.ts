@@ -26,7 +26,8 @@ import type {
 import { deliverBotShareHeldMessage } from '../../../bots/team-share/bot-share-held-messages'
 import { openBotShareNewChat } from '../../../bots/team-share/bot-share-new-chats'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { registerSocketDeviceKey } from './runtime-rpc-device-key-registration'
 import { injectDeviceScope } from './runtime-rpc-device-scope-stamp'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
@@ -231,7 +232,7 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
   }
 
   /** One call as a share device with no socket (its held message), admitted as its socket's calls
-   *  are: the share allowlist and guard, then the handler. A send answers once it is accepted. */
+   *  are: the share allowlist and guard, then the handler. */
   protected async callAsBotShareDevice(
     device: BotShareDevice,
     method: string,
@@ -245,9 +246,13 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
         clientId: principal.clientId,
         pairedDeviceId: device.deviceId,
         pairedDeviceParentId: device.parentDeviceId,
-        clientKind: device.scope,
+        // As the teammate's desktop would send it live: its handshake's capabilities, which take a
+        // send's answer at acceptance.
+        clientKind: 'runtime',
         callerScope: botShareCallerScopeOf(device),
-        clientCapabilities: [AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY]
+        clientCapabilities: remoteRuntimeClientCapabilities(
+          ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+        )
       }
     )
     if (!response.ok) {

@@ -66,6 +66,8 @@ export type ConnectorHelloSaid = {
   /** Only the first bots, to an older cloud that takes no pages. */
   cut: boolean
   triggers: ConnectorTrigger[]
+  /** The key teammates seal held messages to; null from a machine without one (it holds nothing). */
+  hostKey: string | null
 }
 
 /**
@@ -80,16 +82,18 @@ export function connectorHelloSaid(
 ): ConnectorHelloSaid {
   const bots = machine.bots()
   const triggers = machine.triggers()
+  // Only from a machine that takes share_send: without it, the cloud holds nothing for this machine.
+  const hostKey = machine.shareSend?.hostKey() ?? null
   const { maxHelloBots } = CONNECTOR_CLIENT_LIMITS
   if (bots.length <= maxHelloBots) {
-    return { bots, paged: false, cut: false, triggers }
+    return { bots, paged: false, cut: false, triggers, hostKey }
   }
   if (cloudFeatures === null) {
-    return { bots: null, paged: false, cut: false, triggers }
+    return { bots: null, paged: false, cut: false, triggers, hostKey }
   }
   return cloudFeatures.has('bots.pages' satisfies ConnectorCloudFeature)
-    ? { bots, paged: true, cut: false, triggers }
-    : { bots: bots.slice(0, maxHelloBots), paged: false, cut: true, triggers }
+    ? { bots, paged: true, cut: false, triggers, hostKey }
+    : { bots: bots.slice(0, maxHelloBots), paged: false, cut: true, triggers, hostKey }
 }
 
 /** Says `said`, after staging a paged hello's bots: the cloud's answer, and whether it left any out. */
@@ -131,13 +135,6 @@ function ownerName(machine: ConnectorMachine): { ownerName?: string } {
   return name ? { ownerName: name } : {}
 }
 
-// The key teammates seal held messages to, only from a machine that takes share_send: without it,
-// the cloud holds nothing for this machine.
-function hostKey(machine: ConnectorMachine): { hostKey?: string } {
-  const key = machine.shareSend?.hostKey()
-  return key ? { hostKey: key } : {}
-}
-
 /**
  * The hello body. Inline bots always fit: each is cut to its share of the request cap
  * (connector-places.ts), which leaves room for triggers up to their cap.
@@ -156,7 +153,7 @@ export function connectorHello(
     runtime: machine.runtime,
     hostName: machine.hostName(),
     ...ownerName(machine),
-    ...hostKey(machine),
+    ...(said.hostKey ? { hostKey: said.hostKey } : {}),
     // Older clouds require both lists; they stay empty now that only bots start conversations.
     // TODO: drop both once every connector cloud ships the contract without them.
     agents: [],
