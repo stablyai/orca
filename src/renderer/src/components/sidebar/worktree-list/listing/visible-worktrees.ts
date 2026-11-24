@@ -47,7 +47,7 @@ export function setVisibleWorktreeSection(
   } else {
     renderedSections.delete(section)
   }
-  const sections = ['chats', 'projects'] as const
+  const sections = ['projects', 'chats'] as const
   _publishedVisibleIds = renderedSections.size
     ? sections.flatMap((key) => renderedSections.get(key)?.ids ?? [])
     : null

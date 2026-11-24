@@ -31,6 +31,8 @@ import { applyDefaultTerminalTabs } from '@/lib/workspace/activation/initial-sur
 import { openDefaultAgentChatInEmptyWorkspace } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-agent-chat'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
 import { findPendingWorktreeCreationId } from '../../creation/pending-worktree-creation'
+import { resolveWorktreeExecutionHost } from '../../../../../../shared/execution-host/worktree-execution-host-resolution'
+import { getIndexedRepoExecutionHostLookup } from '../../ownership/repo-owner-index'
 
 function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'windows' | 'posix' {
   return getSetupRunnerCommandPlatformForPath(
@@ -91,6 +93,10 @@ export function ensureWorktreeHasInitialTerminal(
     store.settings !== undefined || store.repos !== undefined || store.worktreesByRepo !== undefined
       ? store
       : useAppStore.getState()
+  const owner = resolveWorktreeExecutionHost(getIndexedRepoExecutionHostLookup(ownerState.repos), {
+    repoId: getRepoIdFromWorktreeId(worktreeId),
+    hostId: opts?.executionHostId ?? ownerState.activeWorkspaceExecutionHostId
+  })
   let sequencedStartup = startup
   if (
     renderableTabCount === 0 &&
@@ -102,8 +108,8 @@ export function ensureWorktreeHasInitialTerminal(
       (repo) =>
         repo.id === getRepoIdFromWorktreeId(worktreeId) &&
         repo.chatWorkspace &&
-        getRepoExecutionHostId(repo) ===
-          (opts?.executionHostId ?? ownerState.activeWorkspaceExecutionHostId ?? 'local')
+        owner.kind === 'resolved' &&
+        getRepoExecutionHostId(repo) === owner.hostId
     )
   ) {
     return null
