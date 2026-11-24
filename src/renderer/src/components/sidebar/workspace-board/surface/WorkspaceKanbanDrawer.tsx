@@ -1,6 +1,8 @@
 import React, { useCallback, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { useAllWorktrees, useRepoMap } from '@/store/selectors'
+import { selectWorkspaceListOpen } from '@/components/app-rail/app-rail-layout'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useWorkspaceStatusDocumentDrop } from '../../worktree-list/drag/use-workspace-status-drop'
 import { useWorkspaceKanbanAreaSelection } from '../selection/use-workspace-kanban-area-selection'
 import { useWorkspaceKanbanCardPointerDrag } from '../drag/use-workspace-kanban-card-pointer-drag'
@@ -21,7 +23,7 @@ import { useWorkspaceKanbanNativeDrag } from '../drag/use-workspace-kanban-nativ
 import { useWorkspaceKanbanRenderLifecycle } from './use-workspace-kanban-render-lifecycle'
 import { useWorkspaceKanbanDrawerLingering } from './use-workspace-kanban-drawer-lingering'
 import { buildWorktreeManualOrderCatalog } from '../../worktree-list/drag/worktree-manual-order-catalog'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   useAllOfferedWorkspaceStatuses,
   useWorkspaceBoardStatuses
@@ -75,7 +77,7 @@ function WorkspaceKanbanDrawerContent({
   const workspaceBoardColumnWidth = useAppStore((s) => s.workspaceBoardColumnWidth)
   const setWorkspaceBoardColumnWidth = useAppStore((s) => s.setWorkspaceBoardColumnWidth)
   const sortBy = useAppStore((s) => s.sortBy)
-  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  const sidebarOpen = useAppStore(selectWorkspaceListOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const boardRef = useRef<HTMLDivElement>(null)
   const laneScrollerRef = useRef<HTMLDivElement>(null)

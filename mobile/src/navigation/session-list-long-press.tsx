@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react'
 import { useGlobalSearchParams, usePathname } from 'expo-router'
-import { triggerEdgeBump } from '../platform/haptics'
+import { triggerEdgeBump } from '../platform/haptics/haptics'
 import { firstParam } from './route-param-reader'
 import { useRouteHandoff } from './route-handoff'
 import { returnToHostSessionList, sessionListBackTarget } from './session-list-back'

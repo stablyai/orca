@@ -3,7 +3,7 @@ import type {
   CheckStatus,
   PRMergeableState,
   ProviderCheckSummary
-} from '../../shared/github/pull-request-types'
+} from '../../shared/github/pull-requests/pull-request-types'
 
 export type RawAzureDevOpsStatus = {
   state?: string | null
@@ -19,6 +19,7 @@ export type RawAzureDevOpsPullRequest = {
   closedDate?: string | null
   mergeStatus?: string | null
   sourceRefName?: string | null
+  targetRefName?: string | null
   lastMergeSourceCommit?: {
     commitId?: string | null
   } | null

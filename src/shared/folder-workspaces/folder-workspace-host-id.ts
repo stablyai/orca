@@ -1,12 +1,12 @@
 import type { FolderWorkspace } from './folder-workspace-types'
-import type { ProjectGroup } from '../project-group-types'
+import type { ProjectGroup } from '../project/groups/project-group-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../execution-host'
+} from '../execution-host/execution-host'
 
 export function getFolderWorkspaceHostId(
   workspace: FolderWorkspace,

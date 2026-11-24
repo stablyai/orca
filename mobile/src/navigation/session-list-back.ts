@@ -1,5 +1,5 @@
 import { hostStackHostRoute, type HostStackHostRoute } from './host-stack-navigation'
-import { isHostRouteOf } from '../mobile-web-shell/page-route-policy'
+import { isHostRouteOf } from '../mobile-web-shell/routing/page-route-policy'
 
 /** Pressable's platform long-press. */
 export const SESSION_LIST_LONG_PRESS_MS = 500

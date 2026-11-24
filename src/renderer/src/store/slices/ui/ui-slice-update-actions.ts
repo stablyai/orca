@@ -1,22 +1,33 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
+import { reconcileRetainedUpdateTarget } from './retained-update-target'
 import {
   DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
   normalizeBrowserPageZoomLevel
-} from '../../../../../shared/browser-page-zoom'
-import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
-import { DEFAULT_BROWSER_DEVTOOLS_DOCK_LAYOUT } from '../../../../../shared/browser-devtools-dock'
+} from '../../../../../shared/browser/site-settings/browser-page-zoom'
+import { normalizeKagiSessionLink } from '../../../../../shared/browser/navigation/browser-url'
+import { DEFAULT_BROWSER_DEVTOOLS_DOCK_LAYOUT } from '../../../../../shared/browser/devtools/browser-devtools-dock'
+import {
+  DEFAULT_BROWSER_EXTENSION_SIDE_PANEL_WIDTH,
+  normalizeBrowserExtensionSidePanelWidth
+} from '../../../../../shared/browser/extensions/browser-extension-side-panel-types'
 export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     updateStatus: { state: 'idle' },
+    retainedUpdateTarget: null,
     setUpdateStatus: (status) => {
-      const { updateStatus: previousStatus, updateUserInitiatedCycle } = get()
+      const { updateStatus: previousStatus, retainedUpdateTarget, updateUserInitiatedCycle } = get()
       const update: Partial<
         Pick<
           UISlice,
-          'updateStatus' | 'updateChangelog' | 'updateCardCollapsed' | 'updateUserInitiatedCycle'
+          | 'updateStatus'
+          | 'retainedUpdateTarget'
+          | 'updateChangelog'
+          | 'updateCardCollapsed'
+          | 'updateUserInitiatedCycle'
         >
       > = {
-        updateStatus: status
+        updateStatus: status,
+        retainedUpdateTarget: reconcileRetainedUpdateTarget(retainedUpdateTarget, status)
       }
       if (status.state === 'checking') {
         update.updateUserInitiatedCycle = status.userInitiated === true
@@ -42,15 +53,23 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
           (status.version !== undefined && previousStatus.version === undefined) ||
           (status.recovery?.kind === 'linux-package-install' &&
             previousStatus.recovery?.kind !== 'linux-package-install'))
-      if (status.state !== previousStatus.state || errorBecameActionable) {
+      const installStateChanged =
+        status.state === 'downloaded' &&
+        previousStatus.state === 'downloaded' &&
+        Boolean(status.installing) !== Boolean(previousStatus.installing)
+      if (status.state !== previousStatus.state || errorBecameActionable || installStateChanged) {
         // Quiet check failures start collapsed so the status bar can still disclose them.
         update.updateCardCollapsed =
-          status.state === 'error' &&
-          !status.userInitiated &&
-          !updateUserInitiatedCycle &&
-          status.version === undefined &&
-          status.recovery?.kind !== 'linux-package-install' &&
-          !('version' in previousStatus && previousStatus.version !== undefined)
+          (status.automaticDownload === true &&
+            (status.state === 'downloading' ||
+              (status.state === 'downloaded' && status.installing === true) ||
+              (status.state === 'error' && status.retryAction !== 'install'))) ||
+          (status.state === 'error' &&
+            !status.userInitiated &&
+            !updateUserInitiatedCycle &&
+            status.version === undefined &&
+            status.recovery?.kind !== 'linux-package-install' &&
+            !('version' in previousStatus && previousStatus.version !== undefined))
       }
       set(update)
     },
@@ -142,6 +161,12 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
     setBrowserDevToolsDock: (layout) => {
       void window.api.ui.set({ browserDevToolsDock: layout }).catch(console.error)
       set({ browserDevToolsDock: layout })
+    },
+    browserExtensionSidePanelWidth: DEFAULT_BROWSER_EXTENSION_SIDE_PANEL_WIDTH,
+    setBrowserExtensionSidePanelWidth: (width) => {
+      const normalized = normalizeBrowserExtensionSidePanelWidth(width)
+      void window.api.ui.set({ browserExtensionSidePanelWidth: normalized }).catch(console.error)
+      set({ browserExtensionSidePanelWidth: normalized })
     }
   }
 }

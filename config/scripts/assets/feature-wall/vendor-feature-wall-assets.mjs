@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process'
 import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import { runProcessSync } from '@orca/process-host'
-import { FEATURE_WALL_TILES } from '../../../../src/shared/feature-wall-tiles.ts'
+import { FEATURE_WALL_TILES } from '../../../../src/shared/feature-education/explore/feature-wall-tiles.ts'
 import { verifyLosslessFeatureWallMedia } from './verify-feature-wall-lossless-media.mjs'
 
 const __dirname = import.meta.dirname

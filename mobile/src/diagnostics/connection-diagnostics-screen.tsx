@@ -12,9 +12,9 @@ import {
 import type { DiagnosticsDeviceOperations } from './diagnostics-device-operations'
 import type {
   ConnectionLogEntry,
-  ConnectionState,
   MobileConnectionDiagnosticPath
-} from '../transport/types'
+} from './connection/connection-log-types'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 export function ConnectionDiagnosticsScreen({
   device,

@@ -9,7 +9,12 @@ import {
   currentBrowserRoutePartitionBindingStore,
   routePartitionDataRoot
 } from './browser-route-partition-binding-runtime'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
+import { retireBrowserExtensionRouteProfile } from '../../extensions/profile-sessions/browser-extension-route-profiles'
+import {
+  forgetBrowserRoutePartitionSessionCookies,
+  releaseRetiredRoutePartitions
+} from '../../cookies/session-restore/browser-session-cookie-route-restore'
 import {
   browserRoutePartitionPendingDeletesPath,
   queueBrowserRoutePartitionDirectoryDelete
@@ -29,6 +34,9 @@ export function browserRoutePartitionStorageDependencies(
     partitionDataRoot,
     isPartitionLive,
     clearPartitionStorage: async (partition) => {
+      await forgetBrowserRoutePartitionSessionCookies(partition)
+      // Why before the wipe: a running extension would write to storage again after it.
+      await retireBrowserExtensionRouteProfile(partition)
       // Why not when cold: `fromPartition` would load the session and lock the folder it deletes.
       if (mode === 'live') {
         const partitionSession = session.fromPartition(partition)
@@ -37,6 +45,7 @@ export function browserRoutePartitionStorageDependencies(
         browserSessionRegistry.clearRoutePartitionPolicies(partition)
       }
     },
+    releaseRetiredPartitions: releaseRetiredRoutePartitions,
     removePartitionDirectory: async (directory) => {
       if (mode === 'live') {
         queueBrowserRoutePartitionDirectoryDelete(

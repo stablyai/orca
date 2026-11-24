@@ -1,15 +1,21 @@
+import { scopedCrewChange } from '../../orchestration/crew/crew-changes'
 import { RuntimeWorkspaceRepoScanRefresh } from '../../workspaces/catalog/workspace-repo-scan-refresh'
+import {
+  awaitReattachedTerminalPaint,
+  vouchTerminalSpawn
+} from '../input/terminal-command-paint-record'
+import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
-import { cloneAgentSessionOwnerBinding } from '../../../../shared/claimed-agent-pty-owner-snapshot'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import { cloneAgentSessionOwnerBinding } from '../../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner-snapshot'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import { maxTimestamp } from '../../workspaces/process-listing/runtime-worktree-status-projection'
-import type { RuntimeSyncedLeaf } from '../../../../shared/runtime-types'
+import type { RuntimeSyncedLeaf } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { inferWorktreeIdFromPtyId } from '../../workspaces/catalog/runtime-worktree-path-identity'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import {
   mainDecidesLeafLiveness,
   mainPaneRecordFacts,
@@ -69,6 +75,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         | 'wslDistro'
         | 'incarnationId'
         | 'agentSessionOwners'
+        | 'worktreeInferredFromCwd'
       >
     > = {}
   ): RuntimePtyWorktreeRecord {
@@ -95,6 +102,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         ptyId,
         incarnationId: state.incarnationId ?? null,
         worktreeId,
+        ...(state.worktreeInferredFromCwd ? { worktreeInferredFromCwd: true } : {}),
         connectionId,
         runtimeSessionOwned: state.runtimeSessionOwned ?? false,
         isWsl: state.isWsl ?? null,
@@ -165,7 +173,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
       return pty
     }
 
-    this.terminalIdentity.setPtyWorktreeId(pty, worktreeId)
+    this.terminalIdentity.setPtyWorktree(pty, worktreeId, state.worktreeInferredFromCwd === true)
     if (
       state.incarnationId !== undefined &&
       pty.incarnationId !== null &&
@@ -257,7 +265,12 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
       noteMainPaneRecordChange(this, prior, pty)
     }
     if (previousTitle !== pty.title) {
-      this.crewChanges.notify(new Set(['names']))
+      // Agent CLIs retitle about once a second; only a crew showing this pane rereads names.
+      this.crewChanges.notify(
+        pty.paneKey
+          ? scopedCrewChange(['names'], { paneKeys: new Set([pty.paneKey]) })
+          : new Set(['names'])
+      )
     }
     return pty
   }
@@ -273,6 +286,31 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
     return isTerminalLeafId(leaf.leafId)
       ? makePaneKey(leaf.tabId, leaf.leafId)
       : `${leaf.tabId}:${leaf.paneRuntimeId}`
+  }
+
+  /** A reattached live process may print nothing; its silence is observed quiet from the first attach of this generation. */
+  startReattachedOutputClock(
+    ptyId: string,
+    attached?: { pid?: number | null; incarnationId?: string }
+  ): void {
+    const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
+    if (pty && pty.lastOutputAt === null) {
+      pty.outputObservedSince ??= Date.now()
+    }
+    // Why from the attach reply: discovery may never list this session (no refresh at reattach, or
+    // another owner's failed inventory), and an old owner's rest-title read needs its root.
+    if (pty && attached?.pid && attached.pid > 0 && getPtyExecutionHost(ptyId) === null) {
+      pty.adoptedRootProcess = {
+        incarnationId: attached.incarnationId ?? pty.incarnationId,
+        pid: attached.pid
+      }
+    }
+    awaitReattachedTerminalPaint(pty, Date.now())
+  }
+
+  /** Main saw this process start, so no later reattach of it this run hides a command start. */
+  vouchSpawnedTerminal(ptyId: string): void {
+    vouchTerminalSpawn(this.getOrCreatePtyWorktreeRecord(ptyId))
   }
 
   protected getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null {

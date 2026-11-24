@@ -14,7 +14,15 @@ Orca fetches usage for Claude Code, Codex, Gemini, OpenCode Go, Kimi Code, MiniM
 
 Orca asks each provider for your usage over the network, using the login that agent already has or a key or session cookie you add in Orca Settings.
 
-For Claude, Orca requests `https://api.anthropic.com/api/oauth/usage` with the token from your existing Claude Code login; it does not ask for extra credentials. Triggers include:
+### Claude usage polling
+
+**Settings → Accounts → Claude → Claude usage polling** is on by default. Turn it off to stop Orca's requests to `https://api.anthropic.com/api/oauth/usage`, including manual refreshes, account switching, inactive-account previews, and refreshes from mobile or web clients. Turning it off cancels pending usage requests and removes their cached figures while retaining live terminal readings. A request already sent cannot be recalled.
+
+With polling off, the meter uses Claude Code's [status-line data](https://code.claude.com/docs/en/statusline#rate-limit-usage): five-hour and weekly percentages and reset times. This requires a supported Claude Code version and Orca's status-line feed. Orca preserves a user-owned status line, so those sessions do not supply this feed. Without a reading, usage is unavailable until a terminal session reports it. Model-specific weekly windows, credits, and inactive-account readings require polling.
+
+The persisted setting is `claudeOAuthUsageEnabled: false` to disable polling. It applies on the host running the agents, including a headless Orca server; configure each host separately. Hiding the Claude status-bar item controls visibility independently.
+
+When polling is enabled, Orca uses the token from your existing Claude Code login. Triggers include:
 
 - Once the Orca window is active after startup, then about every 15 minutes while it stays visible and focused.
 - Bringing the window back to the front when the last check is more than 5 minutes old (sooner after a failed check).

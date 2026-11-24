@@ -1,10 +1,11 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
 import {
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
 } from './browser-link-routing-copy'
+import { useTranslate } from '../../../../i18n/use-translate'
 
 type BrowserLinkRoutingModifierSettingProps = {
   settings: Pick<GlobalSettings, 'openLinksInApp' | 'openLinksInAppModifierInverts'>
@@ -17,9 +18,10 @@ export function BrowserLinkRoutingModifierSetting({
   isMac,
   updateSettings
 }: BrowserLinkRoutingModifierSettingProps): React.JSX.Element {
+  const t = useTranslate()
   const openLinksInApp = settings.openLinksInApp === true
-  const title = getLinkRoutingModifierTitle(openLinksInApp)
-  const description = getLinkRoutingModifierDescription({ openLinksInApp, isMac })
+  const title = getLinkRoutingModifierTitle(openLinksInApp, t)
+  const description = getLinkRoutingModifierDescription({ openLinksInApp, isMac }, t)
 
   return (
     <SearchableSetting

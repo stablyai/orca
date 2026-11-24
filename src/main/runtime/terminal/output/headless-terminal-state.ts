@@ -2,17 +2,17 @@ import { OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer } from './headless-term
 import type { RuntimeHeadlessTerminal } from '../records/runtime-terminal-state-records'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
-import { isNativeWindowsConptyPty } from '../../terminal-model-query-authority'
+import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 import { getTerminalViewAttributes } from '../view/terminal-view-attribute-store'
 import { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirror'
 import { PROCESS_BOUNDARY_GROUND } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { release } from 'node:os'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import {
   windowsPtyForOwnerMachine,
   type XtermConptyOptions
-} from '../../../../shared/xterm-conpty-options'
+} from '../../../../shared/terminal/pty/native-process/xterm-conpty-options'
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 
 export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer {
@@ -221,6 +221,13 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
       })
   }
 
+  /** A resize the PTY took before this mirror existed: the TUI repaints for it, so unlike a reflow it leaves the grid readable. */
+  resizeHeadlessTerminalToPtyGrid(ptyId: string, cols: number, rows: number): void {
+    if (cols > 0 && rows > 0) {
+      this.resizeHeadlessTerminal(ptyId, cols, rows)
+    }
+  }
+
   /** Reflow to provider-proven size after early live bytes used default geometry; preserve renderer restore baselines because no pane was measured. */
   reflowHeadlessTerminalToPtyGrid(ptyId: string, cols: number, rows: number): void {
     if (cols <= 0 || rows <= 0) {
@@ -262,6 +269,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     // Why on the chain: the ground must land after every PTY chunk already queued.
     const completion = state.writeChain.then(async () => {
       await state.emulator.write(state.ownership.groundInputModes())
+      state.rendererSeedEscapeTail = undefined
     })
     state.writeChain = completion.catch(() => {})
     await completion

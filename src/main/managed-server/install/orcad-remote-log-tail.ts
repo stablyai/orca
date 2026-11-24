@@ -1,5 +1,5 @@
 // Decorate logged errors with a bounded redacted host tail, never telemetry; missing host evidence preserves the original failure.
-import { redactString } from '../../observability/redactor'
+import { redactString } from '../../../shared/observability/redactor'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { ORCAD_LOG_FILENAME } from './orcad-remote-host-support'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
@@ -7,7 +7,7 @@ import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 import {
   orcadWindowsSlotOpCommand,
   readOrcadWindowsEncodedAnswer

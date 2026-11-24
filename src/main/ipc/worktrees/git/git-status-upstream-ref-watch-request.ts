@@ -1,16 +1,16 @@
 import type { Store } from '../../../persistence/loading-store/store'
-import { resolveGitStatusUpstreamRef } from '../../../git/source-control/status-upstream-ref'
+import { resolveGitStatusUpstreamRef } from '../../../git/source-control/upstream/status-upstream-ref'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { abortSignalWithTimeout } from '../../../lib/abort-signal-with-timeout'
 import { resolveRegisteredWorktreePath } from '../removal/registered-worktree-roots-cache'
 import {
   getLocalGitOptionsForRepo,
   getLocalRepoForRegisteredWorktree
-} from '../../local-worktree-runtime-options'
+} from '../local-worktree-runtime-options'
 import { setWorktreeGitStatusRefWatch } from '../creation/worktree-base-directory-watcher'
 import type { GitStatusRefBindingRequest } from './worktree-git-status-ref-watch'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 const UPSTREAM_REF_RESOLUTION_TIMEOUT_MS = 15_000

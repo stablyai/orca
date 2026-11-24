@@ -1,4 +1,4 @@
-import type { ConnectionLogEntry } from '../transport/types'
+import type { ConnectionLogEntry } from './connection/connection-log-types'
 
 const SECRET_JSON_ASSIGNMENT =
   /(["'])(resumeToken|deviceToken|authorization|credential|token|publicKeyB64)\1(\s*:\s*)(["'])(?:Bearer\s+)?(?:\\.|(?!\4)[^\\\r\n])*\4/gi

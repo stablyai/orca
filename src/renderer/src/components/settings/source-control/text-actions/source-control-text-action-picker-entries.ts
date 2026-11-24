@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { AgentPickerEntry } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 import { getCommitMessageAgentSpec } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { removeSourceControlAiArgumentFlag } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-argument-flags'
@@ -8,7 +9,8 @@ export function textActionPickerEntryView(
   entry: AgentPickerEntry,
   ownerKey: string,
   agentArgs: string,
-  listing: boolean
+  listing: boolean,
+  t: Translate = translate
 ): AgentPickerEntry {
   const spec = getCommitMessageAgentSpec(entry.agent)!
   const model = removeSourceControlAiArgumentFlag(agentArgs, spec, 'model')
@@ -17,7 +19,7 @@ export function textActionPickerEntryView(
     entry.catalog.origin !== 'unknown'
       ? entry.catalog.models.find((model) => model.id === entry.terminal.model)
       : undefined
-  const defaultLabel = translate('agentPicker.sameAsTextDefault', 'Same as default · {{value0}}', {
+  const defaultLabel = t('agentPicker.sameAsTextDefault', 'Same as default · {{value0}}', {
     value0: [
       defaultModel?.label ?? entry.terminal.model,
       defaultModel?.efforts.find((effort) => effort.value === entry.terminal.options?.effort)?.label

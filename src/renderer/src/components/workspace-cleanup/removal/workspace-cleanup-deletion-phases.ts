@@ -1,0 +1,67 @@
+import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
+import type { WorktreeDeleteState } from '@/store/slices/worktrees/teardown/worktree-delete-state-types'
+import {
+  getWorkspaceCleanupCandidateIdentity,
+  resolveWorkspaceCleanupRemovalHostId
+} from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
+import { composeWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
+import type { WorkspaceCleanupDeletionPhase } from '../candidate-list/workspace-cleanup-candidate-row'
+
+export function updateWorkspaceCleanupDeletionPhases(
+  current: Record<string, WorkspaceCleanupDeletionPhase>,
+  ownedIdentities: readonly string[],
+  phase: WorkspaceCleanupDeletionPhase | null
+): Record<string, WorkspaceCleanupDeletionPhase> {
+  const next = { ...current }
+  for (const identity of ownedIdentities) {
+    if (phase === null) {
+      delete next[identity]
+    } else if (next[identity]) {
+      next[identity] = phase
+    }
+  }
+  return next
+}
+
+export function getWorkspaceCleanupDeletionPhaseByIdentity(
+  candidates: readonly WorkspaceCleanupCandidate[],
+  cleanupPhases: Readonly<Record<string, WorkspaceCleanupDeletionPhase>>,
+  genericPhasesByDeleteStateKey: Readonly<Record<string, WorkspaceCleanupDeletionPhase>>
+): Record<string, WorkspaceCleanupDeletionPhase> {
+  const phases = { ...cleanupPhases }
+  for (const candidate of candidates) {
+    const identity = getWorkspaceCleanupCandidateIdentity(candidate)
+    if (cleanupPhases[identity]) {
+      continue
+    }
+    const hostId = resolveWorkspaceCleanupRemovalHostId(candidate)
+    const phase =
+      (hostId
+        ? genericPhasesByDeleteStateKey[composeWorktreeHostIdentity(hostId, candidate.worktreeId)]
+        : undefined) ?? genericPhasesByDeleteStateKey[candidate.worktreeId]
+    if (phase) {
+      phases[identity] = phase
+    }
+  }
+  return phases
+}
+
+/** Re-key bare-ID delete state to its named host so colliding workspace rows cannot show another host’s progress (STA-4343). */
+export function selectWorkspaceCleanupDeletionPhases(s: {
+  deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
+}): Record<string, WorkspaceCleanupDeletionPhase> {
+  const phases: Record<string, WorkspaceCleanupDeletionPhase> = {}
+  for (const [worktreeId, state] of Object.entries(s.deleteStateByWorktreeId)) {
+    if (!state.isDeleting) {
+      continue
+    }
+    const executionHostId = state.executionHostId ?? undefined
+    const hostPrefix = executionHostId ? composeWorktreeHostIdentity(executionHostId, '') : null
+    const key =
+      hostPrefix && !worktreeId.startsWith(hostPrefix)
+        ? composeWorktreeHostIdentity(executionHostId, worktreeId)
+        : worktreeId
+    phases[key] = state.phase ?? 'deleting'
+  }
+  return phases
+}

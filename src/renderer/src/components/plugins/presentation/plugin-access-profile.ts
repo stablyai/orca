@@ -1,7 +1,5 @@
-import type {
-  PluginHostListEntry,
-  PluginMarketplaceHostListing
-} from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
+import type { PluginMarketplaceHostListing } from '../../../../../preload/api/plugins/plugin-host-api'
 import {
   pluginExecutionProfile,
   type PluginExecutionProfile

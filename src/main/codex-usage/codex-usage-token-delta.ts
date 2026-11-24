@@ -1,4 +1,4 @@
-import { ensureNumber } from '../usage/usage-record-coercion'
+import { ensureNumber } from '../usage/source-input/usage-record-coercion'
 
 export type CodexUsageRawUsage = {
   inputTokens: number

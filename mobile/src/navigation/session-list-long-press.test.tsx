@@ -17,7 +17,7 @@ vi.mock('expo-router', () => ({
   useGlobalSearchParams: () => ({ hostId: route.hostId })
 }))
 vi.mock('./route-handoff', () => ({ useRouteHandoff: () => router }))
-vi.mock('../platform/haptics', () => haptics)
+vi.mock('../platform/haptics/haptics', () => haptics)
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'ChevronLeft', X: 'X' }))
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',

@@ -1,10 +1,11 @@
 import { useAppStore } from '@/store/index'
-import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { ensureDetectedAgentsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'
 
@@ -46,14 +47,17 @@ export function buildSourceControlAgentAvailability({
   }
 }
 
-export function buildSourceControlAgentSaveTargets(repoId?: string | null): {
+export function buildSourceControlAgentSaveTargets(
+  repoId?: string | null,
+  t: Translate = translate
+): {
   value: string
   label: string
 }[] {
   const targets = [
     {
       value: 'none',
-      label: translate(
+      label: t(
         'auto.components.right.sidebar.SourceControlAgentActionDialog.994cddd1f7',
         "Don't save"
       )
@@ -62,7 +66,7 @@ export function buildSourceControlAgentSaveTargets(repoId?: string | null): {
   if (repoId) {
     targets.push({
       value: 'repo',
-      label: translate(
+      label: t(
         'auto.components.right.sidebar.SourceControlAgentActionDialog.808cfe0a3b',
         'This repository'
       )
@@ -70,7 +74,7 @@ export function buildSourceControlAgentSaveTargets(repoId?: string | null): {
   }
   targets.push({
     value: 'global',
-    label: translate(
+    label: t(
       'auto.components.right.sidebar.SourceControlAgentActionDialog.38b899cc02',
       'All repositories'
     )
@@ -105,13 +109,16 @@ export function resolveSourceControlAgentSaveTarget(
   return null
 }
 
-export function buildSourceControlAgentStatusCopy(args: {
-  selectedAgent: TuiAgent | null
-  selectedAgentUnavailable: boolean
-  connectionUnavailable: boolean
-  hasEnabledAgents: boolean
-  detecting: boolean
-}): string | null {
+export function buildSourceControlAgentStatusCopy(
+  args: {
+    selectedAgent: TuiAgent | null
+    selectedAgentUnavailable: boolean
+    connectionUnavailable: boolean
+    hasEnabledAgents: boolean
+    detecting: boolean
+  },
+  t: Translate = translate
+): string | null {
   const {
     selectedAgent,
     selectedAgentUnavailable,
@@ -120,7 +127,7 @@ export function buildSourceControlAgentStatusCopy(args: {
     detecting
   } = args
   if (selectedAgentUnavailable) {
-    return translate(
+    return t(
       'auto.components.right.sidebar.SourceControlAgentActionDialog.agentNotEnabledOrDetected',
       '{{agent}} is not enabled or was not detected on this workspace host.',
       {
@@ -129,13 +136,13 @@ export function buildSourceControlAgentStatusCopy(args: {
     )
   }
   if (connectionUnavailable) {
-    return translate(
+    return t(
       'auto.components.right.sidebar.SourceControlAgentActionDialog.workspaceConnectionUnresolved',
       'Unable to resolve the workspace connection.'
     )
   }
   if (!hasEnabledAgents && !detecting) {
-    return translate(
+    return t(
       'auto.components.right.sidebar.SourceControlAgentActionDialog.noEnabledAgentsDetected',
       'No enabled agents were detected on this workspace host.'
     )

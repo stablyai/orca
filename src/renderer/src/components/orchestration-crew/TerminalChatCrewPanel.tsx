@@ -1,4 +1,4 @@
-import { useNativeChatTabOwnerWorktreeId } from '../native-chat/use-native-chat-tab-owner'
+import { useNativeChatTabOwnerWorktreeId } from '../native-chat/pane/ownership/use-native-chat-tab-owner'
 import { NativeChatCrewPanel } from './NativeChatCrewPanel'
 import { useTerminalCrewIdentity } from './use-terminal-crew-identity'
 

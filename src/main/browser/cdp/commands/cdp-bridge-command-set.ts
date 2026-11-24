@@ -1,8 +1,9 @@
 import type { WebContents } from 'electron'
-import { CdpAuxiliaryCommands, type CdpTabState } from './cdp-auxiliary-commands'
-import type { CdpCommandSender } from '../snapshots/snapshot-engine'
+import { CdpAuxiliaryCommands } from './cdp-auxiliary-commands'
+import type { CdpTabState } from './cdp-tab-state'
+import type { CdpCommandSender } from '../debugger/cdp-command-sender'
 import type { CdpBridgeState } from './cdp-bridge-state'
-import { CdpDebuggerLifecycle } from './cdp-debugger-lifecycle'
+import { CdpDebuggerLifecycle } from '../debugger/cdp-debugger-lifecycle'
 import { CdpElementStateCommands } from './cdp-element-state-commands'
 import { CdpNavigationOperations } from './cdp-navigation-operations'
 import { CdpPageCommands } from './cdp-page-commands'
@@ -23,13 +24,12 @@ export class CdpBridgeCommandSet {
     const debuggerLifecycle = new CdpDebuggerLifecycle(bridgeState)
     const navigation = new CdpNavigationOperations()
     const refResolution = new CdpRefResolution(bridgeState, debuggerLifecycle, navigation)
-    const moduleArgs = [bridgeState, debuggerLifecycle, refResolution, navigation] as const
 
-    this.elements = new CdpElementStateCommands(...moduleArgs)
-    this.page = new CdpPageCommands(...moduleArgs)
-    this.pointer = new CdpPointerCommands(...moduleArgs)
-    this.tabs = new CdpTabCommands(...moduleArgs)
-    this.textInput = new CdpTextInputCommands(...moduleArgs)
+    this.elements = new CdpElementStateCommands(bridgeState, debuggerLifecycle, refResolution)
+    this.page = new CdpPageCommands(bridgeState, debuggerLifecycle, navigation)
+    this.pointer = new CdpPointerCommands(bridgeState, debuggerLifecycle, refResolution)
+    this.tabs = new CdpTabCommands(bridgeState, debuggerLifecycle)
+    this.textInput = new CdpTextInputCommands(bridgeState, debuggerLifecycle, refResolution)
     this.auxiliary = new CdpAuxiliaryCommands({
       run: <T>(
         operation: (context: {

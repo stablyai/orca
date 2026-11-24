@@ -5,7 +5,7 @@ import type {
   WorkerReportOutcome,
   WorkerReportSettlement,
   LegacyOperationReceiptRow
-} from '../../types'
+} from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import type { OrchestrationDb } from '../orchestration-db'

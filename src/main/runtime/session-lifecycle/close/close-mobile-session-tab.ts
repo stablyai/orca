@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithCloseMobileRowInMainLayout } from './close-mobile-row-in-main-layout'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   adjudicateAbsentMobileSessionTabClose,
   resolveMobileSessionLifecycleCloseContext,
@@ -13,13 +13,13 @@ import {
   type MobileSessionTabCloseOptions
 } from './mobile-session-tab-close-outcome'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
-import type { RuntimeEdgeCommandSurface } from '../../runtime-edge-command-controller'
-import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
-import { retireHeadlessMobileSessionEditorTab } from '../../mobile-session-editor-projection'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { closeMobileStructuredSessionPresentation } from '../../session-tabs/structured-session-tab-presentation'
-import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/structured-session-tab-close'
+import type { RuntimeEdgeCommandSurface } from '../../construction/runtime-edge-command-controller'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import { retireHeadlessMobileSessionEditorTab } from '../../session-tabs/restoration/headless-editor-tabs'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { closeMobileStructuredSessionPresentation } from '../../session-tabs/chat/structured-session-tab-presentation'
+import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/chat/structured-session-tab-close'
 
 export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithCloseMobileRowInMainLayout {
   abstract retireStructuredAgentSessionTabFromSnapshot(
@@ -47,14 +47,14 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
     tabId: string,
     options: MobileSessionTabCloseOptions = {}
   ): Promise<MobileSessionTabCloseOutcome> {
-    const graphEpoch = options.clientNavigationId ? this.captureReadyGraphEpoch() : null
+    const graphFence = options.clientNavigationId ? this.captureRendererGraphFence() : undefined
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     const observedPtyIds = await this.refreshMobileSessionPtyRecords()
-    if (graphEpoch !== null) {
-      this.assertStableReadyGraph(graphEpoch)
+    if (graphFence !== undefined) {
+      this.assertRendererGraphFence(graphFence)
     }
     this.restoreLivePairedRendererSessionOwnedMobileTerminals(worktreeId)
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
@@ -185,13 +185,14 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         // Commit the acknowledged identity even if renderer flush rebased its omission.
         const acknowledgeRetirement = this.captureTerminalTabRetirement(worktreeId, tab.parentTabId)
         // Await renderer pin guard, retirement and forced session flush.
-        const win = this.getAvailableAuthoritativeWindow()
-        if (win?.webContents.isDestroyed?.()) {
+        const windowId = this.getAvailableAuthoritativeWindowId()
+        const desktop = getRuntimeDesktopSurface()
+        if (windowId !== null && !desktop.hasLiveRenderer(windowId)) {
           throw new Error('runtime_unavailable')
         }
         const releasePublicationThrottle =
-          options.clientNavigationId && win
-            ? rendererPublicationThrottle.acquire(win.webContents)
+          options.clientNavigationId && windowId !== null
+            ? (desktop.holdRendererPublication?.(windowId) ?? (() => {}))
             : () => {}
         try {
           await (options.localPtyTeardownOwnedExternally

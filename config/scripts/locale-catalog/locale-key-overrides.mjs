@@ -13,8 +13,9 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.settings.TerminalWindowSection.c9e1fdf42f': { ja: 'カーソル' },
   'auto.components.onboarding.ThemeStep.ab2a583a97': { ja: 'カーソル' },
   // File-row "Duplicate" is the action, and it sits beside "Copy" (复制) in the same menu; keyed
-  // because the skills-dialog chip shares the English string but reads as a noun.
-  'auto.components.right.sidebar.FileExplorerRow.0fec99bfd7': { zh: '创建副本' },
+  // because the skills-dialog chip shares the English string but reads as a noun. The French
+  // noun "Doublon" has the same problem.
+  'auto.components.right.sidebar.FileExplorerRow.0fec99bfd7': { zh: '创建副本', fr: 'Dupliquer' },
   'menu.reportCrash': { ko: '크래시 신고...', zh: '报告崩溃...', ja: 'クラッシュを報告...' },
   'menu.showMobileButton': {
     ko: 'Orca 모바일 버튼 표시',
@@ -116,11 +117,11 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.settings.SettingsSidebar.82db1b7de4': {
     ko: '온보딩 체크리스트, {{value0}}/{{value1}} 완료. 설정 가이드 보기.',
-    zh: '入门清单，已完成 {{value0}}/{{value1}}。显示设置指南。',
+    zh: '入门清单，已完成 {{value0}}/{{value1}}。显示设置指南',
     ja: 'オンボーディングチェックリスト、{{value0}}/{{value1}} 完了。セットアップガイドを表示。'
   },
   'auto.components.settings.ShortcutFilterRail.02dc7d4251': {
-    ko: '바로가기 검색',
+    ko: '단축키 검색',
     zh: '搜索快捷键',
     ja: 'ショートカットを検索'
   },
@@ -180,6 +181,24 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     zh: '新功能',
     ja: '新機能'
   },
+  // The worktree cards notice badge marks a new feature too.
+  'sidebar.worktreeCardsUpdateNotice.newLabel': { zh: '新功能' },
+  // Automation status: "Active" means enabled, not the generic "current" (当前).
+  'auto.components.automations.listGroups.active': { zh: '已启用' },
+  'auto.components.automations.AutomationDetail.active': { zh: '已启用' },
+  'auto.components.automations.ExternalAutomationManagers.b3feba84c7': { zh: '已启用' },
+  'bots.settingsPage.active': { zh: '已启用' },
+  'settings.bots.active': { zh: '已启用' },
+  'settings.bots.tools.sourcePlaceholder': { zh: 'https://… 或 npx …' },
+  // Bots: "Next" labels the next run time; "New" badges an unseen chat or a just-added install.
+  'bots.automations.next': { zh: '下次运行', ja: '次回', ko: '다음 실행' },
+  'bots.chats.newTag': { zh: '新' },
+  'bots.github.setup.new': { zh: '新增' },
+  // Bots: "Review" opens items, an access request, a finished setup or a tidy-up, not a code review (评审).
+  'bots.hover.review': { zh: '查看' },
+  'bots.accessRequest.review': { zh: '审核' },
+  'bots.github.pill.review': { zh: '查看' },
+  'settings.bots.tidyUp.review': { zh: '查看' },
   'auto.components.sidebar.SidebarSettingsHelpMenu.eb9884e55b': {
     ko: 'Discord',
     zh: 'Discord',
@@ -196,7 +215,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: '待機中'
   },
   'auto.components.sidebar.SidebarWorkspaceFilterSection.ed1611b65b': {
-    ko: '슬립 중인 항목 숨기기',
+    ko: '절전 중인 항목 숨기기',
     zh: '隐藏休眠项',
     ja: 'スリープ中を非表示'
   },
@@ -307,12 +326,12 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'settings.appearance.statusBar.kimiToggleDescription': {
     ko: '활성 워크스페이스의 Kimi 구독 사용량을 표시합니다.',
-    zh: '显示当前工作区的 Kimi 订阅使用情况。',
+    zh: '显示当前工作区的 Kimi 订阅使用情况',
     ja: 'アクティブなワークスペースの Kimi サブスクリプション使用状況を表示します。'
   },
   'auto.components.mobile.MobileHero.cd4e5e816f': {
     ko: '주머니 속의 워크스페이스.',
-    zh: '您的工作区就在您的口袋里。',
+    zh: '您的工作区就在您的口袋里',
     ja: 'ワークスペースをポケットに。'
   },
   'auto.components.GitHubItemDialog.dbe5e2448e': {
@@ -332,12 +351,12 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.JiraIssueWorkspace.857bd2f88f': {
     ko: '선택한 이슈를 미리보기하고, 편집하고, 작업을 시작하세요.',
-    zh: '预览、编辑并从选定的议题开始工作。',
+    zh: '预览、编辑并从选定的议题开始工作',
     ja: '選択したイシューをプレビュー・編集し、そこから作業を開始します。'
   },
   'auto.components.LinearIssueWorkspace.ad5dec37b7': {
     ko: '선택한 이슈를 미리보기하고, 편집하고, 작업을 시작하세요.',
-    zh: '预览、编辑并从选定的议题开始工作。',
+    zh: '预览、编辑并从选定的议题开始工作',
     ja: '選択したイシューをプレビュー・編集し、そこから作業を開始します。'
   },
   'auto.components.TaskPage.67662ade50': {
@@ -352,12 +371,12 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.TaskPage.1e1b2ad8f2': {
     ko: '이 이슈를 등록하기 전에 프로젝트 워크스페이스에서 팀을 선택하세요.',
-    zh: '在提交此议题之前，请从项目工作区选择一个团队。',
+    zh: '在提交此议题之前，请从项目工作区选择一个团队',
     ja: 'このイシューを登録する前に、プロジェクトワークスペースからチームを選択してください。'
   },
   'auto.components.TaskPage.94d900518d': {
     ko: '선택한 프리셋과 일치하는 이슈가 없습니다.',
-    zh: '没有与所选预设匹配的议题。',
+    zh: '没有与所选预设匹配的议题',
     ja: '選択したプリセットに一致するイシューはありません。'
   },
   'auto.components.linear.project.view.surfaces.3ad562bdf4': {
@@ -376,7 +395,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'GitHub イシュー'
   },
   'auto.components.settings.CommitMessageAiPane.4f722a5f53': {
-    ko: '사용자 지정 명령을 선택하는 커밋 메시지, PR 및 브랜치 이름 레시피에서 사용됩니다. 사용',
+    ko: '사용자 지정 명령을 선택하는 커밋 메시지, PR 및 브랜치 이름 레시피에서 사용됩니다. 명령 입력을 인수로 넘기려면 명령에',
     zh: '由选择自定义命令的提交消息、拉取请求和分支名称配方使用。使用',
     ja: 'カスタムコマンドを選択するコミットメッセージ、PR、ブランチ名のレシピで使用されます。使用'
   },
@@ -392,7 +411,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.onboarding.OnboardingFlow.04ae28d8ca': {
     ko: '몇 시간 내내 보고 싶은 테마를 선택하세요.',
-    zh: '选择你想盯着看几个小时的主题。',
+    zh: '选择你想盯着看几个小时的主题',
     ja: '何時間も眺めていたくなるテーマを選んでください。'
   },
   'auto.components.GitLabItemDialog.e089f62594': {
@@ -402,12 +421,12 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.right.sidebar.source.control.primary.action.3d5dccef0b': {
     ko: '커밋할 것이 없습니다. PR은 이미 병합되었습니다.',
-    zh: '没有可提交的内容。PR 已合并。',
+    zh: '没有可提交的内容。PR 已合并',
     ja: 'コミットするものはありません。PR はすでにマージされています。'
   },
   'auto.components.settings.integrations.search.16a486a49d': {
     ko: 'Linear에 연결해 이슈를 탐색하고 연결합니다.',
-    zh: '连接 Linear 以浏览和链接议题。',
+    zh: '连接 Linear 以浏览和链接议题',
     ja: 'Linear に接続してイシューを参照し、リンクします。'
   },
   'menu.showTitlebarAppName': {
@@ -422,7 +441,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.lib.fix.checks.agent.launch.9f00d7df0c': {
     ko: '검사 프롬프트가 비어 있습니다. 소스 제어 AI 설정을 업데이트하세요.',
-    zh: '检查提示为空。请更新源代码管理 AI 设置。',
+    zh: '检查提示为空。请更新源代码管理 AI 设置',
     ja: 'チェック プロンプトが空です。ソース管理 AI 設定を更新してください。'
   },
   'auto.components.TaskPage.2af3ab5c58': {
@@ -442,7 +461,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.TaskPage.25ff84769a': {
     ko: '이 Linear 컨텍스트와 일치하는 이슈가 없습니다.',
-    zh: '没有议题与此 Linear 上下文匹配。',
+    zh: '没有议题与此 Linear 上下文匹配',
     ja: 'この Linear コンテキストに一致するイシューはありません。'
   },
   'auto.components.GitHubItemDialog.8c45901789': {
@@ -512,7 +531,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.GitHubItemDialog.a341343303': {
     ko: '리뷰 댓글이 추가되었습니다.',
-    zh: '已添加评审评论。',
+    zh: '已添加评审评论',
     ja: 'レビューコメントを追加しました。'
   },
   // Port forwarding "Forward" is 転送, not the browser-navigation 進む.
@@ -522,7 +541,17 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.settings.browser.search.sshWorkspaceRouting.ssh': { fr: 'ssh' },
   // Worktree badge: stand-alone 主要な leaves the adnominal な dangling — align with the Tooltip's プライマリ.
   'auto.components.sidebar.WorktreeCard.7d517f82e2': { ja: 'プライマリ' },
-  'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ' }
+  'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ' },
+  // "Dismiss" on a bot's create offer is sent to the bot as the owner's reply, so it reads 忽略, not 关闭.
+  'components.native-chat.offerCard.dismiss': { zh: '忽略' },
+  // Bot statuses read as states (已完成), not the imperative button word 完成.
+  'bots.items.status.done': { zh: '已完成' },
+  'bots.webhooks.calls.completed': { zh: '已完成' },
+  'bots.googleSetup.progress.done': { zh: '已完成' },
+  'featureTips.botsTeammate.agentDone': { zh: '已完成' },
+  // Dismissing an Up next suggestion ignores it; the webhook's Checks are its signature checks.
+  'bots.upNext.dismiss': { zh: '忽略' },
+  'bots.webhooks.checksLabel': { zh: '验证' }
 }
 
 export const LOCALE_KEY_OVERRIDES = mergeLocaleKeyOverrides(BASE_LOCALE_KEY_OVERRIDES)

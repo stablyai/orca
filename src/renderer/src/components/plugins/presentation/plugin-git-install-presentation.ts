@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { PluginGitInstallInputError } from '../../../../../shared/plugins/installation/plugin-git-install-input'
 import type {
   PluginGitResolution,
@@ -45,35 +46,38 @@ export function pluginGitResolutionErrorMessage(
       )
 }
 
-export function pluginGitResolutionSummary(resolution: PluginGitResolution): string {
+export function pluginGitResolutionSummary(
+  resolution: PluginGitResolution,
+  t: Translate = translate
+): string {
   const commit = resolution.commit.slice(0, 7)
   switch (resolution.kind) {
     case 'latest-tag':
-      return translate(
+      return t(
         'auto.components.settings.PluginInstallDialog.resolvedLatestTag',
         'Installs {{value0}}, the latest version, at commit {{value1}}.',
         { value0: resolution.ref, value1: commit }
       )
     case 'tag':
-      return translate(
+      return t(
         'auto.components.settings.PluginInstallDialog.resolvedTag',
         'Installs {{value0}} at commit {{value1}}.',
         { value0: resolution.ref, value1: commit }
       )
     case 'branch':
-      return translate(
+      return t(
         'auto.components.settings.PluginInstallDialog.resolvedBranch',
         'Installs branch {{value0}} as it is now, at commit {{value1}}.',
         { value0: resolution.ref, value1: commit }
       )
     case 'commit':
-      return translate(
+      return t(
         'auto.components.settings.PluginInstallDialog.resolvedCommit',
         'Installs commit {{value0}}.',
         { value0: commit }
       )
     case 'default-branch':
-      return translate(
+      return t(
         'auto.components.settings.PluginInstallDialog.resolvedDefaultBranch',
         'No version tag found, so this installs the latest commit, {{value0}}.',
         { value0: commit }
