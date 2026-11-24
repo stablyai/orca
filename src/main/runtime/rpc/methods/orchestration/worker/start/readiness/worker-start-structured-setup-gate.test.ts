@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { setRuntimeDesktopSurface } from '../../../../../../construction/runtime-desktop-surface'
 import {
   setupLayoutOwnerRuntime,
@@ -20,7 +20,7 @@ it('waits for setup on a terminal the window adopted before the wait began', asy
   const leafId = '22222222-2222-4222-8222-222222222222'
   const ptyId = 'pty-setup'
   const handle = 'term_setup'
-  // oxlint-disable-next-line typescript/no-explicit-any -- SAFETY: drives the create path's protected handle registration.
+  // oxlint-disable-next-line typescript/no-explicit-any, typescript/consistent-type-assertions -- SAFETY: drives the create path's protected handle registration.
   const internals = runtime as any
   runtime.attachWindow(1)
   internals.registerPreAllocatedHandleForPty(ptyId, handle)
@@ -37,6 +37,7 @@ it('waits for setup on a terminal the window adopted before the wait began', asy
     expect(host.getPtyId(handle)).toBe(ptyId)
     host.recordSetupCompletionToken(ptyId, 'token-1')
 
+    vi.useFakeTimers()
     const effects: WorkerEffect[] = [{ kind: 'setup', terminalId: handle }]
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the gate reads only policy and state.
     const setup = { startupPolicy: 'wait-for-setup', state: 'running' } as WorkerSetupReceipt
@@ -47,13 +48,15 @@ it('waits for setup on a terminal the window adopted before the wait began', asy
         return result
       }
     )
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    // Unfixed, the gate settles at once with no verdict; fixed, it waits out the budget's last tick.
+    await vi.advanceTimersByTimeAsync(4_999)
     expect(settled).toBe(false)
 
-    runtime.onPtyData(ptyId, '\n__ORCA_SETUP_COMPLETE__:token-1:0\n', Date.now())
+    runtime.onPtyData(ptyId, '\n__ORCA_SETUP_COMPLETE__:token-1:0\n', 1)
     expect(await gate).toEqual({ satisfied: true, status: 'exited' })
     expect(effects.some((effect) => effect.action === 'wait_unevaluated')).toBe(false)
   } finally {
+    vi.useRealTimers()
     await runtime.onPtyExit(ptyId, 0)
     setRuntimeDesktopSurface(null)
   }
