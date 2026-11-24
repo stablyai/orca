@@ -4,33 +4,36 @@ import {
   refreshRuntimeEnvironmentCatalogWithResult
 } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 import {
-  getRuntimeEnvironmentRevision,
+  getRuntimeEnvironmentRegistration,
   onRuntimeEnvironmentRevisionsPublished
 } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { BOT_READ_SETTLE_MS, type BotReadSettled } from './bot-read-settled'
 import type { BotReadAuthority } from './bot-read-authority'
 import type { BotActivityWithAuthority } from './use-bot-activity'
 
+type QualifiedRegistration = ReturnType<typeof getRuntimeEnvironmentRegistration>
+
 function waitForCatalog(
   authority: Extract<BotReadAuthority, { kind: 'environment' }>,
   pairingChanged: boolean,
   deadline: number,
   signal: AbortSignal
-): Promise<number | undefined> {
-  const replacementRevision = (): number | undefined => {
-    const current = getRuntimeEnvironmentRevision(authority.environmentId)
-    return current !== authority.pairingRevision ? current : undefined
+): Promise<QualifiedRegistration> {
+  const currentRegistration = () => getRuntimeEnvironmentRegistration(authority.environmentId)
+  const replacement = (): QualifiedRegistration => {
+    const current = currentRegistration()
+    return current?.revision !== authority.pairingRevision ? current : undefined
   }
   if (signal.aborted || performance.now() >= deadline) {
     return Promise.resolve(undefined)
   }
-  const alreadyCurrent = replacementRevision()
+  const alreadyCurrent = replacement()
   if (alreadyCurrent !== undefined) {
     return Promise.resolve(alreadyCurrent)
   }
   return new Promise((resolve) => {
     let finished = false
-    const finish = (revision?: number): void => {
+    const finish = (registration?: QualifiedRegistration): void => {
       if (finished) {
         return
       }
@@ -38,12 +41,12 @@ function waitForCatalog(
       unsubscribe()
       clearTimeout(timer)
       signal.removeEventListener('abort', cancel)
-      resolve(performance.now() < deadline ? revision : undefined)
+      resolve(performance.now() < deadline ? registration : undefined)
     }
     const cancel = (): void => finish()
     const onPublish = (): void => {
-      const published = replacementRevision()
-      if (published !== undefined) {
+      const published = replacement()
+      if (published) {
         finish(published)
       }
     }
@@ -55,7 +58,12 @@ function waitForCatalog(
     if (!finished) {
       void refreshRuntimeEnvironmentCatalogWithResult().then((sample) => {
         const sampled = sample?.get(authority.environmentId)
-        finish(!pairingChanged && sampled === authority.pairingRevision ? sampled : undefined)
+        const current = currentRegistration()
+        finish(
+          !pairingChanged && sampled === authority.pairingRevision && current?.revision === sampled
+            ? current
+            : undefined
+        )
       })
     }
   })
@@ -76,7 +84,7 @@ export async function reconcileBotAutomationDelete(
     error instanceof RuntimeRpcCallError &&
     error.code === 'runtime_environment_changed'
   ) {
-    const qualifiedRevision = await waitForCatalog(
+    const qualified = await waitForCatalog(
       authority,
       isRuntimeEnvironmentPairingChangedError(error),
       deadline,
@@ -84,8 +92,8 @@ export async function reconcileBotAutomationDelete(
     )
     const canStart = (): boolean =>
       !signal.aborted &&
-      qualifiedRevision !== undefined &&
-      qualifiedRevision === getRuntimeEnvironmentRevision(authority.environmentId)
+      qualified !== undefined &&
+      qualified === getRuntimeEnvironmentRegistration(authority.environmentId)
     if (canStart() && performance.now() < deadline) {
       return refreshSettled(deadline, canStart)
     }

@@ -2,6 +2,10 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { botRefKey, type BotRef } from '@/lib/bot-hosts'
+import { useRuntimeEnvironmentCatalog } from '@/components/settings/runtime-environments/catalog/use-runtime-environment-catalog'
+import { registerRuntimeClientIpcBridge } from '@/hooks/ipc-events/runtime-events/runtime-client-ipc-bridge'
+import { createWorktreeEventRuntime } from '@/hooks/ipc-events/workspace-catalog/worktree-event-runtime'
+import { useAppStore } from '@/store'
 import {
   clearRuntimeCompatibilityCache,
   markRuntimeEnvironmentCompatible
@@ -14,6 +18,7 @@ import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-re
 import * as registry from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { runtimeEnvironmentChangedFailure } from '../../../../main/ipc/runtime-environments/requests/runtime-environment-revision-guard'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../../shared/remote-runtime/protocol/protocol-version'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { createBotHostRead } from './bot-host-read-store'
 import { NO_ACTIVITY, type BotActivityWithAuthority } from './use-bot-activity'
 import {
@@ -90,6 +95,7 @@ function scenario(
     identity?: boolean
     predecessor?: boolean
     pairingRevision?: number
+    list?: () => Promise<PublicKnownRuntimeEnvironment[]>
   } = {}
 ) {
   const oldRevision = options.pairingRevision ?? 11
@@ -102,9 +108,11 @@ function scenario(
   }
   const calls: [string, number | undefined][] = []
   const activityReplies: (() => void)[] = []
+  const recoveryDeadlines: number[] = []
   let refused = false
   vi.stubGlobal('api', {
     runtimeEnvironments: {
+      list: options.list,
       call: async ({
         method,
         expectedEnvironmentPairingRevision: expected
@@ -153,7 +161,10 @@ function scenario(
           read: listed,
           currentRead: () => read.snapshot(botRefKey(bot)) ?? listed,
           refresh: () => read.request(bot),
-          refreshSettled: (deadline, canStart) => read.requestSettled(bot, deadline, canStart)
+          refreshSettled: (deadline, canStart) => {
+            recoveryDeadlines.push(deadline)
+            return read.requestSettled(bot, deadline, canStart)
+          }
         },
         false
       )
@@ -184,6 +195,7 @@ function scenario(
     ...openOwner(),
     openOwner,
     calls,
+    recoveryDeadlines,
     close,
     activityReplies,
     request: () => read.request(bot)
@@ -523,6 +535,104 @@ describe('reconciling a resolved pairing refusal', () => {
     ])
     view.close()
   })
+
+  it.each([
+    { transition: 'rotation', independent: false },
+    { transition: 'removal', independent: false },
+    { transition: 'rotation', independent: true },
+    { transition: 'removal', independent: true },
+    { transition: 'equal revision and unrelated change', independent: false }
+  ])(
+    'keeps queued recovery fenced across Settings publication ($transition, independent=$independent)',
+    async ({ transition, independent }) => {
+      const registration: PublicKnownRuntimeEnvironment = {
+        id: 'paired',
+        name: 'Paired',
+        createdAt: 1,
+        updatedAt: 1,
+        pairingRevision: 11,
+        lastUsedAt: null,
+        runtimeId: 'runtime',
+        // Settings publishes these catalog rows without starting unrelated host status probes.
+        source: 'ephemeral-vm',
+        endpoints: [{ id: 'access', kind: 'websocket', label: 'Access', endpoint: 'ws://fixture' }],
+        preferredEndpointId: 'access'
+      }
+      const catalogReplies: ((rows: PublicKnownRuntimeEnvironment[]) => void)[] = []
+      const view = scenario({
+        warm: true,
+        identity: true,
+        predecessor: true,
+        holdActivity: true,
+        list: () => new Promise((resolve) => catalogReplies.push(resolve))
+      })
+      const store = useAppStore.getState()
+      store.setRuntimeEnvironments([registration])
+      const unsubs: (() => void)[] = []
+      unsubs.push(
+        registerRuntimeClientIpcBridge(
+          unsubs,
+          createWorktreeEventRuntime(unsubs, () => false)
+        )
+      )
+      const settings = renderHook(useRuntimeEnvironmentCatalog)
+      try {
+        expect(catalogReplies).toHaveLength(1)
+        await act(async () => view.request())
+        const admission = await view.admit()
+        const outcomes: string[] = []
+        void admission.settled.then((outcome) => outcomes.push(outcome))
+        expect(catalogReplies).toHaveLength(2)
+        await act(async () => catalogReplies[1]([registration]))
+        expect(view.recoveryDeadlines).toEqual([15_000])
+        const unchanged = transition === 'equal revision and unrelated change'
+        const intermediate = unchanged
+          ? [
+              { ...registration, name: 'Renamed' },
+              { ...registration, id: 'different', pairingRevision: 99 }
+            ]
+          : transition === 'removal'
+            ? []
+            : [{ ...registration, pairingRevision: 22 }]
+        await act(async () => {
+          const load = settings.result.current.loadEnvironments()
+          catalogReplies[2](intermediate)
+          await load
+        })
+        expect(registry.getRuntimeEnvironmentRevision('paired')).toBe(
+          unchanged ? 11 : transition === 'removal' ? undefined : 22
+        )
+        await act(async () => catalogReplies[0]([registration]))
+        expect(registry.getRuntimeEnvironmentRevision('paired')).toBe(11)
+        expect(outcomes).toEqual([])
+        expect(view.calls).toEqual([
+          ['bots.activity', 11],
+          ['automation.delete', 11]
+        ])
+        await act(async () => {
+          if (independent) {
+            view.request()
+          }
+          view.activityReplies[0]()
+        })
+        // A surviving independent read is deliberately held while the old waiter settles.
+        expect(outcomes).toEqual(unchanged ? [] : ['uncertain'])
+        expect(view.calls.filter(([method]) => method !== 'status.get')).toEqual([
+          ['bots.activity', 11],
+          ['automation.delete', 11],
+          ...(independent || unchanged ? [['bots.activity', 11]] : [])
+        ])
+        await act(async () => view.activityReplies[1]?.())
+        expect(outcomes).toEqual(unchanged ? ['omitted'] : ['uncertain'])
+      } finally {
+        settings.unmount()
+        unsubs.toReversed().forEach((unsubscribe) => unsubscribe())
+        view.unmount()
+        view.close()
+        store.setRuntimeEnvironments([])
+      }
+    }
+  )
 
   it.each([false, true])(
     'uses a successful fresh catalog to reconcile a same-revision identity refusal (warm %s)',

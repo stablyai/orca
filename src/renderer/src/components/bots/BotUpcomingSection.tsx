@@ -1,7 +1,7 @@
 // Automations in a bot's Activity panel: Tidy memory, Look around, automations and waits, failed first,
 // then running, then soonest; paused ones last. Five show, then "All N automations". Folded, the rows
 // in trouble stay listed under the header. An automation's Delete confirms here and keeps focus near it.
-import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { ChevronRight, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -26,7 +26,8 @@ import { isBotRowTrouble } from './BotPanelRow'
 import {
   botAutomationMembershipState,
   useBotAutomationMembership,
-  type AutomationEnabledOverride
+  type AutomationEnabledOverride,
+  type NormalAutomationCardRow
 } from './bot-automation-row-membership'
 import { botReadAuthorityKey } from './bot-read-authority'
 import type { BotAutomationDeletion } from './use-bot-automation-delete'
@@ -35,6 +36,8 @@ import {
   useBotAutomationDeleteFocus,
   type BotAutomationFocusIntent
 } from './use-bot-automation-delete-focus'
+
+type DeleteTarget = Omit<BotAutomationFocusIntent, 'admittedAsTrouble' | 'saved'>
 
 export function BotUpcomingSection({
   bot,
@@ -74,27 +77,37 @@ export function BotUpcomingSection({
   const fold = useBotPanelFold(bot.id, 'automations')
   const confirmButton = useRef<HTMLButtonElement | null>(null)
   const [dialogId, setDialogId] = useState(0)
-  const [target, setTarget] = useState<BotAutomationFocusIntent | null>(null)
+  const [target, setTarget] = useState<DeleteTarget | null>(null)
   const [dontAskAgain, setDontAskAgain] = useState(false)
+  const savedByRow = useRef(new Map<string, AutomationEnabledOverride>())
+  const commitSaved = useCallback((rowKey: string, saved: AutomationEnabledOverride | null) => {
+    if (saved) {
+      savedByRow.current.set(rowKey, saved)
+    } else {
+      savedByRow.current.delete(rowKey)
+    }
+  }, [])
   const membership = useBotAutomationMembership(bot, hasConnectorNeed)
   const membershipAtCommit = useRef(membership)
   useLayoutEffect(() => {
     membershipAtCommit.current = membership
   }, [membership])
+  const hasTrouble = (
+    card: NormalAutomationCardRow,
+    saved: AutomationEnabledOverride | null
+  ): boolean => {
+    const { automation } = card.row
+    const enabled = saved?.from === automation.updatedAt ? saved.enabled : automation.enabled
+    return isBotRowTrouble(
+      botAutomationMembershipState(card, membershipAtCommit.current, t, enabled)
+    )
+  }
   const troubleCleared = (
     intent: BotAutomationFocusIntent,
     cards: readonly BotAutomationCardRow[]
   ): boolean => {
     const card = cards.find((row) => row.key === intent.rowKey)
-    if (card?.kind !== 'automation') {
-      return false
-    }
-    const { automation } = card.row
-    const enabled =
-      intent.saved?.from === automation.updatedAt ? intent.saved.enabled : automation.enabled
-    return !isBotRowTrouble(
-      botAutomationMembershipState(card, membershipAtCommit.current, t, enabled)
-    )
+    return card?.kind === 'automation' && !hasTrouble(card, intent.saved)
   }
   const { section, newButton, newShown, setNewShown, follow, onCloseAutoFocus } =
     useBotAutomationDeleteFocus({
@@ -103,38 +116,48 @@ export function BotUpcomingSection({
       panelFallback,
       troubleCleared: (intent) => troubleCleared(intent, rows)
     })
-  const admit = (intent: BotAutomationFocusIntent) =>
-    deletion.admit(
+  const admit = (route: DeleteTarget, dialog?: number): boolean => {
+    const current = deletion.currentReadFor(route)
+    const card =
+      current &&
+      botAutomationCardRows(bot, current.activity, now).find((row) => row.key === route.rowKey)
+    if (card?.kind !== 'automation') {
+      return false
+    }
+    const saved = savedByRow.current.get(route.rowKey) ?? null
+    const intent: BotAutomationFocusIntent = {
+      ...route,
+      saved,
+      admittedAsTrouble: hasTrouble(card, saved)
+    }
+    const admission = deletion.admit(
       intent,
       intent.admittedAsTrouble
         ? (activity: BotActivityWithAuthority['activity']) =>
             troubleCleared(intent, botAutomationCardRows(bot, activity, now))
         : undefined
     )
+    if (!admission) {
+      return false
+    }
+    follow(intent, admission, dialog)
+    return true
+  }
 
-  const request = (
-    row: BotAutomationCardRow,
-    asTrouble: boolean,
-    saved: AutomationEnabledOverride | null
-  ): void => {
+  const request = (row: BotAutomationCardRow): void => {
     if (row.kind !== 'automation' || !deletion.authority) {
       return
     }
-    const intent: BotAutomationFocusIntent = {
+    const intent: DeleteTarget = {
       botKey: deletion.botKey,
       generation: deletion.generation,
       id: row.row.automation.id,
       name: row.row.automation.name,
       authority: deletion.authority,
-      admittedAsTrouble: asTrouble,
-      rowKey: row.key,
-      saved
+      rowKey: row.key
     }
     if (useAppStore.getState().settings?.skipDeleteAutomationConfirm) {
-      const admission = admit(intent)
-      if (admission) {
-        follow(intent, admission)
-      }
+      admit(intent)
     } else if (deletion.canAdmit(intent)) {
       setDialogId((id) => id + 1)
       setDontAskAgain(false)
@@ -146,8 +169,7 @@ export function BotUpcomingSection({
     if (!target) {
       return
     }
-    const admission = admit(target)
-    if (!admission) {
+    if (!admit(target, dialogId)) {
       if (deletion.membership(target) !== 'listed') {
         setTarget(null)
       }
@@ -161,7 +183,6 @@ export function BotUpcomingSection({
         openSettingsTarget: store.openSettingsTarget
       })
     }
-    follow(target, admission, dialogId)
     setTarget(null)
     setDontAskAgain(false)
   }
@@ -175,7 +196,8 @@ export function BotUpcomingSection({
       pending: Boolean(pending),
       admittedAsTrouble: pending?.admittedAsTrouble ?? false,
       disabled: Boolean(pending) || deletion.offline || !deletion.authority,
-      request: (asTrouble, saved) => request(row, asTrouble, saved)
+      request: () => request(row),
+      commitSaved
     }
   }
 

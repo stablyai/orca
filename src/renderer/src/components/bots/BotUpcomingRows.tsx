@@ -1,7 +1,7 @@
 // The Automations section's rows: Look around, Tidy memory, automations and waits, one line each. The
 // leading icon is the state (failed, can't run, running, paused), details sit in the hover card, and
 // Pause/Resume, Run now and the row's other commands show on hover or focus. Folded, only trouble stays.
-import { useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { botTarget } from '@/lib/bot-hosts'
 import {
   ArrowUpRight,
@@ -123,12 +123,12 @@ function TidyUpRow({ bot, folded }: { bot: Bot; folded: boolean }): React.JSX.El
 /** Delete on an automation row: its state while deleting, and how to ask for it. */
 export type BotAutomationRowDeletion = {
   pending: boolean
-  /** It was asked from the folded list, which keeps it listed until the delete ends. */
+  /** Keep a row that was in trouble at admission visible while folded and pending. */
   admittedAsTrouble: boolean
   /** Offline or deleting. */
   disabled: boolean
-  /** `asTrouble`: it is listed under a folded section for its trouble. */
-  request: (asTrouble: boolean, saved: AutomationEnabledOverride | null) => void
+  request: () => void
+  commitSaved: (rowKey: string, saved: AutomationEnabledOverride | null) => void
 }
 
 /** A click opens it on the Automations page, at its failed run if it failed. */
@@ -153,6 +153,15 @@ function AutomationRow({
   const [starting, setStarting] = useState(false)
   // The saved state until the list re-reads; a newer record from the host replaces it.
   const [saved, setSaved] = useState<AutomationEnabledOverride | null>(null)
+  const commitSaved = deletion?.commitSaved
+  const rowKey = card.key
+  useLayoutEffect(() => {
+    if (commitSaved && saved) {
+      commitSaved(rowKey, saved)
+      return () => commitSaved(rowKey, null)
+    }
+    return undefined
+  }, [commitSaved, rowKey, saved])
   const enabled = saved?.from === automation.updatedAt ? saved.enabled : automation.enabled
   const membershipState = botAutomationMembershipState(card, membership, t, enabled)
   const trouble = isBotRowTrouble(membershipState)
@@ -189,7 +198,7 @@ function AutomationRow({
     ? {
         icon: <Trash2 />,
         label: t('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete'),
-        onSelect: () => deletion.request(trouble, saved),
+        onSelect: deletion.request,
         disabled: deletion.disabled,
         variant: 'destructive'
       }

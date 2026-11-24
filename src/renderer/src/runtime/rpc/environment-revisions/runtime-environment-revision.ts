@@ -1,4 +1,6 @@
-const revisionByEnvironmentId = new Map<string, number>()
+type RuntimeEnvironmentRegistration = Readonly<{ revision: number }>
+
+const registrations = new Map<string, RuntimeEnvironmentRegistration>()
 // Pairings proven to continue the same machine: old revision → the revision that replaced it.
 const continuedRevisionsByEnvironmentId = new Map<string, Map<number, number>>()
 // Re-pairs whose host identity is not decided yet: id → the pairing they may continue.
@@ -20,7 +22,7 @@ export function replaceRuntimeEnvironmentRevisions(
   environments: readonly { id: string; createdAt: number; pairingRevision?: number }[],
   continuity: RuntimeEnvironmentContinuity = { retired: [], sameHost: [] }
 ): void {
-  const previous = new Map(revisionByEnvironmentId)
+  const previous = new Map(registrations)
   const nextIds = new Set(environments.map((environment) => environment.id))
   const retired = new Set([
     ...continuity.retired,
@@ -49,15 +51,20 @@ export function replaceRuntimeEnvironmentRevisions(
       pendingContinuationByEnvironmentId.set(id, fromRevision)
     }
   }
-  revisionByEnvironmentId.clear()
+  registrations.clear()
   for (const environment of environments) {
-    revisionByEnvironmentId.set(
-      environment.id,
-      environment.pairingRevision ?? environment.createdAt
+    const { id } = environment
+    const previousRegistration = previous.get(id)
+    const revision = environment.pairingRevision ?? environment.createdAt
+    registrations.set(
+      id,
+      previousRegistration?.revision === revision && !retired.has(id)
+        ? previousRegistration
+        : { revision }
     )
   }
-  const changed = [...previous].flatMap(([id, revision]) =>
-    retired.has(id) || revisionByEnvironmentId.get(id) === revision ? [] : [id]
+  const changed = [...previous].flatMap(([id, { revision }]) =>
+    retired.has(id) || registrations.get(id)?.revision === revision ? [] : [id]
   )
   if (changed.length > 0) {
     for (const listener of revisionChangeListeners) {
@@ -90,13 +97,20 @@ export function onRuntimeEnvironmentRevisionsChanged(
 }
 
 export function getRuntimeEnvironmentRevision(environmentId: string): number | undefined {
-  return revisionByEnvironmentId.get(environmentId)
+  return registrations.get(environmentId)?.revision
+}
+
+/** Identity survives equal-revision publications, but never removal or a pairing transition. */
+export function getRuntimeEnvironmentRegistration(
+  environmentId: string
+): RuntimeEnvironmentRegistration | undefined {
+  return registrations.get(environmentId)
 }
 
 /** Selected catalog projection also changes when a pending host key is proved at the same revision. */
 export function runtimeEnvironmentContinuityStamp(environmentId: string): string {
   return JSON.stringify([
-    revisionByEnvironmentId.get(environmentId),
+    getRuntimeEnvironmentRevision(environmentId),
     pendingContinuationByEnvironmentId.get(environmentId)
   ])
 }

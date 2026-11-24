@@ -34,6 +34,7 @@ export type BotAutomationDeleteIntent = {
   admittedAsTrouble: boolean
 }
 
+type BotAutomationDeleteRoute = Omit<BotAutomationDeleteIntent, 'admittedAsTrouble'>
 type DeleteOp = BotAutomationDeleteIntent & { opId: number; opKey: string }
 
 export type BotAutomationPending = { opId: number; admittedAsTrouble: boolean }
@@ -56,9 +57,10 @@ export type BotAutomationDeletion = {
   /** Ids being deleted under the current incarnation. */
   pending: ReadonlyMap<string, BotAutomationPending>
   offline: boolean
-  membership: (intent: BotAutomationDeleteIntent) => DeleteMembership
+  currentReadFor: (intent: BotAutomationDeleteRoute) => BotActivityWithAuthority | null
+  membership: (intent: BotAutomationDeleteRoute) => DeleteMembership
   ownsFocus: (intent: BotAutomationDeleteIntent) => boolean
-  canAdmit: (intent: BotAutomationDeleteIntent) => boolean
+  canAdmit: (intent: BotAutomationDeleteRoute) => boolean
   admit: (
     intent: BotAutomationDeleteIntent,
     troubleClearedBy?: CheckFoldedTrouble
@@ -177,7 +179,7 @@ export function useBotAutomationDelete(
     () => new Set(read?.activity.automations.map((row) => row.automation.id)),
     [read]
   )
-  const membership = (intent: BotAutomationDeleteIntent): DeleteMembership => {
+  const currentReadFor = (intent: BotAutomationDeleteRoute): BotActivityWithAuthority | null => {
     const latest = currentRead()
     if (
       intent.generation !== liveVisit.current?.generation ||
@@ -185,6 +187,13 @@ export function useBotAutomationDelete(
       !latest ||
       botReadAuthorityKey(latest.authority) !== botReadAuthorityKey(intent.authority)
     ) {
+      return null
+    }
+    return latest
+  }
+  const membership = (intent: BotAutomationDeleteRoute): DeleteMembership => {
+    const latest = currentReadFor(intent)
+    if (!latest) {
       return 'stale'
     }
     const present =
@@ -198,7 +207,7 @@ export function useBotAutomationDelete(
     (intent.authority.kind !== 'environment' ||
       getRuntimeEnvironmentRevision(intent.authority.environmentId) ===
         intent.authority.pairingRevision)
-  const canAdmit = (intent: BotAutomationDeleteIntent): boolean =>
+  const canAdmit = (intent: BotAutomationDeleteRoute): boolean =>
     !offlineNow.current && membership(intent) === 'listed' && !ops.current.has(deleteOpKey(intent))
 
   const admit = (
@@ -271,6 +280,7 @@ export function useBotAutomationDelete(
     hidden,
     pending,
     offline,
+    currentReadFor,
     membership,
     ownsFocus,
     canAdmit,
@@ -278,6 +288,6 @@ export function useBotAutomationDelete(
   }
 }
 
-function deleteOpKey(intent: BotAutomationDeleteIntent): string {
+function deleteOpKey(intent: BotAutomationDeleteRoute): string {
   return `${botReadAuthorityKey(intent.authority)}\u0000${intent.id}`
 }
