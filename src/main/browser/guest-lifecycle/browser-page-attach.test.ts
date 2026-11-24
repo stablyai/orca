@@ -7,8 +7,23 @@ import {
   prepareBrowserPageAttach,
   startBrowserPageAttach
 } from './browser-page-memory'
+import {
+  whenBrowserExtensionsReadyForPage,
+  whenBrowserExtensionsStartFor
+} from '../extensions/profile-sessions/browser-extension-page-start'
 
 vi.mock('electron', () => ({ app: { on: vi.fn(), off: vi.fn() }, session: {} }))
+// A profile whose 2 extensions are starting, as right after launch; null once they have loaded.
+const profileLoad = vi.hoisted(() => ({ loading: null as Promise<void> | null }))
+vi.mock('../extensions/api-runtime/browser-extension-api-host', () => ({
+  getBrowserExtensionProfileIdForSession: () => 'default'
+}))
+vi.mock('../extensions/profile-sessions/browser-extension-session-loader', () => ({
+  getBrowserExtensionProfileLoadingPhase: () => profileLoad.loading,
+  whenBrowserExtensionProfileLoaded: () => profileLoad.loading ?? Promise.resolve(),
+  whenBrowserExtensionProfileUnloaded: () => Promise.resolve(),
+  getBrowserExtensionSessionForProfile: () => null
+}))
 
 const RENDERER_ID = 7
 const PARTITION = 'persist:orca-browser'
@@ -92,6 +107,35 @@ describe('claimBrowserPageFirstLoad', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it("loads the first tab after launch once, its page created after the profile's extensions", async () => {
+    let finishLoad = (): void => {}
+    profileLoad.loading = new Promise<void>((resolve) => {
+      finishLoad = () => {
+        profileLoad.loading = null
+        resolve()
+      }
+    })
+    // The renderer's attach request waits on this before the guest exists.
+    const ready = whenBrowserExtensionsStartFor('default')
+    expect(ready).not.toBeNull()
+    finishLoad()
+    await ready
+
+    const url = 'https://example.com/callback?code=first'
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the extension wait reads only session and the emitter.
+    const probe = Object.assign(new EventEmitter(), {
+      session: {}
+    }) as unknown as Electron.WebContents
+    // Computed the way the webview attach does once the guest exists.
+    const racesExtensions = whenBrowserExtensionsReadyForPage(probe) !== null
+    const { loads } = openTab('page-first-after-launch', url, racesExtensions)
+
+    const claimed = claimBrowserPageFirstLoad('page-first-after-launch', url)
+    expect(claimed).not.toBeNull()
+    await claimed?.load
+    expect(loads).toEqual([url])
   })
 
   it('leaves a load that raced starting extensions to be loaded again', () => {
