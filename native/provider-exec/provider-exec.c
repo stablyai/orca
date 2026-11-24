@@ -806,6 +806,7 @@ static int sweep_once(struct watcher *w, int signal_number) {
     }
     long long scan_tick = (long long)boot.tv_sec * ticks_per_second +
                           (long long)boot.tv_nsec * ticks_per_second / 1000000000LL;
+    int hidden_before = procfs_hides_processes();
     struct pollfd anchor = {.fd = w->reaper_fd, .events = POLLIN};
     if (w->reaper_fd < 0 || poll(&anchor, 1, 0) != 0) {
         // The subreaper exited (or its pidfd is unusable), so its PID anchors nothing.
@@ -836,8 +837,8 @@ static int sweep_once(struct watcher *w, int signal_number) {
     scan.leader_alive = leader != NULL && !leader->zombie && leader->start == w->leader_start;
 #if defined(__linux__)
     // A hidden row this watcher can signal might be a member, so the scan can't prove absence.
-    // Read each sweep: the mount's options can change while the chat runs.
-    int dropped = table_has_hidden_row || procfs_hides_processes();
+    // Checked around each table read: the mount's options can change while the chat runs.
+    int dropped = table_has_hidden_row || hidden_before || procfs_hides_processes();
 #else
     int dropped = 0;
 #endif
