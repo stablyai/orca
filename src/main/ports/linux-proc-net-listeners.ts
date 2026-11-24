@@ -1,7 +1,7 @@
 import { parseProcAddress } from './local-workspace-port-address'
 import { parseProcNetTcpRows, PROC_NET_TCP_LISTEN_STATE } from './linux-proc-net-tcp-rows'
 
-export type ProcNetListener = { host: string; port: number; inode: number }
+export type ProcNetListener = { host: string; port: number; inode: number; uid: number }
 
 // Login accounts (local or directory) get uids from UID_MIN up; root and system services sit below.
 const FIRST_LOGIN_UID = 1000
@@ -31,7 +31,7 @@ export function parseProcNetTcp(content: string, ownUid: number | undefined): Pr
     if (!parsed || row.inode === 0 || isAnotherLoginUsersListener(row.uid, ownUid)) {
       continue
     }
-    results.push({ ...parsed, inode: row.inode })
+    results.push({ ...parsed, inode: row.inode, uid: row.uid })
   }
   return results
 }

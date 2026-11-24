@@ -176,6 +176,10 @@ async function scanLinuxProcPorts(
   const sockets = [...tcp4, ...tcp6]
   const inodeToPid = await resolveLinuxSocketOwners(
     new Set(sockets.map((socket) => socket.inode)),
+    // Root and service sockets can't be mapped by a normal user; ours must be, or the next scan walks again.
+    new Set(
+      sockets.flatMap((socket) => (socket.uid === ownUid || ownUid === 0 ? [socket.inode] : []))
+    ),
     {
       requireFresh: options.requireMetadata
     }

@@ -1,6 +1,10 @@
 import { readFile, readdir, readlink } from 'node:fs/promises'
 
+// Handoffs keep the inode and the old owner alive, so walk again at least every 10th scan (5 min at 30 s).
+const MAX_REUSED_SCANS = 9
+
 type OwnerSnapshot = {
+  reusedScans: number
   inodeSignature: string
   inodeToPid: Map<number, number>
   startTimeByPid: Map<number, string>
@@ -8,9 +12,10 @@ type OwnerSnapshot = {
 
 let lastOwners: OwnerSnapshot | null = null
 
-/** Map listening socket inodes to pids, walking every /proc/<pid>/fd only when the listener set or an owner changed. */
+/** Map listening socket inodes to pids, walking every /proc/<pid>/fd only when the listener set or an owner changed, or the map is 10 scans old. */
 export async function resolveLinuxSocketOwners(
   inodes: Set<number>,
+  ownedInodes: Set<number>,
   options: { requireFresh?: boolean } = {}
 ): Promise<Map<number, number>> {
   if (inodes.size === 0) {
@@ -22,11 +27,17 @@ export async function resolveLinuxSocketOwners(
   if (
     !options.requireFresh &&
     cached?.inodeSignature === inodeSignature &&
+    cached.reusedScans < MAX_REUSED_SCANS &&
     (await ownersUnchanged(cached.startTimeByPid))
   ) {
+    cached.reusedScans += 1
     return new Map(cached.inodeToPid)
   }
   const inodeToPid = await walkProcSocketOwners(inodes)
+  if ([...ownedInodes].some((inode) => !inodeToPid.has(inode))) {
+    lastOwners = null
+    return inodeToPid
+  }
   const startTimeByPid = new Map<number, string>()
   for (const pid of new Set(inodeToPid.values())) {
     const startTime = await readProcStartTime(pid)
@@ -36,7 +47,7 @@ export async function resolveLinuxSocketOwners(
     }
     startTimeByPid.set(pid, startTime)
   }
-  lastOwners = { inodeSignature, inodeToPid, startTimeByPid }
+  lastOwners = { reusedScans: 0, inodeSignature, inodeToPid, startTimeByPid }
   return new Map(inodeToPid)
 }
 
