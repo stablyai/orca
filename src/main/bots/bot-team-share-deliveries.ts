@@ -45,10 +45,10 @@ export async function resolveBotShareInvite(
 }
 
 /**
- * Binds a teammate's device to a share and mints what it connects with. One device key has one
- * device row, bound to `{ botId, accountId }`: a repeat accept with the same key (its relay invite
- * expired before the teammate's Orca used it) reuses that row and mints a fresh invite, never a
- * second row. Each call returns a new offer.
+ * Binds a teammate's device to a share and mints what it connects with. One row per
+ * `(devicePublicKey, botId, accountId)`, so one device key can reach several shared agents: a
+ * repeat accept for the same three (its relay invite expired before the teammate's Orca used it)
+ * reuses that row and mints a fresh invite, never a second row. Each call returns a new offer.
  */
 export type BotShareOfferMint = (input: {
   botId: string
