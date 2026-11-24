@@ -166,8 +166,11 @@ export function Setup(): React.JSX.Element | null {
   )
 }
 
+// Polls every 50 ms for up to 10 s: a loaded machine can take seconds to show a control.
+const CLICK_TRIES = 200
+
 export async function clickWhenShown(name: string): Promise<void> {
-  for (let tries = 0; tries < 80; tries++) {
+  for (let tries = 0; tries < CLICK_TRIES; tries++) {
     const button = [...document.querySelectorAll('button')].find(
       (candidate) => candidate.textContent?.trim() === name
     )
@@ -177,12 +180,16 @@ export async function clickWhenShown(name: string): Promise<void> {
     }
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
+  // Fail the fixture instead of capturing a state it never reached.
+  throw new Error(`No button "${name}" showed within ${(CLICK_TRIES * 50) / 1000} s`)
 }
 
+const ADD_REPOSITORIES = 'Add repositories or an organization'
+
 export async function clickAddRepositories(): Promise<void> {
-  for (let tries = 0; tries < 80; tries++) {
+  for (let tries = 0; tries < CLICK_TRIES; tries++) {
     const button = document.querySelector<HTMLButtonElement>(
-      'button[aria-label="Add repositories or an organization"]'
+      `button[aria-label="${ADD_REPOSITORIES}"]`
     )
     if (button) {
       button.click()
@@ -190,6 +197,7 @@ export async function clickAddRepositories(): Promise<void> {
     }
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
+  throw new Error(`No "${ADD_REPOSITORIES}" button showed within ${(CLICK_TRIES * 50) / 1000} s`)
 }
 
 export const settle = (ms: number): Promise<void> =>
