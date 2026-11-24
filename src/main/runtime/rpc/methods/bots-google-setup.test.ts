@@ -7,6 +7,7 @@ import { googleSetupKeyBlocker } from '../../../../shared/google/google-setup-bl
 import type { GoogleClientView } from '../../../../shared/google/google-client-config'
 import type { GoogleAccountView } from '../../../../shared/google/google-connect-types'
 import type { RpcContext } from '../core'
+import type * as ChatCards from '../../../google/google-setup-chat-cards'
 
 const state = vi.hoisted(
   (): {
@@ -14,7 +15,8 @@ const state = vi.hoisted(
     offers: number
     lines: string[]
     accounts: GoogleAccountView[]
-  } => ({ runs: null, offers: 0, lines: [], accounts: [] })
+    cards: string[]
+  } => ({ runs: null, offers: 0, lines: [], accounts: [], cards: [] })
 )
 const BOT = { id: 'bot-1', name: 'Ada', google: true, chatSessionId: 'chat-1' }
 const OLD_CLIENT: GoogleClientView = {
@@ -43,10 +45,19 @@ vi.mock('../../../bots/bot-of-caller', () => ({
     token ? { kind: 'bot', bot: BOT } : { kind: 'owner' }
 }))
 vi.mock('../../../google/google-card-reach', () => ({ noWindowAnswersGoogleCards: () => false }))
-vi.mock('../../../google/google-setup-chat-cards', () => ({
-  writeGoogleSetupCards: () => [],
-  rewriteGoogleSetupWaitingCard: () => {}
-}))
+vi.mock('../../../google/google-setup-chat-cards', async (importOriginal) => {
+  const real = await importOriginal<typeof ChatCards>()
+  return {
+    ...real,
+    // The cards a change calls for, without a chat to write them in.
+    writeGoogleSetupCards: (...[, prev, next]: Parameters<typeof real.writeGoogleSetupCards>) => {
+      const due = real.googleSetupCardsDue(prev, next)
+      state.cards.push(...due.map((ref) => ref.card))
+      return due
+    },
+    rewriteGoogleSetupWaitingCard: () => {}
+  }
+})
 vi.mock('../../../bots/bot-chat-session', () => ({
   runtimeBotChats: () => ({
     sendToChat: async (_botId: string, line: string) => {
@@ -88,6 +99,7 @@ beforeEach(() => {
   state.offers = 0
   state.lines = []
   state.accounts = []
+  state.cards = []
 })
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
@@ -194,7 +206,7 @@ describe('a step handed to the owner that they finished outside its card', () =>
   })
   // A run saved by an earlier build: publish handed to the owner, who published in Google Cloud and
   // signed in, so only that step's Done holds it.
-  const saveStuckRun = () =>
+  const saveStuckRun = (steps: object = {}, fields: object = {}) =>
     writeFileSync(
       join(dir, 'runs.json'),
       JSON.stringify({
@@ -212,14 +224,16 @@ describe('a step handed to the owner that they finished outside its card', () =>
               links: { status: 'done', by: 'user', at: 2 },
               publish: { status: 'needs-user', at: 3, note: 'Press Publish app.' },
               client: { status: 'done', by: 'user', at: 4 },
-              connect: { status: 'done', by: 'user', at: 5 }
+              connect: { status: 'done', by: 'user', at: 5 },
+              ...steps
             },
             account: 'dana@acme.com',
             services: ['gmail', 'calendar'],
             answers: {},
             startedAt: 1,
             updatedAt: 5,
-            revision: 9
+            revision: 9,
+            ...fields
           }
         }
       })
@@ -235,6 +249,52 @@ describe('a step handed to the owner that they finished outside its card', () =>
       steps: { publish: { status: 'done', note: expect.stringContaining('outside the card') } }
     })
     expect(runs.get(BOT.id)?.steps.publish?.by).toBeUndefined()
+    await read.handler({ botId: BOT.id }, context)
+    expect(state.cards).toEqual(['connected'])
+  })
+
+  it('records the step but keeps running while another step is left', async () => {
+    saveStuckRun({ links: { status: 'active', at: 2 } }, { personStep: 'publish' })
+    state.accounts = [account('ready')]
+    await read.handler({ botId: BOT.id }, context)
+    const run = runs.get(BOT.id)
+    expect(run).toMatchObject({ state: 'running', steps: { publish: { status: 'done' } } })
+    expect(run?.personStep).toBeUndefined()
+    expect(state.cards).toEqual([])
+  })
+
+  it('counts a sign-in made outside the Connect card through this setup key', async () => {
+    saveStuckRun({ connect: undefined })
+    state.accounts = [{ ...account('ready'), app: { clientId: OLD_CLIENT.clientId } }]
+    await read.handler({ botId: BOT.id }, context)
+    expect(runs.get(BOT.id)).toMatchObject({
+      state: 'done',
+      steps: { connect: { status: 'done' } }
+    })
+  })
+
+  it('ignores a sign-in through another app', async () => {
+    saveStuckRun({ connect: undefined })
+    state.accounts = [{ ...account('ready'), app: { clientId: 'other' } }]
+    await read.handler({ botId: BOT.id }, context)
+    expect(runs.get(BOT.id)).toMatchObject({
+      state: 'running',
+      steps: { publish: { status: 'needs-user' } }
+    })
+    expect(runs.get(BOT.id)?.steps.connect).toBeUndefined()
+  })
+
+  it("takes the bot's done and a late Done card answer once Orca finished the run", async () => {
+    saveStuckRun()
+    state.accounts = [account('ready')]
+    await read.handler({ botId: BOT.id }, context)
+    const finished = runs.get(BOT.id)
+    const result = await write.handler({ botToken: 't', change: { action: 'done' } }, context)
+    expect(result).toMatchObject({ run: { state: 'done', revision: finished?.revision } })
+    expect(
+      runs.apply(BOT.id, 'owner', { action: 'answer', card: 'step', values: ['done', 'connect'] })
+    ).toEqual(finished)
+    expect(state.cards).toEqual(['connected'])
   })
 
   it("lets the bot's done finish it", async () => {

@@ -1,6 +1,7 @@
-// A step a bot's Google setup handed to the person (publishing the app, say) that they finished
-// outside its card. Once Google already works for the setup, Orca records it from what it reads, so
-// the run doesn't wait on a Done the person may never see; the bot still can't claim it.
+// A step of a bot's Google setup that the person finished outside its card: one handed to them
+// (publishing the app, say), or signing in from Settings rather than the Connect card. Once Google
+// already works for the setup, Orca records it from what it reads, so the run doesn't wait on a Done
+// the person may never see; the bot still can't claim it.
 import type { GoogleStatusView } from '../../shared/google/google-connect-types'
 import { GOOGLE_CHOICE_SERVICES } from '../../shared/google/google-scopes'
 import {
@@ -14,19 +15,29 @@ import {
   type GoogleSetupStep
 } from '../../shared/google/google-setup-run'
 import { writeGoogleSetupCards } from './google-setup-chat-cards'
-import { GOOGLE_SETUP_FINISHED_OUTSIDE_NOTE, googleSetupRuns } from './google-setup-runs'
+import { GOOGLE_SETUP_FINISHED_OUTSIDE_NOTE } from './google-setup-rules'
+import { googleSetupRuns } from './google-setup-runs'
 
 type SetupGoogle = Pick<GoogleStatusView, 'client' | 'accounts' | 'clientKey'>
 
 const BEFORE_KEY = GOOGLE_SETUP_STEPS.slice(0, GOOGLE_SETUP_STEPS.indexOf('client'))
 
-/** Handed steps before the key that a working sign-in shows are finished: connect is done and every
- *  chosen service is ready. */
+const finished = (run: GoogleSetupRun, step: GoogleSetupStep): boolean => {
+  const status = run.steps[step]?.status
+  return status === 'done' || status === 'skipped'
+}
+
+/**
+ * Steps a working sign-in shows are finished, once every chosen service is ready: handed steps before
+ * the key, and connect when the account signed in through this setup's key somewhere else (Settings,
+ * the CLI, an offer card).
+ */
 export function googleSetupStepsFinishedOutside(
   run: GoogleSetupRun,
   google: SetupGoogle
 ): GoogleSetupStep[] {
-  if (run.state !== 'running' || run.steps.connect?.status !== 'done') {
+  const { client } = google
+  if (run.state !== 'running' || !client || !finished(run, 'client')) {
     return []
   }
   const account = googleSetupAccount(run, google.accounts)
@@ -41,7 +52,16 @@ export function googleSetupStepsFinishedOutside(
         account.services.some((entry) => entry.service === service && entry.state === 'ready')
       )
     )
-  return ready ? BEFORE_KEY.filter((step) => run.steps[step]?.status === 'needs-user') : []
+  // An older host names no app: a sign-in since the key was saved went through it.
+  const throughKey =
+    account !== null &&
+    (account.app ? account.app.clientId === client.clientId : account.connectedAt >= client.savedAt)
+  const connect = finished(run, 'connect') || throughKey
+  if (!ready || !connect) {
+    return []
+  }
+  const handed = BEFORE_KEY.filter((step) => run.steps[step]?.status === 'needs-user')
+  return finished(run, 'connect') ? handed : [...handed, 'connect']
 }
 
 /** Records those steps on the run as stored now (a request may have moved it since `run` was read). */
@@ -74,6 +94,7 @@ export function reconcileGoogleSetupFinishedOutside(
     return marked
   }
   const next = googleSetupRuns().apply(marked.botId, 'owner', { action: 'done' })
-  writeGoogleSetupCards(chatSessionId, run, next)
-  return next
+  writeGoogleSetupCards(chatSessionId, marked, next)
+  // Writing the cards stamps them, a change of its own.
+  return googleSetupRuns().get(marked.botId) ?? next
 }
