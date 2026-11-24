@@ -17,6 +17,7 @@ import type {
   RetainedWorkerAuthority,
   RetainedWorkerTerminal
 } from '../../../../../orchestration/db/worker-terminal/worker-terminal-transfer'
+import type { RunningStructuredSession } from '../../../../../orchestration/addressing/session-lineage/structured-session-lineage'
 
 /** What a follow-up continues, and for a closed worker how it comes back once the follow-up holds its Dispatch. */
 export type WorkerFollowUp = {
@@ -180,10 +181,7 @@ export function prepareRetainedWorkerChat(
     )
   }
   const running = requireRunningStructuredWorker(identity)
-  if (
-    running.record.location.workspaceId !== worktreeId ||
-    running.lineage.some((sessionId) => host.isSessionTabVisible(sessionId))
-  ) {
+  if (running.record.location.workspaceId !== worktreeId || workerChatTabVisible(host, running)) {
     throw new OrchestrationError(
       'worker_identity_changed',
       `Worker ${selected.handle} no longer has a closed chat in its workspace. No effects were applied.`,
@@ -217,4 +215,11 @@ export function prepareRetainedWorkerChat(
       }
     }
   }
+}
+
+export function workerChatTabVisible(
+  host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
+  running: RunningStructuredSession
+): boolean {
+  return running.lineage.some((sessionId) => host.isSessionTabVisible(sessionId))
 }

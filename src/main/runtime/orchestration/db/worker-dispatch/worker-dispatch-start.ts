@@ -9,7 +9,10 @@ import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { taskNotFoundError } from '../../coordinator/dispatch/task-dispatch-refusal'
 import { claimTaskForStart } from '../tasks/task-start-claim'
-import { getFollowUpDispatch, takeFollowUpMail } from '../dispatch-context/worker-follow-up-lineage'
+import {
+  assertWorkerFollowUpUnclaimed,
+  takeFollowUpMail
+} from '../dispatch-context/worker-follow-up-lineage'
 import {
   requireRetainedWorkerTerminal,
   type RetainedWorkerAuthority
@@ -68,13 +71,8 @@ export function createStartingWorkerDispatch(
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    const claimedFollowUp = params.followUpOf ? getFollowUpDispatch(this, params.followUpOf) : null
-    if (claimedFollowUp) {
-      throw new OrchestrationError(
-        'follow_up_claimed',
-        `Dispatch ${params.followUpOf} already continues as Dispatch ${claimedFollowUp.id}.`,
-        { followUpDispatchId: claimedFollowUp.id }
-      )
+    if (params.followUpOf) {
+      assertWorkerFollowUpUnclaimed(this, params.followUpOf)
     }
     const retained = params.retainedChat
     if (retained) {

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
+import { dispatchReportMailbox } from '../../../orchestration/workers/reports/dispatch-report-mailbox'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -55,6 +57,7 @@ const worktree = {
 }
 
 const paneKey = mintStructuredWorkerPaneKey(SESSION_Y)
+const SUCCESSOR = testOrcaSessionId('8c673b73-db35-4202-a1b7-9d9dacfd17fb')
 const processIncarnation = structuredWorkerProcessIncarnation(SESSION_Y)
 const hostScope = JSON.stringify({ kind: 'local', hostId: 'local' })
 
@@ -102,7 +105,7 @@ describe('follow-up custody for a closed retained worker chat', () => {
     return dispatch
   }
 
-  function send() {
+  function send(body = 'Continue here') {
     return h.dispatch(
       orchestrationRequest(
         'orchestration.send',
@@ -110,7 +113,7 @@ describe('follow-up custody for a closed retained worker chat', () => {
           from: ADDRESS_X,
           to: `dispatch:${owner.id}`,
           subject: 'Next work',
-          body: 'Continue here'
+          body
         },
         { sessionId: SESSION_X }
       )
@@ -187,6 +190,7 @@ describe('follow-up custody for a closed retained worker chat', () => {
     // The bot observer reads committed Dispatch rows in a microtask.
     await Promise.resolve()
     h.close()
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -214,9 +218,148 @@ describe('follow-up custody for a closed retained worker chat', () => {
     })
   })
 
+  it('continues a persisted lineage whose successor is already open', async () => {
+    h.records.set(SESSION_Y, {
+      ...h.records.get(SESSION_Y)!,
+      conversationCommand: {
+        command: 'clear',
+        state: 'completed',
+        phase: 'committed',
+        operationId: 'persisted-clear',
+        callerKey: 'fixture',
+        replacementSessionId: SUCCESSOR
+      }
+    })
+    h.records.set(SUCCESSOR, sessionRecord(SUCCESSOR))
+    visible.add(SUCCESSOR)
+    const resource = h.db.getWorkerTerminalResourceByOwner(owner.id)!
+    const result = resultOf(await send())
+    expect(result).toMatchObject({ delivery: 'follow_up', followUpOf: owner.id })
+    expect(custodyRows()).toEqual([
+      {
+        id: resource.id,
+        owner_dispatch_id: result.dispatchId,
+        prior_owner_dispatch_ids: JSON.stringify([owner.id]),
+        ownership_state: 'owned'
+      }
+    ])
+    expect(deliveredTo).toEqual([{ sessionId: SUCCESSOR, expectedRuntimeFence: 7 }])
+  })
+
+  it('stores a competing send on the follow-up that published the tab first', async () => {
+    const entered = Promise.withResolvers<void>()
+    const workspace = Promise.withResolvers<typeof worktree>()
+    vi.mocked(h.runtime.showManagedTerminalWorkspace)
+      .mockResolvedValueOnce(worktree)
+      .mockImplementationOnce(() => {
+        entered.resolve()
+        return workspace.promise
+      })
+    const competing = send('Steer the winner')
+    await entered.promise
+    const winner = resultOf(await send())
+    const winningDispatchId = idOf({ id: winner.dispatchId })
+    workspace.resolve(worktree)
+    const steered = resultOf(await competing)
+    expect(steered).toMatchObject({
+      message: { to_handle: `dispatch:${winningDispatchId}`, body: 'Steer the winner' }
+    })
+    expect(custodyRows()).toHaveLength(1)
+    expect(deliveredTo).toHaveLength(1)
+  })
+
+  it('continues after a requested release settles during the bounded wait', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    const release = h.db.requestWorkerTerminalRelease(owner.id)
+    if (release.disposition !== 'requested') {
+      throw new Error('Expected the settled worker to have a release request')
+    }
+    const pending = send()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(custodyRows()).toHaveLength(1)
+    h.db.settleWorkerTerminalRelease(release.resource.id)
+    await vi.advanceTimersByTimeAsync(250)
+    const receipt = resultOf(await pending)
+    expect(receipt).toMatchObject({ delivery: 'reopened', followUpOf: owner.id })
+    expect(custodyRows()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: release.resource.id, ownership_state: 'released' }),
+        expect.objectContaining({ owner_dispatch_id: receipt.dispatchId, ownership_state: 'owned' })
+      ])
+    )
+  })
+
+  it('refuses a matching explicit start even before that start attaches authority', async () => {
+    const { dispatch } = h.db.createStartingWorkerDispatch({
+      taskSpec: 'Competing explicit start',
+      taskRunId: runId,
+      creator: { kind: 'session', orcaSessionId: SESSION_X },
+      maxDepth: 3,
+      startOptions: { terminal: handle },
+      runtimeEpoch: h.runtime.getRuntimeId()
+    })
+    expect(await send()).toMatchObject({
+      ok: false,
+      error: { code: 'terminal_busy', data: { dispatchId: dispatch.id, effectsApplied: false } }
+    })
+    expect(h.db.getWorkerTerminalResourceByOwner(owner.id)).toBeDefined()
+    expect(observedCustody).toEqual([])
+  })
+
+  it.each([
+    ['authority_attached', 'failed', 'failed', 'failed', 'before sending'],
+    ['dispatch_input', 'start_unknown', 'pending', 'blocked', 'never saw']
+  ] as const)(
+    'recovers a restart at %s with one coordinator report',
+    async (stage, workerState, dispatchState, taskState, wording) => {
+      const resource = h.db.getWorkerTerminalResourceByOwner(owner.id)!
+      const { dispatch, task } = h.db.createStartingWorkerDispatch({
+        taskSpec: 'Interrupted continuation',
+        taskRunId: runId,
+        creator: { kind: 'session', orcaSessionId: SESSION_X },
+        maxDepth: 3,
+        startOptions: {},
+        runtimeEpoch: 'previous-runtime',
+        followUpOf: owner.id,
+        retainedChat: {
+          authority: {
+            resourceId: resource.id,
+            ownerDispatchId: owner.id,
+            handle,
+            paneKey,
+            processIncarnation,
+            hostScope
+          },
+          effects: [],
+          worktreeId: WORKSPACE_X
+        }
+      })
+      expect(h.db.getWorkerDispatch(dispatch.id)).toMatchObject({
+        state: 'starting',
+        stage: 'authority_attached',
+        agent_terminal_handle: handle
+      })
+      if (stage === 'dispatch_input') {
+        h.db.recordWorkerStage({ dispatchId: dispatch.id, stage })
+      }
+      await h.runtime.reportUnconfirmedWorkerStart(dispatch.id)
+      await h.runtime.reportUnconfirmedWorkerStart(dispatch.id)
+      expect(h.db.getWorkerDispatch(dispatch.id)).toMatchObject({ state: workerState, stage })
+      expect(h.db.getDispatchContextById(dispatch.id)?.status).toBe(dispatchState)
+      expect(h.db.getTask(task.id)?.status).toBe(taskState)
+      expect(h.db.getWorkerTerminalResourceByOwner(dispatch.id)?.id).toBe(resource.id)
+      const mailbox = dispatchReportMailbox(h.db, dispatch)
+      expect(
+        h.db.getAllMessagesForHandle(mailbox).filter((mail) => mail.payload?.includes(dispatch.id))
+      ).toEqual([expect.objectContaining({ body: expect.stringContaining(wording) })])
+      expect(deliveredTo).toEqual([])
+    }
+  )
+
   it.each([
     ['ambiguous custody', 'worker_identity_changed'],
     ['release in progress', 'terminal_busy'],
+    ['unconfirmed release', 'terminal_busy'],
     ['user reopened the chat', 'worker_identity_changed'],
     ['owner changed', 'worker_identity_changed']
   ] as const)('refuses %s before accepting a Task or exposing the chat', async (scenario, code) => {
@@ -229,9 +372,12 @@ describe('follow-up custody for a closed retained worker chat', () => {
     vi.mocked(h.runtime.showManagedTerminalWorkspace).mockImplementationOnce(async () => {
       if (scenario === 'ambiguous custody') {
         settledWorker()
-      } else if (scenario === 'release in progress') {
+      } else if (scenario === 'release in progress' || scenario === 'unconfirmed release') {
         const release = h.db.requestWorkerTerminalRelease(owner.id)
         expect(release.disposition).toBe('requested')
+        if (scenario === 'unconfirmed release' && release.disposition === 'requested') {
+          h.db.markWorkerTerminalReleaseUnknown(release.resource.id, 'The close was not observed')
+        }
       } else if (scenario === 'user reopened the chat') {
         visible.add(SESSION_Y)
       } else {

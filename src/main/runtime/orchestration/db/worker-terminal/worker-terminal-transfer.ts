@@ -19,6 +19,21 @@ export type RetainedWorkerAuthority = RetainedWorkerTerminal & {
   hostScope: string
 }
 
+export function refuseUnsettledWorkerTerminalRelease(row: WorkerTerminalResourceRow): void {
+  const state = row.release_state
+  if (state === 'requested' || state === 'releasing' || state === 'unknown') {
+    const reason =
+      state === 'unknown'
+        ? `an unconfirmed release; check worker-show for Dispatch ${row.owner_dispatch_id}`
+        : 'a release in progress'
+    throw new OrchestrationError(
+      'terminal_busy',
+      `Terminal ${row.terminal_handle} has ${reason}. No effects were applied.`,
+      { effectsApplied: false, dispatchId: row.owner_dispatch_id }
+    )
+  }
+}
+
 /** The follow-up may take only the row its admission selected, while holding the write transaction. */
 export function requireRetainedWorkerTerminal(
   db: OrchestrationDb,
@@ -26,15 +41,8 @@ export function requireRetainedWorkerTerminal(
   worktreeId: string | null
 ): void {
   const row = db.getWorkerTerminalResource(selected.resourceId)
-  if (
-    row?.owner_dispatch_id === selected.ownerDispatchId &&
-    ['requested', 'releasing', 'unknown'].includes(row.release_state)
-  ) {
-    throw new OrchestrationError(
-      'terminal_busy',
-      `Terminal ${selected.handle} has a release in progress. No effects were applied.`,
-      { effectsApplied: false }
-    )
+  if (row?.owner_dispatch_id === selected.ownerDispatchId) {
+    refuseUnsettledWorkerTerminalRelease(row)
   }
   const owner = db.getWorkerDispatch(selected.ownerDispatchId)
   if (

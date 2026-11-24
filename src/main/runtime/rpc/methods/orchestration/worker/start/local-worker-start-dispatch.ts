@@ -11,6 +11,7 @@ import { resolveDispatchCreator } from '../../runs/dispatch-creator'
 import { refuseClaimedWorkerTerminal } from '../../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { qualifyLiveWorkerFollowUp } from './admission/worker-start-authority'
 import { prepareRetainedWorkerChat } from '../follow-up/worker-follow-up-placement'
+import { assertWorkerFollowUpUnclaimed } from '../../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import type { WorkerEffect } from './placement/worker-placement-topology'
 
 export function createLocalWorkerStartDispatch(
@@ -47,6 +48,18 @@ export function createLocalWorkerStartDispatch(
     launchReceipt: OrchestrationWorkerLaunchReceipt
   }
 ) {
+  const retainedRun = followUp?.retainedChat ? bindRun() : undefined
+  if (retainedRun && followUp) {
+    qualifyLiveWorkerFollowUp(
+      runtime,
+      coordinator,
+      params.from,
+      callerSession,
+      retainedRun.id,
+      followUp
+    )
+    assertWorkerFollowUpUnclaimed(db, followUp.of)
+  }
   // No await from the native tab and claim checks through the Dispatch insert.
   const retained = followUp?.retainedChat
     ? prepareRetainedWorkerChat(runtime, db, followUp.retainedChat, resolvedWorktreeId)
@@ -55,12 +68,10 @@ export function createLocalWorkerStartDispatch(
     db,
     retained?.authority.handle ?? params.terminal,
     runtime,
-    followUp?.of
+    followUp?.of,
+    retained?.authority.paneKey
   )
-  const run = bindRun()
-  if (retained && followUp) {
-    qualifyLiveWorkerFollowUp(runtime, coordinator, params.from, callerSession, run.id, followUp)
-  }
+  const run = retainedRun ?? bindRun()
   const effects: WorkerEffect[] = resolvedWorktreeId
     ? [
         { kind: 'worktree', action: 'reused', id: resolvedWorktreeId },

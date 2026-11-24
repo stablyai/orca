@@ -1,5 +1,13 @@
 import type { OrchestrationDb } from '../orchestration-db'
 import type { WorkerDispatchRow } from '../orchestration-records'
+import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
+
+export function chatStartBeforeBrief(worker: WorkerDispatchRow): boolean {
+  return (
+    worker.stage === 'authority_attached' &&
+    isStructuredWorkerHandle(worker.agent_terminal_handle ?? '')
+  )
+}
 
 /** A start begun by an earlier runtime never reaches its receipt: it is settled as unknown, so every
  *  reader (show, stop, the restart pass) sees the same state. */
