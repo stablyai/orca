@@ -1,5 +1,6 @@
 import React from 'react'
 import { useEditorState, type Editor } from '@tiptap/react'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import {
   ChevronRight,
   Heading1,
@@ -28,7 +29,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { RichMarkdownToolbarButton } from './RichMarkdownToolbarButton'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { insertToggle } from './rich-markdown-slash-command-primitives'
-import { countWords, wordCountText } from './rich-markdown-word-count'
+import { countWords, wordCountTextForSelection } from './rich-markdown-word-count'
 
 type RichMarkdownToolbarProps = {
   editor: Editor | null
@@ -91,6 +92,23 @@ function RichMarkdownMoreBlocksMenu({ editor }: { editor: Editor | null }): Reac
   )
 }
 
+const wholeDocumentCounts = new WeakMap<ProseMirrorNode, Map<string, number>>()
+
+function cachedWholeDocumentCount(doc: ProseMirrorNode, locale: string): number {
+  let byLocale = wholeDocumentCounts.get(doc)
+  if (!byLocale) {
+    byLocale = new Map()
+    wholeDocumentCounts.set(doc, byLocale)
+  }
+  const cached = byLocale.get(locale)
+  if (cached !== undefined) {
+    return cached
+  }
+  const count = countWords(wordCountTextForSelection(doc, { empty: true, ranges: [] }), locale)
+  byLocale.set(locale, count)
+  return count
+}
+
 function RichMarkdownWordCount({ editor }: { editor: Editor }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -98,12 +116,9 @@ function RichMarkdownWordCount({ editor }: { editor: Editor }): React.JSX.Elemen
     editor,
     selector: ({ editor: currentEditor }) => {
       const { doc, selection } = currentEditor.state
-      const text = wordCountText(
-        doc,
-        selection.empty ? 0 : selection.from,
-        selection.empty ? doc.content.size : selection.to
-      )
-      return countWords(text, intlLocale)
+      return selection.empty
+        ? cachedWholeDocumentCount(doc, intlLocale)
+        : countWords(wordCountTextForSelection(doc, selection), intlLocale)
     }
   })
   return (

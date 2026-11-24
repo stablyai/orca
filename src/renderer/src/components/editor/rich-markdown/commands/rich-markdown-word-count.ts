@@ -11,6 +11,22 @@ export function wordCountText(doc: ProseMirrorNode, from: number, to: number): s
   return doc.textBetween(from, to, ' ', leafText)
 }
 
+type WordCountSelection = {
+  empty: boolean
+  ranges: readonly { $from: { pos: number }; $to: { pos: number } }[]
+}
+
+/** CellSelection holds one range per cell; from/to alone describe only the head cell. */
+export function wordCountTextForSelection(
+  doc: ProseMirrorNode,
+  selection: WordCountSelection
+): string {
+  if (selection.empty) {
+    return wordCountText(doc, 0, doc.content.size)
+  }
+  return selection.ranges.map(({ $from, $to }) => wordCountText(doc, $from.pos, $to.pos)).join('\n')
+}
+
 function segmenterFor(locale: string): Intl.Segmenter {
   let segmenter = segmenters.get(locale)
   if (!segmenter) {
