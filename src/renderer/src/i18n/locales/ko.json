@@ -27225,7 +27225,7 @@
     "avatar": {
       "generate": {
         "closeAnytime": "언제든 닫아도 됩니다",
-        "failedFor": "{{name}}의 이미지를 생성하지 못했습니다."
+        "failedFor": "{{name}}의 사진을 생성하지 못했습니다."
       }
     },
     "github": {
@@ -27244,7 +27244,7 @@
       },
       "account": {
         "descriptionPlural": "내 GitHub 계정들입니다. bots가 어떤 댓글이 내 것인지 아는 데 사용됩니다.",
-        "descriptionOnHostPlural": "{{host}}의 bots가 대신 작업하고 bots를 소유하는 GitHub 사용자들입니다."
+        "descriptionOnHostPlural": "{{host}}의 bots가 이 GitHub 사용자로 작업하며, 이 사용자들이 bots를 소유합니다."
       }
     },
     "upcoming": {
@@ -28001,7 +28001,7 @@
           "now": "방금",
           "you": "나",
           "ask": "<mention/> 이 스레드 요약해 줘",
-          "reply": "바로 할게요."
+          "reply": "바로 시작하겠습니다."
         },
         "cancel": "취소"
       },
@@ -28021,9 +28021,9 @@
       },
       "reconnect": {
         "expiredTitle": "Slack 토큰 만료됨",
-        "whyMine": "컴퓨터마다 자체 Slack 토큰을 보관합니다. Slack이 {{email}}의 토큰을 더 이상 받지 않습니다.",
-        "whyHost": "컴퓨터마다 자체 Slack 토큰을 보관합니다. Slack이 {{host}}의 토큰을 더 이상 받지 않습니다.",
-        "why": "Slack이 이 워크스페이스의 저장된 토큰을 더 이상 받지 않습니다.",
+        "whyMine": "컴퓨터마다 자체 Slack 토큰을 보관합니다. Slack이 {{email}}의 토큰을 더 이상 허용하지 않습니다.",
+        "whyHost": "컴퓨터마다 자체 Slack 토큰을 보관합니다. Slack이 {{host}}의 토큰을 더 이상 허용하지 않습니다.",
+        "why": "Slack이 이 워크스페이스의 저장된 토큰을 더 이상 허용하지 않습니다.",
         "submit": "다시 연결",
         "about": "Slack 토큰 정보",
         "kept": "Orca Cloud가 새 토큰을 암호화해 보관하므로, 여기에 추가하는 다음 bots부터는 클릭 한 번이면 됩니다.",
@@ -28047,7 +28047,7 @@
         "expired": "Slack 로그인이 완료되지 않았습니다.",
         "expiredNext": "아무도 연결을 승인하기 전에 Slack 링크가 만료되었습니다.",
         "tokenRejected": "Slack이 이 워크스페이스의 토큰을 거부했습니다.",
-        "tokenRejectedNext": "Slack 앱이 제거되었거나 토큰이 해제되면 이렇게 됩니다. 토큰을 교체해 {{bot}}을(를) 다시 설정하세요.",
+        "tokenRejectedNext": "Slack 앱이 제거되었거나 토큰이 취소되면 이렇게 됩니다. 토큰을 교체해 {{bot}}을(를) 다시 설정하세요.",
         "reconnect": "다시 연결",
         "replaceToken": "토큰 교체",
         "details": "세부 정보",
@@ -28359,7 +28359,7 @@
       "addAccount": "다른 Google 계정 추가",
       "defaultBadge": "기본값",
       "row": {
-        "signedOut": "Google에서 로그아웃됨",
+        "signedOut": "Google에 의해 로그아웃됨",
         "notAllowed": "{{service}} 허용되지 않음",
         "apiOff": "{{service}}이(가) Google Cloud에서 꺼짐",
         "adminBlocked": "관리자가 {{service}}을(를) 차단함",
