@@ -38,6 +38,9 @@ export type TabAgentLaunchOption = {
   botChat?: { bot: Bot; agent: BotAgent; home: boolean }
 }
 
+/** Ids of a bot home's chat results; a pinned one that drops out keeps Enter from moving on. */
+export const BOT_CHAT_OPTION_ID_PREFIX = 'bot-chat:'
+
 function normalizeAgentAlias(value: string): string {
   return value.trim().toLowerCase()
 }

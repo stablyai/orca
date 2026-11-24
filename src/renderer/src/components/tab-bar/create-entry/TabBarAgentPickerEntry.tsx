@@ -8,8 +8,12 @@ import {
 import type { NewTabAgentMenuModel } from '../../agent/launch-menu/new-tab-agent-menu-model'
 import { buildBotNewChatSearchOptions } from '../../bots/bot-new-chat-search-options'
 import { useBotNewChatLaunch } from '../../bots/use-bot-new-chat-launch'
-import { botNewChatAgents } from '../../../../../shared/bots/bot-agent-choices'
-import type { Bot } from '../../../../../shared/bot-types'
+import {
+  botNewChatAgents,
+  type BotNewChatAgent
+} from '../../../../../shared/bots/bot-agent-choices'
+import type { ChatUnavailableReason } from '../../../../../shared/agent-launch/picker/agent-launch-picker-rows'
+import type { Bot, BotAgent } from '../../../../../shared/bot-types'
 import {
   buildAgentPickerLaunchOptions,
   type TabAgentLaunchOption
@@ -61,9 +65,13 @@ function BotChatPickerEntry({
 }): React.JSX.Element {
   const t = useTranslate()
   const { startSideChat, newHomeChat } = useBotNewChatLaunch(bot)
+  // The menu model is rebuilt as the query changes; key on what it offers so typing only re-matches.
+  const agentsKey = botNewChatAgents(bot, agentMenu)
+    .map(({ agent, unavailable }) => (unavailable ? `${agent}:${unavailable}` : agent))
+    .join(',')
   const agentOptions = useMemo(
-    () => buildBotNewChatSearchOptions(bot, botNewChatAgents(bot, agentMenu), overrides, t),
-    [bot, agentMenu, overrides, t]
+    () => buildBotNewChatSearchOptions(bot, parseBotChatAgents(agentsKey), overrides, t),
+    [bot, agentsKey, overrides, t]
   )
   const launch = (option: TabAgentLaunchOption): boolean | void | Promise<boolean> => {
     if (!option.botChat) {
@@ -77,4 +85,15 @@ function BotChatPickerEntry({
     return true
   }
   return <TabBarCreateEntry {...props} agentOptions={agentOptions} onLaunchAgentOption={launch} />
+}
+
+// Agent ids and reasons hold no commas or colons.
+function parseBotChatAgents(key: string): BotNewChatAgent[] {
+  if (!key) {
+    return []
+  }
+  return key.split(',').map((entry) => {
+    const [agent, unavailable] = entry.split(':') as [BotAgent, ChatUnavailableReason | undefined]
+    return unavailable ? { agent, unavailable } : { agent }
+  })
 }
