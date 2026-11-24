@@ -14,8 +14,12 @@ import {
   slackMirrorAvailable,
   slackMirrorDefault,
   slackMirrorMayPost,
-  slackMirrorPosts
+  slackMirrorPosts,
+  type SlackMirrorGate
 } from '../../shared/connectors/slack-mirror-state'
+import { slackMirrorPostsShare } from '../../shared/connectors/slack-mirror-share-posts'
+import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
+import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import {
   cloudConversation,
   type ConnectorAsker
@@ -49,6 +53,8 @@ export type SlackMirrorDeps = SlackMirrorLinkDeps & {
   botSetting: (botId: string) => boolean | undefined
   /** A message of the chat, read back for Retry. */
   readMessage: (sessionId: string, itemId: string) => Promise<AgentJournalMessageItem | null>
+  /** Whom the chat acts for, as Orca recorded it; undefined when it has no record. */
+  chatActsFor: (sessionId: string) => readonly BotRequestAsker[] | undefined
   signal: AbortSignal
   random?: () => number
 }
@@ -72,6 +78,28 @@ export class SlackMirror extends SlackMirrorLinks {
 
   private enabled(): SlackMirrorCloud | null {
     return mirroringCloud(this.deps.cloud())
+  }
+
+  /** The gate a message posts through: a shared teammate's own message in their own chat posts as
+   *  a default-on chat's (still waiting for Slack Connect) until the owner sets the chat; any
+   *  other, as the chat is set. */
+  private gateOf(
+    link: ExternalConversationLink,
+    sessionId: string,
+    body: AgentJournalMessageItem
+  ): SlackMirrorGate {
+    const botId = link.bot?.botId
+    const share =
+      botId !== undefined &&
+      link.mirrorChosen !== true &&
+      slackMirrorPostsShare(
+        body.typedBy,
+        this.deps.chatActsFor(sessionId),
+        this.deps.botSetting(botId)
+      )
+    return share
+      ? { mirror: true, mirrorBlocked: link.mirrorBlocked, mirrorExternal: link.mirrorExternal }
+      : link
   }
 
   private caller(cloud: SlackMirrorCloud, botId: string): SlackMirrorCall {
@@ -98,7 +126,8 @@ export class SlackMirror extends SlackMirrorLinks {
     return this.write(linked, next) ? { workspace, link: next } : linked
   }
 
-  /** A message a chat admitted: the owner's own, in a chat that posts to its thread, posts there.
+  /** A message a chat admitted: the owner's own (or a shared teammate's in their own chat), in a
+   *  chat that posts to its thread, posts there.
    *  Deliveries, mail and automation runs carry `origin` or `from`, so they never do; a delivery
    *  from the thread proves it open again. */
   admitted(message: AdmittedMessage): void {
@@ -115,7 +144,11 @@ export class SlackMirror extends SlackMirrorLinks {
       this.write(linked, open)
       return
     }
-    if (!isPersonsMessage(message.body) || !slackMirrorMayPost(link) || !this.enabled()) {
+    if (
+      !isPersonsMessage(message.body) ||
+      !slackMirrorMayPost(this.gateOf(link, message.sessionId, message.body)) ||
+      !this.enabled()
+    ) {
       return
     }
     const itemId = agentJournalSubmissionKey(message.clientMessageId)
@@ -265,11 +298,15 @@ export class SlackMirror extends SlackMirrorLinks {
       await this.status(sessionId)
     }
     const current = this.linkOfSession(sessionId)
-    if (current && slackMirrorPosts(current.link)) {
+    if (!current) {
+      return
+    }
+    const gate = this.gateOf(current.link, sessionId, body)
+    if (slackMirrorPosts(gate)) {
       await this.post(sessionId, itemId, clientMessageId, body)
-    } else if (current && slackMirrorMayPost(current.link)) {
+    } else if (slackMirrorMayPost(gate)) {
       this.failed(current, itemId, 'status_unknown')
-    } else if (current) {
+    } else {
       this.settled(current, itemId, null)
     }
   }

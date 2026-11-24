@@ -14,13 +14,34 @@ export type ConnectorNoAccessLine = { name?: string; text: string }
  *  lines from people without access that arrived with it. */
 export type ConnectorMessageAsker = Pick<
   ConnectorAsker,
-  'userId' | 'name' | 'role' | 'place' | 'url' | 'avatarUrl' | 'messageRef' | 'via' | 'app'
+  | 'userId'
+  | 'name'
+  | 'role'
+  | 'place'
+  | 'url'
+  | 'avatarUrl'
+  | 'messageRef'
+  | 'via'
+  | 'viaAccount'
+  | 'app'
 > & { source: ConnectorSource; noAccess?: ConnectorNoAccessLine[] }
 
 /** The part of a delivered asker the journal keeps, with only links a tag may open or fetch. */
 export function storedConnectorAsker(
   source: ConnectorSource,
-  { userId, name, role, place, url, avatarUrl, messageRef, context, via, app }: ConnectorAsker
+  {
+    userId,
+    name,
+    role,
+    place,
+    url,
+    avatarUrl,
+    messageRef,
+    context,
+    via,
+    viaAccount,
+    app
+  }: ConnectorAsker
 ): ConnectorMessageAsker | undefined {
   const noAccess = context.flatMap((item) =>
     item.kind === 'no_access' ? [{ name: item.name, text: item.text }] : []
@@ -36,6 +57,7 @@ export function storedConnectorAsker(
     messageRef,
     ...(noAccess.length > 0 ? { noAccess } : {}),
     via,
+    ...(viaAccount ? { viaAccount } : {}),
     ...(app ? { app } : {})
   })
 }
@@ -111,6 +133,7 @@ const askerSchema = z
     avatarUrl: optionalUrl,
     messageRef: z.string().min(1).max(2048).optional().catch(undefined),
     via: ConnectorAskerVia,
+    viaAccount: z.string().min(1).max(128).optional().catch(undefined),
     app: z.literal(true).optional().catch(undefined),
     // Unreadable lines are left out one by one; the tag never depends on them.
     noAccess: z

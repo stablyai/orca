@@ -97,6 +97,9 @@ export const ConnectorAsker = z.object({
   // A bare mention's request; one this build can't read is dropped alone, and the bot then greets.
   earlierOwn: ConnectorEarlierOwn.optional().catch(undefined),
   via: ConnectorAskerVia,
+  // Mirrors the contract's ViaAccountSchema (share-messages.ts): the shared Orca account their
+  // login is linked to, when that share lets them ask.
+  viaAccount: z.string().min(1).max(128).optional().catch(undefined),
   // Another Slack app on the bot's Who can ask wrote it, not a person: userId is its bot user.
   app: z.literal(true).optional().catch(undefined),
   // Orca's own lines on where it was asked (GitHub: the branch, how to post there): the agent reads

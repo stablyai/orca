@@ -1,7 +1,7 @@
 // Which of a shared bot's chats are a teammate's own: the only chats their share connection lists, reads
 // or acts in. Others' chats are not theirs to see, Home Chat included.
 import type { BotRequestPerson } from '../../../shared/bots/bot-acts-for'
-import { actsForOwner, shareOwnsChat } from '../../../shared/bots/bot-acts-for'
+import { actsForOwner, orcaTeammateAsker, shareOwnsChat } from '../../../shared/bots/bot-acts-for'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import type { RpcContext } from '../../runtime/rpc/core'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -22,14 +22,7 @@ export function botShareScopeOf(
 
 /** Whom a teammate's new chat acts for: them, as their share row names them, never the owner. */
 export function botShareAsker(scope: BotShareCallerScope): BotRequestPerson {
-  return {
-    kind: 'person',
-    source: 'orca',
-    userId: scope.accountId,
-    name: scope.name,
-    workspaceId: null,
-    role: 'member'
-  }
+  return orcaTeammateAsker(scope.accountId, scope.name)
 }
 
 /** By chat id (its /clear root): the teammate's when Orca's record says it acts for them alone. */

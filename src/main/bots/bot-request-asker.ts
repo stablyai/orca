@@ -13,6 +13,7 @@ import type { ConnectorSource } from '../../shared/connectors/external-conversat
 import {
   distinctAskers,
   OWNER_ACTS_FOR,
+  shareTypistAsker,
   type AutomationTriggeredBy,
   type BotRequestAsker
 } from '../../shared/bots/bot-acts-for'
@@ -131,6 +132,10 @@ function readItem(body: AgentJournalItemBody, lookups: BotActingTurnLookups): It
   if (body.asker) {
     return { kind: 'asker', ...stampedAsker(body.asker, lookups.conversationWorkspaceId) }
   }
+  const teammate = shareTypistAsker(body.typedBy)
+  if (teammate) {
+    return { kind: 'asker', asker: teammate }
+  }
   const wokenAt = body.memorySource ? (lookups.automationPlace?.() ?? null) : undefined
   // A person's connector message whose asker didn't parse is someone Orca can't name, never the owner;
   // an event no one asked through acts for its conversation, like an automation's prompt.
@@ -159,7 +164,8 @@ function stampedAsker(
       workspaceId,
       // Another Slack app is no person: never the owner, nor a member with their rights.
       role: asker.app ? null : asker.role,
-      placeKind: asker.place.kind
+      placeKind: asker.place.kind,
+      ...(asker.viaAccount ? { viaAccount: asker.viaAccount } : {})
     },
     wokenAt: {
       source: asker.source,
@@ -172,9 +178,9 @@ function stampedAsker(
 
 /**
  * Whom a conversation Orca has no record for acts for, read from its first message: the person the
- * cloud stamped, the people a bot request was for, or the owner for the owner's own message, an event
- * no one asked through and an automation's prompt (from automations made before Orca recorded who made
- * them). Null before any message.
+ * cloud stamped, the people a bot request was for, the teammate whose share connection typed it, or
+ * the owner for the owner's own message, an event no one asked through and an automation's prompt
+ * (from automations made before Orca recorded who made them). Null before any message.
  */
 export function firstMessageActsFor(
   items: readonly AgentJournalRenderItem[],
@@ -198,6 +204,10 @@ export function firstMessageActsFor(
   }
   if (body.asker) {
     return [stampedAsker(body.asker, lookups.conversationWorkspaceId).asker]
+  }
+  const teammate = shareTypistAsker(body.typedBy)
+  if (teammate) {
+    return [teammate]
   }
   if (body.origin === 'connector' && !body.memorySource) {
     return [{ kind: 'unknown' }]
