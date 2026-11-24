@@ -1,13 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 
-const readWindowsTerminalCapabilities = vi.fn(async () => ({
-  wslAvailable: true,
-  wslDistros: ['Ubuntu'],
-  pwshAvailable: true,
-  gitBashAvailable: true,
-  hostPlatform: 'win32' as const,
-  isLoading: false
+const { readWindowsTerminalCapabilities } = vi.hoisted(() => ({
+  readWindowsTerminalCapabilities: vi.fn(async () => ({
+    wslAvailable: true,
+    wslDistros: ['Ubuntu'],
+    pwshAvailable: true,
+    gitBashAvailable: true,
+    hostPlatform: 'win32' as const,
+    isLoading: false
+  }))
 }))
 vi.mock('./windows-terminal-capability-read', () => ({ readWindowsTerminalCapabilities }))
 
