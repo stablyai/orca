@@ -184,3 +184,76 @@ it('never sends a contribution against a bootstrap superseded while registration
     rmSync(directory, { recursive: true, force: true })
   }
 })
+
+it('registers a replacement bootstrap before sending after an in-flight census', async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(20_000)
+  const directory = mkdtempSync(join(tmpdir(), 'orca-activity-census-bootstrap-'))
+  const registry = new DeviceRegistry(directory)
+  const phone = registry.addDevice('Phone', 'mobile')
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  let census = 0
+  let destination = ''
+  const deliveries: string[] = []
+  const host = new HostLiveActivities(
+    {
+      listAllMobileSessionTabsInventory: async () => {
+        if (census++ > 0) {
+          entered.resolve()
+          await release.promise
+          return { snapshots: [] }
+        }
+        return { snapshots: [], authoritative: true }
+      },
+      projectLocalAgentSessionTabs: (frame) => ({ frame, complete: true }),
+      restoreStructuredAgentSessionTabs: async () => {},
+      onMobileSessionTabsChanged: () => () => {}
+    },
+    registry,
+    {
+      registerLiveActivityOverview: async (input) => {
+        destination = input.token
+        return true
+      },
+      sendLiveActivity: async () => {
+        deliveries.push(destination)
+        return 'sent'
+      }
+    }
+  )
+  const registration = {
+    activityId: 'activity',
+    schemaVersion: 2 as const,
+    overviewId: '33333333-3333-4333-8333-333333333333',
+    scopeKey: 'a'.repeat(64),
+    showNames: false,
+    bootstrap: {
+      revision: 1,
+      showNames: false,
+      discoveryComplete: true,
+      controlKey: 'b'.repeat(64),
+      token: 'aabb',
+      apnsEnvironment: 'sandbox' as const,
+      scopes: ['c'.repeat(64)]
+    }
+  }
+  try {
+    await host.register(phone.deviceId, registration)
+    const advancing = vi.advanceTimersByTimeAsync(5 * 60_000)
+    await entered.promise
+    const replacement = host.register(phone.deviceId, {
+      ...registration,
+      bootstrap: { ...registration.bootstrap, revision: 2, token: 'ccdd' }
+    })
+    release.resolve()
+    await advancing
+    await replacement
+    await vi.advanceTimersByTimeAsync(1001)
+    expect(deliveries).toEqual(['aabb', 'ccdd'])
+  } finally {
+    host.stop()
+    vi.useRealTimers()
+    rmSync(directory, { recursive: true, force: true })
+  }
+})

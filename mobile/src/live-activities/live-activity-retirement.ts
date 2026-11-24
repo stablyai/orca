@@ -174,18 +174,13 @@ export async function endLiveActivityOverview(
   cohort: LiveActivityCohort | null,
   clients: ReadonlyMap<string, RpcClient>
 ): Promise<boolean> {
-  try {
-    return await enqueueRetirement(
-      activity.activityId,
-      activity.linkId,
-      cohort?.overviewId === activity.linkId ? cohort.scopes : [],
-      true,
-      clients
-    )
-  } catch (error) {
-    await nativeLiveActivities?.end(activity.activityId).catch(() => undefined)
-    throw error
-  }
+  return enqueueRetirement(
+    activity.activityId,
+    activity.linkId,
+    cohort?.overviewId === activity.linkId ? cohort.scopes : [],
+    true,
+    clients
+  )
 }
 
 export async function retireCurrentLiveActivityOverview(

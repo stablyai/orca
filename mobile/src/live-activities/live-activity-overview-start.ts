@@ -1,4 +1,5 @@
 import { AppState } from 'react-native'
+import { isLiveActivityRetiring } from './live-activity-retirement'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { translate } from '../i18n/mobile-i18n'
 import { nativeLiveActivities, type NativeActivity } from './native-live-activities'
@@ -7,7 +8,8 @@ import type { LiveActivityTrackParams } from './live-activity-track-contract'
 import {
   createLiveActivityCohort,
   discoverLiveActivitySources,
-  forgetLiveActivityCohort
+  forgetLiveActivityCohort,
+  loadLiveActivityCohort
 } from './live-activity-overview-enrollment'
 
 export async function startLiveActivityOverview(
@@ -16,30 +18,40 @@ export async function startLiveActivityOverview(
   hosts: ReadonlyMap<string, RpcClient>,
   current: () => boolean
 ): Promise<NativeActivity | null> {
-  if (!nativeLiveActivities || !current() || AppState.currentState !== 'active') {
+  const canStart = (): boolean => current() && AppState.currentState === 'active'
+  if (!nativeLiveActivities || !canStart()) {
     return null
   }
   const preferences = await loadLiveActivityPreferences()
   if (!preferences.enabled || !(await nativeLiveActivities.authorization())) {
     return null
   }
-  const existing = (await nativeLiveActivities.activities()).find((activity) =>
-    ['active', 'stale'].includes(activity.state)
+  const activities = await nativeLiveActivities.activities()
+  const saved = await loadLiveActivityCohort()
+  const existing = activities.find(
+    (activity) =>
+      ['active', 'stale'].includes(activity.state) && activity.linkId === saved?.overviewId
   )
+  if (!canStart()) {
+    return null
+  }
   if (existing) {
-    return existing
+    return !(await isLiveActivityRetiring(existing.activityId)) && canStart() ? existing : null
+  }
+  if (activities.some((activity) => ['active', 'stale'].includes(activity.state))) {
+    return null
   }
   const seed = { hostId, ...input }
   if (await nativeLiveActivities.hasTurn(seed)) {
     return null
   }
-  if (!current()) {
+  if (!canStart()) {
     return null
   }
   await forgetLiveActivityCohort()
-  const sources = await discoverLiveActivitySources(hosts)
-  const cohort = await createLiveActivityCohort(sources, hostId, current)
-  if (!cohort || !current()) {
+  const sources = await discoverLiveActivitySources(hosts, canStart)
+  const cohort = await createLiveActivityCohort(sources, hostId, canStart)
+  if (!cohort || !canStart()) {
     return null
   }
   const labels = {

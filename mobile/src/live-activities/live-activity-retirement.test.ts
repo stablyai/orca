@@ -81,3 +81,24 @@ it('rejects an oversized scope union without corrupting the durable retirement r
     Array.from({ length: 32 }, (_, i) => `host-${i}`)
   )
 })
+
+it('keeps the native card and cohort recoverable until retirement intent is durable', async () => {
+  const { createLiveActivityCohort, loadLiveActivityCohort } =
+    await import('./live-activity-overview-enrollment')
+  const { retireCurrentLiveActivityOverview } = await import('./live-activity-retirement')
+  const current = await createLiveActivityCohort(
+    { sources: [{ hostId: 'host-a' }], complete: true },
+    'host-a',
+    () => true
+  )
+  backend.overviewId = current!.overviewId
+  backend.nativeActive.add('activity')
+  backend.failRetirementWrite = true
+  await retireCurrentLiveActivityOverview(new Map())
+  expect([...backend.nativeActive]).toEqual(['activity'])
+  expect((await loadLiveActivityCohort())?.overviewId).toBe(current!.overviewId)
+  backend.failRetirementWrite = false
+  await retireCurrentLiveActivityOverview(new Map())
+  expect([...backend.nativeActive]).toEqual([])
+  expect(await pendingLiveActivityRetirementHosts()).toEqual(['host-a'])
+})

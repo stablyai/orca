@@ -184,3 +184,33 @@ it('recovers active Keychain credentials when the cohort metadata becomes malfor
   expect(backend.secrets.size).toBe(0)
   expect(backend.storage.has('orca:liveActivitySecretCleanup:v2')).toBe(false)
 })
+
+it('bootstraps through the next coordinator when the saved coordinator key cannot be read', async () => {
+  const cohort = await createLiveActivityCohort(
+    { sources: [{ hostId: 'host-a' }, { hostId: 'host-b' }], complete: true },
+    'host-a',
+    () => true
+  )
+  backend.secrets.delete(`orca.activity.${cohort!.overviewId}.${cohort!.coordinatorScopeId}`)
+  const enrolled = new Set<string>()
+  const clients = new Map(
+    ['host-a', 'host-b'].map((id) => [
+      id,
+      client(async () => {
+        enrolled.add(id)
+        return { id, ok: true, result: { registered: true } }
+      })
+    ])
+  )
+  expect(
+    await registerLiveActivityOverview(
+      { activityId: 'activity', linkId: cohort!.overviewId, token: 'aabb', state: 'active' },
+      cohort!,
+      clients,
+      false,
+      () => true
+    )
+  ).toBe(false)
+  expect([...enrolled]).toEqual(['host-b'])
+  expect((await loadLiveActivityCohort())?.coordinatorScopeId).toBe(cohort!.scopes[1].id)
+})

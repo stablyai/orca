@@ -82,7 +82,8 @@ export async function forgetLiveActivityCohort(expectedId?: string): Promise<voi
 }
 
 export async function discoverLiveActivitySources(
-  clients: ReadonlyMap<string, RpcClient>
+  clients: ReadonlyMap<string, RpcClient>,
+  current: () => boolean = () => true
 ): Promise<{ sources: LiveActivitySource[]; complete: boolean }> {
   const catalog = await loadHostCatalog()
   const snapshot = new Map(clients)
@@ -95,6 +96,9 @@ export async function discoverLiveActivitySources(
   )
   sources.push(...catalog.map((host) => ({ hostId: host.id })))
   for (const { id: hostId } of catalog) {
+    if (!current()) {
+      return { sources: [], complete: false }
+    }
     const client = snapshot.get(hostId)
     if (!client) {
       continue
@@ -113,6 +117,9 @@ export async function discoverLiveActivitySources(
   sources.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
   if (sources.length > 32) {
     throw new Error('Too many Live Activity sources')
+  }
+  if (!current()) {
+    return { sources: [], complete: false }
   }
   await AsyncStorage.setItem(CATALOG_KEY, JSON.stringify(sources))
   return { sources, complete: catalog.every((host) => surveyed.has(host.id)) }

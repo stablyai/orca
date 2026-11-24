@@ -1,3 +1,4 @@
+import { LiveActivityOverviewWorker } from '../delivery/live-activity-overview-worker.js'
 import { LiveActivityBootstrapSchema, LiveActivityContributionSchema } from '@orca-cloud/push-contract/live-activity-messages'
 import { createHash } from 'node:crypto'
 import { expect, it } from 'vitest'
@@ -128,5 +129,18 @@ it('rejects a stale sandbox result after the same token moves to production', as
     expect(production?.push.apnsEnvironment).toBe('production')
     expect(production?.push.token).toBe('aabb')
     expect(production?.push.content.counts.working).toBe(2)
+  } finally { await harness.close() }
+})
+
+it('prunes expired tokens and names even while APNs configuration is absent', async () => {
+  const harness = await createPushServerHarness()
+  try {
+    const store = harness.server.liveActivityStore
+    await store.register('owner', LiveActivityBootstrapSchema.parse(bootstrap))
+    await store.contribute('owner', LiveActivityContributionSchema.parse(first))
+    harness.advanceClock(33 * 60 * 60_000)
+    await new LiveActivityOverviewWorker(store, null).runDue()
+    expect(await harness.database.query('SELECT overview_id FROM push_live_overviews')).toEqual([])
+    expect(await harness.database.query('SELECT overview_id FROM push_live_contributions')).toEqual([])
   } finally { await harness.close() }
 })

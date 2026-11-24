@@ -9,12 +9,19 @@ const state = vi.hoisted(() => ({
   failDelete: false,
   catalog: [{ id: 'host-a' }],
   nativeActive: new Set<string>(),
-  failNativeEnd: false
+  failNativeEnd: false,
+  failRetirementWrite: false,
+  overviewId: '',
+  appState: 'active',
+  backgroundOnAuthorization: false
 }))
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: async (key: string) => state.storage.get(key) ?? null,
     setItem: async (key: string, value: string) => {
+      if (key === 'orca:liveActivityRetirements:v2' && state.failRetirementWrite) {
+        throw new Error('Retirement storage unavailable')
+      }
       state.storage.set(key, value)
     },
     removeItem: async (key: string) => {
@@ -47,9 +54,37 @@ vi.mock('expo-crypto', async () => {
       createHash(algorithm).update(input).digest('hex')
   }
 })
+vi.mock('react-native', () => ({
+  AppState: {
+    get currentState() {
+      return state.appState
+    },
+    addEventListener: () => ({ remove() {} })
+  }
+}))
+vi.mock('../i18n/mobile-i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('./native-live-activities', () => ({
   nativeLiveActivities: {
     environment: async () => 'sandbox',
+    authorization: async () => {
+      if (state.backgroundOnAuthorization) {
+        state.appState = 'background'
+      }
+      return true
+    },
+    activities: async () =>
+      [...state.nativeActive].map((activityId) => ({
+        activityId,
+        linkId: state.overviewId,
+        token: 'aabb',
+        state: 'active'
+      })),
+    hasTurn: async () => false,
+    start: async (linkId: string) => {
+      state.overviewId = linkId
+      state.nativeActive.add('replacement')
+      return 'replacement'
+    },
     storeRoute: async () => {},
     end: async (id: string) => {
       if (state.failNativeEnd) {
@@ -85,6 +120,10 @@ beforeEach(() => {
   state.catalog = [{ id: 'host-a' }]
   state.nativeActive.clear()
   state.failNativeEnd = false
+  state.failRetirementWrite = false
+  state.overviewId = ''
+  state.appState = 'active'
+  state.backgroundOnAuthorization = false
 })
 
 export const backend = state

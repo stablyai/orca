@@ -60,6 +60,12 @@ export class HostLiveActivities {
     if (expiresAt <= Date.now()) {
       return { registered: false }
     }
+    const retainedLeases = (device.liveActivities ?? []).filter(
+      (item) => item.activityId !== input.activityId && item.expiresAt > Date.now()
+    )
+    if (retainedLeases.length >= 4) {
+      return { registered: false }
+    }
     const key = JSON.stringify([deviceId, input.activityId])
     const existing = this.activities.get(key)
     if (
@@ -87,12 +93,7 @@ export class HostLiveActivities {
         JSON.stringify(saved.bootstrap) !== JSON.stringify(input.bootstrap) ||
         saved.showNames !== input.showNames ||
         saved.credentialRevision !== stored.credentialRevision) &&
-      !this.registry.setLiveActivities(deviceId, [
-        ...(device.liveActivities ?? []).filter(
-          (item) => item.activityId !== input.activityId && item.expiresAt > Date.now()
-        ),
-        stored
-      ])
+      !this.registry.setLiveActivities(deviceId, [...retainedLeases, stored])
     ) {
       return { registered: false }
     }
@@ -173,15 +174,17 @@ export class HostLiveActivities {
     const key = JSON.stringify([deviceId, activityId])
     const entry = this.activities.get(key)
     if (entry) {
-      this.remove(key, entry)
-    } else {
-      const device = this.registry.getDevice(deviceId)
-      if (device) {
-        this.registry.setLiveActivities(
-          deviceId,
-          (device.liveActivities ?? []).filter((saved) => saved.activityId !== activityId)
-        )
-      }
+      this.remove(key, entry, false)
+    }
+    const device = this.registry.getDevice(deviceId)
+    if (
+      device &&
+      !this.registry.setLiveActivities(
+        deviceId,
+        (device.liveActivities ?? []).filter((saved) => saved.activityId !== activityId)
+      )
+    ) {
+      throw new Error('Could not retire saved Live Activity')
     }
   }
 

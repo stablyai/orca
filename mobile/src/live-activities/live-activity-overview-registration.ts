@@ -102,7 +102,7 @@ export async function registerLiveActivityOverview(
         return false
       }
     }
-    if (await request(scope, true)) {
+    if (await request(scope, true).catch(() => false)) {
       coordinator = scope
       break
     }

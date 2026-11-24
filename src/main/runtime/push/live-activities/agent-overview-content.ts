@@ -1,3 +1,7 @@
+import {
+  isAgentStatusFresh,
+  agentStatusEvidenceObservedAt
+} from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { createHmac } from 'node:crypto'
 import type {
   LiveActivityHostContent,
@@ -67,15 +71,25 @@ export function agentOverviewContent(
         ? `session:${conversation}`
         : `pane:${liveActivitySessionId(activityId, frame.worktree, paneKey)}`
       const previous = candidates.get(identity)?.tab
-      if (previous?.type === 'agent-session') {
+      const previousStatus =
+        previous?.type === 'terminal' ? previous.agentStatus : previous?.chatStatus
+      const nextStatus = tab.type === 'terminal' ? tab.agentStatus : tab.chatStatus
+      const previousFresh = !!previousStatus && isAgentStatusFresh(previousStatus, now)
+      const nextFresh = !!nextStatus && isAgentStatusFresh(nextStatus, now)
+      if (previousFresh && !nextFresh) {
         continue
       }
-      if (
-        previous?.type === 'terminal' &&
-        tab.type === 'terminal' &&
-        (previous.agentStatus?.updatedAt ?? 0) > (tab.agentStatus?.updatedAt ?? 0)
-      ) {
-        continue
+      if (previousFresh === nextFresh && previous) {
+        if (previous.type === 'agent-session') {
+          continue
+        }
+        if (
+          tab.type === 'terminal' &&
+          (previousStatus ? agentStatusEvidenceObservedAt(previousStatus) : 0) >
+            (nextStatus ? agentStatusEvidenceObservedAt(nextStatus) : 0)
+        ) {
+          continue
+        }
       }
       candidates.set(identity, { worktree: frame.worktree, tab })
     }

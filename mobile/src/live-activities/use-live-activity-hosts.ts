@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AppState } from 'react-native'
 import { loadHostCatalog } from '../host-catalog/host-store'
+import { subscribeHostCatalogChanges } from '../host-catalog/host-list-load-sharing'
 import { useAllHostClients } from '../transport/connection/use-all-host-clients'
 import {
   loadLiveActivityPreferences,
@@ -39,6 +40,7 @@ export function useLiveActivityHosts(): void {
         .catch(() => undefined)
     }
     const unsubscribe = subscribeLiveActivityPreferences(refresh)
+    const catalog = subscribeHostCatalogChanges(refresh)
     const state = AppState.addEventListener('change', (value) => {
       if (value === 'active') {
         refresh()
@@ -48,6 +50,7 @@ export function useLiveActivityHosts(): void {
     return () => {
       disposed = true
       unsubscribe()
+      catalog()
       state.remove()
     }
   }, [])

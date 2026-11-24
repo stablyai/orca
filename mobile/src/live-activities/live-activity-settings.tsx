@@ -24,6 +24,7 @@ export function LiveActivitySettings() {
   const [value, setValue] = useState<LiveActivityPreferences>({ enabled: false, showNames: false })
   const [authorized, setAuthorized] = useState(false)
   const [ready, setReady] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const [error, setError] = useState(false)
   const busy = useRef(false)
   const [saving, setSaving] = useState(false)
@@ -40,12 +41,13 @@ export function LiveActivitySettings() {
       if (busy.current || current !== revision.current) {
         return
       }
+      setLoadError(false)
       setValue(preferences)
       setAuthorized(allowed)
       setReady(true)
     } catch {
       if (current === revision.current && !busy.current) {
-        setError(true)
+        setLoadError(true)
       }
     }
   }, [])
@@ -85,6 +87,7 @@ export function LiveActivitySettings() {
     } finally {
       busy.current = false
       setSaving(false)
+      void refresh()
     }
   }
   const enabledLabel = t('liveActivities.enable', 'Live Activities')
@@ -159,17 +162,19 @@ export function LiveActivitySettings() {
               revision.current++
               busy.current = true
               setSaving(true)
+              setError(false)
               void retryLiveActivityCleanup()
                 .catch(() => setError(true))
                 .finally(() => {
                   busy.current = false
                   setSaving(false)
+                  void refresh()
                 })
             }}
           />
         </SettingsSection>
       ) : null}
-      {error ? (
+      {error || loadError ? (
         <SettingsNote error>
           {t('liveActivities.saveFailed', 'Could not update Live Activities. Try again.')}
         </SettingsNote>

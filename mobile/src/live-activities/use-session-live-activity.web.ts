@@ -32,13 +32,18 @@ export function useSessionLiveActivity(
           : ''
   useFocusEffect(
     useCallback(() => {
-      if (working && paneKey && turnKey) {
+      if (
+        working &&
+        paneKey &&
+        turnKey &&
+        (!executionHost || executionHost === 'local' || executionHost.startsWith('runtime:'))
+      ) {
         void native
           .trackLiveActivity({
             worktreeId: model.worktreeId,
             paneKey,
             turnKey,
-            ...(executionHost ? { executionHost } : {})
+            ...(executionHost?.startsWith('runtime:') ? { executionHost } : {})
           })
           .catch(() => undefined)
       }

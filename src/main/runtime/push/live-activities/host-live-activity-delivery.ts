@@ -59,6 +59,10 @@ export async function deliverHostLiveActivity(
   if (!context.isCurrent()) {
     return
   }
+  if (entry.input.bootstrap && !entry.bootstrapReady) {
+    entry.nextAt = Date.now()
+    return
+  }
   now = Date.now()
   const projected = [...entry.frames.values()].map((frame) =>
     context.runtime.projectLocalAgentSessionTabs(frame)

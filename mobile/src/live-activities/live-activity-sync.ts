@@ -71,7 +71,13 @@ function register(activity: NativeActivity): Promise<boolean> {
     return Promise.resolve(true)
   }
   const revision = generation
-  return deliverLiveActivityOverview(activity, hosts, () => revision === generation)
+  return deliverLiveActivityOverview(activity, hosts, () => revision === generation).catch(() => {
+    if (revision !== generation) {
+      return true
+    }
+    setLiveActivityDeliveryFailed(true)
+    return false
+  })
 }
 
 async function reconcile(): Promise<void> {
@@ -130,7 +136,13 @@ async function reconcile(): Promise<void> {
       }
     }
     if (AppState.currentState === 'active') {
-      const sources = await discoverLiveActivitySources(hosts)
+      const sources = await discoverLiveActivitySources(
+        hosts,
+        () => AppState.currentState === 'active'
+      )
+      if (AppState.currentState !== 'active') {
+        return
+      }
       if (!liveActivitySourcesMatch(cohort, sources)) {
         generation++
         cleanupPending = !(await endLiveActivityOverview(activity, cohort, hosts)) || cleanupPending

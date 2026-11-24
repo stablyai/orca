@@ -86,7 +86,10 @@ session.
 - The gateway persists the cohort, contributions and delivery leases in the
   existing SQLite/PostgreSQL database. It merges only fresh source data using
   gateway receipt clocks, applies privacy, and picks attention/failure/working rows.
-  Only this gateway sends the complete APNs content state.
+  Only this gateway sends the complete APNs content state. Multiple desktop relay
+  paths to one executor use that executor's persistent E2EE key at the gateway;
+  contributions are deduplicated by its authenticated fingerprint before summing
+  counts or choosing rows. Scope IDs name grants and paths, not distinct executors.
 - A durable single-writer lease and whole-second timestamp ordering serialize
   APNs delivery across worker processes. In-flight old-token results cannot erase
   a rotated activity. Replayed source sequences cannot refresh stale coverage.
@@ -136,6 +139,13 @@ execution. New source enrollment also requires the foreground phone.
 Partial executor inventories retain the known locally projected sessions as lower
 bounds. A failed inventory drops older frames and retains only publications
 received during that attempt; those contributions remain incomplete.
+
+A native card is ended only after its retirement intent is durable. If local
+storage fails, the card and cohort remain recoverable for retry. Host
+unregistration acknowledges success only after its saved lease is removed.
+Pairing/catalog changes refresh source discovery while the phone is active.
+Local execution routes use the paired host; `runtime:` routes name full Orca
+servers. Direct `ssh:` routes are not enrolled by the session tracking hook.
 
 ## Qualification
 

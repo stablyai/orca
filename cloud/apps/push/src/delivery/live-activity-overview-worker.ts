@@ -22,7 +22,7 @@ export class LiveActivityOverviewWorker {
   }
 
   private async drain(): Promise<void> {
-    if (!this.apns) return
+    if (!this.apns) { await this.store.prune(); return }
     for (let count = 0; count < 25 && !this.stopped; count++) {
       const claim = await this.store.claim()
       if (!claim) break
