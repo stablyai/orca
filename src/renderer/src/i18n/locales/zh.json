@@ -14588,7 +14588,6 @@
             "noRebaseInProgress": "没有正在进行的变基",
             "rebaseStopMovedOn": "变基已经继续进行。请查看面板后重试。",
             "rebaseEmptyStep": "此步骤没有可提交的内容。请中止变基，或在终端中完成它。",
-            "rebaseStepUnreadable": "无法检查此变基步骤",
             "rebaseStepUnreadableShort": "无法检查步骤",
             "rebaseCheckAgain": "重新检查",
             "rebaseRetryInspect": "重试",

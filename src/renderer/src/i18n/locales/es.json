@@ -13719,7 +13719,6 @@
             "noRebaseInProgress": "No hay ningún rebase en curso",
             "rebaseStopMovedOn": "El rebase ya avanzó. Revisa el panel e inténtalo de nuevo.",
             "rebaseEmptyStep": "No hay nada que confirmar en este paso. Aborta el rebase o termínalo en una terminal.",
-            "rebaseStepUnreadable": "No se pudo comprobar este paso del rebase",
             "rebaseStepUnreadableShort": "No se pudo comprobar",
             "rebaseCheckAgain": "Comprobar de nuevo",
             "rebaseRetryInspect": "Reintentar",

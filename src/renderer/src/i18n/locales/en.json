@@ -15506,7 +15506,6 @@
             "noRebaseInProgress": "No rebase is in progress",
             "rebaseStopMovedOn": "The rebase already moved on. Check the panel and try again.",
             "rebaseEmptyStep": "Nothing to commit in this step. Abort the rebase or finish it in a terminal.",
-            "rebaseStepUnreadable": "Couldn't check this rebase step",
             "rebaseStepUnreadableShort": "Couldn't check step",
             "rebaseCheckAgain": "Check again",
             "rebaseRetryInspect": "Retry",
