@@ -13697,13 +13697,6 @@
             "c76693e456": "Die Dateien für diesen Arbeitsbereich konnten nicht geladen werden:"
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "Noch keine Commits",
-            "d0fb0f4bf2": "Commits aktualisieren",
-            "9f7535d22b": "Referenzen sind Branch- oder Tag-Namen, die genau auf diesen Commit verweisen. Sie erscheinen nur dort, wo Git eine benannte Referenz für den Commit hat.",
-            "9289ba0cb9": "Was sind Referenzen?",
-            "d836037d02": "Commits",
-            "8232c8b2f2": "Commit {{value0}} öffnen: {{value1}}",
-            "e5e81e59a6": "Größe des Commit-Bereichs ändern",
             "6d1e0a7c3b": "Commit-Dateien konnten nicht geladen werden"
           },
           "HostedReviewActions": {
@@ -14100,7 +14093,34 @@
             "rebaseStoppedFinishInTerminal": "Git hat diesen Schritt angehalten. Schließe ihn im Terminal ab oder brich ab.",
             "rebaseCheckingStep": "Rebase-Schritt wird geprüft",
             "rebaseEmptyStepShort": "Leerer Schritt",
-            "rebaseAbortLabel": "Rebase abbrechen"
+            "rebaseAbortLabel": "Rebase abbrechen",
+            "scopeFileCount_one": "{{count}} Datei",
+            "scopeFileCount_other": "{{count}} Dateien",
+            "scopeCommitCount_one": "{{count}} Commit",
+            "scopeCommitCount_other": "{{count}} Commits",
+            "scopeUncommitted": "Nicht committet",
+            "scopeAllChanges": "Alle Änderungen",
+            "scopeNone": "Keine",
+            "scopeOpenDiff": "Diff öffnen",
+            "scopeShowAll": "Alle Änderungen anzeigen",
+            "scopeLoadingBranchChanges": "Branch-Änderungen werden geladen…",
+            "scopeBranchCommits": "Commits auf diesem Branch",
+            "scopeRecentCommits": "Letzte Commits",
+            "scopeCompareTo": "Mit {{ref}} vergleichen",
+            "scopeFilterCommits": "Commits filtern",
+            "scopeCommitsFailed": "Commits konnten nicht geladen werden.",
+            "scopeFilesFailed": "Dateien konnten nicht geladen werden.",
+            "scopeLoadingFiles": "Dateien werden geladen…",
+            "scopeNoSharedHistory": "Keine gemeinsame Historie mit {{ref}}",
+            "scopeRetryCommits": "Erneut versuchen",
+            "scopeLoadingCommits": "Commits werden geladen…",
+            "scopeNoMatchingCommits": "Keine passenden Commits",
+            "scopeNoBranchCommitsYet": "Noch keine Commits auf diesem Branch",
+            "scopeNoCommitsYet": "Noch keine Commits",
+            "scopeOlderHistory": "Älterer Verlauf in Git Graph",
+            "scopeNoUncommitted": "Keine nicht committeten Änderungen.",
+            "scopeCommitFiles": "Dateien",
+            "gitGraphButton": "Graph"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Der ausgewählte Agent konnte nicht gestartet werden.",
@@ -14952,12 +14972,7 @@
             "f8a2c4d1e0": "Suchmodus des Datei-Explorers"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "Keine Dateiänderungen in diesem Commit",
-            "c3d4e5f6a7": "Alle Änderungen öffnen"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "Dateien in Commit {{value0}} anzeigen: {{value1}}",
-            "4a8d9e0c1f": "Dateien in Commit {{value0}} ausblenden: {{value1}}"
+            "b2c3d4e5f6": "Keine Dateiänderungen in diesem Commit"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "Commit im Browser öffnen",
@@ -24987,7 +25002,8 @@
     "branchCreated": "{{branch}} bei {{commit}} erstellt",
     "branchName": "Branch-Name",
     "invalidBranchName": "Dieser Branchname ist ungültig. Wähle einen anderen Namen.",
-    "createBranchFailed": "Orca konnte den Branch nicht erstellen. Prüfe dieses Repository im Terminal und versuche es erneut."
+    "createBranchFailed": "Orca konnte den Branch nicht erstellen. Prüfe dieses Repository im Terminal und versuche es erneut.",
+    "openDiff": "Diff öffnen"
   },
   "checks": {
     "gitlabAllowedFailure": "Fehlschlag erlaubt"

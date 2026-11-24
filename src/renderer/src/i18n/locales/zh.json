@@ -14198,13 +14198,6 @@
             "c76693e456": "无法加载此工作区的文件："
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "尚无提交",
-            "d0fb0f4bf2": "刷新提交记录",
-            "9f7535d22b": "引用是指向该确切提交的分支或标签名称，它们仅出现在 Git 具有该提交的命名引用的位置",
-            "9289ba0cb9": "什么是参考文献？",
-            "d836037d02": "提交",
-            "8232c8b2f2": "打开提交 {{value0}}：{{value1}}",
-            "e5e81e59a6": "调整提交记录高度",
             "6d1e0a7c3b": "无法加载提交文件"
           },
           "HostedReviewActions": {
@@ -14592,7 +14585,34 @@
             "rebaseStoppedFinishInTerminal": "Git 已在此步骤暂停。请在终端中完成或中止。",
             "rebaseCheckingStep": "正在检查变基步骤",
             "rebaseEmptyStepShort": "空步骤",
-            "rebaseAbortLabel": "中止变基"
+            "rebaseAbortLabel": "中止变基",
+            "scopeFileCount_one": "{{count}} 个文件",
+            "scopeFileCount_other": "{{count}} 个文件",
+            "scopeCommitCount_one": "{{count}} 次提交",
+            "scopeCommitCount_other": "{{count}} 次提交",
+            "scopeUncommitted": "未提交",
+            "scopeAllChanges": "所有更改",
+            "scopeNone": "无",
+            "scopeOpenDiff": "打开差异",
+            "scopeShowAll": "显示所有更改",
+            "scopeLoadingBranchChanges": "正在加载分支更改…",
+            "scopeBranchCommits": "此分支上的提交",
+            "scopeRecentCommits": "最近提交",
+            "scopeCompareTo": "与 {{ref}} 比较",
+            "scopeFilterCommits": "筛选提交",
+            "scopeCommitsFailed": "无法加载提交。",
+            "scopeFilesFailed": "无法加载文件。",
+            "scopeLoadingFiles": "正在加载文件…",
+            "scopeNoSharedHistory": "与 {{ref}} 没有共同历史记录",
+            "scopeRetryCommits": "重试",
+            "scopeLoadingCommits": "正在加载提交…",
+            "scopeNoMatchingCommits": "没有匹配的提交",
+            "scopeNoBranchCommitsYet": "此分支上还没有提交",
+            "scopeNoCommitsYet": "还没有提交",
+            "scopeOlderHistory": "在 Git Graph 中查看更早的历史",
+            "scopeNoUncommitted": "没有未提交的更改。",
+            "scopeCommitFiles": "文件",
+            "gitGraphButton": "图谱"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的代理",
@@ -15452,12 +15472,7 @@
             "f8a2c4d1e0": "资源管理器搜索模式"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "此提交没有文件更改",
-            "c3d4e5f6a7": "打开未提交的差异"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "显示提交{{value0}}中的文件：{{value1}}",
-            "4a8d9e0c1f": "隐藏提交{{value0}}中的文件：{{value1}}"
+            "b2c3d4e5f6": "此提交没有文件更改"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "在浏览器中打开提交",
@@ -26874,7 +26889,8 @@
     "branchCreated": "已在 {{commit}} 创建 {{branch}}",
     "branchName": "分支名称",
     "invalidBranchName": "此分支名称无效。请选择其他名称。",
-    "createBranchFailed": "Orca 无法创建分支。请在终端中检查此仓库，然后重试。"
+    "createBranchFailed": "Orca 无法创建分支。请在终端中检查此仓库，然后重试。",
+    "openDiff": "打开差异"
   },
   "bots": {
     "deepLink": {
