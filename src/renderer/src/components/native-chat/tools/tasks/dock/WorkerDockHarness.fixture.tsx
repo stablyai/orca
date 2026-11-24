@@ -71,7 +71,7 @@ function Harness({
   details?: boolean
   /** The saved result a failed row's card reads: the worker's own Markdown report, or a raw
    *  error. Without it the read comes back empty, as an unreadable result does. */
-  result?: 'report' | 'raw'
+  result?: 'report' | 'raw' | 'legacy'
 } & Seed) {
   const [rows, setRows] = useState(() => seed(count, failed, remote, options))
   const [detailed, setDetailed] = useState(() => new Set(rows.slice(0, lazy).map((row) => row.id)))
@@ -290,24 +290,22 @@ export const lastFailedDetails720 = defineFixture({
   width: 720,
   render: () => workerDockFixturePane(<Harness count={1} failed={1} details open />)
 })
-// The only worker failed and saved its own Markdown report; the card reads it in full.
-export const failedReport720 = defineFixture({
-  width: 720,
-  render: () => workerDockFixturePane(<Harness count={1} failed={1} details result="report" open />)
-})
-export const failedReport320 = defineFixture({
-  width: 320,
-  render: () => workerDockFixturePane(<Harness count={1} failed={1} details result="report" open />)
-})
-// The only worker failed with a raw error; the card shows one reason line and Show details.
-export const failedRaw720 = defineFixture({
-  width: 720,
-  render: () => workerDockFixturePane(<Harness count={1} failed={1} details result="raw" open />)
-})
-export const failedRaw320 = defineFixture({
-  width: 320,
-  render: () => workerDockFixturePane(<Harness count={1} failed={1} details result="raw" open />)
-})
+// The only worker failed; its card reads the saved result the host returns: its own Markdown report
+// in full, the same report from an older host with no report mark (still Markdown), or a raw error
+// with one reason line and Show details.
+function failedCard(width: number, result: 'report' | 'legacy' | 'raw') {
+  return defineFixture({
+    width,
+    render: () =>
+      workerDockFixturePane(<Harness count={1} failed={1} details result={result} open />)
+  })
+}
+export const failedReport720 = failedCard(720, 'report')
+export const failedReport320 = failedCard(320, 'report')
+export const failedLegacy720 = failedCard(720, 'legacy')
+export const failedLegacy320 = failedCard(320, 'legacy')
+export const failedRaw720 = failedCard(720, 'raw')
+export const failedRaw320 = failedCard(320, 'raw')
 // The first two detail reads fail; a later key press recovers the last row.
 export const lazyFailingOpen720 = defineFixture({
   width: 720,

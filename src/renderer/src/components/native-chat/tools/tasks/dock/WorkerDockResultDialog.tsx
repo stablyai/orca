@@ -140,10 +140,11 @@ export function WorkerDockResultDialog({
           failed: row.state === 'failed' || row.state === 'unexpected'
         }
       : null
-  // A failure's raw error shows one line up front, the rest on request. A worker's own report
-  // (finished or failed) reads in full as Markdown. An error beside a loaded result is a failed
-  // action (Show in dock again), shown next to the result rather than in place of it.
-  const raw = result ? (status?.failed && result.report !== true ? result.body : null) : error
+  // A failure the host marks as a raw error shows one line up front, the rest on request. Any
+  // other body (a worker's own report, or a reply from an older host that sends no mark) reads in
+  // full as Markdown, as it always has. An error beside a loaded result is a failed action (Show in
+  // dock again), shown next to the result rather than in place of it.
+  const raw = result ? (status?.failed && result.report === false ? result.body : null) : error
   const actionError = result ? error : null
   const reason = raw ? workerDockReasonLine(raw) : null
   // The reason line clamps at two lines, and how much fits depends on the glyphs and the width,

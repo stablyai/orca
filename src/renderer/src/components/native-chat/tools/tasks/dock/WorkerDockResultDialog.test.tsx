@@ -22,7 +22,8 @@ const result: WorkerDockResult = {
   at: 1,
   settlement: 'settled-1',
   acknowledged: false,
-  ownerActionsAvailable: true
+  ownerActionsAvailable: true,
+  report: false
 }
 
 function card(value: WorkerDockResult, error: string | null = null) {
@@ -203,4 +204,18 @@ it("reads a failed worker's own report in full as Markdown, with no details fold
   expect(screen.queryByRole('button', { name: 'Show details' })).toBeNull()
   expect(document.querySelector('[data-worker-dock-card-reason]')).toBeNull()
   expect(document.querySelector('[data-worker-dock-card-state]')).toHaveTextContent('Failed')
+})
+
+it('reads a failed report from an older host, which sends no mark, as Markdown', () => {
+  const { report: _omitted, ...legacy } = result
+  card({
+    ...legacy,
+    outcome: 'failed',
+    body: 'Could not finish. See [the release log](https://example.com/log) for the gaps.'
+  })
+  expect(screen.getByRole('link', { name: 'the release log' })).toHaveAttribute(
+    'href',
+    'https://example.com/log'
+  )
+  expect(screen.queryByRole('button', { name: 'Show details' })).toBeNull()
 })

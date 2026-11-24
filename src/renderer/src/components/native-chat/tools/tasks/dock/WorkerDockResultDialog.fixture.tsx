@@ -28,7 +28,8 @@ const failed: WorkerDockResult = {
   at: Date.now() - 58 * 60_000,
   settlement: 'settled:0',
   acknowledged: false,
-  ownerActionsAvailable: true
+  ownerActionsAvailable: true,
+  report: false
 }
 
 function Card({ result }: { result: WorkerDockResult }) {
