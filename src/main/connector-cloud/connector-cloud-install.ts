@@ -195,8 +195,9 @@ function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore)
     read: (key) => readThreadMute(store, key),
     write: threadMuteSaves(store),
     saving: threadMuteSaving,
+    // Not known yet (no client runs): keep muting; only a cloud known to lack it lets replies on.
     mentionsKnown: () =>
-      runtime.getConnectorCloud()?.cloudFeatures()?.has(CONNECTOR_CLOUD_MENTIONED_FEATURE) === true,
+      runtime.getConnectorCloud()?.cloudFeatures()?.has(CONNECTOR_CLOUD_MENTIONED_FEATURE) ?? true,
     queued: (key, work) =>
       runtime.getExternalConversationSeam()?.queued(key, work) ??
       Promise.resolve(work?.()).then(() => undefined)

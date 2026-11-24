@@ -36,6 +36,12 @@ type LeaveLinesDeps = {
   setTimer?: (run: () => void, ms: number) => void
   /** Saves pending store writes to disk. */
   flush?: () => Promise<void>
+  /** Whether the reply outbox already holds an answer of `turnId` that carries the line (a quit
+   *  after it was written, before the debt was cleared). */
+  carriedIn?: (
+    link: Pick<ExternalConversationLink, 'source' | 'externalId' | 'sessionId'>,
+    turnId: number
+  ) => Promise<boolean>
 }
 
 export type LeaveLines = {
@@ -48,10 +54,6 @@ export type LeaveLines = {
     link: Pick<ExternalConversationLink, 'source' | 'externalId' | 'sessionId'>,
     turnId: number
   ) => void
-  /** An answer is about to carry the line: owed no more, saved before the answer is. */
-  handOff: (link: Thread, turnId: number) => Promise<void>
-  /** The answer didn't carry it after all: owed again, while the thread is still left. */
-  restore: (link: Thread, turnId: number) => void
   /** A turn end is deciding `turnId`'s line (on its answer or alone): a resume leaves it alone. */
   ending: (link: Thread, turnId: number) => void
   /** Posts every line still owed for a turn that isn't running (cut short by a quit or a reset). */
@@ -97,6 +99,8 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
     ending.delete(idOf(link, turnId))
     if (owed(link, turnId)) {
       writeLinkFact(deps.store, link, { leaveLine: undefined })
+      // Saved now, so a quit can't leave it owed beside the answer that carried it.
+      void deps.flush?.().catch(() => undefined)
     }
   }
   const post: LeaveLines['post'] = (link, turnId) => {
@@ -171,24 +175,6 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
   return {
     owed,
     carried: settle,
-    handOff: async (link, turnId) => {
-      if (owed(link, turnId)) {
-        writeLinkFact(deps.store, link, { leaveLine: undefined })
-        // A failed save leaves it to a restart, which may post it again: never a false line.
-        await deps.flush?.().catch(() => undefined)
-      }
-    },
-    restore: (link, turnId) => {
-      const thread = readThreadMute(deps.store, link)
-      if (
-        typeof thread === 'object' &&
-        thread !== null &&
-        thread.muted &&
-        thread.leaveLine === undefined
-      ) {
-        writeLinkFact(deps.store, link, { leaveLine: turnId })
-      }
-    },
     post,
     ending: (link, turnId) => {
       ending.set(idOf(link, turnId), Date.now())
@@ -207,7 +193,10 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
         }
         const began = ending.get(idOf(link, turnId))
         if (began === undefined) {
-          post(link, turnId)
+          // A quit after the answer that carried it was saved: settled, never posted again.
+          void (deps.carriedIn?.(link, turnId) ?? Promise.resolve(false))
+            .catch(() => false)
+            .then((carried) => (carried ? settle(link, turnId) : post(link, turnId)))
         } else {
           // Its turn end is deciding it; one that never finishes (a reset meanwhile) lets go here.
           timer(() => post(link, turnId), began + ENDING_MS - now)

@@ -82,7 +82,7 @@ export const CONNECTOR_LEAVE_THREAD_METHOD = defineMethod({
   }
 })
 
-async function leaveFrom(
+function leaveFrom(
   runtime: Parameters<typeof CONNECTOR_LEAVE_THREAD_METHOD.handler>[1]['runtime'],
   sessionId: string,
   key: ConnectorConversation,
@@ -91,28 +91,37 @@ async function leaveFrom(
   store: Parameters<typeof threadMuteSaves>[0]
 ): Promise<void> {
   // Only the turn running now: a report that woke it never borrows the request before it.
-  const host = await requireStructuredHost(runtime)
-  const { snapshot } = await (
-    await host.journalReads(sessionId)
-  ).operationWindow({ latestTurns: 2, turnShape: true })
-  const refusal = leaveThreadRefusal(snapshot.items, snapshot.submissions, key)
-  if (refusal) {
-    throw new ConnectorActError(refusal, refusal === 'leave_refused_mixed' ? MIXED : STALE)
-  }
-  // In the thread's queue, ordered with its deliveries; the save is on disk before this answers.
+  const checking = (async () => {
+    const host = await requireStructuredHost(runtime)
+    const { snapshot } = await (
+      await host.journalReads(sessionId)
+    ).operationWindow({ latestTurns: 2, turnShape: true })
+    return leaveThreadRefusal(snapshot.items, snapshot.submissions, key)
+  })()
+  // Its place in the thread's queue is taken now, before the read, so a reply that waits on this
+  // leave is always behind it and never holds it up. The save is on disk before this answers.
   const save: { saving?: Promise<void> } = {}
-  await seam.queued(key, async () => {
-    save.saving = threadMuteSaves(store)(key, true, turnId)
-    await save.saving.catch(() => undefined)
-  })
-  try {
-    // A Stop settled the queue before the save ran: nothing was written.
-    if (!save.saving) {
-      throw new Error('thread queue stopped before the save')
+  const queued = seam.queued(key, async () => {
+    if ((await checking.catch(() => 'unread')) === null) {
+      save.saving = threadMuteSaves(store)(key, true, turnId)
+      await save.saving.catch(() => undefined)
     }
-    await save.saving
-  } catch (error) {
-    console.warn('[connectors] could not save that a bot left its thread', error)
-    throw new ConnectorActError('thread_mute_not_saved', NOT_SAVED)
-  }
+  })
+  return (async () => {
+    await queued
+    const refusal = await checking
+    if (refusal) {
+      throw new ConnectorActError(refusal, refusal === 'leave_refused_mixed' ? MIXED : STALE)
+    }
+    try {
+      // A Stop settled the queue before the save ran: nothing was written.
+      if (!save.saving) {
+        throw new Error('thread queue stopped before the save')
+      }
+      await save.saving
+    } catch (error) {
+      console.warn('[connectors] could not save that a bot left its thread', error)
+      throw new ConnectorActError('thread_mute_not_saved', NOT_SAVED)
+    }
+  })()
 }

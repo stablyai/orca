@@ -267,8 +267,7 @@ export class ChatTurns {
     if (shared && !heard) {
       return end.leave.settle()
     }
-    void news.readTurn().then(async (read) => {
-      const turn = end.leave.turn(read)
+    void news.readTurn().then(async (turn) => {
       const reply = turnReply(linked.link, turn)
       const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))
       const fill = this.deps.replyFill?.()

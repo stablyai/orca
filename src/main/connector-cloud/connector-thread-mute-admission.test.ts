@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const journal = vi.hoisted(() => {
   const items: unknown[] = []
-  return { items }
+  // What the leave's read of its turn waits on, when a test holds it.
+  const reading: { held: Promise<unknown> } = { held: Promise.resolve() }
+  return { items, reading }
 })
 vi.mock('../bots/bot-session-tabs', () => ({
   botOfSession: (_bots: unknown, sessionId: string) =>
@@ -15,7 +17,10 @@ vi.mock('../bots/bot-turn-for', () => ({ botTurnFor: async () => 'someone_else' 
 vi.mock('../bots/bot-chat-session', () => ({
   requireStructuredHost: async () => ({
     journalReads: async () => ({
-      operationWindow: async () => ({ snapshot: { items: journal.items, submissions: [] } })
+      operationWindow: async () => {
+        await journal.reading.held
+        return { snapshot: { items: journal.items, submissions: [] } }
+      }
     })
   })
 }))
@@ -24,12 +29,16 @@ import type { ConnectorConversation } from '../../shared/connectors/connector-cl
 import { DeliveryReceipts } from '../external-conversations/external-conversation-delivery-receipts'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import { findLink, writeLink } from '../external-conversations/external-conversation-links'
-import { readThreadMute } from '../external-conversations/external-conversation-link-writes'
+import {
+  readThreadMute,
+  writeLinkFact
+} from '../external-conversations/external-conversation-link-writes'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import { ConversationChain } from '../external-conversations/external-conversation-chain'
 import { dispatchDelivery } from './connector-deliveries'
-import { handleThreadMute } from './connector-thread-mute'
+import { handleThreadMute, type ThreadMuteDeps } from './connector-thread-mute'
 import { threadMuteSaves, threadMuteSaving } from './connector-thread-mute-saves'
 import { CONNECTOR_LEAVE_THREAD_METHOD } from '../runtime/rpc/methods/connector-leave-thread'
 import {
@@ -115,7 +124,8 @@ async function botHome(muted: { first?: true; second?: true }) {
 function connector(
   store: ReturnType<typeof createStore>,
   receipts = new DeliveryReceipts(() => orchestration),
-  mentionsKnown = true
+  mentionsKnown = true,
+  queue?: ThreadMuteDeps['queued']
 ) {
   const turns: string[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mute path calls only these seam members.
@@ -134,8 +144,10 @@ function connector(
     write: threadMuteSaves(store),
     saving: threadMuteSaving,
     mentionsKnown: () => mentionsKnown,
-    queued: (_key: ConnectorConversation, work?: () => Promise<unknown>) =>
-      Promise.resolve(work?.()).then(() => undefined)
+    queued:
+      queue ??
+      ((_key: ConnectorConversation, work?: () => Promise<unknown>) =>
+        Promise.resolve(work?.()).then(() => undefined))
   }
   const machine = {
     runTrigger: async () => false,
@@ -163,7 +175,8 @@ const TURN_ID = 1_800_000_000_300
  *  in that thread runs. */
 function leaver(
   store: ReturnType<typeof createStore>,
-  ahead: Promise<unknown> = Promise.resolve()
+  ahead: Promise<unknown> = Promise.resolve(),
+  queue?: (key: ConnectorConversation, work: () => Promise<unknown>) => Promise<unknown>
 ) {
   journal.items = [
     {
@@ -213,11 +226,13 @@ function leaver(
       getExternalConversationSeam: () => ({
         replyTarget: () => ({ key: FIRST, turnId: TURN_ID }),
         // The thread's queue: deliveries ahead of the leave run first.
-        queued: async (_key: unknown, work: () => Promise<unknown>) => {
-          await ahead
-          await work()
-          return undefined
-        }
+        queued:
+          queue ??
+          (async (_key: unknown, work: () => Promise<unknown>) => {
+            await ahead
+            await work()
+            return undefined
+          })
       })
     }
   } as unknown as Parameters<typeof CONNECTOR_LEAVE_THREAD_METHOD.handler>[1]
@@ -419,6 +434,26 @@ describe('a bot that leaves its thread', () => {
     expect(turns).toEqual([])
   })
 
+  it('never stalls the thread when a reply lands while the leave reads its turn', async () => {
+    const store = await botHome({})
+    // One real thread queue for the leave and the replies.
+    const chain = new ConversationChain(new AbortController().signal)
+    const queue = (_key: ConnectorConversation, work?: () => Promise<unknown>) =>
+      chain.after('thread', work)
+    let read = (): void => {}
+    journal.reading.held = new Promise<void>((resolve) => (read = resolve))
+    const { leave } = leaver(store, undefined, queue)
+    const { deliver, turns } = connector(store, undefined, true, queue)
+
+    const leaving = leave()
+    const replied = deliver(send(FIRST, 'great, thanks'))
+    read()
+    expect(await leaving).toEqual({ ok: true })
+    expect(await replied).toEqual({ outcome: 'accepted' })
+    expect(turns).toEqual([])
+    journal.reading.held = Promise.resolve()
+  })
+
   it('never leaves on a cloud that can\u2019t say a reply @mentioned it', async () => {
     const store = await botHome({})
     const { leave, features } = leaver(store)
@@ -434,23 +469,35 @@ describe('a bot that leaves its thread', () => {
     expect(turns).toEqual(['@Ranger please check this'])
   })
 
-  it('hands its line to an answer on disk first, and owes it again if the answer didn\u2019t take it', async () => {
+  it('after a quit, posts a line no saved answer carried, and never one an answer did', async () => {
     const store = await botHome({})
-    const { leave, posted, lines, link } = leaver(store)
+    const { leave, posted, timers } = leaver(store)
     await leave()
-    await lines().handOff(link(), TURN_ID)
-    // Quit after the answer was saved: a restart owes nothing, so the line never posts twice.
     await closeTestStores()
     const reopened = createStore()
-    expect(readThreadMute(reopened, FIRST)).toEqual({ botId: 'bot1', muted: true })
-    lines(reopened).resume(() => null)
+    const linked = () => findLink(reopened, FIRST)!.link
+    const restarted = (carried: boolean) =>
+      leaveLines({
+        store: reopened,
+        cloud: () => ({
+          reply: async (reply: unknown) => {
+            posted.push(reply)
+            return { ok: true as const }
+          }
+        }),
+        setTimer: (run) => timers.push(run),
+        carriedIn: async () => carried
+      })
+    // The answer that carried it was saved before the quit: owed no more, nothing posts.
+    restarted(true).resume(() => null)
+    await expect.poll(() => readThreadMute(reopened, FIRST)).toEqual({ botId: 'bot1', muted: true })
     expect(posted).toEqual([])
-    // The fill wrote no answer: owed again, and posted on its own once.
-    const again = lines(reopened)
-    again.restore(findLink(reopened, FIRST)!.link, TURN_ID)
-    again.post(findLink(reopened, FIRST)!.link, TURN_ID)
+    // No saved answer carried it: it posts on its own once.
+    await leave().catch(() => undefined)
+    writeLinkFact(reopened, FIRST, { leaveLine: TURN_ID })
+    restarted(false).resume(() => null)
     await expect.poll(() => posted.length).toBe(1)
-    expect(again.owed(findLink(reopened, FIRST)!.link, TURN_ID)).toBe(false)
+    expect(restarted(false).owed(linked(), TURN_ID)).toBe(false)
   })
 
   it('changes nothing when no request of the thread is running', async () => {

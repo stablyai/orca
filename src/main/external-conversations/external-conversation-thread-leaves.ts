@@ -18,20 +18,17 @@ export function withThreadLeftLine(words: string | undefined): string {
  *  `settle` posts it alone when they didn't carry it (a failed turn, or one whose end said nothing
  *  there). Owed only while the thread is still left: an @mention since drops it. */
 export type TurnLeave = {
-  /** The turn as read, its outbox prose with the line after it. */
-  turn: <T extends { turnProse?: string }>(turn: T) => T
+  /** The outbox prose, as the fill is about to write it, with the line after it while still owed. */
+  prose: (prose: string | undefined) => string | undefined
   /** The end's final message, as it goes out, with the line after it while still owed. */
   words: (words: string | null | undefined) => string | undefined
-  /** Before the outbox fill: an answer about to carry the line takes it over, saved first, so a
-   *  quit after the fill never posts it again. */
-  handOff: () => Promise<void>
-  /** The fill wrote the turn's prose, and so the line, into an answer (or didn't: owed again). */
+  /** The fill wrote the turn's prose, and so the line, into an answer. */
   filled: (answered: boolean) => void
   /** `carried`: the end went out with the turn's words. */
   settle: (carried?: boolean) => void
 }
 
-type Lines = Pick<LeaveLines, 'owed' | 'carried' | 'post' | 'ending' | 'handOff' | 'restore'>
+type Lines = Pick<LeaveLines, 'owed' | 'carried' | 'post' | 'ending'>
 
 // The line rides only on an answer every cloud keeps whole (the smallest takes 8 KB).
 const RIDE_MAX_BYTES = 7 * 1024
@@ -52,7 +49,6 @@ export function turnLeave(
   // Which of the turn's words were given the line (its outbox prose, its final message); only
   // those can carry it.
   const appended = { prose: false, message: false }
-  let handedOff = false
   let rode = false
   const said = (words: string | undefined, part: keyof typeof appended) => {
     const spoken = words && !isQuietBotResult(words) ? words : undefined
@@ -62,33 +58,24 @@ export function turnLeave(
     appended[part] = true
     return withThreadLeftLine(spoken)
   }
+  // Added as each goes out, never earlier: an @mention since then means it is no longer left.
+  const still = () => left !== null && outcome === 'success' && left.lines.owed(link, left.turnId)
   return {
-    // Read once the turn is: an @mention since its end began means it is no longer left.
-    turn: (turn) =>
-      left && outcome === 'success' && left.lines.owed(link, left.turnId)
-        ? { ...turn, turnProse: said(turn.turnProse, 'prose') }
-        : turn,
-    words: (words) =>
-      left && outcome === 'success' && left.lines.owed(link, left.turnId)
-        ? said(words ?? undefined, 'message')
-        : (words ?? undefined),
-    handOff: async () => {
-      if (left && appended.prose && live()) {
-        handedOff = true
-        await left.lines.handOff(link, left.turnId)
-      }
-    },
+    prose: (prose) => (still() ? said(prose, 'prose') : prose),
+    words: (words) => (still() ? said(words ?? undefined, 'message') : (words ?? undefined)),
+    // The outbox has the line now: it owes nothing more.
     filled: (answered) => {
       rode ||= answered && appended.prose
-      if (handedOff && !rode && left) {
-        left.lines.restore(link, left.turnId)
+      if (rode && left) {
+        left.lines.carried(link, left.turnId)
       }
     },
     settle: (carried) => {
-      if (!left || !live()) {
+      // An answer the fill wrote already took it over.
+      if (!left || rode || !live()) {
         return
       }
-      if (rode || (carried && appended.message)) {
+      if (carried && appended.message) {
         left.lines.carried(link, left.turnId)
       } else {
         left.lines.post(link, left.turnId)

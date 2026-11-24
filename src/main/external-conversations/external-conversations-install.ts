@@ -2,6 +2,7 @@ import type { RuntimeStore } from '../runtime/construction/runtime-store-contrac
 import {
   installLeaveLines,
   leaveLines,
+  THREAD_LEFT_LINE,
   type LeaveLinesCloud
 } from './external-conversation-leave-lines'
 import { setConnectorClaimSource } from '../native-chat/agent-session-wire/recovery/structured-agent-session-connector-claims'
@@ -115,7 +116,19 @@ export function installExternalConversations(
       cloud: () => runtime.getConnectorCloud?.() ?? null,
       ...(store.flushPendingOrThrowAsync
         ? { flush: () => store.flushPendingOrThrowAsync!({ drainToStableGeneration: false }) }
-        : {})
+        : {}),
+      carriedIn: async (link, turnId) => {
+        const rows =
+          (await getStructuredAgentSessionHost()
+            ?.deps.store.connectorReplies()
+            ?.read(link.sessionId)) ?? []
+        return rows.some(
+          (row) =>
+            row.conversation.externalId === link.externalId &&
+            row.fill?.turnStartedAt === turnId &&
+            row.fill.prose?.includes(THREAD_LEFT_LINE) === true
+        )
+      }
     })
     installLeaveLines(lines)
     const restartCuts = heldTurnEnds(() => seam)
