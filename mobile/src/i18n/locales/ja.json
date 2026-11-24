@@ -219,7 +219,6 @@
       "addToMessage": "メッセージに追加",
       "attachImage": "画像を添付",
       "cancelEditing": "編集をキャンセル",
-      "placeholder": "何でも聞いてください。@ でファイルを参照、/ でコマンドを実行",
       "saveEditedMessage": "編集したメッセージを保存",
       "sendMessage": "メッセージを送信",
       "sendQueue": "キューに入れる",
@@ -229,10 +228,7 @@
       "sendSteerHint": "Agent が今行っている作業に加えます"
     },
     "contextUsage": {
-      "label": "コンテキスト {{used}} / {{window}} トークン、{{percent}}% 使用済み",
-      "title": "コンテキスト",
-      "estimated": "最後の応答から推定。",
-      "deferredNote": "必要時に読み込まれます。使用量には含まれません。"
+      "title": "コンテキスト"
     },
     "composerAttachments": {
       "attachedImage": "添付画像",
@@ -243,7 +239,6 @@
       "uploadingFile": "「{{name}}」をアップロード中"
     },
     "composerPlaceholder": {
-      "prompt": "何でも聞いてください。@ でファイルを参照、/ でコマンドを実行",
       "waitingForTerminal": "ターミナルを待っています…"
     },
     "diffCard": {
@@ -443,8 +438,6 @@
       "xhighShort": "最高"
     },
     "sessionOptionPickers": {
-      "agentWorking": "Agent が作業中",
-      "backToModels": "モデル一覧に戻る",
       "dispatchUnconfirmed": "Agent に送信済み — 未確認",
       "modelFullAccessLabel": "モデル、{{value}}、フルアクセス",
       "modelLabel": "モデル、{{value}}",
@@ -458,9 +451,6 @@
       "notReportedMarker": "未報告",
       "moreModels": "その他のモデル",
       "fewerModels": "表示を減らす"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "Agent に送信済み — 未確認"
     },
     "stopButton": {
       "stopAgent": "Agent を停止",

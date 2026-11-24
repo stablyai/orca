@@ -17,7 +17,9 @@ export function MobileNativeChatComposerAttachButton({
   structured,
   isAttaching,
   disabled,
-  menu
+  menu,
+  onPlan,
+  onGoal
 }: {
   onAttachImage: (() => void) | undefined
   onAttachFiles: (() => void) | undefined
@@ -30,6 +32,8 @@ export function MobileNativeChatComposerAttachButton({
     openSlashMenu: (kind: 'skill' | 'command') => void
     skillCount: number
   }
+  onPlan?: (() => void) | undefined
+  onGoal?: (() => void) | undefined
 }): React.JSX.Element | null {
   const t = useMobileTranslation()
   const [attachOpen, setAttachOpen] = useState(false)
@@ -68,7 +72,9 @@ export function MobileNativeChatComposerAttachButton({
             onWorkspaceFile: sheet.openFileMenu,
             onSkills: () => sheet.openSlashMenu('skill'),
             onCommands: () => sheet.openSlashMenu('command'),
-            skillCount: sheet.skillCount
+            skillCount: sheet.skillCount,
+            onPlan,
+            onGoal
           })}
         />
       ) : null}

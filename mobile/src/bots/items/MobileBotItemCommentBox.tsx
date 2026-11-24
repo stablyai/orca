@@ -340,7 +340,6 @@ export function MobileBotItemCommentBox({
             micStarting={mic.micStarting}
             micProcessing={mic.micProcessing}
             cancelRef={cancelRef}
-            trailing={null}
           >
             {null}
           </MobileNativeChatDictationLeading>

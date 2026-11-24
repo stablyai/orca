@@ -29,7 +29,8 @@ import { mobileNativeChatComposerStyles as styles } from './field/mobile-native-
 import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
 import { MobileNativeChatComposerSendSlot } from './delivery/MobileNativeChatComposerSendSlot'
 import { MobileNativeChatEditActions } from './field/MobileNativeChatEditActions'
-import { useMobileNativeChatContextRing } from './commands/MobileNativeChatContextUsageRing'
+import { MobileNativeChatContextLimitLine } from './commands/MobileNativeChatContextUsage'
+import { mobileNativeChatComposerModes } from './commands/mobile-native-chat-composer-modes'
 import type { MobileNativeChatSendIntent } from './delivery/mobile-native-chat-send'
 import { MobileNativeChatComposerMic } from './dictation/MobileNativeChatComposerMic'
 import { MobileNativeChatDictationLeading } from './dictation/MobileNativeChatDictationLeading'
@@ -39,6 +40,7 @@ import { MobileNativeChatComposerPlanChip } from './commands/MobileNativeChatCom
 import type { MobileNativeChatComposerProps } from './mobile-native-chat-composer-props'
 import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
 import { MobileNativeChatQuoteTab } from './quotes/MobileNativeChatQuoteTab'
+import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -162,7 +164,6 @@ export function MobileNativeChatComposer({
     onSlashMenuDemand: structured?.onSlashMenuDemand,
     focusField: () => fieldRef.current?.focus()
   })
-  const contextRing = useMobileNativeChatContextRing(contextUsage, menu.rows.length > 0)
   const dictation = useMobileNativeChatComposerDictation({
     draftScopeKey,
     value,
@@ -244,6 +245,25 @@ export function MobileNativeChatComposer({
     }
   }
 
+  const modes = mobileNativeChatComposerModes({
+    options: sessionOptions?.controller,
+    structured: structured !== null,
+    editing: editSession !== undefined,
+    offline,
+    goalMenu: goal.menu,
+    goalActive: goal.chip !== null,
+    commands: menu.commands,
+    contextUsage,
+    onSend,
+    fieldRef
+  })
+  const mic = onMicPress ? (
+    <MobileNativeChatComposerMic
+      {...{ onMicPress, micActive, micStarting, micProcessing, dictationMode }}
+      {...{ onMicPressIn, onMicPressOut, cancelRef }}
+      disabled={disabled || offline}
+    />
+  ) : null
   const followUp = goal.sendFollowUp(sendFollowUp)
   const headChord = goal.holdsFollowUp ? undefined : steerHead
   const content = (
@@ -260,7 +280,8 @@ export function MobileNativeChatComposer({
         {orca.usageSheet}
         {goal.strip}
         {editSession ? null : <MobileNativeChatQuoteTab {...{ value, onChangeText, fieldRef }} />}
-        <View {...contextRing.barProps} style={styles.bar} testID="native-chat-composer">
+        <View style={styles.bar} testID="native-chat-composer">
+          <MobileNativeChatContextLimitLine {...modes.context} />
           <MobileNativeChatComposerAttachments
             images={attachments}
             files={files}
@@ -299,17 +320,7 @@ export function MobileNativeChatComposer({
               menu.onSelectionChange(e.nativeEvent.selection)
             }}
             placeholder={
-              goal.placeholder ??
-              placeholder ??
-              (mentionBots && mentionBots.bots.length > 0
-                ? t(
-                    'bots.chat.mentionPlaceholder',
-                    'Ask anything, @ to mention bots or files, / for commands'
-                  )
-                : t(
-                    'chat.composer.placeholder',
-                    'Ask anything, @ to mention files, / for commands'
-                  ))
+              goal.placeholder ?? placeholder ?? t('chat.composer.askAnything', 'Ask anything')
             }
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.accentBlue}
@@ -322,7 +333,7 @@ export function MobileNativeChatComposer({
           />
           <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
             <MobileNativeChatDictationLeading
-              {...{ micActive, micStarting, micProcessing, cancelRef, trailing: contextRing.ring }}
+              {...{ micActive, micStarting, micProcessing, cancelRef }}
             >
               <MobileNativeChatComposerAttachButton
                 onAttachImage={onAttachImage}
@@ -331,14 +342,21 @@ export function MobileNativeChatComposer({
                 isAttaching={isAttaching}
                 disabled={disabled || offline}
                 menu={menu}
+                onPlan={modes.onPlan}
+                onGoal={modes.onGoal}
               />
               {roomReplies}
               {sessionOptions ? (
                 <MobileNativeChatSessionOptionPickers
                   {...sessionOptions}
+                  title={tuiAgentDisplayName(agent ?? '') ?? undefined}
+                  context={modes.context}
                   sendInFlight={sending || isAttaching}
                   presentation={picker}
-                  onNavigate={(page) => setPicker((current) => current && { ...current, page })}
+                  // A pick that lands after Done must not reopen the closing sheet.
+                  onNavigate={(page) =>
+                    setPicker((current) => (current?.page == null ? current : { ...current, page }))
+                  }
                   onDrawerOpen={(page) => setPicker({ page, refocus: focused })}
                   onDrawerAfterClose={() => {
                     if (picker?.refocus) {
@@ -351,13 +369,7 @@ export function MobileNativeChatComposer({
               <MobileNativeChatComposerPlanChip options={sessionOptions} inputRef={fieldRef} />
               {goal.chip}
             </MobileNativeChatDictationLeading>
-            {onMicPress ? (
-              <MobileNativeChatComposerMic
-                {...{ onMicPress, micActive, micStarting, micProcessing, dictationMode }}
-                {...{ onMicPressIn, onMicPressOut, cancelRef }}
-                disabled={disabled || offline}
-              />
-            ) : null}
+            {editSession ? mic : null}
             {editSession ? (
               <MobileNativeChatEditActions
                 canSave={canSend}
@@ -377,8 +389,10 @@ export function MobileNativeChatComposer({
                   followUp,
                   canSend,
                   sending,
-                  stop
+                  stop,
+                  mic
                 }}
+                micLive={micActive || micStarting === true || micProcessing === true}
                 snapshot={sessionOptions?.controller.snapshot}
                 steerHead={headChord}
                 pickerOpen={menu.rows.length > 0}

@@ -219,7 +219,6 @@
       "addToMessage": "新增至訊息",
       "attachImage": "附加圖片",
       "cancelEditing": "取消編輯",
-      "placeholder": "隨心輸入，@ 引用檔案，/ 使用命令",
       "saveEditedMessage": "儲存編輯後的訊息",
       "sendMessage": "傳送訊息",
       "sendQueue": "加入佇列",
@@ -229,10 +228,7 @@
       "sendSteerHint": "加入代理程式目前正在進行的工作"
     },
     "contextUsage": {
-      "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
-      "title": "上下文",
-      "estimated": "根據上一次回應的估算值。",
-      "deferredNote": "按需載入，不計入已用總量。"
+      "title": "上下文"
     },
     "composerAttachments": {
       "attachedImage": "已附加的圖片",
@@ -243,7 +239,6 @@
       "uploadingFile": "正在上傳 {{name}}"
     },
     "composerPlaceholder": {
-      "prompt": "隨心輸入，@ 引用檔案，/ 使用命令",
       "waitingForTerminal": "等待終端機…"
     },
     "diffCard": {
@@ -443,8 +438,6 @@
       "xhighShort": "極高"
     },
     "sessionOptionPickers": {
-      "agentWorking": "代理程式正在執行",
-      "backToModels": "返回模型清單",
       "dispatchUnconfirmed": "已傳送給代理程式 — 尚未確認",
       "modelFullAccessLabel": "模型，{{value}}，完整存取權",
       "modelLabel": "模型，{{value}}",
@@ -458,9 +451,6 @@
       "notReportedMarker": "未回報",
       "moreModels": "更多模型",
       "fewerModels": "較少模型"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "已傳送給代理程式 — 尚未確認"
     },
     "stopButton": {
       "stopAgent": "停止代理程式",

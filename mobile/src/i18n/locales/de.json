@@ -219,7 +219,6 @@
       "addToMessage": "Zur Nachricht hinzufügen",
       "attachImage": "Bild anhängen",
       "cancelEditing": "Bearbeitung abbrechen",
-      "placeholder": "Frage stellen, @ für Dateiverweise, / für Befehle",
       "saveEditedMessage": "Bearbeitete Nachricht speichern",
       "sendMessage": "Nachricht senden",
       "sendQueue": "Einreihen",
@@ -229,10 +228,7 @@
       "sendSteerHint": "Fließt in das ein, was der Agent gerade tut"
     },
     "contextUsage": {
-      "label": "Kontext: {{used}} von {{window}} Token, {{percent}} % genutzt",
-      "title": "Kontext",
-      "estimated": "Anhand der letzten Antwort geschätzt.",
-      "deferredNote": "Bei Bedarf geladen. Nicht in der Nutzung enthalten."
+      "title": "Kontext"
     },
     "composerAttachments": {
       "attachedImage": "Angehängtes Bild",
@@ -243,7 +239,6 @@
       "uploadingFile": "{{name}} wird hochgeladen"
     },
     "composerPlaceholder": {
-      "prompt": "Frage stellen, @ für Dateiverweise, / für Befehle",
       "waitingForTerminal": "Warten auf Terminal…"
     },
     "diffCard": {
@@ -443,8 +438,6 @@
       "xhighShort": "Sehr hoch"
     },
     "sessionOptionPickers": {
-      "agentWorking": "Agent arbeitet",
-      "backToModels": "Zurück zu den Modellen",
       "dispatchUnconfirmed": "An den Agenten gesendet — nicht bestätigt",
       "modelFullAccessLabel": "Modell, {{value}}, Vollzugriff",
       "modelLabel": "Modell, {{value}}",
@@ -458,9 +451,6 @@
       "notReportedMarker": "Nicht gemeldet",
       "moreModels": "Weitere Modelle",
       "fewerModels": "Weniger Modelle"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "An den Agenten gesendet — nicht bestätigt"
     },
     "stopButton": {
       "stopAgent": "Agenten stoppen",

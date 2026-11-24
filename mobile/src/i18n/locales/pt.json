@@ -239,7 +239,6 @@
       "addToMessage": "Adicionar à mensagem",
       "attachImage": "Anexar imagem",
       "cancelEditing": "Cancelar edição",
-      "placeholder": "Pergunte o que quiser, @ para mencionar arquivos, / para comandos",
       "saveEditedMessage": "Salvar mensagem editada",
       "sendMessage": "Enviar mensagem",
       "sendQueue": "Colocar na fila",
@@ -249,10 +248,7 @@
       "sendSteerHint": "Entra no que o agente está fazendo agora"
     },
     "contextUsage": {
-      "label": "Contexto: {{used}} de {{window}} tokens, {{percent}}% usado",
-      "title": "Contexto",
-      "estimated": "Estimado a partir da última resposta.",
-      "deferredNote": "Carregado sob demanda. Não conta no total usado."
+      "title": "Contexto"
     },
     "composerAttachments": {
       "attachedImage": "Imagem anexada",
@@ -263,7 +259,6 @@
       "uploadingFile": "Enviando {{name}}"
     },
     "composerPlaceholder": {
-      "prompt": "Enviar uma mensagem…",
       "waitingForTerminal": "Aguardando o terminal…"
     },
     "diffCard": {
@@ -466,8 +461,6 @@
       "ultracode": "Ultracode"
     },
     "sessionOptionPickers": {
-      "agentWorking": "O agente está trabalhando",
-      "backToModels": "Voltar aos modelos",
       "dispatchUnconfirmed": "Enviado ao agente — não confirmado",
       "modelFullAccessLabel": "Modelo, {{value}}, acesso total",
       "modelLabel": "Modelo, {{value}}",
@@ -475,17 +468,13 @@
       "permissionsLabel": "Permissões, {{value}}",
       "settingsLocked": "As configurações do modelo serão desbloqueadas quando este turno terminar.",
       "workingAnnouncement": "O agente está trabalhando. As configurações do modelo serão desbloqueadas quando este turno terminar.",
-      "applying": "Aplicando…",
-      "optionsSection": "Opções"
+      "applying": "Aplicando…"
     },
     "sessionOptionRows": {
       "defaultMarker": "Padrão",
       "notReportedMarker": "Não informado",
       "moreModels": "Mais modelos",
       "fewerModels": "Menos modelos"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "Enviado ao agente — não confirmado"
     },
     "stopButton": {
       "stopAgent": "Parar o agente",

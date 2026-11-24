@@ -308,7 +308,6 @@
       "addToMessage": "添加到消息",
       "attachImage": "添加图片",
       "cancelEditing": "取消编辑",
-      "placeholder": "随心输入，@ 引用文件，/ 使用命令",
       "saveEditedMessage": "保存编辑后的消息",
       "sendMessage": "发送消息",
       "sendQueue": "加入队列",
@@ -318,10 +317,7 @@
       "sendSteerHint": "加入智能体当前正在进行的工作"
     },
     "contextUsage": {
-      "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
-      "title": "上下文",
-      "estimated": "根据上一次响应的估算值。",
-      "deferredNote": "按需加载，不计入已用总量。"
+      "title": "上下文"
     },
     "composerAttachments": {
       "attachedImage": "已添加的图片",
@@ -333,7 +329,6 @@
       "uploadingFile": "正在上传 {{name}}"
     },
     "composerPlaceholder": {
-      "prompt": "随心输入，@ 引用文件，/ 使用命令",
       "waitingForTerminal": "等待终端…"
     },
     "diffCard": {
@@ -547,8 +542,6 @@
       "xhighShort": "XHigh"
     },
     "sessionOptionPickers": {
-      "agentWorking": "智能体正在工作",
-      "backToModels": "返回模型列表",
       "dispatchUnconfirmed": "已发送给智能体 — 尚未确认",
       "modelFullAccessLabel": "模型，{{value}}，完全访问权限",
       "modelLabel": "模型，{{value}}",
@@ -556,7 +549,6 @@
       "applying": "正在应用…",
       "onAttach": "聊天连接后生效",
       "heldPickRefused": "{{picked}} 在此聊天中不可用，已保留 {{kept}}",
-      "optionsSection": "选项",
       "permissionsLabel": "权限，{{value}}",
       "settingsLocked": "本轮结束后将解锁模型设置",
       "workingAnnouncement": "智能体正在工作。本轮结束后将解锁模型设置"
@@ -566,9 +558,6 @@
       "notReportedMarker": "未上报",
       "moreModels": "更多模型",
       "fewerModels": "较少模型"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "已发送给智能体 — 尚未确认"
     },
     "stopButton": {
       "stopAgent": "停止智能体",
@@ -6818,7 +6807,6 @@
       "nothingToReport": "没有需要汇报的内容",
       "mentionOwnChats": "你的其他聊天",
       "mentionPaused": "已暂停",
-      "mentionPlaceholder": "随心输入，@ 提及 bots 或文件，/ 使用命令",
       "mentionChatsLoadFailed": "无法加载聊天"
     },
     "access": {

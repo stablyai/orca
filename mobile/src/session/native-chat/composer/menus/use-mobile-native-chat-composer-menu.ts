@@ -306,6 +306,8 @@ export function useMobileNativeChatComposerMenu(input: {
 
   return {
     onFieldChange,
+    /** This chat's own commands, which the + sheet reads for /compact and /goal. */
+    commands: catalog.commands,
     skillToken,
     skillCount: skillTokens.size,
     rows,

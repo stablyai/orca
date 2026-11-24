@@ -293,7 +293,6 @@ export function MobileBotGroupRoom({
                   primary={t('bots.groups.repliesValue', 'Replies: {{value0}}', {
                     value0: audience
                   })}
-                  secondary={null}
                   warning={false}
                   accessibleName={t('bots.groups.repliesValue', 'Replies: {{value0}}', {
                     value0: audience

@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import type { TextInputInstance } from 'react-native'
 import { isStructuredAgentSessionHostCommand } from '../../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { agentSessionInteractionCommand } from '../../../../../../src/shared/agent-session/options/permissions/agent-session-interaction-mode'
@@ -18,7 +18,8 @@ import type { MobileNativeChatSteerHead } from '../menus/use-mobile-native-chat-
 import { useMobileNativeChatSteerChordPreview } from '../field/use-mobile-native-chat-steer-chord-preview'
 import { useMobileNativeChatDictationFailed } from '../dictation/MobileNativeChatDictationLeading'
 
-/** Send's slot outside a queued edit: Send, Stop where Send can't deliver, or what a held Cmd/Ctrl would do. */
+/** Send's slot outside a queued edit: the mic until there is something to send, then Send; Stop where
+ *  Send can't deliver, with the mic beside it; or what a held Cmd/Ctrl would do. */
 export function MobileNativeChatComposerSendSlot({
   fieldRef,
   value,
@@ -35,6 +36,8 @@ export function MobileNativeChatComposerSendSlot({
   sendDisabled,
   attaching,
   stop,
+  mic,
+  micLive,
   onSend
 }: {
   fieldRef: RefObject<TextInputInstance | null>
@@ -53,6 +56,10 @@ export function MobileNativeChatComposerSendSlot({
   /** An attachment or dictation still on its way. */
   attaching: boolean
   stop: { onStop?: () => void; held: boolean } | null
+  /** The composer's mic; null where the chat has no dictation. */
+  mic: ReactNode
+  /** Dictation is starting, recording or transcribing: the mic keeps the slot. */
+  micLive: boolean
   onSend: (intent?: MobileNativeChatSendIntent, keepFocus?: boolean) => void
 }): React.JSX.Element | null {
   const dictationFailed = useMobileNativeChatDictationFailed()
@@ -89,32 +96,37 @@ export function MobileNativeChatComposerSendSlot({
     draft: value,
     attachmentCount
   })
-  // A dictation kept for Retry takes Send's room; a running agent keeps its Stop.
-  if (dictationFailed && !(showsStop && stop)) {
-    return null
-  }
-  if (steerChord.preview && (steerChord.preview === 'steer-queued' || canSend)) {
-    // As desktop, the preview takes Send's slot at once, with no ease.
-    return (
-      <MobileNativeChatSteerPreviewButton
-        preview={steerChord.preview}
-        onPress={steerChord.runPreview}
-      />
-    )
-  }
+  const stopping = showsStop && stop !== null
+  const hasDraft = value.trim() !== '' || attachmentCount > 0
+  // The mic holds the slot until there is something to send; a live or failed dictation keeps it.
+  const micHoldsSlot = micLive || dictationFailed || (!hasDraft && !sending)
+  const preview = steerChord.preview && (steerChord.preview === 'steer-queued' || canSend)
+  const control = stopping ? 'stop' : mic !== null && micHoldsSlot ? null : 'send'
   return (
-    <MobileNativeChatControlSwap swapKey={showsStop && stop ? 'stop' : 'send'}>
-      {showsStop && stop ? (
-        // Only this phone's own request holds Stop: a repeat is how a stuck stop escalates.
-        <MobileNativeChatStopButton onStop={stop.onStop} held={stop.held} />
-      ) : (
-        <MobileNativeChatSendButton
-          canSend={canSend}
-          sending={sending}
-          sendFollowUp={followUp}
-          onSend={onSend}
+    <>
+      {/* Always first, so a held mic is never remounted when Stop or a preview comes or goes mid-hold. */}
+      {mic !== null && (stopping || micHoldsSlot) ? mic : null}
+      {preview && steerChord.preview ? (
+        // As desktop, the preview takes Send's slot at once, with no ease.
+        <MobileNativeChatSteerPreviewButton
+          preview={steerChord.preview}
+          onPress={steerChord.runPreview}
         />
-      )}
-    </MobileNativeChatControlSwap>
+      ) : control ? (
+        <MobileNativeChatControlSwap swapKey={control}>
+          {stop && control === 'stop' ? (
+            // Only this phone's own request holds Stop: a repeat is how a stuck stop escalates.
+            <MobileNativeChatStopButton onStop={stop.onStop} held={stop.held} />
+          ) : (
+            <MobileNativeChatSendButton
+              canSend={canSend}
+              sending={sending}
+              sendFollowUp={followUp}
+              onSend={onSend}
+            />
+          )}
+        </MobileNativeChatControlSwap>
+      ) : null}
+    </>
   )
 }
