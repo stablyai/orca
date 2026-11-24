@@ -8,6 +8,7 @@ import {
 import { useAppStore } from '@/store'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { WorktreeCardLineWorker } from './workspace-card/controller/worktree-card-model'
 import { isActiveSidebarWorkspace } from '../../../../shared/sidebar-list/selection/active-workspace'
 import { getWorktreeLineageGroupKey } from '../../../../shared/sidebar-list/sections/group-keys'
 import { getActiveSidebarWorkspaceId } from '../../../../shared/workspace/identity/workspace-scope'
@@ -26,6 +27,7 @@ export function AttachedWorktreeCards({
   lineOwnerHostId,
   affiliateListMode = false,
   lineNotes,
+  lineWorkers,
   onOpen
 }: {
   roots: readonly Worktree[]
@@ -40,6 +42,8 @@ export function AttachedWorktreeCards({
   affiliateListMode?: boolean
   /** A muted note after a line's name, by worktree id, as under a bot's chat. */
   lineNotes?: ReadonlyMap<string, string>
+  /** The worker a line stands for, by worktree id: its dot and what a press opens. */
+  lineWorkers?: ReadonlyMap<string, WorktreeCardLineWorker>
   /** Runs when a card is opened, as a sidebar card closes the workspace board. */
   onOpen?: () => void
 }): React.JSX.Element {
@@ -112,6 +116,7 @@ export function AttachedWorktreeCards({
         renameRowKey={compactLine ? botWorkerLineRowKey(identity) : undefined}
         lineOwnerHostId={lineOwnerHostId}
         lineNote={lineNotes?.get(worktree.id)}
+        lineWorker={lineWorkers?.get(worktree.id)}
         nativeDragEnabled={false}
         // A regular nested child row's geometry, so a selected row's glyph clears its border.
         flushSurface

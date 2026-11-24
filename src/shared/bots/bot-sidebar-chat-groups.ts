@@ -72,10 +72,10 @@ export function pageChatLines(
 
 export type BotSidebarLineNote = 'handed-over' | 'from-closed-chat'
 
-/** Each workspace's note from its newest loaded worker: a hand-over or a closed chat's still-running worker. */
-export function botSidebarLineNotes(
+/** Each workspace's newest loaded worker; a workspace none of the loaded workers has is absent. */
+export function botSidebarLineWorkers(
   chats: readonly BotChatTreeChat[]
-): Map<string, BotSidebarLineNote> {
+): Map<string, BotChatTreeWorker> {
   const newest = new Map<string, BotChatTreeWorker>()
   for (const chat of chats) {
     for (const worker of [...chat.running, ...chat.finished]) {
@@ -85,8 +85,15 @@ export function botSidebarLineNotes(
       }
     }
   }
+  return newest
+}
+
+/** Each workspace's note from its newest loaded worker: a hand-over or a closed chat's still-running worker. */
+export function botSidebarLineNotes(
+  workers: ReadonlyMap<string, BotChatTreeWorker>
+): Map<string, BotSidebarLineNote> {
   const notes = new Map<string, BotSidebarLineNote>()
-  for (const [worktreeId, worker] of newest) {
+  for (const [worktreeId, worker] of workers) {
     if (worker.note === 'handed-over' || worker.note === 'from-closed-chat') {
       notes.set(worktreeId, worker.note)
     }

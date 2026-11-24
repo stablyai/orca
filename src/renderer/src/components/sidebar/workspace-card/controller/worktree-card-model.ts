@@ -6,6 +6,7 @@ import type React from 'react'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceStatus, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
+import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -15,6 +16,9 @@ export type WorktreeRenameRequest = {
 }
 
 export type ActiveSurfaceVariant = 'primary' | 'secondary'
+
+/** A line that stands for a worker: the dot its state draws and what a press opens; null keeps the workspace's own. */
+export type WorktreeCardLineWorker = { status: WorktreeStatus | null; open: (() => void) | null }
 
 export type WorktreeCardProps = {
   worktree: Worktree
@@ -37,6 +41,8 @@ export type WorktreeCardProps = {
   lineOwnerHostId?: ExecutionHostId
   /** A line under a bot's chat: a muted note after its name, such as "handed over". */
   lineNote?: string
+  /** The worker this line stands for. */
+  lineWorker?: WorktreeCardLineWorker
   inPinnedSection?: boolean
   activationRowKey?: string
   renameRowKey?: string

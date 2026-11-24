@@ -26,6 +26,8 @@ import type { BotChatTree } from './use-bot-chat-tree'
 import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChatRowMenu'
 import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
+import { botSidebarWorkerLines } from './bot-sidebar-worker-lines'
+import type { WorktreeCardLineWorker } from '@/components/sidebar/workspace-card/controller/worktree-card-model'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
 
 /** The bot's open chat tabs in the panel's order, each with the workspaces its workers have, nested by indent. */
@@ -101,6 +103,7 @@ export function BotSidebarChats({
     }
     return labels
   }, [view.notes, t])
+  const lineWorkers = useMemo(() => botSidebarWorkerLines(bot, view.workers), [bot, view.workers])
 
   return (
     <>
@@ -110,6 +113,7 @@ export function BotSidebarChats({
           bot={bot}
           view={chatView}
           notes={notes}
+          lineWorkers={lineWorkers}
           lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
           onStep={(next) => onStep(chatView.chat.chatId, next)}
           onOpen={onOpen}
@@ -122,6 +126,7 @@ export function BotSidebarChats({
           compactLine
           lineOwnerHostId={bot.hostId}
           lineNotes={notes}
+          lineWorkers={lineWorkers}
           onOpen={onOpen}
         />
       ) : null}
@@ -146,6 +151,7 @@ function BotSidebarChat({
   bot,
   view,
   notes,
+  lineWorkers,
   lineageChildrenByParentIdentity,
   onStep,
   onOpen
@@ -153,6 +159,7 @@ function BotSidebarChat({
   bot: Bot
   view: BotSidebarChatView<Worktree>
   notes: ReadonlyMap<string, string>
+  lineWorkers: ReadonlyMap<string, WorktreeCardLineWorker>
   lineageChildrenByParentIdentity: ReadonlyMap<string, Worktree[]>
   onStep: (steps: number) => void
   onOpen: () => void
@@ -232,6 +239,7 @@ function BotSidebarChat({
             compactLine
             lineOwnerHostId={bot.hostId}
             lineNotes={notes}
+            lineWorkers={lineWorkers}
             onOpen={onOpen}
           />
           <BotChatPaging

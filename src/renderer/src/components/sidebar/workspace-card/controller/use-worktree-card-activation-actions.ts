@@ -26,6 +26,7 @@ export function useWorktreeCardActivationActions({
   activationRowKey,
   onActivate,
   onWorktreeCardClick,
+  lineOpen,
   onImmediateActivate,
   isDeleting,
   isSshDisconnected,
@@ -48,7 +49,10 @@ export function useWorktreeCardActivationActions({
     Foundation,
     'isSshDisconnected' | 'updateWorktreeMeta' | 'setWorkspaceUnreadByUser' | 'openModal'
   > &
-  Pick<LinkedDetails, 'isDeleting'>) {
+  Pick<LinkedDetails, 'isDeleting'> & {
+    /** A worker's line opens the worker, which activates its workspace itself. */
+    lineOpen: (() => void) | null
+  }) {
   const worktreeRef = useRef(worktree)
   useLayoutEffect(() => {
     worktreeRef.current = worktree
@@ -85,6 +89,11 @@ export function useWorktreeCardActivationActions({
         return
       }
       onWorktreeCardClick?.()
+      if (lineOpen) {
+        lineOpen()
+        onActivate?.()
+        return
+      }
       // Use shared activation so sidebar navigation participates in back/forward history.
       recordRendererCrashBreadcrumb('sidebar_worktree_activate', {
         worktreeId: worktree.id,
@@ -111,6 +120,7 @@ export function useWorktreeCardActivationActions({
       isSshDisconnected,
       onActivate,
       onWorktreeCardClick,
+      lineOpen,
       onImmediateActivate,
       onSelectionGesture
     ]
