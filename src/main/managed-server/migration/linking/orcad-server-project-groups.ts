@@ -1,4 +1,4 @@
-import { isRepoOnCatalogHost } from '../../../../shared/execution-host'
+import { isRepoOnCatalogHost } from '../../../../shared/execution-host/execution-host'
 import type { OrcadMigrationCatalogPayload } from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import type { OrcadServerFolderCatalog } from './orcad-server-folder-workspaces'
 

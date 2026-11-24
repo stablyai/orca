@@ -1,5 +1,5 @@
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
+import { isWslHookRelayConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 // Encode connection and file in the engine’s single path string so local files cannot answer remote reads.
 const SSH_TRANSCRIPT_PATH_PREFIX = 'orca-ssh-transcript:'

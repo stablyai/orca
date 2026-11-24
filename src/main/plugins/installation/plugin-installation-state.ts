@@ -2,9 +2,9 @@ import {
   isInvalidDiscoveredPlugin,
   type DiscoveredPlugin,
   type ValidDiscoveredPlugin
-} from '../plugin-discovery'
+} from '../discovery/plugin-discovery'
 import { readPluginLockfile } from './plugin-install'
-import { PluginLogBuffer, type PluginLogLine } from '../plugin-log-buffer'
+import { PluginLogBuffer, type PluginLogLine } from '../logging/plugin-log-buffer'
 import { notifyPluginRemoved } from './plugin-removal-events'
 
 export class PluginInstallationState {

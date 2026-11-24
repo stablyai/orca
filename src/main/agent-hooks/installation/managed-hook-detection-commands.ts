@@ -2,10 +2,10 @@ import type { AgentHookTarget } from '../../../shared/agent-hook-listener/config
 import {
   extractExecutableToken,
   isSafeOverrideExecutableToken
-} from '../../../shared/managed-agent-command-token'
-import { MANAGED_AGENT_HOOK_TARGETS } from '../../../shared/managed-agent-hook-targets'
+} from '../../../shared/agent-launch/installation/managed-agent-command-token'
+import { MANAGED_AGENT_HOOK_TARGETS } from '../../../shared/agent-hook-listener/configuration/managed-agent-hook-targets'
 import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { TuiAgentDetectionCommand } from '../../../shared/agent-launch/catalog/tui-agent-detection-commands'
 import { parseClaudeCliVersionOutput } from '../../claude/cli-capabilities/claude-hook-event-versions'
 

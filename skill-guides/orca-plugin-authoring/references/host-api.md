@@ -44,7 +44,7 @@ Host API 1.10 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; 
 
 ## Theme variables in frames
 
-HTML panels and custom editors get these CSS variables from Orca's active theme, plus a `light` or `dark` class on `<html>`. A theme change updates them in place and emits `theme` (`orca.on('theme', ...)`); the frame is not reloaded. Style from them, not fixed colours.
+HTML panels and custom editors get these CSS variables from Orca's active theme and fonts, plus a `light` or `dark` class on `<html>`. A theme or font change updates them in place and emits `theme` (`orca.on('theme', ...)`); the frame is not reloaded. Style from them, not fixed colours.
 
 - `--orca-background`: App canvas
 - `--orca-foreground`: Body text
@@ -66,6 +66,8 @@ HTML panels and custom editors get these CSS variables from Orca's active theme,
 - `--orca-input`: Input borders
 - `--orca-ring`: Focus rings
 - `--orca-radius`: Corner radius of cards and controls
+- `--orca-font-sans`: Interface font stack. Fonts Orca loads itself (the default Geist, plugin fonts) are not in frames, so the next installed font in the stack is used
+- `--orca-font-mono`: Monospace font stack for code
 
 ## Methods
 
@@ -103,8 +105,8 @@ HTML panels and custom editors get these CSS variables from Orca's active theme,
   `(params?: {}) => { opened: true }`
 - `plugin.request` (no capability; panel, editor; since 1.2): Asks the plugin's own worker to run the handler it registered with `orca.panels.handle(name)`, starting the worker if needed; resolves with what the handler returned. `unknown_method` when no handler has that name.
   `(params: { name: string; input?: JSON; timeoutMs?: number }) => { output: JSON }`
-- `agents.list` (capability `agent:read`; worker, panel, editor; since 1.2): The agents in the focused workspace: their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after.
-  `(params?: {}) => { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number; sessionId?: string | null; task?: { title: string } | null }[] }`
+- `agents.list` (capability `agent:read`; worker, panel, editor; since 1.2): The agents in the focused workspace, or in the one `workspaceId` names (rejected when no workspace has it): their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after.
+  `(params?: { workspaceId?: string }) => { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number; sessionId?: string | null; task?: { title: string } | null }[] }`
 - `events.subscribe` (no capability; panel, editor; since 1.2): Delivers a workspace, agent or editor event to this panel as `orca.on(event)`; needs the event's read capability, when it has one. The frame APIs call it for you.
   `(params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" | "editor.typography.changed" }) => { ok: true }`
 - `statusBar.update` (no capability; worker; since 1.2): Changes one of the plugin's `contributes.statusBarItems` (named by `id`): fields given replace their current value, `visible: false` hides it. Desktop app only; lasts until Orca restarts, and is hidden while the plugin is disabled. A plugin with `main` and status bar items has its worker started when it is enabled and kept running while it stays enabled, so a worker can poll and update its items without an event or a hook.
@@ -170,7 +172,7 @@ List each in `contributes.hooks` (`{ "event", "onError"? }`; `main` and `trusted
   event `{ workspaceId: string; kind: "worktree" | "folder"; path: string; branch: string }`; `next` may change nothing; stop with nothing (observe only)
 - `agent.launch.before` (since 1.4.248): Orca is about to start an agent CLI in a terminal, from any launcher (new tab, workspace create, CLI, automation, orchestration). Change `command` or add `env` with `next`, or return `{ deny }` to refuse the launch. Restores of saved sessions are not hooked.
   event `{ agent: string; workspaceId: string | null; workspaceKind: "worktree" | "folder" | null; terminalId?: string; command: string; env: Record<string, string> }`; `next` may change `command`, `env`; stop with `{ deny: string }`
-- `agent.prompt.before` (since 1.4.248): Orca is about to submit a prompt to an agent in a terminal: a launch prompt, an orchestration dispatch, an issue or task prompt, or `orca terminal send` to an agent. A prompt a person submits is never hooked, and writes to one terminal stay in order while it decides. Rewrite `prompt` with `next`, or return `{ deny }` to refuse it.
+- `agent.prompt.before` (since 1.4.248): Orca is about to submit a prompt to an agent in a terminal: a launch prompt, an orchestration dispatch, an issue or task prompt, or a prompt sent with `orca terminal send`. A prompt a person submits is never hooked, and writes to one terminal stay in order while it decides. Rewrite `prompt` with `next`, or return `{ deny }` to refuse it.
   event `{ agent: string | null; terminalId: string; prompt: string; inputKind: "driving" | "orchestration" | "launch" }`; `next` may change `prompt`; stop with `{ deny: string }`
 - `agent.tool.before` (since 1.4.248): An agent in an Orca terminal is about to run a tool. Claude Code waits for the answer: return `{ deny }` to refuse the call (the agent sees the reason) or change `input` with `next`; the person is still asked as usual. Other agents only report the call, so their results are ignored. Agents on SSH or WSL hosts are not hooked yet.
   event `{ agent: string; workspaceId: string | null; terminalId?: string; tool: string; input: JSON; callId?: string }`; `next` may change `input`; stop with `{ deny: string }`
@@ -191,7 +193,7 @@ List each in `contributes.hooks` (`{ "event", "onError"? }`; `main` and `trusted
 - `storage:own` (since 1.4.245): Store data in the plugin's own storage folder
 - `secrets:own` (since 1.4.245): Store and read secrets in the plugin's own encrypted file
 - `settings:own` (since 1.4.160): Read and change the plugin's own settings
-- `appearance:write` (since 1.4.249): Publish and select desktop application, editor and terminal colors
+- `appearance:write` (since 1.4.251): Publish and select desktop application, editor and terminal colors
 - `workspace:create` (since 1.4.259): Create workspaces (new Git branches and worktrees) in your projects, local and SSH; a project's setup script runs as its settings say
 - `automation:read` (since 1.4.259): Read your automations: their names, prompts, agents, projects, workspaces and schedules
 - `automation:write` (since 1.4.259): Create automations that start agents in your projects on a schedule, even when the plugin is not running, and change or delete them (Orca asks you first for ones the plugin did not create, and before it changes what one with extra agent settings runs)

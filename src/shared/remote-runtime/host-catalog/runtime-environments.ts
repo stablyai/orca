@@ -11,7 +11,7 @@ import {
   OrcadWslDeploymentLinkSchema,
   type OrcadWslDeploymentLink
 } from './wsl-host-deployment-link'
-import type { WslHostServerStop } from '../../wsl-host-types'
+import type { WslHostServerStop } from '../wsl-hosts/wsl-host-types'
 
 export const RuntimeAccessEndpointSchema = z.object({
   id: z.string().min(1),

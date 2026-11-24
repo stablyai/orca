@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto'
-import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
-import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
-import type { TokenDeviceEntry } from './device-entry'
+import type { DeviceScope } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimePairingReach } from '../../../../../shared/remote-runtime/pairing/runtime-pairing-reach'
+import type { PendingOfferOptions, TokenDeviceEntry } from './device-entry'
 import { validGrants } from './device-registry-row-validation'
 import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 
@@ -15,7 +15,7 @@ export function mintTokenDevice(
   scope: DeviceScope,
   pairingReach: RuntimePairingReach,
   grants: readonly RuntimeDeviceGrant[],
-  offerTtlMs?: number
+  { offerTtlMs, createdByDeviceId }: PendingOfferOptions = {}
 ): TokenDeviceEntry {
   const validatedGrants = validGrants(grants, scope)
   const pairedAt = Date.now()
@@ -29,6 +29,7 @@ export function mintTokenDevice(
     ticket: true,
     pairingReach,
     ...(validatedGrants ? { grants: validatedGrants } : {}),
-    ...(offerTtlMs !== undefined ? { offerExpiresAt: pairedAt + offerTtlMs } : {})
+    ...(offerTtlMs !== undefined ? { offerExpiresAt: pairedAt + offerTtlMs } : {}),
+    ...(createdByDeviceId ? { createdByDeviceId } : {})
   }
 }

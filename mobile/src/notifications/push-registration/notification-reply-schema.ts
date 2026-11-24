@@ -1,9 +1,9 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type {
   MobilePushRegisterResult,
   MobilePushTestResult
-} from '../../../../src/shared/mobile-push-contract'
-import { hostUnionArms, salvagedOptional } from '../../../../src/shared/zod-salvage'
+} from '../../../../src/shared/notifications/mobile-push-contract'
+import { hostUnionArms, salvagedOptional } from '../../../../src/shared/validation/zod-salvage'
 
 // Keep notification replies nullish/optional where callers use optional access; tightening them would replace existing fallback copy with incompatible-reply errors.
 
@@ -33,7 +33,8 @@ export const PUSH_REGISTER_REFUSAL_REASONS = hostUnionArms<
 export const pushDeliveryTestResultSchema = z
   .looseObject({
     accepted: salvagedOptional('accepted', z.boolean()),
-    reason: salvagedOptional('reason', z.enum(PUSH_TEST_REFUSAL_REASONS))
+    reason: salvagedOptional('reason', z.enum(PUSH_TEST_REFUSAL_REASONS)),
+    clockSkewSeconds: salvagedOptional('clockSkewSeconds', z.number().finite())
   })
   .nullish()
   .catch(undefined)

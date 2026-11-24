@@ -2,14 +2,14 @@ import {
   getRepoDialableSshTargetId,
   parseExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
-import { PROVIDER_REQUEST_ID_MAX_UTF8_BYTES } from '../../../../shared/detected-worktree-provider-contract'
+import { PROVIDER_REQUEST_ID_MAX_UTF8_BYTES } from '../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import type {
   ListDetectedWorktreesArgs,
   HostQualifiedDetectedWorktreeResult,
   DirectSshDetectedWorktreeRequest
-} from '../../../../shared/detected-worktree-provider-contract'
+} from '../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import { isCurrentSshProviderAuthority } from '../../../ssh/connection/authority/ssh-provider-authority'
 import {
   hasValidDirectSshAuthority,
@@ -20,7 +20,7 @@ import {
   isCapturedRepoCurrent,
   resolveRepoOwnershipEvidence
 } from './worktree-host-ownership'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { dropWorkspacesTheListingInvalidates } from '../../../persistence/restoring-sessions/invalid-workspace-layout-purge'
 
 export async function listHostQualifiedDetectedWorktrees(

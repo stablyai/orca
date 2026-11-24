@@ -1,6 +1,6 @@
 import { BrowserWindow, Menu, webContents as electronWebContents } from 'electron'
 import type { Session, WebContents } from 'electron'
-import type { KeybindingOverrides } from '../../../../shared/keybindings'
+import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
 import { setupGuestShortcutForwarding } from '../../../browser/guest-lifecycle/input/shortcuts/browser-guest-shortcut-forwarding'
 import { buildEditableContextMenuTemplate } from '../../../window/editing/editable-context-menu'
 import { isAllowedPluginFrameNavigation } from './plugin-frame-request-policy'

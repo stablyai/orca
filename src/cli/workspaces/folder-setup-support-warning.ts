@@ -1,7 +1,7 @@
 import type { RuntimeClient } from '../runtime/client'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
-import { WORKTREE_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
+import { WORKTREE_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 
 const FOLDER_SETUP_UNSUPPORTED_WARNING =
   'Setup did not run: this host runs an older Orca without folder workspace setup. Update Orca on that host to run it.'

@@ -30,12 +30,20 @@ export type ProcessSpec = {
   stdio?: NodeSpawnOptions['stdio']
   /** Bun and Node require JSON for an IPC channel shared between the two runtimes. */
   serialization?: NodeSpawnOptions['serialization']
-  /** Await tree termination or observed root exit, then settle at the final deadline if unverified. */
-  terminationBarrier?: boolean | ProcessTerminationBarrier
-  /** Called once when the child exits or tree termination is verified. */
+  /** 'wait-for-posix-group' also keeps the runner alive until an interrupted group is quiescent. */
+  terminationBarrier?: boolean | 'wait-for-posix-group' | ProcessTerminationBarrier
+  /** Normal close or verified termination; native POSIX close after stop alone is insufficient. */
   onChildTerminated?: () => void
   /** Every raw stderr chunk as it arrives, including any past the capture cap. */
   onStderr?: (chunk: Buffer | string) => void
+  /** Starts the child off this thread; null spawns it here. */
+  launch?: (spec: ProcessSpec) => LaunchedProcess | null
+}
+
+/** A child started elsewhere: its pid arrives with 'spawn', and a launch not yet started can be withdrawn. */
+export type LaunchedProcess = {
+  child: ChildProcess
+  withdrawPendingLaunch: () => void
 }
 
 export type PipedProcessSpec = Omit<ProcessSpec, 'stdio'> & {

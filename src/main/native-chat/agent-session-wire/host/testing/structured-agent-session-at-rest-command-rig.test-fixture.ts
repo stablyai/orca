@@ -8,7 +8,7 @@ import { acpStructuredAgentDefinition } from '../../../../acp/session/acp-struct
 import { CLAUDE_STRUCTURED_AGENT } from '../../../../claude/structured/claude-structured-agent-definition'
 import { StructuredAgentRegistry } from '../../providers/structured-agent-registry'
 import { StructuredAgentSessionAdapterRouter } from '../../providers/structured-agent-session-adapter-router'
-import { structuredAgentsDeclaringNothing } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import { structuredAgentsDeclaringNothing } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import type { StructuredAgentSessionAtRestCommands } from '../../options/structured-agent-session-at-rest-commands'
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -25,22 +25,22 @@ import {
 } from '../../../../claude/command-catalog/claude-at-rest-commands'
 
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
-import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger.test-fixture'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
   hostTestOperationId,
   resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from './structured-agent-session-host-test-data.test-fixture'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const runtimeMocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
 vi.mock(
@@ -141,7 +141,7 @@ export async function openHost(
     agents,
     store,
     adapter: deliveryAdapter,
-    journalDatabase: openTestJournalHostDatabase(directory),
+    journalDatabase: await openTestAgentSessionDatabase(directory),
     claimKeyId: 'key',
     logger: recordingStructuredAgentSessionLogger().logger,
     now: () => clock,

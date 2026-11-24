@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import type { RightSidebarExplorerView } from '../../../../../../shared/ui-chrome-types'
+import type { RightSidebarExplorerView } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 
 type FileExplorerViewSwitchProps = {
   view: RightSidebarExplorerView

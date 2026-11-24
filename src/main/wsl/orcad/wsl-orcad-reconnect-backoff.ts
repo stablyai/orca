@@ -1,4 +1,4 @@
-import { withReconnectJitter } from '../../../shared/reconnect-jitter'
+import { withReconnectJitter } from '../../../shared/network/reconnect-jitter'
 
 /** A relaunch on a warm VM measured ~0.9 s; a slow deploy ~11 s. Seven tries span ~1 minute. */
 export const WSL_ORCAD_RECONNECT_DELAYS_MS = [250, 1_000, 2_000, 4_000, 8_000, 15_000, 30_000]

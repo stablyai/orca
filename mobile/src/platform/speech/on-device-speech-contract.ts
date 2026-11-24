@@ -3,7 +3,7 @@ import type {
   BridgeSpeechRead,
   BridgeSpeechStartResult,
   BridgeSpeechStatusResult
-} from '../../mobile-web-shell/bridge/bridge-speech-verbs'
+} from '../../mobile-web-shell/bridge/native-capabilities/bridge-speech-verbs'
 
 // The phone's own recognizer as dictation sees it, in the phone's language. Any rejection means "use the computer".
 export type OnDeviceSpeech = {

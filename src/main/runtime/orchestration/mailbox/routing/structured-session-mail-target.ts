@@ -1,12 +1,13 @@
 /** Resolve structured-owned mail to a session turn, covering Run, session, Dispatch and worker-handle addresses. */
 
 import {
+  formatOrcaSessionAddress,
   isOrcaSessionId,
   parseOrcaSessionAddress
-} from '../../../../../shared/orca-session-address'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
+} from '../../../../../shared/agent-session/identity/orca-session-address'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 
-import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { currentRunCoordinatorOrcaSessionId } from '../../db/runs/run-coordinator-orca-session'
 import type { StructuredPointerTarget } from '../structured-pointer/structured-mailbox-pointer-delivery'
@@ -16,6 +17,7 @@ import {
 } from './structured-session-mail-address'
 import {
   readAgentSessionRecordStore,
+  resolveLineageRunningSession,
   type AgentSessionRecordReader
 } from '../../addressing/session-lineage/structured-session-lineage'
 import type { RunRow } from '../../db/orchestration-records'
@@ -136,8 +138,14 @@ export function structuredSessionOwnedMailboxes(sessionId: string, db: Orchestra
     return []
   }
   const mailboxes = db.runsBoundToCoordinator(party).map((run) => `run:${run.id}`)
-  if (db.getUnreadDirectMessageTypes(party.address).length > 0) {
-    mailboxes.push(party.address)
+  // Direct mail can name any session of the lineage (item mail names the live one), not only its root.
+  const lineage = resolveLineageRunningSession(readAgentSessionRecordStore(), party.orcaSessionId)
+  const members = lineage.lineage.filter(isOrcaSessionId).map(formatOrcaSessionAddress)
+  const addresses = new Set<string>([party.address, ...members])
+  for (const address of addresses) {
+    if (db.getUnreadDirectMessageTypes(address).length > 0) {
+      mailboxes.push(address)
+    }
   }
   // Re-derive Dispatch mail through current party identity; a cleared or restarted session has no future idle edge.
   const dispatch = db.findActiveDispatchForAssignee(party.address, party.paneKey ?? undefined)

@@ -8,12 +8,16 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { firstParam } from '../../../../src/navigation/route-param-reader'
 import { STANDALONE_SESSION_PARAM } from '../../../../src/navigation/host-stack-navigation'
 import {
+  SESSION_REQUEST_PARAMS,
+  sessionScreenIdentity
+} from '../../../../src/session/session-pane-intent'
+import {
   shellScreenRoute,
   shellScreenRouteKey
-} from '../../../../src/mobile-web-shell/shell-screen-route'
+} from '../../../../src/mobile-web-shell/routing/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
-import type { BridgeClearableRouteParam } from '../../../../src/mobile-web-shell/bridge/bridge-route-update'
-import { PageRouteUnavailableScreen } from '../../../../src/mobile-web-shell/PageRouteUnavailableScreen'
+import type { BridgeClearableRouteParam } from '../../../../src/mobile-web-shell/bridge/page-lifecycle/bridge-route-update'
+import { PageRouteUnavailableScreen } from '../../../../src/mobile-web-shell/presentation/PageRouteUnavailableScreen'
 
 // paneKey selects a tab within the current session, not a new identity; remounting on it reloads the page and loses repeated taps.
 // Deliver it as a route update via repeated init only to supporting pages, then clear the native param so later init cannot replay it (ruling 33.1).
@@ -25,7 +29,10 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
     name?: string | string[]
     created?: string | string[]
     warning?: string | string[]
+    homeDraft?: string | string[]
     paneKey?: string | string[]
+    botItem?: string | string[]
+    paneIntent?: string | string[]
     standalone?: string | string[]
   }>()
   const hostId = firstParam(params.hostId)
@@ -33,21 +40,28 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
   const executionHost = useWorkspaceExecutionHost()
   const router = useRouter()
   const paneKey = firstParam(params.paneKey) ?? ''
-  // Clear only the paneKey the page applied; a newer tap must survive. Empty equals absent in the route builder (ruling 34).
-  const erasePaneKey = useCallback(
+  const botItem = firstParam(params.botItem) ?? ''
+  const homeDraft = firstParam(params.homeDraft) ?? ''
+  // Clear only the consumed request; a newer tap must survive.
+  const eraseRequest = useCallback(
     (param: BridgeClearableRouteParam, value: string) => {
-      if (param !== 'paneKey' || paneKey === '' || value !== paneKey) {
+      const held: Partial<Record<BridgeClearableRouteParam, string>> = {
+        paneKey,
+        botItem,
+        homeDraft
+      }
+      if (value === '' || value !== held[param]) {
         return
       }
-      router.setParams({ paneKey: '' })
+      router.setParams({ [param]: '' })
     },
-    [paneKey, router]
+    [botItem, homeDraft, paneKey, router]
   )
 
   // Omit empty params: created=1 is one-shot, warning is host text, absent name derives a label, and empty paneKey marks a spent tap.
   const routeParams: Record<string, string> = {
     ...Object.fromEntries(
-      (['name', 'created', 'warning', 'paneKey', STANDALONE_SESSION_PARAM] as const)
+      (['name', 'created', 'warning', ...SESSION_REQUEST_PARAMS, STANDALONE_SESSION_PARAM] as const)
         .map((key) => [key, firstParam(params[key])] as const)
         .filter(([, value]) => value !== '')
     ),
@@ -64,15 +78,17 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
   if (route === null) {
     return <PageRouteUnavailableScreen hostId={hostId} />
   }
-  // Remount for grant-bearing route changes, excluding paneKey: pane taps update the current page without discarding its bridge.
+  // Item and pane requests update the current page without discarding its bridge.
   // Keep shared shellScreenRouteKey unchanged because other screens treat param changes as identity changes.
-  const { paneKey: _paneKey, ...identity } = routeParams
   return (
     <MobileWebShellScreen
-      key={shellScreenRouteKey({ pathname: route.pathname, params: identity })}
+      key={shellScreenRouteKey({
+        pathname: route.pathname,
+        params: sessionScreenIdentity(routeParams)
+      })}
       hostId={hostId}
       route={route}
-      onRouteParamClear={erasePaneKey}
+      onRouteParamClear={eraseRequest}
     />
   )
 })

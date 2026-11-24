@@ -60,13 +60,13 @@ export async function readCommitPairScope(
       return null
     }
     const value = JSON.stringify([commonDir, shallow.text])
-    const newestMtimeMs = Math.max(shallow.mtimeMs, packedRefs.mtimeMs)
+    const newestTimestampMs = Math.max(shallow.timestampMs, packedRefs.timestampMs)
     // A rewrite inside the mtime bucket could leave the stamp unchanged.
-    if (!canProveUnchangedByStamp({ value, newestMtimeMs, capturedAtMs })) {
+    if (!canProveUnchangedByStamp({ value, newestTimestampMs, capturedAtMs })) {
       return null
     }
     if (
-      Number.isFinite(packedRefs.mtimeMs) &&
+      Number.isFinite(packedRefs.timestampMs) &&
       !(await isPackedRefsFreeOfReplaceRefs(commonDir, packedRefs.text))
     ) {
       return null

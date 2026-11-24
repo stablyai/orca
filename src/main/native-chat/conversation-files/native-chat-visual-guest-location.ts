@@ -1,6 +1,6 @@
 import { basename, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { isNativeChatVisualFileName } from '../../../shared/native-chat/native-chat-visual-directive'
+import { isNativeChatVisualFileName } from '../../../shared/native-chat/visuals/native-chat-visual-directive'
 import { parseDocPreviewUrl } from '../../../shared/document-preview/doc-preview-scheme'
 import { getDocPreviewGrant } from '../../browser/document-preview/doc-preview-grant-registry'
 

@@ -3,7 +3,7 @@
  *  whose agent is proven gone, so the replacement never sits beside it. */
 
 import { isResumableTuiAgent } from '../../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { agentProviderSessionsEqual } from '../../../../../../../shared/agent-session/lifecycle/agent-provider-session-equality'
+import { agentProviderSessionsEqual } from '../../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { isStructuredWorkerHandle } from '../../../../../../../shared/orchestration/workers/structured-worker-handle'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
@@ -157,7 +157,13 @@ async function releaseLeftoverShell(
   const requested = db.requestWorkerTerminalRelease(dispatchId)
   if (requested.disposition === 'requested') {
     release.requested(dispatchId)
-    await completeWorkerTerminalRelease({ runtime, db, dispatchId, resource: requested.resource })
+    await completeWorkerTerminalRelease({
+      runtime,
+      db,
+      dispatchId,
+      resource: requested.resource,
+      keepBound: true
+    })
   }
 }
 
@@ -190,7 +196,10 @@ export async function userTabHoldingSession(
   runtime: OrcaRuntimeService,
   session: WorkerResumeSession
 ): Promise<string | undefined> {
-  for (const row of runtime.getAgentStatusSnapshotFn?.() ?? []) {
+  for (const row of runtime.getAgentRowsForProviderSession(
+    session.agent,
+    session.providerSession
+  )) {
     const handle =
       row.agentType === session.agent &&
       !row.structuredHost &&

@@ -2,7 +2,7 @@ import * as z from 'zod'
 import {
   structuredSessionOpenFailure,
   type StructuredSessionOpenFailure
-} from '../../../../src/shared/open-structured-agent-session'
+} from '../../../../src/shared/agent-session/view/open-structured-agent-session'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'

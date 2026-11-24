@@ -1,5 +1,6 @@
 import {
   getAutomationRunLastRunAt,
+  getAutomationRunListedAt,
   type AutomationRun,
   type AutomationRunStatus
 } from './automation-run'
@@ -17,6 +18,8 @@ export type AutomationUsageSummary = {
   /** Newest retained run's status, so list filters never fetch run history. Optional: older projections omit it. */
   lastRunStatus?: AutomationRunStatus | null
   lastRunAt?: number | null
+  /** The newest run's listed time (its scheduled slot); older projections omit it. */
+  lastRunListedAt?: number | null
   /** The newest run skipped setup because its branch's setup differs from the approved one. */
   lastRunSetupSkipped?: true
   /** That skipped content, when the host recorded it. */
@@ -70,6 +73,7 @@ export function summarizeAutomationRunUsage(
     estimatedCostUsd: hasKnownCost ? estimatedCostUsd : null,
     lastRunStatus: latest?.status ?? null,
     lastRunAt: latest ? getAutomationRunLastRunAt(latest) : null,
+    lastRunListedAt: latest ? getAutomationRunListedAt(latest) : null,
     ...(latest?.setupSkippedReason === 'setup-changed'
       ? {
           lastRunSetupSkipped: true,

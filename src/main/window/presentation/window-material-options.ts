@@ -1,5 +1,5 @@
 import type { BrowserWindowConstructorOptions } from 'electron'
-import type { WindowMaterial } from '../../../shared/window-material'
+import type { WindowMaterial } from '../../../shared/app-lifecycle/windows/window-material'
 
 type WindowMaterialOptions = Pick<
   BrowserWindowConstructorOptions,

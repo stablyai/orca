@@ -1,7 +1,7 @@
 import type {
   ProviderRateLimits,
   UsageRateLimitMetadata
-} from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export function abortedClaudeRateLimitResult(): ProviderRateLimits {
   return {

@@ -2,13 +2,13 @@ import { createCwdContainment, isOnCallerFilesystem } from './caller-cwd-contain
 import { getCallerExecutionHostId } from './caller-host-worktree-selection'
 import { resolveQualifiedFolderWorkspaceResult } from '../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../shared/project-group-types'
-import type { Repo } from '../../shared/repo-types'
-import type { RuntimeWorktreeListResult } from '../../shared/runtime-worktree-contracts'
-import { folderWorkspaceKey } from '../../shared/workspace-scope'
+import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
+import type { Repo } from '../../shared/repository/repo-types'
+import type { RuntimeWorktreeListResult } from '../../shared/worktree/catalog/runtime-worktree-contracts'
+import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { CatalogRow } from './workspace-catalog-row'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 /** An older Orca without the folder catalog keeps its repo-backed rows; any other failure is real. */
 async function readOptional<TResult>(read: Promise<TResult>): Promise<TResult | undefined> {

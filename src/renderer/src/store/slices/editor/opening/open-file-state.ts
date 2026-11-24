@@ -36,11 +36,25 @@ export function createOpenFileState(
     recentlyClosedEditorTabsByWorktree: {},
     // Require explicit worktree so background/floating actions cannot retype main-window selection.
     setActiveTabType: (type, worktreeId) =>
-      set((s) => ({
-        ...(ownsGlobalSelection(s, worktreeId) ? { activeTabType: type } : {}),
-        activeTabTypeByWorktree: worktreeId
-          ? { ...s.activeTabTypeByWorktree, [worktreeId]: type }
-          : s.activeTabTypeByWorktree
-      }))
+      set((s) => {
+        const setsGlobal = ownsGlobalSelection(s, worktreeId) && s.activeTabType !== type
+        const setsWorktree = Boolean(
+          worktreeId &&
+          !(
+            Object.hasOwn(s.activeTabTypeByWorktree, worktreeId) &&
+            s.activeTabTypeByWorktree[worktreeId] === type
+          )
+        )
+        // Unchanged selection publishes nothing; every publication wakes every store subscriber.
+        if (!setsGlobal && !setsWorktree) {
+          return s
+        }
+        return {
+          ...(setsGlobal ? { activeTabType: type } : {}),
+          ...(setsWorktree && worktreeId
+            ? { activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: type } }
+            : {})
+        }
+      })
   }
 }

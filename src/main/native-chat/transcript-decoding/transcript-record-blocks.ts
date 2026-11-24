@@ -4,13 +4,13 @@ import type {
   NativeChatToolResultBlock
 } from '../../../shared/native-chat/native-chat-types'
 import { asRecord } from '../../ai-vault/parsing/session-record-fields'
-import { extractString } from '../../../shared/trimmed-string'
+import { extractString } from '../../../shared/text/trimmed-string'
 import {
   isClaudeToolUseContent,
   isClaudeToolResultContent,
   claudeToolResultText,
   claudeToolResultFailed
-} from '../../../shared/claude-tool-content'
+} from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-tool-content'
 
 export function toolResultOutput(value: unknown): string {
   if (typeof value === 'string') {

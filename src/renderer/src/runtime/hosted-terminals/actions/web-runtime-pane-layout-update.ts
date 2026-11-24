@@ -1,4 +1,4 @@
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { TerminalPaneLayoutNode } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { runtimeEnvironmentIdUnlessTwin } from '../../../lib/workspace/ownership/resolve-owner'
 import { useAppStore } from '../../../store/index'
@@ -12,7 +12,7 @@ import {
   captureRuntimeEnvironmentCall,
   isWebRuntimeSessionActive
 } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
-import { isServerFrameDrawnWorkspace } from '../../web-session-tabs-sync/frame-drawn-server-workspace-set'
+import { isServerFrameDrawnWorkspace } from '../../web-session-tabs-sync/frame-drawn/frame-drawn-server-workspace-set'
 
 // Push remote geometry to its host or the next authoritative snapshot reverts it.
 export async function updateWebRuntimePaneLayout(args: {

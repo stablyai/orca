@@ -1,11 +1,12 @@
 import * as z from 'zod'
-import { SidebarInputsReadResultSchema } from '../../../../src/shared/sidebar-list/sidebar-inputs-feed-contract'
+import { SidebarInputsReadResultSchema } from '../../../../src/shared/sidebar-list/feed/sidebar-inputs-feed-contract'
 import type { SidebarFeedTransport } from '../../../../src/shared/sidebar-feed-client/sidebar-feed-reader'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 import { isMobileMethodUnavailableError } from '../../transport/rpc/mobile-method-unavailable'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
+import { hostReplyErrorTextOrFallback } from '../../transport/rpc/rpc-refusal-message'
 
 // Only ORCA_SIDEBAR_INPUTS=main pages read this feed; method_not_found or an older allowlist’s forbidden means the page is newer than the host.
 
@@ -48,16 +49,19 @@ export const setCollapsedWrite = bindDeferredRpcOperation(
 export type HostMethodReply<Value> =
   | { kind: 'answered'; value: Value }
   | { kind: 'unavailable' }
-  | { kind: 'failed' }
+  /** `message` is the host's own reason for a refusal, when it gave one. */
+  | { kind: 'failed'; message?: string }
 
 export function readHostMethodReply<Value>(
   reply: RpcResponse,
   interpret: (reply: RpcResponse) => { accepted: true; value: Value } | { accepted: false }
 ): HostMethodReply<Value> {
   if (!reply.ok) {
-    return isMobileMethodUnavailableError(reply.error.code, reply.error.message)
-      ? { kind: 'unavailable' }
-      : { kind: 'failed' }
+    if (isMobileMethodUnavailableError(reply.error.code, reply.error.message)) {
+      return { kind: 'unavailable' }
+    }
+    const message = hostReplyErrorTextOrFallback(reply.error.message, '')
+    return message ? { kind: 'failed', message } : { kind: 'failed' }
   }
   try {
     const verdict = interpret(reply)

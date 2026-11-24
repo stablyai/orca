@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../journal-memory-collections'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
@@ -31,7 +32,7 @@ export function restoreRetainedJournalInputs(
   for (const [id, admission] of admissions) {
     state.inputs.sources.set(id, admission)
   }
-  const ordered = [...state.inputs.sources].sort(
+  const ordered = [...memoryJournalMap(state.inputs.sources)].sort(
     ([, a], [, b]) => (journalInputSourceSequence(a) ?? 0) - (journalInputSourceSequence(b) ?? 0)
   )
   const families = new Map<string, typeof ordered>()
@@ -118,7 +119,7 @@ export function restoreRetainedJournalInputs(
     }
   }
   state.queue.returnedCommands.clear()
-  for (const card of state.queue.cards.values()) {
+  for (const card of memoryJournalMap(state.queue.cards).values()) {
     if (card.consumedAs && state.normalizedHandOffs.has(card.consumedAs)) {
       state.inputs.presentations.set(card.consumedAs, card)
     }
@@ -129,7 +130,7 @@ export function restoreRetainedJournalInputs(
   const removals =
     db.prepare(`SELECT seq,field,entry_key,format,ordinal,value_json,deleted FROM journal_outcomes
     WHERE generation=? AND field='tombstones' AND entry_key=? AND seq>? AND seq<=? ORDER BY seq`)
-  for (const [provider, native] of state.aliases) {
+  for (const [provider, native] of memoryJournalMap(state.aliases)) {
     const identity = parseAgentJournalItemKey(native)
     const receipt =
       identity?.provider === 'orca' ? state.receipts.get(identity.clientMessageId) : undefined

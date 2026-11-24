@@ -6,9 +6,11 @@ import type {
 import { discoverFiles } from './session-scanner-discovery'
 import { opencodeDiscoveries } from '../scanners/opencode/session-scanner-opencode-sources'
 import { zcodeDiscoveries } from '../scanners/zcode/session-scanner-zcode-sources'
+import { hermesDiscoveries } from '../scanners/hermes/session-scanner-hermes-sources'
 import { antigravityDiscoveries } from '../scanners/antigravity/session-scanner-antigravity-sources'
+import { cursorAcpDiscoveries } from '../scanners/cursor/session-scanner-cursor-acp-sessions'
 import { AI_VAULT_AGENT_SOURCES, type AiVaultAgentSource } from './session-scanner-agent-sources'
-import { normalizedWslHomeDirs } from './session-scanner-roots'
+import { normalizedWslHomeDirs, realDirAliases } from './session-scanner-roots'
 import { configureOpenCodeWslReaders } from '../scanners/opencode/reader-transport/session-scanner-opencode-wsl-client'
 import { scopeOnlyScan, scopeWalksAgentFiles } from '../scope/session-scope-cwd'
 import type { AiVaultScanOptions, SessionFileDiscovery } from '../session-scanner-types'
@@ -24,44 +26,55 @@ export async function discoverAiVaultSessionSources(args: {
   }
   const wslHomeDirs = normalizedWslHomeDirs(options.wslHomeDirs)
 
-  return Promise.all([
-    ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
-    ...zcodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
-    ...antigravityDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
-    ...Object.entries(AI_VAULT_AGENT_SOURCES).flatMap(([agent, source]) =>
-      source
-        ? agentDiscoveries(
-            agent as AiVaultAgent,
-            source,
-            options,
-            wslHomeDirs,
-            limitPerAgent,
-            issues
-          )
-        : []
+  const [custom, agents] = await Promise.all([
+    Promise.all([
+      ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
+      ...zcodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
+      ...hermesDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
+      ...antigravityDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
+      ...cursorAcpDiscoveries(options, wslHomeDirs, limitPerAgent, issues)
+    ]),
+    Promise.all(
+      Object.entries(AI_VAULT_AGENT_SOURCES).flatMap(([agent, source]) =>
+        source
+          ? [
+              agentDiscoveries(
+                agent as AiVaultAgent,
+                source,
+                options,
+                wslHomeDirs,
+                limitPerAgent,
+                issues
+              )
+            ]
+          : []
+      )
     )
   ])
+  return [...custom, ...agents.flat()]
 }
 
-function agentDiscoveries(
+async function agentDiscoveries(
   agent: AiVaultAgent,
   source: AiVaultAgentSource,
   options: AiVaultScanOptions,
   wslHomeDirs: readonly string[],
   limit: number,
   issues: AiVaultScanIssue[]
-): Promise<SessionFileDiscovery>[] {
-  const rootDirs = source.rootDirs(options, wslHomeDirs)
+): Promise<SessionFileDiscovery[]> {
+  const declaredRootDirs = source.rootDirs(options, wslHomeDirs)
+  const aliases = source.dedupeRealRootDirs ? await realDirAliases(declaredRootDirs) : null
+  const rootDirs = aliases ? [...aliases.keys()] : declaredRootDirs
   // Scope-only reads cwd buckets through the scope pass; Pi stays listed because OMP's dedupe needs its listing.
   if (
     scopeOnlyScan(options) &&
     !scopeWalksAgentFiles(agent, options.scopePaths) &&
     agent !== 'pi'
   ) {
-    return rootDirs.map(async (rootDir) => ({ agent, rootDir, files: [] }))
+    return rootDirs.map((rootDir) => ({ agent, rootDir, files: [] }))
   }
-  const discover = (rootDir: string): Promise<SessionFileDiscovery> =>
-    discoverFiles({
+  const discover = async (rootDir: string): Promise<SessionFileDiscovery> => {
+    const discovery = await discoverFiles({
       rootDir,
       limit,
       agent,
@@ -71,11 +84,15 @@ function agentDiscoveries(
       contentDependencyPath: source.contentDependencyPath,
       directoryPredicate: source.directoryPredicate,
       keepScopeFiles: scopeWalksAgentFiles(agent, options.scopePaths),
+      statCache: options.statCache,
       signal: options.signal
     })
+    const aliasRootDirs = aliases?.get(rootDir)
+    return aliasRootDirs?.length ? { ...discovery, aliasRootDirs } : discovery
+  }
   return source.mergeRootDiscoveries
-    ? [mergedDiscovery(agent, rootDirs, limit, discover)]
-    : rootDirs.map(discover)
+    ? [await mergedDiscovery(agent, rootDirs, limit, discover)]
+    : Promise.all(rootDirs.map(discover))
 }
 
 // Alternate roots share one recency limit per install.
@@ -92,10 +109,12 @@ async function mergedDiscovery(
   const scopeFiles = discoveries.some((discovery) => discovery.scopeFiles)
     ? [...files.slice(limit), ...discoveries.flatMap((discovery) => discovery.scopeFiles ?? [])]
     : undefined
+  const aliasRootDirs = discoveries.flatMap((discovery) => discovery.aliasRootDirs ?? [])
   return {
     agent,
     rootDir: rootDirs.join(delimiter),
     files: files.slice(0, limit),
-    ...(scopeFiles ? { scopeFiles } : {})
+    ...(scopeFiles ? { scopeFiles } : {}),
+    ...(aliasRootDirs.length ? { aliasRootDirs } : {})
   }
 }

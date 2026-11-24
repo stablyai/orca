@@ -1,6 +1,9 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import type { OrcaProfileCloudSummary, OrcaProfileSummary } from '../../../shared/orca-profiles'
+import type {
+  OrcaProfileCloudSummary,
+  OrcaProfileSummary
+} from '../../../shared/orca-profiles/orca-profiles'
 import {
   bestEffortFsyncDirectorySync,
   writeDurableSecureJsonFile

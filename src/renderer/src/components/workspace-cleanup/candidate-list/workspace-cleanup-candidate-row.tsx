@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -33,13 +34,14 @@ import {
   getReviewStateTone
 } from '@/components/github/review-state-presentation'
 import { StatusPill } from './workspace-cleanup-status-pill'
+import { WorkspaceCleanupGitStatusPills } from './workspace-cleanup-git-status-pills'
 import {
   WorkspaceCleanupMetadataChip,
   WorkspaceCleanupMetadataText
 } from './workspace-cleanup-metadata-chip'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { resolveRepoHeaderColor } from '@/components/sidebar/worktree-list/rows/project-header-color'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { CandidateRowTrailing } from './workspace-cleanup-candidate-row-trailing'
 import {
   getWorkspaceCleanupCandidateAccessibleName,
@@ -74,7 +76,7 @@ type CandidateRowProps = {
   repo: Pick<Repo, 'badgeColor' | 'repoIcon'> | null
   /** Host repeats on every row when the fleet is single-host, so it only shows once hosts differ. */
   showHostLabel: boolean
-  /** False until any row has a measured size; the scan card is the action to fill it. */
+  /** The size column is reserved from open ('—' until measured) so a measurement never reflows rows. */
   showSizeColumn: boolean
   selected: boolean
   onIgnore: (candidate: WorkspaceCleanupCandidate) => void
@@ -126,6 +128,10 @@ export const CandidateRow = React.memo(function CandidateRow({
   const facts = getCandidateFactStatuses(candidate, t)
   const gitStatuses = facts.filter((fact) => fact.git)
   const flags = facts.filter((fact) => !fact.git).map((fact) => fact.label)
+  // Blocking pills first so a warning is the last thing to be cut, never the first.
+  const gitStatusPillsOrdered = [...gitStatuses].sort(
+    (left, right) => Number(right.tone === 'destructive') - Number(left.tone === 'destructive')
+  )
   // Clean is the default, so only non-clean git states get a chip. Main/folder/disconnected
   // rows are never queued and git is not read for them; "unknown" would be a false alarm.
   const showGitChip = queueable && gitStatuses.length === 0
@@ -139,6 +145,13 @@ export const CandidateRow = React.memo(function CandidateRow({
     candidate.branch.length > 0 ||
     contextDetails !== null ||
     branchSafetyDetails.length > 0
+
+  const gitSlotText = deletionPhase
+    ? null
+    : [
+        ...gitStatuses.map((status) => status.label),
+        ...(!gitEvidencePending && showGitChip && dirtyLabel ? [dirtyLabel] : [])
+      ].join(' · ') || null
 
   const visibleFlags = flags.length > FLAG_LIMIT ? flags.slice(0, FLAG_LIMIT - 1) : flags
   const hiddenFlagCount = flags.length - visibleFlags.length
@@ -222,45 +235,68 @@ export const CandidateRow = React.memo(function CandidateRow({
               />
             ) : null}
           </div>
-
-          <div className="mt-0.5 flex min-h-5 min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-            {deletionPhase ? (
-              <StatusPill tone="destructive">
-                {deletionPhase === 'queued'
-                  ? t(
-                      'auto.components.workspace.cleanup.workspace.cleanup.candidate.row.e1135728e3',
-                      'Queued for deletion'
-                    )
-                  : t(
-                      'auto.components.workspace.cleanup.workspace.cleanup.candidate.row.b5d2b33e47',
-                      'Deleting…'
+          {/* One fixed-height line that never wraps: late status/review/disconnect data cannot add
+              a line; what does not fit is truncated and keeps its tooltip. */}
+          <div className="mt-0.5 flex h-5 min-w-0 flex-nowrap items-center gap-x-3 overflow-hidden">
+            {queueable || deletionPhase ? (
+              // Fixed-height slot: evidence arriving swaps its contents without resizing the row.
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    data-workspace-cleanup-git-slot
+                    role="group"
+                    aria-label={gitSlotText ?? undefined}
+                    className={cn(
+                      'inline-flex h-5 flex-1 items-center gap-1.5 overflow-hidden',
+                      // Why: reserve room for the +N chip so a status is never silently squeezed out.
+                      gitStatusPillsOrdered.length > 0 && !deletionPhase ? 'min-w-8' : 'min-w-0'
                     )}
-              </StatusPill>
-            ) : (
-              gitStatuses.map((status) => (
-                <StatusPill key={status.label} tone={status.tone}>
-                  {status.label}
-                </StatusPill>
-              ))
-            )}
-            {gitEvidencePending ? (
-              <span
-                role="status"
-                className="inline-flex h-5 shrink-0 items-center gap-1 text-xs text-muted-foreground"
-              >
-                <Loader2
-                  className="size-3 animate-spin motion-reduce:animate-none"
-                  aria-hidden="true"
-                />
-                {t('components.workspace.cleanup.browse.checkingGitRow', 'Checking git status')}
-              </span>
-            ) : showGitChip && dirtyLabel ? (
-              <WorkspaceCleanupMetadataChip
-                icon={FileWarning}
-                label={dirtyLabel}
-                value={dirtyLabel}
-                tone="destructive"
-              />
+                  >
+                    {deletionPhase ? (
+                      <StatusPill tone="destructive">
+                        {deletionPhase === 'queued'
+                          ? t(
+                              'auto.components.workspace.cleanup.workspace.cleanup.candidate.row.e1135728e3',
+                              'Queued for deletion'
+                            )
+                          : t(
+                              'auto.components.workspace.cleanup.workspace.cleanup.candidate.row.b5d2b33e47',
+                              'Deleting…'
+                            )}
+                      </StatusPill>
+                    ) : (
+                      <WorkspaceCleanupGitStatusPills statuses={gitStatusPillsOrdered} />
+                    )}
+                    {gitEvidencePending ? (
+                      <span
+                        role="status"
+                        className="inline-flex h-5 shrink-0 items-center gap-1 text-xs text-muted-foreground"
+                      >
+                        <Loader2
+                          className="size-3 animate-spin motion-reduce:animate-none"
+                          aria-hidden="true"
+                        />
+                        {t(
+                          'components.workspace.cleanup.browse.checkingGitRow',
+                          'Checking git status'
+                        )}
+                      </span>
+                    ) : showGitChip && dirtyLabel ? (
+                      <WorkspaceCleanupMetadataChip
+                        icon={FileWarning}
+                        label={dirtyLabel}
+                        value={dirtyLabel}
+                        tone="destructive"
+                      />
+                    ) : null}
+                  </span>
+                </TooltipTrigger>
+                {gitSlotText ? (
+                  <TooltipContent side="top" sideOffset={4}>
+                    {gitSlotText}
+                  </TooltipContent>
+                ) : null}
+              </Tooltip>
             ) : null}
             {!deletionPhase && visibleFlags.length > 0 ? (
               <span className="inline-flex h-5 min-w-0 items-center gap-1 text-xs text-muted-foreground">
@@ -291,6 +327,7 @@ export const CandidateRow = React.memo(function CandidateRow({
                   { value0: workspaceStatusLabel }
                 )}
                 value={workspaceStatusLabel}
+                className="min-w-0 shrink"
               />
             ) : null}
             {contextDetails ? (
@@ -298,6 +335,7 @@ export const CandidateRow = React.memo(function CandidateRow({
                 icon={SquareTerminal}
                 label={contextDetails}
                 value={String(contextCount)}
+                className="min-w-0 shrink"
               />
             ) : null}
             {reviewInfo.label ? (
@@ -309,7 +347,6 @@ export const CandidateRow = React.memo(function CandidateRow({
               />
             ) : null}
           </div>
-
           {failure ? (
             <div className="mt-1 flex min-h-5 items-center gap-1.5 text-xs text-destructive">
               <AlertTriangle className="size-3.5" />
@@ -326,7 +363,6 @@ export const CandidateRow = React.memo(function CandidateRow({
               ) : null}
             </div>
           ) : null}
-
           {hasExpandableDetails ? (
             <CandidateRowDetails
               flags={flags}

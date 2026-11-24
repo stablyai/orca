@@ -1,19 +1,19 @@
 import { execFileSync, spawn } from 'node:child_process'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
-import type { WindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
+import type { WindowsHostInteractiveLoginSpawn } from '../providers/shell-launch/windows/windows-interactive-login-spawn'
 import type {
   CodexManagedAccount,
   CodexManagedAccountSummary,
-  CodexRateLimitAccountsState,
-  CodexSystemDefaultIdentity
-} from '../../shared/managed-account-types'
-import type { CodexRateLimitResetResult } from '../../shared/rate-limit-types'
-import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
+  CodexRateLimitAccountsState
+} from '../../shared/agent-accounts/managed-account-types'
+import type { CodexRateLimitResetResult } from '../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { CodexResetCreditExpectedScope } from '../../shared/agent-accounts/codex/codex-reset-credit-scope'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import type { Store } from '../persistence/loading-store/store'
 import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import { admitSelfInitiatedTreeKill } from '../pty/process-retirement/own-chromium-tree-kill-guard'
-import type { CodexAccountSelectionTarget } from '../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../shared/agent-accounts/codex/codex-selection-lane'
 import { CodexAccountIdentity } from './credentials/codex-account-identity'
 import type { CodexAuthIdentity as ResolvedCodexIdentity } from './credentials/codex-auth-identity'
 import { CodexConfigMirror } from './managed-homes/codex-config-mirror'
@@ -30,8 +30,8 @@ import type {
   CodexResetCreditConsumeResult
 } from './account-management/codex-account-service-types'
 import { toCodexManagedAccountSummary } from './account-management/codex-account-service-types'
-import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/codex-auth-errors'
-import type { HostAccountSignInChannel } from '../../shared/host-account-sign-in-types'
+import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/agent-accounts/codex/codex-auth-errors'
+import type { HostAccountSignInChannel } from '../../shared/agent-accounts/host-account-sign-in-types'
 
 const WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS = 5_000
 
@@ -39,22 +39,21 @@ function killLoginProcessTree(
   child: CodexLoginChild,
   interactiveLogin?: WindowsHostInteractiveLoginSpawn | null
 ): void {
-  const terminationPid = interactiveLogin?.getTerminationPid?.() ?? child.pid
+  const pid = interactiveLogin?.getTerminationPid?.() ?? child.pid
   if (
     process.platform === 'win32' &&
-    typeof terminationPid === 'number' &&
-    child.exitCode === null &&
-    child.signalCode === null &&
+    typeof pid === 'number' &&
+    (child.exitCode ?? child.signalCode) === null &&
     // Record only attempted kills; Electron-owned PIDs fall back to a direct signal.
     admitSelfInitiatedTreeKill({
-      pid: terminationPid,
+      pid,
       site: 'codex-account-login-teardown',
       scope: 'win-taskkill-tree'
     })
   ) {
     try {
       // Kill descendants too: their Windows file handles can block post-login home operations.
-      execFileSync('taskkill', ['/pid', String(terminationPid), '/t', '/f'], {
+      execFileSync(windowsSystem32Binary('taskkill.exe'), ['/pid', String(pid), '/t', '/f'], {
         windowsHide: true,
         timeout: WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS,
         stdio: 'ignore'
@@ -70,6 +69,7 @@ function killLoginProcessTree(
 export class CodexAccountService {
   // Serialize settings read-modify-write operations to prevent overlapping account changes losing updates.
   private mutationQueue: Promise<unknown> = Promise.resolve()
+  private readonly renameListeners = new Set<() => void>()
   private cancelPendingCodexLogin: (() => boolean) | null = null
   private pendingLoginUrl: string | null = null
   private readonly pendingLoginUrlListeners = new Set<(url: string | null) => void>()
@@ -83,7 +83,7 @@ export class CodexAccountService {
   private readonly registration: CodexAccountRegistration
 
   constructor(
-    store: Store,
+    private readonly store: Store,
     rateLimits: RateLimitService,
     private readonly runtimeHome: CodexRuntimeHomeService,
     lifecycle: CodexAccountServiceLifecycle = {}
@@ -111,7 +111,8 @@ export class CodexAccountService {
       runtimeHome,
       configMirror: this.configMirror,
       lifecycle,
-      resolveSystemDefault: () => this.resolveSystemDefaultIdentity(),
+      resolveSystemDefault: async () =>
+        this.identity.resolveSystemDefault(await this.configMirror.readHostModelProvider()),
       readIdentityFromHostHome: (path, accountId) =>
         this.identity.readFromTrustedHome(
           this.managedHomePaths.assertHostOwnership(path, accountId)
@@ -145,7 +146,7 @@ export class CodexAccountService {
     return next
   }
 
-  listAccounts(): CodexRateLimitAccountsState {
+  listAccounts(): Promise<CodexRateLimitAccountsState> {
     return this.selection.list()
   }
 
@@ -154,14 +155,17 @@ export class CodexAccountService {
     return this.serializeMutation(() => this.registration.add(target))
   }
 
-  async addAccountWithDeviceCode(
-    channel: HostAccountSignInChannel
+  /** Adds a host account, or re-authenticates `accountId`, through a device code opened on another device. */
+  async signInWithDeviceCode(
+    channel: HostAccountSignInChannel,
+    accountId?: string
   ): Promise<CodexRateLimitAccountsState> {
     this.supersedePendingLogin()
+    const login = (home: string): Promise<void> => this.runCodexLogin(home, channel)
     return this.serializeMutation(() =>
-      this.registration.add({ runtime: 'host' }, (managedHomePath) =>
-        this.runCodexLogin(managedHomePath, channel)
-      )
+      accountId
+        ? this.registration.reauthenticate(accountId, undefined, login)
+        : this.registration.add({ runtime: 'host' }, login)
     )
   }
 
@@ -224,6 +228,31 @@ export class CodexAccountService {
     return this.serializeMutation(() => this.selection.remove(accountId))
   }
 
+  // Outside the mutation queue: a pending sign-in can hold it for minutes, and this
+  // synchronous write touches no state a queued account change reads.
+  renameAccount(
+    accountId: string,
+    displayName: string | null
+  ): Promise<CodexRateLimitAccountsState> {
+    const before = this.store.getSettings().managedAccountDisplayNames
+    const state = this.selection.rename(accountId, displayName)
+    // Account streams otherwise republish only on usage changes; an unchanged name writes nothing.
+    if (this.store.getSettings().managedAccountDisplayNames !== before) {
+      for (const listener of this.renameListeners) {
+        listener()
+      }
+    }
+    return state
+  }
+
+  /** Listeners live as long as their account stream subscription. */
+  onAccountRenamed(listener: () => void): () => void {
+    this.renameListeners.add(listener)
+    return () => {
+      this.renameListeners.delete(listener)
+    }
+  }
+
   async selectAccount(accountId: string | null): Promise<CodexRateLimitAccountsState> {
     this.supersedePendingLogin()
     return this.serializeMutation(() => this.selection.select(accountId))
@@ -248,12 +277,8 @@ export class CodexAccountService {
     return this.resetCredits.consumeCurrent()
   }
 
-  private getSnapshot(): CodexRateLimitAccountsState {
+  private getSnapshot(): Promise<CodexRateLimitAccountsState> {
     return this.selection.snapshot()
-  }
-
-  private resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
-    return this.identity.resolveSystemDefault(this.configMirror.readHostModelProvider())
   }
 
   private readIdentityFromHome(
@@ -264,7 +289,10 @@ export class CodexAccountService {
   }
 
   private toSummary(account: CodexManagedAccount): CodexManagedAccountSummary {
-    return toCodexManagedAccountSummary(account)
+    return toCodexManagedAccountSummary(
+      account,
+      this.store.getSettings().managedAccountDisplayNames
+    )
   }
 
   private safeRemoveManagedHome(candidatePath: string, expectedAccountId: string): Promise<void> {
@@ -287,7 +315,7 @@ export class CodexAccountService {
     deviceChannel?.signal.addEventListener('abort', cancelForChannel, { once: true })
     try {
       await runCodexLoginSession(managedHomePath, {
-        wslCommand: 'wsl.exe',
+        wslCommand: windowsSystem32Binary('wsl.exe'),
         spawn: ({ command, args, env, stdio }) => {
           assertWslDistroAllowed(command, args)
           return spawn(command, args, {

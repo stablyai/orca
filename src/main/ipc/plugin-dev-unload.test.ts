@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { PluginService } from '../plugins/plugin-service'
-import { getPluginsDataDir, getUserPluginsDir } from '../plugins/plugin-discovery'
+import { getPluginsDataDir, getUserPluginsDir } from '../plugins/discovery/plugin-discovery'
 import {
   installPluginFromLocalPath,
   readPluginLockfile
@@ -19,7 +19,7 @@ vi.mock('../plugins/panels/guest-isolation/plugin-frame-guest-sessions', () => (
   clearPluginFrameStorage: async () => {},
   preparePluginFrameGuest: async () => null
 }))
-const { registerPluginHandlers } = await import('./plugins')
+const { registerPluginHandlers } = await import('./plugins/plugins')
 const roots: string[] = []
 const services: PluginService[] = []
 afterEach(async () => {

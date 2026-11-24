@@ -3,7 +3,7 @@ import {
   LINEAR_ISSUE_LINK_CLEARED,
   type LinearIssueLinkUpdates
 } from '../../shared/linear/links'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { getOptionalWorktreeLinkFlagValue } from './worktree-link-flag-value'
 
 export function getOptionalLinearIssueLinkFlag(

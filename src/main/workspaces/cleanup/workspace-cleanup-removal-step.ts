@@ -1,11 +1,16 @@
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
-import { queueWorkspaceDelete } from '../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
+import {
+  queueWorkspaceArchive,
+  queueWorkspaceDelete
+} from '../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 import { getEffectiveHooks } from '../../workspace-hooks/hooks'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import {
   evaluateWorkspaceCleanup,
-  type WorkspaceCleanupEvaluation
+  keepFolderWorkspaceSiblings,
+  type WorkspaceCleanupEvaluation,
+  type WorkspaceCleanupFolderVerdict
 } from '../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
 import type { WorkspaceCleanupRules } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import type { WorkspaceCleanupRunRow } from '../../../shared/workspace-cleanup/workspace-cleanup-run'
@@ -21,7 +26,7 @@ function selectorFor(workspace: WorkspaceCleanupWorkspace): string {
 }
 
 /** The evaluator's verdict plus the checks only a live host can make; any doubt keeps the workspace. */
-export async function decideWorkspaceCleanup(
+async function decideWorkspaceCleanup(
   runtime: OrcaRuntimeService,
   workspace: WorkspaceCleanupWorkspace,
   now: number
@@ -59,6 +64,23 @@ export async function decideWorkspaceCleanup(
   )
 }
 
+/** Every workspace's verdict, in order; a folder workspace's worktrees go together or not at all. */
+export async function decideWorkspaceCleanups(
+  runtime: OrcaRuntimeService,
+  workspaces: readonly WorkspaceCleanupWorkspace[],
+  now: number
+): Promise<WorkspaceCleanupEvaluation[]> {
+  const verdicts: WorkspaceCleanupFolderVerdict[] = []
+  for (const workspace of workspaces) {
+    verdicts.push({
+      identity: workspace.identity,
+      folderSiblings: workspace.folderSiblings,
+      evaluation: await decideWorkspaceCleanup(runtime, workspace, now)
+    })
+  }
+  return keepFolderWorkspaceSiblings(verdicts)
+}
+
 function describeRemovalError(error: unknown): string {
   return errorMessage(error).split(/\r?\n/)[0] || 'Removal failed.'
 }
@@ -68,7 +90,8 @@ type RemovalOutcome = Pick<
   'outcome' | 'reason' | 'keepCause' | 'waiting' | 'keptOnRecheck' | 'branchKept' | 'error'
 >
 
-/** Re-reads every piece of evidence right before removing one workspace; removal itself goes through the lifecycle queue. */
+/** Re-reads every piece of evidence, its folder siblings' too, right before removing one workspace;
+ * removal itself goes through the lifecycle queue. */
 export async function removeWorkspaceForCleanup(args: {
   runtime: OrcaRuntimeService
   store: RuntimeStore
@@ -81,23 +104,35 @@ export async function removeWorkspaceForCleanup(args: {
   const selector = selectorFor(workspace)
   try {
     // Earlier removals in this run took time: decide on what is true now, not what the scan saw.
-    const [fresh] = await collectWorkspaceCleanupWorkspaces({
+    // A folder member is re-read with its folder as listed now: a sibling added here since holds it
+    // too. Paired servers' members are as the scan read them; they're asked once per run.
+    const [fresh, ...siblings] = await collectWorkspaceCleanupWorkspaces({
       store,
       runtime,
       globalRules: args.globalRules(),
       now: args.now(),
       worktreeId: workspace.ref.worktreeId,
+      withFolderSiblings: workspace.folderSiblings.length > 0,
+      readPairedFolderChildren: workspace.readPairedFolderChildren,
       signal: args.signal
     })
     if (!fresh) {
       return { outcome: 'kept', keepCause: 'git-unknown', keptOnRecheck: true }
     }
-    const recheck = await decideWorkspaceCleanup(runtime, fresh, args.now())
-    if (recheck.action !== 'delete') {
+    const [recheck] = await decideWorkspaceCleanups(runtime, [fresh, ...siblings], args.now())
+    if (recheck.action === 'keep') {
       return { ...keptRunOutcome(recheck), keptOnRecheck: true }
     }
     if (args.signal?.aborted) {
       return { outcome: 'failed', error: 'Cleanup stopped before removing this workspace.' }
+    }
+    // Only reachable once WORKSPACE_ARCHIVE_SUPPORTED is on; archive keeps the branch and the row.
+    if (recheck.action === 'archive') {
+      const hostId = workspace.ref.executionHostId
+      const archived = await queueWorkspaceArchive(runtime, selector, hostId, () =>
+        runtime.archiveManagedWorktree(selector, hostId ? { hostId } : {})
+      )
+      return { outcome: 'archived', reason: recheck.reason, branchKept: archived.branch }
     }
     // Never forced: Git's own dirty-checkout refusal stays the last guard.
     const result = await queueWorkspaceDelete(

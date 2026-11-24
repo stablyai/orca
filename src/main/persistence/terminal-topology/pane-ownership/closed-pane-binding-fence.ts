@@ -1,7 +1,7 @@
 // Layout-owner builds fence removed panes against late spawns that would recreate missing membership.
 
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
@@ -142,8 +142,4 @@ export function isClosedPaneFenced(paneKey: string): boolean {
     return false
   }
   return true
-}
-
-export function _resetClosedPaneFencesForTests(): void {
-  closedAtByPaneKey.clear()
 }

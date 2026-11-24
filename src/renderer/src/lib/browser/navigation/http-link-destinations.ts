@@ -1,4 +1,4 @@
-import { showOpenInGroupRefusedToast } from '@/components/terminal-pane/links/files/terminal-file-open-in-group-toast'
+import { showLinkOpenInGroupRefusedToast } from '@/components/terminal-pane/links/files/terminal-file-open-in-group-toast'
 import { beginLinkOpenRequest } from '../../links/link-open-request'
 import { translate } from '@/i18n/i18n'
 import {
@@ -6,6 +6,7 @@ import {
   captureHttpLinkIntent,
   canHttpLinkOpenInSourceGroup
 } from '@/lib/browser/navigation/http-link-routing'
+import { isRemoteLoopbackHttpLink } from '@/lib/browser/navigation/http-link-localhost-route'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import type { BrowserLinkOpenContext } from './browser-link-destination'
 import type { HttpLinkBrowserRequestFields } from './http-link-browser-placement'
@@ -38,6 +39,7 @@ type WorkspaceHttpLinkBrowserRequest = HttpLinkBrowserRequestFields & {
   expectedRuntimeEnvironmentId?: string
   expectedSshConnectionId?: string
   allowClientBrowserFallback?: boolean
+  allowSshDeviceBrowser?: boolean
 }
 
 /** Resolves to the page id when the page renders on this desktop, else null. */
@@ -75,12 +77,14 @@ export function canSourceOwnerOpenInOrca(
 export function httpLinkActionDestinationsFor(
   settings: { openLinksInApp?: boolean } | null | undefined,
   sourceOwner: HttpLinkSourceOwner,
-  canOpenOwnedBrowser: boolean
+  canOpenOwnedBrowser: boolean,
+  url?: string,
+  worktreeId?: string | null
 ): HttpLinkActionDestinations {
   if (!canSourceOwnerOpenInOrca(sourceOwner, canOpenOwnedBrowser)) {
     return { primary: 'system' }
   }
-  return settings?.openLinksInApp === true
+  return settings?.openLinksInApp === true || isRemoteLoopbackHttpLink(url, sourceOwner, worktreeId)
     ? { primary: 'orca', alternate: 'system' }
     : { primary: 'system', alternate: 'orca' }
 }
@@ -178,7 +182,7 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
     deps.openInSourceGroup
   )
   if (deps.openInSourceGroup && !linkIntent) {
-    showOpenInGroupRefusedToast(url)
+    showLinkOpenInGroupRefusedToast()
     return
   }
   const linkContext = deps.sourceTabId ? { linkIntent, isCurrentRequest } : undefined

@@ -8,7 +8,7 @@ import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing
 import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
-} from '../../../shared/orcad-terminal-census'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import { requestOrcadTerminalCensus } from '../../managed-server/lifecycle/orcad-terminal-census-client'
 import { subscribeSystemPowerLifecycle } from '../../power/system-power-lifecycle'
 import {
@@ -25,6 +25,7 @@ import { requireConfirmedRunning } from './wsl-orcad-connection-errors'
 import { WslOrcadLivenessSupervisor } from './wsl-orcad-liveness-supervisor'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { openWslOrcadWatch } from './wsl-orcad-watch'
+import { isWslHostIdleStopped } from '../host-lifecycle/wsl-host-idle-stop'
 
 function transportFor(distro: string, environmentId = defaultWslOrcadEnvironmentId(distro)) {
   return createWslOrcadHostTransport({
@@ -44,7 +45,7 @@ export function createWslOrcadLivenessSupervisor(options: {
   manager: WslOrcadConnectionManager
   bridgeActivity: WslOrcadBridgeActivity
   holder: WslDistroHolder
-  hasUserVisibleWork: (distro: string) => boolean
+  hasUserVisibleWork: (distro: string) => boolean | Promise<boolean>
 }): WslOrcadLivenessSupervisor {
   return new WslOrcadLivenessSupervisor({
     manager: options.manager,
@@ -69,6 +70,8 @@ export function createWslOrcadLivenessSupervisor(options: {
       ),
     collectCensus: collectWslOrcadCensus,
     hasUserVisibleWork: options.hasUserVisibleWork,
+    // Registered hosts use the default id; the idle-stop close lands before the exit's settle ends.
+    wasIdleStopped: (distro) => isWslHostIdleStopped(defaultWslOrcadEnvironmentId(distro)),
     deferUntilRunning: deferUntilWslDistroRunning,
     requireRunning: async (distro) =>
       requireConfirmedRunning(await readSettledConfirmedRunningWslDistros(distro), distro),

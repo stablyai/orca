@@ -21,7 +21,7 @@ import {
   withOrcadMigrationAutomationRunHistory
 } from '../../../../../shared/orcad-migration/orcad-migration-automation-run-history'
 
-import type { SshTarget } from '../../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { Store } from '../../../loading-store/store'
 import { collectOrcadMigrationSourceCatalog } from './orcad-source-catalog'
 import { computeOrcadMigrationManifestSha256 } from '../../../../orcad/migration/orcad-migration-manifest-digest'

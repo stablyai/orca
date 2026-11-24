@@ -1,7 +1,7 @@
 import {
   RELAY_HOST_CLOSE_REASON,
   type RelayHostCloseReason
-} from '../../../../shared/relay-host-close-reason'
+} from '../../../../shared/remote-runtime/relay/relay-host-close-reason'
 import { relayStatusCellUrl } from '../../../../shared/remote-runtime/relay/mobile-relay-status'
 import type * as RelayStatus from '../../../../shared/remote-runtime/relay/mobile-relay-status'
 import type { RelayAccessTokenRefresh } from '../session-lifecycle/relay-session-broker-contract'
@@ -20,16 +20,18 @@ import { relayIdentityKey, type RelayAuthContext } from './relay-auth-identity'
 export type CoordinatedRelayBroker = {
   closeNow(hostCloseReason?: RelayHostCloseReason): void
   isLive?(): boolean
+  /** A dead control whose own retry is already re-asking the director. */
+  isRecovering?(): boolean
   readonly endpoint?: { cellUrl: string } | null
 }
 
 type RelayAuthCoordinatorOptions = {
-  readContext: () => Promise<RelayAuthContext | null>
+  readContext: (authOrigin?: string) => Promise<RelayAuthContext | null>
   hasDemand?: (context: RelayAuthContext) => boolean
   openBroker: (input: {
     context: RelayAuthContext
     isCurrent: () => boolean
-    refreshAccessToken: () => Promise<RelayAccessTokenRefresh>
+    refreshAccessToken: (authOrigin?: string) => Promise<RelayAccessTokenRefresh>
   }) => Promise<CoordinatedRelayBroker>
   onStatus: RelayStatus.MobileRelayStatusPublisher
   lingerMs?: number
@@ -119,12 +121,13 @@ export class RelayAuthCoordinator {
   }
 
   // Revive untimed failures without disturbing live brokers, scheduled retries or in-flight opens.
+  // A recovering pool retries against the director alone; a rebuild would add an API round trip.
   ensureLive(): void {
     if (this.stopped || this.retry.pending || this.pendingOwnerships.size > 0) {
       return
     }
-    const ownership = this.ownership
-    if (ownership?.valid && (ownership.broker?.isLive?.() ?? true)) {
+    const broker = this.getActiveBroker()
+    if (broker && ((broker.isLive?.() ?? true) || broker.isRecovering?.())) {
       return
     }
     this.beginReconcile(false)
@@ -236,7 +239,7 @@ export class RelayAuthCoordinator {
         broker = await this.options.openBroker({
           context,
           isCurrent,
-          refreshAccessToken: () => this.refreshAccessToken(ownership, nextIdentityKey)
+          refreshAccessToken: this.refreshAccessToken.bind(this, ownership, nextIdentityKey)
         })
       } finally {
         this.pendingOwnerships.delete(ownership)
@@ -280,13 +283,14 @@ export class RelayAuthCoordinator {
 
   private async refreshAccessToken(
     ownership: { valid: boolean },
-    expectedIdentityKey: string
+    expectedIdentityKey: string,
+    authOrigin?: string
   ): Promise<RelayAccessTokenRefresh> {
     if (!ownership.valid || this.stopped) {
       return { accessToken: null }
     }
     const epoch = this.authEpoch
-    const context = await this.options.readContext()
+    const context = await this.options.readContext(authOrigin)
     if (!ownership.valid || !this.isEpochCurrent(epoch)) {
       return { accessToken: null }
     }

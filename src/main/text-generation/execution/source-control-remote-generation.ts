@@ -1,11 +1,12 @@
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import { isSshRequestOutcomeUnverifiable } from '../../ssh/protocol/ssh-channel-multiplexer'
-import { WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR } from '../../../shared/windows-batch-spawn'
+import { WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR } from '../../../shared/shell/launch/windows-batch-spawn'
 import {
   finalizeFromAgentOutput,
   userFacingUnsafeWindowsBatchArgs
 } from '../failures/source-control-agent-failure'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from './source-control-generation-limits'
+import { textGenerationFailure } from '../../../shared/text-generation/text-generation-failure-copy'
 import type {
   InternalTextGenerationResult,
   RemoteCommitMessageExecResult,
@@ -60,7 +61,9 @@ export async function runRemoteSourceControlPlan(input: {
   if (result.timedOut) {
     return {
       success: false,
-      error: `Generation timed out after ${SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000}s.`
+      error: textGenerationFailure('timedOut', {
+        seconds: SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000
+      }).error
     }
   }
   return finalizeFromAgentOutput({

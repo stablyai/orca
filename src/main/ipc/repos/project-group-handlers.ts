@@ -1,8 +1,13 @@
+import { ProjectGroupHooksCheck } from '../../../shared/rpc-contract/projects/repo-params'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import type { Repo } from '../../../shared/repo-types'
-import type { RepoHostTarget } from '../../../shared/repo-host-identity'
-import type { NestedRepoScanResult, ProjectGroup } from '../../../shared/project-group-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
+import type {
+  NestedRepoScanResult,
+  ProjectGroup
+} from '../../../shared/project/groups/project-group-types'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
   ProjectGroupCancelNestedScanArgs,
@@ -19,10 +24,22 @@ import {
   assertWslMoveRepoWritable
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { activeNestedRepoScans, runNestedRepoScanForIpc } from './nested-repo-scan-ipc'
-import { visibleProjectGroups } from '../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
+import { runtimeVisibleProjectGroups } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
 
-export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: Store): void {
-  ipcMain.handle('projectGroups:list', () => visibleProjectGroups(store))
+export function registerProjectGroupHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  runtime: Pick<OrcaRuntimeService, 'checkProjectGroupHooks'>
+): void {
+  ipcMain.handle('projectGroups:checkHooks', (_event, rawArgs: unknown) => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupHooksCheck,
+      rawArgs,
+      'invalid_project_group_hooks_check_args'
+    )
+    return runtime.checkProjectGroupHooks(args.groupId, { background: args.background })
+  })
+  ipcMain.handle('projectGroups:list', () => runtimeVisibleProjectGroups(store))
 
   ipcMain.handle('projectGroups:create', (_event, rawArgs: unknown): ProjectGroup => {
     const args = parseProjectGroupIpcArgs(

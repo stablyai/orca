@@ -8,9 +8,10 @@ import {
   CUSTOM_APP_ICON_MIN_SIDE,
   type CustomAppIconImportFailureCode,
   type CustomAppIconImportResult
-} from '../../../shared/app-icon'
+} from '../../../shared/app-lifecycle/identity/app-icon'
 import { readRasterImageDimensions } from '../../../shared/file-preview/raster-image-dimensions'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
+import { fitAppIconToPlatformShape } from './platform-app-icon-shape'
 
 // Why: 1024px covers the largest Dock and taskbar tiles; larger images only cost memory on every apply.
 const STORED_ICON_SIDE = 1024
@@ -21,6 +22,12 @@ export const CUSTOM_APP_ICON_FILE_EXTENSIONS = ['png', 'jpg', 'jpeg']
 
 // Imports and removals share one file, so they run one at a time.
 let customAppIconMutations: Promise<unknown> = Promise.resolve()
+let customAppIconRevision = 0
+
+/** Changes whenever the stored file is replaced or removed, so derived images can be cached. */
+export function getCustomAppIconRevision(): number {
+  return customAppIconRevision
+}
 
 function enqueueCustomAppIconMutation<T>(mutation: () => Promise<T>): Promise<T> {
   const result = customAppIconMutations.then(mutation, mutation)
@@ -47,8 +54,14 @@ class CustomAppIconImportError extends Error {
   }
 }
 
+// The preview shows the same platform shape the Dock will draw.
 function previewDataUrl(image: Electron.NativeImage): string {
-  return image.resize({ width: PREVIEW_ICON_SIDE, height: PREVIEW_ICON_SIDE }).toDataURL()
+  const shaped = fitAppIconToPlatformShape(image, PREVIEW_ICON_SIDE)
+  return shaped === image
+    ? image
+        .resize({ width: PREVIEW_ICON_SIDE, height: PREVIEW_ICON_SIDE, quality: 'best' })
+        .toDataURL()
+    : shaped.toDataURL()
 }
 
 async function decodeCustomAppIcon(sourcePath: string): Promise<Electron.NativeImage> {
@@ -110,6 +123,7 @@ async function storeCustomAppIcon(sourcePath: string): Promise<CustomAppIconImpo
     // Re-encoding drops any metadata or trailing payload the source file carried.
     await writeFile(staging, image.toPNG())
     await rename(staging, destination)
+    customAppIconRevision++
   } catch (error) {
     console.warn('[app-icon] failed to save custom app icon:', error)
     await rm(staging, { force: true }).catch(() => {})
@@ -127,5 +141,8 @@ export function readCustomAppIconPreview(): string | null {
 }
 
 export function removeCustomAppIcon(): Promise<void> {
-  return enqueueCustomAppIconMutation(() => rm(getCustomAppIconPath(), { force: true }))
+  return enqueueCustomAppIconMutation(async () => {
+    await rm(getCustomAppIconPath(), { force: true })
+    customAppIconRevision++
+  })
 }

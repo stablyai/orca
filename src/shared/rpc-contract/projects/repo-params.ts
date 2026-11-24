@@ -1,3 +1,4 @@
+import { WorkspaceHookSettingsSchema } from '../../workspace-setup/hooks/workspace-hook-settings-schema'
 import { z } from 'zod'
 
 // Opt-in: a caller holding afterSnapshotId's repos gets `unchanged`; older hosts take no params and ignore it.
@@ -43,10 +44,28 @@ export const RepoSetHidden = RepoShow.extend({
   hidden: z.boolean()
 })
 
+// Older hosts strip this and read the project checkout, as before.
+const SetupHooksCreateSourceParam = z
+  .union([
+    z.object({ kind: z.literal('base'), baseBranch: z.string().optional() }),
+    z.object({
+      kind: z.literal('branch'),
+      ref: z.string().min(1),
+      baseBranch: z.string().optional()
+    })
+  ])
+  .optional()
+
 /** See `repoHooksCheckIsBackground`: only `wakeWslDistro` may open a stopped WSL distro (E9). */
 export const RepoHooksCheck = RepoSelector.extend({
   background: z.boolean().optional(),
-  wakeWslDistro: OptionalBoolean
+  wakeWslDistro: OptionalBoolean,
+  createSource: SetupHooksCreateSourceParam
+})
+
+/** `repo.hooks`: `createSource` reports the setup a create from that ref would run. */
+export const RepoHooksRead = RepoSelector.extend({
+  createSource: SetupHooksCreateSourceParam
 })
 
 export const RepoSearchRefs = z.object({
@@ -74,6 +93,7 @@ export const ProjectGroupCreate = z.object({
 export const ProjectGroupUpdate = z.object({
   groupId: requiredString('Missing group id'),
   updates: z.object({
+    hookSettings: WorkspaceHookSettingsSchema.optional(),
     name: OptionalString,
     isCollapsed: z.boolean().optional(),
     tabOrder: OptionalFiniteNumber,
@@ -84,6 +104,10 @@ export const ProjectGroupUpdate = z.object({
 
 export const ProjectGroupSelector = z.object({
   groupId: requiredString('Missing group id')
+})
+
+export const ProjectGroupHooksCheck = ProjectGroupSelector.extend({
+  background: z.boolean().optional()
 })
 
 export const ProjectGroupUpdateMany = z.object({
@@ -128,4 +152,8 @@ export const RepoSparsePresetSave = RepoSelector.extend({
   id: OptionalString,
   name: requiredString('Missing preset name'),
   directories: z.array(z.string())
+})
+
+export const RepoSparsePresetRemove = RepoSelector.extend({
+  presetId: requiredString('Missing preset id')
 })

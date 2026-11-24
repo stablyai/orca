@@ -5,8 +5,8 @@ import { assertAgentPromptRequestActive } from '../../../terminal/input/agent-pr
 
 import { callerLaunchSource } from '../../../../agent-launch/agent-started-telemetry'
 import { randomUUID } from 'node:crypto'
-import { narrowStructuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
-import { createStructuredAgentSessionOperationId } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { narrowStructuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
+import { createStructuredAgentSessionOperationId } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   AgentLaunchStructuredSessionRefusedError,
@@ -16,14 +16,14 @@ import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-ses
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { RpcContext } from '../../core'
 import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
-import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../../shared/startup-cwd-fallback'
+import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../../shared/shell/launch/startup-cwd-fallback'
 import { structuredCallerFor } from '../structured-sessions/creation/structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from '../structured-sessions/creation/structured-agent-session-create'
-import { structuredAgentRuntimeMetadata } from '../../../agent-session/installation/structured-agent-runtime-metadata'
+import { supportedStructuredSeedOptions } from '../../../agent-session/installation/structured-agent-runtime-metadata'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
 import { AgentLaunchSessionAlreadyExistsError } from '../../../../../shared/agent-launch/contracts/agent-launch-session-already-exists'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-create-capabilities'
-import { createStructuredAgentSessionId } from '../../../../../shared/agent-session/structured-agent-session-create'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
+import { createOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { toAgentLaunchPreferences } from '../../../../../shared/agent-launch/choices/agent-launch-preferences'
 import { paneIdentity } from '../../../terminal/identity/runtime-terminal-pane-identity'
 import {
@@ -70,12 +70,10 @@ export function agentLaunchSurfaceFactory(
       firstMessage,
       signal
     }) => {
-      const sessionId = requested ?? createStructuredAgentSessionId(agent, randomUUID)
-      const definition = structuredAgentRuntimeMetadata(agent)?.definition
-      const supported = Object.fromEntries(
-        Object.entries(narrowStructuredLaunchSeedOptions(options) ?? {}).filter(([key]) =>
-          definition?.restingOptions.acceptsKey(key)
-        )
+      const sessionId = requested ?? createOrcaSessionId(randomUUID)
+      const supported = supportedStructuredSeedOptions(
+        agent,
+        narrowStructuredLaunchSeedOptions(options)
       )
       const seeded = chatOptions ?? (Object.keys(supported).length > 0 ? supported : undefined)
       // A client that creates chats without starting them starts this one on its first message.

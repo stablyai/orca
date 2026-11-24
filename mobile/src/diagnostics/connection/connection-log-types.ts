@@ -2,7 +2,7 @@ import 'zod'
 import '../../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import '../../transport/connection/mobile-runtime-host-platform'
-import '../../../../src/shared/zod-salvage'
+import '../../../../src/shared/validation/zod-salvage'
 import '../../transport/hosts/host-status-reply-schema'
 
 export type ConnectionLogLevel = 'info' | 'success' | 'warn' | 'error'
@@ -43,6 +43,7 @@ export type ConnectionLogEntry = {
   path?: MobileConnectionDiagnosticPath
   // Carry the relay close code separately so diagnostics need not parse detail.
   relayCloseCode?: number
+  relayCredentialRejected?: boolean
 }
 
 export type ConnectionLogSink = (entry: ConnectionLogEntry) => void

@@ -15,6 +15,35 @@ describe('RemoteBrowserStreamLifecycle', () => {
     vi.useRealTimers()
   })
 
+  it('applies current ready metadata after open and a viewport restart', async () => {
+    const harness = createHarness()
+    harness.lifecycle.open()
+    await settle()
+    const before = harness.appliedTitles.length
+    harness.streams[0].emitReady()
+    await settle()
+    expect(harness.appliedTitles.slice(before)).toEqual(['Example'])
+    harness.setViewportSize({ width: 1400, height: 900 })
+    harness.lifecycle.restartForViewport('page-1')
+    await settle()
+    const beforeRestartReady = harness.appliedTitles.length
+    harness.streams.at(-1)!.emitReady()
+    await settle()
+    expect(harness.appliedTitles.slice(beforeRestartReady)).toEqual(['Example'])
+  })
+
+  it('keeps a stream live without applying ready metadata superseded by navigation', async () => {
+    const harness = createHarness()
+    harness.lifecycle.open()
+    await settle()
+    const before = [...harness.appliedTitles]
+    harness.lifecycle.session.invalidateTabInfoReads()
+    harness.streams[0].emitReady()
+    await settle()
+    expect(harness.appliedTitles).toEqual(before)
+    expect(harness.currentStatusKind).toBe('live')
+  })
+
   it("asks once about the streamed page's dialog and answers it on the host", async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)

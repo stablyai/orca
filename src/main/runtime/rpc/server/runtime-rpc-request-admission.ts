@@ -1,4 +1,4 @@
-import type { RuntimeMetadata } from '../../../../shared/runtime-bootstrap'
+import type { RuntimeMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { writeRuntimeMetadata } from './runtime-metadata'
 import type { RpcMessageContext } from '../transport'
 import type { PairingOffersRpcContext, RpcRequest, RpcResponse } from '../core'
@@ -21,6 +21,9 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     rawMessage: string,
     context?: RpcMessageContext
   ): Promise<RpcResponse> {
+    if (this.idleStopFenced) {
+      return this.idleStopRefusal(rawMessage)
+    }
     // Oversized clients arrive as empty messages before transport closes them.
     if (!rawMessage) {
       return this.buildError('unknown', 'request_too_large', 'RPC request exceeds the maximum size')

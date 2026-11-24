@@ -1,14 +1,14 @@
 import type { AgentModelCatalogReadRecords } from './agent-model-catalog-running-account'
 import type { AgentModelCatalogReadOperation } from './agent-model-catalog-operation'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentModelCatalogEntry,
   AgentModelCatalogLiveListing,
   AgentModelCatalogProbe
 } from './agent-model-catalog-store'
-import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type {
   AgentModelCatalogWorkspaceDeps,
   AgentModelCatalogRecord
@@ -22,6 +22,8 @@ export type AgentModelCatalogServiceDeps = AgentModelCatalogWorkspaceDeps & {
   /** Share the launch resolver so recordless reads use the account a new chat would pin. */
   resolveAccountHome: (agent: string) => Promise<AgentSessionAccountHome>
   probes?: Readonly<Partial<Record<string, AgentModelCatalogProbe>>>
+  /** Agents whose listing never runs in warm-up. */
+  listsOnDemand?: ReadonlySet<string>
   listingNamesConfiguredModel?: ReadonlySet<string>
   /** False means project configuration cannot override the account default. */
   agentReadsProjectModelConfig?: (agent: string) => boolean
@@ -62,6 +64,8 @@ export type AgentModelCatalogService = {
 
 export type AgentModelCatalogReadParams = {
   agent: string
+  /** Older readers follow only actual wait expiry, so retain their terminal wait. */
+  progress?: boolean
   records?: AgentModelCatalogReadRecords | null
   operation?: AgentModelCatalogReadOperation
   /** Original explicit operation budget, shared with compatibility saved-scope continuation. */
@@ -78,6 +82,8 @@ export type AgentModelCatalogReadParams = {
   waitForListing?: boolean
   /** Answer only from the saved entry and held reason; start, join or re-check no listing. */
   savedOnly?: boolean
+  /** A user's Refresh: the catalog this read resolves to lists again first. */
+  relist?: true
   verifiedOnly?: boolean
   legacy?: boolean
   /** Old options readers need account-default presentation, never launch or admission proof. */

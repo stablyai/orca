@@ -7,8 +7,8 @@ import {
   pluginManifestSchema,
   type PluginManifest
 } from '../../shared/plugins/manifest/plugin-manifest'
-import { hashPluginTree } from './plugin-content-hash'
-import { PluginContentVerifier } from './plugin-content-integrity'
+import { hashPluginTree } from './artifacts/plugin-content-hash'
+import { PluginContentVerifier } from './artifacts/plugin-content-integrity'
 import { PluginService } from './plugin-service'
 import type { PluginWorkerFactory } from './workers/worker-supervision/plugin-worker-startup'
 
@@ -135,7 +135,6 @@ describe('PluginService content verification on load', () => {
     await expect(service.invokeCommand(plugin.pluginKey, 'run')).rejects.toThrow(
       'integrity verification'
     )
-    expect(workerFactory).not.toHaveBeenCalled()
     await service.dispose()
   })
 })

@@ -1,5 +1,5 @@
 /** Reject activation over state a newer host build may already have migrated. */
-import { compareAppVersions } from '../../../shared/app-version'
+import { compareAppVersions } from '../../../shared/app-lifecycle/identity/app-version'
 import type { OrcadActivationRecord } from './orcad-activation-record'
 
 export type OrcadHostVersionRefusal = 'host-newer'

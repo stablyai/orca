@@ -1,7 +1,7 @@
 import type {
   SkillBundleInstallResult,
   SkillBundleSkillResult
-} from '../../../../../shared/skill-bundle-install-contract'
+} from '../../../../../shared/skills/installation/skill-bundle-install-contract'
 
 export function skillBundleSkillNeedsRetry(skill: SkillBundleSkillResult): boolean {
   return (

@@ -1,4 +1,4 @@
-import { isSubmoduleWorktreeRemovalRefusal } from '../../../../../../shared/worktree/removal'
+import { isSubmoduleWorktreeRemovalRefusal } from '../../../../../../shared/worktree/removal/removal'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getSubmoduleRemovalRefusalCopy } from './delete-worktree-toast'
 import type { Translate } from '../../../../i18n/use-translate'

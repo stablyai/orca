@@ -1,8 +1,11 @@
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { REMOVE_PROJECT_DOMAINS, REPO_CATALOG_DOMAINS } from '../../profile-save-domains'
-import type { ProjectHostSetup, ProjectHostSetupUpdateArgs } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { RepoHostTarget } from '../../../../shared/repo-host-identity'
+import type {
+  ProjectHostSetup,
+  ProjectHostSetupUpdateArgs
+} from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { RepoHostTarget } from '../../../../shared/repository/repo-host-identity'
 import {
   removeRepoFromHostWorkspaceSessions,
   removeRepoFromWorkspaceSession
@@ -11,7 +14,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { applyProjectHostSetupCompatibilityState } from '../../tracking-repos/project-host-compatibility'
 import { RepoOrderPersistenceOperations } from '../../tracking-repos/repo-order-operations'
 import { pruneWorktreeStateForRepo as pruneWorktreeStateForRepoOperation } from '../../tracking-repos/repo-worktree-pruning'

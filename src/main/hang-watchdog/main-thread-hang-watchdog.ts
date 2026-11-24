@@ -1,12 +1,16 @@
 import type { Worker } from 'node:worker_threads'
+import os from 'node:os'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { app, powerMonitor } from 'electron'
 import { hangDetectionMarkerPath } from './hang-detection-marker'
 import { resolveHangWatchdogWorkerPath } from './hang-watchdog-worker-path'
 import { getTraceFilePath, resolveObservabilityConsent } from '../observability'
+import { nativeHangCaptureDirectory } from './native-hang-capture-store'
+import { recordRecoveredMainThreadStall } from './recovered-stall-trace'
 import {
   HANG_WATCHDOG_CHECK_INTERVAL_MS,
   HANG_WATCHDOG_HEARTBEAT_INTERVAL_MS,
+  HANG_WATCHDOG_STALL_MS,
   HANG_WATCHDOG_TIMEOUT_MS,
   type HangWatchdogWorkerData,
   type HangWatchdogToMainMessage,
@@ -16,6 +20,7 @@ import {
 export type MainThreadHangWatchdogHandle = {
   stop: () => void
   worker: Worker
+  setMenuBarIconSetting: (enabled: boolean) => void
 }
 
 function positiveTiming(value: string | undefined, fallback: number): number {
@@ -41,7 +46,17 @@ export function installMainThreadHangWatchdog(options: {
     parentPid: process.pid,
     markerPath: hangDetectionMarkerPath(options.userDataPath),
     tracePath: getTraceFilePath(),
+    artifactDirectory: nativeHangCaptureDirectory(options.userDataPath),
+    processMetadata: {
+      appVersion: app.getVersion(),
+      electronVersion: process.versions.electron ?? 'unknown',
+      chromeVersion: process.versions.chrome ?? 'unknown',
+      arch: os.arch(),
+      osRelease: os.release(),
+      osVersion: os.version()
+    },
     timeoutMs: positiveTiming(process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS, HANG_WATCHDOG_TIMEOUT_MS),
+    stallMs: positiveTiming(process.env.ORCA_HANG_WATCHDOG_STALL_MS, HANG_WATCHDOG_STALL_MS),
     checkIntervalMs: positiveTiming(
       process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS,
       HANG_WATCHDOG_CHECK_INTERVAL_MS
@@ -59,7 +74,7 @@ export function installMainThreadHangWatchdog(options: {
   }
   let stopped = false
   const postMessage = (message: MainToHangWatchdogWorkerMessage): void => {
-    if (stopped && message.type !== 'shutdown' && message.type !== 'capture-drain-ack') {
+    if (stopped && message.type !== 'shutdown') {
       return
     }
     try {
@@ -70,11 +85,11 @@ export function installMainThreadHangWatchdog(options: {
   }
   worker.on('message', (message: HangWatchdogToMainMessage) => {
     if (
-      message?.type === 'capture-drain' &&
-      typeof message.token === 'string' &&
-      message.token.length <= 80
+      message?.type === 'stall-recovered' &&
+      Number.isFinite(message.unresponsiveMs) &&
+      Number.isFinite(message.endedAt)
     ) {
-      setImmediate(() => postMessage({ type: 'capture-drain-ack', token: message.token }))
+      recordRecoveredMainThreadStall(message)
     }
   })
   const powerEvents: NodeJS.EventEmitter = powerMonitor
@@ -117,5 +132,9 @@ export function installMainThreadHangWatchdog(options: {
   })
   worker.unref()
   app.on('will-quit', stop)
-  return { stop, worker }
+  return {
+    stop,
+    worker,
+    setMenuBarIconSetting: (enabled) => postMessage({ type: 'menu-bar-setting', enabled })
+  }
 }

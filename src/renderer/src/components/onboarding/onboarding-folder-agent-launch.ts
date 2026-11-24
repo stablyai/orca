@@ -1,7 +1,7 @@
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { useAppStore } from '@/store/index'
 import {
@@ -14,7 +14,7 @@ import {
   type AgentSessionLaunchPlan
 } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 
-import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import {
   buildOnboardingFolderAgentStartup,
   onboardingFolderDefaultAgent,
@@ -107,6 +107,8 @@ export async function revealOnboardingFolderWithAgentLaunch(args: {
     providesInitialSurface = false
   ) =>
     activateAndRevealWorktree(args.worktreeId, {
+      // Why user-open: like a git project add, an empty folder opens on the user's default surface; startup or a provided surface still wins.
+      navigationIntent: 'user-open',
       sidebarRevealBehavior: 'auto',
       ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
       ...(startup ? { startup } : {}),

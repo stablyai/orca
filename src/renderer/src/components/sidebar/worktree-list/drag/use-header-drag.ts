@@ -3,15 +3,15 @@ import { useCallback, useEffect, useMemo } from 'react'
 import type React from 'react'
 import { useAppStore } from '@/store'
 import '@/store/project-groups/project-group-owner-routing'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome/ui-chrome-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type {
   HostHeaderRow,
   HostSectionRow
-} from '../../../../../../shared/sidebar-list/host-section-rows'
+} from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { Row, WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
 import {

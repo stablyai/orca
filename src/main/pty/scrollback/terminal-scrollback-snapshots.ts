@@ -2,10 +2,10 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal/replay/terminal-scrollback-limits'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 
 const SNAPSHOT_DIR_NAME = 'terminal-scrollback'
 const REF_PREFIX = 'v1'
@@ -220,11 +220,13 @@ export function collectTerminalScrollbackSnapshotRefs(session: WorkspaceSessionS
   return refs
 }
 
+/** `tabIds`: the terminal tabs whose layouts it rewrote. */
 export function migrateWorkspaceSessionTerminalScrollbackSnapshots(
   session: WorkspaceSessionState,
   storage?: TerminalScrollbackSnapshotStorage
-): { session: WorkspaceSessionState; changed: boolean } {
+): { session: WorkspaceSessionState; changed: boolean; tabIds: string[] } {
   let terminalLayoutsByTabId: WorkspaceSessionState['terminalLayoutsByTabId'] | null = null
+  const tabIds: string[] = []
   for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
     const buffers = layout.buffersByLeafId
     if (!buffers || Object.keys(buffers).length === 0) {
@@ -267,9 +269,10 @@ export function migrateWorkspaceSessionTerminalScrollbackSnapshots(
       delete nextLayout.buffersByLeafId
     }
     terminalLayoutsByTabId[tabId] = nextLayout
+    tabIds.push(tabId)
   }
   if (!terminalLayoutsByTabId) {
-    return { session, changed: false }
+    return { session, changed: false, tabIds }
   }
-  return { session: { ...session, terminalLayoutsByTabId }, changed: true }
+  return { session: { ...session, terminalLayoutsByTabId }, changed: true, tabIds }
 }

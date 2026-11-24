@@ -1,8 +1,8 @@
-import { Fragment, useEffect, useState, type JSX } from 'react'
+import { useEffect, useState, type JSX } from 'react'
 import { Plus, Search } from 'lucide-react'
-import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
-import { formatShortcutKeyComboDetails, useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { useTranslate } from '@/i18n/use-translate'
+import { FeatureTipKeycaps, useFeatureTipShortcut } from './FeatureTipKeycaps'
 
 const TYPED_QUERY = 'auth'
 // Mirror the real palette’s recent worktrees before typing narrows them.
@@ -42,13 +42,7 @@ const TYPE_INTERVAL_MS = 120
 export function CmdJPaletteFeatureTipVisual(): JSX.Element {
   const t = useTranslate()
   const reducedMotion = usePrefersReducedMotion()
-  // Read the live binding to reflect rebindings and platform defaults.
-  const shortcut = useShortcutKeyDetails('worktree.palette')
-  // Use platform defaults when the binding is disabled so the demo still has a shortcut cue.
-  const displayShortcut =
-    shortcut.keys.length > 0 ? shortcut : formatShortcutKeyComboDetails('worktree.palette')[0]
-  const displayShortcutKeys = displayShortcut?.keys ?? []
-  const displayShortcutDoubleTap = displayShortcut?.doubleTap === true
+  const shortcut = useFeatureTipShortcut('worktree.palette')
 
   const [phase, setPhase] = useState<CyclePhase>('idle')
   const [typedLength, setTypedLength] = useState(0)
@@ -121,29 +115,7 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
       className="relative flex h-full min-h-[23rem] flex-col items-center justify-center overflow-hidden px-6 py-7"
       aria-hidden="true"
     >
-      {displayShortcutKeys.length > 0 ? (
-        <div className="inline-flex items-center gap-1.5">
-          {displayShortcutKeys.map((key, index) => (
-            <Fragment key={`${key}-${index}`}>
-              {index > 0 && !displayShortcutDoubleTap ? (
-                <span className="text-xs text-muted-foreground" aria-hidden="true">
-                  +
-                </span>
-              ) : null}
-              <span
-                className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border border-border/80 px-2 text-xs font-semibold text-muted-foreground shadow-xs transition-[transform,background-color] duration-150 ease-out ${
-                  isPressed
-                    ? 'translate-y-[1.5px] bg-foreground/[0.18]'
-                    : 'translate-y-0 bg-foreground/[0.08]'
-                }`}
-                style={isPressed ? { transitionDelay: `${index * 40}ms` } : undefined}
-              >
-                {key}
-              </span>
-            </Fragment>
-          ))}
-        </div>
-      ) : null}
+      <FeatureTipKeycaps shortcut={shortcut} pressed={isPressed} />
 
       <div
         className={`relative mt-3 h-[12.75rem] w-full max-w-[21rem] overflow-hidden rounded-xl border border-border bg-card text-left shadow-lg transition-opacity duration-300 ease-out ${

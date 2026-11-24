@@ -5,11 +5,11 @@ import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { MarkupToolbar } from './MarkupToolbar'
-import type { MarkupBaseImage } from './markup-base-image'
-import type { MarkupShape } from './markup-drawing-model'
-import { TEXT_FONT_FAMILY } from './markup-shape-render'
-import { useMarkupEditor } from './useMarkupEditor'
+import { MarkupToolbar } from './markup-tools/MarkupToolbar'
+import type { MarkupBaseImage } from './capture/markup-base-image'
+import type { MarkupShape } from './drawing/markup-drawing-model'
+import { TEXT_FONT_FAMILY } from './drawing/markup-shape-render'
+import { useMarkupEditor } from './drawing/useMarkupEditor'
 
 export type MarkupOverlayProps = {
   baseImage: MarkupBaseImage

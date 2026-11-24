@@ -1,5 +1,5 @@
 import type { HostedReviewInfo } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { AppState } from '../../types'
 import {
   getGitHubPRCacheKey,

@@ -29,7 +29,7 @@ Methods whose capability is `none` need no capability but still need the plugin 
 | [`files.saveAs`](#filessaveas) | none | panel, editor | yes | 1.1 | Offers data (a string or ArrayBuffer, up to 64 MiB) in Orca's save dialog; the plugin never learns the path. Needs a click or key press in the frame; desktop app only. |
 | [`settings.open`](#settingsopen) | `settings:own` | worker, panel, editor | yes | 1.10 | Opens this plugin's declared settings page in Orca settings; requires a desktop window. |
 | [`plugin.request`](#pluginrequest) | none | panel, editor | no | 1.2 | Asks the plugin's own worker to run the handler it registered with `orca.panels.handle(name)`, starting the worker if needed; resolves with what the handler returned. `unknown_method` when no handler has that name. |
-| [`agents.list`](#agentslist) | `agent:read` | worker, panel, editor | no | 1.2 | The agents in the focused workspace: their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after. |
+| [`agents.list`](#agentslist) | `agent:read` | worker, panel, editor | no | 1.2 (`workspaceId`: 1.10) | The agents in the focused workspace, or in the one `workspaceId` names (rejected when no workspace has it): their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after. |
 | [`events.subscribe`](#eventssubscribe) | none | panel, editor | no | 1.2 | Delivers a workspace, agent or editor event to this panel as `orca.on(event)`; needs the event's read capability, when it has one. The frame APIs call it for you. |
 | [`statusBar.update`](#statusbarupdate) | none | worker | no | 1.2 | Changes one of the plugin's `contributes.statusBarItems` (named by `id`): fields given replace their current value, `visible: false` hides it. Desktop app only; lasts until Orca restarts, and is hidden while the plugin is disabled. A plugin with `main` and status bar items has its worker started when it is enabled and kept running while it stays enabled, so a worker can poll and update its items without an event or a hook. |
 | [`appearance.read`](#appearanceread) | `appearance:write` | worker | no | 1.4 | Reads the current desktop appearance revision for a conditional update. |
@@ -195,10 +195,10 @@ Asks the plugin's own worker to run the handler it registered with `orca.panels.
 
 ### `agents.list`
 
-The agents in the focused workspace: their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after.
+The agents in the focused workspace, or in the one `workspaceId` names (rejected when no workspace has it): their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after.
 
 ```ts
-(params?: {}) => { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number; sessionId?: string | null; task?: { title: string } | null }[] }
+(params?: { workspaceId?: string }) => { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number; sessionId?: string | null; task?: { title: string } | null }[] }
 ```
 
 ### `events.subscribe`
@@ -433,7 +433,7 @@ Hooks run in the workers of the Orca that handles the request, before it acts: f
 | `workspace.create.before` | `{ kind: "worktree" \| "folder"; projectId: string; name: string; branch?: string; base?: string }` | `{ deny: string }` | `name`, `branch`, `base` | A worktree or folder workspace is about to be created. Change `name`, `branch` or `base` with `next`, or return `{ deny }` to refuse it. |
 | `workspace.create.after` | `{ workspaceId: string; kind: "worktree" \| "folder"; path: string; branch: string }` | none | nothing | A worktree or folder workspace was created. Observe only: Orca does not wait for it, and results are ignored. |
 | `agent.launch.before` | `{ agent: string; workspaceId: string \| null; workspaceKind: "worktree" \| "folder" \| null; terminalId?: string; command: string; env: Record<string, string> }` | `{ deny: string }` | `command`, `env` | Orca is about to start an agent CLI in a terminal, from any launcher (new tab, workspace create, CLI, automation, orchestration). Change `command` or add `env` with `next`, or return `{ deny }` to refuse the launch. Restores of saved sessions are not hooked. |
-| `agent.prompt.before` | `{ agent: string \| null; terminalId: string; prompt: string; inputKind: "driving" \| "orchestration" \| "launch" }` | `{ deny: string }` | `prompt` | Orca is about to submit a prompt to an agent in a terminal: a launch prompt, an orchestration dispatch, an issue or task prompt, or `orca terminal send` to an agent. A prompt a person submits is never hooked, and writes to one terminal stay in order while it decides. Rewrite `prompt` with `next`, or return `{ deny }` to refuse it. |
+| `agent.prompt.before` | `{ agent: string \| null; terminalId: string; prompt: string; inputKind: "driving" \| "orchestration" \| "launch" }` | `{ deny: string }` | `prompt` | Orca is about to submit a prompt to an agent in a terminal: a launch prompt, an orchestration dispatch, an issue or task prompt, or a prompt sent with `orca terminal send`. A prompt a person submits is never hooked, and writes to one terminal stay in order while it decides. Rewrite `prompt` with `next`, or return `{ deny }` to refuse it. |
 | `agent.tool.before` | `{ agent: string; workspaceId: string \| null; terminalId?: string; tool: string; input: JSON; callId?: string }` | `{ deny: string }` | `input` | An agent in an Orca terminal is about to run a tool. Claude Code waits for the answer: return `{ deny }` to refuse the call (the agent sees the reason) or change `input` with `next`; the person is still asked as usual. Other agents only report the call, so their results are ignored. Agents on SSH or WSL hosts are not hooked yet. |
 | `agent.tool.after` | `{ agent: string; workspaceId: string \| null; terminalId?: string; tool: string; input: JSON; callId?: string; output?: JSON }` | none | nothing | An agent in an Orca terminal finished a tool call (successfully or not). Observe only: Orca does not wait for it. |
 | `editor.save.before` | `{ workspaceId: string \| null; path: string; languageId?: string; text: string }` | `{ deny: string }` | `text` | The person is about to save a text file from an Orca editor tab (an explicit save, not autosave). Change `text` with `next` (format on save) or return `{ deny }` to refuse the save, which shows your reason. Edits made while the hook ran stay unsaved. |
@@ -464,3 +464,20 @@ Plugins are in Alpha: the manifest v2 format and catalog format are stable contr
 - **Deprecation.** A method to be retired is marked deprecated in this table and keeps working for the rest of the major.
 - **New majors.** A breaking change ships as a new `pluginApi` major beside the old one. Orca refuses a manifest whose `pluginApi` names a major it does not implement, with "update Orca", instead of loading it against the wrong API.
 - **Detect, do not assume.** Check `orca.host.has(name)` or `orca.api.minor` before calling a method newer than the oldest Orca you support; a call that slips through fails with `unknown_method`.
+- **Checked at publish.** `orca plugin validate` and `pnpm validate:plugin` read the literal method names your worker, panel and editor code passes to `orca.host.call` (comments ignored), and the Orca plugin directory runs them against the latest Orca release. A method that release does not have fails the check unless the plugin calls `orca.host.has` anywhere, and a proposed one fails unless the plugin checks that name with a literal `orca.host.has(name)`; either is then a warning (guards need `engines.orca` 1.4.245 or later). A method newer than your `engines.orca` or one the surface cannot call is a warning, since a text scan cannot see guards or which code a surface runs; `orca.host.has(name)` anywhere in the plugin silences the `engines.orca` warning. A deprecated method is a warning that starts `deprecated host method <name>`.
+
+The first Orca release with each minor, which is what `engines.orca` must reach for a method of that minor. A few worker methods reached panels and editors in a later minor; the check uses that one for frame code:
+
+| Minor | Orca |
+| --- | --- |
+| 1.0 | 1.4.160 |
+| 1.1 | 1.4.246 |
+| 1.2 | 1.4.246 |
+| 1.3 | 1.4.247 |
+| 1.4 | 1.4.251 |
+| 1.5 | 1.4.256 |
+| 1.6 | 1.4.257 |
+| 1.7 | 1.4.259 |
+| 1.8 | 1.4.259 |
+| 1.9 | 1.4.259 |
+| 1.10 | 1.4.260 |

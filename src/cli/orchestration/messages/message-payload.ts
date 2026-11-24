@@ -1,5 +1,5 @@
 import { getOptionalJsonFlag, getOptionalStringFlag } from '../../arguments/flags'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 
 export function getOptionalStructuredMessagePayload(
   flags: Map<string, string | boolean>

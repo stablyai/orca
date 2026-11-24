@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { CollectionOwner } from './source-preference-ownership'
 
 /** One optimistic source-preference write for a repo/host; `finish` is the single end of its lifetime. */

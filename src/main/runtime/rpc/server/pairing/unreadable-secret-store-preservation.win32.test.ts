@@ -5,8 +5,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   loadWindowsSecurity,
   type WindowsSecurity
-} from '../../../../../shared/windows-security-addon'
-import { removeTreeSync } from '../../../../../shared/windows-transient-lock-removal'
+} from '../../../../../shared/secure-storage/windows-security-addon'
+import { removeTreeSync } from '../../../../../shared/file-write/windows-transient-lock-removal'
 
 /** A foreign-SID file DACL can deny reads while its writable parent still permits replacement; stores must refuse unreadable secrets instead of regenerating them. Assert inode preservation on Windows. */
 

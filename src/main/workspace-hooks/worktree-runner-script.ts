@@ -6,7 +6,7 @@ import {
   type SetupRunnerShell
 } from '../../shared/agent-launch/startup/setup-runner-command'
 import { scriptDeclaresPosixShell } from '../../shared/workspace-setup/setup-script-shebang'
-import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
+import { resolveWindowsShellStartupFamily } from '../../shared/shell/launch/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../pty/shell-startup/git-bash'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { withRepositoryGitCause } from '../git/repository-git-cause'
@@ -16,7 +16,7 @@ import { resolveWslWorktreeGitPath } from '../git/worktrees/catalog/wsl-worktree
 import { knownWslAutomountRoots } from '../wsl/filesystem/wsl-automount-root'
 import { isWslPath } from '../wsl/filesystem/unc-path-access'
 import { windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
-import { toWindowsWslPath, toLinuxPath } from '../../shared/wsl-paths'
+import { toWindowsWslPath, toLinuxPath } from '../../shared/file-access/wsl-paths'
 import {
   getHookRuntimeTarget,
   getHookWslContext,
@@ -28,12 +28,12 @@ import {
   type HookWorkspaceIdentity
 } from './setup-hook-env-vars'
 import { ignoreFolderSetupRunners, newFolderSetupRunnerPath } from './folder-setup-runner-files'
-import { isFolderRepo } from '../../shared/repo-kind'
+import { isFolderRepo } from '../../shared/repository/repo-kind'
 import { buildPosixRunnerScript, buildWindowsRunnerScript } from './setup-runner-script-text'
 
-import type { Repo } from '../../shared/repo-types'
-import type { WorktreeSetupLaunch } from '../../shared/worktree/launch-types'
-import type { SetupAgentStartupPolicy } from '../../shared/orca-yaml-hook-types'
+import type { WorkspaceHookOwner } from '../../shared/workspace-setup/hooks/workspace-hook-owner'
+import type { WorktreeSetupLaunch } from '../../shared/worktree/creation/launch-types'
+import type { SetupAgentStartupPolicy } from '../../shared/workspace-setup/orca-yaml-hook-types'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 
 type SetupRunnerShellSettings = Record<string, unknown> | undefined
@@ -55,7 +55,7 @@ async function getGitPath(cwd: string, relativePath: string): Promise<string> {
 }
 
 export async function createSetupRunnerScript(
-  repo: Repo,
+  repo: WorkspaceHookOwner,
   worktreePath: string,
   script: string,
   projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
@@ -79,7 +79,7 @@ export async function createSetupRunnerScript(
 }
 
 async function createWorktreeRunnerScript(args: {
-  repo: Repo
+  repo: WorkspaceHookOwner
   worktreePath: string
   script: string
   runnerBaseName: 'setup-runner'
@@ -110,7 +110,7 @@ async function createWorktreeRunnerScript(args: {
   // Report the typing shell, not the runner format: cmd /c typed through Git Bash triggers MSYS path rewriting.
   const launchShell: SetupRunnerShell | undefined = nativeWindowsWorktree
     ? (setupShell ?? { family: 'cmd' })
-    : process.platform === 'win32' && runtimeTarget?.wslDistro
+    : process.platform === 'win32' && wslWorktree
       ? { family: 'posix', executable: 'wsl.exe' }
       : undefined
   const runnerExtension = runnerShell.family === 'cmd' ? 'cmd' : 'sh'

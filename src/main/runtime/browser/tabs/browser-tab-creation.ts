@@ -1,7 +1,7 @@
 import { createBrowserTabInRenderer } from './browser-tab-renderer-create'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { BrowserPageCreationPlacement } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
-import type { BrowserTabSplitDirection } from '../../../../shared/browser-tab-split-direction'
+import type { BrowserTabSplitDirection } from '../../../../shared/browser/workspaces/browser-tab-split-direction'
 import {
   publishCreatedBrowserSessionTab,
   resolveBrowserTabCreateFocus,
@@ -37,6 +37,7 @@ type BrowserTabCreateCaller = {
   pairedDeviceId?: string
   clientKind?: 'mobile' | 'runtime'
   opensPageLink?: boolean
+  signal?: AbortSignal
 }
 
 export class RuntimeBrowserTabCreation {
@@ -50,9 +51,9 @@ export class RuntimeBrowserTabCreation {
       | 'getBrowserHostRequestRegistry'
       | 'getPairedDeviceName'
       | 'getRuntimeBrowserPageRegistry'
-      | 'getAvailableAuthoritativeWindow'
+      | 'getAvailableAuthoritativeWindowId'
       | 'getOffscreenBrowserBackend'
-      | 'getAuthoritativeWindow'
+      | 'getAuthoritativeWindowId'
       | 'markHeadlessBrowserSessionTabActive'
       | 'notifyHeadlessBrowserSessionTabsChanged'
       | 'serveBrowserTabs'
@@ -64,9 +65,16 @@ export class RuntimeBrowserTabCreation {
   ) {}
 
   async browserTabCreate(
-    params: BrowserTabCreateRequest,
+    requested: BrowserTabCreateRequest,
     caller?: BrowserTabCreateCaller
   ): Promise<{ browserPageId: string }> {
+    // A host with no window has no layout to split: its tab opens plain, here or on a paired desktop.
+    const params =
+      requested.split &&
+      requested.placement?.kind !== 'client' &&
+      this.host.getAvailableAuthoritativeWindowId() === null
+        ? { ...requested, split: undefined, splitFromTabId: undefined }
+        : requested
     const url = params.url ?? 'about:blank'
     const focus = resolveBrowserTabCreateFocus({
       activate: params.activate,
@@ -86,10 +94,7 @@ export class RuntimeBrowserTabCreation {
       )
     }
     // Why reject rather than ignore: a caller asking for a split pane should learn it got none.
-    if (
-      params.split &&
-      (params.placement?.kind === 'client' || !this.host.getAvailableAuthoritativeWindow())
-    ) {
+    if (params.split && params.placement?.kind === 'client') {
       throw new BrowserError(
         'invalid_argument',
         'Opening a browser tab in a split pane needs an Orca desktop window on this host.'
@@ -107,7 +112,7 @@ export class RuntimeBrowserTabCreation {
       )
     }
     // Headless hosts use offscreen WebContents because no renderer webview exists.
-    if (!this.host.getAvailableAuthoritativeWindow()) {
+    if (this.host.getAvailableAuthoritativeWindowId() === null) {
       const offscreen = this.host.getOffscreenBrowserBackend()
       const createOffscreen = async (): Promise<{ browserPageId: string }> => {
         if (!offscreen) {
@@ -121,7 +126,8 @@ export class RuntimeBrowserTabCreation {
           this.host,
           params,
           params.profileId ?? browserSessionRegistry.getDefaultProfile().id,
-          offscreen ? createOffscreen : undefined
+          offscreen ? createOffscreen : undefined,
+          caller?.signal
         )
       }
       return createOffscreen()
@@ -148,7 +154,7 @@ export class RuntimeBrowserTabCreation {
     }
 
     const bridge = this.targets.requireAgentBrowserBridge()
-    publishCreatedBrowserSessionTab(this.host, {
+    await publishCreatedBrowserSessionTab(this.host, {
       placementKind: 'renderer',
       browserPageId,
       worktreeId,
@@ -163,7 +169,7 @@ export class RuntimeBrowserTabCreation {
         // Nobody reads a new tab's effects, so its first load skips the settle.
         const result = await bridge.goto(url, worktreeId, browserPageId, { reportEffects: false })
         this.targets.notifyRendererNavigation(browserPageId, result.url, result.title)
-        if (!this.host.getAvailableAuthoritativeWindow() && worktreeId) {
+        if (this.host.getAvailableAuthoritativeWindowId() === null && worktreeId) {
           this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)
         }
       }
@@ -205,7 +211,7 @@ export class RuntimeBrowserTabCreation {
         ...(params.targetGroupId ? { groupId: params.targetGroupId } : {})
       })
     }
-    publishCreatedBrowserSessionTab(this.host, {
+    await publishCreatedBrowserSessionTab(this.host, {
       placementKind: 'offscreen',
       browserPageId: created.browserPageId,
       worktreeId,
@@ -217,10 +223,13 @@ export class RuntimeBrowserTabCreation {
     return { browserPageId: created.browserPageId }
   }
 
-  async browserOpenUrlOnClient(params: {
-    url: string
-    worktree: string
-  }): Promise<{ browserPageId: string }> {
-    return openBrowserUrlOnClient(this.host, params)
+  async browserOpenUrlOnClient(
+    params: {
+      url: string
+      worktree: string
+    },
+    options?: { signal?: AbortSignal }
+  ): Promise<{ browserPageId: string }> {
+    return openBrowserUrlOnClient(this.host, params, options?.signal)
   }
 }

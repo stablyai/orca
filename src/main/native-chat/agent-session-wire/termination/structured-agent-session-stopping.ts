@@ -5,22 +5,36 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { activeStructuredAgentSessionTurnId } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import type { StructuredAgentSessionWorkScope } from '../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import { stopIsAPersons } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
+import type { JournalLatestStop } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
 import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause-marks'
 
-export function structuredAgentSessionStopping(
+export async function structuredAgentSessionStopping(
   journal: Pick<AgentSessionJournal, 'stopMarks'>,
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = [],
   /** A Stop bound to an ended generation’s turn is over. */
   scope?: StructuredAgentSessionWorkScope
+): Promise<boolean> {
+  return structuredAgentSessionStoppingForMark(
+    await journal.stopMarks.latest(),
+    items,
+    submissions,
+    scope
+  )
+}
+
+export function structuredAgentSessionStoppingForMark(
+  stop: JournalLatestStop | null,
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[],
+  scope?: StructuredAgentSessionWorkScope
 ): boolean {
-  const stop = journal.stopMarks.latest()
   if (stop === null || !stopIsAPersons(stop.event.reason)) {
     return false
   }

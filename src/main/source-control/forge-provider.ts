@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult,
@@ -252,7 +252,7 @@ const azureDevOpsForgeProvider = {
       input.branch,
       input.linkedReviewNumber ?? null,
       forgeConnectionId(input),
-      ...hostedReviewExecutionArgs(input)
+      input
     )
     return pr ? mapAzureDevOpsReview(pr) : null
   },

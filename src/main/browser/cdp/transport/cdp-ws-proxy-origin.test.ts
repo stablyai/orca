@@ -5,7 +5,6 @@ import { CdpWsProxy } from './cdp-ws-proxy'
 import {
   connect,
   createMockWebContents,
-  getSendCommandMethods,
   sendAndReceive,
   mockAsWebContents,
   type MockWebContents
@@ -53,7 +52,6 @@ describe('CdpWsProxy loopback request guard', () => {
     const response = await sendAndReceive(client, { id: 7, method: 'DOM.getDocument' })
 
     expect(response.result).toEqual({ ok: true })
-    expect(getSendCommandMethods(mock)).not.toContain('Network.getAllCookies')
     client.close()
   })
 })

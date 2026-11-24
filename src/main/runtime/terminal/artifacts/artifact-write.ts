@@ -13,7 +13,7 @@ import {
   terminalFileStatIdentity
 } from './artifact-integrity'
 import { statLocalTerminalArtifact } from './artifact-stat'
-import { runSerializedLocalFileWrite } from '../../../ipc/filesystem/local-disk-write-precondition'
+import { runSerializedLocalFileWrite } from '../../../filesystem/local-file-io/local-disk-write-precondition'
 
 export async function writeTerminalArtifactFile(
   grants: Pick<RuntimeTerminalFileGrants, 'requireTerminalFileGrant' | 'refreshTerminalFileGrant'>,

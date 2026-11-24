@@ -17,16 +17,16 @@ import {
   buildDiffEditorWordWrapOptions,
   syncDiffEditorOriginalWordWrap
 } from '../monaco-view/diff-editor-word-wrap-options'
-import { monacoFindOptions } from '../../monaco-find-options'
-import { buildEditorUnicodeHighlightOptions } from '../../editor-unicode-highlight-options'
+import { monacoFindOptions } from '../../monaco/monaco-find-options'
+import { buildEditorUnicodeHighlightOptions } from '../../monaco/editor-unicode-highlight-options'
 import { installDiffEditorHorizontalWheelScroll } from '../monaco-view/diff-editor-horizontal-wheel-scroll'
 import { installCombinedDiffCursorReveal } from '../../combined-diff/scroll-viewport/combined-diff-cursor-reveal'
-import { usePluginSyntaxLanguage } from '../../use-plugin-syntax-language'
+import { usePluginSyntaxLanguage } from '../../monaco/use-plugin-syntax-language'
 import {
   PLUGIN_SYNTAX_EDITOR_OPTIONS,
   applyModelLanguage
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
-import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { useMonacoTheme } from '@/lib/editor/appearance/use-monaco-theme'
 import { wholeFileDiffTintClass } from '../monaco-view/whole-file-diff-tint'
 import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
 import type { EditorTypography } from '../../../../../../shared/editor/editor-typography'
@@ -196,7 +196,7 @@ export function DiffSectionBody({
         </div>
       ) : section.diffResult?.kind === 'binary' ? (
         section.diffResult.tooLarge ? (
-          <DiffTooLargeNotice />
+          <DiffTooLargeNotice forConnection={section.diffResult.tooLargeForConnection} />
         ) : section.diffResult.isImage ? (
           // Why: without a row-local boundary the chunk load hides the whole virtualized list, which
           // then drops this overscan row, un-suspends, re-shows it, and loops into React #185.

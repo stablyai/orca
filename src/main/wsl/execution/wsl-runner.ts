@@ -1,11 +1,11 @@
-import { addWslEnvKeys } from '../../../shared/wsl-env'
+import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 import {
   commandLineLength,
   MAX_COMMAND_LINE_CHARS
-} from '../../../shared/windows-command-line-budget'
+} from '../../../shared/shell/launch/windows-command-line-budget'
 import { runProcess } from '@orca/process-host'
 import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'
-import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
+import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import { getWslGuestEnvironment, type WslGuestEnvironment } from './wsl-guest-environment'
 import { resolveWslExecutablePath } from './wsl-executable-path'
 

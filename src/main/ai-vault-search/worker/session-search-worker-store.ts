@@ -1,4 +1,4 @@
-import { ownRetainedString } from '../../../shared/own-retained-string'
+import { ownRetainedString } from '../../../shared/text/own-retained-string'
 import type { SessionFileCandidate } from '../../ai-vault/session-scanner-types'
 import type {
   TranscriptMessage,

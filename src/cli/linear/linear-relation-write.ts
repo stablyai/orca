@@ -8,7 +8,7 @@ import { getRequiredStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { formatLinearRelationWrite } from './linear-format'
 import { buildWriteTargetRequest } from './linear-request-builders'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 const LINEAR_WRITE_TIMEOUT_MS = 75_000
 

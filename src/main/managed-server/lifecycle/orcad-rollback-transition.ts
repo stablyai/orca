@@ -52,7 +52,7 @@ import {
   stopIncumbentBehindTerminalBarrier
 } from './orcad-rollback-terminal-barrier'
 import { withOrcadLogTail } from '../install/orcad-remote-log-tail'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 
 async function stateWritesSinceActivation(options: OrcadRollbackOptions): Promise<boolean | null> {
   const activatedAtSeconds = Math.floor(Date.parse(options.record.activatedAt ?? '') / 1000)

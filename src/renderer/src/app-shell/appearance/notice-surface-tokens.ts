@@ -10,13 +10,19 @@ import {
 
 export const NOTICE_SURFACE_TOKEN = '--notice-surface'
 export const NOTICE_SECONDARY_TOKEN = '--notice-secondary'
+export const NOTICE_DESCRIPTION_TOKEN = '--notice-description'
 export const NOTICE_MUTED_FOREGROUND_TOKEN = '--notice-muted-foreground'
 export const NOTICE_SECONDARY_EDGE_TOKEN = '--notice-secondary-edge'
 export const NOTICE_MUTED_TOKEN = '--notice-muted'
+export const NOTICE_ACCENT_TOKEN = '--notice-accent'
+export const NOTICE_ACCENT_FOREGROUND_TOKEN = '--notice-accent-foreground'
+export const NOTICE_INPUT_TOKEN = '--notice-input'
+export const NOTICE_EDGE_TOKEN = '--notice-edge'
+export const NOTICE_OUTLINE_EDGE_TOKEN = '--notice-outline-edge'
 // Keep in sync with the built-in notice mixes in main.css.
-const NOTICE_LIFT = { light: 0, dark: 7 } as const
+const NOTICE_LIFT = { light: 0, dark: 15 } as const
 const NOTICE_SECONDARY_MIX = { light: 6, dark: 10 } as const
-// Keep in sync with the [data-description] color-mix in main.css.
+// Keep in sync with the built-in --notice-description mix in main.css.
 const NOTICE_DESCRIPTION_OPACITY = 80
 
 const BLACK: Rgba = [0, 0, 0, 1]
@@ -54,9 +60,10 @@ function deepestReadableMix(
 /**
  * Toasts and corner cards lift the popover toward the foreground and paint popover and muted
  * text on it, but a theme's popover pair is only checked unlifted. So the lift and secondary
- * fill shrink until popover text stays readable (on the surface, its 80% description blend
- * too), and muted text moves toward popover text until it does too, on the surface and on muted
- * panels. Emitted as final hex colors: CSS paints exactly the colors measured here.
+ * fill shrink until popover text stays readable, the description blend rises from 80% toward
+ * full popover text until it reads too, and muted text moves toward popover text until it does
+ * too, on the surface and on muted panels. Emitted as final hex colors: CSS paints exactly the
+ * colors measured here.
  */
 export function noticeSurfaceTokensFor(
   colors: { foreground: Rgba; popover: Rgba; popoverForeground: Rgba; mutedForeground: Rgba },
@@ -67,16 +74,19 @@ export function noticeSurfaceTokensFor(
     return {}
   }
   const text = painted(popoverForeground)
-  // Why: toast descriptions paint popover text at 80% (main.css [data-description]), so the lift
-  // must keep that blend readable too, not just the opaque text.
-  const surface = deepestReadableMix(
-    foreground,
-    popover,
-    NOTICE_LIFT[base],
-    (candidate) =>
-      readable(candidate, text) &&
-      readable(candidate, painted(mix(text, candidate, NOTICE_DESCRIPTION_OPACITY)))
+  const surface = deepestReadableMix(foreground, popover, NOTICE_LIFT[base], (candidate) =>
+    readable(candidate, text)
   )
+  // Why: descriptions read quieter than titles, but never below 4.5:1; a light theme with grey
+  // popover text leaves no room for the 80% blend, so it moves toward the full text color.
+  let description = painted(mix(text, surface, NOTICE_DESCRIPTION_OPACITY))
+  for (
+    let opacity = NOTICE_DESCRIPTION_OPACITY + 1;
+    opacity <= 100 && !readable(surface, description);
+    opacity++
+  ) {
+    description = painted(mix(text, surface, opacity))
+  }
   const secondary = deepestReadableMix(
     foreground,
     surface,
@@ -96,13 +106,24 @@ export function noticeSurfaceTokensFor(
   return {
     [NOTICE_SURFACE_TOKEN]: surfaceHex,
     [NOTICE_SECONDARY_TOKEN]: secondaryHex,
+    [NOTICE_DESCRIPTION_TOKEN]: rgbaToHex(description),
     // Why: with no fill left, secondary buttons need an edge to still read as buttons.
     [NOTICE_SECONDARY_EDGE_TOKEN]:
       secondaryHex === surfaceHex ? 'var(--notice-border)' : 'transparent',
     // Why: built-in palettes set --muted equal to --secondary; keeping that here keeps muted panels
     // on the notice surface's polarity when a theme's popover and app polarity differ.
     [NOTICE_MUTED_TOKEN]: secondaryHex,
-    [NOTICE_MUTED_FOREGROUND_TOKEN]: rgbaToHex(muted)
+    [NOTICE_MUTED_FOREGROUND_TOKEN]: rgbaToHex(muted),
+    // Why: hover (bg-accent, bg-accent/50) and outline fills (dark:bg-input/30, /50) paint under
+    // popover text in the notice scope; the secondary fill is the deepest one it stays readable on.
+    [NOTICE_ACCENT_TOKEN]: secondaryHex,
+    [NOTICE_ACCENT_FOREGROUND_TOKEN]: rgbaToHex(text),
+    [NOTICE_INPUT_TOKEN]: secondaryHex,
+    // Why: edges never sit under text, so they follow the popover text like the card border does;
+    // the theme's own --border/--input can be on the app's polarity, not the popover's.
+    [NOTICE_EDGE_TOKEN]: 'var(--notice-border)',
+    // Why: --input now only fills, so dark outline buttons (border-input) need the edge drawn.
+    [NOTICE_OUTLINE_EDGE_TOKEN]: 'var(--notice-border)'
   }
 }
 

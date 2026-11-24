@@ -3,14 +3,14 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { NativeChatSettledTurns } from '../../../../../../shared/native-chat/transcript/native-chat-turn-status'
+import type { NativeChatSettledTurns } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { AgentSessionLatestTurn } from '../../../../../../shared/agent-session/agent-session-wire'
-import type { StructuredAgentHostClock } from '../../../../../../shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentHostClock } from '../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { selectStructuredAgentTurnBars } from '../../../../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import {
   stepStructuredAgentTurnClock,
   type StructuredAgentTurnClockLatch
-} from '../../../../../../shared/structured-agent-turn-clock-anchor'
+} from '../../../../../../shared/native-chat/transcript/turns/structured-agent-turn-clock-anchor'
 
 /** Use journal durations and latch host-to-client clock conversion once per live turn to avoid clock skew. */
 export function useStructuredAgentTurnTiming(

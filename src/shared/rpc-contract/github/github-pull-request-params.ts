@@ -20,7 +20,10 @@ export const PrForBranch = RepoSelector.extend({
   branch: requiredString('Missing branch'),
   reason: OptionalPRRefreshReason,
   userRefresh: z.boolean().optional(),
+  acceptRevalidationOnly: z.boolean().optional(),
+  selected: z.boolean().optional(),
   linkedPRNumber: z.number().int().positive().nullable().optional(),
+  linkedPRUrl: z.string().max(4096).optional(),
   fallbackPRNumber: z.number().int().positive().nullable().optional(),
   acceptMergedFallbackPR: z.boolean().optional(),
   currentHeadOid: z.string().nullable().optional()
@@ -41,7 +44,9 @@ export const PRCommentReaction = RepoSelector.extend({
 
 export const PullRequestChecks = PullRequest.extend({
   headSha: OptionalString,
-  userRefresh: z.boolean().optional()
+  userRefresh: z.boolean().optional(),
+  /** `swr`: a client's timer; the host's PR auto-refresh cadence may answer from its last read. */
+  reason: OptionalPRRefreshReason
 })
 
 export const PullRequestCheckDetails = RepoSelector.extend({

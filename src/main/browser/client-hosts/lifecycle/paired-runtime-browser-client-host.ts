@@ -11,7 +11,7 @@ import { BROWSER_CLIENT_PAGE_METADATA_METHOD } from '../../../../shared/browser/
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type { RemoteRuntimeSubscriptionOptions } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { BrowserClientFileChannelAvailability } from '../file-transfers/browser-client-file-channel-transport'
 import { BrowserClientHostCommandDispatcher } from '../commands/browser-client-host-command-dispatcher'
 import type {
@@ -29,6 +29,7 @@ export type PairedRuntimeBrowserClientHostOptions = {
   browserHostClientId: string
   hostCapabilities: readonly string[]
   handler: CommandHandler
+  acquireInitialization?: DispatcherOptions['acquireInitialization']
   getPageInventory?: () => readonly BrowserClientHostedPageInventory[]
   pageReconciliationProtocolVersion?: 1
   fileChannelProtocolVersion?: 1
@@ -156,13 +157,14 @@ export class PairedRuntimeBrowserClientHost {
     this.options.onAuthority?.(authority)
     this.dispatcher = new BrowserClientHostCommandDispatcher({
       authority,
-      handler: async (command, signal) =>
+      handler: async (command, signal, closeInitialization) =>
         stageBrowserHostCommandResult(
           command,
-          await this.options.handler(command, signal),
+          await this.options.handler(command, signal, closeInitialization),
           (params) => this.sendCommandResultChunk(params),
           signal
         ),
+      acquireInitialization: this.options.acquireInitialization,
       ...this.options.dispatcher
     })
   }

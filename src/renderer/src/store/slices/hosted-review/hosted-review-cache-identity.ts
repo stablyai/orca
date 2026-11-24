@@ -1,10 +1,10 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { composeRepoCacheKey } from '../../../../../shared/github/cache/github-cache-key'
 import {
   getSettingsFocusedExecutionHostId,
   normalizeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 
 export type LinkedReviewHints = {
   linkedGitHubPR?: number | null

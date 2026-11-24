@@ -1,7 +1,7 @@
 import type { PullRequestDraftContext } from '../../../shared/source-control/ai/generation/pull-request-generation'
 import { isSafeGitRefName } from '../../../shared/git/status/git-status-upstream-ref'
-import { isSafeReviewHeadFetchRemote } from '../../../shared/review-head-tracking-ref'
-import { ReviewDraftContextError } from '../../../shared/review-draft-context-error'
+import { isSafeReviewHeadFetchRemote } from '../../../shared/worktree/hosted-review/review-head-tracking-ref'
+import { ReviewDraftContextError } from '../../../shared/source-control/ai/generation/review-draft-context-error'
 import {
   canQueryRemoteBaseRefs,
   getPullRequestRemoteRefState,

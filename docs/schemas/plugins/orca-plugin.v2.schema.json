@@ -758,7 +758,7 @@
             "workspace.removed": "1.4.245",
             "agent.status.changed": "1.4.160",
             "workspace.changed": "1.4.246",
-            "editor.typography.changed": "1.4.256"
+            "editor.typography.changed": "1.4.257"
           }
         }
       },
@@ -1612,7 +1612,7 @@
             "storage:own": "1.4.245",
             "secrets:own": "1.4.245",
             "settings:own": "1.4.160",
-            "appearance:write": "1.4.249",
+            "appearance:write": "1.4.251",
             "workspace:create": "1.4.259",
             "automation:read": "1.4.259",
             "automation:write": "1.4.259",

@@ -123,6 +123,7 @@ export function answerQuestion(
         `Question ${params.messageId} is closed because its Dispatch is inactive.`
       )
     }
+    this.markAsRead([question.message_id], { kind: 'reply' })
     if (question.status === 'answered') {
       if (question.answer_body !== params.body || !question.answer_message_id) {
         throw new OrchestrationError(
@@ -149,13 +150,13 @@ export function answerQuestion(
     })
     // The answer is the worker's mail; a federated worker's copy lives on its execution host.
     if (this.getFederatedDispatch(question.dispatch_id)) {
-      this.markAsReadAndDelivered([message.id])
+      this.markAsReadAndDelivered([message.id], { kind: 'orca' })
     }
     this.db
       .prepare(
         `UPDATE question_threads
          SET status = 'answered', answer_message_id = ?, answer_body = ?,
-             answered_by_generation = ?, answered_at = datetime('now')
+             answered_by_generation = ?, answered_at = datetime('now'), awaiting = NULL
          WHERE message_id = ? AND status = 'pending'`
       )
       .run(message.id, params.body, generation, question.message_id)
@@ -209,7 +210,7 @@ export function closeQuestionsForDispatch(this: OrchestrationDb, dispatchId: str
   }
   this.db
     .prepare(
-      "UPDATE question_threads SET status = 'closed', closed_at = datetime('now') WHERE dispatch_id = ? AND status = 'pending'"
+      "UPDATE question_threads SET status = 'closed', closed_at = datetime('now'), awaiting = NULL WHERE dispatch_id = ? AND status = 'pending'"
     )
     .run(dispatchId)
   return rows.map((row) => row.message_id)

@@ -1,5 +1,5 @@
 import { Activity, Edit3, PowerOff, RefreshCw } from 'lucide-react-native'
-import type { ActionSheetAction } from './components/ActionSheetModal'
+import type { ActionSheetAction } from './components/sheets/ActionSheetModal'
 import type { ConnectionState } from './transport/connection/connection-state'
 import type { HostProfile } from './host-catalog/host-profile'
 import { translate } from './i18n/mobile-i18n'

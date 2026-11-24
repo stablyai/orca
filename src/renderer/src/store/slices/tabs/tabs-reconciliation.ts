@@ -1,6 +1,9 @@
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import type { AppState } from '../../types'
-import type { Tab } from '../../../../../shared/tab-types'
+import {
+  TAB_CONTENT_TRAITS,
+  type Tab
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-groups/tab-order'
 import { ensureWorktreeGroup, updateGroup } from './tab-group-state'
 import { sanitizeRecentTabIds } from './tab-selection-history'
@@ -9,7 +12,7 @@ import {
   buildOrphanTerminalCleanupPatch,
   getOrphanTerminalIds,
   terminalTabHasReconnectablePty
-} from '../../terminals/terminal-orphan-cleanup'
+} from '../../terminals/retirement/terminal-orphan-cleanup'
 import {
   createReconciliationDrafts,
   finishReconciliationDrafts,
@@ -21,6 +24,15 @@ export type WorktreeTabModelReconciliation = {
   patch: Partial<AppState>
   renderableTabCount: number
   activeRenderableTabId: string | null
+}
+
+export function hasRecordIndependentRenderableTab(
+  state: Pick<AppState, 'unifiedTabsByWorktree'>,
+  worktreeId: string
+): boolean {
+  return (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+    (tab) => TAB_CONTENT_TRAITS[tab.contentType].renderableWithoutRecord
+  )
 }
 
 /** Pure single-workspace patch; optional batch reuses map drafts/openFiles index without changing projected values. */
@@ -112,8 +124,7 @@ export function projectWorktreeTabModelReconciliation(
   const liveTerminalIds = new Set(
     runtimeTerminalTabs.filter((tab) => !orphanTerminalIds.has(tab.id)).map((tab) => tab.id)
   )
-  // Batch index avoids O(workspaces × openFiles) rescanning.
-  const liveEditorIds = batch?.liveEditorIds ?? new Set(state.openFiles.map((file) => file.id))
+  let liveEditorIds = batch?.liveEditorIds
   const liveBrowserIds = new Set(
     (state.browserTabsByWorktree[worktreeId] ?? []).map((browserTab) => browserTab.id)
   )
@@ -125,10 +136,10 @@ export function projectWorktreeTabModelReconciliation(
     if (tab.contentType === 'browser') {
       return liveBrowserIds.has(tab.entityId)
     }
-    if (tab.contentType === 'simulator' || tab.contentType === 'agent-session') {
-      return true
-    }
-    return liveEditorIds.has(tab.entityId)
+    return (
+      TAB_CONTENT_TRAITS[tab.contentType].renderableWithoutRecord ||
+      (liveEditorIds ??= new Set(state.openFiles.map((file) => file.id))).has(tab.entityId)
+    )
   }
 
   const renderableTabs = reconciledUnifiedTabs.filter(isRenderableTab)
@@ -137,8 +148,12 @@ export function projectWorktreeTabModelReconciliation(
     renderableTabs.length === reconciledUnifiedTabs.length ? reconciledUnifiedTabs : renderableTabs
   const validTabIds = new Set(validTabs.map((tab) => tab.id))
   const nextGroupsWithEmpty = reconciledGroups.map((group) => {
-    const slots = structuredLaunchSlotIds(worktreeId, group.id)
-    const tabOrder = group.tabOrder.filter((tabId) => validTabIds.has(tabId) || slots.has(tabId))
+    let slots: Set<string> | undefined
+    const tabOrder = group.tabOrder.filter(
+      (tabId) =>
+        validTabIds.has(tabId) ||
+        (slots ??= structuredLaunchSlotIds(worktreeId, group.id)).has(tabId)
+    )
     const realOrder = tabOrder.filter((id) => validTabIds.has(id))
     const activeTabId =
       group.activeTabId && validTabIds.has(group.activeTabId)

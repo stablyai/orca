@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import {
   PLUGIN_APP_THEME_TOKENS,
   type PluginThemeRegistration
@@ -12,6 +12,7 @@ import {
 } from './plugin-theme-tokens'
 import { CHAT_SELECTION_MIX_TOKEN, chatSelectionMix } from './chat-selection-mix'
 import { noticeSurfaceTokens } from './notice-surface-tokens'
+import { themeAccentButtonTokens } from './theme-accent-button-tokens'
 
 export type DocumentThemePreference = GlobalSettings['theme']
 
@@ -187,7 +188,8 @@ function paintPluginTokens(
     ...withFloatingSurfaces(safe),
     [HOST_PILL_OUTLINE_MIX_TOKEN]: `${hostPillOutlineMix(safe, base, builtIns, probe)}%`,
     [CHAT_SELECTION_MIX_TOKEN]: `${chatSelectionMix(safe, base, builtIns, probe)}%`,
-    ...noticeSurfaceTokens(safe, base, builtIns, probe)
+    ...noticeSurfaceTokens(safe, base, builtIns, probe),
+    ...themeAccentButtonTokens(safe, builtIns, probe)
   })
   return safe
 }

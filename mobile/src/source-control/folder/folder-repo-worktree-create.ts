@@ -1,5 +1,5 @@
 import { WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE } from '../../../../src/shared/new-workspace/worktree-create-collision'
-import { hasRuntimeRpcErrorCode } from '../../../../src/shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../src/shared/remote-runtime/rpc/runtime-rpc-error-code'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
 import { readNewWorktreeRuntimeCapabilities } from '../../new-workspace/creation/worktree-create-capability'

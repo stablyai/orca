@@ -10,7 +10,7 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { openPluginIntegrationSettings } from '@/components/settings/integrations/plugin-integration-navigation'
 

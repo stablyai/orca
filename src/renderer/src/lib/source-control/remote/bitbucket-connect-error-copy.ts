@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   BITBUCKET_CONNECT_FAILURE_COPY as EN,
   type BitbucketConnectFailureCode
-} from '../../../../../shared/bitbucket-credentials'
+} from '../../../../../shared/bitbucket/bitbucket-credentials'
 
 const COPY: Record<BitbucketConnectFailureCode, () => string> = {
   invalidInput: () => translate('codeHost.bitbucketConnect.invalidInput', EN.invalidInput),

@@ -1,4 +1,4 @@
-import type { RuntimeWorktreeAgentRow } from '../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeAgentRow } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   programStatusAttentionLabel,
   resolveProgramStatusPresentation

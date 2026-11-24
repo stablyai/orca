@@ -1,4 +1,4 @@
-import { createPromptDismissalStore } from '../../../../../shared/prompt-dismissal-store'
+import { createPromptDismissalStore } from '../../../../../shared/native-chat/input/prompt-dismissal-store'
 
 export type NativeChatPromptDismissal = Readonly<{
   content: string

@@ -38,8 +38,7 @@ export function AutomationsPageListPanel({
     relativeNow,
     externalActionKey,
     setActivePaneTab,
-    isLoading,
-    setPageView
+    isLoading
   } = local
   const {
     hostCatalog,
@@ -108,17 +107,12 @@ export function AutomationsPageListPanel({
       requestDeleteAutomation={managementActions.requestDeleteAutomation}
       requestExternalAction={externalActions.requestExternalAction}
       openCreateDialog={editorActions.openCreateDialog}
-      canCreateAutomation={destination.canCreateAutomation}
       onOpenDetail={onOpenDetail}
       onRefresh={() => {
         hostCatalog.refreshHosts()
         void pageRefresh.refresh()
       }}
       isRefreshing={isLoading}
-      onOpenRuns={() => {
-        hostCatalog.selectHost({ kind: 'all' })
-        setPageView('runs')
-      }}
     />
   )
 }

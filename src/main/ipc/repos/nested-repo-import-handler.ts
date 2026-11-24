@@ -2,11 +2,12 @@ import { type BrowserWindow, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import type { Store } from '../../persistence/loading-store/store'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { RepositoryMetadataOwner } from '../../workspaces/catalog/imported-folder-project-link'
-import type { ProjectGroupImportResult } from '../../../shared/project-group-types'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import type { ProjectGroupImportResult } from '../../../shared/project/groups/project-group-types'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
+import { getNextProjectGroupOrder } from '../../../shared/project/groups/project-groups'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
 import { isGitRepoAsync } from '../../git/repositories/discovery/repo-detection'
 import { getRepoName } from '../../git/repositories/repository-name'
@@ -15,7 +16,10 @@ import {
   resolveNestedRepoSelection
 } from '../../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../../project-groups/nested-repo-import-target'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
@@ -58,7 +62,11 @@ export function registerNestedRepoImportHandler(
         mode: args.mode,
         connectionId: args.connectionId ?? null,
         repoPaths: selection.selectedPaths,
-        createGroup: (input) => store.createProjectGroup(input)
+        existingGroups: store.getProjectGroups(),
+        existingRepos: store.getRepos(),
+        createGroup: (input) => store.createProjectGroup(input),
+        renameGroup: (groupId, name) => store.updateProjectGroup(groupId, { name }),
+        reparentGroups: (moves) => store.setProjectGroupParents(moves)
       })
       const results: ProjectGroupImportResult['projects'] = selection.rejectedPaths.map(
         (repoPath) => ({
@@ -72,7 +80,7 @@ export function registerNestedRepoImportHandler(
       const importTargetResolver = createNestedRepoImportTargetResolver()
 
       const acceptedRepos: Repo[] = []
-      for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
+      for (const repoPath of selection.selectedPaths) {
         try {
           // This process cannot validate SSH paths with local Git.
           if (args.connectionId) {
@@ -123,8 +131,9 @@ export function registerNestedRepoImportHandler(
           )
           const group = groupResolver.getGroupForRepo(repoPath)
           if (existing) {
-            if (group) {
-              store.moveProjectToGroup(existing, group.id, projectGroupOrder)
+            // A rescan can reuse the group, so keep its members' order and append the rest.
+            if (group && existing.projectGroupId !== group.id) {
+              store.moveProjectToGroup(existing, group.id)
             }
             importedProjectIdsByRepoPath.set(normalizedImportRepoPath, existing.id)
             results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
@@ -148,7 +157,7 @@ export function registerNestedRepoImportHandler(
             ...(group
               ? {
                   projectGroupId: group.id,
-                  projectGroupOrder
+                  projectGroupOrder: getNextProjectGroupOrder(store.getRepos(), group.id)
                 }
               : {})
           }
@@ -176,6 +185,8 @@ export function registerNestedRepoImportHandler(
         for (const group of groupResolver.getCreatedGroups().toReversed()) {
           store.deleteProjectGroup(group.id)
         }
+      } else {
+        groupResolver.applyReusedGroupChanges()
       }
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)

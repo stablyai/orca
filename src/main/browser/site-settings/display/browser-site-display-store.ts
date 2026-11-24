@@ -1,8 +1,8 @@
 import {
   isBrowserSiteColorScheme,
   type BrowserSiteDisplay
-} from '../../../../shared/browser-site-display'
-import { normalizeBrowserPageZoomLevel } from '../../../../shared/browser-page-zoom'
+} from '../../../../shared/browser/site-settings/browser-site-display'
+import { normalizeBrowserPageZoomLevel } from '../../../../shared/browser/site-settings/browser-page-zoom'
 import { createBrowserProfileSiteStore } from '../browser-profile-site-store'
 
 function parseSiteDisplay(value: unknown): BrowserSiteDisplay | null {

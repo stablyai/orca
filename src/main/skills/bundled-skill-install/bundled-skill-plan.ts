@@ -4,7 +4,7 @@ import type {
   BundledSkillOp,
   BundledSkillPlan,
   BundledSkillPlanEntry
-} from '../../../shared/bundled-skill-plan'
+} from '../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import {
   hasCloudReceipt,
@@ -14,12 +14,15 @@ import {
 import {
   bundledSkillTextDigest,
   classifyBundledSkillPath,
-  type BundledSkillFolderClass
+  bundledSkillFreshnessClass,
+  keptBesideAgentFiles,
+  ORCA_COPY_CLASSES
 } from './bundled-skill-classification'
 import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
 import { recoverySiblings } from './bundled-skill-swap-recovery'
 import { findBundledSkillSource } from './bundled-skill-source-selection'
-import { planFormerSkillPlacements } from './renamed-skill-placement'
+import { formerLeavesBesideKeep, planFormerSkillPlacements } from './renamed-skill-placement'
+import { planFormerRootPlacements } from './former-skill-roots'
 import { isOtherBuildCopy } from './bundled-skill-written-digests'
 import {
   bundledSkillPathKey,
@@ -52,11 +55,19 @@ type SkillContext = {
   source: BundledSkillSource
   digest: string
   force: Set<string> | 'all'
+  roots: readonly BundledSkillTargetRoot[]
   sharedRoot?: BundledSkillTargetRoot
 }
 
 // `otherBuild`: the shared folder holds another Orca build's copy, so links to it are already right.
-type SharedTarget = { path: string; realPath: string; current: boolean; otherBuild?: boolean }
+// `besideAgentFiles`: it was kept although an agent's files sit beside its SKILL.md.
+type SharedTarget = {
+  path: string
+  realPath: string
+  current: boolean
+  otherBuild?: boolean
+  besideAgentFiles?: boolean
+}
 
 const WRITES_SHARED_CURRENT = new Set<BundledSkillOp['kind']>([
   'keep',
@@ -71,15 +82,6 @@ type PlannedTarget = {
   formerInstalled: boolean
   leaves: BundledSkillOp[]
 }
-
-type PlannedFolderClass = BundledSkillFolderClass | 'other-build'
-
-const ORCA_COPY_CLASSES = new Set<PlannedFolderClass>([
-  'current',
-  'released',
-  'edited',
-  'other-build'
-])
 
 /** Classifies one root's copy of the skill and decides its op, including another build's copy. */
 async function planTarget(
@@ -106,10 +108,12 @@ async function planTarget(
     context.digest,
     context.sharedRoot
   )
-  let folderClass: PlannedFolderClass = classified.folderClass
+  const retiresFormer = former.previous.some((previous) => !previous.retain)
+  const formerRoots = await planFormerRootPlacements(context, root)
+  let folderClass = bundledSkillFreshnessClass(classified, context.digest)
   // Cloud receipts identify a different package; a current replaced copy must settle as keep.
   if (
-    (folderClass === 'released' || folderClass === 'edited') &&
+    (classified.folderClass === 'released' || classified.folderClass === 'edited') &&
     (await hasCloudReceipt(stateDirectory, stateKeys))
   ) {
     folderClass = 'other'
@@ -176,8 +180,9 @@ async function planTarget(
       observed.kind === 'link' &&
       (await linkPointsAt(filesystem, path, observed.target, shared.realPath))
     ) {
+      // Retiring former placements into this link waits on the shared copy's own check.
       return shared.current || shared.otherBuild
-        ? { ...base, kind: 'keep', cleanup }
+        ? { ...base, kind: 'keep', ...(retiresFormer ? { requires: shared.path } : {}), cleanup }
         : leave('shared-not-current', false)
     }
     if (context.force !== 'all' && !context.force.has(bundledSkillPathKey(path))) {
@@ -194,23 +199,22 @@ async function planTarget(
   const holdsOrcaCopy =
     former.installed || Boolean(restoreFrom) || ORCA_COPY_CLASSES.has(folderClass)
   const decision = await decide()
+  // Only a folder holding just Orca's SKILL.md; a swap would move an agent's files to backups.
   const decided =
-    decision.kind === 'keep' &&
-    observed.kind === 'folder' &&
-    former.previous.some((previous) => !previous.retain)
+    decision.kind === 'keep' && classified.folderClass === 'current' && retiresFormer
       ? files('update')
       : decision
+  const keepsFormer = decided.kind === 'keep' && former.previous.every((entry) => entry.retain)
+  const previous = [...(keepsFormer ? [] : former.previous), ...formerRoots]
   const op =
     WRITES_SHARED_CURRENT.has(decided.kind) || decided.kind === 'copy' || decided.kind === 'link'
-      ? {
-          ...decided,
-          ...(former.previous.length &&
-          !(decided.kind === 'keep' && former.previous.every((previous) => previous.retain))
-            ? { previous: former.previous }
-            : {})
-        }
+      ? { ...decided, ...(previous.length ? { previous } : {}) }
       : decided
-  const result = { holdsOrcaCopy, formerInstalled: former.installed, leaves: former.leaves }
+  const leaves =
+    op.kind === 'keep'
+      ? formerLeavesBesideKeep(former.leaves, keptBesideAgentFiles(op, shared?.besideAgentFiles))
+      : former.leaves
+  const result = { holdsOrcaCopy, formerInstalled: former.installed, leaves }
   const writes = op.kind !== 'keep' && op.kind !== 'leave'
   if (!writes && op.cleanup.length === 0 && !op.previous?.length) {
     return { op, ...result }
@@ -240,6 +244,7 @@ async function planSkill(
     source,
     digest: bundledSkillTextDigest(Buffer.from(source.text, 'utf8')),
     force: input.force === 'all' ? 'all' : new Set((input.force ?? []).map(bundledSkillPathKey)),
+    roots,
     sharedRoot: roots.find((root) => root.role === 'shared')
   }
   const sharedRoot = roots.find((root) => root.role === 'shared')
@@ -251,7 +256,8 @@ async function planSkill(
           path: sharedTarget.op.path,
           realPath: join(sharedRoot.realPath, source.name),
           current: WRITES_SHARED_CURRENT.has(sharedTarget.op.kind),
-          otherBuild: sharedTarget.op.reason === 'other-build'
+          otherBuild: sharedTarget.op.reason === 'other-build',
+          besideAgentFiles: keptBesideAgentFiles(sharedTarget.op)
         }
       : null
   const planAgents = async (target: SharedTarget | null) => {

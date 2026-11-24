@@ -1,13 +1,13 @@
 import { defineMethod } from '../../core'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { isRepoHidden } from '../../../../../shared/hidden-projects'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { isRepoHidden } from '../../../../../shared/project/catalog/hidden-projects'
 import { resolveReplySnapshot } from '../../workspace-client-views/content-snapshot-id'
 import { PROJECT_GROUP_METHODS } from './project-group-rpc-methods'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from '../workspaces/folder-workspace'
 import {
-  includesQualifiedSearchRefs,
-  projectRepoSearchRefsForClient
+  projectRepoSearchRefsForClient,
+  repoSearchRefSelectorForm
 } from './repo-search-ref-projection'
 import {
   RepoIssueCommandRead,
@@ -15,7 +15,7 @@ import {
   RepoShow
 } from '../../../../../shared/rpc-contract/github/github-repo-target-params'
 import { hostQualifiedRepoSelector } from '../../../workspaces/catalog/runtime-repo-selector'
-import { repoHooksCheckIsBackground } from '../../../../../shared/repo-hooks-check-wake'
+import { repoHooksCheckIsBackground } from '../../../../../shared/workspace-setup/hooks/repo-hooks-check-wake'
 import {
   projectRepoResultVisibilityForClient,
   projectRepoVisibilityForClient
@@ -24,6 +24,7 @@ import {
   RepoClone,
   RepoCreate,
   RepoHooksCheck,
+  RepoHooksRead,
   RepoIssueCommandWrite,
   RepoList,
   RepoPath,
@@ -31,6 +32,7 @@ import {
   RepoSearchRefs,
   RepoSetBaseRef,
   RepoSetHidden,
+  RepoSparsePresetRemove,
   RepoSparsePresetSave,
   RepoUpdate
 } from '../../../../../shared/rpc-contract/projects/repo-params'
@@ -46,7 +48,9 @@ export const REPO_METHODS = [
       const reply = {
         repos: context.runtime
           .listVisibleRepos()
-          .map((repo) => projectRepoVisibilityForClient(repo, context))
+          .map((repo) => projectRepoVisibilityForClient(repo, context)),
+        // Image icons' ids for sidebarInputs.repoIcons: a phone draws no https image itself.
+        repoIconIds: context.runtime.repoIconDataUrls.idsByRepo()
       }
       return resolveReplySnapshot(reply, params.afterSnapshotId)
     }
@@ -73,6 +77,15 @@ export const REPO_METHODS = [
         directories: params.directories
       })
     })
+  }),
+  defineMethod({
+    name: 'repo.removeSparsePreset',
+    permission: 'workspace',
+    params: RepoSparsePresetRemove,
+    handler: async (params, { runtime }) => {
+      await runtime.removeSparsePreset(params.repo, params.presetId)
+      return { removed: true }
+    }
   }),
   defineMethod({
     name: 'repo.add',
@@ -103,6 +116,13 @@ export const REPO_METHODS = [
         await context.runtime.createRepo(params.parentPath, params.name, params.kind),
         context
       )
+  }),
+  // Older hosts answer method_not_found; clients then fall back to <host home>/orca/projects.
+  defineMethod({
+    name: 'repo.defaultCreateParent',
+    permission: 'workspace',
+    params: null,
+    handler: (_params, { runtime }) => ({ parentPath: runtime.getDefaultCreateProjectParent() })
   }),
   defineMethod({
     name: 'repo.gitAvailable',
@@ -206,34 +226,35 @@ export const REPO_METHODS = [
     name: 'repo.searchRefs',
     permission: 'workspace',
     params: RepoSearchRefs,
-    handler: async (params, { runtime, clientCapabilities }) => {
-      const searchArgs: Parameters<typeof runtime.searchRepoRefs> = [
-        params.repo,
-        params.query,
-        params.limit,
-        includesQualifiedSearchRefs(clientCapabilities)
-      ]
-      if (params.namespace !== undefined) {
-        searchArgs.push(params.namespace)
-      }
-      return projectRepoSearchRefsForClient(
-        await runtime.searchRepoRefs(...searchArgs),
+    handler: async (params, { runtime, clientCapabilities, signal }) =>
+      projectRepoSearchRefsForClient(
+        await runtime.searchRepoRefs(
+          params.repo,
+          params.query,
+          params.limit,
+          repoSearchRefSelectorForm(clientCapabilities),
+          params.namespace,
+          signal
+        ),
         clientCapabilities
       )
-    }
   }),
   defineMethod({
     name: 'repo.hooks',
     permission: 'workspace',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.getRepoHooks(params.repo)
+    params: RepoHooksRead,
+    handler: async (params, { runtime }) =>
+      runtime.getRepoHooks(params.repo, { createSource: params.createSource })
   }),
   defineMethod({
     name: 'repo.hooksCheck',
     permission: 'workspace',
     params: RepoHooksCheck,
     handler: async (params, { runtime }) =>
-      runtime.checkRepoHooks(params.repo, { background: repoHooksCheckIsBackground(params) })
+      runtime.checkRepoHooks(params.repo, {
+        background: repoHooksCheckIsBackground(params),
+        createSource: params.createSource
+      })
   }),
   defineMethod({
     name: 'repo.setupScriptImports',

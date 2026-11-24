@@ -1,10 +1,15 @@
 /** What a coordinator is told about a worker's permission prompt: who may answer, and how it closed. */
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
+
+/** A helper's prompt is held from the worker's terminal: Claude shows it there only after Orca lets go. */
+export function describeHelperHold(chatCoordinator: boolean | undefined): string {
+  return `${chatCoordinator ? 'The user has been shown it in your chat. ' : ''}A helper agent inside the worker asked, so the worker's terminal shows it only if nobody answers in Orca within 2 minutes.`
+}
 
 /** With the user's setting on: the coordinator may answer too, and the first answer wins. */
 export function describeCoordinatorAnswer(
-  { approvalId, allowedActions, personOnly, worker }: WorkerApprovalPayload,
+  { approvalId, allowedActions, personOnly, worker, fromHelper }: WorkerApprovalPayload,
   { dispatchId, chatCoordinator }: { dispatchId: string; chatCoordinator?: boolean }
 ): string[] {
   const shown = allowedActions.map((action) => (action === 'allow' ? 'Allow' : 'Deny')).join('/')
@@ -31,7 +36,9 @@ export function describeCoordinatorAnswer(
       : 'You can approve it, with a reason:'
     : `${personOnly ? "The worker's agent lets only a person approve this one." : 'Orca cannot approve this one.'}${deny ? ' You can deny it, with a reason:' : ''}`
   return [
-    `The user has been shown ${shown}${chatCoordinator ? '' : where} too; whoever answers first wins. ${how}`,
+    fromHelper
+      ? `${describeHelperHold(chatCoordinator)} ${how}`
+      : `The user has been shown ${shown}${chatCoordinator ? '' : where} too; whoever answers first wins. ${how}`,
     ...commands,
     'Or leave it for the user and carry on with other work.'
   ]
@@ -57,10 +64,10 @@ export function describeApprovalClosed(approval: WorkerApprovalPayload): string 
     ...(outcome?.reason
       ? [
           `Reason: ${outcome.reason}`,
-          ...(outcome.reasonDelivered || outcome.decision !== 'deny'
+          ...(outcome.reasonDelivered
             ? []
             : [
-                "This agent's prompt takes no message, so the reason was sent to the worker as mail."
+                "The agent's answer could not carry the reason, so it was sent to the worker as mail."
               ])
         ]
       : []),

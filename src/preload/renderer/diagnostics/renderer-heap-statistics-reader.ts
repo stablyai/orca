@@ -1,4 +1,4 @@
-import type { RendererHeapStatistics } from '../../../shared/renderer-heap-statistics'
+import type { RendererHeapStatistics } from '../../../shared/crash-reporting/renderer-heap-statistics'
 
 type HeapStatisticsSource = Pick<NodeJS.Process, 'getHeapStatistics' | 'getBlinkMemoryInfo'>
 

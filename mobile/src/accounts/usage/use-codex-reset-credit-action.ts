@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { CodexResetCreditExpectedScope } from '../../../../src/shared/codex-reset-credit-scope'
+import type { CodexResetCreditExpectedScope } from '../../../../src/shared/agent-accounts/codex/codex-reset-credit-scope'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { translate } from '../../i18n/mobile-i18n'
 import type { Translate } from '../../i18n/mobile-i18n'
@@ -11,6 +11,7 @@ import {
   requestCodexResetCredit
 } from './codex-reset-credit'
 import { useCodexResetCreditCapability } from './codex-reset-credit-capability'
+import { getCodexAccountDisplayLabel } from '../../../../src/shared/agent-accounts/codex-account-display-label'
 
 type CodexResetDialog = { title: string; message: string }
 
@@ -20,7 +21,9 @@ function describeScope(
   t: Translate
 ): { label: string; message: string } {
   const account = snapshot.codex.accounts.find((candidate) => candidate.id === scope.accountId)
-  const identity = account?.email
+  const identity = account
+    ? getCodexAccountDisplayLabel(account, snapshot.codex.accounts)
+    : undefined
   if (scope.target.runtime === 'host') {
     return identity != null
       ? {

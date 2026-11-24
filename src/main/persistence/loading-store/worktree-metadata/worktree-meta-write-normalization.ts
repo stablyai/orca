@@ -1,18 +1,18 @@
 import { randomUUID } from 'node:crypto'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { normalizeStoredTaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import { normalizeWorkspaceLinkedItem } from '../../../../shared/workspace-attachments/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-attachments/workspace-linked-item-source-context'
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace-statuses'
+import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace/status/workspace-statuses'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { WORKTREE_META_PERSISTED_DEFAULTS } from '../../../../shared/worktree/meta-persisted-defaults'
-import { normalizeGitHubPRSuppressionUpdate } from '../../../../shared/worktree/github-pr-suppression'
+import { WORKTREE_META_PERSISTED_DEFAULTS } from '../../../../shared/worktree/metadata/meta-persisted-defaults'
+import { normalizeGitHubPRSuppressionUpdate } from '../../../../shared/worktree/hosted-review/github-pr-suppression'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../../shared/workspace-attachments/workspace-attachments'
 import {
-  mergeDiffCommentMutation,
+  applyDiffCommentWrite,
   type DiffCommentBaseMutation
-} from '../../../../shared/diff-comment-mutation'
+} from '../../../../shared/file-review/diff-comment-mutation'
 
 type WorktreeMetaIdentity = {
   instanceId: string
@@ -38,13 +38,9 @@ export function mergeWorktreeMetaForWrite(
   updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation & DiffCommentBaseMutation,
   identity?: WorktreeMetaIdentity
 ): WorktreeMeta {
-  const { diffCommentsBase, ...metaUpdates } = updates
-  if (diffCommentsBase !== undefined && metaUpdates.diffComments !== undefined) {
-    metaUpdates.diffComments = mergeDiffCommentMutation(
-      diffCommentsBase,
-      existing?.diffComments ?? [],
-      metaUpdates.diffComments
-    )
+  const { diffCommentsBase: _diffCommentsBase, ...metaUpdates } = updates
+  if (metaUpdates.diffComments !== undefined) {
+    metaUpdates.diffComments = applyDiffCommentWrite(existing?.diffComments, updates)
   }
   const normalizedUpdates = normalizeWorkspaceAttachmentUpdate(existing, metaUpdates)
   const updated = {

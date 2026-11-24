@@ -6,10 +6,10 @@ import {
   type NativeChatBlock,
   type NativeChatMessage
 } from '../../../shared/native-chat/native-chat-types'
-import type { AgentSessionTokenUsage } from '../../../shared/agent-session/agent-session-context-usage'
+import type { AgentSessionTokenUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import { buildImageDataUri } from '../../../shared/file-preview/image-data-uri'
 import { asRecord } from '../../ai-vault/parsing/session-record-fields'
-import { extractString } from '../../../shared/trimmed-string'
+import { extractString } from '../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../ai-vault/parsing/session-json-object'
 import { timestampMs } from '../../ai-vault/parsing/session-record-time'
 import { toolResultOutput } from './transcript-record-blocks'
@@ -41,7 +41,7 @@ export function decodeOmpTranscriptLine(
 
   if (record.type === 'custom_message') {
     // Match OMP visibility: undisplayed custom messages are hidden extension state.
-    const customBlocks = record.display === true ? ompContentBlocks(record.content) : []
+    const customBlocks = record.display === true ? ompCustomMessageBlocks(record) : []
     return customBlocks.length === 0
       ? null
       : { id, role: 'system', blocks: customBlocks, timestamp, source: 'transcript' }
@@ -195,6 +195,25 @@ function ompFileMentionPaths(files: unknown): string[] {
     }
   }
   return paths
+}
+
+function ompCustomMessageBlocks(record: Record<string, unknown>): NativeChatBlock[] {
+  if (record.customType !== 'advisor') {
+    return ompContentBlocks(record.content)
+  }
+  // OMP shows advisor cards from their notes; the content is the model-facing <advisory> markup.
+  const notes = asRecord(record.details)?.notes
+  const lines = (Array.isArray(notes) ? notes : []).flatMap((value) => {
+    const entry = asRecord(value)
+    const note = extractString(entry?.note)
+    if (!note) {
+      return []
+    }
+    const source = extractString(entry?.advisor) ?? 'Advisor'
+    const severity = extractString(entry?.severity)
+    return [`${source}${severity ? ` (${severity})` : ''}: ${note}`]
+  })
+  return lines.length === 0 ? [] : [{ type: 'text', text: lines.join('\n') }]
 }
 
 function ompContentBlocks(content: unknown): NativeChatBlock[] {

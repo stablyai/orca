@@ -1,9 +1,10 @@
 import { existsSync, realpathSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { join, relative, sep } from 'node:path'
+import { join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { runProcess } from '@orca/process-host'
 import { z } from 'zod'
+import { pathInsidePluginRoot } from '../../../shared/plugins/artifacts/plugin-root-containment'
 import type { PluginDeclarativeNode } from '../../../shared/plugins/declarative/plugin-declarative-catalog'
 import { parsePluginDeclarativeTree } from '../../../shared/plugins/declarative/plugin-declarative-tree'
 import {
@@ -64,8 +65,8 @@ export function pluginStackLocation(dir: string, stack: string | undefined): str
     /(file:\/\/[^\s)]+|\/[^\s():]+|[A-Za-z]:\\[^\s():]+):(\d+):(\d+)/g
   ) ?? []) {
     const file = match[1].startsWith('file:') ? fileURLToPath(match[1]) : match[1]
-    const path = relative(dir, file)
-    if (path && !path.startsWith('..') && !path.split(sep).includes('node_modules')) {
+    const path = pathInsidePluginRoot(dir, file)
+    if (path !== null && !path.split(sep).includes('node_modules')) {
       return `${path.split(sep).join('/')}:${match[2]}:${match[3]}`
     }
   }

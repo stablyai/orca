@@ -1,8 +1,8 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import type { WorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-operation-route'
 import { preservedBranchCleanupKey } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { PreservedBranchCleanup } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
 
 export const preservedBranchRuntimeTargetByCleanupKey = new Map<

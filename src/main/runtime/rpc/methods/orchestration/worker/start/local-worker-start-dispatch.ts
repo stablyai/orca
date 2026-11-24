@@ -1,6 +1,10 @@
 import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
-import type { OrchestrationWorkerLaunchReceipt } from './launch/worker-launch-preferences'
+import {
+  reusedWorkerLaunchReceipt,
+  type OrchestrationWorkerLaunchReceipt
+} from './launch/worker-launch-preferences'
+import { resolveDispatchAssigneeParty } from '../../../../../orchestration/addressing/orchestration-party'
 import type { WorkerStartInput } from './worker-start-input'
 import type { RunRow } from '../../../../../orchestration/db/orchestration-records'
 import type { startLocalWorker } from './local-worker-start'
@@ -16,7 +20,8 @@ export function createLocalWorkerStartDispatch(
     existingTask,
     orchestrationMutation,
     helperCreator,
-    followUp
+    followUp,
+    chatLineage
   }: Parameters<typeof startLocalWorker>[0],
   {
     params,
@@ -49,7 +54,14 @@ export function createLocalWorkerStartDispatch(
     baseBranch: params.baseBranch ?? null,
     terminal: params.terminal ?? null,
     agent: agent ?? null,
-    launch: launchReceipt,
+    // Mail from a reuse start that never binds still names the agent already running there.
+    launch: params.terminal
+      ? reusedWorkerLaunchReceipt(
+          runtime,
+          launchReceipt,
+          resolveDispatchAssigneeParty(params.terminal, db)
+        )
+      : launchReceipt,
     timeoutMs: params.timeoutMs ?? 60_000,
     setup: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
     setupSource: createsWorktree
@@ -83,6 +95,9 @@ export function createLocalWorkerStartDispatch(
     mutationReceipt: orchestrationMutation,
     followUpOf: followUp?.of,
     acceptedBy: followUp?.acceptedBy,
-    takesMailOf: followUp?.takesMailOf
+    takesMailOf: followUp?.takesMailOf,
+    ...(params.origin ? { originRef: params.origin } : {}),
+    ...(params.forQuestion ? { forMessageId: params.forQuestion } : {}),
+    ...(chatLineage ? { chatLineage } : {})
   })
 }

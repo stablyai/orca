@@ -3,21 +3,21 @@ import { createBrowserLinkSessionMatcher } from './browser-link-session'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
-} from '../../../../../shared/browser-url'
-import { browserPageDocLocationsEqual } from '../../../../../shared/browser-page-doc-location'
+} from '../../../../../shared/browser/navigation/browser-url'
+import { browserPageDocLocationsEqual } from '../../../../../shared/browser/workspaces/browser-page-doc-location'
 import { findVisibleBrowserLinkTarget } from './visible-browser-link-target'
 import { isLiveLinkOpenGroup, liveLinkOpenGroupIds } from '../../links/placement/link-open-intent'
 import type { LinkOpenIntent } from '../../links/placement/link-open-intent'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../workspace/ownership/worktree-runtime-owner'
 import { resolveLinkOpenSidePlacement } from '../../links/placement/adjacent-link-open-group'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '@/store/types'
 import type {
   BrowserPage,
   BrowserPageDocLocation,
   BrowserWorkspace
-} from '../../../../../shared/browser-workspace-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 
 export type BrowserLinkDestination = {
@@ -44,7 +44,9 @@ export type BrowserOpenResult = {
 
 export type BrowserOpenOutcome =
   | { status: 'opened'; result: BrowserOpenResult }
-  | { status: 'refused' | 'unsupported' | 'superseded' | 'failed' }
+  | { status: 'refused' | 'unsupported' | 'superseded' }
+  /** `cause` names a failure the toast can show; only fixed tags, never an error's text. */
+  | { status: 'failed'; cause?: 'client-create-rejected' }
 
 export type BrowserLinkOpenContext = {
   linkIntent: LinkOpenIntent | null

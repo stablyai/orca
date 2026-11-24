@@ -6,7 +6,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   isWslHostRuntimeEnvironment,
   type OrcadDeploymentLink

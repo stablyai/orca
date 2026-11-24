@@ -1,6 +1,7 @@
+import type { WorktreeSetupLaunch } from '../../../../../shared/worktree/creation/launch-types'
 import { toast } from 'sonner'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui/ui-slice-contract-core'
 import type { WorktreeStartupPayload } from '../creation/worktree-startup-payload'
 import type { WorktreeActivationSurfaceSelection } from './worktree-activation-surface-selection'
@@ -31,6 +32,8 @@ export type FolderWorkspaceActivationOptions = Omit<
   WorkspaceRevealOptions,
   'clearSidebarFilters'
 > & {
+  setup?: WorktreeSetupLaunch
+  backendStartupTerminalSpawned?: boolean
   startup?: WorktreeStartupPayload
   runtimeEnvironmentId?: string | null
 }

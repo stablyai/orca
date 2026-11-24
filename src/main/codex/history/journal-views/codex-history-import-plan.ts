@@ -10,7 +10,9 @@ import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { journalLifecycleItemMutation } from '../../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
-import type { StructuredAgentSessionTransitionJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
+import type { AgentSessionJournalReads } from '../../../native-chat/agent-session-journal/journal-reads'
+import { createJournalHistoryItems } from '../../../native-chat/agent-session-journal/journal-history-items'
+import { codexHistoryItemKeys } from './codex-history-item-keys'
 import {
   continuedOutsideRecordId,
   createHistoryCatchUpBatch
@@ -21,7 +23,7 @@ import {
   CODEX_RESTORE_MAX_BYTES,
   historicalTurnLifecycle
 } from '../../structured/journal/codex-structured-journal-translation-restore'
-import { agentJournalTurnBody as codexTurnLifecycleBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { agentJournalTurnBody as codexTurnLifecycleBody } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   codexTurnLifecycleIdentity,
   reviseCodexTurnRow
@@ -37,13 +39,15 @@ import {
 export function createCodexHistoryImportPlan(input: {
   sessionId: string
   threadId: string
-  journal: StructuredAgentSessionTransitionJournal
+  epoch: string
+  reads: Pick<AgentSessionJournalReads, 'historyItems'>
   subagentExecutions?: CodexSubagentExecutions
   nativePromptKeys: Pick<ReadonlySet<string>, 'has'>
   outsideNotice?: AgentJournalItemBody
   check: () => void
 }) {
   const batch = createHistoryCatchUpBatch()
+  const journal = createJournalHistoryItems()
   const helpers = new CodexSubagentExecutions()
   const helperIds = new Map<string, string | null>()
   const turnIds: string[] = []
@@ -52,6 +56,7 @@ export function createCodexHistoryImportPlan(input: {
     outsideNoted = false
   const observations = createCodexHistoryObservations({
     ...input,
+    journal,
     retainedHelperBytes: () => helperBytes
   })
   const completeTurn = () => {
@@ -88,7 +93,7 @@ export function createCodexHistoryImportPlan(input: {
     ): boolean => {
       const key = agentJournalItemKey(identity)
       if (
-        input.journal.presentationRemoved(key) ||
+        journal.presentationRemoved(key) ||
         (saved &&
           ((body.kind === 'message' && body.role === 'user') ||
             isDeepStrictEqual(saved.body, body)))
@@ -103,7 +108,7 @@ export function createCodexHistoryImportPlan(input: {
           sessionId: input.sessionId,
           recordId: continuedOutsideRecordId(turn.id)
         }
-        const savedNotice = input.journal.item(agentJournalItemKey(notice))
+        const savedNotice = journal.item(agentJournalItemKey(notice))
         append(notice, input.outsideNotice, AGENT_JOURNAL_THREAD_SCOPE, savedNotice)
       }
       input.check()
@@ -152,7 +157,7 @@ export function createCodexHistoryImportPlan(input: {
     const prompt = [...turn.items.values()].find(({ item }) => item.type === 'userMessage')
     if (prompt) {
       lifecycle.userItemId =
-        prompt.native ?? input.journal.canonicalItemId(agentJournalItemKey(prompt.identity))
+        prompt.native ?? journal.canonicalItemId(agentJournalItemKey(prompt.identity))
     } else {
       delete lifecycle.userItemId
     }
@@ -177,12 +182,12 @@ export function createCodexHistoryImportPlan(input: {
     }
     const lifecycleChanged = append(
       identity,
-      reviseCodexTurnRow(input.journal, identity, body),
+      reviseCodexTurnRow(journal, identity, body),
       AGENT_JOURNAL_THREAD_SCOPE,
       turn.saved
     )
     if (lifecycleChanged && body.userItemId) {
-      const savedUser = input.journal.item(body.userItemId)
+      const savedUser = journal.item(body.userItemId)
       if (savedUser) {
         require({ key: body.userItemId, saved: savedUser })
       }
@@ -205,7 +210,7 @@ export function createCodexHistoryImportPlan(input: {
           provider: 'orca',
           clientMessageId: `codex-compaction:${codexCompactionKey(input.threadId, turn.id)}`
         }
-        saved = input.journal.item(agentJournalItemKey(chosenIdentity))
+        saved = journal.item(agentJournalItemKey(chosenIdentity))
         translated = { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
       } else if (item.type === 'subAgentActivity') {
         continue
@@ -257,15 +262,22 @@ export function createCodexHistoryImportPlan(input: {
     observations.release()
   }
   return {
-    restore: observations.restore,
-    completeTurn,
+    restore: async (turn: Record<string, unknown>) => {
+      journal.adopt(await input.reads.historyItems(codexHistoryItemKeys(input, turn)))
+      input.check()
+      observations.restore(turn)
+    },
+    completeTurn: () => {
+      completeTurn()
+      journal.clear()
+    },
     finish: () => {
       completeTurn()
       if (!batch.size && !helperIds.size) {
         return null
       }
       return {
-        ...batch.finish('codex-history-import', [input.journal.epoch, input.threadId, turnIds]),
+        ...batch.finish('codex-history-import', [input.epoch, input.threadId, turnIds]),
         turnIds
       }
     },
@@ -278,6 +290,7 @@ export function createCodexHistoryImportPlan(input: {
     },
     dispose: () => {
       observations.release()
+      journal.clear()
       helpers.clear()
       expected.clear()
     }

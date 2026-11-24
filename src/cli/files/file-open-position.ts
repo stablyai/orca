@@ -1,6 +1,6 @@
 import type { RuntimeFileOpenPosition } from '../../shared/file-access/runtime-editor-file-open'
 import { getOptionalPositiveIntegerFlag } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 export function getFileOpenPosition(
   flags: Map<string, string | boolean>

@@ -39,7 +39,11 @@ export const SelectAccountParams = z.object({
 
 export const SelectClaudeAccountParams = SelectAccountParams.extend({
   // The web client moves running sessions in its own window; older hosts strip this.
-  movesRunningSessions: z.literal(true).optional()
+  movesRunningSessions: z.literal(true).optional(),
+  // The switching client's own choice for the host's running terminals; older hosts strip this.
+  runningSessions: z.enum(['ask', 'restart', 'keep']).optional(),
+  // Answers the Ask an earlier switch to this account left open; never switches accounts itself.
+  answersAsk: z.literal(true).optional()
 })
 
 export const SelectCodexAccountForTargetParams = SelectAccountParams.extend({
@@ -48,6 +52,12 @@ export const SelectCodexAccountForTargetParams = SelectAccountParams.extend({
 
 export const RemoveAccountParams = z.object({
   accountId: z.string().min(1, 'Missing accountId')
+})
+
+// Blank clears the name; the service enforces the length limit with a readable error.
+export const RenameAccountParams = z.object({
+  accountId: z.string().min(1, 'Missing accountId'),
+  displayName: z.string().nullable()
 })
 
 export const CodexResetExpectedScope = z
@@ -111,7 +121,11 @@ export const FinishClaudeSignInParams = z
   .object({ accountId: z.string().min(1), ...ClaudeSignInTarget })
   .strict()
 
-export const HostAccountSignInStartParams = z.object({ provider: z.enum(['claude', 'codex']) })
+export const HostAccountSignInStartParams = z.object({
+  provider: z.enum(['claude', 'codex']),
+  /** Re-authenticates this saved account instead of adding one; send only to hosts with the reauth capability. */
+  accountId: z.string().min(1).max(128).optional()
+})
 
 export const HostAccountSignInWaitParams = z.object({
   flowId: z.string().min(1).max(64),

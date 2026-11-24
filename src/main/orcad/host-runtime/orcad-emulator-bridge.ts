@@ -1,7 +1,7 @@
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { BackendServiceCleanup } from '../../backend/service-composition'
 import { EmulatorBridge } from '../../emulator/emulator-bridge'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 
 // A stalled adb must not hold the final profile flush past orcad's shutdown deadline.
 const EMULATOR_TEARDOWN_BUDGET_MS = 3_000

@@ -4,7 +4,7 @@ import { type ImportedDomainScope, domainIsInImportedScope } from './policy/cook
 import { cookieRemovalUrl } from './storage/cookie-removal-url'
 import { isNonTransplantableCookieDomain } from './policy/cookie-import-exclusions'
 import { normalizeCookieDomain, registrableFamily } from './policy/cookie-domain'
-import { mapSettledWithConcurrency } from '../../../shared/map-with-concurrency'
+import { mapSettledWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import { withCookieMutationLock } from './mutation/cookie-mutation-lock'
 
 const COOKIE_CLEAR_CONCURRENCY = 8

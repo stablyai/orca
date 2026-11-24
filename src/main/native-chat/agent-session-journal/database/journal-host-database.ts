@@ -10,6 +10,7 @@ import {
 } from './journal-database'
 import { journalOpenRefusalError } from '../replay/journal-open-failure'
 import { JournalCheckpointOwner } from './journal-checkpoint-owner'
+import { readJournalSessionEpoch } from '../durable-rows/journal-row-table'
 import { AgentSessionJournalError } from '../writing/journal-write-guards'
 
 const JOURNAL_DATABASE_FILE = 'agent-session-journal.db'
@@ -17,6 +18,24 @@ const JOURNAL_DATABASE_FILE = 'agent-session-journal.db'
 export function journalDatabasePath(stateDirectory: string): string {
   return join(stateDirectory, JOURNAL_DATABASE_FILE)
 }
+
+export function journalDomainDatabasePath(stateDirectory: string): string {
+  return join(stateDirectory, 'agent-session-domain.db')
+}
+
+/** The Orca version that copied this profile; its original journal stays until a later version runs. */
+export const JOURNAL_LEGACY_CONVERTED_BY = 'journal.legacy-converted-by.v1'
+
+/** This host's own release: the desktop's, or the bundle orcad stamps for itself at start. */
+export function journalRunningOrcaVersion(): string | null {
+  return process.env.ORCA_APP_VERSION?.trim() || null
+}
+
+/** What journal collaborators need from a connection owner; the SQL writer supplies its own. */
+export type JournalTransactionalDatabase = Pick<
+  JournalHostDatabase,
+  'db' | 'readOnly' | 'stateDirectory' | 'transaction'
+>
 
 export class JournalHostDatabase {
   private connection: Database.Database | null
@@ -61,35 +80,17 @@ export class JournalHostDatabase {
     return connection
   }
 
-  /** Streamed text may lose only its trailing suffix on OS crash; the next FULL commit makes it durable. */
-  transaction<T>(
-    run: (db: Database.Database) => T,
-    streamed = false,
-    committed?: (result: T) => void
-  ): T {
+  async sessionEpoch(sessionId: string): Promise<string | null> {
+    return readJournalSessionEpoch(this.db, sessionId)
+  }
+
+  transaction<T>(run: (db: Database.Database) => T, committed?: (result: T) => void): T {
     const db = this.db
     this.transactionNumber += 1
-    if (!streamed) {
-      const result = runJournalTransaction(db, run, () => {
-        this.stranded = true
-      })
-      committed?.(result)
-      this.checkpoint?.afterCommit()
-      return result
-    }
-    // Synchronous level changes require no transaction; stranded recovery restores FULL first.
-    db.pragma('synchronous = NORMAL')
-    let result: T
-    try {
-      result = runJournalTransaction(db, run, () => {
-        this.stranded = true
-      })
-      committed?.(result)
-    } finally {
-      if (!db.isTransaction) {
-        db.pragma('synchronous = FULL')
-      }
-    }
+    const result = runJournalTransaction(db, run, () => {
+      this.stranded = true
+    })
+    committed?.(result)
     this.checkpoint?.afterCommit()
     return result
   }
@@ -128,7 +129,6 @@ export class JournalHostDatabase {
         throw journalOpenRefusalError(error)
       }
     }
-    connection.pragma('synchronous = FULL')
     this.stranded = false
   }
 }

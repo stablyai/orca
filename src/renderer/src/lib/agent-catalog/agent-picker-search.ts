@@ -1,5 +1,5 @@
 import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
-import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard/clipboard-text'
 
 type RankedAgent = {
   agent: AgentCatalogEntry

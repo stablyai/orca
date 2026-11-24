@@ -1,6 +1,6 @@
 import { observeAcpForkSupport } from '../capabilities/acp-fork-support'
 import { join } from 'node:path'
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
 import {
   AtRestCommandCatalog,
   type AtRestCommandScan
@@ -9,7 +9,7 @@ import { resolveNativeChatVisualsSkillLocation } from '../../native-chat/convers
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
-import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from '../../ipc/pty/host-env/spawn-env-keys'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../runtime/agent-session/environment/structured-session-child-env'
 import {
@@ -150,7 +150,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               answer({ commands: undefined, fromAgent: false })
               return
             }
-            const location = spec.visualsSkill
+            const location = spec.skillRoots
               ? await awaitAcpDiscovery(
                   (deps.resolveVisualsSkill ?? resolveNativeChatVisualsSkillLocation)(),
                   signal
@@ -158,10 +158,10 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               : null
             check()
             const skill =
-              location && spec.visualsSkill
+              location && spec.skillRoots
                 ? await awaitAcpDiscovery(
-                    spec.visualsSkill({
-                      skill: location,
+                    spec.skillRoots({
+                      roots: [location],
                       version: version.version,
                       env: launch.env
                     }),
@@ -183,7 +183,8 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               env: { ...launch.env, ...skill?.env },
               args: [
                 ...invocation.prefixArgs,
-                ...spec.args({ fullAccess: false, pluginDir: skill?.pluginDir ?? null }),
+                ...spec.args({ fullAccess: false, pluginDirs: skill?.pluginDirs ?? [] }),
+                ...(skill?.args ?? []),
                 ...folderArgs
               ]
             })

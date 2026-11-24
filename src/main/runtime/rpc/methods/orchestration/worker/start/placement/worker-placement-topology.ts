@@ -1,6 +1,6 @@
-import type { RuntimeTerminalCreate } from '../../../../../../../../shared/runtime-terminal-create-contract'
-import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/agent-session-host-authority'
-import { narrowStructuredLaunchSeedOptions } from '../../../../../../../../shared/native-chat/input/native-chat-session-option-defaults'
+import type { RuntimeTerminalCreate } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import { narrowStructuredLaunchSeedOptions } from '../../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
@@ -94,7 +94,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   worktreeId: string
   agent: TuiAgent
   dispatchId: string
-  /** `--model`/`--effort`; the session seeds them exactly as a saved selection is seeded. */
+  /** `--model`/`--effort`, laid over the saved selection; a leveled Antigravity `--model` replaces it. */
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
@@ -189,17 +189,12 @@ export function monitorWorkerSetup(args: {
     .catch(() => undefined)
 }
 
-export function isUnknownWorkerStartOutcome(error: unknown, stage: string): boolean {
-  const code =
-    error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
-      ? (error as { code: string }).code
-      : ''
-  if (code === 'operation_unknown') {
-    return true
-  }
-  if (stage !== 'worktree_create') {
-    return false
-  }
-  const message = error instanceof Error ? error.message : String(error)
-  return /connection|disconnect|timed?\s*out|runtime changed|outcome unknown/i.test(message)
+/** Only an explicit unknown is one: a local start runs in this process, so its errors are known failures. */
+export function isUnknownWorkerStartOutcome(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'operation_unknown'
+  )
 }

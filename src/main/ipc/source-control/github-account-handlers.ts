@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { appStarSourceSchema } from '../../../shared/gh-star-source'
+import { appStarSourceSchema } from '../../../shared/github/repositories/gh-star-source'
 import { resolveGhAccountRequiredHost } from '../../github/accounts/account-binding-required-host'
 import { diagnoseGhAuth } from '../../github/accounts/auth-diagnose'
 import { checkOrcaStarred, starOrca } from '../../github/client/fetch/orca-star'

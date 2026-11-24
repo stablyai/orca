@@ -2,8 +2,8 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import { compactIpcErrorMessage } from '@/runtime/errors/ipc-error'
-import { hostDictationErrorMessage } from '../../../../shared/host-dictation-error-messages'
-import { SPEECH_MODEL_NEEDS_UPDATE_ERROR } from '../../../../shared/speech-model-retirement'
+import { hostDictationErrorMessage } from '../../../../shared/speech/dictation/host-dictation-error-messages'
+import { SPEECH_MODEL_NEEDS_UPDATE_ERROR } from '../../../../shared/speech/models/speech-model-retirement'
 
 export function openVoiceSettings(): void {
   useAppStore.getState().openSettingsTarget({ pane: 'voice', repoId: null })

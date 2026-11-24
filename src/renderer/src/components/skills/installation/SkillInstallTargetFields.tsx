@@ -7,8 +7,8 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { SKILL_INSTALL_CAPABILITY } from '../../../../../shared/skill-install-capability'
-import type { SkillInstallProviderId } from '../../../../../shared/skill-install-providers'
+import { SKILL_INSTALL_CAPABILITY } from '../../../../../shared/skills/capabilities/skill-install-capability'
+import type { SkillInstallProviderId } from '../../../../../shared/skills/installation/skill-install-providers'
 import { SkillInstallAgentPicker } from './SkillInstallAgentPicker'
 import { SkillInstallWorkspaceCombobox } from './SkillInstallWorkspaceCombobox'
 import type { SkillInstallWorkspaceChoice } from './skill-install-workspace-choices'
@@ -26,8 +26,7 @@ export function SkillInstallTargetFields(props: {
   executionTarget: { kind: 'wsl'; distro: string } | null
   onExecutionTargetChange(value: { kind: 'wsl'; distro: string } | null): void
   runtimeEnvironments: readonly { id: string; name: string }[]
-  runtimeStatus: Map<string, { status: { capabilities?: string[] } | null }>
-  sshConnections: readonly { id: string; label: string; connected: boolean }[]
+  runtimeStatus: ReadonlyMap<string, { status: { capabilities?: string[] } | null }>
   workspaceChoices: readonly SkillInstallWorkspaceChoice[]
   requiredCapability?: string
   providers: ReadonlySet<SkillInstallProviderId>
@@ -41,12 +40,6 @@ export function SkillInstallTargetFields(props: {
 
   useEffect(() => {
     let active = true
-    if (props.environmentId.startsWith('ssh:')) {
-      setWslDistros([])
-      return () => {
-        active = false
-      }
-    }
     void window.api.skills
       .listWslDistros(props.environmentId === 'local' ? undefined : props.environmentId)
       .then((distros) => {
@@ -181,8 +174,7 @@ export function SkillInstallTargetFields(props: {
 function skillInstallMachineOptions(
   props: {
     runtimeEnvironments: readonly { id: string; name: string }[]
-    runtimeStatus: Map<string, { status: { capabilities?: string[] } | null }>
-    sshConnections: readonly { id: string; label: string; connected: boolean }[]
+    runtimeStatus: ReadonlyMap<string, { status: { capabilities?: string[] } | null }>
     requiredCapability?: string
   },
   t: Translate = translate
@@ -206,13 +198,5 @@ function skillInstallMachineOptions(
         : undefined
     }
   })
-  const ssh = props.sshConnections.map((connection): HostComboboxOption => ({
-    id: `ssh:${connection.id}`,
-    label: connection.label,
-    disabled: !connection.connected,
-    detail: connection.connected
-      ? t('auto.components.skills.SkillInstallTargetFields.85d85880df', '· SSH')
-      : t('auto.components.skills.SkillInstallTargetFields.71eefd7660', '— disconnected')
-  }))
-  return [local, ...environments, ...ssh]
+  return [local, ...environments]
 }

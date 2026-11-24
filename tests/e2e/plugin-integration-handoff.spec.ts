@@ -1,11 +1,12 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, test } from './helpers/orca-app'
+import { expect } from '@stablyai/playwright-test'
+import { test } from './desktop/electron-fixtures/orca-app'
 import { enableDevPlugins } from './helpers/plugin-smoke'
-import { writeIntegrationHandoffFixture } from './helpers/plugin-integration-handoff-fixture'
-import { configureGoldenStubAgent, getGoldenStubAgentLaunchEnv } from './helpers/golden-stub-agent'
-import { getTerminalContent } from './helpers/terminal'
+import { writeIntegrationHandoffFixture } from './desktop/electron-fixtures/plugin-integration-handoff-fixture'
+import { configureGoldenStubAgent, getGoldenStubAgentLaunchEnv } from './golden-journeys/golden-stub-agent'
+import { getTerminalContent } from './terminal/layout/terminal-pane-identity'
 
 test.use({
   launchEnv: getGoldenStubAgentLaunchEnv(),

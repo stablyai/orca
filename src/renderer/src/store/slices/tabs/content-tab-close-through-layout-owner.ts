@@ -1,6 +1,6 @@
 // Main decides content closes; wait for its frame before cleanup and selection, preserving refused tabs and notifying close waiters.
 
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { sendLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import {
   afterPendingTab,

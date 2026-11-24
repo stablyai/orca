@@ -6,8 +6,8 @@ import type {
   AgentJournalMessageItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { subagentFallbackText } from '../../../../shared/native-chat/transcript/native-chat-subagent-items'
-import { MAX_SUBAGENT_FIELD_CHARS } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
+import { subagentFallbackText } from '../../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
+import { MAX_SUBAGENT_FIELD_CHARS } from '../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import {
   isSubagentBlock,
   type NativeChatSubagentBlock
@@ -26,13 +26,36 @@ export function subagentJournalBody(block: NativeChatSubagentBlock): AgentJourna
     label: boundSubagentLabel(block.label),
     groupId: boundSubagentEntryId(block.groupId),
     ...(block.parentId !== undefined ? { parentId: boundSubagentEntryId(block.parentId) } : {}),
-    ...(block.run !== undefined ? { run: boundSubagentEntryId(block.run) } : {})
+    ...(block.run !== undefined ? { run: boundSubagentEntryId(block.run) } : {}),
+    ...boundOptionalLabels(block),
+    ...(block.operation !== undefined
+      ? {
+          operation: {
+            toolName: boundSubagentLabel(block.operation.toolName),
+            ...(block.operation.input !== undefined
+              ? { input: boundSubagentLabel(block.operation.input) }
+              : {})
+          }
+        }
+      : {})
   }
   return {
     kind: 'message',
     role: 'system',
     blocks: [{ type: 'text', text: subagentFallbackText(bounded) }, bounded]
   }
+}
+
+const OPTIONAL_LABELS = ['agentType', 'model', 'effort', 'lastMessage'] as const
+
+function boundOptionalLabels(
+  block: NativeChatSubagentBlock
+): Pick<NativeChatSubagentBlock, (typeof OPTIONAL_LABELS)[number]> {
+  return Object.fromEntries(
+    OPTIONAL_LABELS.flatMap((key) =>
+      block[key] === undefined ? [] : [[key, boundSubagentLabel(block[key])]]
+    )
+  )
 }
 
 export function journaledSubagent(

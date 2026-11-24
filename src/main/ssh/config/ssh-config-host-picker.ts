@@ -3,9 +3,9 @@ import type {
   SshConfigHostResolution,
   SshConfigHostSummary,
   SshTarget
-} from '../../../shared/ssh-types'
-import { SSH_CONFIG_HOST_RESULT_LIMIT } from '../../../shared/ssh-types'
-import { normalizeSshConfigAlias } from '../../../shared/ssh-config-alias'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
+import { SSH_CONFIG_HOST_RESULT_LIMIT } from '../../../shared/remote-runtime/ssh/ssh-types'
+import { normalizeSshConfigAlias } from '../../../shared/remote-runtime/ssh/ssh-config-alias'
 import { loadUserSshConfig, type SshConfigHost } from './ssh-config-parser'
 import { resolveWithSshG, type SshResolvedConfig } from './ssh-g-config-resolution'
 

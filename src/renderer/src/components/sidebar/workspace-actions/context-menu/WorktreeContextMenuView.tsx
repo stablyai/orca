@@ -1,3 +1,4 @@
+import { useId, useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +19,9 @@ import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model
 import { WorktreeStatusMenuItems } from '../../workspace-status/presentation/WorktreeStatusMenuItems'
 import { WorktreeWslHostStartMenuItem } from '../../workspace-card/host/WorktreeWslHostStartMenuItem'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
+import { WorktreeNotificationMuteMenuItem } from './WorktreeNotificationMuteMenuItem'
+import { WslMovedWorkspaceUseHereMenuItem } from '@/components/wsl-move/WslMovedUseHereMenuItem'
+import { WslMoveFolderWorkspaceMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
 import { WorktreeContextMenuDeleteItems } from './WorktreeContextMenuDeleteItems'
 import {
   WorktreeCopySubMenu,
@@ -26,11 +30,15 @@ import {
 } from './WorktreeContextMenuSubMenus'
 import {
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
+  WorktreeContextMenuPortalScope,
+  isFromWorkspaceAgentRow,
+  isOwnedWorktreeContextMenuPortal,
   shouldIgnoreNestedWorktreeContextMenuScope,
   shouldRevealWorktreeDeveloperMenu,
   shouldUseNativeContextMenu
 } from './worktree-context-menu-policy'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
+import { WorktreeHandToBotMenuItem } from '@/components/bots/hand-to-bot/WorktreeHandToBotMenuItem'
 
 export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
   const {
@@ -42,6 +50,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     deletingSubtree,
     developerMenuRevealed,
     effectiveSelectedWorktrees,
+    folderWorkspaceId,
     handleAssignWorkspaceStatus,
     handleCloseAutoFocus,
     handleCloseTerminals,
@@ -51,6 +60,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     handleSleepSubtreeWithVm,
     handleTogglePin,
     handleToggleRead,
+    showsUnread,
     hasAnyContextLineage,
     isDeleting,
     isMultiContext,
@@ -72,6 +82,8 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     workspaceStatuses
   } = model
   const t = useTranslate()
+  const portalScope = useId()
+  const [openedFromAgentRow, setOpenedFromAgentRow] = useState(false)
   const sleepItems = (
     <WorkspaceSleepMenuItems
       isMultiContext={isMultiContext}
@@ -83,35 +95,51 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
       onSleepSubtree={handleSleepSubtree}
     />
   )
+  function openContextMenu(event: React.MouseEvent<HTMLDivElement>, fromPortal = false): void {
+    event.preventDefault()
+    contextMenuOpenedAtRef.current = Date.now()
+    window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+    setDeveloperMenuRevealed(event.altKey)
+    setOpenedFromAgentRow(fromPortal || isFromWorkspaceAgentRow(event.currentTarget, event.target))
+    setContextWorktrees(
+      fromPortal ? [worktree] : (onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
+    )
+    const bounds = event.currentTarget.getBoundingClientRect()
+    setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
+    setMenuOpenState(true)
+  }
   return (
     <div
       ref={scopeRef}
       className="relative"
       {...{ [WORKTREE_CONTEXT_MENU_SCOPE_ATTR]: 'worktree' }}
       onContextMenuCapture={(event) => {
-        if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
+        if (
+          !isEventTargetInsideCurrentTarget(event.currentTarget, event.target) ||
+          shouldUseNativeContextMenu(event.target) ||
+          shouldIgnoreNestedWorktreeContextMenuScope(event.currentTarget, event.target)
+        ) {
           return
         }
-        if (shouldUseNativeContextMenu(event.target)) {
-          return
+        openContextMenu(event)
+      }}
+      onContextMenu={(event) => {
+        // Portaled rows let the hover's selected-text Copy handler capture first.
+        if (
+          !event.defaultPrevented &&
+          isOwnedWorktreeContextMenuPortal(event.target, portalScope)
+        ) {
+          event.stopPropagation()
+          openContextMenu(event, true)
         }
-        if (shouldIgnoreNestedWorktreeContextMenuScope(event.currentTarget, event.target)) {
-          return
-        }
-        event.preventDefault()
-        contextMenuOpenedAtRef.current = Date.now()
-        window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
-        setDeveloperMenuRevealed(event.altKey)
-        setContextWorktrees(onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
-        const bounds = event.currentTarget.getBoundingClientRect()
-        setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
-        setMenuOpenState(true)
       }}
       onClickCapture={(event) => {
         suppressOpeningPointerEvent(event)
       }}
     >
-      {children}
+      <WorktreeContextMenuPortalScope.Provider value={portalScope}>
+        {children}
+      </WorktreeContextMenuPortalScope.Provider>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpenState} modal={false}>
         <DropdownMenuTrigger asChild>
           <button
@@ -164,14 +192,21 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           )}
           {!isMultiContext && (
             <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
-              {worktree.isUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
-              {worktree.isUnread
+              {showsUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
+              {showsUnread
                 ? t('auto.components.sidebar.WorktreeContextMenu.8dacff1fe0', 'Mark Read')
                 : t('auto.components.sidebar.WorktreeContextMenu.f50603c6b2', 'Mark Unread')}
             </DropdownMenuItem>
           )}
-          <WorktreeContextMenuDeleteItems model={model} />
-          <DropdownMenuSeparator />
+          {!isMultiContext && (
+            <WorktreeNotificationMuteMenuItem worktreeId={worktree.id} disabled={isDeleting} />
+          )}
+          {!openedFromAgentRow && (
+            <>
+              <WorktreeContextMenuDeleteItems model={model} />
+              <DropdownMenuSeparator />
+            </>
+          )}
           {!isMultiContext && (
             <>
               <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
@@ -194,6 +229,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             workspaceStatuses={workspaceStatuses}
           />
           {!isMultiContext && (
+            <WorktreeHandToBotMenuItem worktree={worktree} disabled={isDeleting} />
+          )}
+          {!isMultiContext && (
             <>
               <DropdownMenuSeparator />
               <WorktreeRowOpenInSubMenu
@@ -204,6 +242,10 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               <WorktreeCopySubMenu model={model} />
               <WorktreeLineageSubMenu model={model} />
               <WorktreeProjectGroupSubMenu model={model} />
+              {folderWorkspaceId ? (
+                <WslMoveFolderWorkspaceMenuItem folderWorkspaceId={folderWorkspaceId} />
+              ) : null}
+              <WslMovedWorkspaceUseHereMenuItem worktree={worktree} />
             </>
           )}
           {isMultiContext && hasAnyContextLineage ? (

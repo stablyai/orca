@@ -1,3 +1,4 @@
+import type { GitBlameResult } from '../../../shared/git/blame/git-blame-types'
 import type {
   GitCommitAction,
   GitCommitActionResult
@@ -10,7 +11,7 @@ import type {
 import type { GitStagingArea, GitUpstreamStatus } from '../../../shared/git/status/git-status-types'
 import type { ConflictResolution } from '../../../shared/source-control/listing/source-control-entry-actions'
 import type { GitPushTarget } from '../../../shared/worktree/types'
-import type { WorktreeAtRiskLocalFiles } from '../../../shared/worktree/at-risk-local-files'
+import type { WorktreeAtRiskLocalFiles } from '../../../shared/worktree/removal/at-risk-local-files'
 import type { GitStageWorktreeScope } from '../../../shared/git/paths/git-stage-worktree-scope'
 import type {
   GitHistoryItemRef,
@@ -54,7 +55,10 @@ export const gitApi = {
   atRiskLocalFiles: (args: {
     worktreePath: string
     connectionId?: string
+    requestToken?: string
   }): Promise<WorktreeAtRiskLocalFiles> => ipcRenderer.invoke('git:atRiskLocalFiles', args),
+  cancelAtRiskLocalFiles: (args: { requestToken: string }): Promise<void> =>
+    ipcRenderer.invoke('git:cancelAtRiskLocalFiles', args),
   findHugeFoldersToIgnore: (args: { worktreePath: string }): Promise<string[]> =>
     ipcRenderer.invoke('git:findHugeFoldersToIgnore', args),
   appendGitignore: (args: { worktreePath: string; folderName: string }): Promise<boolean> =>
@@ -268,5 +272,11 @@ export const gitApi = {
     worktreePath: string
     sha: string
     connectionId?: string
-  }): Promise<string | null> => ipcRenderer.invoke('git:remoteCommitUrl', args)
+  }): Promise<string | null> => ipcRenderer.invoke('git:remoteCommitUrl', args),
+  blame: (args: {
+    worktreePath: string
+    filePath: string
+    knownHeadOid?: string
+    connectionId?: string
+  }): Promise<GitBlameResult> => ipcRenderer.invoke('git:blame', args)
 } satisfies PreloadApi['git']

@@ -1,5 +1,5 @@
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type { RuntimeLegacyWorkerTerminalRecoveryController } from './runtime-legacy-worker-terminal-recovery-controller'
 import {
@@ -41,7 +41,11 @@ export async function runLegacyWorkerTerminalRecovery(
     }
   >()
   for (const candidate of plan.candidates) {
-    if (retryDispatchIds && !retryDispatchIds.has(candidate.dispatchId)) {
+    // A worker already resuming after a restart has its own terminal coming; this pass leaves it be.
+    if (
+      (retryDispatchIds && !retryDispatchIds.has(candidate.dispatchId)) ||
+      ports.isResuming?.(candidate.dispatchId)
+    ) {
       continue
     }
     const sshPty = parseAppSshPtyId(candidate.ptyId)
@@ -156,6 +160,11 @@ export async function runLegacyWorkerTerminalRecovery(
       continue
     }
     ports.rollback(candidate)
+    if (ports.holdForRestartResume?.(candidate)) {
+      // Its surface and resume record are retired as for any lost terminal; the conversation reopens elsewhere.
+      ports.notifyResolution(candidate, 'exited')
+      continue
+    }
     if (!ports.reconcileMissing(candidate)) {
       deferredDispatchIds.add(candidate.dispatchId)
       continue

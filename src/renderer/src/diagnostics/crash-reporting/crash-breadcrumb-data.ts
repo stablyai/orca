@@ -2,7 +2,7 @@
 import type {
   CrashReportBreadcrumbData,
   CrashReportDetailValue
-} from '../../../../shared/crash-reporting'
+} from '../../../../shared/crash-reporting/crash-reporting'
 
 const BYTES_PER_MEGABYTE = 1024 * 1024
 

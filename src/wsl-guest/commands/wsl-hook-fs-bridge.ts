@@ -7,7 +7,7 @@ import {
   WSL_HOOK_FS_METHODS,
   type WslFsFailure,
   type WslFsResult
-} from '../../shared/wsl-hook-relay-contract'
+} from '../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 function failure(err: unknown): WslFsFailure {
   const e = err as NodeJS.ErrnoException

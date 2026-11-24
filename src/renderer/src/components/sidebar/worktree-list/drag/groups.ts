@@ -1,9 +1,12 @@
-import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
+import {
+  ALL_GROUP_KEY,
+  PINNED_GROUP_KEY
+} from '../../../../../../shared/sidebar-list/sections/group-keys'
 import { getNaturalWorktreeKeys } from '../listing/natural-worktree-keys'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { WorktreeDragGroup } from './worktree-manual-order'
-import { isFolderLaneSectionKey } from '../../../../../../shared/sidebar-list/folder-workspace-occurrences'
+import { isFolderLaneSectionKey } from '../../../../../../shared/sidebar-list/folders/folder-workspace-occurrences'
 
 /** Group members are host identities: same-id copies on two machines are separate cards to reorder.
  * Rows nested under a folder workspace group by their folder's lane, as getWorktreeDragIndexes keys

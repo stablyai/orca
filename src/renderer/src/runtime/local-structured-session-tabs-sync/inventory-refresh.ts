@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { refreshLocalRuntimeCapabilities } from '../hosts/capabilities/local-runtime-capabilities'
 import {
   isCurrentLocalStructuredSessionGeneration,
@@ -11,7 +11,7 @@ import {
   startStructuredAgentLaunchCancellationCleanup
 } from '../../lib/agent-session/launch/structured-agent-session-launch-cancellation'
 import { closeStructuredAgentSession } from '../native-chat/requests/structured-agent-session-close'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '../rpc/targets/runtime-worktree-selector'
 

@@ -1,6 +1,6 @@
 import type { ModelManager } from './model-manager'
 import type { SttService } from './stt-service'
-import type { VoiceSettings } from '../../shared/speech-types'
+import type { VoiceSettings } from '../../shared/speech/speech-types'
 
 /** Hosts inject Chromium/Node download factories; missing services reject per call rather than appearing to transcribe. */
 

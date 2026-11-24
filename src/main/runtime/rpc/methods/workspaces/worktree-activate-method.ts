@@ -1,5 +1,5 @@
-import { WorktreeActivate } from '../../../../../shared/rpc-contract/worktree-params'
-import { resolveRuntimeNavigationTarget } from '../../../../../shared/runtime-navigation'
+import { WorktreeActivate } from '../../../../../shared/rpc-contract/workspaces/worktree-params'
+import { resolveRuntimeNavigationTarget } from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { defineMethod } from '../../core'
 
 export const WORKTREE_ACTIVATE_METHOD = defineMethod({

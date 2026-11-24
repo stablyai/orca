@@ -14,8 +14,10 @@ import { createUiSurfaceActions } from './ui-slice-surface-actions'
 import { createUiPersistenceActions } from './ui-slice-persistence-actions'
 import { createUiHydrationActions } from './ui-slice-hydration-actions'
 import { createUiUpdateActions } from './ui-slice-update-actions'
+import { createUiWslMovedSectionActions } from './ui-slice-wsl-moved-section-actions'
 
 export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each creator returns a Partial<UISlice>; together they define every field, which the spread type cannot prove.
   ({
     ...createUiAgentActions(set, get),
     ...createUiTaskActions(set, get),
@@ -29,5 +31,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     ...createUiSurfaceActions(set, get),
     ...createUiPersistenceActions(set, get),
     ...createUiHydrationActions(set, get),
-    ...createUiUpdateActions(set, get)
+    ...createUiUpdateActions(set, get),
+    ...createUiWslMovedSectionActions(set)
   }) as UISlice

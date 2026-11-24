@@ -1,25 +1,22 @@
 import { createHash } from 'node:crypto'
-import type { RepoIcon } from '../../../../shared/repo-icon'
-import type { Repo } from '../../../../shared/repo-types'
-import { readRasterImageDimensions } from '../../../../shared/file-preview/raster-image-dimensions'
+import type { RepoIcon } from '../../../../shared/repository/appearance/repo-icon'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   MAX_REPO_ICON_DATA_URL_BYTES,
   repoIconFeedKey,
   type RepoIconDataUrlsReply
-} from '../../../../shared/sidebar-list/repo-icon-data-urls-contract'
+} from '../../../../shared/sidebar-list/catalog/repo-icon-data-urls-contract'
 import {
   fetchRemoteRepoIcon,
   type FetchedRepoIcon,
   type RepoIconFetch
 } from './repo-icon-remote-fetch'
-import type { RuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
-
-export type RepoIconPngEncoder = NonNullable<RuntimeDesktopSurface['encodeRepoIconPng']>
+import { iconDataUrl, type IconPngEncoder } from './icon-data-url'
 
 // Remote bytes are untrusted; user-picked local icons already display on desktop and need only a decode-bomb cap.
 const MAX_REMOTE_DECODE_EDGE_PX = 512
 const MAX_LOCAL_DECODE_EDGE_PX = 2048
-const ENCODED_EDGES_PX = [64, 32]
+const ENCODED_EDGES_PX = [64, 32] as const
 const SUCCESS_TTL_MS = 60 * 60 * 1000
 const FAILURE_TTL_MS = 5 * 60 * 1000
 const MAX_CACHE_BYTES = 1024 * 1024
@@ -43,11 +40,6 @@ function decodeDataUrl(src: string): FetchedRepoIcon | null {
   return match ? { mimeType: match[1].toLowerCase(), bytes: Buffer.from(match[2], 'base64') } : null
 }
 
-function asDataUrl(mimeType: string, bytes: Uint8Array): string | null {
-  const dataUrl = `data:${mimeType};base64,${Buffer.from(bytes).toString('base64')}`
-  return dataUrl.length <= MAX_REPO_ICON_DATA_URL_BYTES ? dataUrl : null
-}
-
 /**
  * The workspace icons the window shows (each repo's `repoIcon`), as small data URLs a phone can
  * draw even where its shell admits no https images. Without an encoder (orcad) small images pass
@@ -65,7 +57,7 @@ export class RepoIconDataUrls {
     private readonly options: {
       repos: () => readonly Repo[]
       fetch: RepoIconFetch
-      encoder: () => RepoIconPngEncoder | undefined
+      encoder: () => IconPngEncoder | undefined
       now?: () => number
       fetchTimeoutMs?: number
     }
@@ -141,32 +133,15 @@ export class RepoIconDataUrls {
     if (!image) {
       return null
     }
-    const dimensions = readRasterImageDimensions(image.bytes)
-    const maxEdge = remote ? MAX_REMOTE_DECODE_EDGE_PX : MAX_LOCAL_DECODE_EDGE_PX
-    if (!dimensions || dimensions.width > maxEdge || dimensions.height > maxEdge) {
-      return null
-    }
-    // Why pass through when encoding fails: Electron decodes only PNG and JPEG everywhere, and
-    // a small GIF, WebP or ICO the phone can draw must not show worse than on orcad.
-    return this.encodeFitting(image.bytes) ?? asDataUrl(image.mimeType, image.bytes)
-  }
-
-  private encodeFitting(bytes: Uint8Array): string | null {
-    const encode = this.options.encoder()
-    if (!encode) {
-      return null
-    }
-    for (const edge of ENCODED_EDGES_PX) {
-      const png = encode(bytes, edge)
-      if (!png) {
-        return null
-      }
-      const dataUrl = asDataUrl('image/png', png)
-      if (dataUrl) {
-        return dataUrl
-      }
-    }
-    return null
+    return iconDataUrl(
+      image,
+      {
+        maxDataUrlLength: MAX_REPO_ICON_DATA_URL_BYTES,
+        maxDecodeEdgePx: remote ? MAX_REMOTE_DECODE_EDGE_PX : MAX_LOCAL_DECODE_EDGE_PX,
+        encodedEdgesPx: ENCODED_EDGES_PX
+      },
+      this.options.encoder()
+    )
   }
 
   private async fetchLimited(url: string): Promise<FetchedRepoIcon | null> {

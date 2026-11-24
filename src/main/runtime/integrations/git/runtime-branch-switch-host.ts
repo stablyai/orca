@@ -3,14 +3,14 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import {
   CLEARED_HOSTED_REVIEW_LINK_UPDATES,
   HOSTED_REVIEW_LINK_KEYS
-} from '../../../../shared/worktree/hosted-review-links'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+} from '../../../../shared/worktree/hosted-review/hosted-review-links'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { findAgentSwitchBlocker, type AgentSwitchRow } from './branch-switch-agent-blocker'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import type { RuntimeGitCommandHost } from './runtime-git-command-target'
 
 type ConnectedPty = { ptyId: string; worktreeId: string; connected: boolean }

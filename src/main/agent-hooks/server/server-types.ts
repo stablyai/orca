@@ -1,13 +1,13 @@
 import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
 import type { RowAgentIdentity } from '../identity/pane-agent-identities'
-import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
+import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import type { PersistedAgentExitEvidence } from './agent-exit-evidence'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentStatusState } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusObservation } from '../../../shared/agent-status/contracts/agent-status-observation'
-import type { AgentKind } from '../../../shared/telemetry-events'
-import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
+import type { AgentKind } from '../../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { LegacyPaneKeyAliasEntry } from '../../../shared/orca-profiles/persisted-state-types'
 import type { CodexRemoteRosterAuthority } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 
@@ -37,6 +37,7 @@ export type IncomingAgentHookEvent = AgentHookEventPayload & {
 }
 
 export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
+  paneSleep?: { ptyId: string; incarnationId?: string }
   /** Live acknowledgement of the matching renderer retirement; never cached. */
   authorityRestartId?: string
   receivedAt: number
@@ -133,6 +134,8 @@ export type ProviderSessionChangeListener = (
   providerSessions: AgentHookProviderSessionIdentity[]
 ) => void
 export type AgentHookStatusRowIdentity = {
+  providerSession?: EnrichedAgentHookEventPayload['providerSession']
+  agentType?: EnrichedAgentHookEventPayload['payload']['agentType']
   paneKey: string
   worktreeId?: string
   terminalHandle?: string
@@ -178,6 +181,10 @@ export type AgentPromptSentDedupeEntry = {
 export type NormalizedLocalHook = {
   event: AgentHookEventPayload | null
   onAccepted?: () => void
+  /** A Stop without its text whose transcript normalize skipped; read it off the event loop. */
+  stopTranscriptPath?: string
+  /** A Droid Stop's transcript, read off the event loop for the turn verdict Droid appends after it. */
+  droidVerdictTranscriptPath?: string
 }
 
 export type ServerStatusLineListener = ((event: ClaudeStatusLineRateLimits) => void) | null

@@ -11,7 +11,7 @@ import {
   getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { getBrowserCommandTarget } from './browser-command-target'
 
 export const BROWSER_ENV_HANDLERS: Record<string, CommandHandler> = {

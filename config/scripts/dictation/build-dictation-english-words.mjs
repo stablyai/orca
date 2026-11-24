@@ -1,11 +1,11 @@
-// Regenerates src/shared/dictation-english-words.ts, the common-word filter dictation's near-miss matching
+// Regenerates src/shared/speech/dictation/dictation-english-words.ts, the common-word filter dictation's near-miss matching
 // checks before spelling a word as a dictionary term. Run: node config/scripts/dictation/build-dictation-english-words.mjs
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { wordFilterSlots } from '../../../src/shared/dictation-word-filter.ts'
+import { wordFilterSlots } from '../../../src/shared/speech/dictation/dictation-word-filter.ts'
 
 const SOURCES = {
   scowl: [
@@ -31,7 +31,7 @@ const LAST_NAMES = 1000
 const FALSE_POSITIVE_RATE = 0.02
 // Matching never looks up words shorter than this.
 const MIN_WORD_LENGTH = 3
-const OUT = 'src/shared/dictation-english-words.ts'
+const OUT = 'src/shared/speech/dictation/dictation-english-words.ts'
 
 async function download([url, sha256]) {
   const response = await fetch(url)

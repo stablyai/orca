@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { NetworkInterfacePicker } from '../../../mobile/NetworkInterfacePicker'
-import type { PairingNetworkInterface } from '../../../../../../shared/pairing-address-auto-selection'
+import type { PairingNetworkInterface } from '../../../../../../shared/remote-runtime/pairing/pairing-address-auto-selection'
 import type { MobilePairingConnectionMode } from '../../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 
 type MobilePairingSetupSectionProps = {

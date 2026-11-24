@@ -1,4 +1,4 @@
-import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
+import type { BundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
 import type { ComponentProps, ReactNode } from 'react'
 import type { LocalAgentRuntime } from '../../../lib/skills/runtime/skill-runtime-command'

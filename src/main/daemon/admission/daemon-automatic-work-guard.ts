@@ -4,7 +4,7 @@ import type {
   AutomaticWorkStatus,
   HostPressureLevel
 } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
-import type { ProcessGrowthTrip } from '../../../shared/process-growth-breaker'
+import type { ProcessGrowthTrip } from './process-growth-breaker'
 import { AutomaticWorkRunMarker } from './automatic-work-run-marker-store'
 import type { AutomaticWorkRequestType } from './daemon-automatic-work-protocol'
 import { DaemonProcessGrowthMonitor } from './daemon-process-growth-monitor'

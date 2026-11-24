@@ -3,16 +3,17 @@ import type {
   AgentSessionModelCatalogResult,
   AgentSessionOptionResult
 } from '../../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionOptionsResult } from '../../../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { AgentModelCatalogService } from '../../../agent-model-catalog/agent-model-catalog-service-contract'
 import type { StructuredAgentSessionMutationContext } from '../../operations/structured-agent-session-mutation-context'
 import type { StructuredAgentSessionLiveOptions } from '../../options/structured-agent-session-option-models'
+import type { StructuredAgentDefinition } from '../../providers/structured-agent-definition'
 import {
   hostTestCatalogReadOperation,
   hostTestRestingOptionsRecord,
   hostTestRestingOptionsJournal,
   hostTestOptionsReadStore
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { readStructuredAgentSessionOptions } from '../../options/structured-agent-session-options-read'
 
 function deferred<T>() {
@@ -29,12 +30,19 @@ const levels = (values: string[]) => values.map((value) => ({ value, label: valu
 const gap = levels(['off', 'minimal', 'low', 'xhigh'])
 const precise = levels(['off', 'minimal', 'low', 'high', 'xhigh'])
 
+type OptionRefreshAgent = {
+  provider: string
+  options: Record<string, string>
+  definition: StructuredAgentDefinition
+}
+
 /** Exercise the host's actual rest/live reader; only transport completion is held. */
-export function piOptionRefreshHost(sessionId = 'session-1') {
+export function optionRefreshHost(agent: OptionRefreshAgent) {
+  const sessionId = 'session-1'
   const record = {
     ...hostTestRestingOptionsRecord(sessionId),
-    provider: 'pi',
-    options: { model: 'openai/model', effort: 'medium' }
+    provider: agent.provider,
+    options: { ...agent.options }
   }
   const row = { id: record.options.model, label: 'Model', isDefault: false, efforts: gap }
   let live: StructuredAgentSessionLiveOptions | null = null
@@ -81,7 +89,7 @@ export function piOptionRefreshHost(sessionId = 'session-1') {
       host.hostReads += 1
       const conversation = {
         child: host.live ? { fence: 2, phase: 'ready' } : null,
-        params: { provider: 'pi' },
+        params: { provider: record.provider },
         journal: hostTestRestingOptionsJournal()
       }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real reader accesses only these injected ports; no provider process is launched.
@@ -93,7 +101,7 @@ export function piOptionRefreshHost(sessionId = 'session-1') {
               return host.live
             }
           },
-          agents: { definition: () => null, capabilities: () => null },
+          agents: { definition: () => agent.definition, capabilities: () => null },
           store: hostTestOptionsReadStore(() => record),
           modelCatalog: host.modelCatalog ?? {
             captureRead: hostTestCatalogReadOperation,

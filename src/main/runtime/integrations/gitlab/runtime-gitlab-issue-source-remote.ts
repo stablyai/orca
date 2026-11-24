@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { getDefaultRemote } from '../../../git/remotes/repo-remote-queries'
 import { getProjectRefForRemote } from '../../../gitlab/projects/gitlab-project-ref-resolution'
 import { getGlabKnownHosts } from '../../../gitlab/projects/gitlab-known-host-probe'

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { PostHog } from 'posthog-node'
-import type { CommonProps, OptInVia } from '../../shared/telemetry-events'
+import type { CommonProps } from '../../shared/telemetry/telemetry-event-classification'
+import type { OptInVia } from '../../shared/telemetry/schemas/telemetry-property-schemas'
 import { consumeBurstToken } from './burst-cap'
 import { waitForCaptureEnqueue } from './posthog-transport'
 import { validate } from './validator'

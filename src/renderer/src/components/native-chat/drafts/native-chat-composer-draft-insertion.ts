@@ -5,7 +5,7 @@ import {
 } from './native-chat-composer-draft-store'
 import { notifyDraftAppend } from './native-chat-composer-draft-memory'
 import { appendPromptDocumentText } from '../composer/editor/native-chat-prompt-document-text'
-import { dictationSeparators } from '../../../../../shared/dictation-transcript-spacing'
+import { dictationSeparators } from '../../../../../shared/speech/dictation/dictation-transcript-spacing'
 import type {
   NativeChatComposerDraft,
   NativeChatComposerDraftOwner

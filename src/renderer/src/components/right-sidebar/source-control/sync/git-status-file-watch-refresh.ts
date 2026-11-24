@@ -6,17 +6,17 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership
 import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
-} from '../../../../../../shared/cross-platform-path'
+} from '../../../../../../shared/file-access/cross-platform-path'
 import type { FsChangedPayload } from '../../../../../../shared/file-watch/filesystem-change-event'
 import type {
   ActiveRightSidebarTab,
   RightSidebarExplorerView
-} from '../../../../../../shared/ui-chrome-types'
+} from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import {
   ORCA_WORKTREE_FILE_CHANGE_EVENT,
   type WorktreeFileChangeEventDetail
-} from '@/hooks/worktree-file-change-event'
+} from '@/runtime/files/watching/worktree-file-change-event'
 
 const WATCH_REFRESH_DEBOUNCE_MS = 125
 

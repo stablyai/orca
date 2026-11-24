@@ -1,6 +1,7 @@
+import { decodeSavedLocalPtyReference } from '../../restoring-sessions/saved-local-terminal-ids'
 import { normalizePersistedMobileClientTabSelections } from '../../../runtime/client/navigation/client-session-tab-selection-persistence'
-import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
-import { normalizeFeatureInteractionTelemetryBuckets } from '../../../../shared/feature-interactions'
+import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
+import { normalizeFeatureInteractionTelemetryBuckets } from '../../../../shared/feature-education/interactions/feature-interactions'
 import { normalizeFolderWorkspaceDiffComments } from '../../../workspaces/catalog/folder-workspace-diff-comments'
 import { normalizeFolderWorkspaces } from '../../../../shared/folder-workspaces/folder-workspaces'
 import { normalizeOrcadMigrationEvictedReceipts } from '../../../../shared/orcad-migration/orcad-migration-evicted-receipts'
@@ -8,7 +9,13 @@ import { normalizeOrcadMigrationImportReceipts } from '../../../../shared/orcad-
 import { normalizeOrcadMigrationStagedCatalogs } from '../../../../shared/orcad-migration/orcad-migration-staged-catalog-validation'
 import { normalizeWorkspaceLineageByChildKey } from '../../applying-settings/ui-interaction-merge'
 import { dropInferredParentsOverFolderParents } from '../workspace-lineage/folder-parent-lineage-persistence'
-import { normalizeCrossStoreLineageByChildKey } from '../../../../shared/worktree/cross-store-lineage-records'
+import { normalizeCrossStoreLineageByChildKey } from '../../../../shared/worktree/lineage/cross-store-lineage-records'
+import { normalizePersistedBots, splitBotsByOlderBuildSupport } from '../../../../shared/bot-types'
+import {
+  markImmutableBotSnapshot,
+  orderBotsBySavedOrder
+} from '../../../../shared/bots/bot-lookup-index'
+import { withBotAutomationAgents } from '../../../bots/bot-automation-agent-sync'
 import {
   normalizeSshRemotePtyLease,
   normalizeSshTarget
@@ -19,7 +26,7 @@ import {
   normalizeLegacyPaneKeyAliasEntries,
   normalizeMigrationUnsupportedPtyEntries
 } from '../../restoring-sessions/pane-alias-normalization'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import { normalizeLoadedGlobalSettings } from './normalize-loaded-global-settings'
@@ -44,15 +51,78 @@ export function normalizeLoadedProfileState(
   const projectCatalog = normalizeLoadedProjectCatalog(parsed, markNeedsSave)
   // Normalize local first; host partitions drop global fields already owned here.
   const workspaceSession = normalizeLoadedLocalSession(parsed, defaults, markNeedsSave)
+  const parsedBotOrder = Array.isArray(parsed.botOrder)
+    ? parsed.botOrder.filter((id): id is string => typeof id === 'string')
+    : undefined
+  const normalizedBots =
+    parsed.bots === undefined && parsed.botsNewerAgents === undefined
+      ? undefined
+      : normalizePersistedBots([
+          ...(Array.isArray(parsed.bots) ? parsed.bots : []),
+          ...(Array.isArray(parsed.botsNewerAgents) ? parsed.botsNewerAgents : [])
+        ])
+  const allBots =
+    normalizedBots && parsedBotOrder
+      ? orderBotsBySavedOrder(normalizedBots, parsedBotOrder)
+      : normalizedBots
+  const { readable: bots, newer: botsNewerAgents } = allBots
+    ? splitBotsByOlderBuildSupport(allBots)
+    : { readable: undefined, newer: [] }
+  if (bots) {
+    markImmutableBotSnapshot(bots)
+  }
+  const hasStaleNewerBotState =
+    botsNewerAgents.length === 0 &&
+    (parsed.botsNewerAgents !== undefined || parsed.botOrder !== undefined)
+  if (
+    hasStaleNewerBotState ||
+    (botsNewerAgents.length > 0 && parsed.bots?.length !== bots?.length)
+  ) {
+    markNeedsSave()
+  }
+  if (allBots !== undefined && parsed.botsPermissionDefaultMigrated !== true) {
+    // Old bots were created with Ask; later explicit Ask overrides must survive reloads.
+    for (const bot of allBots) {
+      if (bot.permissionMode === 'ask') {
+        delete bot.permissionMode
+      }
+    }
+    markNeedsSave()
+  }
   const workspaceLineageByChildKey = normalizeWorkspaceLineageByChildKey(
     parsed.workspaceLineageByChildKey
   )
   const worktreeLineageById = { ...parsed.worktreeLineageById }
   dropInferredParentsOverFolderParents(worktreeLineageById, workspaceLineageByChildKey)
 
+  const legacyPaneKeyAliasEntries = normalizeLegacyPaneKeyAliasEntries(
+    parsed.legacyPaneKeyAliasEntries
+  ).map((entry) => {
+    const decoded = decodeSavedLocalPtyReference(entry)
+    if (decoded !== entry) {
+      markNeedsSave()
+    }
+    return decoded
+  })
+  const migrationUnsupportedPtyEntries = normalizeMigrationUnsupportedPtyEntries(
+    parsed.migrationUnsupportedPtyEntries
+  ).map((entry) => {
+    const decoded = entry.source === 'local' ? decodeSavedLocalPtyReference(entry) : entry
+    if (decoded !== entry) {
+      markNeedsSave()
+    }
+    return decoded
+  })
+
+  const {
+    botsNewerAgents: _parsedBotsNewerAgents,
+    botOrder: _parsedBotOrder,
+    ...restParsed
+  } = parsed
+
   return {
     ...defaults,
-    ...parsed,
+    ...restParsed,
     featureInteractionTelemetryBuckets: normalizeFeatureInteractionTelemetryBuckets(
       parsed.featureInteractionTelemetryBuckets
     ),
@@ -113,12 +183,29 @@ export function normalizeLoadedProfileState(
       .map(normalizeSshRemotePtyLease)
       .filter((lease): lease is SshRemotePtyLease => lease !== null),
     sshPtyConsumerRecoveries: parsed.sshPtyConsumerRecoveries,
-    migrationUnsupportedPtyEntries: normalizeMigrationUnsupportedPtyEntries(
-      parsed.migrationUnsupportedPtyEntries
+    migrationUnsupportedPtyEntries,
+    legacyPaneKeyAliasEntries,
+    // Bots that switched agents before their automations followed: those catch up once.
+    automations: withBotAutomationAgents(
+      Array.isArray(parsed.automations) ? parsed.automations : [],
+      allBots ?? [],
+      markNeedsSave
     ),
-    legacyPaneKeyAliasEntries: normalizeLegacyPaneKeyAliasEntries(parsed.legacyPaneKeyAliasEntries),
-    automations: Array.isArray(parsed.automations) ? parsed.automations : [],
     automationRuns: normalizeLoadedAutomationRuns(parsed, markNeedsSave),
+    ...(bots === undefined
+      ? {}
+      : {
+          bots,
+          botsPermissionDefaultMigrated: true as const,
+          ...(botsNewerAgents.length > 0
+            ? {
+                botsNewerAgents: markImmutableBotSnapshot(botsNewerAgents),
+                botOrder: markImmutableBotSnapshot(
+                  parsedBotOrder ?? (allBots ?? []).map((bot) => bot.id)
+                )
+              }
+            : {})
+        }),
     orcadMigrationImportReceipts: normalizeOrcadMigrationImportReceipts(
       parsed.orcadMigrationImportReceipts
     ),

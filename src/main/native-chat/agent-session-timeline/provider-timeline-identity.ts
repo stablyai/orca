@@ -76,8 +76,6 @@ export function isProviderTimelineTurnInNamespace(turnId: string, namespace: str
   return turnId.startsWith(`p:${providerTimelineKeyPart(namespace)}:`)
 }
 
-export { spelledProviderTimelineItemKey } from '../../../shared/provider-timeline-item-key'
-
 /** Preserve legacy turn-lifecycle prefixes and separate provider namespaces from minted keys. */
 export function createLegacyProviderTimelineIdentityScheme(input: {
   agent: AgentType

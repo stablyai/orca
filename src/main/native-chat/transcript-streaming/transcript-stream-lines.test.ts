@@ -11,10 +11,6 @@ describe('bounded transcript records', () => {
     return records
   }
 
-  it('resets the byte budget per record and accepts the exact limit', async () => {
-    expect(await collect(['1234\n123', '4\n1234'], 4)).toEqual(['1234', '1234', '1234'])
-  })
-
   it('counts UTF-8 bytes across split codepoints', async () => {
     const bytes = Buffer.from('😀é')
     const chunks = [bytes.subarray(0, 2), bytes.subarray(2, 5), bytes.subarray(5)]

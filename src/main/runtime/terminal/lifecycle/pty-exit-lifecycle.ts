@@ -1,9 +1,11 @@
-import { OrcaRuntimeWithOnClientDisconnected } from '../layout/terminal-client-disconnect'
+import { RuntimeTerminalWorkerModelWait } from './terminal-worker-model-wait'
+
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 
 import {
   type TerminalExitCause,
   OPERATOR_CLOSE_EXIT_CAUSE,
+  isUnobservedTerminalExit,
   resolveUnreportedExitCause
 } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { SSH_EXIT_UNCONFIRMED_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
@@ -12,22 +14,13 @@ import type { RetiredTerminalSurface } from '../surface/mobile-session-terminal-
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { exitedSplitPaneFacts } from './exited-split-pane-rule'
-import { closedPaneOfExitedPty, type ClosedPaneOfExit } from './closed-pane-of-exited-pty'
+
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
-export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnected {
+export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerModelWait {
   protected abstract pruneDisconnectedPtyRecords(): void
-
-  protected abstract failActiveDispatchOnExit(
-    handle: string,
-    paneKey: string | null,
-    cause: TerminalExitCause,
-    lastOutput?: string
-  ): void
-
-  protected abstract readPtyLastOutput(ptyId: string | null | undefined): string | undefined
 
   protected abstract pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void
 
@@ -42,23 +35,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
   /** Its process ended on its own: no close, kill, sleep or restart, nor a lost host or replayed exit. */
   protected notePtyEndedOnItsOwn(_pty: RuntimePtyWorktreeRecord): void {}
 
-  /** The pane main's close already dropped, from its closed-pane record; null while main holds it. */
-  private closedPaneOfExit(
-    pty: RuntimePtyWorktreeRecord | undefined,
-    exitIncarnationId: PtyIncarnationId | undefined
-  ): ClosedPaneOfExit | null {
-    if (!ORCA_LAYOUT_OWNER_IS_MAIN || !pty || this.paneOfPty(pty).paneKey) {
-      return null
-    }
-    return closedPaneOfExitedPty(
-      this.store,
-      this.tryGetWorkspaceSessionHostIdForWorktree(pty.worktreeId),
-      pty,
-      exitIncarnationId ?? pty.incarnationId
-    )
-  }
-
-  onPtyExit(
+  async onPtyExit(
     ptyId: string,
     exitCode: number,
     exitIncarnationId?: PtyIncarnationId,
@@ -71,8 +48,10 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       viewShown?: boolean
       /** Its host went away (a WSL bridge pane's distro stopped): keep the pane to cold-restore, as after a daemon crash. */
       hostLost?: boolean
+      /** Its pane is starting again in place because the host no longer had its process (a daemon crash). */
+      paneRespawning?: boolean
     } = {}
-  ): void | Promise<void> {
+  ): Promise<void> {
     const pty = this.ptysById.get(ptyId)
     const pending = this.pendingPtyRegistrationIncarnations.get(ptyId)
     const candidateIncarnation = pending ? pending.incarnationId : pty?.incarnationId
@@ -86,8 +65,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     // A bare exit code is not enough to establish why a process ended: older
     // daemons and SSH relays can report 0 for crashes and wrapper exits.
     const observedCause = options.cause ?? resolveUnreportedExitCause(exitCode)
-    const stopNeverConfirmed =
-      observedCause.kind === 'unknown' && observedCause.reason === 'stop_unverified'
+    const stopNeverConfirmed = isUnobservedTerminalExit(observedCause)
     const stopRequested = this.stopRequestedPtyIds.has(ptyId)
     const exitCause: TerminalExitCause =
       stopRequested && !stopNeverConfirmed ? OPERATOR_CLOSE_EXIT_CAUSE : observedCause
@@ -130,8 +108,20 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       // An unverifiable exit keeps the facet tracked until a certified exit or prune.
       this.clearLiveProgramStatusFacet(ptyId)
     }
+    for (const paneKey of exitPaneKeys) {
+      if (this.paneHasSuccessorProcess(paneKey, ptyId, exitIncarnationId)) {
+        exitPaneKeys.delete(paneKey)
+      }
+    }
     if (processDeathCertified && exitPaneKeys.size > 0) {
-      this.reconcileAgentStatusForEndedProcessFn?.(exitPaneKeys)
+      this.reconcileAgentStatusForEndedProcessFn?.(
+        exitPaneKeys,
+        this.intentionalPtyStops
+          .claimExit(ptyId, exitIncarnationId ?? pty?.incarnationId)
+          .includes('reversible')
+          ? { ptyId, incarnationId: exitIncarnationId ?? pty?.incarnationId ?? undefined }
+          : undefined
+      )
     }
     const incarnationId =
       exitIncarnationId ??
@@ -194,6 +184,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.ptyOutputSequenceById.delete(ptyId)
       this.providerSequenceInitializedPtys.delete(ptyId)
       this.providerSequenceOffsetByPtyId.delete(ptyId)
+      this.reattachedProviderSequenceByPtyId.delete(ptyId)
       this.providerSnapshotPreferredPtys.delete(ptyId)
       this.providerModeTrackersByPtyId.delete(ptyId)
       this.providerModeSnapshotScansByPtyId.delete(ptyId)
@@ -317,27 +308,26 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       })
     }
     for (const surface of preservesAbnormalSshSurface ? [] : exitedSurfaces) {
-      this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCause, lastOutput)
+      this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCause, lastOutput, {
+        paneRespawning: options.paneRespawning === true && pty?.connectionId == null
+      })
+    }
+    // A restart, sleep or recovery in place keeps a coordinator's Runs; any other end retires them.
+    if (
+      !preservesAbnormalSshSurface &&
+      !preservesIntentionallyStoppedSurface &&
+      options.hostLost !== true &&
+      options.paneRespawning !== true
+    ) {
+      // The panes read before retirement too: a pane with no issued handle, or one main's close
+      // already dropped, leaves no exited surface.
+      const exitedPanes = new Set([...exitPaneKeys, ...exitedSurfaces.map((s) => s.paneKey)])
+      this.retireExitedCoordinatorRuns(exitedPanes, ptyId, exitIncarnationId)
     }
     this.pruneDisconnectedPtyRecords()
     if (pty && endedOnItsOwn && !preservesIntentionallyStoppedSurface) {
       this.notePtyEndedOnItsOwn(pty)
     }
     return retirement
-  }
-
-  private notifyPtyExitListeners(ptyId: string): void {
-    const listeners = this.ptyExitListenersByPtyId.get(ptyId)
-    if (!listeners) {
-      return
-    }
-    this.ptyExitListenersByPtyId.delete(ptyId)
-    for (const listener of listeners) {
-      try {
-        listener()
-      } catch {
-        // A subscriber cannot change exit cleanup for other waiters.
-      }
-    }
   }
 }

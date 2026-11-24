@@ -1,4 +1,4 @@
-import type { CliInstallMethod } from '../../../shared/cli-install-types'
+import type { CliInstallMethod } from '../../../shared/cli/cli-install-types'
 import type { WindowsUserPathReadResult } from '../command-paths/windows-user-path-registry'
 
 export type CliInstallerOptions = {

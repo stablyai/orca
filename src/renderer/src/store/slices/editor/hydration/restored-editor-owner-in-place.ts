@@ -1,6 +1,9 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { AppState } from '../../../types'
-import { replaceRecordEntries, replaceTabBuckets } from '../../../keyed-record-transitions'
+import {
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '../../../record-transitions/keyed-record-transitions'
 
 type InPlaceTabState = Pick<
   AppState,

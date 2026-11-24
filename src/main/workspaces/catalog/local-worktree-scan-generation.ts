@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { WorktreeCatalogVersion } from '../../../shared/worktree/catalog-version'
+import type { WorktreeCatalogVersion } from '../../../shared/worktree/catalog/catalog-version'
 
 const generationByRepoId = new Map<string, number>()
 let generationSequence = 0
@@ -74,12 +74,6 @@ export function getWorktreeScanMutationRevision(): number {
 
 export function isLocalWorktreeScanGenerationCurrent(repoId: string, generation: number): boolean {
   return getLocalWorktreeScanGeneration(repoId) === generation
-}
-
-export function resetLocalWorktreeScanGenerationsForTests(): void {
-  generationSequence += 1
-  mutationRevision += 1
-  generationByRepoId.clear()
 }
 
 export function _getLocalWorktreeScanGenerationCacheSize(): number {

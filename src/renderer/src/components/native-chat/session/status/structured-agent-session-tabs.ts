@@ -1,7 +1,7 @@
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
-import type { Tab } from '../../../../../../shared/tab-types'
-import { readTabMapChanges } from '@/store/keyed-record-change-reads'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { readTabMapChanges } from '@/store/record-transitions/keyed-record-change-reads'
 
 export type StructuredTab = Tab & { contentType: 'agent-session' }
 
@@ -182,18 +182,39 @@ export function getStructuredAgentSessionTabs(
   return list
 }
 
+// Chat tabs keep their objects across non-chat writes, so a full pass never re-hashes a session id.
+const paneKeysByTab = new WeakMap<StructuredTab, string>()
+export function structuredTabPaneKey(tab: StructuredTab): string {
+  let paneKey = paneKeysByTab.get(tab)
+  if (paneKey === undefined) {
+    paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+    paneKeysByTab.set(tab, paneKey)
+  }
+  return paneKey
+}
+
+const emptyPaneTabs: ReadonlyMap<string, StructuredTab> = new Map()
 const paneTabs = new WeakMap<readonly StructuredTab[], ReadonlyMap<string, StructuredTab>>()
 export function getStructuredAgentSessionTabsByPaneKey(
-  tabs: TabsByWorktree
+  tabs: TabsByWorktree | Tab[] | undefined
 ): ReadonlyMap<string, StructuredTab> {
-  const structuredTabs = getStructuredAgentSessionTabs(tabs)
+  if (!tabs) {
+    return emptyPaneTabs
+  }
+  return structuredTabsByPaneKey(
+    Array.isArray(tabs) ? structuredTabsOf(tabs, undefined) : getStructuredAgentSessionTabs(tabs)
+  )
+}
+
+/** A chat list's tabs by pane key, built once per list identity. */
+export function structuredTabsByPaneKey(
+  structuredTabs: readonly StructuredTab[]
+): ReadonlyMap<string, StructuredTab> {
   const cached = paneTabs.get(structuredTabs)
   if (cached) {
     return cached
   }
-  const result = new Map(
-    structuredTabs.map((tab) => [structuredAgentSessionPaneKey(tab.id, tab.entityId), tab])
-  )
+  const result = new Map(structuredTabs.map((tab) => [structuredTabPaneKey(tab), tab]))
   paneTabs.set(structuredTabs, result)
   return result
 }

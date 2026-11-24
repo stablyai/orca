@@ -2,13 +2,13 @@ import {
   classifyTerminalCreationFailure,
   terminalExitError
 } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
-import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/agent-session-host-authority'
-import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
+import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner'
 import { isPtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { registeredPtyProviders, tryGetProviderForPty } from '../provider/registry'
 
 // Coordinate claims across provider boundaries, including shared namespaces reached through different relays.
@@ -42,8 +42,13 @@ export function seedTerminalRestoreRecordsFromSpawnResult(
     })
   }
   if (result.isReattach === true) {
-    runtime?.startReattachedOutputClock?.(result.id)
+    runtime?.startReattachedOutputClock?.(result.id, {
+      pid: result.pid,
+      ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
+    })
     runtime?.restoreReattachedAgentStatus?.(result.id)
+  } else {
+    runtime?.vouchSpawnedTerminal?.(result.id)
   }
 }
 

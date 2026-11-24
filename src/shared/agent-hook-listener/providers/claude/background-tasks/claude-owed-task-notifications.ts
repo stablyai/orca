@@ -1,5 +1,5 @@
 import { isRecord } from '../../../../agent-status/child-work/agent-status-child-work-value-guards'
-import { runsOrcaOrchestrationWait } from '../../../../orca-cli-invocations'
+import { runsOrcaOrchestrationWait } from '../../../../cli/orca-cli-invocations'
 
 /** Main-agent background tasks keyed by launch/notification task ID. Notifications can arrive a turn after task end and an empty Stop; owed work keeps the pane active (#23942). Captures: __fixtures__/claude-task-notification-hooks.jsonl. */
 export type ClaudeLaunchedBackgroundTasks = Map<string, ClaudeLaunchedBackgroundTask>

@@ -9,7 +9,10 @@ import {
   Sparkles,
   Waypoints
 } from 'lucide-react'
-import type { ClaudeUsageRange, ClaudeUsageScope } from '../../../../shared/claude-usage-types'
+import type {
+  ClaudeUsageRange,
+  ClaudeUsageScope
+} from '../../../../shared/agent-usage/analytics/claude-usage-types'
 import { useAppStore } from '../../store'
 import { ClaudeUsageDetails } from './ClaudeUsageDetails'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
@@ -173,7 +176,7 @@ export function ClaudeUsagePane(): React.JSX.Element {
       }
     >
       <>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 @md:grid-cols-2 @4xl:grid-cols-4">
           <StatCard
             label={t('auto.components.stats.ClaudeUsagePane.ea71fae8fc', 'Input tokens')}
             value={formatTokens(summary?.inputTokens ?? 0, intlLocale)}

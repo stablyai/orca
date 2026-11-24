@@ -59,6 +59,19 @@ export type BrowserHostCommandPageState = {
   activeCapacityReleased: boolean
 }
 
+export function createBrowserHostCommandPageState(generation: number): BrowserHostCommandPageState {
+  return {
+    generation,
+    nextIssueSequence: 1,
+    nextSettlementSequence: 1,
+    records: new Map(),
+    outstanding: 0,
+    settledSequences: [],
+    terminalCommandIssued: false,
+    activeCapacityReleased: false
+  }
+}
+
 export function assertBrowserHostCommandOrder(
   page: BrowserHostCommandPageState,
   command: BrowserClientHostCommandEvent['command'],
@@ -213,6 +226,21 @@ export function resolveBrowserHostCommandCacheLimits(options: BrowserHostCommand
     maxBytesPerPage: positiveBrowserHostCommandLimit(
       options.maxCachedResultBytesPerPage,
       BROWSER_COMMAND_CACHE_MAX_BYTES_PER_PAGE
+    )
+  }
+}
+
+export function resolveBrowserHostOutstandingCommandLimits(
+  options: BrowserHostCommandLedgerOptions
+) {
+  return {
+    maxOutstandingCommands: positiveBrowserHostCommandLimit(
+      options.maxOutstandingCommands,
+      DEFAULT_MAX_OUTSTANDING_COMMANDS
+    ),
+    maxOutstandingCommandsPerPage: positiveBrowserHostCommandLimit(
+      options.maxOutstandingCommandsPerPage,
+      DEFAULT_MAX_OUTSTANDING_COMMANDS_PER_PAGE
     )
   }
 }

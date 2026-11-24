@@ -1,5 +1,5 @@
 import type { ServeReadiness } from '../../server/serve-readiness'
-import type { OrcadManagedStopContext } from '../../../shared/orcad-stop-request'
+import type { OrcadManagedStopContext } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 
 export type OrcadOptions = {
   port?: number

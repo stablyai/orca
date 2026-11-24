@@ -1,8 +1,8 @@
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../../shared/abort-signal-reason'
+} from '../../../../../shared/concurrency/abort-signal-reason'
 import type {
   SearchOptions,
   SearchResult

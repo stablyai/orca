@@ -1,6 +1,6 @@
 // Check the model before serialization hides structural breaches such as ungrouped tabs or invalid group trees. Disk rules separately cover older writers.
 
-import type { TabGroupLayoutNode } from '../../tab-types'
+import type { TabGroupLayoutNode } from '../tab-groups/tab-types'
 import { collectLayoutLeafIdsInOrder } from '../terminal-topology/terminal-pane-tree'
 import { checkLayoutIdStability, type LayoutEntities } from './workspace-layout-id-stability'
 import type { LoadedWorkspaceLayout } from '../persistence/workspace-layout-load-types'

@@ -1,5 +1,5 @@
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 export function createRuntimeRpcAbortError(): Error {
   const error = new Error('Runtime request aborted')
@@ -14,7 +14,9 @@ export async function callAbortableRuntimeEnvironment(
   timeoutMs: number | undefined,
   signal: AbortSignal,
   expectedEnvironmentPairingRevision?: number,
-  expectedEnvironmentRuntimeId?: string
+  expectedEnvironmentRuntimeId?: string,
+  background?: boolean,
+  wake?: boolean
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (signal.aborted) {
     throw createRuntimeRpcAbortError()
@@ -59,7 +61,9 @@ export async function callAbortableRuntimeEnvironment(
           params,
           timeoutMs,
           expectedEnvironmentPairingRevision,
-          expectedEnvironmentRuntimeId
+          expectedEnvironmentRuntimeId,
+          ...(background ? { background: true } : {}),
+          ...(wake ? { wake: true } : {})
         },
         {
           onResponse: (response) => finish(() => resolve(response)),

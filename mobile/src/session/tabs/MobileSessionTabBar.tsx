@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Plus } from 'lucide-react-native'
+import { Bell, Plus } from 'lucide-react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   Easing,
@@ -12,23 +12,27 @@ import Animated, {
 } from 'react-native-reanimated'
 import { triggerMediumImpact, triggerSelection } from '../../platform/haptics/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { AgentStateDot } from '../../components/AgentStateDot'
-import { ArrivalFade } from '../../components/ArrivalFade'
+import { AgentStateDot } from '../../agents/presentation/AgentStateDot'
+import { ArrivalFade } from '../../components/motion/ArrivalFade'
 import { useDrawerReducedMotion } from '../../components/bottom-drawer/bottom-drawer-constants'
-import { SHEET_CURVE } from '../../components/sheet-motion-values'
+import { SHEET_CURVE } from '../../components/motion/sheet-motion-values'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useKeyboardPersistingTaps } from '../../platform/keyboard/keyboard-persisting-taps'
 import { useNow } from '../../hooks/use-now'
-import { agentStateLabel, type AgentDotState } from '../../worktree/agent-row-display'
+import { agentStateLabel, type AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
 import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import {
   buildMobileSessionTabSummary,
+  countMobileSessionDesktopTabs,
+  isForkedChatTab,
   type MobileSessionTabSummary
 } from './mobile-session-tab-rows'
 import { MobileSessionTabMark } from './MobileSessionTabMark'
 import { MobileSessionTabsSheet } from './MobileSessionTabsSheet'
+import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
+import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import type { MobileSessionController } from '../use-mobile-session-controller'
 
 const SWIPE_SETTLE_MS = 250
@@ -65,11 +69,14 @@ function ArrivingTabBarDot({ state }: { state: AgentDotState | undefined }) {
 export function MobileSessionTabBar({
   controller,
   inTopBar,
-  actionsCollapsed = false
+  actionsCollapsed = false,
+  homeChatId = null
 }: {
   controller: MobileSessionController
   inTopBar: boolean
   actionsCollapsed?: boolean
+  /** The route bot's main chat, whose recorded name "Home" reads in the phone's language. */
+  homeChatId?: string | null
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -87,8 +94,22 @@ export function MobileSessionTabBar({
   const keepsKeyboard = useKeyboardPersistingTaps('handled')
   const now = useNow(60_000)
   const rows = useMemo(
-    () => visibleTabs.map((tab) => buildMobileSessionTabSummary(tab, terminals, now)),
-    [visibleTabs, terminals, now]
+    () =>
+      visibleTabs.map((tab) => {
+        const built = buildMobileSessionTabSummary(tab, terminals, now)
+        const summary =
+          homeChatId !== null &&
+          tab.type === 'agent-session' &&
+          tab.sessionId === homeChatId &&
+          built.title === 'Home'
+            ? { ...built, title: t('bots.tabs.homeTitle', 'Home') }
+            : built
+        // The tab on screen is being read (useMarkViewedAgentRead), so it never rings.
+        return summary.unread && tab.id === activeSessionTabId
+          ? { ...summary, unread: false }
+          : summary
+      }),
+    [visibleTabs, terminals, now, activeSessionTabId, homeChatId, t]
   )
   const activeIndex = rows.findIndex((row) => row.tab.id === activeSessionTabId)
   const active: MobileSessionTabSummary | undefined = rows[activeIndex]
@@ -160,15 +181,21 @@ export function MobileSessionTabBar({
   )
 
   const status = active?.dotState && active.dotState !== 'idle' ? active.dotState : undefined
+  const tabCount = countMobileSessionDesktopTabs(rows)
   const countLabel =
-    rows.length === 1
+    tabCount === 1
       ? t('session.tabBar.oneTab', '1 tab')
-      : t('session.tabBar.tabCount', '{{count}} tabs', { count: rows.length })
-  const tabLabel = [active?.title, status ? agentStateLabel(status) : null]
+      : t('session.tabBar.tabCount', '{{count}} tabs', { count: tabCount })
+  const tabLabel = [
+    active && isForkedChatTab(active.tab) ? mobileForkAccessibleName(active.title) : active?.title,
+    status ? agentStateLabel(status) : null
+  ]
     .filter(Boolean)
     .join(', ')
+  const anyUnread = rows.some((row) => row.unread)
   const countAccessibilityLabel = [
     countLabel,
+    anyUnread ? t('agents.list.unread', 'Unread') : null,
     othersNeedYou ? t('session.tabBar.anotherNeedsYou', 'another tab needs you') : null
   ]
     .filter(Boolean)
@@ -230,7 +257,11 @@ export function MobileSessionTabBar({
                 </>
               ) : null}
               <Text style={styles.title} numberOfLines={1}>
-                {active?.title ?? countLabel}
+                {active && isForkedChatTab(active.tab) ? (
+                  <MobileForkMarkedName name={active.title} />
+                ) : (
+                  (active?.title ?? countLabel)
+                )}
               </Text>
             </Animated.View>
           </Pressable>
@@ -248,9 +279,10 @@ export function MobileSessionTabBar({
         accessibilityHint={t('session.tabBar.hint', 'Shows all tabs')}
       >
         <View style={styles.countBox}>
-          <Text style={styles.countText}>{rows.length}</Text>
+          <Text style={styles.countText}>{tabCount}</Text>
+          {othersNeedYou ? <View style={styles.alert} /> : null}
         </View>
-        {othersNeedYou ? <View style={styles.alert} /> : null}
+        {anyUnread ? <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} /> : null}
       </Pressable>
       {/* A collapsed bar's + lives in the header's ⋯ menu. */}
       {!actionsCollapsed ? (
@@ -329,6 +361,8 @@ const styles = themedStyleSheet(() => ({
   },
   sideCell: {
     width: 46,
+    flexDirection: 'row',
+    gap: 2,
     alignItems: 'center',
     justifyContent: 'center',
     borderRightWidth: 1,
@@ -357,8 +391,8 @@ const styles = themedStyleSheet(() => ({
   // Another tab needs you: a red dot on the count's corner, ringed in the bar's colour.
   alert: {
     position: 'absolute',
-    top: 8,
-    right: 9,
+    top: -6,
+    right: -7,
     width: 9,
     height: 9,
     borderRadius: radii.pill,
@@ -367,3 +401,6 @@ const styles = themedStyleSheet(() => ({
     borderColor: colors.bgPanel
   }
 }))
+
+// The group room's thread bar draws its cells with these too.
+export { styles as sessionTabBarStyles }

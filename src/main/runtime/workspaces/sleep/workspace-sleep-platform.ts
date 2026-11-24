@@ -1,5 +1,5 @@
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { EphemeralVmRuntimeRecord } from '../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 
 /** Desktop access to paired hosts and VM suspend/resume; headless servers refuse those portions. */
 export type WorkspaceSleepPlatform = {

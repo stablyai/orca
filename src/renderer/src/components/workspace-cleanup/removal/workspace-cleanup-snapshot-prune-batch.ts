@@ -1,5 +1,5 @@
 import type { WorkspaceCleanupBackgroundRemovalArgs } from './settlement/workspace-cleanup-background-removal'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 export function createWorkspaceCleanupSnapshotPruneBatch():
   | WorkspaceCleanupBackgroundRemovalArgs['snapshotPruneBatch']

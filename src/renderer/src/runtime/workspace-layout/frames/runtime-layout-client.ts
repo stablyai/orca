@@ -1,6 +1,6 @@
 // One transport-neutral layout.subscribe client for local/paired main. Caller owns read-only cache; this client stores no layout.
 
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import {
   isKnownWorkspaceLayoutFrameType,
   readWorkspaceLayoutFramePosition,
@@ -8,7 +8,7 @@ import {
   type WorkspaceLayoutChangeFrame,
   type WorkspaceLayoutStreamFrame
 } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { subscribeRuntimeRpc } from '../../rpc/subscriptions/runtime-rpc-subscribe'
 import { exposeLocalLayoutStreamE2EEnd } from '../testing/local-layout-stream-e2e-end'
 

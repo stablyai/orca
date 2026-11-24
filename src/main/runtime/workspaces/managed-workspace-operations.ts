@@ -1,17 +1,23 @@
-import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
-import type { RuntimeWorktreeListResult } from '../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeListResult } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { DetectedWorktreeListResult, Worktree } from '../../../shared/worktree/types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { RepoRowExecutionHostLookup } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import { stopMissingWorktreeTerminals } from './removal/missing-worktree-terminal-reconciliation'
-import type { WorktreeVisibilitySourceMatcher } from '../../../shared/worktree/visibility-sources'
+import type { WorktreeVisibilitySourceMatcher } from '../../../shared/worktree/visibility/visibility-sources'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { ScopedWorktreeReads } from './catalog/scoped-worktree-row-resolution'
+import { launchTargetGitSelector } from './catalog/launch-target-git-selector'
 import { RuntimeWorkspacePortOperations } from './ports/runtime-workspace-port-operations'
+import { resolveKeyedFolderWorkspaceSelection } from './catalog/workspace-selector-candidates'
 const DEFAULT_WORKTREE_LIST_LIMIT = 200
 export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspacePortOperations {
   protected abstract resolveFolderWorkspaceSelector(
@@ -147,14 +153,33 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
     }
   }
 
+  resolveManagedFolderWorkspace(selector: string, requiredHostId?: ExecutionHostId) {
+    const store = this.requireStore()
+    const projectGroups = store.getProjectGroups?.() ?? []
+    const repos = store.getRepos()
+    const selected = resolveKeyedFolderWorkspaceSelection(
+      { folderWorkspaces: store.getFolderWorkspaces?.() ?? [], projectGroups, repos },
+      selector,
+      requiredHostId
+    )
+    return selected ? { ...selected, catalog: { projectGroups, repos } } : null
+  }
+
   /**
    * The git worktree record behind a terminal workspace. Refuses the floating sentinel, which has
    * no such record — callers that only need to address the workspace want the scope below instead.
    */
-  async showManagedTerminalWorkspace(worktreeSelector: string, requiredHostId?: ExecutionHostId) {
+  /** `reads`: one batch's owner-repo reads, so its lookups read each repo once. */
+  async showManagedTerminalWorkspace(
+    worktreeSelector: string,
+    requiredHostId?: ExecutionHostId,
+    reads?: ScopedWorktreeReads
+  ) {
     const target = await this.resolveManagedTerminalWorkspaceTarget(
       worktreeSelector,
-      requiredHostId
+      requiredHostId,
+      true,
+      reads
     )
     if (!target.managedWorktree) {
       throw new Error('selector_not_found')
@@ -165,7 +190,8 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
   async resolveManagedTerminalWorkspaceTarget(
     worktreeSelector: string,
     requiredHostId?: ExecutionHostId,
-    checkPath = true
+    checkPath = true,
+    reads?: ScopedWorktreeReads
   ) {
     const key = worktreeSelector.startsWith('id:') ? worktreeSelector.slice(3) : worktreeSelector
     const scope = parseWorkspaceKey(key)
@@ -173,10 +199,14 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
       scope?.type === 'folder'
         ? this.resolveFolderWorkspaceSelector(worktreeSelector, requiredHostId)
         : undefined
+    const gitSelector = reads ? launchTargetGitSelector(worktreeSelector) : null
     const resolved =
       requiredHostId && scope?.type !== 'folder'
         ? await this.showManagedWorktree(worktreeSelector, requiredHostId)
-        : undefined
+        : reads && gitSelector !== null
+          ? // The Git row the launch target would resolve, through the batch's reads; a miss throws as there.
+            await this.resolveGitWorktreeSelector(gitSelector, undefined, reads)
+          : undefined
     return this.resolveTerminalWorkspaceLaunchTarget(
       worktreeSelector,
       undefined,

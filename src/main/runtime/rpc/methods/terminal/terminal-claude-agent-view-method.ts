@@ -11,7 +11,7 @@ import {
   assertTerminalSendExactPtyBinding,
   terminalInputSourceForClient
 } from './terminal-input-delivery'
-import type { ClaudeAgentViewResult } from '../../../../../shared/claude-agent-view'
+import type { ClaudeAgentViewResult } from '../../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
 export const TERMINAL_CLAUDE_AGENT_VIEW_METHODS = [
   defineStreamingMethod({
@@ -80,6 +80,9 @@ export const TERMINAL_CLAUDE_AGENT_VIEW_METHODS = [
               handle: params.terminal,
               assertWritable: assertCurrent
             })
+            if (!(await agentHookServer.agentAcceptsInput(paneKey))) {
+              throw new Error('terminal_guard_not_writable')
+            }
             const status = await runtime.getTerminalAgentStatus(params.terminal)
             if (status.status === 'permission') {
               throw new Error('terminal_guard_permission')

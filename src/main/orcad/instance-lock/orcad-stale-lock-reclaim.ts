@@ -32,7 +32,7 @@ import {
   type OrcadReclaimHintRuntime,
   type OrcadStaleLockEvidence,
   type OrcadStaleLockReclaimStatus
-} from '../../../shared/orcad-stale-lock-reclaim'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stale-lock-reclaim'
 
 const ENDPOINT_PROBE_TIMEOUT_MS = 1_500
 

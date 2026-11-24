@@ -81,9 +81,10 @@ export function matchesWorkspaceCleanupAgent(
   if (filter.states.length > 0 && !filter.states.includes(facets.agentState)) {
     return false
   }
-  return matchesWorkspaceCleanupTriState(
-    filter.retainedDoneAgents,
-    facets.retainedDoneAgentCount > 0
+  return (
+    filter.retainedDoneAgents === 'any' ||
+    (facets.finishedAgentCount !== null &&
+      matchesWorkspaceCleanupTriState(filter.retainedDoneAgents, facets.finishedAgentCount > 0))
   )
 }
 

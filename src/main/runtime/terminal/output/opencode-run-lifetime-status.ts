@@ -4,7 +4,7 @@ import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
 } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { FOREGROUND_COMMAND_READS } from '../../../../shared/foreground-command-settle'
+import { FOREGROUND_COMMAND_READS } from '../../../../shared/terminal/pty/foreground/foreground-command-settle'
 import { isOpenCodeRunCommand } from '../../../../shared/agent-status/process/opencode-headless-command'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 
@@ -23,6 +23,7 @@ function mayStillBecomeOpenCode(processName: string): boolean {
 type OpenCodeAgent = 'opencode' | 'opencode2'
 
 type Dependencies = {
+  isStopping?(ptyId: string): boolean
   /** Local PTYs only: SSH and WSL foregrounds cannot be read on this host. */
   isObservablePty(ptyId: string): boolean
   isStatusEnabled(agent: OpenCodeAgent): boolean
@@ -38,6 +39,7 @@ type CommandState = {
   startedAt: number
   timer: ReturnType<typeof setTimeout> | null
   armed: OpenCodeAgent | null
+  deferredEnd?: { exitCode: number | null }
 }
 
 /** OpenCode 2 run loads no plugin; infer Working/Done from its local foreground command lifetime. */
@@ -68,6 +70,12 @@ export class OpenCodeRunLifetimeStatus {
 
   onCommandFinished(ptyId: string, exitCode: number | null): void {
     const state = this.commands.get(ptyId)
+    if (this.deps.isStopping?.(ptyId)) {
+      if (state) {
+        state.deferredEnd = { exitCode }
+      }
+      return
+    }
     this.forgetPty(ptyId)
     if (!state?.armed) {
       return
@@ -80,6 +88,24 @@ export class OpenCodeRunLifetimeStatus {
     })
     if (payload) {
       this.deps.publish(ptyId, payload, state.startedAt)
+    }
+  }
+
+  onStopSettled(ptyId: string, stopped: boolean): void {
+    const state = this.commands.get(ptyId)
+    if (stopped) {
+      this.forgetPty(ptyId)
+    } else if (state?.deferredEnd) {
+      const { exitCode } = state.deferredEnd
+      delete state.deferredEnd
+      void this.deps
+        .readForegroundProcessName(ptyId)
+        .then((name) => {
+          if (this.isCurrent(ptyId, state) && name && isShellProcess(name)) {
+            this.onCommandFinished(ptyId, exitCode)
+          }
+        })
+        .catch(() => {})
     }
   }
 

@@ -1,14 +1,14 @@
 import TabBar from '@/components/tab-bar/TabBar'
 import { TabGroupSplitNodeTree } from '@/components/tab-group/TabGroupSplitNodeTree'
 import { WorkspaceTabDragLayer } from '@/components/tab-group/WorkspaceTabDragLayer'
-import { WorkspacePaneOverlayLayers } from '@/components/WorkspacePaneOverlayLayers'
+import { WorkspacePaneOverlayLayers } from '@/components/terminal/workbench/WorkspacePaneOverlayLayers'
 import { isTerminalImeInputContextRefreshing } from '@/components/terminal-pane/input/ime/terminal-ime-input-context-refresh'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/browser/workspace/duplicate-browser-tab-options'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { FloatingTerminalEmptyState } from './FloatingTerminalEmptyState'
-import { renderFloatingTerminalOrchestrationCard } from './FloatingTerminalOrchestrationCard'
-import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestrationDialog'
-import { FloatingTerminalResizeHandles } from './FloatingTerminalResizeHandles'
+import { renderFloatingTerminalOrchestrationCard } from './orchestration/FloatingTerminalOrchestrationCard'
+import { FloatingTerminalOrchestrationDialog } from './orchestration/FloatingTerminalOrchestrationDialog'
+import { FloatingTerminalResizeHandles } from './geometry/FloatingTerminalResizeHandles'
 import { FloatingTerminalWindowControls } from './FloatingTerminalWindowControls'
 import type { useFloatingTerminalPanelController } from './use-floating-terminal-panel-controller'
 import type { Translate } from '@/i18n/use-translate'
@@ -145,7 +145,7 @@ export function renderFloatingTerminalPanelSurface(
                   onNewBrowserTab={createFloatingBrowserTab}
                   onNewFileTab={createFloatingMarkdownTab}
                   onOpenFileTab={openFloatingMarkdownTab}
-                  newTabMenuOrder="markdown-first"
+                  newTabMenuSurface="floating-panel"
                   onSetCustomTitle={setTabCustomTitle}
                   onSetTabColor={setTabColor}
                   onTogglePaneExpand={(tabId) =>

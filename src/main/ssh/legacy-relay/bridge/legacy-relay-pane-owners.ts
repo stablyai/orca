@@ -1,6 +1,6 @@
 /** Remember owners across reconnects by endpoint plus incarnation: pty-N ids repeat across relays and restarts. Never serve a replacement process under a known id. COMPAT(legacy-relay-bridge): revisit 2027-01-15. */
 import type { LegacyRelayClient } from './legacy-relay-client'
-import { isEpochScopedRelayPtyId } from '../../../../shared/ssh-pending-pty-kill'
+import { isEpochScopedRelayPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pending-pty-kill'
 
 type Owner = {
   endpoint: string

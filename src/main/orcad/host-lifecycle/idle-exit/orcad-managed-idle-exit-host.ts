@@ -1,4 +1,4 @@
-import { getAppEnvironment } from '../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import type { RuntimeRpcClientActivity } from '../../../runtime/rpc/server/runtime-rpc'
 import type { OrcadIdleExitEvidence } from './orcad-idle-exit-monitor'
 import {
@@ -22,7 +22,7 @@ import {
   requestOrcadWslHolderRelease,
   withdrawOrcadWslHolderRelease
 } from '../../instance-lock/orcad-wsl-holder-release'
-import type { OrcadIdleStopRecord } from '../../../../shared/orcad-idle-exit'
+import type { OrcadIdleStopRecord } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 let requestIdleShutdown: OrcadShutdownTrigger | null = null
@@ -33,7 +33,7 @@ export function bindOrcadIdleShutdown(request: OrcadShutdownTrigger): void {
 }
 
 type OrcadIdleExitRuntimePorts = {
-  rpc: { readClientActivity(): RuntimeRpcClientActivity }
+  rpc: { readClientActivity(): RuntimeRpcClientActivity; fenceForIdleStop(): void }
   agentStates: () => readonly { state: string }[]
   hasStagedMigration: () => boolean
   automationsBusy: () => boolean
@@ -77,7 +77,7 @@ async function startOrcadManagedIdleExit(
     await import('../../daemon/orcad-daemon-retirement')
   const idleRecord = createIdleStopRecordOwnership(input.userDataPath)
   const hasChatProviders = (): boolean =>
-    getStructuredAgentSessionHost()?.hasLoadedProviders() ?? false
+    (getStructuredAgentSessionHost()?.chatSessionCount() ?? 0) > 0
   const ports: OrcadManagedIdleExitPorts = {
     readClientActivity: () => input.rpc.readClientActivity(),
     listTerminals: () => getLocalPtyProvider().listProcesses(),
@@ -137,7 +137,7 @@ async function startOrcadManagedIdleExit(
         if (daemon === 'serving' || (await hasNonTerminalWork())) {
           return false
         }
-        idleRecord.requestShutdown(requestIdleShutdown)
+        commitIdleStop(input.rpc, idleRecord)
         return true
       }
       if (idleStopMayReleaseWslHolder(process.env, outcome)) {
@@ -147,7 +147,8 @@ async function startOrcadManagedIdleExit(
           console.error('[orcad] could not release the WSL distro holder:', error)
         }
       }
-      idleRecord.requestShutdown(requestIdleShutdown)
+      // Same turn as the check above: no request can slip in between and be lost to the exit.
+      commitIdleStop(input.rpc, idleRecord)
       return true
     }
   })
@@ -157,9 +158,20 @@ async function startOrcadManagedIdleExit(
   })
 }
 
+/** Stop, then fence admission in the same turn (cleanup starts a microtask later), only when
+ *  this idle stop owns the stop: a SIGTERM stop already under way is no idle stop. */
+function commitIdleStop(
+  rpc: OrcadIdleExitRuntimePorts['rpc'],
+  idleRecord: ReturnType<typeof createIdleStopRecordOwnership>
+): void {
+  if (idleRecord.requestShutdown(requestIdleShutdown)) {
+    rpc.fenceForIdleStop()
+  }
+}
+
 /** Discard failed, overdue and externally superseded idle stops, including cleanup before request completion. */
 export function createIdleStopRecordOwnership(userDataPath: string): {
-  requestShutdown(request: OrcadShutdownTrigger | null): void
+  requestShutdown(request: OrcadShutdownTrigger | null): boolean
   onShutdown(): void
 } {
   let idleOwnsStop = false
@@ -176,6 +188,7 @@ export function createIdleStopRecordOwnership(userDataPath: string): {
         idleOwnsStop = false
         discard()
       }
+      return idleOwnsStop
     },
     onShutdown: () => {
       if (!idleOwnsStop) {

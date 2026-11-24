@@ -1,6 +1,12 @@
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import { type WorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import {
+  type WorkspaceKey,
+  parseWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   removeWorkspaceSessionOwners,

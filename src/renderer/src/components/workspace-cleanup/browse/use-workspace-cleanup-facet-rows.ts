@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/workspace/activity/worktree-activity-state'
-import { translateWorkspaceBoardStatusLabel } from '@/components/sidebar/workspace-board-status-label'
+import { translateWorkspaceBoardStatusLabel } from '@/components/sidebar/workspace-status/presentation/workspace-board-status-label'
 import type { HostedReviewProvider } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import type {
@@ -42,6 +42,8 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 export type WorkspaceCleanupFacetRows = {
   rows: WorkspaceCleanupFacets[]
+  /** Every candidate's live facets, unfiltered; lets a held row keep updating after it stops matching. */
+  allRows: readonly WorkspaceCleanupFacets[]
   selectableIdentities: string[]
   facetMatchedIdentities: ReadonlySet<string>
   matchedCount: number
@@ -268,6 +270,7 @@ export function useWorkspaceCleanupFacetRows({
 
   return {
     rows: result.rows,
+    allRows: facets,
     selectableIdentities: result.selectableIdentities,
     facetMatchedIdentities,
     matchedCount: result.matchedCount,

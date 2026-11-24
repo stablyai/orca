@@ -2,7 +2,7 @@ import {
   PRIMARY_AGENT_DIR_ENV_BY_KIND,
   SOURCE_AGENT_DIR_ENV_BY_KIND,
   type PiAgentKind
-} from '../../../../shared/pi-agent-kind'
+} from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 import { readSessionShellStartupEnvVar } from '../../../pty/shell-startup/shell-startup-env'
 import { getAgentLaunchExecutableName } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS, ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from './spawn-env-keys'

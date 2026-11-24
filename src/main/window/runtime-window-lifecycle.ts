@@ -3,8 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { ipcMain, type BrowserWindow } from 'electron'
 
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
-import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
-import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-session-contracts'
+import type { WorktreeStartupLaunch } from '../../shared/worktree/creation/launch-types'
+import type { RuntimeMobileSessionTabMove } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TerminalTabCreateReply } from '../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
 import { runWorktreeChangeInvalidators } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import { requestAgentLaunchTabPublishFromRenderer } from './renderer-relays/agent-launch-tab-publish-relay'
@@ -16,8 +16,8 @@ import { requestSessionTabCloseFromRenderer } from './renderer-relays/session-ta
 import { requestTerminalPaneMoveFromRenderer } from './renderer-relays/terminal-pane-move-request-relay'
 import { revealTerminalPaneInWindow } from './renderer-relays/terminal-pane-reveal-relay'
 import { requestTerminalTabCloseFromRenderer } from './renderer-relays/terminal-tab-close-request-relay'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
-import type { AgentListPublication } from '../../shared/agent-status/presentation/agent-list-status'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-list/feed/sidebar-inputs-switch'
+import type { AgentListVerdictUpdate } from '../../shared/agent-status/presentation/agent-list-status'
 import { addFanoutListener } from '../runtime/events/event-listener-fanout'
 
 let runtimeNotifierTokenCounter = 0
@@ -52,6 +52,11 @@ export function registerRuntimeWindowLifecycle(
     reposChanged: () => send('repos:changed'),
     browserProfilesChanged: () => send('browser:session:profilesChanged'),
     automationsChanged: (payload) => send('automations:changed', payload),
+    botsChanged: (scope) => send('bots:changed', scope),
+    orchestrationSessionWorkersChanged: (sessionId) =>
+      send('runtime:orchestrationSessionWorkersChanged', { sessionId }),
+    peerMailReturned: () => send('runtime:peerMailReturned'),
+    workspaceCleanupRunFinished: (run) => send('workspaceCleanup:runFinished', run),
     activateWorktree: (
       repoId,
       worktreeId,
@@ -160,6 +165,7 @@ export function registerRuntimeWindowLifecycle(
       requestAgentLaunchTabPublishFromRenderer(mainWindow, request),
     agentLaunchPaneVerdict: (event) => send('ui:agentLaunchPaneVerdict', event),
     rememberLaunchRecipe: (recipe) => send('ui:launchRecipe', recipe),
+    restartOffersChanged: () => send('agentStatus:restartOffersChanged', {}),
     resolveLegacyWorkerTerminalRecovery: (paneKey, resolution, ptyId) =>
       send('agentStatus:legacyWorkerTerminalRecovery', {
         paneKey,
@@ -172,10 +178,12 @@ export function registerRuntimeWindowLifecycle(
         paneRuntimeId,
         direction: opts.direction,
         command: opts.command,
+        ...(opts.env ? { env: opts.env } : {}),
         worktreeId: opts.worktreeId,
         sourceLeafId: opts.sourceLeafId,
         telemetrySource: opts.telemetrySource,
-        newLeafId: opts.newLeafId
+        newLeafId: opts.newLeafId,
+        ...(opts.activate === false ? { activate: false } : {})
       })
     },
     renameTerminal: (tabId, title, options) =>
@@ -254,25 +262,22 @@ export function registerRuntimeWindowLifecycle(
   const releaseAgentListVerdicts = addFanoutListener(
     ipcMain,
     'agentStatus:listVerdicts',
-    (event: Electron.IpcMainEvent, publication: AgentListPublication | null) => {
+    (event: Electron.IpcMainEvent, update: AgentListVerdictUpdate | null) => {
       if (event.sender === mainWebContents && event.senderFrame === mainWebContents.mainFrame) {
-        runtime.setAgentListPublication(publication)
+        runtime.applyAgentListUpdate(update)
       }
     }
   )
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()
-    const agentListBeforeReload = runtime.readAgentListPublication()
-    runtime.setAgentListPublication(null)
+    runtime.withholdAgentList()
     const fence = runtime.markRendererReloading(mainWindow.id)
     return () => {
       if (fence && runtime.markRendererReloadCancelled(mainWindow.id, fence)) {
         rendererNotifications.onMainFrameReloadCancelled()
       }
       // The surviving document only re-sends on change.
-      if (runtime.readAgentListPublication() === null) {
-        runtime.setAgentListPublication(agentListBeforeReload)
-      }
+      runtime.restoreAgentList()
     }
   })
   mainWebContents.on('did-finish-load', () => {

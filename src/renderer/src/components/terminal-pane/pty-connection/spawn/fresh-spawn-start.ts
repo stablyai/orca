@@ -8,10 +8,11 @@ import { hasPtySerializer } from '../../snapshots/pty-buffer-serializer'
 import { writeTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 
 import { settleSpawnThatLeftPaneUnbound } from './unbound-pane-spawn-recovery'
-import { STARTUP_CWD_FALLBACK_NOTICE } from '../../../../../../shared/startup-cwd-fallback'
+import { STARTUP_CWD_FALLBACK_NOTICE } from '../../../../../../shared/shell/launch/startup-cwd-fallback'
 import { pendingSpawnByPaneKey, pendingSpawnGenerationByPaneKey } from './pending-pane-spawn'
 import { shouldWritePtyOutputForeground } from '../output/foreground-output-visibility'
 import { toProcessExitStartup } from '../startup/process-exit-startup'
+import { runPaneResumeAttempt } from '../startup/in-place-resume-hold'
 import type {
   PendingStartupCommand,
   FreshSpawnOptions,
@@ -33,21 +34,18 @@ export function releaseDeferredCwdFence(session: ConnectPanePtySession): void {
 }
 
 export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
-  session.startFreshSpawn = (
+  const startFreshSpawn = (
     startupOverride?: PendingStartupCommand | null,
     options: FreshSpawnOptions = {}
   ): Promise<string | null> => {
+    const effectiveStartup = startupOverride === undefined ? session.paneStartup : startupOverride
     if (
+      effectiveStartup?.resumeSource?.cancelled ||
       hasWorktreeTeardownStarted(
         useAppStore.getState().deleteStateByWorktreeId?.[session.deps.worktreeId]
       )
     ) {
-      // Worktree deletion already killed its PTYs; skip respawn into the directory being removed instead of racing main’s fence.
-      releaseDeferredCwdFence(session)
-      return Promise.resolve(null)
-    }
-    const effectiveStartup = startupOverride === undefined ? session.paneStartup : startupOverride
-    if (effectiveStartup?.resumeSource?.cancelled) {
+      // Cancelled starts and removed workspaces must release ownership without reconnecting.
       releaseDeferredCwdFence(session)
       return Promise.resolve(null)
     }
@@ -302,9 +300,8 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           return
         }
         if (ownerRefused) {
-          armPaneOwnerRetry(session, outputCallbacks.generation, () =>
-            session.startFreshSpawn(startupOverride, options)
-          )
+          const retry = () => session.startFreshSpawn(startupOverride, options)
+          armPaneOwnerRetry(session, outputCallbacks.generation, retry, startupOverride)
           session.settlePaneAttachAttempt?.('failed')
           return
         }
@@ -320,4 +317,6 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     pendingSpawnGenerationByPaneKey.set(session.pendingSpawnKey, session.tabGeneration)
     return trackedPromise
   }
+  session.startFreshSpawn = (...args: Parameters<typeof startFreshSpawn>) =>
+    runPaneResumeAttempt(session, () => startFreshSpawn(...args))
 }

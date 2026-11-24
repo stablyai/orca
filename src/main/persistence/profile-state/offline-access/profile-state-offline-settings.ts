@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { getDefaultPersistedState } from '../../../../shared/constants'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { getDefaultPersistedState } from '../../../../shared/orca-profiles/constants'
 import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { profileStateJsonMatchesAcceptance } from '../documents/profile-state-documents'
 import { isRecord, parseProfileStateRoot } from '../documents/profile-state-document-validation'
@@ -86,6 +86,7 @@ export function updateAgentHookSettingsInProfileState(
     const {
       uiLanguagePortugueseMigrationApplied: _migrationApplied,
       nestedWorkerMaxDepthDefaultedToFour: _depthMigrated,
+      nativeChatAutoContinueAfterUsageLimitDefaultedOn: _autoContinueMigrated,
       agentLaunchChoices: _launchChoices,
       artifactSharingEnabled: _artifactSharingEnabled,
       ...settingsDefaults

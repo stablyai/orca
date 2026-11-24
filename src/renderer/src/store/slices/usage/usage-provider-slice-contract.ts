@@ -1,28 +1,29 @@
 import type {
   BackendConnectionListener,
   BackendConnectionPurpose
-} from '../../../../../shared/backend-service-contract'
+} from '../../../../../shared/backend/backend-service-contract'
 import type {
   ClaudeUsageRange,
   ClaudeUsageScope,
   ClaudeUsageSnapshot
-} from '../../../../../shared/claude-usage-types'
+} from '../../../../../shared/agent-usage/analytics/claude-usage-types'
 import type {
   CodexUsageRange,
   CodexUsageScope,
   CodexUsageSnapshot
-} from '../../../../../shared/codex-usage-types'
+} from '../../../../../shared/agent-usage/analytics/codex-usage-types'
 import type {
   OpenCodeUsageRange,
   OpenCodeUsageScope,
   OpenCodeUsageSnapshot
-} from '../../../../../shared/opencode-usage-types'
+} from '../../../../../shared/agent-usage/analytics/opencode-usage-types'
 import type {
   MuseUsageRange,
   MuseUsageScope,
   MuseUsageSnapshot
-} from '../../../../../shared/muse-usage-types'
+} from '../../../../../shared/agent-usage/analytics/muse-usage-types'
 import type { UsageSnapshot, UsageProviderTypes, UsageFailure } from './usage-provider-types'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type UsageData<T extends UsageProviderTypes<string, string, UsageSnapshot>> = {
   failure: UsageFailure | null
@@ -74,7 +75,7 @@ export type UsageProviderConfig<
   name: Name
   initialScope: T['scope']
   initialRange: T['range']
-  getApi: () => UsageApi<T>
+  getApi: (host: RuntimeClientTarget) => UsageApi<T>
   hasCachedData: (scanState: T['snapshot']['scanState']) => boolean
 }
 export type ClaudeUsageTypes = UsageProviderTypes<

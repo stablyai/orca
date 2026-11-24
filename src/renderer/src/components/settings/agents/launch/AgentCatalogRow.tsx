@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId } from 'react'
 import { ExternalLink, MoreHorizontal } from 'lucide-react'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
@@ -18,7 +18,6 @@ import {
   type AgentSessionSourceHomeControl,
   AgentSessionSourceHomeInput
 } from '../../../agent/launch-settings/codex-session-source-home-control'
-import { resolveTuiAgentPermissionMode } from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
 import { stringifyAgentDefaultEnvDraft } from '../../../agent/launch-settings/agent-default-env-draft'
 import { liftAgentPermissionArgs } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
 import {
@@ -36,7 +35,9 @@ import { AgentPermissionMenu } from '../../../agent/launch-settings/AgentPermiss
 import type { AgentPermissionChoiceRow } from '../../../agent/launch-settings/agent-permission-choice-row'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import type { AgentOpensAs } from '../../../../lib/agent-session/launch/native-chat-provider-choice'
+import { useAgentCatalogRowExpansion } from './agent-catalog-row-expansion'
 import { AgentOpensAsControl } from '../../../agent/launch-settings/AgentChatChoiceControls'
+import { AgentRowDetailsToggle } from './AgentRowDetailsToggle'
 
 const OPENS_AS_PLACEHOLDER: AgentOpensAs = { value: 'chat', cliMissing: false, onChange: () => {} }
 
@@ -77,7 +78,14 @@ export type AgentCatalogRowProps = {
   reserveOpensAsSlot?: boolean
   /** The downloaded chat program's install and sign-in, shown in the row's details. */
   chatRuntime?: React.ReactNode
+  /** Update for the user's own CLI, shown while a newer release is out. */
+  cliUpdate?: React.ReactNode
   launchChoiceEditor?: (permissionControlRef: React.Ref<HTMLDivElement>) => React.ReactNode
+}
+
+export type AgentCatalogRowViewProps = AgentCatalogRowProps & {
+  expanded: boolean
+  onExpandedChange: (expanded: boolean) => void
 }
 
 export function AgentCatalogRow({
@@ -108,35 +116,23 @@ export function AgentCatalogRow({
   launchArgs = argsOverride,
   opensAs,
   reserveOpensAsSlot = false,
-  chatRuntime
-}: AgentCatalogRowProps): React.JSX.Element {
+  chatRuntime,
+  cliUpdate,
+  expanded: cmdOpen,
+  onExpandedChange: setCmdOpen
+}: AgentCatalogRowViewProps): React.JSX.Element {
   const t = useTranslate()
   const envSummary = environmentNames?.join(' ') ?? stringifyAgentDefaultEnvDraft(envOverride)
-  const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
-  const [cmdOpen, setCmdOpen] = useState(
-    Boolean(cmdOverride) ||
-      (argsOverride !== defaultArgs &&
-        resolveTuiAgentPermissionMode({
-          agent: agentId,
-          agentArgs: argsOverride,
-          agentEnv: envOverride
-        }) === 'mixed') ||
-      envSummary !== defaultEnvSummary
-  )
-  const permissionRef = useRef<HTMLDivElement>(null)
-  const openPermission = (): void => {
-    setCmdOpen(true)
-    requestAnimationFrame(() => {
-      const control = permissionRef.current
-      ;(
-        control?.querySelector<HTMLElement>('[aria-checked="true"]') ??
-        control?.querySelector<HTMLElement>('button')
-      )?.focus()
-    })
-  }
-  const toggleOpen = (): void => setCmdOpen((previous) => !previous)
+  const { rowRef, panelRef, permissionRef, openPermission, toggleOpen } =
+    useAgentCatalogRowExpansion(cmdOpen, setCmdOpen)
+  const panelId = useId()
+  const nameId = useId()
   return (
-    <div className={cn('py-3', !isDetected && !opensAs?.cliMissing && 'opacity-70')}>
+    <div
+      ref={rowRef}
+      data-agent-opens-as={opensAs ? '' : undefined}
+      className={cn('scroll-my-6 py-3', !isDetected && !opensAs?.cliMissing && 'opacity-70')}
+    >
       {/* Clicking the row's empty space expands it; its controls and the name button handle their own clicks. */}
       <div
         className="-mx-2 flex cursor-pointer flex-wrap items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent"
@@ -160,35 +156,42 @@ export function AgentCatalogRow({
         >
           <AgentIcon agent={agentId} size={16} />
         </div>
-        <div className="flex-1 max-sm:min-w-0 sm:min-w-48">
-          {/* Badges overhang the name line so rows with one stay the same height. */}
-          <div className="flex flex-wrap items-center gap-2 [&>*+*]:-my-1">
+        {/* A narrow row moves its controls to a second line rather than squeezing the name and command. */}
+        <div className="min-w-32 flex-1 sm:min-w-48">
+          {/* Badges overhang the name line so rows with one stay the same height; they truncate, never wrap. */}
+          <div className="flex min-w-0 items-center gap-2 [&>*+*]:-my-1 [&>*+*]:min-w-0">
             <button
+              id={nameId}
               type="button"
               onClick={toggleOpen}
               aria-expanded={cmdOpen}
+              aria-controls={panelId}
               className={cn(
-                'rounded-sm text-sm leading-none font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                'shrink-0 rounded-sm text-sm leading-none font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
                 !isEnabled && 'opacity-45'
               )}
             >
               {label}
             </button>
             {defaultMark && (
-              <SettingsBadge className="border-foreground/30 text-foreground">
-                {defaultMark === 'auto'
-                  ? t('settings.agents.defaultAutoBadge', 'Default · Auto')
-                  : t('auto.components.settings.AgentsPane.24e032fa34', 'Default')}
+              <SettingsBadge className="max-w-full border-foreground/30 text-foreground">
+                <span className="truncate">
+                  {defaultMark === 'auto'
+                    ? t('settings.agents.defaultAutoBadge', 'Default · Auto')
+                    : t('auto.components.settings.AgentsPane.24e032fa34', 'Default')}
+                </span>
               </SettingsBadge>
             )}
             {permissionChoice?.source === 'agent' && (
               <button
                 type="button"
                 onClick={openPermission}
-                className="rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                className="flex rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
-                <SettingsBadge tone="accent">
-                  {agentPermissionChoiceLabel(permissionChoice.choice, label, t)}
+                <SettingsBadge tone="accent" className="max-w-full">
+                  <span className="truncate">
+                    {agentPermissionChoiceLabel(permissionChoice.choice, label, t)}
+                  </span>
                 </SettingsBadge>
               </button>
             )}
@@ -227,11 +230,12 @@ export function AgentCatalogRow({
           ) : (
             reserveOpensAsSlot && (
               // Keeps the switch and menu columns aligned with rows that have the choice.
-              <div aria-hidden className="invisible">
+              <div aria-hidden className="invisible max-sm:hidden">
                 <AgentOpensAsControl label={label} opensAs={OPENS_AS_PLACEHOLDER} />
               </div>
             )
           )}
+          {cliUpdate}
           <Switch
             checked={isEnabled}
             onCheckedChange={onSetEnabled}
@@ -282,10 +286,16 @@ export function AgentCatalogRow({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <AgentRowDetailsToggle
+            open={cmdOpen}
+            panelId={panelId}
+            nameId={nameId}
+            onToggle={toggleOpen}
+          />
         </div>
       </div>
       {cmdOpen && (
-        <div className="mt-3 space-y-3 pl-10">
+        <div id={panelId} ref={panelRef} className="mt-3 space-y-3 pl-10">
           {chatRuntime}
           {!launchChoiceEditor && permissionChoice && (
             <div ref={permissionRef}>

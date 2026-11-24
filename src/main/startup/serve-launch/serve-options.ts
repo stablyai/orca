@@ -1,8 +1,8 @@
 import {
   getServeFlagTypoError,
   getServeOptionValidationError
-} from '../../../shared/serve-option-validation'
-import { resolveOrcadBindHost } from '../../../shared/orcad-bind-address'
+} from '../../../shared/remote-runtime/serve-supervisor/serve-option-validation'
+import { resolveOrcadBindHost } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-bind-address'
 
 export type ServeOptions = {
   json: boolean

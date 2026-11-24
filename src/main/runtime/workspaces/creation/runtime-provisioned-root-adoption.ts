@@ -1,9 +1,9 @@
 /** Use the host-run recipe root as main workspace, as for direct SSH adoption; create no linked worktree. */
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { GitWorktreeInfo, Worktree } from '../../../../shared/worktree/types'
-import { getRepoSshConnectionId } from '../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { getRepoSshConnectionId } from '../../../../shared/execution-host/execution-host'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import {
   buildProvisionedRootMeta,
   provisionedRootPathsEqual,

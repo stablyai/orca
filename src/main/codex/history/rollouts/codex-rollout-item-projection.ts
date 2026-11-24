@@ -1,6 +1,6 @@
 import { readRecord, readString } from '../../app-server/codex-item-field-readers'
 import { posix, win32 } from 'node:path'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import type { CodexThreadItem } from '../../structured/items/codex-thread-item-identity'
 import {
   fileUriToFilesystemPath,

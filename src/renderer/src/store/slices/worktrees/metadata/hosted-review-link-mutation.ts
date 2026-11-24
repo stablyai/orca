@@ -20,12 +20,12 @@ import {
   HOSTED_REVIEW_LINK_KEYS,
   canonicalHostedReviewBranchIdentity,
   type HostedReviewLinkKey
-} from '../../../../../../shared/worktree/hosted-review-links'
+} from '../../../../../../shared/worktree/hosted-review/hosted-review-links'
 import { deleteDetachedOwners, moveDetachedOwners } from './detached-hosted-review-owners'
 import type {
   HostedReviewClearUpdates,
   HostedReviewContext
-} from '../../../../../../shared/worktree/hosted-review-branch-ownership'
+} from '../../../../../../shared/worktree/hosted-review/hosted-review-branch-ownership'
 
 export const hostedReviewLinkMutationGenerationByWorktreeId = new Map<string, number>()
 export const hostedReviewLinkClearTombstonesByCopy = new Map<
@@ -161,21 +161,6 @@ export function migrateHostedReviewLinkMutationGeneration(
     )
     hostedReviewLinkMutationGenerationByWorktreeId.delete(oldWorktreeId)
   }
-}
-
-export function getHostedReviewLinkMutationGenerationForTests(worktreeId: string): number {
-  return getHostedReviewLinkMutationGeneration(worktreeId)
-}
-
-export function getHostedReviewLinkWorktreeAliasCountForTests(): number {
-  return hostedReviewLinkWorktreeIdAliases.size
-}
-
-export function resetHostedReviewLinkMutationGenerationForTests(): void {
-  hostedReviewLinkMutationGenerationByWorktreeId.clear()
-  hostedReviewLinkClearTombstonesByCopy.clear()
-  hostedReviewLinkWorktreeIdAliases.clear()
-  deleteDetachedOwners()
 }
 
 export function hostedReviewLinksAreCleared(

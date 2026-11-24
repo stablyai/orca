@@ -11,8 +11,8 @@ import {
 import type {
   RuntimeGitLocalBranches,
   RuntimeRepoSearchRefs
-} from '../../../../../../shared/runtime-worktree-contracts'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/worktree/catalog/runtime-worktree-contracts'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   branchPickerRows,
   indexBranchWorkspaces,

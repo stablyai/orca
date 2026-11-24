@@ -2,7 +2,7 @@ import { isAbsolute } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 
 export type ClipboardFileResult = { ok: boolean; reason?: string }
 

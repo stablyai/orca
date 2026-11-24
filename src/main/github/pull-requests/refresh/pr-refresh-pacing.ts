@@ -19,7 +19,6 @@ export class PRRefreshPacing {
   private readonly backgroundStarts: number[] = []
   private readonly activeStartsByScope = new Map<string, number[]>()
   private lastBackgroundStartAt = 0
-  private lastBudgetedStartWasSelected = false
 
   clearActiveBurstWindow(windowId: number): void {
     const windowPrefix = `${windowId}::`
@@ -30,9 +29,7 @@ export class PRRefreshPacing {
     }
   }
 
-  noteBackgroundStart(entry: PRRefreshQueueEntry): void {
-    this.lastBudgetedStartWasSelected =
-      entry.reason === 'visible' && entry.candidate.isSelected === true
+  noteBackgroundStart(): void {
     const now = Date.now()
     this.lastBackgroundStartAt = now
     this.backgroundStarts.push(now)
@@ -53,11 +50,7 @@ export class PRRefreshPacing {
     return Math.max(spacingDelay, windowDelay)
   }
 
-  order(a: PRRefreshQueueEntry, b: PRRefreshQueueEntry): number {
-    const priority = this.priority(b) - this.priority(a)
-    if (priority !== 0) {
-      return priority
-    }
+  activeOrder(a: PRRefreshQueueEntry, b: PRRefreshQueueEntry): number {
     if (!usesActiveRefreshPacing(a) || !usesActiveRefreshPacing(b)) {
       return 0
     }
@@ -65,16 +58,6 @@ export class PRRefreshPacing {
       return 0
     }
     return b.queuedAt - a.queuedAt
-  }
-
-  private priority(entry: PRRefreshQueueEntry): number {
-    // Reserve the next budgeted slot for other ready reviews after a selected list read.
-    return this.lastBudgetedStartWasSelected &&
-      entry.reason === 'visible' &&
-      entry.candidate.isSelected === true &&
-      entry.bypassBackgroundBudget !== true
-      ? 0
-      : entry.priority
   }
 
   entryDelay(entry: PRRefreshQueueEntry): number {

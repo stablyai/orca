@@ -1,7 +1,7 @@
 import {
   HIDDEN_WINDOW_FRAME_PUMP_INTERVAL_MS,
   hasHiddenWindowFramePumpArgument
-} from '../../shared/hidden-window-frame-pump'
+} from '../../shared/app-lifecycle/windows/hidden-window-frame-pump'
 
 // Near-black so the single damaged frame is indistinguishable even if the window were visible.
 const FLIP_COLOR = 'rgb(1, 1, 1)'

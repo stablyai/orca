@@ -3,7 +3,7 @@ import { vi } from 'vitest'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../../../shared/managed-account-types'
+} from '../../../../../../shared/agent-accounts/managed-account-types'
 import { useAppStore } from '../../../../store/index'
 import type { accountSettings } from './ai-vault-account-test-fixture'
 

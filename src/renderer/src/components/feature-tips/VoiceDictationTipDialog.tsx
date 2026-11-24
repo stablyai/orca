@@ -1,8 +1,8 @@
 import { useRef, type JSX } from 'react'
-import type { FeatureTip } from '../../../../shared/feature-tips'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import type { FeatureTip } from '../../../../shared/feature-education/feature-tips'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyDetails } from '@/lib/keyboard/useShortcutLabel'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { Trans } from 'react-i18next'
@@ -10,7 +10,7 @@ import { FeatureTipActions } from './FeatureTipActions'
 import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
 import {
   FeatureTipDialogFrame,
-  FeatureTipEyebrow,
+  FeatureTipLabel,
   FeatureTipSettingsLine
 } from './FeatureTipDialogFrame'
 import { VoiceDictationFeatureTipVisual } from './VoiceDictationFeatureTipVisual'
@@ -49,7 +49,7 @@ export function VoiceDictationTipDialog({
     >
       <DialogHeader className="gap-4 text-left">
         <div>
-          <FeatureTipEyebrow label={copy.eyebrow} />
+          <FeatureTipLabel />
           <DialogTitle className="text-2xl font-semibold leading-tight tracking-tight md:text-[1.75rem]">
             {copy.title}
           </DialogTitle>

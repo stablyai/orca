@@ -1,23 +1,25 @@
 import type { AtRestCommandDemand } from '../../native-chat/agent-session-wire/options/at-rest-command-demand'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
+import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   isLegacyAgentSessionAccountHome,
   requireLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
-import { structuredSlashCommands } from '../../../shared/agent-session/view/structured-agent-session-composer'
+import { structuredSlashCommands } from '../../../shared/agent-session/view/structured-agent-session-slash-menu'
 import { discoverSkills } from '../../skills/discovery/skill-native-discovery'
 import { scanClaudeCommandFolders } from './claude-command-folder-scan'
 import { supportsClaudeStructuredLocation } from '../structured/launch/claude-structured-location-support'
 import type { ClaudeCommandCatalogProbe } from './claude-command-catalog-probe'
+import type { ClaudeCliLaunch } from '../cli-capabilities/claude-cli-flag-support'
 import {
   AtRestCommandCatalog,
   type AtRestCommandScan
 } from '../../native-chat/agent-session-wire/options/at-rest-command-catalog'
 import { join } from 'node:path'
+import { isNativeChatSkillForAgent } from '../../../shared/native-chat/input/commands/native-chat-skill-visibility'
 
 // Older clients eagerly discover commands; retain their bounded admission.
 const MAX_PROBES_RUNNING = 2
@@ -27,6 +29,8 @@ export type ClaudeAtRestCommandsDeps = {
   /** A resting chat's next start follows the selected account, not the one it was created on. */
   resolveAccountHome?: () => Promise<AgentSessionAccountHome>
   probe?: ClaudeCommandCatalogProbe
+  /** The chat's discovery flags (`claudeDiscoveryArgs`) for the CLI the probe runs. */
+  discovery?: (record: AgentSessionRecord, launch: ClaudeCliLaunch) => Promise<readonly string[]>
   now?: () => number
   discover?: typeof discoverSkills
 }
@@ -61,6 +65,7 @@ async function scanClaudeAtRest(
   demand: AtRestCommandDemand
 ): Promise<AtRestCommandScan> {
   const account = requireLegacyAgentSessionAccountHome(record.accountHome).path
+  const { discovery } = deps
   if (deps.probe) {
     const release = await demand.acquire(probes, signal)
     try {
@@ -69,7 +74,15 @@ async function scanClaudeAtRest(
       }
       admitted()
       return {
-        commands: await deps.probe({ cwd, accountHomePath: account, isCurrent, signal }),
+        commands: await deps.probe({
+          cwd,
+          accountHomePath: account,
+          isCurrent,
+          signal,
+          ...(discovery
+            ? { discovery: (launch: ClaudeCliLaunch) => discovery(record, launch) }
+            : {})
+        }),
         fromAgent: true
       }
     } catch (error) {
@@ -110,7 +123,8 @@ async function scanClaudeAtRest(
   )
   const names = new Set(builtIn.map((command) => command.name))
   const skills = discovered.skills
-    .filter((skill) => skill.providers.includes('claude'))
+    // The default ~/.claude/skills beside a relocated account home is for agents that borrow it.
+    .filter((skill) => isNativeChatSkillForAgent('claude', skill, discovered))
     .map((skill): AgentSessionSlashCommand => ({
       name: skill.name,
       kind: 'skill',

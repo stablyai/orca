@@ -1,6 +1,5 @@
 import { useMemo, type ReactNode } from 'react'
 import { ActivityIndicator, Text, View } from 'react-native'
-import { ChevronLeft } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useBackClaim } from '../../navigation/use-back-claim'
@@ -10,23 +9,22 @@ import {
   useOptionPager,
   type OptionPagerControls
 } from '../../components/bottom-drawer/BottomDrawer'
-import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../src/shared/execution-host'
+} from '../../../../src/shared/execution-host/execution-host'
 import {
   getShownWorkspaceViewSections,
   type WorkspaceViewOptionKey,
   type WorkspaceViewSection
 } from '../../../../src/shared/workspace-view/workspace-view-options'
-import { getHostContextLabel } from '../../../../src/shared/worktree/host-context-labels'
+import { getHostContextLabel } from '../../../../src/shared/worktree/row-display/host-context-labels'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { resolveWorktreeHostId } from '../../worktree/worktree-host-context-labels'
-import { withServerHosts } from '../../worktree/server-workspaces'
+import { resolveWorktreeHostId } from '../../worktree/row-presentation/worktree-host-context-labels'
+import { withServerHosts } from '../../worktree/execution-hosts/server-workspaces'
 import { hostScreenStyles as styles } from '../host-screen-styles'
 import type { HostScreenController } from '../use-host-screen-controller'
 import { ListGroup, SectionHeader } from '../../components/list/ListGroup'
@@ -152,8 +150,8 @@ function WorkspaceOptionsPending({ settings }: Pick<HostScreenController, 'setti
       <ActivityIndicator size="small" color={colors.textMuted} />
       <Text style={styles.filterModalSubtitle}>
         {stale
-          ? t('hostScreen.workspaceOptionsSheet.waitingForDesktop', 'Still waiting for the desktop')
-          : t('hostScreen.workspaceOptionsSheet.savingToDesktop', 'Saving to the desktop')}
+          ? t('hostScreen.workspaceOptionsSheet.waitingForDesktop', 'Still waiting for the host')
+          : t('hostScreen.workspaceOptionsSheet.savingToDesktop', 'Saving to the host')}
       </Text>
     </View>
   )
@@ -208,19 +206,14 @@ function WorkspaceOptionsContent({
   const page =
     pageOption && pageControl?.kind === 'page' ? (
       <>
-        <View>
-          <SheetHeader title={pageOption.label} trailing={done} />
-          <View style={styles.optionPageBack}>
-            <NavBarButton
-              icon={ChevronLeft}
-              accessibilityLabel={t(
-                'hostScreen.workspaceOptionsSheet.backToOptions',
-                'Back to Workspace options'
-              )}
-              onPress={pager.close}
-            />
-          </View>
-        </View>
+        <SheetHeader
+          title={pageOption.label}
+          onBack={{
+            label: t('hostScreen.workspaceOptionsSheet.backToOptions', 'Back to Workspace options'),
+            onPress: pager.close
+          }}
+          trailing={done}
+        />
         <pageControl.Page controller={controller} hosts={hosts} label={pageOption.label} />
       </>
     ) : null

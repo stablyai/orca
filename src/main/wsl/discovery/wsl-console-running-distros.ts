@@ -2,7 +2,7 @@
 import { createRequire } from 'node:module'
 import type * as pty from 'node-pty'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
-import { stripAnsiEscapeSequences } from '../../../shared/ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import { resolveWslInteropSpawnCwd } from '../execution/wsl-interop-spawn-directory'
 
 const requireFromMain = createRequire(__filename)

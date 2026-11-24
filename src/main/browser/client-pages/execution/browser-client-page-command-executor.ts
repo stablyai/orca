@@ -1,41 +1,34 @@
-import { closeBrowserClientExecutorPages } from './browser-client-page-executor-close'
+import type { BrowserClientInitializationOwner } from '../../client-hosts/commands/browser-client-host-command-state'
+import { BrowserClientExecutorPageCreation } from './browser-client-executor-page-creation'
+import { BrowserClientPageInitializations } from './browser-client-page-initializations'
+import { BrowserClientPageMetadataParams } from '../../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
 import {
-  BrowserClientProfileSwitches,
-  switchBrowserClientPageProfile
-} from '../lifecycle/browser-client-page-profile-switch'
+  closeBrowserClientExecutor,
+  cleanupBrowserClientExecutorPage
+} from './browser-client-page-executor-close'
+import { BrowserClientProfileSwitches } from '../lifecycle/browser-client-page-profile-switch'
+import { routeBrowserClientPageCommand } from './browser-client-page-command-routing'
 import {
   BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_PAGES,
   type BrowserClientHostedPageInventory,
   type BrowserClientHostCommandEvent
 } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
-import { cleanupRetainedBrowserClientPage } from '../lifecycle/browser-client-page-cleanup'
 import type { BrowserClientPageRendererIdentity } from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
-import { assertBrowserClientPageAdmission } from '../lifecycle/browser-client-page-admission'
-import { createReservedBrowserClientPage } from '../lifecycle/browser-client-page-creation'
-import { retireSupersededExecutionHostPages } from '../lifecycle/browser-client-page-execution-host-supersession'
-import {
-  browserClientPageCommandFailure,
-  BrowserClientPageCommandError,
-  isBrowserClientPageCleanupFailure
-} from './browser-client-page-command-failure'
+import { browserClientPageCommandFailure } from './browser-client-page-command-failure'
 import { BrowserClientPageNavigationFence } from '../lifecycle/browser-client-page-navigation-fence'
-import { executeBrowserClientPageReconciliationCommand } from '../lifecycle/browser-client-page-reconciliation'
+import { BrowserClientPageMemorySaver } from '../lifecycle/browser-client-page-memory-saver'
+import { registerBrowserClientPageMemoryOwner } from '../lifecycle/browser-client-page-memory-registry'
 import {
   findBrowserClientPageByWebContentsId,
+  retainedBrowserClientPageCookieJar,
   retireBrowserClientRetainedPage,
   type BrowserClientRetainedPage
 } from '../lifecycle/browser-client-page-retained-state'
 import {
-  createBrowserClientPageInventory,
   recordBrowserClientPagePublishedUrl,
   snapshotBrowserClientPageInventoryList
 } from '../lifecycle/browser-client-page-inventory'
-import {
-  executeBrowserClientPageAutomationCommand,
-  navigateBrowserClientPageCommand
-} from './browser-client-page-command-execution'
-import { publishBrowserClientRetainedPage } from '../lifecycle/browser-client-page-availability'
 import {
   pageAuthorityIdentity,
   type BrowserClientPageAuthorityIdentity,
@@ -47,15 +40,42 @@ export class BrowserClientPageCommandExecutor {
   private readonly pages = new Map<string, BrowserClientRetainedPage>()
   private readonly creatingPages = new Map<string, BrowserClientHostedPageInventory>()
   private readonly failedPages = new Map<string, BrowserClientHostedPageInventory>()
+  private readonly initializers: BrowserClientPageInitializations
   private readonly profileSwitches = new BrowserClientProfileSwitches()
   private readonly navigationFence = new BrowserClientPageNavigationFence()
+  private readonly memorySaver: BrowserClientPageMemorySaver
+  private readonly releaseMemoryOwner: () => void
   private closePromise: Promise<void> | null = null
+  private closingPageAttempts?: Map<BrowserClientRetainedPage, Promise<void>>
   private authority: BrowserClientPageAuthorityIdentity
   private authorityTransitioning = false
   private closed = false
+  private readonly assertAvailable = (): void =>
+    this.navigationFence.assertAvailable(this.closed || this.authorityTransitioning)
 
   constructor(private readonly dependencies: BrowserClientPageCommandExecutorDependencies) {
+    this.initializers = new BrowserClientPageInitializations(
+      this.pages,
+      this.failedPages,
+      dependencies.routeWebContents,
+      (page) => this.cleanupPage(page)
+    )
     this.authority = pageAuthorityIdentity(dependencies)
+    this.memorySaver = new BrowserClientPageMemorySaver({
+      pages: this.pages,
+      failedPages: this.failedPages,
+      dependencies,
+      authority: () => this.authority,
+      isSettled: (browserPageId) =>
+        !this.closed &&
+        !this.authorityTransitioning &&
+        !this.navigationFence.isFenced &&
+        !this.initializers.has(browserPageId) &&
+        !this.profileSwitches.stagedPages.has(browserPageId),
+      assertAvailable: this.assertAvailable,
+      cleanupPage: (page) => this.cleanupPage(page)
+    })
+    this.releaseMemoryOwner = registerBrowserClientPageMemoryOwner(this.memorySaver)
     this.maxPages = dependencies.maxPages ?? BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_PAGES
     if (
       !Number.isInteger(this.maxPages) ||
@@ -68,7 +88,8 @@ export class BrowserClientPageCommandExecutor {
 
   async handle(
     event: BrowserClientHostCommandEvent,
-    signal: AbortSignal
+    signal: AbortSignal,
+    closeInitialization?: BrowserClientInitializationOwner['close']
   ): Promise<BrowserClientHostCommandResult> {
     if (this.closed || this.authorityTransitioning || this.navigationFence.isFenced) {
       return {
@@ -77,7 +98,14 @@ export class BrowserClientPageCommandExecutor {
       }
     }
     try {
-      const value = await this.executeCommand(event, signal)
+      if (closeInitialization) {
+        return await closeInitialization(signal)
+      }
+      const value = await this.memorySaver.track(event.browserPageId, async () =>
+        (await this.memorySaver.settleCommand(event)) === 'handled'
+          ? undefined
+          : this.executeCommand(event, signal)
+      )
       return value === undefined ? { status: 'completed' } : { status: 'completed', value }
     } catch (error) {
       return browserClientPageCommandFailure(error, signal)
@@ -88,103 +116,99 @@ export class BrowserClientPageCommandExecutor {
     event: BrowserClientHostCommandEvent,
     signal: AbortSignal
   ): Promise<unknown> {
-    switch (event.command.type) {
-      case 'switchProfile':
-        return switchBrowserClientPageProfile({
-          event,
-          signal,
-          switches: this.profileSwitches,
-          pages: this.pages,
-          dependencies: {
-            ...this.dependencies,
-            ...this.authority
-          },
-          assertAvailable: () =>
-            this.navigationFence.assertAvailable(this.closed || this.authorityTransitioning),
-          commit: (page) => publishBrowserClientRetainedPage(this.dependencies, this.pages, page),
-          cleanup: (page, releaseUploads) => this.cleanupPage(page, undefined, releaseUploads)
-        })
-      case 'createPage':
-        return this.createPage(event, signal)
-      case 'navigate':
-        return navigateBrowserClientPageCommand(
-          this.pages,
-          this.dependencies.routeWebContents,
-          event,
-          signal
-        )
-      case 'automation':
-        return executeBrowserClientPageAutomationCommand(
-          this.pages,
-          this.dependencies.executeAutomation,
-          event,
-          signal,
-          {
-            transport: this.dependencies.fileChannel,
-            staging: this.dependencies.uploadStaging
-          }
-        )
-      case 'reclaimPage':
-      case 'closePage':
-      case 'restorePage':
-        return executeBrowserClientPageReconciliationCommand(
-          {
-            pages: this.pages,
-            failedPages: this.failedPages,
-            routeWebContents: this.dependencies.routeWebContents,
-            assertAvailable: () =>
-              this.navigationFence.assertAvailable(this.closed || this.authorityTransitioning),
-            createPage: (command, commandSignal) => this.createPage(command, commandSignal),
-            navigate: (command, commandSignal) =>
-              navigateBrowserClientPageCommand(
-                this.pages,
-                this.dependencies.routeWebContents,
-                command,
-                commandSignal
-              ),
-            retirePage: (browserPageId, generation) => this.retirePage(browserPageId, generation),
-            cleanupPage: (page, previousRendererPage) =>
-              this.cleanupPage(page, previousRendererPage)
-          },
-          event,
-          signal
-        )
-    }
+    return routeBrowserClientPageCommand(
+      {
+        dependencies: this.dependencies,
+        authority: this.authority,
+        pages: this.pages,
+        failedPages: this.failedPages,
+        initializers: this.initializers,
+        profileSwitches: this.profileSwitches,
+        assertAvailable: this.assertAvailable,
+        createPage: (command, commandSignal) => this.createPage(command, commandSignal),
+        retirePage: (browserPageId, generation) => this.retirePage(browserPageId, generation),
+        cleanupPage: (page, previous, releaseUploads) =>
+          this.cleanupPage(page, previous, releaseUploads)
+      },
+      event,
+      signal
+    )
   }
 
   hasPage(browserPageId: string, pageHostGeneration: number): boolean {
-    return this.pages.get(browserPageId)?.generation === pageHostGeneration
+    return (
+      (this.pages.get(browserPageId)?.generation ??
+        this.memorySaver.freed.get(browserPageId)?.inventory.pageHostGeneration) ===
+      pageHostGeneration
+    )
   }
 
   hostsPage(browserPageId: string): boolean {
-    return !this.closed && this.pages.has(browserPageId)
+    return (
+      !this.closed && (this.pages.has(browserPageId) || this.memorySaver.freed.has(browserPageId))
+    )
+  }
+
+  pageCookieJar(browserPageId: string) {
+    return this.closed ? null : retainedBrowserClientPageCookieJar(this.pages.get(browserPageId))
   }
 
   hasUnresolvedPage(browserPageId: string, pageHostGeneration: number): boolean {
     return this.failedPages.get(browserPageId)?.pageHostGeneration === pageHostGeneration
   }
 
-  readonly recordPublishedPageUrl = (params: unknown): void =>
-    recordBrowserClientPagePublishedUrl(this.pages, params)
+  readonly recordPublishedPageUrl = (params: unknown): void => {
+    // Only actual initialization owns a requested URL; published pages keep ordinary metadata semantics.
+    const parsed = BrowserClientPageMetadataParams.safeParse(params)
+    if (!parsed.success || this.initializers.has(parsed.data.browserPageId)) {
+      return
+    }
+    recordBrowserClientPagePublishedUrl(this.pages, parsed.data)
+  }
 
   snapshotPageInventory(): readonly BrowserClientHostedPageInventory[] {
+    const freedInventory = [...this.memorySaver.freed].map(
+      ([browserPageId, freed]) => [browserPageId, freed.inventory] as const
+    )
     return snapshotBrowserClientPageInventoryList(
-      this.creatingPages,
+      new Map([...freedInventory, ...this.creatingPages]),
       this.pages.values(),
       this.failedPages
     )
   }
 
   close(): Promise<void> {
+    if (this.closePromise) {
+      return this.closePromise
+    }
     this.closed = true
-    return (this.closePromise ??= this.navigationFence.fenceBeforeCleanup(
-      this.profileSwitches.withStagedPages(this.pages.values()),
-      (claim) => this.dependencies.routeWebContents.revokeNavigation(claim),
-      () => this.closePages()
-    ))
+    this.closingPageAttempts = new Map()
+    this.initializers.cancelAll()
+    this.releaseMemoryOwner()
+    return (this.closePromise ??= this.navigationFence
+      .fenceBeforeCleanup(
+        this.profileSwitches.withStagedPages(this.pages.values()),
+        (claim) => this.dependencies.routeWebContents.revokeNavigation(claim),
+        async () => {
+          await this.memorySaver.close()
+          return closeBrowserClientExecutor({
+            closeInitializations: () => this.initializers.closeAll(),
+            profileSwitches: this.profileSwitches,
+            creatingPages: this.creatingPages,
+            failedPages: this.failedPages,
+            pages: this.pages,
+            cleanupPage: (page) => this.cleanupPage(page),
+            uploadStaging: this.dependencies.uploadStaging
+          })
+        }
+      )
+      .finally(() => {
+        this.closingPageAttempts = undefined
+      }))
   }
 
   fenceNavigation(): void {
+    this.initializers.cancelAll()
     this.navigationFence.fence(this.profileSwitches.withStagedPages(this.pages.values()), (claim) =>
       this.dependencies.routeWebContents.revokeNavigation(claim)
     )
@@ -195,6 +219,7 @@ export class BrowserClientPageCommandExecutor {
       throw new Error('browser_client_page_authority_transition_unavailable')
     }
     this.authorityTransitioning = true
+    this.initializers.cancelAll()
     this.navigationFence.revoke(
       this.profileSwitches.withStagedPages(this.pages.values()),
       (claim) => this.dependencies.routeWebContents.revokeNavigation(claim)
@@ -205,66 +230,49 @@ export class BrowserClientPageCommandExecutor {
     if (this.closed || !this.authorityTransitioning || !input.authorityConnectionIdentity) {
       throw new Error('browser_client_page_authority_transition_unavailable')
     }
+    this.initializers.retireCleanupReceipts()
     this.authority = pageAuthorityIdentity(input)
     this.authorityTransitioning = false
   }
 
   retirePage(browserPageId: string, pageHostGeneration: number): Promise<boolean> {
-    return retireBrowserClientRetainedPage(
+    return (
+      this.initializers.retirePage(browserPageId, pageHostGeneration) ??
+      (this.memorySaver.holds(browserPageId)
+        ? this.memorySaver
+            .retire(browserPageId, pageHostGeneration)
+            .then((retired) => retired ?? this.retireLivePage(browserPageId, pageHostGeneration))
+        : this.retireLivePage(browserPageId, pageHostGeneration))
+    )
+  }
+
+  private retireLivePage(browserPageId: string, pageHostGeneration: number): Promise<boolean> {
+    return retireBrowserClientRetainedPage(this.pages, browserPageId, pageHostGeneration, (page) =>
+      this.cleanupPage(page)
+    )
+  }
+
+  private createPage(event: BrowserClientHostCommandEvent, signal: AbortSignal): Promise<void> {
+    return new BrowserClientExecutorPageCreation(
+      this.dependencies,
+      this.authority,
       this.pages,
+      this.creatingPages,
       this.failedPages,
-      browserPageId,
-      pageHostGeneration,
-      (page) => this.cleanupPage(page)
-    )
-  }
-
-  private async createPage(
-    event: BrowserClientHostCommandEvent,
-    signal: AbortSignal
-  ): Promise<void> {
-    if (event.command.type !== 'createPage') {
-      throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
-    }
-    assertBrowserClientPageAdmission(
-      [this.pages, this.creatingPages, this.failedPages],
+      this.memorySaver.freed,
+      this.initializers,
       this.maxPages,
-      event.browserPageId
-    )
-    const unknownInventory = createBrowserClientPageInventory(event, 'outcomeUnknown')
-    this.creatingPages.set(event.browserPageId, unknownInventory)
-    try {
-      await this.createReservedPage(event, signal)
-    } catch (error) {
-      if (isBrowserClientPageCleanupFailure(error)) {
-        this.failedPages.set(event.browserPageId, unknownInventory)
-      }
-      throw error
-    } finally {
-      this.creatingPages.delete(event.browserPageId)
-    }
+      this.assertAvailable,
+      (id, generation) => this.retirePage(id, generation)
+    ).createPage(event, signal)
   }
 
-  private async createReservedPage(
-    event: BrowserClientHostCommandEvent,
-    signal: AbortSignal
-  ): Promise<void> {
-    await createReservedBrowserClientPage(
-      {
-        ...this.dependencies,
-        ...this.authority,
-        retireSupersededExecutionHostPages: (route) =>
-          retireSupersededExecutionHostPages(this.pages.values(), route, (id, generation) =>
-            this.retirePage(id, generation)
-          )
-      },
-      event,
-      signal,
-      () => this.navigationFence.assertAvailable(this.closed || this.authorityTransitioning),
-      (page) => {
-        publishBrowserClientRetainedPage(this.dependencies, this.pages, page)
-      }
-    )
+  acquireInitialization(event: BrowserClientHostCommandEvent) {
+    return this.initializers.acquire(event)
+  }
+
+  cancelInitialization(event: BrowserClientHostCommandEvent): boolean {
+    return this.initializers.cancel(event)
   }
 
   findPageByWebContentsId(webContentsId: number): BrowserClientHostedPageInventory | undefined {
@@ -275,37 +283,23 @@ export class BrowserClientPageCommandExecutor {
     )?.inventory
   }
 
-  private async cleanupPage(
+  private cleanupPage(
     page: BrowserClientRetainedPage,
     previousRendererPage?: Readonly<BrowserClientPageRendererIdentity>,
     releaseUploads = true
   ): Promise<void> {
-    page.releaseAvailabilityWatch?.()
-    page.releaseAvailabilityWatch = undefined
-    this.dependencies.guestBinding.release(page.registration)
-    return cleanupRetainedBrowserClientPage(
+    const closing = this.closingPageAttempts
+    const attempt = closing?.get(page)
+    if (attempt) {
+      return attempt
+    }
+    const cleanup = cleanupBrowserClientExecutorPage(
+      this.dependencies,
       page,
-      {
-        routeWebContents: this.dependencies.routeWebContents,
-        retireAutomation: this.dependencies.retireAutomation,
-        releaseUploadStaging: async () => {
-          if (releaseUploads) {
-            await this.dependencies.uploadStaging?.releasePage(page.inventory.browserPageId)
-          }
-        }
-      },
-      previousRendererPage
+      previousRendererPage,
+      releaseUploads
     )
-  }
-
-  private closePages(): Promise<void> {
-    return closeBrowserClientExecutorPages({
-      profileSwitches: this.profileSwitches,
-      creatingPages: this.creatingPages,
-      failedPages: this.failedPages,
-      pages: this.pages,
-      cleanupPage: (page) => this.cleanupPage(page),
-      uploadStaging: this.dependencies.uploadStaging
-    })
+    closing?.set(page, cleanup)
+    return cleanup
   }
 }

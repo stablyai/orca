@@ -1,4 +1,4 @@
-import { createE2EConfig } from '../../../../shared/e2e-config'
+import { createE2EConfig } from '../../../../shared/app-lifecycle/launch/e2e-config'
 
 const rendererE2EExposeStore = String(import.meta.env.VITE_EXPOSE_STORE) === 'true'
 // The paired API installs after module initialization; read the build-gated test URL before caching configuration.

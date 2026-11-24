@@ -1,4 +1,4 @@
-import { isEditableKeyboardTarget } from '@/components/browser-pane/host-guest/browser-keyboard'
+import { isEditableKeyboardTarget } from '@/components/browser-pane/host-guest/input/browser-keyboard'
 
 type TerminalPastePaneIdentity = {
   id: number

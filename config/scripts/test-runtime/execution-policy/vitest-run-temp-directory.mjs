@@ -43,8 +43,19 @@ export function sweepStaleRunDirectories(base, { ownPid = process.pid, alive = i
   }
 }
 
+// macOS /tmp is a symlink to /private/tmp; a root that is not its own real path breaks tests that resolve paths.
+function shortPosixRoot() {
+  try {
+    return realpathSync('/tmp')
+  } catch {
+    return '/tmp'
+  }
+}
+
 export function resolveRunTempBase(base, name, platform = process.platform) {
-  return platform !== 'win32' && join(base, name).length > MAX_POSIX_ROOT_LENGTH ? '/tmp' : base
+  return platform !== 'win32' && join(base, name).length > MAX_POSIX_ROOT_LENGTH
+    ? shortPosixRoot()
+    : base
 }
 
 /** A per-run temp root, so files tests leave in os.tmpdir() go when the run ends; null keeps the inherited one. */

@@ -2,9 +2,9 @@ import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-
 import {
   buildOpenCodeSqliteCandidatePath,
   splitOpenCodeSqliteCandidate
-} from '../../../../shared/opencode-sqlite-session-path'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import type { SessionFileCandidate } from '../../session-scanner-types'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import SyncDatabase from '../../../sqlite/sync-database'
 import { columnExists, tableExists } from '../../../opencode-usage/schema-helpers'
 import { scopedSessionRows } from '../session-scanner-sqlite-scope-rows'

@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
-import type { RateLimitRuntimeTarget } from '../../shared/rate-limit-types'
+import type { RateLimitRuntimeTarget } from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { CodexAccountService } from '../codex-accounts/service'
 
 export function registerRateLimitHandlers(
@@ -9,6 +9,7 @@ export function registerRateLimitHandlers(
 ): void {
   ipcMain.handle('rateLimits:get', () => rateLimits.getState())
   ipcMain.handle('rateLimits:refresh', () => rateLimits.refresh())
+  ipcMain.handle('rateLimits:refreshOnOwnerReturn', () => rateLimits.refreshOnOwnerReturn())
   ipcMain.handle('rateLimits:refreshCodexForTarget', (_event, target: RateLimitRuntimeTarget) =>
     rateLimits.refreshCodexForTarget(target)
   )

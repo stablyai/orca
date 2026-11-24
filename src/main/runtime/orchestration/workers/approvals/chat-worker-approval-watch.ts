@@ -1,6 +1,6 @@
 /** Chat approvals Orca reported open. Each closes as soon as its journal item settles: answered in
  *  the worker's own chat, or gone. Orca's own answers write their closing lines themselves. */
-import type { AgentSessionJournal } from '../../../../native-chat/agent-session-journal/journal-store'
+import type { JournalPublication } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-conversations'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { subscribeForRedrive } from '../../mailbox/structured-pointer/structured-session-journal-redrive'
 import { structuredMailboxCustody } from '../../mailbox/routing/structured-session-mail-target'
@@ -20,7 +20,7 @@ import {
 export type ChatJournalWatch = (
   sessionId: string,
   onChange: () => void,
-  relevant: (journal: AgentSessionJournal) => boolean
+  relevant: (publication: JournalPublication) => boolean
 ) => () => void
 
 const watchHostJournal: ChatJournalWatch = (sessionId, onChange, relevant) => {
@@ -65,11 +65,9 @@ export class ChatWorkerApprovalWatch {
         stop: watch(
           sessionId,
           () => void this.check(sessionId),
-          (journal) =>
-            [...approvals.keys()].some((id) => {
-              const body = journal.itemBody(id)
-              return body?.kind !== 'approval' || body.resolution.state !== 'pending'
-            })
+          (publication) =>
+            !publication.commit ||
+            publication.commit.items.some((item) => approvals.has(item.itemId))
         )
       }
       if (this.deps.signal.aborted) {

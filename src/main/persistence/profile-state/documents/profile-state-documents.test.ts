@@ -6,7 +6,7 @@ import { exportProfileStateJson, importProfileStateJson } from './profile-state-
 import { readProfileStateDocuments } from './profile-state-document-reader'
 import { readProfileStateRevision } from '../database/profile-state-revision'
 import { openProfileStateDatabase } from '../database/profile-state-database'
-import { profileStateDatabaseFile } from '../../../../shared/profile-state-storage-paths'
+import { profileStateDatabaseFile } from '../../../../shared/orca-profiles/profile-state-storage-paths'
 
 const temporaryDirectories: string[] = []
 

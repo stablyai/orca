@@ -29,7 +29,7 @@ import {
   formatJiraUserList
 } from './jira-format'
 import { resolveJiraTarget } from './jira-target'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { JIRA_WRITE_HANDLERS } from './jira-write'
 
 function issueTarget(context: HandlerContext) {

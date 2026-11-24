@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { confirmPluginInstallTrust } from '@/store/plugins/installation/plugin-install-trust-request'
+import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS as flags } from '../../../../../shared/orca-profiles/orca-cloud-team-policy'
+import { usePluginInstallTrust } from '../state/use-plugin-install-trust'
 import { Button } from '../../ui/button'
 import {
   Dialog,
@@ -40,10 +42,17 @@ export function PluginDevelopmentDialog({
   onChange
 }: PluginDevelopmentDialogProps): React.JSX.Element {
   const t = useTranslate()
+  const confirmTrust = usePluginInstallTrust(open)
+  const pluginsBlocked = useOrcaTeamFeatureBlocked(flags.plugins)
+  const memberSourcesBlocked = useOrcaTeamFeatureBlocked(flags.allowMemberSources)
+  const teamBlocked = pluginsBlocked || memberSourcesBlocked
   const [pathInput, setPathInput] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const addPath = async (): Promise<void> => {
+    if (teamBlocked) {
+      return
+    }
     const path = pathInput.trim()
     if (!path) {
       setError(
@@ -55,7 +64,7 @@ export function PluginDevelopmentDialog({
       return
     }
     setError(null)
-    if (!(await confirmPluginInstallTrust(localFolderTrustPrompt('dev-folder', path)))) {
+    if (!(await confirmTrust(localFolderTrustPrompt('dev-folder', path)))) {
       return
     }
     try {
@@ -86,10 +95,15 @@ export function PluginDevelopmentDialog({
             )}
           </DialogTitle>
           <DialogDescription>
-            {t(
-              'auto.components.settings.PluginDevelopmentSection.reviewHelp',
-              'Reviewed once. Later code edits run without asking.'
-            )}
+            {teamBlocked
+              ? t(
+                  'auto.components.settings.PluginDevelopmentSection.teamDisabled',
+                  'Development folders are turned off by your team.'
+                )
+              : t(
+                  'auto.components.settings.PluginDevelopmentSection.reviewHelp',
+                  'Reviewed once. Later code edits run without asking.'
+                )}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -134,10 +148,11 @@ export function PluginDevelopmentDialog({
                 'Path to a plugin folder'
               )}
               spellCheck={false}
+              disabled={teamBlocked}
               aria-invalid={Boolean(error)}
               aria-describedby={error ? 'plugin-development-path-error' : undefined}
             />
-            <Button type="submit" variant="outline" size="sm" disabled={busy}>
+            <Button type="submit" variant="outline" size="sm" disabled={busy || teamBlocked}>
               {busy ? <Loader2 className="animate-spin" /> : null}
               {t('auto.components.settings.PluginDevelopmentSection.add', 'Add path')}
             </Button>
