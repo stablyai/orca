@@ -11,7 +11,7 @@ import {
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-screen'
 import type { RuledScreen } from '../wait/screen-input-veto'
-import { hookLeadTurnState } from '../wait/tui-idle-hook-lane'
+import { hookLeadTurnState } from '../../../../shared/agent-status/lifecycle/hook-lead-turn-state'
 
 export type ReattachedAgentStatusRestoreHost = {
   getPty(ptyId: string): RuntimePtyWorktreeRecord | undefined

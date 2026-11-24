@@ -3,7 +3,7 @@ import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/c
 import type { EnrichedAgentHookEventPayload } from '../../../../agent-hooks/server/server-types'
 import { hookAuthority } from '../../../agent-state-rules/agent-state-rules-engine'
 import { subscribeHookStatusTitles } from '../../../terminal/layout/hook-status-title-subscription'
-import { hookLeadTurnState } from '../../../terminal/wait/tui-idle-hook-lane'
+import { hookLeadTurnState } from '../../../../../shared/agent-status/lifecycle/hook-lead-turn-state'
 
 type HookMailWakeupRuntime = {
   resolvePtyIdForHookPane(paneKey: string): string | null
