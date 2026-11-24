@@ -803,7 +803,8 @@
         "handedOff": "已移交给",
         "task": "任务来自",
         "update": "更新来自",
-        "message": "消息来自"
+        "message": "消息来自",
+        "notSentYet": "尚未发送"
       },
       "kind": {
         "started": "已启动",

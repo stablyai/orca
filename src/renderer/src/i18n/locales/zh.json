@@ -2038,8 +2038,24 @@
           "tab": {
             "open": {
               "urlFailed": "无法打开网址",
-              "searchFailed": "无法使用 {{value0}} 搜索"
+              "searchFailed": "无法使用 {{value0}} 搜索",
+              "failure": {
+                "stageError": "错误 · {{value0}} · {{value1}}",
+                "hostNotFound": "找不到工作区所在的电脑",
+                "linkBlocked": "已阻止打开链接",
+                "notWebLink": "不是网页链接"
+              }
             }
+          }
+        },
+        "ports": {
+          "serverPortForward": {
+            "updateServer": "无法从 {{host}} 转发端口 {{port}}。请在 {{host}} 上更新 Orca 后重试",
+            "failed": "无法从 {{host}} 转发端口 {{port}}。请检查连接后重试",
+            "forwarded": "已从 {{host}} 转发端口 {{port}}",
+            "opened": "已在默认浏览器中打开 {{address}}",
+            "otherMachine": "无法转发端口 {{port}}：此工作区并非直接运行在 {{host}} 上",
+            "useSshPorts": "无法从 {{host}} 转发端口 {{port}}。请在\"端口\"中转发后重试"
           }
         }
       },
@@ -4695,6 +4711,7 @@
             "downloadAlreadyLocal": "\"{{value0}}\"已在此电脑上",
             "downloadFolderUnsupported": "无法从此主机下载文件夹\"{{value0}}\"",
             "downloadOpenFailed": "下载\"{{value0}}\"失败",
+            "openLinkInThisGroupRefused": "无法在此分组中打开链接",
             "openInNewTab": "在新标签页中打开",
             "openInThisGroupRefused": "无法在此分组中打开 {{value0}}",
             "copyFilePath": "复制文件路径",
@@ -20767,7 +20784,8 @@
           "handedOff": "已移交给",
           "task": "任务来自",
           "update": "更新来自",
-          "message": "消息来自"
+          "message": "消息来自",
+          "notSentYet": "尚未发送"
         },
         "kind": {
           "started": "已启动",
@@ -21340,7 +21358,8 @@
         "oneComment": "1 条评论",
         "comments": "{{count}} 条评论",
         "unavailable": "预览不可用",
-        "retry": "重试"
+        "retry": "重试",
+        "retryKeyHint": "预览不可用。按 {{key}} 重试"
       },
       "webPeek": {
         "unavailable": "此页面没有预览"
@@ -23372,7 +23391,12 @@
     },
     "serverPage": {
       "download": {
-        "started": "正在下载到 {{host}} 上的 {{path}}"
+        "started": "正在下载到 {{host}} 上的 {{path}}",
+        "saveHere": "保存到这台电脑",
+        "copying": "正在将 {{filename}} 下载到这台电脑…",
+        "copied": "已保存到 {{path}}",
+        "copyFailed": "无法将 {{filename}} 保存到这台电脑",
+        "showInFolder": "在文件夹中显示"
       },
       "print": {
         "failed": "无法将页面另存为 PDF"
@@ -23416,8 +23440,8 @@
     "deviceMove": {
       "toThisComputer": "在这台电脑上打开",
       "toHost": "在 {{host}} 上打开",
-      "tooltip": "在另一端的新标签页中打开此地址，并关闭此标签页。你可能需要重新登录。",
-      "failedToThisComputer": "无法在这台电脑上打开此页面。"
+      "tooltip": "在另一端的新标签页中打开此地址，并关闭此标签页。你可能需要重新登录",
+      "failedToThisComputer": "无法在这台电脑上打开此页面"
     },
     "sshRoute": {
       "preparingTitle": "正在通过 SSH 主机连接",
