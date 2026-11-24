@@ -27,15 +27,10 @@ export function MobileSlackThreadReplies(props: {
     ? t('bots.slack.threadReplies.updateHost', 'Update Orca on {{host}} to change this option.', {
         host: props.hostName
       })
-    : mentions
-      ? t(
-          'bots.slack.threadReplies.waiting',
-          'Your saved choice is not active: this Slack connection does not support it yet.'
-        )
-      : t(
-          'bots.slack.threadReplies.unsupported',
-          'This Slack connection does not support this option yet.'
-        )
+    : t(
+        'bots.slack.threadReplies.unavailable',
+        'This setting cannot be changed on this Slack connection right now.'
+      )
 
   const change = async (on: boolean): Promise<void> => {
     if (saving.current || !supported || !props.online) {

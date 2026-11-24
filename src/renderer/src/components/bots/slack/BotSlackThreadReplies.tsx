@@ -2,7 +2,6 @@ import { useContext, useId, useRef, useState } from 'react'
 import { Switch } from '@/components/ui/switch'
 import { useTranslate } from '@/i18n/use-translate'
 import { updateBot } from '@/lib/bot-catalog'
-import { useBotHostOnOwnAccount } from '@/lib/bot-host-orca-account'
 import type { Bot } from '../../../../../shared/bot-types'
 import { SettingsControlsOffContext } from '../settings-view/BotSettingsRows'
 
@@ -15,7 +14,6 @@ export function BotSlackThreadReplies({
 }): React.JSX.Element {
   const t = useTranslate()
   const id = useId()
-  const owner = useBotHostOnOwnAccount(bot.hostId)
   const offline = useContext(SettingsControlsOffContext)
   const saving = useRef(false)
   const [busy, setBusy] = useState(false)
@@ -23,20 +21,17 @@ export function BotSlackThreadReplies({
   const mentions = bot.slackThreadReplies === 'mentions'
 
   const change = async (on: boolean): Promise<void> => {
-    if (saving.current || !supported || !owner || offline) {
+    if (saving.current || !supported || offline) {
       return
     }
     saving.current = true
     setBusy(true)
     setFailed(false)
-    try {
-      await updateBot(bot, { slackThreadReplies: on ? 'mentions' : 'always' })
-    } catch {
+    await updateBot(bot, { slackThreadReplies: on ? 'mentions' : 'always' }).catch(() =>
       setFailed(true)
-    } finally {
-      saving.current = false
-      setBusy(false)
-    }
+    )
+    saving.current = false
+    setBusy(false)
   }
 
   return (
@@ -48,7 +43,7 @@ export function BotSlackThreadReplies({
         <Switch
           id={id}
           checked={mentions}
-          disabled={!supported || !owner || offline || busy}
+          disabled={!supported || offline || busy}
           aria-describedby={`${id}-detail`}
           onCheckedChange={(on) => void change(on)}
         />
@@ -61,19 +56,10 @@ export function BotSlackThreadReplies({
       </p>
       {!supported ? (
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          {mentions
-            ? t(
-                'bots.slack.threadReplies.waiting',
-                'Your saved choice is not active: this Slack connection does not support it yet.'
-              )
-            : t(
-                'bots.slack.threadReplies.unsupported',
-                'This Slack connection does not support this option yet.'
-              )}
-        </p>
-      ) : !owner ? (
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          {t('bots.slack.threadReplies.ownerOnly', 'Only the bot’s owner can change this option.')}
+          {t(
+            'bots.slack.threadReplies.unavailable',
+            'This setting cannot be changed on this Slack connection right now.'
+          )}
         </p>
       ) : null}
       {failed ? (
