@@ -7,9 +7,7 @@ import { getWorkspaceAttachments } from '../../../../../../shared/workspace-atta
 import { toast } from 'sonner'
 
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
-import { translate } from '@/i18n/i18n'
-import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
-import { openFailureDetail } from '@/lib/browser/workspace/workspace-browser-tab-presentation'
+import { openLinkedUrlInWorkspaceBrowser } from './worktree-card-linked-url-open'
 import './WorktreeCardMeta'
 import { hasWorktreeCardDetails } from '../metadata/WorktreeCardMetaBadges'
 import { usePromptCacheCountdownStartedAt } from '../activity/CacheTimer'
@@ -121,20 +119,7 @@ export function useWorktreeCardSecondaryDetails({
     [hoverReview, openTaskPage, repo]
   )
   const openLinkedUrlInBrowser = useCallback(
-    (url: string): void => {
-      void openWorkspaceBrowserTab({
-        workspaceId: worktree.id,
-        url,
-        intent: { kind: 'url' }
-      }).catch((error: unknown) => {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.'),
-          { description: openFailureDetail(error) ?? undefined }
-        )
-      })
-    },
+    (url: string): void => void openLinkedUrlInWorkspaceBrowser(worktree.id, url),
     [worktree.id]
   )
   const handleOpenIssueInBrowser = openLinkedUrlInBrowser
