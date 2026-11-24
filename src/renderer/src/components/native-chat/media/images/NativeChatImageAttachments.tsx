@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Image as ImageIcon } from 'lucide-react'
 import { cn } from '../../../../lib/class-names'
 import { useTranslate } from '../../../../i18n/use-translate'
@@ -18,6 +18,11 @@ import { isNativeChatPastedImagePath } from '../../../../../../shared/native-cha
 import { nativeChatImageLabel } from './native-chat-image-label'
 import { chatImageAccess } from '../../../../lib/files/access/local-file-access'
 import { observeTranscriptVisibility } from './native-chat-image-visibility'
+import {
+  NativeChatGalleryMessageContext,
+  useNativeChatGalleryRecord,
+  type NativeChatGalleryImage
+} from './gallery/native-chat-image-gallery-context'
 
 function renderableImageSource(source: string | undefined): boolean {
   return Boolean(source && /^(?:https?|data|blob):/i.test(source))
@@ -230,6 +235,35 @@ export function NativeChatImageViewer({
   )
 }
 
+/** An attachment the gallery can show again later, read the same way its tile reads it. */
+function galleryAttachment(
+  block: ImageRef,
+  runtimeContext: RuntimeFileOperationArgs | null | undefined
+): NativeChatGalleryImage | null {
+  const source = block.url?.trim() || block.path
+  const label = nativeChatImageLabel(block)
+  if (!source) {
+    return null
+  }
+  if (renderableImageSource(source)) {
+    return { title: label, label, source: { kind: 'url', url: source } }
+  }
+  return runtimeContext
+    ? {
+        title: label,
+        label,
+        source: {
+          kind: 'local',
+          rawSrc: source,
+          filePath: block.path ?? source,
+          connectionId: runtimeContext.connectionId,
+          runtimeContext,
+          access: TRANSCRIPT_IMAGE_ACCESS
+        }
+      }
+    : null
+}
+
 export function NativeChatImageAttachments({
   blocks,
   runtimeContext,
@@ -244,8 +278,27 @@ export function NativeChatImageAttachments({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const [viewing, setViewing] = useState<number | null>(null)
-  const gallery = useRef<HTMLDivElement>(null)
   const images = blocks.filter((block) => block.type === 'image-ref')
+  const group = useRef<HTMLDivElement>(null)
+  const galleryMessageId = useContext(NativeChatGalleryMessageContext)
+  // Only images a tile can show join, so a label chip never becomes a step.
+  const shown = enablePreview
+    ? images.flatMap((block) => {
+        const image = galleryAttachment(block, runtimeContext)
+        return image ? [{ block, image }] : []
+      })
+    : []
+  const gallery = useNativeChatGalleryRecord(
+    group,
+    galleryMessageId && shown.length > 0
+      ? {
+          kind: 'group',
+          messageId: galleryMessageId,
+          blocks: shown.map(({ block }) => block),
+          images: shown.map(({ image }) => image)
+        }
+      : null
+  )
   if (images.length === 0) {
     return null
   }
@@ -283,7 +336,11 @@ export function NativeChatImageAttachments({
     )
   }
   return (
-    <div ref={gallery} className={cn('mb-2 flex flex-wrap gap-1.5', className)}>
+    <div
+      ref={group}
+      data-native-chat-gallery-item={gallery ? '' : undefined}
+      className={cn('mb-2 flex flex-wrap gap-1.5', className)}
+    >
       {images.map((image, index) => {
         const label =
           image.alt ??
@@ -299,7 +356,11 @@ export function NativeChatImageAttachments({
             key={`${imageKeyBase}-${identity}-${occurrence}`}
             block={image}
             runtimeContext={runtimeContext}
-            onOpen={() => setViewing(index)}
+            onOpen={() => {
+              if (!(group.current && gallery?.tryOpen(group.current, image))) {
+                setViewing(index)
+              }
+            }}
           />
         )
       })}
@@ -308,7 +369,7 @@ export function NativeChatImageAttachments({
         index={viewing}
         onIndexChange={setViewing}
         runtimeContext={runtimeContext}
-        opener={gallery}
+        opener={group}
         notesOffset={nativeChatSentNotesNumberMax(
           blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
         )}

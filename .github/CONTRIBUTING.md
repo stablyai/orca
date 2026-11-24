@@ -48,9 +48,11 @@ pnpm build
 
 For faster repeat typechecks use `pnpm tc` (or `pnpm tc:node`, `pnpm tc:web`, `pnpm tc:cli`); run `pnpm tc:node` after editing shared tests.
 
-Add a test when it would catch a regression of your behavior change or bug fix, not for shallow coverage; see [test anti-patterns](../docs/agents-md-refs/test-antipatterns.md). If your change affects UI or interaction behavior, verify it on the platforms it could impact.
+Tests are the exception: add one only for logic where a silent regression is costly (parsers, security boundaries, data integrity, concurrency invariants), never for UI behavior or wiring; see [test anti-patterns](../docs/agents-md-refs/test-antipatterns.md). If your change affects UI or interaction behavior, verify it on the platforms it could impact.
 
 ### Targeting Local Tests
+
+On macOS and Linux, set `git config --local orca.serializeChangedChecks true` to queue full `pnpm check:changed` runs across worktrees. On Ctrl+C, SIGTERM, or terminal hangup, the runner waits for its active check process groups to stop before admitting another run. Processes that detach from those groups, or survive a force-kill of the runner, can continue independently. Windows uses the standard concurrent runner.
 
 Use `pnpm test`, not raw `vitest`: only it keeps the transform cache that makes repeat runs fast.
 

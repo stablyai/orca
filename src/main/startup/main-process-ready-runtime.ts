@@ -6,11 +6,15 @@ import { browserSessionRegistry } from '../browser/sessions/profiles/browser-ses
 import { configureBrowserClientPageAutomationRuntime } from '../browser/client-pages/execution/browser-client-page-automation-runtime'
 import { openOffscreenBrowserPageLink } from '../runtime/browser/commands/offscreen-browser-page-link'
 import { startPreGoneCrashSampling } from '../crash-reporting/process-exits/process-gone-diagnostics'
+import { setMainMemorySpikeCounts } from '../memory/main-memory-spike-capture'
+import { registeredPtyCount } from '../memory/pty-registry'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { refuseRealtimeSchedulingUnderZeroRtTime } from './linux-runtime/linux-realtime-scheduling-guard'
 import { recordProcessGoneCrash } from './main-window/main-window-lifecycle-flags'
 import { handleGpuChildCrash } from './gpu-recovery/gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/recovery/gpu-crash-fallback-decision'
 import { mainProcessState as state } from './main-process-state'
+import { isNativeUpdateInstallUnderWay } from '../updater/updater-service'
 import { initializeMainProcessObservers, startUsageBackend } from './main-process-observers'
 import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
 import { startSpeechModelWarmup } from '../speech/speech-model-warmup'
@@ -32,6 +36,13 @@ function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
 }
 
 function startProcessCrashObservers(): void {
+  setMainMemorySpikeCounts(() => ({
+    openChats: getStructuredAgentSessionHost()?.reads.openConversationCount() ?? 0,
+    workspaces: Object.keys(state.store?.getAllWorktreeMeta() ?? {}).length,
+    projects: state.store?.getRepos().length ?? 0,
+    bots: state.store?.getBots().length ?? 0,
+    terminals: registeredPtyCount()
+  }))
   // Sample live processes: gone-time metrics omit dead children and already-released memory.
   startPreGoneCrashSampling()
   app.on('child-process-gone', (_event, details) => {
@@ -75,6 +86,7 @@ function startThemeAndSpeech(store: Store, fallbackMs: number): void {
 function desktopCoreNative(store: Store): DesktopCoreNative {
   return {
     isQuitting: () => state.isQuitting,
+    isNativeUpdateInstallUnderWay,
     isServeMode: () => state.isServeMode,
     servedOrcaProfileId: () => state.activeOrcaProfile?.profile.id,
     openExternal: (url) => shell.openExternal(url),
@@ -97,6 +109,11 @@ function desktopCoreNative(store: Store): DesktopCoreNative {
           request
         )
       )
+      browserManager.setServerPagePopupPresenter((popup) => {
+        void runtime.showServerPagePopupToClient(popup).catch((error: unknown) => {
+          console.warn('[browser] could not show a page popup to its client:', error)
+        })
+      })
       browserSessionRegistry.onProfilesChanged = () => runtime.notifyBrowserProfilesChanged()
     },
     createAgentBrowserBridge: (onTabsChanged) => {

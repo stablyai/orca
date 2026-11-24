@@ -1,6 +1,7 @@
 import type { ConnectorCloudFeature } from '../../../../shared/connectors/connector-cloud-contract'
 import {
   CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE,
+  CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE,
   CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE
 } from '../../../../shared/connector-cloud-features'
 import type { ConnectorActErrorCode } from '../../../../shared/connector-action-contract'
@@ -153,7 +154,8 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
         "Orca Cloud can't list the bot's workspaces yet. Update Orca, and find Slack channels with `orca slack find <name|link>`."
       )
     }
-    if (args.title && !features.has('create' satisfies ConnectorCloudFeature)) {
+    // A titled post is an issue; a canvas or a list is titled too, and needs only Slack's verbs.
+    if (verb === 'post' && args.title && !features.has('create' satisfies ConnectorCloudFeature)) {
       throw new ConnectorActError(
         'cloud_lacks_create',
         "Orca Cloud can't make issues yet. Say what the issue should be instead, and try again after Orca Cloud updates."
@@ -195,6 +197,13 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
         "Orca Cloud can't post several files in one reply yet; each file goes as its own message."
       )
     }
+    // An older cloud refuses the field outright; this says what to do instead.
+    if (args.choices && !features.has(CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE)) {
+      throw new ConnectorActError(
+        'cloud_lacks_reply_choices',
+        "Orca Cloud can't put buttons on a reply yet; nothing was posted. List the options in --text and ask them to answer in words."
+      )
+    }
     // A file's bytes go straight between the CLI and the source; an older cloud took them inline.
     if (
       (args.upload || args.stream || (verb === 'attach' && args.files)) &&
@@ -209,14 +218,16 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
     const target = runtime.getExternalConversationSeam()?.replyTarget(chatPaneKey(sessionId))
     const conversation = target ? cloudConversation(target.key) : null
     const place = verb === 'find' && args.search && !ref ? searchedWorkspace(target?.key) : ref
-    // Only a post (its words, or a file and its comment) shows another Orca bot whom its turn acts for.
+    const actsFor = await botTurnFor(
+      runtime,
+      sessionId,
+      sessionCallerOf(context.orchestrationCaller)?.sessionId
+    )
+    // A post (its words, or a file and its comment) shows another Orca bot whom its turn acts for.
+    // Any other verb says only owner: the cloud believes a host's other answer over its own record.
     const turnFor =
-      verb === 'post' || verb === 'reply' || verb === 'attach'
-        ? await botTurnFor(
-            runtime,
-            sessionId,
-            sessionCallerOf(context.orchestrationCaller)?.sessionId
-          )
+      verb === 'post' || verb === 'reply' || verb === 'attach' || actsFor === 'owner'
+        ? actsFor
         : undefined
     // Asked again here, after the awaits above: a post for later must never go to a cloud that
     // has stopped saying it schedules.

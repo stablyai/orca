@@ -18,8 +18,10 @@ import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-ke
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 import { BotAvatar } from '../BotAvatar'
 import type { BotItemWalkState } from './use-bot-item-walk'
-import { BotItemStepper, botItemStepArrow } from './BotItemStepper'
+import { BotItemStepper, BotItemSteppingContext, botItemStepArrow } from './BotItemStepper'
 import { useBotItemChords, type BotItemStepOrigin } from './use-bot-item-chords'
+
+const PENDING_NOTICE_DELAY_MS = 400
 
 /** What the pane hands the item: the ref its comment box fills, the arrows for its tool row, and the
  *  call it makes once per mount when the item first shows. */
@@ -27,6 +29,7 @@ export type BotItemPaneSlots = {
   comment: React.RefObject<BotItemCommentBoxHandle | null>
   nav: React.ReactNode
   onShown: (item: BotItem) => void
+  onLoading: () => (() => void) | undefined
 }
 
 export function BotItemPane({
@@ -60,6 +63,7 @@ export function BotItemPane({
           commentRef={slots.comment}
           nav={slots.nav}
           onShown={slots.onShown}
+          onLoading={slots.onLoading}
           onGone={walk.markGone}
         />
       )}
@@ -86,6 +90,7 @@ export function BotItemPaneFrame({
   const root = useRef<HTMLDivElement | null>(null)
   const comment = useRef<BotItemCommentBoxHandle | null>(null)
   const announcer = useRef<BotItemAnnouncerHandle | null>(null)
+  const onLoading = useLatestHandler(() => announcer.current?.loading())
   // The committed item and place, read after a step's flush and by the item's first-show call.
   const shown = useRef({ uid: walk.uid, place: walk.place, opening: true })
   useLayoutEffect(() => {
@@ -114,6 +119,11 @@ export function BotItemPaneFrame({
       return
     }
     const before = shown.current.uid
+    // An arrow pressed while focus stays in the text: it takes focus now, so the next item's box opens
+    // with the arrows in view for focus to come back to.
+    if (from === 'previous' || from === 'next') {
+      botItemStepArrow(root.current, from)?.focus({ preventScroll: true })
+    }
     flushSync(() => walk.step(direction))
     if (shown.current.uid !== before) {
       focusAfterStep(root.current, comment.current, from)
@@ -197,7 +207,9 @@ export function BotItemPaneFrame({
       {walk.failed ? <BotItemsReadFailed onRetry={walk.retry} closedPage /> : null}
       {/* min-w-0: a fieldset is never narrower than its content, so one long unwrapped line widened the item. */}
       <fieldset disabled={offline} className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {children({ comment, nav, onShown })}
+        <BotItemSteppingContext value={walk.pending}>
+          {children({ comment, nav, onShown, onLoading })}
+        </BotItemSteppingContext>
       </fieldset>
       <BotItemAnnouncer ref={announcer} />
     </div>
@@ -239,7 +251,7 @@ function useSlowPending(pending: boolean): boolean {
     if (!pending) {
       return
     }
-    const timer = window.setTimeout(() => setSlow(true), 400)
+    const timer = window.setTimeout(() => setSlow(true), PENDING_NOTICE_DELAY_MS)
     return () => {
       window.clearTimeout(timer)
       setSlow(false)
@@ -248,17 +260,45 @@ function useSlowPending(pending: boolean): boolean {
   return pending && slow
 }
 
-type BotItemAnnouncerHandle = { say: (text: string) => void }
+type BotItemAnnouncerHandle = { say: (text: string) => void; loading: () => () => void }
 
 /** The pane's screen-reader line. A leaf, so speaking re-renders only it. */
 function BotItemAnnouncer({ ref }: { ref: React.Ref<BotItemAnnouncerHandle> }): React.JSX.Element {
+  const t = useTranslate()
   const [said, setSaid] = useState('')
+  const cancelLoading = useRef<(() => void) | null>(null)
+  useEffect(() => () => cancelLoading.current?.(), [])
   useImperativeHandle(ref, () => ({
     // The same words again still change the text, so they're read again.
-    say: (text) => setSaid((previous) => (previous === text ? `${text} ` : text))
+    say: (text) => {
+      cancelLoading.current?.()
+      setSaid((previous) => (previous === text ? `${text} ` : text))
+    },
+    loading: () => {
+      cancelLoading.current?.()
+      setSaid('')
+      let announced = false
+      const stop = (): void => {
+        window.clearTimeout(timer)
+        if (cancelLoading.current === stop) {
+          cancelLoading.current = null
+          if (announced) {
+            setSaid('')
+          }
+        }
+      }
+      const timer = window.setTimeout(() => {
+        if (cancelLoading.current === stop) {
+          announced = true
+          setSaid(t('bots.items.view.loading', 'Loading item…'))
+        }
+      }, PENDING_NOTICE_DELAY_MS)
+      cancelLoading.current = stop
+      return stop
+    }
   }))
   return (
-    <span role="status" className="sr-only">
+    <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
       {said}
     </span>
   )

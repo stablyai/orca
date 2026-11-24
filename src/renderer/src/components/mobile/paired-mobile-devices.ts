@@ -224,13 +224,3 @@ export function usePairedMobileDevices({
     refresh
   }
 }
-
-export function _resetPairedMobileDevicesCacheForTests(): void {
-  latestRequestId += 1
-  activeRequest = null
-  if (enabledConsumerCount > 0) {
-    removeRecoveryListeners()
-  }
-  enabledConsumerCount = 0
-  publish(EMPTY_SNAPSHOT)
-}

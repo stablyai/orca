@@ -1,12 +1,12 @@
 // A host's structured-session wiring for bots: preambles, own tools, the turn context, and look-around turns.
 import type { Bot } from '../../shared/bot-types'
-import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { KnownPairedBotRoster } from './paired-bot-rosters'
 import type { StructuredAgentSessionRuntimeDeps } from '../runtime/agent-session/installation/structured-agent-session-runtime-contract'
 import { botHomeFolder, localBotHomeFilesystem } from './bot-home'
 import type { BotChatRow } from '../../shared/bots/bot-chat-row'
 import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import type { BotLookAroundStore } from './bot-look-around-store'
+import type { BotTurnNoteRead } from './bot-active-work'
 import { botSessionToolServers, currentBotToolsRevision } from './bot-tools-file'
 import { botToolsEpoch, type BotLaunchedTools } from './bot-tools-revision'
 import { createBotTurnContext } from './bot-turn-context'
@@ -53,17 +53,15 @@ export function botStructuredSessionWiring(deps: {
   /** The bots the host holds when this is installed; none when it has no store yet. */
   botsAtInstall?: readonly Bot[]
   /** What the bot's other chats did lately, as a turn of this chat may hear of it. */
-  recentChats?: (
-    botId: string,
-    sessionId: string,
-    message: AgentJournalMessageItem
-  ) => Promise<BotRecentChatsSection | null>
+  recentChats?: (botId: string, sessionId: string) => Promise<BotRecentChatsSection | null>
   /** The every-fifth-turn note on questions an owner chat left unanswered; null on other turns. */
-  unansweredQuestionNote?: (sessionId: string) => Promise<string | null>
+  unansweredQuestionNote?: BotTurnNoteRead
   /** A bot's chats on this host, each with whether it takes mail, as `sessionId` asks. */
   botChats?: (bot: Bot, sessionId: string) => Promise<readonly BotChatRow[]>
   /** The bots on these paired servers as last read, without waiting on the network. */
   pairedBotRosters?: (servers: ReadonlySet<string>) => Promise<readonly KnownPairedBotRoster[]>
+  /** A paired computer's name while it is connected; null otherwise. */
+  clientName?: (installationId: string) => string | null
   /** Moves saved values an older Orca left behind out of reach; a launch waits for it. */
   scrubToolSecrets?: (bot: Bot) => Promise<void>
 }): Required<
@@ -127,7 +125,8 @@ export function botStructuredSessionWiring(deps: {
       }
     },
     deps.recentChats,
-    deps.unansweredQuestionNote
+    deps.unansweredQuestionNote,
+    (botId) => botById(botId)?.name ?? null
   )
   // The host's bots at install move their saved values out now, not when each next launches.
   const scrub = deps.scrubToolSecrets
@@ -151,7 +150,8 @@ export function botStructuredSessionWiring(deps: {
   const mentions = createBotSessionMentions({
     botById,
     botChats: deps.botChats,
-    pairedBotRosters: deps.pairedBotRosters
+    pairedBotRosters: deps.pairedBotRosters,
+    clientName: deps.clientName
   })
   return {
     resolveSessionInstructions: (record, launchDirectory, linkedSkills) => {

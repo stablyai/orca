@@ -23,8 +23,9 @@ export const CONNECTOR_CONTRACT_VERSION = 1
 
 export { CONNECTOR_PATHS } from './connector-cloud-paths'
 
-/** The shared-app services an owner connects in one browser trip. */
-export const CONNECTOR_CONNECT_SOURCES = ['linear', 'github'] as const
+/** The services a person connects in one browser trip (connect-messages.ts in the cloud contract;
+ *  connector-mirrored-constants.test.ts keeps them equal). */
+export const CONNECTOR_CONNECT_SOURCES = ['linear', 'github', 'slack'] as const
 export type ConnectorConnectSource = (typeof CONNECTOR_CONNECT_SOURCES)[number]
 
 export const CONNECTOR_FEATURES = [
@@ -87,6 +88,7 @@ export {
   CONNECTOR_CLOUD_FEATURES,
   CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE,
   CONNECTOR_REPLIES_OUTBOX_FEATURE,
+  CONNECTOR_RESUME_FEATURE,
   type ConnectorCloudFeature
 } from '../connector-cloud-features'
 export const ConnectorHelloResponse = z.object({
@@ -122,6 +124,9 @@ export type ConnectorThreadOwner = z.infer<typeof ConnectorThreadOwner>
 
 /** A send whose chat is deleted here; a cloud with threads.owner frees the thread and starts anew. */
 export const CHAT_GONE_REFUSAL = 'chat_gone'
+
+/** A resume whose chat's newest turn no longer failed (resumed, answered or replaced since). */
+export const NOT_FAILED_REFUSAL = 'not_failed'
 
 /** The conversation as Orca Cloud names it; null for one the cloud's contract can't name. */
 export function cloudConversation(key: {
@@ -174,9 +179,13 @@ export const ConnectorDelivery = z.discriminatedUnion('kind', [
     text: z.string().min(1),
     asker: OptionalAsker,
     automations: OptionalTurnAutomations,
+    // The reply @mentioned the bot, which unmutes a muted thread; absent from an older cloud.
+    mentioned: z.literal(true).optional().catch(undefined),
     // A mention of the bot with no words of its own; its text is the cloud's stand-in.
     bareMention: z.literal(true).optional(),
-    askedAt: OptionalAskedAt
+    askedAt: OptionalAskedAt,
+    // Resume pressed on the failed turn turnId: continue the chat only while that is still so.
+    resume: z.object({ turnId: z.number().int().positive() }).optional()
   }),
   z
     .object({

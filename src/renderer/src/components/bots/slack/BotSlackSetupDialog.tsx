@@ -9,12 +9,13 @@ import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { botSlackApps, type Bot } from '../../../../../shared/bot-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { signedOutHere } from '../bot-host-copy'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
 import { botSlackErrorMessage } from './bot-slack-copy'
-import { ConnectorTryIt } from '../ConnectorTryIt'
 import { readBotSlack, slackTeamState } from '@/lib/bot-slack-state'
 import { BotSlackPostAs } from './BotSlackPostAs'
+import { SlackTryItPreview } from './SlackTryItPreview'
 import {
   ConnectorSetupHeader,
   ConnectorWorkspacePicker,
@@ -25,9 +26,23 @@ import { SlackConfigTokenForm } from './SlackConfigTokenForm'
 import { SlackTeamName } from './SlackWorkspacesSettings'
 import { BotHostSignInButton } from '../BotHostSignInButton'
 import { ConnectorSetupDialog, useSetupStepAside } from '../connector-setup-surface'
-import { forgetOpenedSlackPages, useBotSlackSetup } from './use-bot-slack-setup'
+import { useBotSlackSetup } from './use-bot-slack-setup'
+import { forgetOpenedSlackPages } from './slack-opened-pages'
 import { useSlackHandOffOffer } from './use-slack-hand-off-offer'
-import { SlackCopyLink, SlackHandOffConfirm, SlackHandOffLines } from './slack-hand-off-parts'
+import { useBotHostOutage } from '../use-bot-host-outage'
+import {
+  SlackSetupProblemStep,
+  slackSetupProblem,
+  useResumeWhenHostReturns
+} from './SlackSetupProblem'
+import {
+  SlackHandOffConfirm,
+  SlackHandOffLines,
+  SlackHandOffAside,
+  SlackHandOffOfferStep
+} from './slack-hand-off-parts'
+import { SlackApproveStep } from './SlackApproveStep'
+import { SlackWaitingStep } from './SlackWaitingStep'
 import { useBotHostLabel } from '../use-bot-host-label'
 import {
   SlackOneLineIntro,
@@ -59,9 +74,11 @@ function BotSlackSetupFlow({
 }): React.JSX.Element {
   const t = useTranslate()
   const hostName = useBotHostLabel(bot.hostId)
-  const { step, retry, setUp, handOff, submitToken, pasteToken, approve, copyLink } =
+  const { step, retry, setUp, handOff, submitToken, pasteToken, approve, openNewLink, copyLink } =
     useBotSlackSetup(bot, teamId, aside.stepAside)
   const offer = useSlackHandOffOffer(bot, step)
+  const outage = useResumeWhenHostReturns(step, useBotHostOutage(bot.hostId), retry)
+  const problem = slackSetupProblem(step, outage)
   // Back from Slack's page in Orca's browser once the install ends, or needs the owner. Stepping aside
   // mounts this flow anew, which checks again before it waits again: that is not an end.
   const settled =
@@ -79,6 +96,9 @@ function BotSlackSetupFlow({
   }, [away, settled, comeBack])
   const ownEmail = useAppStore((state) => state.orcaProfileAuthStatus?.cloud?.email ?? null)
   const [checkedSlack, setCheckedSlack] = useState(false)
+  // The token form instead of this computer's offered sign-in: chosen, or already in use when the
+  // offer arrives, so a late offer never takes away a token being typed (it shows above the form).
+  const [anotherWay, setAnotherWay] = useState<false | 'chosen' | 'in-use'>(false)
   const checkboxId = useId()
 
   // This computer's sign-in lapsed while open: the same ask, then setup again. A server's failed
@@ -110,7 +130,7 @@ function BotSlackSetupFlow({
         installed
           ? t('bots.slack.setup.isIn', '{{name}} is in Slack', { name: bot.name })
           : reconnecting
-            ? slackReconnectTitle(t, reconnectOffer !== null)
+            ? slackReconnectTitle(t, reconnectOffer ? hostName : null, step.unsure === true)
             : title
       }
       intro={intro}
@@ -126,7 +146,22 @@ function BotSlackSetupFlow({
       done={installed}
     />
   )
-  const body = ((): React.JSX.Element => {
+  const problemStep = problem ? (
+    <SlackSetupProblemStep
+      problem={problem}
+      botName={bot.name}
+      hostName={hostName}
+      onClose={onClose}
+      onNewLink={(newLinkTeam) => void setUp(newLinkTeam)}
+      onOpenNewLink={
+        bot.hostId === LOCAL_EXECUTION_HOST_ID
+          ? undefined
+          : (newLinkTeam) => void openNewLink(newLinkTeam)
+      }
+      onReplaceToken={pasteToken}
+    />
+  ) : null
+  const body = ((): React.JSX.Element | null => {
     switch (step.kind) {
       case 'checking':
       case 'setting-up': {
@@ -158,7 +193,7 @@ function BotSlackSetupFlow({
               onPick: () => void setUp(pickTeamId)
             }))}
             another={
-              <Button variant="ghost" onClick={pasteToken}>
+              <Button variant="ghost" onClick={() => pasteToken()}>
                 {t('bots.slack.setup.another', 'Connect another workspace')}
               </Button>
             }
@@ -171,117 +206,83 @@ function BotSlackSetupFlow({
             hostName={hostName}
             offer={reconnectOffer}
             mine={step.mine === true}
+            unsure={step.unsure === true}
             ownEmail={ownEmail}
             error={step.error}
             onUse={(useTeamId) => void handOff(useTeamId)}
             onSubmit={(token) => void submitToken(token)}
             onCancel={onClose}
           />
-        ) : (
-          <SlackConfigTokenForm
-            hostId={bot.hostId}
-            aside={
-              offer ? (
-                <SlackHandOffLines
-                  email={offer.email}
-                  teamIds={offer.teamIds}
-                  onUse={(useTeamId) => void handOff(useTeamId)}
-                />
-              ) : null
-            }
-            submitLabel={t('bots.slack.setup.create', 'Create Slack app')}
-            busy={false}
-            error={step.error}
-            onSubmit={(token) => void submitToken(token)}
+        ) : offer && offer.teamIds.length === 1 && !anotherWay ? (
+          <SlackHandOffOfferStep
+            teamId={offer.teamIds[0]}
+            onUse={(useTeamId) => void handOff(useTeamId)}
+            onAnotherWay={() => setAnotherWay('chosen')}
           />
+        ) : (
+          <div onFocus={() => setAnotherWay((way) => way || 'in-use')}>
+            <SlackConfigTokenForm
+              hostId={bot.hostId}
+              aside={
+                offer && offer.teamIds.length > 1 ? (
+                  <SlackHandOffLines
+                    email={offer.email}
+                    teamIds={offer.teamIds}
+                    onUse={(useTeamId) => void handOff(useTeamId)}
+                  />
+                ) : offer && anotherWay === 'in-use' ? (
+                  <SlackHandOffAside
+                    teamId={offer.teamIds[0]}
+                    onUse={(useTeamId) => void handOff(useTeamId)}
+                  />
+                ) : null
+              }
+              submitLabel={t('bots.slack.setup.create', 'Create Slack app')}
+              busy={false}
+              error={step.error}
+              onSubmit={(token) => void submitToken(token)}
+            />
+          </div>
         )
       case 'ready':
         return (
-          <div className="space-y-4">
-            <p className="text-sm">
-              {t(
-                'bots.slack.setup.ready',
-                'Your Slack app is ready. Approve it in Slack to finish.'
-              )}
-            </p>
-            <Button autoFocus className="w-full" onClick={approve}>
-              {t('bots.slack.setup.approve', 'Approve in Slack')}
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              {t('bots.slack.setup.otherBrowser', 'Approving in another browser?')}{' '}
-              <SlackCopyLink link={step.link} copied={false} onCopy={copyLink} />
-            </p>
-          </div>
+          <SlackApproveStep
+            hostName={hostName}
+            link={step.link}
+            copied={false}
+            onOpen={approve}
+            onCopy={copyLink}
+            onNewLink={() => void setUp(step.teamId)}
+          />
         )
       case 'waiting':
+        // A paired computer's link copied for another device: the same step, waiting on Slack.
+        if (bot.hostId !== LOCAL_EXECUTION_HOST_ID && step.copied && step.link) {
+          return (
+            <SlackApproveStep
+              hostName={hostName}
+              link={step.link}
+              copied
+              onOpen={approve}
+              onCopy={copyLink}
+              onNewLink={() => void setUp(step.teamId)}
+            />
+          )
+        }
         return (
-          <div className="space-y-4">
-            <p role="status" className="flex items-center gap-2 text-sm">
-              <Loader2 className="size-4 animate-spin" />
-              {t('bots.slack.setup.waiting', 'Waiting for Slack…')}
-            </p>
-            {hostName && step.link ? (
-              <>
-                <p className="text-sm text-muted-foreground">
-                  {t(
-                    'bots.slack.setup.approveAsYourself',
-                    'Approve in Slack as yourself. Approving in another browser?'
-                  )}{' '}
-                  <SlackCopyLink link={step.link} copied={step.copied} onCopy={copyLink} />
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {t(
-                    'bots.slack.setup.waitingAdmin',
-                    'If your workspace needs an admin to approve new apps, {{name}} joins once they do. If they decline, Install again reuses the same app.',
-                    { name: bot.name }
-                  )}
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {t(
-                  'bots.slack.setup.waitingDetail',
-                  'Finish in Slack. If your workspace needs an admin to approve new apps, {{name}} joins once they do. If they decline, Install again reuses the same app.',
-                  { name: bot.name }
-                )}
-              </p>
-            )}
-            <DialogFooter>
-              <Button variant="ghost" onClick={onClose}>
-                {t('bots.slack.setup.close', 'Close')}
-              </Button>
-              <Button variant="outline" onClick={() => void setUp(step.teamId)}>
-                {t('bots.slack.setup.installAgain', 'Install again')}
-              </Button>
-            </DialogFooter>
-          </div>
+          <SlackWaitingStep
+            botName={bot.name}
+            hostName={hostName}
+            link={step.link}
+            copied={step.copied}
+            onCopy={copyLink}
+            onClose={onClose}
+            onInstallAgain={() => void setUp(step.teamId)}
+          />
         )
       case 'expired':
       case 'other-user':
-        return (
-          <div className="space-y-4">
-            {step.kind === 'expired' ? (
-              <p className="text-sm">
-                {t('bots.slack.setup.expired', 'The install link expired.')}
-              </p>
-            ) : (
-              <p className="text-sm text-destructive">
-                {t(
-                  'bots.slack.setup.otherUser',
-                  'Another Slack account approved it. Get a new link and approve as yourself.'
-                )}
-              </p>
-            )}
-            <DialogFooter>
-              <Button variant="ghost" onClick={onClose}>
-                {t('bots.slack.setup.close', 'Close')}
-              </Button>
-              <Button autoFocus onClick={() => void setUp(step.teamId)}>
-                {t('bots.slack.setup.newLink', 'Get a new link')}
-              </Button>
-            </DialogFooter>
-          </div>
-        )
+        return problemStep
       case 'uncertain':
         return (
           <div className="space-y-4">
@@ -317,9 +318,11 @@ function BotSlackSetupFlow({
         // Post as stays: this install's link applies the pick at once, later it needs Slack's approval.
         return (
           <div className="space-y-4">
-            <ConnectorTryIt
-              heading={t('bots.slack.setup.tryIt', 'Try it in any channel or direct message')}
-              ways={[{ key: 'mention', shown: `@${bot.name}` }]}
+            <SlackTryItPreview
+              bot={bot}
+              asker={
+                installedState?.state === 'installed' ? installedState.installerName : undefined
+              }
             />
             {installedState?.state === 'installed' ? (
               <BotSlackPostAs bot={bot} slack={installedState} setupState={step.setupState} />
@@ -333,6 +336,9 @@ function BotSlackSetupFlow({
           </div>
         )
       case 'failed':
+        if (problemStep) {
+          return problemStep
+        }
         return (
           <div className="space-y-4">
             <p className="text-sm text-destructive">{botSlackErrorMessage(step.code, hostName)}</p>

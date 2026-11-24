@@ -283,6 +283,18 @@ export const ignoredFilesScrolling = dialogFixture(
     document.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
   }
 )
+export const dirtyAndIgnoredOpen = dialogFixture(
+  {
+    target: shortWorktree,
+    entries: dirtyEntries,
+    unsaved: true,
+    localFiles: manyAtRiskLocalFiles,
+    heightClassName: 'h-[580px]'
+  },
+  () => {
+    document.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
+  }
+)
 export const alwaysDeleteMenu = dialogFixture(
   { entries: dirtyEntries, localFiles: cleanLocalFiles },
   () => {

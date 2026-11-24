@@ -1,11 +1,12 @@
 // @protected-copy scope=file
 // Picks a bot's permission, including for a bot made from someone else's link.
 // The bot's agent with its model, effort and permissions: the agent picker, chat only, keeping a setup.
-import { useCallback, useMemo, useState, type ComponentProps } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ComponentProps } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
+import { agentLaunchSetupState } from '@/components/agent/agent-launch-setup-state'
 import { useAgentPickerDraftScope } from '@/components/agent/AgentLaunchSetupButton'
 import { useAgentLaunchPickerInventory } from '@/components/agent/use-agent-launch-picker-inventory'
 import type { NewTabAgentMenuModel } from '../agent/launch-menu/new-tab-agent-menu-model'
@@ -20,6 +21,7 @@ import {
   type AgentChatPermissionMode
 } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { isBotAgent, type BotAgent } from '../../../../shared/bot-types'
+import { keptSetupCatalog } from '../../../../shared/agent-launch/picker/agent-launch-kept-setup-catalog'
 import { botLaunchFromChoices, type BotLaunch } from '../../../../shared/bots/bot-launch'
 import type { BotPermissionIntent } from './use-bot-agent-setup'
 
@@ -75,6 +77,7 @@ function useBotAgentPickerEntries(
       }
       const projected: AgentPickerEntry = {
         ...entry,
+        catalog: keptSetupCatalog(entry.agent, entry.catalog),
         surfaces: ['chat'],
         defaultSurface: 'chat',
         // A bot's chats take no terminal Arguments, so none may set or hide a choice here.
@@ -127,6 +130,7 @@ export function BotAgentLaunchPicker({
   choices,
   value,
   worktreeId,
+  defaultModelHint,
   withPermission = true,
   showChatDefaultHint = true,
   disabled,
@@ -141,6 +145,7 @@ export function BotAgentLaunchPicker({
   value: BotAgentSetup
   /** The bot's folder workspace, where agents such as OMP list their models; none before the bot exists. */
   worktreeId?: string
+  defaultModelHint?: { model?: { id: string; label: string }; observeModel: (id: string) => void }
   /** False where the bot's permission has its own control beside the picker. */
   withPermission?: boolean
   showChatDefaultHint?: boolean
@@ -175,6 +180,16 @@ export function BotAgentLaunchPicker({
     carried,
     withPermission
   )
+  const { model: hintedModel, observeModel } = defaultModelHint ?? {}
+  const openEntry = menuOpen ? entries.find((entry) => entry.agent === value.agent) : undefined
+  useEffect(() => {
+    if (openEntry && observeModel) {
+      const { currentModel } = agentLaunchSetupState(openEntry, draftForEntry(openEntry))
+      if (currentModel && currentModel !== hintedModel?.id) {
+        observeModel(currentModel)
+      }
+    }
+  }, [openEntry, observeModel, hintedModel, draftForEntry])
   // A kept setup reseeds the panel's drafts from what the bot now has.
   const scope = useAgentPickerDraftScope(JSON.stringify(value))
   const onPick = useCallback<ComponentProps<typeof AgentLaunchPicker>['onPick']>(
@@ -216,6 +231,7 @@ export function BotAgentLaunchPicker({
       <AgentLaunchPicker
         model={model}
         entries={entries}
+        defaultModelLabel={hintedModel?.label}
         agent={inherit?.chosen ? (inherit.agent ?? null) : value.agent}
         {...(inherit?.chosen
           ? {
@@ -233,7 +249,7 @@ export function BotAgentLaunchPicker({
         onPick={onPick}
         choices={extraChoice ? [extraChoice] : undefined}
       />
-      {showChatDefaultHint && !inherit && !value.launch ? (
+      {showChatDefaultHint && !inherit && !value.launch?.model ? (
         // Without its own model the picker shows the owner's chat default, which the bot didn't choose.
         <p className="text-xs text-muted-foreground">
           {t(

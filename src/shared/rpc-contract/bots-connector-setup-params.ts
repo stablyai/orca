@@ -5,7 +5,7 @@ import {
   SLACK_CONFIG_REFRESH_TOKEN_MAX_LENGTH,
   SLACK_CONFIG_REFRESH_TOKEN_PREFIX
 } from '../connector-bot-slack-contract'
-import { GITHUB_ID_PATTERN } from '../connector-bot-github-contract'
+import { GITHUB_ID_PATTERN, GITHUB_LOGIN_PATTERN } from '../connector-bot-github-contract'
 import { CONNECTOR_CONNECT_SOURCES } from '../connectors/connector-cloud-contract'
 
 const Id = z.string().min(1).max(256)
@@ -45,8 +45,13 @@ export const BotGitHubDefaultBot = z.object({ botId: Id.nullable(), userId: GitH
 export const BotGitHubUnlink = z.object({ userId: GitHubUserId })
 
 const Source = z.enum(CONNECTOR_CONNECT_SOURCES)
-/** `switchAccount` is "Not you?", which lets the person pick another account. */
-export const ConnectorConnectStart = z.object({ source: Source, switchAccount: z.boolean() })
+/** `switchAccount` is "Not you?", which lets the person pick another account. `addAccess` (GitHub):
+ *  the trip adds access, for `workspace` if named; a host that has it answers `addAccess: true`. */
+export const ConnectorConnectStart = z.object({
+  source: Source,
+  switchAccount: z.boolean(),
+  addAccess: z.object({ workspace: z.string().regex(GITHUB_LOGIN_PATTERN).optional() }).optional()
+})
 export const ConnectorConnectWait = z.object({ tripId: z.uuid() })
 export const ConnectorConnectCancel = z.object({ source: Source })
 /** The "Open Orca" fallback's result, from orca://<source>/link; the host checks its shape. */

@@ -7,10 +7,7 @@ import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-ga
 import { EMPTY_AI_VAULT_SESSIONS } from '../session-list/ai-vault-session-identity'
 import { useAppliedAiVaultScan } from './ai-vault-applied-scan'
 import { useAiVaultSessionHostRefreshEvents } from '../scope/ai-vault-host-scope'
-import {
-  aiVaultSessionResultCacheKey,
-  resetAiVaultSessionResultCacheForTest
-} from './ai-vault-session-result-cache'
+import { aiVaultSessionResultCacheKey } from './ai-vault-session-result-cache'
 import {
   refreshAiVaultSessionList,
   type AiVaultConditionalSnapshot,
@@ -18,26 +15,16 @@ import {
   readCachedAiVaultSessionList,
   readLastAiVaultSessionList
 } from './ai-vault-session-list-request'
-import { resetAgentSessionIdsRefreshKeys } from './ai-vault-agent-session-refresh-key'
 import { useAiVaultNewSessionRescan } from './ai-vault-new-session-rescan'
 import { saveAiVaultSessionList } from './ai-vault-saved-session-lists'
 import { useAiVaultAssociationObservation } from './ai-vault-association-observation'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
-import {
-  claimAiVaultForcedRescan,
-  resetAiVaultForcedRescanBudgetForTest
-} from './ai-vault-forced-rescan-budget'
+import { claimAiVaultForcedRescan } from './ai-vault-forced-rescan-budget'
 import {
   type AiVaultListResult,
   type AiVaultSession,
   isAiVaultScanCancelledError as isAiVaultScanCancellation
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-
-export function resetAiVaultForcedRescanThrottleForTest(): void {
-  resetAiVaultForcedRescanBudgetForTest()
-  resetAgentSessionIdsRefreshKeys()
-  resetAiVaultSessionResultCacheForTest()
-}
 
 // Desktop IPC resolves cancellations; web/runtime RPC rejects, so recognize both.
 

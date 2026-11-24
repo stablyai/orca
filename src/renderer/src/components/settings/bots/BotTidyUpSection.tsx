@@ -1,3 +1,4 @@
+import { botCodedText } from '../../../../../shared/bots/bot-failure-copy'
 import { useState } from 'react'
 import { BotTidyUpReview, tidyUpRunMeta } from '@/components/bots/BotTidyUpReview'
 import { botAgentLabel } from '@/components/bots/bot-presentation'
@@ -74,7 +75,7 @@ export function BotTidyUpSection({
             ? t(
                 'settings.bots.tidyUp.turnedOff',
                 'Turned off after 10 tidy-ups in a row failed. Last: {{error}}',
-                { error: view.turnedOff }
+                { error: botCodedText(view.turnedOff, view.turnedOffFailure, t) }
               )
             : t(
                 'settings.bots.tidyUp.onDescription',
@@ -146,7 +147,7 @@ export function BotTidyUpSection({
                 {view?.error && !view.turnedOff ? (
                   <>
                     <br />
-                    {view.error}
+                    {botCodedText(view.error, view.failure, t)}
                   </>
                 ) : null}
                 <br />

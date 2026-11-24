@@ -1,19 +1,19 @@
 // A conversation's native chat (structured session): its deliveries, prompts, turns and Stop.
 import { randomUUID } from 'node:crypto'
 import { isConversationReport } from './external-conversation-turn-opener'
+import { leaveEligibleBatch } from './external-conversation-leave-eligibility'
 import {
   endedTurn,
   endedTurnAttribution,
   type EndedChatTurn
 } from './external-conversation-ended-turn'
 export type { EndedChatTurn } from './external-conversation-ended-turn'
-import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../shared/agent-session/agent-session-wire'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import {
-  allLinks,
+  findLinkForSession,
   sameConversation,
   type ExternalConversationLinkStore
 } from './external-conversation-links'
@@ -35,7 +35,7 @@ import {
 } from '../runtime/orchestration/turn-delivery/send-agent-turn'
 import { refusalOf } from './external-conversation-chain'
 import { storedConnectorAsker } from '../../shared/connector-message-asker'
-import { connectorFailure } from './external-conversation-failure'
+import { rejectedSendRefusal } from './external-conversation-failure'
 import { refused, type ConnectorMessage, type Delivery } from './external-conversation-types'
 
 /** What the seam reads of the native-chat host. */
@@ -48,6 +48,7 @@ export type ConversationChat = StructuredAgentTurnHost &
     | 'journalReads'
     | 'currentWork'
     | 'publishedWork'
+    | 'conversation'
   > & {
     deps: { store: { getConversation(sessionId: string): { currentFence: number } | null } }
   }
@@ -85,7 +86,6 @@ export type ChatNews =
       kind: 'turn-ended'
       sessionId: string
       outcome: AgentJournalTurnOutcome
-      mergedTurnCount?: number
       /** Read in full from the journal, only for linked chats; the status row keeps a short preview. */
       readTurn: () => Promise<EndedChatTurn>
       /** Only whom the turn acts for (its opener and the deliveries it answered), read by index. */
@@ -97,12 +97,15 @@ export type ChatNews =
 export function watchChatNews(
   chats: ConversationChatHost,
   listener: (news: ChatNews) => void,
-  id = 'external-conversations'
+  id = 'external-conversations',
+  // A turn's words go out with that turn, even when its workers hold its end.
+  includeHeld = true
 ): () => void {
   const subscribe = (chat: ConversationChat | null): (() => void) =>
     chat?.subscribeTurnCompletions({
       id,
       includePrompts: true,
+      includeHeld,
       onClosed: (sessionId) => listener({ kind: 'closed', sessionId }),
       emit: (event) => {
         if (event.type === 'prompt') {
@@ -113,9 +116,6 @@ export function watchChatNews(
             kind: 'turn-ended',
             sessionId,
             outcome,
-            ...(event.completion.mergedTurnCount !== undefined
-              ? { mergedTurnCount: event.completion.mergedTurnCount }
-              : {}),
             readTurn: () =>
               endedTurn(chat, sessionId, event.completion.turnId, event.completion.journalCursor),
             readAttribution: () =>
@@ -161,10 +161,10 @@ export function chatTurnFacts(
   // A continuation answering this link's requests a restart or usage limit cut: durable, unlike a
   // delivery's mark. One claiming another conversation's (the chat moved since) is not this one's.
   const claimed = (sessionId: string): boolean => {
-    const link = [...allLinks(store)].find((linked) => linked.link.sessionId === sessionId)?.link
-    const opener = link && currentChat(chats)?.publishedWork(sessionId)?.activeTurnOpener
+    const opener = currentChat(chats)?.publishedWork(sessionId)?.activeTurnOpener
     const claim = opener?.body.kind === 'message' ? opener.body.connectorClaim : undefined
-    return claim?.origin.some((stamp) => sameConversation(link!, stamp.conversation)) === true
+    const link = claim && findLinkForSession(store, sessionId)?.link
+    return !!link && claim.origin.some((stamp) => sameConversation(link, stamp.conversation))
   }
   return {
     delivered: (sessionId: string) => pending(sessionId) || claimed(sessionId),
@@ -261,6 +261,7 @@ export async function deliverToChat(
           ...(link.bot
             ? { connectorConversation: { source: link.source, externalId: link.externalId } }
             : {}),
+          ...leaveEligibleBatch(link, asker, delivery.later),
           // Its reply outbox rows commit with this admission (design item 125).
           ...(delivery.reply && delivery.deliveryId
             ? {
@@ -293,11 +294,12 @@ export async function deliverToChat(
     }
     const dispatched = outcome.kind === 'sent' ? outcome.submission?.dispatchState : 'accepted'
     if (dispatched === 'rejected') {
-      // Why the agent couldn't take it (signed out, not installed…), for the connector to say.
-      const fact = readAgentSessionFailureFact(
-        outcome.kind === 'sent' ? outcome.submission?.rejection : undefined
+      // Why the agent couldn't take it (signed out, not installed…), or that a person's Stop did.
+      return await rejectedSendRefusal(
+        chat,
+        link,
+        outcome.kind === 'sent' ? outcome.submission : null
       )
-      return refused('agent_not_reachable', fact && connectorFailure(fact, link.agent))
     }
     return dispatched === 'unknown'
       ? { outcome: 'unknown', reason: 'writer_failed' }

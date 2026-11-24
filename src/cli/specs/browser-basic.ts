@@ -13,9 +13,10 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
   },
   {
     path: ['browser', 'identity', 'set'],
-    summary: 'Choose the browser identity for every page on this Orca host',
+    summary: 'Choose the browser identity for pages this Orca host renders',
     usage: 'orca browser identity set --mode <clean|native> [--reset] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'mode', 'reset']
+    allowedFlags: [...GLOBAL_FLAGS, 'mode', 'reset'],
+    notes: ["Pages a paired desktop renders for this host use that desktop's identity."]
   },
   {
     path: ['open-url'],
@@ -234,11 +235,11 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
     path: ['tab', 'create'],
     summary: 'Create a new browser tab in the current worktree',
     usage:
-      'orca tab create [--url <url>] [--worktree <selector>] [--profile <id>] [--split <right|left|down|up>] [--headless] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree', 'profile', 'split', 'headless'],
+      'orca tab create [--url <url>] [--worktree <selector>] [--profile <id>] [--split <right|left|down|up>] [--headless] [--focus] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree', 'profile', 'split', 'headless', 'focus'],
     booleanFlags: ['headless'],
     notes: [
-      "On a Linux server, WSL or SSH host, the tab opens on the Orca desktop that shows that host's tabs, and the command fails when none can. --headless opens it in the host's own headless browser instead, which no desktop or phone shows."
+      "The tab opens behind the visible one; --focus shows it in its worktree without switching worktrees. On a Linux server, WSL or SSH host, the tab opens on the Orca desktop that shows that host's tabs, and the command fails when none can. --headless opens it in the host's own headless browser instead, which no desktop or phone shows."
     ]
   },
   {

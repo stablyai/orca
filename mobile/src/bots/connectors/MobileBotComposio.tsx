@@ -14,7 +14,7 @@ import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { useClipboardReader } from '../../platform/clipboard/clipboard'
-import { openExternalLink } from '../../platform/external-links/external-link'
+import { openConnectorLink } from './connector-link'
 import {
   composioAdd,
   composioAppRead,
@@ -58,8 +58,6 @@ export function MobileBotComposioConnect(
 ) {
   const t = useMobileTranslation()
   const { client, app, composio } = props
-  const clipboard = useClipboardReader()
-  const [key, setKey] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [own, setOwn] = useState(false)
@@ -106,25 +104,7 @@ export function MobileBotComposioConnect(
       )
       setOpened({ url, read: composio.connections })
       rereadMobileComposio(props.hostKey, props.botId)
-      openExternalLink(url)
-    } catch (caught) {
-      setError(errorMessage(caught))
-    } finally {
-      setBusy(false)
-    }
-  }
-  const saveKey = async (value: string) => {
-    if (!client) {
-      return
-    }
-    setBusy(true)
-    setError(null)
-    try {
-      composioSetKey.interpret(
-        await composioSetKey.request(client, { key: value }, { failWhenDisconnected: true })
-      )
-      setKey('')
-      rereadMobileComposio(props.hostKey, props.botId)
+      openConnectorLink(url)
     } catch (caught) {
       setError(errorMessage(caught))
     } finally {
@@ -150,76 +130,7 @@ export function MobileBotComposioConnect(
     return <MobileStateView loading title={t('bots.composio.reading', 'Reading Composio…')} />
   }
   if (!keyReady) {
-    const trimmed = key.trim()
-    const save = () => void saveKey(trimmed)
-    return (
-      <>
-        <SheetHeader
-          title={t('bots.apps.composio.connectTitle', 'Connect Composio')}
-          subtitle={t('bots.apps.composio.once', 'Once, for all your bots')}
-          onBack={{ label: t('bots.connectors.backShort', 'Back'), onPress: props.onClose }}
-        />
-        {props.banner}
-        <SettingsNote>
-          {t('bots.apps.composio.thenApp', 'Then you sign in to {{app}} on Composio’s page.', {
-            app: app.name
-          })}
-        </SettingsNote>
-        <View style={styles.field}>
-          <TextField
-            label={t('bots.composio.key.label', 'Composio API key')}
-            placeholder={t('bots.composio.key.placeholder', 'Paste your key')}
-            value={key}
-            onChangeText={setKey}
-            secureTextEntry
-            monospace
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="off"
-            editable={!busy}
-            trailing={
-              <MobileBotTextButton
-                label={t('bots.slack.token.paste', 'Paste')}
-                onPress={() =>
-                  void clipboard
-                    .readText()
-                    .then((text) => setKey(text.trim()))
-                    .catch(() => {})
-                }
-              />
-            }
-          />
-        </View>
-        {error ? <SettingsNote error>{error}</SettingsNote> : null}
-        <SettingsNote>
-          {t(
-            'bots.apps.composio.keyStoredOnHost',
-            'Stored on {{host}}; bots never see it. Composio holds your app sign-ins.',
-            { host: props.hostName }
-          )}
-        </SettingsNote>
-        <SettingsSection>
-          <ListRow
-            leading={<ArrowUpRight size={18} color={colors.textPrimary} />}
-            title={t('bots.composio.key.getKey', 'Get a key')}
-            accessibilityRole="link"
-            onPress={() => openExternalLink(COMPOSIO_PAGES.apiKeys)}
-          />
-        </SettingsSection>
-        <View style={styles.field}>
-          <SheetPrimaryButton
-            label={
-              busy
-                ? t('bots.composio.key.checking', 'Checking…')
-                : t('bots.apps.composio.addKey', 'Add key and continue')
-            }
-            busy={busy}
-            disabled={!trimmed || !props.online}
-            onPress={save}
-          />
-        </View>
-      </>
-    )
+    return <MobileBotComposioKey {...props} />
   }
   const header = (
     <SheetHeader
@@ -248,7 +159,7 @@ export function MobileBotComposioConnect(
           <SheetPrimaryButton
             label={t('chat.botCards.composio.openAuthConfigs', 'Open Auth Configs')}
             icon={ExternalLink}
-            onPress={() => openExternalLink(COMPOSIO_PAGES.authConfigs)}
+            onPress={() => openConnectorLink(COMPOSIO_PAGES.authConfigs)}
           />
           <MobileStateButton
             label={t('chat.botCards.composio.checkAgain', 'Check again')}
@@ -311,7 +222,7 @@ export function MobileBotComposioConnect(
             {page ? (
               <MobileStateButton
                 label={t('bots.apps.openPageAgain', 'Open page again')}
-                onPress={() => openExternalLink(page)}
+                onPress={() => openConnectorLink(page)}
               />
             ) : null}
           </>
@@ -323,6 +234,128 @@ export function MobileBotComposioConnect(
             'bots.apps.closeKeepsSigningIn',
             'Sign-in continues in your browser if you close this.'
           )}
+        </SettingsNote>
+      )}
+    </>
+  )
+}
+
+/** Fix key: the key page alone, until Composio takes the new key. */
+export function MobileBotComposioFixKey(props: ComposioScope & { onClose: () => void }) {
+  const { onClose } = props
+  useBackClaim(() => {
+    onClose()
+    return true
+  })
+  const accepted = props.composio.status?.key === 'ok'
+  useEffect(() => {
+    if (accepted) {
+      onClose()
+    }
+  }, [accepted, onClose])
+  return <MobileBotComposioKey {...props} />
+}
+
+/** The host's Composio key: asked before an app's sign-in, or alone (Fix key) to replace a refused one. */
+export function MobileBotComposioKey(props: ComposioScope & { onClose: () => void }) {
+  const t = useMobileTranslation()
+  const { client } = props
+  const clipboard = useClipboardReader()
+  const [key, setKey] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const rejected = props.composio.status?.key === 'rejected'
+  const saveKey = async (value: string) => {
+    if (!client) {
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      composioSetKey.interpret(
+        await composioSetKey.request(client, { key: value }, { failWhenDisconnected: true })
+      )
+      setKey('')
+      rereadMobileComposio(props.hostKey, props.botId)
+    } catch (caught) {
+      setError(errorMessage(caught))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const trimmed = key.trim()
+  const save = () => {
+    if (trimmed && props.online && !busy) {
+      void saveKey(trimmed)
+    }
+  }
+  return (
+    <>
+      <SheetHeader
+        title={
+          rejected
+            ? t('chat.botCards.composio.replaceKey', 'Replace key')
+            : t('bots.apps.composio.connectTitle', 'Connect Composio')
+        }
+        subtitle={t('bots.apps.composio.once', 'Once, for all your bots')}
+        leading={{ label: t('common.cancel', 'Cancel'), onPress: props.onClose, disabled: busy }}
+        trailing={{
+          label: t('common.save', 'Save'),
+          onPress: save,
+          disabled: !trimmed || !props.online,
+          busy
+        }}
+      />
+      {props.banner}
+      {rejected ? (
+        <SettingsNote>
+          {t(
+            'chat.botCards.composio.keyRejectedNote',
+            'Composio no longer accepts the saved key. Make a new one in Composio under Settings, API Keys.'
+          )}
+        </SettingsNote>
+      ) : null}
+      <SettingsSection first={!rejected}>
+        <ListRow
+          leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+          accent
+          title={t('bots.composio.key.getKey', 'Get a key')}
+          accessibilityRole="link"
+          onPress={() => openConnectorLink(COMPOSIO_PAGES.apiKeys)}
+        />
+      </SettingsSection>
+      <TextField
+        style={styles.field}
+        label={t('bots.composio.key.label', 'Composio API key')}
+        placeholder={t('bots.composio.key.placeholder', 'Paste your key')}
+        value={key}
+        onChangeText={setKey}
+        secureTextEntry
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="off"
+        editable={!busy}
+        returnKeyType="done"
+        onSubmitEditing={save}
+        trailing={
+          <MobileBotTextButton
+            label={t('bots.slack.token.paste', 'Paste')}
+            onPress={() =>
+              void clipboard
+                .readText()
+                .then((text) => setKey(text.trim()))
+                .catch(() => {})
+            }
+          />
+        }
+      />
+      {error ? (
+        <SettingsNote error>{error}</SettingsNote>
+      ) : (
+        <SettingsNote>
+          {t('bots.apps.composio.keyOnHost', 'Stored on {{host}}; bots never see it.', {
+            host: props.hostName
+          })}
         </SettingsNote>
       )}
     </>

@@ -70,7 +70,8 @@ export function useAddRepoNestedReviewController({
     nestedGroupName: review.nestedGroupName,
     nestedImportScanId: review.nestedImportScanId,
     nestedRuntimeEnvironmentId: review.nestedRuntimeEnvironmentId,
-    getNestedRepoRuntimeKind: review.getNestedRepoRuntimeKind
+    getNestedRepoRuntimeKind: review.getNestedRepoRuntimeKind,
+    takeNestedProjectReporter: review.takeNestedProjectReporter
   })
   return { ...review, ...imports }
 }
