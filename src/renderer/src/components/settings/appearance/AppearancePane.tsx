@@ -11,6 +11,7 @@ import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { getAppIconEntries } from './appearance-app-icon-search'
+import { getHighlightsReplyBackgroundEntry } from './highlights-reply-background-search'
 import {
   getCodeEditorThemeEntries,
   getLanguageEntries,
@@ -104,6 +105,7 @@ export function AppearancePane({
   const interfaceSearchEntries = [
     { title: interfaceTitle },
     ...getThemeEntries(),
+    getHighlightsReplyBackgroundEntry(),
     ...getCodeEditorThemeEntries(),
     ...getZoomEntries(),
     ...getTypographyEntries(),

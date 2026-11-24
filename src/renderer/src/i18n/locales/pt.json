@@ -1496,6 +1496,17 @@
   },
   "settings": {
     "appearance": {
+      "highlightsReplyBackground": {
+        "blue": "Azul",
+        "colors": "cores",
+        "search": "fundo das respostas em Destaques",
+        "previewLabel": "Prévia do comentário",
+        "teal": "Verde-azulado",
+        "neutral": "Neutro",
+        "preview": "Valeu, já dá para revisar.",
+        "title": "Fundo das minhas respostas",
+        "description": "Escolha uma cor para seus comentários e respostas rápidas em Destaques."
+      },
       "language": {
         "title": "Idioma",
         "description": "Escolha o idioma usado pela interface do Orca.",

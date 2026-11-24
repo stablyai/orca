@@ -945,6 +945,17 @@
       "uiZoom": {
         "zoomOut": "Zoom out",
         "zoomIn": "Zoom in"
+      },
+      "highlightsReplyBackground": {
+        "blue": "Blue",
+        "teal": "Teal",
+        "neutral": "Neutral",
+        "preview": "Thanks, this is ready to review.",
+        "title": "My reply background",
+        "description": "Choose a color for your comments and quick replies in Highlights.",
+        "colors": "colors",
+        "previewLabel": "Comment preview",
+        "search": "Highlights reply background"
       }
     },
     "browser": {
