@@ -14,7 +14,10 @@ import {
 
 vi.mock('electron', () => ({ app: { on: vi.fn(), off: vi.fn() }, session: {} }))
 // A profile whose 2 extensions are starting, as right after launch; null once they have loaded.
-const profileLoad = vi.hoisted(() => ({ loading: null as Promise<void> | null }))
+const profileLoad = vi.hoisted(() => {
+  const state: { loading: Promise<void> | null } = { loading: null }
+  return state
+})
 vi.mock('../extensions/api-runtime/browser-extension-api-host', () => ({
   getBrowserExtensionProfileIdForSession: () => 'default'
 }))
