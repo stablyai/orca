@@ -143,6 +143,7 @@ function applyTerminalChatColors(
       '--chat-muted-foreground': 'initial',
       '--chat-inline-code': 'initial',
       '--chat-inline-code-foreground': 'initial',
+      '--chat-inline-code-border': 'initial',
       '--chat-code-block': 'initial',
       '--chat-selection': 'initial',
       '--chat-selection-foreground': 'initial',

@@ -72,7 +72,7 @@
   --color-chat-code-surface: var(--chat-code-surface);
   --color-chat-code-border: var(--chat-code-border);
   --color-chat-inline-code-surface: var(--chat-inline-code-surface);
-  --color-chat-inline-code-border: var(--chat-inline-code-border);
+  --color-chat-inline-code-border: var(--chat-inline-code-border-color);
   --color-chat-composer-surface: var(--chat-composer-surface);
   --color-chat-composer-border: var(--chat-composer-border);
   --color-chat-warning: var(--chat-warning);
@@ -902,10 +902,13 @@ body[data-modal-overlay-open]
       var(--chat-inline-code-base)
     )
   );
-  --chat-inline-code-border: color-mix(
-    in srgb,
-    var(--chat-source-foreground) var(--chat-inline-code-border-mix),
-    transparent
+  --chat-inline-code-border-color: var(
+    --chat-inline-code-border,
+    color-mix(
+      in srgb,
+      var(--chat-source-foreground) var(--chat-inline-code-border-mix),
+      transparent
+    )
   );
   --chat-composer-surface: color-mix(
     in srgb,

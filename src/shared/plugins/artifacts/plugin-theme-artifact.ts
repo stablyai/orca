@@ -64,6 +64,7 @@ export const PLUGIN_APP_THEME_TOKENS = [
   '--chat-muted-foreground',
   '--chat-inline-code',
   '--chat-inline-code-foreground',
+  '--chat-inline-code-border',
   '--chat-code-block',
   '--chat-selection',
   '--chat-selection-foreground',
