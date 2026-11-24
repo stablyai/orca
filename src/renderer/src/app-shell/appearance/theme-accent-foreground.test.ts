@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { accentInkHex, accentInkContrast } from '../../../../shared/color/accent-ink'
@@ -84,5 +85,39 @@ describe('safePluginThemeTokens: the accent label', () => {
 
   it('adds no label when the theme sets no accent or label', () => {
     expect(run({})).not.toHaveProperty('--theme-accent-foreground')
+  })
+})
+
+// Every theme Orca ships, run through the validator: its accent and label (its own or the built-in
+// ones for its base) must read at 4.5:1.
+const launchDir = fileURLToPath(
+  new URL('../../../../../resources/plugins/launch/', import.meta.url)
+)
+const bundledThemes = readdirSync(launchDir, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && existsSync(join(launchDir, entry.name, 'themes')))
+  .flatMap((entry) =>
+    readdirSync(join(launchDir, entry.name, 'themes'))
+      .filter((file) => file.endsWith('.json'))
+      .map((file) => join(launchDir, entry.name, 'themes', file))
+  )
+
+describe('bundled themes: accent label contrast', () => {
+  it('finds the bundled themes', () => {
+    expect(bundledThemes.length).toBeGreaterThan(0)
+  })
+
+  it.each(bundledThemes.map((path) => [basename(path), path]))('%s', (_name, path) => {
+    const theme = JSON.parse(readFileSync(path, 'utf8')) as {
+      base: 'light' | 'dark'
+      tokens: Record<string, string>
+    }
+    const builtIns = {
+      '--text-link': theme.base === 'light' ? lightAccent : darkAccent,
+      '--theme-accent-foreground': theme.base === 'light' ? lightLabel : darkLabel
+    }
+    const out = safePluginThemeTokens(theme.tokens, theme.base, builtIns, hexProbe)
+    const accent = out['--text-link'] ?? builtIns['--text-link']
+    const label = out['--theme-accent-foreground'] ?? builtIns['--theme-accent-foreground']
+    expect(ratio(accent, label)).toBeGreaterThanOrEqual(MIN)
   })
 })
