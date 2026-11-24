@@ -29,7 +29,16 @@ export function structuredAgentSessionToolCallBlock(
   itemId: string
 ): NativeChatToolCallBlock {
   if (action.kind === 'diff') {
-    return { type: 'tool-call', name: 'Diff', input: { path: action.path }, callId: itemId }
+    return {
+      type: 'tool-call',
+      name: 'Diff',
+      input: {
+        path: action.path,
+        // `paths` is the file list when `path` is only a count ("2 files").
+        ...(action.paths && action.paths.length > 0 ? { paths: action.paths } : {})
+      },
+      callId: itemId
+    }
   }
   return {
     type: 'tool-call',

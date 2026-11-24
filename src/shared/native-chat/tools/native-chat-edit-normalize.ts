@@ -254,5 +254,20 @@ export function editFilesFromToolPair(pair: {
   if (!patchText) {
     return null
   }
-  return editFilesFromPatchText(patchText, text(input?.path) ?? text(input?.file_path))
+  return editFilesFromPatchText(
+    patchText,
+    text(input?.path) ?? text(input?.file_path),
+    false,
+    countedFilePaths(input)
+  )
+}
+
+function countedFilePaths(input: Record<string, unknown> | null): string[] | null {
+  if (!input || !Array.isArray(input.paths)) {
+    return null
+  }
+  const paths = input.paths.filter(
+    (path): path is string => typeof path === 'string' && path.length > 0
+  )
+  return paths.length > 1 ? paths : null
 }
