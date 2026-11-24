@@ -1,13 +1,7 @@
 import { runLifecycleWriteTransaction } from '../db/lifecycle-write-transaction-runner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../db/orchestration-db'
-import {
-  acknowledgeWorkerDock,
-  readWorkerDock,
-  readWorkerDockResult,
-  readWorkerDockResultRefs
-} from './worker-dock-read'
-import { oldestWorkerDockResultRef } from '../../../../shared/orchestration/dock/worker-dock'
+import { acknowledgeWorkerDock, readWorkerDock, readWorkerDockResult } from './worker-dock-read'
 import { isOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 import { subscribeWorkerDock } from './worker-dock-stream'
 import { refreshWorkerDockActivity, workerDockActivitySource } from './worker-dock-activity'
@@ -70,16 +64,33 @@ function report(dispatchId: string, outcome: 'succeeded' | 'failed') {
 }
 
 describe('worker dock lifecycle projection', () => {
-  it('pages complete result windows when many reports have the same settlement time', () => {
-    for (let index = 0; index < 100; index++) {
-      report(worker(), 'succeeded')
+  it('streams active workers ahead of a full page of older failures', async () => {
+    for (let index = 0; index < 50; index++) {
+      report(worker(), 'failed')
     }
-    const first = readWorkerDockResultRefs(db, party)
-    const second = readWorkerDockResultRefs(db, party, oldestWorkerDockResultRef(first))
-    expect(first).toHaveLength(50)
-    expect(second).toHaveLength(50)
-    expect(new Set([...first, ...second].map((row) => row.id)).size).toBe(100)
+    const active = worker()
+    const emit = vi.fn<(snapshot: ReturnType<typeof readWorkerDock>) => void>()
+    const unsubscribe = subscribeWorkerDock(db, party, emit, undefined, true, true)
+    try {
+      const snapshot = emit.mock.lastCall?.[0]
+      expect(snapshot?.identities.map((row) => row.dispatchId)).toEqual([active])
+      expect(snapshot?.rows.map((row) => row.dispatchId)).toEqual([active])
+      expect(db.workerDockSources.read(session)?.open).toBe(true)
+
+      report(active, 'succeeded')
+      db.workerDockSources.invalidate(session)
+      db.crewChanges.notify(new Set(['topology']))
+      await Promise.resolve()
+
+      expect(emit.mock.lastCall?.[0].identities).toEqual([])
+      expect(emit.mock.lastCall?.[0]).not.toHaveProperty('results')
+      expect(readWorkerDockResult(db, party, active)?.outcome).toBe('succeeded')
+      expect(db.workerDockSources.read(session)?.open).toBe(false)
+    } finally {
+      unsubscribe()
+    }
   })
+
   it('preserves a normalized status episode through replay and retains unverifiable membership', () => {
     vi.useFakeTimers({ now: 1794657600000 })
     const id = worker()
@@ -292,6 +303,22 @@ describe('worker dock lifecycle projection', () => {
     })
     expect(read().identities).toEqual([])
     expect(readWorkerDockResult(db, party, id)?.body).toBe('The journal is verified.')
+  })
+
+  it('marks a failed report as the worker report and a start failure as a raw error', () => {
+    const reported = worker()
+    report(reported, 'failed')
+    expect(readWorkerDockResult(db, party, reported)).toMatchObject({
+      outcome: 'failed',
+      body: 'Verified the journal.',
+      report: true
+    })
+    const failed = worker()
+    db.failWorkerStart(failed, 'verification', 'Verification exited with code 1.')
+    expect(readWorkerDockResult(db, party, failed)).toMatchObject({
+      body: 'Verification exited with code 1.',
+      report: false
+    })
   })
 
   it('shares 200 durable failure acknowledgments across reopen and another paired client', () => {

@@ -12,31 +12,37 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import {
-  BOT_ITEM_PICKER_STATUSES,
+  botItemPickerStatuses,
   isOpenBotItemStatus,
   type BotItem,
   type BotItemStatus
 } from '../../../../../shared/bots/bot-items'
 import { BotItemSnoozeMenuItems, type BotItemSnoozing } from './BotItemSnooze'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
-import { useBotItemStatusName } from './bot-item-status-name'
+import { botItemPickName } from './bot-item-status-name'
+import type { BotRef } from '@/lib/bot-hosts'
+import { botHostTakes } from '../bot-host-capability'
+import { BOTS_ITEM_WAITING_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
 
 export function BotItemSelectionPill({
   items,
   snoozing,
+  botOf,
   onMove,
   onClear
 }: {
   items: readonly BotItem[]
   snoozing: BotItemSnoozing
-  /** Canceled asks for a reason first. */
+  /** Each item's bot, whose host says whether it has Waiting. */
+  botOf: (item: BotItem) => BotRef
+  /** Waiting asks what it waits on first; every other move is at once. */
   onMove: (to: BotItemStatus) => void
   onClear: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const statusName = useBotItemStatusName()
   const count = items.length
   const open = items.filter((item) => isOpenBotItemStatus(item.status))
+  const waiting = items.every((item) => botHostTakes(botOf(item), BOTS_ITEM_WAITING_CAPABILITY))
   return (
     <div className="sticky bottom-2 z-10 mx-auto flex items-center gap-0.5 rounded-full border border-border bg-popover py-0.5 pl-3 pr-1 text-xs shadow-lg">
       <span className="whitespace-nowrap font-medium tabular-nums">
@@ -56,14 +62,12 @@ export function BotItemSelectionPill({
               defaultValue_one: 'Move {{count}} item to'
             })}
           </DropdownMenuLabel>
-          {BOT_ITEM_PICKER_STATUSES.map((status) => (
+          {botItemPickerStatuses(waiting).map((status) => (
             <DropdownMenuItem key={status} onSelect={() => onMove(status)}>
               <span className="flex w-4 justify-center">
                 <BotItemStatusIcon status={status} />
               </span>
-              {status === 'canceled'
-                ? t('bots.items.menu.canceled', 'Canceled…')
-                : statusName(status)}
+              {botItemPickName(status, t)}
             </DropdownMenuItem>
           ))}
           {open.length > 0 ? (

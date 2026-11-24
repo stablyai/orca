@@ -165,6 +165,7 @@ function MobileNativeChatMessageImpl({
         pending={askPending}
         fontScale={fontScale}
         listsQuestions={false}
+        disclosureKey={`ask:${rowKey ?? message.id}`}
       />
     ) : null
   // A ref keeps the memoized Markdown context stable as the message streams.
@@ -226,6 +227,7 @@ function MobileNativeChatMessageImpl({
         <MobileNativeChatResolutionReceipt
           body={receipt}
           awaiting={awaiting}
+          disclosureKey={`receipt:${rowId}`}
           fontScale={fontScale}
         />
       </View>
@@ -325,6 +327,7 @@ function MobileNativeChatMessageImpl({
                   fontScale={fontScale}
                   onLongPress={onLongPress}
                   cardId={message.id}
+                  timestamp={message.timestamp}
                 />
               ) : null}
               {isUser ? (

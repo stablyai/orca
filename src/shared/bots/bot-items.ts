@@ -20,10 +20,10 @@ export const BOT_ITEM_OPEN_STATUSES: readonly BotItemStatus[] = [
   'needs_you'
 ]
 
-/** What the owner's status pickers offer: not Waiting, whose wait text they don't ask for. */
-export const BOT_ITEM_PICKER_STATUSES: readonly BotItemStatus[] = BOT_ITEM_STATUSES.filter(
-  (status) => status !== 'waiting'
-)
+/** What the owner's status pickers offer: Waiting only where the item's host has it. */
+export function botItemPickerStatuses(waiting: boolean): readonly BotItemStatus[] {
+  return waiting ? BOT_ITEM_STATUSES : BOT_ITEM_STATUSES.filter((status) => status !== 'waiting')
+}
 
 export function isOpenBotItemStatus(status: BotItemStatus): boolean {
   return BOT_ITEM_OPEN_STATUSES.includes(status)
@@ -123,12 +123,16 @@ export type BotItemLinkView =
       latest: string | null
       title: string | null
       state: BotItemWorkerState
+      /** Its start failed before an agent ran, so there is no worker to open. Absent from older hosts. */
+      neverStarted?: true
       host: string | null
       /** Activity read from orchestration's own records, never copied onto the item. */
       startedAt: number | null
       settledAt: number | null
       /** The report the worker ended with: its result. */
       report: { subject: string; body: string | null } | null
+      /** Why it ended, as the chat's worker strip shows it. Absent from older hosts. */
+      reason?: string | null
       pr: BotItemPullRequest | null
     }
   | { kind: 'pr'; ref: string; pr: BotItemPullRequest | null }
@@ -236,6 +240,10 @@ export type BotItem = {
   /** Needs you: the agent's comment asking the owner. `gist`: its body's first line; `decisions`: its
    *  question lines (`--ask`) and their quick replies (`--option`). */
   question: { eventId: string; text: string; gist?: string; decisions?: BotItemDecision[] } | null
+  /** The ask waiting on the owner, which can be older than `question` when a later question left it
+   *  open, and can outlast the Needs you another ask's answer ended; the item's view reads back to it.
+   *  Absent from older hosts and from lists. */
+  waitingAsk?: string
   closeNote: string | null
   /** Waiting: what it waits on, and when that was set. */
   wait: { text: string; at: number } | null

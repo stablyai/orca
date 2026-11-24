@@ -1,5 +1,5 @@
 // @protected-copy: delete-workspace confirmation buttons.
-import { useId, useState, type JSX } from 'react'
+import { useId, useState, type JSX, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -27,6 +27,7 @@ async function saveDeletionPreference(
 }
 
 export function DeleteWorktreeDialogFooter({
+  start,
   isMainWorktree,
   isDeleting,
   isDetachingChildren = false,
@@ -37,6 +38,7 @@ export function DeleteWorktreeDialogFooter({
   onDelete,
   onAlwaysDelete
 }: {
+  start?: ReactNode
   isMainWorktree: boolean
   isDeleting: boolean
   isDetachingChildren?: boolean
@@ -92,25 +94,30 @@ export function DeleteWorktreeDialogFooter({
     run()
   }
 
-  return (
+  const footer = (
     <DialogFooter
       className="mt-0"
       start={
-        !isMainWorktree && saveRemembered ? (
-          <>
-            <Checkbox
-              id={checkboxId}
-              checked={remember}
-              disabled={busy}
-              onCheckedChange={(checked) => setRemember(checked === true)}
-            />
-            <Label htmlFor={checkboxId} variant="dialog-muted">
-              {canForceDelete
-                ? t('worktree.delete.alwaysForceDelete', 'Always force delete')
-                : t('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")}
-            </Label>
-          </>
-        ) : null
+        start || (!isMainWorktree && saveRemembered) ? (
+          <div className="min-w-0 space-y-1.5">
+            {start}
+            {!isMainWorktree && saveRemembered ? (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id={checkboxId}
+                  checked={remember}
+                  disabled={busy}
+                  onCheckedChange={(checked) => setRemember(checked === true)}
+                />
+                <Label htmlFor={checkboxId} variant="dialog-muted">
+                  {canForceDelete
+                    ? t('worktree.delete.alwaysForceDelete', 'Always force delete')
+                    : t('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")}
+                </Label>
+              </div>
+            ) : null}
+          </div>
+        ) : undefined
       }
     >
       <DialogCancel disabled={busy}>
@@ -130,4 +137,5 @@ export function DeleteWorktreeDialogFooter({
       )}
     </DialogFooter>
   )
+  return start ? <div className="shrink-0 border-t border-border pt-3">{footer}</div> : footer
 }

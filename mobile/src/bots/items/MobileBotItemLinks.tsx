@@ -154,7 +154,7 @@ export function MobileBotItemLinks({
             bot={bot}
             worker={worker}
             nested={false}
-            onOpen={() => onOpenWorker(worker)}
+            onOpen={worker.neverStarted ? undefined : () => onOpenWorker(worker)}
           />
         )
       }

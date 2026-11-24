@@ -37,7 +37,7 @@ export type WorkerRest = Pick<WorkerTurnStop, WorkerRestFact> & {
 export type WorkerGone = Pick<
   WorkerTurnStop,
   'from' | 'lastOutput' | 'cause' | 'leftover' | 'neverStarted' | 'restartsOnMail'
-> & { reason: 'exited' | 'lost' | 'never-ready' }
+> & { reason: 'exited' | 'lost' | 'never-ready' | 'start-failed' }
 
 /** What an edge saw of its worker. `fence` names the rest: its process or chat turn and when it began,
  *  so the same rest seen twice is one fact and a new rest is another, even in the same presence. */

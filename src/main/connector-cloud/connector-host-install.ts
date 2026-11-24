@@ -15,6 +15,8 @@ import { refreshDueLinearLogins } from '../linear/accounts/linear-login-refresh'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence/loading-store/store'
 import { splitBotsByOlderBuildSupport, withGitHubMembersTagged } from '../../shared/bot-types'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../shared/orca-profiles/orca-cloud-team-policy'
+import { onTeamFeatureBlockChanged } from '../orca-profiles/cloud-auth/active-team-capabilities'
 
 const LINEAR_LOGIN_REFRESH_DELAY_MS = 30_000
 
@@ -108,12 +110,17 @@ export function installConnectorHost({
   )
   const stops: (() => void)[] = []
   // Only a host with Orca Cloud makes webhooks, as it alone hosts the connector.
-  if (runtime.getConnectorCloud()) {
+  const connector = runtime.getConnectorCloud()
+  if (connector) {
     runtime.setWebhooks(webhooks)
     const composio = installComposioUpkeep(runtime, webhooks)
     stops.push(
       () => webhooks.stop(),
-      () => composio.stop()
+      () => composio.stop(),
+      onTeamFeatureBlockChanged(ORCA_CLOUD_TEAM_POLICY_FLAGS.bots, () => {
+        connector.helloInputsChanged()
+        runtime.notifyBotsChanged({ kinds: ['settings', 'bot'] })
+      })
     )
     runtime.onClientEvent(
       (event) => {

@@ -150,7 +150,9 @@ export function botItemLinkRows(links: readonly BotItemLinkView[]): BotItemLinkR
       return
     }
     const key = prKey(botItemPrRefOfUrl(pr.url) ?? pr.ref)
-    if (!prs.has(key)) {
+    const known = prs.get(key)
+    // A worker's read carries the workspace the page reports for refresh; keep it over a bare link.
+    if (!known || (!known.worktreeId && pr.worktreeId)) {
       prs.set(key, pr)
     }
   }
@@ -244,6 +246,7 @@ export function botItemWorkerRow(
     startedAt: link.startedAt ?? 0,
     ...(link.settledAt !== null ? { settledAt: link.settledAt } : {}),
     dispatchId: link.latest ?? link.ref,
+    ...(link.neverStarted ? { neverStarted: true as const } : {}),
     ...(link.host ? { hostId: link.host } : {}),
     ...(link.report ? { summary: link.report.subject } : {})
   }

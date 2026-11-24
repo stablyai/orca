@@ -34,7 +34,7 @@ export const GOOGLE_READ_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       AS_OWNER,
       'A long thread comes in pages of about 16,000 characters; the last line gives the --offset for the next.',
-      'Each message lists its attachments as gmail:att:… refs; --download saves one (up to 2.9 MB) to --out, or under its own name here.',
+      'Each message lists its attachments as gmail:att:… refs; --download saves one (up to 2.9 MB) to --out, or under its own name here (numbered when taken); open the path it prints.',
       CONTENT
     ],
     examples: [

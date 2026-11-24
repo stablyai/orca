@@ -37,6 +37,8 @@ import { missedItsThread } from '../automations/bot-automation-launch'
 import { requireStructuredHost, runtimeBotChats } from './bot-chat-session'
 import { runtimeBotRunNotStarted, showBotRunNotStarted } from './bot-run-not-started'
 import { isQuietBotResult } from '../../shared/bot-quiet-result'
+import { structuredAgentSessionRefusalLine } from '../../shared/agent-session/requests/structured-agent-session-turn-failure'
+import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import { ANSWERED_TOGETHER_NOTICE } from '../../shared/automations/history/automation-run-answered-together'
 import * as resultNote from './bot-run-result-note'
 import { writeStructuredAgentSessionOrcaNote } from '../native-chat/agent-session-wire/structured-agent-session-orca-note'
@@ -164,7 +166,10 @@ export async function deliverBotRunResult(
     )
     const error = COPY.failed(ended.outcome)
     await resultNote.leave(deps, result, 'couldNotFinish', ended.message.trim() || error)
-    return { status: 'dispatch_failed', error: ended.error ?? error }
+    const why =
+      ended.error ??
+      structuredAgentSessionRefusalLine(ended.refusal, tuiAgentDisplayName(bot.agent) ?? undefined)
+    return { status: 'dispatch_failed', error: why ?? error }
   }
   const message = ended.message.trim()
   const completed: BotRunCompletion = {

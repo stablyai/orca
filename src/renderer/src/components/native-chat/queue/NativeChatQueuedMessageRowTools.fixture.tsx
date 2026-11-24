@@ -20,6 +20,11 @@ function Queue({ cards }: { cards: QueuedMessageCard[] }) {
   const controller: StructuredAgentSessionQueuedMessagesController = {
     cards,
     queueCapable: true,
+    holds: () => false,
+    agentMail: [],
+    agentMailEditable: () => false,
+    mailLeads: false,
+    stopping: false,
     clearCapable: true,
     pause: null,
     resume: async () => true,

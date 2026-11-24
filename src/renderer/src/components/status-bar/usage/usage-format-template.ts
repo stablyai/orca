@@ -81,7 +81,7 @@ export function buildUsageFormatValues(
 ): UsageFormatValues {
   const values: UsageFormatValues = {
     provider: getProviderDisplayName(p.provider),
-    plan: formatPlanLabel(p.planType) ?? ''
+    plan: formatPlanLabel(p.planType, p.provider) ?? ''
   }
   for (const [key, minutes, pick] of WINDOW_KEYS) {
     const candidate = pick(p)

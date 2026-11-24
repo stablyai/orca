@@ -146,7 +146,7 @@ const SHOW = defineMethod({
       throw new BotItemError('invalid_argument', 'after and before take an event id such as e41.')
     }
     const limit = BOT_ITEM_LIMITS.eventsPage
-    const [item] = botItemsForClient(await botItems.views([record]), context)
+    const [item] = botItemsForClient(await botItems.views([record], false, true), context)
     if (params.newest) {
       // The newest page; `earlierCursor` pages back from its oldest event.
       const events = await botItems.eventsBefore(record.uid, before, limit + 1)
@@ -205,7 +205,8 @@ const COMMENT = defineMethod({
       params.requestId,
       params.questionId === undefined ? undefined : (parseBotItemEventId(params.questionId) ?? -1),
       params.plain === true,
-      params.skills
+      params.skills,
+      params.skipped
     )
     botItems.changed([item])
     // The comment is stored and its mail owed: the reply never waits on the chat taking it.

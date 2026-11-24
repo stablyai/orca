@@ -38,17 +38,14 @@ import { MobileBotItemPage } from './items/MobileBotItemPage'
 import { MobileBotItemSheets, type BotItemSheet } from './items/MobileBotItemSheets'
 import { MobileBotItemSelectionBar } from './items/MobileBotItemRow'
 import { MobileBotItemsTab } from './items/MobileBotItemsTab'
-import {
-  MobileBotItemsFilterSheet,
-  MobileBotPanelHeader,
-  type PanelTab
-} from './MobileBotPanelHeader'
+import { MobileBotPanelHeader, type PanelTab } from './MobileBotPanelHeader'
 import { useBotItemMoves } from './items/use-bot-item-moves'
 import { usePhoneBotItems } from './items/use-phone-bot-items'
 import { usePhoneBotItemWalk } from './items/use-phone-bot-item-walk'
 import { openBotItemWorker } from './items/bot-item-worker-open'
 import { useBotAccessDecisionSheet } from './MobileBotAccessDecision'
 import { useBotPanelAutomations } from './use-bot-panel-automations'
+import { useMobileBotChatDelete } from './MobileBotChatDelete'
 
 type PanelPage = 'settings' | `item:${string}` | `automation:${string}`
 
@@ -101,7 +98,6 @@ export function MobileBotPanel(props: {
   const [sheet, setSheet] = useState<BotItemSheet | null>(null)
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const [filter, setFilter] = useState<BotItemFilter>(BOT_ITEM_NO_FILTER)
-  const [filtering, setFiltering] = useState(false)
   const [boxHeight, setBoxHeight] = useState(0)
   // Each Settings open mounts it afresh on the page asked for; the gear opens its list.
   const [settings, setSettings] = useState(() => ({
@@ -167,6 +163,7 @@ export function MobileBotPanel(props: {
     reads: props.routeBot.reads
   })
   const { review, sheet: accessSheet } = useBotAccessDecisionSheet(props, bot, showToast)
+  const deleteChat = useMobileBotChatDelete(props, automations.present, showToast)
   const { asks, count: needsYou } = usePhonePanelNeedsYouAsks({
     client: visible && pager.page !== 'settings' ? props.client : null,
     panel: props,
@@ -196,8 +193,6 @@ export function MobileBotPanel(props: {
     }
     return ok
   }
-
-  const filterLabel = filter.needsYou ? t('bots.items.filter.needsYou', 'Needs you only') : null
 
   const openWorker = (worker: BotChatTreeWorker) =>
     openBotItemWorker(worker, {
@@ -239,10 +234,9 @@ export function MobileBotPanel(props: {
         showsVerticalScrollIndicator={false}
       >
         <MobileBotItemsTab
-          botName={bot.name}
+          bot={bot}
           items={items}
           filter={filter}
-          filterLabel={filterLabel}
           onClearFilter={() => changeFilter(BOT_ITEM_NO_FILTER)}
           staleDays={staleDays}
           seenEventId={seenAtOpen ?? items.read?.seenEventId ?? 'e0'}
@@ -259,8 +253,7 @@ export function MobileBotPanel(props: {
             chat: props.treeActions.openChat,
             worker: openWorker,
             access: review,
-            connector: (need) => showSettings(need.page),
-            stopped: props.onViewRuns ?? ((id) => pager.open(`automation:${id}`))
+            connector: showSettings
           }}
           client={props.client}
           showToast={showToast}
@@ -279,7 +272,7 @@ export function MobileBotPanel(props: {
           hostKey={props.hostKey}
           activity={props.routeBot.activity}
           tree={tree}
-          treeActions={props.treeActions}
+          treeActions={deleteChat ? { ...props.treeActions, deleteChat } : props.treeActions}
           upNextActions={upNext}
           loading={props.routeBot.activityLoading}
           error={props.routeBot.activityError ?? null}
@@ -313,8 +306,8 @@ export function MobileBotPanel(props: {
         tab={tab}
         onTab={switchTab}
         needsYou={needsYou}
-        filterActive={filterLabel !== null}
-        onFilter={() => setFiltering(true)}
+        needsYouOnly={filter.needsYou}
+        onNeedsYouOnly={() => changeFilter({ ...filter, needsYou: !filter.needsYou })}
         onSettings={() => showSettings(undefined)}
       />
       {body}
@@ -412,12 +405,6 @@ export function MobileBotPanel(props: {
       />
       {accessSheet}
       {automations.sheets}
-      <MobileBotItemsFilterSheet
-        visible={filtering}
-        onClose={() => setFiltering(false)}
-        filter={filter}
-        onFilter={changeFilter}
-      />
     </BottomDrawerModalHost>
   )
 }

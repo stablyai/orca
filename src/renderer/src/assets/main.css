@@ -178,11 +178,25 @@
     --tab-active-indicator,
     var(--tab-active-foreground, var(--foreground))
   );
-  --color-tab-inactive-foreground: var(--tab-inactive-foreground, var(--muted-foreground));
+  /* --tab-inactive-label is set only in a light unfocused split group (below). */
+  --color-tab-inactive-foreground: var(
+    --tab-inactive-foreground,
+    var(--tab-inactive-label, var(--muted-foreground))
+  );
   /* Active right sidebar tool line: the theme's tab indicator, else the foreground it always used. */
   --color-activity-bar-indicator: var(--tab-active-indicator, var(--foreground));
   /* The theme's accent where one is set (link color); the built-in note blue otherwise. */
   --color-theme-accent: var(--text-link, var(--callout-note));
+  /* A theme-accent button's fill: the accent, unless no label reads on it (then the built-in accent). */
+  --color-theme-accent-fill: var(--theme-accent-fill, var(--text-link, var(--callout-note)));
+  /* Its hover: 12% toward the neutral opposite of the label, so the label keeps 4.5:1 either way. */
+  --color-theme-accent-fill-hover: color-mix(
+    in srgb,
+    var(--theme-accent-fill, var(--text-link, var(--callout-note))) 88%,
+    oklch(from var(--theme-accent-foreground) calc(1 - l) 0 0)
+  );
+  /* The label on a theme-accent fill: derived from the accent (near-black or white, whichever reads better). */
+  --color-theme-accent-foreground: var(--theme-accent-foreground);
   --color-git-graph-ref: var(--git-graph-ref);
   --color-git-graph-remote-ref: var(--git-graph-remote-ref);
   --color-git-graph-base-ref: var(--git-graph-base-ref);
@@ -350,9 +364,35 @@
   --split-divider: #868690;
   --split-divider-hover: #71717a;
   /* `--tab-bar` is set only by themes; keep in sync with PLUGIN_APP_THEME_CSS_FALLBACKS. */
-  /* White --card can't be lifted, so light mode recesses inactive tabs to keep the active one lighter. */
+  /* White --card can't be lifted, so light mode recesses inactive tabs to keep the active one lighter.
+     Why 8%: 4% left tabs ~2% apart on tinted bars; past 8% muted tab text drops under 4.5:1.
+     An app theme lowers the mix where its tab text would read worse (tab-contrast-mix.ts). */
+  --tab-contrast-mix: 8%;
   --tab-active: var(--tab-bar, var(--card));
-  --tab-inactive: color-mix(in srgb, var(--foreground) 4%, var(--tab-bar, var(--card)));
+  --tab-inactive: color-mix(
+    in srgb,
+    var(--foreground) var(--tab-contrast-mix),
+    var(--tab-bar, var(--card))
+  );
+}
+
+.light {
+  --tab-decoration-added: color-mix(in srgb, black 15%, var(--git-decoration-added));
+  --tab-decoration-renamed: color-mix(in srgb, black 20%, var(--git-decoration-renamed));
+  --tab-decoration-copied: color-mix(in srgb, black 20%, var(--git-decoration-copied));
+}
+
+/* The split's 95% opacity can take the muted label under 4.5:1. Themes check their actual fill. */
+.light [data-unfocused-split-group] {
+  --tab-inactive-label: var(
+    --tab-unfocused-inactive-label,
+    color-mix(in srgb, black 10%, var(--muted-foreground))
+  );
+}
+
+.light .bg-tab-inactive,
+.dark .bg-tab-active {
+  --tab-status-ink: var(--tab-status-mixed-ink);
 }
 
 .dark {
@@ -473,8 +513,14 @@
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
   --split-divider: #71717a;
   --split-divider-hover: #a1a1aa;
-  --tab-active: color-mix(in srgb, var(--foreground) 6%, var(--tab-bar, var(--card)));
+  --tab-contrast-mix: 11%;
+  --tab-active: color-mix(
+    in srgb,
+    var(--foreground) var(--tab-contrast-mix),
+    var(--tab-bar, var(--card))
+  );
   --tab-inactive: var(--tab-bar, var(--card));
+  --tab-decoration-deleted: color-mix(in srgb, white 35%, var(--git-decoration-deleted));
 }
 
 /* Status and diff colors follow the chat scheme without copying the app palette. */
@@ -500,6 +546,8 @@
   --status-warning-foreground: color-mix(in srgb, var(--status-warning) 70%, var(--foreground));
   /* GitHub's own hues for the two callout kinds no status token covers. */
   --callout-note: #0969da;
+  /* Keep in step with accentInkHex (src/shared/color/accent-ink.ts): white reads better on this accent. */
+  --theme-accent-foreground: #fafafa;
   --callout-important: #8250df;
   --git-decoration-added: #587c0c;
   --git-decoration-modified: #895503;
@@ -537,6 +585,8 @@
   /* Warning text on a plain surface; the bare hue is ~3:1 on light backgrounds. */
   --status-warning-foreground: color-mix(in srgb, var(--status-warning) 70%, var(--foreground));
   --callout-note: #4493f8;
+  /* Keep in step with accentInkHex (src/shared/color/accent-ink.ts): near-black reads better on this accent. */
+  --theme-accent-foreground: #171717;
   --callout-important: #ab7df8;
   --git-decoration-added: #81b88b;
   --git-decoration-modified: #e2c08d;
@@ -1207,6 +1257,49 @@ body[data-modal-overlay-open]
 }
 
 /* SortableTab renders activity as a DOM child, reserving ::before/::after for drop-indicator feedback. */
+
+/* Icon-only slots in a condensed strip: the identity icon centred; controls are display:none so
+   nothing clipped stays focusable, and the title stays for screen readers and the hover card. */
+[data-tab-density='icon'] > * {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+[data-tab-density='icon'] > * > * {
+  margin-inline: 0;
+  flex: none;
+}
+
+[data-tab-density='icon'] button,
+[data-tab-density='icon'] [data-tab-compact-hide] {
+  display: none;
+}
+
+[data-tab-density='icon'] .tab-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-tab-density='icon'] [data-tab-icon-badge] {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+}
+
+[data-tab-density='icon'] [data-tab-dirty-dot] {
+  display: block;
+}
+
+[data-tab-density='icon'] > :focus-visible {
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
 
 #root {
   height: 100dvh;
@@ -2598,11 +2691,6 @@ html.native-shell .app-layout {
   border-radius: var(--radius-md);
 }
 
-[data-settings-scroll-list] .settings-target-highlight {
-  --settings-target-tint: color-mix(in srgb, var(--foreground) 12%, transparent);
-  border-radius: var(--radius-md);
-}
-
 @media (prefers-reduced-motion: no-preference) {
   .settings-target-highlight {
     animation: settings-target-highlight-fade 3s ease-out forwards;
@@ -2696,6 +2784,24 @@ html.native-shell .app-layout {
 /* The library sets `font-family: sans-serif` on every descendant, so inheriting from the root never lands. */
 .repo-icon-emoji-picker .EmojiPickerReact * {
   font-family: var(--font-sans);
+}
+
+/* Inside the sidebar project card: no inner card, tighter header, smaller emoji. */
+.repo-icon-emoji-picker[data-compact] .EmojiPickerReact {
+  --epr-bg-color: transparent;
+  --epr-category-label-bg-color: var(--popover);
+  --epr-horizontal-padding: 0px;
+  --epr-header-padding: 0 0 6px;
+  --epr-category-navigation-button-size: 20px;
+  --epr-category-label-height: 22px;
+  --epr-emoji-size: 20px;
+  --epr-emoji-padding: 4px;
+}
+
+.repo-icon-emoji-picker[data-compact] .epr-emoji-category-label {
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--muted-foreground);
 }
 
 .repo-icon-emoji-picker .epr-body {

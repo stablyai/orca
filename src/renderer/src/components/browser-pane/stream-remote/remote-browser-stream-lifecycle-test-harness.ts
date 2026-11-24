@@ -223,7 +223,7 @@ export function createHarness() {
     setStatus: (status) => statusLog.push(status),
     clearFrame: () => {},
     handleFrameBytes: () => {},
-    setPointer: () => {}
+    viewerEvents: { onPointer: () => {}, onAgentCursor: () => {}, onDriver: () => {} }
   })
 
   return {

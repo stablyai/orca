@@ -1,5 +1,5 @@
 import { useNativeChatProseText } from '../../preferences/native-chat-text-settings'
-import { Fragment, memo, useContext } from 'react'
+import { Fragment, memo, useContext, useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ArrowUpRight, Bot } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
@@ -12,8 +12,10 @@ import {
   agentMessagePrimarySender,
   agentMessageCanCopy,
   agentMessageSenderCanOpen,
+  agentMessageWaitingQueuedId,
   type AgentMessageHeading
 } from '../../../../../../src/shared/agent-session/view/messages/agent-message-presentation'
+import { agentMessagePreviewLine } from '../../../../../../src/shared/agent-session/view/messages/agent-message-preview-line'
 import { mobileNativeChatDisplayCopyText } from '../messages/mobile-native-chat-display-copy'
 import { MobileNativeChatMarkdown } from '../message-content/MobileNativeChatMarkdown'
 import { MobileNativeChatMessageTime } from '../messages/MobileNativeChatMessageTime'
@@ -28,6 +30,7 @@ import {
   useMobileAgentMessageName,
   useMobileAgentMessageView
 } from './mobile-agent-message-context'
+import { MobileWaitingAgentMailActions } from './MobileWaitingAgentMailActions'
 import {
   MobileNativeChatEventName,
   MobileNativeChatEventRow
@@ -35,7 +38,7 @@ import {
 
 type Sender = AgentMessageSource['senders'][number]
 
-function lead(heading: AgentMessageHeading, t: Translate): string {
+export function mobileAgentMessageLead(heading: AgentMessageHeading, t: Translate): string {
   switch (heading) {
     case 'started':
     case 'started-agent':
@@ -56,6 +59,27 @@ function lead(heading: AgentMessageHeading, t: Translate): string {
   }
 }
 
+/** The one word drawn before the name for a start, a hand-off or a task; a plain message draws none. */
+function kindWord(heading: AgentMessageHeading, t: Translate): string | null {
+  switch (heading) {
+    case 'started':
+    case 'started-agent':
+      return t('chat.agentMessage.kind.started', 'Started')
+    case 'reopened-worker':
+      return t('chat.agentMessage.kind.reopened', 'Reopened')
+    case 'followed-up-worker':
+      return t('chat.agentMessage.kind.followedUp', 'Follow-up')
+    case 'handed-off':
+      return t('chat.agentMessage.kind.handedOff', 'Handed off')
+    case 'task':
+      return t('chat.agentMessage.kind.task', 'Task')
+    case 'worker':
+    case 'coordinator':
+    case 'generic':
+      return null
+  }
+}
+
 type AgentMessageCardProps = {
   message: NativeChatMessage
   from: AgentMessageSource
@@ -66,7 +90,8 @@ type AgentMessageCardProps = {
 }
 
 /** A message between agents (a start, a task, a worker's update) as one status row: the sender's agent
- *  mark with its live state, "Update from <name>", the open icon, and the message opening below. */
+ *  mark with its live state, a kind word for a start or a task, the name, the message's first line, the
+ *  open icon, and the whole message opening below. */
 export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAgentMessageCard({
   message,
   from,
@@ -77,39 +102,59 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
 }: AgentMessageCardProps) {
   const t = useMobileTranslation()
   const prose = useNativeChatProseText(fontScale)
-  const text = mobileNativeChatDisplayCopyText(message)
+  // A sender's status change redraws the row; the body's text and first line are read once per body.
+  const text = useMemo(() => mobileNativeChatDisplayCopyText(message), [message])
   const sender = agentMessagePrimarySender(from)
   const unnamed = t('session.agentMessageAttribution.unnamedSender', 'an agent')
   const senderName = useMobileAgentMessageName(sender ?? NO_SENDER, unnamed)
   const view = useMobileAgentMessageView(sender)
   const { shown, more } = agentMessageSendersShown(from)
-  const words = lead(agentMessageHeading(from, message), t)
+  const heading = agentMessageHeading(from, message)
+  const words = mobileAgentMessageLead(heading, t)
+  const kind = kindWord(heading, t)
+  const preview = useMemo(() => agentMessagePreviewLine(text).line, [text])
   const items = message.agentStartItems ?? []
   const merged = message.mergedEvents ?? []
   const canCopy = agentMessageCanCopy(text)
   // Mail from several senders opens each from its details.
   const several = shown.length > 1
+  // Not taken by the agent yet: dimmed, with no time, until its delivered row replaces it in place.
+  const waiting = message.queued === true
+  // A row with details is a button VoiceOver names by its label, which says a waiting one is not sent yet.
   const expandable =
+    waiting ||
     canCopy ||
     several ||
     merged.length > 0 ||
     message.blocks.some((block) => block.type === 'image-ref')
-  return (
+  const waitingId = agentMessageWaitingQueuedId(message)
+  const openSender =
+    sender && !several ? <OpenSender from={from} sender={sender} unnamed={unnamed} /> : null
+  const row = (
     <MobileNativeChatEventRow
-      testID="agent-message-card"
+      testID={waiting ? 'agent-message-card-waiting' : 'agent-message-card'}
       icon={<SenderMark agentType={view.agentType} />}
-      // The live state never marks a row failed: a restarted worker would un-fail it.
-      badge={view.dot === 'working' ? 'running' : null}
+      // The live state never marks a row failed: a restarted worker would un-fail it. Waiting mail shows no status.
+      badge={!waiting && view.dot === 'working' ? 'running' : null}
       label={`${words} ${sender ? senderName : unnamed}${more > 0 ? ` +${more}` : ''}${
         items.length > 0
           ? ` ${t('chat.agentMessage.row.forItems', 'for')} ${items.map((item) => item.title).join(', ')}`
           : ''
+      }${waiting ? `, ${t('chat.agentMessage.row.notSentYet', 'not sent yet')}` : ''}${
+        preview ? `: ${preview}` : ''
       }`}
       action={
-        sender && !several ? <OpenSender from={from} sender={sender} unnamed={unnamed} /> : null
+        waitingId ? (
+          <View style={styles.waitingActions}>
+            {openSender}
+            <MobileWaitingAgentMailActions queuedMessageId={waitingId} />
+          </View>
+        ) : (
+          openSender
+        )
       }
-      timestamp={message.timestamp}
-      disclosureKey={`agent-message:${message.id}`}
+      timestamp={waiting ? null : message.timestamp}
+      disclosureKey={`agent-message:${message.queuedMessageId ?? message.id}`}
       fontScale={fontScale}
       onLongPress={onLongPress}
       details={
@@ -138,7 +183,7 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
             {status}
             {merged.map((earlier) => {
               const earlierWords = earlier.from
-                ? lead(agentMessageHeading(earlier.from, earlier), t)
+                ? mobileAgentMessageLead(agentMessageHeading(earlier.from, earlier), t)
                 : null
               const earlierText = mobileNativeChatDisplayCopyText(earlier)
               return (
@@ -182,26 +227,33 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
         ) : null
       }
     >
-      {words}{' '}
-      {shown.length === 0
-        ? unnamed
-        : shown.map((shownSender, index) => (
-            <Fragment key={shownSender.party.address}>
-              {index > 0 ? ', ' : null}
-              <SenderName sender={shownSender} unnamed={unnamed} />
-            </Fragment>
-          ))}
-      {more > 0 ? ` +${more}` : null}
-      {items.length > 0 ? (
+      {(open) => (
         <>
-          {` ${t('chat.agentMessage.row.forItems', 'for')} `}
-          <MobileNativeChatEventName>
-            {items.map((item) => item.title).join(', ')}
-          </MobileNativeChatEventName>
+          {kind ? `${kind} ` : null}
+          {shown.length === 0
+            ? unnamed
+            : shown.map((shownSender, index) => (
+                <Fragment key={shownSender.party.address}>
+                  {index > 0 ? ', ' : null}
+                  <SenderName sender={shownSender} unnamed={unnamed} />
+                </Fragment>
+              ))}
+          {more > 0 ? ` +${more}` : null}
+          {items.length > 0 ? (
+            <>
+              {` ${t('chat.agentMessage.row.forItems', 'for')} `}
+              <MobileNativeChatEventName>
+                {items.map((item) => item.title).join(', ')}
+              </MobileNativeChatEventName>
+            </>
+          ) : null}
+          {/* The open message shows its first line itself. */}
+          {preview && !open ? ` ${preview}` : null}
         </>
-      ) : null}
+      )}
     </MobileNativeChatEventRow>
   )
+  return waiting ? <View style={styles.waiting}>{row}</View> : row
 })
 
 /** Stands in so the name hook runs in every render; its answer is unused without a sender. */
@@ -270,6 +322,8 @@ function SenderMark({
 
 const styles = themedStyleSheet(() => ({
   copy: { alignSelf: 'flex-start' },
+  waiting: { opacity: 0.7 },
+  waitingActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   mergedEntry: { gap: spacing.xs },
   mergedMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   mergedWords: { color: colors.textMuted, fontSize: typography.metaSize, flexShrink: 1 },

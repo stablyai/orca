@@ -72,6 +72,10 @@ function stopPluginsAndSessions(
   // Final stats flush closes working sessions synchronously; quit supplies no terminating hook to preserve their duration.
   core.starNag?.stop()
   core.automations?.stop()
+  core.stopTeamPolicyRefresh?.()
+  core.stopTeamPolicyRefresh = null
+  core.stopTeamPluginPolicy?.()
+  core.stopTeamPluginPolicy = null
   if (core.runtime) {
     getWorkspaceCleanupRunner(core.runtime)?.stop()
   }

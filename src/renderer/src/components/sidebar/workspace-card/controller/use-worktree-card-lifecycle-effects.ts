@@ -136,7 +136,11 @@ export function useWorktreeCardLifecycleEffects({
     // Why: fallback poll behind activity triggers; stopped while hidden to avoid waking idle workspaces.
     return installWindowVisibilityInterval({
       run: () =>
-        void fetchIssue(repo.path, issueNumber, { repoId: repo.id, ownerRepo: issueRepository }),
+        void fetchIssue(repo.path, issueNumber, {
+          repoId: repo.id,
+          ownerRepo: issueRepository,
+          background: true
+        }),
       intervalMs: 5 * 60_000
     })
   }, [repo, worktree.linkedIssue, issueRepository, fetchIssue, issueCacheKey, showIssue])

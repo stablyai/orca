@@ -3,12 +3,7 @@
 // workers started for an item linked from orchestration's record. Changes owed to an item's chat go out
 // as orchestration mail; startup sends any a crash left owed.
 import type { Bot } from '../../shared/bot-types'
-import {
-  BOT_ITEM_EVENT_KINDS,
-  botItemEventId,
-  type BotItem,
-  type BotItemEvent
-} from '../../shared/bots/bot-items'
+import { botItemEventId, type BotItem, type BotItemEvent } from '../../shared/bots/bot-items'
 import { botItemsNeedingOwnerByBot } from '../../shared/bots/bot-item-groups'
 import { botItemQuestionView } from '../../shared/bots/bot-item-ask'
 import {
@@ -28,25 +23,11 @@ import {
   type BotItemGitHubCache
 } from './bot-items-link-join'
 import type { BotItemsRemote } from './bot-items-ops'
-import type {
-  BotItemEventRecord,
-  BotItemMail,
-  BotItemRecord,
-  BotItemSource
-} from './bot-items-schema'
+import { eventViewOf } from './bot-items-rows'
+import type { BotItemMail, BotItemRecord, BotItemSource } from './bot-items-schema'
 import type { BotWorkRuntime } from './bot-work-runtime'
 import type { BotsDbWorkerClient } from './db-worker/bots-db-worker-client'
 import { BotItemUsageLimitWaits } from './bot-item-usage-limit-wait'
-
-function eventView(event: BotItemEventRecord): BotItemEvent {
-  return {
-    id: botItemEventId(event.id),
-    kind: BOT_ITEM_EVENT_KINDS.find((kind) => kind === event.kind) ?? 'edited',
-    actor: event.actor,
-    data: event.data,
-    at: event.createdAt
-  }
-}
 
 export type BotItemsHostDeps = {
   workRuntime: BotWorkRuntime
@@ -146,10 +127,10 @@ export class BotItemsHost {
     await this.sendOwedMail()
   }
 
+  /** Leaves the bots DB worker client alone: the runtime owns it, shared with the work record. */
   dispose(): void {
     this.usageLimitWaits.stop()
     this.stores.clear()
-    this.deps.db.dispose()
   }
 
   /** Where a chat came from: the bot's Home Chat, a connector thread, an automation run, a side chat. */
@@ -261,11 +242,19 @@ export class BotItemsHost {
 
   /** Items as the wire shows them, links joined in one batch; `summary` leaves out the long texts a
    *  list doesn't show. */
-  async views(items: readonly BotItemRecord[], summary = false): Promise<BotItem[]> {
+  async views(
+    items: readonly BotItemRecord[],
+    summary = false,
+    /** Each Needs you item's waiting ask too: for the item's own view. */
+    withWaitingAsks = false
+  ): Promise<BotItem[]> {
     if (items.length === 0) {
       return []
     }
-    const rows = await this.store().viewRows(items.map((item) => item.uid))
+    const rows = await this.store().viewRows(
+      items.map((item) => item.uid),
+      withWaitingAsks
+    )
     const refs = Object.values(rows.links)
       .flat()
       .flatMap((link) => (link.kind === 'dispatch' ? [link.ref] : []))
@@ -292,6 +281,7 @@ export class BotItemsHost {
           ? { botId: madeBy.botId, name: nameOf(madeBy.botId), chatId: madeBy.chatId }
           : null,
         question: question ? botItemQuestionView(botItemEventId(question.id), question.data) : null,
+        ...(rows.waitingAsks[item.uid] ? { waitingAsk: rows.waitingAsks[item.uid] } : {}),
         closeNote: summary ? null : item.closeNote,
         wait: wait && waitText !== null ? { text: waitText, at: wait.createdAt } : null,
         links: (rows.links[item.uid] ?? []).map((link) =>
@@ -310,12 +300,17 @@ export class BotItemsHost {
   }
 
   async events(uid: string, afterId: number, limit: number): Promise<BotItemEvent[]> {
-    return (await this.store().events(uid, afterId, limit)).map(eventView)
+    return (await this.store().events(uid, afterId, limit)).map(eventViewOf)
   }
 
   /** The newest `limit` events before `beforeId` (0: the newest of all), oldest first. */
   async eventsBefore(uid: string, beforeId: number, limit: number): Promise<BotItemEvent[]> {
-    return (await this.store().eventsBefore(uid, beforeId, limit)).map(eventView)
+    return (await this.store().eventsBefore(uid, beforeId, limit)).map(eventViewOf)
+  }
+
+  /** A write to any Dispatch's rows (the database's notice), or a paired server's verdict on one. */
+  workersWritten(dispatchIds: readonly string[] = [], deleted = false): void {
+    this.join.workersWritten(dispatchIds, deleted)
   }
 
   /** A Dispatch row changed: a start for an item is linked, and linked items re-read. */

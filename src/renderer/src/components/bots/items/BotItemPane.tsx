@@ -18,7 +18,7 @@ import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-ke
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 import { BotAvatar } from '../BotAvatar'
 import type { BotItemWalkState } from './use-bot-item-walk'
-import { BotItemStepper, botItemStepArrow } from './BotItemStepper'
+import { BotItemStepper, BotItemSteppingContext, botItemStepArrow } from './BotItemStepper'
 import { useBotItemChords, type BotItemStepOrigin } from './use-bot-item-chords'
 
 const PENDING_NOTICE_DELAY_MS = 400
@@ -119,6 +119,11 @@ export function BotItemPaneFrame({
       return
     }
     const before = shown.current.uid
+    // An arrow pressed while focus stays in the text: it takes focus now, so the next item's box opens
+    // with the arrows in view for focus to come back to.
+    if (from === 'previous' || from === 'next') {
+      botItemStepArrow(root.current, from)?.focus({ preventScroll: true })
+    }
     flushSync(() => walk.step(direction))
     if (shown.current.uid !== before) {
       focusAfterStep(root.current, comment.current, from)
@@ -202,7 +207,9 @@ export function BotItemPaneFrame({
       {walk.failed ? <BotItemsReadFailed onRetry={walk.retry} closedPage /> : null}
       {/* min-w-0: a fieldset is never narrower than its content, so one long unwrapped line widened the item. */}
       <fieldset disabled={offline} className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {children({ comment, nav, onShown, onLoading })}
+        <BotItemSteppingContext value={walk.pending}>
+          {children({ comment, nav, onShown, onLoading })}
+        </BotItemSteppingContext>
       </fieldset>
       <BotItemAnnouncer ref={announcer} />
     </div>

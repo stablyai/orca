@@ -89,8 +89,9 @@ export function BotAppBrandLogo({
 }: {
   /** A connector, or an MCP app by its id. */
   app: { id: string; Icon?: ComponentType<{ className?: string }> }
-  /** xs: a link row's icon column; sm: a chip in a list of names; md: a list row; lg: a setup dialog's heading. */
-  size?: 'xs' | 'sm' | 'md' | 'lg'
+  /** xs: a link row's icon column; sm: a chip in a list of names; md: a connector row; catalog: Add apps'
+   *  list rows; lg: a setup dialog's heading. */
+  size?: 'xs' | 'sm' | 'md' | 'catalog' | 'lg'
 }): React.JSX.Element {
   const bare = useContext(BotLogoBare)
   const brand = BRANDS[app.id]
@@ -133,7 +134,17 @@ export function BotAppBrandLogo({
       logo={brand?.logo}
       icon={
         brand?.logo || !Icon ? undefined : (
-          <Icon className={size === 'lg' ? 'size-6.5' : size === 'sm' ? 'size-3.5' : 'size-5'} />
+          <Icon
+            className={
+              size === 'lg'
+                ? 'size-6.5'
+                : size === 'catalog'
+                  ? 'size-6'
+                  : size === 'sm'
+                    ? 'size-3.5'
+                    : 'size-5'
+            }
+          />
         )
       }
       tile={LOGO_TILES.brand[app.id]}

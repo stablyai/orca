@@ -220,7 +220,10 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
     }
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
+      // A new epoch retires the publisher, so an attached window keeps its own.
+      publicationEpoch: this.hasAuthoritativeWindow()
+        ? snapshot.publicationEpoch
+        : `headless:${Date.now().toString(36)}`,
       snapshotVersion: snapshot.snapshotVersion + 1,
       tabs
     }
