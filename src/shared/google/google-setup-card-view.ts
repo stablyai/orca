@@ -11,15 +11,17 @@ import {
   currentGoogleSetupStep,
   GOOGLE_SETUP_STEPS,
   googleSetupAwaitsKey,
+  googleSetupRunActive,
   personDoesGoogleSetupStep,
   type GoogleSetupCard,
   type GoogleSetupRun,
-  type GoogleSetupStep
+  type GoogleSetupStep,
+  type GoogleSetupStepStatus
 } from './google-setup-run'
 
 /** A choice made before the bot started in Google Cloud can still change; after, it says so in chat. */
 export function googleSetupChoiceChangeable(run: GoogleSetupRun): boolean {
-  return run.state === 'running' && (run.steps.project?.status ?? 'pending') === 'pending'
+  return googleSetupRunActive(run) && (run.steps.project?.status ?? 'pending') === 'pending'
 }
 
 /** The services the owner picked on the services card, or null before they answered. */
@@ -54,9 +56,22 @@ export function googleSetupShownSteps(run: GoogleSetupRun): GoogleSetupStep[] {
   return GOOGLE_SETUP_STEPS.filter((step) => run.steps[step]?.status !== 'skipped')
 }
 
+/** A step's status as the list shows it: a stopped run waits on nobody, so its open step reads as not started. */
+export function googleSetupShownStepStatus(
+  run: GoogleSetupRun,
+  step: GoogleSetupStep
+): GoogleSetupStepStatus {
+  const status = run.steps[step]?.status ?? 'pending'
+  return run.state === 'cancelled' && (status === 'active' || status === 'needs-user')
+    ? 'pending'
+    : status
+}
+
 export type GoogleSetupProgressView = {
   steps: GoogleSetupStep[]
-  state: 'working' | 'waiting' | 'done' | null
+  state: 'working' | 'waiting' | 'done' | 'stopped' | null
+  /** The owner's Stop setup: on the newest copy while the run is under way. */
+  stop: boolean
   /** One signed-in account is used without asking; this switches it before the bot starts in Google Cloud. */
   switchAccount: boolean
   /** The step the bot is doing now, which the owner may take ("Let me do this one"). */
@@ -91,7 +106,7 @@ export function googleSetupProgressView(
     current === 'connect' || steps.some((step) => run.steps[step]?.status === 'needs-user')
   const botDoing =
     newest &&
-    run.state === 'running' &&
+    googleSetupRunActive(run) &&
     current !== null &&
     current !== 'connect' &&
     run.steps[current]?.status !== 'needs-user' &&
@@ -101,11 +116,14 @@ export function googleSetupProgressView(
     state:
       run.state === 'done'
         ? 'done'
-        : waiting
-          ? 'waiting'
-          : run.state === 'running'
-            ? 'working'
-            : null,
+        : run.state === 'cancelled'
+          ? 'stopped'
+          : waiting
+            ? 'waiting'
+            : googleSetupRunActive(run)
+              ? 'working'
+              : null,
+    stop: newest && googleSetupRunActive(run),
     switchAccount:
       newest &&
       run.steps.account?.status === 'done' &&
@@ -128,8 +146,10 @@ export type GoogleSetupStepCardView = {
   done: boolean
   /** The bot took it back ("Take over from here"); a step handed to the person stays theirs until then. */
   handedBack: boolean
-  /** Done and Take over act: the step is the person's, open, and this is the newest copy. */
+  /** Done and Take over act: the step is the person's, open, the run under way, and this is the newest copy. */
   acts: boolean
+  /** Open, but the run ended or stopped: its buttons go. */
+  ended: boolean
   /** The policy box is the person's own tick; Take over can't do it for them. */
   takeOver: boolean
   /** In Guide me here the bot reads the page the person clicks in. */
@@ -144,7 +164,8 @@ export function googleSetupStepCardView(
   const status = run.steps[step]?.status ?? 'pending'
   const done = status === 'done' || status === 'skipped'
   const handedBack = !done && status !== 'needs-user' && !personDoesGoogleSetupStep(run, step)
-  const acts = !done && !handedBack && newest
+  const ended = !done && !googleSetupRunActive(run)
+  const acts = !done && !handedBack && !ended && newest
   const shown = googleSetupShownSteps(run)
   return {
     n: shown.indexOf(step) + 1,
@@ -152,6 +173,7 @@ export function googleSetupStepCardView(
     done,
     handedBack,
     acts,
+    ended,
     takeOver: step !== 'branding',
     watching: acts && run.mode === 'guide-here' && status === 'active'
   }

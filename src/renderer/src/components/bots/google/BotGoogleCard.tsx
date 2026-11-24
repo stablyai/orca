@@ -9,7 +9,12 @@ import type { Bot } from '../../../../../shared/bot-types'
 import { BotConnectorDetails, BotConnectorRowFrame } from '../BotConnectorRow'
 import type { BotConnectorTitle } from '../bot-connector-titles'
 import { botErrorMessage } from '../bot-presentation'
-import { startGoogleSetupInChat } from './setup-cards/google-setup-run-store'
+import {
+  startGoogleSetupInChat,
+  stopGoogleSetup,
+  useGoogleSetupRun
+} from './setup-cards/google-setup-run-store'
+import { googleSetupRunActive } from '../../../../../shared/google/google-setup-run'
 import { botTarget } from '@/lib/bot-hosts'
 import { googleServiceLabel } from './google-copy'
 import { useBotHostLabel } from '../use-bot-host-label'
@@ -47,6 +52,7 @@ export function BotGoogleCard({
   const confirm = useConfirmationDialog()
   const host = useBotHostLabel(bot.hostId)
   const signIn = useGoogleSignIn(botTarget(bot), bot)
+  const settingUp = googleSetupRunActive(useGoogleSetupRun(bot))
   if (view.status !== 'ready' || bot.google !== true) {
     return null
   }
@@ -70,6 +76,9 @@ export function BotGoogleCard({
     void startGoogleSetupInChat(bot, 'settings').catch((error: unknown) =>
       toast.error(botErrorMessage(error))
     )
+  }
+  const stop = (): void => {
+    void stopGoogleSetup(bot).catch((error: unknown) => toast.error(botErrorMessage(error)))
   }
   const remove = async (): Promise<void> => {
     const confirmed = await confirm({
@@ -107,7 +116,9 @@ export function BotGoogleCard({
             ? t('bots.google.bot.signedOutOnHost', 'Not connected on {{host}}', { host })
             : t('bots.google.bot.signedOut', 'Not connected on this computer')
       }
-      status={null}
+      status={
+        settingUp ? { label: t('bots.google.bot.settingUp', 'Setting up'), tone: 'neutral' } : null
+      }
       fix={connected ? null : { label: t('bots.google.connect', 'Connect Google'), onClick: setUp }}
       actions={{
         ...(connected && defaultAccount !== undefined
@@ -117,6 +128,9 @@ export function BotGoogleCard({
                 onClick: () => void signIn.connect(googleSignInChoices(fallback))
               }
             }
+          : {}),
+        ...(settingUp
+          ? { stop: { label: t('bots.googleSetup.stop', 'Stop setup'), onClick: stop } }
           : {}),
         remove: {
           label: t('bots.google.bot.remove', 'Remove Google…'),

@@ -4,6 +4,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GoogleSetupRuns } from '../../../google/google-setup-runs'
 import { googleSetupKeyBlocker } from '../../../../shared/google/google-setup-blocker'
+import {
+  googleSetupShownStepStatus,
+  googleSetupStepCardView
+} from '../../../../shared/google/google-setup-card-view'
 import type { GoogleClientView } from '../../../../shared/google/google-client-config'
 import type { RpcContext } from '../core'
 
@@ -168,5 +172,42 @@ describe('bots.googleSetup.start from Orca with newApp', () => {
     const again = await start.handler({ botId: BOT.id, from: 'settings', newApp: true }, context)
     expect(again.run).toEqual(first.run)
     expect(state.lines).toHaveLength(1)
+  })
+})
+
+describe('Stop setup', () => {
+  const waitingOnPublish = (): void => {
+    runs.apply(BOT.id, 'owner', { action: 'start' })
+    runs.apply(BOT.id, 'owner', { action: 'answer', card: 'path', values: ['guide-browser'] })
+    runs.apply(BOT.id, 'bot', { action: 'need-user', step: 'publish', note: 'Click Publish app.' })
+  }
+
+  it('lets the owner stop a run, which locks its step card', async () => {
+    waitingOnPublish()
+    await write.handler({ botId: BOT.id, change: { action: 'cancel' } }, context)
+    const run = runs.get(BOT.id)
+    if (!run) {
+      throw new Error('no run')
+    }
+    expect(run.state).toBe('cancelled')
+    expect(googleSetupStepCardView(run, 'publish', true)).toMatchObject({
+      acts: false,
+      ended: true
+    })
+    expect(googleSetupShownStepStatus(run, 'publish')).toBe('pending')
+    await expect(
+      write.handler(
+        { botToken: 't', change: { action: 'step', step: 'client', status: 'active' } },
+        context
+      )
+    ).rejects.toThrow('Your owner stopped this Google setup.')
+  })
+
+  it("refuses a bot's stop", async () => {
+    waitingOnPublish()
+    await expect(
+      write.handler({ botToken: 't', change: { action: 'cancel' } }, context)
+    ).rejects.toThrow('Only your owner can stop the setup.')
+    expect(runs.get(BOT.id)?.state).toBe('running')
   })
 })

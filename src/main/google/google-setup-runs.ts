@@ -148,6 +148,11 @@ export class GoogleSetupRuns {
     if (revived) {
       return this.save(revived)
     }
+    if (current?.state === 'cancelled') {
+      throw new GoogleSetupError(
+        'Your owner stopped this Google setup. Start it again only if they ask.'
+      )
+    }
     if (current?.state !== 'running') {
       throw new GoogleSetupError(
         'No Google setup is running for this bot. Start one with `orca bot google-setup start`.'

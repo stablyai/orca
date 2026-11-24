@@ -3988,7 +3988,8 @@
           "signedInAs": "✓ Signed in as {{email}}",
           "signedIn": "✓ Signed in",
           "done": "✓ Done",
-          "takeOver": "✓ {{bot}} takes over from here"
+          "takeOver": "✓ {{bot}} takes over from here",
+          "stopped": "Setup stopped"
         },
         "heading": "Connect Google",
         "path": {
@@ -4007,7 +4008,8 @@
           "done": "Done",
           "waiting": "Waiting for you",
           "working": "Working",
-          "you": "You"
+          "you": "You",
+          "stopped": "Stopped"
         },
         "account": {
           "title": "Which Google account should I use?",
