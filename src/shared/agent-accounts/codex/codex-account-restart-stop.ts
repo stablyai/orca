@@ -9,6 +9,16 @@ export type CodexAccountRestartStopRequest = {
   opId: string
 }
 
+/** The in-pane failure when a stopped pane cannot resume its conversation on the new account. */
+export const CODEX_ACCOUNT_RESTART_RESUME_ERROR =
+  "Couldn't resume on the new account. Restart the pane to try again."
+
+/** The pane a release or close names; it carries no operation. */
+export type CodexAccountRestartPane = Pick<
+  CodexAccountRestartStopRequest,
+  'worktreeId' | 'tabId' | 'leafId'
+>
+
 /** Dismiss for one pane and operation; a stale opId changes nothing. */
 export type CodexAccountRestartWithdrawRequest = Pick<
   CodexAccountRestartStopRequest,

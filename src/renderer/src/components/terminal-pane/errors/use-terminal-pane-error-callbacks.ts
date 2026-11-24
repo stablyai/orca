@@ -3,6 +3,7 @@ import { isTerminalSessionStateSaveFailure } from '../../../../../shared/workspa
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { appendPaneTerminalError, clearPaneTerminalError } from './terminal-error-accumulation'
 import { stripSshReconnectOwnedErrorLines } from './terminal-error-display'
+import { releaseCodexAccountRestartRefusal } from '../account-restart/codex-account-restart-stop'
 import type { TerminalPaneFoundation } from '../controller/use-terminal-pane-foundation'
 
 export function useTerminalPaneErrorCallbacks({
@@ -11,7 +12,9 @@ export function useTerminalPaneErrorCallbacks({
   setSessionStateSaveFailureMessage,
   setTerminalError,
   setTerminalErrorsByPaneId,
-  sshReconnectOwnsTerminalErrorsRef
+  sshReconnectOwnsTerminalErrorsRef,
+  tabId,
+  worktreeId
 }: Pick<
   TerminalPaneFoundation,
   | 'managerRef'
@@ -20,6 +23,8 @@ export function useTerminalPaneErrorCallbacks({
   | 'setTerminalError'
   | 'setTerminalErrorsByPaneId'
   | 'sshReconnectOwnsTerminalErrorsRef'
+  | 'tabId'
+  | 'worktreeId'
 >) {
   const onPtyErrorRef = useRef((paneId: number, message: string) => {
     if (message.includes(AGENT_LAUNCH_PANE_REFUSED_CODE)) {
@@ -45,12 +50,29 @@ export function useTerminalPaneErrorCallbacks({
     setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId, message))
   })
   const dismissTerminalError = useCallback(() => {
-    const paneId = managerRef.current?.getActivePane()?.id ?? null
+    const pane = managerRef.current?.getActivePane() ?? null
+    const paneId = pane?.id ?? null
     setTerminalError(null)
-    if (paneId !== null) {
-      setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
+    if (pane && paneId !== null) {
+      setTerminalErrorsByPaneId((current) => {
+        // Dismissing a failed account-restart resume lets the pane start normally again (idempotent).
+        releaseCodexAccountRestartRefusal(
+          (current[paneId] ?? []).map((entry) => entry.message).join('\n'),
+          worktreeId,
+          tabId,
+          pane.leafId
+        )
+        return clearPaneTerminalError(current, paneId)
+      })
       paneTransportsRef.current.get(paneId)?.notifyErrorSurfaceDismissed?.()
     }
-  }, [managerRef, paneTransportsRef, setTerminalError, setTerminalErrorsByPaneId])
+  }, [
+    managerRef,
+    paneTransportsRef,
+    setTerminalError,
+    setTerminalErrorsByPaneId,
+    tabId,
+    worktreeId
+  ])
   return { onPtyErrorRef, onPtyErrorClearedRef, dismissTerminalError }
 }

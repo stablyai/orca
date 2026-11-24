@@ -41,6 +41,8 @@ export class CodexAccountRestartMarks {
   protected readonly markByPane = new Map<string, RestartMark>()
   // A granted intent stays reachable until its launch starts, so Dismiss still applies to it.
   protected readonly spentMarkByPane = new Map<string, RestartMark>()
+  // Panes whose stopped conversation came back missing; bounded by panes.
+  protected readonly refusedPanes = new Set<string>()
   protected readonly retiredIncarnations = new Set<string>()
   // Restart exits sent while no ready window existed; the next window that signals ready gets them.
   protected readonly rendererOwed = new Set<RestartMark>()
@@ -107,6 +109,10 @@ export class CodexAccountRestartMarks {
   }
   /** A proven restart whose pane comes back without its conversation must fail once, not open a shell. */
   async refusesResumeWithoutConversation(paneKey: string): Promise<boolean> {
+    // Automatic remounts keep failing until the user dismisses the failure or closes the pane.
+    if (this.refusedPanes.has(paneKey)) {
+      return true
+    }
     const mark = this.markByPane.get(paneKey)
     if (!mark || mark.withdrawn) {
       return false
@@ -116,11 +122,18 @@ export class CodexAccountRestartMarks {
       return false
     }
     this.retireMark(mark)
+    this.refusedPanes.add(paneKey)
     return true
+  }
+
+  /** The user dismissed the failure: the pane's next start is ordinary. */
+  releaseRefusedPane(paneKey: string): void {
+    this.refusedPanes.delete(paneKey)
   }
   /** Close or rebind of the pane: its intent no longer applies. */
   forgetPane(paneKey: string): void {
     this.spentMarkByPane.delete(paneKey)
+    this.refusedPanes.delete(paneKey)
     const mark = this.markByPane.get(paneKey)
     if (mark) {
       this.retireMark(mark)

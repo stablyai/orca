@@ -1,3 +1,4 @@
+import { CODEX_ACCOUNT_RESTART_RESUME_ERROR } from '../../../../shared/agent-accounts/codex/codex-account-restart-stop'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   codexAccountRestartPaneKey,
@@ -7,7 +8,7 @@ import {
 
 export class CodexAccountRestartResumeUnavailableError extends Error {
   constructor() {
-    super("Couldn't resume on the new account. Restart the pane to try again.")
+    super(CODEX_ACCOUNT_RESTART_RESUME_ERROR)
     this.name = 'CodexAccountRestartResumeUnavailableError'
   }
 }

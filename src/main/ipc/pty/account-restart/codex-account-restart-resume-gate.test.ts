@@ -5,6 +5,7 @@ import {
 } from './codex-account-restart-resume-gate'
 import {
   CodexAccountRestartStops,
+  codexAccountRestartPaneKey,
   type CodexRestartStopOutcome
 } from './codex-account-restart-stops'
 
@@ -148,7 +149,7 @@ describe('account restart resume reopens the exact conversation', () => {
     await expect(resume(stops)).resolves.toMatchObject({ resumeOnSelectedAccount: true })
   })
 
-  it('fails once instead of opening a shell when the stopped pane returns without its conversation', async () => {
+  it('keeps refusing a shell for the stopped pane until the user dismisses the failure', async () => {
     const stops = new CodexAccountRestartStops()
     const { result, release } = admitStop(stops)
     release()
@@ -157,7 +158,26 @@ describe('account restart resume reopens the exact conversation', () => {
     await expect(resume(stops, withoutConversation)).rejects.toBeInstanceOf(
       CodexAccountRestartResumeUnavailableError
     )
-    // Restarting the pane afterwards is an ordinary start.
+    // An automatic remount is refused again: no shell appears behind the user's back.
+    await expect(resume(stops, withoutConversation)).rejects.toBeInstanceOf(
+      CodexAccountRestartResumeUnavailableError
+    )
+    stops.releaseRefusedPane(codexAccountRestartPaneKey(pane))
+    await expect(resume(stops, withoutConversation)).resolves.toMatchObject({
+      resumeOnSelectedAccount: false
+    })
+  })
+
+  it('closing the refused pane also ends the refusal', async () => {
+    const stops = new CodexAccountRestartStops()
+    const { result, release } = admitStop(stops)
+    release()
+    await result
+    const withoutConversation = { launchAgent: undefined, resumeProviderSession: undefined }
+    await expect(resume(stops, withoutConversation)).rejects.toBeInstanceOf(
+      CodexAccountRestartResumeUnavailableError
+    )
+    stops.forgetPane(codexAccountRestartPaneKey(pane))
     await expect(resume(stops, withoutConversation)).resolves.toMatchObject({
       resumeOnSelectedAccount: false
     })

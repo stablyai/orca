@@ -8,6 +8,7 @@ import type { ResourceViewAdmission } from '../../../shared/diagnostics/resource
 import type { SpawnIntent } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { ipcRenderer } from 'electron'
 import type {
+  CodexAccountRestartPane,
   CodexAccountRestartStopRequest,
   CodexAccountRestartStopResult,
   CodexAccountRestartWithdrawRequest
@@ -198,6 +199,8 @@ export const ptySessionControlApi = {
     ipcRenderer.invoke('pty:stopCodexForAccountRestart', request),
   withdrawCodexAccountRestart: (request: CodexAccountRestartWithdrawRequest): Promise<boolean> =>
     ipcRenderer.invoke('pty:withdrawCodexAccountRestart', request),
+  releaseCodexAccountRestartPane: (pane: CodexAccountRestartPane): Promise<void> =>
+    ipcRenderer.invoke('pty:releaseCodexAccountRestartPane', pane),
   kill: (id: string, opts?: { keepHistory?: boolean; replaced?: boolean }): Promise<void> =>
     ipcRenderer.invoke('pty:kill', {
       id,

@@ -1,4 +1,7 @@
-import type { CodexAccountRestartWithdrawRequest } from '../../../../shared/agent-accounts/codex/codex-account-restart-stop'
+import type {
+  CodexAccountRestartPane,
+  CodexAccountRestartWithdrawRequest
+} from '../../../../shared/agent-accounts/codex/codex-account-restart-stop'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -14,6 +17,7 @@ import { ptyIncarnationById } from '../provider/ownership-state'
 import { resolvePtyExecutionHost, tryGetProviderForPty } from '../provider/registry'
 import type { PtyKillIpcDeps } from '../ipc/renderer-kill'
 import {
+  codexAccountRestartPaneKey,
   codexAccountRestartStops,
   type CodexAccountRestartNotStartedReason,
   type CodexAccountRestartStopRequest,
@@ -40,6 +44,18 @@ export function installCodexAccountRestartIpcHandlers(deps: CodexAccountRestartI
         resolveOccupant: (request) => resolveCodexRestartOccupant(current(), request),
         stop: (occupant, authorize) => stopCodexRestartOccupant(current, occupant, authorize)
       })
+  )
+  getPtyIpc().handle(
+    'pty:releaseCodexAccountRestartPane',
+    (_event, args: CodexAccountRestartPane) => {
+      if (
+        typeof args?.worktreeId === 'string' &&
+        typeof args.tabId === 'string' &&
+        typeof args.leafId === 'string'
+      ) {
+        codexAccountRestartStops.releaseRefusedPane(codexAccountRestartPaneKey(args))
+      }
+    }
   )
   getPtyIpc().handle(
     'pty:withdrawCodexAccountRestart',

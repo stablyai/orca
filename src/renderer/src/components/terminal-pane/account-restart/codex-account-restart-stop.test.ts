@@ -19,6 +19,7 @@ vi.mock('@/store/index', () => ({ useAppStore: { getState: () => store } }))
 
 import {
   _testing,
+  releaseCodexAccountRestartRefusal,
   stopCodexPaneForAccountRestart,
   withdrawCodexPaneAccountRestart
 } from './codex-account-restart-stop'
@@ -34,10 +35,17 @@ function heldReplies() {
       })
   )
   const withdraw = vi.fn(async () => true)
+  const releasePane = vi.fn(async () => {})
   vi.stubGlobal('window', {
-    api: { pty: { stopCodexForAccountRestart: stop, withdrawCodexAccountRestart: withdraw } }
+    api: {
+      pty: {
+        stopCodexForAccountRestart: stop,
+        withdrawCodexAccountRestart: withdraw,
+        releaseCodexAccountRestartPane: releasePane
+      }
+    }
   })
-  return { replies, stop, withdraw }
+  return { replies, stop, withdraw, releasePane }
 }
 
 describe('renderer account restart stop', () => {
@@ -152,5 +160,18 @@ describe('renderer account restart stop', () => {
     replies[0]({ outcome: 'not-started', reason: 'superseded', opIds: ['op-1'] })
     await pending
     expect(store.reopenCodexRestartPrompt).toHaveBeenCalledWith('pty-a')
+  })
+
+  it('dismissing the failed resume releases only that refusal', () => {
+    const { releasePane } = heldReplies()
+    releaseCodexAccountRestartRefusal('Something else failed.', 'wt', 'tab', 'leaf')
+    expect(releasePane).not.toHaveBeenCalled()
+    releaseCodexAccountRestartRefusal(
+      "Couldn't resume on the new account. Restart the pane to try again.",
+      'wt',
+      'tab',
+      'leaf'
+    )
+    expect(releasePane).toHaveBeenCalledWith({ worktreeId: 'wt', tabId: 'tab', leafId: 'leaf' })
   })
 })

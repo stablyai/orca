@@ -88,7 +88,9 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
       setSessionStateSaveFailureMessage,
       setTerminalError,
       setTerminalErrorsByPaneId,
-      sshReconnectOwnsTerminalErrorsRef
+      sshReconnectOwnsTerminalErrorsRef,
+      tabId: controller.tabId,
+      worktreeId: controller.worktreeId
     })
   const { onPtyRecoveryStateRef } = useTerminalPaneRecoveryCallback({
     setPtyRecoveryStatesByPaneId

@@ -30,6 +30,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     stopCodexForAccountRestart: (request) =>
       Promise.resolve({ outcome: 'not-started', reason: 'unsupported', opIds: [request.opId] }),
     withdrawCodexAccountRestart: () => Promise.resolve(false),
+    releaseCodexAccountRestartPane: () => Promise.resolve(),
     ackColdRestore: () => {},
     // Web panes never transit main's hidden-delivery gate, so there is no drop latch.
     ackHiddenOutputRestoreApplied: () => {},

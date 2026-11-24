@@ -1,9 +1,11 @@
 import { useAppStore } from '@/store/index'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
-import type {
-  CodexAccountRestartNotStartedReason,
-  CodexAccountRestartStopRequest,
-  CodexAccountRestartStopResult
+import {
+  CODEX_ACCOUNT_RESTART_RESUME_ERROR,
+  type CodexAccountRestartPane,
+  type CodexAccountRestartNotStartedReason,
+  type CodexAccountRestartStopRequest,
+  type CodexAccountRestartStopResult
 } from '../../../../../shared/agent-accounts/codex/codex-account-restart-stop'
 
 type CodexRestartPane = Omit<CodexAccountRestartStopRequest, 'opId'>
@@ -86,6 +88,20 @@ export function withdrawCodexPaneAccountRestart(ptyId: string): void {
   const { ptyId: _ptyId, ...withdraw } = current
   void window.api.pty.withdrawCodexAccountRestart(withdraw).catch((err: unknown) => {
     console.warn('[codex-restart] failed to withdraw account restart:', err)
+  })
+}
+
+/** Dismissing the failed resume is the user's choice to let the pane start normally again. */
+export function releaseCodexAccountRestartRefusal(
+  error: string,
+  ...[worktreeId, tabId, leafId]: [string, string, string]
+): void {
+  if (!error.includes(CODEX_ACCOUNT_RESTART_RESUME_ERROR)) {
+    return
+  }
+  const pane: CodexAccountRestartPane = { worktreeId, tabId, leafId }
+  void window.api.pty.releaseCodexAccountRestartPane(pane).catch((err: unknown) => {
+    console.warn('[codex-restart] failed to release the refused pane:', err)
   })
 }
 
