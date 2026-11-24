@@ -21,6 +21,7 @@ import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { formatUpdateDelayDate } from './update-delay-copy'
 import { useNow } from '@/lib/window-activity/use-now'
 import { isDelayedUpdatePending } from '../../../../../shared/updater/update-delay'
+import { isMacStagingStillRunning } from '../../../../../shared/updater/update-staging-status'
 import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 
@@ -125,8 +126,7 @@ export function GeneralUpdateSettingsSection({
             disabled={
               updateStatus.state === 'checking' ||
               updateStatus.state === 'downloading' ||
-              (updateStatus.state === 'error' &&
-                updateStatus.messageCode === 'macStagingTimeout') ||
+              isMacStagingStillRunning(updateStatus) ||
               (updateStatus.state === 'downloaded' && updateStatus.installing)
             }
             className="gap-2"

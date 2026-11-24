@@ -17,6 +17,7 @@ import {
 } from '@/app-shell/updates/updater-message-copy'
 import { errorMessage } from '../../../../../shared/errors/error-message'
 import type { UpdaterCodedMessage } from '../../../../../shared/updater/updater-failure-copy'
+import { isMacStagingStillRunning } from '../../../../../shared/updater/update-staging-status'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import {
   DEV_CHANNEL_PLATFORM_LABEL,
@@ -76,7 +77,11 @@ export function ReleaseChannelSection(): React.JSX.Element {
   const activeChannel = isChannelSupportedOnPlatform(requestedChannel, platform)
     ? requestedChannel
     : 'stable'
-  const busy = updateStatus.state === 'checking' || updateStatus.state === 'downloading'
+  // Main refuses a switch while macOS still owns the staged update, so the button must not look live then.
+  const busy =
+    updateStatus.state === 'checking' ||
+    updateStatus.state === 'downloading' ||
+    isMacStagingStillRunning(updateStatus)
 
   useEffect(() => {
     let cancelled = false

@@ -9,6 +9,7 @@ import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { isExternallyManagedLinuxInstall } from '../linux-package/linux-update-package-type'
 import type { UpdateStatus } from '../../../shared/updater/update-status-types'
 import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
+import { isMacStagingStillRunning } from '../../../shared/updater/update-staging-status'
 import {
   AUTO_UPDATE_RETRY_INTERVAL_MS,
   MAC_INTERACTIVE_STAGING_TIMEOUT_MS,
@@ -118,6 +119,22 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
         })
       }
     }, MAC_INTERACTIVE_STAGING_TIMEOUT_MS)
+  }
+
+  /** Squirrel's native error ends staging; the JS updater ignores it once the timeout card shows, so replace that card here. */
+  protected failNativeMacStaging(error: unknown): void {
+    const version = this.finishMacStaging()
+    const status = this.currentStatus
+    if (version !== null && isMacStagingStillRunning(status) && status.version === version) {
+      const cause = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+      this.sendStatus({
+        state: 'error',
+        failurePhase: 'download',
+        version,
+        message: cause || 'Unknown error'
+      })
+    }
+    this.failMacStaging(error)
   }
 
   protected finishMacStaging(): string | null {

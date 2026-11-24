@@ -265,10 +265,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       performQuitAndInstall: () => this.performRecordedInstall('manual'),
       commitStagedMacInstall: () => this.commitStagedMacInstall(),
       finishMacStaging: () => this.finishMacStaging(),
-      failMacStaging: (error) => {
-        this.finishMacStaging()
-        this.failMacStaging(error)
-      },
+      failMacStaging: (error) => this.failNativeMacStaging(error),
       isAwaitingMacStaging: () => this.isAwaitingMacStaging(),
       isMacStagingDeferredToInstall: () => this.isMacStagingDeferredToInstall(),
       shouldAcceptDownloadedUpdate: (version, obsolete) =>

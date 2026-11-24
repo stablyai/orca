@@ -120,11 +120,18 @@ function clearPendingInstallTimeout(): void {
 }
 
 export function resetMacInstallState(): void {
+  const quitWasDeferred = requestedActionAfterSquirrelReady === 'quit'
   macInstallPreflightInProgress = false
   requestedActionAfterSquirrelReady = null
   quitAndInstallInFlight = false
   bypassMacInstallGuardUntilNextAttempt = false
   clearPendingInstallTimeout()
+  if (quitWasDeferred) {
+    // Staging ended without readiness; the Quit the user already asked for must still happen, once.
+    recordUpdaterLifecycle('macos_deferred_quit_resumed')
+    bypassMacInstallGuardUntilNextAttempt = true
+    app.quit()
+  }
 }
 
 export function beginMacUpdateDownload(): void {

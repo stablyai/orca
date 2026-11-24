@@ -11,7 +11,11 @@ import { beginMacUpdateDownload, isMacInstallerReady } from './updater-mac-insta
 vi.mock('electron', async () => {
   const { EventEmitter } = await import('node:events')
   return {
-    app: Object.assign(new EventEmitter(), { isPackaged: true, getVersion: () => '1.4.272' }),
+    app: Object.assign(new EventEmitter(), {
+      isPackaged: true,
+      getVersion: () => '1.4.272',
+      quit: vi.fn()
+    }),
     autoUpdater: new EventEmitter(),
     powerMonitor: new EventEmitter()
   }
@@ -26,7 +30,7 @@ vi.mock('../releases/updater-changelog', () => ({ fetchChangelog: async () => nu
 
 const version = '1.4.273'
 const jsUpdater = Object.assign(new EventEmitter(), {
-  setFeedURL: () => {},
+  setFeedURL: vi.fn(),
   checkForUpdates: async () => {
     jsUpdater.emit('checking-for-update')
     jsUpdater.emit('update-available', { version })
@@ -35,6 +39,8 @@ const jsUpdater = Object.assign(new EventEmitter(), {
 })
 
 afterEach(() => {
+  vi.mocked(app.quit).mockClear()
+  jsUpdater.setFeedURL.mockClear()
   vi.clearAllTimers()
   vi.useRealTimers()
   autoUpdater.removeAllListeners()
@@ -103,5 +109,104 @@ it.runIf(process.platform === 'darwin')(
 
     autoUpdater.emit('update-downloaded')
     expect(updater.getUpdateStatus()).toMatchObject({ state: 'downloaded', version })
+  }
+)
+
+async function startStaging(): Promise<UpdaterSetup> {
+  vi.useFakeTimers({ now: 0 })
+  const updater = new UpdaterSetup()
+  updater.setupAutoUpdater(null, { getLastUpdateCheckAt: () => Date.now() })
+  updater.checkForUpdatesFromMenu()
+  await vi.advanceTimersByTimeAsync(0)
+  updater.downloadUpdate()
+  jsUpdater.emit('update-downloaded', { version })
+  return updater
+}
+
+// MacUpdater forwards a native failure to its own listeners before Orca's native listener runs.
+function failNativeStaging(message: string): void {
+  const error = new Error(message)
+  jsUpdater.emit('error', error)
+  autoUpdater.emit('error', error)
+}
+
+it.runIf(process.platform === 'darwin')(
+  'shows macOS staging guidance at fifteen minutes, not before',
+  async () => {
+    const updater = await startStaging()
+    vi.advanceTimersByTime(899_999)
+    expect(updater.getUpdateStatus()).toEqual({ state: 'downloading', version, percent: 100 })
+
+    vi.advanceTimersByTime(1)
+    expect(updater.getUpdateStatus()).toMatchObject({
+      state: 'error',
+      version,
+      retryable: false,
+      messageCode: 'macStagingTimeout'
+    })
+  }
+)
+
+it.runIf(process.platform === 'darwin')(
+  'refuses a build switch while macOS stages, then accepts it after a late native failure',
+  async () => {
+    const updater = await startStaging()
+    vi.advanceTimersByTime(900_000)
+    const pinnedFeedCalls = (): unknown[] =>
+      jsUpdater.setFeedURL.mock.calls.filter(([options]) =>
+        String((options as { url?: string }).url).includes('v1.4.274')
+      )
+
+    updater.checkForUpdatesFromMenu({ channel: 'stable', targetTag: 'v1.4.274' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(pinnedFeedCalls()).toHaveLength(0)
+
+    failNativeStaging('Could not locate update bundle')
+    const failed = updater.getUpdateStatus()
+    expect(failed).toEqual({
+      state: 'error',
+      failurePhase: 'download',
+      version,
+      message: 'Could not locate update bundle'
+    })
+
+    updater.checkForUpdatesFromMenu({ channel: 'stable', targetTag: 'v1.4.274' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(pinnedFeedCalls()).toHaveLength(1)
+  }
+)
+
+it.runIf(process.platform === 'darwin')(
+  'retries the download after macOS staging fails late',
+  async () => {
+    const updater = await startStaging()
+    vi.advanceTimersByTime(900_000)
+    failNativeStaging('Could not locate update bundle')
+
+    updater.downloadUpdate()
+    expect(updater.getUpdateStatus()).toEqual({ state: 'downloading', version, percent: 0 })
+  }
+)
+
+it.runIf(process.platform === 'darwin')(
+  'still quits once when macOS staging fails after the user asked to quit',
+  async () => {
+    const updater = await startStaging()
+    vi.advanceTimersByTime(3 * 60 * 1000)
+    const quitEvent = { preventDefault: vi.fn(), defaultPrevented: false }
+    app.emit('before-quit', quitEvent)
+    expect(quitEvent.preventDefault).toHaveBeenCalledOnce()
+    expect(app.quit).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(5_000)
+    failNativeStaging('Could not locate update bundle')
+    expect(app.quit).toHaveBeenCalledOnce()
+    expect(updater.getUpdateStatus().state).toBe('error')
+
+    const resumedQuit = { preventDefault: vi.fn(), defaultPrevented: false }
+    app.emit('before-quit', resumedQuit)
+    expect(resumedQuit.preventDefault).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(60_000)
+    expect(app.quit).toHaveBeenCalledOnce()
   }
 )
