@@ -1,6 +1,10 @@
 import { ipcMain } from 'electron'
-import { createProject, getProject, listProjects } from '../../linear/linear-project-queries'
-import { listProjectIssues } from '../../linear/linear-project-issue-queries'
+import {
+  createProject,
+  getProject,
+  listProjects
+} from '../../linear/projects/linear-project-queries'
+import { listProjectIssues } from '../../linear/projects/linear-project-issue-queries'
 import {
   normalizeConcreteWorkspaceId,
   normalizeIdList,

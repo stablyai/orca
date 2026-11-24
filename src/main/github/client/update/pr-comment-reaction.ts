@@ -1,8 +1,11 @@
-import type { GitHubReactionContent } from '../../../../shared/github/comment-types'
-import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
-import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
-import { toGraphQLReactionContent } from '../../comment-reactions'
-import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../rate-limit'
+import type { GitHubReactionContent } from '../../../../shared/github/comments/comment-types'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
+import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { toGraphQLReactionContent } from '../../comments/comment-reactions'
+import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../api/rate-limit'
 export async function setPRCommentReaction(
   repoPath: string,
   reactionSubjectId: string,

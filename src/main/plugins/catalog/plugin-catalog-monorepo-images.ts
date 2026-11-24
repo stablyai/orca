@@ -3,8 +3,12 @@ import {
   type PluginMarketplaceEntry
 } from '../../../shared/plugins/catalog/plugin-marketplace'
 import { catalogImagesFromManifest } from '../../../shared/plugins/images/plugin-manifest-catalog-images'
-import { sha256Hex } from '../plugin-image-cache'
-import type { CatalogBlobReader } from './plugin-catalog-image-extraction'
+import {
+  catalogImageDigest,
+  catalogImageHeader,
+  type CatalogBlobReader,
+  type CatalogBufferMemo
+} from './plugin-catalog-image-extraction'
 
 const MANIFEST_MAX_BYTES = 256 * 1024
 
@@ -16,7 +20,8 @@ const MANIFEST_MAX_BYTES = 256 * 1024
 export async function fillMonorepoReleaseImages(
   entry: PluginMarketplaceEntry,
   catalogUrl: string,
-  readBlob: CatalogBlobReader
+  readBlob: CatalogBlobReader,
+  memo?: CatalogBufferMemo
 ): Promise<{ entry: PluginMarketplaceEntry; readBlob: CatalogBlobReader }> {
   const [newest, ...older] = entry.releases ?? []
   const prefix = entry.source.path
@@ -26,12 +31,7 @@ export async function fillMonorepoReleaseImages(
   const manifestBytes = await readBlob(`${prefix}/orca-plugin.json`, MANIFEST_MAX_BYTES).catch(
     () => null
   )
-  let manifest: unknown = null
-  try {
-    manifest = manifestBytes ? JSON.parse(manifestBytes.toString('utf8')) : null
-  } catch {
-    manifest = null
-  }
+  const manifest = manifestBytes ? parseManifest(manifestBytes, memo?.manifests) : null
   const read = new Map<string, Buffer>()
   const images = await catalogImagesFromManifest({
     manifest,
@@ -43,7 +43,8 @@ export async function fillMonorepoReleaseImages(
       }
       return bytes
     },
-    sha256: (bytes) => sha256Hex(Buffer.from(bytes))
+    sha256: (bytes) => catalogImageDigest(bytes, memo),
+    readHeader: (bytes) => catalogImageHeader(bytes, memo)
   })
   if (!images) {
     return { entry, readBlob }
@@ -56,4 +57,19 @@ export async function fillMonorepoReleaseImages(
       return bytes ? (bytes.byteLength <= maxBytes ? bytes : null) : readBlob(path, maxBytes)
     }
   }
+}
+
+/** Batched catalog reads rerun extraction over the same buffers; parse each manifest once. */
+function parseManifest(bytes: Buffer, manifests?: WeakMap<Uint8Array, unknown>): unknown {
+  if (manifests?.has(bytes)) {
+    return manifests.get(bytes)
+  }
+  let manifest: unknown = null
+  try {
+    manifest = JSON.parse(bytes.toString('utf8'))
+  } catch {
+    manifest = null
+  }
+  manifests?.set(bytes, manifest)
+  return manifest
 }

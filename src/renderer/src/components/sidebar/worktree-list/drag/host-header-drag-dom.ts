@@ -1,7 +1,7 @@
 import {
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 
 export type HostHeaderRect = {
   hostId: ExecutionHostId

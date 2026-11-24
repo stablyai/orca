@@ -1,4 +1,4 @@
-import type { DeveloperPermissionStatus } from '../../../shared/developer-permissions-types'
+import type { DeveloperPermissionStatus } from '../../../shared/app-lifecycle/permissions/developer-permissions-types'
 import {
   getCurrentDaemonAdapter,
   getLegacyDaemonAdapters

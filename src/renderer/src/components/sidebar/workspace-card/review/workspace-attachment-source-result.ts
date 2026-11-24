@@ -1,13 +1,13 @@
 import { getWorkspaceReferenceIdentity } from '../../../../../../shared/workspace-attachments/workspace-reference-identity'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import {
   buildTaskSourceContextFromRepo,
   haveConflictingTaskSourceAccounts,
   normalizeTaskSourceContext,
-  type TaskSourceContext,
-  type TaskProvider
-} from '../../../../../../shared/task-source-context'
+  type TaskSourceContext
+} from '../../../../../../shared/work-items/task-source-context'
+import type { TaskProvider } from '../../../../../../shared/work-items/task-providers'
 import {
   getWorkspaceAttachmentUrlScope,
   matchesWorkspaceAttachmentIdentity,

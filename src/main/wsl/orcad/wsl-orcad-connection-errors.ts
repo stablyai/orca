@@ -1,6 +1,6 @@
 import type { WslRunningDistrosRead } from '../discovery/wsl-background-distro-gate'
 import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
-import type { WslOrcadLaunch } from './wsl-orcad-deploy'
+import type { WslOrcadLaunch } from './wsl-orcad-launch-contract'
 import { confirmsRunning } from './wsl-orcad-liveness-evidence'
 
 type WslOrcadDeferredLaunch = Extract<WslOrcadLaunch, { outcome: 'deferred' }>

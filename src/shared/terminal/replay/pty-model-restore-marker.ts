@@ -12,3 +12,6 @@ export type PtyModelRestoreNeededEvent = {
    *  repeat for an episode the renderer already disclosed as lost is the same gap. */
   hiddenDropEpisode?: number
 }
+
+/** Main reports hidden output at most this often, so one notice stands for output until this long after it. */
+export const HIDDEN_OUTPUT_ACTIVITY_NOTICE_INTERVAL_MS = 5_000

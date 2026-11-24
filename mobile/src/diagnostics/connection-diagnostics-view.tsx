@@ -4,9 +4,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Copy, Check, Send } from 'lucide-react-native'
 import { colors, pressedStyle, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { ConnectionLog } from '../components/ConnectionLog'
+import { ConnectionLog } from '../components/host-connection/ConnectionLog'
 import { connectionDiagnosticsScreenStyles as styles } from './connection-diagnostics-screen-styles'
-import type { ConnectionLogEntry, ConnectionState } from '../transport/types'
+import type { ConnectionLogEntry } from './connection/connection-log-types'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import type { ConnectionDiagnosis } from './connection-diagnostics-analysis'
 import type { DiagnosticsSubmissionState } from './connection-diagnostics-screen-data'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -135,7 +136,7 @@ export function ConnectionDiagnosticsView({
                                 )
                               : t(
                                   'diagnostics.connectionDiagnosticsView.sendDiagnostics',
-                                  'Send diagnostics to Orca'
+                                  'Send diagnostics'
                                 )}
                       </Text>
                     </Pressable>

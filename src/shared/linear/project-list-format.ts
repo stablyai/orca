@@ -1,5 +1,6 @@
 import type { LinearProjectListResult } from './agent-result-types'
 import { appendLinearListTruncation } from './list-truncation-format'
+import { padEndToTerminalWidth } from '../terminal/display-width/terminal-display-width'
 import { terminalSafeLine as safe } from '../terminal/output/terminal-safe-text'
 
 // Why: non-JSON project output aligns ids with the existing compact Linear tables.
@@ -20,7 +21,7 @@ export function formatLinearProjectListRows(result: LinearProjectListResult): st
           .filter(Boolean)
           .join(',') || 'no-teams'
       const workspace = project.workspaceName ? ` ${safe(project.workspaceName)}` : ''
-      return `${safe(project.name).padEnd(LINEAR_PROJECT_NAME_COLUMN_WIDTH)} ${safe(project.id)} ${teams}${workspace}`
+      return `${padEndToTerminalWidth(safe(project.name), LINEAR_PROJECT_NAME_COLUMN_WIDTH)} ${safe(project.id)} ${teams}${workspace}`
     })
     .join('\n')
   return appendLinearListTruncation(

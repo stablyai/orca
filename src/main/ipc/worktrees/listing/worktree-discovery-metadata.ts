@@ -1,7 +1,7 @@
 import type { Store } from '../../../persistence/loading-store/store'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project-host-setup-lookup'
+import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project/host-setup/project-host-setup-lookup'
 import {
   hostWorktreeTargetForRepo,
   readWorktreeMetaForRepo

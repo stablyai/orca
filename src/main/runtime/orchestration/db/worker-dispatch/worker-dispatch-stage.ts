@@ -1,4 +1,4 @@
-import type { WorkerDispatchRow, WorkerDispatchState } from '../../types'
+import type { WorkerDispatchRow, WorkerDispatchState } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
@@ -49,6 +49,9 @@ export function recordWorkerStage(
     this.db.exec('ROLLBACK TO worker_stage_transition')
     this.db.exec('RELEASE worker_stage_transition')
     throw error
+  }
+  if (params.lastError !== undefined && params.lastError !== current.last_error) {
+    this.workerDockSources?.changedDispatch(params.dispatchId)
   }
   return this.getWorkerDispatch(params.dispatchId) as WorkerDispatchRow
 }

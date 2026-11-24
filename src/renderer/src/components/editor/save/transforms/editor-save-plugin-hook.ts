@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { usePluginPanelsStore } from '@/store/plugin-panels'
+import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import type { AppStoreApi } from '../queue/editor-save-queue-contract'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { EditorSaveTrigger } from '../queue/editor-save-disk-precondition'

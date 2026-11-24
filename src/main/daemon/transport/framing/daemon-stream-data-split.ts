@@ -7,7 +7,7 @@ import {
   type DaemonStreamFraming,
   type StreamDataPayloadMeta
 } from './daemon-stream-binary-framing'
-import { encodeNdjson } from '../../../../shared/main-process-ndjson-framer'
+import { encodeNdjson } from '../../../../shared/json-stream/main-process-ndjson-framer'
 
 export type StreamWriteChunk = string | Buffer
 

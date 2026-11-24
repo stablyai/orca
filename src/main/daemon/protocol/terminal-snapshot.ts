@@ -1,6 +1,12 @@
 import type { TerminalOscLinkRange } from '../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { TerminalModes } from './terminal-modes'
 import type { TerminalOwner } from '../../../shared/terminal/pty/lifecycle/terminal-owner'
+import type { RuntimeTerminalProjection } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
+
+export type TerminalSnapshotReadOptions = {
+  scrollbackRows?: number
+  visibleProjection?: true
+}
 
 export type TerminalSnapshot = {
   snapshotAnsi: string
@@ -22,4 +28,12 @@ export type TerminalSnapshot = {
   outputSequence?: number
   /** Ordered shell lifecycle evidence captured at this snapshot boundary. */
   terminalOwner?: TerminalOwner
+}
+
+export type TerminalVisibleProjectionSnapshot = Pick<
+  TerminalSnapshot,
+  'cols' | 'rows' | 'cwd' | 'modes' | 'lastTitle' | 'terminalOwner'
+> & {
+  visibleProjection: RuntimeTerminalProjection
+  outputSequence: number
 }

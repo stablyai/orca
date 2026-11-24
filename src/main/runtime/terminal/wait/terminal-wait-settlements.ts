@@ -8,37 +8,37 @@ import {
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
-import { evaluateTuiIdle, isTuiIdleReadyVerdict, type TuiIdleVerdict } from './tui-idle-evidence'
+import { evaluateTuiIdle } from './tui-idle-evidence'
+import { settlesForMidTurnInput, terminalDeliveryRefusal } from './terminal-delivery-refusal'
 import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
-import { USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
+import { USER_INPUT_HOLD_CAP_MS } from './claude-open-dialog-hold'
 import {
   readTerminalComposerTypedText,
   type TerminalCursorContext
 } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
-import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox-owner'
-
-import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
+import { piComposerHoldsDraft } from '../../../../shared/terminal/input/pi-composer'
+import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
+import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
+import { receiptMailboxOwnershipHold } from '../../orchestration/mailbox/delivery-hold/receipt-mailbox-ownership'
 
 const DIALOG_HOLD_RECHECK_MS = 2000
+const CORROBORATED_HOLDS: ReadonlySet<MailboxDeliveryHold['kind']> = new Set([
+  'prompt',
+  'draft',
+  'blocked',
+  'overlay'
+])
 
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
-  protected abstract resolveWaiter(
-    ...args: Parameters<OrcaRuntimeWithResolveWaiter['resolveWaiter']>
-  ): ReturnType<OrcaRuntimeWithResolveWaiter['resolveWaiter']>
-
-  protected abstract removeWaiter(
-    ...args: Parameters<OrcaRuntimeWithResolveWaiter['removeWaiter']>
-  ): ReturnType<OrcaRuntimeWithResolveWaiter['removeWaiter']>
-
   protected resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
     for (const waiter of this.terminalWaiters.forPty(ptyId)) {
       if (waiter.condition === 'exit') {
-        this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'exit', pty))
+        this.terminalWaiters.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'exit', pty))
       } else {
         // Why: after exit, conditions like tui-idle can never be satisfied — reject now instead of spinning the poll until timeout on a dead process.
-        this.removeWaiter(waiter)
+        this.terminalWaiters.remove(waiter)
         waiter.reject(buildPtyTerminalWaitExitError(pty))
       }
     }
@@ -52,15 +52,25 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       return
     }
     // Re-rank titles: weak readiness cannot see tail-truncated dialogs and must wait for a rendered-screen poll.
-    const verdict = this.evaluateTuiIdleForPty(pty)
+    const evidence = ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () =>
+      buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    )
+    const verdict = evaluateTuiIdle(evidence)
     for (const waiter of waiters) {
       if (verdict.kind === 'blocked') {
-        this.resolveWaiter(
+        this.terminalWaiters.resolve(
           waiter,
           buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, verdict.reason)
         )
-      } else if (verdict.kind === 'ready-strong') {
-        this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
+      } else if (
+        verdict.kind === 'ready-strong' ||
+        (waiter.acceptsMidTurnInput &&
+          settlesForMidTurnInput(verdict, ptyId, this.tuiIdleEvidenceSource))
+      ) {
+        this.terminalWaiters.resolve(
+          waiter,
+          buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty)
+        )
       }
     }
   }
@@ -104,13 +114,15 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (!terminal || !this.orchestrationMailboxNotifications.hasDeliverableMail(terminal)) {
       return
     }
+    // As a tui-idle wait does: a reattached idle agent prints nothing, so ask for the paint that settles it.
+    this.requestReattachedRepaint(ptyId)
     // Schedule just beyond the quiet window and re-arm from fresher output if still streaming.
     const outputAt = this.readOutputClockAt(ptyId)
     const quietRemainingMs =
       outputAt === null ? 0 : TUI_IDLE_QUIESCENCE_MS - (Date.now() - outputAt)
     // A dialog or draft lifts only when the user acts, so poll it slowly rather than at 20 Hz.
     const delay =
-      this.isPtyHoldingDelivery(ptyId) || quietRemainingMs <= 0
+      this.ptyDeliveryHold(ptyId) !== null || quietRemainingMs <= 0
         ? DIALOG_HOLD_RECHECK_MS
         : quietRemainingMs + 50
     const timer = setTimeout(() => {
@@ -126,28 +138,74 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
    *  steer text sent mid-turn, so only dialogs, drafts and unsettled terminals hold mail. Callers
    *  separately require live status evidence. */
   protected isAgentSettledForDelivery(ptyId: string): boolean {
-    const pty = this.ptysById.get(ptyId)
-    if (!pty || this.isPtyHoldingDelivery(ptyId)) {
-      return false
+    return this.deliveryRefusal(ptyId) === null
+  }
+
+  /** Why delivery would not type a note for this mailbox now, for a send receipt: the gates' own reads,
+   *  through the terminal delivery resolves (a Run's current coordinator, a Dispatch's assignee),
+   *  once that terminal is shown to read the mailbox. */
+  readTerminalMailHold(mailbox: string): MailboxDeliveryHold | null {
+    const terminal = this.orchestrationMailboxDeliveryTarget.resolveTerminal(mailbox)
+    if (!terminal) {
+      return null
     }
+    const db = this._orchestrationDb
+    const notRead = db ? receiptMailboxOwnershipHold(db, terminal, mailbox) : null
+    if (notRead) {
+      return notRead
+    }
+    const refusal = this.deliveryRefusal(terminal.ptyId)
+    if (refusal === 'no-terminal') {
+      return null
+    }
+    if (isMailboxTerminalTakingInput(terminal)) {
+      return refusal
+    }
+    // Without live status, only holds Orca read on screen or from the agent stay true once status arrives.
+    return refusal && CORROBORATED_HOLDS.has(refusal.kind)
+      ? refusal
+      : { kind: 'unverified', terminal: terminal.handle }
+  }
+
+  /** Whether a waiting `check --wait` takes mail of this type stored for this mailbox, as arrival would. */
+  hasMessageWaiterFor(mailbox: string, messageType: string): boolean {
+    return [...(this.messageWaiters.get(mailbox) ?? [])].some(
+      (waiter) => !waiter.typeFilter || waiter.typeFilter.includes(messageType)
+    )
+  }
+
+  private deliveryRefusal(ptyId: string): MailboxDeliveryHold | 'no-terminal' | null {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty) {
+      return 'no-terminal'
+    }
+    const hold = this.ptyDeliveryHold(ptyId)
+    if (hold) {
+      return { kind: hold }
+    }
+    const { verdict, readScreenInputVeto } = this.deliveryTuiVerdict(pty)
+    return terminalDeliveryRefusal({
+      verdict,
+      recognizedAgent: !!this.getPaneTerminalAgent(ptyId),
+      readScreenInputVeto
+    })
+  }
+
+  private deliveryTuiVerdict(pty: RuntimePtyWorktreeRecord) {
     const evidence = ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () =>
       buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
     )
     // Why no blocked reader: a refusal here re-arms a recheck that a lingering tail prompt
     // would spin, so delivery keeps its own, blocked-blind, reading of the same ranking.
     const verdict = evaluateTuiIdle({ ...evidence, readTailBlockedReason: () => null })
-    // The ranking vetoes overlays only on ready verdicts; an overlay refuses input mid-turn too.
-    // Only a recognized agent queues mid-turn text; an unknown program would read it as stdin.
-    return verdict.kind === 'working'
-      ? !!this.getPaneTerminalAgent(ptyId) && evidence.readScreenInputVeto() !== true
-      : isTuiIdleReadyVerdict(verdict)
+    return { verdict, readScreenInputVeto: evidence.readScreenInputVeto }
   }
 
   /** An unsent draft would be submitted with the injected text; the cap bounds an abandoned or misread one.
    *  Typed text only: an agent's dim prompt suggestion is not the user's draft (#38015). */
-  private isPtyHoldingDelivery(ptyId: string): boolean {
+  private ptyDeliveryHold(ptyId: string): 'prompt' | 'draft' | 'restoring' | null {
     if (this.isPtyAwaitingUserInput(ptyId)) {
-      return true
+      return 'prompt'
     }
     const facts = this.terminalRunFacts
     const state = this.readWholeScreenModel(ptyId)
@@ -163,27 +221,24 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       unattributed && (draft || restoring)
     )
     const holdSince = drivingInputAt ?? unattributedSince
-    return (
+    const holding =
       (draft || (unattributed && restoring)) &&
       holdSince !== null &&
       Date.now() - holdSince <= USER_INPUT_HOLD_CAP_MS
-    )
+    return holding ? (draft ? 'draft' : 'restoring') : null
   }
 
-  // Why: OpenCode's composer has no prompt glyph, so only its own pane is read with its box layout.
+  // Why: OpenCode's and Pi's composers have no prompt glyph, so only their own panes are read with
+  // their layouts.
   private hasComposerDraft(ptyId: string, context: TerminalCursorContext | null): boolean {
     const agent = this.getPaneTerminalAgent(ptyId)
-    return (agent === 'opencode' || agent === 'opencode2') && context
-      ? openCodeComposerHoldsDraft(context)
-      : !!readTerminalComposerTypedText(context)
-  }
-
-  protected evaluateTuiIdleForPty(pty: RuntimePtyWorktreeRecord): TuiIdleVerdict {
-    return evaluateTuiIdle(
-      ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () =>
-        buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-      )
-    )
+    if (context && (agent === 'opencode' || agent === 'opencode2')) {
+      return openCodeComposerHoldsDraft(context)
+    }
+    if (context && agent === 'pi') {
+      return piComposerHoldsDraft(context)
+    }
+    return !!readTerminalComposerTypedText(context)
   }
 
   protected getAdoptedPtyExplicitIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {

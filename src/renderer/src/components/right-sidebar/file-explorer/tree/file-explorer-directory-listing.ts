@@ -1,17 +1,17 @@
 import { useAppStore } from '@/store/index'
 import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
-import type { DirEntry } from '../../../../../../shared/filesystem-entry-types'
-import { sortDirEntries } from '../../../../../../shared/file-name-sort'
+import type { DirEntry } from '../../../../../../shared/file-listing/directory-entry'
+import { sortDirEntries } from '../../../../../../shared/file-listing/file-name-sort'
 import {
   readRuntimeDirectoryPage,
   runtimeDirectoryPagesSupported
-} from '@/runtime/runtime-directory-page-client'
-import { readUserOpenedDirectory } from '@/lib/user-opened-local-path'
+} from '@/runtime/files/reads/runtime-directory-page-client'
+import { readUserOpenedDirectory } from '@/lib/files/access/user-opened-local-path'
 import {
   FILE_READ_DIR_MAX_PAGE_ENTRIES,
   isDirListingTooLargeForRemoteError,
   type DirEntryCursor
-} from '../../../../../../shared/file-dir-page'
+} from '../../../../../../shared/file-listing/file-dir-page'
 import type {
   DirCache,
   FileExplorerDirMore,
@@ -114,6 +114,27 @@ export function clearFailedOpenedDirectoryLink(
     return { ...child, isDirectory: false, isDirectoryFromOpenedLink: false }
   })
   return changed ? { ...cache, [parentPath]: { ...parent, children } } : cache
+}
+
+export function markOpenedPathAsDirectory(
+  cache: Record<string, DirCache>,
+  path: string
+): Record<string, DirCache> {
+  let changed = false
+  const next: Record<string, DirCache> = {}
+  for (const [dirPath, dir] of Object.entries(cache)) {
+    let dirChanged = false
+    const children = dir.children.map((child) => {
+      if (child.path !== path || child.isDirectory) {
+        return child
+      }
+      changed = true
+      dirChanged = true
+      return { ...child, isDirectory: true, isDirectoryFromOpenedLink: child.isSymlink === true }
+    })
+    next[dirPath] = dirChanged ? { ...dir, children } : dir
+  }
+  return changed ? next : cache
 }
 
 /** A gesture, a listed link row, or an already-outside listing may follow a project folder link; a folder that only became a link stays refused until clicked. */

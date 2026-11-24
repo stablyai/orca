@@ -1,11 +1,11 @@
 import {
   createManagedCommandMatcher,
-  removeManagedCommands,
-  writeHooksJson,
-  type HookDefinition
-} from '../../../agent-hooks/installer-utils'
-import { readHooksJsonWithRaw } from '../../../agent-hooks/hooks-json-read'
-import { resolveHooksJsonWritePath } from '../../../agent-hooks/hook-config-write-path'
+  removeManagedCommands
+} from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
+import { writeHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-write'
+import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { readHooksJsonWithRaw } from '../../../agent-hooks/installation/configuration/hooks-json-read'
+import { resolveHooksJsonWritePath } from '../../../agent-hooks/installation/configuration/hook-config-write-path'
 import { assertHooksJsonGeneration } from './codex-real-home-hooks-json'
 import { getCodexManagedScriptFileName } from '../definitions/codex-hook-identity'
 import {

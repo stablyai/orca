@@ -2,7 +2,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 
 export function checkRunDetailsOwnerScope(
   hostId: ExecutionHostId,

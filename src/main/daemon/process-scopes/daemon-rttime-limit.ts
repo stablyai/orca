@@ -1,4 +1,4 @@
-import { readZeroRtTimeLimit } from '../../startup/linux-rttime-limit'
+import { readZeroRtTimeLimit } from '../../startup/linux-runtime/linux-rttime-limit'
 
 // Why: PTYs inherit the daemon's RLIMIT_RTTIME, so a zero limit can kill terminal jobs.
 export function warnWhenRealtimeTimeoutIsZero(

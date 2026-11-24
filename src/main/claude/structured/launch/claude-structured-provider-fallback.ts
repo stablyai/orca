@@ -1,7 +1,7 @@
 import {
   readClaudeModelFallback,
   claudeModelFallbackText
-} from '../../../../shared/native-chat/claude-model-fallback'
+} from '../../../../shared/native-chat/transcript/notices/claude-model-fallback'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../../shared/agent-session/journal/agent-session-turn-notice'
 import type {
   AgentJournalPlainStatusItem,
@@ -9,34 +9,37 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionFailureRowWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { PROVIDER_FRAME_PAYLOAD_LIMITS } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
-import { CLAUDE_STREAM_JSON_FRAME_KINDS } from '../../../native-chat/agent-session-wire/claude-stream-json-frame-schema'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { PROVIDER_FRAME_PAYLOAD_LIMITS } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
+import { CLAUDE_STREAM_JSON_FRAME_KINDS } from '../../../native-chat/agent-session-wire/providers/claude-stream-json-frame-schema'
 import {
   type UnhandledProviderFrameJournalItemOptions,
   readableProviderFrameText,
   unhandledProviderFrameJournalItem
-} from '../../../native-chat/agent-session-wire/unhandled-provider-frame'
+} from '../../../native-chat/agent-session-wire/providers/unhandled-provider-frame'
 import {
   claudeRecord,
   claudeText,
   type ClaudeMessageEnvelope
 } from '../journal/claude-structured-item-translation'
-import { claudeResultOutcome } from '../../claude-result-outcome'
+import { claudeResultOutcome } from '../turns/claude-result-outcome'
+import { isUnmodeledClaudeSystemFrame } from '../../../native-chat/agent-session-wire/providers/provider-frame-disposition'
 import {
   isClaudeToolUseContent,
   isClaudeToolResultContent
-} from '../../../../shared/claude-tool-content'
-import type { ClaudeRowStamp } from '../../claude-provisional-row-corrections'
+} from '../../../../shared/agent-hook-listener/providers/claude/transcripts/claude-tool-content'
+import type { ClaudeRowStamp } from '../../subagents/claude-provisional-row-corrections'
+import { writeClaudeStopReadings, type ClaudeStopCheck } from '../../claude-stop-readings'
+import { estimateStructuredAgentSessionItemBytes } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 import {
   CLAUDE_API_RETRY_FRAME_KIND,
   claudeApiRetryRowBody,
   createClaudeApiRetryRuns
-} from '../../claude-api-retry-row'
+} from '../journal/claude-api-retry-row'
 import {
   CLAUDE_INFORMATIONAL_FRAME_KIND,
   claudeInformationalRowBody
-} from '../../claude-informational-row'
+} from '../journal/claude-informational-row'
 
 export function claudeProviderFrameKind(message: Record<string, unknown>): string {
   const type = claudeText(message.type) ?? 'unknown'
@@ -54,7 +57,8 @@ const PROGRESS_FRAME_KINDS: ReadonlySet<string> = new Set([
 
 /** No row to write, so buffered output need not flush ahead of this frame. */
 export function isClaudeProgressFrame(message: Record<string, unknown>): boolean {
-  return PROGRESS_FRAME_KINDS.has(claudeProviderFrameKind(message))
+  const kind = claudeProviderFrameKind(message)
+  return PROGRESS_FRAME_KINDS.has(kind) || isUnmodeledClaudeSystemFrame(kind)
 }
 
 const SETTLED_RESULT_KINDS: ReadonlySet<string> = new Set(
@@ -136,13 +140,19 @@ export function createClaudeProviderFrameFallback(
     beforeAppend?: () => void,
     options?: UnhandledProviderFrameJournalItemOptions,
     /** Attribute child output; omit for the session's own agent. */
-    stamp?: ClaudeRowStamp
+    stamp?: ClaudeRowStamp,
+    /** A Stop at the write position records `stopped` instead; null writes nothing. */
+    stopReading?: {
+      check: ClaudeStopCheck
+      ran?: null
+      stopped: { options?: UnhandledProviderFrameJournalItemOptions } | null
+    }
   ) => boolean
 } {
   let sequence = 0
   const retryRun = createClaudeApiRetryRuns()
   return {
-    append: (kind, payload, display, beforeAppend, options, stamp) => {
+    append: (kind, payload, display, beforeAppend, options, stamp, stopReading) => {
       sequence += 1
       const retrying = kind === CLAUDE_API_RETRY_FRAME_KIND ? claudeRecord(payload) : null
       if (retrying) {
@@ -186,13 +196,37 @@ export function createClaudeProviderFrameFallback(
         provider: 'orca',
         clientMessageId: `provider-frame:claude:${acquisitionId}:${sequence}`
       } as const
-      const body: AgentJournalStatusItem =
+      const shown = (translatedBody: typeof translated.body): AgentJournalStatusItem =>
         display && typeof display === 'object'
-          ? { ...translated.body, ...display }
+          ? { ...translatedBody, ...display }
           : typeof display === 'string' && display
-            ? { ...translated.body, text: display }
-            : translated.body
-      sink.appendItem(identity, body, stamp?.(identity, body) ?? { turnScope: turnScope() })
+            ? { ...translatedBody, text: display }
+            : translatedBody
+      const body = shown(translated.body)
+      const rowOptions = stamp?.(identity, body) ?? { turnScope: turnScope() }
+      if (stopReading) {
+        const plain =
+          stopReading.stopped &&
+          unhandledProviderFrameJournalItem(
+            'claude',
+            kind,
+            payload,
+            PROVIDER_FRAME_PAYLOAD_LIMITS,
+            stopReading.stopped.options
+          )
+        const stopped = plain ? { identity, body: plain.body } : null
+        const readings = {
+          ran: stopReading.ran === null ? null : { kind: 'literal' as const, identity, body },
+          stopped: stopped && { kind: 'literal' as const, ...stopped },
+          reservedBytes: estimateStructuredAgentSessionItemBytes(identity, body) * 2
+        }
+        if (
+          writeClaudeStopReadings(sink, stopReading.check, readings, rowOptions, { publish: true })
+        ) {
+          return true
+        }
+      }
+      sink.appendItem(identity, body, rowOptions)
       sink.publish()
       return true
     }

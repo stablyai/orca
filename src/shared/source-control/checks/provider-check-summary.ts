@@ -1,20 +1,26 @@
-import type { CheckStatus, ProviderCheckSummary } from '../../github/pull-request-types'
+import type {
+  CheckStatus,
+  ProviderCheckSummary
+} from '../../github/pull-requests/pull-request-types'
 
 export type CheckOutcome = 'passed' | 'failed' | 'pending' | 'neutral'
 
-export type CheckOutcomeInput = { status?: string | null; conclusion?: string | null }
+export type CheckOutcomeInput = {
+  status?: string | null
+  conclusion?: string | null
+  gitlabAllowedFailure?: boolean
+}
 
 // Skipped means not applicable; count it passing everywhere so desktop/mobile agree on the same PR.
 const PASSED_CONCLUSIONS = new Set(['success', 'skipped'])
 
-// Why: these block the merge. GitLab `manual` is deliberately absent — it waits on a human.
+// Why: these fail the head. GitLab `manual` and GitHub `action_required` are absent — they wait on a human.
 const FAILED_CONCLUSIONS = new Set([
   'failure',
   'error',
   'startup_failure',
   'timed_out',
-  'cancelled',
-  'action_required'
+  'cancelled'
 ])
 
 /** The single provider-neutral verdict for one check; every check surface must route through it. */
@@ -23,6 +29,13 @@ export function classifyCheckOutcome(check: CheckOutcomeInput): CheckOutcome {
   const status = (check.status ?? '').toLowerCase()
   if (FAILED_CONCLUSIONS.has(conclusion)) {
     return 'failed'
+  }
+  // Why: action_required (e.g. a workflow awaiting approval) has not run yet; it blocks merge like a running check.
+  if (conclusion === 'action_required') {
+    return 'pending'
+  }
+  if (check.gitlabAllowedFailure === true && conclusion === 'neutral' && status === 'completed') {
+    return 'passed'
   }
   if (PASSED_CONCLUSIONS.has(conclusion)) {
     return 'passed'
@@ -57,6 +70,7 @@ export function summarizeProviderChecks(
   let failed = 0
   let cancelled = 0
   let pending = 0
+  let actionRequired = 0
   let neutral = 0
   for (const check of checks) {
     const outcome = classifyCheckOutcome(check)
@@ -69,6 +83,9 @@ export function summarizeProviderChecks(
       }
     } else if (outcome === 'pending') {
       pending += 1
+      if (check.conclusion?.toLowerCase() === 'action_required') {
+        actionRequired += 1
+      }
     } else {
       neutral += 1
     }
@@ -81,6 +98,7 @@ export function summarizeProviderChecks(
     failed,
     cancelled,
     pending,
+    ...(actionRequired > 0 ? { actionRequired } : {}),
     neutral
   }
 }

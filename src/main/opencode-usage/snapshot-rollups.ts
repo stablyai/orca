@@ -1,4 +1,4 @@
-import { highestUsageKey } from '../usage/highest-usage-key'
+import { highestUsageKey } from '../usage/rollups/highest-usage-key'
 import type {
   OpenCodeUsageBreakdownKind,
   OpenCodeUsageBreakdownRow,
@@ -7,7 +7,7 @@ import type {
   OpenCodeUsageScope,
   OpenCodeUsageSessionRow,
   OpenCodeUsageSummary
-} from '../../shared/opencode-usage-types'
+} from '../../shared/agent-usage/analytics/opencode-usage-types'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from './types'
 
 function addCost(left: number | null, right: number | null): number | null {

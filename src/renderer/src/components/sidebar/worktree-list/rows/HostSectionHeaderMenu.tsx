@@ -24,35 +24,35 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { formatSshUserFacingError } from '@/components/settings/ssh/targets/ssh-user-facing-error'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { runtimePairingRepairRoute } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
-import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
-import { startWslHostAndReloadProjects } from '@/lib/wsl-host-user-start'
-import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-rpc-client'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
-import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-section-rows'
-import { buildHostHeaderMenuModel } from '../../host-header-menu-items'
+import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'
+import { startWslHostAndReloadProjects } from '@/runtime/hosts/wsl/wsl-host-user-start'
+import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
+import { buildHostHeaderMenuModel } from '../../host-lifecycle/host-header-menu-items'
 import { selectStartableStoppedWslDistro } from '../../../wsl-host-stopped/use-stopped-wsl-host'
-import { HostRenameDialog } from '../../HostRenameDialog'
-import { HostRemoveDialog } from '../../HostRemoveDialog'
+import { HostRenameDialog } from '../../host-lifecycle/HostRenameDialog'
+import { HostRemoveDialog } from '../../host-lifecycle/HostRemoveDialog'
 import { RuntimeRepairDialog } from '../../../runtime-access/RuntimeRepairDialog'
-import { resolveHostRemoval } from '../../host-rename-remove'
+import { resolveHostRemoval } from '../../host-lifecycle/host-rename-remove'
+import { translateHostDisplayLabel } from '../../../../runtime/hosts/display/execution-host-label'
 
-function blockedTitle(reason: 'client-too-old' | 'server-too-old'): string {
+function blockedTitle(
+  reason: 'client-too-old' | 'server-too-old',
+  t: Translate = translate
+): string {
   return reason === 'server-too-old'
-    ? translate(
-        'auto.components.sidebar.HostSectionHeaderMenu.5b8b4b6a01',
-        'Update server required'
-      )
-    : translate(
-        'auto.components.sidebar.HostSectionHeaderMenu.9b3c1d2e44',
-        'Update client required'
-      )
+    ? t('auto.components.sidebar.HostSectionHeaderMenu.5b8b4b6a01', 'Update server required')
+    : t('auto.components.sidebar.HostSectionHeaderMenu.9b3c1d2e44', 'Update client required')
 }
 
 // Shared sidebar host rows route to connection-specific management pages in Settings.
@@ -74,6 +74,7 @@ function openManageHost(row: HostHeaderRow): void {
 }
 
 export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
@@ -125,7 +126,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
       } catch (err) {
         toast.error(
           err instanceof Error
-            ? err.message
+            ? formatSshUserFacingError(err.message)
             : action === 'connect'
               ? translate(
                   'auto.components.sidebar.HostSectionHeaderMenu.2c29e2de68',
@@ -156,15 +157,11 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
     // Managed SSH can repair revoked pairing; connect retries it rather than rereading refusal.
     const retryPairing = row.blockedReason === 'access-revoked' && repairRoute === 'ssh'
     try {
-      const response = await (
-        retryPairing
-          ? window.api.runtimeEnvironments.connect
-          : window.api.runtimeEnvironments.getStatus
-      )({
-        selector: parsed.environmentId,
-        // Re-pairing needs time for SSH, readiness and two handshakes.
-        timeoutMs: retryPairing ? 45_000 : 10_000
-      })
+      const selector = parsed.environmentId
+      const response = await (retryPairing
+        ? // Re-pairing needs time for SSH, readiness and two handshakes.
+          window.api.runtimeEnvironments.connect({ selector, timeoutMs: 45_000 })
+        : window.api.runtimeEnvironments.getStatus({ selector, timeoutMs: 10_000, force: true }))
       unwrapRuntimeRpcResult<RuntimeStatus>(response)
       // Publish refreshed host status to other pickers through the shared store.
       await useAppStore.getState().readRuntimeHostStatusSnapshots()
@@ -205,7 +202,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
               size="icon-xs"
               type="button"
               className="size-5 shrink-0 text-muted-foreground can-hover:opacity-0 transition-opacity focus-visible:opacity-100 group-hover/host-header:opacity-100 data-[state=open]:opacity-100"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.sidebar.HostSectionHeaderMenu.4f2c8a9b10',
                 'Host actions for {{value0}}',
                 { value0: row.label }
@@ -223,7 +220,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {translate('auto.components.sidebar.HostSectionHeaderMenu.6b7c8d9e10', 'Host actions')}
+          {t('auto.components.sidebar.HostSectionHeaderMenu.6b7c8d9e10', 'Host actions')}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-56">
@@ -234,7 +231,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
               onSelect={() => setRepairOpen(true)}
             >
               <Link2 className="size-3.5" />
-              {translate('auto.components.sidebar.HostSectionHeaderMenu.repair', 'Re-pair…')}
+              {t('auto.components.sidebar.HostSectionHeaderMenu.repair', 'Re-pair…')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
           </>
@@ -245,7 +242,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
               onSelect={() => void startWslHostAndReloadProjects(runtimeEnvironmentId)}
             >
               <Play className="size-3.5" />
-              {translate('components.native-chat.hostOutage.startDistro', 'Start {{distro}}', {
+              {t('components.native-chat.hostOutage.startDistro', 'Start {{distro}}', {
                 distro: stoppedWslDistro
               })}
             </DropdownMenuItem>
@@ -261,50 +258,47 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
                   onSelect={() => openManageHost(row)}
                 >
                   <AlertTriangle className="size-3.5" />
-                  {blockedTitle(model.blocked.reason)}
+                  {blockedTitle(model.blocked.reason, t)}
                 </DropdownMenuItem>
               </TooltipTrigger>
               <TooltipContent side="right" sideOffset={6} className="max-w-72">
-                {row.compatibility ? describeRuntimeCompatBlock(row.compatibility) : null}
+                {row.compatibility ? describeRuntimeCompatBlock(row.compatibility, t) : null}
               </TooltipContent>
             </Tooltip>
             <DropdownMenuSeparator />
           </>
         )}
         <DropdownMenuLabel className="truncate text-[11px] font-medium text-muted-foreground">
-          {row.label}
+          {translateHostDisplayLabel(row)}
         </DropdownMenuLabel>
         {model.actions.includes('rename') && (
           <DropdownMenuItem onSelect={() => setRenameOpen(true)}>
             <Pencil className="size-3.5" />
-            {translate('auto.components.sidebar.HostSectionHeaderMenu.8d1e2f3a4b', 'Rename…')}
+            {t('auto.components.sidebar.HostSectionHeaderMenu.8d1e2f3a4b', 'Rename…')}
           </DropdownMenuItem>
         )}
         {model.actions.includes('ssh-reconnect') && (
           <DropdownMenuItem onSelect={() => void runSshAction('connect')}>
             <Plug className="size-3.5" />
-            {sshConnectVerb(sshStatus)}
+            {sshConnectVerb(sshStatus, t)}
           </DropdownMenuItem>
         )}
         {model.actions.includes('ssh-disconnect') && (
           <DropdownMenuItem onSelect={() => void runSshAction('disconnect')}>
             <PlugZap className="size-3.5" />
-            {translate('auto.components.sidebar.HostSectionHeaderMenu.59b553e2aa', 'Disconnect')}
+            {t('auto.components.sidebar.HostSectionHeaderMenu.59b553e2aa', 'Disconnect')}
           </DropdownMenuItem>
         )}
         {model.actions.includes('runtime-check-connection') && (
           <DropdownMenuItem onSelect={() => void handleCheckConnection()}>
             <RefreshCw className="size-3.5" />
-            {translate(
-              'auto.components.sidebar.HostSectionHeaderMenu.2d3e4f5a6b',
-              'Check connection'
-            )}
+            {t('auto.components.sidebar.HostSectionHeaderMenu.2d3e4f5a6b', 'Check connection')}
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={handleManage}>
           <Settings2 className="size-3.5" />
-          {translate('auto.components.sidebar.HostSectionHeaderMenu.3c4d5e6f7a', 'Manage host…')}
+          {t('auto.components.sidebar.HostSectionHeaderMenu.3c4d5e6f7a', 'Manage host…')}
         </DropdownMenuItem>
         {model.actions.includes('remove') && (
           <>
@@ -314,10 +308,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
               onSelect={() => setRemoveOpen(true)}
             >
               <Trash2 className="size-3.5" />
-              {translate(
-                'auto.components.sidebar.HostSectionHeaderMenu.6e7f8a9b0c',
-                'Remove host…'
-              )}
+              {t('auto.components.sidebar.HostSectionHeaderMenu.6e7f8a9b0c', 'Remove host…')}
             </DropdownMenuItem>
           </>
         )}

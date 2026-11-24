@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
-import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeGitIgnoredPaths } from '@/runtime/runtime-git-status-client'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import { getRuntimeGitIgnoredPaths } from '@/runtime/source-control/git/runtime-git-status-client'
 import { getWorktreeGitOwnerTarget } from '../../source-control/sync/worktree-git-owner-target'
+import {
+  createFileExplorerWorktreeSnapshots,
+  fileExplorerWorktreeSnapshotKey
+} from './file-explorer-worktree-snapshots'
 
 const EMPTY_IGNORED_PATHS: readonly string[] = []
 export const FILE_EXPLORER_IGNORED_QUERY_DEBOUNCE_MS = 300
@@ -12,7 +16,9 @@ export type IgnoredPathResult = {
   worktreePath: string
 }
 
-export function getEffectiveFileExplorerIgnoredPaths({
+const lastIgnoredPathResults = createFileExplorerWorktreeSnapshots<IgnoredPathResult>()
+
+function getEffectiveFileExplorerIgnoredPaths({
   activeWorktreeId,
   canLoadIgnoredPaths,
   ignoredPathResult,
@@ -23,17 +29,17 @@ export function getEffectiveFileExplorerIgnoredPaths({
   ignoredPathResult: IgnoredPathResult | null
   worktreePath: string | null
 }): readonly string[] {
-  const ignoredPathResultMatchesCurrentWorktree =
-    ignoredPathResult !== null &&
-    ignoredPathResult.activeWorktreeId === activeWorktreeId &&
-    ignoredPathResult.worktreePath === worktreePath
-
-  if (!canLoadIgnoredPaths || !ignoredPathResultMatchesCurrentWorktree) {
+  if (!canLoadIgnoredPaths || !activeWorktreeId || !worktreePath) {
     return EMPTY_IGNORED_PATHS
   }
-
+  // Same-host switches keep Files mounted, so fall back to this workspace's last answer until git replies.
+  const result =
+    ignoredPathResult?.activeWorktreeId === activeWorktreeId &&
+    ignoredPathResult.worktreePath === worktreePath
+      ? ignoredPathResult
+      : lastIgnoredPathResults.peek(fileExplorerWorktreeSnapshotKey(activeWorktreeId, worktreePath))
   // Retain same-worktree answers while expanded-folder queries refresh to prevent ignored-row flashes.
-  return ignoredPathResult.paths
+  return result?.paths ?? EMPTY_IGNORED_PATHS
 }
 
 export function useFileExplorerIgnoredPaths({
@@ -57,6 +63,14 @@ export function useFileExplorerIgnoredPaths({
     }
 
     let canceled = false
+    const show = (paths: string[]): void => {
+      const result = { activeWorktreeId, paths, worktreePath }
+      lastIgnoredPathResults.keep(
+        fileExplorerWorktreeSnapshotKey(activeWorktreeId, worktreePath),
+        result
+      )
+      setIgnoredPathResult(result)
+    }
     const refresh = (): void => {
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
       const target = getWorktreeGitOwnerTarget(activeWorktreeId)
@@ -74,12 +88,12 @@ export function useFileExplorerIgnoredPaths({
       )
         .then((paths) => {
           if (!canceled) {
-            setIgnoredPathResult({ activeWorktreeId, paths, worktreePath })
+            show(paths)
           }
         })
         .catch(() => {
           if (!canceled) {
-            setIgnoredPathResult({ activeWorktreeId, paths: [], worktreePath })
+            show([])
           }
         })
     }

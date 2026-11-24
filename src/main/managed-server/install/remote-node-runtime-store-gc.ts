@@ -25,12 +25,12 @@ import {
   moveRemoteTreeCommand,
   removeRemoteTreeCommand,
   restoreRemoteTreeCommand
-} from '../../ssh/ssh-remote-commands'
+} from '../../ssh/remote-exec/ssh-remote-commands'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 import {
   hostRuntimeStoreInventoryCommand,
   windowsSweepStaleRuntimeStagesCommand

@@ -8,13 +8,11 @@ import {
   parsePluginTerminalThemeArtifact,
   type PluginTerminalThemeRegistration
 } from '../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
-import {
-  PLUGIN_THEME_MAX_BYTES,
-  readContainedPluginArtifactText
-} from '../plugin-artifact-validation'
+import { PLUGIN_THEME_MAX_BYTES } from '../artifacts/plugin-artifact-validation'
+import { readContainedPluginArtifactText } from '../artifacts/plugin-contained-artifact'
 import { PluginArtifactPackRegistry } from './plugin-artifact-pack-registry'
-import type { PluginContentVerifier } from '../plugin-content-integrity'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
+import type { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import { resolvePluginThemeBackground } from './plugin-theme-background-image'
 
 async function readTheme<T>(

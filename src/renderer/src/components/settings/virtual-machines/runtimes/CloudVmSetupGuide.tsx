@@ -1,7 +1,7 @@
 import type React from 'react'
 import { ArrowUpRight, Cloud } from 'lucide-react'
 import { useAppStore } from '@/store/index'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 
 export function CloudVmSetupGuide({
@@ -9,6 +9,7 @@ export function CloudVmSetupGuide({
 }: {
   refreshAction?: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
 
   return (
@@ -16,10 +17,10 @@ export function CloudVmSetupGuide({
       <Cloud className="size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium">
-          {translate('auto.components.settings.CloudVmSetupGuide.cardTitle', 'Cloud VMs')}
+          {t('auto.components.settings.CloudVmSetupGuide.cardTitle', 'Cloud VMs')}
         </div>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.CloudVmSetupGuide.cardDescription',
             'Created per workspace from an environment recipe.'
           )}
@@ -38,7 +39,7 @@ export function CloudVmSetupGuide({
           })
         }
       >
-        {translate('auto.components.settings.CloudVmSetupGuide.setUpRecipes', 'Set up recipes')}
+        {t('auto.components.settings.CloudVmSetupGuide.setUpRecipes', 'Set up recipes')}
         <ArrowUpRight />
       </Button>
     </div>

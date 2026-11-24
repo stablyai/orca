@@ -6,6 +6,7 @@ import type {
   AgentTabActionId,
   KeybindingActionId,
   KeybindingDefinition,
+  KeybindingOverrides,
   PluginKeybindingActionId
 } from './types'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
@@ -45,12 +46,19 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
   ...buildAgentTabKeybindingDefinitions()
 ]
 
-/** Pre-swap tab-switch bindings; a one-time migration pins these for pre-release installs so upgrading users keep the shortcuts they learned. */
+/** Inherited by pre-rollout profiles; explicit shared shortcuts take precedence. */
 export const LEGACY_TAB_SWITCH_BINDINGS: Readonly<Partial<Record<KeybindingActionId, string[]>>> = {
   'tab.nextSameType': ['Mod+Shift+BracketRight'],
   'tab.previousSameType': ['Mod+Shift+BracketLeft'],
   'tab.nextAllTypes': ['Mod+Alt+BracketRight'],
   'tab.previousAllTypes': ['Mod+Alt+BracketLeft']
+}
+
+export function getLegacySearchBindings(platform: NodeJS.Platform): KeybindingOverrides {
+  return {
+    'worktree.palette': [platform === 'darwin' ? 'Mod+J' : 'Mod+Shift+J'],
+    'terminal.clear': ['Mod+K']
+  }
 }
 
 export const DEFINITIONS_BY_ID = new Map<KeybindingActionId, KeybindingDefinition>(

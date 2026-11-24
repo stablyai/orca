@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { AzureDevOpsStatus, BitbucketStatus, GiteaStatus } from './integrations-pane-status'
 
 /** Unavailable means the runtime cannot report provider status. */
@@ -7,25 +8,28 @@ export type TokenProviderStatus = BitbucketStatus | AzureDevOpsStatus | GiteaSta
 const NS = 'auto.components.settings.token.source.control.integration.cards'
 
 /** Token providers share status labels. */
-export function tokenProviderStatusLabel(input: {
-  configured: boolean
-  hasAccount?: boolean
-  status: TokenProviderStatus
-  /** Gitea works read-only without a token, so its unconfigured state is softer. */
-  optional?: boolean
-}): string {
+export function tokenProviderStatusLabel(
+  input: {
+    configured: boolean
+    hasAccount?: boolean
+    status: TokenProviderStatus
+    /** Gitea works read-only without a token, so its unconfigured state is softer. */
+    optional?: boolean
+  },
+  t: Translate = translate
+): string {
   if (input.configured) {
     return input.hasAccount === false
-      ? translate(`${NS}.statusConfigured`, 'Configured')
-      : translate(`${NS}.statusConnected`, 'Connected')
+      ? t(`${NS}.statusConfigured`, 'Configured')
+      : t(`${NS}.statusConnected`, 'Connected')
   }
   if (input.status === 'unavailable') {
-    return translate(`${NS}.statusUnavailable`, 'Unavailable')
+    return t(`${NS}.statusUnavailable`, 'Unavailable')
   }
   if (input.status === 'not-configured') {
     return input.optional
-      ? translate(`${NS}.statusOptionalSetup`, 'Optional setup')
-      : translate(`${NS}.statusNotConfigured`, 'Not configured')
+      ? t(`${NS}.statusOptionalSetup`, 'Optional setup')
+      : t(`${NS}.statusNotConfigured`, 'Not configured')
   }
-  return translate(`${NS}.statusAuthFailed`, 'Auth failed')
+  return t(`${NS}.statusAuthFailed`, 'Auth failed')
 }
