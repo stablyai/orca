@@ -84,7 +84,8 @@ describe('item worker links', () => {
 
   it('show a long report on a kept read, which keeps the read but not the report', async () => {
     const id = failedWorker('Agent process exited with code 1')
-    const body = 'x'.repeat(5_000)
+    // Past the kept-report budget, so a kept read rereads it from the Task.
+    const body = 'x'.repeat(1_100_000)
     db.updateTaskStatus(
       db.getDispatchContextById(id)!.task_id,
       'failed',

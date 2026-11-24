@@ -45,7 +45,8 @@ type Kept = {
 type Finished = {
   ref: string
   worker: BotWorkWorker
-  report: LinkedWorkerState['report']
+  /** Undefined: past the report budget. */
+  report: LinkedWorkerState['report'] | undefined
   reason: string | null
   lineage: WorkerLineage
 }
@@ -80,22 +81,19 @@ export class LinkedWorkerStates {
 
   /** Each ref's worker, report and stop reason: kept ones when their rows are unchanged, the rest read in
    *  one batch. Left out when unreadable; null when its records are gone. */
-  async readStates(unique: readonly string[]): Promise<Map<string, LinkedWorkerState | null>> {
+  async readStates(
+    unique: readonly string[]
+  ): Promise<{ states: Map<string, LinkedWorkerState | null>; keep: () => void }> {
     const db = this.workRuntime.getOrchestrationDb()
     if (db !== this.source) {
       this.forgetAll()
       this.source = db
     }
-    const writes = this.writes
     // Row notices, other connections' commits (which fire none here) and the dock's own revision: with
     // none since a kept worker was last checked, its rows are unchanged and no fingerprint is read.
     const stamp = this.stampOf(db)
     // Another connection's commit fires no notice here, and a fingerprint misses a rewrite inside long text.
-    const version = dataVersion(db)
-    if (version !== this.version) {
-      this.forgetAll()
-      this.version = version
-    }
+    this.syncVersion(db)
     const states = new Map<string, LinkedWorkerState | null>()
     const candidates = unique.flatMap((ref) => {
       const kept = this.kept.get(ref)
@@ -129,49 +127,57 @@ export class LinkedWorkerStates {
       this.kept.delete(ref)
       this.kept.set(ref, kept)
       hits.push([ref, kept])
-      const report = kept.report === undefined ? readReport(kept.worker.taskId) : kept.report
-      states.set(ref, { worker: kept.worker, report: report ?? null, reason: kept.reason })
     }
     const lineageOf = new Map<string, WorkerLineage>()
     const workers =
       missing.length > 0 ? await readWorkers(this.workRuntime, missing, lineageOf) : new Map()
-    // A kept worker dropped while the walk ran (its rows written or deleted) is read again, not shown stale.
-    // Until none is: each re-read awaits too, and a hit can be dropped only once.
+    // A write while the read awaited may have changed a kept worker: check again, re-read what changed,
+    // and repeat while re-reads (which await too) see more; each is re-read at most once.
     const reread = new Set<string>()
-    for (;;) {
-      const dropped = hits.flatMap(([ref, kept]) =>
-        reread.has(ref) || this.kept.get(ref) === kept ? [] : [ref]
-      )
+    for (let checked = stamp; ;) {
+      const now = this.stampOf(db)
+      this.syncVersion(db)
+      const live = hits.filter(([ref]) => !reread.has(ref))
+      const nowPrints = readPrints(db, now === checked ? [] : live.map(([, kept]) => kept))
+      const dropped = live.flatMap(([ref, kept]) => {
+        if (this.kept.get(ref) !== kept) {
+          return [ref]
+        }
+        if (now === checked) {
+          return []
+        }
+        const print = nowPrints.get(printKey(kept))
+        if (now === null || print?.print !== kept.print) {
+          this.forget(ref)
+          return [ref]
+        }
+        kept.reason = print.reason
+        kept.checkedAt = now
+        return []
+      })
+      checked = now
       if (dropped.length === 0) {
         break
       }
       for (const ref of dropped) {
         reread.add(ref)
-        states.delete(ref)
       }
       for (const [ref, worker] of await readWorkers(this.workRuntime, dropped, lineageOf)) {
         workers.set(ref, worker)
+      }
+    }
+    for (const [ref, kept] of hits) {
+      if (!reread.has(ref)) {
+        const report = kept.report === undefined ? readReport(kept.worker.taskId) : kept.report
+        states.set(ref, { worker: kept.worker, report: report ?? null, reason: kept.reason })
       }
     }
     const reasons = readWorkerDockReasons(
       db,
       [...workers.values()].flatMap((worker) => worker?.dispatchId ?? [])
     )
-    if (this.writes !== writes) {
-      // A Task written while the walk ran: kept workers show its report as of now.
-      reports.clear()
-      for (const [ref, kept] of hits) {
-        if (workers.has(ref) || !states.has(ref)) {
-          continue
-        }
-        states.set(ref, {
-          worker: kept.worker,
-          report: readReport(kept.worker.taskId) ?? null,
-          reason: kept.reason
-        })
-      }
-    }
     const finished: Finished[] = []
+    let pendingChars = 0
     for (const [ref, worker] of workers) {
       if (!worker) {
         states.set(ref, null)
@@ -192,14 +198,19 @@ export class LinkedWorkerStates {
         // A worker still on a pane reads as the fleet sees every Dispatch on it, so it stays live.
         (!lineage.resource || lineage.resource.ownership_state === 'released')
       ) {
-        finished.push({ ref, worker, report: read, reason, lineage })
+        // Only reports within the budget wait to be kept; the rest are read from their Task on use.
+        const fits = this.keptChars + pendingChars + reportLength(read) <= KEPT_REPORT_MAX_CHARS
+        pendingChars += fits ? reportLength(read) : 0
+        finished.push({ ref, worker, report: fits ? read : undefined, reason, lineage })
       }
     }
-    if (stamp !== null && finished.length > 0) {
-      // After the reply, in slices: keeping costs a cold read nothing over reading.
-      setImmediate(() => this.keepLater(db, stamp, finished))
+    // Run once the caller has replied, in slices: keeping costs a cold read nothing over reading.
+    const keep = () => {
+      if (stamp !== null && finished.length > 0) {
+        this.keepLater(db, stamp, finished)
+      }
     }
-    return states
+    return { states, keep }
   }
 
   /** Keeps what a read found finished, a slice per turn, while no write has landed since that read began;
@@ -249,6 +260,16 @@ export class LinkedWorkerStates {
     }
     if (finished.length > KEEP_SLICE) {
       setImmediate(() => this.keepLater(db, stamp, finished.slice(KEEP_SLICE)))
+    }
+  }
+
+  /** Another connection's commit fires no notice here, and a fingerprint misses a rewrite inside long
+   *  text: it drops every kept worker. */
+  private syncVersion(db: OrchestrationDb): void {
+    const version = dataVersion(db)
+    if (version !== this.version) {
+      this.forgetAll()
+      this.version = version
     }
   }
 
@@ -309,7 +330,7 @@ export class LinkedWorkerStates {
   }
 }
 
-function reportLength(report: LinkedWorkerState['report']): number {
+function reportLength(report: LinkedWorkerState['report'] | undefined): number {
   return report ? report.subject.length + (report.body?.length ?? 0) : 0
 }
 
