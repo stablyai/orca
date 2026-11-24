@@ -34,8 +34,9 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunk
 // fetched only for the active language, never before the first route. Code keeps its own fence.
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS = 10
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
-// A budget, not a frame limit: the host sends a catalog as plain JSON in one reply, gzipped per frame,
-// under the 4 MiB REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES; this keeps the first-paint read short.
+// A budget, not a frame limit: the host sends a catalog as plain JSON in one reply (gzipped when the phone
+// reads compressed frames) under the 4 MiB REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES. This keeps the first-paint
+// read short and the page's gzipped stored copy under DEVICE_STORE_MAX_VALUE_LENGTH.
 export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 1024 * 1024
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
