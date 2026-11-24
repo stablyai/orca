@@ -6,13 +6,12 @@ import { NativeChatLinkPeekContext } from '@/components/native-chat/links/previe
 import { getTaskPageGitHubWorkItemStateLabel } from '@/components/task-page/github/listing/task-page-github-work-item-status'
 import type { BotItemGitHubRow } from '../../../../../shared/bots/bot-item-link-rows'
 import { BotItemChipButton } from './BotItemChipButton'
+import { gitHubIcon, useOpenWeb } from './BotItemLinks'
 import {
   checksLabel,
-  gitHubIcon,
   useGitHubChecksMeta,
-  useGitHubLinkPeekFallback,
-  useOpenWeb
-} from './BotItemLinks'
+  useGitHubLinkPeekFallback
+} from './bot-item-github-peek-content'
 
 /** A PR or issue chip: the GitHub card a chat's link shows when Orca can look the item up, opening
  *  below the chip so a second line's card leaves the first line in view; the tooltip otherwise. */
@@ -53,7 +52,8 @@ export function BotItemGitHubChip({ row }: { row: BotItemGitHubRow }): React.JSX
     <NativeChatLinkPeek
       href={row.url}
       side="bottom"
-      githubFallback={fallback}
+      githubFallback={fallback.pending}
+      githubFailedFallback={fallback.failed}
       githubChecks={checks}
     >
       {chip}

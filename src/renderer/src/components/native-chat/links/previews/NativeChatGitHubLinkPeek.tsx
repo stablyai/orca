@@ -111,12 +111,16 @@ export function NativeChatGitHubPeekBody({
   source,
   link,
   otherRepoFallback,
+  failedFallback,
   checks
 }: {
   source: GitHubPeekSource
   link: GitHubIssueOrPRLink
   /** The PR's CI result as the caller knows it; shown while the PR is open or draft. */
   checks?: ReactNode
+  /** Shown above the failure line when the lookup fails, in place of `otherRepoFallback`: what the
+   *  caller still knows for sure (its title), never a state the failure leaves unconfirmed. */
+  failedFallback?: ReactNode
   /** For a link to another repo, which an older host or a repo the sign-in can't read leaves
    *  unanswered: what such a link showed before, kept until its details arrive, and never a failure.
    *  Null shows just the name until then. Undefined for the chat repo's own links. */
@@ -148,6 +152,7 @@ export function NativeChatGitHubPeekBody({
       lookup={peekLookup(source, link, key, route)}
       link={link}
       otherRepoFallback={otherRepoFallback}
+      failedFallback={failedFallback}
       checks={checks}
     />
   )
@@ -157,18 +162,29 @@ function GitHubPeekContent({
   lookup,
   link,
   otherRepoFallback,
+  failedFallback,
   checks
 }: {
   lookup: ReturnType<typeof peekLookup>
   link: GitHubIssueOrPRLink
   otherRepoFallback?: ReactNode
+  failedFallback?: ReactNode
   checks?: ReactNode
 }): ReactNode {
   const t = useTranslate()
   const { state, retry } = useNativeChatHoverPreview(lookup.key, lookup.read, lookup.load)
-  if (otherRepoFallback && state.status !== 'ready') {
+  const failed = state.status === 'failed' && failedFallback !== undefined
+  if (otherRepoFallback && state.status !== 'ready' && !failed) {
     return otherRepoFallback
   }
+  const unavailable = (
+    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+      <span>{t('components.native-chat.githubPeek.unavailable', 'Preview unavailable.')}</span>
+      <Button variant="link" size="xs" onClick={retry}>
+        {t('components.native-chat.githubPeek.retry', 'Retry')}
+      </Button>
+    </div>
+  )
   return (
     <div className="flex flex-col gap-1.5">
       {/* Known from the URL, so the card has a header before the lookup answers. Rows wrap rather
@@ -214,6 +230,11 @@ function GitHubPeekContent({
           ) : null}
           <PeekFooter item={state.value} />
         </>
+      ) : failed ? (
+        <>
+          {failedFallback}
+          {unavailable}
+        </>
       ) : otherRepoFallback !== undefined ? null : state.status === 'loading' ? (
         <div aria-hidden className="flex flex-col gap-1.5 motion-safe:animate-pulse">
           <div className="h-3.5 w-11/12 rounded bg-muted" />
@@ -221,12 +242,7 @@ function GitHubPeekContent({
           <div className="mt-0.5 h-3 w-1/3 rounded bg-muted" />
         </div>
       ) : (
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <span>{t('components.native-chat.githubPeek.unavailable', 'Preview unavailable.')}</span>
-          <Button variant="link" size="xs" onClick={retry}>
-            {t('components.native-chat.githubPeek.retry', 'Retry')}
-          </Button>
-        </div>
+        unavailable
       )}
     </div>
   )

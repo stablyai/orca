@@ -15,7 +15,7 @@ import {
   X,
   type LucideIcon
 } from 'lucide-react'
-import { useContext, useMemo, type MouseEvent, type ReactNode } from 'react'
+import { useContext, type MouseEvent, type ReactNode } from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -45,6 +45,11 @@ import {
 } from '../../../../../shared/bots/bot-item-link-rows'
 import { openBotItemFile, type BotItemFileContext } from './bot-item-file-open'
 import { useBotItemLivePr } from './use-bot-item-live-pr'
+import {
+  checksLabel,
+  useGitHubChecksMeta,
+  useGitHubLinkPeekFallback
+} from './bot-item-github-peek-content'
 
 const PR_ICONS: Record<NonNullable<BotItemGitHubRow['state']>, LucideIcon> = {
   open: GitPullRequest,
@@ -184,19 +189,6 @@ export function gitHubIcon(row: BotItemGitHubRow): React.JSX.Element {
   )
 }
 
-export function checksLabel(t: Translate, checks: string | null): string | null {
-  if (checks === 'success') {
-    return t('browser.newTab.checks.passing', 'Checks passing')
-  }
-  if (checks === 'failure') {
-    return t('browser.newTab.checks.failing', 'Checks failing')
-  }
-  if (checks === 'pending') {
-    return t('browser.newTab.checks.pending', 'Checks pending')
-  }
-  return null
-}
-
 /** CI only where it can still change: open and draft PRs, and only once it has an outcome. */
 function ciGlyph(t: Translate, row: BotItemGitHubRow): React.JSX.Element | null {
   if (
@@ -215,44 +207,6 @@ function ciGlyph(t: Translate, row: BotItemGitHubRow): React.JSX.Element | null 
       strokeWidth={2.5}
       className={cn('size-3', ok ? 'text-status-success' : 'text-destructive')}
     />
-  )
-}
-
-/** A PR's checks in words, for its GitHub card: a hover must not read a failing PR as healthy. */
-export function useGitHubChecksMeta(checks: string | null): ReactNode {
-  const t = useTranslate()
-  const label = checksLabel(t, checks)
-  return useMemo(() => {
-    if (!label) {
-      return null
-    }
-    const Icon = checks === 'success' ? Check : checks === 'failure' ? X : CircleDot
-    const tone =
-      checks === 'success'
-        ? 'text-status-success'
-        : checks === 'failure'
-          ? 'text-destructive'
-          : 'text-status-warning'
-    return (
-      <span className={cn('flex shrink-0 items-center gap-0.5', tone)}>
-        <Icon aria-hidden strokeWidth={2.5} className="size-3" />
-        {label}
-      </span>
-    )
-  }, [checks, label])
-}
-
-/** A GitHub link's card before, or without, its lookup: what its chip or row already knows, never a
- *  bare web page preview. */
-export function useGitHubLinkPeekFallback(title: string, tip: string): ReactNode {
-  return useMemo(
-    () => (
-      <div className="flex flex-col gap-1">
-        <div className="line-clamp-2 text-sm font-semibold text-foreground">{title}</div>
-        <div className="text-xs text-muted-foreground">{tip}</div>
-      </div>
-    ),
-    [title, tip]
   )
 }
 
@@ -300,7 +254,12 @@ function GitHubRow({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Eleme
     />
   )
   return card ? (
-    <NativeChatLinkPeek href={row.url} githubFallback={fallback} githubChecks={checks}>
+    <NativeChatLinkPeek
+      href={row.url}
+      githubFallback={fallback.pending}
+      githubFailedFallback={fallback.failed}
+      githubChecks={checks}
+    >
       {line}
     </NativeChatLinkPeek>
   ) : (

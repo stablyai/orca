@@ -10,6 +10,7 @@ import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/reposi
 export function NativeChatLinkPeek({
   href,
   githubFallback,
+  githubFailedFallback,
   githubChecks,
   side = 'top',
   children
@@ -20,6 +21,9 @@ export function NativeChatLinkPeek({
   /** What a GitHub card shows until its details arrive, and if they never do, in place of the web
    *  page preview or the failure line: for a caller that already knows the item. */
   githubFallback?: ReactNode
+  /** What a GitHub card shows above its failure line if the lookup fails, instead of `githubFallback`:
+   *  only what stays true, so a failed card never passes off a known state as current. */
+  githubFailedFallback?: ReactNode
   /** A PR's CI result as the caller knows it, beside the GitHub card's state badge. */
   githubChecks?: ReactNode
   children: ReactNode
@@ -43,6 +47,7 @@ export function NativeChatLinkPeek({
           source={{ kind: 'repo', repo: githubRepo.repo }}
           link={github.link}
           otherRepoFallback={githubFallback ?? (github.ownRepo ? undefined : webBody)}
+          failedFallback={githubFailedFallback}
           checks={githubChecks}
         />
       )
@@ -57,12 +62,21 @@ export function NativeChatLinkPeek({
           source={{ kind: 'routed', authorityKey: githubRoutingAuthorityKey }}
           link={routed}
           otherRepoFallback={githubFallback ?? webBody}
+          failedFallback={githubFailedFallback}
           checks={githubChecks}
         />
       )
     }
     return webBody
-  }, [githubChecks, githubFallback, githubRepo, githubRoutingAuthorityKey, href, webPreviews])
+  }, [
+    githubChecks,
+    githubFailedFallback,
+    githubFallback,
+    githubRepo,
+    githubRoutingAuthorityKey,
+    href,
+    webPreviews
+  ])
   if (!body) {
     return children
   }
