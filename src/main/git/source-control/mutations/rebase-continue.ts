@@ -15,7 +15,7 @@ import {
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { trackGitOperationWriters } from '../../command-runner/git-writer-lifetime'
 import { runWithGitReadCacheInvalidation } from '../git-read-cache-invalidation'
-import { readRebaseIndexObservation } from './rebase-index-observation'
+import { noteRebaseEmptyStep, readRebaseIndexObservation } from './rebase-index-observation'
 import { resolveGitDir } from '../resolve-git-dir'
 import { AUTOSTASH_REAPPLY_CONFLICT, detectConflictOperation } from './git-conflict-operation'
 import { takeOrcaRebaseProvenance } from './orca-rebase-provenance'
@@ -42,9 +42,11 @@ export async function continueRebase(
     () =>
       action === 'inspect'
         ? inspectRebaseStop(worktreePath, gitOptions)
-        : runWithGitReadCacheInvalidation(() =>
-            continueRebaseUnlocked(worktreePath, expected, lifetime.options)
-          ),
+        : runWithGitReadCacheInvalidation(async () => {
+            const result = await continueRebaseUnlocked(worktreePath, expected, lifetime.options)
+            noteRebaseEmptyStep(worktreePath, gitOptions, result.outcome === 'empty')
+            return result
+          }),
     lifetime.waitForWriters
   )
 }
