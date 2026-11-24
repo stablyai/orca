@@ -3,9 +3,9 @@
 import type { ConnectorSharesMine } from '../../../shared/connector-share-contract'
 import { openBotTeamShareOffer } from '../../../shared/bots/bot-team-share-seal'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
-import { SHARED_HOSTS_HOLD_WHILE_AWAY } from '../../../shared/bots/shared-bot-hosts'
 import type { SharedHostRelayCredential } from '../../../shared/remote-runtime/relay/client/shared-host-relay-connection'
 import type { SharedHostLink } from '../../../shared/remote-runtime/relay/client/shared-host-relay-link'
+import { sendsHeldTo } from '../../../shared/bots/shared-bot-held-routing'
 import {
   sharedBotHostKey,
   type SharedBotHeldMessage,
@@ -82,38 +82,14 @@ export function nextPairingStep(
   return share.hostOnline && !askedRecently ? { kind: 'accept' } : { kind: 'wait' }
 }
 
-type HeldChat = SharedBotHeldMessage['chat']
+export { sharedBotHeldChatId } from '../../../shared/bots/shared-bot-held-routing'
 
-/** The chat a held message lands in: its session, a new chat's once the host started it, else its
- *  placeholder id (the namespaces never meet). */
-export function sharedBotHeldChatId(
-  held: Pick<SharedBotHeldMessage, 'chat' | 'startedAs'>
-): string {
-  return 'sessionId' in held.chat ? held.chat.sessionId : (held.startedAs ?? held.chat.newChatId)
-}
-
-/**
- * Whether a message goes to Orca Cloud's held queue instead of the relay. Only with the host's key
- * (no key, nothing can be sealed to it). Then: whenever the host can't be reached live, for a new chat
- * the host hasn't started yet, and while an earlier held message in the same chat hasn't landed, so a
- * later one never overtakes it.
- */
+/** Whether a message to `entry`'s host is held: see `sendsHeldTo`. */
 export function sendsHeld(
   entry: Pick<SharedBotHostEntry, 'offer' | 'hostKey' | 'held'>,
   link: SharedBotLink,
-  chat: HeldChat,
+  chat: SharedBotHeldMessage['chat'],
   heldStates: ReadonlyMap<string, MineShare['held'][number]['state']>
 ): boolean {
-  if (!SHARED_HOSTS_HOLD_WHILE_AWAY || !sharedBotHostKey(entry)) {
-    return false
-  }
-  if (link !== 'live' || 'newChatId' in chat) {
-    return true
-  }
-  const chatId = sharedBotHeldChatId({ chat })
-  return entry.held.some(
-    (held) =>
-      sharedBotHeldChatId(held) === chatId &&
-      (heldStates.get(held.clientMessageId) ?? 'waiting') === 'waiting'
-  )
+  return sendsHeldTo(sharedBotHostKey(entry), entry.held, link, chat, heldStates)
 }

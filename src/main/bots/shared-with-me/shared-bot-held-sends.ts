@@ -14,6 +14,7 @@ import {
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
 import { SendParams } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import { sharedBotHeldChat } from '../../../shared/bots/shared-bot-held-routing'
 import { handOffSharedBotMessage, type HandOffResult } from './shared-bot-hand-off'
 import {
   sharedBotHostKey,
@@ -56,10 +57,7 @@ export function namesSharedBotNewChat(params: unknown): boolean {
   return isSharedBotNewChatId(sessionIdOf(params))
 }
 
-/** The chat a session id names: a placeholder id is a new chat the host hasn't started yet. */
-export function sharedBotHeldChat(sessionId: string): SharedBotHeldMessage['chat'] {
-  return isSharedBotNewChatId(sessionId) ? { newChatId: sessionId } : { sessionId }
-}
+export { sharedBotHeldChat } from '../../../shared/bots/shared-bot-held-routing'
 
 export class SharedBotHeldSends {
   private states = new Map<string, SharedBotHeldState>()

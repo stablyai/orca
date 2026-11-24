@@ -43,7 +43,9 @@ export const SharedBotPhoneShare = z.object({
   shareId: BotShareIdSchema,
   botId: Id,
   botName: Name,
-  ownerName: Name
+  ownerName: Name,
+  // The computer's id for the agent's host: its pages name the host by it (executionHost runtime:<id>).
+  environmentId: Id
 })
 export type SharedBotPhoneShare = z.infer<typeof SharedBotPhoneShare>
 

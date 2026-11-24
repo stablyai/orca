@@ -40,7 +40,8 @@ export class SharedBotPhoneGrants {
         shareId: entry.shareId,
         botId: entry.botId,
         botName: entry.botName,
-        ownerName: entry.ownerName
+        ownerName: entry.ownerName,
+        environmentId: entry.environmentId
       }))
     }
   }
@@ -94,6 +95,7 @@ export class SharedBotPhoneGrants {
       botId: entry.botId,
       botName: entry.botName,
       ownerName: entry.ownerName,
+      environmentId: entry.environmentId,
       connectorOrigin: origin,
       hostKey,
       sealedOffer: provisioned.sealedOffer

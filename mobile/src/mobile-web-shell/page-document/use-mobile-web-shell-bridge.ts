@@ -20,6 +20,8 @@ import type { BridgeClearableRouteParam } from '../bridge/page-lifecycle/bridge-
 import type { BridgeSafeAreaInsets } from '../bridge/page-geometry/bridge-safe-area-insets'
 import type { BridgeFoldDivision } from '../bridge/page-geometry/bridge-fold-division'
 import type { BridgeHapticsKind } from '../bridge/native-capabilities/bridge-haptics-notify'
+import { routeSharedAgentCalls } from '../../bots/shared-agents/shared-agent-call-routing'
+import { phoneSharedAgents } from '../../bots/shared-agents/phone-shared-agents'
 import { createBridgeHost } from '../host-bridge/bridge-host'
 import { latestBridgeCallbacks } from './bridge-latest-callbacks'
 import { usePageAppPresence } from './use-page-app-presence'
@@ -149,6 +151,13 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
   })
   const snapshot = args.snapshot
 
+  // A computer's page opening is when its shared agents (and this phone's keys to them) are followed.
+  useEffect(() => {
+    if (client !== null) {
+      void phoneSharedAgents().syncComputer(args.hostId, client)
+    }
+  }, [client, args.hostId])
+
   // Replace the host on commit so same-session native frames cannot reach a retired client in the passive-effect gap.
   useLayoutEffect(() => {
     if (client === null || sessionId === null || buildId === null || snapshot === null) {
@@ -157,7 +166,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     const latest = argsRef.current
     // Read callbacks from the current committed ref; captured render closures would outlive their screen state.
     const host = createBridgeHost({
-      client,
+      client: routeSharedAgentCalls(client, latest.hostId, phoneSharedAgents()),
       buildId,
       sessionId,
       route: latest.route,
