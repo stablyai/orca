@@ -274,6 +274,56 @@ describe('file open absolute paths outside the selected worktree', () => {
     expect(call.mock.calls.some((entry) => entry[0] === 'files.open')).toBe(false)
   })
 
+  it('does not open a runtime worktree for a local caller', async () => {
+    const runtimeOnly: ListedWorktree[] = [
+      { id: 'repoA::/repos/current', path: '/repos/current' },
+      { id: 'repoB::/repos/feature', path: '/repos/feature', hostId: 'runtime:env-1' }
+    ]
+    const paths = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
+    const argv = ['file', 'open', '/repos/feature/README.md', '--json']
+    const parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv, paths, COMMAND_SPECS))
+    const { call, client } = clientFor(runtimeOnly)
+    const ctx: HandlerContext = {
+      flags: parsed.flags,
+      client,
+      cwd: '/repos/current',
+      json: true,
+      rawArgs: argv
+    }
+    await expect(FILE_HANDLERS['file open'](ctx)).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: 'That absolute path is outside every registered worktree.'
+    })
+    expect(call.mock.calls.some((entry) => entry[0] === 'files.open')).toBe(false)
+  })
+
+  it('keeps a shorter local worktree when a runtime row is a longer path match', async () => {
+    const mixed: ListedWorktree[] = [
+      { id: 'repoA::/repos/current', path: '/repos/current' },
+      { id: 'repoA::/repos/feature', path: '/repos/feature' },
+      {
+        id: 'repoA::/repos/feature/nested',
+        path: '/repos/feature/nested',
+        hostId: 'runtime:env-1'
+      }
+    ]
+    const call = await run(
+      'file open',
+      ['file', 'open', '/repos/feature/nested/README.md', '--json'],
+      mixed
+    )
+    expect(call.mock.calls.filter((entry) => entry[0] === 'files.open')).toEqual([
+      [
+        'files.open',
+        {
+          worktree: 'id:repoA::/repos/feature',
+          relativePath: 'nested/README.md',
+          navigation: 'caller'
+        }
+      ]
+    ])
+  })
+
   it('does not guess when the worktree list is truncated', async () => {
     const paths = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
     const argv = ['file', 'open', '/repos/feature/README.md', '--json']

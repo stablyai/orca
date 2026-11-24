@@ -153,9 +153,11 @@ function pickContainingWorktree(
 
 function isListedOnCallerHost(hostId: string | undefined, callerHostId: string): boolean {
   const rowHostId = hostId ?? LOCAL_EXECUTION_HOST_ID
-  return parseExecutionHostId(callerHostId)?.kind === 'ssh'
-    ? rowHostId === callerHostId
-    : parseExecutionHostId(rowHostId)?.kind !== 'ssh'
+  if (parseExecutionHostId(callerHostId)?.kind === 'ssh') {
+    return rowHostId === callerHostId
+  }
+  // A local absolute path is on this machine. runtime:* can reuse that path string on another filesystem.
+  return parseExecutionHostId(rowHostId)?.kind === 'local'
 }
 
 // Only UNC roots need Linux-path translation; backslash filenames have no equivalent Windows spelling.
