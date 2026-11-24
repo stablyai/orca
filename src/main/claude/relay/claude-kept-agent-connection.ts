@@ -1,4 +1,6 @@
 import { finished } from 'node:stream/promises'
+import { randomUUID } from 'node:crypto'
+import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
   openClaudeStreamJsonConnection,
   type ClaudeStreamJsonConnection,
@@ -37,6 +39,23 @@ export function keptClaudeAgentRelay(
   connection: ClaudeStreamJsonConnection
 ): ClaudeKeptAgentRelay | null {
   return isKeptConnection(connection) ? connection.kept : null
+}
+
+/** The one note a chat shows when its kept agent couldn't take a message and a new one did. */
+export function noteKeptClaudeAgentReplaced(
+  session: { events: StructuredAgentSessionEventSink | undefined },
+  clientMessageId: string | undefined
+): void {
+  session.events?.appendItem(
+    { provider: 'orca', clientMessageId: `kept-agent-replaced:${clientMessageId ?? randomUUID()}` },
+    {
+      kind: 'status',
+      tone: 'neutral',
+      text: 'Orca restarted this chat\u2019s agent to send your message.'
+    },
+    { turnScope: { kind: 'thread' } }
+  )
+  session.events?.publish()
 }
 
 function isKeptConnection(

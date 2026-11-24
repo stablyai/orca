@@ -38,7 +38,10 @@ import {
   isAgentSessionOptionRejectedError
 } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import { ClaudeControlRequestError } from '../../sdk-transport/claude-agent-sdk-control-requests'
-import { keptClaudeAgentRelay } from '../../relay/claude-kept-agent-connection'
+import {
+  keptClaudeAgentRelay,
+  noteKeptClaudeAgentReplaced
+} from '../../relay/claude-kept-agent-connection'
 import {
   admitStructuredAgentSessionInput,
   StructuredAgentSessionInputNotAdmitted,
@@ -249,6 +252,7 @@ export async function dispatchClaudeTurn(
       waiter.resolve(null)
       if (keptClaudeAgentRelay(session.connection)) {
         // The agent kept from before the restart can't take it: a new one does, with this message.
+        noteKeptClaudeAgentReplaced(session, input.clientMessageId)
         await session.connection.close().catch(() => false)
         throw new StructuredAgentSessionInputNotAdmitted(undefined, 'auto')
       }
