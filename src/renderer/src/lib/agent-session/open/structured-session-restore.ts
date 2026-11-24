@@ -89,7 +89,8 @@ export async function revealStructuredSession(target: {
       {
         timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS,
         beforeSend:
-          target.beforeSend ?? (target.signal ? () => throwIfSignalAborted(target.signal) : undefined)
+          target.beforeSend ??
+          (target.signal ? () => throwIfSignalAborted(target.signal) : undefined)
       }
     )
     result = await (target.beforeSend

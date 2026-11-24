@@ -43,7 +43,10 @@ export function pairedBotThreadRecovery(
       minimumReceivedFrame = nextReceivedSessionTabsFrame()
     }
   }
-  const find = <T>(pending: Map<string, Pending<T>>, targetKey?: string): Promise<T> | undefined => {
+  const find = <T>(
+    pending: Map<string, Pending<T>>,
+    targetKey?: string
+  ): Promise<T> | undefined => {
     const entry = pending.get(key)
     return entry &&
       entry.registration === registration &&

@@ -23,7 +23,11 @@ type ChatLinkReadScope = {
 
 const inFlightBySession = new Map<
   string,
-  { request: Promise<RemoteRuntimeSessionTabsAnswer>; receivedFrame: number; scope?: ChatLinkReadScope }
+  {
+    request: Promise<RemoteRuntimeSessionTabsAnswer>
+    receivedFrame: number
+    scope?: ChatLinkReadScope
+  }
 >()
 
 type RemoteRuntimeSessionTabsLoad = {
