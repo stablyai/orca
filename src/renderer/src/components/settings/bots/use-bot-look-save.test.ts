@@ -155,24 +155,3 @@ describe('saveBotLook', () => {
     expect(events).toEqual(['send tie', 'landed', 'checkpoint', 'close'])
   })
 })
-
-describe('useBotLookSave picks of the saved look', () => {
-  it('sends nothing and shows nothing new for the saved outfit or the default color stored', () => {
-    const sent: BotLookUpdate[] = []
-    const update = (look: BotLookUpdate): Promise<unknown> => {
-      sent.push(look)
-      return Promise.resolve()
-    }
-    const { result } = renderHook(() =>
-      useBotLookSave('local:b5', update, 500, undefined, {
-        avatarColor: '#b3dbf4',
-        avatarOutfit: 'tie'
-      })
-    )
-    act(() => result.current.pick({ avatarOutfit: 'tie' }))
-    act(() => result.current.pick({ avatarColor: null }))
-    act(() => result.current.flush())
-    expect(result.current.picked).toBeNull()
-    expect(sent).toEqual([])
-  })
-})

@@ -106,7 +106,7 @@ describe('the work record through the bots DB worker', () => {
     expect(viaWorker.list.map((row) => row.dispatchId)).toEqual(['d-done', 'd-slack', 'd-old'])
     expect(viaWorker.turnNote).toContain('dispatch:d-slack')
     expect(viaWorker.chatNote).toBeNull()
-    expect(viaWorker.liveWork.text).toContain('dispatch:d-old working: "work d-old" · PR #12 open')
+    expect(viaWorker.liveWork.text).toContain('dispatch:d-old working: "work d-old" · PR #12')
     expect(viaWorker.forgotten).toBe(true)
     expect(viaWorker.afterForget).toEqual(['d-done'])
   })

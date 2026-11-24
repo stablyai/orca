@@ -40,6 +40,8 @@ export function* getVisibleHostedReviewWorkspaces(
     (state.workspaceHostScope && state.workspaceHostScope !== 'all'
       ? [state.workspaceHostScope]
       : null)
+  // An open item page shows its PRs whatever host the left sidebar is filtered to.
+  const itemPageIds = new Set(state.visibleItemPageReviewWorktreeIds ?? [])
   for (const id of options?.worktreeIds ?? state.visibleReviewWorktreeIds) {
     const lookupIndex = getWorktreeLookupIndex(state)
     const trackedOwners = lookupIndex.byId.get(id)?.owners
@@ -105,7 +107,10 @@ export function* getVisibleHostedReviewWorkspaces(
         getRepoExecutionHostId(selectedOwner.repo) === hostId
       if (
         (options?.selectedOnly && !selected) ||
-        (!selected && visibleHosts && !hostIds.some((hostId) => visibleHosts.includes(hostId)))
+        (!selected &&
+          !itemPageIds.has(id) &&
+          visibleHosts &&
+          !hostIds.some((hostId) => visibleHosts.includes(hostId)))
       ) {
         continue
       }

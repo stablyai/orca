@@ -392,6 +392,13 @@
     "queuedMessages": {
       "deleteAll": "Alle löschen",
       "editMessage": "Nachricht bearbeiten",
+      "showLess": "Weniger anzeigen",
+      "moreCount_one": "{{count}} weitere",
+      "moreCount_other": "{{count}} weitere",
+      "deleteMessage": "Nachricht löschen",
+      "queuedCount_one": "{{count}} Nachricht in der Warteschlange",
+      "queuedCount_other": "{{count}} Nachrichten in der Warteschlange",
+      "foldNeedsAttention": "{{more}}, eine Nachricht erfordert Aufmerksamkeit",
       "pausedState": "Pausiert",
       "queuedState": "In der Warteschlange",
       "resume": "Fortsetzen",
@@ -2429,6 +2436,7 @@
       "images_one": "{{count}} Bild",
       "images_other": "{{count}} Bilder",
       "moreActions": "Weitere Aktionen",
+      "you": "Du",
       "send": "Senden",
       "sendAgainHint": "Diese Nachricht erneut senden",
       "sendHint": "Diese Nachricht senden",
@@ -2538,6 +2546,7 @@
       "unsavedMarkdown": "Ungespeicherte Markdown-Änderungen",
       "urlPrompt": "URL eingeben oder für einen neuen Tab leer lassen.",
       "allowAutoClose": "Automatisches Schließen erlauben",
+      "agents": "Agenten",
       "renameTerminalFailed": "Das Terminal konnte nicht umbenannt werden. {{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -2858,11 +2867,29 @@
     "nativeChatView": {
       "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden."
     },
+    "tabsSheet": {
+      "needsYou": "Benötigt dich",
+      "working": "In Arbeit",
+      "everythingElse": "Alles andere",
+      "closeTab": "{{title}} schließen"
+    },
+    "tabRows": {
+      "browser": "Browser",
+      "markdown": "Markdown-Notiz",
+      "file": "Datei",
+      "chat": "Chat",
+      "terminal": "Terminal"
+    },
     "browserProfile": {
       "default": "Standard"
     },
     "tabBar": {
+      "oneTab": "1 Tab",
       "tabCount": "{{count}} Tabs",
+      "anotherNeedsYou": "ein anderer Tab benötigt dich",
+      "actionsHint": "Zeigt Aktionen für diesen Tab",
+      "next": "Nächster Tab",
+      "previous": "Vorheriger Tab",
       "hint": "Zeigt alle Tabs"
     }
   },
@@ -3442,6 +3469,9 @@
       "planModelUnavailable": "Modell „{{model}}“ ist für {{label}} nicht verfügbar.",
       "planModelWithoutThinking": "Modell „{{model}}“ unterstützt keine Einstellung des Denkaufwands.",
       "planThinkingLevelInvalid": "Die Denkstufe „{{level}}“ ist für {{model}} nicht gültig.",
+      "commandTemplateEmptyDictationCleanup": "Die Befehlsvorlage für die Diktatnachbearbeitung ist leer.",
+      "dictationCleanupAgentUnsupported": "Unter Einstellungen -> Spracheingabe -> Nachbearbeitung einen unterstützten Agenten für die KI-Nachbearbeitung auswählen. Unterstützte Agenten: {{agents}} oder Benutzerdefinierter Befehl.",
+      "agentCannotGenerateDictationCleanup": "Agent „{{agent}}“ unterstützt keine Diktatnachbearbeitung. Unterstützte Agenten: {{agents}} oder Benutzerdefinierter Befehl.",
       "promptTooLargeForArgument": "Der Prompt für {{label}} ist zu groß, um ihn als einzelnes Befehlszeilenargument zu übergeben. Weniger Änderungen vormerken und erneut versuchen.",
       "promptTooLargeForWindows": "Der Prompt für {{label}} ist für die Windows-Befehlszeile zu groß. Weniger Änderungen vormerken und erneut versuchen.",
       "pullRequestDetailsUnparseable": "Die generierten Pull-Request-Details konnten nicht geparst werden.",
@@ -4540,26 +4570,12 @@
       "peerTold": "{{from}} hat {{to}} Bescheid gegeben",
       "startAConversationWithThisGroupMentionBots": "Starte eine Unterhaltung mit dieser Gruppe. Erwähne Bots mit @Name oder @everyone.",
       "items": {
-        "thisGroup": "Diese Gruppe",
-        "thread": "Thread",
-        "all": "Ihre gesamte Arbeit",
-        "orNames": "{{names}} oder {{last}}",
-        "outsideRoom_one": "{{count}} weiteres außerhalb dieses Raums",
-        "outsideRoom_other": "{{count}} weitere außerhalb dieses Raums",
-        "outsideThread_one": "{{count}} weiteres außerhalb dieses Threads",
-        "outsideThread_other": "{{count}} weitere außerhalb dieses Threads",
-        "outside_one": "{{count}} weiteres außerhalb dieser Gruppe",
-        "outside_other": "{{count}} weitere außerhalb dieser Gruppe",
         "emptyTitle": "Noch keine Elemente aus dieser Gruppe",
-        "emptyBody": "Wenn {{names}} in dieser Gruppe etwas übernehmen, erscheint es hier.",
         "needsYouCount_one": "{{count}} braucht dich",
         "needsYouCount_other": "{{count}} brauchen dich",
         "workingCount_one": "{{count}} arbeitet",
         "workingCount_other": "{{count}} arbeiten",
         "filterBot": "Bot",
-        "outsideRoom": "{{count}} weiteres außerhalb dieses Raums",
-        "outsideThread": "{{count}} weiteres außerhalb dieses Threads",
-        "outside": "{{count}} weiteres außerhalb dieser Gruppe",
         "needsYouCount": "{{count}} braucht dich",
         "workingCount": "{{count}} arbeitet"
       },
@@ -4597,8 +4613,7 @@
     },
     "items": {
       "filter": {
-        "clearAll": "Filter zurücksetzen",
-        "chat": "Chat"
+        "clearAll": "Filter zurücksetzen"
       },
       "tab": "Einträge",
       "activity": {
@@ -4626,7 +4641,8 @@
       "ask": {
         "notSentYet": "noch nicht gesendet",
         "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann.",
-        "replacedByNewer": "Durch eine neuere Frage ersetzt"
+        "replacedByNewer": "Durch eine neuere Frage ersetzt",
+        "skipped": "Übersprungen"
       }
     },
     "needs": {

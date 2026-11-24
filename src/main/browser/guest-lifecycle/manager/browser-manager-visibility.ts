@@ -15,6 +15,7 @@ import { BrowserPageInputCredit } from '../../routing/input-ownership/browser-pa
 import { browserPopupPageId, browserPopupPageWebContentsId } from '../popups/browser-popup-page-id'
 import { resolveBrowserRouteGuestPopupOpener } from '../../routing/guest-authority/browser-route-guest-popup-ownership'
 import type { RpcCallerIdentity } from '../../../runtime/rpc/callers/rpc-caller-identity'
+import { printForBrowserViewer } from '../prompts/browser-print-viewers'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
   protected readonly capturePaintHolds = new Map<Electron.WebContents, Map<string, number>>()
@@ -55,13 +56,23 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     this.leadAgentOnPage(browserPageId)
     return {
       ...lease,
-      // A person's input queued ahead may have taken the page back; the agent leads again as it acts.
+      // A person's input queued ahead may have taken the page back; the agent leads again as it acts,
+      // and what the page does from here (a timed print, a popup) is not that input's.
       run: (execute) =>
         lease.run(() => {
           this.leadAgentOnPage(browserPageId)
+          this.withdrawPageInputCredit(browserPageId)
           return execute()
         })
     }
+  }
+
+  private withdrawPageInputCredit(browserPageId: string): void {
+    const pageGuestId =
+      this.webContentsIdByTabId.get(browserPageId) ?? browserPopupPageWebContentsId(browserPageId)
+    const ownerTabId =
+      pageGuestId === null ? null : this.resolveBrowserTabIdForGuestWebContentsId(pageGuestId)
+    this.pageInputCredit.withdraw(ownerTabId ?? browserPageId)
   }
 
   private leadAgentOnPage(browserPageId: string): void {
@@ -141,7 +152,10 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     }
     const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
     if (ownerTabId) {
-      this.pageInputCredit.creditInput(ownerTabId, this.pageIdForGuest(guestWebContentsId))
+      // While an agent command runs in the tab, what the page prints may be that command's.
+      this.pageInputCredit.creditInput(ownerTabId, this.pageIdForGuest(guestWebContentsId), {
+        printable: !this.isAgentCommandRunningInTab(ownerTabId)
+      })
     }
   }
 
@@ -161,21 +175,74 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     )
   }
 
-  /** A page the agent leads refused its own print dialog, which would take the foreground; tell the agent. */
-  reportRefusedPrint(guestWebContentsId: number, origin: string): void {
+  /** An offscreen page, or a popup one opened: viewers list both as server tabs. */
+  abstract isListedAsServerPage(guestWebContentsId: number): boolean
+
+  /**
+   * A page's print() opened no dialog here. On a server page, the device whose own input just
+   * reached it saves it as a PDF; otherwise, the agent leading the page is told, as its dialog
+   * would take the foreground.
+   */
+  reportHeldPrint(
+    guestWebContentsId: number,
+    frame: Electron.WebFrameMain | null,
+    origin: string
+  ): void {
+    const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+    // The credit is the tab's, shared with its popups, so a print while an agent command runs on
+    // any of them may be that agent's script.
+    const pairedDeviceId =
+      ownerTabId &&
+      frame &&
+      this.isListedAsServerPage(guestWebContentsId) &&
+      !this.isAgentCommandRunningInTab(ownerTabId)
+        ? this.pageInputCredit.printer(ownerTabId)
+        : null
+    if (pairedDeviceId && frame && ownerTabId) {
+      const title = webContents.fromId(guestWebContentsId)?.getTitle() ?? ''
+      if (
+        printForBrowserViewer(
+          guestWebContentsId,
+          frame,
+          pairedDeviceId,
+          title,
+          this.guestIdsInTab(ownerTabId)
+        )
+      ) {
+        return
+      }
+    }
     if (!this.isAgentLedGuest(guestWebContentsId)) {
       return
     }
     // Reach a command on the popup page itself as well as one on the tab that owns it.
-    const pageIds = new Set([
-      this.pageIdForGuest(guestWebContentsId),
-      this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
-    ])
+    const pageIds = new Set([this.pageIdForGuest(guestWebContentsId), ownerTabId])
     for (const pageId of pageIds) {
       if (pageId) {
         this.pageEvents.emit(pageId, { kind: 'print', origin })
       }
     }
+  }
+
+  /** The tab's page and the popups its page opened. */
+  private guestIdsInTab(browserTabId: string): number[] {
+    const tabGuestId = this.webContentsIdByTabId.get(browserTabId)
+    const popupIds = [...this.popupOwnerContextByGuestId]
+      .filter(([, owner]) => owner.browserTabId === browserTabId)
+      .map(([popupId]) => popupId)
+    return tabGuestId === undefined ? popupIds : [tabGuestId, ...popupIds]
+  }
+
+  private isAgentCommandRunningInTab(browserTabId: string): boolean {
+    if (this.agentActivity.isExecuting(browserTabId)) {
+      return true
+    }
+    for (const [popupId, owner] of this.popupOwnerContextByGuestId) {
+      if (owner.browserTabId === browserTabId && this.isAgentCommandRunning(popupId)) {
+        return true
+      }
+    }
+    return false
   }
 
   private pageIdForGuest(guestWebContentsId: number): string {
