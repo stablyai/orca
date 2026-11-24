@@ -355,7 +355,8 @@ it.each([
     hoisted.identities = [identity({ state: 'stopping' })]
     renderDock()
     expect(screen.queryByRole('button', { name: STOP })).toBeNull()
-    expect(screen.queryByText('Waiting on you')).toBeNull()
+    // The card row carries its state in the row's accessible name.
+    expect(screen.queryByRole('button', { name: /· Waiting on you$/ })).toBeNull()
     expect(stopCalls()).toHaveLength(0)
   }
 )
@@ -363,7 +364,7 @@ it.each([
 it('still stops a running worker that is waiting on an approval', async () => {
   hoisted.approvals = [approval]
   renderDock()
-  expect(screen.getByText('Waiting on you')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /· Waiting on you$/ })).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: STOP }), { detail: 1 })
   await act(async () => {})
   expect(stopCalls()).toHaveLength(1)

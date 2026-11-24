@@ -1,5 +1,5 @@
-// One item, in the list's place: a frozen header (title, status, links, Reply), then the description
-// (clamped), chat, done means and activity scrolling under it, and a comment box that wakes its chat.
+// One item, in the list's place: a fixed top (title, status, links, Reply, description, chat, done means;
+// it scrolls itself only to leave the Activity 140px), the Activity scrolling under it, and a comment box.
 // BotItemPane holds it under the back row and sends typing from anywhere in it to the comment box.
 // The comment box always stays at the bottom: a reply to the agent's question is a comment, typed there
 // or picked from the question's quick replies.
@@ -46,6 +46,7 @@ import { useBotItemPendingComments } from './use-bot-item-pending-comments'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 import { BotItemNavRow } from './BotItemStepper'
 import { BotItemLoading } from './BotItemLoading'
+import { BotItemCloseNote } from './BotItemCloseNote'
 
 const NO_FOLDERS: never[] = []
 
@@ -208,7 +209,8 @@ export function BotItemBody({
     useBotTranscriptFollow({
       itemCount: view.events.length + pending.shown.length,
       isWorking: false,
-      isVisible: true
+      isVisible: true,
+      preserveReaderOnViewportResize: true
     })
   // From the comment box or a quick reply: shown at once, then sent to the host.
   const sendComment: Parameters<typeof useBotItemQuestionSteps>[3] = (
@@ -246,7 +248,7 @@ export function BotItemBody({
     [fileContext?.fileLinkContext, runtimeContext]
   )
   // `waitingLine`: the question the comment box names, until a reply is on its way.
-  const { steps, sent, quick, fromBox, waitingLine } = useBotItemQuestionSteps(
+  const { steps, sent, quick, fromBox, answerNone, waitingLine } = useBotItemQuestionSteps(
     bot,
     item,
     view.events,
@@ -260,17 +262,20 @@ export function BotItemBody({
         : {
             send: quick,
             edit: (text: string) => comment.current?.fill(text),
-            recover: (text: string) => comment.current?.fill(text, true),
+            recover: (text: string) => {
+              // A comment of its own: it answers no line, whatever the box names next.
+              answerNone()
+              comment.current?.fill(text, true)
+            },
             type: () => comment.current?.answer(),
             steps,
             sent
           },
-    [deleted, comment, quick, steps, sent]
+    [deleted, comment, quick, answerNone, steps, sent]
   )
   const loadingTarget = useWaitingQuestionPage(item.waitingAsk ?? item.question?.eventId, view)
-  const answering = pending.shown.some(({ failed }) => !failed)
-  const waitingOn =
-    waitingLine && !answering ? { ...waitingLine, asker: item.owner.name ?? bot.name } : null
+  const answering = steps?.sending ?? pending.shown.some(({ failed }) => !failed)
+  const waitingOn = waitingLine ? { ...waitingLine, asker: item.owner.name ?? bot.name } : null
   const needsYou = useBotItemNeedsYouJump({
     eligible: item.status === 'needs_you' && !deleted && !answering,
     activityShown,
@@ -301,11 +306,7 @@ export function BotItemBody({
             <NativeChatFileLinkExistenceContext value={fileContext?.existence ?? null}>
               <NativeChatLinkClickContext value={links.onLinkClick}>
                 <div className="relative flex min-h-0 flex-1 flex-col">
-                  <div
-                    ref={scrollRef}
-                    {...scrollerProps}
-                    className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]"
-                  >
+                  <div className="scrollbar-sleek flex max-h-[max(50%,calc(100%_-_140px))] shrink-0 flex-col overflow-y-auto">
                     <BotItemHeader
                       bot={bot}
                       item={item}
@@ -313,16 +314,14 @@ export function BotItemBody({
                       deleted={deleted}
                       onStatus={(to) => notes.move([item], to)}
                       snoozing={snoozing}
-                      scrollRef={scrollRef}
                       reply={needsYou.reply}
-                      onHeight={needsYou.setHeaderHeight}
                     />
-                    <div ref={contentRef} className="flex flex-col gap-4 px-3.5 pt-2">
+                    <div className="flex flex-col gap-4 px-3.5 pt-2">
                       {item.description ? (
                         <BotItemClampedText text={item.description} clampClassName="max-h-[57px]" />
                       ) : null}
                       {item.status === 'canceled' || item.status === 'done' ? (
-                        <CloseNote item={item} />
+                        <BotItemCloseNote item={item} />
                       ) : null}
                       <dl className="grid grid-cols-[84px_minmax(0,1fr)] items-start gap-x-2 gap-y-1 text-xs @max-[284px]:grid-cols-[72px_minmax(0,1fr)]">
                         <dt className="leading-6 text-muted-foreground">
@@ -348,10 +347,18 @@ export function BotItemBody({
                           </>
                         ) : null}
                       </dl>
-                      <section className="pb-2">
-                        <h3 className="mb-1.5 text-xs text-muted-foreground">
-                          {t('bots.items.view.activity', 'Activity')}
-                        </h3>
+                    </div>
+                  </div>
+                  <section className="mt-4 flex min-h-0 flex-1 flex-col">
+                    <h3 className="mb-1.5 shrink-0 px-3.5 text-xs text-muted-foreground">
+                      {t('bots.items.view.activity', 'Activity')}
+                    </h3>
+                    <div
+                      ref={scrollRef}
+                      {...scrollerProps}
+                      className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]"
+                    >
+                      <div ref={contentRef} className="px-3.5 pb-2">
                         {view.hasEarlier ? (
                           <Button variant="ghost" size="xs" onClick={view.loadEarlier}>
                             {t('bots.items.view.showEarlier', 'Show earlier')}
@@ -368,9 +375,9 @@ export function BotItemBody({
                             needsYou={needsYou.mark}
                           />
                         ) : null}
-                      </section>
+                      </div>
                     </div>
-                  </div>
+                  </section>
                   {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
                   <div
                     aria-hidden
@@ -408,20 +415,5 @@ export function BotItemBody({
       {notes.dialog}
       {snoozing.dialog}
     </div>
-  )
-}
-
-function CloseNote({ item }: { item: BotItem }): React.JSX.Element | null {
-  const t = useTranslate()
-  if (!item.closeNote) {
-    return null
-  }
-  return (
-    <p className="rounded-md bg-muted px-2.5 py-2 text-xs text-muted-foreground">
-      {item.status === 'canceled'
-        ? t('bots.items.view.canceledNote', 'Canceled:')
-        : t('bots.items.view.doneNote', 'Done:')}{' '}
-      <span className="text-foreground">{item.closeNote}</span>
-    </p>
   )
 }

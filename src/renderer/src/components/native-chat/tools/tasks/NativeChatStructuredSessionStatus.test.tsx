@@ -103,7 +103,7 @@ it("keeps a remote chat's orchestration worker Open-only: no Stop that would do 
   hoisted.workers = [worker]
   const onStop = renderStrip(REMOTE)
   expect(screen.queryByRole('button', { name: /^Stop Verifier/ })).toBeNull()
-  const open = screen.getByRole('button', { name: /^Verifier · Review journal/ })
+  const open = screen.getByRole('button', { name: /^Worker · Review journal/ })
   expect(open).toHaveAccessibleName(/from the computer it runs on/)
   expect(onStop).not.toHaveBeenCalled()
   expect(hoisted.rpc).not.toHaveBeenCalledWith(

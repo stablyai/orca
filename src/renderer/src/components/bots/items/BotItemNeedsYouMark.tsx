@@ -29,24 +29,29 @@ export function BotItemNeedsYouMarkBox({
   mark,
   children
 }: {
-  mark: BotItemNeedsYouMark
+  mark?: BotItemNeedsYouMark
   children: React.ReactNode
 }): React.JSX.Element {
-  const { setNode, id, opened } = mark
   return (
     // Bled past the column like a comment card, so a jump's ring wraps the card's own edge.
     <div
-      ref={setNode}
-      id={id}
-      data-bot-item-needs-you=""
-      className="relative -mx-2 scroll-mt-3 rounded-[10px] px-2 before:pointer-events-none before:absolute before:inset-y-1 before:-left-0.5 before:w-0.5 before:rounded-full before:bg-agent-question"
+      ref={mark?.setNode}
+      id={mark?.id}
+      data-bot-item-needs-you={mark ? '' : undefined}
+      className={
+        mark
+          ? 'relative -mx-2 scroll-mt-3 rounded-[10px] px-2 before:pointer-events-none before:absolute before:inset-y-1 before:-left-0.5 before:w-0.5 before:rounded-full before:bg-agent-question'
+          : undefined
+      }
     >
-      <span
-        aria-hidden
-        {...{ [BOT_ITEM_NEEDS_YOU_TOP_ATTRIBUTE]: '' }}
-        className="pointer-events-none absolute inset-x-0 top-0 h-6 max-h-full"
-      />
-      <BotItemClampedOpenContext value={opened}>{children}</BotItemClampedOpenContext>
+      {mark ? (
+        <span
+          aria-hidden
+          {...{ [BOT_ITEM_NEEDS_YOU_TOP_ATTRIBUTE]: '' }}
+          className="pointer-events-none absolute inset-x-0 top-0 h-6 max-h-full"
+        />
+      ) : null}
+      <BotItemClampedOpenContext value={mark?.opened ?? 0}>{children}</BotItemClampedOpenContext>
     </div>
   )
 }

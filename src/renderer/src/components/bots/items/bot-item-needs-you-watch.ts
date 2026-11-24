@@ -27,7 +27,6 @@ const FAR = 1_000_000
 export function createBotItemNeedsYouWatch() {
   let node: HTMLElement | null = null
   let root: HTMLElement | null = null
-  let top = 0
   let observers: IntersectionObserver[] = []
   // Whether the entry's top shows, and whether it is above the view's bottom (so not below it). The
   // second says which way when a jump carries the entry past the whole view in one step.
@@ -76,7 +75,7 @@ export function createBotItemNeedsYouWatch() {
       observer.observe(edge)
       observers.push(observer)
     }
-    watchEdge(`-${top}px 0px -${BOTTOM_EDGE}px 0px`, (entry) => {
+    watchEdge(`0px 0px -${BOTTOM_EDGE}px 0px`, (entry) => {
       shows = entry.intersectionRatio >= VISIBLE_RATIO
     })
     watchEdge(`${FAR}px 0px -${BOTTOM_EDGE}px 0px`, (entry) => {
@@ -99,14 +98,6 @@ export function createBotItemNeedsYouWatch() {
     setRoot: (next: HTMLElement | null): void => {
       if (next !== root) {
         root = next
-        observe()
-      }
-    },
-    /** The sticky header's height, left out of the view; observed again only when it changes. */
-    setTop: (height: number): void => {
-      const rounded = Math.round(height)
-      if (rounded !== top) {
-        top = rounded
         observe()
       }
     },

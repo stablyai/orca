@@ -34,7 +34,7 @@ import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { prStateColor } from '../../worktree/row-presentation/WorktreeMetaGlyphs'
-import { MobileConnectorSourceIcon } from '../MobileConnectorSourceIcon'
+import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
 import { MobileBotWorkerRow } from '../MobileBotChatTree'
 
 const ICON = 15
@@ -197,7 +197,7 @@ export function MobileBotItemLinks({
             title={entry.title}
             leading={
               entry.brand ? (
-                <MobileConnectorSourceIcon source={entry.brand} />
+                <MobileConnectorLogo source={entry.brand} />
               ) : (
                 <Link2 size={ICON} color={colors.textMuted} />
               )

@@ -35,6 +35,8 @@ export type CallerOwnedSignInStatus<
 /** How a login running on the host reaches the person signing in elsewhere. */
 export type CallerOwnedSignInChannel<TPrompt, TCode> = {
   signal: AbortSignal
+  /** Why `signal` aborted: the person cancelled, or the device that started it stopped answering. */
+  stopped: () => 'cancelled' | 'silent' | null
   onPrompt: (prompt: TPrompt) => void
   /** What the person sent back; rejects if the flow ends first. */
   nextCode: () => Promise<TCode>
@@ -173,6 +175,7 @@ export class CallerOwnedSignInFlows<
   ): Promise<void> {
     const channel: CallerOwnedSignInChannel<TPrompt, TCode> = {
       signal: flow.ended.signal,
+      stopped: () => flow.stop,
       onPrompt: (prompt) => {
         if (
           flow.status.phase === 'starting' &&

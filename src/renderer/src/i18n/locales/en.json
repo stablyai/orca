@@ -1592,7 +1592,7 @@
         "addedMany": "Added {{count}} lines",
         "forgotMany": "Forgot {{count}} lines",
         "changedMany": "Changed {{count}} lines",
-        "chat": "Chat \"{{title}}\"",
+        "chat": "Chat “{{title}}”",
         "aChat": "A chat",
         "chatFrom": "{{chat}} · from {{source}}",
         "kept": "Orca · {{chat}} wrote over it",
@@ -2910,14 +2910,18 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "The structured agent session is not available yet. Retry in a moment.",
         "gone": "This chat is no longer on this host, so it cannot be reopened here.",
         "hostCannotOpen": "This chat can't be reopened until Orca is updated.",
         "notLocatedNamed": "Orca can't find where {{agent}} is running, so it can't open it.",
         "notLocated": "Orca can't find where this agent is running, so it can't open it.",
         "worktreeDeleted": "The worktree was deleted.",
         "projectRemoved": "The project was removed from Orca.",
-        "folderWorkspaceRemoved": "The folder workspace was removed."
+        "folderWorkspaceRemoved": "The folder workspace was removed.",
+        "chatStillStarting": "This chat is still starting. Try again in a moment.",
+        "chatOpenFailed": "Couldn't open this chat.",
+        "chatOpenRetry": "Retry",
+        "chatOpenShowDetails": "Show details",
+        "chatOpenHideDetails": "Hide details"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
@@ -5027,27 +5031,20 @@
         "cleanup": {
           "WorkspaceCleanupDialog": {
             "3828408538": "Remove {{value0}}",
-            "b6bae1eed1": "Cancel",
-            "38ca0b1400": "This permanently deletes their local files. You can't undo this.",
             "e97e4580c7": "Dirty",
             "9623a5107d": "Unpushed commits",
             "e8b3741ff7": "Ignored",
             "a9957007eb": "Ignore {{value0}}",
             "bef0adef9b": "Branch",
             "bbb1ab6a6f": "Select {{value0}}",
-            "b771c92598": "Delete selected",
             "7eee951968": "Scanning workspaces",
             "191f0bc98e": "Close",
-            "7ae2ad30f4": "Refresh",
             "7f451a3e2c": "Could not ignore cleanup suggestion",
             "662b8ec3f8": "Workspace cleanup scan failed",
             "9cc26c019d": "Remove",
             "0e2d235c63": "Workspace scan ready",
             "4a35c08764": "Review",
             "47123d0108": "Collecting workspace information. You can close this and come back.",
-            "1d3503357d": "You can close this and come back while deletion continues.",
-            "4c2990886e": "{{value0}}/{{value1}} deleted",
-            "86ba852118": "{{value0}}, {{value1}} failed",
             "archivedStatus": "Archived",
             "mergedStatus": "Merged",
             "unchangedStatus": "No new commits",
@@ -10055,7 +10052,9 @@
           "lucideDescription": "{{label}} icon with repo color",
           "defaultIcon": "Default",
           "cc76342291": "Use GitHub avatar",
-          "43bf3709dd": "Repo icon"
+          "43bf3709dd": "Repo icon",
+          "autoColor": "Automatic color (kept distinct from other projects)",
+          "lettersDescription": "Letters “{{text}}”"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Relative paths resolve from this project root.",
@@ -16658,6 +16657,25 @@
         },
         "forkIndicator": {
           "forkOf": "Fork of {{repo}}"
+        },
+        "ProjectPeek": {
+          "openRemote": "Open {{value0}} in browser",
+          "folderProject": "Folder · not a git repo",
+          "noRemote": "Local git repo · no remote",
+          "openUpstream": "Open {{value0}} in browser",
+          "forkOf": "Fork of {{value0}}",
+          "openSettingsPage": "Open settings page",
+          "done": "Done",
+          "resetDone": "Icon and color reset",
+          "undo": "Undo",
+          "styleLetters": "Letters",
+          "stylePicture": "Picture",
+          "resetAppearance": "Reset icon & color",
+          "faviconPlaceholder": "Website for favicon",
+          "lettersInput": "Up to 2 letters",
+          "lettersPlaceholder": "1–2 letters",
+          "useLetters": "Use “{{value0}}”",
+          "usingGitHubAvatar": "Using the GitHub avatar"
         }
       },
       "pet": {
@@ -21720,6 +21738,10 @@
       "railLabel": "Your messages",
       "railImageMessage": "Image attachment",
       "railEmptyMessage": "Message",
+      "railFilterPlaceholder": "Filter your messages",
+      "railNoMatches": "No messages match",
+      "railTickLabel": "Message {{index}} of {{count}}: {{text}}",
+      "railMatchCount": "{{count}} of {{total}}",
       "prompt": {
         "collapse": "Collapse",
         "expand": "Expand"
@@ -22836,22 +22858,16 @@
         "openWorker": "Open worker",
         "remoteOwner": "Stop or clear this from the computer it runs on",
         "restore": "Show in dock again",
-        "unavailable": "Worker status unavailable",
         "alreadyStopped": "Already stopped",
         "cantStop": "Can't stop now",
-        "empty": "0 workers",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
-        "clearAll": "Clear all",
-        "attention": "Needs attention",
-        "openWork": "Open work",
-        "orderHeld": "Order held",
-        "statusChanged": "Status changed",
         "loadingWorker": "Loading worker…",
         "resultUnavailable": "Worker result unavailable",
-        "showLatest": "Show latest",
+        "showDetails": "Show details",
+        "hideDetails": "Hide details",
+        "close": "Close",
         "workersRegion": "Workers",
-        "timeUnavailable": "Status time unavailable",
         "doneResult": "Done · open result",
         "clearName": "Clear {{name}}",
         "stopUnavailable": "Stop {{name}} · {{title}} unavailable · {{reason}}",
@@ -22898,12 +22914,17 @@
         "queuedQuestions": "Queued worker questions",
         "showQuestion": "Show {{name}} question",
         "show": "Show",
-        "showName": "Show {{name}}",
-        "startedAt": " · Started {{time}} · {{elapsed}} elapsed",
-        "contactUnavailable": " · Last confirmed contact unavailable",
         "runningCount": "{{count}} running",
         "cleared_one": "Cleared 1 worker",
-        "cleared_other": "Cleared {{count}} workers"
+        "cleared_other": "Cleared {{count}} workers",
+        "stopAll": "Stop all",
+        "clearFailed": "Clear failed",
+        "pillLabel_one": "{{count}} worker, latest: {{title}}",
+        "pillLabel_other": "{{count}} workers, latest: {{title}}",
+        "unlistedDetail": "Some background work isn’t listed here",
+        "unlisted": "Background work running",
+        "unread": "Workers couldn’t load",
+        "unreadDetail": "Workers will show here once they load"
       },
       "webhookSetup": {
         "heading": "Set up a webhook",
@@ -22961,8 +22982,6 @@
           "noSizes": "No workspace sizes measured yet.",
           "noSizesDescription": "Sizes appear after disk usage has been measured.",
           "measureSizesTitle": "Scan workspace sizes",
-          "sizeOnDisk": "Size on disk: {{value0}}",
-          "checkingGitRow": "Checking git status",
           "searchPlaceholder": "Search name, repo, branch, path, host",
           "searchLabel": "Search workspaces",
           "filters": "Filters",
@@ -23020,7 +23039,6 @@
           "noMatches": "No workspaces match these filters.",
           "noMatchesDescription": "Every workspace is in one list — widen a facet or clear the filters.",
           "sortBy": "Sort by",
-          "sortByField": "Sort by {{value0}}",
           "sort": {
             "lastActivity": "Last activity",
             "lastVisited": "Last opened",
@@ -23076,17 +23094,11 @@
             "none": "Has none"
           },
           "idleSignalField": "Idle signal",
-          "updatedAgo": "Updated {{value0}}",
-          "refreshing": "Refreshing…",
-          "refreshingProgress": "Refreshing {{value0}}/{{value1}}",
-          "notMeasured": "Not measured",
           "openWorkspaceNamed": "Open {{value0}}",
           "openWorkspace": "Open workspace",
-          "workspaceStatus": "Workspace status: {{value0}}",
           "measuringSizesProgress": "Scanning {{value0}}/{{value1}}",
           "measuringSizes": "Scanning sizes",
           "measureSizesFailed": "Could not scan workspace sizes",
-          "selectedCount": "{{value0}} selected",
           "gitStatusCheckFailed": "Git status check failed",
           "gitStatusUnverified": "Git status could not be verified",
           "deleteAnyway": "Delete anyway",
@@ -23134,17 +23146,12 @@
               "finishedAgents": "Finished agents"
             }
           },
-          "forceDeleteRisk_one": "{{count}} workspace currently shows risk and may need a force delete",
-          "forceDeleteRisk_other": "{{count}} workspaces currently show risk and may need a force delete",
           "selectionVanishedCount_one": "{{count}} selected workspace no longer exists.",
           "selectionVanishedCount_other": "{{count}} selected workspaces no longer exist.",
           "selectionWithheldCount_one": "{{count}} selected workspace is hidden by the current filters and was deselected.",
           "selectionWithheldCount_other": "{{count}} selected workspaces are hidden by the current filters and were deselected.",
-          "selectAllSafetyChecked_one": "Select {{count}} safety-checked workspace",
-          "selectAllSafetyChecked_other": "Select all {{count}} safety-checked workspaces",
           "lastActive": "Last active {{value0}}",
           "projectNamed": "Project: {{value0}}",
-          "moreFlags": "Show {{value0}} more flags",
           "pathLabel": "Path",
           "copyPath": "Copy path",
           "gitNotChecked": "Not checked",
@@ -23154,7 +23161,8 @@
           "ignoreTooltip": "Ignore: skip in bulk delete",
           "stopIgnoring": "Stop ignoring",
           "stopIgnoringNamed": "Stop ignoring {{value0}}",
-          "clearSelection": "Clear selection"
+          "sortAscending": "ascending",
+          "sortDescending": "descending"
         },
         "scan": {
           "progress": "Scanning workspaces ({{value0}}/{{value1}})",
@@ -23197,8 +23205,74 @@
           "ignoredFilesUnchecked": "Ignored files not fully checked"
         },
         "confirm": {
-          "deletingTitle_one": "Deleting {{count}} workspace",
-          "deletingTitle_other": "Deleting {{count}} workspaces"
+          "title_one": "Delete {{count}} workspace?",
+          "title_other": "Delete {{count}} workspaces?",
+          "localFilesSection": "Local files will be lost",
+          "back": "Back",
+          "deletePermanently": "Delete permanently",
+          "retryDescription": "This permanently deletes {{name}} and its local files.",
+          "showMore": "Show {{count}} more"
+        },
+        "review": {
+          "title": "Review workspaces",
+          "refresh": "Refresh",
+          "checking": "Checking for changes",
+          "updatesAvailable": "Updates available. Refresh"
+        },
+        "row": {
+          "sizeLabel": "Size",
+          "reviewLabel": "Review",
+          "statusLabel": "Status",
+          "signalsLabel": "Signals",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "Not a git workspace. Remove the project from Orca instead.",
+          "unreachable": "Can't reach {{host}}. Reconnect to delete, or remove it from Orca.",
+          "mainCheckout": "Can't delete the project's main checkout.",
+          "uncommittedFiles_one": "{{count}} uncommitted file",
+          "uncommittedFiles_other": "{{count}} uncommitted files",
+          "couldntCheck": "Couldn't check for changes"
+        },
+        "group": {
+          "empty": "No workspaces here.",
+          "nothingLocal": "Nothing local",
+          "localFiles": "Has local files",
+          "cannotDelete": "Can't delete",
+          "label": "Workspace groups",
+          "selected": "{{count}} selected"
+        },
+        "footer": {
+          "delete_one": "Delete {{count}} workspace",
+          "delete_other": "Delete {{count}} workspaces",
+          "selected": "{{count}} selected",
+          "waitForDelete": "Wait for the current delete to finish."
+        },
+        "selectAll": {
+          "partial": "{{selected}} of {{total}} selected",
+          "all": "Select all {{count}}"
+        },
+        "runCard": {
+          "title": "Deleting workspaces",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "Dismiss",
+          "show": "Show"
+        },
+        "done": {
+          "failedLine_one": "{{count}} couldn't be deleted.",
+          "failedLine_other": "{{count}} couldn't be deleted.",
+          "title": "Deleted {{deleted}} of {{total}} workspaces",
+          "singleTitle": "Deleted {{deleted}} of {{total}} workspace",
+          "button": "Done"
+        },
+        "deleting": {
+          "title_one": "Deleting {{count}} workspace",
+          "title_other": "Deleting {{count}} workspaces",
+          "runInBackground": "Run in background",
+          "progress": "{{done}} of {{total}} deleted",
+          "statusDeleted": "Deleted",
+          "statusDeleting": "Deleting…",
+          "statusFailed": "Couldn't delete",
+          "statusWaiting": "Waiting",
+          "unconfirmed": "Couldn't confirm this was deleted. Refresh to check."
         }
       },
       "creation": {
@@ -24073,7 +24147,6 @@
       "showDetails": "Show {{name}}'s task and reply",
       "task": "Task",
       "openFailed": "{{name}}: {{detail}}",
-      "chatUnavailable": "This host cannot open the chat. Try again.",
       "terminalExited": "This terminal has exited.",
       "openOnHost": "Open this agent on {{host}}.",
       "cannotLocate": "This host cannot locate this agent. Try again.",
@@ -25830,6 +25903,19 @@
       }
     }
   },
+  "tabStrip": {
+    "overflow": {
+      "chipOnlyName_one": "{{title}}, {{count}} tab",
+      "chipOnlyName_other": "{{title}}, {{count}} tabs",
+      "entryNeedsAttention": "{{title}}, needs attention",
+      "moreTabs_one": "{{count}} more tab",
+      "moreTabs_other": "{{count}} more tabs",
+      "needAttention_one": ", {{count}} needs attention",
+      "needAttention_other": ", {{count}} need attention",
+      "openTabs_one": "{{count}} open tab",
+      "openTabs_other": "{{count}} open tabs"
+    }
+  },
   "updates": {
     "installOnQuit": {
       "title": "Update ready to install",
@@ -27575,6 +27661,8 @@
     "errors": {
       "nameTaken": "Another bot already has that name.",
       "generic": "Something went wrong. Try again.",
+      "avatarHomeUnreadable": "Couldn't read the saved picture. Choose it again.",
+      "folderNotOwned": "Couldn't verify this bot's folder.",
       "avatarInvalid": "That picture could not be used. Pick a PNG or JPG image.",
       "unsavedDrafts": "Its folder has unsaved editor changes. Save or close them, then delete again."
     },
@@ -27913,6 +28001,8 @@
         "describe": "Picture description",
         "button": "Generate",
         "generating": "Generating…",
+        "closeAnytime": "Close anytime",
+        "failedFor": "Couldn't generate a picture for {{name}}.",
         "cancel": "Cancel",
         "cancelRunning": "Cancel generating",
         "edit": "Edit description",
@@ -28173,7 +28263,10 @@
       "openOnPage": "Open on Automations page",
       "pauseShort": "Pause",
       "resumeShort": "Resume",
-      "nextAt": "next {{time}}"
+      "nextAt": "next {{time}}",
+      "deleting": "Deleting…",
+      "deleteFailed": "Couldn’t delete {{name}}",
+      "deleteDescription": "Delete <name/> and its run history."
     },
     "access": {
       "thisComputer": "this computer",
@@ -28214,7 +28307,7 @@
       "codexNoSandbox": "No Codex sandbox.",
       "whoeverAskedApproves": "If it asks, whoever asked can approve.",
       "reachLinear": "Comment on, update and create Linear issues as you",
-      "reachSlack": "Post in Slack as @{{name}}",
+      "reachSlack": "Post in Slack as {{name}}",
       "reachGitHub": "Comment, review and push on GitHub as you",
       "trust": "Add only people you’d trust at your keyboard.",
       "adviceHeading": "Before you share",
@@ -28578,6 +28671,7 @@
       "sameComputer": "Bots in a group must be on the same computer.",
       "pairedComputersOnly": "Groups can add bots only from paired computers.",
       "needsLocalBot": "This group needs at least one bot on this computer.",
+      "pickLocalBot": "Pick a bot on this computer",
       "thisComputer": "This computer",
       "remoteNeedsChat": "Open a chat with {{name}} once, then add it to the group.",
       "remoteReplied": "Replied on {{computer}}",
@@ -28643,7 +28737,8 @@
         "hostDefault": "{{host}}’s default",
         "computerDefault": "This computer’s default",
         "changeInSettings": "Change in Settings",
-        "alsoConnected": "Also connected"
+        "alsoConnected": "Also connected",
+        "settingUp": "Setting up"
       },
       "copied": "Copied. Send it to your Google admin.",
       "share": {
@@ -28817,7 +28912,8 @@
         "signedIn": "✓ Signed in",
         "done": "✓ Done",
         "takeOver": "✓ {{bot}} takes over from here",
-        "chose": "✓ You chose {{what}}"
+        "chose": "✓ You chose {{what}}",
+        "stopped": "Setup stopped"
       },
       "ended": "This Google setup ended.",
       "heading": "Connect Google",
@@ -28861,7 +28957,8 @@
         "waiting": "Waiting for you",
         "working": "Working",
         "heading": "Setting up Google",
-        "you": "You"
+        "you": "You",
+        "stopped": "Stopped"
       },
       "letMe": "Let me do this one",
       "step": {
@@ -28908,7 +29005,8 @@
         "checkFailed": "Orca couldn’t check {{services}}."
       },
       "notNow": "Not now",
-      "importSetupFile": "Import setup file"
+      "importSetupFile": "Import setup file",
+      "stop": "Stop setup"
     },
     "import": {
       "nudgeOne": "We found a bot in {{app}}.",
@@ -28959,7 +29057,6 @@
     "composio": {
       "connectedAs": "Connected as {{label}}",
       "connected": "Connected",
-      "group": "More apps with Composio",
       "key": {
         "label": "Composio API key",
         "placeholder": "Paste your key",
@@ -29681,12 +29778,10 @@
       "duplicateSkill": "Same name, in {{folder}} · not shared"
     },
     "apps": {
-      "title": "Add to {{bot}}",
       "close": "Close",
       "signingIn": "Signing in",
       "add": "Add",
       "composio": {
-        "note": "These connect through your Composio account.",
         "browseAll": "Browse Composio apps",
         "searchCaption": "Composio apps",
         "allCaption": "All Composio apps",
@@ -29696,9 +29791,9 @@
         "accountThenCatalog": "Once, for all your bots. Then pick from all of Composio’s apps.",
         "keyStored": "Stored on this computer; bots never see it. Composio holds your app sign-ins.",
         "addKey": "Add key and continue",
-        "keyStoredOnHost": "Stored on {{host}}; bots never see it. Composio holds your app sign-ins."
+        "keyStoredOnHost": "Stored on {{host}}; bots never see it. Composio holds your app sign-ins.",
+        "signsIn": "Signs in through your Composio account."
       },
-      "allApps": "All apps",
       "closeKeepsSigningIn": "Sign-in continues in your browser",
       "openPageAgain": "Open page again",
       "webhooks": {
@@ -29711,7 +29806,9 @@
         "line": "Any MCP server {{bot}} should use",
         "failedLine": "{{app}} is on {{bot}} but not signed in. Try again, or remove it in Settings › Tools.",
         "done": "{{app}} is on {{bot}}",
-        "doneLine": "{{bot}} can use its tools from its next turn."
+        "doneLine": "{{bot}} can use its tools from its next turn.",
+        "name": "Custom",
+        "rowLine": "Any MCP server"
       },
       "couldNotSignIn": "Couldn’t sign in to {{app}}",
       "done": "Done",
@@ -29723,11 +29820,11 @@
       },
       "signInAllow": "Sign in to {{app}} and allow access.",
       "viaComposio": "via Composio",
-      "onBot": "On {{bot}}",
       "appsCaption": "Apps",
       "searchComposio": "Search Composio apps",
-      "searchMine": "Search On {{bot}}",
+      "searchAdded": "Search added apps",
       "search": "Search apps",
+      "filters": "App filters",
       "categories": "Categories",
       "addByUrl": "Add by URL",
       "noMatch": "No app matches “{{query}}”.",
@@ -29816,7 +29913,17 @@
         "box": "Files and folders",
         "miro": "Boards, sticky notes and frames",
         "reddit": "Posts, comments and subreddits"
-      }
+      },
+      "addAppsTitle": "Add apps to {{bot}}",
+      "addedCount": "{{count}} added",
+      "addedCaption": "Added",
+      "chip": {
+        "all": "All",
+        "composio": "Composio",
+        "more": "More"
+      },
+      "setUpNamed": "Set up {{name}}",
+      "setUp": "Set up"
     },
     "panel": {
       "idle": "Idle",
@@ -30351,17 +30458,17 @@
         "pickCustom": "Custom time"
       },
       "ask": {
-        "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
-        "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>",
-        "next": "Next question",
         "notSentYet": "not sent yet",
-        "previous": "Previous question",
         "recommended": "Recommended",
-        "step": "{{n}} of {{total}}",
         "typeAnswer": "Type your answer",
         "replaced": "The agent asked a new question. Read it, then reply.",
         "replacedByNewer": "Replaced by a newer question",
-        "skipped": "Skipped"
+        "skipped": "Skipped",
+        "send": "Send",
+        "sending": "Sending…",
+        "sendSome": "Send {{count}}/{{total}}",
+        "sendSomeLabel": "Send {{count}} of {{total}} answers",
+        "changeAnswer": "{{question}}: {{answer}}. Change answer"
       },
       "readMoreClosedFailed": "Reading more Closed items failed",
       "wait": {

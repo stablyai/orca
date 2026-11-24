@@ -32,6 +32,15 @@ export type BotItemQuestionAnswers = {
 
 export type BotItemAskEnd = 'replaced' | 'skipped'
 
+/** The end an ask's card names: while a line no comment or send answered stays open to nothing, even
+ *  one showing an answer held on this device, which only goes back to the box. */
+export function botItemShownAskEnd(
+  ended: BotItemAskEnd | null,
+  answered: readonly (string | null)[]
+): BotItemAskEnd | null {
+  return ended && answered.some((words) => !words) ? ended : null
+}
+
 export type BotItemQuestionPairing = {
   /** By the ask's event id. */
   questions: Map<string, BotItemQuestionAnswers>
@@ -109,13 +118,15 @@ function answeredLines(
     return { lines: [picked], byOrder: false }
   }
   // Several questions answered in one comment, a line each; or a quick reply edited before sending.
-  const named = botItemNamedAnswers(shape, text).flatMap((words, index) =>
+  const wordsByLine = botItemNamedAnswers(shape, text)
+  const named = wordsByLine.flatMap((words, index) =>
     words !== null && isOpen(index) ? [index] : []
   )
   if (named.length > 0) {
     return { lines: named, byOrder: false }
   }
-  if (answersAskedQuestions(text, asked)) {
+  // If the named lines were answered meanwhile, a late reply can't take another line by order.
+  if (wordsByLine.some((words) => words !== null) || answersAskedQuestions(text, asked)) {
     return none
   }
   const next = answers.indexOf(null)

@@ -607,6 +607,33 @@ describe('a bot’s words before its quiet marker across a pause', () => {
   })
 })
 
+describe('an upgrade restart between a bot’s quiet reply and its fill', () => {
+  // The thread asks; the turn ends with words and the marker while the app restarts, and the next
+  // launch's recovery fills the row. `olderBuild`: the row was admitted before the trailing rule.
+  const recoveredAfterUpgrade = async (olderBuild: boolean) => {
+    const before = start({ bot: true })
+    admit(before.db, 'm1', asked('d1'))
+    if (olderBuild) {
+      before.db.prepare('UPDATE journal_connector_replies SET quiet_rule=NULL').run()
+    }
+    before.db.close()
+    const p = start({ bot: true, continuationsSettled: Promise.resolve() })
+    p.show([p.message('m1'), ...p.turn('item:t1', 'm1', 'completed', 'Checked it.\n\nNO_REPLY')])
+    await p.recovery.boot()
+    return p.outcomes()
+  }
+
+  it('keeps a reply the older build admitted quiet, as its turn began', async () => {
+    expect(await recoveredAfterUpgrade(true)).toEqual({ d1: { outcome: 'quiet', head: 'd1' } })
+  })
+
+  it('posts the words before the marker for a reply this build admitted', async () => {
+    expect(await recoveredAfterUpgrade(false)).toEqual({
+      d1: { outcome: 'answered', prose: 'Checked it.', head: 'd1' }
+    })
+  })
+})
+
 describe('no positional "answered together" across a restart', () => {
   const unrelated: AgentJournalMessageItem = {
     kind: 'message',

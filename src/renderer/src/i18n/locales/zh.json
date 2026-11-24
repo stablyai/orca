@@ -2151,14 +2151,18 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "结构化代理会话尚不可用，请稍后重试",
         "gone": "此聊天已不在这台主机上，无法在此重新打开",
         "hostCannotOpen": "更新 Orca 后才能重新打开此聊天",
         "notLocatedNamed": "Orca 找不到 {{agent}} 的运行位置，因此无法打开它",
         "notLocated": "Orca 找不到此智能体的运行位置，因此无法打开它",
         "worktreeDeleted": "工作树已删除。",
         "projectRemoved": "项目已从 Orca 中移除。",
-        "folderWorkspaceRemoved": "文件夹工作区已移除。"
+        "folderWorkspaceRemoved": "文件夹工作区已移除。",
+        "chatStillStarting": "此聊天仍在启动，请稍后重试",
+        "chatOpenFailed": "无法打开此聊天",
+        "chatOpenRetry": "重试",
+        "chatOpenShowDetails": "显示详情",
+        "chatOpenHideDetails": "隐藏详情"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root 配方不支持稀疏检出"
@@ -4232,27 +4236,20 @@
         "cleanup": {
           "WorkspaceCleanupDialog": {
             "3828408538": "删除 {{value0}}",
-            "b6bae1eed1": "取消",
-            "38ca0b1400": "这将永久删除他们的本地文件，您无法撤销此操作",
             "e97e4580c7": "有改动",
             "9623a5107d": "未推送的提交",
             "e8b3741ff7": "被忽略",
             "a9957007eb": "忽略 {{value0}}",
             "bef0adef9b": "分支",
             "bbb1ab6a6f": "选择{{value0}}",
-            "b771c92598": "删除所选内容",
             "7eee951968": "检查工作区安全",
             "191f0bc98e": "关闭",
-            "7ae2ad30f4": "刷新",
             "7f451a3e2c": "无法忽略清理建议",
             "662b8ec3f8": "工作区清理扫描失败",
             "9cc26c019d": "移除",
             "0e2d235c63": "非活动工作区扫描已就绪",
             "4a35c08764": "评审",
             "47123d0108": "正在扫描非活动工作区，你可以关闭此窗口，稍后再回来查看",
-            "1d3503357d": "删除继续期间，你可以关闭此窗口并稍后回来",
-            "4c2990886e": "已删除 {{value0}}/{{value1}}",
-            "86ba852118": "{{value0}}，{{value1}} 个失败",
             "archivedStatus": "已归档",
             "74f6c16279": "返回",
             "mergedStatus": "已合并",
@@ -20615,6 +20612,10 @@
       "railLabel": "你的消息",
       "railImageMessage": "图片附件",
       "railEmptyMessage": "消息",
+      "railFilterPlaceholder": "筛选你的消息",
+      "railNoMatches": "没有匹配的消息",
+      "railTickLabel": "第 {{index}} 条消息，共 {{count}} 条：{{text}}",
+      "railMatchCount": "{{count}} / {{total}}",
       "ask": {
         "awaiting": "等待用户输入：",
         "awaitingUnnamed": "等待用户输入",
@@ -21317,6 +21318,11 @@
         "waitOver": "等待结束",
         "scheduled": "按计划",
         "runNow": "立即运行",
+        "github": "GitHub",
+        "slack": "Slack",
+        "linear": "Linear",
+        "webhook": "Webhook",
+        "gmail": "Gmail",
         "calendar": "日历",
         "instructions": "指令",
         "event": "事件",
@@ -21330,6 +21336,8 @@
         "reusedFrom": "复用的事件：{{what}}，发生于 {{time}}",
         "whatOn": "{{what}}（{{where}}）",
         "whatIn": "{{what}}（{{where}}）",
+        "whatAt": "{{what}} · {{where}}",
+        "factsAt": "{{facts}} · {{time}}",
         "someoneWrote": "某人写道",
         "personWrote": "{{name}} 写道",
         "callerSent": "调用方发送了",
@@ -21370,6 +21378,7 @@
             "review_requested": "已请求评审",
             "assigned": "已分配",
             "ci_failed": "CI 失败",
+            "ci_finished": "CI 完成",
             "ci_passed": "CI 通过",
             "pr_conflicted": "出现冲突",
             "pr_closed": "已关闭",
@@ -21655,8 +21664,6 @@
           "noSizes": "尚未测量工作区大小",
           "noSizesDescription": "测量磁盘占用后将显示大小",
           "measureSizesTitle": "扫描工作区大小",
-          "sizeOnDisk": "磁盘占用：{{value0}}",
-          "checkingGitRow": "正在检查 Git 状态",
           "searchPlaceholder": "搜索名称、仓库、分支、路径或主机",
           "searchLabel": "搜索工作区",
           "filters": "筛选器",
@@ -21714,7 +21721,6 @@
           "noMatches": "没有工作区符合这些筛选条件",
           "noMatchesDescription": "所有工作区都在同一列表中——请放宽筛选条件或清除筛选器",
           "sortBy": "排序方式",
-          "sortByField": "按{{value0}}排序",
           "sort": {
             "lastActivity": "最近活动",
             "lastVisited": "最近打开",
@@ -21770,25 +21776,15 @@
             "none": "没有"
           },
           "idleSignalField": "空闲依据",
-          "updatedAgo": "更新于 {{value0}}",
-          "refreshing": "正在刷新…",
-          "refreshingProgress": "正在刷新 {{value0}}/{{value1}}",
-          "notMeasured": "未测量",
           "openWorkspaceNamed": "打开 {{value0}}",
           "openWorkspace": "打开工作区",
-          "workspaceStatus": "工作区状态：{{value0}}",
           "measuringSizesProgress": "正在扫描 {{value0}}/{{value1}}",
           "measuringSizes": "正在扫描大小",
           "measureSizesFailed": "扫描工作区大小失败",
-          "selectedCount": "已选择 {{value0}} 个",
-          "forceDeleteRisk_other": "{{count}} 个工作区目前存在风险，可能需要强制删除",
           "selectionVanishedCount_other": "所选的 {{count}} 个工作区已不存在",
           "selectionWithheldCount_other": "所选的 {{count}} 个工作区被当前筛选条件隐藏，已取消选择",
-          "selectAllSafetyChecked_other": "选择全部 {{count}} 个已通过安全检查的工作区",
-          "clearSelection": "清除选择",
           "lastActive": "最后活跃：{{value0}}",
           "projectNamed": "项目：{{value0}}",
-          "moreFlags": "显示其余 {{value0}} 个标记",
           "pathLabel": "路径",
           "copyPath": "复制路径",
           "gitNotChecked": "未检查",
@@ -21796,7 +21792,9 @@
           "restoreFailed": "无法取消忽略 {{value0}}",
           "ignoreTooltip": "忽略：批量删除时跳过",
           "stopIgnoring": "取消忽略",
-          "stopIgnoringNamed": "取消忽略 {{value0}}"
+          "stopIgnoringNamed": "取消忽略 {{value0}}",
+          "sortAscending": "升序",
+          "sortDescending": "降序"
         },
         "scan": {
           "progress": "正在扫描工作区 ({{value0}}/{{value1}})",
@@ -21840,7 +21838,69 @@
           "ignoredFilesUnchecked": "未完整检查 Git 忽略的文件"
         },
         "confirm": {
-          "deletingTitle_other": "正在删除 {{count}} 个工作区"
+          "title_other": "删除 {{count}} 个工作区？",
+          "localFilesSection": "本地文件将丢失",
+          "back": "返回",
+          "deletePermanently": "永久删除",
+          "retryDescription": "这会永久删除 {{name}} 及其本地文件。",
+          "showMore": "再显示 {{count}} 个"
+        },
+        "review": {
+          "title": "检查工作区",
+          "refresh": "刷新",
+          "checking": "正在检查更改",
+          "updatesAvailable": "有更新。刷新"
+        },
+        "row": {
+          "sizeLabel": "大小",
+          "reviewLabel": "评审",
+          "statusLabel": "状态",
+          "signalsLabel": "信号",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "不是 Git 工作区。请改为从 Orca 中移除该项目。",
+          "unreachable": "无法连接 {{host}}。重新连接后即可删除，或将其从 Orca 中移除。",
+          "mainCheckout": "无法删除项目的主检出。",
+          "uncommittedFiles_other": "{{count}} 个未提交的文件",
+          "couldntCheck": "无法检查更改"
+        },
+        "group": {
+          "empty": "这里没有工作区。",
+          "nothingLocal": "无本地内容",
+          "localFiles": "有本地文件",
+          "cannotDelete": "无法删除",
+          "label": "工作区分组",
+          "selected": "已选 {{count}} 个"
+        },
+        "footer": {
+          "delete_other": "删除 {{count}} 个工作区",
+          "selected": "已选 {{count}} 个",
+          "waitForDelete": "请等待当前删除完成。"
+        },
+        "selectAll": {
+          "partial": "已选 {{selected}}/{{total}} 个",
+          "all": "全选 {{count}} 个"
+        },
+        "runCard": {
+          "title": "正在删除工作区",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "关闭",
+          "show": "显示"
+        },
+        "done": {
+          "failedLine_other": "{{count}} 个无法删除。",
+          "title": "已删除 {{deleted}}/{{total}} 个工作区",
+          "singleTitle": "已删除 {{deleted}}/{{total}} 个工作区",
+          "button": "完成"
+        },
+        "deleting": {
+          "title_other": "正在删除 {{count}} 个工作区",
+          "runInBackground": "在后台运行",
+          "progress": "已删除 {{done}}/{{total}}",
+          "statusDeleted": "已删除",
+          "statusDeleting": "正在删除…",
+          "statusFailed": "无法删除",
+          "statusWaiting": "等待中",
+          "unconfirmed": "无法确认已删除。请刷新以检查。"
         }
       },
       "creation": {
@@ -22938,7 +22998,6 @@
       "showDetails": "显示 {{name}} 的任务和最新消息",
       "task": "任务",
       "openFailed": "{{name}}：{{detail}}",
-      "chatUnavailable": "此主机无法打开该聊天，请重试",
       "terminalExited": "此终端已退出",
       "openOnHost": "请在 {{host}} 上打开此智能体",
       "cannotLocate": "此主机找不到此智能体，请重试",
@@ -27503,12 +27562,10 @@
         "title": "要在另一台电脑上登录？",
         "line": "在那台电脑上登录 {{app}}，然后复制未能加载的页面的地址"
       },
-      "title": "添加到 {{bot}}",
       "close": "关闭",
       "signingIn": "正在登录",
       "add": "添加",
       "composio": {
-        "note": "这些应用通过你的 Composio 账户连接",
         "browseAll": "浏览 Composio 应用",
         "searchCaption": "Composio 应用",
         "allCaption": "全部 Composio 应用",
@@ -27520,7 +27577,6 @@
         "addKey": "添加密钥并继续",
         "keyStoredOnHost": "存储在 {{host}} 上，bots 永远看不到它。你的应用登录信息由 Composio 保管"
       },
-      "allApps": "全部应用",
       "closeKeepsSigningIn": "登录会在浏览器中继续进行",
       "openPageAgain": "再次打开页面",
       "webhooks": {
@@ -27540,10 +27596,8 @@
       "back": "返回",
       "signInAllow": "登录 {{app}} 并允许访问",
       "viaComposio": "通过 Composio",
-      "onBot": "{{bot}} 的应用",
       "appsCaption": "应用",
       "searchComposio": "搜索 Composio 应用",
-      "searchMine": "搜索 {{bot}} 的应用",
       "search": "搜索应用",
       "categories": "分类",
       "addByUrl": "通过 URL 添加",
@@ -27946,16 +28000,17 @@
         "pickCustom": "自定义时间"
       },
       "ask": {
-        "heldCount_other": "{{count}} 条回答尚未发送，<send>仍然发送</send>",
-        "next": "下一个问题",
         "notSentYet": "尚未发送",
-        "previous": "上一个问题",
         "recommended": "推荐",
-        "step": "第 {{n}} 个，共 {{total}} 个",
         "typeAnswer": "输入你的回答",
         "replaced": "智能体提出了新问题。请先阅读，再回复",
         "replacedByNewer": "已由较新的问题取代",
-        "skipped": "已跳过"
+        "skipped": "已跳过",
+        "send": "发送",
+        "sending": "正在发送…",
+        "sendSome": "发送 {{count}}/{{total}}",
+        "sendSomeLabel": "发送 {{total}} 个回答中的 {{count}} 个",
+        "changeAnswer": "{{question}}：{{answer}}。更改回答"
       },
       "readMoreClosedFailed": "无法读取更多已关闭的条目"
     },
@@ -28531,7 +28586,10 @@
       "runNow": "立即运行",
       "openOnPage": "在自动化页面中打开",
       "pauseShort": "暂停",
-      "resumeShort": "恢复"
+      "resumeShort": "恢复",
+      "deleting": "正在删除…",
+      "deleteFailed": "无法删除 {{name}}",
+      "deleteDescription": "删除 <name/> 及其运行历史。"
     },
     "host": {
       "errors": {
@@ -29153,7 +29211,7 @@
       "codexNoSandbox": "不使用 Codex 沙盒",
       "whoeverAskedApproves": "如果它请求批准，提问的人可以批准",
       "reachLinear": "以你的身份评论、更新和创建 Linear 议题",
-      "reachSlack": "以 @{{name}} 的身份在 Slack 中发消息",
+      "reachSlack": "以 {{name}} 的身份在 Slack 中发消息",
       "reachGitHub": "以你的身份在 GitHub 上评论、评审和推送",
       "trust": "只添加你放心把键盘交给对方的人",
       "adviceHeading": "分享之前",
@@ -29293,7 +29351,6 @@
     "composio": {
       "connectedAs": "已以 {{label}} 身份连接",
       "connected": "已连接",
-      "group": "通过 Composio 使用更多应用",
       "key": {
         "label": "Composio API 密钥",
         "placeholder": "粘贴你的密钥",

@@ -190,12 +190,16 @@ export function botRunningRow(rows: readonly BotAutomationCardRow[]): BotAutomat
 
 type OrderFacts = { runFacts: string; running: boolean; nextAt: number | null }
 
+const NO_KEYS: ReadonlySet<string> = new Set()
+
 /**
  * The card's order, re-ranked only when rows come or go or their run facts change: a switch flipped
- * here, and the host's refresh after it, leave its row in place until the panel next opens.
+ * here, and the host's refresh after it, leave its row in place until the panel next opens. Rows that
+ * leave only because they were deleted here (`hiddenKeys`) leave the rest where they are.
  */
 export function useAutomationCardOrder(
-  rows: readonly BotAutomationCardRow[]
+  rows: readonly BotAutomationCardRow[],
+  hiddenKeys: ReadonlySet<string> = NO_KEYS
 ): BotAutomationCardRow[] {
   const [order, setOrder] = useState<{
     keys: string[]
@@ -212,20 +216,23 @@ export function useAutomationCardOrder(
       }
     ])
   )
-  const rerank =
-    !order ||
-    order.facts.size !== rows.length ||
-    rows.some((row) => {
-      const before = order.facts.get(row.key)
-      return (
-        !before ||
-        before.running !== row.running ||
-        before.nextAt !== row.nextAt ||
-        before.runFacts !== row.runFacts
-      )
-    })
+  const factsChanged = (row: BotAutomationCardRow): boolean => {
+    const before = order?.facts.get(row.key)
+    return (
+      !before ||
+      before.running !== row.running ||
+      before.nextAt !== row.nextAt ||
+      before.runFacts !== row.runFacts
+    )
+  }
+  const left = order ? [...order.facts.keys()].filter((key) => !facts.has(key)) : []
+  const onlyHiddenLeft =
+    left.length > 0 && left.every((key) => hiddenKeys.has(key)) && !rows.some(factsChanged)
   let keys = order?.keys ?? []
-  if (rerank) {
+  if (order && onlyHiddenLeft) {
+    keys = order.keys.filter((key) => facts.has(key))
+    setOrder({ keys, facts })
+  } else if (!order || order.facts.size !== rows.length || rows.some(factsChanged)) {
     keys = rankAutomationCardRows(rows).map((row) => row.key)
     setOrder({ keys, facts })
   }

@@ -11,6 +11,7 @@ import {
   useWorkerDockFailureFocusHandoff,
   WorkerDockFailureStrip
 } from './dock/WorkerDockFailureStrip'
+import { WorkerDockResultDialogSlot } from './dock/WorkerDockResultDialogSlot'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import { NativeChatCrewBackgroundTasksStatus } from './NativeChatCrewBackgroundTasksStatus'
@@ -23,11 +24,6 @@ import {
   useNativeChatCrew
 } from '../../../orchestration-crew/use-native-chat-crew'
 
-const WorkerDockResultDialog = lazy(() =>
-  import('./dock/WorkerDockResultDialog').then((module) => ({
-    default: module.WorkerDockResultDialog
-  }))
-)
 const WorkerDockProviderDetailsDialog = lazy(() =>
   import('./dock/WorkerDockProviderDetailsDialog').then((module) => ({
     default: module.WorkerDockProviderDetailsDialog
@@ -232,6 +228,8 @@ export function NativeChatStructuredSessionStatus(props: {
         onWorkerAction={owner.action}
         onClearAll={owner.clearAll}
         loadWindow={feed.loadWindow}
+        incomplete={backgroundTasks.incomplete}
+        unavailable={!feed.available}
         tasks={backgroundTasks.tasks}
         settledTasks={backgroundTasks.settledTasks}
         {...(backgroundTasks.children
@@ -240,7 +238,6 @@ export function NativeChatStructuredSessionStatus(props: {
         indicatorActive={backgroundTasks.isMonitoring}
         supportsTaskStop={backgroundTasks.supportsStop}
         offersStopAll={backgroundTasks.offersStopAll}
-        incomplete={backgroundTasks.incomplete || !feed.available}
         stoppingTaskIds={new Set([...stop.stoppingTaskIds, ...owner.pending])}
         stoppingAll={stop.stoppingAll}
         expanded={expandedHere}
@@ -271,32 +268,13 @@ export function NativeChatStructuredSessionStatus(props: {
           focusHandoff={failureFocus}
         />
       ) : null}
-      {dialog ? (
-        <Suspense fallback={null}>
-          <WorkerDockResultDialog
-            ownerActionsAvailable={
-              ownerActionsAvailable && dialog.result?.ownerActionsAvailable !== false
-            }
-            result={dialog.result}
-            error={dialog.error}
-            onClose={() => {
-              const { opener } = dialog
-              owner.close()
-              if (opener.isConnected) {
-                opener.focus()
-              } else {
-                document
-                  .querySelector<HTMLButtonElement>(
-                    '[data-native-chat-background-tasks] button[aria-expanded]'
-                  )
-                  ?.focus()
-              }
-            }}
-            onOpen={() => workerOpen(dialog.row)}
-            onRestore={owner.restore}
-          />
-        </Suspense>
-      ) : null}
+      <WorkerDockResultDialogSlot
+        dialog={dialog}
+        ownerActionsAvailable={ownerActionsAvailable}
+        onClose={owner.close}
+        onOpen={workerOpen}
+        onRestore={owner.restore}
+      />
     </WorkerDockFeedLossesContext.Provider>
   )
 }
