@@ -102,6 +102,11 @@ async function openStartingClaudeSession(
   )
   // A kept agent's output since the last ack is replayed in order instead of transcript catch-up.
   const kept = keptClaudeAgentRelay(session.connection)
+  if (kept) {
+    // The journal holds the kept agent's output through the last ack and the replay brings the
+    // rest, so its turn ends may move the resume point (or the next cold resume re-imports them).
+    history.covered = true
+  }
   if (!kept && resumesTranscript && (leafUuid || origin?.kind === 'native_copy') && events) {
     const catchUp = withStructuredHistoryInvocation(
       session,

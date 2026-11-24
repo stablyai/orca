@@ -8,20 +8,34 @@ function scopeOf(frame: Record<string, unknown>): string {
   return `${String(frame.session_id ?? '')}/${String(frame.parent_tool_use_id ?? '')}`
 }
 
+function contentIds(frame: Record<string, unknown>, type: string, key: string): string[] {
+  const message = isRecord(frame.message) ? frame.message : null
+  const content = Array.isArray(message?.content) ? message.content : []
+  return content.flatMap((part) =>
+    isRecord(part) && part.type === type && typeof part[key] === 'string' ? [part[key]] : []
+  )
+}
+
 /**
- * A streamed Claude message is matched to its final frame in memory, so a later attach must replay
- * it from its `message_start`: acks stop just before the oldest message whose final hasn't landed.
+ * A streamed Claude message is matched to its final frame in memory, and a tool call to its result,
+ * so a later attach must replay from the `message_start`: acks stop just before the oldest message
+ * whose final hasn't landed or whose tool calls haven't returned.
  */
 export function claudeRelayAckFloor(): ProviderRelayAckFloor {
   /** Each stream scope's open message, by the seq of its `message_start`. */
   const open = new Map<string, number>()
+  /** Each scope's latest `message_start`, for the tool calls in its later final frames. */
+  const starts = new Map<string, number>()
+  /** Unreturned tool calls, by the seq of their message's `message_start`. */
+  const tools = new Map<string, number>()
   return {
     observe: (seq, line) => {
       // Cheap tests first: only stream starts, final assistant frames and results matter.
       if (
         !line.includes('"message_start"') &&
         !line.includes('"assistant"') &&
-        !line.includes('"result"')
+        !line.includes('"result"') &&
+        !line.includes('"tool_result"')
       ) {
         return
       }
@@ -37,16 +51,25 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
       if (frame.type === 'result') {
         // A turn's end closes every stream it had, including one the CLI never finished.
         open.clear()
+        starts.clear()
+        tools.clear()
       } else if (frame.type === 'assistant') {
-        open.delete(scopeOf(frame))
+        const scope = scopeOf(frame)
+        const start = starts.get(scope) ?? seq
+        open.delete(scope)
+        contentIds(frame, 'tool_use', 'id').forEach((id) => tools.set(id, start))
+      } else if (frame.type === 'user') {
+        contentIds(frame, 'tool_result', 'tool_use_id').forEach((id) => tools.delete(id))
       } else if (
         frame.type === 'stream_event' &&
         isRecord(frame.event) &&
         frame.event.type === 'message_start'
       ) {
         open.set(scopeOf(frame), seq)
+        starts.set(scopeOf(frame), seq)
       }
     },
-    floor: () => (open.size === 0 ? null : Math.min(...open.values()))
+    floor: () =>
+      open.size === 0 && tools.size === 0 ? null : Math.min(...open.values(), ...tools.values())
   }
 }

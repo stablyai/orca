@@ -38,5 +38,30 @@ describe('Claude relay ack floor', () => {
     expect(acks).toEqual([1, 5])
     await output.settle(true)
     expect(acks).toEqual([1, 5, 7])
+    // A tool call holds its message until the tool's result lands, so its row keeps its name.
+    output.line('relayData', 8, stream('message_start'))
+    output.line(
+      'relayData',
+      9,
+      frame({
+        type: 'assistant',
+        session_id: 's',
+        parent_tool_use_id: null,
+        message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash' }] }
+      })
+    )
+    await output.settle()
+    expect(acks).toEqual([1, 5, 7])
+    output.line(
+      'relayData',
+      10,
+      frame({
+        type: 'user',
+        session_id: 's',
+        message: { content: [{ type: 'tool_result', tool_use_id: 't1' }] }
+      })
+    )
+    await output.settle()
+    expect(acks).toEqual([1, 5, 7, 10])
   })
 })
