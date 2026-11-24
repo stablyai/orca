@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { isFinalAutomationRunStatus } from '../../../shared/automations/history/automation-run'
+import {
+  isFinalAutomationRunStatus,
+  isRecoveringAutomationRun
+} from '../../../shared/automations/history/automation-run'
 import { normalizeSetupSkippedContent } from './automation-setup-skipped-content'
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../workspaces/catalog/local-worktree-metadata-prune-gate'
 import type { Automation } from '../../../shared/automations/automation-definition'
@@ -58,6 +61,16 @@ function sortedAutomationRuns(state: PersistedState, automationId?: string): Aut
 
 export function listAutomationRuns(state: PersistedState, automationId?: string): AutomationRun[] {
   return sortedAutomationRuns(state, automationId)
+}
+
+export function listRecoveringAutomationIds(state: PersistedState): Set<string> {
+  const ids = new Set<string>()
+  for (const run of state.automationRuns ?? []) {
+    if (isRecoveringAutomationRun(run)) {
+      ids.add(run.automationId)
+    }
+  }
+  return ids
 }
 
 /** Each named automation's runs, newest first, from one pass over the run history. */

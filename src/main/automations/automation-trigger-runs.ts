@@ -18,7 +18,13 @@ export type AutomationOnceEffects = {
 }
 
 export type AutomationTriggerRunContext = {
-  store: Pick<Store, 'listAutomations' | 'listAutomationRuns' | 'getLatestAutomationOccurrence'>
+  store: Pick<
+    Store,
+    | 'listAutomations'
+    | 'listAutomationRuns'
+    | 'getLatestAutomationOccurrence'
+    | 'listRecoveringAutomationIds'
+  >
   runs: AutomationRunWriter
   /** The wait the wake gate imposed before this scheduler pass. */
   wakeGateDelayMs: number

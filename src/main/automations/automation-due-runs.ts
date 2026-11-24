@@ -4,7 +4,6 @@ import {
   automationRecoveryQueue,
   isPendingAutomationRecovery
 } from '../../shared/automations/automation-missed-occurrence-recovery'
-import { isRecoveringAutomationRun } from '../../shared/automations/history/automation-run'
 import { onceClaimed, onceDueAt, onceRunFinished } from '../../shared/automation-once'
 import { AutomationDispatchCancelledError } from './dispatch/automation-dispatch-cancelled-error'
 import { recordUnevaluableAutomation } from './dispatch/dispatch-refusal'
@@ -33,16 +32,10 @@ export async function runDueAutomations(input: {
     const due = (onceDueAt(automation) ?? automation.nextRunAt) <= now
     try {
       if (!due) {
-        recoveringIds ??= new Set(
-          ctx.store
-            .listAutomationRuns()
-            .filter(isRecoveringAutomationRun)
-            .map((run) => run.automationId)
-        )
         if (
           !automation.once &&
-          (recoveringIds.has(automation.id) ||
-            automationRecoveryQueue(automation).some(isPendingAutomationRecovery))
+          (automationRecoveryQueue(automation).some(isPendingAutomationRecovery) ||
+            (recoveringIds ??= ctx.store.listRecoveringAutomationIds()).has(automation.id))
         ) {
           const captured = input.captureTarget(automation)
           const refusal = await ctx.describeRefusal(ctx.resolveTarget(captured))

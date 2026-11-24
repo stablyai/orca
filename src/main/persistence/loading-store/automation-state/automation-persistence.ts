@@ -48,6 +48,7 @@ import {
 import {
   createAutomationRun as createAutomationRunOperation,
   listAutomationRuns as listAutomationRunsOperation,
+  listRecoveringAutomationIds as listRecoveringAutomationIdsOperation,
   listAutomationRunsByAutomation as listRunsByAutomationOperation,
   listAutomationRunsPage as listAutomationRunsOperationPage,
   snapshotAutomationRunWorkspaceDisplayName as snapshotAutomationRunWorkspaceDisplayNameOperation,
@@ -146,11 +147,12 @@ export class AutomationPersistence {
     })
   }
 
-  listAutomationRuns(automationId?: string): AutomationRun[] {
-    return listAutomationRunsOperation(
-      this[automationPersistenceContext].runtime.state,
-      automationId
-    )
+  listAutomationRuns(...args: ArgsAfterOperations<typeof listAutomationRunsOperation>) {
+    return listAutomationRunsOperation(this[automationPersistenceContext].runtime.state, ...args)
+  }
+
+  listRecoveringAutomationIds(): Set<string> {
+    return listRecoveringAutomationIdsOperation(this[automationPersistenceContext].runtime.state)
   }
 
   listAutomationRunsByAutomation(ids: readonly string[]): Map<string, AutomationRun[]> {
