@@ -12,6 +12,7 @@ export class BotAvatarShown {
   private writes: Promise<void> = Promise.resolve()
   // Per bot, its write waiting for its turn: asking again joins it, so the queue holds at most one per bot.
   private readonly waiting = new Map<string, Promise<void>>()
+  private flushing: Promise<void> | null = null
 
   constructor(
     private readonly store: Pick<BotSlackIcons, 'shown' | 'markShown'>,
@@ -51,9 +52,15 @@ export class BotAvatarShown {
 
   /** Writes again the records whose write failed, on the next poll answer or bot write, so a passing disk
    *  error doesn't leave a restart sending older art. Nothing to write costs nothing. */
-  async flush(): Promise<void> {
-    // One bot's write failing again leaves the others to go.
-    await Promise.all([...this.unsaved].map((botId) => this.write(botId).catch(() => {})))
+  flush(): Promise<void> {
+    // One in progress is joined, so a stuck write holds one flush however many poll answers ask. One bot's
+    // write failing again leaves the others to go.
+    this.flushing ??= Promise.all(
+      [...this.unsaved].map((botId) => this.write(botId).catch(() => {}))
+    ).then(() => {
+      this.flushing = null
+    })
+    return this.flushing
   }
 
   private write(botId: string): Promise<void> {
