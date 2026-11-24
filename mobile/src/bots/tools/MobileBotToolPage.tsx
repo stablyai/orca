@@ -1,22 +1,21 @@
 // One tool's page: the details the desktop shows when its row opens, what its check found, its
 // sign-in from the phone, Edit, and Remove (asked first: on a phone it is one stray tap away).
 import { useState, type ReactNode } from 'react'
-import { View } from 'react-native'
+import { Text } from 'react-native'
 import { BOT_MCP_APPS } from '../../../../src/shared/bots/bot-mcp-apps'
 import type { BotToolProblem } from '../../../../src/shared/bot-tools'
 import { botToolSignInFace } from '../../../../src/shared/bots/bot-tool-sign-in-face'
-import { ListRow } from '../../components/list/ListGroup'
+import { LIST_ROW_PADDING, ListGroup, ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
-import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { spacing } from '../../theme/mobile-theme'
+import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { botAgentLabel } from '../mobile-bot-sheet-copy'
-import { MobileBotTextButton } from '../MobileBotTextButton'
 import { botToolRemove, type PhoneOwnTool } from './bot-tool-operations'
 import { MobileBotToolSignInPage } from './MobileBotToolSignInPage'
 import {
@@ -47,10 +46,12 @@ export function MobileBotToolPage(props: {
   showToast: (message: string, durationMs?: number) => void
 }) {
   const t = useMobileTranslation()
+  useMobileColorScheme()
   const { client, bot, tool, problem } = props
   const name = botToolAppName(tool.name)
   const [signingIn, setSigningIn] = useState(props.signInFirst)
   const [removing, setRemoving] = useState(false)
+  const [readingProblem, setReadingProblem] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const signIn = useBotToolPhoneSignIn({
@@ -72,6 +73,8 @@ export function MobileBotToolPage(props: {
   useBackClaim(() => {
     if (removing) {
       setRemoving(false)
+    } else if (readingProblem) {
+      setReadingProblem(false)
     } else if (signingIn) {
       closeSignIn()
     } else {
@@ -132,12 +135,34 @@ export function MobileBotToolPage(props: {
       />
     )
   }
-  const action = botToolSignInActionLabel(face, t)
   const trouble = problem && problem.kind !== 'sign-in' ? problem : undefined
+  const troubleLabel =
+    trouble?.kind === 'failed'
+      ? t('bots.tools.wontStart', 'Won’t start')
+      : t('bots.tools.unconfirmed', 'Not confirmed')
+  if (trouble && readingProblem) {
+    return (
+      <>
+        <SheetHeader
+          title={troubleLabel}
+          subtitle={name}
+          onBack={{ label: name, onPress: () => setReadingProblem(false) }}
+        />
+        <ListGroup style={styles.detail}>
+          <Text selectable style={styles.detailText}>
+            {trouble.detail}
+          </Text>
+        </ListGroup>
+      </>
+    )
+  }
+  const signInAction =
+    botToolSignInActionLabel(face, t) ??
+    (face === 'signed-in' ? t('bots.tools.face.signInAgain', 'Sign in again') : null)
   const agent = botAgentLabel(bot.agent)
   const app = BOT_MCP_APPS.find((entry) => entry.id === tool.name)
   const signInDetail = tool.signIn
-    ? t('bots.tools.signInOrca', 'Works with Claude and Codex')
+    ? null
     : tool.remote
       ? problem?.kind === 'sign-in'
         ? t('bots.tools.signInMissing', '{{agent}} isn’t signed in', { agent })
@@ -155,21 +180,18 @@ export function MobileBotToolPage(props: {
       {trouble ? (
         <SettingsSection title={t('bots.tools.problem', 'Problem')} first>
           <ListRow
-            title={
-              trouble.kind === 'failed'
-                ? t('bots.tools.wontStart', 'Won’t start')
-                : t('bots.tools.unconfirmed', 'Not confirmed')
-            }
-            subtitle={trouble.detail}
-            subtitleMono
-            subtitleLines={8}
-            accessory={
-              <MobileBotTextButton
-                label={t('bots.tools.checkAgain', 'Check again')}
-                disabled={locked || props.checking}
-                onPress={props.onCheckAgain}
-              />
-            }
+            key="problem"
+            title={troubleLabel}
+            subtitle={trouble.detail?.trim().split('\n')[0]}
+            subtitleLines={1}
+            navigates={trouble.detail !== undefined}
+            onPress={trouble.detail === undefined ? undefined : () => setReadingProblem(true)}
+          />
+          <ListRow
+            key="check"
+            title={t('bots.tools.checkAgain', 'Check again')}
+            disabled={locked || props.checking}
+            onPress={props.onCheckAgain}
           />
         </SettingsSection>
       ) : null}
@@ -208,10 +230,10 @@ export function MobileBotToolPage(props: {
         ) : null}
       </SettingsSection>
       <SettingsSection footer={error ? <SettingsNote error>{error}</SettingsNote> : undefined}>
-        {face === 'signed-in' ? (
+        {signInAction ? (
           <ListRow
-            key="again"
-            title={t('bots.tools.face.signInAgain', 'Sign in again')}
+            key="sign-in"
+            title={signInAction}
             disabled={locked}
             onPress={() => setSigningIn(true)}
           />
@@ -231,15 +253,18 @@ export function MobileBotToolPage(props: {
           onPress={() => setRemoving(true)}
         />
       </SettingsSection>
-      {action ? (
-        <View style={styles.primary}>
-          <SheetPrimaryButton label={action} disabled={locked} onPress={() => setSigningIn(true)} />
-        </View>
-      ) : null}
     </>
   )
 }
 
 const styles = themedStyleSheet(() => ({
-  primary: { paddingTop: spacing.xl }
+  detail: { marginTop: spacing.sm },
+  detailText: {
+    fontFamily: typography.monoFamily,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textSecondary,
+    paddingHorizontal: LIST_ROW_PADDING,
+    paddingVertical: spacing.md
+  }
 }))

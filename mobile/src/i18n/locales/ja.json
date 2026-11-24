@@ -4985,9 +4985,7 @@
       "addButton": "追加",
       "sourceLabel": "サーバーの URL または起動コマンド",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "あなた自身のツールに加えて、{{name}} だけがこれを使えます。",
       "details": "詳細",
-      "commandWarning": "コマンドは {{host}} 上のボットのホームフォルダーで実行されます。追加や保存の際、ネイティブチェック中に起動することがあります。信頼できるソフトウェアだけを追加してください。",
       "serverType": "サーバーの種類",
       "urlMode": "URL に接続",
       "commandMode": "コマンドを実行",
@@ -4995,7 +4993,6 @@
       "removeTitle": "{{app}} を削除しますか？",
       "removeNote": "{{bot}} は {{app}} を使えなくなります。いつでも再追加できます。",
       "remove": "削除",
-      "signInOrca": "Claude と Codex で使えます",
       "signInMissing": "{{agent}} はサインインしていません",
       "signInHeld": "{{agent}} が管理",
       "wontStart": "起動しません",
@@ -5057,7 +5054,17 @@
         "denied": "アクセスが許可されませんでした。",
         "expired": "サインインの有効期限が切れました。もう一度お試しください。",
         "couldNotSignIn": "サインインできませんでした。もう一度お試しください。"
-      }
+      },
+      "trust": "信頼できるソフトウェアだけを追加してください。",
+      "argument": "引数",
+      "removeArgument": "引数を削除",
+      "header": "ヘッダー",
+      "variable": "変数",
+      "removeHeaderRow": "ヘッダーを削除",
+      "removeVariableRow": "変数を削除",
+      "emptyArgument": "空",
+      "valueNew": "新しい値",
+      "valueSaved": "保存済み"
     },
     "handToBot": {
       "menu": "ボットに引き渡す…",
@@ -5274,6 +5281,9 @@
       },
       "webhooks": {
         "line": "あらゆるツールやスクリプトからのイベント"
+      },
+      "composio": {
+        "keyOnHost": "{{host}} に保存され、ボットからは見えません。"
       }
     },
     "share": {

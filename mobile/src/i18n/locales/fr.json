@@ -5018,9 +5018,7 @@
       "addButton": "Ajouter",
       "sourceLabel": "URL du serveur ou commande de démarrage",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "Seul {{name}} le reçoit, en plus de vos propres outils.",
       "details": "Détails",
-      "commandWarning": "La commande s’exécute dans le dossier personnel de ce bot sur {{host}}. L’ajout ou l’enregistrement peut la lancer pendant la vérification native. N’ajoutez que des logiciels de confiance.",
       "serverType": "Type de serveur",
       "urlMode": "Se connecter à une URL",
       "commandMode": "Exécuter une commande",
@@ -5028,7 +5026,6 @@
       "removeTitle": "Retirer {{app}} ?",
       "removeNote": "{{bot}} ne peut plus utiliser {{app}}. Vous pouvez la rajouter à tout moment.",
       "remove": "Supprimer",
-      "signInOrca": "Fonctionne avec Claude et Codex",
       "signInMissing": "{{agent}} n’est pas connecté",
       "signInHeld": "Gérée par {{agent}}",
       "wontStart": "Ne démarre pas",
@@ -5090,7 +5087,17 @@
         "denied": "L’accès n’a pas été autorisé.",
         "expired": "La connexion a expiré. Réessayez.",
         "couldNotSignIn": "Connexion impossible. Réessayez."
-      }
+      },
+      "trust": "N’ajoutez que des logiciels de confiance.",
+      "argument": "Argument",
+      "removeArgument": "Supprimer l’argument",
+      "header": "En-tête",
+      "variable": "Variable",
+      "removeHeaderRow": "Supprimer l’en-tête",
+      "removeVariableRow": "Supprimer la variable",
+      "emptyArgument": "Vide",
+      "valueNew": "Nouvelle valeur",
+      "valueSaved": "Enregistré"
     },
     "handToBot": {
       "menu": "Transmettre à un bot…",
@@ -5308,6 +5315,9 @@
       },
       "webhooks": {
         "line": "Événements de n’importe quel outil ou script"
+      },
+      "composio": {
+        "keyOnHost": "Stockée sur {{host}} ; les bots ne la voient jamais."
       }
     },
     "share": {

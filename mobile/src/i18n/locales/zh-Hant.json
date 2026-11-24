@@ -4898,9 +4898,7 @@
       "addButton": "新增",
       "sourceLabel": "伺服器 URL 或啟動命令",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "除了你自己的工具外，只有 {{name}} 會獲得它。",
       "details": "詳情",
-      "commandWarning": "命令在 {{host}} 上此機器人的主資料夾中執行。新增或儲存可能會在原生檢查期間啟動它。只新增你信任的軟體。",
       "serverType": "伺服器型別",
       "urlMode": "連線到 URL",
       "commandMode": "執行命令",
@@ -4908,7 +4906,6 @@
       "removeTitle": "要移除 {{app}} 嗎？",
       "removeNote": "{{bot}} 將無法再使用 {{app}}。你隨時可以重新新增。",
       "remove": "移除",
-      "signInOrca": "適用於 Claude 和 Codex",
       "signInMissing": "{{agent}} 未登入",
       "signInHeld": "由 {{agent}} 保管",
       "wontStart": "無法啟動",
@@ -4970,7 +4967,17 @@
         "denied": "未獲准存取。",
         "expired": "登入已逾期。請再試一次。",
         "couldNotSignIn": "無法登入。請再試一次。"
-      }
+      },
+      "trust": "只新增你信任的軟體。",
+      "argument": "引數",
+      "removeArgument": "移除引數",
+      "header": "標頭",
+      "variable": "變數",
+      "removeHeaderRow": "移除標頭",
+      "removeVariableRow": "移除變數",
+      "emptyArgument": "空白",
+      "valueNew": "新值",
+      "valueSaved": "已儲存"
     },
     "handToBot": {
       "menu": "移交給機器人…",
@@ -5187,6 +5194,9 @@
       },
       "webhooks": {
         "line": "來自任何工具或指令碼的事件"
+      },
+      "composio": {
+        "keyOnHost": "儲存在 {{host}}；機器人永遠看不到。"
       }
     },
     "share": {

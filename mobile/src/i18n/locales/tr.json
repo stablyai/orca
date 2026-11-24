@@ -4904,9 +4904,7 @@
       "addButton": "Ekle",
       "sourceLabel": "Sunucu URL'si veya başlatma komutu",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "Kendi araçlarınıza ek olarak yalnızca {{name}} bunu alır.",
       "details": "Ayrıntılar",
-      "commandWarning": "Komut, {{host}} üzerinde bu botun ana klasöründe çalışır. Eklemek veya kaydetmek, yerel kontrol sırasında onu başlatabilir. Yalnızca güvendiğiniz yazılımları ekleyin.",
       "serverType": "Sunucu türü",
       "urlMode": "Bir URL'ye bağlan",
       "commandMode": "Komut çalıştır",
@@ -4914,7 +4912,6 @@
       "removeTitle": "{{app}} kaldırılsın mı?",
       "removeNote": "{{bot}} artık {{app}} uygulamasını kullanamaz. İstediğiniz zaman yeniden ekleyebilirsiniz.",
       "remove": "Kaldır",
-      "signInOrca": "Claude ve Codex ile çalışır",
       "signInMissing": "{{agent}} oturum açmamış",
       "signInHeld": "{{agent}} tarafından tutulur",
       "wontStart": "Başlamaz",
@@ -4976,7 +4973,17 @@
         "denied": "Erişime izin verilmedi.",
         "expired": "Oturum açmanın süresi doldu. Yeniden deneyin.",
         "couldNotSignIn": "Oturum açılamadı. Yeniden deneyin."
-      }
+      },
+      "trust": "Yalnızca güvendiğiniz yazılımları ekleyin.",
+      "argument": "Argüman",
+      "removeArgument": "Argümanı kaldır",
+      "header": "Başlık",
+      "variable": "Değişken",
+      "removeHeaderRow": "Başlığı kaldır",
+      "removeVariableRow": "Değişkeni kaldır",
+      "emptyArgument": "Boş",
+      "valueNew": "Yeni değer",
+      "valueSaved": "Kaydedildi"
     },
     "handToBot": {
       "menu": "Bota devret…",
@@ -5193,6 +5200,9 @@
       },
       "webhooks": {
         "line": "Herhangi bir araç veya betikten gelen olaylar"
+      },
+      "composio": {
+        "keyOnHost": "{{host}} üzerinde saklanır; botlar asla görmez."
       }
     },
     "share": {

@@ -1,29 +1,25 @@
-// Edit a tool from the phone: the desktop's Edit tool dialog (BotToolEditor) as a page, saved with
-// bots.tools.update. Saved header and variable values never reach the phone, only their names.
+// Edit a tool from the phone: the desktop's Edit tool dialog (BotToolEditor) as one grouped list whose
+// rows open a page per value, saved with bots.tools.update. Saved header and variable values never
+// reach the phone, only their names.
 import { useEffect, useState, type ReactNode } from 'react'
-import { View } from 'react-native'
 import { Plus } from 'lucide-react-native'
 import { freeBotToolName, type BotToolDetails } from '../../../../src/shared/bot-tools'
 import {
   botToolDraftError,
   botToolDraftInput,
   draftFromServer,
-  type BotToolDraft
+  type BotToolDraft,
+  type SecretDraft
 } from '../../../../src/shared/bots/bot-tool-draft'
 import { createNonSecureContextUuid as createUuid } from '../../../../src/shared/identifiers/non-secure-context-uuid'
-import { LIST_ROW_PADDING, ListRow, SectionHeader } from '../../components/list/ListGroup'
-import { TextField } from '../../components/composer-input/TextField'
-import { MobileSegmentedControl } from '../../components/controls/MobileSegmentedControl'
+import { ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { botAgentLabel } from '../mobile-bot-sheet-copy'
-import { MobileBotTextButton } from '../MobileBotTextButton'
-import { MobileBotToolSecretRows as SecretRows } from './MobileBotToolSecretRows'
 import {
   botToolContextRead,
   botToolDetailsRead,
@@ -31,8 +27,12 @@ import {
   type PhoneOwnTool
 } from './bot-tool-operations'
 import type { ToolsBot } from './bot-tool-words'
+import { MobileBotToolValuePage } from './MobileBotToolValuePage'
 
-type Loaded = { folder: string; platform: NodeJS.Platform; saved: BotToolDetails }
+type Loaded = { platform: NodeJS.Platform; saved: BotToolDetails }
+type Sub =
+  | { kind: 'type' | 'name' | 'url' | 'command' }
+  | { kind: 'arg' | 'secret'; index: number | null }
 
 export function MobileBotEditToolPage(props: {
   client: RpcClient | null
@@ -50,11 +50,14 @@ export function MobileBotEditToolPage(props: {
   const { client, bot, name } = props
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [draft, setDraft] = useState<BotToolDraft | null>(null)
+  const [sub, setSub] = useState<Sub | null>(null)
   const [readError, setReadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useBackClaim(() => {
-    if (!saving) {
+    if (sub) {
+      setSub(null)
+    } else if (!saving) {
       props.onCancel()
     }
     return true
@@ -75,7 +78,7 @@ export function MobileBotEditToolPage(props: {
         const context = botToolContextRead.interpret(contextResponse)
         const saved: BotToolDetails = botToolDetailsRead.interpret(detailsResponse)
         if (live) {
-          setLoaded({ folder: context.folder, platform: context.platform, saved })
+          setLoaded({ platform: context.platform, saved })
           setDraft(draftFromServer(saved.server))
         }
       })
@@ -88,11 +91,10 @@ export function MobileBotEditToolPage(props: {
       live = false
     }
   }, [client, bot.id, name, needsRead])
-  const collision = draft !== null && props.taken.has(draft.name)
   const invalid =
     draft && loaded ? botToolDraftError(draft, loaded.platform, t, loaded.saved) : null
   const save = () => {
-    if (!client || !draft || !loaded || saving || invalid || collision || !props.online) {
+    if (!client || !draft || !loaded || saving || invalid || !props.online) {
       return
     }
     setSaving(true)
@@ -109,203 +111,282 @@ export function MobileBotEditToolPage(props: {
         setError(caught instanceof Error ? caught.message : String(caught))
       })
   }
-  const patch = (changes: Partial<BotToolDraft>) => {
-    if (draft) {
-      setDraft({ ...draft, ...changes })
-      setError(null)
-    }
-  }
-  const editable = !saving && props.online
-  return (
-    <>
-      <SheetHeader
-        title={t('bots.tools.editTitle', 'Edit tool')}
-        subtitle={`${botAgentLabel(bot.agent)} · ${props.hostName}`}
-        leading={{ label: t('common.cancel', 'Cancel'), onPress: props.onCancel, disabled: saving }}
-        trailing={{
-          label: t('bots.tools.save', 'Save'),
-          onPress: save,
-          disabled: !draft || Boolean(invalid) || collision || !props.online,
-          busy: saving
-        }}
-      />
-      {props.banner}
-      {!draft || !loaded ? (
+  const header = (
+    <SheetHeader
+      title={t('bots.tools.editTitle', 'Edit tool')}
+      subtitle={`${botAgentLabel(bot.agent)} · ${props.hostName}`}
+      leading={{ label: t('common.cancel', 'Cancel'), onPress: props.onCancel, disabled: saving }}
+      trailing={{
+        label: t('bots.tools.save', 'Save'),
+        onPress: save,
+        disabled: !draft || Boolean(invalid) || !props.online,
+        busy: saving
+      }}
+    />
+  )
+  if (!draft || !loaded) {
+    return (
+      <>
+        {header}
+        {props.banner}
         <SettingsNote error={readError !== null}>
           {readError ?? t('bots.tools.reading', 'Reading tool details…')}
         </SettingsNote>
-      ) : (
-        <>
-          <SettingsNote>
-            {t('bots.tools.scope', 'Only {{name}} gets it, in addition to your own tools.', {
-              name: bot.name
-            })}
-          </SettingsNote>
-          <SectionHeader title={t('bots.tools.serverType', 'Server type')} />
-          <MobileSegmentedControl
-            segments={[
-              { value: 'url', label: t('bots.tools.urlMode', 'Connect to a URL') },
-              { value: 'command', label: t('bots.tools.commandMode', 'Run a command') }
-            ]}
-            selected={draft.mode}
-            onSelect={(mode) => editable && patch({ mode })}
-            fill
-            onSheet
+      </>
+    )
+  }
+  const patch = (changes: Partial<BotToolDraft>) => {
+    setDraft({ ...draft, ...changes })
+    setError(null)
+    setSub(null)
+  }
+  const url = draft.mode === 'url'
+  const secrets = url ? draft.headers : draft.env
+  const setSecrets = (rows: SecretDraft[]) => patch(url ? { headers: rows } : { env: rows })
+  const urlLabel = t('bots.tools.urlMode', 'Connect to a URL')
+  const commandLabel = t('bots.tools.commandMode', 'Run a command')
+  const close = () => setSub(null)
+  if (sub?.kind === 'type') {
+    return (
+      <>
+        <SheetHeader
+          title={t('bots.tools.serverType', 'Server type')}
+          onBack={{ label: t('bots.tools.editTitle', 'Edit tool'), onPress: close }}
+        />
+        <SettingsSection first radioGroup>
+          <ListRow title={urlLabel} selected={url} onPress={() => patch({ mode: 'url' })} />
+          <ListRow
+            title={commandLabel}
+            selected={!url}
+            onPress={() => patch({ mode: 'command' })}
           />
-          <SectionHeader title={t('bots.tools.serverName', 'Server name')} />
-          <TextField
-            value={draft.name}
-            onChangeText={(next) => patch({ name: next })}
-            maxLength={64}
-            accessibilityLabel={t('bots.tools.serverName', 'Server name')}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={editable}
-          />
-          {collision ? (
-            <>
-              <SettingsNote error>
-                {t(
+        </SettingsSection>
+      </>
+    )
+  }
+  if (sub?.kind === 'name') {
+    const label = t('bots.tools.serverName', 'Server name')
+    return (
+      <MobileBotToolValuePage
+        title={label}
+        initial={[draft.name]}
+        fields={() => [{ label, required: true }]}
+        problem={([next]) =>
+          props.taken.has(next)
+            ? {
+                text: t(
                   'bots.tools.nameTaken',
                   'A tool named {{name}} already exists. Choose another name.',
-                  { name: draft.name }
-                )}
-              </SettingsNote>
-              <View style={styles.collision}>
-                <MobileBotTextButton
-                  label={t('bots.tools.useName', 'Use {{name}}', {
-                    name: freeBotToolName(draft.name, props.taken)
-                  })}
-                  disabled={!editable}
-                  onPress={() => patch({ name: freeBotToolName(draft.name, props.taken) })}
-                />
-              </View>
-            </>
-          ) : null}
-          {draft.mode === 'url' ? (
-            <>
-              <SectionHeader title={t('bots.tools.url', 'Server URL')} />
-              <TextField
-                value={draft.url}
-                onChangeText={(next) => patch({ url: next })}
-                monospace
-                placeholder={t('bots.tools.urlPlaceholder', 'https://example.com/mcp')}
-                accessibilityLabel={t('bots.tools.url', 'Server URL')}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                editable={editable}
-              />
-              <SettingsNote>
-                {t(
-                  'bots.tools.transport',
-                  'Streamable HTTP · localhost means this bot’s computer.'
-                )}
-              </SettingsNote>
-              <SecretRows
-                kind="header"
-                rows={draft.headers}
-                editable={editable}
-                onChange={(headers) => patch({ headers })}
-              />
-              <SettingsNote>
-                {t(
-                  'bots.tools.authHint',
-                  'If the server needs browser sign-in, Connect appears after its native check.'
-                )}
-              </SettingsNote>
-            </>
-          ) : (
-            <>
-              <SectionHeader title={t('bots.tools.executable', 'Executable')} />
-              <TextField
-                value={draft.command}
-                onChangeText={(next) => patch({ command: next })}
-                monospace
-                placeholder={t('bots.tools.commandPlaceholder', 'npx')}
-                accessibilityLabel={t('bots.tools.executable', 'Executable')}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={editable}
-              />
-              <SectionHeader title={t('bots.tools.args', 'Arguments')} />
-              {draft.args.map((arg, index) => (
-                <TextField
-                  key={arg.id}
-                  style={styles.stacked}
-                  value={arg.value}
-                  onChangeText={(next) =>
-                    patch({
-                      args: draft.args.map((entry, i) =>
-                        i === index ? { ...entry, value: next } : entry
-                      )
-                    })
-                  }
-                  monospace
-                  accessibilityLabel={t('bots.tools.argumentLabel', 'Argument {{index}}', {
-                    index: index + 1
-                  })}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={editable}
-                  trailing={
-                    <MobileBotTextButton
-                      label={t('bots.tools.remove', 'Remove')}
-                      accessibilityLabel={t(
-                        'bots.tools.removeArgumentLabel',
-                        'Remove argument {{index}}',
-                        { index: index + 1 }
-                      )}
-                      disabled={!editable}
-                      onPress={() => patch({ args: draft.args.filter((_, i) => i !== index) })}
-                    />
-                  }
-                />
-              ))}
-              <SettingsSection
-                footer={t(
-                  'bots.tools.argsHint',
-                  'One exact argument per row. Spaces and empty arguments are preserved.'
-                )}
-              >
-                <ListRow
-                  title={t('bots.tools.addArg', 'Add argument')}
-                  leading={<Plus size={18} color={colors.textMuted} />}
-                  disabled={!editable}
-                  onPress={() => patch({ args: [...draft.args, { id: createUuid(), value: '' }] })}
-                />
-              </SettingsSection>
-              <SecretRows
-                kind="variable"
-                rows={draft.env}
-                editable={editable}
-                onChange={(env) => patch({ env })}
-              />
-            </>
-          )}
-          {error || invalid ? <SettingsNote error>{error ?? invalid}</SettingsNote> : null}
-          <SettingsNote>
-            {t('bots.tools.workingFolder', 'Working folder: {{folder}}', {
-              folder: loaded.folder
-            })}
-          </SettingsNote>
-          {draft.mode === 'command' ? (
-            <SettingsNote>
-              {t(
-                'bots.tools.commandWarning',
-                'The command runs in this bot’s home folder on {{host}}. Adding or saving can start it during the native check. Only add software you trust.',
-                { host: props.hostName }
-              )}
-            </SettingsNote>
-          ) : null}
-        </>
+                  { name: next }
+                ),
+                fix: {
+                  label: t('bots.tools.useName', 'Use {{name}}', {
+                    name: freeBotToolName(next, props.taken)
+                  }),
+                  values: [freeBotToolName(next, props.taken)]
+                }
+              }
+            : null
+        }
+        onCancel={close}
+        onDone={([next]) => patch({ name: next.trim() })}
+      />
+    )
+  }
+  if (sub?.kind === 'url' || sub?.kind === 'command') {
+    const label =
+      sub.kind === 'url'
+        ? t('bots.tools.url', 'Server URL')
+        : t('bots.tools.executable', 'Executable')
+    return (
+      <MobileBotToolValuePage
+        title={label}
+        initial={[sub.kind === 'url' ? draft.url : draft.command]}
+        fields={() => [
+          {
+            label,
+            url: sub.kind === 'url',
+            placeholder:
+              sub.kind === 'url'
+                ? t('bots.tools.urlPlaceholder', 'https://example.com/mcp')
+                : t('bots.tools.commandPlaceholder', 'npx')
+          }
+        ]}
+        onCancel={close}
+        onDone={([next]) => patch(sub.kind === 'url' ? { url: next } : { command: next })}
+      />
+    )
+  }
+  if (sub?.kind === 'arg') {
+    const index = sub.index
+    return (
+      <MobileBotToolValuePage
+        title={t('bots.tools.argument', 'Argument')}
+        initial={[index === null ? '' : draft.args[index].value]}
+        fields={() => [{ label: t('bots.tools.argument', 'Argument') }]}
+        remove={
+          index === null
+            ? undefined
+            : {
+                label: t('bots.tools.removeArgument', 'Remove argument'),
+                onPress: () => patch({ args: draft.args.filter((_, i) => i !== index) })
+              }
+        }
+        onCancel={close}
+        onDone={([value]) =>
+          patch({
+            args:
+              index === null
+                ? [...draft.args, { id: createUuid(), value }]
+                : draft.args.map((arg, i) => (i === index ? { ...arg, value } : arg))
+          })
+        }
+      />
+    )
+  }
+  if (sub?.kind === 'secret') {
+    const index = sub.index
+    const row = index === null ? null : secrets[index]
+    // A renamed header or variable leaves its saved value behind, so it needs a new one.
+    const keeps = (key: string) => row !== null && row.configured && key === row.key
+    return (
+      <MobileBotToolValuePage
+        title={url ? t('bots.tools.header', 'Header') : t('bots.tools.variable', 'Variable')}
+        initial={[row?.key ?? '', row?.value ?? '']}
+        fields={([key]) => [
+          { label: t('bots.tools.keyPlaceholder', 'Name'), required: true },
+          {
+            label: t('bots.tools.valuePlaceholder', 'Value'),
+            secret: true,
+            required: !keeps(key),
+            placeholder: keeps(key)
+              ? t('bots.tools.savedPlaceholder', 'Saved value · enter to replace')
+              : undefined
+          }
+        ]}
+        remove={
+          index === null
+            ? undefined
+            : {
+                label: url
+                  ? t('bots.tools.removeHeaderRow', 'Remove header')
+                  : t('bots.tools.removeVariableRow', 'Remove variable'),
+                onPress: () => setSecrets(secrets.filter((_, i) => i !== index))
+              }
+        }
+        onCancel={close}
+        onDone={([key, value]) => {
+          const next = {
+            id: row?.id ?? createUuid(),
+            key: key.trim(),
+            value,
+            configured: keeps(key)
+          }
+          setSecrets(
+            index === null ? [...secrets, next] : secrets.map((r, i) => (i === index ? next : r))
+          )
+        }}
+      />
+    )
+  }
+  const editable = !saving && props.online
+  const open = (next: Sub) => () => setSub(next)
+  const add = (title: string, onPress: () => void) => (
+    <ListRow
+      key="add"
+      title={title}
+      leading={<Plus size={18} color={colors.textMuted} />}
+      disabled={!editable}
+      onPress={onPress}
+    />
+  )
+  return (
+    <>
+      {header}
+      {props.banner}
+      <SettingsSection first>
+        <ListRow
+          key="type"
+          title={t('bots.tools.serverType', 'Server type')}
+          value={url ? urlLabel : commandLabel}
+          navigates
+          disabled={!editable}
+          onPress={open({ kind: 'type' })}
+        />
+        <ListRow
+          key="name"
+          title={t('bots.tools.serverName', 'Server name')}
+          value={draft.name}
+          navigates
+          disabled={!editable}
+          onPress={open({ kind: 'name' })}
+        />
+        {url ? (
+          <ListRow
+            key="url"
+            title={t('bots.tools.url', 'Server URL')}
+            subtitle={draft.url}
+            subtitleMono
+            navigates
+            disabled={!editable}
+            onPress={open({ kind: 'url' })}
+          />
+        ) : (
+          <ListRow
+            key="command"
+            title={t('bots.tools.executable', 'Executable')}
+            value={draft.command}
+            navigates
+            disabled={!editable}
+            onPress={open({ kind: 'command' })}
+          />
+        )}
+      </SettingsSection>
+      {url ? null : (
+        <SettingsSection title={t('bots.tools.args', 'Arguments')}>
+          {draft.args.map((arg, index) => (
+            <ListRow
+              key={arg.id}
+              title={arg.value || t('bots.tools.emptyArgument', 'Empty')}
+              navigates
+              disabled={!editable}
+              onPress={open({ kind: 'arg', index })}
+            />
+          ))}
+          {add(t('bots.tools.addArg', 'Add argument'), open({ kind: 'arg', index: null }))}
+        </SettingsSection>
+      )}
+      <SettingsSection
+        title={
+          url ? t('bots.tools.headers', 'Headers') : t('bots.tools.env', 'Environment variables')
+        }
+      >
+        {secrets.map((row, index) => (
+          <ListRow
+            key={row.id}
+            title={row.key}
+            value={
+              row.value
+                ? t('bots.tools.valueNew', 'New value')
+                : t('bots.tools.valueSaved', 'Saved')
+            }
+            navigates
+            disabled={!editable}
+            onPress={open({ kind: 'secret', index })}
+          />
+        ))}
+        {add(
+          url
+            ? t('bots.tools.addHeader', 'Add header')
+            : t('bots.tools.addVariable', 'Add variable'),
+          open({ kind: 'secret', index: null })
+        )}
+      </SettingsSection>
+      {error || invalid ? (
+        <SettingsNote error>{error ?? invalid}</SettingsNote>
+      ) : url ? null : (
+        <SettingsNote>{t('bots.tools.trust', 'Only add software you trust.')}</SettingsNote>
       )}
     </>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  stacked: { marginBottom: spacing.sm },
-  // Lines the button's label up with the note above it.
-  collision: { alignItems: 'flex-start', paddingHorizontal: LIST_ROW_PADDING - spacing.xs }
-}))
