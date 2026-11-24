@@ -375,8 +375,7 @@ export function NativeChatMessageList({
             overlays={
               <>
                 <NativeChatMessageRail
-                  // A new conversation starts with the list closed.
-                  key={session.sessionId}
+                  key={session.transcriptIdentity ?? session.sessionId}
                   rail={rail}
                   railRef={railRef}
                   scrollRef={scrollRef}

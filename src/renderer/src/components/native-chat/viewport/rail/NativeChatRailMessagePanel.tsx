@@ -18,7 +18,7 @@ import { nativeChatRailItemLabel } from './native-chat-rail-item-label'
 import type { NativeChatRailListMode } from './use-native-chat-rail-list-open'
 
 const ROW_PX = 28
-const LIST_PAD_TOP_PX = 4
+const LIST_PAD_TOP_PX = 8
 const LIST_PAD_BOTTOM_PX = 8
 const TIME_CLASS = 'text-xs whitespace-nowrap tabular-nums'
 // Bold accent text, not a fill: a translucent fill over the muted row text reads muddy in dark.
@@ -179,6 +179,7 @@ export function NativeChatRailMessagePanel({
       role={focused ? 'dialog' : undefined}
       aria-label={focused ? t('components.native-chat.railLabel', 'Your messages') : undefined}
       data-native-chat-rail-panel
+      data-native-chat-typing-redirect-ignore="true"
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
       // A hover-opened list leaves focus where it was: only the filter takes it.

@@ -67,8 +67,9 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
   const interactive = useNativeChatTranscriptInteractive()
   const panelRef = useRef<HTMLDivElement | null>(null)
   const panelId = useId()
+  const canOpenList = rail.visible && listMode && listEnabled && interactive
   const list = useNativeChatRailListOpen({
-    enabled: rail.visible && listMode && listEnabled && interactive,
+    enabled: canOpenList,
     railRef,
     panelRef
   })
@@ -132,15 +133,16 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
     }
   }
   const pickListed = (id: string): void => {
+    const item = loadedRef.current.find((candidate) => candidate.id === id)
+    if (!item || item.slotIndex === null) {
+      return
+    }
     const restoreTo = list.mode === 'focus' ? openerId : null
     list.close('pick')
     if (restoreTo !== null) {
       focusTick(restoreTo)
     }
-    const item = loadedRef.current.find((candidate) => candidate.id === id)
-    if (item && item.slotIndex !== null) {
-      onSelect(item)
-    }
+    onSelect(item)
   }
 
   const show = (item: NativeChatRailItem, element: HTMLElement): void => {
@@ -180,9 +182,21 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
               }
             }}
             onKeyDown={(event) => {
-              if (listMode && event.altKey && event.key === 'ArrowDown') {
-                event.preventDefault()
-                list.openFromKeyboard(tabId ?? null)
+              if (event.defaultPrevented) {
+                return
+              }
+              if (event.altKey && event.key === 'ArrowDown') {
+                if (
+                  canOpenList &&
+                  !event.ctrlKey &&
+                  !event.metaKey &&
+                  !event.shiftKey &&
+                  event.target instanceof HTMLButtonElement &&
+                  event.target.dataset.nativeChatRailTick === tabId
+                ) {
+                  event.preventDefault()
+                  list.openFromKeyboard(tabId ?? null)
+                }
                 return
               }
               // Through every message, not only the drawn ticks: a long thread samples them.
@@ -235,7 +249,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
               // Preview ownership overrides scroll-position highlighting.
               const lit = item.id === (previewedId ?? rail.activeId)
               const tabStop = item.id === tabId
-              const opensList = listMode && tabStop
+              const opensList = canOpenList && tabStop
               return (
                 <button
                   key={item.id}

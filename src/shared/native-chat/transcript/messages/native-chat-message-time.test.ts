@@ -6,15 +6,12 @@ describe('formatCompact', () => {
   const now = new Date(2026, 10, 21, 15, 0)
 
   it("shows only the time for today's messages", () => {
-    expect(formatter.formatCompact(new Date(2026, 10, 21, 3, 53), now)).toMatch(
-      /^\d{1,2}:53\s?[AP]M$/
-    )
+    const time = formatter.formatCompact(new Date(2026, 10, 21, 3, 53), now)
+    expect(time.replace(/\s/g, ' ')).toBe('3:53 AM')
   })
 
   it('shows only the day for older messages, with the year once it differs', () => {
-    expect(formatter.formatCompact(new Date(2026, 10, 20, 12, 0), now)).toMatch(/^Nov \d{1,2}$/)
-    expect(formatter.formatCompact(new Date(2025, 10, 20, 12, 0), now)).toMatch(
-      /^Nov \d{1,2}, 2025$/
-    )
+    expect(formatter.formatCompact(new Date(2026, 10, 20, 12, 0), now)).toBe('Nov 20')
+    expect(formatter.formatCompact(new Date(2025, 10, 20, 12, 0), now)).toBe('Nov 20, 2025')
   })
 })
