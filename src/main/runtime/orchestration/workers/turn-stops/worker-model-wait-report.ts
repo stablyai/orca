@@ -18,7 +18,8 @@ export type WorkerModelWaitNotice = {
   kind: 'retrying' | 'waiting'
   /** The turn or stretch the notice is about: a second notice of the same one is a no-op. */
   stretchKey: string
-  /** What the worker last showed: the retry's words, or its screen's status line. */
+  /** A chat worker's retry words, from its journal. A terminal worker sends none: its screen
+   *  can show anything. */
   lastSeen?: string
   waitedMs?: number
   /** Claude's transcript shows no model request since its last tool returned, at this time. */
