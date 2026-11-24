@@ -45,7 +45,7 @@ export function BotPictureButton({
   const look = pictureTakesLook(picture.value, picture.custom)
   const slackNote = (onGenerate: boolean): React.ReactNode =>
     bot.slack && look && !onGenerate && (outfits || colors) ? (
-      <p className="pb-3 text-center text-xs text-muted-foreground">
+      <p className="text-center text-xs text-muted-foreground">
         {outfits
           ? t('settings.bots.avatarSlackNote', 'Slack gets the picture, not the color or outfit.')
           : t('settings.bots.avatarSlackNoteColor', 'Slack gets the picture, not the color.')}
@@ -113,12 +113,12 @@ export function BotPictureButton({
         wheelScroll
         className="flex w-80 flex-col"
       >
-        {/* The whole popover takes a dropped picture, so all of it is outlined while one is dragged; the top
-            padding matches the gap beside the preview. */}
+        {/* The whole popover takes a dropped picture, so all of it is outlined while one is dragged;
+            the padding keeps the picture and caption clear of its edges. */}
         <div
           className={cn(
             BOT_PICTURE_DROP_OUTLINE,
-            'scrollbar-sleek min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain pt-3'
+            'scrollbar-sleek min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain p-3'
           )}
         >
           <BotPicturePicker
