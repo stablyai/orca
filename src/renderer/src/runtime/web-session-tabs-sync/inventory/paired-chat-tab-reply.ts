@@ -155,6 +155,7 @@ export async function readPairedChatTab(args: {
     registration,
     connectionGeneration,
     runtimeId,
+    receivedFrame,
     publicationEpoch: snapshot.publicationEpoch,
     snapshotVersion: snapshot.snapshotVersion,
     previousEpoch,

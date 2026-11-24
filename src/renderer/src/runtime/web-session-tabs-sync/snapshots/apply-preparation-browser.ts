@@ -65,7 +65,8 @@ export function prepareWebSessionTabsSnapshotBrowser(
     environmentId,
     executionHostId: snapshotExecutionHostId,
     currentTabs: currentUnifiedTabs,
-    hostGroupIdByTabId
+    hostGroupIdByTabId,
+    requestReceivedFrame: base.options?.requestReceivedFrame
   })
   const agentSessionsAffirmed = hostSnapshotAffirmsAgentSessions(snapshot)
   const existingTabIndex = buildWebSessionExistingTabIndex({ unifiedTabs: currentUnifiedTabs })

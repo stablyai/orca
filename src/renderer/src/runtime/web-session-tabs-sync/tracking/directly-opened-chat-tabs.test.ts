@@ -45,6 +45,7 @@ it('startup and older inventories cannot erase an early chat before the current 
     hostTabId: chat.id,
     registration: undefined,
     connectionGeneration: 0,
+    receivedFrame: 5,
     publicationEpoch: 'epoch-1',
     snapshotVersion: 5
   })
@@ -57,16 +58,34 @@ it('startup and older inventories cannot erase an early chat before the current 
       ENV
     )
   }
-  const older = {
+  const delayedList = {
     ...startup,
-    ...applyWebSessionTabsSnapshot(startup, makeSnapshot([], { snapshotVersion: 4 }), ENV)
+    ...applyWebSessionTabsSnapshot(
+      startup,
+      makeSnapshot([], { publicationEpoch: 'epoch-0', snapshotVersion: 9 }),
+      ENV,
+      NOW,
+      { requestReceivedFrame: 4 }
+    )
+  }
+  expect(delayedList.unifiedTabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([chat.id])
+
+  const older = {
+    ...delayedList,
+    ...applyWebSessionTabsSnapshot(delayedList, makeSnapshot([], { snapshotVersion: 4 }), ENV)
   }
   expect(older.unifiedTabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([chat.id])
   expect(older.groupsByWorktree[WT]?.[0].activeTabId).toBe(chat.id)
 
   const newer = {
     ...older,
-    ...applyWebSessionTabsSnapshot(older, makeSnapshot([], { snapshotVersion: 6 }), ENV)
+    ...applyWebSessionTabsSnapshot(
+      older,
+      makeSnapshot([], { publicationEpoch: 'epoch-2', snapshotVersion: 1 }),
+      ENV,
+      NOW,
+      { requestReceivedFrame: 6 }
+    )
   }
   expect(newer.unifiedTabsByWorktree[WT] ?? []).toEqual([])
 })
@@ -105,6 +124,7 @@ it.each(['empty', 'populated'])('keeps the split after an older %s frame', (olde
     hostGroupId: 'right',
     registration: undefined,
     connectionGeneration: 0,
+    receivedFrame: 5,
     publicationEpoch: 'epoch-1',
     snapshotVersion: 5,
     initialGroupId: localGroupId

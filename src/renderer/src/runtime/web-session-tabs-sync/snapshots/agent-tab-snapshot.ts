@@ -17,6 +17,7 @@ export function prepareAgentTabSnapshot(args: {
   executionHostId: ExecutionHostId
   currentTabs: readonly Tab[]
   hostGroupIdByTabId: Map<string, string>
+  requestReceivedFrame?: number
 }) {
   const { state, snapshot, environmentId, executionHostId, currentTabs, hostGroupIdByTabId } = args
   const receivedChats = directlyOpenedChatPublications(environmentId, snapshot.worktree)
@@ -41,7 +42,8 @@ export function prepareAgentTabSnapshot(args: {
     environmentId,
     snapshot,
     currentDirectTabs,
-    hostGroupIdByTabId
+    hostGroupIdByTabId,
+    args.requestReceivedFrame
   )
   const mayAdoptInitialHostGroups = Boolean(
     snapshot.tabGroups?.length &&

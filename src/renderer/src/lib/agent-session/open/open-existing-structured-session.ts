@@ -185,7 +185,7 @@ export async function openDesktopStructuredSessionInteraction(
   const activation = (key === undefined ? execute() : Promise.resolve().then(execute))
     .then(
       (result) => {
-        if (initialized) {
+        if (initialized && (deps.current?.() ?? true)) {
           options.present(result, owner)
         }
         return result

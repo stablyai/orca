@@ -25,6 +25,7 @@ type ChatPublication = {
   registration: ReturnType<typeof getRuntimeEnvironmentRegistration>
   connectionGeneration: number
   runtimeId?: string
+  receivedFrame: number
   publicationEpoch: string
   snapshotVersion: number
   previousEpoch?: string
@@ -113,7 +114,8 @@ export function retainDirectlyOpenedChats(
   environmentId: string,
   snapshot: RuntimeMobileSessionTabsResult,
   currentTabs: readonly Tab[],
-  hostGroupIdByTabId: Map<string, string>
+  hostGroupIdByTabId: Map<string, string>,
+  requestReceivedFrame?: number
 ): ReadonlyMap<string, MirroredAgentTab> | undefined {
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
   const entries = directlyOpenedChats.get(key)
@@ -145,8 +147,9 @@ export function retainDirectlyOpenedChats(
       proof.publicationEpoch
     )
       ? snapshot.snapshotVersion < proof.snapshotVersion
-      : proof.previousEpoch !== undefined &&
-        sameSessionTabsPublicationLineage(snapshot.publicationEpoch, proof.previousEpoch)
+      : (requestReceivedFrame !== undefined && requestReceivedFrame < proof.receivedFrame) ||
+        (proof.previousEpoch !== undefined &&
+          sameSessionTabsPublicationLineage(snapshot.publicationEpoch, proof.previousEpoch))
     if (
       (earlier || !affirmsAgentSessions) &&
       registration === proof.registration &&

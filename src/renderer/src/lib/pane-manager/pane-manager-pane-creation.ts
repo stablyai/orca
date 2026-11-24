@@ -36,7 +36,7 @@ export function activateManagedPane(
   }
 
   if (changed) {
-    host.options.onActivePaneChange?.(toPublicPane(pane))
+    host.options.onActivePaneChange?.(toPublicPane(pane), opts)
   }
 }
 
@@ -83,7 +83,8 @@ export function createManagedPaneInternal(
     (paneId, options) => {
       if (!host.isDestroyed()) {
         host.setActivePane(paneId, {
-          focus: options?.focusTerminal !== false
+          focus: options?.focusTerminal !== false,
+          userInitiated: true
         })
       }
     },
@@ -129,6 +130,6 @@ function handleManagedPaneMouseEnter(
       managerDestroyed: host.isDestroyed()
     })
   ) {
-    host.setActivePane(paneId, { focus: true })
+    host.setActivePane(paneId, { focus: true, userInitiated: true })
   }
 }
