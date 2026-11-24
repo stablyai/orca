@@ -373,17 +373,33 @@ struct proc_row {
 };
 
 #if defined(__APPLE__)
+static long long kinfo_start(const struct kinfo_proc *k) {
+    return (long long)k->kp_proc.p_starttime.tv_sec * 1000000LL +
+           (long long)k->kp_proc.p_starttime.tv_usec;
+}
+
+// Attaching a debugger reparents its target to it, and the PID it was born to is kept aside but
+// never updated. That PID is the parent only while it holds a process no younger than the target;
+// otherwise the parent is gone and the target counts as launchd's, as a detach would make it.
+static pid_t traced_parent(const struct kinfo_proc *k) {
+    pid_t birth = k->kp_proc.p_oppid;
+    int mib[] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, birth};
+    struct kinfo_proc parent;
+    size_t size = sizeof parent;
+    if (birth > 1 && sysctl(mib, 4, &parent, &size, NULL, 0) == 0 && size == sizeof parent &&
+            parent.kp_proc.p_pid == birth && parent.kp_proc.p_stat != SZOMB &&
+            kinfo_start(&parent) <= kinfo_start(k)) {
+        return birth;
+    }
+    return 1;
+}
+
 static void row_from_kinfo(const struct kinfo_proc *k, struct proc_row *row) {
     row->pid = k->kp_proc.p_pid;
-    row->ppid = k->kp_eproc.e_ppid;
-    // Attaching a debugger reparents its target to it; the parent it was born to is kept aside.
-    if (k->kp_proc.p_flag & P_TRACED) {
-        row->ppid = k->kp_proc.p_oppid > 0 ? k->kp_proc.p_oppid : 0;
-    }
+    row->ppid = k->kp_proc.p_flag & P_TRACED ? traced_parent(k) : k->kp_eproc.e_ppid;
     row->pgid = k->kp_eproc.e_pgid;
     row->uid = k->kp_eproc.e_ucred.cr_uid;
-    row->start = (long long)k->kp_proc.p_starttime.tv_sec * 1000000LL +
-                 (long long)k->kp_proc.p_starttime.tv_usec;
+    row->start = kinfo_start(k);
     row->zombie = k->kp_proc.p_stat == SZOMB;
     row->stale = 0;
 }
