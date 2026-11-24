@@ -57,7 +57,6 @@ export const expiredCursorFlyout = defineFixture({
             canSignIn={() => false}
             onManageAccounts={noop}
             onUsageDetails={noop}
-            canHideProviders
             renderRow={(p, row) => (
               <ProviderDetailsMenu
                 provider={p}

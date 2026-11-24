@@ -162,7 +162,6 @@ export function StatusBarUsageArea({
                   canSignIn={canSignInFromUsageRow}
                   onManageAccounts={handleManageAccounts}
                   onUsageDetails={handleUsageDetails}
-                  canHideProviders
                   renderRow={(p, rowNode) => {
                     // Why: a placeholder has nothing to drill into; its row opens the host's accounts.
                     if (isOwnerNotSetUpPlaceholder(p)) {

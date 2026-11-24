@@ -30,7 +30,6 @@ import {
 import { formatBareUsagePercentage, formatScopedUsageTitle } from './usage-percentage-label'
 import { getUsageHealthTone } from './usage-health-tone'
 import { UsageBar, UsageDisplayToggle, UsageValue } from './usage-meter'
-import { HideProviderUsageButton } from './HideProviderUsageMenuItem'
 
 type ProviderId = ProviderRateLimits['provider']
 
@@ -257,8 +256,7 @@ export function UsageRosterPanel({
   onUsageDetails,
   actionsAvailable = true,
   unavailableReason,
-  renderRow,
-  canHideProviders = false
+  renderRow
 }: {
   providers: ProviderRateLimits[]
   display: UsagePercentageDisplay
@@ -275,7 +273,6 @@ export function UsageRosterPanel({
   onUsageDetails: () => void
   // Return null to use the default row instead of a host-supplied detail/account wrapper.
   renderRow?: (p: ProviderRateLimits, row: React.ReactNode) => React.ReactNode
-  canHideProviders?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   // Why: one boundary-scheduled clock keeps every open row current without per-provider timers.
@@ -352,19 +349,15 @@ export function UsageRosterPanel({
         const state = getUsageRosterRowState(p, usedSections(p, t).length > 0, t)
         const showSignInAction =
           actionsAvailable && state.kind === 'sign-in' && canSignIn(p.provider)
-        // The × gets its own column so it never overlaps the row's right-aligned usage.
         const rowNode = (
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <UsageRow
-              p={p}
-              display={display}
-              state={state}
-              showSignInAction={showSignInAction}
-              now={now}
-              mode={statusBarUsageMode}
-            />
-            {canHideProviders ? <HideProviderUsageButton p={p} /> : null}
-          </div>
+          <UsageRow
+            p={p}
+            display={display}
+            state={state}
+            showSignInAction={showSignInAction}
+            now={now}
+            mode={statusBarUsageMode}
+          />
         )
         if (showSignInAction) {
           return (
