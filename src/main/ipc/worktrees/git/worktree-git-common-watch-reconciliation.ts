@@ -8,6 +8,7 @@ import {
   type GitCommonPollingSubscription
 } from './worktree-git-common-polling'
 import { createSingleFlight } from './single-flight-promise'
+import { isOnNetworkVolume } from './worktree-git-common-network-volume'
 
 // The native watcher is primary: reconcile its silent losses every five minutes and on window focus, not every 30 s.
 const NARROW_WATCH_RECONCILIATION_TICKS = 150
@@ -15,6 +16,9 @@ const NARROW_WATCH_RECONCILIATION_TICKS = 150
 const RECONCILIATION_FULL_SCAN_EVERY_TICKS = 1
 // Focus and reveal scan at most as often as the old 30 s cadence, counting timed sweeps.
 const ON_DEMAND_RECONCILIATION_MIN_TICKS = 15
+// Network volumes can miss other hosts' changes silently, so they keep the old 30 s check with a five-minute full sweep.
+const NETWORK_VOLUME_RECONCILIATION_TICKS = 15
+const NETWORK_VOLUME_FULL_SCAN_EVERY_TICKS = 10
 
 type GitCommonWatchReconciliationOptions = {
   commonDirPath: string
@@ -48,6 +52,7 @@ export function createGitCommonWatchReconciliation({
     subscription?.poke()
   }
   const starting = createSingleFlight()
+  let onNetworkVolume: Promise<boolean> | null = null
   let generation = 0
   const visibilityListeners = new Set<() => void>()
   const pollVisibility: WorktreePollerWindowVisibility = {
@@ -99,16 +104,21 @@ export function createGitCommonWatchReconciliation({
       return starting.run(async () => {
         const startGeneration = generation
         const shouldKeepBaseline = (): boolean => startGeneration === generation && shouldKeep()
+        onNetworkVolume ??= isOnNetworkVolume(commonDirPath)
+        const network = await onNetworkVolume
         const reconciliation = await startGitCommonPolling(
           commonDirPath,
           handleEvents,
-          pollIntervalMs * NARROW_WATCH_RECONCILIATION_TICKS,
+          pollIntervalMs *
+            (network ? NETWORK_VOLUME_RECONCILIATION_TICKS : NARROW_WATCH_RECONCILIATION_TICKS),
           pollVisibility,
           undefined,
           false,
           () => [],
           {
-            reconciliationFullScanEveryTicks: RECONCILIATION_FULL_SCAN_EVERY_TICKS,
+            reconciliationFullScanEveryTicks: network
+              ? NETWORK_VOLUME_FULL_SCAN_EVERY_TICKS
+              : RECONCILIATION_FULL_SCAN_EVERY_TICKS,
             minOnDemandScanIntervalMs: pollIntervalMs * ON_DEMAND_RECONCILIATION_MIN_TICKS,
             onRootMissing: (initial) => {
               if (shouldKeepBaseline()) {
