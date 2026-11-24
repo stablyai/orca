@@ -21,6 +21,7 @@ import {
 } from '../../../../../shared/bots/bot-items'
 import {
   botItemActivity,
+  botItemLiveAskKey,
   botItemNeedsYouEntryKey,
   botItemWaitEntryKey,
   botItemWorkerStopReason,
@@ -275,6 +276,7 @@ export function BotItemActivityList({
   const t = useTranslate()
   const entries = botItemActivity(item, events)
   const waitKey = botItemWaitEntryKey(item, entries)
+  const liveAskId = botItemLiveAskKey(entries)
   const needsYouKey = needsYou ? botItemNeedsYouEntryKey(item, entries) : null
   const list = useRef<HTMLDivElement | null>(null)
   // A reply's quote leads to its question, focused so Tab goes on from there.
@@ -297,6 +299,7 @@ export function BotItemActivityList({
             pending?.shown.some(({ failed }) => !failed) ? { ...entry, waiting: false } : entry
           }
           onJump={jump}
+          liveAskId={liveAskId}
           quickReplies={quickReplies}
         />
       )

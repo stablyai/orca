@@ -243,6 +243,13 @@ export function botItemWaitEntryKey(
 }
 
 /** The open question, or the status entry that put the item in Needs you. */
+/** The ask the item waits on now, as its comment entry: where a replaced ask leads. */
+export function botItemLiveAskKey(entries: readonly BotItemActivityEntry[]): string | null {
+  return (
+    entries.find((entry) => entry.kind === 'comment' && entry.waiting && !entry.onAsk)?.key ?? null
+  )
+}
+
 export function botItemNeedsYouEntryKey(
   item: Pick<BotItem, 'question' | 'waitingAsk'>,
   entries: readonly BotItemActivityEntry[]

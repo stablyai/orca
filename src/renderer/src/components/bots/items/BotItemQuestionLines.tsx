@@ -17,7 +17,10 @@ import {
   botItemAnswerWords,
   botItemUnsentAnswers
 } from '../../../../../shared/bots/bot-item-answer-lines'
-import type { BotItemAskEnd } from '../../../../../shared/bots/bot-item-question-answers'
+import {
+  botItemShownAskEnd,
+  type BotItemAskEnd
+} from '../../../../../shared/bots/bot-item-question-answers'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { BotItemMarkdown } from './BotItemMarkdown'
 import {
@@ -42,6 +45,7 @@ export function BotItemQuestionLines({
   answers = NO_ANSWERS,
   byOrder,
   ended = null,
+  onShowLive,
   actions,
   className
 }: {
@@ -58,6 +62,8 @@ export function BotItemQuestionLines({
   byOrder?: readonly boolean[]
   /** Why its open lines take no answer: a later ask replaced them, or the owner skipped them. */
   ended?: BotItemAskEnd | null
+  /** Replaced: shows the ask that waits now. */
+  onShowLive?: () => void
   /** While it waits, what its quick replies do; absent where the item takes no comment. */
   actions?: BotItemQuickReplyActions
   /** Its spacing from the body above; by default a gap under a body. */
@@ -88,6 +94,7 @@ export function BotItemQuestionLines({
   // A line answered meanwhile shows its answer; its held one is not put back in the box.
   const unsentHeld = botItemUnsentAnswers(stored.held, answered)
   const unsent = !waiting && heldScope && unsentHeld.some(Boolean) ? unsentHeld : null
+  const shownEnd = botItemShownAskEnd(ended, answered)
   return (
     <div data-bot-item-question={waiting ? 'waiting' : 'closed'} className={spacing}>
       <div className={several ? 'space-y-1.5' : 'space-y-3'}>
@@ -175,9 +182,17 @@ export function BotItemQuestionLines({
           )
         })}
       </div>
-      {ended && answered.some((words, index) => !words && !unsent?.[index]) ? (
+      {shownEnd === 'replaced' && onShowLive ? (
+        <button
+          type="button"
+          className="mt-1.5 block rounded-sm text-xs text-muted-foreground outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/50"
+          onClick={onShowLive}
+        >
+          {t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
+        </button>
+      ) : shownEnd ? (
         <div className="mt-1.5 text-xs text-muted-foreground">
-          {ended === 'skipped'
+          {shownEnd === 'skipped'
             ? t('bots.items.ask.skipped', 'Skipped')
             : t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
         </div>
