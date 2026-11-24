@@ -12,7 +12,6 @@ import { PRCommentsList } from './comments/comments-list'
 import { refreshChecksPanelHostedReview } from './refresh/hosted-review-manual-refresh'
 import type { ChecksPanelManualRefreshInput } from './refresh/manual-refresh-dependencies'
 import { useAppStore } from '@/store/index'
-import type { HostedReviewInfo } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 
 type HostedReviewCacheEntry = ReturnType<typeof useAppStore.getState>['hostedReviewCache'][string]
 
@@ -303,7 +302,10 @@ describe('manual refresh lookups', () => {
     expect(fetchGitLabDetails).not.toHaveBeenCalled()
   })
 
-  function gitLabReview(number: number, headSha: string): HostedReviewInfo {
+  function gitLabReview(
+    number: number,
+    headSha: string
+  ): NonNullable<ChecksPanelManualRefreshInput['activeGitLabReview']> {
     return {
       provider: 'gitlab',
       number,
