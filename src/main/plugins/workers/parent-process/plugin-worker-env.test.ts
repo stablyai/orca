@@ -53,16 +53,50 @@ describe('buildPluginWorkerEnv', () => {
     expect(env.GIT_TERMINAL_PROMPT).toBe('0')
   })
 
+  it('passes proxy routing in both cases, but never a proxy URL that carries credentials', () => {
+    const env = buildPluginWorkerEnv(
+      {
+        ...sessionEnv,
+        HTTPS_PROXY: 'http://proxy.example:3128',
+        http_proxy: 'http://proxy.example:3128',
+        ALL_PROXY: 'socks5://user:secret@proxy.example:1080',
+        https_proxy: 'user:secret@proxy.example:3128',
+        HTTP_PROXY: 'not a url',
+        all_proxy: 'http://:secret@proxy.example:3128',
+        NO_PROXY: 'localhost,.internal',
+        no_proxy: 'localhost',
+        NODE_USE_ENV_PROXY: '1'
+      },
+      'linux'
+    )
+    expect(env).toMatchObject({
+      HTTPS_PROXY: 'http://proxy.example:3128',
+      http_proxy: 'http://proxy.example:3128',
+      NO_PROXY: 'localhost,.internal',
+      no_proxy: 'localhost',
+      NODE_USE_ENV_PROXY: '1'
+    })
+    for (const key of ['ALL_PROXY', 'https_proxy', 'HTTP_PROXY', 'all_proxy']) {
+      expect(env).not.toHaveProperty(key)
+    }
+  })
+
   it('reads Windows variables case-insensitively and restores SystemRoot casing', () => {
     expect(
       buildPluginWorkerEnv(
-        { Path: 'C:\\Windows', systemroot: 'C:\\Windows', SSH_AUTH_SOCK: '\\\\.\\pipe\\agent' },
+        {
+          Path: 'C:\\Windows',
+          systemroot: 'C:\\Windows',
+          SSH_AUTH_SOCK: '\\\\.\\pipe\\agent',
+          https_proxy: 'http://proxy.example:3128'
+        },
         'win32'
       )
     ).toEqual({
       PATH: 'C:\\Windows',
       SystemRoot: 'C:\\Windows',
       SSH_AUTH_SOCK: '\\\\.\\pipe\\agent',
+      HTTPS_PROXY: 'http://proxy.example:3128',
       GIT_TERMINAL_PROMPT: '0',
       ELECTRON_RUN_AS_NODE: '1'
     })

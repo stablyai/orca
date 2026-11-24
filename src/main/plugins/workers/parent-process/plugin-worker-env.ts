@@ -1,4 +1,5 @@
 import { removeChromiumDisabledSessionBus } from '../../../pty/shell-startup/chromium-session-bus-env'
+import { PROXY_ENV_KEYS, PROXY_ENVIRONMENT_KEYS } from '../../../../shared/network/network-proxy'
 
 // Allowlist worker environment to exclude shell/CI credentials from third-party code.
 
@@ -24,8 +25,22 @@ const WORKER_ENV_ALLOWLIST = [
   'COMSPEC',
   'PATHEXT',
   'PROCESSOR_ARCHITECTURE',
-  'NUMBER_OF_PROCESSORS'
+  'NUMBER_OF_PROCESSORS',
+  // Node's own fetch and http read the proxy variables only when this is set.
+  'NODE_USE_ENV_PROXY'
 ] as const
+
+const PROXY_URL_KEYS: ReadonlySet<string> = new Set(PROXY_ENV_KEYS)
+
+// A proxy URL passes only without a user part; `user:pass@proxy:8080` has no host and hides one.
+function isCredentialFreeProxyUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.host !== '' && url.username === '' && url.password === ''
+  } catch {
+    return false
+  }
+}
 
 export function buildPluginWorkerEnv(
   baseEnv: NodeJS.ProcessEnv = process.env,
@@ -45,6 +60,14 @@ export function buildPluginWorkerEnv(
     const value = platform === 'win32' ? windowsLookup.get(key) : baseEnv[key]
     if (value !== undefined) {
       env[key === 'SYSTEMROOT' ? 'SystemRoot' : key] = value
+    }
+  }
+  for (const key of PROXY_ENVIRONMENT_KEYS) {
+    // NO_PROXY is a host list and passes as is; on Windows one variable answers to either case.
+    const name = platform === 'win32' ? key.toUpperCase() : key
+    const value = platform === 'win32' ? windowsLookup.get(name) : baseEnv[name]
+    if (value !== undefined && (!PROXY_URL_KEYS.has(key) || isCredentialFreeProxyUrl(value))) {
+      env[name] = value
     }
   }
   removeChromiumDisabledSessionBus(env)

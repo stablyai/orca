@@ -203,8 +203,12 @@ A worker does not inherit Orca's full environment: tokens, shell-rc variables an
 variables, plus `XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS` and `SSH_AUTH_SOCK` from Orca's launch
 environment, so `git` credential helpers (such as libsecret) and ssh-agent can reach the session
 Orca started in. `GIT_TERMINAL_PROMPT=0` is set, so `git` fails instead of asking for a password.
-This filter only keeps secrets held in Orca's environment out of plugins; it is not a sandbox. A
-worker runs as you and can read your files, saved logins and SSH keys like any other program.
+The proxy variables Orca was started with (`HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`, `NO_PROXY`, in
+either case) pass too, except a proxy URL with a user name or password, which is withheld like any
+other credential. Node's own `fetch` uses them only when `NODE_USE_ENV_PROXY=1` is set as well; it
+passes through when Orca's environment has it. This filter only keeps secrets held in Orca's
+environment out of plugins; it is not a sandbox. A worker runs as you and can read your files, saved
+logins and SSH keys like any other program.
 
 ### Panels, workers and data
 
