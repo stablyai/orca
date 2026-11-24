@@ -963,8 +963,7 @@
           "heading": "正在设置 Google",
           "done": "已完成",
           "waiting": "等待你处理",
-          "working": "工作中",
-          "you": "你"
+          "working": "工作中"
         },
         "account": {
           "title": "我应该使用哪个 Google 账户？",
@@ -8074,7 +8073,6 @@
         "removeConfirm": "移除",
         "signedOutOnHost": "{{host}} 上未连接",
         "uses": "可使用的服务",
-        "who": "谁可以使用",
         "whoNote": "任何可以向 {{name}} 提问的人，都能让它读取和发送你的邮件、日历和文件",
         "removeFrom": "从 {{name}} 移除 Google…"
       },
@@ -8088,18 +8086,14 @@
       "state": {
         "ready": "就绪",
         "apiOff": "已在 Google Cloud 中停用",
-        "notAllowed": "你未授权",
         "adminBlocked": "已被你公司的 Google 管理员阻止",
         "error": "无法检查"
       },
       "headline": {
-        "ended": "Google 访问权限已失效。请重新连接",
         "connected": "Google 已连接",
         "toFixOne": "快完成了：还有 1 个问题需要解决",
         "toFix": "快完成了：还有 {{count}} 个问题需要处理"
       },
-      "signInOnHost": "在 {{host}} 上重新登录 Google",
-      "addOnHost": "请在 {{host}} 上的 Orca 中添加服务或其他账户",
       "defaultBadge": "默认",
       "setDefault": "设为默认",
       "shareButton": "分享配置",
