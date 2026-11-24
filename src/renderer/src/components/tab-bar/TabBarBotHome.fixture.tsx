@@ -97,7 +97,6 @@ function BotHomeTabsFixture({
       activeTabType="agent-session"
       worktreeId={WORKSPACE_ID}
       groupId={GROUP_ID}
-      // A focused group, as after a click into it: the +N list closes in an unfocused one.
       isGroupFocused
       expandedPaneByTabId={{}}
       showAgentLaunchItems={false}
@@ -134,7 +133,7 @@ function BotHomeTabsFixture({
   )
 }
 
-// The group owns focus in the store too: the +N list reads it when it closes and restores focus.
+// The group owns focus in the store too, as after a click into it.
 const STORE = {
   workspaceSessionReady: true,
   activeWorktreeId: WORKSPACE_ID,
@@ -159,7 +158,7 @@ export const homeWithSideChats = defineFixture({
   render: () => <BotHomeTabsFixture sideChats={2} />
 })
 
-// Side chats overflow the strip: they condense behind +N while Home stays whole at the left edge.
+// Side chats overflow the strip: they scroll while Home stays whole at the left edge.
 export const homeOverflowing = defineFixture({
   width: 620,
   store: STORE,
@@ -167,7 +166,7 @@ export const homeOverflowing = defineFixture({
   render: () => <BotHomeTabsFixture sideChats={12} />
 })
 
-// A narrow split: the strip folds to its +N chip, then Home narrows to its icons.
+// A narrow split: the strip shrinks to its tab floor and scrolls, then Home narrows to its icons.
 export const homeNarrowSplit = defineFixture({
   width: 160,
   store: STORE,
@@ -207,58 +206,10 @@ export const homeBehindOtherTabs = defineFixture({
   render: () => <BotHomeTabsFixture sideChats={12} homeIndex={2} />
 })
 
-async function nextFrames(count: number): Promise<void> {
-  for (let index = 0; index < count; index++) {
-    await new Promise((resolve) => requestAnimationFrame(resolve))
-  }
-}
-
-/** Opens the +N list with Home active: Home leads it, marked current, as shortcut 1. */
-async function openListWithHomeActive(frame: HTMLElement): Promise<void> {
-  await nextFrames(4)
-  const chip = frame.querySelector('[data-tab-strip-overflow-chip]')
-  if (!chip) {
-    throw new Error('Missing tab overflow chip')
-  }
-  chip.dispatchEvent(
-    new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })
-  )
-  await nextFrames(4)
-  const entries = document.querySelectorAll(
-    '[role="menu"][data-state="open"] [data-tab-strip-list-entry]'
-  )
-  const first = entries[0]
-  if (first?.getAttribute('data-tab-strip-list-entry') !== 'home-tab') {
-    throw new Error('Home does not lead the +N list')
-  }
-  if (first.getAttribute('aria-current') !== 'true') {
-    throw new Error('Home is not marked current in the +N list')
-  }
-}
-
-// The +N list opened with Home active, stored behind two side chats: Home leads it and is marked current.
-export const homeOverflowListOpen = defineFixture({
+// Other tabs ahead of Home with Home active: Home still leads and shows as the active tab.
+export const homeActiveBehindOtherTabs = defineFixture({
   width: 620,
   store: STORE,
   setup,
-  render: () => <BotHomeTabsFixture sideChats={12} homeIndex={2} homeActive />,
-  interact: openListWithHomeActive
+  render: () => <BotHomeTabsFixture sideChats={12} homeIndex={2} homeActive />
 })
-
-// The narrowest pane headers, by tab-strip width (the frame adds 32px of padding and the header 4px): Home is a 32px icon
-// below 86px so the +N chip stays whole, and it hides once the plan is sure to show that chip (below 78px beside three or
-// more tabs, below 76px beside two), reached through the +N list.
-function narrowestHeader(stripWidth: number, sideChats = 12): ReturnType<typeof defineFixture> {
-  return defineFixture({
-    width: stripWidth + 36,
-    store: STORE,
-    setup,
-    render: () => <BotHomeTabsFixture sideChats={sideChats} paneHeader />
-  })
-}
-
-export const homeStrip90 = narrowestHeader(90)
-export const homeStrip82 = narrowestHeader(82)
-export const homeStrip74 = narrowestHeader(74)
-export const homeStrip77TwoTabs = narrowestHeader(77, 2)
-export const homeStrip75TwoTabs = narrowestHeader(75, 2)
