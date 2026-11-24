@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { requireGitOwnerTarget } from './worktree-git-owner-target'
+import {
+  commitDiffErrorMessage,
+  trackCommitCompare,
+  type CommitCompareReads
+} from './git-history-commit-compare'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -24,12 +29,9 @@ import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-brows
 
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 
-type PendingCommitCompare = { completion: PromiseWithResolvers<GitCommitCompareResult> }
-
-type CommitCompareGeneration = {
+type CommitCompareGeneration = CommitCompareReads & {
   key: string
-  cache: Map<string, GitCommitCompareResult>
-  pending: Map<string, PendingCommitCompare>
+  live: boolean
 }
 
 type GitHistoryCommitActions = {
@@ -41,15 +43,6 @@ type GitHistoryCommitActions = {
     event?: SourceControlRowOpenEvent
   ) => void
   handleCommitAction: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
-}
-
-function commitDiffErrorMessage(error?: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : translate(
-        'auto.components.right.sidebar.SourceControl.8a5ba6a988',
-        'Failed to load commit diff'
-      )
 }
 
 export function useGitHistoryCommitActions({
@@ -81,12 +74,22 @@ export function useGitHistoryCommitActions({
   ])
   const generationRef = useRef<CommitCompareGeneration>({
     key: generationKey,
+    live: true,
     cache: new Map(),
     pending: new Map()
   })
-  useEffect(() => {
-    if (generationRef.current.key !== generationKey) {
-      generationRef.current = { key: generationKey, cache: new Map(), pending: new Map() }
+  useLayoutEffect(() => {
+    if (generationRef.current.key !== generationKey || !generationRef.current.live) {
+      generationRef.current = {
+        key: generationKey,
+        live: true,
+        cache: new Map(),
+        pending: new Map()
+      }
+    }
+    const generation = generationRef.current
+    return () => {
+      generation.live = false
     }
   }, [generationKey])
 
@@ -111,31 +114,7 @@ export function useGitHistoryCommitActions({
         },
         item.id
       )
-      // When the same commit is read again, existing callers follow the newer reply.
-      const completion =
-        generation.pending.get(item.id)?.completion ??
-        Promise.withResolvers<GitCommitCompareResult>()
-      const pending = { completion }
-      generation.pending.set(item.id, pending)
-      const settle = (result: GitCommitCompareResult | null, error?: unknown): void => {
-        if (generation.pending.get(item.id) !== pending) {
-          return
-        }
-        generation.pending.delete(item.id)
-        if (result?.summary.status === 'ready') {
-          generation.cache.set(item.id, result)
-          completion.resolve(result)
-        } else {
-          completion.reject(
-            error ?? new Error(result?.summary.errorMessage ?? commitDiffErrorMessage())
-          )
-        }
-      }
-      void request.then(
-        (result) => settle(result),
-        (error: unknown) => settle(null, error)
-      )
-      return completion.promise
+      return trackCommitCompare(generation, item.id, request)
     },
     [activeRepoTarget, activeWorktreeId, scope, worktreePath, ownerConnectionId]
   )
@@ -156,7 +135,7 @@ export function useGitHistoryCommitActions({
         const compare = await (generation.pending.get(item.id)?.completion.promise ??
           loadCommitCompare(item))
         // A worktree or host change while loading drops the open; a scope change in the list does not.
-        if (!compare || generationRef.current !== generation) {
+        if (!compare || !generation.live) {
           return
         }
         useAppStore
@@ -171,7 +150,9 @@ export function useGitHistoryCommitActions({
             { placementWorkspaceId, runtimeEnvironmentId, executionHostId }
           )
       } catch (error) {
-        toast.error(commitDiffErrorMessage(error))
+        if (generation.live) {
+          toast.error(commitDiffErrorMessage(error))
+        }
       }
     },
     [

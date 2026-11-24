@@ -43,13 +43,13 @@ import { useGitHistoryCommitActions } from './use-git-history-commit-actions'
 
 const COMMIT: GitHistoryItem = { id: 'c1', parentIds: [], subject: 'c1', message: 'c1' }
 
-function compare(path: string, commitOid = COMMIT.id): GitCommitCompareResult {
+function compare(path: string, commitOid = COMMIT.id, parentOid = 'p1'): GitCommitCompareResult {
   return {
     summary: {
       commitOid,
-      parentOid: 'p1',
+      parentOid,
       compareRef: commitOid,
-      baseRef: 'p1',
+      baseRef: parentOid,
       changedFiles: 1,
       status: 'ready'
     },
@@ -157,6 +157,64 @@ describe('useGitHistoryCommitActions context fencing', () => {
       { path: 'current.ts', status: 'modified' }
     ])
     expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it('keeps the replacement Graph diff after the closed Graph settles', async () => {
+    const first = Promise.withResolvers<GitCommitCompareResult>()
+    const retired = Promise.withResolvers<GitCommitCompareResult>()
+    const fresh = Promise.withResolvers<GitCommitCompareResult>()
+    mocks.getRuntimeGitCommitCompare
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(retired.promise)
+      .mockReturnValueOnce(fresh.promise)
+    const root = render(<Probe worktreeId="A" />)
+    const original = latest!
+    const oldOpen = original.openHistoryCommitDiff(COMMIT)
+    const oldFiles = original.loadCommitFiles(COMMIT)
+    root.unmount()
+
+    render(<Probe worktreeId="A" />)
+    const newOpen = latest!.openHistoryCommitDiff(COMMIT)
+    fresh.resolve(compare('fresh.ts', COMMIT.id, 'fresh-parent'))
+    await newOpen
+    retired.resolve(compare('retired.ts', COMMIT.id, 'retired-parent'))
+    await Promise.all([oldOpen, oldFiles])
+    first.resolve(compare('first.ts', COMMIT.id, 'first-parent'))
+
+    expect(mocks.openCommitAllDiffs.mock.lastCall?.[2]).toMatchObject({
+      parentOid: 'fresh-parent'
+    })
+    expect(mocks.openCommitAllDiffs.mock.lastCall?.[3]).toEqual([
+      { path: 'fresh.ts', status: 'modified' }
+    ])
+  })
+
+  it('ignores a departed owner error and opens a later live retry', async () => {
+    const first = Promise.withResolvers<GitCommitCompareResult>()
+    const departed = Promise.withResolvers<GitCommitCompareResult>()
+    mocks.getRuntimeGitCommitCompare
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(departed.promise)
+    const root = render(<Probe worktreeId="A" />)
+    const original = latest!
+    const oldOpen = original.openHistoryCommitDiff(COMMIT)
+    const oldFiles = original.loadCommitFiles(COMMIT).catch(() => undefined)
+    await act(async () => root.rerender(<Probe worktreeId="B" />))
+    departed.reject(new Error('Departed owner unavailable'))
+    await Promise.all([oldOpen, oldFiles])
+    first.resolve(compare('first.ts'))
+
+    mocks.getRuntimeGitCommitCompare.mockRejectedValueOnce(new Error('Current owner unavailable'))
+    await latest!.openHistoryCommitDiff(COMMIT)
+    expect(mocks.toastError.mock.calls.map(([message]) => message)).toEqual([
+      'Current owner unavailable'
+    ])
+
+    mocks.getRuntimeGitCommitCompare.mockResolvedValueOnce(compare('recovered.ts'))
+    await latest!.openHistoryCommitDiff(COMMIT)
+    expect(mocks.openCommitAllDiffs.mock.lastCall?.[3]).toEqual([
+      { path: 'recovered.ts', status: 'modified' }
+    ])
   })
 
   it('keeps a late compare for the previous worktree out of the current cache', async () => {
