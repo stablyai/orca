@@ -23,11 +23,14 @@ export type LinkedWorkerState = {
 /** Every linked Dispatch of a big profile (thousands) stays kept. */
 const KEPT_WORKERS_MAX = 16_384
 const KEPT_SCOPE = 'items'
+/** A longer report is read again with each pass, so thousands of kept workers never pin their reports. */
+const KEPT_REPORT_MAX_CHARS = 2_000
 
 /** A settled worker's read, kept until a Dispatch its walk read is written. */
 type KeptWorker = {
   worker: BotWorkWorker
-  report: LinkedWorkerState['report']
+  /** Undefined: too long to keep, read again from its Task. */
+  report: LinkedWorkerState['report'] | undefined
   reason: string | null
   /** The dock's revision `reason` was read at; null: read again. */
   dockRevision: number | null
@@ -97,8 +100,13 @@ export class LinkedWorkerStates {
       kept.dockRevision = revision
     }
     const states = new Map<string, LinkedWorkerState | null>()
+    const longReports = readTaskReports(
+      db,
+      [...hits.values()].flatMap((kept) => (kept.report === undefined ? [kept.worker.taskId] : []))
+    )
     for (const [ref, kept] of hits) {
-      states.set(ref, { worker: kept.worker, report: kept.report, reason: kept.reason })
+      const report = kept.report === undefined ? longReports.get(kept.worker.taskId) : kept.report
+      states.set(ref, { worker: kept.worker, report: report ?? null, reason: kept.reason })
     }
     // Undefined: the Task couldn't be read, so the read shows no report and isn't kept.
     const reports = new Map<string, LinkedWorkerState['report'] | undefined>()
@@ -130,7 +138,7 @@ export class LinkedWorkerStates {
       ) {
         const value: KeptWorker = {
           worker,
-          report,
+          report: reportLength(report) <= KEPT_REPORT_MAX_CHARS ? report : undefined,
           reason,
           dockRevision: revision,
           session: { paneKey: session.paneKey, address: session.address },
@@ -167,6 +175,35 @@ function taskReport(result: string | null): LinkedWorkerState['report'] {
     // Plain text is its own report.
   }
   return { subject: result.trim(), body: null }
+}
+
+function reportLength(report: LinkedWorkerState['report']): number {
+  return report ? report.subject.length + (report.body?.length ?? 0) : 0
+}
+
+/** These Tasks' reports in one read; a Task left out couldn't be read and shows none. */
+function readTaskReports(
+  db: OrchestrationDb,
+  taskIds: readonly string[]
+): Map<string, LinkedWorkerState['report']> {
+  if (taskIds.length === 0) {
+    return new Map()
+  }
+  try {
+    const rows = db.db
+      .prepare(
+        'SELECT t.id, t.result FROM json_each(?) selected JOIN tasks t ON t.id = selected.value'
+      )
+      .all(JSON.stringify([...new Set(taskIds)]))
+    return new Map(
+      rows.map((row) => [
+        String(row.id),
+        taskReport(typeof row.result === 'string' ? row.result : null)
+      ])
+    )
+  } catch {
+    return new Map()
+  }
 }
 
 /** The dock facts' revision, which every change to them bumps; null when unreadable. */

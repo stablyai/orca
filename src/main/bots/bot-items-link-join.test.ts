@@ -73,4 +73,19 @@ describe('item worker links', () => {
     })
     expect((await itemLink(first, join)).latest).toBe(next.id)
   })
+
+  it('show a long report on a kept read, which keeps the read but not the report', async () => {
+    const id = failedWorker('Agent process exited with code 1')
+    const body = 'x'.repeat(5_000)
+    db.updateTaskStatus(
+      db.getDispatchContextById(id)!.task_id,
+      'failed',
+      JSON.stringify({ subject: 'Done', body })
+    )
+    const join = newJoin()
+    await itemLink(id, join)
+    const walks = vi.spyOn(db, 'getDispatchContextById')
+    expect((await itemLink(id, join)).report).toEqual({ subject: 'Done', body })
+    expect(walks).not.toHaveBeenCalled()
+  })
 })
