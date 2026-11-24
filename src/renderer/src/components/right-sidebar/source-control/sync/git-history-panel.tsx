@@ -24,6 +24,8 @@ import {
 import type { SourceControlRowOpenEvent } from '../listing/split-open'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
+import { useGitGraphScope } from '@/lib/source-control/graph/git-graph-tab'
+import { useGitGraphWorkspaces } from '@/components/editor/git-graph/git-graph-ref-menu'
 
 export type GitHistoryPanelState =
   | { status: 'idle' | 'loading'; result?: GitHistoryResult; error?: string }
@@ -75,6 +77,7 @@ export function GitHistoryPanel({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const result = state.result
+  const agentWorkspaces = useGitGraphWorkspaces(useGitGraphScope(worktreeId ?? ''), true)
   const viewModels = useMemo(() => {
     if (!result) {
       return []
@@ -351,6 +354,7 @@ export function GitHistoryPanel({
                   viewModel={viewModel}
                   expanded={isExpanded}
                   preserveRefIds={result?.baseRef ? [result.baseRef.id] : undefined}
+                  agentWorkspaces={agentWorkspaces}
                   onOpenCommit={onOpenCommit}
                   onToggleExpand={canExpand ? handleToggleExpand : undefined}
                 />
