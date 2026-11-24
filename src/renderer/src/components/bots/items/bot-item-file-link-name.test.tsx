@@ -41,6 +41,10 @@ describe('botItemFileLinkName', () => {
   })
 })
 
+/** The files on the bot's host: the detector links only paths that exist, as in the app. */
+const FILES = new Set(['/tmp/work/notes/plan.md', '/tmp/work/src/app.ts'])
+const exists = (link: { pathText: string }): boolean => FILES.has(link.pathText)
+
 /** A description as the item page renders it: the real path detector, then the short-link anchor. */
 function renderDescription(content: string): HTMLAnchorElement[] {
   const { container } = render(
@@ -48,7 +52,7 @@ function renderDescription(content: string): HTMLAnchorElement[] {
       content={content}
       onLinkClick={vi.fn()}
       allowFileUriLinks
-      fileLinkExists={() => true}
+      fileLinkExists={exists}
       extension={SHORT_FILE_LINKS}
     />
   )
@@ -104,7 +108,7 @@ describe('description file links after the Markdown transform', () => {
         content="See /tmp/work/notes/plan.md for the plan."
         onLinkClick={vi.fn()}
         allowFileUriLinks
-        fileLinkExists={() => true}
+        fileLinkExists={exists}
       />
     )
     expect(container.querySelector('a')?.textContent).toBe('/tmp/work/notes/plan.md')

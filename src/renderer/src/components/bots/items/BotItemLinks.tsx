@@ -50,10 +50,6 @@ import {
 import { useBotItemLivePr, useBotItemPrWorkspacesVisible } from './use-bot-item-live-pr'
 import { botItemLinksOrder } from './bot-item-links-order'
 import { selectBotItemLinearRead, type BotItemLinearRead } from './bot-item-linear-read'
-import {
-  canPublishLinearScopeCache,
-  getLinearReadScope
-} from '@/store/slices/linear/linear-slice-scope'
 
 /** Rows shown before "N more". */
 export const BOT_ITEM_LINKS_SHOWN = 5
@@ -75,17 +71,17 @@ function MiddleTruncated({ text }: { text: string }): React.JSX.Element {
   )
 }
 
-/** The cached read proven to be this link's issue, from the default Linear scope on this runtime. */
-function useLinearRead(identifier: string | null, url: string): BotItemLinearRead | null {
+/** The cached read proven to be this link's issue, from a Linear source the bot's host owns. */
+function useLinearRead(
+  identifier: string | null,
+  url: string,
+  hostId: string
+): BotItemLinearRead | null {
   const cache = useAppStore((state) => (identifier ? state.linearIssueCache : null))
-  const settings = useAppStore((state) => state.settings)
-  return useMemo(() => {
-    if (!cache) {
-      return null
-    }
-    const current = canPublishLinearScopeCache(getLinearReadScope(settings), settings)
-    return selectBotItemLinearRead(cache, identifier, url, current)
-  }, [cache, settings, identifier, url])
+  return useMemo(
+    () => (cache ? selectBotItemLinearRead(cache, identifier, url, hostId) : null),
+    [cache, identifier, url, hostId]
+  )
 }
 
 /** The item view's link handler: the workspace card's popover and destinations, from the bot's folder. A
@@ -165,8 +161,14 @@ function GitHubRow({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Eleme
   )
 }
 
-function WebRow({ row }: { row: Extract<BotItemLinkRow, { kind: 'web' }> }): React.JSX.Element {
-  const linear = useLinearRead(row.linear, row.url)
+function WebRow({
+  row,
+  hostId
+}: {
+  row: Extract<BotItemLinkRow, { kind: 'web' }>
+  hostId: string
+}): React.JSX.Element {
+  const linear = useLinearRead(row.linear, row.url, hostId)
   const openWeb = useOpenWeb()
   const name = linear ? `${row.title} ${linear.title}` : row.title
   return (
@@ -291,7 +293,7 @@ function Row({
       )
     }
     case 'web':
-      return <WebRow row={row} />
+      return <WebRow row={row} hostId={bot.hostId} />
     case 'file':
       return (
         <BotItemLinkRowButton

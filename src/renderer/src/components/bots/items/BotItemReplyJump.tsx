@@ -42,7 +42,7 @@ export function useBotItemNeedsYouJump({
   /** The whole item page: a newer interaction anywhere in it (details, header, Activity) wins. */
   paneRef: React.RefObject<HTMLDivElement | null>
   revealRow: (row: HTMLElement, behavior: ScrollBehavior) => void
-  comment: React.RefObject<BotItemCommentBoxHandle | null>
+  comment: React.RefObject<Pick<BotItemCommentBoxHandle, 'focus'> | null>
 }): BotItemNeedsYouJump {
   const [watch] = useState(createBotItemNeedsYouWatch)
   const id = useId()

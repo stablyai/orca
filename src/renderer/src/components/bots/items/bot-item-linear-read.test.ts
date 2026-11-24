@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
-import { getLinearReadScope, scopedLinearCacheKey } from '@/store/slices/linear/linear-slice-scope'
 import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { botItemLinkRows } from '../../../../../shared/bots/bot-item-link-rows'
 import { selectBotItemLinearRead } from './bot-item-linear-read'
 
@@ -26,14 +26,22 @@ function issue(over: Partial<LinearIssue> = {}): LinearIssue {
 
 const entry = (data: LinearIssue | null, fetchedAt = 1) => ({ data, fetchedAt })
 
-/** The key `fetchLinearIssue` publishes for a default-scope read. */
+const BOT_HOST: ExecutionHostId = 'runtime:studio'
+const OTHER_HOST: ExecutionHostId = 'local'
+
+/** The key `fetchLinearIssue` publishes for the app's own (default-scope) read: no source prefix. */
 function producerKey(workspaceId: string | undefined, id: string): string {
-  const scope = getLinearReadScope({} as never)
-  return scopedLinearCacheKey(scope, `${workspaceId ?? 'selected'}::${id}`)
+  return `${workspaceId ?? 'selected'}::${id}`
 }
 
-const read = (cache: Record<string, ReturnType<typeof entry>>, url = URL_A, current = true) =>
-  selectBotItemLinearRead(cache, 'ENG-7', url, current)
+/** The key it publishes for a project's Linear source on `hostId`. */
+function sourceKey(hostId: ExecutionHostId, workspaceId: string, id: string): string {
+  const scope = getTaskSourceCacheScope({ provider: 'linear', hostId, projectId: 'project-1' })
+  return `${scope}::${workspaceId}::${id}`
+}
+
+const read = (cache: Record<string, ReturnType<typeof entry>>, url = URL_A) =>
+  selectBotItemLinearRead(cache, 'ENG-7', url, BOT_HOST)
 
 describe('selectBotItemLinearRead', () => {
   it('reads the identifier the link row derives from its URL', () => {
@@ -65,8 +73,17 @@ describe('selectBotItemLinearRead', () => {
     expect(read(cache, 'https://linear.app/initech/issue/ENG-7')).toBeNull()
   })
 
-  it('leaves the identifier alone for another host, account or source', () => {
-    expect(read({ [producerKey(undefined, 'ENG-7')]: entry(issue()) }, URL_A, false)).toBeNull()
+  it("reads a project source on the bot's own host, never one on another host", () => {
+    expect(read({ [sourceKey(BOT_HOST, 'ws-acme', 'ENG-7')]: entry(issue()) })?.title).toBe(
+      'Share dialog'
+    )
+    expect(read({ [sourceKey(BOT_HOST, 'ws-acme', 'uuid-a')]: entry(issue()) })?.title).toBe(
+      'Share dialog'
+    )
+    expect(read({ [sourceKey(OTHER_HOST, 'ws-acme', 'ENG-7')]: entry(issue()) })).toBeNull()
+  })
+
+  it('leaves the identifier alone for another link host, account or issue', () => {
     expect(
       read({
         'selected::ENG-7': entry(issue({ url: 'https://linear.evil.test/acme/issue/ENG-7' }))
@@ -74,12 +91,6 @@ describe('selectBotItemLinearRead', () => {
     ).toBeNull()
     expect(read({ 'ws-globex::ENG-7': entry(issue()) })).toBeNull()
     expect(read({ 'selected::ENG-8': entry(issue()) })).toBeNull()
-    const project = getTaskSourceCacheScope({
-      provider: 'linear',
-      hostId: 'host-1',
-      projectId: 'project-1'
-    })
-    expect(read({ [`${project}::ws-acme::ENG-7`]: entry(issue()) })).toBeNull()
   })
 
   it('shows nothing when two different issues match or a newer read found none', () => {

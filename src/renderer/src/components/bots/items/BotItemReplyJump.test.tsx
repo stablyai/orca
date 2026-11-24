@@ -18,9 +18,7 @@ function Page({
 }): React.JSX.Element {
   const pane = useRef<HTMLDivElement | null>(null)
   const scroll = useRef<HTMLDivElement | null>(null)
-  const comment = useRef<BotItemCommentBoxHandle | null>({
-    focus: focusComposer
-  } as unknown as BotItemCommentBoxHandle)
+  const comment = useRef<Pick<BotItemCommentBoxHandle, 'focus'> | null>({ focus: focusComposer })
   const jump = useBotItemNeedsYouJump({
     eligible: true,
     activityShown: true,
