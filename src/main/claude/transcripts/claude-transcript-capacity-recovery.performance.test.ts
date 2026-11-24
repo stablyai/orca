@@ -6,12 +6,13 @@ import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent
 import { afterEach, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
-import { stat, utimes, writeFile } from 'node:fs/promises'
+import { appendFile, stat, utimes, writeFile } from 'node:fs/promises'
 import * as capacityRecovery from './claude-transcript-capacity-recovery'
 import * as transcriptTail from './claude-transcript-tail'
 import * as claudeImport from '../../native-chat/agent-session-journal/history-import/journal-claude-import'
 import * as payloadBounds from '../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import { catchUpClaudeTranscript } from './claude-transcript-catch-up'
+import * as heavyWorkerSpawn from '../../utility-worker-host/heavy-worker-spawn'
 import { claudeSourceBlockId } from '../structured/journal/claude-streamed-block-identity'
 import '../../native-chat/agent-session-journal/history-import/journal-claude-import-worker.test-fixture'
 import {
@@ -525,17 +526,16 @@ it('restores whole standalone and embedded tool inputs within their saved call',
   ])
 })
 
-async function saveLargeAnswer(c: Awaited<ReturnType<typeof chat>>, text: string) {
+async function saveLargeAnswer(c: Awaited<ReturnType<typeof chat>>, text: string, prefix = '') {
   const identity = { provider: 'claude', sessionId: PROVIDER, uuid: 'new-answer' } as const
   await writeFile(
     c.filePath,
-    `${JSON.stringify({
+    `${prefix}${JSON.stringify({
       type: 'assistant',
       uuid: identity.uuid,
       parentUuid: 'old-leaf',
       message: { content: text }
-    })}
-`
+    })}\n`
   )
   await c.journal.appendItem(
     identity,
@@ -568,29 +568,63 @@ function recoveryReceivedBytes(): number[] {
   return messages
 }
 
-// PR #45200: a whole saved answer crosses the reader boundary in bounded replies.
-it('commits a 2 MiB saved answer without a worker reply above 512 KiB', async () => {
+// PR #45200: one recovery restores a whole saved answer and certifies the unchanged source.
+it('commits a 2 MiB saved answer in bounded replies and skips recovery on two unchanged reopens', async () => {
   const c = await chat('batch')
-  const text = `${'😀"'.repeat(419_430)}\n`
-  await saveLargeAnswer(c, text)
+  const text = `${'😀"'.repeat(419_430)}\r\n`
+  const oldLeaf =
+    '{"type":"assistant","uuid":"old-leaf","parentUuid":null,"message":{"content":"old answer"}}'
+  await saveLargeAnswer(c, text, `${oldLeaf}\n`)
+  const growth = JSON.stringify({ type: 'progress', data: 'x'.repeat(1024 * 1024) })
+  const frontier = JSON.stringify({
+    type: 'assistant',
+    uuid: 'frontier-answer',
+    parentUuid: 'new-answer',
+    message: { content: 'Newest answer' }
+  })
+  await appendFile(c.filePath, `${`${growth}\n`.repeat(17)}${frontier}\n`)
+  const source = await stat(c.filePath)
+  const spawn = vi.spyOn(heavyWorkerSpawn, 'spawnHeavyWorker')
+  const imports = () =>
+    spawn.mock.calls.filter(([, options]) => options.name === 'orca-claude-history-import').length
   const messages = recoveryReceivedBytes()
-  expect(
-    await catchUpClaudeTranscript({
-      sessionId: SESSION,
-      providerSessionId: PROVIDER,
-      leafUuid: 'old-leaf',
-      claudeConfigDir: c.config,
-      cwd: c.cwd,
-      sink: c.deferred.sink,
-      mode: 'recovery'
-    })
-  ).toBe(true)
-  expect(messages.length).toBeGreaterThan(6)
-  expect(Math.max(...messages)).toBeLessThanOrEqual(512 * 1024)
-  expect((await c.items()).map(({ body }) => body)).toEqual([
+  const recovered = await c.catchUp()
+  const receives = messages.slice()
+  expect(imports()).toBe(1)
+  const cursor = await c.journal.reads.physicalCursor()
+  const expectedBodies = [
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'old answer' }] },
     { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] },
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Newest answer' }] },
     expect.objectContaining({ presentation: 'continued-outside-recent' })
-  ])
+  ]
+  const receipt = await c.journal.reads.historyOrigin()
+  for (const open of [2, 3]) {
+    await c.reopen()
+    handleReads.bytes = 0
+    sourceStreams.length = 0
+    const checked = await c.catchUp()
+    expect(imports(), `total import workers after open ${open}`).toBe(1)
+    const readBytes =
+      handleReads.bytes + sourceStreams.reduce((total, stream) => total + stream.bytesRead, 0)
+    expect(readBytes).toBeLessThanOrEqual(64 * 1024)
+    expect(checked).toBe(true)
+    expect(await c.journal.reads.physicalCursor()).toEqual(cursor)
+    expect(await c.journal.reads.historyOrigin()).toEqual(receipt)
+    expect((await c.items()).map(({ body }) => body)).toEqual(expectedBodies)
+  }
+  expect(recovered).toBe(true)
+  expect(receipt).toMatchObject({
+    raw: {
+      kind: 'native_copy',
+      ids: ['old-leaf', 'new-answer', 'frontier-answer'],
+      sourceFrontier: 'frontier-answer',
+      sourceConsumedBytes: source.size,
+      sourceMtimeMs: source.mtimeMs
+    }
+  })
+  expect(receives.length).toBeGreaterThan(6)
+  expect(Math.max(...receives)).toBeLessThanOrEqual(512 * 1024)
 })
 
 it('rejects staged restoration when the saved revision changes before its first slice', async () => {

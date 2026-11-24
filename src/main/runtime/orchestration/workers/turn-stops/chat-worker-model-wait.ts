@@ -140,6 +140,10 @@ export class ChatWorkerModelWait {
       watch.plain.clear()
       watch.reading.clear()
       watch.activityAt = this.now()
+      watch.turnKey = `${sessionId}:${watch.activityAt}`
+      watch.turnId = undefined
+      watch.lastRetry = undefined
+      watch.retried = false
       return
     }
     for (const itemId of itemIds) {
