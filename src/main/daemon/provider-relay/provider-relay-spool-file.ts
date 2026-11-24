@@ -5,6 +5,8 @@ import { compactSpoolFile } from './provider-relay-spool-compaction'
 
 /** Coalesced appends stop growing here, so joining records can never pass the engine's string limit. */
 const MAX_COALESCED_WRITE_CHARS = 8 * 1024 * 1024
+/** What a write waiting behind a stalled disk costs even once a removal emptied it. */
+const WAITING_WRITE_OVERHEAD_BYTES = 512
 
 type SpoolWrite = { chunk: string; records: HeldRecord[]; bytes: number }
 
@@ -22,7 +24,7 @@ export class SpoolFile {
   readonly index = new SpoolFileIndex()
   /** A failed write keeps every later record in memory, so a full or broken disk loses nothing. */
   failed = false
-  /** Bytes queued but not yet started; acks can't free them, so pressure counts them. */
+  /** Bytes queued but not yet started, plus each waiting write's overhead; acks can't free them. */
   pendingBytes = 0
   io: Promise<void> = Promise.resolve()
   private handle: FileHandle | null = null
@@ -73,6 +75,8 @@ export class SpoolFile {
     const epoch = this.epoch
     this.queued = write
     this.waiting.add(write)
+    // Each waiting write holds a callback in the chain, emptied or not, so a stall can't grow unseen.
+    this.pendingBytes += WAITING_WRITE_OVERHEAD_BYTES
     this.io = this.io
       .then(async () => {
         this.waiting.delete(write)
@@ -80,7 +84,7 @@ export class SpoolFile {
           this.queued = null
         }
         // Once started, a write is the one in flight; only those still queued count as pending.
-        this.pendingBytes -= write.bytes
+        this.pendingBytes -= write.bytes + WAITING_WRITE_OVERHEAD_BYTES
         this.hooks.pendingChanged()
         if (epoch !== this.epoch) {
           return
@@ -92,7 +96,10 @@ export class SpoolFile {
         try {
           if (!this.handle) {
             this.handle = await open(this.path, this.truncateOnOpen ? 'w' : 'a', 0o600)
-            this.truncateOnOpen = false
+            // A removal while this opened means a new file, which must still start empty.
+            if (epoch === this.epoch) {
+              this.truncateOnOpen = false
+            }
           }
           // appendFile keeps writing until every byte lands; a bare write may stop short.
           await this.handle.appendFile(write.chunk)

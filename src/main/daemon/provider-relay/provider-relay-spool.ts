@@ -252,25 +252,20 @@ export class ProviderRelaySpool {
 
   /** Pause at the cap, resume below half of it, so acks near the cap don't flap the agent's stdout. */
   private updatePressure(): void {
-    const [kept, keptCap] = this.pressure(false)
-    // While paused, kept lines that alone keep it from resuming count as reaching the cap. Only when
-    // releasing them lifts it, so queued writes alone stay under the limit: a queue drains by itself
-    // and rechecks as it does.
-    const keptLimit = this.paused ? keptCap / 2 : keptCap
+    // A kept span is released through the live client's own acks only when it alone holds the
+    // agent paused (or would pause it): queued writes drain by themselves, and lines the client hasn't
+    // acked can't be released. Only this client's acks count, so a takeover never loses lines.
     if (
       this.keeping &&
       this.mode === 'attached' &&
-      kept >= keptLimit &&
-      this.file.pendingBytes < keptLimit &&
-      this.clientAcked > this.acked
+      this.clientAcked > this.acked &&
+      this.holdsPause(this.pressure(0)) &&
+      !this.holdsPause(this.pressure(this.clientAcked))
     ) {
-      // A kept span reaching the cap can't be kept whole; holding it would stall the agent. Only the
-      // live client's own acks count, so a takeover never loses lines its new client hasn't had, and
-      // only kept bytes count, since releasing them can't shrink writes still queued.
       this.releaseThrough(this.clientAcked)
     }
-    const [held, cap] = this.pressure(true)
-    const paused = !this.disposed && (this.paused ? held >= cap / 2 : held >= cap)
+    const [held, cap] = this.pressure(0)
+    const paused = !this.disposed && this.holdsPause([held, cap])
     // Asked once per crossing and again once answered if still crossed, so a client can ack rarely.
     // Only while streaming live: during a replay the client has nothing new to ack yet. While
     // keeping, lines are on disk, so the ask comes near the file cap rather than the memory cap.
@@ -289,14 +284,23 @@ export class ProviderRelaySpool {
     }
   }
 
-  /** `withQueued` adds writes not yet started: they hold memory an ack can't free, in any mode. */
-  private pressure(withQueued: boolean): [held: number, cap: number] {
-    const queued = withQueued ? this.file.pendingBytes : 0
+  private holdsPause([held, cap]: [number, number]): boolean {
+    return this.paused ? held >= cap / 2 : held >= cap
+  }
+
+  /**
+   * What holds memory or disk, against its cap, as if everything through `releasedThrough` were
+   * released (0 for as it is). Writes not yet started count: they hold memory an ack can't free.
+   */
+  private pressure(releasedThrough: number): [held: number, cap: number] {
+    const queued = this.file.pendingBytes
+    const memory = this.memory.bytes - this.memory.bytesThrough(releasedThrough)
     if (this.mode !== 'detached' && !this.keepingLive) {
       // Live, a queue here is left from keeping; a replay flushes the detached queue before it starts.
-      return [this.memory.bytes + (this.mode === 'attached' ? queued : 0), this.memoryCap]
+      return [memory + (this.mode === 'attached' ? queued : 0), this.memoryCap]
     }
-    return [Math.max(this.file.index.unackedBytes, queued) + this.memory.bytes, this.fileCap]
+    const unacked = this.file.index.unackedBytes - this.file.index.bytesThrough(releasedThrough)
+    return [Math.max(unacked, queued) + memory, this.fileCap]
   }
 
   private writeToFile(record: HeldRecord): void {

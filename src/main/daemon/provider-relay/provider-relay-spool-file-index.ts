@@ -64,6 +64,15 @@ export class SpoolFileIndex {
     return false
   }
 
+  /** Unacked bytes at or below `seq`: what an ack through it would free. */
+  bytesThrough(seq: number): number {
+    let bytes = 0
+    for (let at = this.head; at < this.entries.length && this.entries[at] <= seq; at += 2) {
+      bytes += this.entries[at + 1]
+    }
+    return bytes
+  }
+
   /** How many records after `seq` the file must still hold whole. */
   countAfter(seq: number): number {
     let count = 0

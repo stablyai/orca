@@ -39,6 +39,15 @@ export class SpoolMemory {
     }
   }
 
+  /** Held bytes at or below `seq`: what releasing through it would free. */
+  bytesThrough(seq: number): number {
+    let bytes = 0
+    for (let at = this.head; at < this.records.length && this.records[at].seq <= seq; at++) {
+      bytes += this.records[at].bytes
+    }
+    return bytes
+  }
+
   /** Empties memory and returns what it held, in seq order. */
   takeAll(): HeldRecord[] {
     const held = this.records.slice(this.head)
