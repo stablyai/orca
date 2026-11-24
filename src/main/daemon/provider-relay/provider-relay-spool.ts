@@ -61,6 +61,7 @@ export class ProviderRelaySpool {
   private io: Promise<void> = Promise.resolve()
   private paused = false
   private ackAsked = false
+  private ackAskedSeq = 0
   private disposed = false
   private readonly memoryCap: number
   private readonly fileCap: number
@@ -132,6 +133,8 @@ export class ProviderRelaySpool {
     if (this.fileIndex.lastSeq > 0 && this.acked >= this.fileIndex.lastSeq) {
       this.removeFile()
     }
+    // An answer to the last ask that leaves half the cap held asks again, so the client never stalls.
+    this.ackAsked = this.ackAsked && this.acked < this.ackAskedSeq
     this.updatePressure()
   }
 
@@ -246,11 +249,12 @@ export class ProviderRelaySpool {
         ? [this.fileIndex.unackedBytes + this.memoryBytes, this.fileCap]
         : [this.memoryBytes, this.memoryCap]
     const paused = !this.disposed && (this.paused ? held >= cap / 2 : held >= cap)
-    // Asked once per crossing, so a client can ack rarely and still never stall the agent.
+    // Asked once per crossing and again once answered if still crossed, so a client can ack rarely.
     // Only while streaming live: during a replay the client has nothing new to ack yet.
     const ackWanted = this.mode === 'attached' && held >= cap / 2
     if (ackWanted && !this.ackAsked) {
-      this.options.onAckWanted?.(this.nextSeqValue - 1)
+      this.ackAskedSeq = this.nextSeqValue - 1
+      this.options.onAckWanted?.(this.ackAskedSeq)
     }
     this.ackAsked = ackWanted
     if (paused !== this.paused) {

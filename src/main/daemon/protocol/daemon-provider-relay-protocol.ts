@@ -96,7 +96,8 @@ export type ProviderRelayDataEvent = {
 
 /**
  * Acks may be batched (about once a second is plenty). The daemon sends this once each time unacked
- * output reaches half its memory cap; the client should then ack everything it has received.
+ * output reaches half its memory cap, and again when an ack through `seq` still leaves it there; the
+ * client should then ack everything it has received.
  */
 export type ProviderRelayAckWantedEvent = {
   type: 'event'
