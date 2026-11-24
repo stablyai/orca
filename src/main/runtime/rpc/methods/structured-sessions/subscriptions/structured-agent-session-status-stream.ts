@@ -8,10 +8,7 @@ import { defineStreamingMethod, type RpcContext } from '../../../core'
 import { requireStructuredHost as requireHost } from '../creation/structured-agent-session-gate'
 import { structuredAgentSessionStatusSubscriptionId } from './structured-agent-session-subscription-id'
 import { clientReadsStructuredSessionAgent } from '../structured-agent-session-policy'
-import {
-  botShareScopeOf,
-  botShareSessionFilter
-} from '../../../../../bots/team-share/bot-share-chats'
+import { botShareScopedView } from '../../../../../bots/team-share/bot-share-scoped-view'
 
 /** Ties a stream to both ends that can close it — the runtime's subscription registry and the
  *  transport abort — so either one runs `onClose` exactly once. */
@@ -65,8 +62,7 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
         return
       }
       // A teammate's stream carries only their own chats on the shared bot.
-      const share = botShareScopeOf(ctx)
-      const listed = share ? botShareSessionFilter(ctx.runtime, share) : () => true
+      const listed = botShareScopedView(ctx)?.['agentSession.subscribeStatus'] ?? (() => true)
       dispose = host.subscribeStatus({
         id: subscriptionId,
         emit: (event) => {

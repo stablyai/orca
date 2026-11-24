@@ -41,7 +41,7 @@ import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
 import { refuseUnsavedFolderDrafts } from '../../repositories/folder-workspace-deletion'
 import { botShareScopeOf, emptyChatReusableBy } from '../../../bots/team-share/bot-share-chats'
 import { startBotShareSession } from '../../../bots/team-share/bot-share-session-start'
-import { botShareListedBots } from '../../../bots/team-share/bot-share-access'
+import { botShareScopedView } from '../../../bots/team-share/bot-share-scoped-view'
 
 async function updateBot(params: BotUpdateParams, context: RpcContext) {
   if (params.updates.slackMirror !== undefined) {
@@ -118,13 +118,10 @@ export const BOT_METHODS = [
     handler: async (_params, context) => {
       const { runtime } = context
       const listing = runtime.bots.listing()
-      const share = botShareScopeOf(context)
+      const share = botShareScopedView(context)
       if (share) {
-        // A teammate sees the shared bot alone, and none of this host's own state.
-        return {
-          bots: botShareListedBots(listing.bots, share),
-          botsEnabled: listing.botsEnabled
-        }
+        // None of this host's own state.
+        return { bots: share['bots.list'](listing.bots), botsEnabled: listing.botsEnabled }
       }
       const webhooks = runtime.getWebhooks()
       const signInServer = orcaSignInServer(runtime)
@@ -150,10 +147,9 @@ export const BOT_METHODS = [
     params: BotRoster,
     handler: async (params, context) => {
       const { runtime } = context
-      const share = botShareScopeOf(context)
+      const share = botShareScopedView(context)
       if (share) {
-        // The shared bot alone, without its chats count (which counts everyone's) or other computers.
-        return { bots: (await runtime.bots.roster()).filter((entry) => entry.id === share.botId) }
+        return { bots: share['bots.roster']() }
       }
       // A session id names a chat only on its own host, so a paired client's claim names none.
       const caller =

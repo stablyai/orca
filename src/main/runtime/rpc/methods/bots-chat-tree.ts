@@ -8,6 +8,7 @@ import { readBotOwnChatPanes } from '../../../bots/bot-own-chat-panes'
 import { runtimeBotChatSearchHost, searchBotChats } from '../../../bots/bot-chat-search-host'
 import { defineMethod } from '../core'
 import { botShareChatFilter, botShareScopeOf } from '../../../bots/team-share/bot-share-chats'
+import { botShareScopedView } from '../../../bots/team-share/bot-share-scoped-view'
 import type { BotChatTreeRead as BotChatTree } from '../../../../shared/bots/bot-chat-tree'
 
 /** A teammate's tree: their own chats, and only the workspaces under those. */
@@ -38,14 +39,10 @@ export const BOT_CHAT_TREE_METHODS = [
     params: BotChatsOwn,
     handler: async (params, context) => {
       const host = runtimeBotChatTreeHost(context.runtime)
-      const share = botShareScopeOf(context)
+      const share = botShareScopedView(context)?.['bots.chats.own']
       return {
         chats: share
-          ? await readBotOwnChatPanes(
-              host,
-              [share.botId],
-              botShareChatFilter(context.runtime, share)
-            )
+          ? await readBotOwnChatPanes(host, share.botIds, share.owns)
           : await readBotOwnChatPanes(host, params.botIds)
       }
     }

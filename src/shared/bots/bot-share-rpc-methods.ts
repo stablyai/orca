@@ -4,7 +4,7 @@ import { z } from 'zod'
 
 /** `chat`: the session it names must be one of the teammate's own chats on the shared bot.
  *  `bot`: the bot it names must be the shared bot; its handler lists only the teammate's chats.
- *  `scoped`: names nothing; its handler returns only the shared bot and the teammate's chats.
+ *  `scoped`: names nothing; what it returns comes from `botShareScopedView` alone.
  *  `self`: bound to the caller's own connection (its Relay credential, its own uploads). */
 export type BotShareMethodAccess =
   | { kind: 'chat'; sessionId: (params: unknown) => string | undefined }
@@ -29,16 +29,22 @@ const BOT: BotShareMethodAccess = {
   botId: (params) => BotParams.safeParse(params).data?.botId
 }
 const SCOPED: BotShareMethodAccess = { kind: 'scoped' }
+
+/** The methods that name nothing: each needs its view in `botShareScopedView`, or the build fails. */
+export const BOT_SHARE_SCOPED_METHODS = [
+  'bots.list',
+  'bots.roster',
+  'bots.chats.own',
+  'agentSession.subscribeStatus'
+] as const
+export type BotShareScopedMethod = (typeof BOT_SHARE_SCOPED_METHODS)[number]
 const SELF: BotShareMethodAccess = { kind: 'self' }
 
 export const BOT_SHARE_RPC_METHODS: ReadonlyMap<string, BotShareMethodAccess> = new Map<
   string,
   BotShareMethodAccess
 >([
-  ['bots.list', SCOPED],
-  ['bots.roster', SCOPED],
-  ['bots.chats.own', SCOPED],
-  ['agentSession.subscribeStatus', SCOPED],
+  ...BOT_SHARE_SCOPED_METHODS.map((method) => [method, SCOPED] as const),
   ['bots.avatar.read', BOT],
   ['bots.chats', BOT],
   ['bots.chatTree', BOT],
