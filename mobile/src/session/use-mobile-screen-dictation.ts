@@ -7,7 +7,6 @@ import {
   useSyncExternalStore
 } from 'react'
 import { useFocusEffect, useNavigation } from 'expo-router'
-import { HOST_SESSION_ROUTE } from '../navigation/host-stack-navigation'
 import { useMobileSessionDictationSetup } from './use-mobile-session-dictation-setup'
 import { triggerError } from '../platform/haptics/haptics'
 import { useClipboardWriter } from '../platform/clipboard/clipboard'
@@ -25,19 +24,18 @@ import { mobileDictationShownOnScreen } from '../dictation/mobile-dictation-show
 import { useDictationComputerName } from '../dictation/use-mobile-dictation-live'
 import { nativeChatDictationCopy } from '../dictation/mobile-session-native-chat-dictation-copy'
 import { dictationAnnounceCopy } from '../dictation/mobile-dictation-announce-copy'
-import {
-  useWorkspaceExecutionHost,
-  workspaceRouteHref
-} from '../navigation/workspace-execution-host'
-import { sessionTabPaneKey } from '../../../src/shared/remote-runtime/session-graph/session-tab-pane-key'
-import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
-import type { useMobileNativeChatController } from './native-chat/use-mobile-native-chat-controller'
+import type {
+  MobileDictationChat,
+  MobileDictationScreenRoute,
+  MobileScreenDictationScope
+} from './mobile-screen-dictation-scope'
 
-// The session screen's side of the page's one dictation: start it here, show it in place while this screen is in front, and insert where it started.
-export function useMobileSessionDictation(
-  scope: MobileSessionFeedbackCapabilitiesModel,
-  nativeChatController: ReturnType<typeof useMobileNativeChatController>,
-  sendLiveTerminalInput: (handle: string, bytes: string) => Promise<boolean>
+// A screen's side of the page's one dictation: start it here, show it in place while this screen is in front, and insert where it started.
+export function useMobileScreenDictation(
+  scope: MobileScreenDictationScope,
+  nativeChatController: MobileDictationChat,
+  sendLiveTerminalInput: (handle: string, bytes: string) => Promise<boolean>,
+  route: MobileDictationScreenRoute
 ) {
   const {
     hostId,
@@ -46,7 +44,6 @@ export function useMobileSessionDictation(
     connState,
     activeHandle,
     activeHandleRef,
-    activeSessionTab,
     setShowDictationSetup,
     dictationRouteContextRef,
     flushPendingLiveInputBeforeExternalSend,
@@ -58,8 +55,8 @@ export function useMobileSessionDictation(
   const host = useMobileDictationHost()
   const computerName = useDictationComputerName(hostId)
   const { start: startHost } = host
-  const executionHost = useWorkspaceExecutionHost()
-  const sessionKey = JSON.stringify([hostId, executionHost ?? null, worktreeId])
+  const sessionKey = route.key
+  const routeName = route.name
   const [instance] = useState(() => ({}))
   const [inFront, setInFront] = useState(true)
   useFocusEffect(
@@ -179,7 +176,7 @@ export function useMobileSessionDictation(
           current?.dispatch({
             type: 'POP_TO',
             payload: {
-              name: HOST_SESSION_ROUTE,
+              name: routeName,
               params: paneKey ? { paneKey } : undefined,
               merge: true
             },
@@ -187,7 +184,7 @@ export function useMobileSessionDictation(
           })
         }
       }),
-    [attach, dictationRouteContextRef, instance, sessionKey]
+    [attach, dictationRouteContextRef, instance, routeName, sessionKey]
   )
   // The pill reads shown() on the host's render.
   useEffect(() => refresh(), [refresh, shown])
@@ -227,7 +224,6 @@ export function useMobileSessionDictation(
     const routeContext = activeHandle ? { handle: activeHandle } : null
     dictationRouteContextRef.current = routeContext
     const target = destination.captureDestination(showNativeChat, activeHandle)
-    const paneKey = sessionTabPaneKey(activeSessionTab)
     // A refused start comes back through this screen's reportFailure while it is shown, or the host's toast.
     void startHost({
       instance,
@@ -239,12 +235,9 @@ export function useMobileSessionDictation(
             ? null
             : { field: 'chat', scope: target.scope }
           : target,
-      title: activeSessionTab?.title ?? '',
-      paneKey,
-      href: workspaceRouteHref(
-        `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(worktreeId)}${paneKey ? `?paneKey=${encodeURIComponent(paneKey)}` : ''}`,
-        executionHost
-      ),
+      title: route.title,
+      paneKey: route.paneKey,
+      href: route.href,
       dictationMode: scope.dictationMode,
       silenceSeconds,
       removeFillerWords,
@@ -255,14 +248,14 @@ export function useMobileSessionDictation(
   }, [
     computerName,
     activeHandle,
-    activeSessionTab,
     busyElsewhere,
     client,
     destination.captureDestination,
     dictationCanStart,
     dictationRouteContextRef,
-    executionHost,
-    hostId,
+    route.title,
+    route.paneKey,
+    route.href,
     startHost,
     instance,
     phoneDictation.readyRef,
