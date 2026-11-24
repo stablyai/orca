@@ -3,18 +3,35 @@ import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/exec
 import { readCachedRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
+import {
+  getOrcadSshDeployment,
+  type OrcadDeploymentLink
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+
+type ServerPortForwardState = Omit<WorktreeRuntimeOwnerState, 'runtimeEnvironments'> & {
+  runtimeEnvironments?: readonly { id: string; orcadDeployment?: OrcadDeploymentLink }[]
+}
 
 // The store registers itself so link routing need not import it.
-let readOwnerState: (() => WorktreeRuntimeOwnerState) | null = null
+let readOwnerState: (() => ServerPortForwardState) | null = null
 
-export function registerServerPortForwardStateAccessor(fn: () => WorktreeRuntimeOwnerState): void {
+export function registerServerPortForwardStateAccessor(fn: () => ServerPortForwardState): void {
   readOwnerState = fn
 }
 
-/** Whether this desktop can forward the paired server's localhost ports, from its last probed status. */
+/** A server Orca deployed over SSH forwards through that SSH connection, as its Ports panel does. */
+export function serverSshForwardTargetId(environmentId: string): string | null {
+  const environment = readOwnerState?.()?.runtimeEnvironments?.find(
+    (candidate) => candidate.id === environmentId
+  )
+  return (environment && getOrcadSshDeployment(environment)?.sshTargetId) || null
+}
+
+/** Whether this desktop can forward the paired server's localhost ports over its own connection, from its last probed status. */
 export function serverForwardsPorts(environmentId: string): boolean {
   return (
     typeof window !== 'undefined' &&
+    serverSshForwardTargetId(environmentId) === null &&
     window.api?.runtimeEnvironments?.portForwards !== undefined &&
     readCachedRuntimeEnvironmentCapability(
       environmentId,

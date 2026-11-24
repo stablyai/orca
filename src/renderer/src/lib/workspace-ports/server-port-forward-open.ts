@@ -8,7 +8,11 @@ import { NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY } from '../../../../shared/remo
 import { isLoopbackBrowserUrl } from '../../../../shared/browser/navigation/loopback-browser-url'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { forwardedUrlForRemoteUrl } from './workspace-port-urls'
-import { serverForwardsPorts, workspaceRunsOnServer } from './server-port-forward-support'
+import {
+  serverForwardsPorts,
+  serverSshForwardTargetId,
+  workspaceRunsOnServer
+} from './server-port-forward-support'
 
 /** How a port's URL opens in the system browser; null when only Orca's browser on its host reaches it.
  *  `worktreeId` names the workspace a workspace port belongs to; the server's own listeners have none. */
@@ -47,14 +51,6 @@ export async function openServerLoopbackInSystemBrowser(
   }
   const port = Number(url.port) || (url.protocol === 'https:' ? 443 : 80)
   const state = useAppStore.getState()
-  const known = forwardedUrlForRemoteUrl(
-    rawUrl,
-    state.portForwardsByConnection[environmentId] ?? []
-  )
-  if (known) {
-    await window.api.shell.openUrl(known)
-    return
-  }
   const host = selectExecutionHostDisplayLabel(state, toRuntimeExecutionHostId(environmentId))
   // A workspace on an SSH host or WSL distro the server reaches has another localhost than the server's.
   if (worktreeId !== null && !workspaceRunsOnServer(environmentId, worktreeId)) {
@@ -62,6 +58,25 @@ export async function openServerLoopbackInSystemBrowser(
       translate(
         'auto.lib.workspace.ports.serverPortForward.otherMachine',
         "Couldn't forward port {{port}}: this workspace doesn't run on {{host}} itself.",
+        { port, host }
+      )
+    )
+    return
+  }
+  const sshTargetId = serverSshForwardTargetId(environmentId)
+  const known = forwardedUrlForRemoteUrl(
+    rawUrl,
+    state.portForwardsByConnection[sshTargetId ?? environmentId] ?? []
+  )
+  if (known) {
+    await window.api.shell.openUrl(known)
+    return
+  }
+  if (sshTargetId) {
+    toast.error(
+      translate(
+        'auto.lib.workspace.ports.serverPortForward.useSshPorts',
+        "Couldn't forward port {{port}} from {{host}}. Forward it in Ports, then try again.",
         { port, host }
       )
     )
