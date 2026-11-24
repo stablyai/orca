@@ -27,6 +27,39 @@ function wholeLineFields(line: string): LeadingProperty[] {
   )
 }
 
+/**
+ * Agent lines are classified from their leading envelope fields only (`id`, `method`, `type`,
+ * `request_id`), which every supported agent writes before its payload. The scan stops at the first
+ * object value and never reads past this many chars, so a notification is never parsed whole; a line
+ * whose envelope the scan can't finish (cut by this limit, or unusual) is parsed whole instead.
+ */
+const ENVELOPE_SCAN_CHARS = 4096
+
+const CONTROL_REQUEST_TYPES = new Set<unknown>(['control_request', 'control_cancel_request'])
+
+/**
+ * The envelope fields of an agent line. A scan cut short (by the char limit or the field limit) is
+ * still enough when what it read decides the line; only an undecided line is parsed whole.
+ */
+function envelopeFields(line: string): LeadingProperty[] {
+  const head = line.length > ENVELOPE_SCAN_CHARS ? line.slice(0, ENVELOPE_SCAN_CHARS) : line
+  const envelope = leadingJsonEnvelope(head, { stopAtContainer: true })
+  if (envelope.complete) {
+    return envelope.properties
+  }
+  // A number running into the cut may be missing digits, so it is not trusted.
+  const last = envelope.properties.at(-1)
+  const read =
+    typeof last?.value === 'number' ? envelope.properties.slice(0, -1) : envelope.properties
+  const value = (key: string): unknown => read.find((property) => property.key === key)?.value
+  const decided =
+    typeof value('method') === 'string'
+      ? value('id') !== undefined
+      : typeof value('type') === 'string' &&
+        (!CONTROL_REQUEST_TYPES.has(value('type')) || value('request_id') !== undefined)
+  return decided ? read : wholeLineFields(line)
+}
+
 function rpcId(value: unknown): string | null {
   return typeof value === 'number' || typeof value === 'string'
     ? `j:${JSON.stringify(value)}`
@@ -38,13 +71,6 @@ const MAX_PENDING_REQUESTS = 256
 const MAX_PENDING_CHARS = 8 * 1024 * 1024
 /** Codex resolves a server request elsewhere (another client, a timeout) and says so with this. */
 const RESOLVED_METHOD = 'serverRequest/resolved'
-/**
- * Agent lines are classified from their leading envelope fields only (`id`, `method`, `type`,
- * `request_id`), which every supported agent writes before its payload. The scan stops at the first
- * object value and never reads past this many chars, so a notification is never parsed whole; a line
- * whose envelope the scan can't finish (cut by this limit, or unusual) is parsed whole instead.
- */
-const ENVELOPE_SCAN_CHARS = 4096
 
 /** A client line longer than this is forwarded but not classified, so it can't grow without bound. */
 const MAX_CLIENT_LINE_CHARS = 256 * 1024 * 1024
@@ -111,9 +137,7 @@ export class ProviderRelayPendingRequests {
 
   observeAgentLine(record: ProviderRelayRecord): void {
     const { line } = record
-    const head = line.length > ENVELOPE_SCAN_CHARS ? line.slice(0, ENVELOPE_SCAN_CHARS) : line
-    const envelope = leadingJsonEnvelope(head, { stopAtContainer: true })
-    const fields = envelope.complete ? envelope.properties : wholeLineFields(line)
+    const fields = envelopeFields(line)
     const field = (key: string): LeadingProperty | undefined =>
       fields.find((property) => property.key === key)
     const method = field('method')?.value
@@ -127,16 +151,17 @@ export class ProviderRelayPendingRequests {
       }
       return
     }
+    // Requests are rare and parsed before being held, so a malformed copy never replaces a valid one.
     if (typeof method === 'string') {
       const key = rpcId(field('id')?.value)
-      if (key) {
+      if (key && parseObject(line)) {
         this.hold(key, record)
       }
       return
     }
-    if (type === 'control_request' || type === 'control_cancel_request') {
+    if (CONTROL_REQUEST_TYPES.has(type)) {
       const key = controlId(field('request_id')?.value)
-      if (key && type === 'control_request') {
+      if (key && type === 'control_request' && parseObject(line)) {
         this.hold(key, record)
       } else if (key) {
         this.release(key)
