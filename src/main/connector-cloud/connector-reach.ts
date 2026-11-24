@@ -25,9 +25,9 @@ export class ConnectorReach {
     return () => this.backListeners.delete(listener)
   }
 
-  /** A call outside the poll (a bot's picture) the cloud didn't answer, or answered with a 5xx. */
+  /** A call outside the poll (a bot's picture) the cloud didn't answer, or answered with a 5xx or 429. */
   missedOutsidePoll(result: ConnectorResult<unknown>): void {
-    if (!result.ok && (result.status === null || result.status >= 500)) {
+    if (!result.ok && (result.status === null || result.status === 429 || result.status >= 500)) {
       this.missed = true
     }
   }

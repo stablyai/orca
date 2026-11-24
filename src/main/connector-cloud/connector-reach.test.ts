@@ -16,6 +16,12 @@ it('treats the poll answering after a missed outside call as the cloud back', ()
   reach.reached(answered)
   expect(backs).toEqual(['answered'])
 
+  // A rate limit is a miss too: the cloud may take it when it next answers.
+  reach.missedOutsidePoll({ ...noAnswer, status: 429 })
+  reach.reached(answered)
+  expect(backs).toEqual(['answered', 'answered'])
+  backs.length = 1
+
   // A refusal is an answer, not a miss; a poll that still gets none is not the cloud back yet.
   reach.missedOutsidePoll({ ...noAnswer, status: 409 })
   reach.reached(answered)

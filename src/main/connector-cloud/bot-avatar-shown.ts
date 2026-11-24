@@ -5,6 +5,8 @@ import type { BotSlackIconShown, BotSlackIcons } from '../bots/bot-slack-icon-st
 // store keeps it across restarts: read once per run, written only when it changes.
 export class BotAvatarShown {
   private readonly byBot = new Map<string, BotSlackIconShown | null>()
+  // Bots whose last write failed: their next mark writes again, even with the same value.
+  private readonly unsaved = new Set<string>()
 
   constructor(
     private readonly store: Pick<BotSlackIcons, 'shown' | 'markShown'>,
@@ -31,9 +33,15 @@ export class BotAvatarShown {
 
   async mark(botId: string, shown: BotSlackIconShown | null): Promise<void> {
     const before = await this.get(botId)
-    if (before?.account !== shown?.account || before?.mascot !== shown?.mascot) {
+    if (
+      this.unsaved.has(botId) ||
+      before?.account !== shown?.account ||
+      before?.mascot !== shown?.mascot
+    ) {
       this.byBot.set(botId, shown)
+      this.unsaved.add(botId)
       await this.store.markShown(botId, shown)
+      this.unsaved.delete(botId)
     }
   }
 
@@ -43,5 +51,6 @@ export class BotAvatarShown {
 
   delete(botId: string): void {
     this.byBot.delete(botId)
+    this.unsaved.delete(botId)
   }
 }
