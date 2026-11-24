@@ -16,6 +16,8 @@ import type { ProviderRelayRecordTaking } from './relayed-provider-consumption'
 const INPUT_FULL_RETRY_MS = 50
 const INPUT_FULL = 'Relay input is full'
 
+/** How long an attach waits for its preamble's stream events after the reply. */
+const PREAMBLE_WAIT_MS = 10_000
 /** A reader paused this long past an exit (a stuck journal drain) no longer holds the exit back. */
 const EXIT_AFTER_OUTPUT_WAIT_MS = 10_000
 
@@ -81,7 +83,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     this.pid = options.pid
     this.output = new RelayedProviderOutput({
       stdout: this.stdout,
-      ack: (seq) => options.channel.ack(options.relayId, seq),
+      ack: (seq, keepFrom) => options.channel.ack(options.relayId, seq, keepFrom),
       ...(options.durable ? { durable: options.durable } : {}),
       ...(options.passWhileHeld ? { passWhileHeld: options.passWhileHeld } : {}),
       ...(options.ackFloor ? { ackFloor: options.ackFloor } : {})
@@ -135,6 +137,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     })
     try {
       const result = await this.options.channel.attach(this.relayId, fromSeq, this.options.policy())
+      await this.output.awaitPreamble(result.initializeResultSent, result.pending, PREAMBLE_WAIT_MS)
       this.attachResult = result
       if (this.state === 'attaching') {
         this.state = 'attached'

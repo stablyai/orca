@@ -31,7 +31,8 @@ type OutputOptions = {
    * leaves it unacked. `force` saves live text first, for when the daemon needs the ack.
    */
   durable?: (force: boolean) => Promise<boolean>
-  ack: (seq: number) => Promise<unknown>
+  /** `keepFrom`: the daemon keeps lines from it on for a later attach, though `seq` is received. */
+  ack: (seq: number, keepFrom?: number) => Promise<unknown>
 }
 
 /**
@@ -46,8 +47,11 @@ export class RelayedProviderOutput {
   /** Highest data seq actually handed on; the next attach and every ack start here. */
   private pushedSeq = 0
   private ackedSeq = 0
+  /** The floor the last ack kept from (the daemon keeps lines from it on for a later attach). */
+  private keptFrom: number | null = null
   /** Requests already handed on, so a replay or reattach never asks the user twice. */
   private readonly deliveredPending = new Set<number>()
+  private preambleArrived: (() => void) | null = null
   private held: { seq: number | null; line: string }[] | null
   /** How far a held replay has been handed on; it stays held until the slices reach the end. */
   private releasedTo = 0
@@ -72,6 +76,7 @@ export class RelayedProviderOutput {
     if (fromSeq !== undefined) {
       this.pushedSeq = fromSeq
       this.ackedSeq = fromSeq
+      this.keptFrom = null
       this.consumption.reset(fromSeq)
     }
     if (this.held) {
@@ -88,6 +93,7 @@ export class RelayedProviderOutput {
     }
     if (event === 'relayInitialize') {
       this.initializeLine = line
+      this.preambleArrived?.()
       return
     }
     if (event === 'relayPending') {
@@ -95,6 +101,7 @@ export class RelayedProviderOutput {
         this.deliveredPending.add(seq)
         this.deliver(null, line)
       }
+      this.preambleArrived?.()
       return
     }
     if (seq <= this.deliveredSeq) {
@@ -102,6 +109,30 @@ export class RelayedProviderOutput {
     }
     this.options.ackFloor?.observe(seq, line)
     this.deliver(seq, this.deliveredPending.has(seq) ? null : line)
+  }
+
+  /**
+   * The attach reply comes on the control socket and its preamble (the initialize answer and held
+   * requests) on the stream socket, and nothing orders the two: resolves once the preamble the
+   * reply names is here, or after `timeoutMs` (a stream that dropped reattaches anyway).
+   */
+  awaitPreamble(initialize: boolean, pendingSeqs: readonly number[], timeoutMs: number) {
+    const here = (): boolean =>
+      (!initialize || this.initializeLine !== null) &&
+      pendingSeqs.every((seq) => this.deliveredPending.has(seq))
+    if (here()) {
+      return Promise.resolve()
+    }
+    return new Promise<void>((resolve) => {
+      const done = (): void => {
+        clearTimeout(timer)
+        this.preambleArrived = null
+        resolve()
+      }
+      const timer = setTimeout(done, timeoutMs)
+      timer.unref?.()
+      this.preambleArrived = () => void (here() && done())
+    })
   }
 
   /** Output waits for the chat to be ready (`release()`). */
@@ -204,22 +235,25 @@ export class RelayedProviderOutput {
 
   private ack(force = false): Promise<void> {
     this.acking = this.acking.then(async () => {
-      // The daemon's ask (its cap) releases the floor; the forced save keeps the text.
-      const floor = force ? null : (this.options.ackFloor?.floor() ?? null)
       // Only what the chat's reader took: a paused reader's lines are replayed after a crash.
-      const taken = this.consumption.upTo(this.pushedSeq)
-      const target = floor === null ? taken : Math.min(taken, floor - 1)
-      if (target <= this.ackedSeq || this.stopped) {
+      const target = this.consumption.upTo(this.pushedSeq)
+      // Lines from the floor on (a streamed item still open) stay kept, so a reattach rewrites
+      // the item whole; the daemon's ask (its file cap) releases them, and the forced save keeps the text.
+      const floor = force ? null : (this.options.ackFloor?.floor() ?? null)
+      const keepFrom = floor !== null && floor <= target ? floor : null
+      if ((target <= this.ackedSeq && keepFrom === this.keptFrom) || this.stopped) {
         return
       }
       // Wait one turn so records just parsed reach the journal before its barrier is taken.
       await new Promise((resolve) => setImmediate(resolve))
       try {
-        if ((await this.options.durable?.(force)) === false) {
+        // Unsaved streamed text is only in a kept item, which a reattach replays whole.
+        if ((await this.options.durable?.(force)) === false && keepFrom === null) {
           return
         }
-        await this.options.ack(target)
+        await (keepFrom === null ? this.options.ack(target) : this.options.ack(target, keepFrom))
         this.ackedSeq = Math.max(this.ackedSeq, target)
+        this.keptFrom = keepFrom
       } catch {
         // Unacked output is replayed on the next attach; a later ack covers it.
       }

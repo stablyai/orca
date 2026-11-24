@@ -100,8 +100,9 @@ export class ProviderRelayChannel {
     return this.client.request('relayWrite', { relayId, data }, RELAY_REQUEST_TIMEOUT_MS)
   }
 
-  ack(relayId: string, seq: number): Promise<unknown> {
-    return this.client.request('relayAck', { relayId, seq }, RELAY_REQUEST_TIMEOUT_MS)
+  ack(relayId: string, seq: number, keepFrom?: number): Promise<unknown> {
+    const payload = keepFrom === undefined ? { relayId, seq } : { relayId, seq, keepFrom }
+    return this.client.request('relayAck', payload, RELAY_REQUEST_TIMEOUT_MS)
   }
 
   close(relayId: string, grace?: 'brief'): Promise<unknown> {

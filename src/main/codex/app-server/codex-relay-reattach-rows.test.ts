@@ -14,14 +14,14 @@ const item = (method: string, id: string, status = 'inProgress') =>
 const settle = () => new Promise((resolve) => setImmediate(resolve))
 
 describe('codex rows across a reattach', () => {
-  it('never acks past the start of a streamed item still open, unless the daemon asks', async () => {
-    const acks: number[] = []
+  it('keeps a streamed item still open from its start, unless the daemon asks', async () => {
+    const acks: string[] = []
     const output = new RelayedProviderOutput({
       stdout: new Readable({ read() {} }),
       ackFloor: createCodexRelayAckFloor(),
       durable: async () => true,
-      ack: async (seq) => {
-        acks.push(seq)
+      ack: async (seq, keepFrom) => {
+        acks.push(keepFrom === undefined ? `${seq}` : `${seq} keep ${keepFrom}`)
       }
     })
     output.restartAt(0)
@@ -31,14 +31,14 @@ describe('codex rows across a reattach', () => {
     output.line('relayData', 4, '{"method":"item/agentMessage/delta","params":{"itemId":"b"}}')
     await output.settle()
     // A crash now replays b from its start, so its row is rewritten whole, never cut in two.
-    expect(acks).toEqual([2])
+    expect(acks).toEqual(['4 keep 3'])
     output.line('relayData', 5, item('item/completed', 'b', 'completed'))
     await output.settle()
-    expect(acks).toEqual([2, 5])
+    expect(acks).toEqual(['4 keep 3', '5'])
     output.line('relayData', 6, item('item/started', 'c'))
     await output.settle(true)
     await settle()
-    expect(acks).toEqual([2, 5, 6])
+    expect(acks).toEqual(['4 keep 3', '5', '6'])
   })
 
   it("numbers a kept chat's and its subagents' running turns as the live run did", async () => {

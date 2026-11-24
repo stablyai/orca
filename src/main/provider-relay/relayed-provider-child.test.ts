@@ -136,4 +136,32 @@ describe('relayed provider child', () => {
     await new Promise((resolve) => child.once('close', resolve))
     expect(order).toEqual(['1', '2', '3', 'exit:0'])
   })
+
+  it("a reattach reads the agent's initialize answer even when its stream event lands after the reply", async () => {
+    let sink = null as ProviderRelaySink | null
+    const channel = {
+      bind: (_relayId: string, bound: ProviderRelaySink) => {
+        sink = bound
+        return () => {}
+      },
+      // The stream socket's preamble may land after the control socket's reply.
+      attach: async () => {
+        setTimeout(() => sink?.line('relayInitialize', 0, '{"id":1,"result":{}}'), 5)
+        setTimeout(() => sink?.line('relayPending', 3, 'ask'), 5)
+        return {
+          replayThroughSeq: 3,
+          pending: [3],
+          maxClientRequestId: 1,
+          initializeResultSent: true,
+          stderrTail: '',
+          exit: null
+        }
+      },
+      ack: async () => ({}),
+      close: async () => ({})
+    } as unknown as ProviderRelayChannel
+    const child = new RelayedProviderChild({ channel, relayId: 'r', pid: 42, policy })
+    await child.start(2)
+    expect(child.initializeLine).toBe('{"id":1,"result":{}}')
+  })
 })
