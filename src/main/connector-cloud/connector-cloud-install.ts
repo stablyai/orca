@@ -190,6 +190,7 @@ export function createConnectorCloud({
         ),
       onHelloInputsChanged: (listener) => {
         runtime.onBotsWritten(listener)
+        runtime.onBotShareHostKeyReady(listener)
         runtime.onClientEvent(
           (event) => {
             if (event.type === 'reposChanged' || event.type === 'automationsChanged') {

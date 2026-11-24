@@ -17,6 +17,7 @@ import {
   CONNECTOR_WAKE_FEATURE,
   ConnectorHelloWakeOfferSchema
 } from '../../../cloud/packages/connector-contract/src/wake-messages'
+import { CONNECTOR_CLOUD_BOT_SHARES_FEATURE } from '../../shared/connector-cloud-features'
 import type { ConnectorResult } from './connector-cloud-request'
 import type { ConnectorMachine, ConnectorTransport } from './connector-machine'
 import { jsonBytes } from './connector-snapshot'
@@ -28,7 +29,8 @@ import { jsonBytes } from './connector-snapshot'
 // ownDmChats: a bot start for a DM that ran in the bot's Chat opens the DM a chat of its own.
 // askerNote: Orca's lines on where a bot was asked come apart from the asker's words.
 // connector-wake-v1: takes a wake offer (connector-wake-channel.ts). resume: a send's `resume`
-// continues a chat whose newest turn failed (external-conversation-resume.ts).
+// continues a chat whose newest turn failed (external-conversation-resume.ts). bots.shares: it
+// handles every share delivery (share_resolved, share_accept, share_send).
 const FEATURES = [
   'answer',
   CONNECTOR_ANSWER_TEXT_FEATURE,
@@ -44,7 +46,8 @@ const FEATURES = [
   'askerNote',
   CONNECTOR_REPLIES_OUTBOX_FEATURE,
   CONNECTOR_WAKE_FEATURE,
-  CONNECTOR_RESUME_FEATURE
+  CONNECTOR_RESUME_FEATURE,
+  CONNECTOR_CLOUD_BOT_SHARES_FEATURE
 ]
 const PROMPT_KINDS = ['approval', 'question']
 // Listed by hand: a source joins only once this build's seam handles its conversations.

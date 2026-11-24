@@ -68,6 +68,20 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   botShareDevices: BotShareDevices | null = null
 
   private readonly botWriteListeners = new Set<() => void>()
+  private readonly shareHostKeyListeners = new Set<() => void>()
+
+  /** The RPC server loaded its pairing identity: held messages now have a key to be sealed to, which
+   *  the connector's hello publishes (hostKey). */
+  onBotShareHostKeyReady(listener: () => void): () => void {
+    this.shareHostKeyListeners.add(listener)
+    return () => this.shareHostKeyListeners.delete(listener)
+  }
+
+  notifyBotShareHostKeyReady(): void {
+    for (const listener of this.shareHostKeyListeners) {
+      listener()
+    }
+  }
 
   /** Every bot record save or removal on this host, for its own readers (webhooks, avatars, the
    *  connector's hello); clients hear `botsChanged`. */
