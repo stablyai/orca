@@ -55,11 +55,18 @@ export class LinkedWorkerStates {
   async readStates(unique: readonly string[]): Promise<Map<string, LinkedWorkerState | null>> {
     const db = this.workRuntime.getOrchestrationDb()
     // A new follow-up continues its predecessor's worker: reads that walked it are read again.
-    for (const inserted of this.kept.takeInserted()) {
-      const before = db.getDispatchContextById(inserted)?.follow_up_of_dispatch_id
-      if (before) {
-        this.kept.drop(before)
+    const inserts = this.kept.takeInserted()
+    try {
+      for (const inserted of inserts) {
+        const before = db.getDispatchContextById(inserted)?.follow_up_of_dispatch_id
+        if (before) {
+          this.kept.drop(before)
+        }
       }
+    } catch (error) {
+      // An unread insert may continue any kept read.
+      this.kept.drop(null)
+      throw error
     }
     const started = this.kept.begin(db)
     const evidenceOf = workerStatusEvidence(this.workRuntime.getAgentStatusSnapshotFn?.() ?? [])
@@ -93,7 +100,8 @@ export class LinkedWorkerStates {
     for (const [ref, kept] of hits) {
       states.set(ref, { worker: kept.worker, report: kept.report, reason: kept.reason })
     }
-    const reports = new Map<string, LinkedWorkerState['report']>()
+    // Undefined: the Task couldn't be read, so the read shows no report and isn't kept.
+    const reports = new Map<string, LinkedWorkerState['report'] | undefined>()
     for (const [ref, worker] of workers) {
       if (!worker) {
         states.set(ref, null)
@@ -103,13 +111,15 @@ export class LinkedWorkerStates {
         reports.set(worker.taskId, this.report(worker.taskId))
       }
       // A server worker shows no report, even when a local retry of its Task has one.
-      const report = worker.host === 'local' ? (reports.get(worker.taskId) ?? null) : null
+      const read = worker.host === 'local' ? reports.get(worker.taskId) : null
+      const report = read ?? null
       const reason = reasons.get(worker.dispatchId) ?? null
       states.set(ref, { worker, report, reason })
       const session = trace.sessions.get(worker.dispatchId)
       const latest = trace.latest.get(ref)
       const walked = latest && trace.walked.get(latest.id)
       if (
+        read !== undefined &&
         session &&
         walked &&
         latest &&
@@ -133,11 +143,11 @@ export class LinkedWorkerStates {
   }
 
   /** The report the worker ended with, as its Task recorded it (what worker cards show). */
-  private report(taskId: string): LinkedWorkerState['report'] {
+  private report(taskId: string): LinkedWorkerState['report'] | undefined {
     try {
       return taskReport(this.workRuntime.getOrchestrationDb().getTask(taskId)?.result ?? null)
     } catch {
-      return null
+      return undefined
     }
   }
 }
