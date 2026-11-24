@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, View } from 'react-native'
 import { Shuffle } from 'lucide-react-native'
-import { parseBotAvatar } from '../../../src/shared/bot-avatar'
 import type { BotAgent } from '../../../src/shared/bot-types'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { HostKindIcon } from '../components/icons/HostKindIcon'
@@ -13,21 +12,19 @@ import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import type { NewBotComputer } from './new-bot-computers'
 import { readBotAgentChoices, readSignedInEmail } from './new-bot-host-reads'
 
 /** New bot's picture, with Another picture's shuffle on its corner. */
-export function NewBotPicture(props: { avatar: string; onShuffle: () => void }) {
+export function NewBotPicture(props: { avatar: MobileBotAvatarSource; onShuffle: () => void }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const picture = parseBotAvatar(props.avatar)
   return (
     <View>
-      {picture?.kind === 'mascot' ? (
-        <MobileBotAvatar avatar={{ kind: 'mascot', id: picture.id }} size={72} />
-      ) : null}
+      <MobileBotAvatar avatar={props.avatar} size={72} />
       <Pressable
         style={({ pressed }) => [styles.shuffle, pressed && styles.pressed]}
         onPress={props.onShuffle}
