@@ -13,7 +13,6 @@ function check(holders: string[], transcriptPath?: string) {
     getSelectedAccountCodexHome: () => '/accounts/b',
     systemCodexHomePath: '/system',
     sharedRuntimeCodexHomePath: '/shared',
-    fileIsRegular: () => true,
     listSessionFiles: async function* (sessionsRoot: string) {
       const home = sessionsRoot.replace(/\/sessions$/, '')
       if (holders.includes(home)) {

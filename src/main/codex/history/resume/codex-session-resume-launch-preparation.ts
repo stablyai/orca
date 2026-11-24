@@ -69,6 +69,7 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
       return null
     }
     const systemHomePath = getSystemCodexHomePath()
+    const sharedRuntimeHomePath = getOrcaManagedCodexHomePath()
     const trustedHomes = trustedCodexResumeHomes(runtimeHome, systemHomePath)
     // Refuse unreadable selections before provenance matching can choose another account.
     const selectedAccountCodexHome = runtimeHome.resolveSelectedHostAccountCodexHomePathForResume()
@@ -83,7 +84,7 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
         trustedCodexHomes: trustedHomes,
         getSelectedAccountCodexHome: () => selectedAccountCodexHome,
         systemCodexHomePath: systemHomePath,
-        sharedRuntimeCodexHomePath: getOrcaManagedCodexHomePath()
+        sharedRuntimeCodexHomePath: sharedRuntimeHomePath
       })
     ) {
       // Without its transcript path the thread's account is ambiguous; never guess the credentials.
@@ -95,7 +96,7 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
       trustedCodexHomes: trustedHomes,
       getSelectedAccountCodexHome: () => selectedAccountCodexHome,
       systemCodexHomePath: systemHomePath,
-      sharedRuntimeCodexHomePath: getOrcaManagedCodexHomePath(),
+      sharedRuntimeCodexHomePath: sharedRuntimeHomePath,
       resolveVerifiedResumeHome: async (sessionSource) => {
         let migrated = { useRealCodexHome: false }
         try {
@@ -143,7 +144,7 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
           ...preparation,
           reconcileSharedRuntimeAuth:
             normalizeRuntimePathForComparison(preparation.codexHomePath) ===
-            normalizeRuntimePathForComparison(getOrcaManagedCodexHomePath())
+            normalizeRuntimePathForComparison(sharedRuntimeHomePath)
         }
       : preparation
   }

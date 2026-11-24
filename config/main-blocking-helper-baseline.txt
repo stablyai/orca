@@ -320,7 +320,7 @@
 3 src/main/codex/history/resume/codex-ai-vault-session-resume.ts
 2 src/main/codex/history/resume/codex-legacy-session-resume.ts
 6 src/main/codex/history/resume/codex-session-resume-home.ts
-4 src/main/codex/history/resume/codex-session-resume-launch-preparation.ts
+3 src/main/codex/history/resume/codex-session-resume-launch-preparation.ts
 1 src/main/codex/history/resume/codex-session-resume-preparation.ts
 1 src/main/codex/history/rollouts/codex-session-file-listing.ts
 2 src/main/codex/history/rollouts/codex-session-link.ts

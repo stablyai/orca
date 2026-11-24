@@ -1,11 +1,41 @@
-import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
-import { findTrustedCodexSessionResume } from './codex-session-resume-home'
+import { join } from 'node:path'
+import {
+  getRuntimePathBasename,
+  normalizeRuntimePathForComparison
+} from '../../../../shared/file-access/cross-platform-path'
+import { listCodexSessionRolloutFilesIncrementally } from '../rollouts/codex-session-file-listing'
+import { codexDatedRolloutRelativePath } from './codex-session-resume-home'
 
 function sameHome(left: string | null, right: string): boolean {
   return (
     left !== null &&
     normalizeRuntimePathForComparison(left) === normalizeRuntimePathForComparison(right)
   )
+}
+
+const defaultListSessionFiles = (sessionsRoot: string): AsyncIterable<string> =>
+  listCodexSessionRolloutFilesIncrementally(sessionsRoot, { batchSize: 64, yieldMs: 0 })
+
+async function homeHoldsThread(
+  homePath: string,
+  sessionId: string,
+  listSessionFiles: (sessionsRoot: string) => AsyncIterable<string>
+): Promise<boolean> {
+  const sessionsRoot = join(homePath, 'sessions')
+  const suffix = `-${sessionId}.jsonl`.toLowerCase()
+  try {
+    for await (const filePath of listSessionFiles(sessionsRoot)) {
+      const name = getRuntimePathBasename(filePath)
+        .toLowerCase()
+        .replace(/\.zst$/, '')
+      if (name.endsWith(suffix) && codexDatedRolloutRelativePath(sessionsRoot, filePath)) {
+        return true
+      }
+    }
+  } catch {
+    // An unreadable home cannot prove it holds the thread.
+  }
+  return false
 }
 
 /**
@@ -20,29 +50,25 @@ export async function isAmbiguousIdOnlyAccountResume(args: {
   getSelectedAccountCodexHome: () => string | null
   systemCodexHomePath: string | null
   sharedRuntimeCodexHomePath: string | null
-  fileIsRegular?: (filePath: string) => boolean
   listSessionFiles?: (sessionsRoot: string) => AsyncIterable<string>
 }): Promise<boolean> {
   const selectedHome = args.getSelectedAccountCodexHome()
   if (args.transcriptPath?.trim() || !selectedHome) {
     return false
   }
-  const winner = await findTrustedCodexSessionResume(args)
-  if (!winner || !sameHome(selectedHome, winner.homePath)) {
+  const list = args.listSessionFiles ?? defaultListSessionFiles
+  // The selected account's home ranks first for an ID-only lookup.
+  if (!(await homeHoldsThread(selectedHome, args.sessionId, list))) {
     return false
   }
-  const notMigrationHome = (homePath: string): boolean =>
-    !sameHome(selectedHome, homePath) &&
-    !sameHome(args.systemCodexHomePath, homePath) &&
-    !sameHome(args.sharedRuntimeCodexHomePath, homePath)
-  const otherAccountHomes = args.trustedCodexHomes.filter(notMigrationHome)
+  const otherAccountHomes = args.trustedCodexHomes.filter(
+    (homePath) =>
+      !sameHome(selectedHome, homePath) &&
+      !sameHome(args.systemCodexHomePath, homePath) &&
+      !sameHome(args.sharedRuntimeCodexHomePath, homePath)
+  )
   for (const homePath of otherAccountHomes) {
-    const found = await findTrustedCodexSessionResume({
-      ...args,
-      trustedCodexHomes: [homePath],
-      getSelectedAccountCodexHome: () => null
-    })
-    if (found) {
+    if (await homeHoldsThread(homePath, args.sessionId, list)) {
       return true
     }
   }
