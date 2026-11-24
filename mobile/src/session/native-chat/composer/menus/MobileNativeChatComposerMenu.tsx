@@ -24,7 +24,7 @@ export type ComposerMenuRow =
 
 /** The chat's host's bots under `@`, and one level down a bot's chats. */
 export type MentionBotRow =
-  | { kind: 'bot'; id: string; bot: MentionBot; chats: boolean }
+  | { kind: 'bot'; id: string; bot: MentionBot; chats: boolean; detail?: string }
   | { kind: 'bot-back'; id: string; bot: MentionBot }
   | { kind: 'bot-chat'; id: string; bot: MentionBot; chat: BotChatRow }
   | {

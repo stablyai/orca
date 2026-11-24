@@ -29,6 +29,7 @@ import { botImportNudge } from '../../../src/shared/bots/bot-import'
 import { BOT_NAME_MAX_LENGTH, type BotAgent } from '../../../src/shared/bot-types'
 import { botCreate } from './bot-sheet-operations'
 import type { ListedBot, PhoneBot } from './host-bots-operations'
+import { mobileBotAvatarSource } from './host-bot-row-facts'
 import type { NewBotComputer } from './new-bot-computers'
 import {
   groupFieldStyles,
@@ -194,7 +195,10 @@ function NewBotForm(props: NewBotSheetProps) {
     setImporting(false)
   }
   const pictureView = (
-    <NewBotPicture avatar={avatar} onShuffle={() => setAvatar(randomMascotAvatar(avatar))} />
+    <NewBotPicture
+      avatar={mobileBotAvatarSource({ name, avatar })}
+      onShuffle={() => setAvatar(randomMascotAvatar(avatar))}
+    />
   )
   const pickerRows = [
     ...(choosesComputer
@@ -289,12 +293,8 @@ function NewBotForm(props: NewBotSheetProps) {
           client={client}
           bots={computer ? props.botsOn(computer.id) : []}
           agent={agent}
-          runsOn={
-            <View style={styles.receivePickers}>
-              <ListGroup>{pickerRows}</ListGroup>
-              {pickerNote}
-            </View>
-          }
+          pickerRows={pickerRows}
+          pickerNote={pickerNote}
           ready={agentsReady}
           onBack={() => setReceiving(false)}
           onClose={props.onClose}
@@ -421,6 +421,5 @@ function NewBotForm(props: NewBotSheetProps) {
 }
 
 const styles = themedStyleSheet(() => ({
-  picture: { alignItems: 'center', paddingTop: spacing.sm, paddingBottom: spacing.lg },
-  receivePickers: { marginBottom: spacing.md }
+  picture: { alignItems: 'center', paddingTop: spacing.sm, paddingBottom: spacing.lg }
 }))

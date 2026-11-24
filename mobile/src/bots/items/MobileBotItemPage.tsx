@@ -2,8 +2,8 @@
 // more), the close note, Status (what it waits on under it) and Snoozed while it is, Chat, Done means,
 // Links, Activity, and the comment box docked at the bottom. The agent's question docks chat's answer
 // card in the box's place. Back returns to the list; up and down step through it, "4 of 6".
-import { useRef, useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { useRef } from 'react'
+import { ScrollView, Text, View, type TextInputInstance } from 'react-native'
 import { House, MessageSquare } from 'lucide-react-native'
 import { BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import {
@@ -16,8 +16,6 @@ import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-n
 import type { BotChatTreeWorker } from '../../../../src/shared/bots/bot-chat-tree'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { MobileEdgeFade } from '../../components/list/MobileEdgeFade'
-import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
-import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
 import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -40,12 +38,15 @@ import { useBotItemActivityFollow } from './use-bot-item-activity-follow'
 import { usePhoneBotItemView } from './use-phone-bot-item-view'
 import type { PhoneBotItemStepper } from './use-phone-bot-item-walk'
 import { MobileBotItemPageHeader } from './MobileBotItemPageHeader'
+import { MobileBotItemDescription } from './MobileBotItemDescription'
 import { usePhoneBotItemPendingComments } from './use-phone-bot-item-pending-comments'
-import { botItemCommentDraftKey, returnBotItemCommentDraft } from './bot-item-comment-drafts'
+import {
+  botItemCommentDraftKey,
+  quoteIntoBotItemCommentDraft,
+  returnBotItemCommentDraft
+} from './bot-item-comment-drafts'
 import { useBotItemQuestionSteps } from './use-phone-bot-item-question-steps'
 import { MobileNativeChatComposerMenuHost } from '../../session/native-chat/composer/menus/MobileNativeChatComposerMenuHost'
-
-const DESCRIPTION_LINES_HEIGHT = 3 * 20
 
 export function MobileBotItemPage({
   client,
@@ -139,6 +140,16 @@ export function MobileBotItemPage({
       quick(text, answering)
     }
   })
+  const commentField = useRef<TextInputInstance>(null)
+  // Quoting starts a comment, so the answer card folds to its strip and the box shows.
+  const quoteComment = (text: string): void => {
+    if (askShown) {
+      ask.fold()
+    }
+    quoteIntoBotItemCommentDraft(botItemCommentDraftKey(hostId, uid), text)
+    // In the tap itself: iOS opens the keyboard only for a focus the gesture made.
+    commentField.current?.focus()
+  }
   const back = <MobileBotItemPageHeader stepper={stepper} online={online} onBack={onBack} />
   const item = view.item
   if (!item) {
@@ -196,7 +207,7 @@ export function MobileBotItemPage({
                 <Text style={styles.number}>{formatBotItemNumber(item.number)} </Text>
                 {item.title}
               </Text>
-              {item.description ? <ClampedDescription text={item.description} /> : null}
+              {item.description ? <MobileBotItemDescription text={item.description} /> : null}
             </View>
             {view.failed ? (
               <ListGroup>
@@ -303,6 +314,7 @@ export function MobileBotItemPage({
               onReveal={jump.center}
               sent={sent}
               asking={askOpen}
+              onQuote={quoteComment}
             />
           </ScrollView>
           {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
@@ -334,38 +346,13 @@ export function MobileBotItemPage({
               attachTo={takesImages && !item.chat.gone ? item.chat.id : null}
               hostId={hostId}
               bot={bot}
+              fieldRef={commentField}
               onSend={fromBox}
               showToast={showToast}
             />
           </View>
         </View>
       </MobileNativeChatComposerMenuHost>
-    </View>
-  )
-}
-
-/** The description's first three lines, then Show more; Markdown, as the desktop draws it. */
-function ClampedDescription({ text }: { text: string }) {
-  const t = useMobileTranslation()
-  const [open, setOpen] = useState(false)
-  const [height, setHeight] = useState(0)
-  const clamps = height > DESCRIPTION_LINES_HEIGHT + 4
-  return (
-    <View style={styles.description}>
-      <View style={!open && clamps ? styles.clamped : undefined}>
-        <View onLayout={(event) => setHeight(event.nativeEvent.layout.height)}>
-          <MobileMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
-        </View>
-      </View>
-      {clamps ? (
-        <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" hitSlop={6}>
-          <Text style={styles.showMore}>
-            {open
-              ? t('bots.items.view.showLess', 'Show less')
-              : t('bots.items.view.showMore', 'Show more')}
-          </Text>
-        </Pressable>
-      ) : null}
     </View>
   )
 }
@@ -382,9 +369,6 @@ const styles = themedStyleSheet(() => ({
   head: { paddingHorizontal: spacing.xs, gap: spacing.xs },
   title: { fontSize: typography.titleSize, fontWeight: '600', color: colors.textPrimary },
   number: { fontWeight: '400', color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  description: { marginTop: spacing.xs, gap: spacing.xs },
-  clamped: { maxHeight: DESCRIPTION_LINES_HEIGHT, overflow: 'hidden' },
-  showMore: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   note: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,

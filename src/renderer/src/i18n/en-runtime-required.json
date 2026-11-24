@@ -1520,6 +1520,7 @@
   },
   "bots": {
     "access": {
+      "actsAsYou": "They act as you on {{computer}}.",
       "adviceHeading": "Before you share",
       "codexAsk": "Codex sandbox: read-only until a request is approved.",
       "codexNoSandbox": "No Codex sandbox.",
@@ -1755,7 +1756,11 @@
         "addedRepositories_other": "Added {{count}} repositories"
       },
       "repositoryCount_one": "{{count}} repository in {{accounts}}",
-      "repositoryCount_other": "{{count}} repositories in {{accounts}}"
+      "repositoryCount_other": "{{count}} repositories in {{accounts}}",
+      "setup": {
+        "repoCount_one": "{{count}} repo",
+        "repoCount_other": "{{count}} repos"
+      }
     },
     "groups": {
       "allBotsCount": "All bots · {{count}}",

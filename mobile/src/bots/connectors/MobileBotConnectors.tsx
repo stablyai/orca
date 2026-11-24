@@ -140,7 +140,7 @@ function ConnectorsPage(
   const google = usePhoneGoogleStatus(
     props.client,
     hostKey,
-    bot.google === true || page.kind === 'google' || page.kind === 'google-connect',
+    bot.google === true || page.kind.startsWith('google'),
     reads
   )
   const composio = useMobileComposio(props.client, hostKey, bot.id)

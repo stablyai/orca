@@ -12,6 +12,7 @@ import {
 import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items/work-item-pagination'
 import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { cn } from '@/lib/class-names'
+import { SIDEBAR_NAV_DIMMED_ICON_CLASS_NAME } from './sidebar-nav-controls'
 import { useAppStore } from '@/store/index'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useTranslate } from '@/i18n/use-translate'
@@ -177,10 +178,7 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
             )}
           >
             <List
-              className={cn(
-                'size-4 shrink-0',
-                !tasksActive && 'text-worktree-sidebar-foreground/30'
-              )}
+              className={cn('size-4 shrink-0', !tasksActive && SIDEBAR_NAV_DIMMED_ICON_CLASS_NAME)}
               strokeWidth={tasksActive ? 2.25 : 1.75}
             />
             <span className="flex-1">

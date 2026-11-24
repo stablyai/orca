@@ -1,4 +1,4 @@
-// Connect Linear's or GitHub's sign-in on the phone: the page open in Orca's browser on the computer, with
+// Linear's, GitHub's or Google's sign-in on the phone: the page open in Orca's browser on the computer, with
 // only typing under it. The setup reopens once the sign-in ends.
 import type { ComponentProps } from 'react'
 import { View } from 'react-native'
@@ -26,7 +26,7 @@ export function MobileConnectSignInSheet(
   > & {
     /** The sign-in's tab; null while none shows. */
     tab: MobileBrowserTab | null
-    source: 'linear' | 'github'
+    source: 'linear' | 'github' | 'google'
     onCancel: () => void
   }
 ) {

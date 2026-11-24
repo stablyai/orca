@@ -109,6 +109,8 @@ export function useMobileBotItemAskSlot({
   askShown: boolean
   /** Not now, offline or dictating: the strip shows in the card's place, which stays mounted. */
   strip: MobileNativeChatCollapsedPrompt | null
+  /** Folds the card to its strip, as Not now does. */
+  fold: () => void
 } {
   const t = useMobileTranslation()
   const [folded, setFolded] = useState<string | null>(null)
@@ -132,14 +134,15 @@ export function useMobileBotItemAskSlot({
       Keyboard.dismiss()
     }
   }, [askShown])
+  const fold = (): void => setFolded(key)
   if (!ask) {
-    return { card: null, askOpen, askShown, strip: null }
+    return { card: null, askOpen, askShown, strip: null, fold }
   }
   const first = ask.shape.decisions[ask.open[0]!]!
-  const fold = (): void => setFolded(ask.askId)
   return {
     askOpen,
     askShown,
+    fold,
     strip:
       askOpen && !askShown
         ? { title: botItemQuestionLine(first.question), expand: () => setFolded(null) }

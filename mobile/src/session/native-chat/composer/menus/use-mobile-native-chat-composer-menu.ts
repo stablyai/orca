@@ -187,6 +187,9 @@ export function useMobileNativeChatComposerMenu(input: {
       onNeedSkills?.()
     }
   }, [onNeedSkills, skillsTriggered, leadingSkillTriggered])
+  const openedBots = input.mentionBots?.opened
+  const botsOpen = mention !== null && !roomMentions
+  useEffect(() => openedBots?.(botsOpen), [openedBots, botsOpen])
   const mentionQuery = mention && !roomMentions ? botMenu.fileQuery(mention) : null
   useEffect(() => {
     if (mentionQuery !== null) {

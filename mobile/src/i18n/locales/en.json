@@ -1696,6 +1696,7 @@
         "exitPlanMode": "Exit plan mode",
         "pastedTextLabel": "Pasted text",
         "botChats": "Chats",
+        "botFor": "For: {{detail}}",
         "backToBots": "Back to bots",
         "loadingBotChats": "Loading {{name}}'s chats…",
         "noOtherChats": "No other chats",
@@ -1757,12 +1758,30 @@
         "loading": "Loading Codex usage…",
         "account": "Account used by this chat",
         "retry": "Retry"
+      },
+      "workerDock": {
+        "coordinator": "Waiting on coordinator",
+        "starting": "Starting",
+        "idle": "Idle",
+        "saving": "Saving result…",
+        "failed": "Failed",
+        "unexpected": "Stopped unexpectedly",
+        "stopping": "Stopping…",
+        "workerCount_one": "{{count}} worker",
+        "workerCount_other": "{{count}} workers",
+        "taskCount_one": "{{count}} task",
+        "taskCount_other": "{{count}} tasks",
+        "failedCount": "{{count}} failed",
+        "needsYouCount": "{{count}} needs you",
+        "runningCount": "{{count}} running",
+        "workersRegion": "Workers",
+        "stopOnComputer": "Stop or clear workers on the computer they run on"
       }
     },
     "hostOfflineBanner": {
-      "offline": "{{host}} is offline",
+      "offline": "Can’t reach {{host}}",
       "reconnecting": "Reconnecting to {{host}}…",
-      "asOf": "Showing what was here as of {{time}}"
+      "asOf": "As of {{time}}"
     },
     "offlineAsOfTime": {
       "yesterday": "yesterday, {{time}}"
@@ -4050,7 +4069,8 @@
         "connect": {
           "titleAccount": "Sign in to connect {{email}}",
           "title": "Sign in to connect",
-          "onComputer": "Sign in to Google in Orca on your computer."
+          "onComputer": "Sign in to Google in Orca on your computer.",
+          "signIn": "Sign in to Google"
         },
         "movedDown": "Continued further down.",
         "connected": {
@@ -7416,9 +7436,6 @@
         "full": "Full access",
         "fullDetail": "Runs commands without asking",
         "chatsDetail": "Starts from your chat permission setting",
-        "askLine": "Asks before running commands. Your own allow rules still apply.",
-        "fullLine": "Runs commands without asking.",
-        "chatsLine": "Asks as your chats do.",
         "origin": "From {{who}}’s link",
         "originAnonymous": "From a shared link",
         "back": "Back",
@@ -7803,23 +7820,26 @@
       "fix": {
         "turnOn": "Turn on",
         "copyForAdmin": "Copy for your admin",
-        "checkAgain": "Check again"
+        "checkAgain": "Check again",
+        "allowAgain": "Allow again"
       },
       "adminRequest": "Please mark this Google app as Trusted in the Admin console (Security › API controls › Manage third-party app access): {{clientId}}",
       "copied": "Copied. Send it to your Google admin.",
       "state": {
         "ready": "Ready",
         "apiOff": "Turned off in Google Cloud",
-        "allowOnHost": "Allow again on {{host}}",
         "adminBlocked": "Your company’s Google admin blocked it",
-        "error": "Couldn’t check"
+        "error": "Couldn’t check",
+        "notAllowed": "You didn’t allow it",
+        "allowOnHost": "Allow again on {{host}}"
       },
       "headline": {
         "connected": "Google is connected",
         "toFixOne": "Almost there: 1 thing to fix",
         "toFix": "Almost there: {{count}} things to fix",
-        "endedOnHost": "Google access ended. Sign in again on {{host}}.",
-        "noDefault": "Choose a default account"
+        "noDefault": "Choose a default account",
+        "ended": "Google access ended.",
+        "endedOnHost": "Google access ended. Sign in again on {{host}}."
       },
       "defaultBadge": "Default",
       "setDefault": "Set as default",
@@ -7840,6 +7860,14 @@
       "accounts": "Accounts",
       "row": {
         "signedOut": "Signed out by Google"
+      },
+      "reconnect": "Reconnect",
+      "addAccount": "Add another account",
+      "signIn": "Sign in to Google",
+      "handoff": "Pick your account and choose Allow.",
+      "signInWarning": "Google will show a warning because this app is yours and brand new. Choose Advanced, then Go to Orca, and tick every box on the next screen.",
+      "signInRun": {
+        "failed": "The Google sign-in failed. Try again."
       }
     },
     "failures": {
@@ -7947,9 +7975,6 @@
     },
     "upcoming": {
       "needsSignIn": "Needs sign-in"
-    },
-    "page": {
-      "serverDownTitle": "Can’t reach {{host}}"
     },
     "memoryHistory": {
       "tidyUp": "Tidy-up"

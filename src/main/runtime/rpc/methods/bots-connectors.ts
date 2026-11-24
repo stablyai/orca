@@ -7,6 +7,7 @@ import {
 import { BotConnectors } from '../../../../shared/rpc-contract/bots-look-around-params'
 import { readGhSignIn } from '../../../bots/bot-local-sign-ins'
 import { getGoogleConnect } from '../../../google/google-connect'
+import { readGoogleDefaultAccount } from '../../../google/google-credential-store'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { defineMethod, InvalidArgumentError } from '../core'
 import { getAzureDevOpsAuthStatus } from '../../../azure-devops/client'
@@ -73,7 +74,7 @@ export const BOT_CONNECTORS_METHOD = defineMethod({
           linear: (await runtime.linearStatus()).connected,
           google: (await getGoogleConnect()?.accounts()) ?? [],
           googleApp: Boolean(await getGoogleConnect()?.client()),
-          googleDefault: (await getGoogleConnect()?.defaultAccount()) ?? null,
+          googleDefault: getGoogleConnect() ? await readGoogleDefaultAccount() : { email: null },
           azureBoards: (await getAzureDevOpsAuthStatus()).configured
         },
         sources

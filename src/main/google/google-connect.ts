@@ -35,6 +35,7 @@ import {
 import { checkGoogleServices } from './google-readiness'
 import { googleCallbackQuery, googlePromptExpectation } from './google-sign-in-return'
 import {
+  GOOGLE_SIGN_IN_TTL_MS,
   runGoogleSignIn,
   type GoogleSignInDeps,
   type GoogleSignInOptions
@@ -103,7 +104,10 @@ export class GoogleConnect {
         },
         describeFailure: (message) => ({ error: message.slice(0, 600) }),
         busyMessage:
-          'A Google sign-in is already running on this computer. Finish or cancel it first.'
+          'A Google sign-in is already running on this computer. Finish or cancel it first.',
+        // Google's page is often finished at this computer while the phone that started it sleeps; its
+        // link still ends the flow. The extra minute covers picking the app and the exchange after Allow.
+        ownerSilenceMs: GOOGLE_SIGN_IN_TTL_MS + 60_000
       }
     )
   }
@@ -182,10 +186,12 @@ export class GoogleConnect {
   }
 
   /** Re-reads every connected account's services; a grant Google ended shows as Reconnect. */
-  async checkAccounts(): Promise<GoogleAccountView[]> {
+  async checkAccounts(only?: (email: string) => boolean): Promise<GoogleAccountView[]> {
     const deps = { http: this.deps.http, now: this.deps.now }
+    // `only`: the accounts worth checking (a bot's own); the rest keep their last check.
+    const listed = (await listGoogleAccounts()).filter(({ email }) => !only || only(email))
     await Promise.all(
-      (await listGoogleAccounts()).map(async ({ email }) => {
+      listed.map(async ({ email }) => {
         // An unreadable account is listed as Reconnect; googleAccessToken says it isn't connected.
         try {
           const accessToken = await googleAccessToken(email, deps)

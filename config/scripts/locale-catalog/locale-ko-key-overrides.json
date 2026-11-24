@@ -4818,7 +4818,7 @@
     "ko": "기본 에이전트 사용"
   },
   "auto.components.settings.SourceControlAiActionRecipeDefaults.bf84dea6af": {
-    "ko": "Orca가 컨텍스트를 삽입하도록 하려는 경우에만 변수를 사용하십시오. 일반 에이전트 기본 설정을 따르려면 에이전트를 기본값으로 둡니다."
+    "ko": "Orca가 컨텍스트를 삽입하도록 하려는 경우에만 변수를 사용하세요. 일반 에이전트 기본 설정을 따르려면 에이전트를 기본값으로 두세요."
   },
   "auto.components.settings.SourceControlAiActionRecipeDefaults.cf01d41bce": {
     "ko": "각 소스 제어 AI 버튼에서 사용되는 에이전트, CLI 인수 및 명령 템플릿입니다."
