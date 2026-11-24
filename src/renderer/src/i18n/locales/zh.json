@@ -6282,7 +6282,16 @@
           "repairAvailable": "可修复",
           "installAvailable": "可安装",
           "otherBuild": "由其他版本的 Orca 安装",
-          "otherBuildKept": "已保留：由其他版本的 Orca 写入"
+          "otherBuildKept": "已保留：由其他版本的 Orca 写入",
+          "differsFromOrca": "此副本与 Orca 的副本不同",
+          "replaceMovesFolder": "替换会将整个文件夹（包括所有额外文件）移动到 {{folder}}。",
+          "replaceMovesFolderOnHost": "替换会将整个文件夹（包括所有额外文件）移动到 {{host}} 上的 {{folder}}。",
+          "replaceMovesLink": "替换会将此链接移动到 {{folder}}。",
+          "replaceMovesLinkOnHost": "替换会将此链接移动到 {{host}} 上的 {{folder}}。",
+          "replaceMovesFile": "替换会将此文件移动到 {{folder}}。",
+          "replaceMovesFileOnHost": "替换会将此文件移动到 {{host}} 上的 {{folder}}。",
+          "replaceMovesCopy": "替换会将此副本移动到 {{folder}}。",
+          "replaceMovesCopyOnHost": "替换会将此副本移动到 {{host}} 上的 {{folder}}。"
         },
         "installResult": {
           "installed": "已安装并验证",
@@ -6304,6 +6313,11 @@
           "preservedDescription": "Orca 已更新该技能，并将你的修改保存到 {{value0}}",
           "uncertainTitle": "Orca 无法确认 {{value0}} 上的技能更新",
           "uncertainDescription": "Orca 可能已更新 {{value0}} 上的技能，但无法确认结果；如果你在更新期间编辑过技能，你的副本位于 {{value1}}"
+        },
+        "SkillBackupPathLine": {
+          "movedTo": "旧副本已移动到：",
+          "movedToOnHost": "旧副本已移动到 {{host}} 上的以下路径：",
+          "showFolder": "显示文件夹"
         }
       },
       "sidebar": {
@@ -13613,7 +13627,11 @@
           "attentionOther": "需要处理 · 另一个技能已使用此名称",
           "attentionSharedNotCurrent": "需要处理 · 此文件夹使用的共享副本不是 Orca 的副本",
           "resultUpdateSkippedPlaces": "{{result}} · 已跳过 {{places}} 个位置的更新：{{reason}}",
-          "resultUpdateSkippedAgent": "{{result}} · 已跳过 {{agent}} 中的更新：{{reason}}"
+          "resultUpdateSkippedAgent": "{{result}} · 已跳过 {{agent}} 中的更新：{{reason}}",
+          "attentionDiffersFromOrca": "需要处理 · 此副本与 Orca 的副本不同",
+          "replaceMovesCopyToBackup": "替换会将当前副本（包括所有额外文件）移动到备份。",
+          "replaceMovesCopyToFolder": "替换会将当前副本（包括所有额外文件）移动到 {{folder}}。",
+          "replaceMovesCopyToFolderOnHost": "替换会将当前副本（包括所有额外文件）移动到 {{host}} 上的 {{folder}}。"
         },
         "recoverServer": {
           "checking": "正在检查锁…",

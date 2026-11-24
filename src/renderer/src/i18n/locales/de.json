@@ -6005,7 +6005,16 @@
           "repairAvailable": "Reparatur verfügbar",
           "installAvailable": "Installation verfügbar",
           "otherBuild": "Von einer anderen Orca-Version installiert",
-          "otherBuildKept": "Beibehalten: von einer anderen Orca-Version geschrieben"
+          "otherBuildKept": "Beibehalten: von einer anderen Orca-Version geschrieben",
+          "differsFromOrca": "Diese Kopie weicht von Orcas Kopie ab",
+          "replaceMovesFolder": "Beim Ersetzen wird der gesamte Ordner einschließlich zusätzlicher Dateien nach {{folder}} verschoben.",
+          "replaceMovesFolderOnHost": "Beim Ersetzen wird der gesamte Ordner einschließlich zusätzlicher Dateien nach {{folder}} auf {{host}} verschoben.",
+          "replaceMovesLink": "Beim Ersetzen wird dieser Link nach {{folder}} verschoben.",
+          "replaceMovesLinkOnHost": "Beim Ersetzen wird dieser Link nach {{folder}} auf {{host}} verschoben.",
+          "replaceMovesFile": "Beim Ersetzen wird diese Datei nach {{folder}} verschoben.",
+          "replaceMovesFileOnHost": "Beim Ersetzen wird diese Datei nach {{folder}} auf {{host}} verschoben.",
+          "replaceMovesCopy": "Beim Ersetzen wird diese Kopie nach {{folder}} verschoben.",
+          "replaceMovesCopyOnHost": "Beim Ersetzen wird diese Kopie nach {{folder}} auf {{host}} verschoben."
         },
         "installResult": {
           "installed": "Installiert und überprüft.",
@@ -6020,6 +6029,11 @@
           "removed": "{{removed}} entfernt.",
           "removedPreserved_one": "{{removed}} entfernt · {{count}} geänderter Skill beibehalten.",
           "removedPreserved_other": "{{removed}} entfernt · {{count}} geänderte Skills beibehalten."
+        },
+        "SkillBackupPathLine": {
+          "movedTo": "Alte Kopie verschoben nach:",
+          "movedToOnHost": "Alte Kopie auf {{host}} verschoben nach:",
+          "showFolder": "Ordner anzeigen"
         }
       },
       "sidebar": {
@@ -13138,7 +13152,11 @@
           "attentionOther": "Handlungsbedarf · Ein anderer Skill verwendet bereits diesen Namen",
           "attentionSharedNotCurrent": "Handlungsbedarf · Die von diesem Ordner verwendete gemeinsame Kopie stammt nicht von Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Aktualisierung an {{places}} Stellen übersprungen: {{reason}}",
-          "resultUpdateSkippedAgent": "{{result}} · Aktualisierung bei {{agent}} übersprungen: {{reason}}"
+          "resultUpdateSkippedAgent": "{{result}} · Aktualisierung bei {{agent}} übersprungen: {{reason}}",
+          "attentionDiffersFromOrca": "Handlungsbedarf · Diese Kopie weicht von Orcas Kopie ab",
+          "replaceMovesCopyToBackup": "Beim Ersetzen wird die aktuelle Kopie einschließlich zusätzlicher Dateien in eine Sicherungskopie verschoben.",
+          "replaceMovesCopyToFolder": "Beim Ersetzen wird die aktuelle Kopie einschließlich zusätzlicher Dateien nach {{folder}} verschoben.",
+          "replaceMovesCopyToFolderOnHost": "Beim Ersetzen wird die aktuelle Kopie einschließlich zusätzlicher Dateien nach {{folder}} auf {{host}} verschoben."
         },
         "recoverServer": {
           "checking": "Sperre wird geprüft…",

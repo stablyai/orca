@@ -6238,7 +6238,16 @@
           "repairAvailable": "Доступно восстановление",
           "installAvailable": "Доступна установка",
           "otherBuild": "Установлено другой версией Orca",
-          "otherBuildKept": "Сохранено: записано другой версией Orca"
+          "otherBuildKept": "Сохранено: записано другой версией Orca",
+          "differsFromOrca": "Эта копия отличается от копии Orca",
+          "replaceMovesFolder": "При замене вся папка, включая дополнительные файлы, будет перемещена в {{folder}}.",
+          "replaceMovesFolderOnHost": "При замене вся папка, включая дополнительные файлы, будет перемещена в {{folder}} на {{host}}.",
+          "replaceMovesLink": "При замене эта ссылка будет перемещена в {{folder}}.",
+          "replaceMovesLinkOnHost": "При замене эта ссылка будет перемещена в {{folder}} на {{host}}.",
+          "replaceMovesFile": "При замене этот файл будет перемещён в {{folder}}.",
+          "replaceMovesFileOnHost": "При замене этот файл будет перемещён в {{folder}} на {{host}}.",
+          "replaceMovesCopy": "При замене эта копия будет перемещена в {{folder}}.",
+          "replaceMovesCopyOnHost": "При замене эта копия будет перемещена в {{folder}} на {{host}}."
         },
         "installResult": {
           "installed": "Установлен и проверен.",
@@ -6255,6 +6264,11 @@
           "removedPreserved_few": "Удалено: {{removed}} · {{count}} изменённых навыка сохранено.",
           "removedPreserved_many": "Удалено: {{removed}} · {{count}} изменённых навыков сохранено.",
           "removedPreserved_other": "Удалено: {{removed}} · {{count}} изменённого навыка сохранено."
+        },
+        "SkillBackupPathLine": {
+          "movedTo": "Старая копия перемещена в:",
+          "movedToOnHost": "Старая копия перемещена на {{host}} в:",
+          "showFolder": "Показать папку"
         }
       },
       "sidebar": {
@@ -13483,7 +13497,11 @@
           "attentionOther": "Требует внимания · Другой навык уже использует это имя",
           "attentionSharedNotCurrent": "Требует внимания · Общая копия, используемая папкой, отличается от копии Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Обновление пропущено в местах установки ({{places}}): {{reason}}",
-          "resultUpdateSkippedAgent": "{{result}} · Обновление пропущено для {{agent}}: {{reason}}"
+          "resultUpdateSkippedAgent": "{{result}} · Обновление пропущено для {{agent}}: {{reason}}",
+          "attentionDiffersFromOrca": "Требует внимания · Эта копия отличается от копии Orca",
+          "replaceMovesCopyToBackup": "При замене текущая копия, включая дополнительные файлы, будет перемещена в резервную копию.",
+          "replaceMovesCopyToFolder": "При замене текущая копия, включая дополнительные файлы, будет перемещена в {{folder}}.",
+          "replaceMovesCopyToFolderOnHost": "При замене текущая копия, включая дополнительные файлы, будет перемещена в {{folder}} на {{host}}."
         },
         "recoverServer": {
           "checking": "Проверка блокировки…",

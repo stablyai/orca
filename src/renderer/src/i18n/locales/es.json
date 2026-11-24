@@ -5519,7 +5519,16 @@
           "repairAvailable": "Reparación disponible",
           "installAvailable": "Instalación disponible",
           "otherBuild": "Instalado por otra versión de Orca",
-          "otherBuildKept": "Conservado: escrito por otra versión de Orca"
+          "otherBuildKept": "Conservado: escrito por otra versión de Orca",
+          "differsFromOrca": "Esta copia es distinta de la de Orca",
+          "replaceMovesFolder": "Al reemplazar, toda la carpeta, incluidos los archivos adicionales, se mueve a {{folder}}.",
+          "replaceMovesFolderOnHost": "Al reemplazar, toda la carpeta, incluidos los archivos adicionales, se mueve a {{folder}} en {{host}}.",
+          "replaceMovesLink": "Al reemplazar, este enlace se mueve a {{folder}}.",
+          "replaceMovesLinkOnHost": "Al reemplazar, este enlace se mueve a {{folder}} en {{host}}.",
+          "replaceMovesFile": "Al reemplazar, este archivo se mueve a {{folder}}.",
+          "replaceMovesFileOnHost": "Al reemplazar, este archivo se mueve a {{folder}} en {{host}}.",
+          "replaceMovesCopy": "Al reemplazar, esta copia se mueve a {{folder}}.",
+          "replaceMovesCopyOnHost": "Al reemplazar, esta copia se mueve a {{folder}} en {{host}}."
         },
         "installResult": {
           "installed": "Instalada y verificada.",
@@ -5535,6 +5544,11 @@
           "removedPreserved_one": "Eliminadas: {{removed}} · {{count}} skill modificada conservada.",
           "removedPreserved_other": "Eliminadas: {{removed}} · {{count}} skills modificadas conservadas.",
           "removedPreserved_many": "Eliminadas: {{removed}} · {{count}} skills modificadas conservadas."
+        },
+        "SkillBackupPathLine": {
+          "movedTo": "Copia anterior movida a:",
+          "movedToOnHost": "Copia anterior movida en {{host}} a:",
+          "showFolder": "Mostrar carpeta"
         }
       },
       "sidebar": {
@@ -12771,7 +12785,11 @@
           "attentionOther": "Requiere atención · Otra habilidad ya usa este nombre",
           "attentionSharedNotCurrent": "Requiere atención · La copia compartida que usa esta carpeta no es de Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Actualización omitida en {{places}} ubicaciones: {{reason}}",
-          "resultUpdateSkippedAgent": "{{result}} · Actualización omitida en {{agent}}: {{reason}}"
+          "resultUpdateSkippedAgent": "{{result}} · Actualización omitida en {{agent}}: {{reason}}",
+          "attentionDiffersFromOrca": "Requiere atención · Esta copia es distinta de la de Orca",
+          "replaceMovesCopyToBackup": "Al reemplazar, la copia actual, incluidos los archivos adicionales, se mueve a una copia de seguridad.",
+          "replaceMovesCopyToFolder": "Al reemplazar, la copia actual, incluidos los archivos adicionales, se mueve a {{folder}}.",
+          "replaceMovesCopyToFolderOnHost": "Al reemplazar, la copia actual, incluidos los archivos adicionales, se mueve a {{folder}} en {{host}}."
         },
         "ReleaseBuildPicker": {
           "build": "Versión",
