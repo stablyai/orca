@@ -10,6 +10,7 @@ const HOST: SharedBotHostView = {
   botId: 'bot-1',
   botName: 'Ivy',
   ownerName: 'Jinwoo Hong',
+  homeWorkspaceId: 'home-1',
   link: 'live'
 }
 

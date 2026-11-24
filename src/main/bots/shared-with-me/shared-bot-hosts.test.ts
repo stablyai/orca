@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
@@ -7,8 +7,11 @@ import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay
 import { SharedBotHosts } from './shared-bot-hosts'
 import { UNREADABLE_ANSWER } from '../../connector-cloud/connector-cloud-request'
 import { SharedBotHeldSends } from './shared-bot-held-sends'
-import { SharedBotHostStore } from './shared-bot-host-store'
-import { SHARED_BOT_HOST_ERRORS } from '../../../shared/bots/shared-bot-hosts'
+import { SHARED_BOT_HOSTS_FILENAME, SharedBotHostStore } from './shared-bot-host-store'
+import {
+  SHARED_BOT_HOST_ERRORS,
+  type SharedBotHostView
+} from '../../../shared/bots/shared-bot-hosts'
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { SharedBotHostEntry } from './shared-bot-host-store'
 import {
@@ -19,6 +22,7 @@ import {
   type MineShare
 } from './shared-bot-pairing'
 import type { SharedBotsCloud } from './shared-bots-cloud'
+import { memorySharedBotHomes } from './shared-bot-home.test-fixture'
 import type { ConnectorShareAcceptRequest } from '../../../shared/connector-share-contract'
 
 const HOST_KEY = Buffer.from(nacl.box.keyPair().publicKey).toString('base64')
@@ -95,14 +99,16 @@ function hosts(
     hold
   }
   const published: string[][] = []
+  const memory = memorySharedBotHomes(dir)
   const service = new SharedBotHosts({
     userDataPath: dir,
     cloud: () => cloud,
     platform: NODE_RELAY_CLIENT_PLATFORM,
     publish: (views) => published.push(views.map((view) => view.shareId)),
+    homes: memory.homes,
     now
   })
-  return { service, accepts, published, mineReads: () => mineReads }
+  return { service, accepts, published, mineReads: () => mineReads, dir, memory }
 }
 
 describe('shared agent pairing', () => {
@@ -303,5 +309,98 @@ describe('a held message and a cloud read that cross', () => {
     expect(store.get('share-1')!.held[0]?.listed).toBe(true)
     read([])
     expect(ids()).toEqual([])
+  })
+})
+
+describe('a shared agent’s home on this computer', () => {
+  function homeHosts(dir: string, memory: ReturnType<typeof memorySharedBotHomes>) {
+    let shares: MineShare[] = [share(), share({ shareId: 'share-2', botId: 'bot-2' })]
+    const views: SharedBotHostView[][] = []
+    const service = new SharedBotHosts({
+      userDataPath: dir,
+      cloud: () => ({
+        mine: async () => ({ ok: true, value: { v: 1, shares } }),
+        accept: async () => ({ ok: true, value: { status: 'queued' } }),
+        hold: async () => ({ ok: true, value: { status: 'held' } })
+      }),
+      platform: NODE_RELAY_CLIENT_PLATFORM,
+      publish: (next) => views.push(next),
+      homes: memory.homes,
+      now: () => 0
+    })
+    return {
+      service,
+      setShares: (next: MineShare[]) => (shares = next),
+      homeOf: (shareId: string) =>
+        views.at(-1)?.find((view) => view.shareId === shareId)?.homeWorkspaceId
+    }
+  }
+
+  it('is one Bots-group folder workspace per share, kept across a restart', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-home-'))
+    dirs.push(dir)
+    const memory = memorySharedBotHomes(dir)
+    const first = homeHosts(dir, memory)
+    await first.service.refresh()
+    first.service.stop()
+    await first.service.flushed()
+    const home = first.homeOf('share-1')
+    expect(memory.groups).toEqual([
+      expect.objectContaining({ name: 'Bots', parentPath: join(dir, 'bots') })
+    ])
+    expect(memory.folders).toEqual([
+      {
+        id: home,
+        name: 'Ivy',
+        folderPath: join(dir, 'shared-agents', 'share-1'),
+        projectGroupId: memory.groups[0]?.id
+      },
+      expect.objectContaining({ folderPath: join(dir, 'shared-agents', 'share-2') })
+    ])
+    expect(existsSync(join(dir, 'shared-agents', 'share-1'))).toBe(true)
+    const restarted = homeHosts(dir, memory)
+    await restarted.service.refresh()
+    restarted.service.stop()
+    expect(restarted.homeOf('share-1')).toBe(home)
+    expect(memory.folders).toHaveLength(2)
+  })
+
+  it('loads a store written before homes, and makes each share its home', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-home-old-'))
+    dirs.push(dir)
+    writeFileSync(join(dir, SHARED_BOT_HOSTS_FILENAME), JSON.stringify({ v: 1, shares: [entry()] }))
+    const memory = memorySharedBotHomes(dir)
+    const { service, homeOf } = homeHosts(dir, memory)
+    await service.ready()
+    expect(service.views()).toEqual([
+      expect.objectContaining({ shareId: 'share-1', homeWorkspaceId: null })
+    ])
+    await service.refresh()
+    service.stop()
+    expect(service.views().find((view) => view.environmentId === 'env-1')?.homeWorkspaceId).toBe(
+      homeOf('share-1')
+    )
+    expect(homeOf('share-1')).toEqual(expect.any(String))
+  })
+
+  it('goes with its share: the record, the workspace and only its own folder', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-home-gone-'))
+    dirs.push(dir)
+    const memory = memorySharedBotHomes(dir)
+    const { service, setShares, homeOf } = homeHosts(dir, memory)
+    await service.refresh()
+    const kept = homeOf('share-2')
+    writeFileSync(join(dir, 'shared-agents', 'share-1', 'notes.md'), 'x')
+    setShares([share({ shareId: 'share-2', botId: 'bot-2' })])
+    await service.refresh()
+    service.stop()
+    expect(service.views().map((view) => view.shareId)).toEqual(['share-2'])
+    expect(memory.folders.map((home) => home.id)).toEqual([kept])
+    expect(existsSync(join(dir, 'shared-agents', 'share-1'))).toBe(false)
+    expect(existsSync(join(dir, 'shared-agents', 'share-2'))).toBe(true)
+    await service.flushed()
+    const store = new SharedBotHostStore(dir)
+    await store.load()
+    expect(store.list().map((kept) => kept.shareId)).toEqual(['share-2'])
   })
 })

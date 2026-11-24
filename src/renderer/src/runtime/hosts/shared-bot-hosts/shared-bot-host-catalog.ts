@@ -7,6 +7,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
+import { setSharedBotHostLookup } from '../../../../../shared/bots/bot-home-host'
 
 let views: readonly SharedBotHostView[] = []
 // Until main first answers, the list says nothing about which shares are gone.
@@ -25,8 +26,12 @@ function setViews(next: readonly SharedBotHostView[]): void {
 export function installSharedBotHostCatalog(): () => void {
   const stop = window.api.sharedBotHosts.onChanged(setViews)
   void window.api.sharedBotHosts.list().then(setViews, () => {})
+  const stopLookup = setSharedBotHostLookup(
+    (environmentId) => sharedBotHostFor({ kind: 'environment', environmentId }) !== null
+  )
   return () => {
     stop()
+    stopLookup()
     views = []
     hydrated = false
     for (const listener of listeners) {
@@ -56,16 +61,27 @@ export function sharedBotHostFor(target: RuntimeClientTarget): SharedBotHostView
     : null
 }
 
+/** The shared agent's host a bot's host id names, or null for this computer's or a paired server's. */
+export function sharedBotHostOf(hostId: ExecutionHostId): SharedBotHostView | null {
+  const parsed = parseExecutionHostId(hostId)
+  return parsed?.kind === 'runtime'
+    ? sharedBotHostFor({ kind: 'environment', environmentId: parsed.environmentId })
+    : null
+}
+
+/** The folder workspace this computer keeps as the home of `botId` on `hostId`, when that is a
+ *  shared agent's host and main has made it. */
+export function sharedBotHomeWorkspaceId(hostId: ExecutionHostId, botId: string): string | null {
+  const host = sharedBotHostOf(hostId)
+  return host?.botId === botId ? host.homeWorkspaceId : null
+}
+
 export function useSharedBotHosts(): readonly SharedBotHostView[] {
   return useSyncExternalStore(subscribeSharedBotHosts, readSharedBotHosts)
 }
 
-/** The shared agent's host a bot's host id names, or null for this computer's or a paired server's. */
+/** `sharedBotHostOf`, followed for its changes. */
 export function useSharedBotHostOf(hostId: ExecutionHostId): SharedBotHostView | null {
-  const parsed = parseExecutionHostId(hostId)
-  const environmentId = parsed?.kind === 'runtime' ? parsed.environmentId : null
-  const hosts = useSharedBotHosts()
-  return environmentId === null
-    ? null
-    : (hosts.find((view) => view.environmentId === environmentId) ?? null)
+  useSharedBotHosts()
+  return sharedBotHostOf(hostId)
 }

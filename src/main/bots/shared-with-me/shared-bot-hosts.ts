@@ -16,9 +16,14 @@ import {
   SharedBotHostStore,
   type SharedBotHostEntry
 } from './shared-bot-host-store'
-import { SharedBotHeldSends, sharedBotFailure as failure } from './shared-bot-held-sends'
+import {
+  SharedBotHeldSends,
+  sharedBotFailure as failure,
+  sharedBotOffline
+} from './shared-bot-held-sends'
 import { nextPairingStep, type MineShare } from './shared-bot-pairing'
 import type { SharedBotsCloud } from './shared-bots-cloud'
+import type { SharedBotHomes } from './shared-bot-home'
 
 // New shares and invites resolve within this; pairing and held messages are read sooner.
 const IDLE_POLL_MS = 10 * 60 * 1000
@@ -29,6 +34,7 @@ export type SharedBotHostsDeps = {
   cloud: () => SharedBotsCloud | null
   platform: RelayClientPlatform
   publish: (views: SharedBotHostView[]) => void
+  homes: SharedBotHomes
   now?: () => number
 }
 
@@ -78,6 +84,11 @@ export class SharedBotHosts {
     }
   }
 
+  /** Every change to the kept shares so far is on disk. */
+  flushed(): Promise<void> {
+    return this.store.flushed()
+  }
+
   views(): SharedBotHostView[] {
     return this.store.list().flatMap((entry) =>
       this.shares === null || this.shares.has(entry.shareId)
@@ -88,6 +99,7 @@ export class SharedBotHosts {
               botId: entry.botId,
               botName: entry.botName,
               ownerName: entry.ownerName,
+              homeWorkspaceId: entry.homeWorkspaceId ?? null,
               link: this.linkFor(entry).current()
             }
           ]
@@ -103,13 +115,16 @@ export class SharedBotHosts {
       return this.refreshing
     }
     this.refreshing = (async () => {
-      do {
-        this.refreshAgain = false
-        await this.readMine()
-      } while (this.refreshAgain)
-    })().finally(() => {
-      this.refreshing = null
-    })
+      // Cleared in the same turn as the last check, so a read asked for after it starts anew.
+      try {
+        do {
+          this.refreshAgain = false
+          await this.readMine()
+        } while (this.refreshAgain)
+      } finally {
+        this.refreshing = null
+      }
+    })()
     return this.refreshing
   }
 
@@ -123,8 +138,9 @@ export class SharedBotHosts {
     const answer = cloud ? await cloud.mine() : null
     // Signed out: the account's shares, keys and links go with it.
     const shares = answer?.ok ? answer.value.shares : answer?.error === 'signed_out' ? [] : null
+    const gone = shares ? this.applyMine(shares) : []
+    await this.deps.homes.settle(gone, this.store)
     if (shares) {
-      this.applyMine(shares)
       await Promise.all(this.store.list().map((entry) => this.advance(entry)))
     }
     this.publish()
@@ -155,13 +171,13 @@ export class SharedBotHosts {
       }
     }
     if (link !== 'live') {
-      return this.offline(entry, method)
+      return sharedBotOffline(entry, method)
     }
     try {
       return this.withMeta(entry, await this.linkFor(entry).request(method, params))
     } catch {
       // The link closed or timed out under the request: an answer the window can read.
-      return this.offline(entry, method)
+      return sharedBotOffline(entry, method)
     }
   }
 
@@ -176,7 +192,7 @@ export class SharedBotHosts {
     if (!entry || (await this.reach(entry)) !== 'live') {
       onResponse(
         entry
-          ? this.offline(entry, method)
+          ? sharedBotOffline(entry, method)
           : failure(method, SHARED_BOT_HOST_ERRORS.offline, 'This agent is no longer shared.')
       )
       return () => {}
@@ -191,21 +207,17 @@ export class SharedBotHosts {
     })
   }
 
-  private applyMine(shares: readonly MineShare[]): void {
+  /** Applies the cloud's list; returns the kept shares it no longer lists, now removed. */
+  private applyMine(shares: readonly MineShare[]): SharedBotHostEntry[] {
     const current = new Map(shares.map((share) => [share.shareId, share]))
     this.shares = current
     this.held.applyMine(shares)
-    const gone = new Set(
-      this.store
-        .list()
-        .map((entry) => entry.shareId)
-        .filter((shareId) => !current.has(shareId))
-    )
-    for (const shareId of gone) {
+    const gone = this.store.list().filter((entry) => !current.has(entry.shareId))
+    for (const { shareId } of gone) {
       this.links.get(shareId)?.close()
       this.links.delete(shareId)
     }
-    this.store.remove(gone)
+    this.store.remove(new Set(gone.map((entry) => entry.shareId)))
     for (const share of shares) {
       const entry = this.store.get(share.shareId) ?? newSharedBotHostEntry(share)
       const { hostKey: _hostKey, avatarUrl: _avatar, ...rest } = entry
@@ -230,6 +242,7 @@ export class SharedBotHosts {
         held: this.held.settle(entry.held)
       })
     }
+    return gone
   }
 
   /** Accepts; dials a fresh invite at once so it is spent before it expires, and an online host so
@@ -260,14 +273,6 @@ export class SharedBotHosts {
     const share = this.shares?.get(entry.shareId)
     const step = share ? nextPairingStep(entry, share, this.now()) : null
     return step?.kind === 'connect' ? link.connect(step.credential) : link.settled()
-  }
-
-  private offline(entry: SharedBotHostEntry, method: string): RuntimeRpcResponse<unknown> {
-    return failure(
-      method,
-      SHARED_BOT_HOST_ERRORS.offline,
-      `${entry.ownerName}’s computer is offline`
-    )
   }
 
   private withMeta(entry: SharedBotHostEntry, response: RpcResponse): RuntimeRpcResponse<unknown> {

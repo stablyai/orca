@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { SharedBotHosts } from '../../bots/shared-with-me/shared-bot-hosts'
+import { memorySharedBotHomes } from '../../bots/shared-with-me/shared-bot-home.test-fixture'
 import { setSharedBotHostRouting } from '../../bots/shared-with-me/shared-bot-host-routing'
 import {
   resolveAttachmentEnvironmentId,
@@ -32,6 +33,7 @@ describe('attachment uploads to a shared agent’s host', () => {
     dirs.push(userDataPath)
     const hosts = new SharedBotHosts({
       userDataPath,
+      homes: memorySharedBotHomes(userDataPath).homes,
       platform: NODE_RELAY_CLIENT_PLATFORM,
       cloud: () => ({
         mine: async () => ({

@@ -33,52 +33,6 @@ export function keptBotHomes(
   ]
 }
 
-/**
- * A shared agent's host lists none of its workspaces to this account, so each of its bots' homes is
- * the bot's own name, restored like an away server's kept home.
- */
-export function sharedBotHomes(
-  hostId: ExecutionHostId,
-  list: KeptBotHostList
-): readonly KeptBotHome[] {
-  return list.bots.map((bot) => sharedBotHome(hostId, bot))
-}
-
-function sharedBotHome(
-  hostId: ExecutionHostId,
-  bot: { folderWorkspaceId: string; name: string }
-): KeptBotHome {
-  return {
-    id: bot.folderWorkspaceId,
-    name: bot.name,
-    folderPath: '',
-    executionHostId: hostId,
-    // The owner's project groups aren't the teammate's: it stands in none.
-    projectGroupId: '',
-    sortOrder: 0
-  }
-}
-
-/** `folderWorkspaces` with each shared agent's home, from the agent itself as soon as it is listed. */
-export function withSharedBotHomes(
-  folderWorkspaces: readonly FolderWorkspace[],
-  bots: readonly { folderWorkspaceId: string; name: string; hostId: ExecutionHostId }[],
-  sharedHostIds: ReadonlySet<ExecutionHostId>
-): readonly FolderWorkspace[] {
-  const missing = bots
-    .filter(
-      (bot) =>
-        sharedHostIds.has(bot.hostId) &&
-        !folderWorkspaces.some(
-          (workspace) =>
-            workspace.id === bot.folderWorkspaceId &&
-            getRepoExecutionHostId(workspace) === bot.hostId
-        )
-    )
-    .map((bot) => restoredHome(sharedBotHome(bot.hostId, bot)))
-  return missing.length === 0 ? folderWorkspaces : [...folderWorkspaces, ...missing]
-}
-
 /** A kept home as a row reads it: nothing unread, archived or active, since its server is away. */
 function restoredHome(home: KeptBotHome): FolderWorkspace {
   return {

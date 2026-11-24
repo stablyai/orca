@@ -6,6 +6,7 @@ import { selectFolderWorkspaceOnHost } from '@/store/folder-workspaces/folder-wo
 import { resolveRuntimePath } from '../../../../../shared/file-access/cross-platform-path'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { Bot } from '../../../../../shared/bot-types'
+import { botHomeHostId } from '../../../../../shared/bots/bot-home-host'
 
 /** False when the bot's home can't open here. */
 export function openBotHomeFileAtLine(bot: Bot, homePath: string, line: number): boolean {
@@ -13,7 +14,7 @@ export function openBotHomeFileAtLine(bot: Bot, homePath: string, line: number):
   const folderPath = selectFolderWorkspaceOnHost(
     state,
     bot.folderWorkspaceId,
-    bot.hostId
+    botHomeHostId(bot)
   )?.folderPath
   if (!folderPath || !openBotHome(bot)) {
     return false

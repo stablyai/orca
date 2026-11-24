@@ -8,7 +8,8 @@ import {
 import { installSharedBotHostCatalog } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { publishBots, readHostBots } from './bot-catalog-snapshot'
 import { installBotHostListing } from './bot-host-listing'
-import { withSharedBotHomes } from './bot-host-kept-homes'
+import { getBotHomes, isHome } from '../../../shared/bots/bot-homes'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 
 const SHARED: SharedBotHostView = {
   environmentId: 'shared-env',
@@ -16,6 +17,7 @@ const SHARED: SharedBotHostView = {
   botId: 'bot-1',
   botName: 'Ivy',
   ownerName: 'Jinwoo Hong',
+  homeWorkspaceId: null,
   link: 'live'
 }
 const HOST = toRuntimeExecutionHostId(SHARED.environmentId)
@@ -51,6 +53,7 @@ const store = {
 }
 
 let answerList: (views: SharedBotHostView[]) => void = () => {}
+let changed: (views: SharedBotHostView[]) => void = () => {}
 const stops: (() => void)[] = []
 
 beforeEach(() => {
@@ -84,7 +87,10 @@ beforeEach(() => {
           new Promise<SharedBotHostView[]>((resolve) => {
             answerList = resolve
           }),
-        onChanged: () => () => {}
+        onChanged: (listener: (views: SharedBotHostView[]) => void) => {
+          changed = listener
+          return () => {}
+        }
       }
     }
   })
@@ -107,17 +113,25 @@ describe('a shared agent’s listing in the window', () => {
     answerList = () => {}
   })
 
-  it('has its home from the agent as soon as its host first lists it', async () => {
+  it('pairs its agent with the home this computer keeps for it, once main has made it', async () => {
     localStorage.removeItem(KEY)
     stops.push(installSharedBotHostCatalog())
     answerList([SHARED])
     await Promise.resolve()
     stops.push(installBotHostListing(store, false))
     publishBots([ivy], { threadReplies: false, webhooks: undefined }, HOST)
-    expect(readHostBots(HOST).map((bot) => bot.id)).toEqual(['bot-1'])
-    const listed = readHostBots(HOST)
-    expect(
-      withSharedBotHomes([], listed, new Set([HOST])).map((home) => [home.id, home.name])
-    ).toEqual([['fw-ivy', 'Ivy']])
+    // The owner's home id names nothing here.
+    const home = { id: 'local-ivy-home', connectionId: null, executionHostId: null }
+    expect(getBotHomes(readHostBots(HOST), [home])).toEqual([])
+    changed([{ ...SHARED, homeWorkspaceId: home.id }])
+    const [bot] = readHostBots(HOST)
+    expect(bot).toMatchObject({ hostId: HOST, folderWorkspaceId: home.id })
+    expect(getBotHomes(readHostBots(HOST), [home]).map((entry) => entry.home.id)).toEqual([home.id])
+    // A workspace of the same id on the agent's own host is not its home here.
+    const ownersHome: Pick<FolderWorkspace, 'id' | 'connectionId' | 'executionHostId'> = {
+      ...home,
+      executionHostId: HOST
+    }
+    expect(isHome(ownersHome, readHostBots(HOST))).toBe(false)
   })
 })

@@ -16,7 +16,9 @@ import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/
 import type { AppState } from '@/store/types'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
+  publishBots,
   readBotHostState,
+  readHostBots,
   readLiveBotHostIds,
   readUpdateNeededBotHosts,
   setBotHostListing,
@@ -29,7 +31,8 @@ import {
   retainKeptBotHostLists,
   setKeptBotHomesReader
 } from './bot-host-kept-lists'
-import { keptBotHomes, sharedBotHomes } from './bot-host-kept-homes'
+import { keptBotHomes } from './bot-host-kept-homes'
+import { botHomeHostId } from '../../../shared/bots/bot-home-host'
 import { retainListedBotGroupHosts } from './bot-group-catalog-snapshot'
 import { emitBotsChangedWindowEvent } from './bots-changed-window-event'
 import { noteBotHostCameBack } from './bot-host-link-read'
@@ -184,14 +187,20 @@ export function installBotHostListing(
   const statusReads = runtimeStatusSubscriptionsFor(store)
   sync(store.getState(), statusReads.readStatuses())
   // Homes are read once per flush; a catalog change only marks the connected servers dirty.
+  // A host whose bots' homes are on this computer keeps none of its own.
   setKeptBotHomesReader((hostId, list) =>
-    readSharedBotHosts().some((shared) => toRuntimeExecutionHostId(shared.environmentId) === hostId)
-      ? sharedBotHomes(hostId, list)
-      : keptBotHomes(hostId, list, selectFolderWorkspaces(store.getState()) ?? [])
+    botHomeHostId({ hostId }) === hostId
+      ? keptBotHomes(hostId, list, selectFolderWorkspaces(store.getState()) ?? [])
+      : []
   )
-  const stopShared = subscribeSharedBotHosts(() =>
+  const stopShared = subscribeSharedBotHosts(() => {
     sync(store.getState(), statusReads.readStatuses())
-  )
+    // Its bot's home is named once main has made it: stamped again on its listed bots.
+    for (const shared of readSharedBotHosts()) {
+      const hostId = toRuntimeExecutionHostId(shared.environmentId)
+      publishBots(readHostBots(hostId), undefined, hostId)
+    }
+  })
   const stopStore = subscribeStoreWithStatuses(
     store,
     (state, previous, statuses, previousStatuses) => {

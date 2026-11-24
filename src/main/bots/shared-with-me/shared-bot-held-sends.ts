@@ -77,7 +77,7 @@ export class SharedBotHeldSends {
     }
     const chat = { sessionId }
     if (!sendsHeld(entry, link, chat, this.states)) {
-      return link === 'live' ? null : offline(entry)
+      return link === 'live' ? null : sharedBotOffline(entry)
     }
     const result = await this.hold(entry, { chat, clientMessageId, blocks: send.body.blocks })
     if (result?.kind === 'held') {
@@ -95,7 +95,7 @@ export class SharedBotHeldSends {
       )
     }
     // Not held (refused, unsupported, no cloud): still never sent live ahead of the queue.
-    return offline(entry)
+    return sharedBotOffline(entry)
   }
 
   private async hold(
@@ -130,9 +130,13 @@ export class SharedBotHeldSends {
   }
 }
 
-function offline(entry: SharedBotHostEntry): RuntimeRpcResponse<unknown> {
+/** A call the host wasn't reached for, and nothing was held for. */
+export function sharedBotOffline(
+  entry: SharedBotHostEntry,
+  method = 'agentSession.send'
+): RuntimeRpcResponse<unknown> {
   return sharedBotFailure(
-    'agentSession.send',
+    method,
     SHARED_BOT_HOST_ERRORS.offline,
     `${entry.ownerName}’s computer is offline`
   )

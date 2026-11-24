@@ -13,6 +13,8 @@ export type SharedBotHostView = {
   botName: string
   /** Who shared it: their name, else their email, else their computer's name. */
   ownerName: string
+  /** This computer's folder workspace the agent's chats open in; null until main has made it. */
+  homeWorkspaceId: string | null
   link: SharedBotHostLink
 }
 

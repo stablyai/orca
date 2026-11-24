@@ -43,8 +43,7 @@ import {
   stampBotHost,
   subscribeToBotChanges
 } from './bot-catalog-snapshot'
-import { withKeptBotHomes, withSharedBotHomes } from './bot-host-kept-homes'
-import { useSharedBotHosts } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
+import { withKeptBotHomes } from './bot-host-kept-homes'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
@@ -54,10 +53,7 @@ import {
   refreshBots
 } from './bot-host-refresh'
 import { botHostTarget, botTarget, callBotRpc, ownBotHost, type BotRef } from './bot-hosts'
-import {
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
-} from '../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   getRuntimeTargetHostId,
   runtimeTargetEnvironmentId
@@ -66,6 +62,7 @@ import { NativeChatVisualOwnerContext } from '@/components/native-chat/media/vis
 import { isHome, type BotHomeOwner } from '../../../shared/bots/bot-homes'
 import { requestNativeChatComposerFocus } from '../components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { structuredAgentSessionDraftScopeKey } from '../components/native-chat/drafts/native-chat-draft-scope'
+import { botHomeHostId } from '../../../shared/bots/bot-home-host'
 
 export { isHome, readBots, readHostBots, refreshBotHost, refreshBots, subscribeToBotChanges }
 
@@ -96,24 +93,14 @@ export function useBots(enabled = true): readonly Bot[] {
 /** The bots' and groups' homes: the store's, and each away server's kept homes. Other folder
  * workspaces' writes (activity, unread) keep this identity. */
 export function useBotHomeWorkspaces(
-  bots: readonly (BotHomeOwner & { name: string })[],
+  bots: readonly BotHomeOwner[],
   groups: readonly BotHomeOwner[]
 ): readonly FolderWorkspace[] {
   const selectHomes = useMemo(() => createBotHomesSelector([...bots, ...groups]), [bots, groups])
   const homes = useAppStore(useShallow(selectHomes))
   // The listed hosts change when a server is first listed from its kept read.
   const hostIds = useSyncExternalStore(subscribe, readBotHostIds, readBotHostIds)
-  // A shared agent's home is its own, read from it as soon as its host lists it.
-  const sharedHosts = useSharedBotHosts()
-  return useMemo(
-    () =>
-      withSharedBotHomes(
-        withKeptBotHomes(homes, hostIds),
-        bots,
-        new Set(sharedHosts.map((host) => toRuntimeExecutionHostId(host.environmentId)))
-      ),
-    [bots, homes, hostIds, sharedHosts]
-  )
+  return useMemo(() => withKeptBotHomes(homes, hostIds), [homes, hostIds])
 }
 
 const NO_FOLDERS: readonly FolderWorkspace[] = []
@@ -329,7 +316,7 @@ export async function deleteBot(
 /** False when the home is not in the catalog (or not reachable) yet. */
 export function openBotHome(bot: Bot): boolean {
   const opened = activateAndRevealFolderWorkspace(bot.folderWorkspaceId, {
-    executionHostId: bot.hostId,
+    executionHostId: botHomeHostId(bot),
     // Bots are not rows of the workspace list, so there is nothing there to reveal.
     revealInSidebar: false
   })

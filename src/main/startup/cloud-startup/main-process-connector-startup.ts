@@ -10,6 +10,7 @@ import { browserManager } from '../../browser/guest-lifecycle/manager/browser-ma
 import { installGoogleSetupHostWatch } from '../../google/google-setup-host-watch'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { mainProcessState as state } from '../main-process-state'
+import { botsRootFolder } from '../../bots/bot-home'
 import type { SharedBotHosts } from '../../bots/shared-with-me/shared-bot-hosts'
 
 let sharedBotHosts: SharedBotHosts | null = null
@@ -43,9 +44,19 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
   powerMonitor.on('resume', host.refreshLinearLogins)
   registerGoogleSetupHandlers()
   registerSlackHandOffHandlers(() => runtime.getConnectorCloud())
+  const store = state.store
   sharedBotHosts = registerSharedBotHostsHandlers({
     userDataPath,
-    cloud: () => runtime.getConnectorCloud()
+    cloud: () => runtime.getConnectorCloud(),
+    // Through the runtime's own create and delete, as a bot home is.
+    homes: {
+      botsRoot: () => botsRootFolder(),
+      store,
+      createFolderWorkspace: async (input) =>
+        (await runtime.createFolderWorkspace(input)).folderWorkspace,
+      deleteFolderWorkspace: (id) =>
+        runtime.deleteFolderWorkspace(id, { discardUnsavedDrafts: true })
+    }
   })
   powerMonitor.on('resume', refreshSharedBotHosts)
   registerAvatarGenerationHandlers(() => runtime.getCommitMessageAgentEnvironmentResolvers())

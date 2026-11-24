@@ -8,6 +8,7 @@ import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import { SharedBotHosts } from '../bots/shared-with-me/shared-bot-hosts'
 import { sharedBotsCloud } from '../bots/shared-with-me/shared-bots-cloud'
 import { setSharedBotHostRouting } from '../bots/shared-with-me/shared-bot-host-routing'
+import { SharedBotHomes, type SharedBotHomeDeps } from '../bots/shared-with-me/shared-bot-home'
 
 const CallArgs = z.object({ environmentId: z.string().min(1), method: z.string().min(1) })
 const SubscribeArgs = CallArgs.extend({ subscriptionId: z.string().min(1) })
@@ -16,9 +17,11 @@ const UnsubscribeArgs = z.object({ subscriptionId: z.string().min(1) })
 export function registerSharedBotHostsHandlers(args: {
   userDataPath: string
   cloud: () => ConnectorCloud | null
+  homes: Omit<SharedBotHomeDeps, 'userDataPath'>
 }): SharedBotHosts {
   const hosts = new SharedBotHosts({
     userDataPath: args.userDataPath,
+    homes: new SharedBotHomes({ ...args.homes, userDataPath: args.userDataPath }),
     platform: NODE_RELAY_CLIENT_PLATFORM,
     cloud: () => {
       const cloud = args.cloud()
