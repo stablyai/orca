@@ -84,12 +84,14 @@ export function AzureDevOpsActiveContent({
         checks={data.checks}
         checksError={null}
         checksLoading={data.loading && data.checks.length === 0}
+        checksRead={data.read}
         checkDetailsContextKey={stateRequestKey}
       />
       <PRCommentsList
         comments={data.comments}
         commentsLoading={data.loading && data.comments.length === 0}
         loadingSkeleton={data.loading && data.comments.length === 0}
+        commentsRead={data.read}
         reviewKind="PR"
         commentsDisabled
         selectionContextKey={stateRequestKey}

@@ -17,13 +17,16 @@ export type AzureDevOpsReviewData = {
   comments: PRComment[]
   loading: boolean
   error: string | null
+  /** True once a snapshot for this PR has loaded; a failed first read leaves it false. */
+  read: boolean
 }
 
 const EMPTY_REVIEW_ROWS: Omit<AzureDevOpsReviewData, 'loading'> = {
   reviewers: [],
   checks: [],
   comments: [],
-  error: null
+  error: null,
+  read: false
 }
 
 /**
@@ -73,7 +76,8 @@ export function useAzureDevOpsReviewData(input: {
           reviewers: snapshot.detail?.reviewers ?? [],
           checks: azureDevOpsChecksToPRChecks(snapshot.checks),
           comments: azureDevOpsThreadsToPRComments(snapshot.threads),
-          error: null
+          error: null,
+          read: true
         })
       })
       .catch((error: unknown) => {
