@@ -25,6 +25,7 @@ import type {
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { nativeChatRestartStillStarting } from '@/components/native-chat-recovery/offers/native-chat-restart-runtimes'
 import { showChatOpenUnavailable, type ChatOpenUnavailable } from './chat-open-failure-toast'
+import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 
 type StructuredSessionActivationDeps = StructuredSessionOpenAdapterDeps & {
   unavailable: (agent?: string, context?: ChatOpenUnavailable) => void
@@ -87,28 +88,27 @@ export async function activateAiVaultStructuredSession(
   }
   await openDesktopStructuredSession(
     { kind: 'history', structuredSession: session.structuredSession, agent: session.agent },
-    target,
-    deps
+    { target, deps, retry: () => activateAiVaultStructuredSession(session, deps, target) }
   )
   return true
 }
 
+type DesktopStructuredSessionOpenOptions = {
+  target?: RuntimeClientTarget
+  deps?: StructuredSessionActivationDeps
+  locate?: StructuredSessionOpenDeps['locate']
+  feedback?: StructuredSessionOpenFeedback
+  retry?: () => Promise<unknown>
+}
+
 export function openDesktopStructuredSession(
   source: StructuredSessionOpenSource,
-  host?: RuntimeClientTarget,
-  deps?: StructuredSessionActivationDeps,
-  locate?: StructuredSessionOpenDeps['locate'],
-  feedback?: StructuredSessionOpenFeedback
+  { target, deps, locate, feedback, retry }: DesktopStructuredSessionOpenOptions = {}
 ): Promise<StructuredSessionOpenResult> {
   // Read when the open starts: the selection may move before it settles.
-  const pairedHostId = openingPairedHostId(source, host)
-  const retry = (): void => {
-    void openDesktopStructuredSession(source, host, deps, locate, feedback).catch(() => {
-      // The retried open reports its own outcome; a thrown admission has nothing to retry.
-    })
-  }
+  const pairedHostId = openingPairedHostId(source, target)
   return openDesktopStructuredSessionInteraction(source, {
-    target: host,
+    target,
     deps,
     locate,
     present: (result, owner) =>
@@ -128,7 +128,10 @@ function openingSessionId(source: StructuredSessionOpenSource): string | undefin
     ? source.structuredSession.sessionId
     : source.kind === 'notification'
       ? source.sessionId
-      : (source.party.orcaSessionId ?? source.fallback?.sessionId)
+      : (source.party.orcaSessionId ??
+        source.fallback?.sessionId ??
+        parseOrcaSessionAddress(source.party.address) ??
+        undefined)
 }
 
 /** The host an open targets, so its same-id workspace is selected, never a twin on another host. */
@@ -178,7 +181,7 @@ function presentDesktopStructuredSession(
   source: StructuredSessionOpenSource,
   deps: StructuredSessionOpenFeedback,
   pairedHostId: ExecutionHostId | null,
-  opening: { owner: RuntimeClientTarget; retry: () => void }
+  opening: { owner: RuntimeClientTarget; retry?: () => Promise<unknown> }
 ): void {
   if (result.kind === 'opened') {
     const workspace = result.target.worktreeId
@@ -240,11 +243,17 @@ function presentDesktopStructuredSession(
       }
     } else {
       const sessionId = openingSessionId(source)
-      const { reason, code, detail } = result.failure
+      const { code, detail } = result.failure
+      const { retry } = opening
       deps.unavailable(agent, {
         starting: !!sessionId && nativeChatRestartStillStarting(opening.owner, sessionId),
-        detail: [reason, code, detail].filter(Boolean).join(' · '),
-        retry: opening.retry
+        detail: detail ?? code,
+        retry:
+          retry &&
+          (() =>
+            void Promise.resolve()
+              .then(retry)
+              .catch(() => {}))
       })
     }
   }
