@@ -1,3 +1,5 @@
+import type { BrowserCommandTargetParams } from './browser-command-contracts'
+
 /** A page operation whose caller withdrew it while it waited for page admission. */
 export class PageAdmissionCancelledError extends Error {
   constructor() {
@@ -7,14 +9,17 @@ export class PageAdmissionCancelledError extends Error {
 }
 
 // Signals a command registered for its own admission; keyed by the params object it passes on.
-const admissionSignals = new WeakMap<object, AbortSignal>()
+const admissionSignals = new WeakMap<BrowserCommandTargetParams, AbortSignal>()
 
 /** Lets a command withdraw its own wait for page admission; the page's load itself continues. */
-export function setPageAdmissionSignal(params: object, signal: AbortSignal): void {
+export function setPageAdmissionSignal(
+  params: BrowserCommandTargetParams,
+  signal: AbortSignal
+): void {
   admissionSignals.set(params, signal)
 }
 
-export function pageAdmissionSignal(params: object): AbortSignal | undefined {
+export function pageAdmissionSignal(params: BrowserCommandTargetParams): AbortSignal | undefined {
   return admissionSignals.get(params)
 }
 
