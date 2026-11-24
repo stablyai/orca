@@ -82,7 +82,8 @@ private func overviewNumber(_ count: Int) -> String {
 private func overviewCounter(_ context: ActivityViewContext<OrcaAgentOverviewAttributes>, attention: Bool, expanded: Bool = false) -> some View {
   let count = attention ? context.state.counts.attention + context.state.counts.failed : context.state.counts.working
   return HStack(spacing: 4) {
-    Image(systemName: attention ? "hand.raised" : "gearshape.2").accessibilityHidden(true)
+    Image(systemName: attention ? "hand.raised" : "gearshape")
+      .imageScale(.small).fixedSize().accessibilityHidden(true)
     Text(context.isStale ? "?" : "\(context.state.complete ? "" : "≥")\(overviewNumber(count))")
       .monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
   }
