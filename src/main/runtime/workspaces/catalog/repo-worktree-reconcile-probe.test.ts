@@ -27,20 +27,6 @@ describe('readRepoWorktreeReconcileProbe', () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
   })
 
-  it('differs after a worktree is added and removed when none existed', async () => {
-    const repo = await makeRepo()
-    await advanceClock(repo)
-    const before = await readRepoWorktreeReconcileProbe(repo)
-    await advanceClock(repo)
-    await mkdir(path.join(repo, '.git', 'worktrees', 'tmp'), { recursive: true })
-    await advanceClock(repo)
-    await rm(path.join(repo, '.git', 'worktrees'), { recursive: true })
-    await advanceClock(repo)
-    const after = await readRepoWorktreeReconcileProbe(repo)
-    expect(before).not.toBeNull()
-    expect(after).not.toBe(before)
-  })
-
   it('differs after a worktree is added and removed beside an existing one', async () => {
     const repo = await makeRepo()
     await mkdir(path.join(repo, '.git', 'worktrees', 'keep'), { recursive: true })

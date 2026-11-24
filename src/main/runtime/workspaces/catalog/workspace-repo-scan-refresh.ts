@@ -64,21 +64,29 @@ function warnFingerprintUnknownOnce(repoId: string, reason: string): void {
 export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCatalog {
   private readonly remoteClientWorktreeReconcile = new RemoteClientWorktreeReconcile({
     listProbeableRepos: () =>
-      (this.store?.getRepos() ?? []).filter(
-        (repo) =>
-          !isFolderRepo(repo) &&
-          !getRepoRoutingConnectionId(repo) &&
-          !wslDistroForPath(
-            repo.path,
-            getLocalProjectWorktreeGitOptionsForRuntime(
-              repo,
-              resolveWorktreeScanRuntime(this.requireStore(), repo).projectRuntime
-            ).wslDistro
-          )
-      ),
+      (this.store?.getRepos() ?? []).filter((repo) => this.isLocalProbeableRepo(repo)),
     probe: (repo) => readRepoWorktreeReconcileProbe(repo.path),
     notifyChanged: (repoId) => this.notifyWorktreeCatalogChangedForRemoteClients(repoId)
   })
+
+  // A repo whose runtime cannot resolve (repair required) is skipped, not allowed to stop the others.
+  private isLocalProbeableRepo(repo: Repo): boolean {
+    try {
+      return (
+        !isFolderRepo(repo) &&
+        !getRepoRoutingConnectionId(repo) &&
+        !wslDistroForPath(
+          repo.path,
+          getLocalProjectWorktreeGitOptionsForRuntime(
+            repo,
+            resolveWorktreeScanRuntime(this.requireStore(), repo).projectRuntime
+          ).wslDistro
+        )
+      )
+    } catch {
+      return false
+    }
+  }
 
   /** Hold while a paired client is subscribed; release on disconnect. */
   retainRemoteClientWorktreeReconcile(): () => void {
