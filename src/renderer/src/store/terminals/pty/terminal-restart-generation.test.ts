@@ -22,7 +22,7 @@ function restartStore() {
 }
 
 describe('restart notice generations', () => {
-  it('a refused request for B leaves the newer C notice visible and answerable', () => {
+  it('an answer for B never carries over to a newer C question', () => {
     const store = restartStore()
     const notice = (nextAccountId: string) => ({
       ptyId: 'pty-a',
@@ -32,16 +32,19 @@ describe('restart notice generations', () => {
       nextAccountId
     })
     store.getState().markCodexRestartNotices([notice('account-b')])
+    const asked = store.getState().codexRestartNoticeByPtyId['pty-a']
     store.getState().queuePaneAccountRestarts(['pty-a'], 'codex')
-    // The user selects C while the B request is still running.
+    // Re-marking the same target keeps the answer and its generation.
+    store.getState().markCodexRestartNotices([notice('account-b')])
+    const answered = store.getState().codexRestartNoticeByPtyId['pty-a']
+    expect(answered?.generation).toBe(asked?.generation)
+    expect(awaitsCodexRestartAnswer(answered)).toBe(false)
+    // The user selects C while the B request is still running: a new, unanswered question.
     store.getState().markCodexRestartNotices([notice('account-c')])
-    const inherited = store.getState().codexRestartNoticeByPtyId['pty-a']
-    expect(blocksCodexPaneInput(inherited)).toBe(true)
-    expect(awaitsCodexRestartAnswer(inherited)).toBe(false)
-    // The B reply settles by reopening the current prompt.
-    store.getState().reopenCodexRestartPrompt('pty-a')
     const current = store.getState().codexRestartNoticeByPtyId['pty-a']
-    expect(current?.nextAccountId).toBe('account-c')
+    expect(current?.generation).not.toBe(asked?.generation)
     expect(awaitsCodexRestartAnswer(current)).toBe(true)
+    expect(blocksCodexPaneInput(current)).toBe(true)
+    expect(store.getState().pendingPaneAccountRestarts['pty-a']).toBeUndefined()
   })
 })

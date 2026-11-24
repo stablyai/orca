@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CodexAccountRestartStopResult } from '../../../../../shared/agent-accounts/codex/codex-account-restart-stop'
 
-type NoticeTargets = Record<string, { nextAccountId?: string | null }>
+type NoticeTargets = Record<string, { nextAccountId?: string | null; generation?: number }>
 type StoreState = {
   clearCodexRestartNotice: ReturnType<typeof vi.fn>
   reopenCodexRestartPrompt: ReturnType<typeof vi.fn>
@@ -15,7 +15,21 @@ const { store } = vi.hoisted((): { store: StoreState } => ({
     codexRestartNoticeByPtyId: {}
   }
 }))
-vi.mock('@/store/index', () => ({ useAppStore: { getState: () => store } }))
+const { listeners } = vi.hoisted((): { listeners: Set<() => void> } => ({ listeners: new Set() }))
+vi.mock('@/store/index', () => ({
+  useAppStore: {
+    getState: () => store,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    }
+  }
+}))
+const notifyStore = (): void => {
+  for (const listener of listeners) {
+    listener()
+  }
+}
 
 import {
   _testing,
@@ -55,7 +69,7 @@ describe('renderer account restart stop', () => {
     _testing.setOpIdMinter(() => `op-${++opCounter}`)
     store.clearCodexRestartNotice.mockClear()
     store.reopenCodexRestartPrompt.mockClear()
-    store.codexRestartNoticeByPtyId = { 'pty-a': { nextAccountId: 'account-b' } }
+    store.codexRestartNoticeByPtyId = { 'pty-a': { nextAccountId: 'account-b', generation: 1 } }
   })
   afterEach(() => {
     _testing.reset()
@@ -142,16 +156,40 @@ describe('renderer account restart stop', () => {
     expect(withdraw).not.toHaveBeenCalled()
   })
 
-  it('leaves a newer account switch actionable when an older request is refused', async () => {
-    const { replies } = heldReplies()
+  it('withdraws the answer when its prompt changes target, and ignores its late reply', async () => {
+    const { replies, withdraw } = heldReplies()
     const pending = stopCodexPaneForAccountRestart(pane)
-    // B was requested; the user then selected C, which inherited the answered state.
-    store.codexRestartNoticeByPtyId = { 'pty-a': { nextAccountId: 'account-c' } }
-    replies[0]({ outcome: 'not-started', reason: 'unsupported', opIds: ['op-1'] })
-    // Never falls back automatically for a target the user did not confirm.
+    // The user selects C while the B request is in flight: a new question.
+    store.codexRestartNoticeByPtyId = { 'pty-a': { nextAccountId: 'account-c', generation: 2 } }
+    notifyStore()
+    expect(withdraw).toHaveBeenCalledWith({
+      worktreeId: 'wt',
+      tabId: 'tab',
+      leafId: 'leaf',
+      opId: 'op-1'
+    })
+    replies[0]({ outcome: 'not-started', reason: 'withdrawn', opIds: ['op-1'] })
     await expect(pending).resolves.toBe('handled')
-    expect(store.reopenCodexRestartPrompt).toHaveBeenCalledWith('pty-a')
+    expect(store.reopenCodexRestartPrompt).not.toHaveBeenCalled()
     expect(store.clearCodexRestartNotice).not.toHaveBeenCalled()
+  })
+
+  it('B then A then B: the old B reply cannot settle the new B prompt', async () => {
+    const { replies, withdraw } = heldReplies()
+    const first = stopCodexPaneForAccountRestart(pane)
+    // A clears the prompt; B asks again under a new generation.
+    store.codexRestartNoticeByPtyId = {}
+    notifyStore()
+    store.codexRestartNoticeByPtyId = { 'pty-a': { nextAccountId: 'account-b', generation: 3 } }
+    notifyStore()
+    expect(withdraw).toHaveBeenCalledTimes(1)
+    const second = stopCodexPaneForAccountRestart(pane)
+    replies[0]({ outcome: 'not-started', reason: 'refused', opIds: ['op-1'] })
+    await first
+    expect(store.reopenCodexRestartPrompt).not.toHaveBeenCalled()
+    replies[1]({ outcome: 'stopped', opIds: ['op-2'] })
+    await second
+    expect(store.clearCodexRestartNotice).toHaveBeenCalledTimes(1)
   })
 
   it('keeps a retryable refusal answerable instead of manual', async () => {

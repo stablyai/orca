@@ -10,8 +10,14 @@ import {
 
 type CodexRestartPane = Omit<CodexAccountRestartStopRequest, 'opId'>
 
+type CodexRestartOperation = CodexAccountRestartStopRequest & {
+  /** The notice generation the user answered; any other generation is a different question. */
+  generation: number | undefined
+}
+
 // The notice row's current operation; a reply or Dismiss for any other opId changes nothing.
-const currentOperationByPtyId = new Map<string, CodexAccountRestartStopRequest>()
+const currentOperationByPtyId = new Map<string, CodexRestartOperation>()
+let stopWatchingNotices: (() => void) | null = null
 
 let mintOpId = (): string => createBrowserUuid()
 
@@ -19,29 +25,23 @@ let mintOpId = (): string => createBrowserUuid()
 export async function stopCodexPaneForAccountRestart(
   pane: CodexRestartPane
 ): Promise<'handled' | 'fallback'> {
-  const operation = { ...pane, opId: mintOpId() }
+  const operation = { ...pane, opId: mintOpId(), generation: noticeGenerationOf(pane.ptyId) }
   currentOperationByPtyId.set(pane.ptyId, operation)
-  // The notice's target names its generation: a newer switch must get its own answer.
-  const noticeTarget = noticeTargetOf(pane.ptyId)
+  watchNoticeGenerations()
   let result: CodexAccountRestartStopResult
   try {
-    result = await window.api.pty.stopCodexForAccountRestart(operation)
+    result = await window.api.pty.stopCodexForAccountRestart(toRequest(operation))
   } catch {
     result = { outcome: 'unknown', opIds: [operation.opId] }
   }
   const current = currentOperationByPtyId.get(pane.ptyId)
-  // A joined click shares the stop, so its opId is in the reply too; Dismiss removed the row's operation.
+  // A joined click shares the stop, so its opId is in the reply too; Dismiss or a newer question
+  // removed the row's operation, and its own answer settles that newer notice.
   if (!current || !result.opIds.includes(current.opId)) {
     return 'handled'
   }
-  currentOperationByPtyId.delete(pane.ptyId)
+  forgetOperation(pane.ptyId)
   const store = useAppStore.getState()
-  if (noticeTargetOf(pane.ptyId) !== noticeTarget && result.outcome !== 'stopped') {
-    // The notice moved to a newer switch while this request ran: settle it by asking again, so the
-    // current prompt is visible and input is not left blocked; never act on it automatically.
-    store.reopenCodexRestartPrompt(pane.ptyId)
-    return 'handled'
-  }
   // Only lanes main does not stop locally (SSH, paired runtime) keep the replacement restart.
   if (result.outcome === 'not-started' && result.reason === 'unsupported') {
     return 'fallback'
@@ -74,8 +74,32 @@ function requiresManualRestart(result: CodexAccountRestartStopResult): boolean {
   )
 }
 
-function noticeTargetOf(ptyId: string): string | null | undefined {
-  return useAppStore.getState().codexRestartNoticeByPtyId?.[ptyId]?.nextAccountId
+function noticeGenerationOf(ptyId: string): number | undefined {
+  return useAppStore.getState().codexRestartNoticeByPtyId?.[ptyId]?.generation
+}
+
+function toRequest(operation: CodexRestartOperation): CodexAccountRestartStopRequest {
+  const { generation: _generation, ...request } = operation
+  return request
+}
+
+function forgetOperation(ptyId: string): void {
+  currentOperationByPtyId.delete(ptyId)
+  if (currentOperationByPtyId.size === 0) {
+    stopWatchingNotices?.()
+    stopWatchingNotices = null
+  }
+}
+
+/** A prompt that went away or changed target withdraws the answer given to it, in main too. */
+function watchNoticeGenerations(): void {
+  stopWatchingNotices ??= useAppStore.subscribe(() => {
+    for (const [ptyId, operation] of currentOperationByPtyId) {
+      if (noticeGenerationOf(ptyId) !== operation.generation) {
+        withdrawCodexPaneAccountRestart(ptyId)
+      }
+    }
+  })
 }
 
 /** Dismiss during a stop: the stop in flight still settles, but its resume stays on the old account. */
@@ -84,8 +108,8 @@ export function withdrawCodexPaneAccountRestart(ptyId: string): void {
   if (!current) {
     return
   }
-  currentOperationByPtyId.delete(ptyId)
-  const { ptyId: _ptyId, ...withdraw } = current
+  forgetOperation(ptyId)
+  const { ptyId: _ptyId, generation: _generation, ...withdraw } = current
   void window.api.pty.withdrawCodexAccountRestart(withdraw).catch((err: unknown) => {
     console.warn('[codex-restart] failed to withdraw account restart:', err)
   })
@@ -111,6 +135,8 @@ export const _testing = {
   },
   reset(): void {
     currentOperationByPtyId.clear()
+    stopWatchingNotices?.()
+    stopWatchingNotices = null
     mintOpId = () => createBrowserUuid()
   }
 }

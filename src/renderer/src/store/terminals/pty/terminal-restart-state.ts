@@ -2,6 +2,9 @@ import { isSameCodexRestartNoticeAccount } from './codex-restart-notice-account-
 import type { AccountRestartAgent } from '../terminal-contracts'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../terminal-state'
 
+// A new or retargeted notice is a new question; a reply or queued answer for the old one never applies.
+let codexRestartNoticeGeneration = 0
+
 // Why: Codex notice cleanup shares this map with Claude switch restarts and must not drop them.
 function dropQueuedCodexRestart(pending: Record<string, AccountRestartAgent>, ptyId: string): void {
   if (pending[ptyId] === 'codex') {
@@ -110,16 +113,30 @@ export function createTerminalRestartActions(
             dropQueuedCodexRestart(nextPendingPaneAccountRestarts, notice.ptyId)
             continue
           }
+          const sameTarget =
+            existing !== undefined &&
+            isSameCodexRestartNoticeAccount(
+              { id: existing.nextAccountId, label: existing.nextAccountLabel },
+              target
+            )
+          if (!sameTarget) {
+            dropQueuedCodexRestart(nextPendingPaneAccountRestarts, notice.ptyId)
+          }
           next[notice.ptyId] = {
+            generation: sameTarget
+              ? (existing.generation ?? ++codexRestartNoticeGeneration)
+              : ++codexRestartNoticeGeneration,
             previousAccountLabel: launch.previousAccountLabel,
             nextAccountLabel: notice.nextAccountLabel,
             ...(launch.previousAccountId === undefined
               ? {}
               : { previousAccountId: launch.previousAccountId }),
             ...(notice.nextAccountId === undefined ? {} : { nextAccountId: notice.nextAccountId }),
-            // Why: a queued restart relaunches under whatever account is selected
-            // when it runs, so a later switch does not reopen an answered prompt.
-            ...(existing?.restartRequested ? { restartRequested: true as const } : {}),
+            // An answer covers one target: a later switch to another account asks again.
+            ...(sameTarget && existing.restartRequested ? { restartRequested: true as const } : {}),
+            ...(sameTarget && existing.restartBlockedBy
+              ? { restartBlockedBy: existing.restartBlockedBy }
+              : {}),
             // Dismissal covers one target account; re-ask only on target change, never same-account add/reauth that would reblock input.
             ...(existing?.dismissed &&
             isSameCodexRestartNoticeAccount(
