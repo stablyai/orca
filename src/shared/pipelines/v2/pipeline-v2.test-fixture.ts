@@ -25,7 +25,7 @@ export function pipelineV2AgentStage(id: string): PipelineV2Stage {
   }
 }
 
-export function pipelineV2TemplateFixture(): PipelineV2Template {
+export function pipelineV2TemplateFixture(projectId = 'project-1'): PipelineV2Template {
   const review = pipelineV2AgentStage('review')
   review.outcomes = [
     { id: 'approved', title: 'Approved', criterion: 'No defects', target: { kind: 'finish' } },
@@ -39,7 +39,7 @@ export function pipelineV2TemplateFixture(): PipelineV2Template {
   return {
     schemaVersion: 2,
     id: 'development',
-    projectId: 'project-1',
+    projectId,
     version: '1',
     title: 'Development',
     description: '',

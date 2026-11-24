@@ -3,7 +3,7 @@ import { PipelineStore } from '../pipeline-store'
 import { pipelineV2TemplateFixture } from '../../../../shared/pipelines/v2/pipeline-v2.test-fixture'
 import { pipelineV2AdmissionFixture, settleV2Stage, v2Mutation } from './pipeline-v2.test-fixture'
 import { pipelineV2Summary } from '../../rpc/methods/pipelines/pipeline-v2-scope'
-import { pipelineBudgetExtension } from '../../../../renderer/src/components/pipelines/pipeline-run-budget'
+import { pipelineBudgetExtension } from '../../../../shared/pipelines/v2/pipeline-v2-budget-extension'
 
 it('extends the exhausted return target rather than the stage that requested the return', () => {
   const store = new PipelineStore(':memory:')

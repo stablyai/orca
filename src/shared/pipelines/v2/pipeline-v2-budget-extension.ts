@@ -1,4 +1,4 @@
-import type { PipelineV2RunSummary } from '../../../../shared/pipelines/v2/pipeline-v2-public-results'
+import type { PipelineV2RunSummary } from './pipeline-v2-public-results'
 
 export function pipelineBudgetExtension(
   run: Pick<PipelineV2RunSummary, 'effectiveLimits' | 'stageId' | 'currentVisitId'>,

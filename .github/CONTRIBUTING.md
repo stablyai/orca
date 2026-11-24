@@ -54,6 +54,8 @@ Tests are the exception: add one only for logic where a silent regression is cos
 
 On macOS and Linux, set `git config --local orca.serializeChangedChecks true` to queue full `pnpm check:changed` runs across worktrees. On Ctrl+C, SIGTERM, or terminal hangup, the runner waits for its active check process groups to stop before admitting another run. Processes that detach from those groups, or survive a force-kill of the runner, can continue independently. Windows uses the standard concurrent runner.
 
+`pnpm check:changed --typecheck-compiler=native` selects the existing native TypeScript compiler for constrained runners. The default remains `auto`; `tsrs` and `bun` are also explicit choices. Passing results are cached separately for each compiler choice.
+
 Use `pnpm test`, not raw `vitest`: only it keeps the transform cache that makes repeat runs fast.
 
 ```bash

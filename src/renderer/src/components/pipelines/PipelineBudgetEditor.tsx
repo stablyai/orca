@@ -12,7 +12,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { usePipelineRun } from './use-pipeline-run'
 import type { PipelineRunRead } from './pipeline-run-read'
 import { PipelineTextField } from './PipelineFormFields'
-import { pipelineBudgetExtension } from './pipeline-run-budget'
+import { pipelineBudgetExtension } from '../../../../shared/pipelines/v2/pipeline-v2-budget-extension'
 
 export function PipelineBudgetEditor({ model }: { model: ReturnType<typeof usePipelineRun> }) {
   const t = useTranslate()

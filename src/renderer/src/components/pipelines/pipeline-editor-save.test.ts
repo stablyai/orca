@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { copyRejectedPipelineEditorDraft, savePipelineEditorDraft } from './pipeline-editor-save'
-import { researchPipelineV2Seed } from '../../../../main/runtime/pipelines/v2/pipeline-v2-seeds'
+import { pipelineV2TemplateFixture } from '../../../../shared/pipelines/v2/pipeline-v2.test-fixture'
 import { createPipelineEditorDraft, updatePipelineEditorDraft } from './pipeline-editor-draft'
 import { pipelineEditorDrafts, pipelineEditorPendingSaves } from './pipeline-editor-cache'
 import { writePipelineEditorDraft } from './pipeline-editor-receipts'
@@ -15,7 +15,7 @@ afterEach(() => {
 })
 function draft() {
   const current = updatePipelineEditorDraft(
-    createPipelineEditorDraft(researchPipelineV2Seed('project-a'), 3),
+    createPipelineEditorDraft(pipelineV2TemplateFixture('project-a'), 3),
     { type: 'template', patch: { description: 'Сохранить весь этот текст.' } }
   )
   pipelineEditorDrafts.set('project-a', current)
@@ -88,7 +88,7 @@ it('does not let an older reply overwrite or clear a newer save after local rete
     'project-a',
     createPipelineEditorDraft(
       {
-        ...researchPipelineV2Seed('project-a'),
+        ...pipelineV2TemplateFixture('project-a'),
         id: 'new-local',
         description: 'Новый сохранённый текст'
       },
@@ -100,7 +100,7 @@ it('does not let an older reply overwrite or clear a newer save after local rete
   old.resolve({
     projectId: 'project-a',
     requestId: original.requestId,
-    draftId: 'research',
+    draftId: 'development',
     revision: 4,
     draftDigest: 'a'.repeat(64)
   })

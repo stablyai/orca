@@ -38,6 +38,7 @@ function parseArgs(argv) {
     related: false,
     base: null,
     maxWorkers: null,
+    typecheckCompiler: null,
     stepTimeoutMs: DEFAULT_STEP_TIMEOUT_MINUTES * 60_000
   }
   for (const argument of argv) {
@@ -53,9 +54,11 @@ function parseArgs(argv) {
       options.maxWorkers = argument.split('=')[1]
     } else if (/^--timeout=\d+$/.test(argument)) {
       options.stepTimeoutMs = Number(argument.split('=')[1]) * 60_000
+    } else if (/^--typecheck-compiler=(auto|tsrs|bun|native)$/.test(argument)) {
+      options.typecheckCompiler = argument.split('=')[1]
     } else {
       throw new Error(
-        `Unknown option ${argument}. Use --force, --related, --base=<ref>, --maxWorkers=<n>, --timeout=<minutes>.`
+        `Unknown option ${argument}. Use --force, --related, --base=<ref>, --maxWorkers=<n>, --timeout=<minutes>, --typecheck-compiler=auto|tsrs|bun|native.`
       )
     }
   }
@@ -187,7 +190,11 @@ function buildWorkspacePackages(root, env) {
   }
 }
 
-function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, transitive }) {
+function buildTasks(
+  root,
+  plan,
+  { files, mergeBase, maxWorkers, typecheckCompiler, bun, transitive }
+) {
   const node = process.execPath
   const oxlint = resolveOxcCliInvocation('oxlint', 'oxlint', root)
   const oxfmt = resolveOxcCliInvocation('oxfmt', 'oxfmt', root)
@@ -202,6 +209,7 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, transitive 
         step(node, [
           'config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs',
           ...plan.typecheckProjects.map((config) => `--project=${config}`),
+          ...(typecheckCompiler ? [`--compiler=${typecheckCompiler}`] : []),
           // A worker cap means a shared host; 4 checkers cut typecheck CPU by about a third.
           ...(maxWorkers ? [`--checkers=${Math.max(2, Number(maxWorkers) * 2)}`] : [])
         ])
@@ -419,7 +427,7 @@ async function runChangedChecks(root, options, signal) {
     console.log(`check:changed: no changes against ${ref}.`)
     return 0
   }
-  const hash = computePassHash(root, mergeBase)
+  const hash = `${computePassHash(root, mergeBase)}:${options.typecheckCompiler ?? 'auto'}`
   if (!options.force && !options.related && readPassHash(root) === hash) {
     console.log('Nothing changed since last passing run.')
     return 0
@@ -486,6 +494,7 @@ async function runChangedChecks(root, options, signal) {
     files,
     mergeBase,
     maxWorkers: options.maxWorkers,
+    typecheckCompiler: options.typecheckCompiler,
     bun,
     transitive: options.related
   })
