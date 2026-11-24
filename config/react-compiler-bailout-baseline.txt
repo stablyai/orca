@@ -696,7 +696,6 @@
 4 src/renderer/src/hooks/skills/freshness/useSkillFreshness.ts
 1 src/renderer/src/hooks/skills/installation/use-bundled-skill-install.ts
 1 src/renderer/src/components/dictation/use-audio-capture.ts
-2 src/renderer/src/lib/agent-session/launch/inventory/useDetectedAgents.ts
 2 src/renderer/src/lib/work-items/github/useGitHubTaskItems.ts
 2 src/renderer/src/hooks/useImmediateMutation.ts
 1 src/renderer/src/lib/work-items/linear/useIssueMetadata.ts
