@@ -115,6 +115,12 @@ const cases: [string, ReturnType<typeof running>, ReturnType<typeof leaveThreadR
     running({ ...typedInOrca, from: { sessionId: 'worker-1' } }, [], PERSON),
     'leave_refused_mixed'
   ],
+  // Another agent's send through Orca's CLI reads as a user send; its stamp says it was an agent.
+  [
+    'an agent’s send through Orca',
+    running({ ...typedInOrca, typedBy: { by: 'agent' } }, [], PERSON),
+    'leave_refused_mixed'
+  ],
   [
     'an automation’s run',
     running({ ...typedInOrca, automationRun: { runId: 'r1' } }, [], PERSON),

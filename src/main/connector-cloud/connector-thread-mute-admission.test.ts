@@ -173,7 +173,10 @@ const TURN_ID = 1_800_000_000_300
 function leaver(
   store: ReturnType<typeof createStore>,
   ahead: Promise<unknown> = Promise.resolve(),
-  queue?: (key: ConnectorConversation, work: () => Promise<unknown>) => Promise<unknown>
+  queue?: (
+    key: ConnectorConversation,
+    work: (signal: AbortSignal) => Promise<unknown>
+  ) => Promise<unknown>
 ) {
   journal.items = [
     {
@@ -229,9 +232,9 @@ function leaver(
         // The thread's queue: deliveries ahead of the leave run first.
         queued:
           queue ??
-          (async (_key: unknown, work: () => Promise<unknown>) => {
+          (async (_key: unknown, work: (signal: AbortSignal) => Promise<unknown>) => {
             await ahead
-            await work()
+            await work(new AbortController().signal)
             return undefined
           })
       })
@@ -497,7 +500,7 @@ describe('a bot that leaves its thread', () => {
     const store = await botHome({})
     // One real thread queue for the leave and the replies.
     const chain = new ConversationChain(new AbortController().signal)
-    const queue = (_key: ConnectorConversation, work?: () => Promise<unknown>) =>
+    const queue = (_key: ConnectorConversation, work?: (signal: AbortSignal) => Promise<unknown>) =>
       chain.after('thread', work)
     let read = (): void => {}
     journal.reading.held = new Promise<void>((resolve) => (read = resolve))
@@ -528,15 +531,16 @@ describe('a bot that leaves its thread', () => {
     let began = (): void => {}
     const running = new Promise<void>((resolve) => (began = resolve))
     const { leave } = leaver(store, undefined, (_key, work) =>
-      chain.after('thread', async () => {
+      chain.after('thread', async (signal) => {
         began()
-        return await work()
+        return await work(signal)
       })
     )
 
     const leaving = leave()
     await running
-    await chain.cancel('thread', 'conversation_cancelled')
+    // The read lands right as the Stop does, before the Stop's answer reaches the leave.
+    void chain.cancel('thread', 'conversation_cancelled')
     read()
     await expect(leaving).rejects.toMatchObject({ code: 'thread_mute_not_saved' })
     journal.reading.held = Promise.resolve()

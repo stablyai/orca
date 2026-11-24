@@ -21,6 +21,23 @@ export function readJournalConnectorReplies(
   return rows.map(replyRowOf)
 }
 
+/** Whether a turn's answer to one conversation is still unsent: one indexed probe, no prose read. */
+export function hasUnsentJournalConnectorReply(
+  db: Database.Database,
+  sessionId: string,
+  conversation: { source: string; externalId: string },
+  turnStartedAt: number
+): boolean {
+  return (
+    db
+      .prepare(
+        `SELECT 1 FROM journal_connector_replies WHERE session_id=? AND sent_at IS NULL
+          AND source=? AND external_id=? AND turn_started_at=? LIMIT 1`
+      )
+      .get(sessionId, conversation.source, conversation.externalId, turnStartedAt) !== undefined
+  )
+}
+
 // Every column a row reads but prose, which a page reads bounded.
 const OWED_COLUMNS = `account,delivery_id,source,external_id,session_id,epoch,message_id,queued,
   outcome,answer_delivery_id,turn_item_id,failure_json,links_json,took_ms,turn_started_at,filled_at,cut_turn_id,

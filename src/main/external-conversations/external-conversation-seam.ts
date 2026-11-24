@@ -20,7 +20,7 @@ import {
 } from './external-conversation-chat-delivery'
 import { cancelConversation } from './external-conversation-cancel'
 import { resumeRefusal } from './external-conversation-resume'
-import { ConversationChain } from './external-conversation-chain'
+import { ConversationChain, type QueuedWork } from './external-conversation-chain'
 import { GoneChats } from './external-conversation-gone-chats'
 import { ConversationEvents, type ConversationWatchListener } from './external-conversation-events'
 import { conversationOwnsTurn } from './external-conversation-chat-turns'
@@ -57,8 +57,8 @@ export class ExternalConversationSeam {
   private readonly abort = new AbortController()
   readonly signal = this.abort.signal
   private readonly chain = new ConversationChain(this.abort.signal)
-  /** Runs `work` in the conversation's queue, after its queued deliveries; a Stop settles it unrun. */
-  readonly queued = (key: ConversationKey, work?: () => Promise<unknown>): Promise<Delivery> =>
+  /** Runs `work` in the conversation's queue after its deliveries; a Stop settles it or aborts it. */
+  readonly queued = (key: ConversationKey, work?: QueuedWork): Promise<Delivery> =>
     this.chain.after(conversationId(key), work)
   private readonly linked = new Map<string, { key: ConversationKey; worktreeId: string }>()
   private readonly chatDeliveries = new ChatDeliveries((...link) => this.linkChat(...link))

@@ -66,8 +66,13 @@ function eligible(
   }
   if (body.origin === undefined) {
     // The owner's own message, typed in Orca: an automation's run or event is marked, never this.
+    // Sent by an agent through Orca (its CLI stamps it): never a person, whatever its source says.
     return (
-      !body.asker && !body.memorySource && !body.automationRun && typedByPerson(item, submissions)
+      !body.asker &&
+      !body.memorySource &&
+      !body.automationRun &&
+      body.typedBy?.by !== 'agent' &&
+      typedByPerson(item, submissions)
     )
   }
   if (body.origin !== 'connector' || body.memorySource || !body.asker) {

@@ -120,7 +120,7 @@ function leaveFrom(
   seam: {
     queued: (
       key: ConnectorConversation,
-      work: () => Promise<unknown>
+      work: (signal: AbortSignal) => Promise<unknown>
     ) => Promise<{ outcome: string } | undefined>
   },
   store: Parameters<typeof threadMuteSaves>[0]
@@ -137,11 +137,12 @@ function leaveFrom(
   checking.catch(() => undefined)
   // Its place in the thread's queue is taken now, before the read, so a reply that waits on this
   // leave is always behind it and never holds it up. The save is on disk before this answers.
-  const save: { saving?: Promise<void>; ran?: Promise<void>; stopped?: true } = {}
-  const queued = seam.queued(key, () => {
+  const save: { saving?: Promise<void>; ran?: Promise<void> } = {}
+  const queued = seam.queued(key, (signal) => {
     save.ran = (async () => {
-      // A Stop since its place came: it never saves after the thread was stopped.
-      if ((await checking.catch(() => 'unread')) === null && !save.stopped) {
+      // A Stop since its place came, read as the save starts: it never saves after the thread was
+      // stopped.
+      if ((await checking.catch(() => 'unread')) === null && !signal.aborted) {
         save.saving = threadMuteSaves(store)(key, true, turnId)
         await save.saving.catch(() => undefined)
       }
@@ -149,9 +150,7 @@ function leaveFrom(
     return save.ran
   })
   return (async () => {
-    if ((await queued)?.outcome === 'refused') {
-      save.stopped = true
-    }
+    await queued
     // A Stop answers the queue at once while its work may still run: what it did is the answer.
     await save.ran
     const refusal = await checking
