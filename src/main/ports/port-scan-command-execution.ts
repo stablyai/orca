@@ -5,6 +5,7 @@ import { LSOF_NONBLOCKING_ARGS } from '../../shared/process-observation/lsof-non
 import { psLocaleEnvironment } from '../../shared/process-observation/tables/ps-locale-environment'
 import { DarwinNetstatListeners } from './darwin-netstat-listeners'
 import { openDarwinPortScanLock } from './darwin-port-scan-lock'
+import { runLinuxSocketHolderListing } from './linux-socket-holder-listing'
 import {
   PORT_SCAN_COMMAND_TIMEOUT_MS,
   PortScanCommandTimeoutError,
@@ -24,10 +25,17 @@ let stopping = false
 export async function runPortScanCommandInProcess(
   command: string,
   args: string[],
-  darwinOperation?: DarwinPortScanOperation
+  darwinOperation?: DarwinPortScanOperation,
+  linuxSocketInodes?: number[]
 ): Promise<{ stdout: string; spawnMs: number }> {
   if (stopping) {
     throw new Error('Port scanning is shutting down.')
+  }
+  if (linuxSocketInodes) {
+    return runLinuxSocketHolderListing(linuxSocketInodes, (child) => {
+      activeChildren.add(child)
+      return () => activeChildren.delete(child)
+    })
   }
   if (process.platform === 'darwin' && darwinOperation) {
     const fd = openDarwinPortScanLock(darwinOperation)

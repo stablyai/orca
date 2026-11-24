@@ -8,40 +8,21 @@ import {
   type ConnectorResult
 } from './connector-cloud-request'
 import { ConnectorPollClient } from './connector-poll-client'
-import type { ConnectorMachine } from './connector-machine'
-import {
-  ConnectorAccountTransport,
-  type ConnectorCallOptions,
-  type ConnectorTokenMint
-} from './connector-transport'
+import { ConnectorAccountTransport, type ConnectorCallOptions } from './connector-transport'
 import { ConnectorTurnEvents } from './connector-turn-events'
 import { ConnectorReach } from './connector-reach'
-import type { ConnectorReplyJournal } from './connector-reply-outbox'
 import { connectorRefResolver, type ConnectorRefResolver } from './connector-ref-resolution'
 import { postConnectorOutboxReply } from './connector-replies'
-import type { ConnectorCloudFeature } from '../../shared/connectors/connector-cloud-contract'
+import type {
+  ConnectorCloudFeature,
+  ConnectorConversation
+} from '../../shared/connectors/connector-cloud-contract'
 
 // Past this, a held call goes ahead without the hello and gets the cloud's own refusal.
 const HOLD_HELLO_WAIT_MS = 10_000
 
-export type ConnectorCloudOptions = {
-  userDataPath: string
-  origin: string
-  machine: ConnectorMachine
-  /** The signed-in Orca account, or null while signed out. */
-  account: () => string | null
-  /** Quitting or relaunching into another profile: nothing new starts, as for the relay. */
-  isFenced: () => boolean
-  /** Mints connector tokens for one account and no other. */
-  mintFor: (account: string) => ConnectorTokenMint
-  /** `status()` may have changed. */
-  onStatusChanged?: () => void
-  /** The signed-in account is another one, or none: setups in flight belong to the old one. */
-  onAccountSwitched?: () => void
-  fetchImpl?: typeof globalThis.fetch
-  /** The journal's reply outbox (design item 125); null while no journal is open. */
-  replyJournal?: () => ConnectorReplyJournal | null
-}
+export type { ConnectorCloudOptions } from './connector-cloud-options'
+import type { ConnectorCloudOptions } from './connector-cloud-options'
 
 export class ConnectorCloud {
   private connected = false
@@ -75,13 +56,25 @@ export class ConnectorCloud {
     return this.activeAccount()
   }
 
+  // The account the last sign-in hook saw (null signing out or fenced for quit), from memory: no profile read.
+  readonly knownAccount = (): string | null => (this.options.isFenced() ? null : this.lastAccount)
+
   private noteAccount(): void {
     const account = this.signingOut ? null : this.options.account()
     if (account !== this.lastAccount) {
       this.lastAccount = account
       this.options.onAccountSwitched?.()
+      if (account) {
+        this.reach.accountSwitched()
+      }
     }
   }
+
+  /** A sign-in completed (not a refresh), even as the same account: bot pictures owed may go again. */
+  readonly signedIn = (): void => this.reach.back('signedIn')
+
+  /** The poll answered (after its own outage or not), or a sign-in: a bot picture owed may go again. */
+  readonly onBack: ConnectorReach['onBack'] = (listener) => this.reach.onBack(listener)
 
   /** From now on, hold the poll whenever an Orca account is signed in and the machine wants the connection. */
   connect(): void {
@@ -211,6 +204,8 @@ export class ConnectorCloud {
   /** The sign-out ended, either way; a sign-in that finished meanwhile resumes here. */
   signOutFinished(): void {
     this.signingOut = false
+    // A sign-in that finished meanwhile was seen as none: the account it left is taken up now.
+    this.noteAccount()
     this.reconcile()
     this.options.onStatusChanged?.()
   }
@@ -346,11 +341,16 @@ export class ConnectorCloud {
     void this.events?.drainReplies()
   }
 
+  /** Whether a turn's end still waits for the cloud to take it, after a restart too. */
+  turnEndPending(conversation: ConnectorConversation, turnId: number): boolean {
+    return this.events?.turnEndPending(conversation, turnId) ?? false
+  }
+
   /** Null while no client runs: signed out, no bot the cloud can reach, or Orca quitting. */
   reply(
-    body: Parameters<ConnectorPollClient['reply']>[0]
+    ...args: Parameters<ConnectorPollClient['reply']>
   ): ReturnType<ConnectorPollClient['reply']> | null {
-    return this.client?.reply(body) ?? null
+    return this.client?.reply(...args) ?? null
   }
 
   /** Null while no client runs: signed out, no bot the cloud can reach, or Orca quitting. */
@@ -369,6 +369,6 @@ export class ConnectorCloud {
     if (neededSignIn) {
       this.options.onStatusChanged?.()
     }
-    this.reach.reached({ ok: true, value: undefined })
+    this.reach.stopped()
   }
 }

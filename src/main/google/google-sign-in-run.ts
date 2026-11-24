@@ -19,6 +19,7 @@ import {
 } from '../orca-profiles/cloud-auth/loopback-callback'
 import { createOrcaCloudPkceSecrets } from '../orca-profiles/cloud-auth/profile-cloud-pkce'
 import { checkGoogleClientKey } from './google-client-check'
+import { exchangeFailureCategory, signInFailure } from './google-sign-in-failures'
 import { checkGoogleServices } from './google-readiness'
 import {
   readGoogleAccount,
@@ -35,6 +36,7 @@ import {
   GOOGLE_CALLBACK_PATH,
   GOOGLE_RETURN_HOLD,
   GOOGLE_RETURN_PAGES,
+  googleFailedReturnPage,
   googleRedirectUri,
   isGoogleReturnFor,
   readGoogleCallback,
@@ -232,12 +234,13 @@ export async function runGoogleSignIn(
       code,
       codeVerifier,
       redirectUri: expectation.redirectUri,
-      signal: channel.signal
+      signal: channel.signal,
+      stopped: channel.stopped
     })
     tab.held?.answer(GOOGLE_RETURN_PAGES.signedIn)
     return record
   } catch (error) {
-    tab.held?.answer(GOOGLE_RETURN_PAGES.notSignedIn)
+    tab.held?.answer(googleFailedReturnPage(channel.stopped(), error))
     throw error
   }
 }
@@ -246,15 +249,32 @@ async function finishGoogleSignIn(
   deps: GoogleSignInDeps,
   client: GoogleSignInClient,
   asked: readonly GoogleServiceChoice[],
-  args: { code: string; codeVerifier: string; redirectUri: string; signal: AbortSignal }
+  args: {
+    code: string
+    codeVerifier: string
+    redirectUri: string
+    signal: AbortSignal
+    stopped: CallerOwnedSignInChannel<GoogleSignInPrompt, string>['stopped']
+  }
 ): Promise<GoogleAccountRecord> {
-  const tokens = await exchangeGoogleCode(deps.http, client, args, args.signal)
+  const tokens = await exchangeGoogleCode(deps.http, client, args, args.signal).catch(
+    (error: unknown) => {
+      // A cancel aborts the request too; it is not a failure to explain.
+      if (args.stopped() === 'cancelled') {
+        throw error
+      }
+      throw signInFailure(
+        'token exchange',
+        args.stopped() === 'silent' ? 'owner_silent' : exchangeFailureCategory(error)
+      )
+    }
+  )
   const account = accountFromIdToken(tokens.idToken)
   if (!account) {
-    throw new Error("Google didn't say which account signed in. Try again.")
+    throw signInFailure('account', 'no_account')
   }
   if (!tokens.refreshToken) {
-    throw new Error("Google didn't return a lasting sign-in. Try again.")
+    throw signInFailure('account', 'no_refresh_token')
   }
   const grantedScopes = tokens.scope?.split(' ') ?? []
   const now = deps.now()
@@ -286,6 +306,8 @@ async function finishGoogleSignIn(
     checkedAt: now,
     connectedAt: now
   }
-  await saveGoogleAccount(record)
+  await saveGoogleAccount(record).catch(() => {
+    throw signInFailure('save', 'save_failed')
+  })
   return record
 }

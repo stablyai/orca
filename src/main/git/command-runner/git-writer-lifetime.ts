@@ -1,11 +1,14 @@
 import type { GitRuntimeOptions } from './git-runtime-options'
 
 /** Keep operation ownership independent of a cancelled caller. */
-export function trackGitOperationWriters(options: GitRuntimeOptions): {
+export function trackGitOperationWriters(
+  options: GitRuntimeOptions,
+  allPlatforms = false
+): {
   options: GitRuntimeOptions
   waitForWriters?: () => Promise<void> | null
 } {
-  if (process.platform !== 'win32') {
+  if (!allPlatforms && process.platform !== 'win32') {
     return { options }
   }
   const pending = new Set<Promise<void>>()

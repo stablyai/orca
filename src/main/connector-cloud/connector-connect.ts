@@ -23,7 +23,11 @@ type ConnectClient = Pick<ReturnType<typeof botsCloudClient>, 'startConnect' | '
 // The life of the cloud's connect session and of its result code.
 const CONNECT_TIMEOUT_MS = 10 * 60_000
 
-const SOURCE_LABELS: Record<ConnectorConnectSource, string> = { linear: 'Linear', github: 'GitHub' }
+const SOURCE_LABELS: Record<ConnectorConnectSource, string> = {
+  linear: 'Linear',
+  github: 'GitHub',
+  slack: 'Slack'
+}
 
 const EXPIRED: ConnectorConnectError = 'expired'
 

@@ -29,7 +29,8 @@ export function usePhoneBotItemPendingComments({
   events,
   hostName,
   showToast,
-  returnText
+  returnText,
+  refresh
 }: {
   client: RpcClient | null
   /** One item on one host. */
@@ -40,6 +41,8 @@ export function usePhoneBotItemPendingComments({
   showToast: (message: string) => void
   /** A replaced question's reply, dropped: its words back to the comment box if it is empty. */
   returnText: (text: string) => void
+  /** Re-reads the item once the host refuses a reply to a replaced question. */
+  refresh: () => void
 }) {
   const t = useMobileTranslation()
   const requestIds = useRouteCapability(BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY)
@@ -80,6 +83,7 @@ export function usePhoneBotItemPendingComments({
             : String(error)
       ),
     returnText,
+    refresh,
     requestIds,
     questionIds,
     plain,

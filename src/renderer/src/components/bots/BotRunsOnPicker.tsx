@@ -142,7 +142,7 @@ export function BotRunsOnPicker({
       }
       components={{
         host: (
-          <span className="inline-flex items-center gap-1 font-medium text-foreground">
+          <span className="inline-flex max-w-full items-center gap-1 font-medium wrap-anywhere text-foreground">
             <HostRowIcon hostId={host.hostId} />
             {host.label}
           </span>
@@ -240,7 +240,7 @@ export function BotRunsOnPicker({
       <div className="rounded-lg border border-border">
         <CollapsibleTrigger variant="summary">
           <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="flex min-w-0 items-center gap-1.5">{runsOn}</span>
+            <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">{runsOn}</span>
             {/* Its own line, so the pick always shows in the narrow dialog. */}
             {picked ? (
               <span className="truncate text-xs text-muted-foreground">{picked}</span>

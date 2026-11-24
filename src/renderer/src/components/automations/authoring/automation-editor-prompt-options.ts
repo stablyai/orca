@@ -31,6 +31,7 @@ export function buildAutomationPromptEditorOptions(args: {
     renderLineHighlight: 'none',
     scrollBeyondLastLine: false,
     scrollbar: {
+      alwaysConsumeMouseWheel: false,
       horizontalScrollbarSize: 8,
       verticalScrollbarSize: 8
     },

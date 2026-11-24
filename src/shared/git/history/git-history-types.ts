@@ -66,6 +66,8 @@ export type GitHistoryOptions = {
   baseRef?: string | null
   /** List only commits on HEAD that baseRef lacks, with statistics and pushed state. */
   branchOnly?: boolean
+  /** With branchOnly: skip per-row pushed state and statistics; `branch.unpushed` is still exact. */
+  branchListOnly?: boolean
   skip?: number
 }
 

@@ -14,10 +14,10 @@ import type { WorkspaceCleanupPreviewRow } from '../../../../../shared/workspace
 import { Switch } from '../../ui/switch'
 import {
   NumberField,
-  SettingsBadge,
   SettingsRow,
   SettingsSegmentedControl
 } from '../form-controls/SettingsFormControls'
+import { SettingsTitleWithBadge } from '../form-controls/SettingsTitleWithBadge'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
 import { matchesSettingsSearch } from '../search/settings-search'
@@ -119,13 +119,7 @@ export function WorkspaceCleanupRuleRows({
     return (
       <SearchableSetting {...search[key]} forceVisible={forceVisible}>
         <SettingsRow
-          label={
-            // Inline, so a wrapping title carries its badge with it.
-            <span className="leading-snug">
-              {search[key].title}
-              {badge ? <SettingsBadge className="ml-2 align-middle">{badge}</SettingsBadge> : null}
-            </span>
-          }
+          label={<SettingsTitleWithBadge title={search[key].title} badge={badge} />}
           description={
             <>
               {description}

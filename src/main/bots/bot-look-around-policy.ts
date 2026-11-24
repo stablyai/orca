@@ -19,6 +19,10 @@ const READ_COMMANDS: Record<string, readonly (readonly string[])[]> = {
     ['slack', 'check'],
     ['bot', 'connectors'],
     ['bot', 'list'],
+    ['bot', 'chats'],
+    ['bot', 'item', 'list'],
+    ['bot', 'item', 'show'],
+    ['bot', 'work', 'list'],
     ['linear', 'issue'],
     ['linear', 'search'],
     ['linear', 'list-issues'],
@@ -71,8 +75,12 @@ function ghStaysOnGitHub(args: readonly string[]): boolean {
     if (word.startsWith('--repo=')) {
       return GITHUB_REPO.test(word.slice('--repo='.length))
     }
-    // `--web` opens a browser on the owner's machine; `-Rhost/o/r` or a bundle hides a value.
-    if (word === '--web' || (/^-[^-]*[Rw]/.test(word) && word !== '-R')) {
+    // `--web`/`--web=<bool>` opens a browser on the owner's machine; `-Rhost/o/r` or a bundle hides a value.
+    if (
+      word === '--web' ||
+      word.startsWith('--web=') ||
+      (/^-[^-]*[Rw]/.test(word) && word !== '-R')
+    ) {
       return false
     }
     return !word.includes('://') || GITHUB_URL.test(word)

@@ -12,18 +12,40 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { BotGroupTranscript } from '../../../src/shared/bots/bot-group-transcript'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { groupStyles as styles } from './mobile-bot-group-styles'
+import { MobileBotFaceStack } from './MobileBotFaceStack'
+import type { MobileBotAvatarSource } from './host-bot-row-facts'
+import type { Translate } from '../i18n/mobile-i18n'
 const READER_SCROLL_MS = 300
+const EMPTY_FACES = 34
+/** Names an empty room lists before "and N more". */
+const NAMED = 3
+
+/** "A, B and C", or "A, B, C and 2 more". */
+function memberNames(members: readonly { name: string }[], t: Translate): string {
+  const names = members.map((member) => member.name)
+  const listed = names.length > NAMED ? names.slice(0, NAMED) : names.slice(0, -1)
+  const last =
+    names.length > NAMED
+      ? t('bots.groups.moreCount', '{{count}} more', { count: names.length - NAMED })
+      : names.at(-1)
+  return listed.length === 0
+    ? (last ?? '')
+    : t('bots.groups.andNames', '{{names}} and {{last}}', { names: listed.join(', '), last })
+}
 
 export function MobileBotGroupTranscript({
   client,
   roomId,
   data,
+  members,
   children
 }: {
   client: RpcClient
   /** The group's id for its original room, a thread's id for that thread. */
   roomId: string
   data: BotGroupTranscript | null
+  /** Who is in the room, for its empty state. */
+  members: readonly { id: string; name: string; avatar: MobileBotAvatarSource }[]
   children: ReactNode
 }) {
   const t = useMobileTranslation()
@@ -53,19 +75,24 @@ export function MobileBotGroupTranscript({
     () => (folderId ? { client, worktreeId: folderWorkspaceKey(folderId) } : undefined),
     [client, folderId]
   )
-  // A loaded room with no messages yet: its name over desktop's prompt, as an empty chat shows.
+  // A loaded room with no messages yet: who is in it, its name, and their names, as an empty chat shows.
   if (data?.messages.length === 0) {
     return (
       <MobileNativeChatEmptyStateView
+        picture={<MobileBotFaceStack faces={members} slot={EMPTY_FACES} />}
         copy={{
           title:
             roomId === data.group.id
               ? data.group.name
               : t('bots.groups.newThread', 'New thread in {{name}}', { name: data.group.name }),
-          subtitle: t(
-            'bots.groups.startAConversationWithThisGroupMentionBots',
-            'Start a conversation with this group. Mention bots with @Name or @everyone.'
-          )
+          // The bots list may not have loaded yet; no names is better than " are here."
+          subtitle:
+            members.length > 0
+              ? t('bots.groups.membersHere', '{{names}} are here.', {
+                  names: memberNames(members, t),
+                  count: members.length
+                })
+              : ''
         }}
       />
     )
