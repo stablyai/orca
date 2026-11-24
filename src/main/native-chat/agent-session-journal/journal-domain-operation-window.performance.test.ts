@@ -10,7 +10,8 @@ import { applyJournalDomainDispatch } from './journal-domain-dispatch'
 import { applyJournalDomainItem } from './journal-domain-item'
 import { readJournalDomainOperationWindow } from './journal-domain-operation-window'
 import { JournalSqlScope } from './journal-sql-scope'
-import { keptSends, type Send } from './journal-operation-window-sends'
+import { keptSends } from './journal-operation-window-held-sends'
+import type { Send } from './journal-operation-window-sends'
 import { codexTurnLifecycleIdentity } from '../../codex/structured/journal/codex-structured-journal-translation-turns'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -52,8 +53,9 @@ function chat(
   /** Tool calls the last turn ran, as a long agent turn does. */
   lastTurnTools = 0,
   /** Every send in one family: a chain (each shares a provider id with one neighbour and a card with
-   *  the other), or one queued card they all carry. */
-  family?: 'chain' | 'card'
+   *  the other), one queued card they all carry, or one answering turn they all name (the newest).
+   *  Or `unsettled`: every send before the newest ten handed over, and never known answered. */
+  family?: 'chain' | 'card' | 'answered' | 'unsettled'
 ): Database {
   const chained = family === 'chain'
   const directory = mkdtempSync(join(tmpdir(), 'orca-operation-window-'))
@@ -114,8 +116,13 @@ function chat(
         {
           kind: 'dispatch',
           input:
-            index < recoveredBelow
-              ? { clientMessageId: id, fence: 1, state: 'unknown', recovered: true }
+            index < recoveredBelow || (family === 'unsettled' && index < turns - 10)
+              ? {
+                  clientMessageId: id,
+                  fence: 1,
+                  state: 'unknown',
+                  ...(index < recoveredBelow ? { recovered: true as const } : {})
+                }
               : {
                   clientMessageId: id,
                   fence: 1,
@@ -126,7 +133,17 @@ function chat(
                     turnId: 'echo',
                     ordinal: chained ? Math.floor((index + 1) / 2) : index
                   },
-                  ...(linked ? { answeredInTurn: { turn, via: 'start' as const } } : {})
+                  ...(linked
+                    ? {
+                        answeredInTurn: {
+                          turn:
+                            family === 'answered'
+                              ? codexTurnLifecycleIdentity('chat', `turn-${turns - 1}`)
+                              : turn,
+                          via: 'start' as const
+                        }
+                      }
+                    : {})
                 }
         },
         now++
@@ -345,7 +362,11 @@ it('walks a family of sends linked by provider id and queued card once, however 
 it('stops reading a long send family at its first member older than the newest turns', () => {
   // Every send is in one family running back through the chat, from the newest send (unanswered or
   // not): the first older member settles the whole read, so the rest is never walked by index.
-  const extra = (turns: number, unanswered: boolean, family: 'chain' | 'card' = 'chain') => {
+  const extra = (
+    turns: number,
+    unanswered: boolean,
+    family: 'chain' | 'card' | 'answered' | 'unsettled' = 'chain'
+  ) => {
     const db = chat(turns, () => true, unanswered ? turns - 1 : undefined, 0, 0, family)
     const pinned = new JournalSqlScope(db, 'chat', 'epoch')
     const read = readJournalDomainOperationWindow(pinned, { latestTurns: 8, turnShape: true })
@@ -366,5 +387,9 @@ it('stops reading a long send family at its first member older than the newest t
   ])
   // One card every send carries: each lookup lists at most the cap, however wide the family.
   expect([extra(200, true, 'card'), extra(500, true, 'card')]).toEqual([67, 67])
-  expect([extra(200, false, 'card'), extra(500, false, 'card')]).toEqual([128, 128])
+  expect([extra(200, false, 'card'), extra(500, false, 'card')]).toEqual([110, 110])
+  // One answering turn, in the window, that every send names: the window's own lookup stops at the cap.
+  expect([extra(200, false, 'answered'), extra(500, false, 'answered')]).toEqual([83, 83])
+  // Unsettled sends piled up before the newest turns: their lookup stops at the cap too.
+  expect([extra(200, false, 'unsettled'), extra(500, false, 'unsettled')]).toEqual([65, 65])
 })

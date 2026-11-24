@@ -14,16 +14,19 @@ import {
   newestTurnsOnly,
   RECENT_FAMILY_CAP,
   boundedSends,
-  keptSends,
-  reachesBefore,
-  recentSends,
+  placedSends,
   readSend,
   seedSends,
   sendHeads,
-  unanswered,
   windowSends,
   withSends
 } from './journal-operation-window-sends'
+import {
+  keptSends,
+  reachesBefore,
+  recentSends,
+  unanswered
+} from './journal-operation-window-held-sends'
 
 /** Where a reader's interest starts; the window runs from a turn ahead of the earliest to the head. */
 export type JournalOperationWindowAnchors = {
@@ -92,9 +95,11 @@ export function readJournalDomainOperationWindow(
   }
   // A window of the newest turns alone reads the sends placed in it and the unsettled ones, each by
   // index, so reading whom the newest turn acts for costs the same however long the chat ran before.
-  const recent = !bounded && newestTurnsOnly(anchors)
+  const newestOnly = !bounded && newestTurnsOnly(anchors)
+  const seeded = seedSends(scope, anchors, newestOnly)
+  const recent = newestOnly && seeded !== null
   let indexed = bounded || recent
-  let sends = seedSends(scope, anchors, recent)
+  let sends = seeded ?? sendHeads(scope)
   const operations = resolveOperations(scope, sends, anchors)
   // Where each anchored send's own turn may reach: past the first turn after it when it names its
   // turn (a turn row naming it, or its answeredInTurn), past the second when it doesn't (an older
@@ -132,11 +137,16 @@ export function readJournalDomainOperationWindow(
   const end = earliest !== null && bounded ? windowEnd(scope, reaches) : null
   if (indexed && start !== null) {
     // A newest-turns window takes the whole read once a family runs older than it, or past the cap.
-    const placed = windowSends(scope, start, end ?? Number.MAX_SAFE_INTEGER)
+    const placed = placedSends(
+      scope,
+      start,
+      end ?? Number.MAX_SAFE_INTEGER,
+      recent ? RECENT_FAMILY_CAP + 1 : undefined
+    )
     const older = (send: Send) => reachesBefore([send], null, start ?? Infinity)
-    const walked = recent
-      ? boundedSends(scope, sends, placed, { cap: RECENT_FAMILY_CAP, older })
-      : withSends(scope, sends, placed)
+    const walked = !recent
+      ? withSends(scope, sends, placed ?? [])
+      : placed && boundedSends(scope, sends, placed, { cap: RECENT_FAMILY_CAP, older })
     indexed = walked !== null
     sends = walked ?? sendHeads(scope)
   }

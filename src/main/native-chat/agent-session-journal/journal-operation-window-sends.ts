@@ -66,34 +66,58 @@ export function windowPlaceRows(column: string): string {
 /** The sends whose opener row, provider row or answering turn row, or the head they were sent at,
  *  sits in `[start, end)`. */
 export function windowSends(scope: JournalSqlScope, start: number, end: number): Send[] {
+  return placedSends(scope, start, end) ?? []
+}
+
+/** As `windowSends`, or null when one lookup lists `limit` sends: a key shared that widely is the
+ *  whole read's to answer. Each lookup stops at `limit`. */
+export function placedSends(
+  scope: JournalSqlScope,
+  start: number,
+  end: number,
+  limit?: number
+): Send[] | null {
   const range = [...scope.prefix, start, end]
-  return [
-    ...sendHeads(
+  return capped(limit, [
+    sendHeads(
       scope,
       `AND item_id IN ${windowPlaceRows('item_id')}`,
       range,
-      'journal_submission_item'
+      'journal_submission_item',
+      limit
     ),
-    ...sendHeads(
+    sendHeads(
       scope,
       `AND provider_item_id IN ${windowPlaceRows('item_id')}`,
       range,
-      'journal_submission_provider_item'
+      'journal_submission_provider_item',
+      limit
     ),
-    ...sendHeads(
+    sendHeads(
       scope,
       // `+item_id` drops the column's TEXT affinity, so the comparison keys on the indexed expression.
       `AND ${SEND_ANSWERED_TURN_SQL} IN ${windowPlaceRows('+item_id')}`,
       range,
-      'journal_submission_answered_turn'
+      'journal_submission_answered_turn',
+      limit
     ),
-    ...sendHeads(
+    sendHeads(
       scope,
       'AND submitted_sequence>=? AND submitted_sequence<?',
       [start, end],
-      'journal_submission_submitted'
+      'journal_submission_submitted',
+      limit
     )
-  ]
+  ])
+}
+
+/** The lookups' sends once each, or null when one listed `limit` (so it may have stopped short). */
+function capped(limit: number | undefined, lookups: Send[][]): Send[] | null {
+  if (limit !== undefined && lookups.some((sends) => sends.length >= limit)) {
+    return null
+  }
+  const byId = new Map(lookups.flat().map((send) => [send.messageId, send]))
+  return [...byId.values()]
 }
 
 /** Most sends a newest-turns window reads by index for one walk of families; past it, the whole read. */
@@ -122,7 +146,9 @@ export function boundedSends(
   bound?: FamilyBound
 ): Send[] | null {
   const byId = new Map(sends.map((send) => [send.messageId, send]))
-  let added = more.filter((send) => !byId.has(send.messageId))
+  let added = [...new Map(more.map((send) => [send.messageId, send])).values()].filter(
+    (send) => !byId.has(send.messageId)
+  )
   const most = bound ? byId.size + added.length + bound.cap : Infinity
   while (added.length > 0) {
     added.forEach((send) => byId.set(send.messageId, send))
@@ -132,8 +158,8 @@ export function boundedSends(
     const limit = bound ? most + 1 : undefined
     const providers = [...new Set(added.flatMap((send) => send.providerItemId ?? []))]
     const cards = [...new Set(added.flatMap((send) => send.queuedMessageId ?? []))]
-    const related = [
-      ...(providers.length > 0
+    const related = capped(limit, [
+      providers.length > 0
         ? sendHeads(
             scope,
             'AND provider_item_id IN (SELECT value FROM json_each(?))',
@@ -141,8 +167,8 @@ export function boundedSends(
             'journal_submission_provider_item',
             limit
           )
-        : []),
-      ...(cards.length > 0
+        : [],
+      cards.length > 0
         ? sendHeads(
             scope,
             `AND ${SEND_QUEUED_CARD_SQL} IN (SELECT value FROM json_each(?))`,
@@ -150,10 +176,10 @@ export function boundedSends(
             'journal_submission_queued_card',
             limit
           )
-        : [])
-    ]
+        : []
+    ])
     // Every send a lookup lists is in a walked family, so a full lookup means the walk is past the cap.
-    if (limit !== undefined && related.length >= limit) {
+    if (related === null) {
       return null
     }
     const seen = new Set<string>()
@@ -210,40 +236,6 @@ export function sendHeads(
     })
 }
 
-/** The unsettled `seed` with its families, or null once a send the window must hold sits before the
- *  `newest` turns: the whole read is cheaper than reading by index the stretch it pins the window to.
- *  Each family member of a held unanswered send is held, so the first older one ends the walk. */
-export function recentSends(
-  scope: JournalSqlScope,
-  seed: Send[],
-  operations: ReadonlySet<string>,
-  earliest: number | null,
-  newest: number,
-  anchorsOnly: boolean
-): Send[] | null {
-  const older = (send: Send) => !anchorsOnly && reachesBefore([send], null, newest)
-  if ((earliest ?? Infinity) < newest || seed.length > RECENT_FAMILY_CAP || seed.some(older)) {
-    return null
-  }
-  const sends = boundedSends(scope, [], seed, { cap: RECENT_FAMILY_CAP, older })
-  if (sends === null) {
-    return null
-  }
-  const held = keptSends(sends, operations, newest, null, anchorsOnly)
-  return reachesBefore(held, earliest, newest) ? null : sends
-}
-
-/** Whether a send the window must hold sits before `first` (by its rows, or the head it was sent at). */
-export function reachesBefore(sends: Send[], earliest: number | null, first: number): boolean {
-  return (
-    (earliest ?? Infinity) < first ||
-    sends.some(
-      (send) =>
-        (send.submittedSequence ?? Infinity) < first || send.positions.some((at) => at < first)
-    )
-  )
-}
-
 /** Anchored by its newest turns and nothing else, so only sends placed in it or unsettled count. */
 export function newestTurnsOnly(anchors: JournalOperationWindowAnchors): boolean {
   return (
@@ -258,12 +250,12 @@ export function newestTurnsOnly(anchors: JournalOperationWindowAnchors): boolean
 }
 
 /** The sends a window starts from: the anchored operations' through anchored turns, the unsettled
- *  ones for the newest turns alone, else every send. */
+ *  ones for the newest turns alone (null past the cap: the whole read answers), else every send. */
 export function seedSends(
   scope: JournalSqlScope,
   anchors: JournalOperationWindowAnchors,
   recent: boolean
-): Send[] {
+): Send[] | null {
   if (anchors.throughAnchoredTurns === true) {
     return operationSends(scope, anchors)
   }
@@ -273,13 +265,10 @@ export function seedSends(
 /** Every send still handed over and unanswered (pending, or unknown and not recovered), wherever it
  *  sits, by the index that keeps exactly those: a recovered one is read only when the window holds it.
  *  The sends sharing a provider id or queued card with them are the caller's to add. */
-function unsettledSends(scope: JournalSqlScope): Send[] {
-  return sendHeads(
-    scope,
-    "AND (dispatch_state='pending' OR (dispatch_state='unknown' AND recovered=0))",
-    [],
-    'journal_submission_recovery'
-  )
+function unsettledSends(scope: JournalSqlScope): Send[] | null {
+  const unsettled = "AND (dispatch_state='pending' OR (dispatch_state='unknown' AND recovered=0))"
+  const limit = RECENT_FAMILY_CAP + 1
+  return capped(limit, [sendHeads(scope, unsettled, [], 'journal_submission_recovery', limit)])
 }
 
 export function readSend(scope: JournalSqlScope, messageId: string): AgentJournalSubmission {
@@ -291,59 +280,4 @@ export function readSend(scope: JournalSqlScope, messageId: string): AgentJourna
     throw new Error('journal send left between its selector and payload reads')
   }
   return scope.decode<AgentJournalSubmission>(scope.examined(row).payload_json)
-}
-
-/** Handed over and not answered: its turn is still to be attributed. */
-export function unanswered(send: Send): boolean {
-  return send.dispatchState === 'pending' || (send.dispatchState === 'unknown' && !send.recovered)
-}
-
-/** The sends the window holds: anchored, unanswered or placed in it, with every send sharing a
- *  provider id or queued card with one, since attribution reads the first or last of those. */
-export function keptSends(
-  sends: readonly Send[],
-  operations: ReadonlySet<string>,
-  start: number | null,
-  end: number | null,
-  anchorsOnly: boolean
-): Send[] {
-  const after = (position: number) =>
-    start !== null && position >= start && (end === null || position < end)
-  const kept = new Set(
-    sends.filter(
-      (send) =>
-        operations.has(send.messageId) ||
-        send.positions.some(after) ||
-        (unanswered(send) && (!anchorsOnly || send.positions.every(after)))
-    )
-  )
-  // Each family (sends sharing a provider id or queued card) is walked once, from its first held member.
-  const families = new Map<string, Send[]>()
-  const family = (send: Send) => [
-    ...(send.providerItemId === null ? [] : [`p:${send.providerItemId}`]),
-    ...(send.queuedMessageId === null ? [] : [`c:${send.queuedMessageId}`])
-  ]
-  for (const send of sends) {
-    for (const key of family(send)) {
-      const members = families.get(key)
-      if (members) {
-        members.push(send)
-      } else {
-        families.set(key, [send])
-      }
-    }
-  }
-  const frontier = [...kept]
-  for (let send = frontier.pop(); send; send = frontier.pop()) {
-    for (const key of family(send)) {
-      for (const related of families.get(key) ?? []) {
-        if (!kept.has(related)) {
-          kept.add(related)
-          frontier.push(related)
-        }
-      }
-      families.delete(key)
-    }
-  }
-  return sends.filter((send) => kept.has(send))
 }
