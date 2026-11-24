@@ -1,5 +1,5 @@
 import { strict as assert } from 'node:assert'
-import { test } from 'node:test'
+import { test } from 'vitest'
 
 import { repairTranslatedValue } from './locale-translation-policy.mjs'
 
