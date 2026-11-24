@@ -129,7 +129,23 @@ function commentWords(event: BotItemEventRecord, imagesBefore: number): string {
   const images = botItemCommentImages(event.data)
   const text = offsetSentImagePromptMarkers(str(event.data.text) ?? '', images.length, imagesBefore)
   const said = text.trim() || images.length === 0 ? `:\n${fenceQuotedText(text)}` : ''
-  return `${said}${imagesNote(images, imagesBefore)}${skillsNote(botItemCommentSkills(event.data))}`
+  return `${said}${skippedNote(event.data.skipped)}${imagesNote(images, imagesBefore)}${skillsNote(botItemCommentSkills(event.data))}`
+}
+
+/** The questions of the answered set the owner skipped: they are closed, unanswered. */
+function skippedNote(skipped: unknown): string {
+  const questions = Array.isArray(skipped)
+    ? skipped.filter((question): question is string => typeof question === 'string')
+    : []
+  if (questions.length === 0) {
+    return ''
+  }
+  const named = questions.map((question) => `"${quoted(inlineUntrusted(question))}"`).join(', ')
+  const closed =
+    questions.length === 1
+      ? `this question is closed unanswered: ${named}. If it still matters`
+      : `these questions are closed unanswered: ${named}. If one still matters`
+  return `\n  [Orca: they skipped the rest of that set, so ${closed}, ask it again in a new set.]`
 }
 
 const quoted = (text: string): string => text.replaceAll('"', '\\"')

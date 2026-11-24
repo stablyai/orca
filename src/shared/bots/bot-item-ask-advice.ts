@@ -266,8 +266,13 @@ export function botItemAskAdvice({
     )
     // Each field is masked on its own, so code never pairs across two of them.
     const written = [context, ...prompts].map(prose)
-    // Choices the bot wrote into its question or context rather than as buttons.
-    if (hasProseChoices(written.join('\n'))) {
+    // Choices spelled in prose instead of buttons; once every question has options, choices named in
+    // the context are those buttons.
+    const bare = ask.questions.filter((question) => question.options.length === 0)
+    if (
+      bare.length > 0 &&
+      hasProseChoices([context, ...bare.map((q) => q.prompt)].map(prose).join('\n'))
+    ) {
       found.add('prose_choices')
     }
     words = [...written, ...options.map(prose)].join('\n')
@@ -287,7 +292,10 @@ export function botItemAskAdvice({
   if (hasJargon(words)) {
     found.add('jargon')
   }
-  const codes = ORDER.filter((code) => found.has(code))
+  return adviceOf(ORDER.filter((code) => found.has(code)))
+}
+
+function adviceOf(codes: BotItemAskAdviceCode[]): BotItemAskAdvice | null {
   if (codes.length === 0) {
     return null
   }
@@ -295,4 +303,18 @@ export function botItemAskAdvice({
     codes,
     tip: `Posted. Tip: ${TIPS[codes[0]!]} Set Needs you again if you rewrite it.`
   }
+}
+
+/** A host's advice without one code, the next code's tip showing if it led; e.g. `long_context` when
+ *  the CLI read the context from --comment-file, which the host cannot tell from --comment. */
+export function botItemAskAdviceWithout<T extends { codes: string[]; tip: string }>(
+  advice: T,
+  code: BotItemAskAdviceCode
+): T | BotItemAskAdvice | null {
+  if (advice.codes[0] !== code) {
+    return advice.codes.includes(code)
+      ? { ...advice, codes: advice.codes.filter((entry) => entry !== code) }
+      : advice
+  }
+  return adviceOf(ORDER.filter((entry) => entry !== code && advice.codes.includes(entry)))
 }

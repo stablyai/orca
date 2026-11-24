@@ -88,6 +88,8 @@ export const GoogleSetupRunSchema = z.object({
   kind: z.enum(['work', 'personal']).optional(),
   services: z.array(z.enum(GOOGLE_SERVICE_CHOICES)).optional(),
   projectId: Text(120).optional(),
+  /** Started over an app already on this computer: only a key saved after the start is this setup's. */
+  newApp: z.literal(true).optional(),
   /** The browser page the setup runs in; while the person clicks, the bot only reads it. */
   browserPageId: Text(200).optional(),
   answers: z.partialRecord(z.enum(GOOGLE_SETUP_CARDS), GoogleSetupAnswerSchema).default({}),

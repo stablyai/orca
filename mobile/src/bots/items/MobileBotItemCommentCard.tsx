@@ -43,7 +43,7 @@ export function MobileBotItemCommentCard({
   item: BotItem
   entry: Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'event' | 'replyTo' | 'waiting'> &
     Partial<
-      Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'answers' | 'byOrder' | 'replaced'>
+      Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'answers' | 'byOrder' | 'ended'>
     >
   attachments: MobileBotItemAttachmentSource
   /** A comment sent from the box that didn't reach the host; no Retry when it may have. */
@@ -106,7 +106,7 @@ export function MobileBotItemCommentCard({
           waiting={waiting}
           answers={entry.answers}
           byOrder={entry.byOrder}
-          replaced={entry.replaced === true}
+          ended={entry.ended}
           actions={quickReplies}
           disabled={repliesDisabled}
           // Ruled off only below something: a question with no body stays under the name.
