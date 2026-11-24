@@ -694,6 +694,14 @@
       "statusAriaLabel": "Git blame: {{summary}}",
       "openCommitHint": "Click to open the commit",
       "statusBarItem": "Git Blame"
+    },
+    "combinedDiff": {
+      "unsavedClose": {
+        "title": "Unsaved diff edits",
+        "description": "Go back to keep editing, or discard the unsaved diff edits and close Orca.",
+        "discard": "Discard and Close",
+        "cancel": "Go Back"
+      }
     }
   },
   "githubChecks": {

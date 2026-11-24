@@ -9,6 +9,10 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
+import {
+  cancelWindowCloseRequest,
+  confirmInteractiveWindowClose
+} from '@/app-shell/shutdown/window-close-request-coordinator'
 import type { TerminalController } from './use-terminal-controller'
 
 export function TerminalWorkspaceDialogs({
@@ -18,19 +22,19 @@ export function TerminalWorkspaceDialogs({
 }): React.JSX.Element {
   const t = useTranslate()
   const {
-    confirmNativeWindowClose,
     handleSaveDialogCancel,
     handleSaveDialogDiscard,
     handleSaveDialogSave,
     saveDialogFile,
     saveDialogFileId,
-    setWindowCloseDialogOpen,
-    windowCloseDialogKind,
-    windowCloseDialogOpen
+    setWindowCloseDialog,
+    windowCloseDialog
   } = controller
   const cancelWindowClose = (): void => {
-    setWindowCloseDialogOpen(false)
-    window.api.ui.cancelWindowClose()
+    if (windowCloseDialog) {
+      setWindowCloseDialog(null)
+      cancelWindowCloseRequest(windowCloseDialog.attempt)
+    }
   }
   return (
     <>
@@ -72,7 +76,7 @@ export function TerminalWorkspaceDialogs({
       </Dialog>
 
       <Dialog
-        open={windowCloseDialogOpen}
+        open={windowCloseDialog !== null}
         onOpenChange={(open) => {
           if (!open) {
             cancelWindowClose()
@@ -85,7 +89,7 @@ export function TerminalWorkspaceDialogs({
               {t('auto.components.Terminal.2fa9c69ff3', 'Close Window?')}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              {windowCloseDialogKind === 'unverifiable'
+              {windowCloseDialog?.kind === 'unverifiable'
                 ? t(
                     'auto.components.Terminal.b7c1f0a934',
                     'A remote host could not be reached, so Orca cannot tell whether work is still running there. Close the window anyway?'
@@ -106,8 +110,10 @@ export function TerminalWorkspaceDialogs({
               size="sm"
               autoFocus
               onClick={() => {
-                setWindowCloseDialogOpen(false)
-                void confirmNativeWindowClose()
+                if (windowCloseDialog) {
+                  setWindowCloseDialog(null)
+                  void confirmInteractiveWindowClose(windowCloseDialog.attempt)
+                }
               }}
             >
               {t('auto.components.Terminal.73768427cf', 'Close')}

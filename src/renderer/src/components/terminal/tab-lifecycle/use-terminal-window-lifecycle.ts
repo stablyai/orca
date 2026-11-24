@@ -2,7 +2,11 @@ import { useEffect, useRef } from 'react'
 import { useAppStore } from '../../../store/index'
 import { isIntentionalAppRestartInProgress } from '@/app-shell/updates/updater-beforeunload'
 import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/app-shell/shutdown/shutdown-checkpoint-guard'
-import { setWindowCloseRequestHandler } from '../../../app-shell/shutdown/window-close-request-coordinator'
+import {
+  abandonWorkbenchWindowClose,
+  sendWindowCloseConfirmation,
+  setWindowCloseRequestHandler
+} from '../../../app-shell/shutdown/window-close-request-coordinator'
 import { runAfterEditorFramesFlush } from '../../editor/save/flush/editor-pending-flush'
 import {
   collectBrowserWebviewIds,
@@ -49,10 +53,12 @@ export function useTerminalWindowLifecycle(
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
 
+  useEffect(() => abandonWorkbenchWindowClose, [])
+
   useEffect(() => {
-    setWindowCloseRequestHandler(({ isQuitting }) => {
+    setWindowCloseRequestHandler((pendingClose) => {
       if (isIntentionalAppRestartInProgress()) {
-        window.api.ui.confirmWindowClose()
+        sendWindowCloseConfirmation(pendingClose)
         return
       }
       if (windowCloseAfterDirtyRef.current) {
@@ -60,7 +66,6 @@ export function useTerminalWindowLifecycle(
       }
       const state = useAppStore.getState()
       // Claimed before the flush so repeat requests are ignored; a cancel clears it and voids this one.
-      const pendingClose = { isQuitting }
       windowCloseAfterDirtyRef.current = pendingClose
       // Why: a custom editor frame may still hold debounced edits the dirty check must see.
       runAfterEditorFramesFlush(
@@ -79,7 +84,7 @@ export function useTerminalWindowLifecycle(
             return
           }
           windowCloseAfterDirtyRef.current = null
-          proceedToNativeWindowClose(isQuitting)
+          proceedToNativeWindowClose(pendingClose)
         }
       )
     })

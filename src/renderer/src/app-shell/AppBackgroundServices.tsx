@@ -1,4 +1,4 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { AgentHibernationGate } from '../lib/agent-session/hibernation/AgentHibernationGate'
 import { AiVaultTabTitleSyncGate } from '../lib/agent-session/history/title-sync/AiVaultTabTitleSyncGate'
@@ -13,6 +13,9 @@ import { StructuredAgentSessionAttentionBridge } from '../components/native-chat
 import { StructuredAgentSessionStatusBridge } from '../components/native-chat/session/status/StructuredAgentSessionStatusBridge'
 import { NativeChatVisualGuestThemePublisher } from '../components/native-chat/media/visuals/NativeChatVisualGuestThemePublisher'
 import { usePairedMobileDevices } from '../components/mobile/paired-mobile-devices'
+import { registerCombinedDiffClosePrompt } from '@/app-shell/shutdown/window-close-request-coordinator'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
+import { translate } from '@/i18n/i18n'
 
 const DashboardPopoutBridge = lazy(
   () => import('../components/dashboard/popout-bridge/DashboardPopoutBridge')
@@ -23,6 +26,25 @@ const AgentListVerdictPublisher = lazy(
 
 /** Isolate high-churn subscriptions from App rendering; services outlive their consuming surfaces. */
 export function AppBackgroundServices(): React.JSX.Element {
+  const confirm = useConfirmationDialog()
+  useEffect(
+    () =>
+      registerCombinedDiffClosePrompt(() =>
+        confirm({
+          title: translate('editor.combinedDiff.unsavedClose.title', 'Unsaved diff edits'),
+          description: translate(
+            'editor.combinedDiff.unsavedClose.description',
+            'Go back to keep editing, or discard the unsaved diff edits and close Orca.'
+          ),
+          confirmLabel: translate('editor.combinedDiff.unsavedClose.discard', 'Discard and Close'),
+          cancelLabel: translate('editor.combinedDiff.unsavedClose.cancel', 'Go Back'),
+          confirmVariant: 'destructive',
+          ignoresOpeningGesture: true
+        })
+      ),
+    [confirm]
+  )
+
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const dashboardPopoutEnabled = useAppStore(
     (s) => s.settings?.experimentalAgentDashboardPopout === true

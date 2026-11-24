@@ -241,6 +241,8 @@ export default function CombinedDiffViewer({
     scrollContainerRef,
     sectionHeights,
     sections,
+    sectionsRef: registry.sectionsRef,
+    modifiedEditorsRef,
     viewStateKey
   })
   useCombinedDiffScrollPersistence({

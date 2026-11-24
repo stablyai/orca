@@ -5,8 +5,11 @@ import {
   type WindowCloseRunningWork
 } from '../tab-lifecycle/window-close-running-work'
 import type { TerminalWorkspaceProjectionController } from '../workbench/use-terminal-workspace-projection'
-import { prepareWindowCloseCheckpoint } from '../../../app-shell/shutdown/window-close-request-coordinator'
-import { showShutdownCheckpointFailureToast } from '@/app-shell/shutdown/shutdown-checkpoint-failure-toast'
+import {
+  confirmInteractiveWindowClose,
+  isWindowCloseAttemptCurrent,
+  type WindowCloseAttempt
+} from '../../../app-shell/shutdown/window-close-request-coordinator'
 
 export function useTerminalEditorCloseFoundation(
   controller: TerminalWorkspaceProjectionController
@@ -29,45 +32,29 @@ export function useTerminalEditorCloseFoundation(
     }, CLOSE_DIALOG_DEBOUNCE_MS)
     closeDialogDebounceTimersRef.current.add(timer)
   }, [])
-  const [windowCloseDialogOpen, setWindowCloseDialogOpen] = useState(false)
-  // Distinguish reported live work from unreachable hosts; loss of contact cannot prove running processes (ssh-execution-boundary.md).
-  const [windowCloseDialogKind, setWindowCloseDialogKind] =
-    useState<Exclude<WindowCloseRunningWork['kind'], 'none'>>('running')
-  const windowCloseAfterDirtyRef = useRef<{ isQuitting: boolean } | null>(null)
+  const [windowCloseDialog, setWindowCloseDialog] = useState<{
+    kind: Exclude<WindowCloseRunningWork['kind'], 'none'>
+    attempt: WindowCloseAttempt
+  } | null>(null)
+  const windowCloseAfterDirtyRef = useRef<WindowCloseAttempt | null>(null)
 
-  const confirmNativeWindowClose = useCallback(async () => {
-    // Capture only after every close guard commits so canceled process prompts cannot consume App’s unload guard.
-    const accepted = await prepareWindowCloseCheckpoint()
-    if (accepted === null) {
-      return
-    }
-    if (!accepted) {
-      // Report checkpoint-vetoed quits instead of silently trapping the window (#15352); dirty-file vetoes provide no reason.
-      showShutdownCheckpointFailureToast()
-      window.api.ui.cancelWindowClose()
-      return
-    }
-    window.api.ui.confirmWindowClose()
+  const proceedToNativeWindowClose = useCallback((attempt: WindowCloseAttempt) => {
+    void assessWindowCloseRunningWork(attempt)
+      .then((runningWork) => {
+        if (!isWindowCloseAttemptCurrent(attempt)) {
+          return
+        }
+        if (runningWork.kind === 'none') {
+          void confirmInteractiveWindowClose(attempt)
+          return
+        }
+        setWindowCloseDialog({ kind: runningWork.kind, attempt })
+      })
+      // Assessment exceptions prove neither live nor exited work; fall through so an unexpected store error cannot trap the window.
+      .catch(() => {
+        void confirmInteractiveWindowClose(attempt)
+      })
   }, [])
-
-  const proceedToNativeWindowClose = useCallback(
-    (isQuitting: boolean) => {
-      void assessWindowCloseRunningWork({ isQuitting })
-        .then((runningWork) => {
-          if (runningWork.kind === 'none') {
-            void confirmNativeWindowClose()
-            return
-          }
-          setWindowCloseDialogKind(runningWork.kind)
-          setWindowCloseDialogOpen(true)
-        })
-        // Assessment exceptions prove neither live nor exited work; fall through so an unexpected store error cannot trap the window.
-        .catch(() => {
-          void confirmNativeWindowClose()
-        })
-    },
-    [confirmNativeWindowClose]
-  )
 
   return {
     saveDialogFileId,
@@ -79,11 +66,9 @@ export function useTerminalEditorCloseFoundation(
     isClosingRef,
     closeDialogDebounceTimersRef,
     releaseCloseDialogGuardAfterDebounce,
-    windowCloseDialogOpen,
-    setWindowCloseDialogOpen,
-    windowCloseDialogKind,
+    windowCloseDialog,
+    setWindowCloseDialog,
     windowCloseAfterDirtyRef,
-    confirmNativeWindowClose,
     proceedToNativeWindowClose
   }
 }

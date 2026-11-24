@@ -1,3 +1,4 @@
+import type { WindowCloseAttempt } from '@/app-shell/shutdown/window-close-request-coordinator'
 import { useCallback, useRef } from 'react'
 import { useAppStore } from '../../../store/index'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
@@ -133,7 +134,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
     const pendingWindowClose = windowCloseAfterDirtyRef.current
     if (pendingWindowClose) {
       windowCloseAfterDirtyRef.current = null
-      proceedToNativeWindowClose(pendingWindowClose.isQuitting)
+      proceedToNativeWindowClose(pendingWindowClose)
     }
   }, [
     getNextQueuedEditorClose,
@@ -145,7 +146,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
   ])
 
   const queueEditorCloseRequests = useCallback(
-    (fileIds: string[], pendingWindowClose?: { isQuitting: boolean }) => {
+    (fileIds: string[], pendingWindowClose?: WindowCloseAttempt) => {
       if (pendingWindowClose) {
         windowCloseAfterDirtyRef.current = pendingWindowClose
       }

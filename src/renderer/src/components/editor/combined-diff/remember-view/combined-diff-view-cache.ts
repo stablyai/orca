@@ -169,8 +169,12 @@ export function rememberCombinedDiffView(
   trimInactiveDiffBodies()
 }
 
-function hasUnsavedEdit(section: DiffSection): boolean {
+export function hasUnsavedEdit(section: Pick<DiffSection, 'dirty' | 'saveConflict'>): boolean {
   return Boolean(section.dirty || section.saveConflict)
+}
+
+export function getCombinedDiffViews(): ReadonlyMap<string, Readonly<CombinedDiffViewMemory>> {
+  return memoryByViewKey
 }
 
 // Dirty edits and save conflicts must survive invalidation; loading and on-demand sections hold no body to release.
