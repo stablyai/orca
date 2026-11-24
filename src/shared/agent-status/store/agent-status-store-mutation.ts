@@ -19,12 +19,13 @@ import {
 import { parseAgentStatusFactRecord } from './agent-status-store-fact-codec'
 import {
   parseAgentStatusParentRecord,
-  type AgentStatusParentRecord
+  type StoredAgentStatusParentRecord
 } from './agent-status-store-parent'
 import {
   agentStatusFactMapKey,
   agentStatusTombstoneMapKey,
-  deepFreezeAgentStatusStoreValue
+  deepFreezeAgentStatusStoreValue,
+  freezeStoredAgentStatusParentRecord
 } from './agent-status-store-state'
 import type { AgentStatusStoreTable } from './agent-status-store-table'
 import {
@@ -36,7 +37,7 @@ import {
 /** The store as one mutation reads and writes it. The queries return present keys in map order. */
 export type AgentStatusStoreMutationTables = {
   revision: number
-  parents: AgentStatusStoreTable<AgentStatusParentRecord>
+  parents: AgentStatusStoreTable<StoredAgentStatusParentRecord>
   children: AgentStatusStoreTable<AgentChildWorkRecord>
   aliases: AgentStatusStoreTable<AgentChildWorkAliasRecord>
   facts: AgentStatusStoreTable<AgentStatusFactRecord>
@@ -172,7 +173,7 @@ function upsertParent(
   if (!record) {
     return false
   }
-  state.parents.set(key, deepFreezeAgentStatusStoreValue(record))
+  state.parents.set(key, freezeStoredAgentStatusParentRecord(record))
   return true
 }
 

@@ -1,9 +1,12 @@
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import type { ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { hasLocalCommandSelection } from '../../../ipc/command-path/command-path-resolver'
 import {
   isWorkerChildStdinWriteError,
   spawnProcessOnWorkerThread,
+  spawnWorkerReadyNow,
+  whenSpawnWorkerReady,
   WorkerThreadChildProcess
 } from '../../../worker-thread-child-process/worker-thread-child-process'
 
@@ -23,6 +26,39 @@ type CaptureCallback = (
   stdout: string | Buffer,
   stderr: string | Buffer
 ) => void
+
+/** Process creation blocks its calling loop (fork/exec; CreateProcessW for seconds under endpoint security, #11161, #27362).
+ * On POSIX, main keeps what only its launch does: canStart rechecked at creation, and a probed CLI selection run under its own name. */
+export async function capturesOnWorker(
+  command: string,
+  options: { canStart?: () => boolean; spawnOnWorkerThread?: boolean }
+): Promise<boolean> {
+  if (process.platform === 'win32') {
+    return options.spawnOnWorkerThread !== false && whenSpawnWorkerReady()
+  }
+  if (options.canStart || hasLocalCommandSelection(command)) {
+    return false
+  }
+  // A booting worker would delay this result, so main spawns meanwhile unless the caller must stay off main.
+  return options.spawnOnWorkerThread === true ? whenSpawnWorkerReady() : spawnWorkerReadyNow()
+}
+
+/** A second, passive stderr listener: execFile still captures every byte. */
+export function observeCapturedStderr(
+  child: ChildProcess | WorkerThreadChildProcess,
+  observer: (chunk: string) => void
+): void {
+  const onData = (chunk: string | Buffer): void => {
+    try {
+      observer(typeof chunk === 'string' ? chunk : chunk.toString('utf8'))
+    } catch (error) {
+      // Detach throwing observers so stream callbacks cannot crash main.
+      child.stderr?.off('data', onData)
+      console.warn('git stderr observer failed; detaching it', error)
+    }
+  }
+  child.stderr?.on('data', onData)
+}
 
 /** Capture a worker-owned child; the caller still owns deadlines and aborts. */
 export function workerExecFile(

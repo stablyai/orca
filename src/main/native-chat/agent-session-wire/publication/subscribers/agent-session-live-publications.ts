@@ -5,6 +5,12 @@ import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up
 import { backgroundTaskFingerprint } from './agent-session-subscriber-frame-fields'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 
+/** Live text goes only to a subscriber that has every journal row; one behind waits for catch-up. */
+export function subscriberAtHead(subscriber: Subscriber, journal: AgentSessionJournal): boolean {
+  const cursor = journal.cursor()
+  return subscriber.cursor.epoch === cursor.epoch && subscriber.cursor.sequence === cursor.sequence
+}
+
 /** Ordinary equal-cursor items preserve the existing desktop and phone merge contract. */
 export async function publishSubscriberLiveText(
   port: SubscriberDeliveryPort,
@@ -23,10 +29,7 @@ export async function publishSubscriberLiveText(
   }
   const cursor = journal.cursor()
   for (const subscriber of subscribers) {
-    if (
-      subscriber.cursor.epoch !== cursor.epoch ||
-      subscriber.cursor.sequence !== cursor.sequence
-    ) {
+    if (!subscriberAtHead(subscriber, journal)) {
       continue
     }
     await port.emit(

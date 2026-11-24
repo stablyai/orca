@@ -16,6 +16,13 @@ import { useCalmConnectionState } from '../transport/connection/calm-connection-
 // The toast rises this far as it fades in; Reduce Motion keeps the fade alone.
 const TOAST_RISE_PX = 8
 
+function sessionPlaceLabel(name: string, branch: string | null, repo: string | null) {
+  if (branch && branch !== name) {
+    return branch
+  }
+  return repo && repo !== name ? repo : branch
+}
+
 export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel) {
   const t = useMobileTranslation()
   const {
@@ -77,8 +84,9 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     presentedConnState === 'connected'
       ? showLoadingState && visibleTabs.length === 0
         ? t('session.presentation.loadingTabs', 'Loading tabs')
-        : // The tab count lives in the tab bar, so the header names the branch instead.
-          (scope.worktreeBranch ?? MOBILE_SESSION_STATUS_LABELS.connected)
+        : // The tab count lives in the tab bar, so the header names the branch, or the project when the branch repeats the title.
+          (sessionPlaceLabel(scope.worktreeName, scope.worktreeBranch, scope.worktreeRepo) ??
+          MOBILE_SESSION_STATUS_LABELS.connected)
       : showConnectionRetry
         ? t('session.presentation.tapToRetry', '{{status}} — tap to retry', {
             status: verdictDisplayLabel(connectionVerdict)

@@ -184,10 +184,8 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
   const forcedFetch = (forceRefresh && taskRefreshNonce > 0) || preferenceInvalidated
   // A Refresh, Retry or search in Tasks, or Tasks opened on one repo, is a user act that may start
   // that repo's stopped WSL distro; opening a multi-repo fan-out is not (E9).
-  const wake =
-    (forceRefresh && taskRefreshNonce > 0) || selectedRepos.length === 1
-      ? { wakeWslDistro: true }
-      : {}
+  const userRefresh = forceRefresh && taskRefreshNonce > 0
+  const wake = userRefresh || selectedRepos.length === 1 ? { wakeWslDistro: true } : {}
   if (forcedFetch) {
     hardRefreshEpochRef.current += 1
   }
@@ -195,7 +193,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
     ? getOrCreateQuietRevalidateState(githubWorkItemMutationQueryKey).dirtyGeneration
     : null
   const repoArgs = getTaskPageGitHubRepoArgs(selectedRepos, unreachableTaskSourceHostIds)
-  recheckUnreachableTaskSourceHosts()
+  recheckUnreachableTaskSourceHosts(userRefresh ? { force: true } : undefined)
   const landingRefreshKey = `${repoArgs.map((r) => `${r.repoId}:${r.path}`).join('|')}::${q}`
   const shouldProbeOnLanding =
     !forcedFetch &&

@@ -78,7 +78,7 @@ const picker = (hosts: BotCreateHost[]) => (
   </div>
 )
 
-/** Ready first (OS, other account), then Not available with only its fix. */
+/** Ready hosts first, followed by hosts that need reconnecting or updating. */
 export const owner = defineFixture({
   width: 420,
   store: { remoteServerUpdates: updates },
@@ -86,7 +86,7 @@ export const owner = defineFixture({
   interact: open
 })
 
-/** Eight rows and more: search on top. */
+/** A longer, scrollable host list. */
 export const many = defineFixture({
   width: 420,
   store: { remoteServerUpdates: updates },

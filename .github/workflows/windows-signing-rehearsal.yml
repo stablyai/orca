@@ -78,6 +78,11 @@ jobs:
           restore-keys: |
             electron-builder-win-
 
+      # Restore-keys bring back every older Electron zip; drop them so the next save keeps only this version.
+      - name: Prune stale Electron downloads
+        shell: bash
+        run: if [ -f config/scripts/electron-installation/prune-electron-download-cache.mjs ]; then node config/scripts/electron-installation/prune-electron-download-cache.mjs; fi
+
       # Why host-only: this job packages only for its own runner OS and
       # architecture, so the default host-scoped install is deliberate.
       - name: Install dependencies
@@ -186,6 +191,11 @@ jobs:
       - name: Install SignPath PowerShell module
         uses: ./.github/actions/install-signpath-module
 
+      - name: Wait for unsigned inner binaries to be listed
+        uses: ./.github/actions/wait-for-run-artifact
+        with:
+          artifact-id: ${{ steps.upload-unsigned-inner.outputs.artifact-id }}
+
       - name: Submit inner binaries signing request
         id: submit-inner-signing
         uses: signpath/github-action-submit-signing-request@v2
@@ -292,6 +302,11 @@ jobs:
           path: dist/orca-windows-setup.exe
           compression-level: 0
           if-no-files-found: error
+
+      - name: Wait for unsigned Windows installer to be listed
+        uses: ./.github/actions/wait-for-run-artifact
+        with:
+          artifact-id: ${{ steps.upload-unsigned-installer.outputs.artifact-id }}
 
       - name: Submit Windows installer signing request
         id: submit-installer-signing

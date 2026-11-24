@@ -1,9 +1,7 @@
 import { androidButtonKeycode, normalizedToDevicePixels } from './android-input-mapping'
 import {
   encodeInjectKeycode,
-  encodeInjectText,
   encodeInjectTouchEvent,
-  splitScrcpyInjectText,
   type ScrcpyTouchAction
 } from './scrcpy-control-protocol'
 import type { ScrcpyControlTarget } from './scrcpy-stream-session'
@@ -94,10 +92,6 @@ export async function sendScrcpyGesture(
     }
   }
   return true
-}
-
-export function sendScrcpyText(control: ScrcpyControlTarget, text: string): boolean {
-  return splitScrcpyInjectText(text).every((chunk) => control.sendControl(encodeInjectText(chunk)))
 }
 
 export function sendScrcpyButton(

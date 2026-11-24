@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host/execution-host'
+import type { ConnectorCloudStatus } from '../../../src/shared/bots/connector-cloud-status'
 import {
   BOTS_CREATE_RUNTIME_CAPABILITY,
   BOTS_MOBILE_RUNTIME_CAPABILITY,
@@ -14,8 +15,11 @@ import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-reques
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import { noteListedBots } from './bot-avatar-uploads'
 import { publishHostBots } from './host-bot-store'
 import { botsListRead, type PhoneBot } from './host-bots-operations'
+import { mobileBotRefusalText } from './mobile-bot-refusal-text'
+import { readAgentSessionErrorRefusal } from '../../../src/shared/agent-session/failures/agent-session-write-failure'
 import type { BotSidebarView } from '../../../src/shared/bots/bot-sidebar-view'
 import type { BotListWaits } from '../../../src/shared/bots/bot-list-waits'
 
@@ -47,6 +51,10 @@ export type HostBotsRead =
       needsYou: Readonly<Record<string, number>>
       /** When those counts next change, as one goes stale or a snoozed one comes back. */
       needsYouChangeInMs?: number
+      /** The host's Orca Cloud link; absent from an older host, which keeps today's card line. */
+      connectorStatus?: ConnectorCloudStatus
+      /** Its Orca Cloud answers an event in that event's thread, for an automation's results. */
+      threadReplies?: boolean
     }
   | { kind: 'no-capability' }
   | { kind: 'unreadable' }
@@ -113,6 +121,7 @@ export async function readHostBots(
     }
     options?.beforeSend?.()
     publishHostBots(key, read)
+    noteListedBots(client, key, read.bots)
     return read
   } catch {
     return { kind: 'unreadable' }
@@ -121,24 +130,28 @@ export async function readHostBots(
 
 const botHomeChatOpen = bindDeferredRpcOperation(
   defineRpcOperation({
-    name: 'bots.chat.open-or-skip',
+    name: 'bots.chat.open',
     method: 'bots.chat.open',
-    acceptance: 'success-result-or-skip',
+    acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('bot-home-chat', z.unknown())
   })
 )
 
 // The desktop's open: a bot that never ran has no Home Chat until the host starts one. Bots switched off refuse; the workspace still opens.
+/** Resolves with why the host refused to start the Home Chat, null when it opened or failed otherwise. */
 export async function ensureBotHomeChat(
   client: RpcClient,
   botId: string,
   options?: SendRequestOptions
-): Promise<void> {
+): Promise<string | null> {
   try {
-    await botHomeChatOpen.request(client, { botId }, options)
-  } catch {
+    botHomeChatOpen.interpret(await botHomeChatOpen.request(client, { botId }, options))
+    return null
+  } catch (error) {
     // Opening the workspace without the chat beats not opening it.
+    const refusal = readAgentSessionErrorRefusal(error)
+    return refusal ? mobileBotRefusalText(refusal) : null
   }
 }
 

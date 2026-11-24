@@ -7,6 +7,9 @@ export type SlackMarkupSegment =
   | { kind: 'plain'; text: string }
   | { kind: 'link'; url: string; text: string }
 
+/** Slack people a chat knows, name by user id. */
+export type SlackPeople = ReadonlyMap<string, string>
+
 // A token holds no `<` or `>`; Slack escapes those inside it.
 const TOKEN = /<([^<>]+)>/g
 const SAFE_LINK = /^(?:https?:\/\/|mailto:)/i
@@ -34,14 +37,18 @@ function prefixed(prefix: string, label: string): string {
   return label.startsWith(prefix) ? label : `${prefix}${label}`
 }
 
-function tokenSegment(raw: string, body: string): SlackMarkupSegment {
+/** One `<…>` token as the chat shows it; `people` names a bare `<@U…>`. */
+export function slackTokenSegment(
+  raw: string,
+  body: string,
+  people?: SlackPeople | null
+): SlackMarkupSegment {
   const bar = body.indexOf('|')
   const target = decodeEntities(bar === -1 ? body : body.slice(0, bar))
   const label = bar === -1 ? '' : oneLine(decodeEntities(body.slice(bar + 1)))
   if (target.startsWith('@')) {
-    return label
-      ? { kind: 'mention', text: prefixed('@', label) }
-      : { kind: 'plain', text: '@user' }
+    const name = label || people?.get(target.slice(1))
+    return name ? { kind: 'mention', text: prefixed('@', name) } : { kind: 'plain', text: '@user' }
   }
   if (target.startsWith('#')) {
     return label
@@ -77,7 +84,7 @@ export function slackMarkupSegments(text: string): SlackMarkupSegment[] {
     if (match.index > last) {
       segments.push({ kind: 'text', text: text.slice(last, match.index) })
     }
-    segments.push(tokenSegment(match[0], match[1]!))
+    segments.push(slackTokenSegment(match[0], match[1]!))
     last = match.index + match[0].length
   }
   if (last < text.length) {
@@ -90,6 +97,37 @@ function linkMarkdown(url: string, text: string): string {
   // `&` too, so markdown's own entity pass can't decode the URL a second time.
   const destination = url.replace(/[\s<>\\&]/g, (char) => encodeURIComponent(char))
   return `[${escapeMarkdown(text)}](<${destination}>)`
+}
+
+/** A Slack message as plain words for a title or a quoted line: a mention as `@Name`, a channel as
+ *  `#name`, a link as its text. The same text back when it holds no token. */
+export function slackMarkupPlainText(text: string): string {
+  if (!text.includes('<')) {
+    return text
+  }
+  const segments = slackMarkupSegments(text)
+  return segments.every((segment) => segment.kind === 'text')
+    ? text
+    : segments
+        .map((segment) => (segment.kind === 'text' ? decodeEntities(segment.text) : segment.text))
+        .join('')
+}
+
+// A person, channel or ping written exactly as Slack writes one, ids and all.
+const SLACK_ID_TOKEN =
+  /<((?:@[UW][A-Z0-9]{2,}|#[CG][A-Z0-9]{2,}|!(?:here|channel|everyone)|!subteam\^S[A-Z0-9]+)(?:\|[^<>]*)?)>/g
+const SLACK_ID_TOKEN_PROBE = new RegExp(SLACK_ID_TOKEN.source)
+
+export function hasSlackMentionMarkup(text: string): boolean {
+  return text.includes('<') && SLACK_ID_TOKEN_PROBE.test(text)
+}
+
+/** An agent's own words with the Slack mentions in them as plain names, for a notification or a
+ *  preview. Only what carries a Slack id is read; any other `<…>` is the agent's text. */
+export function slackMentionsPlainText(text: string): string {
+  return text.includes('<')
+    ? text.replace(SLACK_ID_TOKEN, (raw, body: string) => slackTokenSegment(raw, body).text)
+    : text
 }
 
 /** A mention in the drawn form: a link to this marker, which the chat draws as a mention. */

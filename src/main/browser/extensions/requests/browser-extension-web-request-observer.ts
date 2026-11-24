@@ -15,6 +15,7 @@ import {
   type ObservedWebRequestDetails,
   type ObservedWebRequestEvent
 } from '../../sessions/requests/browser-session-web-request-observer'
+import { holdBrowserSessionWebRequest } from '../../sessions/requests/browser-session-web-request-owner'
 import { browserExtensionHostPatternsInSession } from '../permissions/browser-extension-session-permissions'
 import {
   emitBrowserExtensionEvent,
@@ -74,26 +75,40 @@ function forward(
   )
 }
 
-const observedSessions = new WeakSet<Electron.Session>()
+const releaseObservedSessions = new WeakMap<Electron.Session, () => void>()
 const watchedSessions = new WeakSet<Electron.Session>()
 const OBSERVE_ALL = { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }
 
 /** The events Orca does not otherwise handle, installed once a webRequest extension loads. */
 function observeRemainingEvents(session: Electron.Session): void {
-  if (observedSessions.has(session)) {
+  if (releaseObservedSessions.has(session)) {
     return
   }
-  observedSessions.add(session)
-  const { webRequest } = session
-  webRequest.onSendHeaders(OBSERVE_ALL, (details) => forward(session, 'onSendHeaders', details))
+  const releases = [
+    holdBrowserSessionWebRequest(
+      session,
+      'onSendHeaders',
+      (details) => forward(session, 'onSendHeaders', details),
+      OBSERVE_ALL
+    )
+  ]
   installBrowserSessionHeadersReceived(session)
-  webRequest.onResponseStarted(OBSERVE_ALL, (details) =>
-    forward(session, 'onResponseStarted', details)
-  )
-  webRequest.onBeforeRedirect(OBSERVE_ALL, (details) =>
-    forward(session, 'onBeforeRedirect', details)
+  releases.push(
+    holdBrowserSessionWebRequest(
+      session,
+      'onResponseStarted',
+      (details) => forward(session, 'onResponseStarted', details),
+      OBSERVE_ALL
+    ),
+    holdBrowserSessionWebRequest(
+      session,
+      'onBeforeRedirect',
+      (details) => forward(session, 'onBeforeRedirect', details),
+      OBSERVE_ALL
+    )
   )
   installBrowserSessionRequestLifecycle(session)
+  releaseObservedSessions.set(session, () => releases.forEach((release) => release()))
 }
 
 export function observeBrowserExtensionWebRequests(session: Electron.Session): void {
@@ -113,13 +128,9 @@ export function observeBrowserExtensionWebRequests(session: Electron.Session): v
 export function stopObservingBrowserExtensionWebRequests(session: Electron.Session): void {
   removeBrowserSessionHeadersReceived(session)
   removeBrowserSessionRequestLifecycle(session)
-  if (!observedSessions.delete(session)) {
-    return
-  }
-  const { webRequest } = session
-  webRequest.onSendHeaders(null)
-  webRequest.onResponseStarted(null)
-  webRequest.onBeforeRedirect(null)
+  const release = releaseObservedSessions.get(session)
+  releaseObservedSessions.delete(session)
+  release?.()
 }
 
 export function installBrowserExtensionWebRequestForwarding(): void {

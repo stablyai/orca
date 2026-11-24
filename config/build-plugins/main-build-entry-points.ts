@@ -41,6 +41,9 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
     'src/main/agent-hooks/identity/agent-identity-worker-entry.ts'
   ),
   'bots-db-worker-entry': resolve('src/main/bots/db-worker/bots-db-worker-entry.ts'),
+  'orchestration-reader-entry': resolve(
+    'src/main/runtime/orchestration/db/reader-worker/orchestration-reader-entry.ts'
+  ),
   'session-scanner-service-entry': resolve(
     'src/main/ai-vault/scan-service/session-scanner-service-entry.ts'
   ),
@@ -60,6 +63,13 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'usage-scan-worker-entry': resolve('src/main/usage/scan-worker/usage-scan-worker-entry.ts'),
   'codex-history-disk-usage-worker-entry': resolve(
     'src/main/codex/history/disk-usage/codex-history-disk-usage-worker-entry.ts'
+  ),
+  'codex-rollout-history-references-worker-entry': resolve(
+    'src/main/codex/history/cleanup/codex-rollout-history-references-worker-entry.ts'
+  ),
+  // Launch trust grants edit large Codex configs and the ownership ledger; keep them off main.
+  'codex-project-trust-worker-entry': resolve(
+    'src/main/codex/trust/project-trust/codex-project-trust-worker-entry.ts'
   ),
   'workspace-space-scan-worker-entry': resolve(
     'src/main/workspaces/space-analysis/workspace-space-scan-worker-entry.ts'

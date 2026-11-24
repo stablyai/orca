@@ -1,8 +1,9 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { AlertCircle, Download, Loader2 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { useTranslate } from '@/i18n/use-translate'
@@ -15,7 +16,6 @@ import {
   type AgentCliUpdateRow
 } from './AgentCliUpdateList'
 
-const LOCAL_TARGET = { kind: 'local' } as const
 const NO_HOST_NAMES: Readonly<Record<string, string>> = Object.freeze({})
 
 /** Names of paired servers with listed updates; the shared empty value keeps the always-mounted bar still. */
@@ -37,35 +37,30 @@ function runRow(row: AgentCliUpdateRow): void {
 }
 
 /** Shown while the user's own Claude Code or Codex CLI on a host has a newer release out. */
-export function AgentCliUpdateStatusSegment({
-  iconOnly
-}: {
-  iconOnly: boolean
-}): React.JSX.Element | null {
+export function AgentCliUpdateStatusSegment(): React.JSX.Element | null {
   const t = useTranslate()
   const hosts = useAppStore((s) => s.agentCliUpdates)
   const hostNames = useAppStore(useShallow(remoteHostNames))
-  const checkAgentCliUpdates = useAppStore((s) => s.checkAgentCliUpdates)
-  // This computer is checked at launch; other hosts when a chat starts there.
-  useEffect(() => {
-    void checkAgentCliUpdates(LOCAL_TARGET)
-  }, [checkAgentCliUpdates])
+  const hasOtherHosts = useAppStore(
+    (s) => !isPairedWebClientWindow() && s.runtimeEnvironments.length > 0
+  )
 
   const groups = useMemo((): AgentCliUpdateGroup[] => {
     const listed = [...hosts]
       .map(([hostKey, host]) => ({ hostKey, rows: agentCliUpdateRows(hostKey, host) }))
       .filter((group) => group.rows.length > 0)
       .sort((a, b) => (a.hostKey === '' ? -1 : b.hostKey === '' ? 1 : 0))
-    const remote = listed.some((group) => group.hostKey !== '')
+    // With any other host added (server, WSL host or VM), a local-only list still names this computer.
+    const showHostHeadings = hasOtherHosts || listed.some((group) => group.hostKey !== '')
     return listed.map((group) => ({
       ...group,
-      label: !remote
+      label: !showHostHeadings
         ? null
         : group.hostKey === ''
           ? t('agentCliUpdate.thisComputer', 'This computer')
           : (hostNames[group.hostKey] ?? group.hostKey)
     }))
-  }, [hosts, hostNames, t])
+  }, [hosts, hostNames, hasOtherHosts, t])
 
   const rows = groups.flatMap((group) => group.rows)
   if (rows.length === 0) {
@@ -87,10 +82,10 @@ export function AgentCliUpdateStatusSegment({
         }
       : {
           icon: <Download className="size-3 text-muted-foreground" />,
-          label:
-            rows.length === 1
-              ? t('agentCliUpdate.statusOne', 'CLI update')
-              : t('agentCliUpdate.statusCount', '{{count}} CLI updates', { count: rows.length }),
+          label: t('agentCliUpdate.statusCount', '{{count}} CLI updates', {
+            count: rows.length,
+            defaultValue_one: '{{count}} CLI update'
+          }),
           tooltip: t('agentCliUpdate.statusTooltip', 'Newer agent CLI versions are out')
         }
 
@@ -102,10 +97,9 @@ export function AgentCliUpdateStatusSegment({
             <button
               type="button"
               className="inline-flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/70"
-              aria-label={iconOnly ? segment.label : undefined}
             >
               {segment.icon}
-              {!iconOnly ? <span className="text-2xs tabular-nums">{segment.label}</span> : null}
+              <span className="text-2xs tabular-nums">{segment.label}</span>
             </button>
           </PopoverTrigger>
         </TooltipTrigger>

@@ -25,7 +25,7 @@ export function AgentLaunchSetupPermission({
   const picked = permissions.find((mode) => mode === draft.choices.permissionMode)
   const inherited = entry.structured.permissionMode ?? 'own'
   return (
-    <div className="border-t border-border px-2.5 py-1.5">
+    <div className="shrink-0 border-t border-border px-2.5 py-1.5">
       <AgentPermissionMenu
         agentId={entry.agent}
         label={entry.label}

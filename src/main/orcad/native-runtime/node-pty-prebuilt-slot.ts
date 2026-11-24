@@ -197,5 +197,9 @@ export function installPrebuiltSlot(options: {
   if (spawnHelper) {
     chmodSync(join(releaseDir, 'spawn-helper'), 0o755)
   }
+  // The chat-journal lock helper ships in the same slot; a copy drops its executable bit.
+  if (options.abi.platform !== 'win32' && Object.hasOwn(entry.files, 'journal-file-lock')) {
+    chmodSync(join(releaseDir, 'journal-file-lock'), 0o755)
+  }
   return { installed: true, slot, spawnHelper }
 }

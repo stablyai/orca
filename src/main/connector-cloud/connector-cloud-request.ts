@@ -7,6 +7,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 15_000
 // A refusal may carry words for the owner, e.g. why `host_key_limit` refused this machine; control
 // and bidi characters become spaces so they can't reshape where it is shown.
 const ConnectorRefusal = ConnectorErrorResponse.extend({
+  reason: z.string().max(64).optional().catch(undefined),
   message: z
     .string()
     .max(500)
@@ -24,6 +25,8 @@ export type ConnectorFailure = {
   retryAfterMs: number | null
   /** The cloud's words for the owner, when it sent some. */
   message?: string
+  /** The cloud's tag for its refusal, e.g. `features` on a hello_required for a feature change. */
+  reason?: string
   /** The connector-token route still refused this sign-in after the shared session refresh. */
   sessionRefused?: true
 }
@@ -88,9 +91,17 @@ function failure(
   status: number | null,
   error: string | null = null,
   retryAfterMs: number | null = null,
-  message?: string
+  message?: string,
+  reason?: string
 ): ConnectorFailure {
-  return { ok: false, status, error, retryAfterMs, ...(message ? { message } : {}) }
+  return {
+    ok: false,
+    status,
+    error,
+    retryAfterMs,
+    ...(message ? { message } : {}),
+    ...(reason ? { reason } : {})
+  }
 }
 
 /** The longest Retry-After honoured; past it a timer could overflow and fire at once, in a loop. */
@@ -139,7 +150,8 @@ export async function requestConnector<TSchema extends z.ZodType>(
       response.status,
       error.success ? error.data.error : null,
       readRetryAfterMs(response),
-      error.success ? error.data.message : undefined
+      error.success ? error.data.message : undefined,
+      error.success ? error.data.reason : undefined
     )
   }
   // Only the contract's success counts: 204 with no body for a no-content reader, 200 with its JSON.

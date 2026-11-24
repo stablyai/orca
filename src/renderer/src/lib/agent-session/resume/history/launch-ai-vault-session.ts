@@ -2,7 +2,12 @@ import { useAppStore } from '@/store/index'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import '@/diagnostics/telemetry/telemetry'
 import { tuiAgentToAgentKind } from '../../../../../../shared/agent-status/identity/agent-kind'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import {
+  getKnownExecutionHostIdForWorktree,
+  runtimeEnvironmentIdOrLocalUnlessTwin
+} from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { getSavedTerminalSessionName } from '@/lib/agent-session/history/session-names/terminal-session-names'
+import { setWebRuntimeTabProps } from '@/runtime/hosted-terminals/actions/web-runtime-tab-properties'
 import { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import type { AiVaultAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -30,6 +35,7 @@ export function launchAiVaultSessionInNewTab(args: {
   splitDirection?: TabSplitDirection
 }): LaunchAiVaultSessionInNewTabResult {
   const store = useAppStore.getState()
+  const savedName = savedNameForResume(store, args)
   // Why both paths split: the runtime path used to return first and drop the split (#22791).
   const split =
     args.splitDirection && args.targetGroupId
@@ -62,6 +68,14 @@ export function launchAiVaultSessionInNewTab(args: {
     )
     const observedRuntimeLaunch = runtimeLaunch.then((outcome) => {
       if (outcome.status === 'created') {
+        if (savedName && outcome.mirroredTabId) {
+          // The mirrored tab may not be here yet; name it on its host, which republishes the name.
+          setWebRuntimeTabProps({
+            worktreeId: args.worktreeId,
+            tabId: outcome.mirroredTabId,
+            customTitle: savedName
+          })
+        }
         useAppStore.getState().setActiveTabType('terminal', args.worktreeId)
       } else if (splitGroupId) {
         // A refused or failed drop must not leave a blank pane behind.
@@ -88,9 +102,29 @@ export function launchAiVaultSessionInNewTab(args: {
       }
     }
   })
+  if (savedName) {
+    store.setTabCustomTitle(tab.id, savedName, { recordInteraction: false })
+  }
   store.setActiveTabType('terminal', args.worktreeId)
 
   persistAgentLaunchTabOrder(args.worktreeId, tab.id)
 
   return { tabId: tab.id }
+}
+
+/** A resumed session reopens under the name its tab had (forks carry no provider session, so a
+ *  copy is never named after its source). The tab takes over the saved name once it shows it. */
+function savedNameForResume(
+  state: ReturnType<typeof useAppStore.getState>,
+  args: {
+    agent: AiVaultAgent
+    worktreeId: string
+    providerSession?: AgentProviderSessionMetadata
+  }
+): string | null {
+  const sessionId = args.providerSession?.id
+  const executionHostId = getKnownExecutionHostIdForWorktree(state, args.worktreeId)
+  return sessionId && executionHostId
+    ? getSavedTerminalSessionName(executionHostId, args.agent, sessionId)
+    : null
 }

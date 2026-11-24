@@ -41,7 +41,8 @@ import { useBotAgentMenu } from './use-bot-agent-choices'
 import { useBotCreateHost } from './bot-create-hosts'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { useBotAgentSetup } from './use-bot-agent-setup'
-import { useNewBotPicture } from './use-new-bot-picture'
+import { useNewBotHostLooks, useNewBotPicture } from './use-new-bot-picture'
+import { followedByPicture, useNewBotDialogPicture } from './use-new-bot-generate-face'
 
 export type ImportPick = { source: BotImportSource; bot: BotImportCandidate }
 
@@ -69,8 +70,11 @@ export function ImportBotDialog({
   const menu = useBotAgentMenu(hostId, open)
   const { choices } = menu
   const agentSetup = useBotAgentSetup(choices, hostId)
-  const picture = useNewBotPicture()
+  const picture = useNewBotPicture(useNewBotHostLooks(hostId))
   const [creating, setCreating] = useState(false)
+  // Kept by the dialog, not its hero, so a run outlives the popover and the hero swapping to a bot an
+  // earlier import made while the name is cleared; only dismissing the dialog ends it.
+  const { intake, face } = useNewBotDialogPicture(picture, creating)
 
   const picks =
     read.status === 'ready'
@@ -116,14 +120,17 @@ export function ImportBotDialog({
   const ready =
     !missing && Boolean(trimmedName) && (exporting ? exportPaths !== null : pick !== null)
   // Enter and the Create button share this, so neither creates before the agents are known.
-  const canCreate = ready && !creating && !blocked && choices.length > 0
+  const canCreate = ready && !creating && !intake.reading && !blocked && choices.length > 0
 
   const close = (): void => {
     setView('pick')
     setPicked(null)
     setExported(NO_EXPORT)
     setTypedName(null)
+    intake.dismiss()
     picture.reset()
+    // A run handed to the bot made goes on; any other ends here.
+    face.reset()
     agentSetup.reset()
     hostChoice.reset()
     onOpenChange(false)
@@ -148,14 +155,19 @@ export function ImportBotDialog({
       return
     }
     setCreating(true)
+    const follow = followedByPicture(face, { hostId, name: trimmedName })
     try {
-      const made = await createBot(hostId, {
-        name: trimmedName,
-        ...agentSetup.setup,
-        avatar: picture.avatar,
-        importFrom
-      })
-      const bot = await picture.saveUpload(made)
+      // The bot exists once this resolves, whatever opening it does.
+      const bot = await follow(
+        createBot(hostId, {
+          name: trimmedName,
+          ...agentSetup.setup,
+          avatar: picture.avatar,
+          avatarColor: picture.avatarColor,
+          avatarOutfit: picture.avatarOutfit,
+          importFrom
+        }).then(picture.saveUpload)
+      )
       const opened = await openCreatedBot(bot)
       close()
       if (opened) {
@@ -212,7 +224,14 @@ export function ImportBotDialog({
               : t('bots.import.description', 'Your new bot reads the old one and sets itself up.')}
           </DialogDescription>
         </DialogHeader>
-        <ImportBotHero old={old} picture={picture} existing={existing} />
+        <ImportBotHero
+          old={old}
+          picture={picture}
+          existing={existing}
+          generate={face}
+          disabled={creating}
+          intake={intake}
+        />
         <div>
           <Label htmlFor={nameId} className="sr-only">
             {t('bots.new.name', 'Name')}

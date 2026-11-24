@@ -3,7 +3,7 @@ import {
   MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE,
   MOBILE_DICTATION_PCM_SAMPLE_RATE
 } from './mobile-dictation-pending-audio-budget'
-import { bytesToBase64 } from './mobile-dictation-session-state'
+import { encodeBase64Bytes } from '../transport/encryption/base64-byte-codec'
 import { dictationAudioChunkSend } from '../dictation/mobile-dictation-operations'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../src/shared/rpc-contract/speech/speech-params'
 import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
@@ -264,7 +264,7 @@ async function sendAudioChunk(
 ): Promise<void> {
   const params = {
     dictationId,
-    audioBase64: bytesToBase64(bytes),
+    audioBase64: encodeBase64Bytes(bytes),
     sampleRate: MOBILE_DICTATION_PCM_SAMPLE_RATE,
     seq: queue.pendingAudioBudget.nextSeq(bytes.byteLength)
   }

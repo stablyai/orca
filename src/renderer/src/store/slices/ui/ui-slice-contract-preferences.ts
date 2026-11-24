@@ -1,3 +1,4 @@
+import type { RetainedUpdateTarget } from './retained-update-target'
 import type { StatusBarUsageFormat } from '../../../../../shared/status-bar/status-bar-usage-format'
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
@@ -130,6 +131,8 @@ export type UISlicePreferences = {
   /** Dragged cap on the sidebar Bots section; null keeps the default 40% cap. */
   sidebarBotsHeight: number | null
   setSidebarBotsHeight: (height: number | null) => void
+  sidebarProjectsFirst: boolean
+  setSidebarProjectsFirst: (projectsFirst: boolean) => void
   syncTaskStatusFromWorkspaceBoard: boolean
   setSyncTaskStatusFromWorkspaceBoard: (enabled: boolean) => void
   /** Transient: the in-window Agent Dashboard companion drawer is open. Not persisted. */
@@ -212,6 +215,7 @@ export type UISlicePersistence = {
   setEditorFontZoomLevel: (level: number) => void
   hydratePersistedUI: (ui: PersistedUIState, source?: 'startup' | 'sync') => void
   updateStatus: UpdateStatus
+  retainedUpdateTarget: RetainedUpdateTarget | null
   setUpdateStatus: (status: UpdateStatus) => void
   // Why: cache last-'available' changelog so the card keeps rich content while downloading; cleared on idle/checking to avoid staleness.
   updateChangelog: ChangelogData | null

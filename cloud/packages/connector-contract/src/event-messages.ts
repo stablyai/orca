@@ -109,8 +109,9 @@ export const CONNECTOR_REPLY_OUTCOMES = [
 ] as const
 export const ConnectorReplyOutcomeSchema = z.enum(CONNECTOR_REPLY_OUTCOMES)
 
-// Prose is the answer: present, with words, and within the turn-end limit exactly when answered.
-// turnId (the turn-started `at`) is for presentation only; the delivery ids key everything.
+// Prose is the answer: present, with words, and within the answer limit exactly when answered.
+// turnId: the turn its machine recorded as answering these deliveries (its turn-started `at`); a
+// cloud closes that turn on it. The delivery ids key everything else.
 export const ConnectorReplyEventSchema = z
   .object({
     kind: z.literal('reply'),
@@ -126,14 +127,37 @@ export const ConnectorReplyEventSchema = z
     prose: z
       .string()
       .refine((text) => text.trim().length > 0)
-      .refine((text) => utf8Bytes(text) <= CONNECTOR_LIMITS.maxLastAssistantMessageBytes)
+      .refine((text) => utf8Bytes(text) <= CONNECTOR_LIMITS.maxLongAnswerBytes)
       .optional(),
     failure: OptionalConnectorFailureSchema,
     links: OptionalWorkLinksSchema,
-    turnId: EpochMsSchema.optional()
+    turnId: EpochMsSchema.optional(),
+    // How long the answered turn ran, by the machine's clock; shown under the answer.
+    tookMs: z.number().int().positive().optional()
   })
   .refine((reply) => reply.deliveryIds.includes(reply.answerDeliveryId))
   .refine((reply) => (reply.outcome === 'answered') === (reply.prose !== undefined))
+
+const ActivityTextSchema = z.string().min(1).max(CONNECTOR_LIMITS.maxActivityTextChars)
+
+// text: the tool the turn is inside, in words ("Running pnpm test"); absent between tools. steps: its
+// plan, in order, when the agent keeps one. turnId: the turn-started `at`.
+export const ConnectorActivityEventSchema = z.object({
+  ...PaneEvent,
+  kind: z.literal('activity'),
+  turnId: EpochMsSchema,
+  text: ActivityTextSchema.optional(),
+  steps: z
+    .array(
+      z.object({
+        title: ActivityTextSchema,
+        status: z.enum(['pending', 'in_progress', 'completed'])
+      })
+    )
+    .max(CONNECTOR_LIMITS.maxActivitySteps)
+    .optional()
+})
+export type ConnectorActivityEvent = z.infer<typeof ConnectorActivityEventSchema>
 
 // Identities: linked by pane, prompt by pane + promptId, a turn by pane + its turn-started `at` (turnId).
 // actsFor: whom the linked chat acts for, once recorded; an older machine leaves it out.
@@ -180,7 +204,7 @@ export const ConnectorEventSchema = z.discriminatedUnion('kind', [
     lastAssistantMessage: z
       .string()
       .refine(
-        (text) => utf8Bytes(text) <= CONNECTOR_LIMITS.maxLastAssistantMessageBytes
+        (text) => utf8Bytes(text) <= CONNECTOR_LIMITS.maxLongAnswerBytes
       )
       .optional(),
     // A chat turn's cause; someone typing in Orca ('local') is not mirrored back.
@@ -191,7 +215,10 @@ export const ConnectorEventSchema = z.discriminatedUnion('kind', [
     // The thread's turn state only: its answer goes as a `reply` (or through replies), never this.
     stateOnly: z.literal(true).optional(),
     // Whom a turn no delivery started acts for; its final post counts as that person on Slack.
-    turnFor: ConnectorTurnForSchema.optional()
+    turnFor: ConnectorTurnForSchema.optional(),
+    // With a usage-limit failure that has a reset: the machine continues the turn's requests by
+    // itself then. Sent only to a cloud that lists replies.paused.
+    resumes: z.literal(true).optional().catch(undefined)
   }),
   // Sent only to a cloud whose hello answer lists replies.outbox: the outcome of the admitted
   // deliveries one turn answered in one conversation. answerDeliveryId (the earliest of them) keys
@@ -200,6 +227,10 @@ export const ConnectorEventSchema = z.discriminatedUnion('kind', [
   // Whether orchestration workers the conversation's agent started still run, sent only to a cloud
   // whose hello answer lists `workers`. Running keeps the conversation working after its turn ends.
   z.object({ ...PaneEvent, kind: z.literal('workers'), running: z.boolean() }),
+  // What a running turn is doing now, sent only to a cloud whose hello answer lists `turn.activity`,
+  // a few seconds apart at most. The thread's working status shows it; an older or ended turn's
+  // changes nothing.
+  ConnectorActivityEventSchema,
   // Batch 0 after each hello. Not working never means done: an open turn reads unverifiable.
   z.object({
     kind: z.literal('snapshot'),

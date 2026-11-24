@@ -1,4 +1,5 @@
 // A bot's chats with the workers each one started nested under it: the Activity panel's and sidebar's one list.
+import { isBotGroupMemberSession } from './bot-group'
 
 /** What a chat row's icon shows: Home Chat, an outside thread's mark, an automation or a side chat. */
 export type BotChatOrigin = 'home' | 'slack' | 'linear' | 'github' | 'automation' | 'side'
@@ -14,12 +15,18 @@ export type BotChatTreeWorker = {
   worktreeId?: string
   paneKey?: string
   note?: 'handed-over' | 'from-closed-chat' | 'automation-terminal'
+  /** Running, but its turn is over and it waits on background tasks it started. Absent from older hosts. */
+  waitsOnBackground?: true
   /** Stop and open go through it; absent for a handed-over agent. */
   dispatchId?: string
   /** `runtime:<id>` when the workspace runs on another paired computer. */
   hostId?: string
+  /** Where its record places it, relative to the host that answered; absent from older hosts. */
+  host?: 'local' | 'remote'
   agent?: string
   summary?: string
+  /** Its start failed before an agent ran, so there is no worker to open. Absent from older hosts. */
+  neverStarted?: true
   /** A terminal-only automation run, opened as a run rather than a pane. */
   run?: { automationId: string; runId: string }
 }
@@ -31,6 +38,9 @@ export type BotChatTreeChat = {
   /** The thread's place or the automation's name, e.g. '#orca'. */
   originLabel?: string
   live: 'replying' | 'needs-you' | 'idle'
+  /** The session running the chat now, when a /clear moved it past `chatId`: its status is keyed
+   *  by this id. Absent from older hosts. */
+  liveSessionId?: string
   lastActiveAt: number
   /** Filled by each client from its own acks against `turnDone`; the host can't know them. */
   unread: boolean
@@ -114,15 +124,39 @@ export function chatRunningCount(chat: BotChatTreeChat): number {
   return chat.runningTotal - notRunning
 }
 
-/** A folded chat's live counts, '1 waiting · 3 running'; null when nothing runs, so the row shows its time. */
-export function chatFoldSummary(chat: BotChatTreeChat): string | null {
+/** What a folded chat's line counts: its workers waiting on the owner and still running. */
+export type ChatFoldCounts = { waiting: number; running: number }
+
+/** A folded chat's live counts; null when nothing runs, so the row shows its time. */
+export function chatFoldCounts(chat: BotChatTreeChat): ChatFoldCounts | null {
   const waiting = chatWaitingCount(chat)
   const running = chatRunningCount(chat)
-  const parts = [
-    waiting > 0 ? `${waiting} waiting` : null,
-    running > 0 ? `${running} running` : null
-  ].filter(Boolean)
-  return parts.length > 0 ? parts.join(' · ') : null
+  return waiting > 0 || running > 0 ? { waiting, running } : null
+}
+
+/** Delete chat's rows: a terminal-only run has no chat, and the live Home, where the agent's mail
+ *  and connectors land, stays. */
+export function botChatOffersDelete(chat: BotChatTreeChat): boolean {
+  return !chat.run && !(chat.origin === 'home' && !chat.closed)
+}
+
+/** Each client's `t`: the desktop's and the phone's both fit. */
+export type BotChatTranslate = (
+  key: string,
+  fallback: string,
+  values?: Record<string, unknown>
+) => string
+
+/** '1 needs you · 3 running' in the reader's language; a zero count drops out. Waiting is an item
+ *  status for work waiting on something else, so workers asking the owner say Needs you. */
+export function chatFoldSummary(t: BotChatTranslate, counts: ChatFoldCounts): string {
+  const { waiting, running } = counts
+  return [
+    waiting > 0 ? t('bots.chats.needsYouCount', '{{count}} needs you', { count: waiting }) : null,
+    running > 0 ? t('bots.chats.runningCount', '{{count}} running', { count: running }) : null
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 /** A manual fold; a chat with none starts folded. */
@@ -157,4 +191,43 @@ export function normalizeBotChatFolds(value: unknown): Record<string, BotChatFol
     (entry): entry is [string, BotChatFold] => entry[1] === 'open' || entry[1] === 'folded'
   )
   return Object.fromEntries(entries.slice(-BOT_CHAT_FOLDS_MAX))
+}
+
+/** The bot's chats as its own lists show them: a group room session belongs to its room, so its row
+ *  drops, and its workers move under Home Chat, where anything without a chat goes; every worker that
+ *  waits on the owner keeps a row. With no Home Chat to take them, nothing moves. Finished workers
+ *  past the room's shown page stay out: Home's Show more reads only Home's. */
+export function botOwnChatTree<T extends BotChatTreeRead>(tree: T): T {
+  const rooms = tree.chats.filter((chat) => isBotGroupMemberSession(chat.chatId))
+  const home = tree.chats.find((chat) => chat.origin === 'home' && !chat.closed)
+  if (rooms.length === 0 || !home) {
+    return tree
+  }
+  const roomIds = new Set(rooms.map((chat) => chat.chatId))
+  const moved = rooms.flatMap((chat) => chat.finished)
+  const merged: BotChatTreeChat = {
+    ...home,
+    running: [...home.running, ...rooms.flatMap((chat) => chat.running)].toSorted(
+      (a, b) => Number(b.state === 'needs-you') - Number(a.state === 'needs-you')
+    ),
+    runningTotal: rooms.reduce((sum, chat) => sum + chat.runningTotal, home.runningTotal),
+    finished: [...home.finished, ...moved].toSorted(
+      (a, b) => (b.settledAt ?? b.startedAt) - (a.settledAt ?? a.startedAt)
+    ),
+    finishedTotal: home.finishedTotal + moved.length,
+    failedTotal: home.failedTotal + moved.filter((worker) => worker.state === 'failed').length
+  }
+  const workspaceChats = Object.fromEntries(
+    Object.entries(tree.workspaceChats).map(([workspace, chatId]) => [
+      workspace,
+      roomIds.has(chatId) ? home.chatId : chatId
+    ])
+  )
+  return {
+    ...tree,
+    chats: tree.chats.flatMap((chat) =>
+      roomIds.has(chat.chatId) ? [] : chat === home ? [merged] : [chat]
+    ),
+    workspaceChats
+  }
 }

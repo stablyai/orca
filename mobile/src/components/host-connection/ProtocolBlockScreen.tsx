@@ -1,5 +1,6 @@
 import { isGooglePlayInstall, useWallAppUpdate } from '../../app-update/use-wall-app-update'
 import { openExternalLink } from '../../platform/external-links/external-link'
+import { leaveHostRoute } from '../../host-route-exit'
 import { useRouteHandoff } from '../../navigation/route-handoff'
 import { Platform, Pressable, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
@@ -136,21 +137,26 @@ function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, t: Translate): 
   )
 }
 
-export function ProtocolBlockScreen({ verdict }: Props) {
-  useMobileColorScheme()
+/** Where this phone gets a newer Orca Mobile: the known update, else its store. */
+export function useMobileUpdateLink(): { label: string; url: string } {
   const t = useMobileTranslation()
-  const router = useRouteHandoff()
   const mobileUpdate = useWallAppUpdate()
-  const remedy = blockRemedy(verdict)
-  const mobileUpdateTarget = mobileUpdateChannelTarget(t)
-  const mobileAction = mobileUpdate
+  return mobileUpdate
     ? {
         label: t('components.protocolBlockScreen.getVersion', 'Get Orca {{version}}', {
           version: mobileUpdate.version
         }),
         url: mobileUpdate.url
       }
-    : { label: mobileUpdateTarget.label, url: mobileUpdateTarget.url }
+    : mobileUpdateChannelTarget(t)
+}
+
+export function ProtocolBlockScreen({ verdict }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const router = useRouteHandoff()
+  const remedy = blockRemedy(verdict)
+  const mobileAction = useMobileUpdateLink()
   // No download to offer when the fix is a refetch: reconnecting is what this screen leaves you to do.
   const primaryAction =
     remedy === 'refresh-bundle'
@@ -194,8 +200,8 @@ export function ProtocolBlockScreen({ verdict }: Props) {
         <Pressable
           style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
           onPress={() => {
-            // Hand home replacement to shell; expo-router singleton inside page would render / in WebView instead of leaving it.
-            router.replace('/')
+            // Back to the Home under this screen, not a second one stacked on it (a page hands this to the shell).
+            leaveHostRoute(router)
           }}
         >
           <Text style={styles.secondaryButtonText}>

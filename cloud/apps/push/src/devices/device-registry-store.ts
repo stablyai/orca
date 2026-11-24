@@ -112,7 +112,13 @@ export class PushDeviceRegistryStore {
         'DELETE FROM push_devices WHERE registration_id = ? AND host_fingerprint = ?',
         [registrationId, hostFingerprint]
       )
-      return Number(result?.changes ?? 0) > 0
+      const deleted = Number(result?.changes ?? 0) > 0
+      if (deleted) {
+        await transaction.query('DELETE FROM push_badge_counts WHERE registration_id = ?', [
+          registrationId
+        ])
+      }
+      return deleted
     })
   }
 

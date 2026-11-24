@@ -59,7 +59,8 @@ export function createGitRemoteStatus(
             worktreePath,
             connectionId
           },
-          pushTarget
+          pushTarget,
+          { background: options?.background }
         )
         if (options?.applyUpstreamStatus !== false) {
           get().setUpstreamStatus(worktreeId, status)

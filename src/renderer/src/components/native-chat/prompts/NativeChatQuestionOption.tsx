@@ -1,5 +1,7 @@
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import { nativeChatQuestionOptionLabel } from '../../../../../shared/native-chat/input/questions/native-chat-question-option-label'
 
 // Stable, so it runs when the preview opens rather than on every render; the option list is height-capped.
 function revealPreview(element: HTMLPreElement | null): void {
@@ -8,7 +10,6 @@ function revealPreview(element: HTMLPreElement | null): void {
 
 export function NativeChatQuestionOption({
   badge,
-  initialFocus,
   label,
   description,
   preview,
@@ -18,7 +19,6 @@ export function NativeChatQuestionOption({
   onEnter
 }: {
   badge: string
-  initialFocus: boolean
   label: string
   description?: string
   /** Shown under the row while it is selected, as the agent wrote it. */
@@ -29,14 +29,18 @@ export function NativeChatQuestionOption({
   /** Enter on the row: the card picks it, or confirms when it is the chosen single-select row. */
   onEnter: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const { shown, recommended } = nativeChatQuestionOptionLabel(label)
   return (
     // The tile wraps the row and its preview, so the preview reads as part of the picked option.
     // One root whether or not the preview shows, so selecting never remounts the focused row.
-    // The focus ring goes on the tile, not the row, so a shown preview sits inside it instead of under it.
+    // Focus is an outline outside the tile and picked is a ring inside it, so a focused row never reads as picked.
     <div
       className={cn(
-        'rounded-[10px] border transition-colors has-[>button:focus-visible]:ring-2 has-[>button:focus-visible]:ring-inset has-[>button:focus-visible]:ring-chat-focus-ring',
-        selected ? 'border-primary bg-foreground/8' : 'border-question-option-border'
+        'rounded-[10px] outline-offset-2 outline-foreground/45 transition-colors has-[>button:focus-visible]:outline-2 has-[>button:focus-visible]:outline-solid',
+        selected
+          ? 'bg-accent text-accent-foreground ring-[1.5px] ring-inset ring-foreground/45'
+          : 'bg-foreground/5 text-foreground has-[>button:hover]:bg-foreground/8'
       )}
     >
       <button
@@ -61,25 +65,32 @@ export function NativeChatQuestionOption({
           }
         }}
         aria-pressed={selected}
-        data-native-chat-prompt-card-focus-target={initialFocus || undefined}
-        // Focus is the tile's ring, never the selected fill, so the row that opens focused does not read as picked.
-        className={cn(
-          'flex w-full items-start gap-3 rounded-[9px] px-3 py-2.5 text-left text-foreground transition-colors focus-visible:outline-none disabled:pointer-events-none',
-          !selected && 'hover:bg-foreground/5'
-        )}
+        className="flex w-full items-start gap-2.5 rounded-[10px] px-3 py-2.5 text-left focus-visible:outline-none disabled:pointer-events-none"
       >
         <span
           className={cn(
-            'flex size-5.5 shrink-0 items-center justify-center rounded-md border text-xs font-medium',
+            'flex size-5.5 shrink-0 items-center justify-center rounded-md text-xs font-semibold',
             selected
-              ? 'border-primary bg-primary text-primary-foreground'
-              : 'border-question-option-border text-foreground'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-chat-composer-surface ring-1 ring-inset ring-question-option-border'
           )}
         >
           {selected ? <Check className="size-3.5" strokeWidth={3} /> : badge}
         </span>
         <span className="min-w-0">
-          <span className="block break-words text-sm font-medium">{label}</span>
+          <span className="block break-words text-sm font-medium">
+            {recommended ? <span className="sr-only">{label}</span> : null}
+            <span aria-hidden={recommended || undefined}>{shown}</span>
+            {recommended ? (
+              <span
+                aria-hidden
+                data-native-chat-question-recommended
+                className="ml-1.5 inline-block rounded-full bg-status-success/16 px-1.5 align-[1px] text-2xs leading-4 font-semibold whitespace-nowrap text-status-success"
+              >
+                {t('components.native-chat.question.recommended', 'Recommended')}
+              </span>
+            ) : null}
+          </span>
           {description ? (
             <span className="mt-px block whitespace-pre-wrap break-words text-[length:calc(var(--text-sm)*13/14)] leading-snug text-muted-foreground">
               {description}
@@ -91,7 +102,7 @@ export function NativeChatQuestionOption({
       {preview && selected ? (
         <pre
           ref={revealPreview}
-          className="-mt-2 mr-3 mb-2.5 ml-[calc(var(--spacing)*11.5)] max-h-56 overflow-auto whitespace-pre rounded-md bg-chat-code-surface px-2.5 py-2 font-mono text-chat-code leading-snug text-chat-foreground scrollbar-sleek"
+          className="-mt-2 mr-3 mb-2.5 ml-[calc(var(--spacing)*11)] max-h-56 overflow-auto whitespace-pre rounded-md bg-chat-code-surface px-2.5 py-2 font-mono text-chat-code leading-snug text-chat-foreground scrollbar-sleek"
         >
           {preview}
         </pre>

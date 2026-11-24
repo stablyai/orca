@@ -12,8 +12,9 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import type { SessionOptionValue } from '../../../../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
 
+/** `mirroredTabId`: this client's id for a created tab, when the host named it. */
 export type WebRuntimeTerminalCreateOutcome =
-  | { status: 'created' }
+  | { status: 'created'; mirroredTabId?: string }
   | { status: 'failed'; message: string }
 
 export type CreateWebRuntimeSessionTerminalArgs = {

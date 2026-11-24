@@ -1,14 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { openBotHomeTab } from '@/lib/bot-catalog'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
-import { botChatFoldKey, type BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
-import { pressFoldableRow } from '../../../../shared/bots/bot-row-press'
+import {
+  botChatFoldKey,
+  chatFoldSummary,
+  type BotChatTreeChat
+} from '../../../../shared/bots/bot-chat-tree'
 import { botSidebarListedChats } from '../../../../shared/bots/bot-sidebar-chat-groups'
 import {
   botSidebarWorkerPagingLabel,
@@ -20,6 +23,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { BotChatStatusSlot, useBotChatLabel } from './BotChatOriginIcon'
 import { BotChatPaging, BotChatRowEnd, useBotChatPress } from './BotChatRowControls'
 import type { BotChatTree } from './use-bot-chat-tree'
+import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChatRowMenu'
 import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
@@ -31,6 +35,8 @@ export function BotSidebarChats({
   workspaces,
   lineageChildrenByParentIdentity,
   activeLine,
+  steps,
+  onStep,
   onOpen
 }: {
   bot: Bot
@@ -39,6 +45,8 @@ export function BotSidebarChats({
   workspaces: readonly Worktree[]
   lineageChildrenByParentIdentity: ReadonlyMap<string, Worktree[]>
   activeLine: Worktree | undefined
+  steps: Readonly<Record<string, number>>
+  onStep: (chatId: string, steps: number) => void
   onOpen: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -51,7 +59,6 @@ export function BotSidebarChats({
     [listed, bot.hostId, bot.id]
   )
   const folds = useAppStore(useShallow((s) => foldKeys.map((key) => s.botChatFolds[key])))
-  const [steps, setSteps] = useState<Readonly<Record<string, number>>>({})
   const view = useMemo(() => {
     const foldById = new Map(listed.map((chat, index) => [chat.chatId, folds[index]]))
     return buildBotSidebarTree({
@@ -104,7 +111,7 @@ export function BotSidebarChats({
           view={chatView}
           notes={notes}
           lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
-          onStep={(next) => setSteps((shown) => ({ ...shown, [chatView.chat.chatId]: next }))}
+          onStep={(next) => onStep(chatView.chat.chatId, next)}
           onOpen={onOpen}
         />
       ))}
@@ -126,11 +133,13 @@ function chatTitle(t: ReturnType<typeof useTranslate>, chat: BotChatTreeChat): s
   return chat.origin === 'home' ? t('bots.chats.home', 'Home Chat') : chat.title
 }
 
-function trailingText(trailing: BotSidebarChatTrailing | null): string | null {
+function trailingText(t: Translate, trailing: BotSidebarChatTrailing | null): string | null {
   if (!trailing) {
     return null
   }
-  return trailing.kind === 'summary' ? trailing.text : formatShortTimeAgo(trailing.at)
+  return trailing.kind === 'summary'
+    ? chatFoldSummary(t, trailing.counts)
+    : formatShortTimeAgo(trailing.at)
 }
 
 function BotSidebarChat({
@@ -150,65 +159,71 @@ function BotSidebarChat({
 }): React.JSX.Element {
   const t = useTranslate()
   const { chat, foldable, open, lines, paging, steps } = view
-  const { active, toggle } = useBotChatPress(bot, chat.chatId)
+  const { active, toggle, highlight } = useBotChatPress(bot, chat.chatId)
   const title = chatTitle(t, chat)
   const label = useBotChatLabel(chat, title)
-  const trailing = trailingText(view.trailing)
-  const pressRow = (event: Parameters<typeof pressFoldableRow>[1]): void =>
-    pressFoldableRow(
-      {
-        active,
-        folded: foldable && !open,
-        open: () => {
-          if (chat.origin === 'home') {
-            void openBotHomeTab(bot)
-          } else {
-            openBotSession(bot, chat.chatId)
-          }
-        },
-        toggle: foldable ? () => toggle(open) : null
-      },
-      event
-    )
+  const trailing = trailingText(t, view.trailing)
+  // A press only switches to the chat; only the chevron shows or hides its workers. Pressed while
+  // its chat is already in front, it flashes that chat's pane so the press visibly lands.
+  const pressRow = (event: { detail: number; repeat?: boolean }): void => {
+    if (event.detail > 1 || event.repeat) {
+      return
+    }
+    if (active) {
+      highlight()
+    }
+    if (chat.origin === 'home') {
+      void openBotHomeTab(bot)
+    } else {
+      openBotSession(bot, chat.chatId)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-1">
-      {/* Its label names the slot's kind and state; pr-0.5 puts the chevron on the bot chevron's edge. */}
-      <div
-        role="button"
-        data-bot-sidebar-chat={chat.chatId}
-        aria-label={[label, trailing].filter(Boolean).join(' · ')}
-        // The chat whose tab is in front reads as the current row, as the open workspace's does.
-        aria-current={active ? 'true' : undefined}
-        tabIndex={0}
-        aria-expanded={foldable ? open : undefined}
-        className={cn(
-          'group/bot-chat flex h-6 min-w-0 cursor-pointer items-center gap-1.5 rounded-md pr-0.5 pl-1 text-xs text-muted-foreground outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50',
-          active && 'bg-sidebar-accent'
-        )}
-        onClick={pressRow}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault()
-            pressRow(event)
-          }
-        }}
-      >
-        <BotChatStatusSlot chat={chat} />
-        <span
+      <BotChatContextMenu bot={bot} chat={chat} onOpen={() => pressRow({ detail: 1 })}>
+        {/* Its label names the slot's kind and state; pr-0.5 puts the chevron on the bot chevron's edge. */}
+        <div
+          role="button"
+          data-bot-sidebar-chat={chat.chatId}
+          aria-label={[label, trailing].filter(Boolean).join(' · ')}
+          // The chat whose tab is in front reads as the current row, as the open workspace's does.
+          aria-current={active ? 'true' : undefined}
+          tabIndex={0}
+          aria-expanded={foldable ? open : undefined}
           className={cn(
-            'min-w-0 flex-1 truncate text-foreground',
-            (chat.unread || active) && 'font-semibold'
+            'group/bot-chat flex h-6 min-w-0 cursor-pointer items-center gap-1.5 rounded-md pr-0.5 pl-1 text-xs text-muted-foreground outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50',
+            active && 'bg-sidebar-accent'
           )}
+          onClick={pressRow}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              pressRow(event)
+            }
+          }}
         >
-          {title}
-        </span>
-        <BotChatRowEnd
-          text={trailing}
-          fold={foldable ? { open, name: title, onToggle: () => toggle(open) } : null}
-          className="max-w-[60%]"
-        />
-      </div>
+          <BotChatStatusSlot chat={chat} />
+          <span
+            className={cn(
+              'min-w-0 flex-1 truncate text-foreground',
+              (chat.unread || active) && 'font-semibold'
+            )}
+          >
+            {title}
+          </span>
+          <BotChatRowEnd
+            text={trailing}
+            fold={foldable ? { open, name: title, onToggle: () => toggle(open) } : null}
+            menu={
+              botChatHasMenu(chat) ? (
+                <BotChatMoreButton bot={bot} chat={chat} onOpen={() => pressRow({ detail: 1 })} />
+              ) : null
+            }
+            className="max-w-[60%]"
+          />
+        </div>
+      </BotChatContextMenu>
       {open ? (
         <div className="ml-3 flex flex-col gap-1">
           <AttachedWorktreeCards

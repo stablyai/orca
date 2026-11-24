@@ -142,11 +142,13 @@ export function journalReaderOperationAdmitted(operation: JournalSqlReaderOperat
       return operation.operation.kind !== 'records'
     case 'conversion-page':
     case 'conversion-prepare':
+    case 'conversion-storage':
     case 'domain-history':
     case 'fork-next':
     case 'fork-prepare':
     case 'import-state':
     case 'legacy-compare':
+    case 'legacy-proof':
     case 'point':
       return true
   }

@@ -9,6 +9,7 @@ import {
   getRepeatedStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
+import { resolve } from 'node:path'
 import { readTextOrFileFlag } from '../arguments/command-body-input'
 import { printResult } from '../output/command-result-output'
 import {
@@ -20,6 +21,9 @@ import {
 import { RuntimeClientError } from '../runtime/connection/types'
 import { callerChat } from '../automations/automation-caller-chat'
 import { callBots, findBot } from './bot'
+import { botItemAskAdviceWithout } from '../../shared/bots/bot-item-ask-advice'
+import { botItemAskFromFlags, botItemAskParams } from './bot-item-ask-flags'
+import { BOT_ITEM_ASK_BOOLEAN_FLAGS } from '../specs/bot-items'
 import {
   formatBotItemList,
   formatBotItemShow,
@@ -53,12 +57,16 @@ function print<T extends BotItemsView>(
 }
 
 async function write(
-  { client, json }: HandlerContext,
+  { client, json, flags }: HandlerContext,
   method: string,
   params: Record<string, unknown>
 ): Promise<void> {
   const result = await callBots<BotItemWriteView>(client, method, { ...callerChat(), ...params })
-  print(result, json, formatBotItemWrite)
+  const { advice, ...view } = result.result
+  // Context read from --comment-file already follows the long-context tip; only the CLI knows.
+  const kept =
+    advice && flags.has('comment-file') ? botItemAskAdviceWithout(advice, 'long_context') : advice
+  print({ ...result, result: kept ? { ...view, advice: kept } : view }, json, formatBotItemWrite)
 }
 
 function itemId(flags: Flags): string {
@@ -67,6 +75,12 @@ function itemId(flags: Flags): string {
 
 function optional(name: string, value: string | undefined): Record<string, string> {
   return value === undefined ? {} : { [name]: value }
+}
+
+/** `--file`, each resolved against the caller's folder: the host copies them from its own disk. */
+function files(flags: Flags, cwd: string): { files?: string[] } {
+  const paths = getRepeatedStringFlag(flags, 'file').map((path) => resolve(cwd, path))
+  return paths.length > 0 ? { files: paths } : {}
 }
 
 export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
@@ -87,6 +101,8 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
   'bot item set': async (ctx) => {
     const { flags, cwd } = ctx
     const status = getOptionalStringFlag(flags, 'status')
+    const ask = botItemAskFromFlags(ctx, BOT_ITEM_ASK_BOOLEAN_FLAGS)
+    const comment = await readTextOrFileFlag(flags, cwd, 'comment', false)
     await write(ctx, 'bots.items.set', {
       item: itemId(flags),
       ...optional('title', getOptionalStringFlag(flags, 'title')),
@@ -95,14 +111,18 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
       ...(status ? { status: statusFlag(status) } : {}),
       ...optional('note', await readTextOrFileFlag(flags, cwd, 'note', false)),
       ...optional('reason', await readTextOrFileFlag(flags, cwd, 'reason', false)),
-      ...optional('comment', await readTextOrFileFlag(flags, cwd, 'comment', false))
+      ...(ask ? botItemAskParams(ask, comment) : optional('comment', comment)),
+      ...files(flags, cwd)
     })
   },
   'bot item comment': async (ctx) => {
     const { flags, cwd } = ctx
+    const attached = files(flags, cwd)
     await write(ctx, 'bots.items.comment', {
       item: itemId(flags),
-      text: await readTextOrFileFlag(flags, cwd, 'text', true)
+      // Files alone make a comment.
+      text: (await readTextOrFileFlag(flags, cwd, 'text', !attached.files)) ?? '',
+      ...attached
     })
   },
   'bot item done': async (ctx) => {

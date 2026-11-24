@@ -22,7 +22,9 @@ function setup(options: { rotates: boolean; endedErrors?: string[]; login?: Part
     ...(options.endedErrors ? { endedErrors: options.endedErrors } : {}),
     read: (id) => logins.get(id) ?? null,
     grantOf: (login) => login,
-    save: (_id, _login, refreshed) => saved.push(refreshed),
+    save: (_id, _login, refreshed) => {
+      saved.push(refreshed)
+    },
     ended: (id, _login, error) => {
       logins.delete(id)
       endedWith.push(error)
@@ -120,8 +122,12 @@ describe('a login changed while its refresh is in flight', () => {
       rotates: true,
       read: (id) => logins.get(id) ?? null,
       grantOf: (login) => login,
-      save: (_id, _login, refreshed) => saved.push(refreshed),
-      ended: (_id, _login, error) => ended.push(error)
+      save: (_id, _login, refreshed) => {
+        saved.push(refreshed)
+      },
+      ended: (_id, _login, error) => {
+        ended.push(error)
+      }
     })
     const run = refresher.refresh('a', {
       now: () => NOW,

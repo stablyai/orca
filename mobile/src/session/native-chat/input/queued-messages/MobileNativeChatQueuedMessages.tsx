@@ -6,6 +6,7 @@ import { Pressable, Text, View, type LayoutRectangle } from 'react-native'
 import { ChevronDown, ChevronUp, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { ActionSheetModal } from '../../../../components/sheets/ActionSheetModal'
 import { colors } from '../../../../theme/mobile-theme'
+import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { useLargeSystemText } from '../../../../theme/use-large-system-text'
@@ -41,7 +42,9 @@ export function mobileNativeChatChordHeadId(
     steerHeld,
     agentWorking,
     editor
-  }: Pick<MobileNativeChatQueuedMessagesProps, 'cards' | 'steerHeld' | 'agentWorking' | 'editor'>,
+  }: Pick<MobileNativeChatQueuedMessagesProps, 'steerHeld' | 'agentWorking' | 'editor'> & {
+    cards?: readonly MobileQueuedMessageCard[]
+  },
   alternateSteers: boolean
 ): string | null {
   // Mid-turn only where the chord's other way is steer, or a second press would steer the card
@@ -58,6 +61,8 @@ export type MobileNativeChatQueuedMessagesProps = {
   onSend?: (messageId: string) => Promise<boolean>
   onDelete?: (messageId: string) => Promise<boolean>
   onClearAll?: (messageIds: string[]) => Promise<boolean>
+  /** What Delete all deletes and holds, waiting agent mail included; the cards when omitted. */
+  clearIds?: readonly string[]
   /** Offers Clear all while the queue still sends on its own; otherwise only a paused queue does. */
   clearable?: boolean
   // Older hosts cannot edit inline; copy their draft to the composer.
@@ -71,6 +76,8 @@ export type MobileNativeChatQueuedMessagesProps = {
   headLight?: MobileQueuedHeadLight
   /** The agent is working: a steerable card's action reads Steer, otherwise Send. */
   agentWorking?: boolean
+  /** The queue the steer shortcut presses the head of; the cards unless waiting mail leads. */
+  steerOrder?: readonly MobileQueuedMessageCard[]
 }
 
 export function MobileNativeChatQueuedMessages({
@@ -79,6 +86,7 @@ export function MobileNativeChatQueuedMessages({
   onSend,
   onDelete,
   onClearAll,
+  clearIds: heldIds,
   clearable = false,
   onEdit,
   editor,
@@ -87,7 +95,8 @@ export function MobileNativeChatQueuedMessages({
   onResume,
   steerHeld = false,
   headLight,
-  agentWorking = false
+  agentWorking = false,
+  steerOrder
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
   useMobileColorScheme()
   const lowerRegion = useMobileNativeChatLowerRegion()
@@ -145,7 +154,8 @@ export function MobileNativeChatQueuedMessages({
       setExpandedIds(new Set([...expandedIds].filter((messageId) => liveIds.includes(messageId))))
     }
   }
-  if (!cards || cards.length === 0) {
+  // A paused queue holding only agent mail, which the transcript draws, still offers Resume.
+  if (!cards || (cards.length === 0 && !pause)) {
     if (openChoice !== null) {
       setOpenChoice(null)
     }
@@ -164,17 +174,20 @@ export function MobileNativeChatQueuedMessages({
   const open =
     openChoice?.abovePrompt === abovePrompt ? openChoice.open : !abovePrompt || attentionHidden
   // An inline editor on a folded-away card keeps the list open so the edit stays in view.
-  const editingHidden = editor !== undefined && editor.messageId !== cards[0]!.messageId
+  const editingHidden =
+    editor !== undefined && cards.length > 0 && editor.messageId !== cards[0]!.messageId
   const showAll = open || cards.length === 1 || editingHidden
   const shownCards = showAll ? cards : cards.slice(0, 1)
   const queueBusy = busyIds.has(QUEUE_KEY)
-  const headId = headSteerableQueuedMessageCard(cards)?.messageId
+  // The shortcut's own head, which is waiting agent mail (no card) when that is first in line.
+  const headId = headSteerableQueuedMessageCard(steerOrder ?? cards)?.messageId
   const messageIds = cards.map((card) => card.messageId)
-  // Clear all takes every card, so it waits for any card's own action rather than skip that card.
-  const clearBusy = queueBusy || messageIds.some((messageId) => busyIds.has(messageId))
+  const clearIds = heldIds ? [...heldIds] : messageIds
+  // Clear all takes every held message, so it waits for any one's own action rather than skip it.
+  const clearBusy = queueBusy || clearIds.some((messageId) => busyIds.has(messageId))
   const clearAll = () => {
     if (onClearAll) {
-      void run(QUEUE_KEY, () => onClearAll(messageIds), messageIds)
+      void run(QUEUE_KEY, () => onClearAll(clearIds), clearIds, 'deleteAll')
     }
   }
   // Forget closed menu identity so a Stop-requeued draft with the same id cannot reopen it.
@@ -186,40 +199,31 @@ export function MobileNativeChatQueuedMessages({
   const headerActions = pause ? (
     <>
       {onClearAll ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: clearBusy }}
-          accessibilityLabel={t('chat.queuedMessages.deleteAll', 'Delete every queued message')}
-          style={({ pressed }) => [
-            styles.headerAction,
-            pressed && styles.pressed,
-            clearBusy && styles.disabled
-          ]}
+        <MobilePendingButton
+          label={t('chat.queuedMessages.deleteAll', 'Delete all')}
+          icon={<Trash2 size={12} color={colors.textPrimary} strokeWidth={2} />}
+          style={styles.headerAction}
+          labelStyle={styles.actionLabel}
+          spinnerColor={colors.textPrimary}
+          pending={busyIds.get(QUEUE_KEY) === 'deleteAll'}
           disabled={clearBusy}
           onPress={clearAll}
-        >
-          <Trash2 size={12} color={colors.textPrimary} strokeWidth={2} />
-          <Text style={styles.actionLabel}>{t('chat.queuedMessages.clearAll', 'Clear all')}</Text>
-        </Pressable>
+        />
       ) : null}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ disabled: queueBusy }}
+      <MobilePendingButton
+        label={t('chat.queuedMessages.resume', 'Resume')}
         accessibilityLabel={t(
           'chat.queuedMessages.resumeSending',
           'Resume sending the queued messages'
         )}
-        style={({ pressed }) => [
-          styles.headerAction,
-          pressed && styles.pressed,
-          queueBusy && styles.disabled
-        ]}
+        icon={<Play size={12} color={colors.textPrimary} strokeWidth={2} />}
+        style={styles.headerAction}
+        labelStyle={styles.actionLabel}
+        spinnerColor={colors.textPrimary}
+        pending={busyIds.get(QUEUE_KEY) === 'resume'}
         disabled={queueBusy}
-        onPress={() => void run(QUEUE_KEY, onResume && (() => onResume()))}
-      >
-        <Play size={12} color={colors.textPrimary} strokeWidth={2} />
-        <Text style={styles.actionLabel}>{t('chat.queuedMessages.resume', 'Resume')}</Text>
-      </Pressable>
+        onPress={() => void run(QUEUE_KEY, onResume && (() => onResume()), undefined, 'resume')}
+      />
     </>
   ) : null
   const hiddenCount = cards.length - 1
@@ -241,7 +245,7 @@ export function MobileNativeChatQueuedMessages({
         card={card}
         dragHandle={handle}
         editor={editor?.messageId === card.messageId ? editor : undefined}
-        busy={busyIds.has(card.messageId)}
+        busyControl={busyIds.get(card.messageId)}
         headLight={card.messageId === headId ? headLight : undefined}
         steerHeld={steerHeld}
         agentWorking={agentWorking}
@@ -291,14 +295,18 @@ export function MobileNativeChatQueuedMessages({
                 <Text style={[styles.headerLabel, styles.headerLabelPaused]}>
                   {t('chat.queuedMessages.pausedState', 'Paused')}
                 </Text>
-                <Text
-                  style={styles.headerLabel}
-                  importantForAccessibility="no"
-                  accessibilityElementsHidden
-                >
-                  ·
-                </Text>
-                <Text style={styles.headerCount}>{cards.length}</Text>
+                {cards.length > 0 ? (
+                  <>
+                    <Text
+                      style={styles.headerLabel}
+                      importantForAccessibility="no"
+                      accessibilityElementsHidden
+                    >
+                      ·
+                    </Text>
+                    <Text style={styles.headerCount}>{cards.length}</Text>
+                  </>
+                ) : null}
               </View>
               {largeText ? null : headerActions}
             </View>
@@ -322,7 +330,7 @@ export function MobileNativeChatQueuedMessages({
                 rowPresentation="plain"
                 liftFromRow
                 renderRow={(card, handle) => renderRow(card, reveal, show, handle)}
-                onMove={(move) => run(move.movedId, () => onMove(move), [MOVE_KEY])}
+                onMove={(move) => run(move.movedId, () => onMove(move), [MOVE_KEY], 'move')}
                 {...drag}
               />
             ) : (
@@ -383,7 +391,7 @@ export function MobileNativeChatQueuedMessages({
                   closeBeforePress: true,
                   onPress: () => {
                     if (menuCard) {
-                      void run(menuCard.messageId, onEdit)
+                      void run(menuCard.messageId, onEdit, undefined, 'more')
                     }
                   }
                 }
@@ -396,15 +404,15 @@ export function MobileNativeChatQueuedMessages({
             disabled: menuCard === undefined || busyIds.has(menuCard.messageId),
             onPress: () => {
               if (menuCard) {
-                void run(menuCard.messageId, onDelete)
+                void run(menuCard.messageId, onDelete, undefined, 'more')
               }
             }
           },
-          ...(clearable && !pause && onClearAll && cards.length > 1
+          ...(clearable && !pause && onClearAll && clearIds.length > 1
             ? [
                 {
                   id: 'clearAll',
-                  label: t('chat.queuedMessages.deleteAll', 'Delete every queued message'),
+                  label: t('chat.queuedMessages.deleteAll', 'Delete all'),
                   icon: Trash2,
                   destructive: true,
                   disabled: clearBusy,

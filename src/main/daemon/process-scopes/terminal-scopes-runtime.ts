@@ -38,13 +38,6 @@ export function initializeTerminalScopes(
   return resolved.ceiling
 }
 
-export function setTerminalScopesForTest(
-  scopes: TerminalScopeRuntime | null,
-  log: DaemonLog = () => {}
-): void {
-  active = scopes ? { scopes, log } : null
-}
-
 /** Match Orca’s exact wrapper paths so an unrelated user systemd-run is not hidden. */
 export function isTerminalScopeWrapper(processName: string): boolean {
   return (

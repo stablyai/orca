@@ -32,8 +32,67 @@ export const BOTS_ITEMS_RUNTIME_CAPABILITY = 'bots.items.v1' as const
 export const BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY =
   'bots.item-comment-attachments.v1' as const
 
+// Host dedupes the owner's item comments by `requestId` (bots.items.owner.comment): a repeat returns the
+// comment already made. An older host refuses the field, so a client sends it only where advertised.
+export const BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY =
+  'bots.item-comment-request-id.v1' as const
+
+// Host takes `questionId` on the owner's item comments (bots.items.owner.comment) and refuses a comment
+// aimed at a question the agent has since replaced. An older host refuses the field.
+export const BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY =
+  'bots.item-comment-question-id.v1' as const
+
+// Host takes `plain` on the owner's item comments (bots.items.owner.comment): a comment that answers no
+// question, even while the agent waits on one. An older host refuses the field.
+export const BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY = 'bots.item-comment-plain.v1' as const
+
+// Host takes `skills` on the owner's item comments (bots.items.owner.comment) and names each skill's
+// file in the comment's mail. An older host refuses the field.
+export const BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY = 'bots.item-comment-skills.v1' as const
+
+// Host takes `skipped` on the owner's item comments (bots.items.owner.comment): an answer sent with the
+// ask's other questions skipped, which closes them and names them in the mail. An older host refuses the field.
+export const BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY = 'bots.item-comment-skipped.v1' as const
+
+// Host stores a picture's background color (bots.update and bots.create `avatarColor`); an older host's strict
+// update refuses the field, so clients offer the colors only where this is advertised.
+export const BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY = 'bots.avatar-color.v1' as const
+
+// Host stores what a picture wears (bots.update and bots.create `avatarOutfit`); offered only where advertised, as colors are.
+export const BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY = 'bots.avatar-outfit.v1' as const
+
+// Host takes chat image attachments on group room posts (bots.groups.send `images`, store `@path`s in text)
+// and delivers them as image blocks to addressed members; an older host takes text only.
+export const BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY = 'bots.group-attachments.v1' as const
+
+// Host keeps each bot's Home pinned first and its side chats unpinned in what it serves; an older host
+// leaves pins to each client, so a client shows the Home rule only where this is advertised.
+export const BOTS_HOME_PIN_RUNTIME_CAPABILITY = 'bots.home-pin.v1' as const
+
+// Host has the Waiting item status (bots.items.owner.status `waiting` with `note`), and clients send it
+// too: a host shows Waiting only to a client that reads it, and as In progress to one that doesn't.
+export const BOTS_ITEM_WAITING_CAPABILITY = 'bots.item-waiting.v1' as const
+
+// Host cancels an item for the owner with no reason (bots.items.owner.status `canceled`); an older host
+// refuses one, so a client sends it a plain reason (botItemStatusFields).
+export const BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY = 'bots.item-cancel-no-reason.v1' as const
+
+// Host bumps a bot's `avatarRevision` on every picture, color or outfit write and refuses a bots.avatar.upload whose
+// `expectedAvatarRevision` no longer matches; an older host drops the field, so a client uploads a picture
+// on its own (one generated while the picker was closed) only where this is advertised.
+export const BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY = 'bots.avatar-revision.v3' as const
+
+// Host lets a phone change who Slack replies post as (bots.slack.setPostAs); an older host refuses it, so the
+// phone keeps the read-only row.
+export const BOTS_SLACK_POST_AS_RUNTIME_CAPABILITY = 'bots.slack-post-as.v1' as const
+
+// Host lets a phone run Google's sign-in (google.signIn.start/wait/cancel), its page in Orca's browser there;
+// an older host refuses those calls, so the phone hands that step to the computer.
+export const BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY = 'bots.google-phone-sign-in.v1' as const
+
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
+  BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
   BOTS_MOBILE_RUNTIME_CAPABILITY,
   BOTS_CREATE_RUNTIME_CAPABILITY,
   BOTS_TOOLS_OWNED_SIGN_IN_RUNTIME_CAPABILITY,
@@ -42,5 +101,18 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_CHAT_MENTIONS_RUNTIME_CAPABILITY,
   BOTS_ITEMS_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY,
-  BOTS_SESSION_LINKS_RUNTIME_CAPABILITY
+  BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY,
+  BOTS_SESSION_LINKS_RUNTIME_CAPABILITY,
+  BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
+  BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY,
+  BOTS_SLACK_POST_AS_RUNTIME_CAPABILITY,
+  BOTS_HOME_PIN_RUNTIME_CAPABILITY,
+  BOTS_ITEM_WAITING_CAPABILITY,
+  BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY,
+  BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY,
+  BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY
 ] as const

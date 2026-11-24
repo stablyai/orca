@@ -10,6 +10,7 @@ import {
   type NO_HOST_LIST_INPUT
 } from '../../host-screen/catalog/host-list-queries'
 import { defineHostQuery } from '../../query/host-query'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
   homeAgentEntries,
   type HomeAgentBot,
@@ -17,6 +18,9 @@ import {
   type HomeWorktreeSummary
 } from './home-worktree-info'
 import { isWorktreeActive } from '../workspace-list/workspace-row-filtering'
+import type { WorkspaceLineage } from '../../../../src/shared/worktree/lineage-types'
+import { workspaceLineageRead } from '../../bots/host-bots-operations'
+import { readHostMethodReply } from '../../host-screen/sidebar-feed/host-sidebar-feed-operations'
 import {
   readWorktreeCatalogSnapshot,
   type WorktreeCatalogSnapshot
@@ -32,8 +36,15 @@ export type HomeWorktreeCounts = {
   agents: readonly HomeAgentEntry[]
   /** Unread rows' ids, for the rows Home draws over a hidden home (a group room). */
   unreadWorktreeIds?: readonly string[]
-  // The rows this launch read: the next read's delta base, and the wide layout's host list seed. Never stored.
+  // The rows this launch read: the next read's delta base, the wide layout's host list seed, and its
+  // bots' workers. Never stored.
   catalog?: WorktreeCatalogSnapshot
+  /** The host's folder records, for a bot's worker that doesn't report its folder parent, and the
+   *  workspaces they were read for (null: read again); read only while it has bots. Never stored. */
+  folderRecords?: {
+    ids: string | null
+    records: Readonly<Record<string, WorkspaceLineage>> | undefined
+  }
 }
 
 export const homeWorktreeCountsQuery = defineHostQuery<
@@ -46,6 +57,8 @@ export const homeWorktreeCountsQuery = defineHostQuery<
     const bots = readHostBots(client, hostBotsKey(hostId))
     const catalog = await readWorktreeCatalogSnapshot(client, previous?.catalog)
     const botByHomeId = botsByHomeWorktreeId(await bots)
+    const folderRecords =
+      botByHomeId.size > 0 ? await readFolderRecords(client, catalog, previous) : undefined
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows stay opaque because three screens project a row differently. Home reads `status`, `sidebarStatus` and its counts through their own guards, plus the host-typed `agents` the Agents list shows, and the `worktree-home-catalog` golden records the row it is given as `{worktreeId, displayName, repo, status}`.
     const worktrees = catalog.worktrees as HomeWorktreeSummary[]
     // Count what the list shows: archived rows are hidden, and active is the sleeping filter's rule.
@@ -57,7 +70,8 @@ export const homeWorktreeCountsQuery = defineHostQuery<
       // A bot's chats stay agents: one waiting on the user reaches Active and the badge.
       agents: homeAgentEntries(unarchived, botByHomeId),
       unreadWorktreeIds: unarchived.flatMap((w) => (w.unread === true ? [w.worktreeId] : [])),
-      catalog
+      catalog,
+      ...(folderRecords ? { folderRecords } : {})
     }
   },
   staleTime: HOME_WORKTREE_REFRESH_FLOOR_MS,
@@ -89,10 +103,42 @@ export const homeWorktreeCountsQuery = defineHostQuery<
   }
 })
 
+/** The host's workspaces as a set, whatever order its activity lists them in. */
+const worktreeIdsOf = (catalog: WorktreeCatalogSnapshot): string =>
+  catalog.worktrees
+    .map((row) => row.worktreeId)
+    .sort()
+    .join('\n')
+
+/** The host's folder records, read again only when its workspaces change: agent turns refresh Home
+ *  every few seconds, and the records only place a new workspace. A failed read keeps the last and
+ *  asks again next time; a host without the method isn't asked again for the same workspaces. */
+async function readFolderRecords(
+  client: RpcClient,
+  catalog: WorktreeCatalogSnapshot,
+  previous: HomeWorktreeCounts | undefined
+): Promise<HomeWorktreeCounts['folderRecords']> {
+  const ids = worktreeIdsOf(catalog)
+  const kept = previous?.folderRecords
+  if (kept?.ids === ids) {
+    return kept
+  }
+  const reply = await workspaceLineageRead.request(client).catch(() => null)
+  const read = reply && readHostMethodReply(reply, workspaceLineageRead.interpret)
+  return read?.kind === 'answered'
+    ? { ids, records: read.value.workspaceLineage }
+    : read?.kind === 'unavailable'
+      ? { ids, records: kept?.records }
+      : kept && { ids: null, records: kept.records }
+}
+
 function botsByHomeWorktreeId(answer: HostBotsRead): ReadonlyMap<string, HomeAgentBot> {
   return new Map(
     answer.kind === 'bots'
-      ? answer.bots.map((bot) => [botHomeWorktreeId(bot), { name: bot.name, avatar: bot.avatar }])
+      ? answer.bots.map((bot) => [
+          botHomeWorktreeId(bot),
+          { id: bot.id, name: bot.name, avatar: bot.avatar }
+        ])
       : []
   )
 }

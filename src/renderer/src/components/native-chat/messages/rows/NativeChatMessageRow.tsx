@@ -1,4 +1,5 @@
 import { memo, useRef } from 'react'
+import type { AgentSessionAccountKind } from '../../../../../../shared/agent-session/failures/agent-session-availability'
 import type { NativeChatRewindSurface } from '../actions/use-native-chat-rewind-host'
 import type { NativeChatForkRowAction } from '../actions/use-native-chat-fork'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
@@ -18,6 +19,7 @@ import { NativeChatWaitEndedRow, NativeChatWaitRow } from '../../automation-run/
 import { NativeChatAutomationSavedRow } from '../../automation-run/NativeChatAutomationSavedRow'
 import { NativeChatBotItemNoteRow } from '../../bot-items/NativeChatBotItemNoteRow'
 import { NativeChatAutomationRunRow } from '../../automation-run/NativeChatAutomationRunRow'
+import { mergedRunFailures } from '../../../../../../shared/native-chat/transcript/events/native-chat-event-plan'
 import { NativeChatNoticeRow } from '../notices/NativeChatNoticeRow'
 import { NativeChatBotCreatedRow, NativeChatTookOverRow } from '../../NativeChatBotCreatedRow'
 import { nativeChatNoticeBlock } from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
@@ -28,6 +30,10 @@ import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-clie
 import { useNativeChatWorkRun } from '../../tools/runs/use-native-chat-work-run'
 import { useNativeChatRowNavigation } from '../actions/use-native-chat-row-navigation'
 import { useTranslate } from '@/i18n/use-translate'
+import {
+  NativeChatGalleryMessageContext,
+  nativeChatGalleryMessageId
+} from '../../media/images/gallery/native-chat-image-gallery-context'
 
 /** Unconfirmed sending status or a failed-delivery notice with an optional dismissal. */
 export type NativeChatDeliveryNotice =
@@ -39,12 +45,15 @@ export type NativeChatDeliveryNotice =
       onSend?: never
       detail?: never
       failureKind?: never
+      signIn?: never
     }
   | {
       sending?: never
       text: string
       detail?: string
       failureKind?: string
+      /** A not-signed-in rejection, for the line's Sign in. */
+      signIn?: { agentName: string; account?: AgentSessionAccountKind }
       onDismiss?: () => void
       onEdit?: () => void
       onSend?: () => void
@@ -97,9 +106,17 @@ function rowHasContent(content: ReturnType<typeof deriveNativeChatRowContent>): 
 }
 
 /** Memoize settled block identities so stream frames rerender only changed rows. */
-export const MessageRow = memo(function MessageRow(
-  props: MessageRowProps
-): React.JSX.Element | null {
+export const MessageRow = memo(function MessageRow(props: MessageRowProps): React.JSX.Element {
+  return (
+    <NativeChatGalleryMessageContext
+      value={nativeChatGalleryMessageId(props.message, props.activeTurnIsWorking)}
+    >
+      <MessageRowContent {...props} />
+    </NativeChatGalleryMessageContext>
+  )
+}, sameMessageRowProps)
+
+function MessageRowContent(props: MessageRowProps): React.JSX.Element | null {
   const t = useTranslate()
   const {
     message,
@@ -157,6 +174,8 @@ export const MessageRow = memo(function MessageRow(
           text={notStarted.text}
           timestamp={message.timestamp}
           error={notStarted.error}
+          refusal={notStarted.refusal}
+          earlierFailures={mergedRunFailures(message)}
           resend={notStarted.sentAgain ? 'sent' : 'offer'}
           onRefolded={returnToView}
         />
@@ -173,6 +192,7 @@ export const MessageRow = memo(function MessageRow(
           state={message.queued ? 'queued' : 'ran'}
           text={markdown}
           timestamp={message.timestamp}
+          earlierFailures={mergedRunFailures(message)}
           onRefolded={returnToView}
         />
       </div>
@@ -347,7 +367,7 @@ export const MessageRow = memo(function MessageRow(
       scrollToTop={scrollToTop}
     />
   )
-}, sameMessageRowProps)
+}
 
 /** A rebuilt transcript hands every run a fresh member list; same messages, same row. */
 function sameMessageRowProps(previous: MessageRowProps, next: MessageRowProps): boolean {

@@ -1,5 +1,4 @@
 import { applyClaudeAgentViewEnv } from './claude-agent-view'
-import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal/images/terminal-inline-images-settings'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import {
   detectExplicitPiAgentKindFromCommand,
@@ -46,16 +45,6 @@ export function buildPtyHostEnv(
 ): Record<string, string> {
   mergePersistedWindowsPath(baseEnv)
   Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
-
-  // Claude currently recognizes image support only in a short terminal allowlist.
-  if (
-    opts.launchAgent === 'claude' &&
-    resolveTerminalInlineImagesEnabled(opts.terminalInlineImages) &&
-    baseEnv.CLAUDE_CODE_FORCE_TERMINAL_IMAGES === undefined &&
-    process.env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES === undefined
-  ) {
-    baseEnv.CLAUDE_CODE_FORCE_TERMINAL_IMAGES = '1'
-  }
 
   const openCodeConfig = captureOpenCodeSourceConfig(baseEnv, opts.userDataPath)
   const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(baseEnv, opts.launchCommand)

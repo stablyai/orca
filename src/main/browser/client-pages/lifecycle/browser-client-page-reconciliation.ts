@@ -237,7 +237,7 @@ function reconciliationCreateEvent(
   }
 }
 
-function createReconciliationInventory(
+export function createReconciliationInventory(
   event: BrowserClientHostCommandEvent,
   state: BrowserClientHostedPageInventory['state'],
   currentUrl?: string

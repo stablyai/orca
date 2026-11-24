@@ -1,3 +1,4 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { subscribeLinkOpenRequests } from '../../../lib/links/link-open-request'
 import { BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { assertRuntimeManagedBrowserCreationAvailable } from '../../../lib/workspace/creation/surface-policy/client-creation-action-policy'
@@ -31,6 +32,11 @@ import {
 import { selectWebRuntimeSessionBrowserWorktree } from '../../web-session-tabs-sync/workspace-selection/web-runtime-session-workspace-selection'
 import type { BrowserClientHostPlacementPreference } from '../../../../../shared/browser/client-hosting/browser-client-host-placement'
 
+export type WebRuntimeBrowserCreationFailureInfo = {
+  stage: 'prepare' | 'create' | 'materialize'
+  code: string | null
+}
+
 export type CreateWebRuntimeSessionBrowserTabArgs = {
   worktreeId: string
   isCurrentRequest?: () => boolean
@@ -50,6 +56,8 @@ export type CreateWebRuntimeSessionBrowserTabArgs = {
   stagedTitle?: string
   stagedFocusAddressBar?: boolean
   failureLogMode?: 'details' | 'operation-only'
+  /** Receives a failure's stage and known machine code (from its first error, not cleanup's). */
+  onFailure?: (failure: WebRuntimeBrowserCreationFailureInfo) => void
   placementPreference?: BrowserClientHostPlacementPreference
 }
 
@@ -80,8 +88,7 @@ export function createWebRuntimeBrowserCreationContext(
   const shouldFocusOnCreate = args.focusOnCreate !== false
   const provisionalPageId = createBrowserUuid()
   const advertisedCapabilities =
-    useAppStore.getState().runtimeStatusByEnvironmentId?.get(environmentId)?.status?.capabilities ??
-    []
+    readRuntimeStatuses()?.get(environmentId)?.status?.capabilities ?? []
   const hostSupportsKnownPageId = advertisedCapabilities.includes(
     BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
   )
@@ -89,8 +96,7 @@ export function createWebRuntimeBrowserCreationContext(
   const expectsClientHosting = expectsBrowserClientHosting({
     enabled: useAppStore.getState().settings?.browserClientHostedRemoteEnabled !== false,
     preference: args.placementPreference,
-    deviceScope: useAppStore.getState().runtimeStatusByEnvironmentId?.get(environmentId)?.status
-      ?.deviceScope,
+    deviceScope: readRuntimeStatuses()?.get(environmentId)?.status?.deviceScope,
     capabilities: advertisedCapabilities
   })
   return {

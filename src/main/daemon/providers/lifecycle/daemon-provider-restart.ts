@@ -1,4 +1,5 @@
 import { daemonDiedRespawnMessage } from '../../launch/daemon-exit-record'
+import { HOST_LOST_EXIT_CAUSE } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import {
   rebindLocalProviderListeners,
   unbindLocalProviderListeners
@@ -104,9 +105,11 @@ async function runRestartDaemon(
   const killedCount =
     new Set([...currentOnly.getActiveSessionIds(), ...currentDaemonSessionIds]).size +
     fallbackKilledCount
-  currentOnly.fanoutSyntheticExits(-1, { replacedByRestart: true })
+  // The host goes away under its sessions; no stop was asked of them.
+  const restartExit = { replacedByRestart: true as const, cause: HOST_LOST_EXIT_CAUSE }
+  currentOnly.fanoutSyntheticExits(-1, restartExit)
   if (currentAdapter instanceof DegradedDaemonPtyProvider) {
-    currentAdapter.fanoutCurrentDaemonSyntheticExits(-1, { replacedByRestart: true })
+    currentAdapter.fanoutCurrentDaemonSyntheticExits(-1, restartExit)
   }
 
   // Unbind only after synthetic exits have reached renderer listeners.
