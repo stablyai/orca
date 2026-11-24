@@ -350,7 +350,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   protected botDispatchChanged(dispatchId: string | null, change: DispatchRowChange): void {
     this.botChatTreeWorkers.rowChanged(dispatchId, change)
-    this.botItems.workersWritten(dispatchId === null ? [] : [dispatchId])
+    this.botItems.workersWritten(dispatchId === null ? [] : [dispatchId], change === 'deleted')
     if (change !== 'deleted') {
       this.botItems.dispatchChanged(dispatchId)
     }

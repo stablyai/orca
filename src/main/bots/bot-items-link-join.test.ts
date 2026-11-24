@@ -30,8 +30,8 @@ function newJoin(): BotItemLinkJoin {
     getOrchestrationFleetAgentStatusSnapshot: () => []
   } as unknown as BotWorkRuntime
   const join = new BotItemLinkJoin(runtime, () => ({ pr: {}, issue: {} }))
-  db.workerStatusListener = (dispatchId) =>
-    join.workersWritten(dispatchId === null ? [] : [dispatchId])
+  db.workerStatusListener = (dispatchId, change) =>
+    join.workersWritten(dispatchId === null ? [] : [dispatchId], change === 'deleted')
   return join
 }
 
